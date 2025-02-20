@@ -15,7 +15,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -188,7 +188,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
     bool wait = false;
     int room_number;
     uint32_t uid = UINT32_MAX;
-    pmix_data_range_t range;
+    pmix_data_range_t range=PMIX_RANGE_UNDEF;
     prte_data_req_t *req, *rqnext;
     pmix_data_buffer_t pbkt;
     pmix_byte_object_t pbo;

@@ -17,7 +17,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -220,7 +220,10 @@ int main(int argc, char **argv)
             exit(1);
         }
     }
-    asprintf(&cleanup, "rm -rf %s", tmpdir);
+    if (0 > asprintf(&cleanup, "rm -rf %s", tmpdir)) {
+        fprintf(stderr, "Out of memory\n");
+        exit(1);
+    }
     PMIX_INFO_CREATE(info, 1);
     PMIX_INFO_LOAD(&info[0], PMIX_SERVER_TMPDIR, tmpdir, PMIX_STRING);
 
@@ -264,7 +267,10 @@ int main(int argc, char **argv)
     /* we have a single namespace for all clients */
     atmp = NULL;
     for (n = 0; n < nprocs; n++) {
-        asprintf(&tmp, "%d", n);
+        if (0 > asprintf(&tmp, "%d", n)) {
+            fprintf(stderr, "Out of memory\n");
+            exit(1);
+        }
         PMIX_ARGV_APPEND_COMPAT(&atmp, tmp);
         free(tmp);
     }

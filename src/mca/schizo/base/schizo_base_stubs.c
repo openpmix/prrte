@@ -3,7 +3,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -265,7 +265,7 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
             p2 = prte_schizo_base_strip_quotes(argv[i + 2]);
             if (NULL == target) {
                 /* push it into our environment */
-                asprintf(&param, "PRTE_MCA_%s", p1);
+                pmix_asprintf(&param, "PRTE_MCA_%s", p1);
                 pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                                     "%s schizo:prte:parse_cli pushing %s=%s into environment",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param, p2);
@@ -319,7 +319,7 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
                 }
                 if (NULL == target) {
                     /* push it into our environment */
-                    asprintf(&param, "PRTE_MCA_%s", p1);
+                    pmix_asprintf(&param, "PRTE_MCA_%s", p1);
                     pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:prte:parse_cli pushing %s into environment",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), p1);
@@ -365,7 +365,7 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
             p2 = prte_schizo_base_strip_quotes(argv[i + 2]);
             if (NULL == target) {
                 /* push it into our environment */
-                asprintf(&param, "PMIX_MCA_%s", p1);
+                pmix_asprintf(&param, "PMIX_MCA_%s", p1);
                 pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                                     "%s schizo:pmix:parse_cli pushing %s into environment",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
@@ -399,12 +399,12 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
                  * apply the param to ALL of them
                  */
                 if (NULL == target) {
-                    asprintf(&param, "PMIX_MCA_%s", p1);
+                    pmix_asprintf(&param, "PMIX_MCA_%s", p1);
                     setenv(param, p2, true);
                     free(param);
                     // PRRTE shares the MCA base with PMIx, so no
                     // need to cover that project
-                    asprintf(&param, "OMPI_MCA_%s", p1);
+                    pmix_asprintf(&param, "OMPI_MCA_%s", p1);
                     setenv(param, p2, true);
                     free(param);
                 } else {
@@ -445,7 +445,7 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
                 }
                 if (NULL == target) {
                     /* push it into our environment */
-                    asprintf(&param, "PMIX_MCA_%s", p1);
+                    pmix_asprintf(&param, "PMIX_MCA_%s", p1);
                     pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:pmix:parse_cli pushing %s into environment",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
