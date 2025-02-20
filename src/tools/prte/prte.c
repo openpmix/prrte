@@ -584,7 +584,9 @@ int main(int argc, char *argv[])
      * otherwise, remain attached so output can get to us
      */
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
-        pipe(wait_pipe);
+        if (0 > pipe(wait_pipe)) {
+            return PRTE_ERROR;
+        }
         prte_state_base.parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);
         close(wait_pipe[0]);
@@ -1283,7 +1285,7 @@ static int prep_singleton(const char *name)
     app->app = strdup(jdata->nspace);
     app->num_procs = 1;
     PMIX_ARGV_APPEND_NOSIZE_COMPAT(&app->argv, app->app);
-    getcwd(cwd, sizeof(cwd));
+    pmix_getcwd(cwd, sizeof(cwd));
     app->cwd = strdup(cwd);
     pmix_pointer_array_set_item(jdata->apps, 0, app);
     jdata->num_apps = 1;

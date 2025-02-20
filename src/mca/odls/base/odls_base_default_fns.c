@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies Ltd. All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -344,7 +344,7 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
      * the ability for transport specifications */
     PMIX_INFO_LIST_START(mlist);
 
-    asprintf(&tmp, "%s.net", jdata->nspace);
+    pmix_asprintf(&tmp, "%s.net", jdata->nspace);
     PMIX_INFO_LIST_ADD(ret, mlist, PMIX_ALLOC_NETWORK_ID, tmp, PMIX_STRING);
     free(tmp);
     PMIX_INFO_LIST_ADD(ret, mlist, PMIX_ALLOC_NETWORK_SEC_KEY, NULL, PMIX_BOOL);

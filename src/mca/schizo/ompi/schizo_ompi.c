@@ -265,7 +265,7 @@ static void set_classpath_jar_file(prte_pmix_app_t *app, int index, char *jarfil
         char *fmt = ':' == app->app.argv[index][strlen(app->app.argv[index]-1)]
                     ? "%s%s/%s" : "%s:%s/%s";
         char *str;
-        asprintf(&str, fmt, app->app.argv[index], ompi_install_dirs_libdir, jarfile);
+        pmix_asprintf(&str, fmt, app->app.argv[index], ompi_install_dirs_libdir, jarfile);
         free(app->app.argv[index]);
         app->app.argv[index] = str;
     }
@@ -315,9 +315,9 @@ static int setup_app(prte_pmix_app_t *app)
             if (NULL == strstr(app->app.argv[i], ompi_install_dirs_libdir)) {
                 /* doesn't appear to - add it to be safe */
                 if (':' == app->app.argv[i][strlen(app->app.argv[i]-1)]) {
-                    asprintf(&value, "-Djava.library.path=%s%s", dptr, ompi_install_dirs_libdir);
+                    pmix_asprintf(&value, "-Djava.library.path=%s%s", dptr, ompi_install_dirs_libdir);
                 } else {
-                    asprintf(&value, "-Djava.library.path=%s:%s", dptr, ompi_install_dirs_libdir);
+                    pmix_asprintf(&value, "-Djava.library.path=%s:%s", dptr, ompi_install_dirs_libdir);
                 }
                 free(app->app.argv[i]);
                 app->app.argv[i] = value;
@@ -328,7 +328,7 @@ static int setup_app(prte_pmix_app_t *app)
 
     if (!found) {
         /* need to add it right after the java command */
-        asprintf(&value, "-Djava.library.path=%s", ompi_install_dirs_libdir);
+        pmix_asprintf(&value, "-Djava.library.path=%s", ompi_install_dirs_libdir);
         pmix_argv_insert_element(&app->app.argv, 1, value);
         free(value);
     }
@@ -350,7 +350,7 @@ static int setup_app(prte_pmix_app_t *app)
             }
             free(value);
             /* always add the local directory */
-            asprintf(&value, "%s:%s", app->app.cwd, app->app.argv[i+1]);
+            pmix_asprintf(&value, "%s:%s", app->app.cwd, app->app.argv[i+1]);
             free(app->app.argv[i+1]);
             app->app.argv[i+1] = value;
             break;
@@ -372,7 +372,7 @@ static int setup_app(prte_pmix_app_t *app)
                 }
                 free(value);
                 /* always add the local directory */
-                (void)asprintf(&value, "%s:%s", app->app.cwd, app->app.argv[1]);
+                pmix_asprintf(&value, "%s:%s", app->app.cwd, app->app.argv[1]);
                 free(app->app.argv[1]);
                 app->app.argv[1] = value;
                 pmix_argv_insert_element(&app->app.argv, 1, "-cp");
@@ -392,7 +392,7 @@ static int setup_app(prte_pmix_app_t *app)
             /* check for mpi.jar */
             value = pmix_os_path(false, ompi_install_dirs_libdir, "mpi.jar", NULL);
             if (access(value, F_OK ) != -1) {
-                (void)asprintf(&str2, "%s:%s", str, value);
+                pmix_asprintf(&str2, "%s:%s", str, value);
                 free(str);
                 str = str2;
             }

@@ -15,7 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -262,7 +262,7 @@ static void evhandler_reg_callbk(pmix_status_t status, size_t evhandler_ref, voi
 }
 
 /* Register a callback for an application event notification */
-void register_app_notification(pmix_status_t code, myrel_t *myrel, pmix_notification_fn_t callback) 
+void register_app_notification(pmix_status_t code, myrel_t *myrel, pmix_notification_fn_t callback)
 {
     void *tinfo;
     pmix_info_t *info;
@@ -283,10 +283,10 @@ void register_app_notification(pmix_status_t code, myrel_t *myrel, pmix_notifica
     PMIX_INFO_LIST_RELEASE(tinfo);
 
     DEBUG_CONSTRUCT_LOCK(&mylock);
-    PMIx_Register_event_handler(&code, 1, info, ninfo, callback, 
+    PMIx_Register_event_handler(&code, 1, info, ninfo, callback,
                                 evhandler_reg_callbk, (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
-    printf("Debugger: Registered for event %s on nspace %s\n", 
+    printf("Debugger: Registered for event %s on nspace %s\n",
            PMIx_Error_string(code), client_nspace);
     rc = mylock.status;
     DEBUG_DESTRUCT_LOCK(&mylock);
@@ -549,7 +549,9 @@ static pmix_status_t spawn_app(void)
     /* Setup the executable */
     app.cmd = strdup("hello");
     PMIX_ARGV_APPEND(rc, app.argv, "./hello");
-    getcwd(cwd, _POSIX_PATH_MAX); // point us to our current directory
+    if (NULL == getcwd(cwd, _POSIX_PATH_MAX)) { // point us to our current directory
+        exit(1);
+    }
     app.cwd = strdup(cwd);
     if (app_np > 0) {
         app.maxprocs = app_np;
@@ -608,7 +610,9 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     /* No environment variables */
     debugger[0].env = NULL;
     /* Set the working directory to our current directory */
-    getcwd(cwd, _POSIX_PATH_MAX);
+    if (NULL == getcwd(cwd, _POSIX_PATH_MAX)) {
+        exit(1);
+    }
     debugger[0].cwd = strdup(cwd);
     /* Spawn daemon processes - 1 per node if not colocating */
     if (daemon_colocate_per_proc < 0 && daemon_colocate_per_node < 0) {
