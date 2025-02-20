@@ -20,7 +20,7 @@
  *                         All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
@@ -1227,7 +1227,7 @@ static int bitmap_list_snprintf_exp(char *__hwloc_restrict buf, size_t buflen,
     char *tmp = buf;
     int prev = -1;
     ssize_t size = buflen;
-    int res;
+    int res = -1;
 
     /* mark the end in case we do nothing later */
     if (buflen > 0) {

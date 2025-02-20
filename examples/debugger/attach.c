@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * Copyright (c) 2021      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -360,7 +360,9 @@ static int attach_to_running_job(char *nspace)
     /* No environment variables */
     app->env = NULL;
     /* Set the daemon's working directory to our current directory */
-    getcwd(cwd, _POSIX_PATH_MAX);
+    if (NULL == getcwd(cwd, _POSIX_PATH_MAX)) {
+        exit(1);
+    }
     app->cwd = strdup(cwd);
     /* No attributes set in the pmix_app_t structure */
     app->info = NULL;
@@ -386,7 +388,7 @@ static int attach_to_running_job(char *nspace)
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_FWD_STDERR, NULL, PMIX_BOOL);
     /* Set up daemon mapping based on options */
     if (0 < daemon_colocate_per_node) {
-        PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUG_DAEMONS_PER_NODE, 
+        PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUG_DAEMONS_PER_NODE,
                            &daemon_colocate_per_node, PMIX_UINT16);
     } else if (0 < daemon_colocate_per_proc) {
         PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUG_DAEMONS_PER_PROC,
@@ -394,7 +396,7 @@ static int attach_to_running_job(char *nspace)
     } else if (NULL != hostfile) {
         PMIX_INFO_LIST_ADD(rc, dirs, PMIX_HOSTFILE, hostfile, PMIX_STRING);
         PMIX_INFO_LIST_ADD(rc, dirs, PMIX_MAPBY, "ppr:1:node", PMIX_STRING);
-    } 
+    }
     else {
         PMIX_INFO_LIST_ADD(rc, dirs, PMIX_MAPBY, "ppr:1:node", PMIX_STRING);
     }

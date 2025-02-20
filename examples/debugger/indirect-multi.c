@@ -15,7 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -206,7 +206,9 @@ static pmix_status_t spawn_daemons(char **dbgrs)
     PMIX_APP_CONSTRUCT(&app);
     app.cmd = strdup("./daemon");
     PMIX_ARGV_APPEND(rc, app.argv, "./daemon");
-    getcwd(cwd, _POSIX_PATH_MAX - 1); // point us to our current directory
+    if (NULL == getcwd(cwd, _POSIX_PATH_MAX - 1)) { // point us to our current directory
+        exit(1);
+    }
     app.cwd = strdup(cwd);
     if ((0 < daemon_colocate_per_node) || (0 < daemon_colocate_per_proc)) {
         app.maxprocs = 0;
@@ -280,7 +282,9 @@ static pmix_status_t spawn_app(char *myuri, int argc, char **argv,
     for (n = 1; n < argc; n++) {
         PMIX_ARGV_APPEND(rc, app.argv, argv[n]);
     }
-    getcwd(cwd, _POSIX_PATH_MAX - 1); // point us to our current directory
+    if (NULL == getcwd(cwd, _POSIX_PATH_MAX - 1)) { // point us to our current directory
+        exit(1);
+    }
     app.cwd = strdup(cwd);
     app.maxprocs = 1; // only start one instance of the IL
 

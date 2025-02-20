@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2022 IBM Corporation.  All rights reserved.
  *
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,6 +42,7 @@
 #include "src/class/pmix_pointer_array.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/util/pmix_argv.h"
+#include "src/util/pmix_fd.h"
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/proc_info.h"
@@ -905,7 +906,7 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
         len = 5 + 10 + 1 + strlen(hstname) + 6 + strlen(sep) + 1;
         tmp_str = (char *)malloc(sizeof(char) * len);
         sprintf(tmp_str, "rank %d=%s slot=%s\n", cur_rank, hstname, sep);
-        write(fp_rank, tmp_str, strlen(tmp_str));
+        pmix_fd_write(fp_rank, strlen(tmp_str), tmp_str);
         free(tmp_str);
         ++cur_rank;
     }

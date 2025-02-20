@@ -9,7 +9,7 @@
 int main(int argc, char *argv[])
 {
     pmix_status_t rc;
-    int size;
+    int size, n;
     pid_t pid;
     pmix_proc_t myproc;
     pmix_proc_t proc, parent;
@@ -70,21 +70,23 @@ int main(int argc, char *argv[])
 
             PMIX_LOAD_PROCID(&peers[0], myproc.nspace, 0);
             PMIX_LOAD_PROCID(&peers[1], nspace, PMIX_RANK_WILDCARD);
-            /* connect to the children */
-            printf("%s.%u: Connecting to children - signature %s %s\n",
-                   myproc.nspace, myproc.rank,
-                   peers[0].nspace, peers[1].nspace);
-            rc = PMIx_Connect(peers, 2, NULL, 0);
-            if (PMIX_SUCCESS != rc) {
-                printf("Connect to children failed!\n");
+            for (n=0; n < 10; n++) {
+                /* connect to the children */
+                printf("%s.%u: Connecting to children - signature %s %s\n",
+                       myproc.nspace, myproc.rank,
+                       peers[0].nspace, peers[1].nspace);
+                rc = PMIx_Connect(peers, 2, NULL, 0);
+                if (PMIX_SUCCESS != rc) {
+                    printf("Connect to children failed!\n");
+                }
+                printf("%s.%u: Connect complete!\n", myproc.nspace, myproc.rank);
+                printf("%s.%u: Disconnecting from children\n", myproc.nspace, myproc.rank);
+                rc = PMIx_Disconnect(peers, 2, NULL, 0);
+                if (PMIX_SUCCESS != rc) {
+                    printf("Disonnect from children failed!\n");
+                }
+                printf("%s.%u: Disconnect complete!\n", myproc.nspace, myproc.rank);
             }
-            printf("%s.%u: Connect complete!\n", myproc.nspace, myproc.rank);
-            printf("%s.%u: Disconnecting from children\n", myproc.nspace, myproc.rank);
-            rc = PMIx_Disconnect(peers, 2, NULL, 0);
-            if (PMIX_SUCCESS != rc) {
-                printf("Disonnect from children failed!\n");
-            }
-            printf("%s.%u: Disconnect complete!\n", myproc.nspace, myproc.rank);
         }
         PMIX_LOAD_PROCID(&peers[0], myproc.nspace, PMIX_RANK_WILDCARD);
         PMIx_Fence(&peers[0], 1, NULL, 0);
@@ -102,25 +104,27 @@ int main(int argc, char *argv[])
             sleep(2);
             printf("\n\n\n");
         }
-        printf("%s.%u: Connecting to parent - signature %s %s\n",
-               myproc.nspace, myproc.rank,
-               peers[0].nspace, peers[1].nspace);
-        rc = PMIx_Connect(peers, 2, NULL, 0);
-        if (PMIX_SUCCESS != rc) {
-            printf("%s.%u: Connect to parent failed!\n", myproc.nspace, myproc.rank);
-        }
-        printf("%s.%u: Connect complete!\n", myproc.nspace, myproc.rank);
+        for (n=0; n < 10; n++) {
+            printf("%s.%u: Connecting to parent - signature %s %s\n",
+                   myproc.nspace, myproc.rank,
+                   peers[0].nspace, peers[1].nspace);
+            rc = PMIx_Connect(peers, 2, NULL, 0);
+            if (PMIX_SUCCESS != rc) {
+                printf("%s.%u: Connect to parent failed!\n", myproc.nspace, myproc.rank);
+            }
+            printf("%s.%u: Connect complete!\n", myproc.nspace, myproc.rank);
 
-        printf("%s.%u: Disconnecting from parent\n", myproc.nspace, myproc.rank);
-        if (2 == myproc.rank) {
-            sleep(2);
-            printf("\n\n\n");
+            printf("%s.%u: Disconnecting from parent\n", myproc.nspace, myproc.rank);
+            if (2 == myproc.rank) {
+                sleep(2);
+                printf("\n\n\n");
+            }
+            rc = PMIx_Disconnect(peers, 2, NULL, 0);
+            if (PMIX_SUCCESS != rc) {
+                printf("Disonnect from parent failed!\n");
+            }
+            printf("%s.%u: Disconnect complete!\n", myproc.nspace, myproc.rank);
         }
-        rc = PMIx_Disconnect(peers, 2, NULL, 0);
-        if (PMIX_SUCCESS != rc) {
-            printf("Disonnect from parent failed!\n");
-        }
-        printf("%s.%u: Disconnect complete!\n", myproc.nspace, myproc.rank);
     }
 
 done:

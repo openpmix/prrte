@@ -21,7 +21,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -119,6 +119,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_fd.h"
 #include "src/util/pmix_environ.h"
+#include "src/util/pmix_getcwd.h"
 #include "src/util/pmix_show_help.h"
 #include "src/util/sys_limits.h"
 
@@ -405,13 +406,13 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     /* Exec the new executable */
     execve(cd->cmd, cd->argv, cd->env);
     /* If we get here, an error has occurred. */
-    (void) getcwd(dir, sizeof(dir));
+    pmix_getcwd(dir, sizeof(dir));
     struct stat stats;
     char *msg;
     /* If errno is ENOENT, that indicates either cd->cmd does not exist, or
      * cd->cmd is a script, but has a bad interpreter specified. */
     if (ENOENT == errno && 0 == stat(cd->app->app, &stats)) {
-        asprintf(&msg, "%s has a bad interpreter on the first line.", cd->app->app);
+        pmix_asprintf(&msg, "%s has a bad interpreter on the first line.", cd->app->app);
     } else {
         msg = strdup(strerror(errno));
     }
