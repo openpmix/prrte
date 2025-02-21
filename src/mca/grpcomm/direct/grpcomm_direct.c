@@ -8,7 +8,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -174,7 +174,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
     prte_namelist_t *nm;
     pmix_data_array_t darray;
     pmix_status_t st;
-    pmix_info_t *info, infostat;
+    pmix_info_t *info=NULL, infostat;
     prte_grpcomm_signature_t sig;
     pmix_byte_object_t ctrlsbo;
     pmix_data_buffer_t ctrlbuf;
