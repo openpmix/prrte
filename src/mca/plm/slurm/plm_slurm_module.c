@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -600,10 +600,8 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
         /* an orted must have died unexpectedly - report
          * that the daemon has failed so we exit
          */
-        PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                             "%s plm:slurm: srun returned non-zero exit status (%d) from launching "
-                             "the per-node daemon",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), proc->exit_code));
+        pmix_show_help("help-plm-slurm.txt", "srun-failed", true,
+                       proc->exit_code);
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
     } else {
         /* otherwise, check to see if this is the primary pid */
