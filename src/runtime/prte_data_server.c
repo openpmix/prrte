@@ -363,6 +363,9 @@ void prte_data_server(int status, pmix_proc_t *sender,
                 }
             }
             if (0 < (n = pmix_list_get_size(&req->answers))) {
+                // resolved this pending request, so remove it
+                pmix_list_remove_item(&pending, &req->super);
+
                 /* send it back to the requestor */
                 pmix_output_verbose(1, prte_data_server_output,
                                     "%s data server: returning data to %s:%d",
@@ -375,6 +378,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
+                    PMIX_RELEASE(req);
                     goto SEND_ERROR;
                 }
                 /* we are responding to a lookup cmd */
@@ -383,6 +387,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
+                    PMIX_RELEASE(req);
                     goto SEND_ERROR;
                 }
                 /* if we found all of the requested keys, then indicate so */
@@ -396,6 +401,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
+                    PMIX_RELEASE(req);
                     goto SEND_ERROR;
                 }
 
@@ -408,6 +414,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
                     PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                     rc = PRTE_ERR_PACK_FAILURE;
                     PMIX_DATA_BUFFER_RELEASE(reply);
+                    PMIX_RELEASE(req);
                     goto SEND_ERROR;
                 }
                 /* loop thru and pack the individual responses - this is somewhat less
@@ -422,6 +429,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
                         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                         rc = PRTE_ERR_PACK_FAILURE;
                         PMIX_DATA_BUFFER_RELEASE(reply);
+                        PMIX_RELEASE(req);
                         goto SEND_ERROR;
                     }
                     /* pack the data */
@@ -431,6 +439,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
                         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                         rc = PRTE_ERR_PACK_FAILURE;
                         PMIX_DATA_BUFFER_RELEASE(reply);
+                        PMIX_RELEASE(req);
                         goto SEND_ERROR;
                     }
                 }
@@ -446,6 +455,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
+                    PMIX_RELEASE(req);
                     goto SEND_ERROR;
                 }
                 PRTE_RML_SEND(rc, req->proxy.rank, reply, PRTE_RML_TAG_DATA_CLIENT);
@@ -453,6 +463,8 @@ void prte_data_server(int status, pmix_proc_t *sender,
                     PRTE_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
                 }
+                // done with this request
+                PMIX_RELEASE(req);
             }
         }
 
