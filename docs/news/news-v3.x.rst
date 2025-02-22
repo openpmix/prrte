@@ -4,6 +4,34 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
+3.0.9 -- TBD
+------------
+- PR #2145: Multiple commits
+   - Fix inheritance
+   - Provide a user error message when srun fails
+   - Update NEWS
+- PR #2142: Multiple commits
+   - gcc compilation failure fixes
+   - Update CI workflow
+   - Silence warnings exposed by revised CI
+- PR #2141: Multiple commits
+   - Silence warnings exposed by revised CI
+   - Add build against older PMIx CI
+   - Add mpi4py CI
+- PR #2137: Multiple commits
+   - Add spawn_multiple test
+   - Minor cleanups
+   - Implement query support for PMIx resolve functions
+   - Add ability to direct app GPU support
+- PR #2125: hurd: fix build
+- PR #2123: Refactor ranking algorithms
+- PR #2109: Multiple commits
+   - Add a test for CI purposes
+   - Try a DVM-based action
+   - Update users of pmix_os_dirpath_create
+   - Remove the group CI as this release branch doesn't support it
+
+
 3.0.8 -- 15 Dec 2024
 --------------------
 - PR #2103: Final update for release
