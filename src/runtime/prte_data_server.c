@@ -16,6 +16,8 @@
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2025      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -62,6 +64,7 @@ typedef struct {
     /* characteristics */
     pmix_data_range_t range;
     pmix_persistence_t persistence;
+    size_t num_firsts_read;
     /* and the values themselves */
     pmix_info_t *info;
     size_t ninfo;
@@ -75,6 +78,7 @@ static void construct(prte_data_object_t *ptr)
     ptr->uid = UINT32_MAX;
     ptr->range = PMIX_RANGE_SESSION;
     ptr->persistence = PMIX_PERSIST_SESSION;
+    ptr->num_firsts_read = 0;
     ptr->info = NULL;
     ptr->ninfo = 0;
 }
@@ -110,6 +114,14 @@ static void rqdes(prte_data_req_t *p)
     PMIX_LIST_DESTRUCT(&p->answers);
 }
 static PMIX_CLASS_INSTANCE(prte_data_req_t, pmix_list_item_t, rqcon, rqdes);
+
+/* define a container for data object cleanups */
+typedef struct {
+    pmix_list_item_t super;
+    prte_data_object_t *data;
+} prte_data_cleanup_t;
+
+static PMIX_CLASS_INSTANCE(prte_data_cleanup_t, pmix_list_item_t, NULL, NULL);
 
 /* local globals */
 static pmix_pointer_array_t prte_data_server_store;
@@ -185,7 +197,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
     size_t ninfo;
     uint32_t i;
     char **keys = NULL, *str;
-    bool wait = false;
+    bool wait = false, add_to_data_store_list;
     int room_number;
     uint32_t uid = UINT32_MAX;
     pmix_data_range_t range=PMIX_RANGE_UNDEF;
@@ -198,8 +210,10 @@ void prte_data_server(int status, pmix_proc_t *sender,
     size_t n, nanswers;
     pmix_info_t *info;
     pmix_list_t answers;
+    pmix_list_t cleanup_list;
     void *ilist;
     pmix_data_array_t darray;
+    prte_data_cleanup_t *data_to_cleanup;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     pmix_output_verbose(1, prte_data_server_output, "%s data server got message from %s",
@@ -315,8 +329,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
         data->ninfo = darray.size;
         PMIX_INFO_LIST_RELEASE(ilist);
 
-        /* store this object */
-        data->index = pmix_pointer_array_add(&prte_data_server_store, data);
+        add_to_data_store_list = true;
 
         pmix_output_verbose(1, prte_data_server_output,
                             "%s data server: checking for pending requests",
@@ -365,6 +378,14 @@ void prte_data_server(int status, pmix_proc_t *sender,
             if (0 < (n = pmix_list_get_size(&req->answers))) {
                 // resolved this pending request, so remove it
                 pmix_list_remove_item(&pending, &req->super);
+                /*
+                 * check to see if the published stuff is PMIX_PERSIST_FIRST_READ persistence and
+                 * all info keys have been matched, in which case don't post to the
+                 * published data list
+                 */
+                if ((n == data->ninfo) && (data->persistence == PMIX_PERSIST_FIRST_READ)){
+                    add_to_data_store_list = false;
+                }
 
                 /* send it back to the requestor */
                 pmix_output_verbose(1, prte_data_server_output,
@@ -468,6 +489,13 @@ void prte_data_server(int status, pmix_proc_t *sender,
             }
         }
 
+        if (add_to_data_store_list) {
+            data->index = pmix_pointer_array_add(&prte_data_server_store, data);
+            pmix_output_verbose(1, prte_data_server_output,
+                                "%s data server: no results in pending, inserting data at index %d",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), data->index);
+        }
+
         /* tell the user it was wonderful... */
         rc = PRTE_SUCCESS;
         rc = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_INT);
@@ -549,6 +577,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
         /* cycle across the provided keys */
         PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
         PMIX_CONSTRUCT(&answers, pmix_list_t);
+        PMIX_CONSTRUCT(&cleanup_list, pmix_list_t);
 
         for (i = 0; NULL != keys[i]; i++) {
             pmix_output_verbose(10, prte_data_server_output, "%s data server: looking for %s",
@@ -589,6 +618,18 @@ void prte_data_server(int status, pmix_proc_t *sender,
                         memcpy(&rinfo->source, &data->owner, sizeof(pmix_proc_t));
                         rinfo->info = &data->info[n];
                         rinfo->persistence = data->persistence;
+                        ++data->num_firsts_read;
+                        /*
+                         * check if this data is PMIX_PERSIST_FIRST_READ persistence.
+                         * If so, and all infos for this data element have been read,
+                         * schedule for destruction.  Without this, unless the app calls
+                         * PMIx_Unpublish, the data array grows without bound.
+                         */
+                        if(data->ninfo == data->num_firsts_read) {
+                            data_to_cleanup = PMIX_NEW(prte_data_cleanup_t);
+                            data_to_cleanup->data = data;
+                            pmix_list_append(&cleanup_list, &data_to_cleanup->super);
+                        }
                         pmix_list_append(&answers, &rinfo->super);
                         pmix_output_verbose(1, prte_data_server_output,
                                             "%s data server: adding %s to data from %s",
@@ -642,6 +683,20 @@ void prte_data_server(int status, pmix_proc_t *sender,
         }
         PMIX_LIST_DESTRUCT(&answers);
 
+        /*
+         * check the clean up list - see above for what this is abou
+         */
+        if (!pmix_list_is_empty(&cleanup_list)) {
+            PMIX_LIST_FOREACH (data_to_cleanup, &cleanup_list, prte_data_cleanup_t) {
+                data = data_to_cleanup->data;
+                pmix_pointer_array_set_item(&prte_data_server_store, data->index, NULL);
+                pmix_list_remove_item(&cleanup_list, &data_to_cleanup->super);
+                PMIX_DESTRUCT(data);
+                PMIX_DESTRUCT(data_to_cleanup);
+            }
+        }
+        PMIX_LIST_DESTRUCT(&cleanup_list);
+            
         if (nanswers == (size_t) PMIX_ARGV_COUNT_COMPAT(keys)) {
             rc = PRTE_SUCCESS;
         } else {
