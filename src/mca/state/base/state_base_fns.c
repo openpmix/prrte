@@ -429,7 +429,6 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
     prte_proc_t *pdata;
     int i;
     pmix_proc_t target;
-    prte_pmix_lock_t lock;
     pmix_rank_t threshold;
     PRTE_HIDE_UNUSED_PARAMS(fd, argc);
 
@@ -536,10 +535,7 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
             pdata->state = state;
         }
         if (PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_LOCAL)) {
-            PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-            PMIx_server_deregister_client(proc, opcbfunc, &lock);
-            PRTE_PMIX_WAIT_THREAD(&lock);
-            PRTE_PMIX_DESTRUCT_LOCK(&lock);
+            PMIx_server_deregister_client(proc, NULL, NULL);
         }
         /* if we are trying to terminate and our routes are
          * gone, then terminate ourselves IF no local procs
