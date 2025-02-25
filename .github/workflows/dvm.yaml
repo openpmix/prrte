@@ -3,7 +3,7 @@ name: DVM
 on: [pull_request]
 
 jobs:
-  dvm-testsuite:
+  pub-lookup:
     runs-on: ubuntu-22.04
     steps:
     - name: Install dependencies
@@ -44,19 +44,35 @@ jobs:
          mca_params="$HOME/.prte/mca-params.conf"
          mkdir -p "$(dirname "$mca_params")"
          echo rmaps_default_mapping_policy = :oversubscribe >> "$mca_params"
+
     - name: Run simple test
       run: |
          export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
          export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
-         prte --daemonize --no-ready-msg
-         prun -n 4 ./openpmix/master/examples/hello >& /dev/null
-         pterm
-    - name: Run pub-lookup tests
+         prterun -n 4 --pset foo ./openpmix/master/examples/hello
+      if:   ${{ true }}
+      timeout-minutes: 5
+
+    - name: Run pub-lookup test1
       run: |
          export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
          export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
-         prte --daemonize --no-ready-msg
-         prun -n 3 ./openpmix/master/examples/pub >& /dev/null
-         prun -n 2 ./openpmix/master/examples/pub2 >& /dev/null
-         prun -n 4 ./openpmix/master/examples/pubi >& /dev/null
-         pterm
+         prterun -n 3 ./openpmix/master/examples/pub
+      if:   ${{ true }}
+      timeout-minutes: 5
+
+    - name: Run pub-lookup test2
+      run: |
+         export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
+         export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
+         prterun -n 2 ./openpmix/master/examples/pub2 20
+      if:   ${{ true }}
+      timeout-minutes: 5
+
+    - name: Run pub-lookup test3
+      run: |
+         export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
+         export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
+         prterun -n 4 ./openpmix/master/examples/pubi
+      if:   ${{ true }}
+      timeout-minutes: 5
