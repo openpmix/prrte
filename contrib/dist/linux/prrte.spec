@@ -15,7 +15,7 @@
 # Copyright (c) 2015      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2017-2022 Intel, Inc.  All rights reserved.
-# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -107,18 +107,6 @@
 # type: bool (0/1)
 %{!?use_check_files: %define use_check_files 1}
 
-# By default, RPM supplies a bunch of optimization flags, some of
-# which may not work with non-gcc compilers.  We attempt to weed some
-# of these out (below), but sometimes it's better to just ignore them
-# altogether (e.g., PGI 6.2 will warn about unknown compiler flags,
-# but PGI 7.0 will error -- and RPM_OPT_FLAGS contains a lot of flags
-# that PGI 7.0 does not understand).  The default is to use the flags,
-# but you can set this variable to 0, indicating that RPM_OPT_FLAGS
-# should be erased (in which case you probabl want to supply your own
-# optimization flags!).
-# type: bool (0/1)
-%{!?use_default_rpm_opt_flags: %define use_default_rpm_opt_flags 1}
-
 # Some compilers can be installed via tarball or RPM (e.g., Intel,
 # PGI).  If they're installed via RPM, then rpmbuild's auto-dependency
 # generation stuff will work fine.  But if they're installed via
@@ -178,9 +166,7 @@
 
 %{!?configure_options: %define configure_options %{nil}}
 
-%if !%{use_default_rpm_opt_flags}
 %define optflags ""
-%endif
 
 #############################################################################
 #
@@ -365,31 +351,11 @@ fi
 using_gcc=0
 %endif
 
-# If we're not using the default RPM_OPT_FLAGS, then wipe them clean
+# We're not using the default RPM_OPT_FLAGS, so wipe them clean
 # (the "optflags" macro has already been wiped clean, above).
 
-%if !%{use_default_rpm_opt_flags}
 RPM_OPT_FLAGS=
 export RPM_OPT_FLAGS
-%endif
-
-# If we're not GCC, strip out any GCC-specific arguments in the
-# RPM_OPT_FLAGS before potentially propagating them everywhere.
-
-if test "$using_gcc" = 0; then
-
-    # Non-gcc compilers cannot handle FORTIFY_SOURCE (at least, not as
-    # of Oct 2006)
-    RPM_OPT_FLAGS="`echo $RPM_OPT_FLAGS | sed -e 's@-D_FORTIFY_SOURCE[=0-9]*@@'`"
-
-    # Non-gcc compilers will generate warnings for several flags
-    # placed in RPM_OPT_FLAGS by RHEL5, but -mtune=generic will cause
-    # an error for icc 9.1.
-    RPM_OPT_FLAGS="`echo $RPM_OPT_FLAGS | sed -e 's@-mtune=generic@@'`"
-fi
-
-CFLAGS="%{?cflags:%{cflags}}%{!?cflags:$RPM_OPT_FLAGS}"
-export CFLAGS
 
 %configure %{configure_options}
 %{__make} %{?mflags}
@@ -678,9 +644,9 @@ test "x$RPM_BUILD_ROOT" != "x" && rm -rf $RPM_BUILD_ROOT
   of "prrte" with "prte"
 
 * Thu Apr 7 2022 Adam Goldman <adam.goldman@intel.com>
-- Several minor fixes: added _includedir to build_all_in_one_rpm, 
+- Several minor fixes: added _includedir to build_all_in_one_rpm,
   escape macro in comment, and use %{name} instead of hard-coded value
-  
+
 * Tue Mar 28 2017 Jeff Squyres <jsquyres@cisco.com>
 - Reverting a decision from a prior changelog entry: if
   install_in_opt==1, then even put the modulefile under /opt.
