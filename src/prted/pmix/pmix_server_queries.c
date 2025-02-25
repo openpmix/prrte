@@ -968,16 +968,18 @@ done:
         ret = rc;
     }
     PMIX_INFO_LIST_RELEASE(results);
-    if (PMIX_ERR_EMPTY == rc) {
-        ret = PMIX_ERR_NOT_FOUND;
-    } else if (PMIX_SUCCESS == ret) {
-        if (0 == dry.size) {
+    if (PMIX_ERR_NOT_SUPPORTED != ret) {
+        if (PMIX_ERR_EMPTY == rc) {
             ret = PMIX_ERR_NOT_FOUND;
-        } else {
-            if (dry.size < cd->ninfo) {
-                ret = PMIX_QUERY_PARTIAL_SUCCESS;
+        } else if (PMIX_SUCCESS == ret) {
+            if (0 == dry.size) {
+                ret = PMIX_ERR_NOT_FOUND;
             } else {
-                ret = PMIX_SUCCESS;
+                if (dry.size < cd->ninfo) {
+                    ret = PMIX_QUERY_PARTIAL_SUCCESS;
+                } else {
+                    ret = PMIX_SUCCESS;
+                }
             }
         }
     }
