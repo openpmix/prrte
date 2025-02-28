@@ -39,7 +39,7 @@
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml.h"
 #include "src/prted/pmix/pmix_server_internal.h"
-#include "src/runtime/prte_data_server.h"
+#include "src/runtime/data_server/prte_data_server.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
 #include "src/threads/pmix_threads.h"
