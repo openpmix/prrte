@@ -14,7 +14,7 @@
 # Copyright (c) 2012      Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
 # Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -32,7 +32,6 @@ headers += \
         runtime/prte_quit.h \
         runtime/runtime_internals.h \
         runtime/prte_wait.h \
-        runtime/prte_data_server.h \
         runtime/prte_progress_threads.h
 
 libprrte_la_SOURCES += \
@@ -47,5 +46,6 @@ libprrte_la_SOURCES += \
         runtime/data_type_support/prte_dt_unpacking_fns.c \
         runtime/prte_mca_params.c \
         runtime/prte_wait.c \
-        runtime/prte_data_server.c \
         runtime/prte_progress_threads.c
+
+include runtime/data_server/Makefile.am
