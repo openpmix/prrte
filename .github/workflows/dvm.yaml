@@ -76,3 +76,11 @@ jobs:
          prterun -n 4 ./openpmix/master/examples/pubi
       if:   ${{ true }}
       timeout-minutes: 5
+
+    - name: Run pub-lookup stress test
+      run: |
+         export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
+         export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
+         prterun -n 5 ./openpmix/master/examples/pubstress 30
+      if:   ${{ true }}
+      timeout-minutes: 10

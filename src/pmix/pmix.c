@@ -9,7 +9,7 @@
  *                         All rights reserved.
  * Copyright (c) 2016-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -503,14 +503,6 @@ static void ades(prte_pmix_app_t *p)
     PMIX_INFO_LIST_RELEASE(p->info);
 }
 PMIX_CLASS_INSTANCE(prte_pmix_app_t, pmix_list_item_t, acon, ades);
-
-static void dsicon(prte_ds_info_t *p)
-{
-    PMIX_PROC_CONSTRUCT(&p->source);
-    p->info = NULL;
-    p->persistence = PMIX_PERSIST_INVALID;
-}
-PRTE_EXPORT PMIX_CLASS_INSTANCE(prte_ds_info_t, pmix_list_item_t, dsicon, NULL);
 
 static void infoitmcon(prte_info_item_t *p)
 {
