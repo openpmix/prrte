@@ -6,7 +6,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -49,16 +49,6 @@ typedef struct {
     void *info;
 } prte_pmix_app_t;
 PMIX_CLASS_DECLARATION(prte_pmix_app_t);
-
-/* define a caddy for pointing to pmix_info_t that
- * are to be included in an answer */
-typedef struct {
-    pmix_list_item_t super;
-    pmix_proc_t source;
-    pmix_info_t *info;
-    pmix_persistence_t persistence;
-} prte_ds_info_t;
-PMIX_CLASS_DECLARATION(prte_ds_info_t);
 
 /* define another caddy for putting statically defined
  * pmix_info_t objects on a list */

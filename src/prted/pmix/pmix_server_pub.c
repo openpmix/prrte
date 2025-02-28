@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,7 +40,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/rml/rml_contact.h"
 #include "src/rml/rml.h"
-#include "src/runtime/prte_data_server.h"
+#include "src/runtime/data_server/prte_data_server.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
@@ -371,9 +371,42 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
 {
     pmix_server_req_t *req;
     int ret;
-    uint8_t cmd = PRTE_PMIX_UNPUBLISH_CMD;
+    uint8_t cmd;
     size_t m, n;
     pmix_status_t rc;
+
+    // check for a "purge" command
+    if (NULL == keys) {
+        /* create the caddy */
+        req = PMIX_NEW(pmix_server_req_t);
+        pmix_asprintf(&req->operation, "PURGE: %s:%d", __FILE__, __LINE__);
+        req->opcbfunc = cbfunc;
+        req->cbdata = cbdata;
+
+        /* load the command */
+        cmd = PRTE_PMIX_PURGE_PROC_CMD;
+        if (PRTE_SUCCESS != (ret = PMIx_Data_pack(NULL, &req->msg, &cmd, 1, PMIX_UINT8))) {
+            PRTE_ERROR_LOG(ret);
+            PMIX_RELEASE(req);
+            return PMIX_ERR_PACK_FAILURE;
+        }
+
+        /* pack the name of the requestor */
+        if (PMIX_SUCCESS
+            != (rc = PMIx_Data_pack(NULL, &req->msg, (pmix_proc_t *) proc, 1, PMIX_PROC))) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_RELEASE(req);
+            return rc;
+        }
+
+        /* thread-shift so we can store the tracker */
+        prte_event_set(prte_event_base, &(req->ev), -1, PRTE_EV_WRITE, execute, req);
+        PMIX_POST_OBJECT(req);
+        prte_event_active(&(req->ev), PRTE_EV_WRITE, 1);
+
+        return PRTE_SUCCESS;
+    }
+
 
     /* create the caddy */
     req = PMIX_NEW(pmix_server_req_t);
@@ -382,6 +415,7 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
     req->cbdata = cbdata;
 
     /* load the command */
+    cmd = PRTE_PMIX_UNPUBLISH_CMD;
     if (PRTE_SUCCESS != (ret = PMIx_Data_pack(NULL, &req->msg, &cmd, 1, PMIX_UINT8))) {
         PRTE_ERROR_LOG(ret);
         PMIX_RELEASE(req);
@@ -456,14 +490,14 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender,
     pmix_server_req_t *req = NULL;
     pmix_byte_object_t bo;
     pmix_data_buffer_t pbkt;
-    pmix_status_t ret = PMIX_SUCCESS, rt = PMIX_SUCCESS;
+    pmix_status_t ret = PMIX_SUCCESS;
     pmix_info_t info;
     pmix_pdata_t *pdata = NULL;
     size_t n, npdata = 0;
-    PRTE_HIDE_UNUSED_PARAMS(sender, tg, cbdata);
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
 
     pmix_output_verbose(1, prte_pmix_server_globals.output,
-                        "%s recvd lookup data return",
+                        "%s recvd data server return",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* unpack the room number of the request tracker */
@@ -485,23 +519,16 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender,
 
     /* unpack the return status */
     cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &status, &cnt, PMIX_INT);
+    rc = PMIx_Data_unpack(NULL, buffer, &ret, &cnt, PMIX_STATUS);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        ret = PMIX_ERR_UNPACK_FAILURE;
+        ret = rc;
         goto release;
     }
 
-    if (PRTE_ERR_NOT_FOUND == status) {
-        ret = PMIX_ERR_NOT_FOUND;
-        goto release;
-    } else if (PRTE_ERR_PARTIAL_SUCCESS == status) {
-        rt = PMIX_QUERY_PARTIAL_SUCCESS;
-    } else {
-        ret = PMIX_SUCCESS;
-    }
-    if (PRTE_PMIX_UNPUBLISH_CMD == command) {
-        /* nothing else will be included */
+    if (PMIX_ERR_NOT_FOUND == ret ||
+        PRTE_PMIX_UNPUBLISH_CMD == command ||
+        PRTE_PMIX_PUBLISH_CMD == command) {
         goto release;
     }
 
@@ -512,9 +539,12 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender,
      * command will not return any data if no matching pending
      * requests were found */
     if (PMIX_SUCCESS != rc) {
-        if (PMIX_SUCCESS == ret) {
-            ret = rt;
+        if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER == rc) {
+            // not necessarily an error, so don't log it
+            goto release;
         }
+        PMIX_ERROR_LOG(rc);
+        ret = rc;
         goto release;
     }
 
@@ -523,12 +553,19 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender,
     rc = PMIx_Data_load(&pbkt, &bo);
     bo.bytes = NULL;
     PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        ret = rc;
+        goto release;
+    }
 
     /* unpack the number of data items */
     cnt = 1;
-    if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, &pbkt, &npdata, &cnt, PMIX_SIZE))) {
-        PMIX_ERROR_LOG(ret);
+    rc = PMIx_Data_unpack(NULL, &pbkt, &npdata, &cnt, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+        ret = rc;
         goto release;
     }
 
@@ -537,30 +574,31 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender,
         for (n = 0; n < npdata; n++) {
             PMIX_INFO_CONSTRUCT(&info);
             cnt = 1;
-            if (PMIX_SUCCESS
-                != (ret = PMIx_Data_unpack(NULL, &pbkt, &pdata[n].proc, &cnt, PMIX_PROC))) {
-                PMIX_ERROR_LOG(ret);
+            rc = PMIx_Data_unpack(NULL, &pbkt, &pdata[n].proc, &cnt, PMIX_PROC);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+                ret = rc;
                 goto release;
             }
             cnt = 1;
-            if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, &pbkt, &info, &cnt, PMIX_INFO))) {
-                PMIX_ERROR_LOG(ret);
+            rc = PMIx_Data_unpack(NULL, &pbkt, &info, &cnt, PMIX_INFO);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+                ret = rc;
                 goto release;
             }
             PMIX_LOAD_KEY(pdata[n].key, info.key);
-            PMIX_VALUE_XFER_DIRECT(ret, &pdata[n].value, &info.value);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
+            PMIX_VALUE_XFER_DIRECT(rc, &pdata[n].value, &info.value);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+                ret = rc;
                 goto release;
             }
             PMIX_INFO_DESTRUCT(&info);
         }
-    }
-    if (PMIX_SUCCESS == ret) {
-        ret = rt;
     }
 
 release:

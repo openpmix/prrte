@@ -18,7 +18,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -61,7 +61,7 @@
 #include "src/util/session_dir.h"
 #include "src/util/pmix_show_help.h"
 
-#include "src/runtime/prte_data_server.h"
+#include "src/runtime/data_server/prte_data_server.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
 #include "src/runtime/prte_quit.h"
@@ -78,7 +78,7 @@ void prte_quit(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
-    
+
     PMIX_ACQUIRE_OBJECT(caddy);
 
     /* cleanup */
