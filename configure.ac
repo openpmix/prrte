@@ -25,7 +25,7 @@
 # Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
 # Copyright (c) 2018-2022 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
-# Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
 # Copyright (c) 2021      FUJITSU LIMITED.  All rights reserved.
 # Copyright (c) 2023-2024 Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
@@ -323,6 +323,17 @@ prte_show_title "Compiler and preprocessor tests"
 ##################################
 
 PRTE_SETUP_CC
+# We do not currently support the "lto" optimizer as it
+# aggregates all the headers from our plugins, resulting
+# in a configuration that generates warnings/errors when
+# passed through their optimizer phase. We therefore check
+# for the flag, and if found, output a message explaining
+# the situation and aborting configure
+_PRTE_CHECK_LTO_FLAG($CPPFLAGS, CPPFLAGS)
+_PRTE_CHECK_LTO_FLAG($CFLAGS, CFLAGS)
+_PRTE_CHECK_LTO_FLAG($LDFLAGS, LDFLAGS)
+_PRTE_CHECK_LTO_FLAG($LIBS, LIBS)
+
 
 # Does the compiler support "ident"-like constructs?
 
@@ -930,18 +941,6 @@ CPP_INCLUDES="$(echo $cpp_includes | $SED 's/[[^ \]]* */'"$prte_cc_iquote"'&/g')
 CPPFLAGS="$CPP_INCLUDES $CPPFLAGS $PRTE_FINAL_CPPFLAGS"
 LDFLAGS="$LDFLAGS $PRTE_FINAL_LDFLAGS"
 LIBS="$LIBS $PRTE_FINAL_LIBS"
-
-
-# We do not currently support the "lto" optimizer as it
-# aggregates all the headers from our plugins, resulting
-# in a configuration that generates warnings/errors when
-# passed through their optimizer phase. We therefore check
-# for the flag, and if found, output a message explaining
-# the situation and aborting configure
-_PRTE_CHECK_LTO_FLAG($CPPFLAGS, CPPFLAGS)
-_PRTE_CHECK_LTO_FLAG($CFLAGS, CFLAGS)
-_PRTE_CHECK_LTO_FLAG($LDFLAGS, LDFLAGS)
-_PRTE_CHECK_LTO_FLAG($LIBS, LIBS)
 
 
 # restore any user-provided Werror flags
