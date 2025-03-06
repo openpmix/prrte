@@ -172,14 +172,24 @@ option to the help request as "--help <option>".
 | <files>"             | the remote machines current working directory |
 |                      | before starting the remote process.           |
 +----------------------+-----------------------------------------------+
-| "--prtemca <key>     | Pass context-specific PRRTE MCA parameters to |
-| <value>"             | the DVM                                       |
+| "-s" | "--preload-   | Preload the binary on the remote machine      |
+| binary"              | before starting the remote process.           |
++----------------------+-----------------------------------------------+
+| "--app-pmix-prefix <dir>" | Prefix to be used by app procs to look   |
+|                      | for their PMIx installation on remote nodes.  |
+|                      | This is the location of the top-level         |
+|                      | directory for the installation. In the        |
+|                      | absence of providing an application-specific  |
+|                      | prefix, the PMIx prefix (if given) used by    |
+|                      | PRRTE's own executables will be applied       |
+|                      | unless the "--no-app-prefix" directive is     |
+|                      | given.                                        |
++----------------------+-----------------------------------------------+
+| "--no-app-prefix"    | Do not provide a prefix directive to this     |
+|                      | application.                                  |
 +----------------------+-----------------------------------------------+
 | "--pset <name>"      | User-specified name assigned to the processes |
 |                      | in their given application                    |
-+----------------------+-----------------------------------------------+
-| "-s" | "--preload-   | Preload the binary on the remote machine      |
-| binary"              | before starting the remote process.           |
 +----------------------+-----------------------------------------------+
 | "--set-cwd-to-       | Set the working directory of the started      |
 | session-dir"         | processes to their session directory          |
@@ -208,6 +218,9 @@ option to the help request as "--help <option>".
 | "--allow-run-as-     | Allow execution as root (**STRONGLY           |
 | root"                | DISCOURAGED**)                                |
 +----------------------+-----------------------------------------------+
+| "--prtemca <key>     | Pass context-specific PRRTE MCA parameters to |
+| <value>"             | the DVM                                       |
++----------------------+-----------------------------------------------+
 | "--forward-signals   | Comma-delimited list of additional signals    |
 | <signals>"           | (names or integers) to forward to application |
 |                      | processes ["none" => forward nothing].        |
@@ -226,6 +239,16 @@ option to the help request as "--help <option>".
 | "--noprefix"         | Disable automatic "--prefix" behavior         |
 +----------------------+-----------------------------------------------+
 | "--prefix <dir>"     | Prefix to be used to look for RTE executables |
+|                      | AND their libraries on remote nodes. Note     |
+|                      | that an assumption is made that the libraries |
+|                      | will be located at the same subdirectory as   |
+|                      | per the configuration options given when      |
+|                      | PRRTE was built.                              |
++----------------------+-----------------------------------------------+
+| "--pmix-prefix <dir>" | Prefix to be used to look for the PMIx       |
+|                      | library used by RTE executables on remote     |
+|                      | nodes. This is the location of the top-level  |
+|                      | directory for the installation.               |
 +----------------------+-----------------------------------------------+
 | "--report-pid        | Print out PID on stdout ("-"), stderr ("+"),  |
 | <arg0>"              | or a file [anything else]                     |
@@ -447,6 +470,42 @@ prefix for remote daemons if it was either configured with the "--
 enable-prte-prefix-by-default" option OR prte itself was executed with
 an absolute path to the "prte" command. This option disables that
 behavior.
+
+[pmix-prefix]
+
+Prefix to be used by a PRRTE executable to look for its PMIx installation
+on remote nodes. This is the location of the top-level directory for the
+installation. If the installation has not been moved, it would be the
+value given to "--prefix" when the installation was configured.
+
+Note that PRRTE cannot determine the exact name of the library subdirectory
+under this location. For example, some systems will call it "lib" while others
+call it "lib64". Accordingly, PRRTE will use the library subdirectory name
+of the PMIx installation used to build PRRTE.
+
+[app-pmix-prefix]
+
+Prefix to be used by an app to look for its PMIx installation on remote
+nodes. This is the location of the top-level directory for the installation.
+If the installation has not been moved, it would be the value given to
+"--prefix" when the installation was configured.
+
+Note that PRRTE cannot determine the exact name of the library subdirectory
+under this location. For example, some systems will call it "lib" while others
+call it "lib64". Accordingly, PRRTE will use the library subdirectory name
+of the PMIx installation used to build PRRTE.
+
+In the absence of providing an application-specific prefix, the PMIx prefix
+(if given) used by PRRTE's own executables will be applied unless the
+"--no-app-prefix" directive is given.
+
+[no-app-prefix]
+
+Do not apply any prefix to this application. This is needed when a default
+PMIx prefix has been given to PRRTE, but the application has been built
+against a PMIx library that (a) is different from the one used by PRRTE,
+and (b) was not moved. Otherwise, PRRTE will apply its default prefix to
+the application.
 
 [forward-signals]
 

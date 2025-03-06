@@ -18,7 +18,7 @@
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2022-2023 Triad National Security, LLC.
  *                         All rights reserved.
  * $COPYRIGHT$
@@ -78,21 +78,22 @@
  * with a NULL value for app_env, meaning that there is no "base"
  * environment that the app needs to be created from.
  */
-static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_t *jdata,
+static int create_app(prte_schizo_base_module_t *schizo, char **argv,
                       prte_pmix_app_t **app_ptr, bool *made_app, char ***app_env,
-                      char ***hostfiles, char ***hosts)
+                      char ***hostfiles, char ***hosts, pmix_list_t *jobdata)
 {
     char cwd[PRTE_PATH_MAX];
     int i, count, rc;
     char *param, *value, *ptr;
     prte_pmix_app_t *app = NULL;
     char *appname = NULL;
-    pmix_cli_item_t *opt;
+    pmix_cli_item_t *opt, *opt2;
     pmix_cli_result_t results;
     char *tval;
     bool fwd;
     pmix_value_t val;
-    PRTE_HIDE_UNUSED_PARAMS(jdata, app_env);
+    prte_info_item_t *iptr;
+    PRTE_HIDE_UNUSED_PARAMS(app_env);
 
     *made_app = false;
 
@@ -273,6 +274,53 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
         app->app.maxprocs = count;
     }
 
+    // check for PRRTE or PMIx prefixes for the daemons
+    if (NULL != jobdata) {
+        opt = pmix_cmd_line_get_param(&results, PRTE_CLI_PREFIX);
+        if (NULL != opt) {
+            // only allow one instance of it, or all must be the same
+            if (1 < (count = pmix_cmd_line_get_ninsts(&results, PRTE_CLI_PREFIX))) {
+                param = NULL;
+                for (i=0; i < count; i++) {
+                    if (NULL == param) {
+                        param = opt->values[i];
+                    } else if (0 != strcmp(param, opt->values[i])) {
+                        pmix_show_help("help-plm-base.txt", "multiple-prefixes", true,
+                                       prte_tool_basename, PRTE_CLI_PREFIX,
+                                       PRTE_CLI_PREFIX, "PRRTE", PRTE_CLI_PREFIX,
+                                       param, opt->values[i]);
+                        return PRTE_ERR_FATAL;
+                    }
+                }
+            }
+            iptr = PMIX_NEW(prte_info_item_t);
+            PMIX_INFO_LOAD(&iptr->info, "PRTE_PREFIX", opt->values[0], PMIX_STRING);
+            pmix_list_append(jobdata, &iptr->super);
+        }
+
+        opt = pmix_cmd_line_get_param(&results, PRTE_CLI_PMIX_PREFIX);
+        if (NULL != opt) {
+            // only allow one instance of it, or all must be the same
+            if (1 < (count = pmix_cmd_line_get_ninsts(&results, PRTE_CLI_PREFIX))) {
+                param = NULL;
+                for (i=0; i < count; i++) {
+                    if (NULL == param) {
+                        param = opt->values[i];
+                    } else if (0 != strcmp(param, opt->values[i])) {
+                        pmix_show_help("help-plm-base.txt", "multiple-prefixes", true,
+                                       prte_tool_basename, PRTE_CLI_PMIX_PREFIX,
+                                       PRTE_CLI_PMIX_PREFIX, "PMIx", PRTE_CLI_PMIX_PREFIX,
+                                       param, opt->values[i]);
+                        return PRTE_ERR_FATAL;
+                    }
+                }
+            }
+            iptr = PMIX_NEW(prte_info_item_t);
+            PMIX_INFO_LOAD(&iptr->info, PMIX_PREFIX, opt->values[0], PMIX_STRING);
+            pmix_list_append(jobdata, &iptr->super);
+        }
+    }
+
     /* check for preload files */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_PRELOAD_FILES);
     if (NULL != opt) {
@@ -315,6 +363,52 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
         goto cleanup;
     }
 
+    // check for PMIx prefix for the application
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_APP_PREFIX);
+    if (NULL != opt) {
+        // only allow one instance of it, or all must be the same
+        if (1 < (count = pmix_cmd_line_get_ninsts(&results, PRTE_CLI_APP_PREFIX))) {
+            param = NULL;
+            for (i=0; i < count; i++) {
+                if (NULL == param) {
+                    param = opt->values[i];
+                } else if (0 != strcmp(param, opt->values[i])) {
+                    pmix_show_help("help-plm-base.txt", "multiple-app-prefixes", true,
+                                   prte_tool_basename, PRTE_CLI_APP_PREFIX,
+                                   PRTE_CLI_APP_PREFIX, param, opt->values[i]);
+                    return PRTE_ERR_FATAL;
+                }
+            }
+        }
+        // add it to the app's info
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PREFIX, opt->values[0], PMIX_STRING);
+    } else if (NULL != (param = getenv("PMIX_APP_PREFIX"))) {
+        // allow the cmd line to override the environment
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PREFIX, param, PMIX_STRING);
+    }
+
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_NO_APP_PREFIX);
+    if (NULL != opt) {
+        // cannot have a prefix as well as no-prefix
+        if (NULL != (opt2 = pmix_cmd_line_get_param(&results, PRTE_CLI_APP_PREFIX))) {
+            pmix_show_help("help-plm-base.txt", "prefix-conflict", true,
+                           prte_tool_basename, PRTE_CLI_APP_PREFIX, opt2->values[0],
+                           PRTE_CLI_NO_APP_PREFIX);
+            return PRTE_ERR_FATAL;
+        }
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PREFIX, NULL, PMIX_STRING);
+    } else if (NULL != getenv("PMIX_APP_NO_PREFIX")) {
+        // cannot have a prefix as well as no-prefix
+        if (NULL != (opt2 = pmix_cmd_line_get_param(&results, PRTE_CLI_APP_PREFIX))) {
+            pmix_show_help("help-plm-base.txt", "prefix-conflict", true,
+                           prte_tool_basename, PRTE_CLI_APP_PREFIX, opt2->values[0],
+                           "PMIX_APP_NO_PREFIX");
+            return PRTE_ERR_FATAL;
+        }
+        // allow the cmd line to override the environment
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PREFIX, NULL, PMIX_STRING);
+    }
+
     *app_ptr = app;
     app = NULL;
     *made_app = true;
@@ -334,7 +428,8 @@ cleanup:
 
 int prte_parse_locals(prte_schizo_base_module_t *schizo,
                       pmix_list_t *jdata, char *argv[],
-                      char ***hostfiles, char ***hosts)
+                      char ***hostfiles, char ***hosts,
+                      pmix_list_t *jobdata)
 {
     int i, rc;
     char **temp_argv, **env;
@@ -359,8 +454,8 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
                     env = NULL;
                 }
                 app = NULL;
-                rc = create_app(schizo, temp_argv, jdata, &app, &made_app, &env,
-                                hostfiles, hosts);
+                rc = create_app(schizo, temp_argv, &app, &made_app, &env,
+                                hostfiles, hosts, jobdata);
                 if (PRTE_SUCCESS != rc) {
                     /* Assume that the error message has already been
                      printed; */
@@ -383,8 +478,8 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
 
     if (PMIX_ARGV_COUNT_COMPAT(temp_argv) > 1) {
         app = NULL;
-        rc = create_app(schizo, temp_argv, jdata, &app, &made_app, &env,
-                        hostfiles, hosts);
+        rc = create_app(schizo, temp_argv, &app, &made_app, &env,
+                        hostfiles, hosts, jobdata);
         if (PRTE_SUCCESS != rc) {
             return rc;
         }

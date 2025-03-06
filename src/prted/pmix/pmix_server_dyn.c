@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -280,8 +280,9 @@ static void interim(int sd, short args, void *cbdata)
                     prte_set_attribute(&app->attributes, PRTE_APP_ADD_HOST, PRTE_ATTR_GLOBAL,
                                        info->value.data.string, PMIX_STRING);
                 } else if (PMIX_CHECK_KEY(info, PMIX_PREFIX)) {
-                    prte_set_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL,
-                                       info->value.data.string, PMIX_STRING);
+                    prte_prepend_attribute(&app->attributes, PRTE_APP_PMIX_PREFIX,
+                                           PRTE_ATTR_GLOBAL,
+                                           info->value.data.string, PMIX_STRING);
                 } else if (PMIX_CHECK_KEY(info, PMIX_WDIR)) {
                     /* if this is a relative path, convert it to an absolute path */
                     if (pmix_path_is_absolute(info->value.data.string)) {
@@ -375,8 +376,24 @@ static void interim(int sd, short args, void *cbdata)
     /* transfer the job info across */
     for (m = 0; m < cd->ninfo; m++) {
         info = &cd->info[m];
+        if (PMIX_CHECK_KEY(info, PMIX_PREFIX)) {
+            /* this is the default PMIx library prefix for the
+             * job - apply it to all apps, but avoid overwriting
+             * any value specified at the app-level */
+            for (i=0; i < jdata->apps->size; i++) {
+                app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, i);
+                if (NULL == app) {
+                    continue;
+                }
+                if (!prte_get_attribute(&app->attributes, PRTE_APP_PMIX_PREFIX, NULL, PMIX_STRING)) {
+                    // an app-level prefix wasn't given, so use this one
+                    prte_set_attribute(&app->attributes, PRTE_APP_PMIX_PREFIX,
+                                       PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
+                }
+            }
+
             /***   REQUESTED MAPPER   ***/
-        if (PMIX_CHECK_KEY(info, PMIX_MAPPER)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_MAPPER)) {
             jdata->map->req_mapper = strdup(info->value.data.string);
 
             /***   DISPLAY ALLOCATION   ***/

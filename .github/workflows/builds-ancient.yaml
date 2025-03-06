@@ -47,6 +47,8 @@ jobs:
          export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
          export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
          prterun -n 4 $RUNNER_TEMP/pmixinstall/bin/hello
+      if:   ${{ true }}
+      timeout-minutes: 5
 
   ubuntuClang4:
     runs-on: ubuntu-latest
@@ -94,3 +96,5 @@ jobs:
          export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
          export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
          prterun -n 4 $RUNNER_TEMP/pmixinstall/bin/hello
+      if:   ${{ true }}
+      timeout-minutes: 5
