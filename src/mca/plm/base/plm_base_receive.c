@@ -17,7 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -134,8 +134,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
     pid_t pid;
     bool debugging, found;
     int i, room, *rmptr = &room;
-    char **env;
-    char *prefix_dir, *tmp;
+    char **env, *tmp;
     pmix_value_t pidval = PMIX_VALUE_STATIC_INIT;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
@@ -308,24 +307,19 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             }
             /* if the prefix was set in the parent's job, we need to transfer
              * that prefix to the child's app_context so any further launch of
-             * orteds can find the correct binary. There always has to be at
+             * procs can find the correct library. There always has to be at
              * least one app_context in both parent and child, so we don't
              * need to check that here. However, be sure not to overwrite
              * the prefix if the user already provided it!
              */
             app = (prte_app_context_t *) pmix_pointer_array_get_item(parent->apps, 0);
             child_app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0);
-            if (NULL != app && NULL != child_app) {
-                prefix_dir = NULL;
-                if (prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR,
-                                       (void **) &prefix_dir, PMIX_STRING)
-                    && !prte_get_attribute(&child_app->attributes, PRTE_APP_PREFIX_DIR, NULL,
-                                           PMIX_STRING)) {
-                    prte_set_attribute(&child_app->attributes, PRTE_APP_PREFIX_DIR,
-                                       PRTE_ATTR_GLOBAL, prefix_dir, PMIX_STRING);
-                }
-                if (NULL != prefix_dir) {
-                    free(prefix_dir);
+            if (NULL != app && NULL != app->env && NULL != child_app) {
+                for (i=0; NULL != app->env[i]; i++) {
+                    if (0 == strncmp(app->env[i], "PMIX_PREFIX", strlen("PMIX_PREFIX"))) {
+                        PMIx_Argv_append_unique_nosize(&child_app->env, app->env[i]);
+                        break;
+                    }
                 }
             }
         }

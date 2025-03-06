@@ -78,7 +78,7 @@ jobs:
     - name: Build PRRTE
       run: |
         ./autogen.pl
-        ./configure --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall --enable-devel-check
+        ./configure --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall --enable-debug --enable-devel-check
         make -j
         make install
     - name: Tweak PRRTE
@@ -92,6 +92,8 @@ jobs:
          export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
          export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
          prterun -n 4 $RUNNER_TEMP/pmixinstall/bin/hello
+      if:   ${{ true }}
+      timeout-minutes: 5
 
   ubuntuClang:
     runs-on: ubuntu-latest
@@ -125,7 +127,7 @@ jobs:
         ./autogen.pl
 
         pip3 install -r docs/requirements.txt
-        CC=clang ./configure --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall $sphinx --enable-devel-check
+        CC=clang ./configure --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall $sphinx --enable-debug --enable-devel-check
         make -j
         make install
     - name: Tweak PRRTE
@@ -139,6 +141,8 @@ jobs:
          export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
          export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
          prterun -n 4 $RUNNER_TEMP/pmixinstall/bin/hello
+      if:   ${{ true }}
+      timeout-minutes: 5
 
   ubuntuClang5:
     runs-on: ubuntu-latest
@@ -172,7 +176,7 @@ jobs:
         ./autogen.pl
 
         pip3 install -r docs/requirements.txt
-        CC=clang ./configure --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall $sphinx --enable-devel-check
+        CC=clang ./configure --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall $sphinx --enable-debug --enable-devel-check
         make -j
         make install
     - name: Tweak PRRTE
@@ -186,3 +190,5 @@ jobs:
          export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
          export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
          prterun -n 4 $RUNNER_TEMP/pmixinstall/bin/hello
+      if:   ${{ true }}
+      timeout-minutes: 5

@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2020-2021 Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2024      Nanook Consulting  All rights reserved.
+# Copyright (c) 2024-2025 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -40,18 +40,6 @@ For reference, your current PATH is:
 
 We also looked for orted in the following directory:
 
-  %s
-
-[multiple-prefixes]
-Specified multiple application contexts using different
-settings for --prefix. Care should be taken, that corresponding
-processes are mapped to different nodes. Having multiple prefixes
-per node is not allowed.
-
-The previously set prefix was
-  %s
-
-the prefix to be set overriding:
   %s
 
 [concurrency-less-than-zero]

@@ -35,6 +35,7 @@
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
+#include "src/mca/pinstalldirs/pinstalldirs_types.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_output.h"
@@ -200,7 +201,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
 {
     pmix_info_t *info;
     size_t n;
-    int i, rc;
+    int i, m, rc;
     bool flag;
     uint32_t u32;
     uint16_t u16;
@@ -211,8 +212,25 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
     for (n = 0; n < ninfo; n++) {
         info = &iptr[n];
 
+            /***   PREFIX   ***/
+        if (PMIX_CHECK_KEY(info, PMIX_PREFIX)) {
+            /* this is the default PMIx library prefix for the
+             * job - apply it to all apps, but avoid overwriting
+             * any value specified at the app-level */
+            for (m=0; m < jdata->apps->size; m++) {
+                app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, m);
+                if (NULL == app) {
+                    continue;
+                }
+                if (!prte_get_attribute(&app->attributes, PRTE_APP_PMIX_PREFIX, NULL, PMIX_STRING)) {
+                    // an app-level prefix wasn't given, so use this one
+                    prte_set_attribute(&app->attributes, PRTE_APP_PMIX_PREFIX,
+                                       PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
+                }
+            }
+
             /***   REQUESTED MAPPER   ***/
-        if (PMIX_CHECK_KEY(info, PMIX_MAPPER)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_MAPPER)) {
             jdata->map->req_mapper = strdup(info->value.data.string);
 
             /***   DISPLAY ALLOCATION   ***/
@@ -707,7 +725,6 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
     if (NULL != papp->info) {
         for (m = 0; m < papp->ninfo; m++) {
             info = &papp->info[m];
-
             if (PMIX_CHECK_KEY(info, PMIX_HOST)) {
                 prte_set_attribute(&app->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_GLOBAL,
                                    info->value.data.string, PMIX_STRING);
@@ -725,8 +742,9 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                                    info->value.data.string, PMIX_STRING);
 
             } else if (PMIX_CHECK_KEY(info, PMIX_PREFIX)) {
-                prte_set_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL,
-                                   info->value.data.string, PMIX_STRING);
+                prte_prepend_attribute(&app->attributes, PRTE_APP_PMIX_PREFIX,
+                                       PRTE_ATTR_GLOBAL,
+                                       info->value.data.string, PMIX_STRING);
 
             } else if (PMIX_CHECK_KEY(info, PMIX_WDIR)) {
                 /* if this is a relative path, convert it to an absolute path */

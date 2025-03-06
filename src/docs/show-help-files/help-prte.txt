@@ -116,6 +116,16 @@ option to the help request as "--help <option>".
 | "--noprefix"         | Disable automatic "--prefix" behavior         |
 +----------------------+-----------------------------------------------+
 | "--prefix <dir>"     | Prefix to be used to look for RTE executables |
+|                      | AND their libraries on remote nodes. Note     |
+|                      | that an assumption is made that the libraries |
+|                      | will be located at the same subdirectory as   |
+|                      | per the configuration options given when      |
+|                      | PRRTE was built.                              |
++----------------------+-----------------------------------------------+
+| "--pmix-prefix <dir>" | Prefix to be used to look for the PMIx       |
+|                      | library used by RTE executables on remote     |
+|                      | nodes. This is the location of the top-level  |
+|                      | directory for the installation.               |
 +----------------------+-----------------------------------------------+
 | "--report-pid <arg>" | Print out PID on stdout ("-"), stderr ("+"),  |
 |                      | or a file (anything else)                     |
@@ -281,6 +291,18 @@ prefix for remote daemons if it was either configured with the "--
 enable-prte-prefix-by-default" option OR prte itself was executed with
 an absolute path to the "prte" command. This option disables that
 behavior.
+
+[pmix-prefix]
+
+Prefix to be used by a PRRTE executable to look for its PMIx installation
+on remote nodes. This is the location of the top-level directory for the
+installation. If the installation has not been moved, it would be the
+value given to "--prefix" when the installation was configured.
+
+Note that PRRTE cannot determine the exact name of the library subdirectory
+under this location. For example, some systems will call it "lib" while others
+call it "lib64". Accordingly, PRRTE will use the library subdirectory name
+of the PMIx installation used to build PRRTE.
 
 [forward-signals]
 
