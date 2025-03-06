@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -297,20 +297,23 @@ static void launch_daemons(int fd, short args, void *cbdata)
     PMIX_SETENV_COMPAT("PRTE_DAEMON_UMASK_VALUE", var, true, &env);
     free(var);
 
-    /* If we have a prefix, then modify the PATH and
-       LD_LIBRARY_PATH environment variables. We only allow
-       a single prefix to be specified. Since there will
-       always be at least one app_context, we take it from
-       there
-    */
-    app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0);
-    if (!prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &prefix_dir, PMIX_STRING) ||
-        NULL == prefix_dir) {
-        // see if it is in the environment
-        if (NULL != (var = getenv("PRTE_PREFIX"))) {
-            prefix_dir = strdup(var);
-        }
+    /*
+     * Any prefix is being installed in the DAEMON app object, so
+     * we only need to look there to find it. This covers any
+     * prefix by default, PRTE_PREFIX given in the environment,
+     * and '--prefix' from the cmd line
+     */
+    app = (prte_app_context_t *) pmix_pointer_array_get_item(daemons->apps, 0);
+    if (NULL == app) {
+        // should never happen
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        rc = PRTE_ERR_NOT_FOUND;
+        goto cleanup;
     }
+    if (!prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &prefix_dir, PMIX_STRING)) {
+        prefix_dir = NULL;
+    }
+
     if (NULL != prefix_dir) {
         char *newenv;
 

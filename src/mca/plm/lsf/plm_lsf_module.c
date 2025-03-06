@@ -18,7 +18,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -58,11 +58,13 @@
 #define SR1_PJOBS
 #include <lsf/lsbatch.h>
 
+#include "src/pmix/pmix-internal.h"
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_environ.h"
+#include "src/util/pmix_printf.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps.h"
@@ -297,50 +299,33 @@ static void launch_daemons(int fd, short args, void *cbdata)
         }
     }
 
-    /* Copy the prefix-directory specified in the
-       corresponding app_context.  If there are multiple,
-       different prefix's in the app context, complain (i.e., only
-       allow one --prefix option for the entire lsf run -- we
-       don't support different --prefix'es for different nodes in
-       the LSF plm) */
-    cur_prefix = NULL;
-    for (i = 0; i < jdata->apps->size; i++) {
-        char *app_prefix_dir = NULL;
-        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
-            continue;
-        }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &app_prefix_dir,
-                               PMIX_STRING)
-            && NULL != app_prefix_dir) {
-            /* Check for already set cur_prefix_dir -- if different,
-               complain */
-            if (NULL != cur_prefix && 0 != strcmp(cur_prefix, app_prefix_dir)) {
-                pmix_show_help("help-plm-lsf.txt", "multiple-prefixes", true, cur_prefix,
-                               app_prefix_dir);
-                rc = PRTE_ERR_FAILED_TO_START;
-                goto cleanup;
-            }
-
-            /* If not yet set, copy it; iff set, then it's the
-               same anyway */
-            if (NULL == cur_prefix) {
-                cur_prefix = strdup(app_prefix_dir);
-                PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                                     "%s plm:lsf: Set prefix:%s",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cur_prefix));
-            }
-            free(app_prefix_dir);
-        }
+    /*
+     * Any prefix is being installed in the DAEMON app object, so
+     * we only need to look there to find it. This covers any
+     * prefix by default, PRTE_PREFIX given in the environment,
+     * and '--prefix' from the cmd line
+     */
+    app = (prte_app_context_t *) pmix_pointer_array_get_item(daemons->apps, 0);
+    if (NULL == app) {
+        // should never happen
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        rc = PRTE_ERR_NOT_FOUND;
+        goto cleanup;
     }
-    if (NULL == cur_prefix) {
-        // see if it is in the environment
-        if (NULL != (param = getenv("PRTE_PREFIX"))) {
-            cur_prefix = strdup(param);
-        }
+    if (!prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &cur_prefix, PMIX_STRING)) {
+        cur_prefix = NULL;
     }
 
     /* setup environment */
     env = PMIX_ARGV_COPY_COMPAT(prte_launch_environ);
+
+    // set the prefix, if needed
+    if (NULL != cur_prefix) {
+        pmix_asprintf(&param, "PRTE_PREFIX=%s", cur_prefix);
+        PMIx_Argv_append_unique_nosize(&env, param);
+        free(param);
+        free(cur_prefix);
+    }
 
     /* lsb_launch tampers with SIGCHLD.
      * After the call to lsb_launch, the signal handler for SIGCHLD is NULL.

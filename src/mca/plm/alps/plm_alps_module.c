@@ -16,7 +16,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -178,7 +178,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     char *vpid_string;
     char **custom_strings;
     int num_args, i;
-    char *cur_prefix;
+    char *cur_prefix = NULL;
     int proc_vpid_index;
     prte_app_context_t *app;
     prte_node_t *node;
@@ -357,40 +357,21 @@ static void launch_daemons(int fd, short args, void *cbdata)
         }
     }
 
-    /* Copy the prefix-directory specified in the
-       corresponding app_context.  If there are multiple,
-       different prefix's in the app context, complain (i.e., only
-       allow one --prefix option for the entire alps run -- we
-       don't support different --prefix'es for different nodes in
-       the ALPS plm) */
-    cur_prefix = NULL;
-    for (i = 0; i < state->jdata->apps->size; i++) {
-        char *app_prefix_dir = NULL;
-        if (NULL
-            == (app = (prte_app_context_t *) pmix_pointer_array_get_item(state->jdata->apps, i))) {
-            continue;
-        }
-        prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &app_prefix_dir,
-                           PMIX_STRING);
-        /* Check for already set cur_prefix_dir -- if different,
-           complain */
-        if (NULL != app_prefix_dir) {
-            if (NULL != cur_prefix && 0 != strcmp(cur_prefix, app_prefix_dir)) {
-                pmix_show_help("help-plm-alps.txt", "multiple-prefixes", true, cur_prefix,
-                               app_prefix_dir);
-                goto cleanup;
-            }
-
-            /* If not yet set, copy it; iff set, then it's the
-               same anyway */
-            if (NULL == cur_prefix) {
-                cur_prefix = strdup(app_prefix_dir);
-                if (prte_mca_plm_alps_component.debug) {
-                    pmix_output(0, "plm:alps: Set prefix:%s", cur_prefix);
-                }
-            }
-            free(app_prefix_dir);
-        }
+    /*
+     * Any prefix is being installed in the DAEMON app object, so
+     * we only need to look there to find it. This covers any
+     * prefix by default, PRTE_PREFIX given in the environment,
+     * and '--prefix' from the cmd line
+     */
+    app = (prte_app_context_t *) pmix_pointer_array_get_item(daemons->apps, 0);
+    if (NULL == app) {
+        // should never happen
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        rc = PRTE_ERR_NOT_FOUND;
+        goto cleanup;
+    }
+    if (!prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &cur_prefix, PMIX_STRING)) {
+        cur_prefix = NULL;
     }
 
     /* protect the args in case someone has a script wrapper around aprun */
@@ -428,7 +409,9 @@ cleanup:
     if (NULL != env) {
         PMIX_ARGV_FREE_COMPAT(env);
     }
-
+    if (NULL != cur_prefix) {
+        free(cur_prefix);
+    }
     /* check for failed launch - if so, force terminate */
     if (failed_launch) {
         PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);

@@ -19,22 +19,6 @@
 #
 # $HEADER$
 #
-[multiple-prefixes]
-The SLURM process starter for PRTE does not support multiple
-different --prefix options to mpirun.  You can specify at most one
-unique value for the --prefix option (in any of the application
-contexts); it will be applied to all the application contexts of your
-parallel job.
-
-Put simply, you must have PRTE installed in the same location on
-all of your SLURM nodes.
-
-Multiple different --prefix options were specified to mpirun.  This is
-a fatal error for the SLURM process starter in PRTE.
-
-The first two prefix values supplied were:
-    %s
-and %s
 #
 [no-hosts-in-list]
 The SLURM process starter for PRTE didn't find any hosts in

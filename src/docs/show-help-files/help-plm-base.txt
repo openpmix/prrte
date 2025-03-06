@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -175,3 +175,18 @@ detected that the following node differs in endianness:
   Local endian:  %s
 
 Please correct the situation and try again.
+#
+[multiple-prefixes]
+%s does not support multiple different --prefix options.  You can
+specify at most one unique value for the --prefix option (in any of
+the application contexts); it will be applied to all the application
+contexts of your parallel job.
+
+Put simply, you must have PRRTE installed in the same location on
+all of your nodes.
+
+The first two prefix values supplied were:
+    %s
+and %s
+
+Please correct this and try again.

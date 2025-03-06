@@ -18,7 +18,7 @@
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2022-2023 Triad National Security, LLC.
  *                         All rights reserved.
  * $COPYRIGHT$
@@ -78,9 +78,9 @@
  * with a NULL value for app_env, meaning that there is no "base"
  * environment that the app needs to be created from.
  */
-static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_t *jdata,
+static int create_app(prte_schizo_base_module_t *schizo, char **argv,
                       prte_pmix_app_t **app_ptr, bool *made_app, char ***app_env,
-                      char ***hostfiles, char ***hosts)
+                      char ***hostfiles, char ***hosts, pmix_list_t *jobdata)
 {
     char cwd[PRTE_PATH_MAX];
     int i, count, rc;
@@ -92,7 +92,8 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
     char *tval;
     bool fwd;
     pmix_value_t val;
-    PRTE_HIDE_UNUSED_PARAMS(jdata, app_env);
+    prte_info_item_t *iptr;
+    PRTE_HIDE_UNUSED_PARAMS(app_env);
 
     *made_app = false;
 
@@ -273,6 +274,22 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
         app->app.maxprocs = count;
     }
 
+    // check for prefix
+    if (NULL != jobdata) {
+        opt = pmix_cmd_line_get_param(&results, PRTE_CLI_PREFIX);
+        if (NULL != opt) {
+            // only allow one instance of it
+            if (1 < pmix_cmd_line_get_ninsts(&results, PRTE_CLI_PREFIX)) {
+                pmix_show_help("help-plm-base.txt", "multiple-prefixes", true,
+                               prte_tool_basename, opt->values[0], opt->values[1]);
+                return PRTE_ERR_FATAL;
+            }
+            iptr = PMIX_NEW(prte_info_item_t);
+            PMIX_INFO_LOAD(&iptr->info, PMIX_PREFIX, opt->values[0], PMIX_STRING);
+            pmix_list_append(jobdata, &iptr->super);
+        }
+    }
+
     /* check for preload files */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_PRELOAD_FILES);
     if (NULL != opt) {
@@ -334,7 +351,8 @@ cleanup:
 
 int prte_parse_locals(prte_schizo_base_module_t *schizo,
                       pmix_list_t *jdata, char *argv[],
-                      char ***hostfiles, char ***hosts)
+                      char ***hostfiles, char ***hosts,
+                      pmix_list_t *jobdata)
 {
     int i, rc;
     char **temp_argv, **env;
@@ -359,8 +377,8 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
                     env = NULL;
                 }
                 app = NULL;
-                rc = create_app(schizo, temp_argv, jdata, &app, &made_app, &env,
-                                hostfiles, hosts);
+                rc = create_app(schizo, temp_argv, &app, &made_app, &env,
+                                hostfiles, hosts, jobdata);
                 if (PRTE_SUCCESS != rc) {
                     /* Assume that the error message has already been
                      printed; */
@@ -383,8 +401,8 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
 
     if (PMIX_ARGV_COUNT_COMPAT(temp_argv) > 1) {
         app = NULL;
-        rc = create_app(schizo, temp_argv, jdata, &app, &made_app, &env,
-                        hostfiles, hosts);
+        rc = create_app(schizo, temp_argv, &app, &made_app, &env,
+                        hostfiles, hosts, jobdata);
         if (PRTE_SUCCESS != rc) {
             return rc;
         }

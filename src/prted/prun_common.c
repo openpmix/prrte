@@ -587,7 +587,8 @@ int prun_common(pmix_cli_result_t *results,
     /* they want to run an application, so let's parse
      * the cmd line to get it */
 
-    if (PRTE_SUCCESS != (rc = prte_parse_locals(schizo, &apps, pargv, NULL, NULL))) {
+    rc = prte_parse_locals(schizo, &apps, pargv, NULL, NULL, NULL);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_LIST_DESTRUCT(&apps);
         goto DONE;

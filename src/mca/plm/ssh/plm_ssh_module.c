@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -1004,7 +1004,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     char *prefix_dir = NULL, *var;
     int argc;
     int rc;
-    prte_app_context_t *app;
+    prte_app_context_t *dapp;
     prte_node_t *node, *nd;
     int32_t nnode;
     prte_job_t *daemons;
@@ -1084,41 +1084,22 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /*
-     * After a discussion between Ralph & Jeff, we concluded that we
-     * really are handling the prefix dir option incorrectly. It currently
-     * is associated with an app_context, yet it really refers to the
-     * location where PRTE is installed on a NODE. Fixing
-     * this right now would involve significant change to prun as well
-     * as elsewhere, so we will intentionally leave this incorrect at this
-     * point. The error, however, is identical to that seen in all prior
-     * releases of PRTE, so our behavior is no worse than before.
-     *
-     * A note to fix this, along with ideas on how to do so, has been filed
-     * on the project's Trac system under "feature enhancement".
-     *
-     * For now, default to the prefix_dir provided in the first app_context.
-     * Since there always MUST be at least one app_context, we are safe in
-     * doing this.
+     * Any prefix is being installed in the DAEMON app object, so
+     * we only need to look there to find it. This covers any
+     * prefix by default, PRTE_PREFIX given in the environment,
+     * and '--prefix' from the cmd line
      */
-    app = (prte_app_context_t *) pmix_pointer_array_get_item(state->jdata->apps, 0);
-    if (NULL == app) {
+    dapp = (prte_app_context_t *) pmix_pointer_array_get_item(daemons->apps, 0);
+    if (NULL == dapp) {
+        // should never happen
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         rc = PRTE_ERR_NOT_FOUND;
         goto cleanup;
     }
-    if (!prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &prefix_dir, PMIX_STRING)) {
-        /* check to see if enable-prun-prefix-by-default was given - if
-         * this is being done by a singleton, then prun will not be there
-         * to put the prefix in the app. So make sure we check to find it */
-        if ((bool) PRTE_WANT_PRTE_PREFIX_BY_DEFAULT) {
-            prefix_dir = strdup(prte_install_dirs.prefix);
-        } else {
-            // see if it is in the environment
-            if (NULL != (var = getenv("PRTE_PREFIX"))) {
-                prefix_dir = strdup(var);
-            }
-        }
+    if (!prte_get_attribute(&dapp->attributes, PRTE_APP_PREFIX_DIR, (void **) &prefix_dir, PMIX_STRING)) {
+        prefix_dir = NULL;
     }
+
     /* we also need at least one node name so we can check what shell is
      * being used, if we have to
      */
