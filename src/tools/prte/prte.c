@@ -252,7 +252,7 @@ int main(int argc, char *argv[])
     int rc = 1, i;
     char *param, *tpath, *cptr;
     prte_pmix_lock_t lock;
-    pmix_list_t apps;
+    pmix_list_t apps, jobdata;
     prte_pmix_app_t *app;
     pmix_info_t *iptr, *iptr2, info;
     pmix_status_t ret;
@@ -278,9 +278,11 @@ int main(int argc, char *argv[])
     pmix_cli_result_t results;
     pmix_cli_item_t *opt;
     FILE *fp;
+    prte_info_item_t *iprteinfo;
 
     /* init the globals */
     PMIX_CONSTRUCT(&apps, pmix_list_t);
+    PMIX_CONSTRUCT(&jobdata, pmix_list_t);
     if (NULL == (param = getenv("PRTE_BASENAME"))) {
         prte_tool_basename = pmix_basename(argv[0]);
     } else {
@@ -637,7 +639,7 @@ int main(int argc, char *argv[])
     if (!pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
         /* see if they want to run an application - let's parse
          * the cmd line to get it */
-        rc = prte_parse_locals(schizo, &apps, pargv, &hostfiles, &hosts);
+        rc = prte_parse_locals(schizo, &apps, pargv, &hostfiles, &hosts, &jobdata);
         // not-found => no app given
         if (PRTE_SUCCESS != rc && PRTE_ERR_NOT_FOUND != rc) {
             PRTE_UPDATE_EXIT_STATUS(rc);
@@ -758,13 +760,37 @@ int main(int argc, char *argv[])
         goto DONE;
     }
 
-    /* Did the user specify a prefix, or want prefix by default? */
-    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_PREFIX);
-    if (NULL != opt || want_prefix_by_default) {
-        if (NULL != opt) {
-            param = strdup(opt->values[0]);
-        } else {
-            /* --enable-prun-prefix-default was given to prun */
+    /* check if we were given multiple prefixes, and if so, are
+     * any of them different from each other. The app parser
+     * puts every prefix it finds, regardless of app_context,
+     * onto the jobdata list */
+    param = NULL;
+    PMIX_LIST_FOREACH(iprteinfo, &jobdata, prte_info_item_t) {
+        if (PMIx_Check_key(iprteinfo->info.key, PMIX_PREFIX)) {
+            if (NULL == param) {
+                param = strdup(iprteinfo->info.value.data.string);
+            } else {
+                if (0 != strcmp(param, iprteinfo->info.value.data.string)) {
+                    // we have non-matching prefixes
+                    pmix_show_help("help-plm-base.txt", "multiple-prefixes", true,
+                                   prte_tool_basename, param, iprteinfo->info.value.data.string);
+                    PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                    goto DONE;
+                }
+            }
+        }
+    }
+
+    /* Did the user specify a prefix, or want prefix by default? We
+     * already checked for any prefixes on the cmd line, so we can
+     * just use that result */
+    if (NULL != param || want_prefix_by_default) {
+        if (NULL == param) {
+            /* --enable-prte-prefix-default was given at time of configure.
+             * NOTE: if the PRTE_PREFIX envar was set, then the installdirs
+             * framework would have picked that value up during init and
+             * populated the prte_install_dirs struct accordingly, so we
+             * do not need to explicitly check the environment here */
             param = strdup(prte_install_dirs.prefix);
         }
         /* "Parse" the param, aka remove superfluous path_sep. */
@@ -780,9 +806,24 @@ int main(int argc, char *argv[])
                 break;
             }
         }
-        prte_set_attribute(&dapp->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL,
-                           param, PMIX_STRING);
-        free(param);
+    } else if (NULL != (cptr = getenv("PRTE_PREFIX"))) {
+        /* need to cover the case where "want prefix by default" is not
+         * given, but PRTE_PREFIX was added to the environment prior
+         * to actually invoking prte */
+        param = strdup(cptr);
+        /* "Parse" the param, aka remove superfluous path_sep. */
+        param_len = strlen(param);
+        while (0 == strcmp(PRTE_PATH_SEP, &(param[param_len - 1]))) {
+            param[param_len - 1] = '\0';
+            param_len--;
+            if (0 == param_len) {
+                /* We get here if we removed all PATH_SEP's and end up
+                   with an empty string.  In this case, the prefix is
+                   just a single PATH_SEP. */
+                strncpy(param, PRTE_PATH_SEP, sizeof(param) - 1);
+                break;
+            }
+        }
     } else {
         /* Check if called with fully-qualified path to prte.
            (Note: Put this second so can override with --prefix (above). */
@@ -808,12 +849,28 @@ int main(int argc, char *argv[])
                 free(tmp_basename);
             }
             if (NULL != tpath) {
-                prte_set_attribute(&dapp->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL,
-                                   tpath, PMIX_STRING);
+                param = tpath;
             }
         }
     }
-
+    if (NULL != param) {
+        // add the directive to the daemon app object
+        if (prte_get_attribute(&dapp->attributes, PRTE_APP_PREFIX_DIR, (void **) &cptr, PMIX_STRING)) {
+            // already have a prefix directory entry - see if they are the same
+            if (0 != strcmp(cptr, param)) {
+                pmix_show_help("help-plm-base.txt", "multiple-prefixes", true,
+                               prte_tool_basename, param, cptr);
+                free(param);
+                free(cptr);
+                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                goto DONE;
+            }
+            free(cptr);
+        }
+        prte_set_attribute(&dapp->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL,
+                           param, PMIX_STRING);
+        free(param);
+    }
     /* apply any provided runtime options to the DVM itself */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_RTOS);
     if (NULL != opt) {

@@ -381,47 +381,21 @@ static void launch_daemons(int fd, short args, void *cbdata)
     argv[proc_vpid_index] = strdup(name_string);
     free(name_string);
 
-    /* Copy the prefix-directory specified in the
-       corresponding app_context.  If there are multiple,
-       different prefix's in the app context, complain (i.e., only
-       allow one --prefix option for the entire slurm run -- we
-       don't support different --prefix'es for different nodes in
-       the SLURM plm) */
-    cur_prefix = NULL;
-    for (n = 0; n < state->jdata->apps->size; n++) {
-        char *app_prefix_dir;
-        app = (prte_app_context_t *) pmix_pointer_array_get_item(state->jdata->apps, n);
-        if (NULL == app) {
-            continue;
-        }
-        app_prefix_dir = NULL;
-        prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &app_prefix_dir, PMIX_STRING);
-        /* Check for already set cur_prefix_dir -- if different,
-           complain */
-        if (NULL != app_prefix_dir) {
-            if (NULL != cur_prefix && 0 != strcmp(cur_prefix, app_prefix_dir)) {
-                pmix_show_help("help-plm-slurm.txt", "multiple-prefixes", true, cur_prefix,
-                               app_prefix_dir);
-                goto cleanup;
-            }
-
-            /* If not yet set, copy it; iff set, then it's the
-             * same anyway
-             */
-            if (NULL == cur_prefix) {
-                cur_prefix = strdup(app_prefix_dir);
-                PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                                     "%s plm:slurm: Set prefix:%s",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cur_prefix));
-            }
-            free(app_prefix_dir);
-        }
+    /*
+     * Any prefix is being installed in the DAEMON app object, so
+     * we only need to look there to find it. This covers any
+     * prefix by default, PRTE_PREFIX given in the environment,
+     * and '--prefix' from the cmd line
+     */
+    app = (prte_app_context_t *) pmix_pointer_array_get_item(daemons->apps, 0);
+    if (NULL == app) {
+        // should never happen
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        rc = PRTE_ERR_NOT_FOUND;
+        goto cleanup;
     }
-    if (NULL == cur_prefix) {
-        // see if it is in the environment
-        if (NULL != (param = getenv("PRTE_PREFIX"))) {
-            cur_prefix = strdup(param);
-        }
+    if (!prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &cur_prefix, PMIX_STRING)) {
+        cur_prefix = NULL;
     }
 
     /* protect the args in case someone has a script wrapper around srun */
