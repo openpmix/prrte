@@ -171,14 +171,27 @@ option to the help request as "--help <option>".
 | <filenames>"         | the remote machines current working directory |
 |                      | before starting the remote process.           |
 +----------------------+-----------------------------------------------+
+| "-s" | "--preload-   | Preload the binary on the remote machine      |
+| binary"              | before starting the remote process.           |
++----------------------+-----------------------------------------------+
+| "--app-pmix-prefix <dir>" | Prefix to be used by app procs to look   |
+|                      | for their PMIx installation on remote nodes.  |
+|                      | This is the location of the top-level         |
+|                      | directory for the installation. In the        |
+|                      | absence of providing an application-specific  |
+|                      | prefix, the PMIx prefix (if given) used by    |
+|                      | PRRTE's own executables will be applied       |
+|                      | unless the "--no-app-prefix" directive is     |
+|                      | given.                                        |
++----------------------+-----------------------------------------------+
+| "--no-app-prefix"    | Do not provide a prefix directive to this     |
+|                      | application.                                  |
++----------------------+-----------------------------------------------+
 | "--pset <name>"      | User-specified name assigned to the processes |
 |                      | in their given application                    |
 +----------------------+-----------------------------------------------+
 | "--rankfile          | Name of file to specify explicit task mapping |
 | <filename>"          |                                               |
-+----------------------+-----------------------------------------------+
-| "-s" | "--preload-   | Preload the binary on the remote machine      |
-| binary"              | before starting the remote process.           |
 +----------------------+-----------------------------------------------+
 | "--set-cwd-to-       | Set the working directory of the started      |
 | session-dir"         | processes to their session directory          |
@@ -1155,6 +1168,30 @@ stdout and stderr) remain open after launch, thus allowing the user to
 see any daemon-generated error messages. Otherwise, the daemon will
 "daemonize" itself upon launch, thereby closing its output streams.
 
+[app-pmix-prefix]
+
+Prefix to be used by an app to look for its PMIx installation on remote
+nodes. This is the location of the top-level directory for the installation.
+If the installation has not been moved, it would be the value given to
+"--prefix" when the installation was configured.
+
+Note that PRRTE cannot determine the exact name of the library subdirectory
+under this location. For example, some systems will call it "lib" while others
+call it "lib64". Accordingly, PRRTE will use the library subdirectory name
+of the PMIx installation used to build PRRTE.
+
+In the absence of providing an application-specific prefix, the PMIx prefix
+(if given) used by PRRTE's own executables will be applied unless the
+"--no-app-prefix" directive is given.
+
+[no-app-prefix]
+
+Do not apply any prefix to this application. This is needed when a default
+PMIx prefix has been given to PRRTE, but the application has been built
+against a PMIx library that (a) is different from the one used by PRRTE,
+and (b) was not moved. Otherwise, PRRTE will apply its default prefix to
+the application.
+
 [prun:executable-not-specified]
 
 No executable was specified on the %s command line.
@@ -1213,86 +1250,6 @@ signal %d.
 
 %s noticed that process rank %lu with PID %lu on node %s exited on
 signal %d (%s).
-
-[prun:empty-prefix]
-
-A prefix was supplied to %s that only contained slashes.
-
-This is a fatal error; %s will now abort.  No processes were launched.
-
-[prun:sys-limit-pipe]
-
-%s was unable to launch the specified application as it encountered an
-error:
-
-Error: system limit exceeded on number of pipes that can be open
-
-   Node: %s
-
-when attempting to start process rank %lu.
-
-This can be resolved by setting the mca parameter
-opal_set_max_sys_limits to 1, increasing your limit descriptor setting
-(using limit or ulimit commands), asking the system administrator for
-that node to increase the system limit, or by rearranging your
-processes to place fewer of them on that node.
-
-[prun:sys-limit-files]
-
-%s was unable to launch the specified application as it encountered an
-error:
-
-Error: system limit exceeded on number of files that can be open
-
-   Node: %s
-
-when attempting to start process rank %lu.
-
-This can be resolved by setting the mca parameter
-opal_set_max_sys_limits to 1, increasing your limit descriptor setting
-(using limit or ulimit commands), asking the system administrator for
-that node to increase the system limit, or by rearranging your
-processes to place fewer of them on that node.
-
-[prun:pipe-setup-failure]
-
-%s was unable to launch the specified application as it encountered an
-error:
-
-Error: pipe function call failed when setting up I/O forwarding
-subsystem
-
-   Node: %s
-
-while attempting to start process rank %lu.
-
-[prun:sys-limit-children]
-
-%s was unable to launch the specified application as it encountered an
-error:
-
-Error: system limit exceeded on number of processes that can be
-started
-
-   Node: %s
-
-when attempting to start process rank %lu.
-
-This can be resolved by either asking the system administrator for
-that node to increase the system limit, or by rearranging your
-processes to place fewer of them on that node.
-
-[prun:failed-term-attrs]
-
-%s was unable to launch the specified application as it encountered an
-error:
-
-Error: reading tty attributes function call failed while setting up
-I/O forwarding system
-
-   Node: %s
-
-while attempting to start process rank %lu.
 
 [prun:wdir-not-found]
 

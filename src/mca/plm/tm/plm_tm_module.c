@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -59,6 +59,7 @@
 
 #include "src/event/event-internal.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
+#include "src/mca/pinstalldirs/pinstalldirs_types.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_output.h"
@@ -231,7 +232,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
         return;
     }
 
-    PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output, "%s plm:tm: launching vm",
+    PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+                         "%s plm:tm: launching vm",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* Allocate a bunch of TM events to use for tm_spawn()ing */
@@ -297,45 +299,59 @@ static void launch_daemons(int fd, short args, void *cbdata)
     PMIX_SETENV_COMPAT("PRTE_DAEMON_UMASK_VALUE", var, true, &env);
     free(var);
 
-    /* If we have a prefix, then modify the PATH and
-       LD_LIBRARY_PATH environment variables. We only allow
-       a single prefix to be specified. Since there will
-       always be at least one app_context, we take it from
-       there
-    */
-    app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0);
-    if (!prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &prefix_dir, PMIX_STRING) ||
-        NULL == prefix_dir) {
-        // see if it is in the environment
-        if (NULL != (var = getenv("PRTE_PREFIX"))) {
-            prefix_dir = strdup(var);
-        }
-    }
-    if (NULL != prefix_dir) {
-        char *newenv;
+    /*
+     * Any prefix was installed in the DAEMON job object, so
+     * we only need to look there to find it. This covers any
+     * prefix by default, PRTE_PREFIX given in the environment,
+     * and '--prefix' from the cmd line
+     */
+    if (prte_get_attribute(&daemons->attributes, PRTE_JOB_PREFIX, (void **) &prefix_dir, PMIX_STRING)) {
+        char *newenv, *oldenv;
 
-        for (i = 0; NULL != env && NULL != env[i]; ++i) {
-            /* Reset PATH */
-            if (0 == strncmp("PATH=", env[i], 5)) {
-                pmix_asprintf(&newenv, "%s/%s:%s", prefix_dir, bin_base, env[i] + 5);
-                PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                                     "%s plm:tm: resetting PATH: %s",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), newenv));
-                PMIX_SETENV_COMPAT("PATH", newenv, true, &env);
-                free(newenv);
-            }
-
-            /* Reset LD_LIBRARY_PATH */
-            else if (0 == strncmp("LD_LIBRARY_PATH=", env[i], 16)) {
-                pmix_asprintf(&newenv, "%s/%s:%s", prefix_dir, lib_base, env[i] + 16);
-                PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                                     "%s plm:tm: resetting LD_LIBRARY_PATH: %s",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), newenv));
-                PMIX_SETENV_COMPAT("LD_LIBRARY_PATH", newenv, true, &env);
-                free(newenv);
-            }
+        /* Reset PATH */
+        oldenv = getenv("PATH");
+        if (NULL != oldenv) {
+            pmix_asprintf(&newenv, "%s/%s:%s", prefix_dir, bin_base, oldenv);
+        } else {
+            pmix_asprintf(&newenv, "%s/%s", prefix_dir, bin_base);
         }
+        PMIX_SETENV_COMPAT("PATH", newenv, true, &env);
+        PMIX_OUTPUT_VERBOSE((1, "plm:tm: reset PATH: %s", newenv));
+        free(newenv);
+
+        /* Reset LD_LIBRARY_PATH */
+        oldenv = getenv("LD_LIBRARY_PATH");
+        if (NULL != oldenv) {
+            pmix_asprintf(&newenv, "%s/%s:%s", prefix_dir, lib_base, oldenv);
+        } else {
+            pmix_asprintf(&newenv, "%s/%s", prefix_dir, lib_base);
+        }
+        PMIX_SETENV_COMPAT("LD_LIBRARY_PATH", newenv, true, &env);
+        PMIX_OUTPUT_VERBOSE((1, "plm:tm: reset LD_LIBRARY_PATH: %s", newenv));
+        free(newenv);
+        // add the prefix itself to the environment
+        PMIX_SETENV_COMPAT("PRTE_PREFIX", prefix_dir, true, &env);
         free(prefix_dir);
+    }
+
+    /* Similarly, we have to check for any PMIx prefix that was specified */
+    if (prte_get_attribute(&daemons->attributes, PRTE_JOB_PMIX_PREFIX, (void **) &pmix_prefix, PMIX_STRING)) {
+        char *oldenv, *newenv;
+        char *p = pmix_basename(pmix_pinstall_dirs.libdir);
+
+        oldenv = getenv("LD_LIBRARY_PATH");
+        if (NULL != oldenv) {
+            pmix_asprintf(&newenv, "%s/%s:%s", pmix_prefix, p, oldenv);
+        } else {
+            pmix_asprintf(&newenv, "%s/%s", pmix_prefix, p);
+        }
+        free(p);
+        PMIX_SETENV_COMPAT("LD_LIBRARY_PATH", newenv, true, &env);
+        PMIX_OUTPUT_VERBOSE((1, "plm:tm: reset LD_LIBRARY_PATH: %s", newenv));
+        free(newenv);
+        // add the prefix itself to the environment
+        PMIX_SETENV_COMPAT("PMIX_PREFIX", pmix_prefix, true, &env);
+        free(pmix_prefix);
     }
 
     /* Iterate through each of the nodes and spin

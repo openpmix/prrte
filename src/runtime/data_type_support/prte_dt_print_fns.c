@@ -14,7 +14,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
@@ -469,8 +469,13 @@ void prte_app_print(char **output, prte_job_t *jdata, prte_app_context_t *src)
     }
 
     tmp3 = NULL;
-    prte_get_attribute(&src->attributes, PRTE_APP_PREFIX_DIR, (void **) &tmp3, PMIX_STRING);
-    pmix_asprintf(&tmp2, "%s\n\tWorking dir: %s\n\tPrefix: %s\n\tUsed on node: %s", tmp,
+    for (i=0; NULL != src->env && NULL != src->env[i]; i++) {
+        if (0 == strncmp(src->env[i], "PMIX_PREFIX", strlen("PMIX_PREFIX"))) {
+            tmp3 = src->env[i];
+            tmp3 += strlen("PMIX_PREFIX=");
+        }
+    }
+    pmix_asprintf(&tmp2, "%s\n\tWorking dir: %s\n\tPMIxPrefix: %s\n\tUsed on node: %s", tmp,
                   (NULL == src->cwd) ? "NULL" : src->cwd, (NULL == tmp3) ? "NULL" : tmp3,
                   PRTE_FLAG_TEST(src, PRTE_APP_FLAG_USED_ON_NODE) ? "TRUE" : "FALSE");
     free(tmp);

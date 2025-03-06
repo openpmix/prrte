@@ -16,7 +16,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -56,6 +56,7 @@
 
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
+#include "src/mca/pinstalldirs/pinstalldirs_types.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_output.h"
@@ -86,7 +87,8 @@ static int plm_alps_terminate_orteds(void);
 static int plm_alps_signal_job(pmix_nspace_t jobid, int32_t signal);
 static int plm_alps_finalize(void);
 
-static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix);
+static int plm_alps_start_proc(int argc, char **argv, char **env,
+                               char *prefix, char *pmix_prefix);
 
 /*
  * Global variable
@@ -178,7 +180,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     char *vpid_string;
     char **custom_strings;
     int num_args, i;
-    char *cur_prefix;
+    char *cur_prefix = NULL;
+    char *pmix_prefix = NULL;
     int proc_vpid_index;
     prte_app_context_t *app;
     prte_node_t *node;
@@ -357,46 +360,25 @@ static void launch_daemons(int fd, short args, void *cbdata)
         }
     }
 
-    /* Copy the prefix-directory specified in the
-       corresponding app_context.  If there are multiple,
-       different prefix's in the app context, complain (i.e., only
-       allow one --prefix option for the entire alps run -- we
-       don't support different --prefix'es for different nodes in
-       the ALPS plm) */
-    cur_prefix = NULL;
-    for (i = 0; i < state->jdata->apps->size; i++) {
-        char *app_prefix_dir = NULL;
-        if (NULL
-            == (app = (prte_app_context_t *) pmix_pointer_array_get_item(state->jdata->apps, i))) {
-            continue;
-        }
-        prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &app_prefix_dir,
-                           PMIX_STRING);
-        /* Check for already set cur_prefix_dir -- if different,
-           complain */
-        if (NULL != app_prefix_dir) {
-            if (NULL != cur_prefix && 0 != strcmp(cur_prefix, app_prefix_dir)) {
-                pmix_show_help("help-plm-alps.txt", "multiple-prefixes", true, cur_prefix,
-                               app_prefix_dir);
-                goto cleanup;
-            }
-
-            /* If not yet set, copy it; iff set, then it's the
-               same anyway */
-            if (NULL == cur_prefix) {
-                cur_prefix = strdup(app_prefix_dir);
-                if (prte_mca_plm_alps_component.debug) {
-                    pmix_output(0, "plm:alps: Set prefix:%s", cur_prefix);
-                }
-            }
-            free(app_prefix_dir);
-        }
+    /*
+     * Any prefix was installed in the DAEMON job object, so
+     * we only need to look there to find it. This covers any
+     * prefix by default, PRTE_PREFIX given in the environment,
+     * and '--prefix' from the cmd line
+     */
+    if (!prte_get_attribute(&daemons->attributes, PRTE_JOB_PREFIX, (void **) &cur_prefix, PMIX_STRING)) {
+        cur_prefix = NULL;
+    }
+    /* Similarly, we have to check for any PMIx prefix that was specified */
+    if (!prte_get_attribute(&daemons->attributes, PRTE_JOB_PMIX_PREFIX, (void **) &pmix_prefix, PMIX_STRING)) {
+        pmix_prefix = NULL;
     }
 
     /* protect the args in case someone has a script wrapper around aprun */
     prte_plm_base_wrap_args(argv);
 
-    /* setup environment */
+    /* setup environment - this is the pristine version that PRRTE
+     * has already stripped of all PRTE_ and PMIX_ prefixed values */
     env = PMIX_ARGV_COPY_COMPAT(prte_launch_environ);
 
     if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
@@ -428,7 +410,12 @@ cleanup:
     if (NULL != env) {
         PMIX_ARGV_FREE_COMPAT(env);
     }
-
+    if (NULL != cur_prefix) {
+        free(cur_prefix);
+    }
+    if (NULL != pmix_prefix) {
+        free(pmix_prefix);
+    }
     /* check for failed launch - if so, force terminate */
     if (failed_launch) {
         PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
@@ -537,11 +524,14 @@ static void alps_wait_cb(int sd, short args, void *cbdata)
     PMIX_RELEASE(t2);
 }
 
-static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
+static int plm_alps_start_proc(int argc, char **argv, char **env,
+                               char *prefix, char *pmix_prefix)
 {
     int fd;
     pid_t alps_pid;
     char *exec_argv = pmix_path_findv(argv[0], 0, env, NULL);
+    char *p;
+    char *oldenv, *newenv;
 
     if (NULL == exec_argv) {
         return PRTE_ERR_NOT_FOUND;
@@ -574,8 +564,6 @@ static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
         /* If we have a prefix, then modify the PATH and
            LD_LIBRARY_PATH environment variables.  */
         if (NULL != prefix) {
-            char *oldenv, *newenv;
-
             /* Reset PATH */
             oldenv = getenv("PATH");
             if (NULL != oldenv) {
@@ -601,6 +589,30 @@ static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
                 pmix_output(0, "plm:alps: reset LD_LIBRARY_PATH: %s", newenv);
             }
             free(newenv);
+            // add the prefix itself to the environment
+            PMIX_SETENV_COMPAT("PRTE_PREFIX", prefix, true, &env);
+        }
+
+        /* for pmix_prefix, we only have to modify the library path.
+         * NOTE: obviously, we cannot know the lib_base used for the
+         * PMIx library. All we can do is hope they used the same one
+         * for PMIx as they did for the one they linked to PRRTE */
+        if (NULL != pmix_prefix) {
+            oldenv = getenv("LD_LIBRARY_PATH");
+            p = pmix_basename(pmix_pinstall_dirs.libdir);
+            if (NULL != oldenv) {
+                pmix_asprintf(&newenv, "%s/%s:%s", pmix_prefix, p, oldenv);
+            } else {
+                pmix_asprintf(&newenv, "%s/%s", pmix_prefix, p);
+            }
+            free(p);
+            PMIX_SETENV_COMPAT("LD_LIBRARY_PATH", newenv, true, &env);
+            if (prte_mca_plm_alps_component.debug) {
+                pmix_output(0, "plm:alps: reset LD_LIBRARY_PATH: %s", newenv);
+            }
+            free(newenv);
+            // add the prefix itself to the environment
+            PMIX_SETENV_COMPAT("PMIX_PREFIX", pmix_prefix, true, &env);
         }
 
         fd = open("/dev/null", O_CREAT | O_WRONLY | O_TRUNC, 0666);
