@@ -19,6 +19,7 @@
 #include "src/class/pmix_list.h"
 
 #include "src/include/pmix_frameworks.h"
+#include "src/mca/pinstalldirs/pinstalldirs_types.h"
 #include "src/include/prte_frameworks.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/pmdl/base/base.h"
@@ -26,6 +27,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/name_fns.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_show_help.h"
 
@@ -469,9 +471,10 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
 int prte_schizo_base_setup_fork(prte_job_t *jdata, prte_app_context_t *app)
 {
     prte_attribute_t *attr;
-    bool exists;
-    char *param, *p2, *saveptr;
+    bool exists, prefix_defined = false;
+    char *param, *p2, *saveptr, *p, *defprefix;
     int i;
+    prte_job_t *daemons;
 
     /* flag that we started this job */
     PMIX_SETENV_COMPAT("PRTE_LAUNCHED", "1", true, &app->env);
@@ -552,16 +555,62 @@ int prte_schizo_base_setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     /* now do the same thing for any app-level attributes */
     PMIX_LIST_FOREACH(attr, &app->attributes, prte_attribute_t)
     {
-        if (PRTE_APP_SET_ENVAR == attr->key) {
+        if (PRTE_APP_PMIX_PREFIX == attr->key) {
+            prefix_defined = true;
+            /* if the prefix string is NULL, then the user doesn't
+             * want any prefix applied to this application */
+            if (NULL == attr->data.data.string) {
+                continue;
+            }
+            // need to set the prefix into the environment
+            PMIX_SETENV_COMPAT("PMIX_PREFIX",
+                               attr->data.data.string,
+                               true, &app->env);
+            // and need to set LD_LIBRARY_PATH
+            exists = false;
+            for (i = 0; NULL != app->env[i]; i++) {
+                saveptr = strchr(app->env[i], '='); // cannot be NULL
+                *saveptr = '\0';
+                if (0 == strcmp(app->env[i], "LD_LIBRARY_PATH")) {
+                    /* we have the var - prepend it */
+                    param = saveptr;
+                    ++param; // move past where the '=' sign was
+                    p = pmix_basename(pmix_pinstall_dirs.libdir);
+                    pmix_asprintf(&p2, "%s/%s:%s", attr->data.data.string, p, param);
+                    *saveptr = '='; // restore the current envar setting
+                    PMIX_SETENV_COMPAT("LD_LIBRARY_PATH", p2, true, &app->env);
+                    free(p2);
+                    free(p);
+                    exists = true;
+                    break;
+                } else {
+                    *saveptr = '='; // restore the current envar setting
+                }
+            }
+            if (!exists) {
+                /* just insert it */
+                param = pmix_basename(pmix_pinstall_dirs.libdir);
+                pmix_asprintf(&p2, "%s/%s", attr->data.data.string, param);
+                PMIX_SETENV_COMPAT("LD_LIBRARY_PATH",
+                                   p2,
+                                   true, &app->env);
+                free(p2);
+                free(param);
+            }
+
+        } else if (PRTE_APP_SET_ENVAR == attr->key) {
             PMIX_SETENV_COMPAT(attr->data.data.envar.envar,
                                attr->data.data.envar.value,
                                true, &app->env);
+
         } else if (PRTE_APP_ADD_ENVAR == attr->key) {
             PMIX_SETENV_COMPAT(attr->data.data.envar.envar,
                                attr->data.data.envar.value,
                                false, &app->env);
+
         } else if (PRTE_APP_UNSET_ENVAR == attr->key) {
             pmix_unsetenv(attr->data.data.string, &app->env);
+
         } else if (PRTE_APP_PREPEND_ENVAR == attr->key) {
             /* see if the envar already exists */
             exists = false;
@@ -589,6 +638,7 @@ int prte_schizo_base_setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                                    attr->data.data.envar.value,
                                    true, &app->env);
             }
+
         } else if (PRTE_APP_APPEND_ENVAR == attr->key) {
             /* see if the envar already exists */
             exists = false;
@@ -616,6 +666,49 @@ int prte_schizo_base_setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                                    attr->data.data.envar.value,
                                    true, &app->env);
             }
+        }
+    }
+
+    /* if the app's prefix wasn't defined, then check for presence
+     * of a default one */
+    if (!prefix_defined) {
+        daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+        if (prte_get_attribute(&daemons->attributes, PRTE_JOB_PMIX_PREFIX, (void **)&defprefix, PMIX_STRING)) {
+            PMIX_SETENV_COMPAT("PMIX_PREFIX",
+                               defprefix,
+                               true, &app->env);
+            // and need to set LD_LIBRARY_PATH
+            exists = false;
+            for (i = 0; NULL != app->env[i]; i++) {
+                saveptr = strchr(app->env[i], '='); // cannot be NULL
+                *saveptr = '\0';
+                if (0 == strcmp(app->env[i], "LD_LIBRARY_PATH")) {
+                    /* we have the var - prepend it */
+                    param = saveptr;
+                    ++param; // move past where the '=' sign was
+                    p = pmix_basename(pmix_pinstall_dirs.libdir);
+                    pmix_asprintf(&p2, "%s/%s:%s", defprefix, p, param);
+                    *saveptr = '='; // restore the current envar setting
+                    PMIX_SETENV_COMPAT("LD_LIBRARY_PATH", p2, true, &app->env);
+                    free(p2);
+                    free(p);
+                    exists = true;
+                    break;
+                } else {
+                    *saveptr = '='; // restore the current envar setting
+                }
+            }
+            if (!exists) {
+                /* just insert it */
+                param = pmix_basename(pmix_pinstall_dirs.libdir);
+                pmix_asprintf(&p2, "%s/%s", defprefix, param);
+                PMIX_SETENV_COMPAT("LD_LIBRARY_PATH",
+                                   p2,
+                                   true, &app->env);
+                free(p2);
+                free(param);
+            }
+            free(defprefix);
         }
     }
 

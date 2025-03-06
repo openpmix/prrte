@@ -52,7 +52,7 @@ typedef uint8_t prte_app_context_flags_t;
 #define PRTE_APP_MIN_NODES          12 // int64 - min number of nodes required
 #define PRTE_APP_MANDATORY          13 // bool - flag if nodes requested in -host are "mandatory" vs "optional"
 #define PRTE_APP_MAX_PPN            14 // uint32 - maximum number of procs/node for this app
-#define PRTE_APP_PREFIX_DIR         15 // string - prefix directory for this app, if override necessary
+#define PRTE_APP_PMIX_PREFIX        15 // string - PMIX_PREFIX value for application procs
 #define PRTE_APP_NO_CACHEDIR        16 // bool - flag that a cache dir is not to be specified for a Singularity container
 #define PRTE_APP_SET_ENVAR          17 // prte_envar_t - set the given envar to the specified value
 #define PRTE_APP_UNSET_ENVAR        18 // string - name of envar to unset, if present
@@ -224,6 +224,8 @@ typedef uint16_t prte_job_flags_t;
                                                                        //        from its parent, do not terminate if
                                                                        //        parent dies first
 #define PRTE_JOB_GPU_SUPPORT                (PRTE_JOB_START_KEY + 117) // bool - enable/disable GPU support in app
+#define PRTE_JOB_PREFIX                     (PRTE_JOB_START_KEY + 118) // string - PRTE_PREFIX for daemons
+#define PRTE_JOB_PMIX_PREFIX                (PRTE_JOB_START_KEY + 119) // string - PMIX_PREFIX for daemons
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 

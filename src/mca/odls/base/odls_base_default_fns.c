@@ -754,10 +754,12 @@ next:
         }
     }
 
+    /* set any app envars */
+
     /* reset the mapped flags */
     for (n = 0; n < jdata->map->nodes->size; n++) {
-        if (NULL
-            != (node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, n))) {
+        node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, n);
+        if (NULL != node) {
             PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
         }
     }
@@ -773,9 +775,9 @@ next:
      * have to do so AFTER we register the nspace so the PMIx server
      * has the nspace info it needs */
     if (0 < ninfo) {
-        if (PMIX_SUCCESS
-            != (ret = PMIx_server_setup_local_support(jdata->nspace, info, ninfo, ls_cbunc,
-                                                      &lock))) {
+        ret = PMIx_server_setup_local_support(jdata->nspace, info, ninfo,
+                                              ls_cbunc, &lock);
+        if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
             rc = PRTE_ERROR;
             goto REPORT_ERROR;
@@ -948,29 +950,6 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(cd);
 
-    /* thread-protect common values */
-    cd->env = PMIX_ARGV_COPY_COMPAT(prte_launch_environ);
-    if (NULL != app->env) {
-        for (i = 0; NULL != app->env[i]; i++) {
-            /* find the '=' sign.
-             * strdup the env string to a tmp variable,
-             * since it is shared among apps.
-             */
-            char *tmp = strdup(app->env[i]);
-            ptr = strchr(tmp, '=');
-            if (NULL == ptr) {
-                PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-                rc = PRTE_ERR_BAD_PARAM;
-                state = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
-                free(tmp);
-                goto errorout;
-            }
-            *ptr = '\0';
-            ++ptr;
-            PMIX_SETENV_COMPAT(tmp, ptr, true, &cd->env);
-            free(tmp);
-        }
-    }
 
     /* ensure we clear any prior info regarding state or exit status in
      * case this is a restart
@@ -979,6 +958,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     PRTE_FLAG_UNSET(child, PRTE_PROC_FLAG_WAITPID);
 
     /* setup the pmix environment */
+    cd->env = PMIX_ARGV_COPY_COMPAT(app->env);
     PMIX_LOAD_PROCID(&pproc, child->name.nspace, child->name.rank);
     if (PMIX_SUCCESS != (ret = PMIx_server_setup_fork(&pproc, &cd->env))) {
         PMIX_ERROR_LOG(ret);
@@ -1132,7 +1112,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
     pmix_nspace_t job;
     prte_odls_base_fork_local_proc_fn_t fork_local = caddy->fork_local;
     bool index_argv;
-    char *msg;
+    char *msg, **xfer;
     prte_odls_spawn_caddy_t *cd;
     prte_event_base_t *evb;
     prte_schizo_base_module_t *schizo;
@@ -1263,6 +1243,14 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         }
 
         /* setup the environment for this app */
+        if (NULL == app->env) {
+            app->env = PMIX_ARGV_COPY_COMPAT(prte_launch_environ);
+        } else {
+            xfer = pmix_environ_merge(app->env, prte_launch_environ);
+            PMIX_ARGV_FREE_COMPAT(app->env);
+            app->env = xfer;
+        }
+
         if (PRTE_SUCCESS != (rc = schizo->setup_fork(jobdat, app))) {
 
             PMIX_OUTPUT_VERBOSE((10, prte_odls_base_framework.framework_output,

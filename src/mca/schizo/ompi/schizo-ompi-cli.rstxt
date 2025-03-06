@@ -87,6 +87,11 @@ Launch options
 * ``--gpu-support <val>``: Direct application to either enable (true) or
   disable (false) its internal library's GPU support
 
+* ``--app-pmix-prefix <val>``: Prefix to be used by an app to look for its
+  PMIx installation on remote nodes.
+
+* ``--no-app-prefix``: Do not provide a prefix directive to this application.
+
 Mapping, ranking, and binding options
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -147,6 +152,9 @@ Specific options
   :ref:`See below for details <label-schizo-ompi-noprefix>`.
 
 * ``--prefix <prefix>``: Prefix to be used to look for RTE executables.
+
+* ``--pmix-prefix <prefix>``: Prefix to be used by a PRRTE executable
+  to look for its PMIx installation on remote nodes.
 
 * ``--set-sid``: Direct the DVM daemons to separate from the current
   session.
@@ -344,6 +352,27 @@ The ``--prefix`` option
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 .. include:: /prrte-rst-content/cli-prefix.rst
+
+.. _label-schizo-ompi-pmix-prefix:
+
+The ``--pmix-prefix`` option
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. include:: /prrte-rst-content/cli-pmix-prefix.rst
+
+.. _label-schizo-ompi-app-prefix:
+
+The ``--app-prefix`` option
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. include:: /prrte-rst-content/cli-app-prefix.rst
+
+.. _label-schizo-ompi-no-app-prefix:
+
+The ``--no-app-prefix`` option
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. include:: /prrte-rst-content/cli-no-app-prefix.rst
 
 .. _label-schizo-ompi-prtemca:
 
