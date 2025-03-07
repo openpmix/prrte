@@ -549,7 +549,12 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
         if (0 != strncasecmp(version, "slurm", strlen("slurm"))) {
             continue;
         }
-        cptr = &version[strlen("slurm")+1];
+        /* move cptr past the 1st space. if the line doesn't have a space, then ignore it */
+        cptr = strchr(version, ' ');
+        if (NULL == cptr) {
+            continue;
+        }
+        ++cptr;
         major = strtoul(cptr, &cptr, 10);
         ++cptr;
         minor = strtoul(cptr, NULL, 10);
