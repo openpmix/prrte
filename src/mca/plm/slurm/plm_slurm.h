@@ -13,7 +13,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,6 +35,9 @@ struct prte_mca_plm_slurm_component_t {
     prte_plm_base_component_t super;
     char *custom_args;
     bool early;
+    bool ancient;
+    int major;
+    int minor;
 };
 typedef struct prte_mca_plm_slurm_component_t prte_mca_plm_slurm_component_t;
 
