@@ -356,21 +356,21 @@ The ``--prefix`` option
 .. _label-schizo-ompi-pmix-prefix:
 
 The ``--pmix-prefix`` option
-~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. include:: /prrte-rst-content/cli-pmix-prefix.rst
 
 .. _label-schizo-ompi-app-prefix:
 
 The ``--app-prefix`` option
-~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. include:: /prrte-rst-content/cli-app-prefix.rst
 
 .. _label-schizo-ompi-no-app-prefix:
 
 The ``--no-app-prefix`` option
-~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. include:: /prrte-rst-content/cli-no-app-prefix.rst
 
