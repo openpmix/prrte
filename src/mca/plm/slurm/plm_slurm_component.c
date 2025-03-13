@@ -16,7 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -107,7 +107,6 @@ static int prte_mca_plm_slurm_component_query(pmix_mca_base_module_t **module, i
 {
     FILE *fp;
     char version[1024], *ptr;
-    int major, minor;
 
     /* Are we running under a SLURM job? */
     if (NULL != getenv("SLURM_JOBID")) {
@@ -130,21 +129,37 @@ static int prte_mca_plm_slurm_component_query(pmix_mca_base_module_t **module, i
             return PRTE_ERROR;
         }
         pclose(fp);
-        // parse on the dots
-        major = strtol(&version[6], &ptr, 10);
+        /* move cptr past the 1st space. if the line doesn't have a space, then ignore it */
+        ptr = strchr(version, ' ');
+        if (NULL == ptr) {
+            // play it safe
+            *module = NULL;
+            return PRTE_ERROR;
+        }
         ++ptr;
-        minor = strtol(ptr, NULL, 10);
+        // parse on the dots
+        prte_mca_plm_slurm_component.major = strtol(ptr, &ptr, 10);
+        ++ptr;
+        prte_mca_plm_slurm_component.minor = strtol(ptr, NULL, 10);
 
-        if (23 > major) {
+        if (23 > prte_mca_plm_slurm_component.major) {
             prte_mca_plm_slurm_component.early = true;
-        } else if (23 < major) {
+        } else if (23 < prte_mca_plm_slurm_component.major) {
             prte_mca_plm_slurm_component.early = false;
-        } else if (11 > minor) {
+        } else if (11 > prte_mca_plm_slurm_component.minor) {
             prte_mca_plm_slurm_component.early = true;
         } else {
             prte_mca_plm_slurm_component.early = false;
         }
-
+        // check for ancient
+        if (prte_mca_plm_slurm_component.major < 17) {
+            prte_mca_plm_slurm_component.ancient = true;
+        } else if (17 == prte_mca_plm_slurm_component.major &&
+                   prte_mca_plm_slurm_component.minor < 11) {
+            prte_mca_plm_slurm_component.ancient = true;
+        } else {
+            prte_mca_plm_slurm_component.ancient = false;
+        }
         *module = (pmix_mca_base_module_t *) &prte_plm_slurm_module;
         return PRTE_SUCCESS;
     }
