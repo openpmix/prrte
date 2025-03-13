@@ -604,6 +604,8 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
         }
     }
 
+    // check for the --stream-buffering option
+
     if (NULL != results->tail) {
         /* search for the leader of the tail */
         for (n=0; NULL != argv[n]; n++) {
@@ -625,7 +627,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
 {
     char *option, *p1, *p2, *tmp, *tmp2, *output;
     int rc = PRTE_SUCCESS;
-    pmix_cli_item_t *opt, *nxt;
+    pmix_cli_item_t *opt, *nxt, *opt2;
     bool warn;
 
     if (silent) {
@@ -1042,6 +1044,32 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                 }
             }
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+        } else if (0 == strcmp(option, "stream-buffering")) {
+            uint16_t u16;
+
+            u16 = strtol(opt->values[0], NULL, 10);
+            // if the value is 0, then we need to direct the output to be ":raw"
+            if (0 == u16) {
+                opt2 = pmix_cmd_line_get_param(results, PRTE_CLI_OUTPUT);
+                if (NULL == opt2) {
+                    // add the output directive
+                    opt2 = PMIX_NEW(pmix_cli_item_t);
+                    opt2->key = strdup(PRTE_CLI_OUTPUT);
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&opt2->values, ":raw");
+                    pmix_list_append(&results->instances, &opt2->super);
+                } else {
+                    // see if the "raw" modifier is already present
+                    p1 = strstr(opt2->values[0], "raw");
+                    if (NULL == p1) {
+                        /* it isn't - need to add it. Since qualifiers are separated
+                         * from the directive by a ':' as well as from each other,
+                         * we can just append ":raw" to the string */
+                        pmix_asprintf(&p2, "%s:raw", opt2->values[0]);
+                        free(opt2->values[0]);
+                        opt2->values[0] = p2;
+                    }
+                }
+            }
         }
     }
 
