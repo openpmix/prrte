@@ -288,18 +288,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
         unsetenv("PMIX_LAUNCHER_RENDEZVOUS_FILE");
     }
 
-#if SLURM_CRAY_ENV
-    /*
-     * If in a SLURM/Cray env. make sure that Cray PMI is not pulled in,
-     * neither as a constructor run when orteds start, nor selected
-     * when pmix components are registered
-     */
-
-    setenv("PMI_NO_PREINITIALIZE", "1", false);
-    setenv("PMI_NO_FORK", "1", false);
-    setenv("OMPI_NO_USE_CRAY_PMI", "1", false);
-#endif
-
     /* Append user defined arguments to srun */
     if (NULL != prte_mca_plm_slurm_component.custom_args) {
         custom_strings = PMIX_ARGV_SPLIT_COMPAT(prte_mca_plm_slurm_component.custom_args, ' ');

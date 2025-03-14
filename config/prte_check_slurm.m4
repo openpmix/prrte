@@ -14,7 +14,7 @@
 # Copyright (c) 2016      Los Alamos National Security, LLC. All rights
 #                         reserved.
 # Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
 # Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # $COPYRIGHT$
@@ -71,15 +71,6 @@ AC_DEFUN([PRTE_CHECK_SLURM],[
               [AC_CHECK_FUNC([setpgid],
                              [prte_check_slurm_happy="yes"],
                              [prte_check_slurm_happy="no"])])
-
-        # check to see if this is a Cray nativized slurm env.
-
-        slurm_cray_env=0
-        PRTE_CHECK_ALPS([prte_slurm_cray],
-                        [slurm_cray_env=1])
-
-        AC_DEFINE_UNQUOTED([SLURM_CRAY_ENV],[$slurm_cray_env],
-                           [defined to 1 if slurm cray env, 0 otherwise])
 
         PRTE_SUMMARY_ADD([Resource Managers], [Slurm], [], [$prte_check_slurm_happy])
     fi
