@@ -16,7 +16,7 @@
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -56,7 +56,7 @@ int prte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t))
     }
 
     /* child continues */
-#    if defined(HAVE_SETSID) && !(PRTE_HAVE_CRAY_ALPS)
+#    if defined(HAVE_SETSID)
     setsid(); /* become session leader - doing this confuses Cray aprun in some cases */
 #    endif
 
