@@ -15,7 +15,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -68,25 +68,8 @@ static int ras_register(pmix_mca_base_register_flag_t flags)
                                "Simulate a larger cluster by launching N daemons/node",
                                PMIX_MCA_BASE_VAR_TYPE_INT,
                                &prte_ras_base.multiplier);
-#if SLURM_CRAY_ENV
-    /*
-     * If we are in a Cray-SLURM environment, then we cannot
-     * launch procs local to the HNP. The problem
-     * is the MPI processes launched on the head node (where the
-     * PRTE_PROC_IS_MASTER evalues to true) get launched by a daemon
-     * (mpirun) which is not a child of a slurmd daemon.  This
-     * means that any RDMA credentials obtained via the odls/alps
-     * local launcher are incorrect. Test for this condition. If
-     * found, then take steps to ensure we launch a daemon on
-     * the same node as mpirun and that it gets used to fork
-     * local procs instead of mpirun so they get the proper
-     * credential */
 
-    prte_ras_base.launch_orted_on_hn = true;
-#else
     prte_ras_base.launch_orted_on_hn = false;
-#endif
-
     pmix_mca_base_var_register("prte", "ras", "base", "launch_orted_on_hn",
                                "Launch an prte daemon on the head node",
                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
