@@ -975,6 +975,7 @@ proceed:
                         node->name = strdup(cptr);
                         node->slots = slots;
                         node->state = PRTE_NODE_STATE_ADDED;
+                        PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
                         pmix_list_append(&nodes, &node->super);
                     }
                     free(line);
