@@ -377,12 +377,20 @@ static void _query(int sd, short args, void *cbdata)
                     char *xmlbuffer = NULL;
                     int len;
                     kv = PMIX_NEW(prte_info_item_t);
+#if HWLOC_API_VERSION < 0x20000
+                    /* get this from the v1.x API */
+                    if (0 != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len)) {
+                        PMIX_RELEASE(kv);
+                        continue;
+                    }
+#else
                     /* get it from the v2 API */
                     if (0 != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len,
                                                              HWLOC_TOPOLOGY_EXPORT_XML_FLAG_V1)) {
                         PMIX_RELEASE(kv);
                         continue;
                     }
+#endif
                     PMIX_INFO_LIST_ADD(rc, results, PMIX_HWLOC_XML_V1, xmlbuffer, PMIX_STRING);
                     free(xmlbuffer);
                     if (PMIX_SUCCESS != rc) {
@@ -392,6 +400,8 @@ static void _query(int sd, short args, void *cbdata)
                 }
 
             } else if (0 == strcmp(q->keys[n], PMIX_HWLOC_XML_V2)) {
+               /* we cannot provide it if we are using v1.x */
+#if HWLOC_API_VERSION >= 0x20000
                 if (NULL != prte_hwloc_topology) {
                     char *xmlbuffer = NULL;
                     int len;
@@ -407,6 +417,7 @@ static void _query(int sd, short args, void *cbdata)
                         goto done;
                     }
                 }
+#endif
 
             } else if (0 == strcmp(q->keys[n], PMIX_PROC_URI)) {
                 /* they want our URI */
@@ -747,9 +758,17 @@ static void _query(int sd, short args, void *cbdata)
                         continue;
                     }
                     /* convert the topology to XML representation */
+#if HWLOC_API_VERSION < 0x20000
+                    /* get this from the v1.x API */
+                    if (0 != hwloc_topology_export_xmlbuffer(topo->topo, &str, &len)) {
+                        continue;
+                    }
+                    PMIX_INFO_LIST_ADD(rc, nodelist, PMIX_HWLOC_XML_V1, str, PMIX_STRING);
+#else
                     if (0 != hwloc_topology_export_xmlbuffer(topo->topo, &str, &len, 0)) {
                         continue;
                     }
+#endif
                     PMIX_INFO_LIST_ADD(rc, nodelist, PMIX_HWLOC_XML_V2, str, PMIX_STRING);
                     free(str);
                 }
