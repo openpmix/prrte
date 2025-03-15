@@ -135,16 +135,16 @@
 #include "src/util/pmix_show_help.h"
 
 #include "src/mca/odls/base/base.h"
-#include "src/mca/odls/default/odls_default.h"
 #include "src/prted/pmix/pmix_server.h"
+#include "odls_pdefault.h"
 
 /*
  * Module functions (function pointers used in a struct)
  */
-static int prte_odls_default_launch_local_procs(pmix_data_buffer_t *data);
-static int prte_odls_default_kill_local_procs(pmix_pointer_array_t *procs);
-static int prte_odls_default_signal_local_procs(const pmix_proc_t *proc, int32_t signal);
-static int prte_odls_default_restart_proc(prte_proc_t *child);
+static int launch_local_procs(pmix_data_buffer_t *data);
+static int kill_local_procs(pmix_pointer_array_t *procs);
+static int signal_local_procs(const pmix_proc_t *proc, int32_t signal);
+static int restart_proc(prte_proc_t *child);
 
 /*
  * Explicitly declared functions so that we can get the noreturn
@@ -158,12 +158,13 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd) __prte_attribute
 /*
  * Module
  */
-prte_odls_base_module_t prte_odls_default_module
-    = {.get_add_procs_data = prte_odls_base_default_get_add_procs_data,
-       .launch_local_procs = prte_odls_default_launch_local_procs,
-       .kill_local_procs = prte_odls_default_kill_local_procs,
-       .signal_local_procs = prte_odls_default_signal_local_procs,
-       .restart_proc = prte_odls_default_restart_proc};
+prte_odls_base_module_t prte_odls_pdefault_module = {
+    .get_add_procs_data = prte_odls_base_default_get_add_procs_data,
+    .launch_local_procs = launch_local_procs,
+    .kill_local_procs = kill_local_procs,
+    .signal_local_procs = signal_local_procs,
+    .restart_proc = restart_proc
+};
 
 /* deliver a signal to a specified pid. */
 static int odls_default_kill_local(pid_t pid, int signum)
@@ -187,27 +188,26 @@ static int odls_default_kill_local(pid_t pid, int signum)
     if (0 != kill(pid, signum)) {
         if (ESRCH != errno) {
             PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
-                                 "%s odls:default:SENT KILL %d TO PID %d GOT ERRNO %d",
+                                 "%s odls:pdefault:SENT KILL %d TO PID %d GOT ERRNO %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signum, (int) pid, errno));
             return errno;
         }
     }
     PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
-                         "%s odls:default:SENT KILL %d TO PID %d SUCCESS",
+                         "%s odls:pdefault:SENT KILL %d TO PID %d SUCCESS",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signum, (int) pid));
     return 0;
 }
 
-int prte_odls_default_kill_local_procs(pmix_pointer_array_t *procs)
+static int kill_local_procs(pmix_pointer_array_t *procs)
 {
     int rc;
 
-    if (PRTE_SUCCESS
-        != (rc = prte_odls_base_default_kill_local_procs(procs, odls_default_kill_local))) {
+    rc = prte_odls_base_default_kill_local_procs(procs, odls_default_kill_local);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
-        return rc;
     }
-    return PRTE_SUCCESS;
+    return rc;
 }
 
 static void set_handler_default(int sig)
@@ -590,7 +590,7 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
 /**
  *  Fork/exec the specified processes
  */
-static int odls_default_fork_local_proc(void *cdptr)
+static int fork_local_proc(void *cdptr)
 {
     prte_odls_spawn_caddy_t *cd = (prte_odls_spawn_caddy_t *) cdptr;
     int p[2];
@@ -643,7 +643,7 @@ static int odls_default_fork_local_proc(void *cdptr)
  * Launch all processes allocated to the current node.
  */
 
-int prte_odls_default_launch_local_procs(pmix_data_buffer_t *data)
+static int launch_local_procs(pmix_data_buffer_t *data)
 {
     int rc;
     pmix_nspace_t job;
@@ -652,13 +652,13 @@ int prte_odls_default_launch_local_procs(pmix_data_buffer_t *data)
     rc = prte_odls_base_default_construct_child_list(data, &job);
     if (PRTE_SUCCESS != rc) {
         PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
-                             "%s odls:default:launch:local failed to construct child list on error %s",
+                             "%s odls:pdefault:launch:local failed to construct child list on error %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));
         return rc;
     }
 
     /* launch the local procs */
-    PRTE_ACTIVATE_LOCAL_LAUNCH(job, odls_default_fork_local_proc);
+    PRTE_ACTIVATE_LOCAL_LAUNCH(job, fork_local_proc);
 
     return PRTE_SUCCESS;
 }
@@ -711,7 +711,7 @@ static int send_signal(pid_t pd, int signal)
     return rc;
 }
 
-static int prte_odls_default_signal_local_procs(const pmix_proc_t *proc, int32_t signal)
+static int signal_local_procs(const pmix_proc_t *proc, int32_t signal)
 {
     int rc;
 
@@ -723,15 +723,15 @@ static int prte_odls_default_signal_local_procs(const pmix_proc_t *proc, int32_t
     return PRTE_SUCCESS;
 }
 
-static int prte_odls_default_restart_proc(prte_proc_t *child)
+static int restart_proc(prte_proc_t *child)
 {
     int rc;
 
     /* restart the local proc */
-    rc = prte_odls_base_default_restart_proc(child, odls_default_fork_local_proc);
+    rc = prte_odls_base_default_restart_proc(child, fork_local_proc);
     if (PRTE_SUCCESS != rc) {
         PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
-                             "%s odls:default:restart_proc failed to launch on error %s",
+                             "%s odls:pdefault:restart_proc failed to launch on error %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));
     }
     return rc;

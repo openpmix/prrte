@@ -18,7 +18,7 @@
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -79,6 +79,7 @@ prte_mca_plm_lsf_component_t prte_mca_plm_lsf_component = {
         .pmix_mca_query_component = prte_mca_plm_lsf_component_query,
     }
 };
+PMIX_MCA_BASE_COMPONENT_INIT(prte, plm, lsf)
 
 static int plm_lsf_open(void)
 {

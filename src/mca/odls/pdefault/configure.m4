@@ -14,6 +14,7 @@
 #                         All rights reserved.
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2025      Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -21,14 +22,14 @@
 # $HEADER$
 #
 
-# MCA_odls_default_CONFIG([action-if-found], [action-if-not-found])
+# MCA_odls_pdefault_CONFIG([action-if-found], [action-if-not-found])
 # -----------------------------------------------------------
-AC_DEFUN([MCA_prte_odls_default_CONFIG],[
-    AC_CONFIG_FILES([src/mca/odls/default/Makefile])
+AC_DEFUN([MCA_prte_odls_pdefault_CONFIG],[
+    AC_CONFIG_FILES([src/mca/odls/pdefault/Makefile])
 
-    AC_CHECK_FUNC([fork], [odls_default_happy="yes"], [odls_default_happy="no"])
+    AC_CHECK_FUNC([fork], [odls_pdefault_happy="yes"], [odls_pdefault_happy="no"])
 
-    AS_IF([test "$odls_default_happy" = "yes"], [$1], [$2])
+    AS_IF([test "$odls_pdefault_happy" = "yes"], [$1], [$2])
 
 ])dnl
 

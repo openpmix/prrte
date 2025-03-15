@@ -12,7 +12,7 @@
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
+# Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -21,28 +21,28 @@
 #
 
 sources = \
-        odls_default.h \
-        odls_default_component.c \
-        odls_default_module.c
+        odls_pdefault.h \
+        odls_pdefault_component.c \
+        odls_pdefault_module.c
 
 # Make the output library in this directory, and name it either
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_prte_odls_default_DSO
+if MCA_BUILD_prte_odls_pdefault_DSO
 component_noinst =
-component_install = prte_mca_odls_default.la
+component_install = prte_mca_odls_pdefault.la
 else
-component_noinst = libprtemca_odls_default.la
+component_noinst = libprtemca_odls_pdefault.la
 component_install =
 endif
 
 mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
-prte_mca_odls_default_la_SOURCES = $(sources)
-prte_mca_odls_default_la_LDFLAGS = -module -avoid-version
-prte_mca_odls_default_la_LIBADD = $(top_builddir)/src/libprrte.la
+prte_mca_odls_pdefault_la_SOURCES = $(sources)
+prte_mca_odls_pdefault_la_LDFLAGS = -module -avoid-version
+prte_mca_odls_pdefault_la_LIBADD = $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
-libprtemca_odls_default_la_SOURCES =$(sources)
-libprtemca_odls_default_la_LDFLAGS = -module -avoid-version
+libprtemca_odls_pdefault_la_SOURCES =$(sources)
+libprtemca_odls_pdefault_la_LDFLAGS = -module -avoid-version

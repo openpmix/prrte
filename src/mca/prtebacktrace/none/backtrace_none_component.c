@@ -16,7 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,3 +42,4 @@ const pmix_mca_base_component_t prte_mca_prtebacktrace_none_component = {
                                PRTE_MINOR_VERSION,
                                PMIX_RELEASE_VERSION),
 };
+PMIX_MCA_BASE_COMPONENT_INIT(prte, prtebacktrace, none)

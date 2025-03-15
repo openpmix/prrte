@@ -343,6 +343,10 @@ PRTE_EXPORT int prte_pmix_register_cleanup(char *path, bool directory, bool igno
 #define PMIX_GROUP_NONE 2
 #endif
 
+#ifndef PMIX_MCA_BASE_COMPONENT_INIT
+#define PMIX_MCA_BASE_COMPONENT_INIT(prte, a, b)
+#endif
+
 END_C_DECLS
 
 #endif

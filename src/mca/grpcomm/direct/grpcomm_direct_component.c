@@ -6,7 +6,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -44,6 +44,7 @@ prte_grpcomm_direct_component_t prte_mca_grpcomm_direct_component = {
     .fence_ops = PMIX_LIST_STATIC_INIT,
     .group_ops = PMIX_LIST_STATIC_INIT
 };
+PMIX_MCA_BASE_COMPONENT_INIT(prte, grpcomm, direct)
 
 static int direct_query(pmix_mca_base_module_t **module, int *priority)
 {

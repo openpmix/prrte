@@ -8,7 +8,7 @@
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
  *                         All Rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -77,6 +77,7 @@ prte_mca_prtereachable_weighted_component_t prte_mca_prtereachable_weighted_comp
         },
     }
 };
+PMIX_MCA_BASE_COMPONENT_INIT(prte, prtereachable, weighted)
 
 static int reachable_weighted_open(void)
 {

@@ -16,7 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -61,6 +61,7 @@ prte_ess_base_component_t prte_mca_ess_pals_component = {
     .pmix_mca_close_component = prte_mca_ess_pals_component_close,
     .pmix_mca_query_component = prte_mca_ess_pals_component_query,
 };
+PMIX_MCA_BASE_COMPONENT_INIT(prte, ess, pals)
 
 int prte_mca_ess_pals_component_open(void)
 {

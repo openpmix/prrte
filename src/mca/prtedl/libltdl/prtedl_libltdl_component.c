@@ -6,7 +6,7 @@
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -72,6 +72,7 @@ prte_prtedl_libltdl_component_t prte_mca_prtedl_libltdl_component = {
 
     /* Now fill in the libltdl component-specific members */
 };
+PMIX_MCA_BASE_COMPONENT_INIT(prte, prtedl, libltdl)
 
 static bool supported = PRTE_INT_TO_BOOL(PRTE_DL_LIBLTDL_HAVE_LT_DLADVISE);
 

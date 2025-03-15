@@ -84,6 +84,7 @@ prte_mca_plm_slurm_component_t prte_mca_plm_slurm_component = {
     /* Other prte_mca_plm_slurm_component_t items -- left uninitialized
        here; will be initialized in plm_slurm_open() */
 };
+PMIX_MCA_BASE_COMPONENT_INIT(prte, plm, slurm)
 
 static int plm_slurm_register(void)
 {

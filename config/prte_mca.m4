@@ -14,7 +14,7 @@ dnl Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 dnl Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2019      Research Organization for Information Science
 dnl                         and Technology (RIST).  All rights reserved.
-dnl Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+dnl Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -385,7 +385,29 @@ AC_DEFUN([MCA_CONFIGURE_FRAMEWORK],[
     # top-level glue.  This lists all the static components.  We don't
     # need to do this for "common".
     if test "$1" != "common"; then
-        cat > $outfile <<EOF
+        if test "$PRTE_PMIX_LTO_CAPABILITY" = "1"; then
+            cat > $outfile <<EOF
+/*
+ * \$HEADER\$
+ */
+#if defined(c_plusplus) || defined(__cplusplus)
+extern "C" {
+#endif
+
+`cat $outfile.extern`
+
+const pmix_mca_base_component_t **prte_$1_base_static_components[[]] = {
+`cat $outfile.struct`
+  NULL
+};
+
+#if defined(c_plusplus) || defined(__cplusplus)
+}
+#endif
+
+EOF
+        else
+            cat > $outfile <<EOF
 /*
  * \$HEADER\$
  */
@@ -405,6 +427,8 @@ const pmix_mca_base_component_t *prte_$1_base_static_components[[]] = {
 #endif
 
 EOF
+        fi
+
         # Only replace the header file if a) it doesn't previously
         # exist, or b) the contents are different.  Do this to not
         # trigger recompilation of certain .c files just because the
@@ -664,8 +688,14 @@ AC_DEFUN([MCA_PROCESS_COMPONENT],[
             # $FRAMEWORK_LIB_PREFIX prefix.
             $6="mca/$1/$2/libprtemca_$1_$2.la $$6"
         fi
-        echo "extern const pmix_mca_base_component_t prte_mca_$1_$2_component;" >> $outfile.extern
-        echo "  &prte_mca_$1_$2_component, " >> $outfile.struct
+        if test "$PRTE_PMIX_LTO_CAPABILITY" = "1"; then
+            echo "extern const pmix_mca_base_component_t *prte_mca_$1_$2_component_ptr;" >> $outfile.extern
+            echo "  &prte_mca_$1_$2_component_ptr, " >> $outfile.struct
+        else
+            echo "extern const pmix_mca_base_component_t prte_mca_$1_$2_component;" >> $outfile.extern
+            echo "  &prte_mca_$1_$2_component, " >> $outfile.struct
+        fi
+
         $4="$$4 $2"
     fi
 
