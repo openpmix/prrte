@@ -6,7 +6,7 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -60,6 +60,7 @@ prte_errmgr_base_component_t prte_mca_errmgr_prted_component =
         .pmix_mca_register_component_params = errmgr_prted_register,
     }
 };
+PMIX_MCA_BASE_COMPONENT_INIT(prte, errmgr, prted)
 
 static int my_priority;
 

@@ -6,7 +6,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -53,6 +53,7 @@ prte_state_base_component_t prte_mca_state_dvm_component =
     .pmix_mca_close_component = state_dvm_close,
     .pmix_mca_query_component = state_dvm_component_query,
 };
+PMIX_MCA_BASE_COMPONENT_INIT(prte, state, dvm)
 
 static int state_dvm_open(void)
 {

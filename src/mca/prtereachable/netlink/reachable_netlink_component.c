@@ -4,7 +4,7 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2020      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -63,6 +63,7 @@ prte_reachable_base_component_t prte_mca_prtereachable_netlink_component = {
         .pmix_mca_register_component_params = component_register,
     }
 };
+PMIX_MCA_BASE_COMPONENT_INIT(prte, prtereachable, netlink)
 
 static int reachable_netlink_open(void)
 {

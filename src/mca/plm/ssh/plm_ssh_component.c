@@ -99,6 +99,7 @@ prte_mca_plm_ssh_component_t prte_mca_plm_ssh_component = {
         .pmix_mca_register_component_params = ssh_component_register,
     }
 };
+PMIX_MCA_BASE_COMPONENT_INIT(prte, plm, ssh)
 
 static int ssh_component_register(void)
 {

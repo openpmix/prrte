@@ -323,17 +323,6 @@ prte_show_title "Compiler and preprocessor tests"
 ##################################
 
 PRTE_SETUP_CC
-# We do not currently support the "lto" optimizer as it
-# aggregates all the headers from our plugins, resulting
-# in a configuration that generates warnings/errors when
-# passed through their optimizer phase. We therefore check
-# for the flag, and if found, output a message explaining
-# the situation and aborting configure
-_PRTE_CHECK_LTO_FLAG($CPPFLAGS, CPPFLAGS)
-_PRTE_CHECK_LTO_FLAG($CFLAGS, CFLAGS)
-_PRTE_CHECK_LTO_FLAG($LDFLAGS, LDFLAGS)
-_PRTE_CHECK_LTO_FLAG($LIBS, LIBS)
-
 
 # Does the compiler support "ident"-like constructs?
 
@@ -805,6 +794,14 @@ AS_IF([test $prte_found_event_lib -eq 0],
 prte_show_title "Configure PMIx"
 
 PRTE_CHECK_PMIX
+
+# Check for LTO flags - adapt as necessary. Need to delay
+# this check until after we check PMIx as we need to
+# determine its compatibility first
+_PRTE_CHECK_LTO_FLAG($CPPFLAGS, CPPFLAGS)
+_PRTE_CHECK_LTO_FLAG($CFLAGS, CFLAGS)
+_PRTE_CHECK_LTO_FLAG($LDFLAGS, LDFLAGS)
+_PRTE_CHECK_LTO_FLAG($LIBS, LIBS)
 
 ##################################
 # HWLOC

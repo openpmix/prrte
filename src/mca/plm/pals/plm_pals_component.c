@@ -16,7 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -81,6 +81,7 @@ prte_mca_plm_pals_component_t prte_mca_plm_pals_component = {
         .pmix_mca_register_component_params = plm_pals_register,
     }
 };
+PMIX_MCA_BASE_COMPONENT_INIT(prte, plm, pals)
 
 static int plm_pals_register(void)
 {

@@ -43,20 +43,22 @@ AC_MSG_CHECKING(if $CC supports ([$1]))
 
 
 AC_DEFUN([_PRTE_CHECK_LTO_FLAG], [
-    chkflg=`echo $1 | grep -- lto`
-    if test -n "$chkflg"; then
-        AC_MSG_WARN([Configure has detected the presence of one or more])
-        AC_MSG_WARN([compiler directives involving the lto optimizer])
-        AC_MSG_WARN([$2. PRRTE does not currently support such directives])
-        AC_MSG_WARN([as they conflict with the plugin architecture of the])
-        AC_MSG_WARN([PRRTE library. The directive is being ignored.])
-        newflg=
-        for item in $1; do
-            chkflg=`echo $item | grep -- lto`
-            if test ! -n "$chkflg"; then
-                newflg+="$item "
-            fi
-        done
-        $2="$newflg"
+    if test "$PRTE_PMIX_LTO_CAPABILITY" = "0"; then
+        chkflg=`echo $1 | grep -- lto`
+        if test -n "$chkflg"; then
+            AC_MSG_WARN([Configure has detected the presence of one or more])
+            AC_MSG_WARN([compiler directives involving the lto optimizer])
+            AC_MSG_WARN([$2. PRRTE does not currently support such directives])
+            AC_MSG_WARN([as they conflict with the plugin architecture of the])
+            AC_MSG_WARN([PRRTE library. The directive is being ignored.])
+            newflg=
+            for item in $1; do
+                chkflg=`echo $item | grep -- lto`
+                if test ! -n "$chkflg"; then
+                    newflg+="$item "
+                fi
+            done
+            $2="$newflg"
+        fi
     fi
 ])

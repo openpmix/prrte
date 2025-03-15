@@ -6,7 +6,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -44,6 +44,7 @@ prte_schizo_ompi_component_t prte_mca_schizo_ompi_component = {
     .priority = 50,
     .warn_deprecations = false
 };
+PMIX_MCA_BASE_COMPONENT_INIT(prte, schizo, ompi)
 
 static int component_register(void)
 {
