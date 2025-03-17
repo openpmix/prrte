@@ -146,8 +146,9 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     PRTE_LOG_MSG([pmixcc version: $pmixcc_showme_results])
     AS_IF([test $found_pmixcc -eq 0],
           [AC_MSG_WARN([Could not find $PMIXCC_PATH])
-           PMIXCC_PATH=])
-    AM_CONDITIONAL([PRTE_HAVE_PMIXCC], [test $found_pmixcc -eq 1])
+           AC_MSG_WARN([$PMIXCC_PATH is required for PRRTE to build])
+           AC_MSG_WARN([Please ensure it was installed])
+           AC_MSG_ERROR([Cannot continue])])
     AC_SUBST([PMIXCC_PATH])
 
     # Check for any needed capabilities from the PMIx we found.
