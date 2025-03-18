@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -198,7 +198,7 @@ int prte_register_params(void)
          "open" failing is not printed */
         pmix_show_help("help-oob-tcp.txt", "include-exclude", true,
                        prte_if_include, prte_if_exclude);
-        return PRTE_ERR_NOT_AVAILABLE;
+        return PRTE_ERR_SILENT;
     }
 
     prte_set_max_sys_limits = NULL;
