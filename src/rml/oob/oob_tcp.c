@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -112,7 +112,8 @@ prte_oob_base_t prte_oob_base = {
     .max_recon_attempts = 0
 };
 
-static char **split_and_resolve(char **orig_str, char *name);
+static void split_and_resolve(char **orig_str, char *name,
+                              char ***interfaces);
 
 int prte_oob_open(void)
 {
@@ -151,12 +152,12 @@ int prte_oob_open(void)
      * subnet+mask
      */
     if (NULL != prte_if_include) {
-        interfaces = split_and_resolve(&prte_if_include,
-                                       "include");
+        split_and_resolve(&prte_if_include,
+                          "include", &interfaces);
         including = true;
     } else if (NULL != prte_if_exclude) {
-        interfaces = split_and_resolve(&prte_if_exclude,
-                                       "exclude");
+        split_and_resolve(&prte_if_exclude,
+                          "exclude", &interfaces);
     }
 
     /* if we are the master, then check the interfaces for loopbacks
@@ -247,7 +248,7 @@ int prte_oob_open(void)
                                 pmix_net_get_hostname((struct sockaddr *) &my_ss),
                                 (AF_INET == my_ss.ss_family) ? "V4" : "V6");
             PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_oob_base.ipv4conns,
-                                    pmix_net_get_hostname((struct sockaddr *) &my_ss));
+                                           pmix_net_get_hostname((struct sockaddr *) &my_ss));
         } else if (AF_INET6 == my_ss.ss_family) {
 #if PRTE_ENABLE_IPV6
             pmix_output_verbose(10, prte_oob_base.output,
@@ -256,7 +257,7 @@ int prte_oob_open(void)
                                 pmix_net_get_hostname((struct sockaddr *) &my_ss),
                                 (AF_INET == my_ss.ss_family) ? "V4" : "V6");
             PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_oob_base.ipv6conns,
-                                    pmix_net_get_hostname((struct sockaddr *) &my_ss));
+                                           pmix_net_get_hostname((struct sockaddr *) &my_ss));
 #endif // PRTE_ENABLE_IPV6
         } else {
             pmix_output_verbose(10, prte_oob_base.output,
@@ -289,6 +290,9 @@ int prte_oob_open(void)
         sprintf(string, "%d", selected_interface->if_mask);
         PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_oob_base.if_masks, string);
         pmix_list_append(&prte_oob_base.local_ifs, &(copied_interface->super));
+    }
+    if (NULL != interfaces) {
+        PMIX_ARGV_FREE_COMPAT(interfaces);
     }
 
     if (0 == PMIX_ARGV_COUNT_COMPAT(prte_oob_base.ipv4conns)
@@ -683,40 +687,43 @@ cleanup:
  * (a.b.c.d/e), resolve them to an interface name (Currently only
  * supporting IPv4).  If unresolvable, warn and remove.
  */
-static char **split_and_resolve(char **orig_str, char *name)
+static void split_and_resolve(char **orig_str, char *name,
+                              char ***interfaces)
 {
     pmix_pif_t *selected_interface;
-    int i, n, ret, match_count, interface_count;
-    char **argv, **interfaces, *str, *tmp;
+    int i, n, ret, match_count;
+    bool found;
+    char **argv, *str, *tmp;
     char if_name[IF_NAMESIZE];
     struct sockaddr_storage argv_inaddr, if_inaddr;
     uint32_t argv_prefix;
 
     /* Sanity check */
     if (NULL == orig_str || NULL == *orig_str) {
-        return NULL;
+        return;
     }
 
     argv = PMIX_ARGV_SPLIT_COMPAT(*orig_str, ',');
     if (NULL == argv) {
-        return NULL;
+        return;
     }
-    interface_count = 0;
-    interfaces = NULL;
     for (i = 0; NULL != argv[i]; ++i) {
         if (isalpha(argv[i][0])) {
             /* This is an interface name. If not already in the interfaces array, add it */
-            for (n = 0; n < interface_count; n++) {
-                if (0 == strcmp(argv[i], interfaces[n])) {
-                    break;
+            found = false;
+            if (NULL != interfaces) {
+                for (n = 0; NULL != interfaces[n]; n++) {
+                    if (0 == strcmp(argv[i], *interfaces[n])) {
+                        found = true;
+                        break;
+                    }
                 }
             }
-            if (n == interface_count) {
+            if (!found) {
                 pmix_output_verbose(20,
                                     prte_oob_base.output,
                                     "oob:tcp: Using interface: %s ", argv[i]);
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&interfaces, argv[i]);
-                ++interface_count;
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(interfaces, argv[i]);
             }
             continue;
         }
@@ -760,29 +767,33 @@ static char **split_and_resolve(char **orig_str, char *name)
         /* Go through all interfaces and see if we can find a match */
         match_count = 0;
         PMIX_LIST_FOREACH(selected_interface, &pmix_if_list, pmix_pif_t) {
-            pmix_ifindextoaddr(selected_interface->if_kernel_index,
-                               (struct sockaddr*) &if_inaddr,
-                               sizeof(if_inaddr));
-            if (pmix_net_samenetwork((struct sockaddr_storage*) &argv_inaddr,
+            ret = pmix_ifkindextoaddr(selected_interface->if_kernel_index,
+                                     (struct sockaddr*) &if_inaddr,
+                                     sizeof(if_inaddr));
+            if (PMIX_SUCCESS == ret &&
+                pmix_net_samenetwork((struct sockaddr_storage*) &argv_inaddr,
                                      (struct sockaddr_storage*) &if_inaddr,
                                      argv_prefix)) {
                 /* We found a match. If it's not already in the interfaces array,
                    add it. If it's already in the array, treat it as a match */
                 match_count = match_count + 1;
-                pmix_ifindextoname(selected_interface->if_kernel_index, if_name, sizeof(if_name));
-                for (n = 0; n < interface_count; n++) {
-                    if (0 == strcmp(if_name, interfaces[n])) {
-                        break;
+                pmix_ifkindextoname(selected_interface->if_kernel_index, if_name, sizeof(if_name));
+                found = false;
+                if (NULL != interfaces) {
+                    for (n = 0; NULL != interfaces[n]; n++) {
+                        if (0 == strcmp(if_name, *interfaces[n])) {
+                            found = true;
+                            break;
+                        }
                     }
                 }
-                if (n == interface_count) {
+                if (!found) {
                     pmix_output_verbose(20,
                                         prte_oob_base.output,
                                         "oob:tcp: Found match: %s (%s)",
                                         pmix_net_get_hostname((struct sockaddr*) &if_inaddr),
                                         if_name);
-                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&interfaces, if_name);
-                    ++interface_count;
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(interfaces, if_name);
                 }
             }
         }
@@ -798,14 +809,15 @@ static char **split_and_resolve(char **orig_str, char *name)
         free(tmp);
     }
 
-    /* Mark the end of the interface name array with NULL */
-    if (NULL != interfaces) {
-        interfaces[interface_count] = NULL;
-    }
+    // cleanup and construct output string
     free(argv);
     free(*orig_str);
-    *orig_str = PMIX_ARGV_JOIN_COMPAT(interfaces, ',');
-    return interfaces;
+    if (NULL != interfaces) {
+        *orig_str = PMIX_ARGV_JOIN_COMPAT(*interfaces, ',');
+    } else {
+        *orig_str = NULL;
+    }
+    return;
 }
 
 PMIX_CLASS_INSTANCE(prte_oob_send_t,
