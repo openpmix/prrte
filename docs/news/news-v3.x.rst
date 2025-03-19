@@ -4,8 +4,36 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
-3.0.9 -- TBD
-------------
+3.0.9 -- 19 Mar 2025
+--------------------
+.. important:: This release contains configure logic to
+               protect it from PMIx versions that have been
+               updated to support the LTO optimizer as that
+               infrastructure conflicts with the PRRTE v3.0
+               series. PMIx versions v6.0 and above are not
+               supported by the PRRTE v3.0 series.
+
+- PR #2172: Update NEWS for release
+- PR #2171: Multiple commits
+   - Remove ALPS support
+   - Require pmixcc be available to build PRRTE
+   - Fix oob include/exclude matching
+   - Constrain PMIx versions
+- PR #2163: Protect against stone age HWLOC
+- PR #2162: Multiple commits
+   - Break thread deadlock
+   - data_server: changes to handle first_read better
+   - Allow "not supported" to be returned by query upcall
+   - Try adding timeout to CI
+   - Add PMIx v4.2 build
+   - Fix the data server
+   - Just ignore any lto settings
+   - Accommodate changes in Slurm version string
+   - Correctly support the OMPI stream-buffering option
+   - Correct the handling of "prefix"
+   - Correct syntax errors in RST files
+- PR #2157: Update OAC submodule pointer
+- PR #2147: Cleanup the pending lookup request when resolved
 - PR #2145: Multiple commits
    - Fix inheritance
    - Provide a user error message when srun fails
