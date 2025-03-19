@@ -17,11 +17,11 @@ jobs:
       with:
             submodules: recursive
             repository: openpmix/openpmix
-            path: openpmix/master
-            ref: master
-    - name: Build OpenPMIx
+            path: openpmix/v5.0
+            ref: v5.0
+    - name: Build v5.0
       run: |
-        cd openpmix/master
+        cd openpmix/v5.0
         # Homebrew doesn't install Libevent's (or libev's) header or
         # library files into a default search location.  Shrug.  So
         # use pkg-config to get the location and explicitly pass it to
@@ -91,11 +91,11 @@ jobs:
       with:
             submodules: recursive
             repository: openpmix/openpmix
-            path: openpmix/master
-            ref: master
+            path: openpmix/v5.0
+            ref: v5.0
     - name: Build OpenPMIx
       run: |
-        cd openpmix/master
+        cd openpmix/v5.0
         ./autogen.pl
         ./configure --prefix=$RUNNER_TEMP/pmixinstall
         make -j
@@ -139,11 +139,11 @@ jobs:
       with:
             submodules: recursive
             repository: openpmix/openpmix
-            path: openpmix/master
-            ref: master
+            path: openpmix/v5.0
+            ref: v5.0
     - name: Build OpenPMIx
       run: |
-        cd openpmix/master
+        cd openpmix/v5.0
         ./autogen.pl
         CC=clang ./configure --prefix=$RUNNER_TEMP/pmixinstall
         make -j
@@ -178,11 +178,11 @@ jobs:
       with:
             submodules: recursive
             repository: openpmix/openpmix
-            path: openpmix/master
-            ref: master
+            path: openpmix/v5.0
+            ref: v5.0
     - name: Build OpenPMIx
       run: |
-        cd openpmix/master
+        cd openpmix/v5.0
         ./autogen.pl
         ./configure --prefix=$RUNNER_TEMP/pmixinstall
         make -j
