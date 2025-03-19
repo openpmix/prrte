@@ -18,11 +18,11 @@ jobs:
       with:
             submodules: recursive
             repository: openpmix/openpmix
-            path: openpmix/master
-            ref: master
+            path: openpmix/v5.0
+            ref: v5.0
     - name: Build PMIx
       run: |
-        cd openpmix/master
+        cd openpmix/v5.0
         ./autogen.pl
         ./configure --prefix=$RUNNER_TEMP/pmixinstall
         make -j
@@ -49,7 +49,7 @@ jobs:
       run: |
          export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
          export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
-         prterun -n 4 --pset foo ./openpmix/master/examples/hello
+         prterun -n 4 --pset foo ./openpmix/v5.0/examples/hello
       if:   ${{ true }}
       timeout-minutes: 5
 
@@ -57,30 +57,6 @@ jobs:
       run: |
          export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
          export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
-         prterun -n 3 ./openpmix/master/examples/pub
+         prterun -n 3 ./openpmix/v5.0/examples/pub
       if:   ${{ true }}
       timeout-minutes: 5
-
-    - name: Run pub-lookup test2
-      run: |
-         export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
-         export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
-         prterun -n 2 ./openpmix/master/examples/pub2 20
-      if:   ${{ true }}
-      timeout-minutes: 5
-
-    - name: Run pub-lookup test3
-      run: |
-         export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
-         export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
-         prterun -n 4 ./openpmix/master/examples/pubi
-      if:   ${{ true }}
-      timeout-minutes: 5
-
-    - name: Run pub-lookup stress test
-      run: |
-         export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
-         export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
-         prterun -n 5 ./openpmix/master/examples/pubstress 30
-      if:   ${{ true }}
-      timeout-minutes: 10
