@@ -83,7 +83,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
                       char ***hostfiles, char ***hosts, pmix_list_t *jobdata)
 {
     char cwd[PRTE_PATH_MAX];
-    int i, count, rc;
+    int i, n, count, rc;
     char *param, *value, *ptr;
     prte_pmix_app_t *app = NULL;
     char *appname = NULL;
@@ -93,6 +93,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
     bool fwd;
     pmix_value_t val;
     prte_info_item_t *iptr;
+    pmix_envar_t envt;
     PRTE_HIDE_UNUSED_PARAMS(app_env);
 
     *made_app = false;
@@ -342,7 +343,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
     if (NULL == app->app.cmd) {
         pmix_show_help("help-prun.txt", "prun:call-failed", true, "prun", "library",
                        "strdup returned NULL", errno);
-        rc = PRTE_ERR_NOT_FOUND;
+        rc = PRTE_ERR_SILENT;
         goto cleanup;
     }
 
@@ -362,6 +363,111 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
     if (PRTE_SUCCESS != rc) {
         goto cleanup;
     }
+
+    // check for any envar directives
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_FWD_ENVAR);
+    if (NULL != opt) {
+        for (n=0; NULL != opt->values[n]; n++) {
+            param = strdup(opt->values[n]);
+            /* if there is an '=' in it, then they are setting a value */
+            if (NULL != (value = strchr(param, '='))) {
+                *value = '\0';
+                ++value;
+                envt.envar = param;
+                envt.value = strdup(value);
+                pmix_output(0, "SET %s=%s", envt.envar, envt.value);
+                PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_ENVAR, &envt, PMIX_ENVAR);
+                PMIX_ENVAR_DESTRUCT(&envt);
+            } else {
+                // have to support the wildcard here
+                if (NULL != (ptr = strchr(param, '*'))) {
+                    *ptr = '\0';
+                    for (i=0; NULL != environ[i]; i++) {
+                        if (0 == strncmp(environ[i], param, strlen(param))) {
+                            // this is a var to fwd
+                            // extract the name and value
+                            ptr = strdup(environ[i]);
+                            value = strchr(ptr, '=');
+                            *value = '\0';
+                            ++value;
+                            envt.envar = ptr;
+                            envt.value = strdup(value);
+                            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_ENVAR, &envt, PMIX_ENVAR);
+                            PMIX_ENVAR_DESTRUCT(&envt);
+                        }
+                    }
+                    free(param);
+                } else {
+                    // given a unique name
+                    value = getenv(param);
+                    if (NULL == value) {
+                        pmix_show_help("help-schizo-base.txt", "missing-envar-param", true, param);
+                        free(param);
+                    } else {
+                        envt.envar = param;
+                        envt.value = strdup(value);
+                        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_ENVAR, &envt, PMIX_ENVAR);
+                        PMIX_ENVAR_DESTRUCT(&envt);
+                    }
+                }
+            }
+        }
+    }
+
+#ifdef PMIX_CLI_PREPEND_ENVAR
+    opt = pmix_cmd_line_get_param(&results, PMIX_CLI_PREPEND_ENVAR);
+    if (NULL != opt) {
+        for (n=0; NULL != opt->values[n]; n+=2) {
+            param = strdup(opt->values[n]);
+            // find the [] enclosing the separator
+            i = strlen(param);
+            if (']' != param[i-1] || '[' != param[i-3]) {
+                pmix_show_help("help-prun.txt", "malformed-envar", true,
+                               "prepend", app->app.cmd, param);
+                rc = PRTE_ERR_SILENT;
+                free(param);
+                goto cleanup;
+            }
+            param[i-3] = '\0';
+            envt.envar = param;
+            envt.value = strdup(opt->values[n+1]);
+            envt.separator = param[i-2];
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PREPEND_ENVAR, &envt, PMIX_ENVAR);
+            PMIX_ENVAR_DESTRUCT(&envt);
+        }
+    }
+#endif
+#ifdef PMIX_CLI_APPEND_ENVAR
+    opt = pmix_cmd_line_get_param(&results, PMIX_CLI_APPEND_ENVAR);
+    if (NULL != opt) {
+        for (n=0; NULL != opt->values[n]; n+=2) {
+            param = strdup(opt->values[n]);
+            // find the [] enclosing the separator
+            i = strlen(param);
+            if (']' != param[i-1] || '[' != param[i-3]) {
+                pmix_show_help("help-prun.txt", "malformed-envar", true,
+                               "append", app->app.cmd, param);
+                rc = PRTE_ERR_SILENT;
+                free(param);
+                goto cleanup;
+            }
+            param[i-3] = '\0';
+            envt.envar = param;
+            envt.value = strdup(opt->values[n+1]);
+            envt.separator = param[i-2];
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_APPEND_ENVAR, &envt, PMIX_ENVAR);
+            PMIX_ENVAR_DESTRUCT(&envt);
+        }
+    }
+#endif
+#ifdef PMIX_CLI_UNSET_ENVAR
+    opt = pmix_cmd_line_get_param(&results, PMIX_CLI_UNSET_ENVAR);
+    if (NULL != opt) {
+        for (n=0; NULL != opt->values[n]; n++) {
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_UNSET_ENVAR, opt->values[n], PMIX_STRING);
+        }
+    }
+#endif
 
     // check for PMIx prefix for the application
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_APP_PREFIX);

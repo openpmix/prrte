@@ -17,7 +17,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -132,23 +132,23 @@ PRTE_EXPORT void prte_wait_cb_cancel(prte_proc_t *proc);
  * NOTE: the callback function is responsible for releasing the timer
  * event back to the event pool!
  */
-#define PRTE_DETECT_TIMEOUT(n, deltat, maxwait, cbfunc, cbd)                                      \
-    do {                                                                                          \
-        prte_timer_t *tmp;                                                                        \
-        int timeout;                                                                              \
-        tmp = PMIX_NEW(prte_timer_t);                                                             \
-        tmp->payload = (cbd);                                                                     \
-        prte_event_evtimer_set(prte_event_base, tmp->ev, (cbfunc), tmp);                          \
-        timeout = (deltat) * (n);                                                                 \
-        if ((maxwait) > 0 && timeout > (maxwait)) {                                               \
-            timeout = (maxwait);                                                                  \
-        }                                                                                         \
-        tmp->tv.tv_sec = timeout / 1000000;                                                       \
-        tmp->tv.tv_usec = timeout % 1000000;                                                      \
-        PMIX_OUTPUT_VERBOSE((1, prte_debug_output, "defining timeout: %ld sec %ld usec at %s:%d", \
-                             (long) tmp->tv.tv_sec, (long) tmp->tv.tv_usec, __FILE__, __LINE__)); \
-        PMIX_POST_OBJECT(tmp);                                                                    \
-        prte_event_evtimer_add(tmp->ev, &tmp->tv);                                                \
+#define PRTE_DETECT_TIMEOUT(n, deltat, maxwait, cbfunc, cbd)                                        \
+    do {                                                                                            \
+        prte_timer_t *_t;                                                                           \
+        int _timeout;                                                                               \
+        _t = PMIX_NEW(prte_timer_t);                                                                \
+        _t->payload = (cbd);                                                                        \
+        prte_event_evtimer_set(prte_event_base, _t->ev, (cbfunc), _t);                              \
+        _timeout = (deltat) * (n);                                                                  \
+        if ((maxwait) > 0 && _timeout > (maxwait)) {                                                \
+            _timeout = (maxwait);                                                                   \
+        }                                                                                           \
+        _t->tv.tv_sec = _timeout / 1000000;                                                         \
+        _t->tv.tv_usec = _timeout % 1000000;                                                        \
+        PMIX_OUTPUT_VERBOSE((1, prte_debug_output, "defining timeout: %ld sec %ld usec at %s:%d",   \
+                             (long) _t->tv.tv_sec, (long) _t->tv.tv_usec, __FILE__, __LINE__));     \
+        PMIX_POST_OBJECT(_t);                                                                       \
+        prte_event_evtimer_add(_t->ev, &_t->tv);                                                    \
     } while (0);
 
 /**
