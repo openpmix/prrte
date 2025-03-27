@@ -81,8 +81,17 @@ Launch options
 
 * ``--wdir <dir>``: Set the working directory of the started processes.
 
-* ``-x <var>``: Export a environment variable, optionally specifying a value.
+* ``-x <var>``: Export an environment variable, optionally specifying a value.
   :ref:`See below for details <label-schizo-ompi-x>`.
+
+* ``--unset-env <var>``: Unset an environment variable.
+  :ref:`See below for details <label-schizo-ompi-unset-env>`.
+
+* ``--prepend-env <var[c]> <val>``: Prepend a value to an environment variable
+  :ref:`See below for details <label-schizo-ompi-prepend-env>`.
+
+* ``--append-env <var[c]> <val>``: Prepend a value to an environment variable
+  :ref:`See below for details <label-schizo-ompi-append-env>`.
 
 * ``--gpu-support <val>``: Direct application to either enable (true) or
   disable (false) its internal library's GPU support
@@ -422,6 +431,25 @@ The ``-x`` option
 ~~~~~~~~~~~~~~~~~
 
 .. include:: /prrte-rst-content/cli-x.rst
+
+.. _label-schizo-ompi-unset-env
+
+The ``--unset-env`` option
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. include:: /prrte-rst-content/cli-unset-env.rst
+
+.. _label-schizo-ompi-prepend-env
+
+The ``--prepend-env`` option
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. include:: /prrte-rst-content/cli-prepend-env.rst
+
+
+.. _label-schizo-ompi-apppend-env
+
+The ``--apppend-env`` option
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. include:: /prrte-rst-content/cli-apppend-env.rst
 
 
 Deprecated command line options

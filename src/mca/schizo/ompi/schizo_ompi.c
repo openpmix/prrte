@@ -158,6 +158,15 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_PRELOAD_FILES, PMIX_ARG_REQD),
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_PRELOAD_BIN, PMIX_ARG_NONE, 's'),
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_FWD_ENVAR, PMIX_ARG_REQD, 'x'),
+#ifdef PMIX_CLI_PREPEND_ENVAR
+    PMIX_OPTION_DEFINE(PMIX_CLI_PREPEND_ENVAR, PMIX_ARG_REQD),
+#endif
+#ifdef PMIX_CLI_APPEND_ENVAR
+    PMIX_OPTION_DEFINE(PMIX_CLI_APPEND_ENVAR, PMIX_ARG_REQD),
+#endif
+#ifdef PMIX_CLI_UNSET_ENVAR
+    PMIX_OPTION_DEFINE(PMIX_CLI_UNSET_ENVAR, PMIX_ARG_REQD),
+#endif
     PMIX_OPTION_DEFINE(PRTE_CLI_WDIR, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("wd", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_PATH, PMIX_ARG_REQD),
@@ -1812,36 +1821,6 @@ static int parse_env(char **srcenv, char ***dstenv,
         }
     }
     PMIX_ARGV_FREE_COMPAT(envlist);
-
-    /* now look for -x options - not allowed to conflict with a -mca option */
-    if (NULL != (opt = pmix_cmd_line_get_param(results, "x"))) {
-        for (i = 0; NULL != opt->values[i]; ++i) {
-            /* the value is the envar */
-            p1 = opt->values[i];
-            /* if there is an '=' in it, then they are setting a value */
-            if (NULL != (p2 = strchr(p1, '='))) {
-                *p2 = '\0';
-                ++p2;
-            } else {
-                p2 = getenv(p1);
-                if (NULL == p2) {
-                    continue;
-                }
-            }
-            /* not allowed to duplicate anything from an MCA param on the cmd line */
-            rc = check_cache_noadd(&cache, &cachevals, p1, p2);
-            if (PRTE_SUCCESS != rc) {
-                PMIX_ARGV_FREE_COMPAT(cache);
-                PMIX_ARGV_FREE_COMPAT(cachevals);
-                PMIX_ARGV_FREE_COMPAT(xparams);
-                PMIX_ARGV_FREE_COMPAT(xvals);
-                return rc;
-            }
-            /* cache this for later inclusion */
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&xparams, p1);
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&xvals, p2);
-        }
-    }
 
     /* process the resulting cache into the dstenv */
     if (NULL != cache) {

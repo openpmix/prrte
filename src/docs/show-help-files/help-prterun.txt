@@ -203,7 +203,28 @@ option to the help request as "--help <option>".
 |                      | processes                                     |
 +----------------------+-----------------------------------------------+
 | "-x <name>"          | Export an environment variable, optionally    |
-|                      | specifying a value                            |
+|                      | specifying a value (e.g., "-x foo" exports    |
+|                      | the environment variable foo and takes its    |
+|                      | value from the current environment; "-x       |
+|                      | foo=bar" exports the environment variable     |
+|                      | name foo and sets its value to "bar" in the   |
+|                      | started processes; "-x foo*" exports all      |
+|                      | current environmental variables starting with |
+|                      | "foo")                                        |
++----------------------+-----------------------------------------------+
+| "--unset-env <name>" | Unset the named environmental variable. Note  |
+|                      | "--unset-env foo*" unsets all current         |
+|                      | environmental variables starting with "foo"   |
++----------------------+-----------------------------------------------+
+| "--append-env        | Append the named environment variable with    |
+| <name[c]> <value>"   | given value. The "[c]" must be appended to    |
+|                      | the name to specify the separator to be used  |
+|                      | when appending the value.                     |
++----------------------+-----------------------------------------------+
+| "--prepend-env       | Prepend the named environment variable with   |
+| <name[c]> <value>"   | given value. The "[c]" must be appended to    |
+|                      | the name to specify the separator to be used  |
+|                      | when prepending the value.                    |
 +----------------------+-----------------------------------------------+
 | "--gpu-support <val>"| Direct application to either enable (true) or |
 |                      | disable (false) its internal library's GPU    |
@@ -506,6 +527,40 @@ PMIx prefix has been given to PRRTE, but the application has been built
 against a PMIx library that (a) is different from the one used by PRRTE,
 and (b) was not moved. Otherwise, PRRTE will apply its default prefix to
 the application.
+
+[x]
+
+Export an environment variable, optionally specifying a value. For example,
+"-x foo" exports the environment variable "foo" and takes its value
+from the current environment, while "-x foo=bar" exports the environment
+variable name "foo" and sets its value to "bar" in the started processes.
+Note that "-x foo*" exports all current environmental variables starting with
+"foo"
+
+[unset-env]
+
+Unset the named environmental variable. Note "--unset-env foo*" unsets all
+current environmental variables starting with "foo"
+
+[append-env]
+
+Append the named environment variable with the given value. The "[c]" must
+be appended to the name to specify the separator to be used when appending
+the value.
+
+Example: "--append-envar LD_LIBRARY_PATH[:] foo/lib" will result in:
+
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:foo/lib
+
+[prepend-env]
+
+Prepend the named environment variable with the given value. The "[c]" must
+be appended to the name to specify the separator to be used when appending
+the value.
+
+Example: "--prepend-envar LD_LIBRARY_PATH[:] foo/lib" will result in:
+
+LD_LIBRARY_PATH=foo/lib:$LD_LIBRARY_PATH
 
 [forward-signals]
 

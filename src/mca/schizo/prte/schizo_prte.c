@@ -184,6 +184,15 @@ static struct option prterunoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_STOP_IN_INIT, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_STOP_IN_APP, PMIX_ARG_NONE),
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_FWD_ENVAR, PMIX_ARG_REQD, 'x'),
+#ifdef PMIX_CLI_PREPEND_ENVAR
+    PMIX_OPTION_DEFINE(PMIX_CLI_PREPEND_ENVAR, PMIX_ARG_REQD),
+#endif
+#ifdef PMIX_CLI_APPEND_ENVAR
+    PMIX_OPTION_DEFINE(PMIX_CLI_APPEND_ENVAR, PMIX_ARG_REQD),
+#endif
+#ifdef PMIX_CLI_UNSET_ENVAR
+    PMIX_OPTION_DEFINE(PMIX_CLI_UNSET_ENVAR, PMIX_ARG_REQD),
+#endif
     PMIX_OPTION_DEFINE(PRTE_CLI_WDIR, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("wd", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_SET_CWD_SESSION, PMIX_ARG_NONE),
@@ -261,7 +270,7 @@ static struct option prterunoptions[] = {
 
     PMIX_OPTION_END
 };
-static char *prterunshorts = "h::vVpn:c:N:sH:x:";
+static char *prterunshorts = "h::vVn:c:N:sH:x:";
 
 static struct option prunoptions[] = {
     /* basic options */
@@ -302,6 +311,15 @@ static struct option prunoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_STOP_IN_INIT, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_STOP_IN_APP, PMIX_ARG_NONE),
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_FWD_ENVAR, PMIX_ARG_REQD, 'x'),
+#ifdef PMIX_CLI_PREPEND_ENVAR
+    PMIX_OPTION_DEFINE(PMIX_CLI_PREPEND_ENVAR, PMIX_ARG_REQD),
+#endif
+#ifdef PMIX_CLI_APPEND_ENVAR
+    PMIX_OPTION_DEFINE(PMIX_CLI_APPEND_ENVAR, PMIX_ARG_REQD),
+#endif
+#ifdef PMIX_CLI_UNSET_ENVAR
+    PMIX_OPTION_DEFINE(PMIX_CLI_UNSET_ENVAR, PMIX_ARG_REQD),
+#endif
     PMIX_OPTION_DEFINE(PRTE_CLI_WDIR, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("wd", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_SET_CWD_SESSION, PMIX_ARG_NONE),
@@ -931,92 +949,11 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
 static int parse_env(char **srcenv, char ***dstenv,
                      pmix_cli_result_t *cli)
 {
-    int i, j, n;
-    char *p1, *p2;
-    char **env;
-    char **xparams = NULL, **xvals = NULL;
-    char *param, *value;
-    pmix_cli_item_t *opt;
-    PRTE_HIDE_UNUSED_PARAMS(srcenv);
+    PRTE_HIDE_UNUSED_PARAMS(srcenv, dstenv, cli);
 
     pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                         "%s schizo:prte: parse_env",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-
-    if (NULL == cli) {
-        return PRTE_SUCCESS;
-    }
-
-    env = *dstenv;
-
-    /* look for -x options - not allowed to conflict with a -mca option */
-    opt = pmix_cmd_line_get_param(cli, PRTE_CLI_FWD_ENVAR);
-    if (NULL != opt) {
-        for (j=0; NULL != opt->values[j]; j++) {
-            /* the value is the envar */
-            p1 = opt->values[j];
-            /* if there is an '=' in it, then they are setting a value */
-            if (NULL != (p2 = strchr(p1, '='))) {
-                *p2 = '\0';
-                ++p2;
-            } else {
-                p2 = getenv(p1);
-                if (NULL == p2) {
-                    pmix_show_help("help-schizo-base.txt", "missing-envar-param", true, p1);
-                    continue;
-                }
-            }
-
-            /* check if it is already present in the environment */
-            for (n = 0; NULL != env && NULL != env[n]; n++) {
-                param = strdup(env[n]);
-                value = strchr(param, '=');
-                *value = '\0';
-                value++;
-                /* check if parameter is already present */
-                if (0 == strcmp(param, p1)) {
-                    /* we do have it - check for same value */
-                    if (0 != strcmp(value, p2)) {
-                        /* this is an error - different values */
-                        pmix_show_help("help-schizo-base.txt", "duplicate-mca-value", true, p1, p2,
-                                       value);
-                        free(param);
-                        PMIX_ARGV_FREE_COMPAT(xparams);
-                        PMIX_ARGV_FREE_COMPAT(xvals);
-                        return PRTE_ERR_BAD_PARAM;
-                    }
-                }
-                free(param);
-            }
-
-            /* check if we already processed a conflicting -x version with MCA prefix */
-            if (NULL != xparams) {
-                for (i = 0; NULL != xparams[i]; i++) {
-                    if (0 == strncmp("PRTE_MCA_", p1, strlen("PRTE_MCA_"))) {
-                        /* this is an error - different values */
-                        pmix_show_help("help-schizo-base.txt", "duplicate-mca-value", true, p1, p2,
-                                       xvals[i]);
-                        PMIX_ARGV_FREE_COMPAT(xparams);
-                        PMIX_ARGV_FREE_COMPAT(xvals);
-                        return PRTE_ERR_BAD_PARAM;
-                    }
-                }
-            }
-
-            /* cache this for later inclusion - do not modify dstenv in this loop */
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&xparams, p1);
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&xvals, p2);
-        }
-    }
-
-    /* add the -x values */
-    if (NULL != xparams) {
-        for (i = 0; NULL != xparams[i]; i++) {
-            PMIX_SETENV_COMPAT(xparams[i], xvals[i], true, dstenv);
-        }
-        PMIX_ARGV_FREE_COMPAT(xparams);
-        PMIX_ARGV_FREE_COMPAT(xvals);
-    }
 
     return PRTE_SUCCESS;
 }
