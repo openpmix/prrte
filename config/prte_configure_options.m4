@@ -112,6 +112,7 @@ fi
 
 AC_DEFINE_UNQUOTED(PRTE_PICKY_COMPILERS, $WANT_PICKY_COMPILER,
                    [Whether or not we are using picky compiler settings])
+AM_CONDITIONAL([PRTE_PICKY_COMPILERS], [test "$WANT_PICKY_COMPILER" = "1"])
 
 AC_MSG_CHECKING([if want memory sanitizers])
 AC_ARG_ENABLE(memory-sanitizers,

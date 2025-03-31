@@ -25,6 +25,9 @@
 
 # This makefile.am does not stand on its own - it is included from src/Makefile.am
 
+EXTRA_DIST += \
+        runtime/help-prte-runtime.txt
+
 headers += \
         runtime/runtime.h \
         runtime/prte_locks.h \

@@ -11,7 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
-# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -26,7 +26,7 @@ noinst_LTLIBRARIES = libprtemca_ess.la
 libprtemca_ess_la_SOURCES =
 
 # pkgdata setup
-dist_prtedata_DATA =
+EXTRA_DIST =
 
 # local files
 headers = ess.h

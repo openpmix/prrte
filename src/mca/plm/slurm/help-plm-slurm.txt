@@ -27,15 +27,6 @@ an allocation, or by an error in the PRTE code. Please check
 to ensure you have a SLURM allocation. If you do, then please pass
 the error to the PRTE user's mailing list for assistance.
 #
-[no-local-slave-support]
-A call was made to launch a local slave process, but no support
-is available for doing so. Launching a local slave requires support
-for either rsh or ssh on the backend nodes where MPI processes
-are running.
-
-Please consult with your system administrator about obtaining
-such support.
-#
 [no-srun]
 The SLURM process starter for OpenMPI was unable to locate a
 usable "srun" command in its path. Please check your path

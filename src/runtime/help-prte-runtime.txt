@@ -1,13 +1,14 @@
-[bogus section]
-
-This section is not used by PRTE code.  But we have to put a RST
-section title in this file somewhere, or Sphinx gets unhappy.  So we
-put it in a section that is ignored by PRTE code.
-
-
-Hello, world
-============
-
+# -*- text -*-
+#
+# Copyright (c) 2025      Nanook Consulting  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+# This is the US/English general help file for PRTE's runtime.
+#
 [prte_init:startup:internal-failure]
 
 It looks like "prte_init()" failed for some reason. There are many
@@ -18,7 +19,7 @@ appears to be an internal failure — here's some additional information
 
    %s failed
    --> Returned value %s (%d) instead of PRTE_SUCCESS
-
+#
 [prte:session:dir:prohibited]
 
 The specified location for the temporary directories required by PRTE
@@ -32,30 +33,7 @@ administrator to have the list of prohibited locations changed.
 Otherwise, please identify a different location to be used (use "-h"
 to see the cmd line option), or simply let the system pick a default
 location.
-
-[prte:session:dir:nopwname]
-
-PRTE was unable to obtain the username in order to create a path for
-its required temporary directories.  This type of error is usually
-caused by a transient failure of network-based authentication services
-(e.g., LDAP failure due to network congestion), but can also be an
-indication of system misconfiguration.
-
-Please consult your system administrator about these issues and try
-again.
-
-[prte_nidmap:too_many_nodes]
-
-An error occurred while trying to pack the information about the job.
-More nodes have been found than the %d expected. Please check your
-configuration files such as the mapping.
-
-[prte_init:startup:num_daemons]
-
-PRTE was unable to determine the number of nodes in your allocation.
-We are therefore assuming a very large number to ensure you receive
-proper error messages.
-
+#
 [failed-to-uncompress]
 
 A compressed message was received that could not be decompressed. This
@@ -64,7 +42,7 @@ is most likely due to a missing libz library on the receiving node:
    node:  %s
 
 Please ensure that the "libz" library is present on all compute nodes.
-
+#
 [bootstrap-not-found]
 
 Bootstrap startup was requested, but the required configuration file
@@ -75,7 +53,7 @@ was not found on at least one node:
 
 Please ensure the file has been installed in the correct location on
 every node included in this PRRTE DVM.
-
+#
 [bootstrap-missing-field-name]
 
 Bootstrap startup was requested, but the required configuration file
@@ -86,7 +64,7 @@ on at least one node is missing the field name on an entry:
    line: %s
 
 Please correct the line.
-
+#
 [bootstrap-missing-value]
 
 Bootstrap startup was requested, but the required configuration file
@@ -97,7 +75,7 @@ on at least one node is missing a value on an entry:
    line: %s
 
 Please correct the line.
-
+#
 [bootstrap-missing-entry]
 
 Bootstrap startup was requested, but the required configuration file
@@ -108,7 +86,7 @@ on at least one node is missing a required entry:
    entry:  %s
 
 Please provide the missing information.
-
+#
 [bootstrap-bad-nodelist]
 
 Bootstrap startup was requested, but we were unable to parse the regex
@@ -120,7 +98,7 @@ of participating nodes on at least one node:
    error:  %s
 
 Please fix the error and try again.
-
+#
 [prte:session:dir:shared]
 
 PRTE has detected that the head of the session directory tree (where

@@ -29,19 +29,6 @@ that could not be found:
 
 Please either unset the parameter, or check that the path is correct
 #
-[no-local-orted]
-The ssh PLS component was not able to find the executable "orted" in
-your PATH or in the directory where PRTE was initially installed,
-and therefore cannot continue.
-
-For reference, your current PATH is:
-
-  %s
-
-We also looked for orted in the following directory:
-
-  %s
-
 [concurrency-less-than-zero]
 The value of the MCA parameter "pls_ssh_num_concurrent" is less than
 or equal to zero (%d).  This parameter is used to determine how many
@@ -49,7 +36,7 @@ remote agents (typically ssh) to invoke concurrently while launching
 parallel jobs.
 
 This value has automatically be reset to 1; processing will continue.
-
+#
 [deadlock-params]
 The ssh launcher has been given a number of %d concurrent daemons to
 launch and is in a debug-daemons option. However, the total number of
@@ -58,22 +45,6 @@ will cause the system to deadlock.
 
 To avoid deadlock, either increase the number of concurrent daemons, or
 remove the debug-daemons flag.
-
-[unknown-user]
-The user (%d) is unknown to the system (i.e. there is no corresponding
-entry in the password file). Please contact your system administrator
-for a fix.
-#
-[cannot-resolve-shell-with-prefix]
-The ssh launcher has been given a prefix to use, but could not determine
-the type of remote shell being used on the remote node. This is a fatal
-error as we cannot determine how to construct the cmd line to set your
-remote LD_LIBRARY_PATH and PATH environmental variables.
-
-The prefix we were given are:
-
-prte_prefix: %s
-prefix_dir:  %s
 #
 [cmd-line-too-long]
 The cmd line to launch remote daemons is too long:

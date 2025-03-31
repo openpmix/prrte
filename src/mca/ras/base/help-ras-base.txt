@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2023-2024 Nanook Consulting  All rights reserved.
+# Copyright (c) 2023-2025 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -34,11 +34,6 @@ please check that none of the following exist:
 MCA param file: prte_allocation_required = 1
 Environment: PRTE_MCA_prte_allocation_required=1
 Cmd line: -prtemca prte_allocation_required 1
-#
-[ras-sim:mismatch]
-The number of topology files and the list of number of nodes
-must match - i.e., a number of nodes must be given for each
-topology.
 #
 [ras-base:addhost-not-found]
 A request was made to add hosts from a hostfile, but the
