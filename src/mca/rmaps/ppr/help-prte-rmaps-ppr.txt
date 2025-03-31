@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2024      Nanook Consulting  All rights reserved.
+# Copyright (c) 2024-2025 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -40,18 +40,6 @@ Only values for "hwthread", "core", "package",
 enough characters must be provided to clearly specify the desired
 resource (e.g., "l1" for "l1cache").
 #
-[ppr-violation]
-The provided mapping directives resulted in too many processes
-being placed on a node:
-
-  Node:  %s
-  Num procs:  %d
-  Limiting resource:  %s
-  Num resources:  %d
-  Specified constraint:  %s
-
-Please adjust and try again.
-#
 [ppr-too-many-procs]
 Your job has requested more processes than the ppr for
 this topology can support:
@@ -63,9 +51,3 @@ this topology can support:
   PPR: %s
 
 Please revise the conflict and try again.
-#
-[ppr-topo-missing]
-A ppr pattern was specified, but the topology information
-for the following node is missing:
-
-  Node:  %s

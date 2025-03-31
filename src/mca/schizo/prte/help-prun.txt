@@ -1,19 +1,20 @@
-[bogus section]
-
-This section is not used by PRTE code.  But we have to put a RST
-section title in this file somewhere, or Sphinx gets unhappy.  So we
-put it in a section that is ignored by PRTE code.
-
-
-Hello, world
-============
-
+# -*- text -*-
+#
+# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+# This is the US/English general help file for PRRTE's prun.
+#
 [version]
 
 %s (%s) %s
 
 %s
-
+#
 [usage]
 
 %s (%s) %s
@@ -164,16 +165,6 @@ option to the help request as "--help <option>".
 |                      | parameter name; "value" is the parameter      |
 |                      | value)                                        |
 +----------------------+-----------------------------------------------+
-| "--tune <filename>"  | File(s) containing MCA params for tuning      |
-|                      | operations                                    |
-+----------------------+-----------------------------------------------+
-| "--preload-files     | Preload the comma separated list of files to  |
-| <filenames>"         | the remote machines current working directory |
-|                      | before starting the remote process.           |
-+----------------------+-----------------------------------------------+
-| "-s" | "--preload-   | Preload the binary on the remote machine      |
-| binary"              | before starting the remote process.           |
-+----------------------+-----------------------------------------------+
 | "--app-pmix-prefix <dir>" | Prefix to be used by app procs to look   |
 |                      | for their PMIx installation on remote nodes.  |
 |                      | This is the location of the top-level         |
@@ -187,11 +178,21 @@ option to the help request as "--help <option>".
 | "--no-app-prefix"    | Do not provide a prefix directive to this     |
 |                      | application.                                  |
 +----------------------+-----------------------------------------------+
+| "--tune <filename>"  | File(s) containing MCA params for tuning      |
+|                      | operations                                    |
++----------------------+-----------------------------------------------+
+| "--preload-files     | Preload the comma separated list of files to  |
+| <filenames>"         | the remote machines current working directory |
+|                      | before starting the remote process.           |
++----------------------+-----------------------------------------------+
 | "--pset <name>"      | User-specified name assigned to the processes |
 |                      | in their given application                    |
 +----------------------+-----------------------------------------------+
 | "--rankfile          | Name of file to specify explicit task mapping |
 | <filename>"          |                                               |
++----------------------+-----------------------------------------------+
+| "-s" | "--preload-   | Preload the binary on the remote machine      |
+| binary"              | before starting the remote process.           |
 +----------------------+-----------------------------------------------+
 | "--set-cwd-to-       | Set the working directory of the started      |
 | session-dir"         | processes to their session directory          |
@@ -213,20 +214,6 @@ option to the help request as "--help <option>".
 |                      | started processes; "-x foo*" exports all      |
 |                      | current environmental variables starting with |
 |                      | "foo")                                        |
-+----------------------+-----------------------------------------------+
-| "--unset-env <name>" | Unset the named environmental variable. Note  |
-|                      | "--unset-env foo*" unsets all current         |
-|                      | environmental variables starting with "foo"   |
-+----------------------+-----------------------------------------------+
-| "--append-env        | Append the named environment variable with    |
-| <name[c]> <value>"   | given value. The "[c]" must be appended to    |
-|                      | the name to specify the separator to be used  |
-|                      | when appending the value.                     |
-+----------------------+-----------------------------------------------+
-| "--prepend-env       | Prepend the named environment variable with   |
-| <name[c]> <value>"   | given value. The "[c]" must be appended to    |
-|                      | the name to specify the separator to be used  |
-|                      | when prepending the value.                    |
 +----------------------+-----------------------------------------------+
 | "--gpu-support <val>"| Direct application to either enable (true) or |
 |                      | disable (false) its internal library's GPU    |
@@ -268,6 +255,12 @@ option to the help request as "--help <option>".
 | "--personality       | Specify the personality to be used            |
 | <name>"              |                                               |
 +----------------------+-----------------------------------------------+
+| "--report-pid        | Print out PID on stdout ("-"), stderr ("+"),  |
+| <arg0>"              | or a file [anything else]                     |
++----------------------+-----------------------------------------------+
+| "--report-uri        | Print out URI on stdout ("-"), stderr ("+"),  |
+| <arg0>"              | or a file [anything else]                     |
++----------------------+-----------------------------------------------+
 | "--allow-run-as-     | Allow execution as root (**STRONGLY           |
 | root"                | DISCOURAGED**)                                |
 +----------------------+-----------------------------------------------+
@@ -280,44 +273,44 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 
 Report bugs to %s
-
+#
 [dvm-uri]
 
 Specify the URI of the DVM master, or the name of the file (specified
 as "file:filename") that contains that info
-
+#
 [num-connect-retries]
 
 Max number of times to try to connect to the specified server (int)
-
+#
 [pid]
 
 PID of the daemon to which we should connect (integer PID or
 "file:<filename>" for file containing the PID
-
+#
 [namespace]
 
 Namespace of the daemon we are to connect to (char*)
-
+#
 [system-server-first]
 
 First look for a system server and connect to it if found
-
+#
 [system-server-only]
 
 Connect only to a system-level server - abort if one is not found
-
+#
 [tmpdir]
 
 Define the root location for the PRRTE session directory tree
 
 See the "Session directory" HTML documentation for additional details
 about the PRRTE session directory.
-
+#
 [wait-to-connect]
 
 Delay specified number of seconds before trying to connect
-
+#
 [hostfile]
 
 PRRTE supports several levels of user-specified hostfiles based on an
@@ -455,7 +448,7 @@ are left. To accomplish this, the user provides a hostfile of:
 The user can now use this information in combination with PRRTE's
 sequential mapper to obtain their specific layout:
 
-   <launcher> --hostfile dummyhosts --hostfile mylayout --prtemca rmaps seq ./my_app
+   <launcher> --hostfile dummyhosts --hostfile mylayout --map-by seq ./my_app
 
 which will result in:
 
@@ -493,12 +486,12 @@ and/or command lines.
 
 See the "Host specification" HTML documentation for details about the
 format and content of hostfiles.
-
+#
 [machinefile]
 
 Provide a hostfile.  This option is a synonym for "--hostfile"; see
 that option for more information.
-
+#
 [host]
 
 Host syntax consists of a comma-delimited list of node names, each
@@ -517,57 +510,19 @@ Note:
   launch a process. Thus, the number of slots equates to the maximum
   number of processes PRRTE may start on that node without
   oversubscribing it.
-
-[parseable]
-
-Output information (e.g., help messages) in machine-parseable friendly
-format
-
-[parsable]
-
-Output information (e.g., help messages) in machine-parseable friendly
-format
-
+#
 [np]
 
 Specify number of application processes to be started
-
-[no-ready-msg]
-
-Do not print a DVM ready message
-
-[daemonize]
-
-Daemonize the DVM daemons into the background
-
-[system-server]
-
-Start the DVM as the system server
-
-[set-sid]
-
-Direct the DVM daemons to separate from the current session
-
+#
 [report-pid]
 
 Printout PID on stdout [-], stderr [+], or a file [anything else]
-
+#
 [report-uri]
 
 Printout URI on stdout [-], stderr [+], or a file [anything else]
-
-[test-suicide]
-
-Suicide instead of clean abort after delay
-
-[singleton]
-
-ID of the singleton process that started us
-
-[keepalive]
-
-Pipe to monitor - DVM will terminate upon closure
-
+#
 [map-by]
 
 Processes are mapped based on one of the following directives as
@@ -697,7 +652,7 @@ specific number of processing elements per application process via the
 
 A more detailed description of the mapping, ranking, and binding
 procedure can be obtained via the "--help placement" option.
-
+#
 [rank-by]
 
 PRRTE automatically ranks processes for each job starting from zero.
@@ -751,7 +706,7 @@ Note:
 
 A more detailed description of the mapping, ranking, and binding
 procedure can be obtained via the "--help placement" option.
-
+#
 [bind-to]
 
 By default, processes are bound to individual CPUs (either COREs or
@@ -824,7 +779,7 @@ Note:
 
   Directives and qualifiers are case-insensitive. "OVERLOAD" is the
   same as "overload".
-
+#
 [runtime-options]
 
 The "--runtime-options" command line directive must be accompanied by
@@ -980,7 +935,7 @@ Note:
 
   Directives are case-insensitive.  "FWD-ENVIRONMENT" is the same as
   "fwd-environment".
-
+#
 [display]
 
 The "display" command line directive must be accompanied by a comma-
@@ -1021,7 +976,7 @@ colon (":") and any combination of one or more of the following
   a typical spelling for the qualifier.
 
 Provided qualifiers will apply to *all* of the display directives.
-
+#
 [output]
 
 The "output" command line directive must be accompanied by a comma-
@@ -1065,95 +1020,17 @@ Supported values include:
 Supported qualifiers include "NOCOPY" (do not copy the output to the
 stdout/err streams), and "RAW" (do not buffer the output into complete
 lines, but instead output it as it is received).
-
+#
 [rankfile]
 
 Name of file to specify explicit task mapping
 
-[do-not-launch]
-
-Perform all necessary operations to prepare to launch the application,
-but do not actually launch it (usually used to test mapping patterns)
-
-[display-devel-map]
-
-Display a detailed process map (mostly intended for developers) just
-before launch
-
-[display-topo]
-
-Display the topology as part of the process map (mostly intended for
-developers) just before launch
-
-[report-bindings]
-
-Display process bindings to stderr
-
-[display-devel-allocation]
-
-Display a detailed list (mostly intended for developers) of the
-allocation being used by this job
-
-[display-map]
-
-Display the process map just before launch
-
-[display-allocation]
-
-Display the allocation being used by this job
-
-[enable-recovery]
-
-Enable recovery from process failure [Default = disabled]
-
-[max-restarts]
-
-Max number of times to restart a failed process
-
-[disable-recovery]
-
-Disable recovery (resets all recovery options to off)
-
-[continuous]
-
-Job is to run until explicitly terminated
-
+NOTE: deprecated in favor of "--map-by rankfile:file=<filename>"
+#
 [personality]
 
 Specify the personality to be used
-
-[prte-server]
-
-Specify the URI of the publish/lookup server, or the name of the file
-(specified as "file:<filename>" that contains that info
-
-[dvm-master-uri]
-
-URI for the DVM master
-
-[parent-uri]
-
-URI for the parent if tree launch is enabled
-
-[tree-spawn]
-
-Tree-based spawn in progress
-
-[daemonize]
-
-Daemonize the DVM daemons into the background
-
-[set-sid]
-
-Direct the DVM daemons to separate from the current session
-
-[prtemca]
-
-Pass a PRRTE MCA parameter.
-
-Syntax: "--prtemca <key> <value>", where "key" is the parameter name
-and "value" is the parameter value.
-
+#
 [pmixmca]
 
 Pass a PMIx MCA parameter
@@ -1161,91 +1038,13 @@ Pass a PMIx MCA parameter
 Syntax: "--pmixmca <key> <value>", where "key" is the parameter name
 and "value" is the parameter value.
 
-[debug-daemons-file]
-
-Debug daemon output is enabled and all output from the daemons is
-redirected into files with names of the form:
-
-   output-prted-<daemon-nspace>-<nodename>.log
-
-These names avoid conflict on shared file systems. The files are
-located in the top-level session directory assigned to the DVM.
-
-See the "Session directory" HTML documentation for additional details
-about the PRRTE session directory.
-
-[leave-session-attached]
-
-Do not discard stdout/stderr of remote PRRTE daemons. The primary use
-for this option is to ensure that the daemon output streams (i.e.,
-stdout and stderr) remain open after launch, thus allowing the user to
-see any daemon-generated error messages. Otherwise, the daemon will
-"daemonize" itself upon launch, thereby closing its output streams.
-
-[app-pmix-prefix]
-
-Prefix to be used by an app to look for its PMIx installation on remote
-nodes. This is the location of the top-level directory for the installation.
-If the installation has not been moved, it would be the value given to
-"--prefix" when the installation was configured.
-
-Note that PRRTE cannot determine the exact name of the library subdirectory
-under this location. For example, some systems will call it "lib" while others
-call it "lib64". Accordingly, PRRTE will use the library subdirectory name
-of the PMIx installation used to build PRRTE.
-
-In the absence of providing an application-specific prefix, the PMIx prefix
-(if given) used by PRRTE's own executables will be applied unless the
-"--no-app-prefix" directive is given.
-
-[no-app-prefix]
-
-Do not apply any prefix to this application. This is needed when a default
-PMIx prefix has been given to PRRTE, but the application has been built
-against a PMIx library that (a) is different from the one used by PRRTE,
-and (b) was not moved. Otherwise, PRRTE will apply its default prefix to
-the application.
-
-[x]
-
-Export an environment variable, optionally specifying a value. For example,
-"-x foo" exports the environment variable "foo" and takes its value
-from the current environment, while "-x foo=bar" exports the environment
-variable name "foo" and sets its value to "bar" in the started processes.
-Note that "-x foo*" exports all current environmental variables starting with
-"foo"
-
-[unset-env]
-
-Unset the named environmental variable. Note "--unset-env foo*" unsets all
-current environmental variables starting with "foo"
-
-[append-env]
-
-Append the named environment variable with the given value. The "[c]" must
-be appended to the name to specify the separator to be used when appending
-the value.
-
-Example: "--append-envar LD_LIBRARY_PATH[:] foo/lib" will result in:
-
-LD_LIBRARY_PATH=$LD_LIBRARY_PATH:foo/lib
-
-[prepend-env]
-
-Prepend the named environment variable with the given value. The "[c]" must
-be appended to the name to specify the separator to be used when appending
-the value.
-
-Example: "--prepend-envar LD_LIBRARY_PATH[:] foo/lib" will result in:
-
-LD_LIBRARY_PATH=foo/lib:$LD_LIBRARY_PATH
-
+#
 [prun:executable-not-specified]
 
 No executable was specified on the %s command line.
 
 Aborting.
-
+#
 [prun:call-failed]
 
 %s encountered a %s call failure.  This should not happen, and usually
@@ -1256,13 +1055,13 @@ the following error occurred:
 
 The only other available information that may be helpful is the errno
 that was returned: %d.
-
+#
 [prun:proc-ordered-abort]
 
 %s has exited due to process rank %lu with PID %lu on node %s calling
 "abort". This may have caused other processes in the application to be
 terminated by signals sent by %s (as reported here).
-
+#
 [prun:proc-exit-no-sync]
 
 %s has exited due to process rank %lu with PID %lu on node %s exiting
@@ -1288,17 +1087,91 @@ terminated by signals sent by %s (as reported here).
 
 You can avoid this message by specifying -quiet on the %s command
 line.
-
+#
 [prun:proc-aborted]
 
 %s noticed that process rank %lu with PID %lu on node %s exited on
 signal %d.
-
+#
 [prun:proc-aborted-strsignal]
 
 %s noticed that process rank %lu with PID %lu on node %s exited on
 signal %d (%s).
+#
+[prun:sys-limit-pipe]
 
+%s was unable to launch the specified application as it encountered an
+error:
+
+Error: system limit exceeded on number of pipes that can be open
+
+   Node: %s
+
+when attempting to start process rank %lu.
+
+This can be resolved by setting the mca parameter
+opal_set_max_sys_limits to 1, increasing your limit descriptor setting
+(using limit or ulimit commands), asking the system administrator for
+that node to increase the system limit, or by rearranging your
+processes to place fewer of them on that node.
+#
+[prun:sys-limit-files]
+
+%s was unable to launch the specified application as it encountered an
+error:
+
+Error: system limit exceeded on number of files that can be open
+
+   Node: %s
+
+when attempting to start process rank %lu.
+
+This can be resolved by setting the mca parameter
+opal_set_max_sys_limits to 1, increasing your limit descriptor setting
+(using limit or ulimit commands), asking the system administrator for
+that node to increase the system limit, or by rearranging your
+processes to place fewer of them on that node.
+#
+[prun:pipe-setup-failure]
+
+%s was unable to launch the specified application as it encountered an
+error:
+
+Error: pipe function call failed when setting up I/O forwarding
+subsystem
+
+   Node: %s
+
+while attempting to start process rank %lu.
+#
+[prun:sys-limit-children]
+
+%s was unable to launch the specified application as it encountered an
+error:
+
+Error: system limit exceeded on number of processes that can be
+started
+
+   Node: %s
+
+when attempting to start process rank %lu.
+
+This can be resolved by either asking the system administrator for
+that node to increase the system limit, or by rearranging your
+processes to place fewer of them on that node.
+#
+[prun:failed-term-attrs]
+
+%s was unable to launch the specified application as it encountered an
+error:
+
+Error: reading tty attributes function call failed while setting up
+I/O forwarding system
+
+   Node: %s
+
+while attempting to start process rank %lu.
+#
 [prun:wdir-not-found]
 
 %s was unable to launch the specified application as it could not find
@@ -1308,7 +1181,7 @@ the specified working directory:
    Node: %s
 
 while attempting to start process rank %lu.
-
+#
 [prun:wdir-not-accessible]
 
 %s was unable to launch the specified application as it lacks
@@ -1318,7 +1191,7 @@ permissions to change to the specified working directory:
    Node: %s
 
 while attempting to start process rank %lu.
-
+#
 [prun:exe-not-found]
 
 %s was unable to find the specified executable file, and therefore did
@@ -1331,7 +1204,7 @@ NOTE: A common cause for this error is misspelling a %s command
 
    Node:       %s
    Executable: %s
-
+#
 [prun:exe-not-accessible]
 
 %s was unable to launch the specified application as it lacked
@@ -1341,7 +1214,7 @@ permissions to execute an executable:
    Node: %s
 
 while attempting to start process rank %lu.
-
+#
 [prun:pipe-read-failure]
 
 %s was unable to launch the specified application as it encountered an
@@ -1353,7 +1226,7 @@ process
    Node: %s
 
 while attempting to start process rank %lu.
-
+#
 [prun:proc-failed-to-start]
 
 %s was unable to start the specified application as it encountered an
@@ -1364,12 +1237,12 @@ error:
    Node: %s
 
 when attempting to start process rank %lu.
-
+#
 [prun:proc-failed-to-start-no-status]
 
 %s was unable to start the specified application as it encountered an
 error on node %s. More information may be available above.
-
+#
 [prun:ompi-server-filename-bad]
 
 %s was unable to parse the filename where contact info for the prte-
@@ -1384,7 +1257,7 @@ option is:
    --prte-server file:path-to-file
 
 where path-to-file can be either relative to the cwd or absolute.
-
+#
 [prun:ompi-server-filename-missing]
 
 %s was unable to parse the filename where contact info for the prte-
@@ -1398,7 +1271,7 @@ remember that the correct format for this command line option is:
    --prte-server file:path-to-file
 
 where path-to-file can be either relative to the cwd or absolute.
-
+#
 [prun:ompi-server-filename-access]
 
 %s was unable to access the filename where contact info for the prte-
@@ -1413,7 +1286,7 @@ is:
 
 where path-to-file can be either relative to the cwd or absolute, and
 that you must have read access permissions to that file.
-
+#
 [prun:ompi-server-file-bad]
 
 %s was unable to read the prte-server's contact info from the given
@@ -1432,7 +1305,7 @@ for the prte-server. Note that this is *not* a standard uri, but a
 special format used internally by PRTE for communications. It can best
 be generated by simply directing the prte-server to put its uri in a
 file, and then giving %s that filename.
-
+#
 [prun:multiple-paffinity-schemes]
 
 Multiple processor affinity schemes were specified (can only specify
@@ -1442,24 +1315,24 @@ one):
    prte_paffinity_alone:  true
 
 Please specify only the one desired method.
-
+#
 [prun:invalid-node-rank]
 
 An invalid node rank was obtained - this is probably something that
 should be reported to the PRRTE developers.
-
+#
 [prun:invalid-local-rank]
 
 An invalid local rank was obtained - this is probably something that
 should be reported to the PRRTE developers.
-
+#
 [prun:invalid-phys-cpu]
 
 An invalid physical processor id was returned when attempting to set
 processor affinity - please check to ensure that your system supports
 such functionality. If so, then this is probably something that should
 be reported to the PRRTE developers.
-
+#
 [prun:topo-not-supported]
 
 An attempt was made to bind a process to a specific hardware topology
@@ -1474,7 +1347,7 @@ cannot use "bind to package" and other related functionality.
    Local host:        %s
    Action attempted:  %s %s
    Application name:  %s
-
+#
 [prun:not-enough-resources]
 
 Not enough %s were found on the local host to meet the requested
@@ -1485,7 +1358,7 @@ binding action:
    Application name:  %s
 
 Please revise the request and try again.
-
+#
 [prun:invalid-slot-list-range]
 
 A slot list was provided that exceeds the boundaries on available
@@ -1495,7 +1368,7 @@ resources:
    Slot list:  %s
 
 Please check your boundaries and try again.
-
+#
 [prun:proc-comm-failed]
 
 A critical communication path was lost to:
@@ -1503,24 +1376,24 @@ A critical communication path was lost to:
    My name:      %s
    Process name: %s
    Node:         %s
-
+#
 [prun:proc-mem-exceeded]
 
 A process exceeded memory limits:
 
    Process name: %s
    Node:         %s
-
+#
 [prun:proc-stalled]
 
 One or more processes appear to have stalled - a monitored file failed
 to show the required activity.
-
+#
 [prun:proc-sensor-exceeded]
 
 One or more processes have exceeded a specified sensor limit, but no
 further info is available.
-
+#
 [prun:proc-heartbeat-failed]
 
 %s failed to receive scheduled heartbeat communications from a remote
@@ -1528,7 +1401,7 @@ process:
 
    Process name: %s
    Node:         %s
-
+#
 [prun:non-zero-exit]
 
 %s detected that one or more processes exited with non-zero status,
@@ -1536,7 +1409,7 @@ thus causing the job to be terminated. The first process to do so was:
 
    Process name: %s
    Exit code:    %d
-
+#
 [prun:negative-nprocs]
 
 %s has detected that one or more applications was given a negative
@@ -1546,47 +1419,7 @@ number of processes to run:
    Num procs:    %d
 
 Please correct this value and try again.
-
-[prun:timeout]
-
-The user-provided time limit for job execution has been reached:
-
-   Timeout: %d seconds
-
-The job will now be aborted.  Please check your code and/or
-adjust/remove the job execution time limit (as specified by --timeout
-command line option or MPIEXEC_TIMEOUT environment variable).
-
-[prun:conflict-env-set]
-
-ERROR: You have attempted to pass environment variables to PRTE with
-both the "-x" method and by setting the MCA parameter
-"mca_base_env_list".
-
-PRTE does not support mixing these two methods.  Please choose one
-method and try launching your job again.
-
-Your job will now abort.
-
-[prun:pmix-failed]
-
-The call to pmix_init_server() failed. This may be due to your
-system's restriction for Unix's socket's path-length.
-
-   prte_proc_session_dir: %s
-
-Please try to set TMPDIR to something short (like /tmp) or change Your
-computer's name (see uname -n).
-
-[prun:timeoutconflict]
-
-Conflicting requests for timeout were given:
-
-   --timeout command line option: %d MPIEXEC_TIMEOUT envar:         %s
-
-Only one method should be provided, or else they must agree. Please
-correct and retry.
-
+#
 [prun:stop-on-exec]
 
 %s was unable to stop the executable at first instruction:
@@ -1594,30 +1427,13 @@ correct and retry.
    Error:     %s
    Nodename:  %s
    Rank:      %lu
-
-[use-pterm]
-
-Use of %s to terminate the PRTE DVM has been deprecated. Please use
-the "pterm" tool instead in the future.
-
-[bad-pause-for-tool]
-
-%s detected the presence of the PMIX_LAUNCHER_PAUSE_FOR_TOOL
-environmental variable, but the value of the variable is in an
-improper form:
-
-   PMIX_LAUNCHER_PAUSE_FOR_TOOL:  %s
-
-The variable must be of the form (nspace:rank) of the tool requesting
-that %s pause for it to connect. Please reset the value of the
-variable and try again.
-
+#
 [prun:executable-incorrectly-given]
 
 The %s command was given with an application specified. %s is only
 used to start the persistent DVM - it cannot be used with an
 application.
-
+#
 [bad-option-input]
 
 %s was given an option that expected a string argument:
@@ -1627,7 +1443,7 @@ application.
    expected: %s
 
 Please correct the option and try again.
-
+#
 [file-open-error]
 
 %s was unable to open the specified file provided as an option:
@@ -1637,7 +1453,7 @@ Please correct the option and try again.
    file: %s
 
 Please correct the option and try again.
-
+#
 [bad-file]
 
 %s was unable to read the necessary info from the provided file:
@@ -1647,7 +1463,7 @@ Please correct the option and try again.
    file: %s
 
 Please correct the option or the file and try again.
-
+#
 [bad-dvm-option]
 
 The --dvm <arg> option was provided, but the argument is one not
@@ -1657,7 +1473,7 @@ recognized:
 
 Please see "%s --help dvm" for a list of recognized options and
 examples
-
+#
 [appfile-failure]
 
 The --app <arg> option was provided, but the specified file was not
@@ -1666,11 +1482,3 @@ found or could not be opened:
    file: %s
 
 Please correct the option and try again.
-#
-[malformed-envar]
-A command line option was given to %s an envar for an application:
-
-  App: %s
-  Envar: %s
-
-Please correct the error and try again.

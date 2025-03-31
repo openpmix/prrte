@@ -16,7 +16,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -84,7 +84,6 @@ int main(int argc, char *argv[])
     int i;
     char *str;
     char *ptr;
-    char *personality;
     prte_schizo_base_module_t *schizo;
 
     PRTE_HIDE_UNUSED_PARAMS(argc);
@@ -116,24 +115,12 @@ int main(int argc, char *argv[])
         return ret;
     }
 
-    /* look for any personality specification */
-    personality = NULL;
-    for (i = 0; NULL != argv[i]; i++) {
-        if (0 == strcmp(argv[i], "--personality")) {
-            personality = argv[i + 1];
-            break;
-        }
-    }
-
     /* detect if we are running as a proxy and select the active
      * schizo module for this tool */
-    schizo = prte_schizo_base_detect_proxy(personality);
+    schizo = prte_schizo_base_detect_proxy("prte");
     if (NULL == schizo) {
-        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
+        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "prte");
         return 1;
-    }
-    if (NULL == personality) {
-        personality = schizo->name;
     }
 
     /* Register all global MCA Params */

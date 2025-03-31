@@ -1,19 +1,20 @@
-[bogus section]
-
-This section is not used by PRTE code.  But we have to put a RST
-section title in this file somewhere, or Sphinx gets unhappy.  So we
-put it in a section that is ignored by PRTE code.
-
-
-Hello, world
-============
-
+# -*- text -*-
+#
+# Copyright (c) 2025      Nanook Consulting  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+# This is the US/English general help file for PRTE's prterun.
+#
 [version]
 
 %s (%s) %s
 
 %s
-
+#
 [usage]
 
 %s (%s) %s
@@ -86,6 +87,9 @@ option to the help request as "--help <option>".
 |                      | actually launch it (usually used to test      |
 |                      | mapping patterns)                             |
 +----------------------+-----------------------------------------------+
+| "--test-suicide      | Suicide instead of clean abort after          |
+| <arg0>"              | specified delay                               |
++----------------------+-----------------------------------------------+
 
 +----------------------+-----------------------------------------------+
 |                      | Output Options                                |
@@ -141,6 +145,9 @@ option to the help request as "--help <option>".
 | "-N" | "--npernode   | Run designated number of processes on each    |
 | <num>"               | node                                          |
 +----------------------+-----------------------------------------------+
+| "--app <filename>"   | Provide an appfile; ignore all other command  |
+|                      | line options                                  |
++----------------------+-----------------------------------------------+
 | "--personality       | Specify the personality to be used            |
 | <name>"              |                                               |
 +----------------------+-----------------------------------------------+
@@ -154,6 +161,9 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | "--machinefile       | Provide a hostfile (synonym for "--hostfile") |
 | <file>"              |                                               |
++----------------------+-----------------------------------------------+
+| "--path <path>"      | PATH to be used to look for executables to    |
+|                      | start processes                               |
 +----------------------+-----------------------------------------------+
 | "--add-hostfile      | Provide a hostfile listing hosts to add to    |
 | <file>"              | the DVM prior to launching the given app      |
@@ -257,6 +267,9 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | "--no-ready-msg"     | Do not print a DVM ready message              |
 +----------------------+-----------------------------------------------+
+| "--system-server"    | Start prterun and its daemons as the system   |
+|                      | server on their nodes                         |
++----------------------+-----------------------------------------------+
 | "--noprefix"         | Disable automatic "--prefix" behavior         |
 +----------------------+-----------------------------------------------+
 | "--prefix <dir>"     | Prefix to be used to look for RTE executables |
@@ -294,7 +307,7 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 
 Report bugs to %s
-
+#
 [dvm]
 
 Utilize an existing persistent DVM instead of instantiating an
@@ -345,21 +358,21 @@ Examples:
    prterun --dvm pid:file:prte_pid.txt --np 4 ./a.out
 
    prterun --dvm search --np 4 ./a.out
-
+#
 [prtemca]
 
 Pass a PRRTE MCA parameter.
 
 Syntax: "--prtemca <key> <value>", where "key" is the parameter name
 and "value" is the parameter value.
-
+#
 [pmixmca]
 
 Pass a PMIx MCA parameter
 
 Syntax: "--pmixmca <key> <value>", where "key" is the parameter name
 and "value" is the parameter value.
-
+#
 [gpmixmca]
 
 Syntax: "--gpmixmca <key> <value>"
@@ -368,7 +381,7 @@ where "key" is the parameter name and "value" is the parameter value.
 The "g" prefix indicates that this PMIx parameter is to be applied to
 _all_ application contexts and not just the one in which the directive
 appears.
-
+#
 [tune]
 
 Comma-delimited list of one or more files containing PRRTE and PMIx
@@ -384,51 +397,41 @@ Syntax in the file is:
 with one parameter and its associated value per line. Empty lines and
 lines beginning with the "#" character are ignored, as is any
 whitespace around the "=" character.
-
-[stream]
-
-Adjust buffering for stdout/stderr.  Allowable values:
-
-* 0: unbuffered
-
-* 1: line buffered
-
-* 2: fully buffered
-
+#
 [system-server]
 
 Start prterun and its daemons as the system server on their nodes
-
+#
 [set-sid]
 
 Direct the DVM (controller and daemons) to separate from the current
 session
-
+#
 [report-pid]
 
 Printout prterun's PID on stdout ("-"), stderr ("+"), or a file
 (anything else).
-
+#
 [report-uri]
 
 Printout prterun's URI on stdout ("-"), stderr ("+"), or a file
 (anything else).
-
+#
 [test-suicide]
 
 Test DVM cleanup upon daemon failure by having one daemon suicide
 after delay
-
+#
 [singleton]
 
 "prterun" is being started by a singleton process (i.e., one not
 started by prterun) — the argument must be the PMIx ID of the
 singleton process that started us
-
+#
 [keepalive]
 
 Pipe for prterun to monitor — job will terminate upon closure
-
+#
 [launch-agent]
 
 Name of daemon executable used to start processes on remote nodes
@@ -436,17 +439,17 @@ Name of daemon executable used to start processes on remote nodes
 
 This is the executable prterun shall start on each remote node when
 establishing the DVM.
-
+#
 [max-vm-size]
 
 Maximum number of daemons to start
-
+#
 [debug-daemons]
 
 Debug daemon output enabled. This is a somewhat limited stream of
 information normally used to simply confirm that the daemons started.
 Includes leaving the output streams open.
-
+#
 [debug-daemons-file]
 
 Debug daemon output is enabled and all output from the daemons is
@@ -459,7 +462,7 @@ located in the top-level session directory assigned to the DVM.
 
 See the "Session directory" HTML documentation for additional details
 about the PRRTE session directory.
-
+#
 [leave-session-attached]
 
 Do not discard stdout/stderr of remote PRRTE daemons. The primary use
@@ -467,14 +470,14 @@ for this option is to ensure that the daemon output streams (i.e.,
 stdout and stderr) remain open after launch, thus allowing the user to
 see any daemon-generated error messages. Otherwise, the daemon will
 "daemonize" itself upon launch, thereby closing its output streams.
-
+#
 [tmpdir]
 
 Define the root location for the PRRTE session directory tree
 
 See the "Session directory" HTML documentation for additional details
 about the PRRTE session directory.
-
+#
 [prefix]
 
 Prefix to be used to look for PRRTE executables. PRRTE automatically
@@ -483,7 +486,7 @@ the "--enable-prte-prefix-by-default" option OR prte itself was
 executed with an absolute path to the prte command. This option
 overrides those settings, if present, and forces use of the provided
 path.
-
+#
 [noprefix]
 
 Disable automatic "--prefix" behavior. PRRTE automatically sets the
@@ -491,7 +494,7 @@ prefix for remote daemons if it was either configured with the "--
 enable-prte-prefix-by-default" option OR prte itself was executed with
 an absolute path to the "prte" command. This option disables that
 behavior.
-
+#
 [pmix-prefix]
 
 Prefix to be used by a PRRTE executable to look for its PMIx installation
@@ -503,7 +506,7 @@ Note that PRRTE cannot determine the exact name of the library subdirectory
 under this location. For example, some systems will call it "lib" while others
 call it "lib64". Accordingly, PRRTE will use the library subdirectory name
 of the PMIx installation used to build PRRTE.
-
+#
 [app-pmix-prefix]
 
 Prefix to be used by an app to look for its PMIx installation on remote
@@ -519,7 +522,7 @@ of the PMIx installation used to build PRRTE.
 In the absence of providing an application-specific prefix, the PMIx prefix
 (if given) used by PRRTE's own executables will be applied unless the
 "--no-app-prefix" directive is given.
-
+#
 [no-app-prefix]
 
 Do not apply any prefix to this application. This is needed when a default
@@ -527,7 +530,7 @@ PMIx prefix has been given to PRRTE, but the application has been built
 against a PMIx library that (a) is different from the one used by PRRTE,
 and (b) was not moved. Otherwise, PRRTE will apply its default prefix to
 the application.
-
+#
 [x]
 
 Export an environment variable, optionally specifying a value. For example,
@@ -536,12 +539,12 @@ from the current environment, while "-x foo=bar" exports the environment
 variable name "foo" and sets its value to "bar" in the started processes.
 Note that "-x foo*" exports all current environmental variables starting with
 "foo"
-
+#
 [unset-env]
 
 Unset the named environmental variable. Note "--unset-env foo*" unsets all
 current environmental variables starting with "foo"
-
+#
 [append-env]
 
 Append the named environment variable with the given value. The "[c]" must
@@ -551,7 +554,7 @@ the value.
 Example: "--append-envar LD_LIBRARY_PATH[:] foo/lib" will result in:
 
 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:foo/lib
-
+#
 [prepend-env]
 
 Prepend the named environment variable with the given value. The "[c]" must
@@ -561,14 +564,14 @@ the value.
 Example: "--prepend-envar LD_LIBRARY_PATH[:] foo/lib" will result in:
 
 LD_LIBRARY_PATH=foo/lib:$LD_LIBRARY_PATH
-
+#
 [forward-signals]
 
 Comma-delimited list of additional signals (names or integers) to
 forward to application processes ("none" = forward nothing). Signals
 provided by default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT,
 SIGALRM, and SIGCONT.
-
+#
 [allow-run-as-root]
 
 Allow execution as root **(STRONGLY DISCOURAGED)**.
@@ -593,67 +596,69 @@ protection by providing one of the following:
      * "PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1"
 
 Again, we recommend this only be done if absolutely necessary.
-
+#
 [report-child-jobs-separately]
 
 Return the exit status of the primary job only
-
+#
 [timeout]
 
 Timeout the job if execution time exceeds the specified number of
 seconds
-
+#
 [report-state-on-timeout]
 
 Report all job and process states upon timeout
-
+#
 [get-stack-traces]
 
 Get stack traces of all application procs on timeout
-
+#
 [spawn-timeout]
 
 Timeout the job if spawn takes more than the specified number of
 seconds
-
+#
 [np]
 
 Specify number of application processes to be started
+#
+[n]
 
-[n] Specify number of application processes to be started
-
+Specify number of application processes to be started
+#
 [N]
 
 Specify number of application processes per node to be started
-
+#
 [app]
 
 Provide an appfile; ignore all other command line options
-
+#
 [xterm]
 
 Create a new xterm window and display output from the specified ranks
 there.  Ranks are specified as a comma-delimited list of ranges —
 e.g., "1,3-6,9", or as "all".
-
+#
 [stop-on-exec]
 
 If supported, stop each process at start of execution
-
+#
 [stop-in-init]
 
 Include the "PMIX_DEBUG_STOP_IN_INIT" attribute in the application's
 job info directing that the specified ranks stop in PMIx_Init pending
 release. Ranks are specified as a comma-delimited list of ranges —
 e.g., "1,3-6,9", or as "all".
-
+#
 [stop-in-app]
 
 Include the "PMIX_DEBUG_STOP_IN_APP" attribute in the application's
 job info directing that the specified ranks stop at an application-
 determined point pending release. Ranks are specified as a comma-
 delimited list of ranges — e.g., "1,3-6,9", or as "all".
-
+#
 [x]
 
 Export an environment variable, optionally specifying a value. For
@@ -667,33 +672,33 @@ example:
 
 * "-x foo*" exports all current environmental variables starting with
   "foo".
-
+#
 [wdir]
 
 Set the working directory of the started processes
-
+#
 [wd]
 
 Synonym for --wdir
-
+#
 [set-cwd-to-session-dir]
 
 Set the working directory of the started processes to their session
 directory
-
+#
 [path]
 
 Path to be used to look for executables to start processes
-
+#
 [show-progress]
 
 Output a brief periodic report on launch progress
-
+#
 [pset]
 
 User-specified name assigned to the processes in their given
 application
-
+#
 [hostfile]
 
 PRRTE supports several levels of user-specified hostfiles based on an
@@ -869,12 +874,12 @@ and/or command lines.
 
 See the "Host specification" HTML documentation for details about the
 format and content of hostfiles.
-
+#
 [machinefile]
 
 Provide a hostfile.  This option is a synonym for "--hostfile"; see
 that option for more information.
-
+#
 [add-hostfile]
 
 PRRTE allows a user to expand an existing DVM prior to launching an
@@ -907,7 +912,7 @@ added nodes should also include the "--hostfile" command line
 directive, giving the same hostfile as its argument:
 
    --add-hostfile <filename> --hostfile <filename>
-
+#
 [host]
 
 Host syntax consists of a comma-delimited list of node names, each
@@ -929,7 +934,7 @@ Note:
 
 See the "Host specification" HTML documentation for details about the
 format and content of hostfiles.
-
+#
 [add-host]
 
 PRRTE allows a user to expand an existing DVM prior to launching an
@@ -981,7 +986,7 @@ giving the same hosts in its argument:
 Note that the "--host" argument indicates the number of slots to
 assign node01 for this spawn request, and not the number of slots
 being added to the node01 allocation.
-
+#
 [personality]
 
 Specify the personality to be used. This governs selection of the
@@ -991,21 +996,21 @@ library-dependent support to the launched processes. Examples include
 "ompi" for an application compiled with Open MPI, "mpich" for one
 built against the MPICH library, or "oshmem" for an OpenSHMEM
 application compiled against SUNY's reference library.
-
+#
 [preload-files]
 
 Syntax: "--preload-files <files>"
 
 Preload the comma separated list of files to the remote machines
 current working directory before starting the remote process.
-
+#
 [preload-binary]
 
 Syntax: "--preload-binary"
 
 Preload the binary on the remote machine before starting the remote
 process.
-
+#
 [output]
 
 The "output" command line directive must be accompanied by a comma-
@@ -1049,12 +1054,12 @@ Supported values include:
 Supported qualifiers include "NOCOPY" (do not copy the output to the
 stdout/err streams), and "RAW" (do not buffer the output into complete
 lines, but instead output it as it is received).
-
+#
 [stdin]
 
 Specify procs to receive stdin [integer ranks, "all", "none"]
 (default: "0", indicating rank 0)
-
+#
 [map-by]
 
 Processes are mapped based on one of the following directives as
@@ -1184,7 +1189,7 @@ specific number of processing elements per application process via the
 
 A more detailed description of the mapping, ranking, and binding
 procedure can be obtained via the "--help placement" option.
-
+#
 [rank-by]
 
 PRRTE automatically ranks processes for each job starting from zero.
@@ -1238,7 +1243,7 @@ Note:
 
 A more detailed description of the mapping, ranking, and binding
 procedure can be obtained via the "--help placement" option.
-
+#
 [bind-to]
 
 By default, processes are bound to individual CPUs (either COREs or
@@ -1311,7 +1316,7 @@ Note:
 
   Directives and qualifiers are case-insensitive - e.g., "OVERLOAD"
   is the same as "overload".
-
+#
 [runtime-options]
 
 The "--runtime-options" command line directive must be accompanied by
@@ -1468,9 +1473,8 @@ Note:
   Directives are case-insensitive.  "FWD-ENVIRONMENT" is the same as
   "fwd-environment".
 
-[rankfile]
-
-Name of file to specify explicit task mapping [display]
+#
+[display]
 
 The "display" command line directive must be accompanied by a comma-
 delimited list of case-insensitive options indicating what information
@@ -1510,142 +1514,12 @@ colon (":") and any combination of one or more of the following
   a typical spelling for the qualifier.
 
 Provided qualifiers will apply to *all* of the display directives.
-
+#
 [do-not-launch]
 
 Perform all necessary operations to prepare to launch the application,
 but do not actually launch it (usually used to test mapping patterns)
-
-[mca]
-
-Syntax: "--mca <key> <value>", where "key" is the parameter name and
-"value" is the parameter value.
-
-Pass generic MCA parameters — i.e., parameters whose project
-affiliation must be determined by PRRTE based on matching the name of
-the parameter with defined values from various projects that PRRTE
-knows about.
-
-Deprecated: This translation can be incomplete (e.g., if a project
-adds or changes parameters) — thus, it is strongly recommended that
-users use project-specific parameters such as "--prtemca" or "--
-pmixmca".
-
-[gmca]
-
-Syntax: "--gmca <key> <value>", where "key" is the parameter name and
-"value" is the parameter value. The "g" prefix indicates that this
-parameter is "global", and to be applied to *all* application contexts
-— not just the one in which the directive appears.
-
-Pass generic MCA parameters — i.e., parameters whose project
-affiliation must be determined by PRRTE based on matching the name of
-the parameter with defined values from various projects that PRRTE
-knows about.
-
-Deprecated: This translation can be incomplete (e.g., if known project
-adds or changes parameters) — thus, it is strongly recommended that
-users use project-specific parameters such as "--gprtemca" or "--
-gpmixmca".
-
-[xml]
-
-Provide all output in XML format.
-
-Deprecated: This option is deprecated.  Please use "--output".
-
-[bind-to-core]
-
-Bind each process to its own core.
-
-Deprecated: This option is deprecated.  Please use "--bind-to core".
-
-[tag-output]
-
-Tag all output with "[job,rank]".
-
-Deprecated: This option is deprecated.  Please use "--output".
-
-[timestamp-output]
-
-Timestamp all application process output.
-
-Deprecated: This option is deprecated.  Please use "--output
-timestamp".
-
-[output-directory]
-
-Redirect output from application processes into
-"filename/job/rank/std[out,err,diag]". A relative path value will be
-converted to an absolute path. The directory name may include a colon
-followed by a comma-delimited list of optional case-insensitive
-directives. Supported directives currently include "NOJOBID" (do not
-include a job-id directory level) and "NOCOPY" (do not copy the output
-to the stdout/err streams).
-
-Deprecated: This option is deprecated.  Please use "--output
-dir=<path>".
-
-[output-filename]
-
-Redirect output from application processes into "filename.rank". A
-relative path value will be converted to an absolute path. The
-directory name may include a colon followed by a comma-delimited list
-of optional case-insensitive directives. Supported directives
-currently include "NOCOPY" (do not copy the output to the stdout/err
-streams).
-
-Deprecated: This option is deprecated.  Please use "--output
-file=<path>"
-
-[merge-stderr-to-stdout]
-
-Merge stderr to stdout for each process.
-
-Deprecated: This option is deprecated.  Please use "--output merge"
-
-[display-devel-map]
-
-Display a detailed process map (mostly intended for developers) just
-before launch.
-
-Deprecated: This option is deprecated.  Please use "--display map-
-devel".
-
-[display-topo]
-
-Display the topology as part of the process map (mostly intended for
-developers) just before launch.
-
-Deprecated: This option is deprecated.  Please use "--display topo".
-
-[report-bindings]
-
-Display process bindings to stderr.
-
-Deprecated: This option is deprecated.  Please use "--display
-bindings".
-
-[display-devel-allocation]
-
-Display a detailed list (mostly intended for developers) of the
-allocation being used by this job.
-
-Deprecated: This option is deprecated.  Please use "--display alloc-
-devel".
-
-[display-map]
-
-Display the process map just before launch.
-
-Deprecated: This option is deprecated.  Please use "--display map".
-
-[display-allocation]
-
-Display the allocation being used by this job.
-
-Deprecated: This option is deprecated.  Please use "--display alloc".
-
+#
 [placement]
 
 
@@ -1833,7 +1707,7 @@ Definition of "processor element"
 By default, PRRTE defines that a "processing element" is a processor
 core.  However, if "--use-hwthread-cpus" is specified on the command
 line, then a "processing element" is a hardware thread.
-
+#
 [placement-examples]
 
 
@@ -2221,7 +2095,7 @@ And here is a MIMD example:
 This will launch process 0 running "hostname" on node "aa" and
 processes 1 and 2 each running "uptime" on nodes "bb" and "cc",
 respectively.
-
+#
 [placement-rankfiles]
 
 
@@ -2292,7 +2166,7 @@ hostnames, indexed from 0. For example:
 All package/core slot locations are be specified as *logical* indexes.
 You can use tools such as HWLOC's "lstopo" to find the logical indexes
 of packages and cores.
-
+#
 [placement-deprecated]
 
 
@@ -2423,7 +2297,7 @@ These deprecated options will be removed in a future release.
 | "--xml"              | "--output XML"       | Provide all output in XML      |
 |                      |                      | format                         |
 +----------------------+----------------------+--------------------------------+
-
+#
 [placement-diagnostics]
 
 
@@ -2496,7 +2370,7 @@ hardware threads in this case) are mapped to each process.
    [node01:107126] MCW rank 3 is not bound (or bound to all available processors)
 
 Binding is turned off in the above example, as reported.
-
+#
 [placement-fundamentals]
 
 
@@ -2610,7 +2484,7 @@ include:
 +-----------------------------------+-----------------------------------+-----------------------------------+
 | "--bind-to none"                  | "hwloc_default_binding_policy"    | "none"                            |
 +-----------------------------------+-----------------------------------+-----------------------------------+
-
+#
 [placement-limits]
 
 
@@ -2662,7 +2536,8 @@ before *oversubscribing* the node.
 
 If we run the following:
 
-   prun --np 34 --hostfile myhostfile --map-by core --bind-to core hostname
+   prun --np 34 --hostfile myhostfile --map-by core
+       --bind-to core hostname
 
 It will return an error at the binding time indicating an
 *overloading* scenario.
@@ -2678,7 +2553,8 @@ tells PRRTE that it may assign more than one process to a core.
 
 If we run the following:
 
-   prun --np 34 --hostfile myhostfile --map-by core --bind-to core:overload-allowed hostname
+   prun --np 34 --hostfile myhostfile --map-by core
+       --bind-to core:overload-allowed hostname
 
 This will run correctly placing 32 processes on "node01", and 2
 processes on "node02". On "node01" two processes are bound to cores
@@ -2689,7 +2565,8 @@ level CPU to bind to without overloading.
 
 If we run the following:
 
-   prun --np 34 --hostfile myhostfile --map-by core:HWTCPUS --bind-to hwthread hostname
+   prun --np 34 --hostfile myhostfile --map-by core:HWTCPUS
+       --bind-to hwthread hostname
 
 This will run correctly placing 32 processes on "node01", and 2
 processes on "node02". On "node01" two processes are mapped to cores
@@ -2704,7 +2581,8 @@ PRRTE will throw an oversubscription error.
 
 Consider next if we ran the following:
 
-   prun --np 66 --hostfile myhostfile --map-by core:HWTCPUS --bind-to hwthread hostname
+   prun --np 66 --hostfile myhostfile
+       --map-by core:HWTCPUS --bind-to hwthread hostname
 
 This will return an error at mapping time indicating an
 oversubscription scenario. The mapping mechanism will assign all of
@@ -2716,7 +2594,7 @@ You can force PRRTE to oversubscribe the nodes by using the
 ":OVERSUBSCRIBE" qualifier to the "--map-by" option as seen in the
 example below:
 
-   prun --np 66 --hostfile myhostfile \
+   prun --np 66 --hostfile myhostfile
        --map-by core:HWTCPUS:OVERSUBSCRIBE --bind-to hwthread hostname
 
 This will run correctly placing 34 processes on "node01" and 32 on
@@ -2738,7 +2616,7 @@ package).
 
 If we run:
 
-   prun --np 20 --hostfile myhostfile --map-by package \
+   prun --np 20 --hostfile myhostfile --map-by package
        --bind-to package:REPORT hostname
 
 Then 10 processes are mapped to each package, and bound at the package
@@ -2747,7 +2625,7 @@ available in the package at the hardware level.
 
 However, if we run:
 
-   prun --np 21 --hostfile myhostfile --map-by package \
+   prun --np 21 --hostfile myhostfile --map-by package
        --bind-to package:REPORT hostname
 
 Then 11 processes are mapped to the first package and 10 to the second
@@ -2773,7 +2651,7 @@ The lowest level CPUs are "hwthreads" (because we are going to use the
 If we re-run (from the package example) and add the ":HWTCPUS"
 qualifier:
 
-   prun --np 21 --hostfile myhostfile --map-by package:HWTCPUS \
+   prun --np 21 --hostfile myhostfile --map-by package:HWTCPUS
        --bind-to package:REPORT hostname
 
 Without the ":HWTCPUS" qualifier this would be overloading (as we saw
@@ -2785,7 +2663,7 @@ hardware level.
 
 Alternatively, if we run:
 
-   prun --np 161 --hostfile myhostfile --map-by package:HWTCPUS \
+   prun --np 161 --hostfile myhostfile --map-by package:HWTCPUS
        --bind-to package:REPORT hostname
 
 Then 81 processes are mapped to the first package and 80 to the second

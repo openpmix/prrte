@@ -188,21 +188,6 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
         goto error;
     }
 
-    /* SANITY CHECKS */
-
-    /* if the number of processes wasn't specified, then we know there can be only
-     * one app_context allowed in the launch, and that we are to launch it across
-     * all available slots.
-     */
-    if (0 == app->num_procs && 1 < jdata->num_apps) {
-        pmix_show_help("help-rmaps_rank_file.txt", "prte-rmaps-rf:multi-apps-and-zero-np", true,
-                       jdata->num_apps, NULL);
-        rc = PRTE_ERR_SILENT;
-        goto error;
-    }
-
-    /* END SANITY CHECKS */
-
     /* start at the beginning... */
     vpid_start = 0;
     jdata->num_procs = 0;

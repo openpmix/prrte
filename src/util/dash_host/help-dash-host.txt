@@ -1,13 +1,14 @@
-[bogus section]
-
-This section is not used by PRTE code.  But we have to put a RST
-section title in this file somewhere, or Sphinx gets unhappy.  So we
-put it in a section that is ignored by PRTE code.
-
-
-Hello, world
-============
-
+# -*- text -*-
+#
+# Copyright (c) 2025      Nanook Consulting  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+# This is the US/English general help file for PRTE's dash-host.
+#
 [not-all-mapped-alloc]
 
 At least one of the requested hosts is not included in the current
@@ -16,16 +17,7 @@ allocation.
    Missing requested host: %s
 
 Please check your allocation or your request.
-
-[dash-host:relative-syntax]
-
-A relative host was specified, but no prior allocation has been made.
-Thus, there is no way to determine the proper host to be used.
-
-   --host: %s
-
-Re-run this command with "--help hosts" for further information.
-
+#
 [dash-host:relative-node-not-found]
 
 A relative host was specified, but was not found. The requested host
@@ -35,7 +27,7 @@ was specified with "--host" as:
    Syntax given: %s
 
 Re-run this command with "--help hosts" for further information.
-
+#
 [dash-host:relative-node-out-of-bounds]
 
 A relative host was specified, but the index given is beyond the
@@ -48,7 +40,7 @@ You could obtain a larger allocation or reduce the relative host
 index.
 
 Re-run this command with "--help hosts" for further information.
-
+#
 [dash-host:invalid-relative-node-syntax]
 
 A relative host was improperly specified — the value provided was.
@@ -59,7 +51,7 @@ You may have forgotten to preface a node with "N" or "n", or used the
 "e" or "E" to indicate empty nodes.
 
 Re-run this command with "--help hosts" for further information.
-
+#
 [dash-host:not-enough-empty]
 
 The requested number of empty hosts was not available — the system was

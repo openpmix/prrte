@@ -32,7 +32,8 @@ However, it was unable to find the following environment variable:
 
     %s
 
-#This is a fatal error.
+This is a fatal error.
+#
 [slurm-env-var-bad-value]
 While trying to determine what resources are available, the SLURM
 resource allocator uses the following environment variables:
@@ -44,7 +45,8 @@ However, an error was encountered when trying to parse the following variable:
 
     %s
 
-#This is a fatal error.
+This is a fatal error.
+#
 [slurm-dyn-alloc-timeout]
 We attempted to obtain a dynamic allocation from Slurm, but
 contact with the Slurm control daemon timed out. Please check

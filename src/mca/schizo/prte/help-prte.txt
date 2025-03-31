@@ -1,19 +1,20 @@
-[bogus section]
-
-This section is not used by PRTE code.  But we have to put a RST
-section title in this file somewhere, or Sphinx gets unhappy.  So we
-put it in a section that is ignored by PRTE code.
-
-
-Hello, world
-============
-
+# -*- text -*-
+#
+# Copyright (c) 2025      Nanook Consulting  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+# This is the US/English general help file for PRTE's prte.
+#
 [version]
 
 %s (%s) %s
 
 %s
-
+#
 [usage]
 
 %s (%s) %s
@@ -59,6 +60,12 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | "--display <arg0>"   | Comma-delimited list of options for           |
 |                      | displaying information                        |
++----------------------+-----------------------------------------------+
+| "--no-aggregate-help" | Do not aggregate help output from multiple   |
+|                      | processes.                                    |
++----------------------+-----------------------------------------------+
+| "--test-suicide      | Suicide instead of clean abort after          |
+| <arg0>"              | specified delay                               |
 +----------------------+-----------------------------------------------+
 
 +----------------------+-----------------------------------------------+
@@ -151,21 +158,21 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 
 Report bugs to %s
-
+#
 [prtemca]
 
 Pass a PRRTE MCA parameter.
 
 Syntax: "--prtemca <key> <value>", where "key" is the parameter name
 and "value" is the parameter value.
-
+#
 [pmixmca]
 
 Pass a PMIx MCA parameter
 
 Syntax: "--pmixmca <key> <value>", where "key" is the parameter name
 and "value" is the parameter value.
-
+#
 [tune]
 
 Comma-delimited list of one or more files containing PRRTE and PMIx
@@ -181,72 +188,72 @@ Syntax in the file is:
 with one parameter and its associated value per line. Empty lines and
 lines beginning with the "#" character are ignored, as is any
 whitespace around the "=" character.
-
+#
 [no-ready-msg]
 
 Do not print a DVM ready message
-
+#
 [daemonize]
 
 Daemonize the DVM daemons and controller into the background
-
+#
 [system-server]
 
 Start the DVM controller and its daemons as the system server on their
 nodes
-
+#
 [set-sid]
 
 Direct the DVM (controller and daemons) to separate from the current
 session
-
+#
 [report-pid]
 
 Printout DVM controller's PID on stdout [-], stderr [+], or a file
-[anything else]
-
+(passed as anything else)
+#
 [report-uri]
 
 Printout DVM controller's URI on stdout [-], stderr [+], or a file
-[anything else]
-
+(passed as anything else)
+#
 [test-suicide]
 
 Test DVM cleanup upon daemon failure by having one daemon suicide
 after delay
-
+#
 [default-hostfile]
 
 Specify a default hostfile.
 
 Also see "--help hostfile".
-
+#
 [singleton]
 
 DVM is being started by a singleton process (i.e., one not started by
 a DVM) - the argument must be the PMIx ID of the singleton process
 that started us
-
+#
 [keepalive]
 
 Pipe for DVM controller to monitor - DVM will terminate upon closure
-
+#
 [launch-agent]
 
 Name of daemon executable used to start processes on remote nodes
 (default: prted).  This is the executable the DVM controller shall
 start on each remote node when establishing the DVM.
-
+#
 [max-vm-size]
 
 Maximum number of daemons to start - sets the maximum size of the DVM.
-
+#
 [debug-daemons]
 
 Debug daemon output enabled. This is a somewhat limited stream of
 information normally used to simply confirm that the daemons started.
 Includes leaving the output streams open.
-
+#
 [debug-daemons-file]
 
 Debug daemon output is enabled and all output from the daemons is
@@ -259,7 +266,7 @@ located in the top-level session directory assigned to the DVM.
 
 See the "Session directory" HTML documentation for additional details
 about the PRRTE session directory.
-
+#
 [leave-session-attached]
 
 Do not discard stdout/stderr of remote PRRTE daemons. The primary use
@@ -267,14 +274,14 @@ for this option is to ensure that the daemon output streams (i.e.,
 stdout and stderr) remain open after launch, thus allowing the user to
 see any daemon-generated error messages. Otherwise, the daemon will
 "daemonize" itself upon launch, thereby closing its output streams.
-
+#
 [tmpdir]
 
 Define the root location for the PRRTE session directory tree
 
 See the "Session directory" HTML documentation for additional details
 about the PRRTE session directory.
-
+#
 [prefix]
 
 Prefix to be used to look for PRRTE executables. PRRTE automatically
@@ -283,7 +290,7 @@ the "--enable-prte-prefix-by-default" option OR prte itself was
 executed with an absolute path to the prte command. This option
 overrides those settings, if present, and forces use of the provided
 path.
-
+#
 [noprefix]
 
 Disable automatic "--prefix" behavior. PRRTE automatically sets the
@@ -291,7 +298,7 @@ prefix for remote daemons if it was either configured with the "--
 enable-prte-prefix-by-default" option OR prte itself was executed with
 an absolute path to the "prte" command. This option disables that
 behavior.
-
+#
 [pmix-prefix]
 
 Prefix to be used by a PRRTE executable to look for its PMIx installation
@@ -303,14 +310,14 @@ Note that PRRTE cannot determine the exact name of the library subdirectory
 under this location. For example, some systems will call it "lib" while others
 call it "lib64". Accordingly, PRRTE will use the library subdirectory name
 of the PMIx installation used to build PRRTE.
-
+#
 [forward-signals]
 
 Comma-delimited list of additional signals (names or integers) to
 forward to application processes ("none" = forward nothing). Signals
 provided by default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT,
 SIGALRM, and SIGCONT.
-
+#
 [allow-run-as-root]
 
 Allow execution as root **(STRONGLY DISCOURAGED)**.
@@ -335,7 +342,7 @@ protection by providing one of the following:
      * "PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1"
 
 Again, we recommend this only be done if absolutely necessary.
-
+#
 [no-aggregate-help]
 
 Do not aggregate help output from multiple processes. PRRTE defaults
@@ -345,12 +352,12 @@ reported the same issue). This is done to avoid users receiving a
 flood of one-per-process error messages, all containing the identical
 error report.  Setting this option turns off the aggregation, thereby
 allowing the user to see duplicate reports from multiple processes.
-
+#
 [timeout]
 
 Timeout DVM startup if time exceeds the specified number of seconds.
 The DVM startup will abort after the specified interval.
-
+#
 [x]
 
 Export an environment variable, optionally specifying a value. For
@@ -364,11 +371,11 @@ example:
 
 * "-x foo*" exports all current environmental variables starting with
   "foo".
-
+#
 [show-progress]
 
 Output a brief periodic report on DVM startup progress
-
+#
 [hostfile]
 
 PRRTE supports several levels of user-specified host lists based on an
@@ -467,12 +474,12 @@ Important:
 
 See the "Host specification" HTML documentation for details about the
 format and content of hostfiles.
-
+#
 [machinefile]
 
 Provide a hostfile.  This option is a synonym for "--hostfile"; see
 that option for more information.
-
+#
 [host]
 
 Host syntax consists of a comma-delimited list of node names, each
@@ -491,7 +498,7 @@ Note:
   launch a process. Thus, the number of slots equates to the maximum
   number of processes PRRTE may start on that node without
   oversubscribing it.
-
+#
 [display]
 
 The "display" command line directive must be accompanied by a comma-
@@ -532,7 +539,7 @@ colon (":") and any combination of one or more of the following
   a typical spelling for the qualifier.
 
 Provided qualifiers will apply to *all* of the display directives.
-
+#
 [runtime-options]
 
 The "--runtime-options" command line directive must be accompanied by

@@ -22,9 +22,8 @@
 
 AM_CPPFLAGS = $(plm_tm_CPPFLAGS)
 
-dist_prtedata_DATA = help-plm-tm.txt
-
 EXTRA_DIST = \
+        help-plm-tm.txt \
         testbuild_tm.h
 
 sources = \

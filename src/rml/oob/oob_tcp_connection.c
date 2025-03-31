@@ -19,7 +19,7 @@
  * Copyright (c) 2016      Mellanox Technologies Ltd. All rights reserved.
  * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow

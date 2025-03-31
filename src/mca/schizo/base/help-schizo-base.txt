@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2020      Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      IBM Corporation.  All rights reserved.
-# Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -13,6 +13,7 @@
 [missing-param-file]
 Unable to locate the variable file:
    %s
+#
 [missing-param-file-def]
 Unable to locate the variable file:
    %s
@@ -71,15 +72,6 @@ WARNING: A deprecated command line option was used.
   Deprecated option:   %s
   Reason: %s
 #
-[deprecated-fail]
-WARNING: A deprecated command line option was used. It is unclear how to update
-this option. Please contact the community for how best to resolve this issue.
-
-  Deprecated option:   %s
-  Reason: %s
-
-We are not able to proceed. Please update your command line.
-#
 [bad-ppr]
 The proc-per-resource request is not correct. The request must include both
 the number of procs for each resource and the type of resource to be used.
@@ -122,19 +114,6 @@ ERROR: %s was unable to identify the proxy for your command.
 
 Please specify a personality or ask the library developer's to address
 the problem.
-#
-[unrecog-generic-param]
-The command line contains a generic MCA param that is not
-recognized by either the default or active personalities:
-
-  Param name:   %s
-  Param value:  %s
-
-Please modify the command line to either specify the personality
-this parameter belongs to (e.g., "--prtemca" for a PRRTE param,
-"--pmixmca" for a PMIx param, "--omca" for an OMPI param) or
-ensure that the generic param is correct and known to the active
-personality.
 #
 [too-many-instances]
 The command line includes too many instances of the following option:
