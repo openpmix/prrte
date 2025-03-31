@@ -16,7 +16,7 @@
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
-# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
 # Copyright (c) 2023      Triad National Security, LLC. All rights
 #                         reserved.
 # $COPYRIGHT$
@@ -31,7 +31,7 @@ sources = \
         plm_pals_component.c \
         plm_pals_module.c
 
-dist_prtedata_DATA = help-plm-pals.txt
+EXTRA_DIST = help-plm-pals.txt
 
 # Make the output library in this directory, and name it either
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la

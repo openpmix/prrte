@@ -1,0 +1,45 @@
+# -*- text -*-
+#
+# Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
+#                         University Research and Technology
+#                         Corporation.  All rights reserved.
+# Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2014      Research Organization for Information Science
+#                         and Technology (RIST). All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2024-2025 Nanook Consulting  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+# This is the US/English general help file for PRTE's ODLS Framework
+#
+[prte-odls-base:xterm-rank-out-of-bounds]
+The xterm option was asked to display a rank that is larger
+than the number of procs in the job:
+
+Node:      %s
+Rank:      %d
+Num procs: %d
+
+Note that ranks start with 0, not 1, and must be specified
+accordingly.
+#
+[prte-odls-base:xterm-neg-rank]
+The xterm option was asked to display a rank that is negative:
+
+Rank:      %d
+Num procs: %d
+
+Note that ranks start with 0, not 1, and must be specified
+accordingly.
+#
+[prte-odls-base:fork-agent-not-found]
+The specified fork agent was not found:
+
+  Node:        %s
+  Fork agent:  %s
+
+The application cannot be launched.

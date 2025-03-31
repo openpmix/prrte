@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -16,7 +16,7 @@
 #include "src/hwloc/hwloc-internal.h"
 
 /*
- * Don't use show_help() here (or print any error message at all).
+ * Don't use show_help("prte", ) here (or print any error message at all).
  * Let the upper layer output a relevant message, because doing so may
  * be complicated (e.g., this might be called from the PRTE ODLS,
  * which has to do some extra steps to get error messages to be

@@ -20,6 +20,9 @@
 # $HEADER$
 #
 
+EXTRA_DIST = \
+        help-prte-odls-default.txt
+
 sources = \
         odls_pdefault.h \
         odls_pdefault_component.c \

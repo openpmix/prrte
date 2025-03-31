@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2018-2020 Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -45,29 +45,6 @@ for use by the sequential mapper in its assignments by using the
 appropriate modifier:
 
   Example: --map-by seq:file=myseqfile
-#
-[missing-cpu]
-While parsing the sequential hostfile, %s encountered a line that
-specified a non-existent CPU:
-
-  Slots: %s
-  Available CPUs: %s
-
-Please correct the line and try again.
-#
-[bad-syntax]
-Error, invalid syntax in sequential hostfile %s.
-
-The sequential mapper requires that there be a node entry for
-every process in the job, and it processes the provided file
-using each node entry to identify the node where that numbered
-rank is to be placed. You can specify the CPU binding for the
-process on its node entry line in the following manner:
-
-A 1:0,1   # put this rank on node A, bound to socket 1, CPUs 0 and 1
-B 1-4     # put this rank on node B, bound to CPUs 1-4
-
-Please correct the syntax and try again.
 #
 [proc-failed-to-map]
 A process could not be mapped:

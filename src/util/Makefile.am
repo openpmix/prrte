@@ -17,7 +17,7 @@
 # Copyright (c) 2016      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2016-2017 IBM Corporation. All rights reserved.
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
 # Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -31,6 +31,15 @@ SUBDIRS = hostfile
 noinst_LTLIBRARIES = lib@PRTE_BINARY_PREFIX@prrteutil.la
 
 AM_CPPFLAGS = $(LTDLINCL)
+
+include $(top_srcdir)/Makefile.prte-rules
+
+EXTRA_DIST = \
+        dash_host/help-dash-host.txt \
+        hostfile/help-hostfile.txt \
+        help-prte-util.txt \
+        prte-convert-help.py
+
 
 # Source code files
 
@@ -74,12 +83,28 @@ lib@PRTE_BINARY_PREFIX@prrteutil_la_SOURCES = \
         session_dir.c \
         stacktrace.c \
         sys_limits.c \
-        uri.c
+        uri.c \
+        prte_show_help_content.c
+
+libprrteutil_la_SOURCES = $(headers) $(sources)
 
 lib@PRTE_BINARY_PREFIX@prrteutil_la_LIBADD = \
         hostfile/lib@PRTE_BINARY_PREFIX@prrteutilhostfile.la
 lib@PRTE_BINARY_PREFIX@prrteutil_la_DEPENDENCIES = \
         hostfile/lib@PRTE_BINARY_PREFIX@prrteutilhostfile.la
+
+prte_show_help_content.c: prte-convert-help.py
+if PRTE_PICKY_COMPILERS
+	$(PRTE_V_GEN) $(PYTHON) $(abs_srcdir)/prte-convert-help.py \
+		--root $(abs_top_srcdir) \
+		--out prte_show_help_content.c \
+		--purge
+else
+	$(PRTE_V_GEN) $(PYTHON) $(abs_srcdir)/prte-convert-help.py \
+		--root $(abs_top_srcdir) \
+		--out prte_show_help_content.c
+endif
+
 
 # Conditionally install the header files
 
@@ -87,3 +112,9 @@ if WANT_INSTALL_HEADERS
 prtedir = $(prteincludedir)/$(subdir)
 prte_HEADERS = $(headers)
 endif
+
+MAINTAINERCLEANFILES = \
+	prte_show_help_content.c
+
+distclean-local:
+	rm -f prte_show_help_content.c

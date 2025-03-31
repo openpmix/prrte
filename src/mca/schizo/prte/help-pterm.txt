@@ -1,13 +1,14 @@
-[bogus section]
-
-This section is not used by PRTE code.  But we have to put a RST
-section title in this file somewhere, or Sphinx gets unhappy.  So we
-put it in a section that is ignored by PRTE code.
-
-
-Hello, world
-============
-
+# -*- text -*-
+#
+# Copyright (c) 2025      Nanook Consulting  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+# This is the US/English general help file for PRTE's pterm.
+#
 [usage]
 
 %s (%s) %s
@@ -64,50 +65,50 @@ Terminate an instance of the PMIx Reference RTE (PRRTE) DVM
 +----------------------+-----------------------------------------------+
 
 Report bugs to %s
-
+#
 [version]
 
 %s (%s) %s
 
 Report bugs to %s
-
+#
 [dvm-uri]
 
 Specify the URI of the DVM master, or the name of the file (specified
 as "file:<filename>") that contains that info
-
+#
 [num-connect-retries]
 
 Max number of times to try to connect to the specified server (int)
-
+#
 [pid]
 
 PID of the daemon to which we should connect (integer PID or
 "file:<filename>" for file containing the PID
-
+#
 [namespace]
 
 Namespace of the daemon we are to connect to (char*)
-
+#
 [system-server-first]
 
 First look for a system server and connect to it if found
-
+#
 [system-server-only]
 
 Connect only to a system-level server - abort if one is not found
-
+#
 [wait-to-connect]
 
 Delay specified number of seconds before trying to connect
-
+#
 [pmixmca]
 
 Pass a PMIx MCA parameter
 
 Syntax: "--pmixmca <key> <value>", where "key" is the parameter name
 and "value" is the parameter value.
-
+#
 [no-args]
 
 The %s command does not accept arguments other than those specifically

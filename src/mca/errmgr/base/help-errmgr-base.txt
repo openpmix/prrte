@@ -15,7 +15,7 @@
 # Copyright (c) 2018      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
+# Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -23,16 +23,6 @@
 # $HEADER$
 #
 #
-[undeliverable-msg]
-An attempt was made to send a message to a process whose
-address is unknown:
-
-  Sender:     %s
-  From node:  %s
-  Recipient:  %s
-  On node:    %s
-
-The message could not be delivered, and we are aborting.
 #
 [failed-daemon-launch]
 %s was unable to reliably start one or more daemons.
@@ -79,39 +69,9 @@ connection to the node, or possibly an internal failure of
 the daemon itself. We cannot recover from this failure, and
 therefore will terminate the job.
 #
-[no-path]
-PRTE does not know how to route a message to the specified daemon
-located on the indicated node:
-
-  my node:   %s
-  target node:  %s
-
-This is usually an internal programming error that should be
-reported to the developers. In the meantime, a workaround may
-be to set the MCA param routed=direct on the command line or
-in your environment. We apologize for the problem.
-#
-[no-connect]
-PRTE is unable to establish a communication connection to the
-specified daemon located on the indicated node:
-
-  my node:   %s
-  target node:  %s
-
-This is usually due to a lack of common network interfaces and/or
-no route found between them. Please check network connectivity (including
-firewalls and network routing requirements). If these look okay,
-then it could be an internal programming error that should be
-reported to the developers. In the meantime, a workaround may
-be to set the MCA param routed=direct on the command line or
-in your environment.
-#
 [simple-message]
 An internal error has occurred in PRTE:
 
 %s
 
 This is something that should be reported to the developers.
-#
-[normal-termination-but]
-%s job %s terminated normally, but %d %s. Per user-direction, the job has been aborted.

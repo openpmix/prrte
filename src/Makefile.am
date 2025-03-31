@@ -15,7 +15,7 @@
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
 # Copyright (c) 2021      Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
@@ -63,6 +63,7 @@ headers =
 nodist_headers =
 noinst_LTLIBRARIES =
 dist_prtedata_DATA =
+EXTRA_DIST =
 #Add prte binary prefix here as well
 lib@PRTE_BINARY_PREFIX@prrte_la_SOURCES += $(headers)
 

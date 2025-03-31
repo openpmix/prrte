@@ -480,7 +480,7 @@ int main(int argc, char *argv[])
         // parse the file and add its context to the argv array
         fp = fopen(opt->values[0], "r");
         if (NULL == fp) {
-            pmix_show_help("help-prun", "appfile-failure", true, opt->values[0]);
+            pmix_show_help("help-prun.txt", "appfile-failure", true, opt->values[0]);
             return 1;
         }
         first = true;

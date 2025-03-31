@@ -14,20 +14,13 @@
 #                         Use is subject to license terms.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2025      Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
 #
 # $HEADER$
 #
-[empty-nodelist-error]
-There are not enough slots available in the Grid Engine
-Parallel Environment (PE) to satisfy the slot requirement needed to
-launch PRTE daemons to the remote hosts, as requested by the application.
-
-Either request fewer slots in application with less value in -np,
-or make more PE slots available for use.
-
 [cannot-read-pe-hostfile]
 The Grid Engine ras component is not able to read the $PE_HOSTFILE for
 the Grid Engine nodes. The $PE_HOSTFILE environment variable shows the
@@ -38,9 +31,11 @@ file is located at:
 The following error is returned:
 
   %s
-
+#
 [no-nodes-found]
 No slots were found in the Grid Engine Parallel Environment (PE). This
-is probably a setup issue, or could be due to a corrupted $PE_HOSTFILE.There is also a chance that you may not be running under a parallel job
+is probably a setup issue, or could be due to a corrupted $PE_HOSTFILE.
+
+There is also a chance that you may not be running under a parallel job
 environment (PE) -- you may have forgotten to specify this is a parallel
 job. If so, please specify that to Grid Engine and try again.

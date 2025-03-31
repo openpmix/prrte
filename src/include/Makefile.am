@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -21,6 +21,8 @@
 #
 
 # This makefile.am does not stand on its own - it is included from src/Makefile.am
+
+include $(top_srcdir)/Makefile.prte-rules
 
 headers += \
         include/constants.h \

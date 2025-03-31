@@ -17,7 +17,7 @@
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -76,6 +76,7 @@ PRTE_EXPORT extern bool prte_bind_progress_thread_reqd;
 PRTE_EXPORT extern bool prte_show_launch_progress;
 PRTE_EXPORT extern bool prte_bootstrap_setup;
 PRTE_EXPORT extern bool prte_silence_shared_fs;
+PRTE_EXPORT extern pmix_show_help_file_t prte_show_help_data[];
 
 /**
  * Global indicating where this process was bound to at launch (will
