@@ -447,9 +447,9 @@ The ``--prepend-env`` option
 
 .. _label-schizo-ompi-append-env:
 
-The ``--apppend-env`` option
+The ``--append-env`` option
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-.. include:: /prrte-rst-content/cli-apppend-env.rst
+.. include:: /prrte-rst-content/cli-append-env.rst
 
 
 Deprecated command line options
