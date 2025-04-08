@@ -445,7 +445,7 @@ The ``--prepend-env`` option
 .. include:: /prrte-rst-content/cli-prepend-env.rst
 
 
-.. _label-schizo-ompi-apppend-env:
+.. _label-schizo-ompi-append-env:
 
 The ``--apppend-env`` option
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
