@@ -32,12 +32,7 @@ dnl $1 is the base cap name (i.e., what comes after "PMIX_CAP_")
 dnl $2 is the action if happy
 dnl $3 is the action if not happy
 AC_DEFUN([PRTE_CHECK_PMIX_CAP],[
-    PRTE_VAR_SCOPE_PUSH([prte_cpp_save])
 
-    AC_MSG_CHECKING([for PMIX_CAP_$1])
-
-    prte_cpp_save=$CPP
-    CPP="$PMIXCC_PATH -E"
     AC_PREPROC_IFELSE(
         [AC_LANG_PROGRAM([#include <pmix_version.h>],
                          [#if !defined(PMIX_CAPABILITIES)
@@ -57,9 +52,6 @@ AC_DEFUN([PRTE_CHECK_PMIX_CAP],[
         [AC_MSG_RESULT([not found])
          $3])
 
-    CPP=$prte_cpp_save
-
-    PRTE_VAR_SCOPE_POP
 ])
 
 AC_DEFUN([PRTE_CHECK_PMIX],[
@@ -150,9 +142,8 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     PRTE_LOG_MSG([pmixcc version: $pmixcc_showme_results])
     AS_IF([test $found_pmixcc -eq 0],
           [AC_MSG_WARN([Could not find $PMIXCC_PATH])
-           AC_MSG_WARN([$PMIXCC_PATH is required for PRRTE to build])
-           AC_MSG_WARN([Please ensure it was installed])
-           AC_MSG_ERROR([Cannot continue])])
+           PMIXCC_PATH=])
+    AM_CONDITIONAL([PRTE_HAVE_PMIXCC], [test $found_pmixcc -eq 1])
     AC_SUBST([PMIXCC_PATH])
 
     # Check for any needed capabilities from the PMIx we found.
@@ -162,6 +153,14 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     # looking for. Specifically, we cannot use PMIx versions that
     # support LTO compatibility as their pmix_framework.h definition
     # is incompatible with our infrastructure
+
+    prte_external_pmix_save_CPPFLAGS=$CPPFLAGS
+    prte_external_pmix_save_LDFLAGS=$LDFLAGS
+    prte_external_pmix_save_LIBS=$LIBS
+
+    PRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, $PRTE_FINAL_CPPFLAGS)
+    PRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $PRTE_FINAL_LDFLAGS)
+    PRTE_FLAGS_APPEND_UNIQ(LIBS, $PRTE_FINAL_LIBS)
 
     AC_MSG_CHECKING([for LTO compatibility])
     PRTE_CHECK_PMIX_CAP([LTO],
@@ -175,6 +174,11 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                          AC_MSG_WARN([This build will not be compatible with the])
                          AC_MSG_WARN([LTO optimizer. All LTO-related flags will])
                          AC_MSG_WARN([be removed from the build])])
+
+    # restore the global flags
+    CPPFLAGS=$prte_external_pmix_save_CPPFLAGS
+    LDFLAGS=$prte_external_pmix_save_LDFLAGS
+    LIBS=$prte_external_pmix_save_LIBS
 
     PRTE_SUMMARY_ADD([Required Packages], [PMIx], [], [$prte_pmix_SUMMARY])
 
