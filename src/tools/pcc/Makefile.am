@@ -21,8 +21,12 @@
 # $HEADER$
 #
 
+if PRTE_HAVE_PMIXCC
+
 install-exec-hook:
 	(cd $(DESTDIR)$(bindir); rm -f pcc; $(LN_S) $(PMIXCC_PATH)$(EXEEXT) pcc)
 
 uninstall-local:
 	rm -f $(DESTDIR)$(bindir)/pcc$(EXEEXT)
+
+endif
