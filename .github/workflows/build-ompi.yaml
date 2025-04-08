@@ -1,0 +1,84 @@
+name: OMPI Internal
+
+on: [pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - name: Configure hostname
+      run:  echo 127.0.0.1 `hostname` | sudo tee -a /etc/hosts > /dev/null
+      if:   ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends software-properties-common
+
+    - name: Checkout Open MPI
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        repository: open-mpi/ompi
+        ref: v5.0.x
+
+    - name: Tweak OMPI
+      run: |
+        rm -r 3rd-party/prrte 3rd-party/openpmix
+
+    - name: Git clone PMIx
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        repository: openpmix/openpmix
+        path: 3rd-party/openpmix
+        ref: v5.0
+        clean: false
+
+    - name: Git clone PRRTE
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        path: 3rd-party/prrte
+        clean: false
+
+    - name: Bootstrap Open MPI
+      run: ./autogen.pl
+
+    - name: Configure Open MPI
+      run: |
+        ./configure \
+          --disable-dependency-tracking \
+          --enable-debug \
+          --enable-mem-debug \
+          --disable-sphinx \
+          --disable-mpi-fortran \
+          --disable-oshmem \
+          --prefix=$RUNNER_TEMP/openmpi
+
+    - name: Build Open MPI
+      run: |
+        make -j $(nproc) install
+
+    - name: Add Open MPI to PATH
+      run: echo $RUNNER_TEMP/openmpi/bin >> $GITHUB_PATH
+
+    - name: Tweak MPI default parameters
+      run:  |
+        # Tweak MPI
+        mca_params="$HOME/.openmpi/mca-params.conf"
+        mkdir -p "$(dirname "$mca_params")"
+        echo mpi_param_check = true >> "$mca_params"
+        echo mpi_show_handle_leaks = true >> "$mca_params"
+        mca_params="$HOME/.prte/mca-params.conf"
+        mkdir -p "$(dirname "$mca_params")"
+        echo rmaps_default_mapping_policy = :oversubscribe >> "$mca_params"
+
+    - name: Simple test
+      run: |
+          cd examples
+          make hello_c
+          mpirun -n 1 ./hello_c
+      if: ${{ true }}
+      timeout-minutes: 5
