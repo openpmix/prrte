@@ -432,20 +432,20 @@ The ``-x`` option
 
 .. include:: /prrte-rst-content/cli-x.rst
 
-.. _label-schizo-ompi-unset-env
+.. _label-schizo-ompi-unset-env:
 
 The ``--unset-env`` option
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 .. include:: /prrte-rst-content/cli-unset-env.rst
 
-.. _label-schizo-ompi-prepend-env
+.. _label-schizo-ompi-prepend-env:
 
 The ``--prepend-env`` option
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 .. include:: /prrte-rst-content/cli-prepend-env.rst
 
 
-.. _label-schizo-ompi-apppend-env
+.. _label-schizo-ompi-apppend-env:
 
 The ``--apppend-env`` option
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
