@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,11 +47,13 @@ typedef struct {
 } prte_oob_tcp_conn_op_t;
 PMIX_CLASS_DECLARATION(prte_oob_tcp_conn_op_t);
 
+#ifndef CLOSE_THE_SOCKET
 #define CLOSE_THE_SOCKET(socket) \
     do {                         \
         shutdown(socket, 2);     \
         close(socket);           \
     } while (0)
+#endif
 
 #define PRTE_ACTIVATE_TCP_CONN_STATE(p, cbfunc)                                             \
     do {                                                                                    \

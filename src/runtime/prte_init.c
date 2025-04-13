@@ -18,7 +18,7 @@
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -225,10 +225,6 @@ int prte_init_minimum(void)
     if (NULL != path) {
         free(path);
     }
-    if (PMIX_SUCCESS != ret) {
-        return prte_pmix_convert_status(ret);
-    }
-    ret = pmix_show_help_add_dir(prte_install_dirs.prtedatadir);
     if (PMIX_SUCCESS != ret) {
         return prte_pmix_convert_status(ret);
     }
