@@ -14,7 +14,7 @@
 #                         et Automatique. All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -25,6 +25,9 @@
 AM_CPPFLAGS = $(plm_lsf_CPPFLAGS)
 
 dist_prtedata_DATA = help-plm-lsf.txt
+
+EXTRA_DIST = \
+        testbuild_lsf.h
 
 sources = \
         plm_lsf.h \
