@@ -56,13 +56,19 @@
 #endif
 
 #define SR1_PJOBS
+#if PRTE_TESTBUILD_LAUNCHERS
+#include "testbuild_lsf.h"
+int lsberrno;
+#else
 #include <lsf/lsbatch.h>
+#endif
 
 #include "src/pmix/pmix-internal.h"
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/pinstalldirs/pinstalldirs_types.h"
 #include "src/util/pmix_argv.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_printf.h"
@@ -170,16 +176,17 @@ static void launch_daemons(int fd, short args, void *cbdata)
     char **nodelist_argv;
     int nodelist_argc;
     char *vpid_string;
-    int i;
     char *cur_prefix;
     int proc_vpid_index = 0;
     bool failed_launch = true;
-    prte_app_context_t *app;
     prte_node_t *node;
     int32_t nnode;
     prte_job_t *daemons;
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata;
+    char *pmix_prefix = NULL;
+    char *newenv;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(state);
     jdata = state->jdata;
