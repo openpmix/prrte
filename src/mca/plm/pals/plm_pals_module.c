@@ -177,19 +177,14 @@ static void launch_daemons(int fd, short args, void *cbdata)
     int rc;
     char *tmp;
     char **env = NULL;
-    char *nodelist_flat;
-    char **nodelist_argv;
-    int nodelist_argc;
     char *vpid_string;
     char **custom_strings;
     int num_args, i;
     char *cur_prefix, *pmix_prefix;
     int proc_vpid_index;
-    prte_app_context_t *app;
-    prte_node_t *node;
-    int32_t nnode;
     prte_job_t *daemons;
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(state);
 
@@ -415,7 +410,6 @@ cleanup:
 static int plm_pals_terminate_prteds(void)
 {
     int rc;
-    prte_job_t *jdata;
 
     PMIX_OUTPUT_VERBOSE((10, prte_plm_base_framework.framework_output,
                          "%s plm:pals: terminating prteds", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -444,6 +438,8 @@ static int plm_pals_terminate_prteds(void)
  */
 static int plm_pals_signal_job(pmix_nspace_t jobid, int32_t signal)
 {
+    PRTE_HIDE_UNUSED_PARAMS(jobid);
+
     if (NULL != palsrun && 0 != palsrun->pid) {
         kill(palsrun->pid, (int) signal);
     }
@@ -471,6 +467,7 @@ static void pals_wait_cb(int sd, short args, void *cbdata)
     prte_wait_tracker_t *t2 = (prte_wait_tracker_t *) cbdata;
     prte_proc_t *proc = t2->child;
     prte_job_t *jdata;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     /* According to the ALPS folks, pals always returns the highest exit
        code of our remote processes. Thus, a non-zero exit status doesn't
@@ -513,6 +510,7 @@ static int plm_pals_start_proc(int argc, char **argv, char **env,
     char *exec_argv = pmix_path_findv(argv[0], 0, env, NULL);
     char *p;
     char *oldenv, *newenv;
+    PRTE_HIDE_UNUSED_PARAMS(argc);
 
     if (NULL == exec_argv) {
         return PRTE_ERR_NOT_FOUND;

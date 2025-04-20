@@ -14,7 +14,7 @@
 # Copyright (c) 2011-2013 Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
-# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -31,7 +31,7 @@ AC_DEFUN([MCA_prte_plm_lsf_CONFIG],[
 
     # if check worked, set wrapper flags if so.
     # Evaluate succeed / fail
-    AS_IF([test "$plm_lsf_good" = "1"],
+    AS_IF([test "$plm_lsf_good" = "1" || test "$prte_testbuild_launchers" = "1"],
           [$1],
           [$2])
 

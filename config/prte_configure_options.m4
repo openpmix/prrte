@@ -18,7 +18,7 @@ dnl                         reserved.
 dnl Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
 dnl
 dnl Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
-dnl Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+dnl Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
 dnl Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
 dnl                         All Rights reserved.
 dnl $COPYRIGHT$
@@ -116,7 +116,7 @@ AC_DEFINE_UNQUOTED(PRTE_PICKY_COMPILERS, $WANT_PICKY_COMPILER,
 AC_MSG_CHECKING([if want memory sanitizers])
 AC_ARG_ENABLE(memory-sanitizers,
     AS_HELP_STRING([--memory-sanitizers],
-                   [enable developer-level memory sanitizers when building PMIx (default: disabled)]))
+                   [enable developer-level memory sanitizers when building PRRTE (default: disabled)]))
 if test "$enable_memory_sanitizers" = "yes"; then
     AC_MSG_RESULT([yes])
     WANT_MEMORY_SANITIZERS=1
@@ -402,5 +402,24 @@ else
 fi
 AM_CONDITIONAL(PRTE_WANT_LEGACY_TOOLS, test "$PRTE_WANT_LEGACY_TOOLS" = 1)
 PRTE_SUMMARY_ADD([Miscellaneous], [Install legacy tools], [], [$prte_legacy_tools])
+
+# use header "shims" for 3rd-party libraries to test-build
+# the PLM launchers
+AC_MSG_CHECKING([if want to test-build PLM launchers that require 3rd-party headers/libraries])
+AC_ARG_ENABLE([testbuild-launchers],
+    [AS_HELP_STRING([--enable-testbuild-launchers],
+        [Test-build PLM launchers that require 3rd-party headers/libraries (default: disabled)])])
+if test "$enable_testbuild_launchers" = "yes"; then
+    AC_MSG_RESULT([yes])
+    prte_testbuild_launchers=1
+    prte_testbuild_launchers_msg=yes
+else
+    AC_MSG_RESULT([no])
+    prte_testbuild_launchers=0
+    prte_testbuild_launchers_msg=no
+fi
+AC_DEFINE_UNQUOTED([PRTE_TESTBUILD_LAUNCHERS], [$prte_testbuild_launchers],
+                   [Enable testbuild PLM launchers (default: disabled)])
+PRTE_SUMMARY_ADD([Miscellaneous], [Testbuild launchers], [], [$prte_testbuild_launchers_msg])
 
 ])dnl
