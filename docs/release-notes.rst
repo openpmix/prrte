@@ -3,10 +3,16 @@ Release Notes
 
 - Systems that have been tested are:
 
-  - Linux (various flavors/distros), 32 bit, with gcc
-  - Linux (various flavors/distros), 64 bit (x86), with gcc, Intel,
-    and Portland (*)
-  - OS X (10.7 and above), 32 and 64 bit (x86_64), with gcc (*)
+  - Linux (various flavors/distros), 64 bit (x86 and ARM), with gcc
+  - OS X (14.0 and above), 64 bit (x86_64 and ARM), with gcc and clang
+
+- Launch environment testing status:
+
+  - ssh: fully tested
+  - slurm: compiled, no testing
+  - lsf: compiled using a shim header, no testing
+  - pals: compiled, no testing
+  - tm (Torque): compiled using a shim header, no testing
 
 - PRRTE has taken some steps towards Reproducible Builds
   (https://reproducible-builds.org/).  Specifically, PRRTE's

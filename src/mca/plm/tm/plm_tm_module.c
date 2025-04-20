@@ -55,7 +55,11 @@
 #    include <sys/time.h>
 #endif
 #include <errno.h>
+#if PRTE_TESTBUILD_LAUNCHERS
+#include "testbuild_tm.h"
+#else
 #include <tm.h>
+#endif
 
 #include "src/event/event-internal.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
@@ -167,7 +171,6 @@ static int plm_tm_launch_job(prte_job_t *jdata)
 static void launch_daemons(int fd, short args, void *cbdata)
 {
     prte_job_map_t *map = NULL;
-    prte_app_context_t *app;
     prte_node_t *node;
     int proc_vpid_index;
     char *param;
@@ -187,6 +190,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
     int32_t launchid, *ldptr;
     char *prefix_dir = NULL;
+    char *pmix_prefix = NULL;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(state);
 
@@ -316,7 +321,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
             pmix_asprintf(&newenv, "%s/%s", prefix_dir, bin_base);
         }
         PMIX_SETENV_COMPAT("PATH", newenv, true, &env);
-        PMIX_OUTPUT_VERBOSE((1, "plm:tm: reset PATH: %s", newenv));
+        PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+                             "plm:tm: reset PATH: %s", newenv));
         free(newenv);
 
         /* Reset LD_LIBRARY_PATH */
@@ -327,7 +333,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
             pmix_asprintf(&newenv, "%s/%s", prefix_dir, lib_base);
         }
         PMIX_SETENV_COMPAT("LD_LIBRARY_PATH", newenv, true, &env);
-        PMIX_OUTPUT_VERBOSE((1, "plm:tm: reset LD_LIBRARY_PATH: %s", newenv));
+        PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+                             "plm:tm: reset LD_LIBRARY_PATH: %s", newenv));
         free(newenv);
         // add the prefix itself to the environment
         PMIX_SETENV_COMPAT("PRTE_PREFIX", prefix_dir, true, &env);
@@ -347,7 +354,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
         }
         free(p);
         PMIX_SETENV_COMPAT("LD_LIBRARY_PATH", newenv, true, &env);
-        PMIX_OUTPUT_VERBOSE((1, "plm:tm: reset LD_LIBRARY_PATH: %s", newenv));
+        PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+                             "plm:tm: reset LD_LIBRARY_PATH: %s", newenv));
         free(newenv);
         // add the prefix itself to the environment
         PMIX_SETENV_COMPAT("PMIX_PREFIX", pmix_prefix, true, &env);
@@ -437,6 +445,7 @@ static void poll_spawns(int fd, short args, void *cbdata)
     bool failed_launch = true;
     int local_err;
     tm_event_t event;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(state);
 
