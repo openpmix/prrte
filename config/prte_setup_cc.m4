@@ -21,7 +21,7 @@ dnl Copyright (c) 2020      Triad National Security, LLC. All rights
 dnl                         reserved.
 dnl Copyright (c) 2021      IBM Corporation.  All rights reserved.
 dnl
-dnl Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+dnl Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -220,7 +220,7 @@ AC_DEFUN([PRTE_SETUP_CC],[
     AC_DEFINE_UNQUOTED([PRTE_C_HAVE___THREAD], [$prte_prog_cc__thread_available],
                        [Whether C compiler supports __thread])
 
-    PRTE_C_COMPILER_VENDOR([prte_c_vendor])
+    OAC_C_COMPILER_VENDOR([prte_c_vendor])
 
     # GNU C and autotools are inconsistent about whether this is
     # defined so let's make it true everywhere for now...  However, IBM
