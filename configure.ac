@@ -268,7 +268,7 @@ AC_SUBST(PRTE_TOP_BUILDDIR)
 # Configuration options
 ############################################################################
 
-PRTE_CHECK_OS_FLAVORS
+OAC_CHECK_OS_FLAVORS
 PRTE_CONFIGURE_OPTIONS
 
 if test "$enable_binaries" = "no" && test "$enable_dist" = "yes"; then
@@ -551,9 +551,6 @@ PRTE_SEARCH_LIBS_CORE([gethostbyname], [nsl])
 
 PRTE_SEARCH_LIBS_CORE([socket], [socket])
 
-# Solaris has sched_yield in -lrt, usually in libc
-PRTE_SEARCH_LIBS_CORE([sched_yield], [rt])
-
 # Darwin doesn't need -lm, as it's a symlink to libSystem.dylib
 PRTE_SEARCH_LIBS_CORE([ceil], [m])
 
@@ -647,7 +644,7 @@ if test "x$LEX" != xflex && test ! -e $PRTE_TOP_SRCDIR/src/util/hostfile/hostfil
 fi
 
 #
-# Do we have RLIMIT_NPROC in <sys/resources.h>? (e.g., Solaris does not)
+# Do we have RLIMIT_NPROC in <sys/resources.h>?
 #
 
 AC_CHECK_DECLS([RLIMIT_NPROC], [], [], [
@@ -657,7 +654,7 @@ AC_INCLUDES_DEFAULT
 #endif])
 
 #
-# Do we have RLIMIT_MEMLOCK in <sys/resources.h>? (e.g., Solaris does not)
+# Do we have RLIMIT_MEMLOCK in <sys/resources.h>?
 #
 
 AC_CHECK_DECLS([RLIMIT_MEMLOCK], [], [], [
@@ -667,7 +664,7 @@ AC_INCLUDES_DEFAULT
 #endif])
 
 #
-# Do we have RLIMIT_NOFILE in <sys/resources.h>? (e.g., Solaris does not)
+# Do we have RLIMIT_NOFILE in <sys/resources.h>?
 #
 
 AC_CHECK_DECLS([RLIMIT_NOFILE], [], [], [
@@ -677,7 +674,7 @@ AC_INCLUDES_DEFAULT
 #endif])
 
 #
-# Do we have RLIMIT_MEMLOCK in <sys/resources.h>? (e.g., Solaris does not)
+# Do we have RLIMIT_MEMLOCK in <sys/resources.h>?
 #
 
 AC_CHECK_DECLS([RLIMIT_FSIZE], [], [], [
@@ -687,7 +684,7 @@ AC_INCLUDES_DEFAULT
 #endif])
 
 #
-# Do we have RLIMIT_CORE in <sys/resources.h>? (e.g., Solaris does not)
+# Do we have RLIMIT_CORE in <sys/resources.h>?
 #
 
 AC_CHECK_DECLS([RLIMIT_CORE], [], [], [
@@ -697,7 +694,7 @@ AC_INCLUDES_DEFAULT
 #endif])
 
 #
-# Do we have RLIMIT_STACK in <sys/resources.h>? (e.g., Solaris does not)
+# Do we have RLIMIT_STACK in <sys/resources.h>?
 #
 
 AC_CHECK_DECLS([RLIMIT_STACK], [], [], [
@@ -707,7 +704,7 @@ AC_INCLUDES_DEFAULT
 #endif])
 
 #
-# Do we have RLIMIT_AS in <sys/resources.h>? (e.g., Solaris does not)
+# Do we have RLIMIT_AS in <sys/resources.h>?
 #
 
 AC_CHECK_DECLS([RLIMIT_AS], [], [], [
@@ -857,12 +854,6 @@ prte_show_title "Final top-level PRTE configuration"
 # (after C compiler setup = no compiler/linker tests after this)
 ############################################################################
 prte_show_subtitle "Libtool configuration"
-
-# Use the undocumented solaris_use_stlport4 libtool variable to turn off any
-# Cstd/stlport4 linkage. This allows PRTE to be C++ STL agnostic.
-if test "x$prte_cv_c_compiler_vendor" = "xsun"; then
-    solaris_use_stlport4="yes"
-fi
 
 LT_INIT()
 LT_LANG([C])
