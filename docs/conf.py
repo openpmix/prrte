@@ -182,6 +182,10 @@ html_additional_pages = {
     'configurator' : 'configurator.html',
 }
 
+# Put a "Last updated on:" timestamp at the bottom of each page.
+html_last_updated_fmt = '%Y-%m-%d %H:%M:%S %Z'
+
+
 # -- Options for MAN output -------------------------------------------------
 
 import os
