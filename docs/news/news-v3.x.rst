@@ -4,6 +4,25 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
+3.0.10 -- 10 May 2025
+---------------------
+- PR #2195: Update NEWS for release
+- PR #2194: Multiple commits
+   - Remove stale Solaris references
+   - docs: Add a "Last updated on:" HTML footer
+- PR #2190: Multiple commits
+   - Enable shim-based testing of PLM launchers
+   - Roll version to 3.0.10
+- PR #2186: Fix one more typo
+- PR #2184: Fix typo
+- PR #2182: Properly terminate RST label
+- PR #2181: Add new CI test - build OMPI internally
+- PR #2178: Don't link to pmixcc if we don't find it
+- PR #2176: Multiple commits
+   - Extend support for envar operations
+   - Do not require PMIx wrapper compiler
+
+
 3.0.9 -- 19 Mar 2025
 --------------------
 .. important:: This release contains configure logic to
