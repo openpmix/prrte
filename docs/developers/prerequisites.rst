@@ -43,6 +43,17 @@ build them manually, see the :ref:`how to build and install GNU
 Autotools section <developers-installing-autotools-label>` for much
 more detail.
 
+Python
+------
+
+Python >= |python_min_version| is required when building PRRTE
+from a Git clone for generating the "show help" messages and
+building the PRRTE documentation and man pages.
+
+Generating the show help messages can be accomplished with core
+Python; only building the full PRRTE documentation and man pages
+requires additional Python packages (:ref:`see below <developers-requirements-sphinx-label>`).
+
 Perl
 ----
 
@@ -83,6 +94,8 @@ your operating system's packaging system (to include Homebrew or
 MacPorts on MacOS), see `the Flex Github repository
 <https://github.com/westes/flex>`_.
 
+
+.. _developers-requirements-sphinx-label:
 
 Sphinx (and therefore Python)
 -----------------------------
