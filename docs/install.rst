@@ -34,6 +34,9 @@ must then run:
 
    shell$ ./autogen.pl
 
+PRRTE requires Perl and Python >= |python_min_version| to build
+from a Git clone.
+
 You will need very recent versions of GNU Autoconf, Automake, and
 Libtool.  If ``autogen.pl`` fails, read the :doc:`Developer's Guide
 </developers/index>`.  If anything else fails, read the
