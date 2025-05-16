@@ -124,3 +124,14 @@ for an application context:
 
 We cannot execute both of those, so please correct this and
 try again.
+#
+[multi-endian]
+PRRTE does not currently support multi-endian operations. We have
+detected that the following node differs in endianness:
+
+
+  Nodename:      %s
+  Endian:        %s
+  Local endian:  %s
+
+Please correct the situation and try again.

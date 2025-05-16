@@ -305,6 +305,15 @@ option to the help request as "--help <option>".
 |                      | argument indicates the PID, URI, file         |
 |                      | containing the URI, or namespace of the DVM.  |
 +----------------------+-----------------------------------------------+
+| "--hetero-nodes"     | The allocation contains multiple topologies,  |
+|                      | so optimize the launch for that scenario. For |
+|                      | example, the scheduler could be allocating    |
+|                      | individual CPUs instead of entire nodes, thus |
+|                      | effectively creating different topologies     |
+|                      | (due to differing allocated CPUs) on each     |
+|                      | node.                                         |
++----------------------+-----------------------------------------------+
+
 
 Report bugs to %s
 #
@@ -358,6 +367,12 @@ Examples:
    prterun --dvm pid:file:prte_pid.txt --np 4 ./a.out
 
    prterun --dvm search --np 4 ./a.out
+#
+[hetero-nodes]
+The allocation contains multiple topologies, so optimize the launch for
+that scenario. For example, the scheduler could be allocating individual
+CPUs instead of entire nodes, thus effectively creating different topologies
+(due to differing allocated CPUs) on each node.
 #
 [prtemca]
 

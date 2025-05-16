@@ -59,7 +59,7 @@ def find_files(root, verbose=False):
     # skip infrastructure directories
     skip_dirs = ['.git', '.libs', '.deps']
     # there may also be some help files we want to ignore
-    skip_files = ["help-schizo-ompi.txt"]
+    skip_files = []
     for root_dir, dirs, files in os.walk(root):
         for sd in skip_dirs:
             if sd in dirs:
