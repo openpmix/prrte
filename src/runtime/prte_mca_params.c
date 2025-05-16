@@ -495,6 +495,11 @@ int prte_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_silence_shared_fs);
 
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "hetero_nodes",
+                                      "Allocation contains hetero nodes",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_hetero_nodes);
+
     /* pickup the RML params */
     prte_rml_register();
 
