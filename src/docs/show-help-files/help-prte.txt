@@ -60,6 +60,12 @@ option to the help request as "--help <option>".
 | "--display <arg0>"   | Comma-delimited list of options for           |
 |                      | displaying information                        |
 +----------------------+-----------------------------------------------+
+| "--no-aggregate-help" | Do not aggregate help output from multiple   |
+|                      | processes.                                    |
++----------------------+-----------------------------------------------+
+| "--test-suicide      | Suicide instead of clean abort after          |
+| <arg0>"              | specified delay                               |
++----------------------+-----------------------------------------------+
 
 +----------------------+-----------------------------------------------+
 |                      | DVM Options                                   |
@@ -149,6 +155,14 @@ option to the help request as "--help <option>".
 | "--timeout           | Timeout DVM startup if time exceeds the       |
 | <seconds>"           | specified number of seconds                   |
 +----------------------+-----------------------------------------------+
+| "--hetero-nodes"     | The allocation contains multiple topologies,  |
+|                      | so optimize the launch for that scenario. For |
+|                      | example, the scheduler could be allocating    |
+|                      | individual CPUs instead of entire nodes, thus |
+|                      | effectively creating different topologies     |
+|                      | (due to differing allocated CPUs) on each     |
+|                      | node.                                         |
++----------------------+-----------------------------------------------+
 
 Report bugs to %s
 
@@ -181,7 +195,13 @@ Syntax in the file is:
 with one parameter and its associated value per line. Empty lines and
 lines beginning with the "#" character are ignored, as is any
 whitespace around the "=" character.
-
+#
+[hetero-nodes]
+The allocation contains multiple topologies, so optimize the launch for
+that scenario. For example, the scheduler could be allocating individual
+CPUs instead of entire nodes, thus effectively creating different topologies
+(due to differing allocated CPUs) on each node.
+#
 [no-ready-msg]
 
 Do not print a DVM ready message
