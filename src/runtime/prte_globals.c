@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -778,7 +778,13 @@ static void tcon(prte_topology_t *t)
 }
 static void tdes(prte_topology_t *t)
 {
+    hwloc_obj_t root;
+
     if (NULL != t->topo) {
+        root = hwloc_get_root_obj(t->topo);
+        if (NULL != root->userdata) {
+            PMIX_RELEASE(root->userdata);
+        }
         hwloc_topology_destroy(t->topo);
     }
     if (NULL != t->sig) {

@@ -82,6 +82,14 @@ option to the help request as "--help <option>".
 | "--bootstrap"        | Self-construct the DVM based on a             |
 |                      | configuration file                            |
 +----------------------+-----------------------------------------------+
+| "--hetero-nodes"     | The allocation contains multiple topologies,  |
+|                      | so optimize the launch for that scenario. For |
+|                      | example, the scheduler could be allocating    |
+|                      | individual CPUs instead of entire nodes, thus |
+|                      | effectively creating different topologies     |
+|                      | (due to differing allocated CPUs) on each     |
+|                      | node.                                         |
++----------------------+-----------------------------------------------+
 
 +----------------------+-----------------------------------------------+
 |                      | Specific Options                              |
@@ -109,7 +117,13 @@ Report bugs to %s
 
 Specify the URI of the DVM master, or the name of the file (specified
 as "file:filename") that contains that info
-
+#
+[hetero-nodes]
+The allocation contains multiple topologies, so optimize the launch for
+that scenario. For example, the scheduler could be allocating individual
+CPUs instead of entire nodes, thus effectively creating different topologies
+(due to differing allocated CPUs) on each node.
+#
 [test-suicide]
 
 Test DVM cleanup upon daemon failure by having one daemon suicide
