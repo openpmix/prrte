@@ -176,6 +176,9 @@ Specific options
   operations.
   :ref:`See below for details <label-schizo-ompi-tune>`.
 
+* ``--hetero-nodes``: Allocated nodes should be treated as having different
+  topologies
+
 MPI Options
 ^^^^^^^^^^^
 
