@@ -36,12 +36,12 @@ jobs:
       with:
         submodules: recursive
         repository: openpmix/openpmix
-        path: openpmix/master
-        ref: master
+        path: openpmix/v6
+        ref: v6.0
 
     - name: Build OpenPMIx
       run: |
-        cd openpmix/master
+        cd openpmix/v6
         ./autogen.pl
         ./configure --prefix=$RUNNER_TEMP/pmixinstall
         make -j $(nproc)
