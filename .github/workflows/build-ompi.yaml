@@ -26,13 +26,16 @@ jobs:
 
     - name: Tweak OMPI
       run: |
-        rm -r 3rd-party/prrte
+        rm -r 3rd-party/prrte 3rd-party/openpmix
 
-    - name: Update PMIx
-      run: |
-        cd 3rd-party/openpmix
-        git checkout master
-        git pull
+    - name: Git clone PMIx
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        repository: openpmix/openpmix
+        ref: v6.0
+        path: 3rd-party/openpmix
+        clean: false
 
     - name: Git clone PRRTE
       uses: actions/checkout@v4
