@@ -4,6 +4,26 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
+3.0.11 -- 18 May 2025
+---------------------
+.. note:: This is a minor bug fix release to resolve
+          a problem when running with schedulers that
+          allocate at the individual CPU (vs the node)
+          level. Users operating in such an environment
+          need to add the ``--hetero-nodes`` option to
+          their ``prte`` or ``prterun`` cmd lines, or
+          set the ``prte_hetero_nodes`` MCA param to
+          a value of 1, `t`, `T`, "true", or "True".
+          Administrators of such systems can set the
+          MCA param for their users by adding it to
+          the default MCA param file for the 3.0.11
+          installation.
+
+- PR #2203: Update VERSION and NEWS for release
+- PR #2201: Add missing OMPI cmd line option
+- PR #2199: Properly handle hetero node configurations
+
+
 3.0.10 -- 10 May 2025
 ---------------------
 - PR #2195: Update NEWS for release
