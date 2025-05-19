@@ -21,9 +21,19 @@ series, in reverse chronological order.
                support for all three of the group construction modes,
                including the new "bootstrap" method.
 
-               Note that while PRRTE v4 will build and execute against
-               PMIx v5, proper execution of the various group construction
-               modes requires that your application use PMIx v6 or above.
+               A few notes:
+
+               (1) Starting with this release, PRRTE requires
+               Python >= v3.7 to build a Git clone (ie., not a tarball).
+               Certain elements of the code base are constructed at build
+               time, with the construction performed by Python script. The
+               constructed elements are included in release tarballs.
+
+               (2) PRRTE >= v4.0 is not compatible with PMIx < v6.0 due
+               to internal changes (e.g., show-help messages are now
+               contained in memory instead of on-disk files). Configure
+               will therefore error out if the detected PMIx version
+               does not meet this criterion.
 
 A full list of individual changes will not be provided here,
 but will commence with the v4.0.1 release.
