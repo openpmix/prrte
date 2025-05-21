@@ -113,6 +113,9 @@ prtedir = $(prteincludedir)/$(subdir)
 prte_HEADERS = $(headers)
 endif
 
+clean-local:
+	rm -f prte_show_help_content.c prte_show_help_content.lo
+
 MAINTAINERCLEANFILES = \
 	prte_show_help_content.c
 
