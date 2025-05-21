@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -294,6 +294,8 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
     }
 
     cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
+    // transfer the source
+    memcpy(&cd->proc, &source, sizeof(pmix_proc_t));
 
     /* unpack the #infos that were provided */
     cnt = 1;
@@ -328,7 +330,7 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PMIx_Error_string(code), source.nspace,
                         PMIx_Data_range_string(range));
 
-    ret = PMIx_Notify_event(code, &source, range, cd->info, cd->ninfo, _notify_release, cd);
+    ret = PMIx_Notify_event(code, &cd->proc, range, cd->info, cd->ninfo, _notify_release, cd);
     if (PMIX_SUCCESS != ret) {
         if (PMIX_OPERATION_SUCCEEDED != ret) {
             PMIX_ERROR_LOG(ret);
