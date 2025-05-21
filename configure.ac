@@ -728,6 +728,9 @@ AS_IF([test "$prte_need_python" = "yes"],
                       [AC_MSG_ERROR([PRRTE requires Python >= $python_min_version to build. Aborting.])])],
       [prte_have_good_python=0])
 
+AS_IF([test $prte_have_good_python -eq 1],
+      [PRTE_SUMMARY_ADD([Required Packages], [Python], [], [yes ($PYTHON_VERSION)])])
+
 #
 # Setup Sphinx processing
 #
