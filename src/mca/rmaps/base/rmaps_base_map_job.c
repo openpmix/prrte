@@ -36,6 +36,7 @@
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/util/pmix_argv.h"
+#include "src/util/pmix_environ.h"
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_string_copy.h"
 
@@ -70,7 +71,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_app_context_t *app;
     bool inherit = false;
     pmix_proc_t *nptr, *target_proc;
-    char *tmp, **ck;
+    char *tmp, **ck, **env;
     uint16_t u16 = 0, procs_per_target = 0;
     uint16_t *u16ptr = &u16;
     bool colocate_daemons = false;
@@ -294,7 +295,6 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
                 }
             }
-
         } else {
             if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) &&
                 !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
@@ -316,6 +316,37 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         } else {
             PRTE_UNSET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_NO_OVERSUBSCRIBE);
             PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_SUBSCRIBE_GIVEN);
+        }
+    }
+
+    // forward the environment if requested to do so
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT, (void **) &fptr, PMIX_BOOL)) {
+        if (flag) {
+            // forward the environment
+            for (n = 0; n < jdata->apps->size; n++) {
+                app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
+                if (NULL == app) {
+                    continue;
+                }
+                env = pmix_environ_merge(prte_launch_environ, app->env);
+                PMIX_ARGV_FREE_COMPAT(app->env);
+                app->env = env;
+            }
+        }
+    } else if (NULL != parent) {
+        /* we always inherit a parent's fwd environment directive unless the job assigned it */
+        if (prte_get_attribute(&parent->attributes, PRTE_JOB_FWD_ENVIRONMENT, (void **) &fptr, PMIX_BOOL)) {
+            if (flag) {
+                for (n = 0; n < jdata->apps->size; n++) {
+                    app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
+                    if (NULL == app) {
+                        continue;
+                    }
+                    env = pmix_environ_merge(prte_launch_environ, app->env);
+                    PMIX_ARGV_FREE_COMPAT(app->env);
+                    app->env = env;
+                }
+            }
         }
     }
 
