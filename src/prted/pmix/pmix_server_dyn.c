@@ -680,11 +680,19 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
                                &flag, PMIX_BOOL);
 #endif
 
+#ifdef PMIX_FWD_ENVIRONMENT
+        } else if (PMIX_CHECK_KEY(info, PMIX_FWD_ENVIRONMENT)) {
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT, PRTE_ATTR_GLOBAL,
+                               &flag, PMIX_BOOL);
+#endif
+
             /***   DEFAULT - CACHE FOR INCLUSION WITH JOB INFO   ***/
         } else {
             pmix_server_cache_job_info(jdata, info);
         }
     }
+
     return PRTE_SUCCESS;
 }
 

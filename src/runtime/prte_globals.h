@@ -619,9 +619,6 @@ PRTE_EXPORT extern struct timeval prte_child_time_to_exit;
 /* length of stat history to keep */
 PRTE_EXPORT extern int prte_stat_history_size;
 
-/* envars to forward */
-PRTE_EXPORT extern char **prte_forwarded_envars;
-
 /* maximum size of virtual machine - used to subdivide allocation */
 PRTE_EXPORT extern int prte_max_vm_size;
 
