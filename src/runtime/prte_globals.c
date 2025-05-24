@@ -161,9 +161,6 @@ struct timeval prte_child_time_to_exit = {0};
 /* length of stat history to keep */
 int prte_stat_history_size = -1;
 
-/* envars to forward */
-char **prte_forwarded_envars = NULL;
-
 /* maximum size of virtual machine - used to subdivide allocation */
 int prte_max_vm_size = -1;
 

@@ -919,6 +919,13 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
             }
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
        }
+        /* --fwd-environment  ->  --runtime-options fwd-env */
+        else if (0 == strcmp(option, "fwd-environment")) {
+            rc = prte_schizo_base_add_directive(results, option,
+                                                PRTE_CLI_RTOS, PRTE_CLI_FWD_ENVIRON,
+                                                warn);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+        }
         /* --map-by socket ->  --map-by package */
         else if (0 == strcmp(option, PRTE_CLI_MAPBY)) {
             /* check the value of the option for "socket" */
