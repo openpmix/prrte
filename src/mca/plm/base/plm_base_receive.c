@@ -134,7 +134,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
     pid_t pid;
     bool debugging, found;
     int i, room, *rmptr = &room;
-    char **env, *tmp;
+    char *tmp;
     pmix_value_t pidval = PMIX_VALUE_STATIC_INIT;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
@@ -324,21 +324,6 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             }
         }
         PMIX_PROC_RELEASE(nptr);
-
-        /* if the user asked to forward any envars, cycle through the app contexts
-         * in the comm_spawn request and add them
-         */
-        if (NULL != prte_forwarded_envars) {
-            for (i = 0; i < jdata->apps->size; i++) {
-                app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i);
-                if (NULL == app) {
-                    continue;
-                }
-                env = pmix_environ_merge(prte_forwarded_envars, app->env);
-                PMIX_ARGV_FREE_COMPAT(app->env);
-                app->env = env;
-            }
-        }
 
         PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                              "%s plm:base:receive adding hosts",
