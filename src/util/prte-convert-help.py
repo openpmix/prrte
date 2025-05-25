@@ -104,7 +104,7 @@ def parse_help_files(file_paths, data, citations, verbose=False):
         with open(file_path) as file:
             for line in file:
                 stripped = line.rstrip()
-                if not stripped:
+                if not stripped and current_section is None:
                     continue
                 if stripped.startswith("#include"):
                     # this line includes a file/topic from another file
