@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
+# Copyright (c) 2023-2025 Jeffrey M. Squyres.  All rights reserved.
 # Copyright (c) 2023-2025 Nanook Consulting  All rights reserved.
 #
 # $COPYRIGHT$
@@ -43,6 +43,7 @@ dist_rst_DATA = \
     cli-prefix.rst \
     cli-prepend-env.rst \
     cli-prtemca.rst \
+    cli-no-app-prefix.rst \
     cli-rank-by.rst \
     cli-runtime-options.rst \
     cli-stream-buffering.rst \
