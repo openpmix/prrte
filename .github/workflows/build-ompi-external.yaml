@@ -1,0 +1,95 @@
+name: OMPI External
+
+on: [pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - name: Configure hostname
+      run:  echo 127.0.0.1 `hostname` | sudo tee -a /etc/hosts > /dev/null
+      if:   ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt install -y --no-install-recommends wget software-properties-common hwloc libhwloc-dev libevent-2.1-7 libevent-dev
+
+    - name: Git clone PMIx
+      uses: actions/checkout@v3
+      with:
+            submodules: recursive
+            repository: openpmix/openpmix
+            path: openpmix/master
+            ref: master
+    - name: Build PMIx
+      run: |
+        cd openpmix/master
+        ./autogen.pl
+        ./configure --prefix=$RUNNER_TEMP/pmixinstall
+        make -j
+        make install
+
+    - name: Git clone PRRTE
+      uses: actions/checkout@v3
+      with:
+            submodules: recursive
+            path: prrte
+            clean: false
+    - name: Build PRRTE
+      run: |
+        cd prrte
+        ./autogen.pl
+        ./configure --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall --enable-devel-check
+        make -j
+        make install
+
+    - name: Checkout Open MPI
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        repository: open-mpi/ompi
+        path: ompi/main
+        ref: main
+        clean: false
+
+    - name: Bootstrap Open MPI
+      run: |
+        cd ompi/main
+        ./autogen.pl
+        ./configure \
+          --disable-dependency-tracking \
+          --enable-debug \
+          --enable-mem-debug \
+          --disable-sphinx \
+          --disable-mpi-fortran \
+          --disable-oshmem \
+          --prefix=$RUNNER_TEMP/openmpi \
+          --with-libevent=external \
+          --with-hwloc=external \
+          --with-pmix=$RUNNER_TEMP/pmixinstall \
+          --with-prrte=$RUNNER_TEMP/prteinstall
+        make -j $(nproc) install
+
+    - name: Add Open MPI to PATH
+      run: echo $RUNNER_TEMP/openmpi/bin >> $GITHUB_PATH
+
+    - name: Tweak MPI default parameters
+      run:  |
+        # Tweak MPI
+        mca_params="$HOME/.openmpi/mca-params.conf"
+        mkdir -p "$(dirname "$mca_params")"
+        echo mpi_param_check = true >> "$mca_params"
+        echo mpi_show_handle_leaks = true >> "$mca_params"
+        mca_params="$HOME/.prte/mca-params.conf"
+        mkdir -p "$(dirname "$mca_params")"
+        echo rmaps_default_mapping_policy = :oversubscribe >> "$mca_params"
+
+    - name: Simple test
+      run: |
+          cd ompi/main/examples
+          make hello_c
+          mpirun -n 1 ./hello_c
+      if: ${{ true }}
+      timeout-minutes: 5
