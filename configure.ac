@@ -604,10 +604,6 @@ AC_C_BIGENDIAN
 
 PRTE_CONFIG_THREADS
 
-CFLAGS="$CFLAGS $THREAD_CFLAGS"
-LDFLAGS="$LDFLAGS $THREAD_LDFLAGS"
-LIBS="$LIBS $THREAD_LIBS"
-
 #
 # What is the local equivalent of "ln -s"
 #
@@ -615,9 +611,6 @@ LIBS="$LIBS $THREAD_LIBS"
 AC_PROG_LN_S
 AC_PROG_GREP
 AC_PROG_EGREP
-
-# This check must come after PRTE_CONFIG_THREADS
-AC_CHECK_FUNCS([pthread_setaffinity_np])
 
 #
 # We need as and lex
