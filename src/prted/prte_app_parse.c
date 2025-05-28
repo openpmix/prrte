@@ -356,7 +356,6 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
                 ++value;
                 envt.envar = param;
                 envt.value = strdup(value);
-                pmix_output(0, "SET %s=%s", envt.envar, envt.value);
                 PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_ENVAR, &envt, PMIX_ENVAR);
                 PMIX_ENVAR_DESTRUCT(&envt);
             } else {
