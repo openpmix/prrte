@@ -337,6 +337,9 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         /* we always inherit a parent's fwd environment directive unless the job assigned it */
         if (prte_get_attribute(&parent->attributes, PRTE_JOB_FWD_ENVIRONMENT, (void **) &fptr, PMIX_BOOL)) {
             if (flag) {
+                // update the child's flag so any subsequent children can inherit it
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                // forward the environment
                 for (n = 0; n < jdata->apps->size; n++) {
                     app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
                     if (NULL == app) {
