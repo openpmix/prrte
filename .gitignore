@@ -195,6 +195,7 @@ test/chkfs
 
 test/mpi/spawn_multiple
 test/mpi/create_comm_from_group
+test/mpi/fwd
 
 docs/_build
 docs/_static
