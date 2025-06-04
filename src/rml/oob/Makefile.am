@@ -32,7 +32,7 @@ headers += \
       rml/oob/oob_tcp_hdr.h \
       rml/oob/oob_tcp_peer.h
 
-libprrte_la_SOURCES += \
+lib@PRTE_BINARY_PREFIX@prrte_la_SOURCES += \
       rml/oob/oob_tcp_component.c \
       rml/oob/oob_tcp.c \
       rml/oob/oob_tcp_listener.c \

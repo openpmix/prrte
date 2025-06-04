@@ -13,7 +13,8 @@ headers += \
           prted/pmix/pmix_server.h \
           prted/pmix/pmix_server_internal.h
 
-libprrte_la_SOURCES += \
+#Add prrte binary prefix
+lib@PRTE_BINARY_PREFIX@prrte_la_SOURCES += \
           prted/pmix/pmix_server.c \
           prted/pmix/pmix_server_fence.c \
           prted/pmix/pmix_server_register_fns.c \

@@ -63,15 +63,15 @@ EXTRA_DIST = \
 # explicitly listed.
 
 PRTE_MAN1 = \
-        prte.1 \
-        prte_info.1 \
-        prted.1 \
-        prterun.1 \
-        prun.1 \
-        pterm.1
+        ompi-prte.1 \
+        ompi-prte_info.1 \
+        ompi-prted.1 \
+        ompi-prterun.1 \
+        ompi-prun.1 \
+        ompi-pterm.1
 
 PRTE_MAN5 = \
-        prte.5
+        ompi-prte.5
 
 MAN_OUTDIR = $(OUTDIR)/man
 

@@ -37,19 +37,19 @@ AM_CFLAGS = \
             -DPRTE_REPO_REV="\"@PRTE_REPO_REV@\"" \
             -DPMIX_RELEASE_DATE="\"@PMIX_RELEASE_DATE@\""
 
-bin_PROGRAMS = prte
+bin_PROGRAMS = @PRTE_BINARY_PREFIX@prte
 
-prte_SOURCES = \
+@PRTE_BINARY_PREFIX@prte_SOURCES = \
         prte.c
 
-prte_LDADD = \
+@PRTE_BINARY_PREFIX@prte_LDADD = \
     $(prte_libevent_LIBS) \
     $(prte_hwloc_LIBS) \
     $(prte_pmix_LIBS) \
-	$(top_builddir)/src/libprrte.la
+        $(top_builddir)/src/lib@PRTE_BINARY_PREFIX@prrte.la
 
 install-exec-hook:
-	(cd $(DESTDIR)$(bindir); rm -f prterun$(EXEEXT); $(LN_S) prte$(EXEEXT) prterun$(EXEEXT))
+	(cd $(DESTDIR)$(bindir); rm -f prterun$(EXEEXT); $(LN_S) @PRTE_BINARY_PREFIX@prte$(EXEEXT) prterun$(EXEEXT))
 
 uninstall-local:
 	rm -f $(DESTDIR)$(bindir)/prterun$(EXEEXT)

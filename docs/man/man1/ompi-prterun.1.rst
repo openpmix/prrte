@@ -1,27 +1,27 @@
-.. _man1-prterun:
+.. _man1-ompi-prterun:
 
-prterun
-========
+ompi-prterun
+============
 
-prterun |mdash| launch an application with a default DVM
+ompi-prterun |mdash| launch an application with a default DVM
 
 SYNOPSIS
 --------
 
 .. code:: sh
 
-   shell$ prterun ...options...
+   shell$ ompi-prterun ...options...
 
 DESCRIPTION
 -----------
 
-``prterun`` submits a job to the PMIx Reference Runtime Environment
+``ompi-prterun`` submits a job to the PMIx Reference Runtime Environment
 (PRRTE).  A default set of distributed virtual
-machine (DVM) options are used; use :ref:`prun(1) <man1-prun>` if you
+machine (DVM) options are used; use :ref:`ompi-prun(1) <man1-ompi-prun>` if you
 wish to utilize specific DVM options.
 
 Much of this same help documentation for this command is also provided
-through ``prun --help [topic]``.
+through ``ompi-prun --help [topic]``.
 
 .. admonition:: PRRTE Docs TODO
    :class: error
@@ -46,4 +46,4 @@ EXIT STATUS
 Description of the various exit statuses of this command.
 
 .. seealso::
-   :ref:`prte(1) <man1-prte>`
+   :ref:`ompi-prte(1) <man1-ompi-prte>`

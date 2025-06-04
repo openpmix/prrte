@@ -6,7 +6,7 @@ as a Distributed Virtual Machine (DVM) in two ways. First, the
 ``prte`` command can be executed at a shell prompt. This will discover
 the available resources (either from hostfile or as allocated by a
 resource manager) and start a PRRTE shepherd daemon (:ref:`prted(1)
-<man1-prted>`) on each of the indicated nodes.
+<man1-ompi-prted>`) on each of the indicated nodes.
 
 The other method, however, is to bootstrap the DVM at time of cluster
 startup. Bootstrapping PRRTE allows the DVM to serve as the system-level

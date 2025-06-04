@@ -8,7 +8,7 @@
 
 import glob, os, re, shutil
 
-projects= { 'prte' : ["$(top_builddir)/src/libprrte.la"],
+projects= { 'prte' : ["$(top_builddir)/src/lib@PRTE_BINARY_PREFIX@prrte.la"],
           }
 
 no_anchor_file = []

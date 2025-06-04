@@ -38,7 +38,7 @@ mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 prte_mca_grpcomm_direct_la_SOURCES = $(sources)
 prte_mca_grpcomm_direct_la_LDFLAGS = -module -avoid-version
-prte_mca_grpcomm_direct_la_LIBADD = $(top_builddir)/src/libprrte.la
+prte_mca_grpcomm_direct_la_LIBADD = $(top_builddir)/src/lib@PRTE_BINARY_PREFIX@prrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libprtemca_grpcomm_direct_la_SOURCES =$(sources)

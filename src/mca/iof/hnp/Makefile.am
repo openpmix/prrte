@@ -44,7 +44,7 @@ mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 prte_mca_iof_hnp_la_SOURCES = $(hnp_SOURCES)
 prte_mca_iof_hnp_la_LDFLAGS = -module -avoid-version
-prte_mca_iof_hnp_la_LIBADD = $(top_builddir)/src/libprrte.la
+prte_mca_iof_hnp_la_LIBADD = $(top_builddir)/src/lib@PRTE_BINARY_PREFIX@prrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libprtemca_iof_hnp_la_SOURCES = $(hnp_SOURCES)

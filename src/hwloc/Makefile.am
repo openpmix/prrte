@@ -15,7 +15,7 @@
 headers += \
         hwloc/hwloc-internal.h
 
-libprrte_la_SOURCES += \
+lib@PRTE_BINARY_PREFIX@prrte_la_SOURCES += \
         hwloc/hwloc.c \
         hwloc/hwloc_base_util.c \
         hwloc/hwloc_base_maffinity.c

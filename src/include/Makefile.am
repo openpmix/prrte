@@ -40,7 +40,7 @@ headers += \
 nodist_headers += \
         include/prte_config.h \
         include/version.h
-
-libprrte_la_SOURCES += \
+#Add prte binary prefix
+lib@PRTE_BINARY_PREFIX@prrte_la_SOURCES += \
         $(headers) \
         include/prte_frameworks.c

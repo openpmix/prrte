@@ -166,6 +166,11 @@ src/tools/pcc/pcc
 src/tools/pcc/pcc-wrapper-data.txt
 src/tools/pterm/pterm
 src/tools/pterm/prte-term
+src/tools/prun/ompi-prun
+src/tools/prte_info/ompi-prte_info
+src/tools/prted/ompi-prted
+src/tools/prte/ompi-prte
+src/tools/pterm/ompi-pterm
 
 src/util/hostfile/hostfile_lex.c
 src/util/keyval/keyval_lex.c

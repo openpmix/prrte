@@ -26,7 +26,7 @@ headers += \
         runtime/data_server/prte_data_server.h \
         runtime/data_server/ds.h
 
-libprrte_la_SOURCES += \
+lib@PRTE_BINARY_PREFIX@prrte_la_SOURCES += \
         runtime/data_server/ds_main.c \
         runtime/data_server/ds_publish.c \
         runtime/data_server/ds_lookup.c \
