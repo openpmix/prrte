@@ -456,8 +456,9 @@ static void stdin_write_handler(int fd, short event, void *cbdata)
             PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                  "%s hnp:stdin:write:handler incomplete write %d - adjusting data",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_written));
-            /* incomplete write - adjust data to avoid duplicate output */
-            memmove(output->data, &output->data[num_written], output->numbytes - num_written);
+            /* incomplete write - adjust data and count to avoid duplicate output */
+            output->numbytes -= num_written;
+            memmove(output->data, &output->data[num_written], output->numbytes);
             /* push this item back on the front of the list */
             pmix_list_prepend(&wev->outputs, item);
             /* leave the write event running so it will call us again
