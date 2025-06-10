@@ -1119,6 +1119,52 @@ static PMIX_CLASS_INSTANCE(dcaddy_t,
                            pmix_list_item_t,
                            dcon, ddes);
 
+static void progress_daemons(prte_job_t *daemons,
+                             bool show_progress)
+{
+    int i;
+    prte_job_t *jdata;
+
+    if (prted_failed_launch) {
+        PRTE_ACTIVATE_JOB_STATE(jdatorted, PRTE_JOB_STATE_FAILED_TO_START);
+        return;
+    } else {
+        daemons->num_reported++;
+        daemons->num_daemons_reported++;
+        if (show_progress &&
+            (0 == daemons->num_reported % 100 ||
+             daemons->num_reported == prte_process_info.num_daemons)) {
+            PRTE_ACTIVATE_JOB_STATE(jdatorted, PRTE_JOB_STATE_REPORT_PROGRESS);
+        }
+        PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                             "%s plm:base:progress_daemons recvd %d of %d reported daemons",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), daemons->num_reported,
+                             daemons->num_procs));
+
+        if (daemons->num_procs == daemons->num_reported) {
+            bool oneactivated = false;
+            daemons->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
+            /* activate the daemons_reported state for all jobs
+             * whose daemons were launched
+             */
+            for (i = 1; i < prte_job_data->size; i++) {
+                jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, i);
+                if (NULL == jdata) {
+                    continue;
+                }
+                if (PRTE_JOB_STATE_DAEMONS_LAUNCHED == jdata->state) {
+                    oneactivated = true;
+                    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
+                }
+            }
+            if (!oneactivated) {
+                /* must be launching a DVM - activate the state */
+                PRTE_ACTIVATE_JOB_STATE(daemons, PRTE_JOB_STATE_DAEMONS_REPORTED);
+            }
+        }
+    }
+}
+
 /* callback for topology reports */
 void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender,
                                    pmix_data_buffer_t *buffer,
@@ -1127,8 +1173,7 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender,
     hwloc_topology_t topo;
     int rc, idx;
     char *sig;
-    int i;
-    prte_job_t *jdata;
+    bool show_progress;
     uint8_t flag;
     pmix_data_buffer_t datbuf, *data;
     pmix_byte_object_t bo, pbo;
@@ -1144,6 +1189,8 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender,
     if (NULL == jdatorted) {
         jdatorted = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     }
+    show_progress = prte_get_attribute(&jdatorted->attributes, PRTE_JOB_SHOW_PROGRESS, NULL, PMIX_BOOL);
+
     PMIX_DATA_BUFFER_CONSTRUCT(&datbuf);
     /* unpack the flag to see if this payload is compressed */
     idx = 1;
@@ -1232,40 +1279,11 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender,
 
 CLEANUP:
     PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                         "%s plm:base:prted:report_topo launch %s for daemon %s",
+                         "%s plm:base:daemon_topology launch %s for daemon %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         prted_failed_launch ? "failed" : "completed", PRTE_NAME_PRINT(sender)));
-
-    if (prted_failed_launch) {
-        PRTE_ACTIVATE_JOB_STATE(jdatorted, PRTE_JOB_STATE_FAILED_TO_START);
-        return;
-    } else {
-        PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                             "%s plm:base:prted_report_launch recvd %d of %d reported daemons",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), jdatorted->num_reported,
-                             jdatorted->num_procs));
-        if (jdatorted->num_procs == jdatorted->num_reported) {
-            bool dvm = true;
-            jdatorted->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
-            /* activate the daemons_reported state for all jobs
-             * whose daemons were launched
-             */
-            for (i = 1; i < prte_job_data->size; i++) {
-                jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, i);
-                if (NULL == jdata) {
-                    continue;
-                }
-                dvm = false;
-                if (PRTE_JOB_STATE_DAEMONS_LAUNCHED == jdata->state) {
-                    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
-                }
-            }
-            if (dvm) {
-                /* must be launching a DVM - activate the state */
-                PRTE_ACTIVATE_JOB_STATE(jdatorted, PRTE_JOB_STATE_DAEMONS_REPORTED);
-            }
-        }
-    }
+                         prted_failed_launch ? "failed" : "completed",
+                         PRTE_NAME_PRINT(sender)));
+    progress_daemons(jdatorted, show_progress);
 }
 
 static void opcbfunc(pmix_status_t status, void *cbdata)
@@ -1282,7 +1300,6 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     int idx;
     pmix_status_t ret;
     prte_proc_t *daemon = NULL, *dptr;
-    prte_job_t *jdata;
     pmix_proc_t dname;
     pmix_data_buffer_t *relay;
     char *sig;
@@ -1790,7 +1807,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
 
     CLEANUP:
         PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                             "%s plm:base:prted_report_launch %s for daemon %s at contact %s",
+                             "%s plm:base:prted_daemon_cback %s for daemon %s at contact %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              prted_failed_launch ? "failed" : "completed", PRTE_NAME_PRINT(&dname),
                              (NULL == daemon) ? "UNKNOWN" : daemon->rml_uri));
@@ -1800,43 +1817,6 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             nodename = NULL;
         }
 
-        if (prted_failed_launch) {
-            PRTE_ACTIVATE_JOB_STATE(jdatorted, PRTE_JOB_STATE_FAILED_TO_START);
-            return;
-        } else {
-            jdatorted->num_reported++;
-            jdatorted->num_daemons_reported++;
-            PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                 "%s plm:base:prted_report_launch job %s recvd %d of %d reported daemons",
-                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdatorted->nspace),
-                 jdatorted->num_reported, jdatorted->num_procs));
-            if (show_progress &&
-                (0 == jdatorted->num_reported % 100 ||
-                 jdatorted->num_reported == prte_process_info.num_daemons)) {
-                PRTE_ACTIVATE_JOB_STATE(jdatorted, PRTE_JOB_STATE_REPORT_PROGRESS);
-            }
-            if (jdatorted->num_procs == jdatorted->num_reported) {
-                bool dvm = true;
-                jdatorted->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
-                /* activate the daemons_reported state for all jobs
-                 * whose daemons were launched
-                 */
-                for (i = 1; i < prte_job_data->size; i++) {
-                    jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, i);
-                    if (NULL == jdata) {
-                        continue;
-                    }
-                    dvm = false;
-                    if (PRTE_JOB_STATE_DAEMONS_LAUNCHED == jdata->state) {
-                        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
-                    }
-                }
-                if (dvm) {
-                    /* must be launching a DVM - activate the state */
-                    PRTE_ACTIVATE_JOB_STATE(jdatorted, PRTE_JOB_STATE_DAEMONS_REPORTED);
-                }
-            }
-        }
         idx = 1;
         ret = PMIx_Data_unpack(NULL, buffer, &dname, &idx, PMIX_PROC);
     }
@@ -1844,7 +1824,9 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != ret) {
         PMIX_ERROR_LOG(ret);
         PRTE_ACTIVATE_JOB_STATE(jdatorted, PRTE_JOB_STATE_FAILED_TO_START);
+        return;
     }
+    progress_daemons(jdatorted, show_progress);
 }
 
 void prte_plm_base_daemon_failed(int st, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
