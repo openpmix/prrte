@@ -44,6 +44,7 @@ dist_rst_DATA = \
     cli-prefix.rst \
     cli-prepend-env.rst \
     cli-prtemca.rst \
+    cli-no-app-prefix.rst \
     cli-rank-by.rst \
     cli-runtime-options.rst \
     cli-stream-buffering.rst \

@@ -10,7 +10,7 @@
 #
 
 include_HEADERS = \
-        prte.h
+        prte.h \
+        prte_version.h
 
-nodist_include_HEADERS = \
-    prte_version.h
+nodist_include_HEADERS :=
