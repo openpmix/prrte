@@ -805,6 +805,30 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
 
+        /* --stop-in-init  ->  --runtime-options stop-in-init */
+        else if (0 == strcmp(option, PRTE_CLI_STOP_IN_INIT)) {
+            rc = prte_schizo_base_add_directive(results, option,
+                                                PRTE_CLI_RTOS, PRTE_CLI_STOP_IN_INIT,
+                                                warn);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+        }
+
+        /* --stop-in-app  ->  --runtime-options stop-in-app */
+        else if (0 == strcmp(option, PRTE_CLI_STOP_IN_APP)) {
+            rc = prte_schizo_base_add_directive(results, option,
+                                                PRTE_CLI_RTOS, PRTE_CLI_STOP_IN_APP,
+                                                warn);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+        }
+
+        /* --stop-on-exec  ->  --runtime-options stop-on-exec */
+        else if (0 == strcmp(option, PRTE_CLI_STOP_ON_EXEC)) {
+            rc = prte_schizo_base_add_directive(results, option,
+                                                PRTE_CLI_RTOS, PRTE_CLI_STOP_ON_EXEC,
+                                                warn);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+        }
+
         /* --display-map  ->  --display map */
         else if (0 == strcmp(option, "display-map")) {
             rc = prte_schizo_base_add_directive(results, option,
