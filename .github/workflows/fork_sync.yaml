@@ -17,7 +17,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           base: master
           head: master
-          auto_merge: true
+          auto_merge: false
           auto_approve: false
           ignore_fail: true
 
