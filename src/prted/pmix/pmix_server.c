@@ -122,6 +122,7 @@ static pmix_server_module_t pmix_server = {
     .log2 = pmix_server_log2_fn,
 #endif
     .job_control = pmix_server_job_ctrl_fn,
+    .monitor = pmix_server_monitor_fn,
     .iof_pull = pmix_server_iof_pull_fn,
     .push_stdin = pmix_server_stdin_fn,
     .group = pmix_server_group_fn,
@@ -1060,6 +1061,14 @@ void pmix_server_start(void)
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED_RESP,
                   PRTE_RML_PERSISTENT, pmix_server_alloc_request_resp, NULL);
 
+    /* setup recv for monitor request */
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_MONITOR_REQUEST,
+                  PRTE_RML_PERSISTENT, pmix_server_monitor_request, NULL);
+
+    /* setup recv for monitor response */
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_MONITOR_RESP,
+                  PRTE_RML_PERSISTENT, pmix_server_monitor_resp, NULL);
+
     if (PRTE_PROC_IS_MASTER) {
         /* setup recv for logging requests */
         PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING,
@@ -1088,6 +1097,8 @@ void pmix_server_finalize(void)
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_NOTIFICATION);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_TCONN_RESP);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED_RESP);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_MONITOR_REQUEST);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_MONITOR_RESP);
     if (PRTE_PROC_IS_MASTER) {
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING);
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED);
@@ -2154,10 +2165,14 @@ static void rqcon(pmix_server_req_t *p)
     p->operation = NULL;
     p->cmdline = NULL;
     p->key = NULL;
+    p->status = PRTE_SUCCESS;
+    p->pstatus = PMIX_SUCCESS;
     p->flag = true;
     p->launcher = false;
     p->scheduler = false;
     p->copy = false;
+    p->moncopy = false;
+    p->dircopy = false;
     p->local_index = -1;
     p->remote_index = -1;
     p->uid = 0;
@@ -2167,8 +2182,13 @@ static void rqcon(pmix_server_req_t *p)
     p->sessionID = UINT32_MAX;
     p->info = NULL;
     p->ninfo = 0;
+    p->monitor = NULL;
+    p->directives = NULL;
+    p->ndirs = 0;
     p->data = NULL;
     p->sz = 0;
+    p->ndaemons = 0;
+    p->nreported = 0;
     p->range = PMIX_RANGE_SESSION;
     p->proxy = *PRTE_NAME_INVALID;
     p->target = *PRTE_NAME_INVALID;
@@ -2192,6 +2212,12 @@ static void rqdes(pmix_server_req_t *p)
     }
     if (NULL != p->info && p->copy) {
         PMIX_INFO_FREE(p->info, p->ninfo);
+    }
+    if (NULL != p->monitor && p->moncopy) {
+        PMIX_INFO_FREE(p->monitor, 1);
+    }
+    if (NULL != p->directives && p->dircopy) {
+        PMIX_INFO_FREE(p->directives, p->ndirs);
     }
     if (NULL != p->cmdline) {
         free(p->cmdline);

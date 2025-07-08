@@ -195,8 +195,6 @@ int prte_grpcomm_direct_group(pmix_group_operation_t op, char *grpid,
                               const pmix_info_t directives[], size_t ndirs,
                               pmix_info_cbfunc_t cbfunc, void *cbdata);
 
-#if PMIX_NUMERIC_VERSION >= 0x00060000
-
 PRTE_MODULE_EXPORT extern
 void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
                                   pmix_data_buffer_t *buffer,
@@ -268,7 +266,6 @@ static inline void print_signature(prte_grpcomm_direct_group_signature_t *sig)
     pmix_output(0, "%s", tmp);
     free(tmp);
 }
-#endif
 
 END_C_DECLS
 

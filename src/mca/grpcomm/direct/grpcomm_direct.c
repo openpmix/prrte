@@ -8,7 +8,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -70,14 +70,12 @@ static int init(void)
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_RELEASE,
                   PRTE_RML_PERSISTENT, prte_grpcomm_direct_fence_release, NULL);
 
-#if PMIX_NUMERIC_VERSION >= 0x00060000
     /* group receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP,
                   PRTE_RML_PERSISTENT, prte_grpcomm_direct_grp_recv, NULL);
 
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP_RELEASE,
                   PRTE_RML_PERSISTENT, prte_grpcomm_direct_grp_release, NULL);
-#endif
     return PRTE_SUCCESS;
 }
 

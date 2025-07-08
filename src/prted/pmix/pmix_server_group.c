@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -58,20 +58,6 @@
 
 #include "src/prted/pmix/pmix_server_internal.h"
 
-#if PMIX_NUMERIC_VERSION < 0x00060000
-
-pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
-                                   const pmix_proc_t procs[], size_t nprocs,
-                                   const pmix_info_t directives[], size_t ndirs,
-                                   pmix_info_cbfunc_t cbfunc, void *cbdata)
-{
-    PRTE_HIDE_UNUSED_PARAMS(op, grpid, procs, nprocs, directives, ndirs, cbfunc, cbdata);
-
-    return PMIX_ERR_NOT_SUPPORTED;
-}
-
-#else
-
 pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
                                    const pmix_proc_t procs[], size_t nprocs,
                                    const pmix_info_t directives[], size_t ndirs,
@@ -96,5 +82,3 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
     }
     return rc;
 }
-
-#endif

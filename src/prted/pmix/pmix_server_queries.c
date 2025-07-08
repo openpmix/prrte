@@ -208,7 +208,7 @@ static void _query(int sd, short args, void *cbdata)
                                 "%s processing key %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), q->keys[n]);
 
-            if (0 == strcmp(q->keys[n], PMIX_QUERY_NAMESPACES)) {
+            if (PMIx_Check_key(q->keys[n], PMIX_QUERY_NAMESPACES)) {
                 /* get the current jobids */
                 nspaces = NULL;
                 for (k = 0; k < prte_job_data->size; k++) {
@@ -231,7 +231,7 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 
-            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_NAMESPACE_INFO)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_NAMESPACE_INFO)) {
                 PMIX_INFO_LIST_START(cache);
                 /* get the current jobids */
                 for (k = 0; k < prte_job_data->size; k++) {
@@ -335,7 +335,7 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_NAMESPACE_INFO, &dry, PMIX_DATA_ARRAY);
                 PMIX_DATA_ARRAY_DESTRUCT(&dry);
 
-            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_SPAWN_SUPPORT)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_SPAWN_SUPPORT)) {
                 ans = NULL;
                 PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_HOST);
                 PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_HOSTFILE);
@@ -359,7 +359,7 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 
-            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_DEBUG_SUPPORT)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_DEBUG_SUPPORT)) {
                 ans = NULL;
                 PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_DEBUG_STOP_IN_INIT);
                 PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_DEBUG_STOP_IN_APP);
@@ -377,7 +377,7 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 
-            } else if (0 == strcmp(q->keys[n], PMIX_HWLOC_XML_V1)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_HWLOC_XML_V1)) {
                 if (NULL != prte_hwloc_topology) {
                     char *xmlbuffer = NULL;
                     int len;
@@ -396,7 +396,7 @@ static void _query(int sd, short args, void *cbdata)
                     }
                 }
 
-            } else if (0 == strcmp(q->keys[n], PMIX_HWLOC_XML_V2)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_HWLOC_XML_V2)) {
                 if (NULL != prte_hwloc_topology) {
                     char *xmlbuffer = NULL;
                     int len;
@@ -413,7 +413,7 @@ static void _query(int sd, short args, void *cbdata)
                     }
                 }
 
-            } else if (0 == strcmp(q->keys[n], PMIX_PROC_URI)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_PROC_URI)) {
                 /* they want our URI */
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_PROC_URI, prte_process_info.my_hnp_uri, PMIX_STRING);
                 if (PMIX_SUCCESS != rc) {
@@ -421,7 +421,7 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 
-            } else if (0 == strcmp(q->keys[n], PMIX_SERVER_URI)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_SERVER_URI)) {
                 /* they want the PMIx URI */
                 if (NULL != hostname) {
                     /* find the node object */
@@ -482,7 +482,7 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 
-            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_PROC_TABLE)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_PROC_TABLE)) {
                 /* construct a list of values with prte_proc_info_t
                  * entries for each proc in the indicated job */
                 jdata = prte_get_job_data_object(jobid);
@@ -529,7 +529,7 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 
-            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_LOCAL_PROC_TABLE)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_LOCAL_PROC_TABLE)) {
                 /* construct a list of values with prte_proc_info_t
                  * entries for each LOCAL proc in the indicated job */
                 jdata = prte_get_job_data_object(jobid);
@@ -578,7 +578,7 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 
-            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_NUM_PSETS)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_NUM_PSETS)) {
                 sz = pmix_list_get_size(&prte_pmix_server_globals.psets);
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_NUM_PSETS, &sz, PMIX_SIZE);
                 if (PMIX_SUCCESS != rc) {
@@ -586,7 +586,7 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 
-            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_PSET_NAMES)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_PSET_NAMES)) {
                 pmix_server_pset_t *ps;
                 ans = NULL;
                 PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.psets, pmix_server_pset_t)
@@ -609,7 +609,7 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 
-            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_PSET_MEMBERSHIP)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_PSET_MEMBERSHIP)) {
                 pmix_server_pset_t *ps, *psptr;
                 /* must have provided us with a pset name qualifier */
                 if (NULL == psetname) {
@@ -642,7 +642,7 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 
-            } else if (0 == strcmp(q->keys[n], PMIX_JOB_SIZE)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_JOB_SIZE)) {
                 jdata = prte_get_job_data_object(jobid);
                 if (NULL == jdata) {
                     ret = PMIX_ERR_NOT_FOUND;
@@ -656,7 +656,7 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 
-            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_NUM_GROUPS)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_NUM_GROUPS)) {
                 sz = pmix_list_get_size(&prte_pmix_server_globals.groups);
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_NUM_GROUPS, &sz, PMIX_SIZE);
                 if (PMIX_SUCCESS != rc) {
@@ -664,7 +664,7 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 
-            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_GROUP_NAMES)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_GROUP_NAMES)) {
                 pmix_server_pset_t *ps;
                 ans = NULL;
                 PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.groups, pmix_server_pset_t)
@@ -680,7 +680,7 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 
-            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_GROUP_MEMBERSHIP)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_GROUP_MEMBERSHIP)) {
                 /* construct a list of values with pmix_proc_t
                  * entries for each proc in the indicated group */
                 pmix_server_pset_t *ps, *grp = NULL;
@@ -712,7 +712,7 @@ static void _query(int sd, short args, void *cbdata)
                 }
 
 #if PMIX_NUMERIC_VERSION >= 0x00050000
-            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_ALLOCATION)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_ALLOCATION)) {
                 /* collect all the node info */
                 void *nodelist, *nodeinfolist;
                 char *str;
@@ -771,7 +771,7 @@ static void _query(int sd, short args, void *cbdata)
 #endif
 
 #ifdef PMIX_QUERY_AVAILABLE_SLOTS
-            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_AVAILABLE_SLOTS)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_AVAILABLE_SLOTS)) {
                 /* compute the slots currently available for assignment. Note that
                  * this is purely a point-in-time measurement as jobs may be working
                  * there way thru the state machine for mapping, and more jobs may
@@ -813,7 +813,7 @@ static void _query(int sd, short args, void *cbdata)
 #endif
 
 #ifdef PMIX_MEM_ALLOC_KIND
-            } else if (0 == strcmp(q->keys[n], PMIX_MEM_ALLOC_KIND)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_MEM_ALLOC_KIND)) {
                 pmix_proc_t pproc;
                 pmix_info_t info;
                 pmix_value_t *value;
@@ -837,7 +837,7 @@ static void _query(int sd, short args, void *cbdata)
 #endif
 
 #ifdef PMIX_QUERY_RESOLVE_PEERS
-            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_RESOLVE_PEERS)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_RESOLVE_PEERS)) {
                 char *nm;
                 pmix_list_t procs;
                 int idx;
@@ -925,7 +925,7 @@ static void _query(int sd, short args, void *cbdata)
 #endif
 
 #ifdef PMIX_QUERY_RESOLVE_NODE
-            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_RESOLVE_NODE)) {
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_RESOLVE_NODE)) {
                 char **nodes = NULL, *nodelist;
                 // could ask for info on all jobs, so have to check for that case
                 for (k = 1; k < prte_job_data->size; k++) {
@@ -952,6 +952,16 @@ static void _query(int sd, short args, void *cbdata)
                 nodelist = PMIx_Argv_join(nodes, ',');
                 PMIx_Argv_free(nodes);
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_RESOLVE_NODE, nodelist, PMIX_STRING);
+#endif
+
+#ifdef PMIX_QUERY_PROC_RESOURCE_USAGE
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_PROC_RESOURCE_USAGE)) {
+
+#endif
+
+#ifdef PMIX_QUERY_NODE_RESOURCE_USAGE
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_NODE_RESOURCE_USAGE)) {
+
 #endif
 
             } else {

@@ -167,8 +167,12 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 #define PRTE_RML_TAG_SCHED_RESP           73
 
 /* group construct */
-#define PRTE_RML_TAG_GROUP         74
-#define PRTE_RML_TAG_GROUP_RELEASE 75
+#define PRTE_RML_TAG_GROUP                74
+#define PRTE_RML_TAG_GROUP_RELEASE        75
+
+// monitor
+#define PRTE_RML_TAG_MONITOR_REQUEST      76
+#define PRTE_RML_TAG_MONITOR_RESP         77
 
 #define PRTE_RML_TAG_MAX                 100
 
