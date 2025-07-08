@@ -15,7 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -44,7 +44,7 @@ void* myThread(void* vargp)
     pmix_value_t *val;
 
     PMIX_LOAD_PROCID(&proc, myproc.nspace, 1);
-    fprintf(stderr, "Fetching remote\n");
+    fprintf(stderr, "Fetching key=remote\n");
     rc = PMIx_Get(&proc, "remote", NULL, 0, &val);
     fprintf(stderr, "Client ns %s rank %d: PMIx_Get %s returned: %s(%d)\n",
             myproc.nspace, myproc.rank, "foobar", PMIx_Error_string(rc), rc);
@@ -83,7 +83,7 @@ int main(int argc, char **argv)
 
     value.type = PMIX_UINT64;
     value.data.uint64 = 5678;
-    if (PMIX_SUCCESS != (rc = PMIx_Put(PMIX_REMOTE, "remote", &value))) {
+    if (PMIX_SUCCESS != (rc = PMIx_Put(PMIX_GLOBAL, "remote", &value))) {
         fprintf(stderr, "Client ns %s rank %d: PMIx_Put internal failed: %d\n", myproc.nspace,
                 myproc.rank, rc);
         goto done;

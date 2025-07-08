@@ -76,6 +76,8 @@ typedef struct {
     bool launcher;
     bool scheduler;
     bool copy;  // info array has been copied and must be released
+    bool moncopy;  // monitor was allocated and must be released
+    bool dircopy;   // directives array has been copied and must be released
     uid_t uid;
     gid_t gid;
     pid_t pid;
@@ -83,8 +85,13 @@ typedef struct {
     uint32_t sessionID;
     pmix_info_t *info;
     size_t ninfo;
+    pmix_info_t *monitor;
+    pmix_info_t *directives;
+    size_t ndirs;
     char *data;
     size_t sz;
+    uint32_t ndaemons;
+    uint32_t nreported;
     pmix_data_range_t range;
     pmix_proc_t proxy;
     pmix_proc_t target;
@@ -291,6 +298,12 @@ pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_proc_t targets[
                         const pmix_info_t directives[], size_t ndirs, pmix_info_cbfunc_t cbfunc,
                         void *cbdata);
 
+PRTE_EXPORT extern pmix_status_t
+pmix_server_monitor_fn(const pmix_proc_t *requestor,
+                       const pmix_info_t *monitor, pmix_status_t error,
+                       const pmix_info_t directives[], size_t ndirs,
+                       pmix_info_cbfunc_t cbfunc, void *cbdata);
+
 PRTE_EXPORT extern pmix_status_t pmix_server_iof_pull_fn(const pmix_proc_t procs[], size_t nprocs,
                                                          const pmix_info_t directives[],
                                                          size_t ndirs, pmix_iof_channel_t channels,
@@ -306,6 +319,11 @@ PRTE_EXPORT extern pmix_status_t pmix_server_group_fn(pmix_group_operation_t op,
                                                       const pmix_proc_t procs[], size_t nprocs,
                                                       const pmix_info_t directives[], size_t ndirs,
                                                       pmix_info_cbfunc_t cbfunc, void *cbdata);
+
+PRTE_EXPORT extern pmix_status_t pmix_server_monitor_fn(const pmix_proc_t *requestor,
+                                                        const pmix_info_t *monitor, pmix_status_t error,
+                                                        const pmix_info_t directives[], size_t ndirs,
+                                                        pmix_info_cbfunc_t cbfunc, void *cbdata);
 
 /* declare the RML recv functions for responses */
 PRTE_EXPORT extern void pmix_server_launch_resp(int status, pmix_proc_t *sender,
@@ -350,6 +368,14 @@ PRTE_EXPORT extern void prte_server_lost_connection(size_t evhdlr_registration_i
                                                     pmix_event_notification_cbfunc_fn_t cbfunc,
                                                     void *cbdata);
 
+
+PRTE_EXPORT extern void pmix_server_monitor_request(int status, pmix_proc_t *sender,
+                                                    pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
+                                                    void *cbdata);
+
+PRTE_EXPORT extern void pmix_server_monitor_resp(int status, pmix_proc_t *sender,
+                                                 pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
+                                                 void *cbdata);
 
 #define PRTE_PMIX_ALLOC_REQ      0
 #define PRTE_PMIX_SESSION_CTRL   1

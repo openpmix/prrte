@@ -38,20 +38,6 @@
 #include "grpcomm_direct.h"
 #include "src/mca/grpcomm/base/base.h"
 
-#if PMIX_NUMERIC_VERSION < 0x00060000
-
-int prte_grpcomm_direct_group(pmix_group_operation_t op, char *grpid,
-                              const pmix_proc_t procs[], size_t nprocs,
-                              const pmix_info_t directives[], size_t ndirs,
-                              pmix_info_cbfunc_t cbfunc, void *cbdata)
-{
-    PRTE_HIDE_UNUSED_PARAMS(op, grpid, procs, nprocs, directives, ndirs, cbfunc, cbdata);
-
-    return PRTE_ERR_NOT_SUPPORTED;
-}
-
-#else
-
 static void group(int sd, short args, void *cbdata);
 
 static prte_grpcomm_group_t *get_tracker(prte_grpcomm_direct_group_signature_t *sig, bool create);
@@ -1636,5 +1622,3 @@ static int unpack_signature(pmix_data_buffer_t *buffer,
     *sig = s;
     return PRTE_SUCCESS;
 }
-
-#endif
