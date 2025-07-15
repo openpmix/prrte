@@ -235,6 +235,9 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_PREFIX                     (PRTE_JOB_START_KEY + 118) // string - PRTE_PREFIX for daemons
 #define PRTE_JOB_PMIX_PREFIX                (PRTE_JOB_START_KEY + 119) // string - PMIX_PREFIX for daemons
 #define PRTE_JOB_FWD_ENVIRONMENT            (PRTE_JOB_START_KEY + 120) // bool - forward local environment to procs in this job
+#define PRTE_JOB_PTY                        (PRTE_JOB_START_KEY + 121) // bool - Spawn a pseudo-terminal
+#define PRTE_JOB_PTY_TERMIO                 (PRTE_JOB_START_KEY + 122) // pmix_byte_object_t - termio structs for stdin, stdout
+#define PRTE_JOB_PTY_WSIZE                  (PRTE_JOB_START_KEY + 123) // pmix_byte_object_t - winsize structs for stdin, stdout
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 

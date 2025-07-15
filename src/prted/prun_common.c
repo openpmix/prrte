@@ -82,6 +82,7 @@
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_getcwd.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/pmix_tty.h"
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_progress_threads.h"
@@ -543,6 +544,69 @@ int prun_common(pmix_cli_result_t *results,
 
     /* we want to be notified upon job completion */
     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_NOTIFY_COMPLETION, &flag, PMIX_BOOL);
+
+#ifdef PMIX_SPAWN_PTY
+    // see if they want to use a pty
+    if (pmix_cmd_line_is_taken(results, PRTE_CLI_PTY)) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_SPAWN_PTY, NULL, PMIX_BOOL);
+#ifdef PMIX_PTY_TERMIO
+        {
+            // pass our termio settings
+            struct termios terms;
+            pmix_byte_object_t tbo;
+            tbo.bytes = malloc(2 * sizeof(struct termios));
+            tbo.size = 2 * sizeof(struct termios);
+            ret = pmix_gettermios(STDIN_FILENO, &terms);
+            if (PMIX_SUCCESS != ret) {
+                free(tbo.bytes);
+                PMIX_INFO_LIST_RELEASE(jinfo);
+                PRTE_UPDATE_EXIT_STATUS(ret);
+                goto DONE;
+            }
+            memcpy(tbo.bytes, &terms, sizeof(struct termios));
+            memset(&terms, 0, sizeof(struct termios));
+            ret = pmix_gettermios(STDOUT_FILENO, &terms);
+            if (PMIX_SUCCESS != ret) {
+                free(tbo.bytes);
+                PMIX_INFO_LIST_RELEASE(jinfo);
+                PRTE_UPDATE_EXIT_STATUS(ret);
+                goto DONE;
+            }
+            memcpy(tbo.bytes+sizeof(struct termios), &terms, sizeof(struct termios));
+            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PTY_TERMIO, &tbo, PMIX_BYTE_OBJECT);
+            PMIX_BYTE_OBJECT_DESTRUCT(&tbo);
+        }
+#endif
+#ifdef PMIX_PTY_WSIZE
+        {
+            // pass our window size
+            struct winsize ws;
+            pmix_byte_object_t tbo;
+            tbo.bytes = malloc(2 * sizeof(struct winsize));
+            tbo.size = 2 * sizeof(struct winsize);
+            ret = pmix_getwinsz(STDIN_FILENO, &ws);
+            if (PMIX_SUCCESS != ret) {
+                free(tbo.bytes);
+                PMIX_INFO_LIST_RELEASE(jinfo);
+                PRTE_UPDATE_EXIT_STATUS(ret);
+                goto DONE;
+            }
+            memcpy(tbo.bytes, &ws, sizeof(struct winsize));
+            memset(&ws, 0, sizeof(struct winsize));
+            ret = pmix_getwinsz(STDOUT_FILENO, &ws);
+            if (PMIX_SUCCESS != ret) {
+                free(tbo.bytes);
+                PMIX_INFO_LIST_RELEASE(jinfo);
+                PRTE_UPDATE_EXIT_STATUS(ret);
+                goto DONE;
+            }
+            memcpy(tbo.bytes+sizeof(struct winsize), &ws, sizeof(struct winsize));
+            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PTY_WSIZE, &tbo, PMIX_BYTE_OBJECT);
+            PMIX_BYTE_OBJECT_DESTRUCT(&tbo);
+        }
+#endif
+    }
+#endif
 
     /* pickup any relevant envars */
     ninfo = 4;

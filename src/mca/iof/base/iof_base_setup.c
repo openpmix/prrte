@@ -14,7 +14,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2017-2021 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -66,70 +66,162 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
+#include "src/util/name_fns.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/name_fns.h"
-#include "src/util/pmix_os_dirpath.h"
-#include "src/util/pmix_output.h"
-#include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
+#include "src/util/pmix_fd.h"
+#include "src/util/pmix_output.h"
+#include "src/util/pmix_os_dirpath.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/pmix_pty.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/pmix_tty.h"
 
 #include "src/mca/iof/base/base.h"
 #include "src/mca/iof/base/iof_base_setup.h"
 #include "src/mca/iof/iof.h"
 
-int prte_iof_base_setup_prefork(prte_iof_base_io_conf_t *opts)
+#define PTYNAME_MAXLEN  2048
+
+int prte_iof_base_setup_prefork(prte_iof_base_io_conf_t *opts,
+                                prte_job_t *jdata)
 {
-    int ret = -1;
+    int rc;
+    struct termios interms, outterms, errterms, zterm, *terms;
+    struct winsize inws, outws, errws, zws, *ws;
+    size_t sz, offset;
+    pmix_byte_object_t *bptr;
 
     fflush(stdout);
 
-    /* first check to make sure we can do ptys */
-#if PRTE_ENABLE_PTY_SUPPORT
-    if (opts->usepty) {
-        struct winsize *wp = NULL;
-        /**
-         * It has been reported that on MAC OS X 10.4 and prior one cannot
-         * safely close the writing side of a pty before completly reading
-         * all data inside.
-         * There seems to be two issues: first all pending data is
-         * discarded, and second it randomly generate kernel panics.
-         * Apparently this issue was fixed in 10.5 so by now we use the
-         * pty exactly as we use the pipes.
-         * This comment is here as a reminder.
-         */
-#ifdef TIOCGWINSZ
-        struct winsize ws;
-        if (0 == ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws)) {
-            wp = &ws;
+    memset(&zterm, 0, sizeof(struct termios));
+    memset(&interms, 0, sizeof(struct termios));
+    memset(&outterms, 0, sizeof(struct termios));
+    memset(&errterms, 0, sizeof(struct termios));
+
+    memset(&zws, 0, sizeof(struct winsize));
+    memset(&inws, 0, sizeof(struct winsize));
+    memset(&outws, 0, sizeof(struct winsize));
+    memset(&errws, 0, sizeof(struct winsize));
+
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PTY_TERMIO, (void**)&bptr, PMIX_BYTE_OBJECT)) {
+        // these are stored in stdin/stdout/stderr order
+        offset = 0;
+        sz = sizeof(struct termios);
+        memcpy(&interms, bptr->bytes, sz);
+        offset += sz;
+        if (offset < bptr->size) {
+            memcpy(&outterms, bptr->bytes + offset, sz);
+            offset += sz;
+            if (offset < bptr->size) {
+                memcpy(&errterms, bptr->bytes + offset, sz);
+            }
         }
-#endif
-        ret = pmix_openpty(&(opts->p_stdout[0]), &(opts->p_stdout[1]), (char *) NULL,
-                           (struct termios *) NULL, wp);
+        PMIx_Byte_object_free(bptr, 1);
     }
-#else
-    opts->usepty = 0;
+
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PTY_WSIZE, (void**)&bptr, PMIX_BYTE_OBJECT)) {
+        // these are stored in stdin/stdout/stderr order
+        offset = 0;
+        sz = sizeof(struct winsize);
+        memcpy(&inws, bptr->bytes, sz);
+        offset += sz;
+        if (offset < bptr->size) {
+            memcpy(&outws, bptr->bytes + offset, sz);
+            offset += sz;
+            if (offset < bptr->size) {
+                memcpy(&errws, bptr->bytes + offset, sz);
+            }
+        }
+        PMIx_Byte_object_free(bptr, 1);
+    }
+
+    if (opts->usepty) {
+
+        /* first check to make sure we can do ptys */
+#if PRTE_ENABLE_PTY_SUPPORT == 0
+        // we cannot execute this request as we weren't configured
+        // with pty support
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_AVAILABLE);
+        return PRTE_ERR_NOT_AVAILABLE;
 #endif
 
-    if (ret < 0) {
-        opts->usepty = 0;
-        if (pipe(opts->p_stdout) < 0) {
-            PMIX_ERROR_LOG(PMIX_ERR_SYS_LIMITS_PIPES);
-            return PMIX_ERR_SYS_LIMITS_PIPES;
+        if (opts->connect_stdin) {
+            if (memcmp(&zterm, &interms, sizeof(struct termios))) {
+                terms = NULL;
+            } else {
+                terms = &interms;
+            }
+            if (memcmp(&zws, &inws, sizeof(struct winsize))) {
+                ws = NULL;
+            } else {
+                ws = &inws;
+            }
+            rc = pmix_openpty(&opts->p_stdin[0], &opts->p_stdin[1],
+                              NULL, terms, ws);
+            if (0 != rc) {
+                    PRTE_ERROR_LOG(PRTE_ERR_PIPE_SETUP_FAILURE);
+                    return PRTE_ERR_PIPE_SETUP_FAILURE;
+            }
         }
-    }
+
+        if (memcmp(&zterm, &outterms, sizeof(struct termios))) {
+            terms = NULL;
+        } else {
+            terms = &outterms;
+        }
+        if (memcmp(&zws, &outws, sizeof(struct winsize))) {
+            ws = NULL;
+        } else {
+            ws = &outws;
+        }
+        rc = pmix_openpty(&opts->p_stdout[0], &opts->p_stdout[1],
+                          NULL, terms, ws);
+        if (0 != rc) {
+                PRTE_ERROR_LOG(PRTE_ERR_PIPE_SETUP_FAILURE);
+                return PRTE_ERR_PIPE_SETUP_FAILURE;
+        }
+
+        if (memcmp(&zterm, &errterms, sizeof(struct termios))) {
+            terms = NULL;
+        } else {
+            terms = &errterms;
+        }
+        if (memcmp(&zws, &errws, sizeof(struct winsize))) {
+            ws = NULL;
+        } else {
+            ws = &errws;
+        }
+        rc = pmix_openpty(&opts->p_stderr[0], &opts->p_stderr[1],
+                          NULL, terms, ws);
+        if (0 != rc) {
+                PRTE_ERROR_LOG(PRTE_ERR_PIPE_SETUP_FAILURE);
+                return PRTE_ERR_PIPE_SETUP_FAILURE;
+        }
+        return PRTE_SUCCESS;
+    }  // if usepty
+
+
+    // using pipes
+
     if (opts->connect_stdin) {
         if (pipe(opts->p_stdin) < 0) {
-            PMIX_ERROR_LOG(PMIX_ERR_SYS_LIMITS_PIPES);
-            return PMIX_ERR_SYS_LIMITS_PIPES;
+            PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
+            return PRTE_ERR_SYS_LIMITS_PIPES;
         }
     }
-    if (pipe(opts->p_stderr) < 0) {
-        PMIX_ERROR_LOG(PMIX_ERR_SYS_LIMITS_PIPES);
-        return PMIX_ERR_SYS_LIMITS_PIPES;
+
+    if (pipe(opts->p_stdout) < 0) {
+        PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
+        return PRTE_ERR_SYS_LIMITS_PIPES;
     }
+
+    if (pipe(opts->p_stderr) < 0) {
+        PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
+        return PRTE_ERR_SYS_LIMITS_PIPES;
+    }
+
     return PRTE_SUCCESS;
 }
 
@@ -137,19 +229,43 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
                               char ***env)
 {
     int ret;
+    int fd;
     PRTE_HIDE_UNUSED_PARAMS(env);
 
     if (opts->connect_stdin) {
-        close(opts->p_stdin[1]);
+        close(opts->p_stdin[0]);
     }
     close(opts->p_stdout[0]);
     close(opts->p_stderr[0]);
 
     if (opts->usepty) {
+
+        // we are the slave end
+        if (opts->connect_stdin) {
+            ret = pmix_fd_dup2(opts->p_stdin[1], 0);
+            if (ret < 0) {
+                PRTE_ERROR_LOG(PRTE_ERR_PIPE_SETUP_FAILURE);
+                return PRTE_ERR_PIPE_SETUP_FAILURE;
+            }
+            if (ret != opts->p_stdin[1]) {
+                close(opts->p_stdin[1]);
+            }
+        } else {
+
+            /* connect input to /dev/null */
+            fd = open("/dev/null", O_RDONLY, 0);
+            ret = pmix_fd_dup2(fd, 0);
+            if (ret != 0) {
+                close(fd);
+            }
+        }
+
+#if 0
         /* disable echo */
         struct termios term_attrs;
         if (tcgetattr(opts->p_stdout[1], &term_attrs) < 0) {
-            return PMIX_ERR_PIPE_SETUP_FAILURE;
+            PRTE_ERROR_LOG(PRTE_ERR_PIPE_SETUP_FAILURE);
+            return PRTE_ERR_PIPE_SETUP_FAILURE;
         }
         term_attrs.c_lflag &= ~(ECHO | ECHOE | ECHOK | ECHOCTL | ECHOKE | ECHONL);
         term_attrs.c_iflag &= ~(ICRNL | INLCR | ISTRIP | INPCK | IXON);
@@ -161,47 +277,50 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
 #endif
             ONLCR);
         if (tcsetattr(opts->p_stdout[1], TCSANOW, &term_attrs) == -1) {
-            return PMIX_ERR_PIPE_SETUP_FAILURE;
+            PRTE_ERROR_LOG(PRTE_ERR_PIPE_SETUP_FAILURE);
+            return PRTE_ERR_PIPE_SETUP_FAILURE;
         }
-#ifdef HAVE_FILENO_UNLOCKED
-        ret = dup2(opts->p_stdout[1], fileno_unlocked(stdout));
-#else
-        ret = dup2(opts->p_stdout[1], fileno(stdout));
 #endif
+
+        ret = pmix_fd_dup2(opts->p_stdout[1], 1);
         if (ret < 0) {
-            return PMIX_ERR_PIPE_SETUP_FAILURE;
+            PRTE_ERROR_LOG(PRTE_ERR_PIPE_SETUP_FAILURE);
+            return PRTE_ERR_PIPE_SETUP_FAILURE;
         }
-        close(opts->p_stdout[1]);
-    } else {
-#ifdef HAVE_FILENO_UNLOCKED
-        if (opts->p_stdout[1] != fileno_unlocked(stdout)) {
-            ret = dup2(opts->p_stdout[1], fileno_unlocked(stdout));
-#else
-        if (opts->p_stdout[1] != fileno(stdout)) {
-            ret = dup2(opts->p_stdout[1], fileno(stdout));
-#endif
-            if (ret < 0) {
-                return PMIX_ERR_PIPE_SETUP_FAILURE;
-            }
+        if (ret != opts->p_stdout[1]) {
             close(opts->p_stdout[1]);
         }
+        ret = pmix_fd_dup2(opts->p_stderr[1], 2);
+        if (ret < 0) {
+            PRTE_ERROR_LOG(PRTE_ERR_PIPE_SETUP_FAILURE);
+            return PRTE_ERR_PIPE_SETUP_FAILURE;
+        }
+        if (ret != opts->p_stderr[1]) {
+            close(opts->p_stderr[1]);
+        }
+
+        return PRTE_SUCCESS;
     }
+
+
+    // we are using pipes
     if (opts->connect_stdin) {
-#ifdef HAVE_FILENO_UNLOCKED
-        if (opts->p_stdin[0] != fileno_unlocked(stdin)) {
-            ret = dup2(opts->p_stdin[0], fileno_unlocked(stdin));
-#else
-        if (opts->p_stdin[0] != fileno(stdin)) {
-            ret = dup2(opts->p_stdin[0], fileno(stdin));
-#endif
-            if (ret < 0) {
-                return PMIX_ERR_PIPE_SETUP_FAILURE;
-            }
+        close(opts->p_stdin[1]);
+    }
+    close(opts->p_stdout[0]);
+    close(opts->p_stderr[0]);
+
+    if (opts->connect_stdin) {
+        ret = pmix_fd_dup2(opts->p_stdin[0], 0);
+        if (ret < 0) {
+            PRTE_ERROR_LOG(PRTE_ERR_PIPE_SETUP_FAILURE);
+            return PRTE_ERR_PIPE_SETUP_FAILURE;
+        }
+        if (ret != opts->p_stdin[0]) {
             close(opts->p_stdin[0]);
         }
-    } else {
-        int fd;
 
+    } else {
         /* connect input to /dev/null */
         fd = open("/dev/null", O_RDONLY, 0);
         if (fd != fileno(stdin)) {
@@ -210,16 +329,21 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
         close(fd);
     }
 
-#ifdef HAVE_FILENO_UNLOCKED
-    if (opts->p_stderr[1] != fileno_unlocked(stderr)) {
-        ret = dup2(opts->p_stderr[1], fileno_unlocked(stderr));
-#else
-    if (opts->p_stderr[1] != fileno(stderr)) {
-        ret = dup2(opts->p_stderr[1], fileno(stderr));
-#endif
-        if (ret < 0) {
-            return PMIX_ERR_PIPE_SETUP_FAILURE;
-        }
+    ret = pmix_fd_dup2(opts->p_stdout[1], 1);
+    if (ret < 0) {
+        PRTE_ERROR_LOG(PRTE_ERR_PIPE_SETUP_FAILURE);
+        return PRTE_ERR_PIPE_SETUP_FAILURE;
+    }
+    if (ret != opts->p_stdout[1]) {
+        close(opts->p_stdout[1]);
+    }
+
+    ret = pmix_fd_dup2(opts->p_stderr[1], 2);
+    if (ret < 0) {
+        PRTE_ERROR_LOG(PRTE_ERR_PIPE_SETUP_FAILURE);
+        return PRTE_ERR_PIPE_SETUP_FAILURE;
+    }
+    if (ret != opts->p_stderr[1]) {
         close(opts->p_stderr[1]);
     }
 
@@ -230,6 +354,32 @@ int prte_iof_base_setup_parent(const pmix_proc_t *name,
                                prte_iof_base_io_conf_t *opts)
 {
     int ret;
+
+    if (opts->usepty) {
+        if (opts->connect_stdin) {
+            ret = prte_iof.pull(name, PRTE_IOF_STDIN, opts->p_stdin[0]);
+            if (PRTE_SUCCESS != ret) {
+                PRTE_ERROR_LOG(ret);
+                return ret;
+            }
+        }
+
+        ret = prte_iof.push(name, PRTE_IOF_STDOUT, opts->p_stdout[0]);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
+            return ret;
+        }
+
+        ret = prte_iof.push(name, PRTE_IOF_STDERR, opts->p_stderr[0]);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
+            return ret;
+        }
+
+        return PRTE_SUCCESS;
+    }
+
+    // using pipes
 
     /* connect stdin endpoint */
     if (opts->connect_stdin) {

@@ -562,6 +562,28 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
                 jdata->stdin_target = strtoul(info->value.data.string, NULL, 10);
             }
 
+#ifdef PMIX_SPAWN_PTY
+            /***   SPAWN PTY   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_PTY)) {
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_PTY, PRTE_ATTR_GLOBAL,
+                               &flag, PMIX_BOOL);
+#endif
+
+#ifdef PMIX_PTY_TERMIO
+            /***   PTY TERMIO   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_PTY_TERMIO)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_PTY_TERMIO, PRTE_ATTR_GLOBAL,
+                               &info->value.data.bo, PMIX_BYTE_OBJECT);
+#endif
+
+#ifdef PMIX_PTY_WSIZE
+            /***   PTY WIN SIZES   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_PTY_WSIZE)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_PTY_WSIZE, PRTE_ATTR_GLOBAL,
+                               &info->value.data.bo, PMIX_BYTE_OBJECT);
+#endif
+
             /***   INDEX ARGV   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_INDEX_ARGV)) {
             flag = PMIX_INFO_TRUE(info);
