@@ -24,9 +24,8 @@
 
 AM_CPPFLAGS = $(plm_lsf_CPPFLAGS)
 
-dist_prtedata_DATA = help-plm-lsf.txt
-
 EXTRA_DIST = \
+        help-plm-lsf.txt \
         testbuild_lsf.h
 
 sources = \

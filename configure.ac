@@ -91,7 +91,7 @@ PRTE_LOAD_PLATFORM
 #
 # Start it up
 #
-
+. $srcdir/VERSION
 PRTE_CONFIGURE_SETUP
 
 prte_show_title "Configuring PRTE"
@@ -604,10 +604,6 @@ AC_C_BIGENDIAN
 
 PRTE_CONFIG_THREADS
 
-CFLAGS="$CFLAGS $THREAD_CFLAGS"
-LDFLAGS="$LDFLAGS $THREAD_LDFLAGS"
-LIBS="$LIBS $THREAD_LIBS"
-
 #
 # What is the local equivalent of "ln -s"
 #
@@ -615,9 +611,6 @@ LIBS="$LIBS $THREAD_LIBS"
 AC_PROG_LN_S
 AC_PROG_GREP
 AC_PROG_EGREP
-
-# This check must come after PRTE_CONFIG_THREADS
-AC_CHECK_FUNCS([pthread_setaffinity_np])
 
 #
 # We need as and lex
@@ -713,13 +706,33 @@ AC_INCLUDES_DEFAULT
 #include <sys/resource.h>
 #endif])
 
+# We need Python if we are building in a git clone
+# (not a distribution tarball)
+AC_MSG_CHECKING([if we need Python])
+prte_need_python=no
+AS_IF([test -d "${PRTE_TOP_SRCDIR}/.git"],
+      [prte_need_python=yes],
+      [prte_need_python=no])
+AC_MSG_RESULT([$prte_need_python])
+# if we need it, then check the min version
+AS_IF([test "$prte_need_python" = "yes"],
+      [AM_PATH_PYTHON([$python_min_version],
+                      [prte_have_good_python=1],
+                      [AC_MSG_ERROR([PRRTE requires Python >= $python_min_version to build. Aborting.])])],
+      [prte_have_good_python=0])
+
+AS_IF([test $prte_have_good_python -eq 1],
+      [PRTE_SUMMARY_ADD([Required Packages], [Python], [], [yes ($PYTHON_VERSION)])])
+
 #
 # Setup Sphinx processing
 #
+# Note that we have to double escape the URL below
+# so that the # it contains doesn't confuse the Autotools
 
-OAC_SETUP_SPHINX([$srcdir/docs/_build/html/index.html], [],
+OAC_SETUP_SPHINX([$srcdir/docs/_build/html/index.html],
+                 [[https://docs.prrte.org/en/main/developers/prerequisites.html#sphinx-and-therefore-python]],
                  [$srcdir/docs/requirements.txt])
-AC_CHECK_PROGS(PYTHON, [python3 python python2])
 
 AS_IF([test -n "$OAC_MAKEDIST_DISABLE"],
       [AS_IF([test -n "$PRTE_MAKEDIST_DISABLE"],

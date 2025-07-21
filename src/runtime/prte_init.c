@@ -228,6 +228,7 @@ int prte_init_minimum(void)
     if (PMIX_SUCCESS != ret) {
         return prte_pmix_convert_status(ret);
     }
+    pmix_show_help_add_data("prte", prte_show_help_data);
 
     /* keyval lex-based parser */
     /* Setup the parameter system */

@@ -17,7 +17,7 @@
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -76,6 +76,7 @@ PRTE_EXPORT extern bool prte_bind_progress_thread_reqd;
 PRTE_EXPORT extern bool prte_show_launch_progress;
 PRTE_EXPORT extern bool prte_bootstrap_setup;
 PRTE_EXPORT extern bool prte_silence_shared_fs;
+PRTE_EXPORT extern pmix_show_help_file_t prte_show_help_data[];
 
 /**
  * Global indicating where this process was bound to at launch (will
@@ -617,9 +618,6 @@ PRTE_EXPORT extern struct timeval prte_child_time_to_exit;
 
 /* length of stat history to keep */
 PRTE_EXPORT extern int prte_stat_history_size;
-
-/* envars to forward */
-PRTE_EXPORT extern char **prte_forwarded_envars;
 
 /* maximum size of virtual machine - used to subdivide allocation */
 PRTE_EXPORT extern int prte_max_vm_size;

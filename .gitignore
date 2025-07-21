@@ -152,6 +152,7 @@ src/include/prte_frameworks.c
 src/include/prte_frameworks.h
 src/include/frameworks.h
 src/include/prte_config.h
+src/include/prte_show_help_content.c
 
 src/mca/rmaps/rank_file/rmaps_rank_file_lex.c
 src/mca/rmaps/rank_file/rankfile_lex.c
@@ -175,6 +176,7 @@ src/tools/pterm/ompi-pterm
 src/util/hostfile/hostfile_lex.c
 src/util/keyval/keyval_lex.c
 src/util/show_help_lex.c
+src/util/prte_show_help_content.c
 
 test/double-get
 test/get-nofence
@@ -198,6 +200,7 @@ test/chkfs
 
 test/mpi/spawn_multiple
 test/mpi/create_comm_from_group
+test/mpi/fwd
 
 docs/_build
 docs/_static

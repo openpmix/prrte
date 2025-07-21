@@ -1,0 +1,224 @@
+# -*- text -*-
+#
+# Copyright (c) 2025      Nanook Consulting  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+# This is the US/English general help file for PRTE's prted.
+#
+[usage]
+
+%s (%s) %s
+
+Usage: %s [OPTION]...
+
+Start a PRTE Daemon
+
+The following list of command line options are available. Note that
+more detailed help for any option can be obtained by adding that
+option to the help request as "--help <option>".
+
++----------------------+-----------------------------------------------+
+|                      | General Options                               |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "-h" | "--help"      | This help message                             |
++----------------------+-----------------------------------------------+
+| "-h" | "--help       | Help for the specified option                 |
+| <arg0>"              |                                               |
++----------------------+-----------------------------------------------+
+| "-v" | "--verbose"   | Enable typical debug options                  |
++----------------------+-----------------------------------------------+
+| "-V" | "--version"   | Print version and exit                        |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | Debug Options                                 |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--debug"            | Top-level PRTE debug switch (default: false). |
+|                      | This option will be deprecated, use "--debug- |
+|                      | devel" instead.                               |
++----------------------+-----------------------------------------------+
+| "--debug-daemons-    | Enable debugging of any PRTE daemons used by  |
+| file"                | this application, storing output in files     |
++----------------------+-----------------------------------------------+
+| "--leave-session-    | Do not daemonize the "prted"                  |
+| attached"            |                                               |
++----------------------+-----------------------------------------------+
+| "--test-suicide      | Suicide instead of clean abort after          |
+| <arg0>"              | specified delay                               |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | DVM Options                                   |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--pmixmca <key>     | Pass context-specific PMIx MCA parameters     |
+| <value>"             | ("key" is the parameter name; "value" is the  |
+|                      | parameter value)                              |
++----------------------+-----------------------------------------------+
+| "--prtemca <key>     | Pass context-specific PRTE MCA parameters;    |
+| <value>"             | they are considered global if "--gmca" is not |
+|                      | used and only one context is specified ("key" |
+|                      | is the parameter name; "value" is the         |
+|                      | parameter value)                              |
++----------------------+-----------------------------------------------+
+| "--dvm-master-uri    | Specify the URI of the DVM master, or the     |
+| <uri>"               | name of the file (specified as                |
+|                      | "file:filename") that contains that info      |
++----------------------+-----------------------------------------------+
+| "--parent-uri <uri>" | Specify the URI of the prted acting as the    |
+|                      | parent of this prted in a tree-based spawn    |
+|                      | operation                                     |
++----------------------+-----------------------------------------------+
+| "--tree-spawn"       | A tree-based spawn operation is in progress   |
++----------------------+-----------------------------------------------+
+| "--bootstrap"        | Self-construct the DVM based on a             |
+|                      | configuration file                            |
++----------------------+-----------------------------------------------+
+| "--hetero-nodes"     | The allocation contains multiple topologies,  |
+|                      | so optimize the launch for that scenario. For |
+|                      | example, the scheduler could be allocating    |
+|                      | individual CPUs instead of entire nodes, thus |
+|                      | effectively creating different topologies     |
+|                      | (due to differing allocated CPUs) on each     |
+|                      | node.                                         |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | Specific Options                              |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--set-sid"          | Direct the DVM daemons to separate from the   |
+|                      | current session                               |
++----------------------+-----------------------------------------------+
+| "--system-server"    | Start the DVM as the system server            |
++----------------------+-----------------------------------------------+
+| "--pubsub-server     | Contact information for external PRRTE        |
+| <uri>"               | publish/lookup data server                    |
++----------------------+-----------------------------------------------+
+
+Report bugs to %s
+#
+[version]
+
+%s (%s) %s
+
+Report bugs to %s
+#
+[dvm-master-uri]
+
+Specify the URI of the DVM master, or the name of the file (specified
+as "file:filename") that contains that info
+#
+[hetero-nodes]
+The allocation contains multiple topologies, so optimize the launch for
+that scenario. For example, the scheduler could be allocating individual
+CPUs instead of entire nodes, thus effectively creating different topologies
+(due to differing allocated CPUs) on each node.
+#
+[test-suicide]
+
+Test DVM cleanup upon daemon failure by having one daemon suicide
+after delay
+#
+[system-server]
+
+Start the daemon as the system server on its node
+#
+[set-sid]
+
+Direct the daemon to separate from the current session
+#
+[prtemca]
+
+Pass a PRRTE MCA parameter.
+
+Syntax: "--prtemca <key> <value>", where "key" is the parameter name
+and "value" is the parameter value.
+#
+[pmixmca]
+
+Pass a PMIx MCA parameter
+
+Syntax: "--pmixmca <key> <value>", where "key" is the parameter name
+and "value" is the parameter value.
+#
+[leave-session-attached]
+
+Do not discard stdout/stderr of remote PRRTE daemons. The primary use
+for this option is to ensure that the daemon output streams (i.e.,
+stdout and stderr) remain open after launch, thus allowing the user to
+see any daemon-generated error messages. Otherwise, the daemon will
+"daemonize" itself upon launch, thereby closing its output streams.
+#
+[parent-uri]
+
+Specify the URI of the prted acting as the parent of this prted in a
+tree-based spawn operation
+#
+[tree-spawn]
+
+A tree-based spawn operation is in progress
+#
+[pubsub-server]
+
+Contact information for external PRRTE publish/lookup data server
+
+%s
+#
+[cwd]
+
+A dynamic operation (%s) was requested that requires us to obtain the
+current working directory. Unfortunately, an error was returned when
+we attempted to obtain it:
+
+   error: %d
+
+We are unable to complete the requested operation.
+#
+[bad-key]
+
+A dynamic operation (%s) was requested that included an unrecognized
+info key:
+
+   group: %s
+   key:   %s
+
+The operation will continue, but may not behave completely as
+expected.
+#
+[noserver]
+
+A publish/lookup server was provided, but we were unable to connect to
+it — please check the connection info and ensure the server is alive:
+
+   Connection:  %s
+#
+[both-file-and-dir-set]
+
+Both the "output-directory" and "output-filename" options have been
+set:
+
+   Directory:      %s
+   Filename:       %s
+
+Only one of these can be set — please fix the options and try again.
+#
+[min-pmix-violation]
+
+PRRTE has detected that the PMIx library being used to run this
+executable does not meet the minimum supported version:
+
+   Min PMIx version: %0x Detected version: %0x
+
+Please check your LD_LIBRARY_PATH and ensure we are pointed to a
+version that meets the minimum requirement.

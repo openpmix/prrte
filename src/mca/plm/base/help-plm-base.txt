@@ -1,0 +1,137 @@
+# -*- text -*-
+#
+# Copyright (c) 2004-2006 The Trustees of Indiana University and Indiana
+#                         University Research and Technology
+#                         Corporation.  All rights reserved.
+# Copyright (c) 2004-2006 The University of Tennessee and The University
+#                         of Tennessee Research Foundation.  All rights
+#                         reserved.
+# Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
+#                         University of Stuttgart.  All rights reserved.
+# Copyright (c) 2004-2005 The Regents of the University of California.
+#                         All rights reserved.
+# Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+[no-available-pls]
+No available launching agents were found.
+
+This is an unusual error; it means that PRTE was unable to find
+any mechanism to launch proceses, and therefore is unable to start the
+process(es) required by your application.
+#
+[multiple-prefixes]
+%s does not support multiple different %s options.  You can
+specify at most one unique value for the %s option (in any of
+the application contexts); it will be applied to all the application
+contexts of your parallel job.
+
+Put simply, you must have %s installed in the same location on
+all of your nodes.
+
+The first two %s values supplied were:
+    %s
+    %s
+
+Please correct this and try again.
+#
+[multiple-app-prefixes]
+%s does not support multiple different %s options for a given
+application context.  You can specify at most one unique value
+for the option.
+
+Put simply, you must have PMIx installed in the same location on
+all of your nodes.
+
+The first two %s values supplied were:
+    %s
+    %s
+
+Please correct this and try again.
+#
+[multiple-prrte-prefixes]
+%s does not support multiple different prefix settings across the
+various methods for specifying it.
+
+Put simply, you must have PRRTE installed in the same location on
+all of your nodes.
+
+If multiple values are given (e.g., in the environment plus on the
+cmd line), a precedence order is used to try and select between them:
+
+* the cmd line value from "--prefix" overrides all others. You can
+  have multiple cmd line entries, but they must all match or else
+  an error will be generated.
+
+* the configuration option --enable-prte-prefix-by-default takes
+  next precedence
+
+* the "PRTE_PREFIX" environment variable
+
+* use of a fully-qualified absolute path to %s. The path is
+  extracted from the cmd and used as the prefix value. Note that
+  we do permit the path to be different from the prefix specified
+  by other means. This is done for those situations where the
+  library was installed in a different location on remote nodes
+  from the local node where %s is being executed.
+
+%s has detected that the prefix was specified in multiple ways,
+and that the values given were different. The first two values
+supplied were:
+
+    %s
+    %s
+
+Please correct this and try again.
+#
+[multiple-pmix-prefixes]
+%s does not support multiple different prefix settings across the
+various methods for specifying it.
+
+Put simply, you must have PMIx installed in the same location on
+all of your nodes.
+
+If multiple values are given (e.g., in the environment plus on the
+cmd line), a precedence order is used to try and select between them:
+
+* the cmd line value from "--pmix-prefix" overrides all others. You can
+  have multiple cmd line entries, but they must all match or else
+  an error will be generated.
+
+* the "PMIX_PREFIX" environment variable
+
+%s has detected that the prefix was specified in multiple ways,
+and that the values given were different. The first two values
+supplied were:
+
+    %s
+    %s
+
+Please correct this and try again.
+#
+[prefix-conflict]
+%s was given two conflicting directives regarding a prefix value
+for an application context:
+
+    %s: %s
+    %s
+
+We cannot execute both of those, so please correct this and
+try again.
+#
+[multi-endian]
+PRRTE does not currently support multi-endian operations. We have
+detected that the following node differs in endianness:
+
+
+  Nodename:      %s
+  Endian:        %s
+  Local endian:  %s
+
+Please correct the situation and try again.

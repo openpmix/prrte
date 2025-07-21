@@ -158,6 +158,18 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     PRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $PRTE_FINAL_LDFLAGS)
     PRTE_FLAGS_APPEND_UNIQ(LIBS, $PRTE_FINAL_LIBS)
 
+    AC_MSG_CHECKING([for in-memory show-help content compatibility])
+    PRTE_CHECK_PMIX_CAP([INMEMHELP],
+                        [AC_MSG_RESULT([yes])],
+                        [AC_MSG_RESULT([no])
+                         AC_MSG_WARN([Your PMIx version either does not have])
+                         AC_MSG_WARN([the capabilities feature or does not])
+                         AC_MSG_WARN([include the PMIX_CAP_INMEMHELP capability flag.])
+                         AC_MSG_WARN([This PRRTE version requires that support])
+                         AC_MSG_WARN([in order to build. Please point us to a])
+                         AC_MSG_WARN([PMIx installation with the required capability.])
+                         AC_MSG_ERROR([Cannot continue.])])
+
     AC_MSG_CHECKING([for LTO compatibility])
     PRTE_CHECK_PMIX_CAP([LTO],
                         [PRTE_PMIX_LTO_CAPABILITY=1

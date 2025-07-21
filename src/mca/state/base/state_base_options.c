@@ -107,7 +107,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
             }
         }
 
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL)) {
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, (void**)&fptr, PMIX_BOOL)) {
             /* it is present - check the value */
             if (!flag) {
                 /* remove the attribute */
@@ -135,7 +135,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
             }
         }
 
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NOTIFY_ERRORS, NULL, PMIX_BOOL)) {
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NOTIFY_ERRORS, (void**)&fptr, PMIX_BOOL)) {
             /* it is present - check the value */
             if (!flag) {
                 /* remove the attribute */
@@ -149,7 +149,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
             }
         }
 
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_AUTORESTART, NULL, PMIX_BOOL)) {
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_AUTORESTART, (void**)&fptr, PMIX_BOOL)) {
             /* it is present - check the value */
             if (!flag) {
                 /* remove the attribute */
@@ -168,6 +168,20 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_EXEC_AGENT,
                                    PRTE_ATTR_GLOBAL,
                                    prte_odls_globals.exec_agent, PMIX_STRING);
+            }
+        }
+
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT, (void**)&fptr, PMIX_BOOL)) {
+            /* it is present - check the value */
+            if (!flag) {
+                /* remove the attribute */
+                prte_remove_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT);
+            }
+        } else {
+            /* set it based on default value */
+            if (prte_fwd_environment) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT,
+                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
             }
         }
 
@@ -335,6 +349,11 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                 }
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_PROCTABLE,
                                     PRTE_ATTR_GLOBAL, ptr, PMIX_STRING);
+
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_FWD_ENVIRON)) {
+                flag = PMIX_CHECK_TRUE(&value);
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT, PRTE_ATTR_GLOBAL,
+                                   &flag, PMIX_BOOL);
 
             } else {
                 pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true,

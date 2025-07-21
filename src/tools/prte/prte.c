@@ -132,6 +132,7 @@ static void clean_abort(int fd, short flags, void *arg);
 static void signal_forward_callback(int fd, short args, void *cbdata);
 static void epipe_signal_callback(int fd, short args, void *cbdata);
 static int prep_singleton(const char *name);
+static bool keepalive = false;
 
 static void opcbfunc(pmix_status_t status, void *cbdata)
 {
@@ -159,9 +160,16 @@ static void parent_died_fn(size_t evhdlr_registration_id, pmix_status_t status,
                            pmix_info_t results[], size_t nresults,
                            pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
+    pmix_server_req_t *cd;
     PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, status, source, info, ninfo, results, nresults);
-    clean_abort(0, 0, NULL);
+
+    // allow the pmix event base to continue
     cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+
+    // shift this into our event base
+    cd = PMIX_NEW(pmix_server_req_t);
+    prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, clean_abort, cd);
+    prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
 }
 
 static void evhandler_reg_callbk(pmix_status_t status, size_t evhandler_ref, void *cbdata)
@@ -480,7 +488,7 @@ int main(int argc, char *argv[])
         // parse the file and add its context to the argv array
         fp = fopen(opt->values[0], "r");
         if (NULL == fp) {
-            pmix_show_help("help-prun", "appfile-failure", true, opt->values[0]);
+            pmix_show_help("help-prun.txt", "appfile-failure", true, opt->values[0]);
             return 1;
         }
         first = true;
@@ -565,6 +573,7 @@ int main(int argc, char *argv[])
     /* if we were given a keepalive pipe, set up to monitor it now */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_KEEPALIVE);
     if (NULL != opt) {
+        keepalive = true;
         PMIX_SETENV_COMPAT("PMIX_KEEPALIVE_PIPE", opt->values[0], true, &environ);
     }
 
@@ -580,6 +589,11 @@ int main(int argc, char *argv[])
     }
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_LEAVE_SESSION_ATTACHED)) {
         prte_leave_session_attached = true;
+    }
+
+    // check for hetero nodes
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_HETERO_NODES)) {
+        prte_hetero_nodes = true;
     }
 
     /* detach from controlling terminal
@@ -1281,7 +1295,12 @@ DONE:
 
 static void clean_abort(int fd, short flags, void *arg)
 {
-    PRTE_HIDE_UNUSED_PARAMS(fd, flags, arg);
+    PRTE_HIDE_UNUSED_PARAMS(fd, flags);
+
+    if (keepalive && NULL == arg) {
+        // ignore this
+        return;
+    }
 
     /* if we have already ordered this once, don't keep
      * doing it to avoid race conditions
@@ -1316,6 +1335,9 @@ static void clean_abort(int fd, short flags, void *arg)
      Instead, we have to exit this handler and setup to call
      job_completed() after this. */
     prte_plm.terminate_orteds();
+    if (NULL != arg) {
+        PMIX_RELEASE(arg);
+    }
 }
 
 static bool first = true;

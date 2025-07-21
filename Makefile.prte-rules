@@ -3,6 +3,7 @@
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
 # Copyright (c) 2020      Intel, Inc.  All rights reserved.
 # Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
+# Copyright (c) 2025      Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -30,3 +31,19 @@ prte__v_TXT_0 = @echo "  GENERATE text files";
 PRTE_V_LN_S = $(prte__v_LN_S_$V)
 prte__v_LN_S_ = $(prte__v_LN_S_$AM_DEFAULT_VERBOSITY)
 prte__v_LN_S_0 = @echo "  LN_S    " `basename $@`;
+
+PRTE_V_MKDIR = $(prte__v_MKDIR_$V)
+prte__v_MKDIR_ = $(prte__v_MKDIR_$AM_DEFAULT_VERBOSITY)
+prte__v_MKDIR_0 = @echo "  MKDIR   " $@;
+
+PRTE_V_GEN = $(prte__v_GEN_$V)
+prte__v_GEN_ = $(prte__v_GEN_$AM_DEFAULT_VERBOSITY)
+prte__v_GEN_0 = @echo "  GENERATE" $@;
+
+PRTE_V_COPYALL = $(prte__v_COPYALL_$V)
+prte__v_COPYALL_ = $(prte__v_COPYALL_$AM_DEFAULT_VERBOSITY)
+prte__v_COPYALL_0 = @echo "  COPY tree $@";
+
+PRTE_V_SPHINX_COPYRST = $(prte__v_SPHINX_COPYRST_$V)
+prte__v_SPHINX_COPYRST_ = $(prte__v_SPHINX_COPYRST_$AM_DEFAULT_VERBOSITY)
+prte__v_SPHINX_COPYRST_0 = @echo "  COPY RST source files";

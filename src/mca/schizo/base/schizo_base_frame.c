@@ -3,7 +3,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -590,7 +590,7 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                         return ret;
                     }
 #else
-                    pmix_show_help("help-prte-rmaps-base.txt", "non-supporting-pmix", true,
+                    pmix_show_help("help-schizo-base.txt", "non-supporting-pmix", true,
                                    "display", cptr);
                     PMIX_ARGV_FREE_COMPAT(targv);
                     return PRTE_ERR_FATAL;
@@ -668,7 +668,7 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
 #ifdef PMIX_DISPLAY_PROCESSORS
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_PROCESSORS, ptr, PMIX_STRING);
 #else
-                pmix_show_help("help-prte-rmaps-base.txt", "non-supporting-pmix", true,
+                pmix_show_help("help-schizo-base.txt", "non-supporting-pmix", true,
                                "display", targv[idx]);
                 PMIX_ARGV_FREE_COMPAT(targv);
                 return PRTE_ERR_FATAL;

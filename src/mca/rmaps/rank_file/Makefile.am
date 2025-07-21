@@ -16,13 +16,16 @@
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
+# Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
 #
 # $HEADER$
 #
+
+EXTRA_DIST = \
+        help-rmaps_rank_file.txt
 
 AM_LFLAGS = -Pprte_rmaps_rank_file_
 LEX_OUTPUT_ROOT = lex.prte_rmaps_rank_file_

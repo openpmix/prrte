@@ -1,0 +1,71 @@
+# -*- text -*-
+#
+# Copyright (c) 2025      Nanook Consulting  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+# This is the US/English general help file for PRTE's hwloc support.
+#
+[mbind failure]
+
+PRRTE failed to bind internal memory to a specific NUMA node.  This
+message will only be reported at most once per process.
+
+   Local host: %s
+   PID:        %d
+   File:       %s:%d
+   Message:    %s
+   Severity:   %s
+#
+[invalid binding_policy]
+
+The specified %s policy is not recognized:
+
+   Policy: %s
+
+Please check for a typo or ensure that the option is a supported one.
+#
+[obj-idx-failed]
+
+PRRTE failed to find a cache of a specified type.  This is a highly
+unusual error; it may indicate a system configuration error.  This
+additional information may be of help:
+
+   Message:     %s
+#
+[bad-processor-type]
+
+The default CPU list contains an invalid modifier:
+
+   Default CPU list:  %s
+   Modifier:  %s
+
+The modifier should indicate the type of CPU being used in the list —
+the only valid values are HWTCPUS (for use of hwthreads as independent
+CPUs) or CORECPUS (for use of cores as independent CPUs). Please
+correct the input.
+#
+[unrecognized-modifier]
+
+The binding request contains an unrecognized modifier:
+
+   Request: %s
+
+Please check your request and try again.
+#
+[bind-upwards]
+
+Binding is performed to the first available specified object type
+within the object where the process was mapped. In other words,
+binding can only be done to the mapped object or to a resource located
+beneath that object.
+
+The specified binding lies above the mapping object type:
+
+   Mapping level: %s
+   Binding level: %s
+
+Please correct the map/bind directives and try again.

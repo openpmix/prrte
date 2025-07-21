@@ -329,6 +329,11 @@ int main(int argc, char *argv[])
         prte_leave_session_attached = true;
     }
 
+    // check for hetero nodes
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_HETERO_NODES)) {
+        prte_hetero_nodes = true;
+    }
+
     /* if prte_daemon_debug is set, let someone know we are alive right
      * away just in case we have a problem along the way
      */
@@ -524,9 +529,9 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* send the information to the orted report-back point - this function
+    /* send the information to the prted report-back point - this function
      * will process the data, but also counts the number of
-     * orteds that reported back so the launch procedure can continue.
+     * prteds that reported back so the launch procedure can continue.
      * We need to do this at the last possible second as the HNP
      * can turn right around and begin issuing orders to us
      */
@@ -597,9 +602,9 @@ int main(int argc, char *argv[])
         goto DONE;
     }
 
-    /* if we are rank=1, then send our topology back - otherwise, prte
-     * will request it if necessary */
-    if (1 == PRTE_PROC_MY_NAME->rank) {
+    /* if we are rank=1 or designated as having hetero node, then send our
+     * topology back - otherwise, prte will request it if necessary */
+    if (1 == PRTE_PROC_MY_NAME->rank || prte_hetero_nodes) {
         pmix_data_buffer_t data;
         pmix_topology_t ptopo;
         bool compressed;

@@ -90,8 +90,6 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
     pmix_cli_item_t *opt, *opt2;
     pmix_cli_result_t results;
     char *tval;
-    bool fwd;
-    pmix_value_t val;
     prte_info_item_t *iptr;
     pmix_envar_t envt;
     PRTE_HIDE_UNUSED_PARAMS(app_env);
@@ -130,23 +128,6 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
     app = PMIX_NEW(prte_pmix_app_t);
     app->app.argv = PMIX_ARGV_COPY_COMPAT(results.tail);
     // app->app.cmd is setup below.
-
-    /* see if we are to forward the environment */
-    fwd = prte_fwd_environment;
-    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_FWD_ENVIRON);
-    if (NULL != opt) {
-        /* cmd line trumps the MCA param */
-        if (NULL != opt->values) {
-            val.type = PMIX_STRING;
-            val.data.string = opt->values[0];
-            fwd = PMIX_CHECK_TRUE(&val);
-        } else {
-            fwd = true;
-        }
-    }
-    if (fwd) {
-        app->app.env = PMIX_ARGV_COPY_COMPAT(environ);
-    }
 
     /* get the cwd - we may need it in several places */
     if (PRTE_SUCCESS != (rc = pmix_getcwd(cwd, sizeof(cwd)))) {
@@ -375,7 +356,6 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
                 ++value;
                 envt.envar = param;
                 envt.value = strdup(value);
-                pmix_output(0, "SET %s=%s", envt.envar, envt.value);
                 PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_ENVAR, &envt, PMIX_ENVAR);
                 PMIX_ENVAR_DESTRUCT(&envt);
             } else {

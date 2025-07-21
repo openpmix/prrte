@@ -12,6 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2025      Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -24,8 +25,3 @@
 While trying to determine what resources are available, LSF failed when
 queried for a list of available nodes. This may indicate a problem with
 LSF or your cluster.
-
-[no-nodes-avail]
-While trying to determine what resources are available, LSF returned
-a list of available nodes from which we were unable to extract anything
-usable. This may indicate a problem with LSF or your cluster.

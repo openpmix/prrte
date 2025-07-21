@@ -1,0 +1,27 @@
+# -*- text -*-
+#
+# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2022      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2022      IBM Corporation.  All rights reserved.
+# Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+#
+[version]
+%s (%s) %s
+
+%s
+#
+[usage]
+%s (%s) %s
+
+Usage: %s [OPTION]...
+
+See the mpirun(1) man page or HTML help for a detailed list of command
+line options that are available.
+
+%s

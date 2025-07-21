@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -294,6 +294,8 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
     }
 
     cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
+    // transfer the source
+    memcpy(&cd->proc, &source, sizeof(pmix_proc_t));
 
     /* unpack the #infos that were provided */
     cnt = 1;
@@ -328,7 +330,7 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PMIx_Error_string(code), source.nspace,
                         PMIx_Data_range_string(range));
 
-    ret = PMIx_Notify_event(code, &source, range, cd->info, cd->ninfo, _notify_release, cd);
+    ret = PMIx_Notify_event(code, &cd->proc, range, cd->info, cd->ninfo, _notify_release, cd);
     if (PMIX_SUCCESS != ret) {
         if (PMIX_OPERATION_SUCCEEDED != ret) {
             PMIX_ERROR_LOG(ret);
@@ -506,7 +508,7 @@ static void _toolconn(int sd, short args, void *cbdata)
     size_t n;
     pmix_data_buffer_t *buf;
     prte_plm_cmd_flag_t command = PRTE_PLM_ALLOC_JOBID_CMD;
-    pmix_status_t xrc;
+    pmix_status_t xrc = PMIX_SUCCESS, trc;
     bool primary = false;
     bool nspace_given = false;
     bool rank_given = false;
@@ -526,22 +528,14 @@ static void _toolconn(int sd, short args, void *cbdata)
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_VERSION_INFO)) {
                 /* we ignore this for now */
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_USERID)) {
-                PMIX_VALUE_GET_NUMBER(xrc, &cd->info[n].value, cd->uid, uid_t);
-                if (PMIX_SUCCESS != xrc) {
-                    if (NULL != cd->toolcbfunc) {
-                        cd->toolcbfunc(xrc, NULL, cd->cbdata);
-                    }
-                    PMIX_RELEASE(cd);
-                    return;
+                PMIX_VALUE_GET_NUMBER(trc, &cd->info[n].value, cd->uid, uid_t);
+                if (PMIX_SUCCESS == xrc && PMIX_SUCCESS != trc) {
+                    xrc = trc;
                 }
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_GRPID)) {
-                PMIX_VALUE_GET_NUMBER(xrc, &cd->info[n].value, cd->gid, gid_t);
-                if (PMIX_SUCCESS != xrc) {
-                    if (NULL != cd->toolcbfunc) {
-                        cd->toolcbfunc(xrc, NULL, cd->cbdata);
-                    }
-                    PMIX_RELEASE(cd);
-                    return;
+                PMIX_VALUE_GET_NUMBER(trc, &cd->info[n].value, cd->gid, gid_t);
+                if (PMIX_SUCCESS == xrc && PMIX_SUCCESS != trc) {
+                    xrc = trc;
                 }
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_NSPACE)) {
                 PMIX_LOAD_NSPACE(cd->target.nspace, cd->info[n].value.data.string);
@@ -560,16 +554,20 @@ static void _toolconn(int sd, short args, void *cbdata)
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PRIMARY_SERVER)) {
                 primary = PMIX_INFO_TRUE(&cd->info[n]);
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PROC_PID)) {
-                PMIX_VALUE_GET_NUMBER(xrc, &cd->info[n].value, cd->pid, pid_t);
-                if (PMIX_SUCCESS != xrc) {
-                    if (NULL != cd->toolcbfunc) {
-                        cd->toolcbfunc(xrc, NULL, cd->cbdata);
-                    }
-                    PMIX_RELEASE(cd);
-                    return;
+                PMIX_VALUE_GET_NUMBER(trc, &cd->info[n].value, cd->pid, pid_t);
+                if (PMIX_SUCCESS == xrc && PMIX_SUCCESS != trc) {
+                    xrc = trc;
                 }
             }
         }
+    }
+
+    if (PMIX_SUCCESS != xrc) {
+        if (NULL != cd->toolcbfunc) {
+            cd->toolcbfunc(xrc, &cd->target, cd->cbdata);
+        }
+        PMIX_RELEASE(cd);
+        return;
     }
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,

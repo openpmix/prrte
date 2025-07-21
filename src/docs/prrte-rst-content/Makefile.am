@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
+# Copyright (c) 2023-2025 Jeffrey M. Squyres.  All rights reserved.
 # Copyright (c) 2023-2025 Nanook Consulting  All rights reserved.
 #
 # $COPYRIGHT$
@@ -33,6 +33,7 @@ dist_rst_DATA = \
     cli-dvm.rst \
     cli-forward-signals.rst \
     cli-general.rst \
+    cli-hetero-nodes.rst \
     cli-launcher-hostfile.rst \
     cli-leave-session-attached.rst \
     cli-map-by.rst \

@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -160,9 +160,6 @@ struct timeval prte_child_time_to_exit = {0};
 
 /* length of stat history to keep */
 int prte_stat_history_size = -1;
-
-/* envars to forward */
-char **prte_forwarded_envars = NULL;
 
 /* maximum size of virtual machine - used to subdivide allocation */
 int prte_max_vm_size = -1;
@@ -908,11 +905,11 @@ static void tdes(prte_topology_t *t)
 {
     hwloc_obj_t root;
 
-    root = hwloc_get_root_obj(t->topo);
-    if (NULL != root->userdata) {
-        PMIX_RELEASE(root->userdata);
-    }
     if (NULL != t->topo) {
+        root = hwloc_get_root_obj(t->topo);
+        if (NULL != root->userdata) {
+            PMIX_RELEASE(root->userdata);
+        }
         hwloc_topology_destroy(t->topo);
     }
     if (NULL != t->sig) {
