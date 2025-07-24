@@ -18,7 +18,7 @@
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -700,13 +700,16 @@ CLEANUP:
 static char *get_prted_comm_cmd_str(int command)
 {
     switch (command) {
+    case PRTE_DAEMON_CONTACT_QUERY_CMD:
+        return strdup("PRTE_DAEMON_CONTACT_QUERY_CMD");
     case PRTE_DAEMON_KILL_LOCAL_PROCS:
         return strdup("PRTE_DAEMON_KILL_LOCAL_PROCS");
     case PRTE_DAEMON_SIGNAL_LOCAL_PROCS:
         return strdup("PRTE_DAEMON_SIGNAL_LOCAL_PROCS");
     case PRTE_DAEMON_ADD_LOCAL_PROCS:
         return strdup("PRTE_DAEMON_ADD_LOCAL_PROCS");
-
+    case PRTE_DAEMON_HEARTBEAT_CMD:
+        return strdup("PRTE_DAEMON_HEARTBEAT_CMD");
     case PRTE_DAEMON_EXIT_CMD:
         return strdup("PRTE_DAEMON_EXIT_CMD");
     case PRTE_DAEMON_PROCESS_AND_RELAY_CMD:
@@ -714,8 +717,37 @@ static char *get_prted_comm_cmd_str(int command)
     case PRTE_DAEMON_NULL_CMD:
         return strdup("NULL");
 
+    case PRTE_DAEMON_REPORT_JOB_INFO_CMD:
+        return strdup("PRTE_DAEMON_REPORT_JOB_INFO_CMD");
+    case PRTE_DAEMON_REPORT_NODE_INFO_CMD:
+        return strdup("PRTE_DAEMON_REPORT_NODE_INFO_CMD");
+    case PRTE_DAEMON_REPORT_PROC_INFO_CMD:
+        return strdup("PRTE_DAEMON_REPORT_PROC_INFO_CMD");
+    case PRTE_DAEMON_SPAWN_JOB_CMD:
+        return strdup("PRTE_DAEMON_SPAWN_JOB_CMD");
+    case PRTE_DAEMON_TERMINATE_JOB_CMD:
+        return strdup("PRTE_DAEMON_TERMINATE_JOB_CMD");
     case PRTE_DAEMON_HALT_VM_CMD:
         return strdup("PRTE_DAEMON_HALT_VM_CMD");
+    case PRTE_DAEMON_HALT_DVM_CMD:
+        return strdup("PRTE_DAEMON_HALT_DVM_CMD");
+    case PRTE_DAEMON_REPORT_JOB_COMPLETE:
+        return strdup("PRTE_DAEMON_REPORT_JOB_COMPLETE");
+    case PRTE_DAEMON_DEFINE_PSET:
+        return strdup("PRTE_DAEMON_DEFINE_PSET");
+
+    case PRTE_DAEMON_TOP_CMD:
+        return strdup("PRTE_DAEMON_TOP_CMD");
+
+    case PRTE_DAEMON_NAME_REQ_CMD:
+        return strdup("PRTE_DAEMON_NAME_REQ_CMD");
+    case PRTE_DAEMON_CHECKIN_CMD:
+        return strdup("PRTE_DAEMON_CHECKIN_CMD");
+    case PRTE_TOOL_CHECKIN_CMD:
+        return strdup("PRTE_TOOL_CHECKIN_CMD");
+
+    case PRTE_DAEMON_PROCESS_CMD:
+        return strdup("PRTE_DAEMON_PROCESS_CMD");
 
     case PRTE_DAEMON_ABORT_PROCS_CALLED:
         return strdup("PRTE_DAEMON_ABORT_PROCS_CALLED");
@@ -728,6 +760,9 @@ static char *get_prted_comm_cmd_str(int command)
 
     case PRTE_DAEMON_GET_MEMPROFILE:
         return strdup("PRTE_DAEMON_GET_MEMPROFILE");
+
+    case PRTE_DAEMON_REPORT_TOPOLOGY_CMD:
+        return strdup("PRTE_DAEMON_REPORT_TOPOLOGY_CMD");
 
     case PRTE_DAEMON_DVM_CLEANUP_JOB_CMD:
         return strdup("PRTE_DAEMON_DVM_CLEANUP_JOB_CMD");
