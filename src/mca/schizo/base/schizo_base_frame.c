@@ -413,6 +413,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     char *displayquals[] = {
         PRTE_CLI_PARSEABLE,
         PRTE_CLI_PARSABLE,
+        PRTE_CLI_PHYSICAL_CPUS,
         NULL
     };
 
@@ -568,8 +569,9 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
 int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
 {
     int n, idx;
+    size_t m;
     pmix_status_t ret;
-    char **targv, *ptr, *cptr;
+    char **targv, *ptr, *cptr, **quals;
 
     for (n=0; NULL != opt->values[n]; n++) {
         targv = PMIX_ARGV_SPLIT_COMPAT(opt->values[n], ',');
@@ -579,27 +581,48 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
             if (NULL != cptr) {
                 *cptr = '\0';
                 ++cptr;
-                /* we only support one qualifier at present */
-                if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_PARSEABLE) ||
-                    PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_PARSABLE)) {
-#ifdef PMIX_DISPLAY_PARSEABLE_OUTPUT
-                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL);
-                    if (PMIX_SUCCESS != ret) {
-                        PMIX_ERROR_LOG(ret);
+                quals = PMIX_ARGV_SPLIT_COMPAT(cptr, ':');
+                /* check qualifiers */
+                for (m=0; NULL != quals[m]; m++) {
+                    if (PMIX_CHECK_CLI_OPTION(quals[m], PRTE_CLI_PARSEABLE) ||
+                        PMIX_CHECK_CLI_OPTION(quals[m], PRTE_CLI_PARSABLE)) {
+    #ifdef PMIX_DISPLAY_PARSEABLE_OUTPUT
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL);
+                        if (PMIX_SUCCESS != ret) {
+                            PMIX_ERROR_LOG(ret);
+                            PMIX_ARGV_FREE_COMPAT(quals);
+                            PMIX_ARGV_FREE_COMPAT(targv);
+                            return ret;
+                        }
+    #else
+                        pmix_show_help("help-schizo-base.txt", "non-supporting-pmix", true,
+                                       "display", quals[m]);
                         PMIX_ARGV_FREE_COMPAT(targv);
-                        return ret;
+                        PMIX_ARGV_FREE_COMPAT(quals);
+                        return PRTE_ERR_FATAL;
+    #endif
+                    } else if (PMIX_CHECK_CLI_OPTION(quals[m], PRTE_CLI_PHYSICAL_CPUS)) {
+    #ifdef PMIX_REPORT_PHYSICAL_CPUS
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
+                        if (PMIX_SUCCESS != ret) {
+                            PMIX_ERROR_LOG(ret);
+                            PMIX_ARGV_FREE_COMPAT(quals);
+                            PMIX_ARGV_FREE_COMPAT(targv);
+                            return ret;
+                        }
+    #else
+                        pmix_show_help("help-schizo-base.txt", "non-supporting-pmix", true,
+                                       "display", quals[m]);
+                        PMIX_ARGV_FREE_COMPAT(targv);
+                        PMIX_ARGV_FREE_COMPAT(quals);
+                        return PRTE_ERR_FATAL;
+    #endif
+                    } else {
+                        pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-qualifier", true,
+                                       "display", cptr, "PARSEABLE,PARSABLE");
+                        PMIX_ARGV_FREE_COMPAT(targv);
+                        return PRTE_ERR_FATAL;
                     }
-#else
-                    pmix_show_help("help-schizo-base.txt", "non-supporting-pmix", true,
-                                   "display", cptr);
-                    PMIX_ARGV_FREE_COMPAT(targv);
-                    return PRTE_ERR_FATAL;
-#endif
-                } else {
-                    pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-qualifier", true,
-                                   "display", cptr, "PARSEABLE,PARSABLE");
-                    PMIX_ARGV_FREE_COMPAT(targv);
-                    return PRTE_ERR_FATAL;
                 }
             }
 

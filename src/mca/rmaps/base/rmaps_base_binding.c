@@ -151,7 +151,10 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     hwloc_bitmap_list_asprintf(&proc->cpuset, tgtcpus); // bind to the entire target object
     if (4 < pmix_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
         char *tmp1;
-        tmp1 = prte_hwloc_base_cset2str(trg_obj->cpuset, options->use_hwthreads, node->topology->topo);
+        bool physical;
+        physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
+        tmp1 = prte_hwloc_base_cset2str(trg_obj->cpuset, options->use_hwthreads,
+                                        physical, node->topology->topo);
         pmix_output(prte_rmaps_base_framework.framework_output, "%s BOUND PROC %s[%s] TO %s",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name),
                     node->name, tmp1);
