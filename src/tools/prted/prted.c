@@ -379,6 +379,8 @@ int main(int argc, char *argv[])
         PRTE_ERROR_LOG(ret);
         return ret;
     }
+    // get the daemon job object
+    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
 
     /* bind ourselves if so directed */
     if (NULL != prte_daemon_cores) {
@@ -386,11 +388,13 @@ int main(int argc, char *argv[])
         hwloc_obj_t pu;
         hwloc_cpuset_t ours, res;
         int core;
+        bool physical;
 
         /* could be a collection of comma-delimited ranges, so
          * use our handy utility to parse it
          */
         pmix_util_parse_range_options(prte_daemon_cores, &cores);
+        physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
         if (NULL != cores) {
             ours = hwloc_bitmap_alloc();
             hwloc_bitmap_zero(ours);
@@ -413,7 +417,7 @@ int main(int argc, char *argv[])
             if (!hwloc_bitmap_iszero(ours)) {
                 (void) hwloc_set_cpubind(prte_hwloc_topology, ours, 0);
                 if (prte_debug_daemons_flag) {
-                    tmp = prte_hwloc_base_cset2str(ours, false, prte_hwloc_topology);
+                    tmp = prte_hwloc_base_cset2str(ours, false, physical, prte_hwloc_topology);
                     pmix_output(0, "Daemon %s is bound to cores %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), tmp);
                     free(tmp);

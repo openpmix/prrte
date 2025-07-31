@@ -272,6 +272,12 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
             prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS,
                                PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 
+            /***   USE PHYSICAL CPUS  ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_REPORT_PHYSICAL_CPUS)) {
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS,
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
+
             /***   DISPLAY TOPOLOGY   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_TOPOLOGY)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_TOPO,

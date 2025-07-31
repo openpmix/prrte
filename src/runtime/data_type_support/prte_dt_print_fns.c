@@ -334,6 +334,7 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     int npus;
     char *cores = NULL;
     char xmlsp = ' ';
+    bool physical;
 
     /* set default result */
     *output = NULL;
@@ -344,6 +345,8 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     } else {
         use_hwthread_cpus = false;
     }
+
+    physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
         if (NULL != src->cpuset && NULL != src->node->topology &&
@@ -386,7 +389,7 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
             && NULL != src->node->topology->topo) {
             mycpus = hwloc_bitmap_alloc();
             hwloc_bitmap_list_sscanf(mycpus, src->cpuset);
-            str = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus,
+            str = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, physical,
                                            src->node->topology->topo);
             if (NULL == str) {
                 str = strdup("UNBOUND");
@@ -419,7 +422,8 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     if (NULL != src->cpuset) {
         mycpus = hwloc_bitmap_alloc();
         hwloc_bitmap_list_sscanf(mycpus, src->cpuset);
-        tmp2 = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, src->node->topology->topo);
+        tmp2 = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus,
+                                        physical, src->node->topology->topo);
         hwloc_bitmap_free(mycpus);
     } else {
         tmp2 = strdup("UNBOUND");

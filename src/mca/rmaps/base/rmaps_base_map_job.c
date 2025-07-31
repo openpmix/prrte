@@ -1028,7 +1028,10 @@ void prte_rmaps_base_report_bindings(prte_job_t *jdata,
     char **cache = NULL;
     char *out, *tmp;
     pmix_proc_t source;
+    bool physical;
 
+    // see if we are to report physical (vs logical) cpu IDs
+    physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
     for (n=0; n < jdata->procs->size; n++) {
         proc = (prte_proc_t*)pmix_pointer_array_get_item(jdata->procs, n);
         if (NULL == proc) {
@@ -1041,6 +1044,7 @@ void prte_rmaps_base_report_bindings(prte_job_t *jdata,
             hwloc_bitmap_list_sscanf(prte_rmaps_base.available, proc->cpuset);
             tmp = prte_hwloc_base_cset2str(prte_rmaps_base.available,
                                            options->use_hwthreads,
+                                           physical,
                                            proc->node->topology->topo);
             pmix_asprintf(&out, "Proc %s Node %s bound to %s",
                           PRTE_NAME_PRINT(&proc->name),
@@ -1050,12 +1054,14 @@ void prte_rmaps_base_report_bindings(prte_job_t *jdata,
         PMIX_ARGV_APPEND_NOSIZE_COMPAT(&cache, out);
         free(out);
     }
+
     if (NULL == cache) {
         out = strdup("Error: job has no procs");
     } else {
         /* add a blank line with \n on it so IOF will output the last line */
         PMIX_ARGV_APPEND_NOSIZE_COMPAT(&cache, "");
         out = PMIX_ARGV_JOIN_COMPAT(cache, '\n');
+        PMIX_ARGV_FREE_COMPAT(cache);
     }
     PMIX_LOAD_PROCID(&source, jdata->nspace, PMIX_RANK_WILDCARD);
     prte_iof_base_output(&source, PMIX_FWD_STDOUT_CHANNEL, out);

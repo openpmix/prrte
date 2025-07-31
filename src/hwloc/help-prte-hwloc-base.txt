@@ -69,3 +69,17 @@ The specified binding lies above the mapping object type:
    Binding level: %s
 
 Please correct the map/bind directives and try again.
+#
+[pu-not-found]
+Construction of the binding output string failed due to inabilty
+to obtain a processor unit object:
+
+  PU number: %u
+
+There will be no impact to your application, so we will continue
+but will not be able to output the binding locations.
+#
+[too-many-sites]
+At least one process in your application is bound to too many sites
+for us to report in a string. There will be no impact to your application
+so we will continue but will not be able to output the binding locations.

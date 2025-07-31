@@ -1538,7 +1538,11 @@ colon (":") and any combination of one or more of the following
   easily parsed by machines. Note that "PARSABLE" is also accepted as
   a typical spelling for the qualifier.
 
-Provided qualifiers will apply to *all* of the display directives.
+* "PHYSICAL" directs that the output of the "BINDINGS" option be displayed
+  using physical (instead of logical) CPU IDs.
+
+Provided qualifiers will apply to *all* of the display directives unless
+noted.
 #
 [do-not-launch]
 

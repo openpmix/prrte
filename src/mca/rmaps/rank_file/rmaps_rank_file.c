@@ -120,6 +120,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     char *cpu_bitmap;
     char *avail_bitmap = NULL;
     char *overlap_bitmap = NULL;
+    bool physical;
 
     /* only handle initial launch of rf job */
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
@@ -168,6 +169,8 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                             PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_BAD_PARAM;
     }
+
+    physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
 
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rank_file: mapping job %s", PRTE_JOBID_PRINT(jdata->nspace));
@@ -366,7 +369,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                 rc = prte_hwloc_base_cpu_list_parse(slots, node->topology->topo, options->use_hwthreads, proc_bitmap);
                 if (PRTE_ERR_NOT_FOUND == rc) {
                     char *tmp = prte_hwloc_base_cset2str(hwloc_topology_get_allowed_cpuset(node->topology->topo),
-                                                         false, node->topology->topo);
+                                                         false, physical, node->topology->topo);
                     pmix_show_help("help-rmaps_rank_file.txt", "missing-cpu", true,
                                    prte_tool_basename, slots, tmp);
                     free(tmp);
