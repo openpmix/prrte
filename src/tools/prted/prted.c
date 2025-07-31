@@ -352,13 +352,16 @@ int main(int argc, char *argv[])
         prte_state_base.parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);
         close(wait_pipe[0]);
+    } else {
+        // the daemon_init_callback fn already setsid, so don't
+        // do it twice!
+    #if defined(HAVE_SETSID)
+        /* see if we were directed to separate from current session */
+        if (pmix_cmd_line_is_taken(&results, PRTE_CLI_SET_SID)) {
+            setsid();
+        }
+    #endif
     }
-#if defined(HAVE_SETSID)
-    /* see if we were directed to separate from current session */
-    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_SET_SID)) {
-        setsid();
-    }
-#endif
 
     /* ensure we silence any compression warnings */
     PMIX_SETENV_COMPAT("PMIX_MCA_compress_base_silence_warning", "1", true, &environ);
