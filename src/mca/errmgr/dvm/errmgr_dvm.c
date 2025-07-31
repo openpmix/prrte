@@ -310,10 +310,12 @@ static void proc_errors(int fd, short args, void *cbdata)
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
             /* record the first one to fail */
             if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
-                /* output an error message so the user knows what happened */
-                pmix_show_help("help-errmgr-base.txt", "node-died", true,
-                               PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_process_info.nodename,
-                               PRTE_NAME_PRINT(proc), pptr->node->name);
+                if (PRTE_PROC_STATE_FAILED_TO_START != state) {
+                    /* output an error message so the user knows what happened */
+                    pmix_show_help("help-errmgr-base.txt", "node-died", true,
+                                   PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_process_info.nodename,
+                                   PRTE_NAME_PRINT(proc), pptr->node->name);
+                }
                 /* mark the daemon job as failed */
                 jdata->state = PRTE_JOB_STATE_COMM_FAILED;
                 /* point to the lowest rank to cause the problem */

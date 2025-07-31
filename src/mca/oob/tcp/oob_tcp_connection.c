@@ -411,8 +411,8 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
          * not be connected to the HNP at this point */
         pmix_output(prte_clean_output,
                     "------------------------------------------------------------\n"
-                    "A process or daemon was unable to complete a TCP connection\n"
-                    "to another process:\n"
+                    "A daemon was unable to complete a TCP connection\n"
+                    "to another daemon:\n"
                     "  Local host:    %s\n"
                     "  Remote host:   %s\n"
                     "This is usually caused by a firewall on the remote host. Please\n"
@@ -1067,6 +1067,13 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
         return;
     }
 
+    /* if we were connected, then inform the component-level that we have lost a connection so
+     * it can decide what to do about it.
+     */
+    if (MCA_OOB_TCP_CONNECTED == peer->state) {
+        PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_mca_oob_tcp_component_lost_connection);
+    }
+
     peer->state = MCA_OOB_TCP_CLOSED;
     if (NULL != peer->active_addr) {
         peer->active_addr->state = MCA_OOB_TCP_CLOSED;
@@ -1081,11 +1088,6 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
         prte_event_del(&peer->send_event);
         peer->send_ev_active = false;
     }
-
-    /* inform the component-level that we have lost a connection so
-     * it can decide what to do about it.
-     */
-    PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_mca_oob_tcp_component_lost_connection);
 
     if (prte_prteds_term_ordered || prte_finalizing || prte_abnormal_term_ordered) {
         /* nothing more to do */
