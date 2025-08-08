@@ -427,11 +427,11 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                 }
             }
             pset->num_members = pmix_list_get_size(&members);
-            if (0 < (i = pmix_list_get_size(&members))) {
-                PMIX_DATA_ARRAY_CONSTRUCT(&darray, i, PMIX_PROC);
+            if (0 < pset->num_members) {
+                PMIX_DATA_ARRAY_CONSTRUCT(&darray, pset->num_members, PMIX_PROC);
                 procptr = (pmix_proc_t*)darray.array;
                 k = 0;
-                pset->members = (pmix_proc_t *)malloc(i * sizeof (pmix_proc_t));
+                pset->members = (pmix_proc_t *)malloc(pset->num_members * sizeof (pmix_proc_t));
                 PMIX_LIST_FOREACH(nm, &members, prte_namelist_t) {
                     PMIX_LOAD_PROCID(&procptr[k], nm->name.nspace, nm->name.rank);
                     PMIX_LOAD_PROCID(&pset->members[k], nm->name.nspace, nm->name.rank);
@@ -439,6 +439,11 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                 }
                 PMIX_INFO_LIST_ADD(ret, iarray, PMIX_PSET_MEMBERS, &darray, PMIX_DATA_ARRAY);
                 PMIX_DATA_ARRAY_DESTRUCT(&darray);
+                // let the PMIx server know
+                ret = PMIx_server_define_process_set(pset->members, pset->num_members, pset->name);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                }
             }
             PMIX_LIST_DESTRUCT(&members);
         }
