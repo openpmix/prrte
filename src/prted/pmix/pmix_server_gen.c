@@ -84,8 +84,32 @@ static void _client_conn(int sd, short args, void *cbdata)
 pmix_status_t pmix_server_client_connected_fn(const pmix_proc_t *proc, void *server_object,
                                               pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s Client connected received for %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PMIX_NAME_PRINT(proc));
+
     /* need to thread-shift this request as we are going
      * to access our global list of registered events */
+    PRTE_SERVER_PMIX_THREADSHIFT(proc, server_object, PRTE_SUCCESS,
+                          NULL, NULL, 0, _client_conn,
+                          cbfunc, cbdata);
+    return PRTE_SUCCESS;
+}
+
+pmix_status_t pmix_server_client_connected2_fn(const pmix_proc_t *proc,
+                                               void *server_object,
+                                               pmix_info_t *info, size_t ninfo,
+                                               pmix_op_cbfunc_t cbfunc,
+                                               void *cbdata)
+{
+    PRTE_HIDE_UNUSED_PARAMS(info, ninfo);
+
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s Client connected2 received for %s with %d info",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PMIX_NAME_PRINT(proc), (int)ninfo);
+
     PRTE_SERVER_PMIX_THREADSHIFT(proc, server_object, PRTE_SUCCESS,
                           NULL, NULL, 0, _client_conn,
                           cbfunc, cbdata);
