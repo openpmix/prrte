@@ -219,6 +219,11 @@ PRTE_EXPORT extern pmix_status_t pmix_server_client_connected_fn(const pmix_proc
                                                                  void *server_object,
                                                                  pmix_op_cbfunc_t cbfunc,
                                                                  void *cbdata);
+PRTE_EXPORT extern pmix_status_t pmix_server_client_connected2_fn(const pmix_proc_t *proc,
+                                                                  void *server_object,
+                                                                  pmix_info_t *info, size_t ninfo,
+                                                                  pmix_op_cbfunc_t cbfunc,
+                                                                  void *cbdata);
 PRTE_EXPORT extern pmix_status_t pmix_server_client_finalized_fn(const pmix_proc_t *proc,
                                                                  void *server_object,
                                                                  pmix_op_cbfunc_t cbfunc,
