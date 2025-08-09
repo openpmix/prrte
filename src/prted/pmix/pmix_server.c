@@ -120,6 +120,7 @@ static pmix_server_module_t pmix_server = {
     .push_stdin = pmix_server_stdin_fn,
     .group = pmix_server_group_fn,
     .allocate = pmix_server_alloc_fn,
+    .client_connected2 = pmix_server_client_connected2_fn,
 #ifdef PMIX_SESSION_INSTANTIATE
     .session_control = pmix_server_session_ctrl_fn
 #endif
