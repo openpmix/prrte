@@ -124,16 +124,15 @@ static bool check_exist(char *path)
     return false;
 }
 
-static void print_error(unsigned major,
-                        unsigned minor,
-                        unsigned release)
+static void print_error(unsigned major, unsigned minor, unsigned release,
+                        unsigned reqmajor, unsigned reqminor, unsigned reqrelease)
 {
     fprintf(stderr, "************************************************\n");
     fprintf(stderr, "We have detected that the runtime version\n");
-    fprintf(stderr, "of the PMIx library we were given is binary\n");
-    fprintf(stderr, "incompatible with the version we were built against:\n\n");
-    fprintf(stderr, "    Runtime: 0x%x%02x%02x\n", major, minor, release);
-    fprintf(stderr, "    Build:   0x%0x\n\n", PMIX_NUMERIC_VERSION);
+    fprintf(stderr, "of the PMIx library we were given does not\n");
+    fprintf(stderr, "meet the minimum version requirement:\n\n");
+    fprintf(stderr, "    Runtime:  0x%x%02x%02x\n", major, minor, release);
+    fprintf(stderr, "    Minimum:  0x%x%02x%02x\n\n", reqmajor, reqminor, reqrelease);
     fprintf(stderr, "Please update your LD_LIBRARY_PATH to point\n");
     fprintf(stderr, "us to the same PMIx version used to build PRRTE.\n");
     fprintf(stderr, "************************************************\n");
@@ -147,6 +146,7 @@ int prte_init_minimum(void)
     const char *rvers;
     char token[100];
     unsigned int major, minor, release;
+    unsigned int reqmajor, reqminor, reqrelease;
 
     if (min_initialized) {
         return PRTE_SUCCESS;
@@ -159,19 +159,39 @@ int prte_init_minimum(void)
      * cross version operations from inside of PRRTE.
      */
     rvers = PMIx_Get_version();
-    ret = sscanf(rvers, "%s %u.%u.%u", token, &major, &minor, &release);
+    ret = sscanf(rvers, "%s %u.%u.%u",
+                 token, &major, &minor, &release);
+    ret = sscanf(PRTE_PMIX_MIN_VERSION_STRING, "%u.%u.%u",
+                 &reqmajor, &reqminor, &reqrelease);
 
-    /* check the version triplet - we know that version
-     * 5 and above are not runtime compatible with version
-     * 4 and below. Since PRRTE has a minimum PMIx requirement
-     * in the v4.x series, we only need to check v4 vs 5
-     * and above */
-    if ((PMIX_VERSION_MAJOR > 4 && 4 == major) ||
-        (PMIX_VERSION_MAJOR == 4 && 5 <= major)) {
-        print_error(major, minor, release);
+    /* check the version triplet agains the min values
+     * specified in VERSION
+     */
+    if (major > reqmajor) {
+        // we are good - nothing more to check
+        goto proceed;
+    } else if (major < reqmajor) {
+        print_error(major, minor, release,
+                    reqmajor, reqminor, reqrelease);
+        return PRTE_ERR_SILENT;
+    }
+    // checking within the major release series
+    if (minor > reqminor) {
+        // we are good - nothing more to check
+        goto proceed;
+    } else if (minor < reqminor) {
+        print_error(major, minor, release,
+                    reqmajor, reqminor, reqrelease);
+        return PRTE_ERR_SILENT;
+    }
+    // checking within the minor release series
+    if (release < reqrelease) {
+        print_error(major, minor, release,
+                    reqmajor, reqminor, reqrelease);
         return PRTE_ERR_SILENT;
     }
 
+proceed:
     /* Protect against the envar version of the Slurm
      * custom args MCA param. This is an unfortunate
      * hack that hopefully will eventually go away.
