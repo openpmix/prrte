@@ -18,7 +18,7 @@
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -169,7 +169,8 @@ int prte_init_minimum(void)
      * in the v4.x series, we only need to check v4 vs 5
      * and above */
     if ((PMIX_VERSION_MAJOR > 4 && 4 == major) ||
-        (PMIX_VERSION_MAJOR == 4 && 5 <= major)) {
+        (PMIX_VERSION_MAJOR == 4 && 5 <= major) ||
+        6 <= major) {
         print_error(major, minor, release);
         return PRTE_ERR_SILENT;
     }
