@@ -721,6 +721,15 @@ sub export_version {
     $m4 .= "m4_define([PRTE_${name}_NUMERIC_MIN_VERSION], [$hex])\n";
 }
 
+sub export_max_version {
+    my ($name,$version) = @_;
+    $version =~ s/[^a-zA-Z0-9,.]//g;
+    my @version_splits = split(/\./,$version);
+    my $hex = sprintf("0x%04x%02x%02x", $version_splits[0], $version_splits[1], $version_splits[2]);
+    $m4 .= "m4_define([PRTE_${name}_MAX_VERSION], [$version])\n";
+    $m4 .= "m4_define([PRTE_${name}_NUMERIC_MAX_VERSION], [$hex])\n";
+}
+
 sub get_and_define_min_versions() {
 
     open(IN, "VERSION") || my_die "Can't open VERSION";
@@ -745,6 +754,11 @@ sub get_and_define_min_versions() {
           elsif($fields[0] eq "pmix_min_version") {
               if ($fields[1] ne "\n") {
                   export_version("PMIX", $fields[1]);
+              }
+          }
+          elsif($fields[0] eq "pmix_max_version") {
+              if ($fields[1] ne "\n") {
+                  export_max_version("PMIX", $fields[1]);
               }
           }
           elsif($fields[0] eq "hwloc_min_version") {
