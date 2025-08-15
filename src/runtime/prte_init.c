@@ -125,17 +125,41 @@ static bool check_exist(char *path)
 }
 
 static void print_error(unsigned major, unsigned minor, unsigned release,
-                        unsigned reqmajor, unsigned reqminor, unsigned reqrelease)
+                        unsigned reqmajor, unsigned reqminor, unsigned reqrelease,
+                        char *minmax, char *limit)
 {
     fprintf(stderr, "************************************************\n");
     fprintf(stderr, "We have detected that the runtime version\n");
-    fprintf(stderr, "of the PMIx library we were given does not\n");
-    fprintf(stderr, "meet the minimum version requirement:\n\n");
+    fprintf(stderr, "of the PMIx library we were given violates\n");
+    fprintf(stderr, "the %s version requirement:\n\n", minmax);
     fprintf(stderr, "    Runtime:  0x%x%02x%02x\n", major, minor, release);
-    fprintf(stderr, "    Minimum:  0x%x%02x%02x\n\n", reqmajor, reqminor, reqrelease);
+    fprintf(stderr, "    %s:  0x%x%02x%02x\n\n", limit, reqmajor, reqminor, reqrelease);
     fprintf(stderr, "Please update your LD_LIBRARY_PATH to point\n");
     fprintf(stderr, "us to the same PMIx version used to build PRRTE.\n");
     fprintf(stderr, "************************************************\n");
+}
+
+static bool check_range(unsigned major, unsigned minor, unsigned release,
+                        unsigned limmajor, unsigned limminor, unsigned limrelease)
+{
+    if (major > limmajor) {
+        // we are good - nothing more to check
+        return true;
+    } else if (major < limmajor) {
+        return false;
+    }
+    // checking within the major release series
+    if (minor > limminor) {
+        // we are good - nothing more to check
+        return true;
+    } else if (minor < limminor) {
+        return false;
+    }
+    // checking within the minor release series
+    if (release < limrelease) {
+        return false;
+    }
+    return true;
 }
 
 int prte_init_minimum(void)
@@ -147,6 +171,7 @@ int prte_init_minimum(void)
     char token[100];
     unsigned int major, minor, release;
     unsigned int reqmajor, reqminor, reqrelease;
+    unsigned int maxmajor, maxminor, maxrelease;
 
     if (min_initialized) {
         return PRTE_SUCCESS;
@@ -163,35 +188,31 @@ int prte_init_minimum(void)
                  token, &major, &minor, &release);
     ret = sscanf(PRTE_PMIX_MIN_VERSION_STRING, "%u.%u.%u",
                  &reqmajor, &reqminor, &reqrelease);
+    ret = sscanf(PRTE_PMIX_MAX_VERSION_STRING, "%u.%u.%u",
+                 &maxmajor, &maxminor, &maxrelease);
 
     /* check the version triplet agains the min values
      * specified in VERSION
      */
-    if (major > reqmajor) {
-        // we are good - nothing more to check
-        goto proceed;
-    } else if (major < reqmajor) {
+    if (!check_range(major, minor, release,
+                     reqmajor, reqminor, reqrelease)) {
         print_error(major, minor, release,
-                    reqmajor, reqminor, reqrelease);
-        return PRTE_ERR_SILENT;
-    }
-    // checking within the major release series
-    if (minor > reqminor) {
-        // we are good - nothing more to check
-        goto proceed;
-    } else if (minor < reqminor) {
-        print_error(major, minor, release,
-                    reqmajor, reqminor, reqrelease);
-        return PRTE_ERR_SILENT;
-    }
-    // checking within the minor release series
-    if (release < reqrelease) {
-        print_error(major, minor, release,
-                    reqmajor, reqminor, reqrelease);
+                    reqmajor, reqminor, reqrelease,
+                    "minimum", "Minimum");
         return PRTE_ERR_SILENT;
     }
 
-proceed:
+    /* check the version triplet agains the max values
+     * specified in VERSION
+     */
+    if (check_range(major, minor, release,
+                    maxmajor, maxminor, maxrelease)) {
+        print_error(major, minor, release,
+                    maxmajor, maxminor, maxrelease,
+                    "maximum", "Maximum");
+        return PRTE_ERR_SILENT;
+    }
+
     /* Protect against the envar version of the Slurm
      * custom args MCA param. This is an unfortunate
      * hack that hopefully will eventually go away.
