@@ -124,19 +124,42 @@ static bool check_exist(char *path)
     return false;
 }
 
-static void print_error(unsigned major,
-                        unsigned minor,
-                        unsigned release)
+static void print_error(unsigned major, unsigned minor, unsigned release,
+                        unsigned reqmajor, unsigned reqminor, unsigned reqrelease,
+                        char *minmax, char *limit)
 {
     fprintf(stderr, "************************************************\n");
     fprintf(stderr, "We have detected that the runtime version\n");
-    fprintf(stderr, "of the PMIx library we were given is binary\n");
-    fprintf(stderr, "incompatible with the version we were built against:\n\n");
-    fprintf(stderr, "    Runtime: 0x%x%02x%02x\n", major, minor, release);
-    fprintf(stderr, "    Build:   0x%0x\n\n", PMIX_NUMERIC_VERSION);
+    fprintf(stderr, "of the PMIx library we were given violates\n");
+    fprintf(stderr, "the %s version requirement:\n\n", minmax);
+    fprintf(stderr, "    Runtime:  0x%x%02x%02x\n", major, minor, release);
+    fprintf(stderr, "    %s:  0x%x%02x%02x\n\n", limit, reqmajor, reqminor, reqrelease);
     fprintf(stderr, "Please update your LD_LIBRARY_PATH to point\n");
     fprintf(stderr, "us to the same PMIx version used to build PRRTE.\n");
     fprintf(stderr, "************************************************\n");
+}
+
+static bool check_range(unsigned major, unsigned minor, unsigned release,
+                        unsigned limmajor, unsigned limminor, unsigned limrelease)
+{
+    if (major > limmajor) {
+        // we are good - nothing more to check
+        return true;
+    } else if (major < limmajor) {
+        return false;
+    }
+    // checking within the major release series
+    if (minor > limminor) {
+        // we are good - nothing more to check
+        return true;
+    } else if (minor < limminor) {
+        return false;
+    }
+    // checking within the minor release series
+    if (release < limrelease) {
+        return false;
+    }
+    return true;
 }
 
 int prte_init_minimum(void)
@@ -147,6 +170,8 @@ int prte_init_minimum(void)
     const char *rvers;
     char token[100];
     unsigned int major, minor, release;
+    unsigned int reqmajor, reqminor, reqrelease;
+    unsigned int maxmajor, maxminor, maxrelease;
 
     if (min_initialized) {
         return PRTE_SUCCESS;
@@ -159,16 +184,32 @@ int prte_init_minimum(void)
      * cross version operations from inside of PRRTE.
      */
     rvers = PMIx_Get_version();
-    ret = sscanf(rvers, "%s %u.%u.%u", token, &major, &minor, &release);
+    ret = sscanf(rvers, "%s %u.%u.%u",
+                 token, &major, &minor, &release);
+    ret = sscanf(PRTE_PMIX_MIN_VERSION_STRING, "%u.%u.%u",
+                 &reqmajor, &reqminor, &reqrelease);
+    ret = sscanf(PRTE_PMIX_MAX_VERSION_STRING, "%u.%u.%u",
+                 &maxmajor, &maxminor, &maxrelease);
 
-    /* check the version triplet - we know that version
-     * 5 and above are not runtime compatible with version
-     * 4 and below. Since PRRTE has a minimum PMIx requirement
-     * in the v4.x series, we only need to check v4 vs 5
-     * and above */
-    if ((PMIX_VERSION_MAJOR > 4 && 4 == major) ||
-        (PMIX_VERSION_MAJOR == 4 && 5 <= major)) {
-        print_error(major, minor, release);
+    /* check the version triplet agains the min values
+     * specified in VERSION
+     */
+    if (!check_range(major, minor, release,
+                     reqmajor, reqminor, reqrelease)) {
+        print_error(major, minor, release,
+                    reqmajor, reqminor, reqrelease,
+                    "minimum", "Minimum");
+        return PRTE_ERR_SILENT;
+    }
+
+    /* check the version triplet agains the max values
+     * specified in VERSION
+     */
+    if (check_range(major, minor, release,
+                    maxmajor, maxminor, maxrelease)) {
+        print_error(major, minor, release,
+                    maxmajor, maxminor, maxrelease,
+                    "maximum", "Maximum");
         return PRTE_ERR_SILENT;
     }
 
