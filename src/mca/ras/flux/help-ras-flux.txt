@@ -1,0 +1,42 @@
+# -*- text -*-
+#
+# Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
+#                         University Research and Technology
+#                         Corporation.  All rights reserved.
+# Copyright (c) 2004-2005 The University of Tennessee and The University
+#                         of Tennessee Research Foundation.  All rights
+#                         reserved.
+# Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
+#                         University of Stuttgart.  All rights reserved.
+# Copyright (c) 2004-2005 The Regents of the University of California.
+#                         All rights reserved.
+# Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2024-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2026      Triad National Security, LLC. All rights
+#                         reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+# This is the US/English help file for PRTE MCA error messages.
+#
+[flux-broker-not-found]
+flux_open returned with an error.  This usually means no Flux broker was found.  
+
+    %s
+
+#
+[flux-kvs-lookup-failure]
+flux_kvs_lookup returned with an error. Unable to lookup resource.R info.
+
+    %s
+
+#
+[flux-kvs-lookup-get-failure]
+flux_kvs_lookup_get returned with an error. Unable to lookup resource.R info.
+
+    %s
+
