@@ -270,6 +270,8 @@ option to the help request as "--help <option>".
 | "--system-server"    | Start prterun and its daemons as the system   |
 |                      | server on their nodes                         |
 +----------------------+-----------------------------------------------+
+| "--allow-foreign-tools" | Allow tool connections from other users    |
++----------------------+-----------------------------------------------+
 | "--noprefix"         | Disable automatic "--prefix" behavior         |
 +----------------------+-----------------------------------------------+
 | "--prefix <dir>"     | Prefix to be used to look for RTE executables |
@@ -416,6 +418,10 @@ whitespace around the "=" character.
 [system-server]
 
 Start prterun and its daemons as the system server on their nodes
+#
+[allow-foreign-tools]
+
+Allow tool connections from other users
 #
 [set-sid]
 
