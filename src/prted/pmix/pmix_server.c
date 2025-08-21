@@ -98,7 +98,6 @@ pmix_server_globals_t prte_pmix_server_globals = {0};
 static pmix_topology_t mytopology = {0};
 
 static pmix_server_module_t pmix_server = {
-    .client_connected = pmix_server_client_connected_fn,
     .client_finalized = pmix_server_client_finalized_fn,
     .abort = pmix_server_abort_fn,
     .fence_nb = pmix_server_fencenb_fn,
@@ -415,7 +414,15 @@ void pmix_server_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_pmix_server_globals.system_server);
 
-    /* whether or not to drop a system-level tool rendezvous point */
+    /* whether or not to accept connection from foreign tools*/
+    prte_pmix_server_globals.allow_foreign_tools = false;
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "allow_foreign_tools",
+                                      "Whether or not to accept tool connection requests "
+                                      "from other users",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_pmix_server_globals.allow_foreign_tools);
+
+    /* whether or not to generate device distances */
     (void) pmix_mca_base_var_register("prte", "pmix", NULL, "generate_distances",
                                       "Device types whose distances are to be provided (default=fabric,gpu,network)",
                                       PMIX_MCA_BASE_VAR_TYPE_STRING,
@@ -708,6 +715,20 @@ int pmix_server_init(void)
                 return rc;
             }
         }
+
+#ifdef PMIX_SERVER_ALLOW_FOREIGN_TOOLS
+       // see if they want to allow tools from other users
+       if (prte_pmix_server_globals.allow_foreign_tools) {
+            PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_ALLOW_FOREIGN_TOOLS,
+                               NULL, PMIX_BOOL);
+            if (PMIX_SUCCESS != prc) {
+                PMIX_INFO_LIST_RELEASE(ilist);
+                rc = prte_pmix_convert_status(prc);
+                return rc;
+            }
+       }
+#endif
+
 #ifdef PMIX_SERVER_SYS_CONTROLLER
         /* if requested and persistent, tell the server that we are the system
          * controller - don't do this for the non-persistent mode */
