@@ -146,6 +146,8 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | "--system-server"    | Start the DVM as the system server            |
 +----------------------+-----------------------------------------------+
+| "--allow-foreign-tools" | Allow tool connections from other users    |
++----------------------+-----------------------------------------------+
 | "--tmpdir <dir>"     | Set the filesystem root for the session       |
 |                      | directory tree                                |
 +----------------------+-----------------------------------------------+
@@ -214,7 +216,11 @@ Daemonize the DVM daemons and controller into the background
 
 Start the DVM controller and its daemons as the system server on their
 nodes
+#
+[allow-foreign-tools]
 
+Allow tool connections from other users
+#
 [set-sid]
 
 Direct the DVM (controller and daemons) to separate from the current
