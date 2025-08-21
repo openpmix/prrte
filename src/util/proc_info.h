@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2020 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -73,6 +73,10 @@ typedef struct prte_process_info_t {
     int num_nodes;              /**< number of nodes in the job */
     char *nodename;             /**< string name for this node */
     char **aliases;             /**< aliases for this node */
+    uid_t uid;                  /**< Real user UD */
+    uid_t euid;                 /**< Effective user ID */
+    gid_t gid;                  /**< Real group ID */
+    gid_t egid;                 /**< Effective group ID */
     pid_t pid;                  /**< Local process ID for this process */
     prte_proc_type_t proc_type; /**< Type of process */
     char *my_uri;               /**< My contact info */
