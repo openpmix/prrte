@@ -33,7 +33,7 @@ jobs:
       with:
         submodules: recursive
         repository: openpmix/openpmix
-        ref: v6.0
+        ref: v6.1
         path: 3rd-party/openpmix
         clean: false
 

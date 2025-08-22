@@ -37,7 +37,7 @@ jobs:
         submodules: recursive
         repository: openpmix/openpmix
         path: openpmix/v6
-        ref: v6.0
+        ref: v6.1
 
     - name: Build OpenPMIx
       run: |
