@@ -215,10 +215,6 @@ PMIX_CLASS_DECLARATION(prte_pmix_tool_t);
     } while (0);
 
 /* define the server module functions */
-PRTE_EXPORT extern pmix_status_t pmix_server_client_connected_fn(const pmix_proc_t *proc,
-                                                                 void *server_object,
-                                                                 pmix_op_cbfunc_t cbfunc,
-                                                                 void *cbdata);
 PRTE_EXPORT extern pmix_status_t pmix_server_client_connected2_fn(const pmix_proc_t *proc,
                                                                   void *server_object,
                                                                   pmix_info_t *info, size_t ninfo,
@@ -378,6 +374,7 @@ typedef struct {
     bool pubsub_init;
     bool session_server;
     bool system_server;
+    bool allow_foreign_tools;
     bool system_controller;
     bool scheduler_connected;
     pmix_proc_t scheduler;

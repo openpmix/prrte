@@ -63,7 +63,13 @@ static void pmix_server_stdin_push(int sd, short args, void *cbdata);
 static void _client_conn(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
-    prte_proc_t *p;
+    prte_proc_t *p = NULL, *p2;
+    pmix_status_t rc = PMIX_SUCCESS;
+    size_t n;
+    uid_t euid;
+    gid_t egid;
+    pid_t pid;
+    bool singleton = false;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
@@ -75,26 +81,84 @@ static void _client_conn(int sd, short args, void *cbdata)
         PRTE_ACTIVATE_PROC_STATE(&p->name, PRTE_PROC_STATE_REGISTERED);
     }
 
+    // since this is a client of mine, look it up
+    p2 = prte_get_proc_object(&cd->proc);
+    if (NULL == p2) {
+        // not one of our clients!
+        rc = PMIX_ERR_NOT_SUPPORTED;
+       goto complete;
+    }
+    if (NULL != p && p2 != p) {
+        // bogus!
+        rc = PMIX_ERR_NOT_SUPPORTED;
+        goto complete;
+    }
+    /* if p is NULL and we were launched by a singleton,
+     * then this is our singleton connecting to us */
+    if (NULL == p) {
+        if (NULL != prte_pmix_server_globals.singleton) {
+            // use the retrieved proc object
+            p = p2;
+            singleton = true;
+        } else {
+            rc = PMIX_ERR_NOT_SUPPORTED;
+            goto complete;
+        }
+    }
+
+    // check if the uid, gid, and pid match
+    for (n=0; n < cd->ninfo; n++) {
+        if (PMIx_Check_key(cd->info[n].key, PMIX_USERID)) {
+            rc = PMIx_Value_get_number(&cd->info[n].value, (void*)&euid, PMIX_UINT32);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                goto complete;
+            }
+            if (prte_process_info.euid != euid) {
+                rc = PMIX_ERR_NOT_SUPPORTED;
+                PMIX_ERROR_LOG(rc);
+                goto complete;
+            }
+            continue;
+        }
+        if (PMIx_Check_key(cd->info[n].key, PMIX_GRPID)) {
+            rc = PMIx_Value_get_number(&cd->info[n].value, (void*)&egid, PMIX_UINT32);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                goto complete;
+            }
+            if (prte_process_info.egid != egid) {
+                rc = PMIX_ERR_NOT_SUPPORTED;
+                PMIX_ERROR_LOG(rc);
+                goto complete;
+            }
+            continue;
+        }
+        if (PMIx_Check_key(cd->info[n].key, PMIX_PROC_PID)) {
+            rc = PMIx_Value_get_number(&cd->info[n].value, (void*)&pid, PMIX_PID);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                goto complete;
+            }
+            if (singleton) {
+                // we didn't know the pid initially, so update it here
+                p->pid = pid;
+            } else {
+                if (p->pid != pid) {
+                    rc = PMIX_ERR_NOT_SUPPORTED;
+                    PMIX_ERROR_LOG(rc);
+                    goto complete;
+                }
+            }
+            continue;
+        }
+    }
+
+complete:
     if (NULL != cd->cbfunc) {
-        cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
+        cd->cbfunc(rc, cd->cbdata);
     }
     PMIX_RELEASE(cd);
-}
-
-pmix_status_t pmix_server_client_connected_fn(const pmix_proc_t *proc, void *server_object,
-                                              pmix_op_cbfunc_t cbfunc, void *cbdata)
-{
-    pmix_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s Client connected received for %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        PMIX_NAME_PRINT(proc));
-
-    /* need to thread-shift this request as we are going
-     * to access our global list of registered events */
-    PRTE_SERVER_PMIX_THREADSHIFT(proc, server_object, PRTE_SUCCESS,
-                          NULL, NULL, 0, _client_conn,
-                          cbfunc, cbdata);
-    return PRTE_SUCCESS;
 }
 
 pmix_status_t pmix_server_client_connected2_fn(const pmix_proc_t *proc,
@@ -103,6 +167,7 @@ pmix_status_t pmix_server_client_connected2_fn(const pmix_proc_t *proc,
                                                pmix_op_cbfunc_t cbfunc,
                                                void *cbdata)
 {
+    prte_pmix_server_op_caddy_t *cd;
     PRTE_HIDE_UNUSED_PARAMS(info, ninfo);
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
@@ -110,9 +175,20 @@ pmix_status_t pmix_server_client_connected2_fn(const pmix_proc_t *proc,
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PMIX_NAME_PRINT(proc), (int)ninfo);
 
-    PRTE_SERVER_PMIX_THREADSHIFT(proc, server_object, PRTE_SUCCESS,
-                          NULL, NULL, 0, _client_conn,
-                          cbfunc, cbdata);
+    /* need to thread-shift this request as we are going
+     * to access our global data */
+
+    cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
+    memcpy(&cd->proc, proc, sizeof(pmix_proc_t));
+    cd->server_object = server_object;
+    cd->info = info;
+    cd->ninfo = ninfo;
+    cd->cbfunc = cbfunc;
+    cd->cbdata = cbdata;
+    prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _client_conn, cd);
+    PMIX_POST_OBJECT(cd);
+    prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
+
     return PRTE_SUCCESS;
 }
 
@@ -549,40 +625,61 @@ static void _toolconn(int sd, short args, void *cbdata)
         for (n = 0; n < cd->ninfo; n++) {
             if (PMIX_CHECK_KEY(&cd->info[n], PMIX_EVENT_SILENT_TERMINATION)) {
                 cd->flag = PMIX_INFO_TRUE(&cd->info[n]);
+
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_VERSION_INFO)) {
                 /* we ignore this for now */
+
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_USERID)) {
                 PMIX_VALUE_GET_NUMBER(trc, &cd->info[n].value, cd->uid, uid_t);
                 if (PMIX_SUCCESS == xrc && PMIX_SUCCESS != trc) {
                     xrc = trc;
                 }
+
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_GRPID)) {
                 PMIX_VALUE_GET_NUMBER(trc, &cd->info[n].value, cd->gid, gid_t);
                 if (PMIX_SUCCESS == xrc && PMIX_SUCCESS != trc) {
                     xrc = trc;
                 }
+
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_NSPACE)) {
                 PMIX_LOAD_NSPACE(cd->target.nspace, cd->info[n].value.data.string);
                 nspace_given = true;
+
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_RANK)) {
                 cd->target.rank = cd->info[n].value.data.rank;
                 rank_given = true;
+
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_HOSTNAME)) {
                 cd->operation = strdup(cd->info[n].value.data.string);
+
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_CMD_LINE)) {
                 cd->cmdline = strdup(cd->info[n].value.data.string);
+
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_LAUNCHER)) {
                 cd->launcher = PMIX_INFO_TRUE(&cd->info[n]);
+
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_SERVER_SCHEDULER)) {
                 cd->scheduler = PMIX_INFO_TRUE(&cd->info[n]);
+
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PRIMARY_SERVER)) {
                 primary = PMIX_INFO_TRUE(&cd->info[n]);
+
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PROC_PID)) {
                 PMIX_VALUE_GET_NUMBER(trc, &cd->info[n].value, cd->pid, pid_t);
                 if (PMIX_SUCCESS == xrc && PMIX_SUCCESS != trc) {
                     xrc = trc;
                 }
             }
+        }
+    }
+
+    if (!prte_pmix_server_globals.allow_foreign_tools) {
+        // the PMIx "uid" is the effective uid of the tool,
+        // so compare it to our effective  uid
+        if (cd->uid != prte_process_info.euid) {
+            // this should be handled by the PMIx library,
+            // but we back it up here just to be safe
+            xrc = PMIX_ERR_NOT_SUPPORTED;
         }
     }
 
@@ -595,10 +692,10 @@ static void _toolconn(int sd, short args, void *cbdata)
     }
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s %s CONNECTION FROM UID %d GID %d NSPACE %s",
+                        "%s %s CONNECTION FROM UID %d GID %d NSPACE %s PID %d",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         cd->launcher ? "LAUNCHER" : (cd->scheduler ? "SCHEDULER" : "TOOL"),
-                        cd->uid, cd->gid, cd->target.nspace);
+                        cd->uid, cd->gid, cd->target.nspace, cd->pid);
 
     /* if this is the scheduler and we are not the DVM master, then
      * this is not allowed */
