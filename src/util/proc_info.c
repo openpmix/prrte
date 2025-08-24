@@ -69,6 +69,7 @@ PRTE_EXPORT prte_process_info_t prte_process_info = {
     .my_uri = NULL,
     .my_port = 0,
     .tmpdir_base = NULL,
+    .sessdir_prefix = NULL,
     .top_session_dir = NULL,
     .cpuset = NULL,
     .shared_fs = false
@@ -245,6 +246,11 @@ int prte_proc_info_finalize(void)
     if (NULL != prte_process_info.tmpdir_base) {
         free(prte_process_info.tmpdir_base);
         prte_process_info.tmpdir_base = NULL;
+    }
+
+    if (NULL != prte_process_info.sessdir_prefix) {
+        free(prte_process_info.sessdir_prefix);
+        prte_process_info.sessdir_prefix = NULL;
     }
 
     if (NULL != prte_process_info.top_session_dir) {
