@@ -514,6 +514,9 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
         pmix_tool_org      = "Open MPI";
         pmix_tool_msg      = "Report bugs to https://www.open-mpi.org/community/help/";
     }
+    if (NULL == prte_process_info.sessdir_prefix) {
+        prte_process_info.sessdir_prefix = strdup("ompi");
+    }
 
     rc = pmix_cmd_line_parse(pargv, ompishorts, ompioptions, NULL,
                              results, "help-schizo-ompi.txt");
