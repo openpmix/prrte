@@ -4,6 +4,37 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
+3.0.12 -- TBD
+-------------
+- PR #2245: Multiple commits
+   - Adjust top session dir name
+   - Update NEWS
+- PR #2244: Multiple commits
+   - Declare the process set during registration
+   - Add support for client_connected2 server module upcall
+   - Customize the OMPI "allow-run-as-root" doc snippet
+   - Add some finer-grained connection support
+- PR #2236: Protect against running with PMIx versions too high
+- PR #2235: Check for PMIx version too high
+- PR #2232: Multiple commits
+   - Properly handle sigterm when started by singleton
+   - Ensure to progress job launch for singleton
+   - Update CI
+   - Process deprecated "stop" CLI
+   - Minor cleanups in tool connection
+   - Add some missing command strings for debug output
+   - Provide error message when ssh fails
+- PR #2222: Multiple commits
+   - iof/hnp: correctly handle short write to stdin
+   - check for pthread_np.h header
+- PR #2219: Update OAC submodule
+- PR #2214: Multiple commits
+   - Preserve source ID across API call
+   - src/docs/prrte-rst-content: Add missing file to Makefile.am
+   - Add external OMPI build CI
+   - Remove debug output
+
+
 3.0.11 -- 18 May 2025
 ---------------------
 .. note:: This is a minor bug fix release to resolve
