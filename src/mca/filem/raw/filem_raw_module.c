@@ -63,12 +63,14 @@
 
 static int raw_init(void);
 static int raw_finalize(void);
+static void raw_fault_handler(const prte_rml_recovery_status_t *status);
 static int raw_preposition_files(prte_job_t *jdata, prte_filem_completion_cbfunc_t cbfunc,
                                  void *cbdata);
 static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app);
 
 prte_filem_base_module_t prte_filem_raw_module = {.filem_init = raw_init,
                                                   .filem_finalize = raw_finalize,
+                                                  .fault_handler = raw_fault_handler,
                                                   /* we don't use any of the following */
                                                   .put = prte_filem_base_none_put,
                                                   .put_nb = prte_filem_base_none_put_nb,
@@ -133,6 +135,20 @@ static int raw_finalize(void)
     }
 
     return PRTE_SUCCESS;
+}
+
+static void raw_fault_handler(const prte_rml_recovery_status_t *status){
+    PRTE_HIDE_UNUSED_PARAMS(status);
+    /* TODO: Make this actually resilient. Seems pretty trivial, since xcast is
+     * already resilient */
+    if (0 < pmix_list_get_size(&incoming_files) ||
+        0 < pmix_list_get_size(&outbound_files)) {
+        PMIX_OUTPUT_VERBOSE((0, prte_filem_base_framework.framework_output,
+                             "%s filem:raw daemon failed during active file"
+                             " transfer operation(s)",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
+    }
 }
 
 static void xfer_complete(int status, prte_filem_raw_xfer_t *xfer)

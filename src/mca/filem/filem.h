@@ -210,6 +210,12 @@ typedef int (*prte_filem_base_module_init_fn_t)(void);
 typedef int (*prte_filem_base_module_finalize_fn_t)(void);
 
 /**
+ * Recovers filem operations from given faults or else activates relevant job
+ * failure state.
+ */
+typedef void (*prte_filem_base_fault_handler_fn_t)(const prte_rml_recovery_status_t *status);
+
+/**
  * Put a file or directory on the remote machine
  *
  * Note: By using a relative path for the remote file/directory, the filem
@@ -349,6 +355,9 @@ struct prte_filem_base_module_1_0_0_t {
     prte_filem_base_module_init_fn_t filem_init;
     /** Finalization Function */
     prte_filem_base_module_finalize_fn_t filem_finalize;
+
+    /** Respond to daemon failures */
+    prte_filem_base_fault_handler_fn_t fault_handler;
 
     /** Put a file on the remote machine */
     prte_filem_base_put_fn_t put;
