@@ -40,6 +40,7 @@
 #include "src/rml/rml.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_output.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_environ.h"
@@ -73,6 +74,7 @@ int prte_register_params(void)
     int ret;
     pmix_output_stream_t lds;
     char *string = NULL;
+    char *fstype = NULL;
 
     /* only go thru this once - mpirun calls it twice, which causes
      * any error messages to show up twice
@@ -220,6 +222,12 @@ int prte_register_params(void)
     prte_clean_output = pmix_output_open(&lds);
     PMIX_DESTRUCT(&lds);
 
+    /* check directive for warning about shared fs on tmpdir */
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "silence_shared_fs",
+                                      "Silence the shared file system warning",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_silence_shared_fs);
+
     /* LOOK FOR A TMP DIRECTORY BASE */
     /* Several options are provided to cover a range of possibilities:
      *
@@ -288,7 +296,25 @@ int prte_register_params(void)
             free(prte_process_info.tmpdir_base);
         }
         prte_process_info.tmpdir_base = strdup(prte_remote_tmpdir_base);
+    } else {
+        if (NULL != prte_process_info.tmpdir_base) {
+            free(prte_process_info.tmpdir_base);
+        }
+        prte_process_info.tmpdir_base = strdup(pmix_tmp_directory());
     }
+    // check to see if this is on a shared file system
+    // as we know this will impact launch as well as
+    // application execution performance
+    prte_process_info.shared_fs = pmix_path_nfs(prte_process_info.tmpdir_base, &fstype);
+    if (prte_process_info.shared_fs && !prte_silence_shared_fs) {
+        // this is a shared file system - warn the user
+        pmix_show_help("help-prte-runtime.txt", "prte:session:dir:shared", true,
+                       prte_process_info.tmpdir_base, fstype, prte_tool_basename);
+    }
+    if (NULL != fstype) {
+        free(fstype);
+    }
+
 
     prte_prohibited_session_dirs = NULL;
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "no_session_dirs",
@@ -489,11 +515,6 @@ int prte_register_params(void)
                                       "Whether binding of internal PRRTE progress thread is required",
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_bind_progress_thread_reqd);
-
-    (void) pmix_mca_base_var_register("prte", "prte", NULL, "silence_shared_fs",
-                                      "Silence the shared file system warning",
-                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                      &prte_silence_shared_fs);
 
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "hetero_nodes",
                                       "Allocation contains hetero nodes",

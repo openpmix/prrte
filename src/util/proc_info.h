@@ -88,6 +88,7 @@ typedef struct prte_process_info_t {
      * environmental variables, or else a default location.
      */
     char *tmpdir_base;        /**< Base directory of the session dir tree */
+    char *sessdir_prefix;     /**< starting string for top session dir name */
     char *top_session_dir;    /**< Top-most directory of the session tree */
     bool rm_session_dirs;     /**< Session directories will be cleaned up by RM */
 

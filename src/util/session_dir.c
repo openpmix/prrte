@@ -102,71 +102,40 @@ static int _create_dir(char *directory)
     return ret;
 }
 
-static int _setup_tmpdir_base(void)
-{
-    int rc = PRTE_SUCCESS;
-#if PMIX_NUMERIC_VERSION != 0x00040208
-    char *fstype = NULL;
-#endif
-
-    /* make sure that we have tmpdir_base set
-     * if we need it
-     */
-    if (NULL == prte_process_info.tmpdir_base) {
-        prte_process_info.tmpdir_base = strdup(pmix_tmp_directory());
-        if (NULL == prte_process_info.tmpdir_base) {
-            rc = PRTE_ERR_OUT_OF_RESOURCE;
-            goto exit;
-        }
-    }
-
-#if PMIX_NUMERIC_VERSION != 0x00040208
-    // check to see if this is on a shared file system
-    // as we know this will impact launch as well as
-    // application execution performance
-    prte_process_info.shared_fs = pmix_path_nfs(prte_process_info.tmpdir_base, &fstype);
-    if (prte_process_info.shared_fs && !prte_silence_shared_fs) {
-        // this is a shared file system - warn the user
-        pmix_show_help("help-prte-runtime.txt", "prte:session:dir:shared", true,
-                       prte_process_info.tmpdir_base, fstype, prte_tool_basename);
-    }
-    if (NULL != fstype) {
-        free(fstype);
-    }
-#endif
-
-exit:
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-    }
-    return rc;
-}
-
 static int _setup_top_session_dir(void)
 {
     int rc = PRTE_SUCCESS;
     /* get the effective uid */
-    uid_t uid = geteuid();
     pid_t pid = getpid();
 
     /* construct the top_session_dir if we need */
     if (NULL == prte_process_info.top_session_dir) {
-        if (PRTE_SUCCESS != (rc = _setup_tmpdir_base())) {
-            return rc;
-        }
         if (NULL == prte_process_info.nodename ||
             NULL == prte_process_info.tmpdir_base) {
             /* we can't setup top session dir */
             rc = PRTE_ERR_BAD_PARAM;
             goto exit;
         }
-        if (0 > pmix_asprintf(&prte_process_info.top_session_dir, "%s/%s.%s.%lu.%lu",
-                              prte_process_info.tmpdir_base, prte_tool_basename,
-                              prte_process_info.nodename,
-                              (unsigned long)pid, (unsigned long) uid)) {
-            prte_process_info.top_session_dir = NULL;
-            rc = PRTE_ERR_OUT_OF_RESOURCE;
-            goto exit;
+        if (prte_process_info.shared_fs) {
+            /* if it is a shared fs, then we need to include our nodename
+             * to avoid collisions */
+            if (0 > pmix_asprintf(&prte_process_info.top_session_dir, "%s/%s.%s.%lu",
+                                  prte_process_info.tmpdir_base, prte_process_info.sessdir_prefix,
+                                  prte_process_info.nodename,
+                                  (unsigned long)pid)) {
+                prte_process_info.top_session_dir = NULL;
+                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                goto exit;
+            }
+        } else {
+            /* if not a shared fs, then we can just use our pid as that will be unique */
+            if (0 > pmix_asprintf(&prte_process_info.top_session_dir, "%s/%s.%lu",
+                                  prte_process_info.tmpdir_base, prte_process_info.sessdir_prefix,
+                                  (unsigned long)pid)) {
+                prte_process_info.top_session_dir = NULL;
+                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                goto exit;
+            }
         }
     }
     rc = _create_dir(prte_process_info.top_session_dir);
@@ -220,13 +189,6 @@ static int setup_base(void)
 
     /* Ensure that system info is set */
     prte_proc_info();
-
-    if (NULL == prte_process_info.tmpdir_base) {
-        if (PRTE_SUCCESS != (rc = _setup_tmpdir_base())) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-    }
 
     /* BEFORE doing anything else, check to see if this prefix is
      * allowed by the system
