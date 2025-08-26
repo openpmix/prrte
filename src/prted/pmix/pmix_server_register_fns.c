@@ -739,20 +739,34 @@ static void opcbfunc(pmix_status_t status, void *cbdata)
 }
 
 /* add any info that the tool couldn't self-assign */
-int prte_pmix_server_register_tool(pmix_nspace_t nspace)
+int prte_pmix_server_register_tool(pmix_server_req_t *cd)
 {
     pmix_status_t ret;
     prte_pmix_lock_t lock;
     int rc;
-    prte_pmix_tool_t *tl;
+    prte_job_t *jdata;
+    prte_app_context_t *app;
+    prte_proc_t *proc;
 
-    /* record this tool */
-    tl = PMIX_NEW(prte_pmix_tool_t);
-    PMIX_LOAD_PROCID(&tl->name, nspace, 0);
-    pmix_list_append(&prte_pmix_server_globals.tools, &tl->super);
+    // create a job tracker for it
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, cd->target.nspace);
+    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
+    rc = prte_set_job_data_object(jdata);
+    app = PMIX_NEW(prte_app_context_t);
+    app->argv = PMIx_Argv_split(cd->cmdline, ' ');
+    app->app = strdup(app->argv[0]);
+    pmix_pointer_array_set_item(jdata->apps, 0, app);
+    jdata->num_apps++;
+    proc = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&proc->name, cd->target.nspace, 0);
+    proc->pid = cd->pid;
+    proc->state = PRTE_PROC_STATE_RUNNING;
+    pmix_pointer_array_set_item(jdata->procs, 0, proc);
+    jdata->num_procs = 1;
 
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    ret = PMIx_server_register_nspace(nspace, 1, NULL, 0,
+    ret = PMIx_server_register_nspace(cd->target.nspace, 1, NULL, 0,
                                       opcbfunc, &lock);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);

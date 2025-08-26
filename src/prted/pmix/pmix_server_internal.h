@@ -130,15 +130,10 @@ typedef struct {
     pmix_info_cbfunc_t infocbfunc;
     pmix_tool_connection_cbfunc_t toolcbfunc;
     pmix_spawn_cbfunc_t spcbfunc;
+    pmix_event_notification_cbfunc_fn_t evcbfunc;
     void *cbdata;
 } prte_pmix_server_op_caddy_t;
 PMIX_CLASS_DECLARATION(prte_pmix_server_op_caddy_t);
-
-typedef struct {
-    pmix_list_item_t super;
-    pmix_proc_t name;
-} prte_pmix_tool_t;
-PMIX_CLASS_DECLARATION(prte_pmix_tool_t);
 
 #define PRTE_IO_OP(t, nt, b, fn, cfn, cbd)                                         \
     do {                                                                           \
@@ -314,11 +309,11 @@ PRTE_EXPORT extern void pmix_server_notify(int status, pmix_proc_t *sender,
                                            pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
                                            void *cbdata);
 
-PRTE_EXPORT extern void pmix_server_jobid_return(int status, pmix_proc_t *sender,
-                                           pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
-                                           void *cbdata);
+PRTE_EXPORT extern void pmix_server_tconn_return(int status, pmix_proc_t *sender,
+                                                 pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
+                                                 void *cbdata);
 
-PRTE_EXPORT extern int prte_pmix_server_register_tool(pmix_nspace_t nspace);
+PRTE_EXPORT extern int prte_pmix_server_register_tool(pmix_server_req_t *cd);
 
 PRTE_EXPORT extern int pmix_server_cache_job_info(prte_job_t *jdata, pmix_info_t *info);
 
@@ -335,6 +330,14 @@ PRTE_EXPORT extern void pmix_server_alloc_request_resp(int status, pmix_proc_t *
 PRTE_EXPORT extern pmix_status_t prte_pmix_set_scheduler(void);
 
 PRTE_EXPORT extern pmix_status_t prte_server_send_request(uint8_t cmd, pmix_server_req_t *req);
+
+PRTE_EXPORT extern void prte_server_lost_connection(size_t evhdlr_registration_id,
+                                                    pmix_status_t status,
+                                                    const pmix_proc_t *source,
+                                                    pmix_info_t info[], size_t ninfo,
+                                                    pmix_info_t *results, size_t nresults,
+                                                    pmix_event_notification_cbfunc_fn_t cbfunc,
+                                                    void *cbdata);
 
 
 #define PRTE_PMIX_ALLOC_REQ      0
@@ -382,7 +385,6 @@ typedef struct {
     char *report_uri;
     char *singleton;
     pmix_device_type_t generate_dist;
-    pmix_list_t tools;
     pmix_list_t psets;
     pmix_list_t groups;
 } pmix_server_globals_t;

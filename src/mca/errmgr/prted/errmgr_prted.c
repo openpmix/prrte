@@ -456,6 +456,57 @@ static void proc_errors(int fd, short args, void *cbdata)
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         goto cleanup;
     }
+
+    if (PRTE_PROC_STATE_CALLED_ABORT == state) {
+        /* update the state */
+        child->state = state;
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, NULL, PMIX_BOOL)) {
+            PMIX_DATA_BUFFER_CREATE(alert);
+            /* pack update state command */
+            cmd = PRTE_PLM_UPDATE_PROC_STATE;
+            rc = PMIx_Data_pack(NULL, alert, &cmd, 1, PMIX_UINT8);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(alert);
+                return;
+            }
+            /* pack only the data for this proc - have to start with the jobid
+             * so the receiver can unpack it correctly
+             */
+            rc = PMIx_Data_pack(NULL, alert, &proc->nspace, 1, PMIX_PROC_NSPACE);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(alert);
+                return;
+            }
+
+            /* now pack the child's info */
+            if (PMIX_SUCCESS != (rc = pack_state_for_proc(alert, child))) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(alert);
+                return;
+            }
+            /* send it */
+            PMIX_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+                                 "%s errmgr:prted reporting proc %s called abort with "
+                                 "non-zero status (local procs = %d)",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&child->name),
+                                 jdata->num_local_procs));
+            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM);
+            if (PRTE_SUCCESS != rc) {
+                PRTE_ERROR_LOG(rc);
+                PMIX_RELEASE(alert);
+            }
+            /* mark that we notified the HNP for this job so we don't do it again;
+             * recoverable jobs need to receive every notifications, though. */
+            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL)) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, PRTE_ATTR_LOCAL, NULL,
+                                   PMIX_BOOL);
+            }
+        }
+        goto cleanup;
+    }
+
     /* if this is not a local proc for this job, we can
      * ignore this call
      */
