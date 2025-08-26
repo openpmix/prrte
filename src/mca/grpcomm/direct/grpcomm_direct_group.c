@@ -95,6 +95,21 @@ int prte_grpcomm_direct_group(pmix_group_operation_t op, char *grpid,
     return PRTE_SUCCESS;
 }
 
+void prte_grpcomm_direct_group_fault_handler(const prte_rml_recovery_status_t* status)
+{
+    PRTE_HIDE_UNUSED_PARAMS(status);
+    /* TODO: make this actually resilient
+     * For now, we'll just kill the job if any ops are active */
+    if(0 < pmix_list_get_size(&prte_mca_grpcomm_direct_component.group_ops)){
+        PMIX_OUTPUT_VERBOSE((0, prte_grpcomm_base_framework.framework_output,
+                             "%s grpcomm:direct:group daemon failed during"
+                             " active group operation(s)",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
+    }
+}
+
+
 static void group(int sd, short args, void *cbdata)
 {
     prte_pmix_grp_caddy_t *cd = (prte_pmix_grp_caddy_t*)cbdata;

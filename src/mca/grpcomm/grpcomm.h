@@ -84,6 +84,9 @@ typedef int (*prte_grpcomm_base_module_init_fn_t)(void);
 /* finalize the selected module */
 typedef void (*prte_grpcomm_base_module_finalize_fn_t)(void);
 
+/* Respond to failed daemons, repair/restart/destroy ongoing operations */
+typedef void (*prte_grpcomm_base_module_fault_handler_fn_t)(const prte_rml_recovery_status_t* status);
+
 
 /* Scalably send a message. */
 typedef int (*prte_grpcomm_base_module_xcast_fn_t)(prte_rml_tag_t tag,
@@ -107,12 +110,14 @@ typedef int (*prte_grpcomm_base_module_grp_fn_t)(pmix_group_operation_t op, char
                                                  const pmix_proc_t procs[], size_t nprocs,
                                                  const pmix_info_t directives[], size_t ndirs,
                                                  pmix_info_cbfunc_t cbfunc, void *cbdata);
+
 /*
  * Ver 4.0
  */
 typedef struct {
     prte_grpcomm_base_module_init_fn_t          init;
     prte_grpcomm_base_module_finalize_fn_t      finalize;
+    prte_grpcomm_base_module_fault_handler_fn_t fault_handler;
     /* collective operations */
     prte_grpcomm_base_module_xcast_fn_t         xcast;
     prte_grpcomm_base_module_fence_fn_t         fence;

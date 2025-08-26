@@ -542,7 +542,7 @@ static void check_complete(int fd, short args, void *cbdata)
             (2, prte_state_base_framework.framework_output,
              "%s state:dvm:check_job_complete - received NULL job, checking daemons",
              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        if (0 == pmix_list_get_size(&prte_rml_base.children)) {
+        if (0 == prte_rml_base.n_children) {
             /* orteds are done! */
             PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                                  "%s prteds complete - exiting",

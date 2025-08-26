@@ -106,7 +106,11 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 #define PRTE_RML_TAG_ROLLUP               11
 #define PRTE_RML_TAG_REPORT_REMOTE_LAUNCH 12
 
-#define PRTE_RML_TAG_XCAST     15
+#define PRTE_RML_TAG_DAEMON_DIED    13
+#define PRTE_RML_TAG_DAEMON_ADOPTED 14
+
+#define PRTE_RML_TAG_XCAST         15
+#define PRTE_RML_TAG_XCAST_ACK     16
 
 /* For FileM Base */
 #define PRTE_RML_TAG_FILEM_BASE      21
@@ -256,13 +260,64 @@ typedef struct {
 } prte_rml_recv_request_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rml_recv_request_t);
 
-/* struct for tracking routing trees */
+/* struct for traversing the routing tree - used internally */
 typedef struct {
-    pmix_list_item_t super;
     pmix_rank_t rank;
-    pmix_bitmap_t relatives;
-} prte_routed_tree_t;
-PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_routed_tree_t);
+    pmix_rank_t depth; // depth of this rank in tree
+    pmix_rank_t width; // width of this rank's layer in tree
+    pmix_rank_t count; // max count of radix tree of this width
+    pmix_rank_t base;  // rank the node was originally constructed as
+                       //   note: used for going back down the tree after going
+                       //   up, not necessarily related to failures
+} prte_rml_routed_tree_node_t;
+
+/* struct for passing information about a daemon fault to MCA components */
+typedef struct {
+    pmix_object_t super;
+
+    // Faults are handled by the RML as they are discovered, but they are also
+    // passed up the tree to be broadcast by the HNP.Handlers will be called
+    // twice for all faults - once when the fault is first detected and once
+    // when it is globally xcast.
+    //
+    // Global scope notifications will occur in the same order on all ranks, but
+    // RML recovery occurs prior to the local scope notifications - so global
+    // notifications will always report no changes to the tree. Components are
+    // therefore responsible for saving any necessary data between the local and
+    // global scope recoveries.
+    enum {
+        PRTE_RML_FAULT_SCOPE_LOCAL,
+        PRTE_RML_FAULT_SCOPE_GLOBAL
+    } scope;
+
+    pmix_data_array_t failed_ranks;
+
+    // Ancestor deaths could lead to this rank substituting for a hole further
+    // up the tree. If we've been promoted, our subtree has grown. At most, one
+    // of our old children can be the same. Their position in the children list
+    // may be different.
+    //
+    // It is important to note that, depending on how failure information ends
+    // up propagating, that single child may believe they had a different
+    // parent for a short time between. So, if a component chooses to discard
+    // messages from old parents, some messages to that child may be lost.
+    //
+    // This means appropriate handling should almost always treat all children
+    // as new if we have been promoted.
+    //
+    // Similar reasoning applies to our parent.
+    bool promoted;
+
+    bool ancestors_changed;
+    pmix_data_array_t prev_ancestors; // pmix_rank_t
+
+    bool parent_changed;
+    pmix_rank_t prev_parent;
+
+    bool children_changed;
+    pmix_data_array_t prev_children; // pmix_rank_t
+} prte_rml_recovery_status_t;
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rml_recovery_status_t);
 
 END_C_DECLS
 

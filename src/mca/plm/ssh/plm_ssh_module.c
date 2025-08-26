@@ -839,7 +839,7 @@ static int remote_spawn(void)
     bool failed_launch = true;
     pmix_proc_t target;
     prte_plm_ssh_caddy_t *caddy;
-    prte_routed_tree_t *child;
+    pmix_rank_t *children = (pmix_rank_t*) prte_rml_base.children.array;
     pmix_status_t ret;
 
     PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
@@ -861,7 +861,7 @@ static int remote_spawn(void)
     pmix_prefix = getenv("PMIX_PREFIX");
 
     /* if I have no children, just return */
-    if (0 == pmix_list_get_size(&prte_rml_base.children)) {
+    if (0 == prte_rml_base.n_children) {
         PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:ssh: remote spawn - have no children!",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -879,14 +879,14 @@ static int remote_spawn(void)
     }
 
     PMIX_LOAD_NSPACE(target.nspace, PRTE_PROC_MY_NAME->nspace);
-    PMIX_LIST_FOREACH(child, &prte_rml_base.children, prte_routed_tree_t)
-    {
-        target.rank = child->rank;
+    for(size_t i = 0; i < prte_rml_base.children.size; i++){
+        if(PMIX_RANK_INVALID == children[i]) continue;
+        target.rank = children[i];
 
         /* get the host where this daemon resides */
         if (NULL == (hostname = prte_get_proc_hostname(&target))) {
             pmix_output(0, "%s unable to get hostname for daemon %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_VPID_PRINT(child->rank));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_VPID_PRINT(children[i]));
             rc = PRTE_ERR_NOT_FOUND;
             goto cleanup;
         }
@@ -1079,7 +1079,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_plm_ssh_caddy_t *caddy;
     char *username, *nname;
     int port, *portptr;
-    prte_routed_tree_t *child;
+    pmix_rank_t *children = (pmix_rank_t*) prte_rml_base.children.array;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(state);
@@ -1207,9 +1207,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
         /* if we are tree launching, only launch our own children */
         if (!prte_mca_plm_ssh_component.no_tree_spawn) {
-            PMIX_LIST_FOREACH(child, &prte_rml_base.children, prte_routed_tree_t)
-            {
-                if (child->rank == node->daemon->name.rank) {
+            for(size_t i = 0; i < prte_rml_base.children.size; i++){
+                if (children[i] == node->daemon->name.rank) {
                     goto launch;
                 }
             }

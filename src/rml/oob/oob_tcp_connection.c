@@ -1098,24 +1098,44 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
         prte_event_del(&peer->send_event);
         peer->send_ev_active = false;
     }
+    if (peer->timer_ev_active) {
+        prte_event_del(&peer->timer_event);
+        peer->timer_ev_active = false;
+    }
+
+    /* clean up any partial send/recv data */
+    if (NULL != peer->recv_msg) {
+        PMIX_RELEASE(peer->recv_msg);
+        peer->recv_msg = NULL;
+    }
+    if (NULL != peer->send_msg) {
+        /* Just add to send_queue to handle w/ the rest */
+        pmix_list_prepend(&peer->send_queue, &peer->send_msg->super);
+        peer->send_msg = NULL;
+    }
+
+    /* inform rml of all queued sends' completion (as failures)
+     * do not try to re-queue messages at this level - risking message loss is
+     * unavoidable when a node in the communication tree dies, so safely
+     * replaying messages must be handled at a higher level.
+     */
+    prte_oob_tcp_send_t *send, *next;
+    PMIX_LIST_FOREACH_SAFE(send, next, &peer->send_queue, prte_oob_tcp_send_t){
+        send->msg->status = PRTE_ERR_UNREACH;
+        PRTE_RML_SEND_COMPLETE(send->msg);
+        pmix_list_remove_item(&peer->send_queue, &send->super);
+        PMIX_RELEASE(send);
+    }
 
     if (prte_prteds_term_ordered || prte_finalizing || prte_abnormal_term_ordered) {
         /* nothing more to do */
         return;
     }
 
-    /* FIXME: push any queued messages back onto the OOB for retry - note that
-     * this must be done after the prior call to ensure that the component
-     * processes the "lost connection" notice before the OOB begins to
-     * handle these recycled messages. This prevents us from unintentionally
-     * attempting to send the message again across the now-failed interface
+    /* inform the component-level that we have lost a connection so
+     * it can decide what to do about it.
      */
-    /*
-    if (NULL != peer->send_msg) {
-    }
-    while (NULL != (snd = (prte_oob_tcp_send_t*)pmix_list_remove_first(&peer->send_queue))) {
-    }
-    */
+    PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_mca_oob_tcp_component_lost_connection);
 }
 
 /*

@@ -263,12 +263,7 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
                 pmix_output(
                     0, "%s-%s prte_oob_tcp_peer_send_handler: unable to send message ON SOCKET %d",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)), peer->sd);
-                prte_event_del(&peer->send_event);
-                msg->msg->status = rc;
-                PRTE_RML_SEND_COMPLETE(msg->msg);
-                PMIX_RELEASE(msg);
-                peer->send_msg = NULL;
-                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
+                prte_oob_tcp_peer_close(peer);
                 return;
             }
 
@@ -331,7 +326,6 @@ static int read_bytes(prte_oob_tcp_peer_t *peer)
                                 "%s-%s prte_oob_tcp_msg_recv: readv failed: %s (%d)",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)),
                                 strerror(prte_socket_errno), prte_socket_errno);
-            // prte_oob_tcp_peer_close(peer);
             // if (NULL != mca_oob_tcp.oob_exception_callback) {
             // mca_oob_tcp.oob_exception_callback(&peer->name, PRTE_RML_PEER_DISCONNECTED);
             //}
@@ -343,26 +337,10 @@ static int read_bytes(prte_oob_tcp_peer_t *peer)
             pmix_output_verbose(OOB_TCP_DEBUG_FAIL, prte_oob_base.output,
                                 "%s-%s prte_oob_tcp_msg_recv: peer closed connection",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)));
-            /* stop all events */
-            if (peer->recv_ev_active) {
-                prte_event_del(&peer->recv_event);
-                peer->recv_ev_active = false;
-            }
-            if (peer->timer_ev_active) {
-                prte_event_del(&peer->timer_event);
-                peer->timer_ev_active = false;
-            }
-            if (peer->send_ev_active) {
-                prte_event_del(&peer->send_event);
-                peer->send_ev_active = false;
-            }
-            PMIX_RELEASE(peer->recv_msg);
-            peer->recv_msg = NULL;
-            prte_oob_tcp_peer_close(peer);
             // if (NULL != mca_oob_tcp.oob_exception_callback) {
             //   mca_oob_tcp.oob_exception_callback(&peer->peer_name, PRTE_RML_PEER_DISCONNECTED);
             //}
-            return PRTE_ERR_WOULD_BLOCK;
+            return PRTE_ERR_COMM_FAILURE;
         }
         /* we were able to read something, so adjust counters and location */
         peer->recv_msg->rdbytes -= rc;
@@ -426,8 +404,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
             pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                                 "%s UNABLE TO COMPLETE CONNECT ACK WITH %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer->name));
-            prte_event_del(&peer->recv_event);
-            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
+            prte_oob_tcp_peer_close(peer);
             return;
         }
         break;
@@ -561,12 +538,10 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                 /* exit this event and let the event lib progress */
                 return;
             } else {
-                // report the error
+                /* report the error and close the connection */
                 pmix_output(0, "%s-%s prte_oob_tcp_peer_recv_handler: unable to recv message",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)));
-                /* turn off the recv event */
-                prte_event_del(&peer->recv_event);
-                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
+                prte_oob_tcp_peer_close(peer);
                 return;
             }
         }
@@ -575,7 +550,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
         pmix_output(0, "%s-%s prte_oob_tcp_peer_recv_handler: invalid socket state(%d)",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)),
                     peer->state);
-        // prte_oob_tcp_peer_close(peer);
+        prte_oob_tcp_peer_close(peer);
         break;
     }
 }

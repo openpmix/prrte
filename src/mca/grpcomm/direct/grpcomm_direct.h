@@ -21,16 +21,37 @@
 
 BEGIN_C_DECLS
 
+/* Tracks ongoing xcast operations to ensure all messages are delivered exactly
+ * once to all daemons even in the presence of daemon failures */
+typedef struct {
+    pmix_object_t super;
+    // list of ongoing operations, defined in grpcomm_direct_xcast.c
+    pmix_list_t ops;
+    // list of operations sent to HNP to be started, but not seen since
+    pmix_list_t pending_ops;
+    // global op id of the last known completed (in our subtree) operation
+    size_t op_id_completed;
+    // global op id of what was completed (in our subtree) when we were last
+    // promoted (meaning our subtree grew, so we can't assume completion in the
+    // new subtree)
+    size_t op_id_completed_at_promotion;
+    // local op id of the last op generated here
+    size_t op_id_local;
+    // used by HNP to assign global op id
+    size_t op_id_global;
+} prte_grpcomm_xcast_t;
+PRTE_MODULE_EXPORT PMIX_CLASS_DECLARATION(prte_grpcomm_xcast_t);
+
 /*
  * Grpcomm interfaces
  */
-
 typedef struct {
-	prte_grpcomm_base_component_t super;
-	// track ongoing fence operations - list of prte_grpcomm_fence_t
-	pmix_list_t fence_ops;
-	// track ongoiong group operations - list of prte_grpcomm_group_t
-	pmix_list_t group_ops;
+    prte_grpcomm_base_component_t super;
+    prte_grpcomm_xcast_t xcast_ops;
+    // track ongoing fence operations - list of prte_grpcomm_fence_t
+    pmix_list_t fence_ops;
+    // track ongoiong group operations - list of prte_grpcomm_group_t
+    pmix_list_t group_ops;
 } prte_grpcomm_direct_component_t;
 
 PRTE_MODULE_EXPORT extern prte_grpcomm_direct_component_t prte_mca_grpcomm_direct_component;
@@ -64,7 +85,6 @@ typedef struct {
     size_t naddmembers;
 } prte_grpcomm_direct_group_signature_t;
 PRTE_MODULE_EXPORT PMIX_CLASS_DECLARATION(prte_grpcomm_direct_group_signature_t);
-
 
 /* Internal component object for tracking ongoing
  * allgather operations */
@@ -169,6 +189,14 @@ void prte_grpcomm_direct_xcast_recv(int status, pmix_proc_t *sender,
                                     pmix_data_buffer_t *buffer,
                                     prte_rml_tag_t tg, void *cbdata);
 
+PRTE_MODULE_EXPORT extern
+void prte_grpcomm_direct_xcast_ack(int status, pmix_proc_t *sender,
+                                   pmix_data_buffer_t *buffer,
+                                   prte_rml_tag_t tg, void *cbdata);
+
+PRTE_MODULE_EXPORT extern
+void prte_grpcomm_direct_xcast_fault_handler(const prte_rml_recovery_status_t* status);
+
 /* fence functions */
 PRTE_MODULE_EXPORT extern
 int prte_grpcomm_direct_fence(const pmix_proc_t procs[], size_t nprocs,
@@ -185,6 +213,8 @@ void prte_grpcomm_direct_fence_release(int status, pmix_proc_t *sender,
                                 	   pmix_data_buffer_t *buffer,
                                 	   prte_rml_tag_t tag, void *cbdata);
 
+PRTE_MODULE_EXPORT extern
+void prte_grpcomm_direct_fence_fault_handler(const prte_rml_recovery_status_t* status);
 
 /* group functions */
 PRTE_MODULE_EXPORT extern
@@ -192,6 +222,9 @@ int prte_grpcomm_direct_group(pmix_group_operation_t op, char *grpid,
                               const pmix_proc_t procs[], size_t nprocs,
                               const pmix_info_t directives[], size_t ndirs,
                               pmix_info_cbfunc_t cbfunc, void *cbdata);
+
+PRTE_MODULE_EXPORT extern
+void prte_grpcomm_direct_group_fault_handler(const prte_rml_recovery_status_t* status);
 
 #if PMIX_NUMERIC_VERSION >= 0x00060000
 

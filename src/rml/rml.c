@@ -19,6 +19,7 @@
 #include "prte_config.h"
 
 #include <string.h>
+#include <pmix.h>
 
 #include "src/mca/base/pmix_mca_base_component_repository.h"
 #include "src/mca/mca.h"
@@ -36,13 +37,20 @@
 prte_rml_base_t prte_rml_base = {
     .rml_output = -1,
     .routed_output = -1,
+    .max_retries = 0,
     .posted_recvs = PMIX_LIST_STATIC_INIT,
     .unmatched_msgs = PMIX_LIST_STATIC_INIT,
-    .max_retries = 0,
-    .lifeline = PMIX_RANK_INVALID,
-    .children = PMIX_LIST_STATIC_INIT,
     .radix = 64,
-    .static_ports = false
+    .static_ports = false,
+    .cur_node = { .rank = PMIX_RANK_INVALID },
+    .children = PMIX_DATA_ARRAY_STATIC_INIT,
+    .n_children = 0,
+    .ancestors = PMIX_DATA_ARRAY_STATIC_INIT,
+    .lifeline = PMIX_RANK_INVALID,
+    .n_dmns = 0
+    // TODO?
+    //.failed_dmns = PMIX_BITMAP_STATIC_INIT,
+    //.global_failed_dmns = PMIX_BITMAP_STATIC_INIT
 };
 
 static int verbosity = 0;
@@ -102,7 +110,10 @@ void prte_rml_close(void)
     prte_oob_close();
     PMIX_LIST_DESTRUCT(&prte_rml_base.posted_recvs);
     PMIX_LIST_DESTRUCT(&prte_rml_base.unmatched_msgs);
-    PMIX_LIST_DESTRUCT(&prte_rml_base.children);
+    PMIX_DESTRUCT(&prte_rml_base.failed_dmns);
+    PMIX_DESTRUCT(&prte_rml_base.global_failed_dmns);
+    PMIx_Data_array_destruct(&prte_rml_base.ancestors);
+    PMIx_Data_array_destruct(&prte_rml_base.children);
     if (0 <= prte_rml_base.rml_output) {
         pmix_output_close(prte_rml_base.rml_output);
     }
@@ -117,7 +128,16 @@ int prte_rml_open(void)
     /* construct object for holding the active plugin modules */
     PMIX_CONSTRUCT(&prte_rml_base.posted_recvs, pmix_list_t);
     PMIX_CONSTRUCT(&prte_rml_base.unmatched_msgs, pmix_list_t);
-    PMIX_CONSTRUCT(&prte_rml_base.children, pmix_list_t);
+
+    /* construct objects for holding failure information */
+    PMIX_CONSTRUCT(&prte_rml_base.failed_dmns, pmix_bitmap_t);
+    PMIX_CONSTRUCT(&prte_rml_base.global_failed_dmns, pmix_bitmap_t);
+
+    /* set up failure notification receives */
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON_DIED, true,
+                  prte_rml_recv_failures_notice, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON_ADOPTED, true,
+                  prte_rml_recv_adoption_notice, NULL);
 
     /* compute the routing tree - only thing we need to know is the
      * number of daemons in the DVM */
@@ -263,15 +283,37 @@ static void prq_des(prte_rml_recv_request_t *ptr)
 }
 PMIX_CLASS_INSTANCE(prte_rml_recv_request_t, pmix_object_t, prq_cons, prq_des);
 
-static void rtcon(prte_routed_tree_t *rt)
-{
-    rt->rank = PMIX_RANK_INVALID;
-    PMIX_CONSTRUCT(&rt->relatives, pmix_bitmap_t);
+static void rscon(prte_rml_recovery_status_t* p){
+    p->scope = PRTE_RML_FAULT_SCOPE_LOCAL;
+    p->failed_ranks = (pmix_data_array_t) PMIX_DATA_ARRAY_STATIC_INIT;
+    p->promoted = false;
+
+    p->ancestors_changed = false;
+    p->prev_ancestors = (pmix_data_array_t) PMIX_DATA_ARRAY_STATIC_INIT;
+    PMIx_Data_array_construct(
+        &p->prev_ancestors, prte_rml_base.ancestors.size, PMIX_PROC_RANK
+    );
+    for(size_t i = 0; i < p->prev_ancestors.size; i++){
+        ((pmix_rank_t*)p->prev_ancestors.array)[i] =
+            ((pmix_rank_t*)prte_rml_base.ancestors.array)[i];
+    }
+
+    p->parent_changed = false;
+    p->prev_parent = prte_rml_base.lifeline;
+
+    p->children_changed = false;
+    p->prev_children = (pmix_data_array_t) PMIX_DATA_ARRAY_STATIC_INIT;
+    PMIx_Data_array_construct(
+        &p->prev_children, prte_rml_base.children.size, PMIX_PROC_RANK
+    );
+    for(size_t i = 0; i < p->prev_children.size; i++){
+        ((pmix_rank_t*)p->prev_children.array)[i] =
+            ((pmix_rank_t*)prte_rml_base.children.array)[i];
+    }
 }
-static void rtdes(prte_routed_tree_t *rt)
-{
-    PMIX_DESTRUCT(&rt->relatives);
+static void rsdes(prte_rml_recovery_status_t* p){
+    PMIx_Data_array_destruct(&p->failed_ranks);
+    PMIx_Data_array_destruct(&p->prev_ancestors);
+    PMIx_Data_array_destruct(&p->prev_children);
 }
-PMIX_CLASS_INSTANCE(prte_routed_tree_t,
-                    pmix_list_item_t,
-                    rtcon, rtdes);
+PMIX_CLASS_INSTANCE(prte_rml_recovery_status_t, pmix_object_t, rscon, rsdes);

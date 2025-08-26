@@ -162,7 +162,6 @@ PMIX_CLASS_INSTANCE(prte_grpcomm_group_t,
                     pmix_list_item_t,
                     gccon, gcdes);
 
-
 static void mdcon(prte_pmix_fence_caddy_t *p)
 {
     p->sig = NULL;
