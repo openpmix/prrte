@@ -267,6 +267,10 @@ static void launch_daemons(int fd, short args, void *cbdata)
         !prte_get_attribute(&state->jdata->attributes, PRTE_JOB_CONTINUOUS, NULL, PMIX_BOOL)) {
         /* kill the job if any prteds die */
         pmix_argv_append(&argc, &argv, "--kill-on-bad-exit");
+    } else {
+        /* don't kill if a node or prted dies */
+        pmix_argv_append(&argc, &argv, "--no-kill");
+        pmix_argv_append(&argc, &argv, "--kill-on-bad-exit=0");
     }
 
     /* our daemons are not an MPI task */
