@@ -66,6 +66,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/ras/base/ras_private.h"
+#include "src/mca/state/state.h"
 #include "src/rml/rml_contact.h"
 #include "src/rml/rml.h"
 #include "src/runtime/data_server/prte_data_server.h"
@@ -526,32 +527,58 @@ void prte_pmix_server_clear(pmix_proc_t *pname)
 
 /* provide a callback function for lost connections to allow us
  * to cleanup after any tools once they depart */
+static void _lost_conn(int sd, short args, void *cbdata)
+{
+     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t*)cbdata;
+     prte_job_t *jdata;
+     PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+     // check the source to see if it is a client or tool
+     jdata = prte_get_job_data_object(cd->proc.nspace);
+     if (NULL == jdata) {
+        // we don't know this job
+        goto complete;
+     }
+
+     if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+        // client - do nothing, the ODLS will see it go away
+        goto complete;
+     }
+
+     // tool - since the tool isn't a child of ours, we cannot
+     // see a waitpid fire, so this is the only notice we will
+     // receive that the tool is no longer connected to us
+     PRTE_ACTIVATE_PROC_STATE(&cd->proc, PRTE_PROC_STATE_TERMINATED);
+
+complete:
+    // progress the PMIx event notification chain
+    if (NULL != cd->evcbfunc) {
+        cd->evcbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cd->cbdata);
+    }
+    PMIX_RELEASE(cd);
+}
+
 static void lost_connection_hdlr(size_t evhdlr_registration_id, pmix_status_t status,
                                  const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
                                  pmix_info_t *results, size_t nresults,
                                  pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
-    prte_pmix_tool_t *tl;
-    PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, status,
-                            info, ninfo, results, nresults);
+     prte_pmix_server_op_caddy_t *cd;
+     PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id);
 
-    /* scan the list of attached tools to see if this one is there */
-    PMIX_LIST_FOREACH(tl, &prte_pmix_server_globals.tools, prte_pmix_tool_t)
-    {
-        if (PMIX_CHECK_PROCID(&tl->name, source)) {
-            /* take this tool off the list */
-            pmix_list_remove_item(&prte_pmix_server_globals.tools, &tl->super);
-            /* release it */
-            PMIX_RELEASE(tl);
-            break;
-        }
-    }
-
-    /* we _always_ have to execute the evhandler callback or
-     * else the event progress engine will hang */
-    if (NULL != cbfunc) {
-        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
-    }
+     // need to threadshift this into our own progress thread
+     cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
+     cd->status = status;
+     memcpy(&cd->proc, source, sizeof(pmix_proc_t));
+     cd->info = info;
+     cd->ninfo = ninfo;
+     cd->directives = results;
+     cd->ndirs = nresults;
+     cd->evcbfunc = cbfunc;
+     cd->cbdata = cbdata;
+     prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _lost_conn, cd);
+     PMIX_POST_OBJECT(cd);
+     prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
 }
 
 static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
@@ -588,7 +615,6 @@ int pmix_server_init(void)
     /* setup the server's state variables */
     PMIX_CONSTRUCT(&prte_pmix_server_globals.psets, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.groups, pmix_list_t);
-    PMIX_CONSTRUCT(&prte_pmix_server_globals.tools, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.local_reqs, pmix_pointer_array_t);
     pmix_pointer_array_init(&prte_pmix_server_globals.local_reqs, 128, INT_MAX, 2);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.remote_reqs, pmix_pointer_array_t);
@@ -923,10 +949,14 @@ int pmix_server_init(void)
     /* register the "lost-connection" event handler */
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
     prc = PMIX_ERR_LOST_CONNECTION;
-    PMIx_Register_event_handler(&prc, 1, NULL, 0, lost_connection_hdlr, regcbfunc, &lock);
+    ninfo = 1;
+    PMIX_INFO_CREATE(info, ninfo);
+    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_HDLR_NAME, "LOST-CONNECTION", PMIX_STRING);
+    PMIx_Register_event_handler(&prc, 1,info, ninfo, lost_connection_hdlr, regcbfunc, &lock);
     PRTE_PMIX_WAIT_THREAD(&lock);
     prc = lock.status;
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
+    PMIX_INFO_FREE(info, ninfo);
     rc = prte_pmix_convert_status(prc);
 
     return rc;
@@ -958,8 +988,8 @@ void pmix_server_start(void)
                   PRTE_RML_PERSISTENT, pmix_server_notify, NULL);
 
     /* setup recv for jobid return */
-    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_JOBID_RESP,
-                  PRTE_RML_PERSISTENT, pmix_server_jobid_return, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_TCONN_RESP,
+                  PRTE_RML_PERSISTENT, pmix_server_tconn_return, NULL);
 
     /* setup recv for alloc request response */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED_RESP,
@@ -991,6 +1021,7 @@ void pmix_server_finalize(void)
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LAUNCH_RESP);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DATA_CLIENT);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_NOTIFICATION);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_TCONN_RESP);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED_RESP);
     if (PRTE_PROC_IS_MASTER) {
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING);
@@ -1020,7 +1051,6 @@ void pmix_server_finalize(void)
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.notifications);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.psets);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.groups);
-    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.tools);
 
     /* shutdown the local server */
     prte_pmix_server_globals.initialized = false;
@@ -2015,6 +2045,7 @@ static void opcon(prte_pmix_server_op_caddy_t *p)
     p->infocbfunc = NULL;
     p->toolcbfunc = NULL;
     p->spcbfunc = NULL;
+    p->evcbfunc = NULL;
     p->cbdata = NULL;
     p->server_object = NULL;
 }
@@ -2107,7 +2138,3 @@ static void psdes(pmix_server_pset_t *p)
 PMIX_CLASS_INSTANCE(pmix_server_pset_t,
                     pmix_list_item_t,
                     pscon, psdes);
-
-PMIX_CLASS_INSTANCE(prte_pmix_tool_t,
-                    pmix_list_item_t,
-                    NULL, NULL);
