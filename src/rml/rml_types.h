@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -121,7 +121,7 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 /* For FileM RSH Component */
 #define PRTE_RML_TAG_FILEM_RSH 23
 
-#define PRTE_RML_TAG_JOBID_RESP      24
+#define PRTE_RML_TAG_TCONN_RESP      24
 
 /* For tools */
 #define PRTE_RML_TAG_TOOL 26
