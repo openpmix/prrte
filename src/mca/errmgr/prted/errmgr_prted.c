@@ -11,6 +11,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -435,7 +436,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             }
             /* if all my routes and children are gone, then terminate
                ourselves nicely (i.e., this is a normal termination) */
-            if (0 == pmix_list_get_size(&prte_rml_base.children)) {
+            if (0 == prte_rml_base.n_children) {
                 PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                                      "%s errmgr:default:prted all routes gone - exiting",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -444,7 +445,7 @@ static void proc_errors(int fd, short args, void *cbdata)
                 PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                                      "%s errmgr:default:prted not exiting, num_routes() == %d",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                     (int) pmix_list_get_size(&prte_rml_base.children)));
+                                     prte_rml_base.n_children));
             }
         }
         /* if not, then we can continue */
@@ -627,7 +628,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             }
             /* if all my routes and children are gone, then terminate
                ourselves nicely (i.e., this is a normal termination) */
-            if (0 == pmix_list_get_size(&prte_rml_base.children)) {
+            if (0 == prte_rml_base.n_children) {
                 PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                                      "%s errmgr:default:prted all routes gone - exiting",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));

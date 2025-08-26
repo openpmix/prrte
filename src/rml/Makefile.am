@@ -12,6 +12,7 @@
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
+# Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -23,14 +24,17 @@
 headers += \
     rml/rml.h \
     rml/rml_types.h \
-    rml/rml_contact.h
+    rml/rml_contact.h \
+    rml/radix.h
 
 libprrte_la_SOURCES += \
     rml/rml.c \
     rml/rml_send.c \
     rml/rml_recv.c \
+    rml/rml_purge.c \
     rml/rml_base_contact.c \
     rml/rml_base_msg_handlers.c \
+    rml/rml_fault_handler.c \
     rml/routed_radix.c
 
 include rml/oob/Makefile.am
