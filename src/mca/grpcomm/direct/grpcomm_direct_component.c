@@ -7,6 +7,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -164,7 +165,6 @@ static void gcdes(prte_grpcomm_group_t *p)
 PMIX_CLASS_INSTANCE(prte_grpcomm_group_t,
                     pmix_list_item_t,
                     gccon, gcdes);
-
 
 static void mdcon(prte_pmix_fence_caddy_t *p)
 {

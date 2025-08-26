@@ -541,7 +541,7 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
          * gone, then terminate ourselves IF no local procs
          * remain (might be some from another job)
          */
-        if (prte_prteds_term_ordered && 0 == pmix_list_get_size(&prte_rml_base.children)) {
+        if (prte_prteds_term_ordered && 0 == prte_rml_base.n_children) {
             for (i = 0; i < prte_local_children->size; i++) {
                 pdata = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
                 if (NULL != pdata &&
@@ -680,7 +680,7 @@ void prte_state_base_check_all_complete(int fd, short args, void *cbdata)
      */
 CHECK_DAEMONS:
     if (jdata == NULL || PMIX_CHECK_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
-        if (0 == pmix_list_get_size(&prte_rml_base.children)) {
+        if (0 == prte_rml_base.n_children) {
             /* orteds are done! */
             PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                                  "%s orteds complete - exiting",
