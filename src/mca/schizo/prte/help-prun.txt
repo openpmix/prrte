@@ -219,6 +219,8 @@ option to the help request as "--help <option>".
 |                      | disable (false) its internal library's GPU    |
 |                      | support                                       |
 +----------------------+-----------------------------------------------+
+| "--pty"              | Spawn a pseudo-terminal                       |
++----------------------+-----------------------------------------------+
 
 +----------------------+-----------------------------------------------+
 |                      | Specific Options                              |
