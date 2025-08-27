@@ -121,7 +121,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
     int32_t count;
     pmix_nspace_t job;
     prte_session_t *session;
-    prte_job_t *jdata, *parent, jb;
+    prte_job_t *jdata, *parent;
     pmix_data_buffer_t *answer;
     pmix_rank_t vpid;
     prte_proc_t *proc;
@@ -149,9 +149,9 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
     }
 
     switch (command) {
-    case PRTE_PLM_ALLOC_JOBID_CMD:
+    case PRTE_PLM_TOOL_ATTACHED_CMD:
         /* set default return value */
-        PMIX_LOAD_NSPACE(job, NULL);
+        ret = PMIX_SUCCESS;
 
         /* unpack the room number of the request so we can return it to them */
         count = 1;
@@ -160,24 +160,96 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             PMIX_ERROR_LOG(rc);
             goto CLEANUP;
         }
-        /* the new nspace is our base nspace with an "@N" extension */
-        pmix_asprintf(&tmp, "%s@%u", prte_plm_globals.base_nspace, prte_plm_globals.next_jobid);
-        PMIX_LOAD_NSPACE(job, tmp);
-        free(tmp);
-        prte_plm_globals.next_jobid++;
-        PMIX_CONSTRUCT(&jb, prte_job_t);
+        // see if they need a new jobid assigned
+        count = 1;
+        rc = PMIx_Data_unpack(NULL, buffer, &found, &count, PMIX_BOOL);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            goto CLEANUP;
+        }
+        // if so, then get the rank of the tool
+        if (found) {
+            count = 1;
+            rc = PMIx_Data_unpack(NULL, buffer, &name.rank, &count, PMIX_PROC_RANK);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                goto CLEANUP;
+            }
+            /* the new nspace is our base nspace with an "@N" extension */
+            pmix_asprintf(&tmp, "%s@%u", prte_plm_globals.base_nspace, prte_plm_globals.next_jobid);
+            PMIX_LOAD_NSPACE(name.nspace, tmp);
+            free(tmp);
+            prte_plm_globals.next_jobid++;
 
+        } else {
+            // get the full procID of the tool
+            count = 1;
+            rc = PMIx_Data_unpack(NULL, buffer, &name, &count, PMIX_PROC);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                goto CLEANUP;
+            }
+        }
+        // see if we already have this job
+        jdata = prte_get_job_data_object(name.nspace);
+        if (NULL != jdata) {
+            // we do - check if we already have this proc
+            proc = (prte_proc_t*)pmix_pointer_array_get_item(jdata->procs, name.rank);
+            if (NULL == proc) {
+                // new rank for this tool - add it
+                proc = PMIX_NEW(prte_proc_t);
+                memcpy(&proc->name, &name, sizeof(pmix_proc_t));
+                proc->state = PRTE_PROC_STATE_RUNNING;
+                pmix_pointer_array_set_item(jdata->procs, name.rank, proc);
+                jdata->num_procs++;
+            } else {
+                ret = PMIX_ERR_VALUE_OUT_OF_BOUNDS;
+            }
+        } else {
+            // unpack the cmd line
+            count = 1;
+            rc = PMIx_Data_unpack(NULL, buffer, &tmp, &count, PMIX_STRING);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                goto CLEANUP;
+            }
+            // and the pid
+            count = 1;
+            rc = PMIx_Data_unpack(NULL, buffer, &pid, &count, PMIX_PID);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                free(tmp);
+                goto CLEANUP;
+            }
+
+            // need to add the tool job
+            jdata = PMIX_NEW(prte_job_t);
+            PMIX_LOAD_NSPACE(jdata->nspace, name.nspace);
+            PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
+            rc = prte_set_job_data_object(jdata);
+            app = PMIX_NEW(prte_app_context_t);
+            if (NULL != tmp) {
+                app->argv = PMIx_Argv_split(tmp, ' ');
+                free(tmp);
+                app->app = strdup(app->argv[0]);
+            } else {
+                app->app = strdup("unknown");
+                PMIx_Argv_append_nosize(&app->argv, "unknown");
+            }
+            pmix_pointer_array_set_item(jdata->apps, 0, app);
+            jdata->num_apps++;
+            proc = PMIX_NEW(prte_proc_t);
+            memcpy(&proc->name, &name, sizeof(pmix_proc_t));
+            proc->pid = pid;
+            proc->state = PRTE_PROC_STATE_RUNNING;
+            pmix_pointer_array_set_item(jdata->procs, name.rank, proc);
+            jdata->num_procs = 1;
+        }
         /* setup the response */
         PMIX_DATA_BUFFER_CREATE(answer);
 
         /* pack the status to be returned */
-        rc = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_INT32);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-        }
-
-        /* pack the jobid */
-        rc = PMIx_Data_pack(NULL, answer, &job, 1, PMIX_PROC_NSPACE);
+        rc = PMIx_Data_pack(NULL, answer, &ret, 1, PMIX_INT32);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
         }
@@ -188,8 +260,17 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             PMIX_ERROR_LOG(rc);
         }
 
+        if (PRTE_SUCCESS == ret) {
+            // pack the namespace of the tool - we may have provided the namespace,
+            // or it may be just the one they sent us
+            rc = PMIx_Data_pack(NULL, answer, name.nspace, 1, PMIX_PROC_NSPACE);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+            }
+        }
+
         /* send the response back to the sender */
-        PRTE_RML_SEND(ret, sender->rank, answer, PRTE_RML_TAG_JOBID_RESP);
+        PRTE_RML_SEND(ret, sender->rank, answer, PRTE_RML_TAG_TCONN_RESP);
         if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_RELEASE(answer);
