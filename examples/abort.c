@@ -65,7 +65,7 @@ int main(int argc, char **argv)
     pmix_proc_t myproc, target;
     size_t ninfo = 0, n;
     pmix_info_t *info = NULL;
-    char *nspace = NULL;
+    char *nspace = NULL, *server = NULL, *mynspace = NULL;
     pid_t pid = -1;
 
     for (n = 1; n < (size_t) argc; n++) {
@@ -81,22 +81,43 @@ int main(int argc, char **argv)
                 exit(1);
             }
             nspace = argv[n + 1];
+        } else if (0 == strcmp("-server", argv[n]) || 0 == strcmp("--server", argv[n])) {
+            if (NULL == argv[n + 1]) {
+                fprintf(stderr, "Must provide nspace argument to %s option\n", argv[n]);
+                exit(1);
+            }
+            server = argv[n + 1];
+        } else if (0 == strcmp("-mynspace", argv[n]) || 0 == strcmp("--mynspace", argv[n])) {
+            if (NULL == argv[n + 1]) {
+                fprintf(stderr, "Must provide nspace argument to %s option\n", argv[n]);
+                exit(1);
+            }
+            mynspace = argv[n + 1];
         }
     }
-    if (NULL == nspace) {
+    if (NULL == nspace && NULL == mynspace) {
         fprintf(stderr, "Must provide nspace\n");
         exit(1);
+    }
+    if (NULL != mynspace) {
+        setenv("PMIX_NAMESPACE", mynspace, true);
+        setenv("PMIX_RANK", "0", true);
+        nspace = mynspace;
     }
 
     if (0 < pid) {
         ninfo = 1;
         PMIX_INFO_CREATE(info, ninfo);
         PMIX_INFO_LOAD(&info[0], PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
+    } else if (NULL != server) {
+        ninfo = 1;
+        PMIX_INFO_CREATE(info, ninfo);
+        PMIX_INFO_LOAD(&info[0], PMIX_SERVER_URI, server, PMIX_STRING);
     }
 
     /* init us */
     if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, info, ninfo))) {
-        fprintf(stderr, "PMIx_tool_init failed: %d\n", rc);
+        fprintf(stderr, "PMIx_tool_init failed: %s\n", PMIx_Error_string(rc));
         exit(rc);
     }
     if (NULL != info) {

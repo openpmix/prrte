@@ -125,6 +125,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
     pmix_data_buffer_t *answer;
     pmix_rank_t vpid;
     prte_proc_t *proc;
+    prte_node_t *node;
     prte_proc_state_t state;
     prte_exit_code_t exit_code;
     int32_t rc = PRTE_SUCCESS, ret;
@@ -243,6 +244,10 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             proc->pid = pid;
             proc->state = PRTE_PROC_STATE_RUNNING;
             pmix_pointer_array_set_item(jdata->procs, name.rank, proc);
+            // find the node it is on
+            node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, sender->rank);
+            PMIX_RETAIN(node);
+            proc->node = node;
             jdata->num_procs = 1;
         }
         /* setup the response */
