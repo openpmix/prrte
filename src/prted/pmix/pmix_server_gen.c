@@ -759,7 +759,7 @@ static void _toolconn(int sd, short args, void *cbdata)
         }
     }
 
-    if (!prte_pmix_server_globals.allow_foreign_tools) {
+    if (prte_pmix_server_globals.no_foreign_tools) {
         // the PMIx "uid" is the effective uid of the tool,
         // so compare it to our effective  uid
         if (cd->uid != prte_process_info.euid) {

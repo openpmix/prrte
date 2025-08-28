@@ -625,10 +625,6 @@ int main(int argc, char *argv[])
         /* we should act as system-level PMIx server */
         PMIX_SETENV_COMPAT("PRTE_MCA_pmix_system_server", "1", true, &environ);
     }
-    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_ALLOW_FOREIGN_TOOLS)) {
-        /* we should allow tools from foreign users to connect to us */
-        PMIX_SETENV_COMPAT("PRTE_MCA_pmix_allow_foreign_tools", "1", true, &environ);
-    }
     /* always act as session-level PMIx server */
     PMIX_SETENV_COMPAT("PRTE_MCA_pmix_session_server", "1", true, &environ);
     /* if we were asked to report a uri, set the MCA param to do so */

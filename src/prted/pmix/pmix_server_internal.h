@@ -377,7 +377,7 @@ typedef struct {
     bool pubsub_init;
     bool session_server;
     bool system_server;
-    bool allow_foreign_tools;
+    bool no_foreign_tools;
     bool system_controller;
     bool scheduler_connected;
     pmix_proc_t scheduler;

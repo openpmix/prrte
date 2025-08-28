@@ -67,7 +67,6 @@ BEGIN_C_DECLS
 #define PRTE_CLI_NO_READY_MSG           "no-ready-msg"              // none
 #define PRTE_CLI_DAEMONIZE              "daemonize"                 // none
 #define PRTE_CLI_SYSTEM_SERVER          "system-server"             // none
-#define PRTE_CLI_ALLOW_FOREIGN_TOOLS    "allow-foreign-tools"       // none
 #define PRTE_CLI_SET_SID                "set-sid"                   // none
 #define PRTE_CLI_REPORT_PID             "report-pid"                // required
 #define PRTE_CLI_REPORT_URI             "report-uri"                // required
