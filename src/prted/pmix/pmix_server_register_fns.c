@@ -747,6 +747,7 @@ int prte_pmix_server_register_tool(pmix_server_req_t *cd)
     prte_job_t *jdata;
     prte_app_context_t *app;
     prte_proc_t *proc;
+    prte_node_t *node;
 
     // create a job tracker for it
     jdata = PMIX_NEW(prte_job_t);
@@ -763,6 +764,10 @@ int prte_pmix_server_register_tool(pmix_server_req_t *cd)
     proc->pid = cd->pid;
     proc->state = PRTE_PROC_STATE_RUNNING;
     pmix_pointer_array_set_item(jdata->procs, 0, proc);
+    // find the node it is on
+    node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, prte_process_info.myproc.rank);
+    PMIX_RETAIN(node);
+    proc->node = node;
     jdata->num_procs = 1;
 
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
