@@ -416,12 +416,12 @@ void pmix_server_register_params(void)
                                       &prte_pmix_server_globals.system_server);
 
     /* whether or not to accept connection from foreign tools*/
-    prte_pmix_server_globals.allow_foreign_tools = false;
-    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "allow_foreign_tools",
+    prte_pmix_server_globals.no_foreign_tools = false;
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "no_foreign_tools",
                                       "Whether or not to accept tool connection requests "
                                       "from other users",
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                      &prte_pmix_server_globals.allow_foreign_tools);
+                                      &prte_pmix_server_globals.no_foreign_tools);
 
     /* whether or not to generate device distances */
     (void) pmix_mca_base_var_register("prte", "pmix", NULL, "generate_distances",
@@ -743,16 +743,17 @@ int pmix_server_init(void)
         }
 
 #ifdef PMIX_SERVER_ALLOW_FOREIGN_TOOLS
-       // see if they want to allow tools from other users
-       if (prte_pmix_server_globals.allow_foreign_tools) {
+        // see if they want to allow tools from other users
+        if (prte_pmix_server_globals.no_foreign_tools) {
+            flag = false;
             PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_ALLOW_FOREIGN_TOOLS,
-                               NULL, PMIX_BOOL);
+                               (void*)&flag, PMIX_BOOL);
             if (PMIX_SUCCESS != prc) {
                 PMIX_INFO_LIST_RELEASE(ilist);
                 rc = prte_pmix_convert_status(prc);
                 return rc;
             }
-       }
+        }
 #endif
 
 #ifdef PMIX_SERVER_SYS_CONTROLLER
