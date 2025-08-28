@@ -136,7 +136,8 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                         "%s plm:base:receive processing msg", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                         "%s plm:base:receive processing msg",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     count = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &command, &count, PMIX_UINT8);
