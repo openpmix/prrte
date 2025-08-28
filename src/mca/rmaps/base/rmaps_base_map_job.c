@@ -234,7 +234,12 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             /* we do allow inheritance of the defaults */
             inherit = true;
         } else if (NULL != (parent = prte_get_job_data_object(nptr->nspace))) {
-            if (prte_get_attribute(&parent->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL)) {
+            if (PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
+                // we don't inherit anything from tools as they were not
+                // mapped by us
+                inherit = false;
+                parent = NULL;
+            } else if (prte_get_attribute(&parent->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL)) {
                 inherit = true;
             } else if (prte_get_attribute(&parent->attributes, PRTE_JOB_NOINHERIT, NULL, PMIX_BOOL)) {
                 inherit = false;
