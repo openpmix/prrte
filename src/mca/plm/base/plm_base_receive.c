@@ -140,7 +140,8 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                         "%s plm:base:receive processing msg", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                         "%s plm:base:receive processing msg",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     count = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &command, &count, PMIX_UINT8);
@@ -353,12 +354,20 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
 
         } else {
             /* try defaulting to parent session */
-            if (NULL != (parent = prte_get_job_data_object(nptr->nspace))) {
-                session = parent->session;
-                if (NULL == session) {
-                    rc = PRTE_ERR_NOT_FOUND;
-                    goto ANSWER_LAUNCH;
+            parent = prte_get_job_data_object(nptr->nspace);
+            if (NULL != parent) {
+                /* if the proc requesting the spawn is a tool, it does not have a
+                 * session - so assign it the default session */
+                if (PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
+                    session = prte_default_session;
+                } else {
+                    session = parent->session;
+                    if (NULL == session) {
+                        rc = PRTE_ERR_NOT_FOUND;
+                        goto ANSWER_LAUNCH;
+                    }
                 }
+
             // (RHC) This next clause merits some thought - not sure I fully
             // understand the conditionals
             } else if (!prte_pmix_server_globals.scheduler_connected ||
