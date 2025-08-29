@@ -376,6 +376,8 @@ static void send_error(int status, pmix_proc_t *idreq, pmix_proc_t *remote, int 
 static void _mdxresp(int sd, short args, void *cbdata);
 static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata);
 
+static bool remote_connections_specified = false;
+static char *remote_cncts = NULL;
 static char *generate_dist = "fabric,gpu,network";
 void pmix_server_register_params(void)
 {
@@ -401,6 +403,32 @@ void pmix_server_register_params(void)
                                    PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                    &prte_pmix_server_globals.wait_for_server);
 
+    /* whether or not to support tool connections */
+    prte_pmix_server_globals.tool_support = true;
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "tool_support",
+                                      "Whether or not to support tool connectionst",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_pmix_server_globals.tool_support);
+
+    /* whether or not to support remote connections */
+    prte_pmix_server_globals.remote_connections = false;
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "remote_connections",
+                                      "Whether or not to support remote connections",
+                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                      &remote_cncts);
+     if (NULL != remote_cncts) {
+          if (0 == strcasecmp(remote_cncts, "false") ||
+              0 == strcasecmp(remote_cncts, "f") ||
+              0 == strcmp(remote_cncts, "0")) {
+               prte_pmix_server_globals.remote_connections = false;
+          } else if (0 == strcasecmp(remote_cncts, "true") ||
+                     0 == strcasecmp(remote_cncts, "t") ||
+                     0 == strcmp(remote_cncts, "1")) {
+               prte_pmix_server_globals.remote_connections = true;
+          }
+          remote_connections_specified = true;
+     }
+
     /* whether or not to drop a session-level tool rendezvous point */
     prte_pmix_server_globals.session_server = false;
     (void) pmix_mca_base_var_register("prte", "pmix", NULL, "session_server",
@@ -416,9 +444,9 @@ void pmix_server_register_params(void)
                                       &prte_pmix_server_globals.system_server);
 
     /* whether or not to accept connection from foreign tools*/
-    prte_pmix_server_globals.no_foreign_tools = false;
+    prte_pmix_server_globals.no_foreign_tools = true;
     (void) pmix_mca_base_var_register("prte", "pmix", NULL, "no_foreign_tools",
-                                      "Whether or not to accept tool connection requests "
+                                      "Whether or not to reject tool connection requests "
                                       "from other users",
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_pmix_server_globals.no_foreign_tools);
@@ -685,17 +713,24 @@ int pmix_server_init(void)
         rc = prte_pmix_convert_status(prc);
         return rc;
     }
-    /* if requested, tell the server to drop a session-level
-     * PMIx connection point */
-    if (prte_pmix_server_globals.session_server) {
-        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_TOOL_SUPPORT,
-                           NULL, PMIX_BOOL);
-        if (PMIX_SUCCESS != prc) {
-            PMIX_INFO_LIST_RELEASE(ilist);
-            rc = prte_pmix_convert_status(prc);
-            return rc;
-        }
+
+      /* tell the server whether or not to enable tool connections */
+    PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_TOOL_SUPPORT,
+                       (void*)&prte_pmix_server_globals.tool_support, PMIX_BOOL);
+    if (PMIX_SUCCESS != prc) {
+        PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
+        return rc;
     }
+
+    /* tell the server whether or not to drop a session-level PMIx connection point */
+   PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SESSION_SUPPORT,
+                      &prte_pmix_server_globals.session_server, PMIX_BOOL);
+   if (PMIX_SUCCESS != prc) {
+       PMIX_INFO_LIST_RELEASE(ilist);
+       rc = prte_pmix_convert_status(prc);
+       return rc;
+   }
 
     if (PRTE_PROC_IS_MASTER) {
         // mark ourselves as a gateway server
@@ -728,32 +763,28 @@ int pmix_server_init(void)
                 return rc;
             }
         }
-        /* if requested, tell the server to drop a system-level
+        /* tell the server whether or not to drop a system-level
          * PMIx connection point - only do this for the HNP as, in
          * at least one case, a daemon can be colocated with the
          * HNP and would overwrite the server rendezvous file */
-        if (prte_pmix_server_globals.system_server) {
-            PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SYSTEM_SUPPORT,
-                               NULL, PMIX_BOOL);
-            if (PMIX_SUCCESS != prc) {
-                PMIX_INFO_LIST_RELEASE(ilist);
-                rc = prte_pmix_convert_status(prc);
-                return rc;
-            }
-        }
+       PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SYSTEM_SUPPORT,
+                          (void*)&prte_pmix_server_globals.system_server, PMIX_BOOL);
+       if (PMIX_SUCCESS != prc) {
+           PMIX_INFO_LIST_RELEASE(ilist);
+           rc = prte_pmix_convert_status(prc);
+           return rc;
+       }
 
 #ifdef PMIX_SERVER_ALLOW_FOREIGN_TOOLS
-        // see if they want to allow tools from other users
-        if (prte_pmix_server_globals.no_foreign_tools) {
-            flag = false;
-            PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_ALLOW_FOREIGN_TOOLS,
-                               (void*)&flag, PMIX_BOOL);
-            if (PMIX_SUCCESS != prc) {
-                PMIX_INFO_LIST_RELEASE(ilist);
-                rc = prte_pmix_convert_status(prc);
-                return rc;
-            }
-        }
+        // tell if they want to allow tools from other users
+       flag = !prte_pmix_server_globals.no_foreign_tools;
+       PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_ALLOW_FOREIGN_TOOLS,
+                          (void*)&flag, PMIX_BOOL);
+       if (PMIX_SUCCESS != prc) {
+           PMIX_INFO_LIST_RELEASE(ilist);
+           rc = prte_pmix_convert_status(prc);
+           return rc;
+       }
 #endif
 
 #ifdef PMIX_SERVER_SYS_CONTROLLER
@@ -821,15 +852,18 @@ int pmix_server_init(void)
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_BIND_PROGRESS_THREAD,
                            prte_progress_thread_cpus, PMIX_STRING);
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_BIND_REQUIRED,
-                           &prte_bind_progress_thread_reqd, PMIX_BOOL);
+                           (void*)&prte_bind_progress_thread_reqd, PMIX_BOOL);
     }
 
-    /* PRTE always allows remote tool connections */
-    PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_REMOTE_CONNECTIONS, &flag, PMIX_BOOL);
-    if (PMIX_SUCCESS != prc) {
-        PMIX_INFO_LIST_RELEASE(ilist);
-        rc = prte_pmix_convert_status(prc);
-        return rc;
+    /* tell if we allow remote tool connections */
+    if (remote_connections_specified) {
+         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_REMOTE_CONNECTIONS,
+                           (void*)&prte_pmix_server_globals.remote_connections, PMIX_BOOL);
+         if (PMIX_SUCCESS != prc) {
+             PMIX_INFO_LIST_RELEASE(ilist);
+             rc = prte_pmix_convert_status(prc);
+             return rc;
+         }
     }
 
     /* if we were launched by a debugger, then we need to have
