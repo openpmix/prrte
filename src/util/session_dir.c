@@ -283,13 +283,9 @@ void prte_job_session_dir_finalize(prte_job_t *jdata)
         return;
     }
 
-    if (NULL == jdata->session_dir) {
-        return;
-    }
-
     /* if this is the DVM job, then we destroy the top-level
      * session directory, but only if we are finalizing */
-    if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, jdata->nspace)) {
+    if (NULL == jdata || PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, jdata->nspace)) {
         if (prte_finalizing) {
             if (NULL != prte_process_info.top_session_dir) {
                 pmix_os_dirpath_destroy(prte_process_info.top_session_dir, true, _check_file);
@@ -298,6 +294,10 @@ void prte_job_session_dir_finalize(prte_job_t *jdata)
                 prte_process_info.top_session_dir = NULL;
             }
         }
+        return;
+    }
+
+    if (NULL == jdata || NULL == jdata->session_dir) {
         return;
     }
 
