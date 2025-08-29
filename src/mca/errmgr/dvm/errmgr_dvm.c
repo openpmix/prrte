@@ -278,7 +278,7 @@ static void proc_errors(int fd, short args, void *cbdata)
                 /* remove from dependent routes, if it is one */
                 prte_rml_route_lost(proc->rank);
                 /* if all my routes and local children are gone, then terminate ourselves */
-                if (0 == pmix_list_get_size(&prte_rml_base.children)) {
+                if (0 == prte_rml_base.n_children) {
                     for (i = 0; i < prte_local_children->size; i++) {
                         proct = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
                         if (NULL != proct &&
@@ -301,7 +301,7 @@ static void proc_errors(int fd, short args, void *cbdata)
                     PMIX_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                          "%s Comm failure: %d routes remain alive",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                         (int) pmix_list_get_size(&prte_rml_base.children)));
+                                         prte_rml_base.n_children));
                 }
                 goto cleanup;
             }
@@ -316,6 +316,10 @@ static void proc_errors(int fd, short args, void *cbdata)
                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_process_info.nodename,
                                    PRTE_NAME_PRINT(proc), pptr->node->name);
                 }
+
+                if(PRTE_SUCCESS == prte_rml_route_lost(proc->rank))
+                    goto cleanup;
+
                 /* mark the daemon job as failed */
                 jdata->state = PRTE_JOB_STATE_COMM_FAILED;
                 /* point to the lowest rank to cause the problem */
@@ -364,7 +368,7 @@ static void proc_errors(int fd, short args, void *cbdata)
         }
         /* if all my routes and children are gone, then terminate
            ourselves nicely (i.e., this is a normal termination) */
-        if (0 == pmix_list_get_size(&prte_rml_base.children)) {
+        if (0 == prte_rml_base.n_children) {
             PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                                  "%s errmgr:default:dvm all routes gone - exiting",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
