@@ -87,6 +87,7 @@
 #include "src/util/pmix_getcwd.h"
 #include "src/util/pmix_show_help.h"
 #include "src/util/pmix_string_copy.h"
+#include "src/util/session_dir.h"
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_progress_threads.h"
@@ -685,6 +686,9 @@ int main(int argc, char *argv[])
     /* setup PRTE infrastructure */
     if (PRTE_SUCCESS != (ret = prte_init(&pargc, &pargv, PRTE_PROC_MASTER))) {
         PRTE_ERROR_LOG(ret);
+        // ensure we cleanup any session dir we might have dropped
+        prte_finalizing = true;
+        prte_job_session_dir_finalize(NULL);
         return ret;
     }
     /* get my proc ID */

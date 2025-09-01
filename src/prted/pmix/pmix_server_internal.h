@@ -380,6 +380,8 @@ typedef struct {
     bool no_foreign_tools;
     bool system_controller;
     bool scheduler_connected;
+    bool remote_connections;
+    bool tool_support;
     pmix_proc_t scheduler;
     bool scheduler_set_as_server;
     char *report_uri;
