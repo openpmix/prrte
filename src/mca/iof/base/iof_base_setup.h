@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -26,13 +26,20 @@
 #include "prte_config.h"
 #include "types.h"
 
+#include "src/runtime/prte_globals.h"
 #include "src/mca/iof/base/base.h"
 
 struct prte_iof_base_io_conf_t {
     int usepty;
     bool connect_stdin;
 
-    /* private - callers should not modify these fields */
+    char *slave_stdin;
+    char *slave_stdout;
+    char *slave_stderr;
+
+    /* When using pty's:
+     * pty masters are in the 0 position,
+     * pty slaves are in the 1 position */
     int p_stdin[2];
     int p_stdout[2];
     int p_stderr[2];
@@ -45,9 +52,11 @@ typedef struct prte_iof_base_io_conf_t prte_iof_base_io_conf_t;
  * Do all stdio forwarding that must be done before fork() is called.
  * This might include creating pipes or ptys or similar work.
  */
-PRTE_EXPORT int prte_iof_base_setup_prefork(prte_iof_base_io_conf_t *opts);
+PRTE_EXPORT int prte_iof_base_setup_prefork(prte_iof_base_io_conf_t *opts,
+                                            prte_job_t *jdata);
 
-PRTE_EXPORT int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts, char ***env);
+PRTE_EXPORT int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
+                                          char ***env);
 
 PRTE_EXPORT int prte_iof_base_setup_parent(const pmix_proc_t *name, prte_iof_base_io_conf_t *opts);
 
