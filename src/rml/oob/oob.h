@@ -109,6 +109,9 @@ PRTE_EXPORT int prte_oob_open(void);
 PRTE_EXPORT void prte_oob_close(void);
 PRTE_EXPORT int prte_oob_register(void);
 
+/* Simulate this node's failure better than simply killing the process */
+PRTE_EXPORT void prte_oob_simulate_node_failure(void);
+
 /* Access the OOB internal functions via set of event-based macros
  * for inserting messages and other commands into the
  * OOB event base. This ensures that all OOB operations occur

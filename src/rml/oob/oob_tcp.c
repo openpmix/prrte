@@ -552,6 +552,34 @@ int prte_oob_register(void)
     return PRTE_SUCCESS;
 }
 
+void prte_oob_simulate_node_failure(void)
+{
+    /* We're about to raise SIGKILL, so no cleanup necessary. Just ungracefully
+     * close the sockets */
+    prte_oob_tcp_peer_t *peer;
+    PMIX_LIST_FOREACH(peer, &prte_oob_base.peers, prte_oob_tcp_peer_t){
+        if(peer->state == MCA_OOB_TCP_FAILED) continue;
+        if(peer->state == MCA_OOB_TCP_CLOSED) continue;
+        if(peer->state == MCA_OOB_TCP_UNCONNECTED) continue;
+
+        /* Close TCP connection with an rst instead of a fin, i.e. don't send
+         * an EOF, finish sending queued data, continue ACKS/resends, etc.
+         * Slightly better simulation of a node failure than just killing the
+         * daemon - it will be interpreted by the remote as a communication
+         * failure, not just a closed socket.
+         */
+        struct linger opt = {
+            /* sychronously close the socket */
+            .l_onoff = 1,
+            /* but with RST timeout immediately */
+            .l_linger = 0
+        };
+        setsockopt(peer->sd, SOL_SOCKET, SO_LINGER, &opt, sizeof(opt));
+        close(peer->sd);
+        peer->state = MCA_OOB_TCP_FAILED;
+    }
+}
+
 /*
  * Local utility functions
  */

@@ -141,6 +141,11 @@ PRTE_EXPORT void prte_rml_recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag);
         prte_rml_recv_cancel(p, t);                             \
     } while(0)
 
+/**
+ * Simulate this node's failure on TCP sockets, then raise SIGKILL
+ */
+PRTE_EXPORT void prte_rml_simulate_node_failure(void);
+
 typedef struct {
     int rml_output;
     int routed_output;
