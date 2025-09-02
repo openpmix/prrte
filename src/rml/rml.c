@@ -19,6 +19,7 @@
 #include "prte_config.h"
 
 #include <string.h>
+#include <signal.h>
 #include <pmix.h>
 
 #include "src/mca/base/pmix_mca_base_component_repository.h"
@@ -192,6 +193,12 @@ int prte_rml_open(void)
     }
 
     return PRTE_SUCCESS;
+}
+
+void prte_rml_simulate_node_failure(void)
+{
+    prte_oob_simulate_node_failure();
+    raise(SIGKILL);
 }
 
 void prte_rml_send_callback(int status, pmix_proc_t *peer,
