@@ -18,6 +18,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -849,7 +850,6 @@ static int remote_spawn(void)
     bool failed_launch = true;
     pmix_proc_t target;
     prte_plm_ssh_caddy_t *caddy;
-    pmix_rank_t *children = (pmix_rank_t*) prte_rml_base.children.array;
     pmix_status_t ret;
 
     PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
@@ -890,6 +890,7 @@ static int remote_spawn(void)
 
     PMIX_LOAD_NSPACE(target.nspace, PRTE_PROC_MY_NAME->nspace);
     for(size_t i = 0; i < prte_rml_base.children.size; i++){
+        pmix_rank_t *children = (pmix_rank_t*) prte_rml_base.children.array;
         if(PMIX_RANK_INVALID == children[i]) continue;
         target.rank = children[i];
 
@@ -1089,7 +1090,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_plm_ssh_caddy_t *caddy;
     char *username, *nname;
     int port, *portptr;
-    pmix_rank_t *children = (pmix_rank_t*) prte_rml_base.children.array;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(state);
@@ -1217,6 +1217,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
         /* if we are tree launching, only launch our own children */
         if (!prte_mca_plm_ssh_component.no_tree_spawn) {
+            pmix_rank_t *children = (pmix_rank_t*) prte_rml_base.children.array;
             for(size_t i = 0; i < prte_rml_base.children.size; i++){
                 if (children[i] == node->daemon->name.rank) {
                     goto launch;
