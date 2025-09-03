@@ -478,8 +478,7 @@ static void track_procs(int fd, short argc, void *cbdata)
          * gone, then terminate ourselves IF no local procs
          * remain (might be some from another job)
          */
-        if (prte_prteds_term_ordered &&
-            0 == pmix_list_get_size(&prte_rml_base.children)) {
+        if (prte_prteds_term_ordered && 0 == prte_rml_base.n_children) {
             for (i = 0; i < prte_local_children->size; i++) {
                 pdata = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
                 if (NULL != pdata && PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_ALIVE)) {
