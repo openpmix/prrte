@@ -4,8 +4,15 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
-3.0.12 -- TBD
--------------
+3.0.12 -- ? Sept 2025
+---------------------
+- PR #: Multiple commits
+   - Extend support for specifying tool connection parameters
+   - Cleanup queries and completely register tools
+   - Correct handling of tool-based spawn requests
+   - Change no-foreign-tools default to "false"
+   - Include node object when registering tool
+   - Properly implement the "abort" operation
 - PR #2245: Multiple commits
    - Adjust top session dir name
    - Update NEWS
