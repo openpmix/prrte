@@ -796,6 +796,15 @@ int pmix_server_init(void)
             }
         }
 #endif
+    } else {
+        /* prted's never locally output */
+        flag = false;
+        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
+        if (PMIX_SUCCESS != prc) {
+            PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
+            return rc;
+        }
     }
 
     /* if requested, tell the server library to output our PMIx URI */
