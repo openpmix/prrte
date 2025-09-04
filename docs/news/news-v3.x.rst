@@ -6,7 +6,10 @@ series, in reverse chronological order.
 
 3.0.12 -- ? Sept 2025
 ---------------------
-- PR #: Multiple commits
+- PR #2255: Update NEWS
+- PR #2254: Replace some incorrectly removed code
+- PR #2253: Multiple commits
+   - Update NEWS
    - Extend support for specifying tool connection parameters
    - Cleanup queries and completely register tools
    - Correct handling of tool-based spawn requests
