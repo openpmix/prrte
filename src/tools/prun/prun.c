@@ -274,6 +274,9 @@ int prun(int argc, char *argv[])
         fp = fopen(opt->values[0], "r");
         if (NULL == fp) {
             pmix_show_help("help-prun.txt", "appfile-failure", true, opt->values[0]);
+            if (NULL != mypidfile) {
+                free(mypidfile);
+            }
             return 1;
         }
         first = true;

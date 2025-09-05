@@ -651,9 +651,6 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                            true, "mapping", ck[0]);
             PMIX_ARGV_FREE_COMPAT(ck);
             free(cptr);
-            if (NULL != val) {
-                free(val);
-            }
             return PRTE_ERR_SILENT;
         }
         /* Verify the list is composed of comma-delimited ranges */

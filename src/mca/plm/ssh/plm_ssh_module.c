@@ -651,6 +651,17 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
                 full_orted_cmd = strdup(orted_cmd);
             }
             free(orted_cmd);
+        } else {
+            /* use our standard one and add the prefix */
+            value = pmix_basename(prte_install_dirs.bindir);
+            if ('/' == prefix_dir[strlen(prefix_dir)-1]) {
+                pmix_asprintf(&tmp, "%s%s", prefix_dir, value);
+            } else {
+                pmix_asprintf(&tmp, "%s/%s", prefix_dir, value);
+            }
+            free(value);
+            pmix_asprintf(&full_orted_cmd, "%s/prted", tmp);
+            free(tmp);
         }
     } else {
         full_orted_cmd = orted_cmd;

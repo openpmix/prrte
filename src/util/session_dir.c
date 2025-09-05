@@ -143,6 +143,10 @@ static int _setup_top_session_dir(void)
 exit:
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
+        if (NULL != prte_process_info.top_session_dir) {
+            free(prte_process_info.top_session_dir);
+            prte_process_info.top_session_dir = NULL;
+        }
     }
     return rc;
 }
