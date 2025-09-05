@@ -1745,6 +1745,9 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                 }
                 idx = 1;
                 ret = PMIx_Data_unpack(NULL, buffer, &dname, &idx, PMIX_PROC);
+                if (PMIX_SUCCESS != ret) {
+                    break;
+                }
                 continue;
             }
 
@@ -1801,6 +1804,9 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                 }
                 idx = 1;
                 ret = PMIx_Data_unpack(NULL, buffer, &dname, &idx, PMIX_PROC);
+                if (PMIX_SUCCESS != ret) {
+                    break;
+                }
                 continue;
             }
         }
@@ -1819,6 +1825,9 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
 
         idx = 1;
         ret = PMIx_Data_unpack(NULL, buffer, &dname, &idx, PMIX_PROC);
+        if (PMIX_SUCCESS != ret) {
+            break;
+        }
     }
 
     if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != ret) {

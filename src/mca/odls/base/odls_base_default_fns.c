@@ -708,9 +708,8 @@ next:
                 goto REPORT_ERROR;
             }
             /* connect the proc to its node object */
-            if (NULL
-                == (dmn = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs,
-                                                                      pptr->parent))) {
+            dmn = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs, pptr->parent);
+            if (NULL == dmn) {
                 PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                 rc = PRTE_ERR_NOT_FOUND;
                 goto REPORT_ERROR;
@@ -753,6 +752,11 @@ next:
             }
             /* mark that this app_context is being used on this node */
             app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, pptr->app_idx);
+            if (NULL == app) {
+                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                rc = PRTE_ERR_NOT_FOUND;
+                goto REPORT_ERROR;
+            }
             PRTE_FLAG_SET(app, PRTE_APP_FLAG_USED_ON_NODE);
         }
     }

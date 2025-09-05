@@ -133,16 +133,20 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
      * However, if it is a managed allocation AND the hostfile or the hostlist was
      * provided, those take precedence, so process them and filter as we normally do.
      */
-    if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING) ||
-        prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts, PMIX_STRING)) {
+    hosts = NULL;
+    if ((prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING) ||
+         prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts, PMIX_STRING)) &&
+         NULL != hosts) {
         needhosts = true;
+        free(hosts);
     }
     if (!prte_managed_allocation ||
         (prte_managed_allocation && needhosts)) {
         PMIX_CONSTRUCT(&nodes, pmix_list_t);
         /* if the app provided a dash-host, then use those nodes */
         hosts = NULL;
-        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING) &&
+            NULL != hosts) {
             PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                  "%s using dash_host %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  hosts));
@@ -152,7 +156,8 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
                 return rc;
             }
             free(hosts);
-        } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts, PMIX_STRING)) {
+        } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts, PMIX_STRING) &&
+                   NULL != hosts) {
             /* otherwise, if the app provided a hostfile, then use that */
             PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                  "%s using hostfile %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -450,9 +455,12 @@ complete:
             if (node->slots > node->slots_inuse) {
                 int32_t s;
                 /* check for any -host allocations */
-                if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts,
-                                       PMIX_STRING)) {
+                hosts = NULL;
+                if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST,
+                                       (void **) &hosts, PMIX_STRING) &&
+                    NULL != hosts) {
                     s = prte_util_dash_host_compute_slots(node, hosts);
+                    free(hosts);
                 } else {
                     s = node->slots - node->slots_inuse;
                 }

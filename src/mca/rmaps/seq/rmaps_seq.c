@@ -220,6 +220,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
         apprank = 0;
 
         /* specified seq file trumps all */
+        hosts = NULL;
         if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void **) &hosts, PMIX_STRING)) {
             if (NULL == hosts) {
                 rc = PRTE_ERR_NOT_FOUND;
@@ -230,19 +231,31 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
                                 app->app);
             PMIX_CONSTRUCT(&sq_list, pmix_list_t);
             rc = process_file(hosts, &sq_list);
+            free(hosts);
+            hosts = NULL;
             if (PRTE_SUCCESS != rc) {
                 PMIX_LIST_DESTRUCT(&sq_list);
                 goto error;
             }
             seq_list = &sq_list;
-        } else if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts,
-                                      PMIX_STRING)) {
+            goto process;
+        }
+
+        hosts = NULL;
+        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING)) {
+            if (NULL == hosts) {
+                rc = PRTE_ERR_NOT_FOUND;
+                goto error;
+            }
             pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using dash-host nodes on app %s", app->app);
             PMIX_CONSTRUCT(&node_list, pmix_list_t);
             /* dash host entries cannot specify cpusets, so used the std function to retrieve the
              * list */
-            if (PRTE_SUCCESS != (rc = prte_util_get_ordered_dash_host_list(&node_list, hosts))) {
+            rc = prte_util_get_ordered_dash_host_list(&node_list, hosts);
+            free(hosts);
+            hosts = NULL;
+            if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 goto error;
             }
@@ -256,8 +269,11 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
             }
             PMIX_DESTRUCT(&node_list);
             seq_list = &sq_list;
-        } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts,
-                                      PMIX_STRING)) {
+            goto process;
+        }
+
+        hosts = NULL;
+        if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts, PMIX_STRING)) {
             if (NULL == hosts) {
                 rc = PRTE_ERR_NOT_FOUND;
                 goto error;
@@ -267,16 +283,20 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
                                 app->app);
             PMIX_CONSTRUCT(&sq_list, pmix_list_t);
             rc = process_file(hosts, &sq_list);
+            free(hosts);
+            hosts = NULL;
             if (PRTE_SUCCESS != rc) {
                 PMIX_LIST_DESTRUCT(&sq_list);
                 goto error;
             }
             seq_list = &sq_list;
-        } else if (0 < pmix_list_get_size(&default_seq_list)) {
+            goto process;
+        }
+
+        if (0 < pmix_list_get_size(&default_seq_list)) {
             pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using default hostfile nodes on app %s", app->app);
             seq_list = &default_seq_list;
-            hosts = strdup(prte_default_hostfile);
         } else {
             /* can't do anything - no nodes available! */
             pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
@@ -285,6 +305,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
             goto error;
         }
 
+process:
         /* check for nolocal and remove the head node, if required */
         if (PRTE_GET_MAPPING_DIRECTIVE(map->mapping) & PRTE_MAPPING_NO_USE_LOCAL) {
             for (item = pmix_list_get_first(seq_list); item != pmix_list_get_end(seq_list);
@@ -398,9 +419,6 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
             PMIX_LIST_DESTRUCT(seq_list);
         } else {
             save = sq;
-        }
-        if (NULL != hosts) {
-            free(hosts);
         }
     }
     /* compute local/app ranks */

@@ -256,6 +256,13 @@ static void launch_daemons(int fd, short args, void *cbdata)
         if (!prte_managed_allocation || prte_set_slots_override) {
             // set the number of slots on our node
             node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0);
+            if (NULL == node) {
+                // should never happen
+                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+                PMIX_RELEASE(state);
+                return;
+            }
             prte_plm_base_set_slots(node);
             state->jdata->total_slots_alloc = node->slots;
         } else {
