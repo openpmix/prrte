@@ -43,24 +43,36 @@
 
 #include "dash_host.h"
 
+static inline bool is_str_in_arr(char *arr[], char *str)
+{
+    if (NULL == arr) {
+        return false;
+    }
+    while (NULL != *arr) {
+        if (0 == strcmp(*arr, str)) {
+            return true;
+        }
+        arr++;
+    }
+    return false;
+}
+
 static bool quickmatch(prte_node_t *nd, char *name)
 {
-    int n;
-
     if (0 == strcmp(nd->name, name)) {
         return true;
     }
-    if (0 == strcmp(nd->name, prte_process_info.nodename) &&
-        (0 == strcmp(name, "localhost") ||
-         0 == strcmp(name, "127.0.0.1"))) {
-        return true;
-    }
-    if (NULL != nd->aliases) {
-        for (n=0; NULL != nd->aliases[n]; n++) {
-            if (0 == strcmp(nd->aliases[n], name)) {
-                return true;
-            }
+    if (0 == strcmp(nd->name, prte_process_info.nodename)) {
+        if ((0 == strcmp(name, "localhost") ||
+             0 == strcmp(name, "127.0.0.1"))) {
+            return true;
         }
+        if (is_str_in_arr(prte_process_info.aliases, name)) {
+            return true;
+        }
+    }
+    if (is_str_in_arr(nd->aliases, name)) {
+        return true;
     }
     return false;
 }
