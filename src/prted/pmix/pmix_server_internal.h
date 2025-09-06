@@ -382,6 +382,8 @@ typedef struct {
     bool scheduler_connected;
     bool remote_connections;
     bool tool_support;
+    bool require_pid_match;
+    bool allow_client_clones;
     pmix_proc_t scheduler;
     bool scheduler_set_as_server;
     char *report_uri;
