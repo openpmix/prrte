@@ -476,8 +476,6 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
         error = "prte_ess_init";
         goto error;
     }
-    /* add network aliases to our list of alias hostnames */
-    pmix_ifgetaliases(&prte_process_info.aliases);
 
     /* initialize the cache */
     prte_cache = PMIX_NEW(pmix_pointer_array_t);

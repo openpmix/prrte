@@ -154,15 +154,16 @@ void prte_setup_hostname(void)
         }
     }
 
+    // add the localhost names
+    PMIX_ARGV_APPEND_UNIQUE_COMPAT(&prte_process_info.aliases, "localhost");
+    PMIX_ARGV_APPEND_UNIQUE_COMPAT(&prte_process_info.aliases, "127.0.0.1");
 }
 
 bool prte_check_host_is_local(const char *name)
 {
     int i;
 
-    if (0 == strcmp(name, prte_process_info.nodename) ||
-        0 == strcmp(name, "localhost") ||
-        0 == strcmp(name, "127.0.0.1")) {
+    if (0 == strcmp(name, prte_process_info.nodename)) {
         return true;
     }
 

@@ -86,6 +86,11 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(caddy);
+    // init options
+    memset(&options, 0, sizeof(prte_rmaps_options_t));
+    options.stream = prte_rmaps_base_framework.framework_output;
+    options.verbosity = 5;  // usual value for base-level functions
+    // set and check convenience vars
     jdata = caddy->jdata;
     schizo = (prte_schizo_base_module_t*)jdata->schizo;
     if (NULL == schizo) {
@@ -98,9 +103,6 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         jdata->map = PMIX_NEW(prte_job_map_t);
     }
     jdata->state = PRTE_JOB_STATE_MAP;
-    memset(&options, 0, sizeof(prte_rmaps_options_t));
-    options.stream = prte_rmaps_base_framework.framework_output;
-    options.verbosity = 5;  // usual value for base-level functions
     fptr = &flag;
 
     /* check and set some general options */
