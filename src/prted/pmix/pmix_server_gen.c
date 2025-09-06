@@ -134,23 +134,25 @@ static void _client_conn(int sd, short args, void *cbdata)
             }
             continue;
         }
-        if (PMIx_Check_key(cd->info[n].key, PMIX_PROC_PID)) {
-            PMIX_VALUE_GET_NUMBER(rc, &cd->info[n].value, pid, pid_t);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                goto complete;
-            }
-            if (singleton) {
-                // we didn't know the pid initially, so update it here
-                p->pid = pid;
-            } else {
-                if (p->pid != pid) {
-                    rc = PMIX_ERR_NOT_SUPPORTED;
+        if (prte_pmix_server_globals.require_pid_match) {
+            if (PMIx_Check_key(cd->info[n].key, PMIX_PROC_PID)) {
+                PMIX_VALUE_GET_NUMBER(rc, &cd->info[n].value, pid, pid_t);
+                if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     goto complete;
                 }
+                if (singleton) {
+                    // we didn't know the pid initially, so update it here
+                    p->pid = pid;
+                } else {
+                    if (p->pid != pid) {
+                        rc = PMIX_ERR_NOT_SUPPORTED;
+                        PMIX_ERROR_LOG(rc);
+                        goto complete;
+                    }
+                }
+                continue;
             }
-            continue;
         }
     }
 
