@@ -573,9 +573,9 @@ int main(int argc, char *argv[])
 
     /* include any non-loopback aliases for this node */
     for (n = 0; NULL != prte_process_info.aliases[n]; n++) {
-        if (0 != strcmp(prte_process_info.aliases[n], "localhost")
-            && 0 != strcmp(prte_process_info.aliases[n], "127.0.0.1")
-            && 0 != strcmp(prte_process_info.aliases[n], prte_process_info.nodename)) {
+        if (0 != strcmp(prte_process_info.aliases[n], "localhost") &&
+            0 != strcmp(prte_process_info.aliases[n], "127.0.0.1") &&
+            0 != strcmp(prte_process_info.aliases[n], prte_process_info.nodename)) {
             PMIX_ARGV_APPEND_NOSIZE_COMPAT(&nonlocal, prte_process_info.aliases[n]);
         }
     }
