@@ -50,11 +50,6 @@ static bool quickmatch(prte_node_t *nd, char *name)
     if (0 == strcmp(nd->name, name)) {
         return true;
     }
-    if (0 == strcmp(nd->name, prte_process_info.nodename) &&
-        (0 == strcmp(name, "localhost") ||
-         0 == strcmp(name, "127.0.0.1"))) {
-        return true;
-    }
     if (NULL != nd->aliases) {
         for (n=0; NULL != nd->aliases[n]; n++) {
             if (0 == strcmp(nd->aliases[n], name)) {
