@@ -5,7 +5,7 @@
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -94,6 +94,11 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
         als = NULL;
         if (NULL != nptr->aliases) {
             for (m=0; NULL != nptr->aliases[m]; m++) {
+                // skip any localhost entries
+                if (0 == strcmp(nptr->aliases[m], "localhost") ||
+                    0 == strcmp(nptr->aliases[m], "127.0.0.1")) {
+                    continue;
+                }
                 PMIX_ARGV_APPEND_NOSIZE_COMPAT(&als, nptr->aliases[m]);
             }
             raw = PMIX_ARGV_JOIN_COMPAT(als, ',');

@@ -43,6 +43,7 @@
 #include "src/event/event-internal.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
+#include "src/util/pmix_if.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_environ.h"
 
@@ -298,6 +299,10 @@ int prte_ess_base_prted_setup(void)
         error = "pmix_server_init";
         goto error;
     }
+
+    /* add network aliases to our list of alias hostnames - must
+     * wait until after we init PMIx before getting them */
+    pmix_ifgetaliases(&prte_process_info.aliases);
 
     /* Setup the communication infrastructure */
     if (PRTE_SUCCESS
