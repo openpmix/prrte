@@ -252,12 +252,9 @@ static int prte_odls_base_open(pmix_mca_base_open_flag_t flags)
     prte_odls_globals.xtermcmd = NULL;
 
     /* ensure that SIGCHLD is unblocked as we need to capture it */
-    if (0 != sigemptyset(&unblock)) {
-        return PRTE_ERROR;
-    }
-    if (0 != sigaddset(&unblock, SIGCHLD)) {
-        return PRTE_ERROR;
-    }
+    sigemptyset(&unblock);
+    sigaddset(&unblock, SIGCHLD);
+
     if (0 != sigprocmask(SIG_UNBLOCK, &unblock, NULL)) {
         return PRTE_ERR_NOT_SUPPORTED;
     }

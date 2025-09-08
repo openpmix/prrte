@@ -665,7 +665,8 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
                 if (!prte_rmaps_base_check_avail(jdata, app, node, node_list, obj, options)) {
                     rc = PRTE_ERR_OUT_OF_RESOURCE;
                     PRTE_ERROR_LOG(rc);
-                    continue;
+                    // out of resources on this node
+                    break;
                 }
 
                 proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, obj, options);
