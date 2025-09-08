@@ -8,7 +8,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -619,9 +619,21 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
                 PMIx_Info_list_convert(coll->grpinfo, &darray);
                 info = (pmix_info_t*)darray.array;
                 ninfo = darray.size;
-                PMIx_Data_pack(NULL, reply, &ninfo, 1, PMIX_SIZE);
+                rc = PMIx_Data_pack(NULL, reply, &ninfo, 1, PMIX_SIZE);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(reply);
+                    PMIX_RELEASE(sig);
+                    return;
+                }
                 if (0 < ninfo) {
-                    PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
+                    rc = PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
+                    if (PMIX_SUCCESS != rc) {
+                        PMIX_ERROR_LOG(rc);
+                        PMIX_DATA_BUFFER_RELEASE(reply);
+                        PMIX_RELEASE(sig);
+                        return;
+                    }
                 }
                 PMIX_DATA_ARRAY_DESTRUCT(&darray);
 
@@ -629,9 +641,21 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
                 PMIx_Info_list_convert(coll->endpts, &darray);
                 info = (pmix_info_t*)darray.array;
                 ninfo = darray.size;
-                PMIx_Data_pack(NULL, reply, &ninfo, 1, PMIX_SIZE);
+                rc = PMIx_Data_pack(NULL, reply, &ninfo, 1, PMIX_SIZE);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(reply);
+                    PMIX_RELEASE(sig);
+                    return;
+                }
                 if (0 < ninfo) {
-                    PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
+                    rc =PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
+                    if (PMIX_SUCCESS != rc) {
+                        PMIX_ERROR_LOG(rc);
+                        PMIX_DATA_BUFFER_RELEASE(reply);
+                        PMIX_RELEASE(sig);
+                        return;
+                    }
                 }
                 PMIX_DATA_ARRAY_DESTRUCT(&darray);
             }

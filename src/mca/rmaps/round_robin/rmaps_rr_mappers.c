@@ -715,8 +715,7 @@ errout:
         /* ran out of cpus */
         pmix_show_help("help-prte-rmaps-base.txt",
                        "allocation-overload", true,
-                       (NULL == app) ? "N/A" : app->app,
-                       (NULL == app) ? -1 : app->num_procs,
+                       app->app, app->num_procs,
                        prte_rmaps_base_print_mapping(options->map),
                        prte_hwloc_base_print_binding(options->bind));
         return PRTE_ERR_SILENT;
@@ -724,8 +723,7 @@ errout:
     pmix_show_help("help-prte-rmaps-base.txt",
                    "failed-map", true,
                    PRTE_ERROR_NAME(rc),
-                   (NULL == app) ? "N/A" : app->app,
-                   (NULL == app) ? -1 : app->num_procs,
+                   app->app, app->num_procs,
                    prte_rmaps_base_print_mapping(options->map),
                    prte_hwloc_base_print_binding(options->bind));
     return PRTE_ERR_SILENT;

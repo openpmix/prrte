@@ -306,7 +306,6 @@ void prte_ras_base_display_cpus(prte_job_t *jdata, char *nodelist)
             }
             if (0 == strcmp(nptr->name, nodes[j])) {
                 display_cpus(nptr->topology, jdata, nodes[j]);
-                moveon = true;
                 break;
             }
             if (NULL == nptr->aliases) {

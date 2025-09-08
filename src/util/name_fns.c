@@ -14,7 +14,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018-2020 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -120,7 +120,8 @@ char *prte_util_print_name_args(const pmix_proc_t *name)
         if (PRTE_PRINT_NAME_ARG_NUM_BUFS == ptr->cntr) {
             ptr->cntr = 0;
         }
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "[NO-NAME]");
+        snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "[NO-NAME]");
+        ptr->cntr++;
         return ptr->buffers[ptr->cntr - 1];
     }
 
@@ -145,8 +146,8 @@ char *prte_util_print_name_args(const pmix_proc_t *name)
         ptr->cntr = 0;
     }
 
-    snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "[%s,%s]", job, vpid);
-
+    snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "[%s,%s]", job, vpid);
+    ptr->cntr++;
     return ptr->buffers[ptr->cntr - 1];
 }
 
@@ -167,10 +168,11 @@ char *prte_util_print_jobids(const pmix_nspace_t job)
     }
 
     if (0 == strlen(job)) {
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "[INVALID]");
+        snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "[INVALID]");
     } else {
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
+        snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
     }
+    ptr->cntr++;
     return ptr->buffers[ptr->cntr - 1];
 }
 
@@ -199,12 +201,13 @@ char *prte_util_print_job_family(const pmix_nspace_t job)
         cptr = strrchr(job, '@');
         if (NULL == cptr) {
             /* this isn't a PRRTE job */
-            snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
+            snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
         } else {
             *cptr = '\0';
-            snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
+            snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
             *cptr = '@';
         }
+        ptr->cntr++;
     }
     return ptr->buffers[ptr->cntr - 1];
 }
@@ -228,17 +231,19 @@ char *prte_util_print_local_jobid(const pmix_nspace_t job)
 
     /* see if the job is invalid */
     if (PMIX_NSPACE_INVALID(job)) {
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "[INVALID]");
+        snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "[INVALID]");
+        ptr->cntr++;
     } else {
         /* find the '@' sign delimiting the job family */
         cptr = strrchr(job, '@');
         if (NULL == cptr) {
             /* this isn't a PRRTE job */
-            snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
+            snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
         } else {
             ++cptr;
-            snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", cptr);
+            snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", cptr);
         }
+        ptr->cntr++;
     }
     return ptr->buffers[ptr->cntr - 1];
 }
@@ -260,18 +265,24 @@ char *prte_util_print_vpids(const pmix_rank_t vpid)
     }
 
     if (PMIX_RANK_INVALID == vpid) {
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "INVALID");
+        snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "INVALID");
+
     } else if (PMIX_RANK_WILDCARD == vpid) {
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "WILDCARD");
+        snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "WILDCARD");
+
     } else if (PMIX_RANK_LOCAL_NODE == vpid) {
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "LOCALNODE");
+        snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "LOCALNODE");
+
     } else if (PMIX_RANK_LOCAL_PEERS == vpid) {
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "LOCALPEERS");
+        snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "LOCALPEERS");
+
     } else if (PMIX_RANK_UNDEF == vpid) {
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "UNDEFINED");
+        snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "UNDEFINED");
+
     } else {
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%u", vpid);
+        snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%u", vpid);
     }
+    ptr->cntr++;
     return ptr->buffers[ptr->cntr - 1];
 }
 
