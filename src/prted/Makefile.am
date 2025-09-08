@@ -13,7 +13,7 @@
 # Copyright (c) 2014-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2018      IBM Corporation.  All rights reserved.
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
 # Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -26,10 +26,11 @@
 
 headers += \
 	prted/prted.h
-
+        
 libprrte_la_SOURCES += \
         prted/prted_comm.c \
         prted/prte_app_parse.c \
-        prted/prun_common.c
+        prted/prun_common.c \
+        prted/prte.c
 
 include prted/pmix/Makefile.am
