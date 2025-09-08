@@ -1483,11 +1483,17 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
     if (NULL == proc) {
         /* this is truly an error, so notify the sender */
         send_error(PRTE_ERR_NOT_FOUND, &pproc, sender, index);
+        if (NULL != key) {
+          free(key);
+        }
         return;
     }
     if (!PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_LOCAL)) {
         /* send back an error - they obviously have made a mistake */
         send_error(PRTE_ERR_NOT_FOUND, &pproc, sender, index);
+        if (NULL != key) {
+          free(key);
+        }
         return;
     }
 

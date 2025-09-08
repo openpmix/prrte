@@ -726,12 +726,12 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
 
                     } else if (PMIX_CHECK_CLI_OPTION(options[m], PRTE_CLI_RAW)) {
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_RAW, NULL, PMIX_BOOL);
-                    }
-                    if (PMIX_SUCCESS != ret) {
-                        PMIX_ERROR_LOG(ret);
-                        PMIX_ARGV_FREE_COMPAT(targv);
-                        PMIX_ARGV_FREE_COMPAT(options);
-                        return ret;
+                        if (PMIX_SUCCESS != ret) {
+                            PMIX_ERROR_LOG(ret);
+                            PMIX_ARGV_FREE_COMPAT(targv);
+                            PMIX_ARGV_FREE_COMPAT(options);
+                            return ret;
+                        }
                     }
                 }
                 PMIX_ARGV_FREE_COMPAT(options);

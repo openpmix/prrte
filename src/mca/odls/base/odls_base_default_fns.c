@@ -2151,6 +2151,11 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
         child->rml_uri = NULL;
     }
     app = (prte_app_context_t *) pmix_pointer_array_get_item(jobdat->apps, child->app_idx);
+    if (NULL == app) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        rc = PRTE_ERR_NOT_FOUND;
+        goto CLEANUP;
+    }
 
     /* setup the path */
     if (PRTE_SUCCESS != (rc = setup_path(app, &wdir))) {

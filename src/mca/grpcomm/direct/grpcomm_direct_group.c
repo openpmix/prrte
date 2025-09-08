@@ -226,9 +226,21 @@ static void group(int sd, short args, void *cbdata)
         PMIx_Info_list_convert(grpinfo, &darray);
         info = (pmix_info_t*)darray.array;
         ninfo = darray.size;
-        PMIx_Data_pack(NULL, relay, &ninfo, 1, PMIX_SIZE);
+        rc = PMIx_Data_pack(NULL, relay, &ninfo, 1, PMIX_SIZE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(relay);
+            PMIX_DESTRUCT(&sig);
+            goto error;
+        }
         if (0 < ninfo) {
-            PMIx_Data_pack(NULL, relay, info, ninfo, PMIX_INFO);
+            rc = PMIx_Data_pack(NULL, relay, info, ninfo, PMIX_INFO);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(relay);
+                PMIX_DESTRUCT(&sig);
+                goto error;
+            }
         }
         PMIX_DATA_ARRAY_DESTRUCT(&darray);
 
@@ -236,9 +248,21 @@ static void group(int sd, short args, void *cbdata)
         PMIx_Info_list_convert(endpts, &darray);
         info = (pmix_info_t*)darray.array;
         ninfo = darray.size;
-        PMIx_Data_pack(NULL, relay, &ninfo, 1, PMIX_SIZE);
+        rc = PMIx_Data_pack(NULL, relay, &ninfo, 1, PMIX_SIZE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(relay);
+            PMIX_DESTRUCT(&sig);
+            goto error;
+        }
         if (0 < ninfo) {
-            PMIx_Data_pack(NULL, relay, info, ninfo, PMIX_INFO);
+            rc = PMIx_Data_pack(NULL, relay, info, ninfo, PMIX_INFO);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(relay);
+                PMIX_DESTRUCT(&sig);
+                goto error;
+            }
         }
         PMIX_DATA_ARRAY_DESTRUCT(&darray);
     }
@@ -298,7 +322,7 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
     prte_namelist_t *nm;
     pmix_data_array_t darray;
     pmix_status_t st;
-    pmix_info_t *info = NULL, *endpts, *grpinfo;
+    pmix_info_t *info = NULL, *endpts, *grpinfo = NULL;
     prte_grpcomm_direct_group_signature_t *sig = NULL;
     pmix_data_buffer_t *reply;
     prte_grpcomm_group_t *coll;
@@ -386,7 +410,9 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
         rc = PMIx_Data_unpack(NULL, buffer, &nendpts, &cnt, PMIX_SIZE);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            PMIX_INFO_FREE(grpinfo, ngrpinfo);
+            if (NULL != grpinfo) {
+                PMIX_INFO_FREE(grpinfo, ngrpinfo);
+            }
             PMIX_RELEASE(sig);
             return;
         }
@@ -396,7 +422,9 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
             rc = PMIx_Data_unpack(NULL, buffer, endpts, &cnt, PMIX_INFO);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
-                PMIX_INFO_FREE(grpinfo, ngrpinfo);
+                if (NULL != grpinfo) {
+                    PMIX_INFO_FREE(grpinfo, ngrpinfo);
+                }
                 PMIX_INFO_FREE(endpts, nendpts);
                 PMIX_RELEASE(sig);
                 return;

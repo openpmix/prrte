@@ -195,6 +195,8 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
                 if (prte_mca_ras_pbs_component.smp_mode) {
                     /* this cannot happen in smp mode */
                     pmix_show_help("help-ras-pbs.txt", "smp-multi", true);
+                    fclose(fp);
+                    free(hostname);
                     return PRTE_ERR_BAD_PARAM;
                 }
                 ++node->slots;
