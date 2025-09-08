@@ -104,10 +104,10 @@
 #include "src/runtime/prte_wait.h"
 #include "src/runtime/runtime.h"
 
-#include "include/prte.h"
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/prted/prted.h"
+#include "include/prte.h"
 
 typedef struct {
     prte_pmix_lock_t lock;
@@ -256,7 +256,7 @@ static char *pmix_getline(FILE *fp)
 }
 #endif
 
-int main(int argc, char *argv[])
+int prte(int argc, char *argv[])
 {
     int rc = 1, i;
     char *param, *tpath, *cptr;
