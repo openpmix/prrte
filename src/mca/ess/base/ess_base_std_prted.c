@@ -446,8 +446,9 @@ int prte_ess_base_prted_setup(void)
 error:
     pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
                    error, PRTE_ERROR_NAME(ret), ret);
-    /* remove our use of the session directory tree */
-    PMIX_RELEASE(jdata);
+    if (NULL != jdata) {
+        PMIX_RELEASE(jdata);
+    }
     return PRTE_ERR_SILENT;
 }
 

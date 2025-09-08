@@ -598,6 +598,12 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
     /* check for deprecated options - warn and convert them */
     rc = convert_deprecated_cli(results, silent);
     if (PRTE_SUCCESS != rc) {
+        if (NULL != caught_positions) {
+            free(caught_positions);
+        }
+        if (NULL != caught_single_dashes) {
+            free(caught_single_dashes);
+        }
         return rc;
     }
 

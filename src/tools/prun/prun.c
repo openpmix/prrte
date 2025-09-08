@@ -242,7 +242,7 @@ int prun(int argc, char *argv[])
                 /* stitch together the var names and URI */
                 pmix_asprintf(&leftover, "%lu", (unsigned long) getpid());
                 /* output to the pipe */
-                rc = pmix_fd_write(outpipe, strlen(leftover) + 1, leftover);
+                pmix_fd_write(outpipe, strlen(leftover) + 1, leftover);
                 free(leftover);
                 close(outpipe);
             } else {

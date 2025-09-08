@@ -668,6 +668,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                 if (NULL != val) {
                     free(val);
                 }
+                return PRTE_ERR_SILENT;
              }
              for (n=0; NULL != range[n]; n++) {
                 (void)strtol(range[n], &parm_delimiter, 10);

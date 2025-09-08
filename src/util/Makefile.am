@@ -45,8 +45,6 @@ EXTRA_DIST = \
 
 headers = \
         attr.h \
-        bipartite_graph.h \
-        bipartite_graph_internal.h \
         bit_ops.h \
         prte_cmd_line.h \
         crc.h \
@@ -67,7 +65,6 @@ headers = \
 
 sources = \
         attr.c \
-        bipartite_graph.c \
         crc.c \
         daemon_init.c \
         dash_host/dash_host.c \

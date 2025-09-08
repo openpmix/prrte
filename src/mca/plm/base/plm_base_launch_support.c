@@ -191,9 +191,16 @@ void prte_plm_base_allocation_complete(int fd, short args, void *cbdata)
      * to map so we can see where the procs would have
      * gone - so skip to the mapping state */
     if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
-        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
         node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, 0);
+        if (NULL == node) {
+            // should never happen
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+            PMIX_RELEASE(caddy);
+            return;
+        }
         prte_rmaps_base.require_hwtcpus = !prte_hwloc_base_core_cpus(node->topology->topo);
+        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
     } else {
         /* move the state machine along */
         caddy->jdata->state = PRTE_JOB_STATE_ALLOCATION_COMPLETE;
@@ -1043,6 +1050,10 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
                 continue;
             }
             app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, proc->app_idx);
+            if (NULL == app) {
+                // should never happen
+                continue;
+            }
             fprintf(fp, "(rank, host, exe, pid) = (%u, %s, %s, %d)\n",
                     proc->name.rank, proc->node->name, app->app, proc->pid);
         }
