@@ -4,8 +4,12 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
-3.0.12 -- ? Sept 2025
+3.0.12 -- 9 Sept 2025
 ---------------------
+- PR #2269: Final update of NEWS and VERSION for release
+- PR #2263: Multiple commits
+   - Extend control over client connections
+   - Ensure we have HNP node aliases
 - PR #2255: Update NEWS
 - PR #2254: Replace some incorrectly removed code
 - PR #2253: Multiple commits
