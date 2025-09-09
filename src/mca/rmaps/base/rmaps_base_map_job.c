@@ -233,11 +233,18 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 // mapped by us
                 inherit = false;
                 parent = NULL;
+
             } else if (prte_get_attribute(&parent->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL)) {
                 inherit = true;
+                // if they didn't specifically direct it not inherit, then pass this on to the child
+                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, NULL, PMIX_BOOL)) {
+                    prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_INHERIT, NULL, PMIX_BOOL);
+                }
+
             } else if (prte_get_attribute(&parent->attributes, PRTE_JOB_NOINHERIT, NULL, PMIX_BOOL)) {
                 inherit = false;
                 parent = NULL;
+
             } else {
                 inherit = prte_rmaps_base.inherit;
             }
