@@ -18,6 +18,7 @@ int main(int argc, char *argv[])
     char hostname[1024];
     pmix_value_t *val = NULL;
     pmix_nspace_t nspace;
+    char *env;
 
     pid = getpid();
     gethostname(hostname, 1024);
@@ -122,6 +123,9 @@ int main(int argc, char *argv[])
         }
         printf("%s.%u: Disconnect complete!\n", myproc.nspace, myproc.rank);
     }
+
+    env = getenv("foo");
+    printf("%s.%u: FOO %s\n", myproc.nspace, myproc.rank, (NULL == env) ? "NULL" : env);
 
 done:
     PMIx_Finalize(NULL, 0);
