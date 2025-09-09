@@ -56,6 +56,10 @@ static int map_colocate(prte_job_t *jdata,
                         uint16_t procs_per_target,
                         prte_rmaps_options_t *options);
 
+static void inherit_env_directives(prte_job_t *jdata,
+                                   prte_job_t *parent,
+                                   pmix_proc_t *proxy);
+
 void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
@@ -69,7 +73,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_job_t *parent = NULL;
     prte_app_context_t *app;
     bool inherit = false;
-    pmix_proc_t *nptr, *target_proc;
+    pmix_proc_t *nptr = NULL, *target_proc;
     char *tmp, **ck;
     uint16_t u16 = 0, procs_per_target = 0;
     uint16_t *u16ptr = &u16;
@@ -221,6 +225,11 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     /* if this is a dynamic job launch and they didn't explicitly
      * request inheritance, then don't inherit the launch directives */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC)) {
+        if (NULL == nptr) {
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
+        }
         /* if the launch proxy is me, then this is the initial launch from
          * a proxy scenario, so we don't really have a parent */
         if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, nptr->nspace)) {
@@ -255,7 +264,6 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         } else {
             inherit = true;
         }
-        PMIX_PROC_RELEASE(nptr);
     } else {
         /* initial launch always takes on default MCA params for non-specified policies */
         inherit = true;
@@ -301,7 +309,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
                 }
             }
-
+            // copy over any env directives, but do not overwrite anything already specified
+            inherit_env_directives(jdata, parent, nptr);
         } else {
             if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) &&
                 !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
@@ -313,6 +322,9 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 }
             }
         }
+    }
+    if (NULL != nptr) {
+        PMIX_PROC_RELEASE(nptr);
     }
 
     /* we always inherit a parent's oversubscribe flag unless the job assigned it */
@@ -1208,4 +1220,109 @@ done:
     }
     PMIX_LIST_DESTRUCT(&targets);
     return ret;
+}
+
+static void inherit_env_directives(prte_job_t *jdata,
+                                   prte_job_t *parent,
+                                   pmix_proc_t *proxy)
+{
+    prte_app_context_t *app, *app2;
+    prte_proc_t *p;
+    prte_attribute_t *attr, *attr2;
+    pmix_value_t *val, *val2;
+    pmix_envar_t *envar, *envar2;
+    int n;
+    bool exists;
+
+    // deal with job-level attributes first
+    PMIX_LIST_FOREACH(attr, &parent->attributes, prte_attribute_t) {
+        if (PMIX_ENVAR != attr->data.type) {
+            continue;
+        }
+        val = &attr->data;
+        envar = &val->data.envar;
+
+        // do we have a matching attribute in the new job?
+        exists = false;
+        PMIX_LIST_FOREACH(attr2, &jdata->attributes, prte_attribute_t) {
+            if (PMIX_ENVAR != attr->data.type) {
+                continue;
+            }
+            val2 = &attr2->data;
+            envar2 = &val2->data.envar;
+
+            if (attr->key == attr2->key) {
+                // operation is same - check if the target envars match
+                if (0 == strcmp(envar->envar, envar2->envar)) {
+                    // these match, so don't overwrite it
+                    exists = true;
+                    break;
+                }
+            }
+        }
+
+        if (exists) {
+            // leave this alone
+            continue;
+        }
+
+        // if it doesn't exist, then inherit it
+        prte_prepend_attribute(&jdata->attributes, attr->key, PRTE_ATTR_GLOBAL,
+                               envar, PMIX_ENVAR);
+    }
+
+    /* There is no one-to-one correlation between the apps, but we can
+     * inherit the directives from the proc that called spawn, so do that
+     * much here */
+    p = prte_get_proc_object(proxy);
+    if (NULL == p) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return;
+    }
+    app = (prte_app_context_t*)pmix_pointer_array_get_item(parent->apps, p->app_idx);
+    if (NULL == app) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return;
+    }
+    for (n=0; n < jdata->apps->size; n++) {
+        app2 = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, n);
+        if (NULL == app2) {
+            continue;
+        }
+        PMIX_LIST_FOREACH(attr, &app->attributes, prte_attribute_t) {
+            if (PMIX_ENVAR != attr->data.type) {
+                continue;
+            }
+            val = &attr->data;
+            envar = &val->data.envar;
+
+            exists = false;
+            PMIX_LIST_FOREACH(attr2, &app2->attributes, prte_attribute_t) {
+                if (PMIX_ENVAR != attr->data.type) {
+                    continue;
+                }
+                val2 = &attr2->data;
+                envar2 = &val2->data.envar;
+
+                if (attr->key == attr2->key) {
+                    // operation is same - check if the target envars match
+                    if (0 == strcmp(envar->envar, envar2->envar)) {
+                        // these match, so don't overwrite it
+                        exists = true;
+                        break;
+                    }
+                }
+            }
+
+            if (exists) {
+                // leave this alone
+                continue;
+            }
+
+            // if it doesn't exist, then inherit it
+            prte_prepend_attribute(&app2->attributes, attr->key, PRTE_ATTR_GLOBAL,
+                                   envar, PMIX_ENVAR);
+        }
+    }
+
 }

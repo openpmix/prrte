@@ -652,8 +652,8 @@ next:
         /* add any cache'd values to the front of the job attributes  */
         for (m = 0; m < ninfo; m++) {
             if (0 == strcmp(info[m].key, PMIX_SET_ENVAR)) {
-                envt.envar = strdup(info[m].value.data.envar.envar);
-                envt.value = strdup(info[m].value.data.envar.value);
+                envt.envar = info[m].value.data.envar.envar;
+                envt.value = info[m].value.data.envar.value;
                 envt.separator = info[m].value.data.envar.separator;
                 prte_prepend_attribute(&jdata->attributes, PRTE_JOB_SET_ENVAR, PRTE_ATTR_GLOBAL,
                                        &envt, PMIX_ENVAR);
@@ -1108,6 +1108,9 @@ static void process_envars(prte_job_t *jdata,
     bool found;
 
     PMIX_LIST_FOREACH(attr, &jdata->attributes, prte_attribute_t) {
+        if (PMIX_ENVAR != attr->data.type) {
+            continue;
+        }
         val = &attr->data;
         envar = &val->data.envar;
         if (attr->key == PRTE_JOB_SET_ENVAR) {
@@ -1182,6 +1185,9 @@ static void process_envars(prte_job_t *jdata,
 
     // app trumps job, so do it after the job
     PMIX_LIST_FOREACH(attr, &app->attributes, prte_attribute_t) {
+        if (PMIX_ENVAR != attr->data.type) {
+            continue;
+        }
         val = &attr->data;
         envar = &val->data.envar;
         if (attr->key == PRTE_APP_SET_ENVAR) {
@@ -1248,15 +1254,14 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
     int j, idx;
     int total_num_local_procs = 0;
     prte_odls_launch_local_t *caddy = (prte_odls_launch_local_t *) cbdata;
-    prte_job_t *jobdat, *parent;
+    prte_job_t *jobdat;
     pmix_nspace_t job;
     prte_odls_base_fork_local_proc_fn_t fork_local = caddy->fork_local;
-    bool index_argv, inherit;
+    bool index_argv;
     char *msg, **xfer;
     prte_odls_spawn_caddy_t *cd;
     prte_event_base_t *evb;
     prte_schizo_base_module_t *schizo;
-    pmix_proc_t *nptr;
     PRTE_HIDE_UNUSED_PARAMS(fd, sd);
 
     PMIX_ACQUIRE_OBJECT(caddy);
@@ -1349,20 +1354,6 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         }
     }
 
-    // see if we have a parent in case of inheritance
-    nptr = NULL;
-    prte_get_attribute(&jobdat->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC);
-    if (NULL != nptr) {
-        parent = prte_get_job_data_object(nptr->nspace);
-        if (NULL != parent) {
-            inherit = prte_get_attribute(&parent->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL);
-        } else {
-            inherit = false;
-        }
-    } else {
-        inherit = false;
-    }
-
     for (j = 0; j < jobdat->apps->size; j++) {
         app = (prte_app_context_t *) pmix_pointer_array_get_item(jobdat->apps, j);
         if (NULL == app) {
@@ -1406,10 +1397,6 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         }
 
         // process any provided env directives
-        if (inherit) {
-            // start with the parent's directives
-            process_envars(parent, app);
-        }
         process_envars(jobdat, app);
 
 
