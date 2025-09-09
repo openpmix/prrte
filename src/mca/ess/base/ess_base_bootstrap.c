@@ -223,6 +223,9 @@ cleanup:
     if (NULL != cluster) {
         free(cluster);
     }
+    if (NULL != ctrlhost) {
+        free(ctrlhost);
+    }
     if (NULL != dvmnodes) {
         free(dvmnodes);
     }

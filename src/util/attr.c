@@ -632,11 +632,7 @@ int prte_attr_load(prte_attribute_t *kv, void *data, pmix_data_type_t type)
         if (NULL != kv->data.data.string) {
             free(kv->data.data.string);
         }
-        if (NULL != data) {
-            kv->data.data.string = strdup((const char *) data);
-        } else {
-            kv->data.data.string = NULL;
-        }
+        kv->data.data.string = strdup((const char *) data);
         break;
     case PMIX_SIZE:
         kv->data.data.size = *(size_t *) (data);

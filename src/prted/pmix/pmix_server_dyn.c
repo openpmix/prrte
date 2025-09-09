@@ -1102,7 +1102,11 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
     for (n=0; n < ninfo; n++) {
         if (PMIX_CHECK_KEY(&info[n], PMIX_PROC_DATA) ||
             PMIX_CHECK_KEY(&info[n], PMIX_JOB_INFO_ARRAY)) {
-            PMIx_Data_pack(NULL, &cd->msg, (pmix_info_t*)&info[n], 1, PMIX_INFO);
+            rc = PMIx_Data_pack(NULL, &cd->msg, (pmix_info_t*)&info[n], 1, PMIX_INFO);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_RELEASE(cd);
+                return rc;
+            }
         }
     }
     cd->opcbfunc = cbfunc;

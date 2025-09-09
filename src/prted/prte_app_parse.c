@@ -86,7 +86,6 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
     int i, n, count, rc;
     char *param, *value, *ptr;
     prte_pmix_app_t *app = NULL;
-    char *appname = NULL;
     pmix_cli_item_t *opt, *opt2;
     pmix_cli_result_t results;
     char *tval;
@@ -504,9 +503,6 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
 cleanup:
     if (NULL != app) {
         PMIX_RELEASE(app);
-    }
-    if (NULL != appname) {
-        free(appname);
     }
     PMIX_DESTRUCT(&results);
     return rc;

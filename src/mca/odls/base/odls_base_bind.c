@@ -275,11 +275,10 @@ void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd)
         hwloc_bitmap_free(cpuset);
         /* if we got an error and this wasn't a default binding policy, then report it */
         if (rc < 0 && PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding)) {
-            char *tmp = NULL;
             if (errno == ENOSYS) {
-                msg = "hwloc indicates cpu binding not supported";
+                msg = strdup("hwloc indicates cpu binding not supported");
             } else if (errno == EXDEV) {
-                msg = "hwloc indicates cpu binding cannot be enforced";
+                msg = strdup("hwloc indicates cpu binding cannot be enforced");
             } else {
                 pmix_asprintf(&msg, "hwloc_set_cpubind returned \"%s\" for bitmap \"%s\"",
                               prte_strerror(rc), child->cpuset);
@@ -291,19 +290,13 @@ void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd)
                                      "binding generic error",
                                      prte_process_info.nodename, context->app, msg,
                                      __FILE__, __LINE__);
+                free(msg);  // silence static analyzer warning
             } else {
                 send_warn_show_help(write_fd, "help-prte-odls-default.txt",
                                     "not bound", prte_process_info.nodename,
                                     context->app, msg, __FILE__, __LINE__);
-                if (NULL != tmp) {
-                    free(tmp);
-                    free(msg);
-                }
-                return;
-            }
-            if (NULL != tmp) {
-                free(tmp);
                 free(msg);
+                return;
             }
         }
 
