@@ -714,7 +714,6 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
         app->app = strdup(papp->cmd);
     } else if (NULL == papp->argv || NULL == papp->argv[0]) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        PMIX_RELEASE(jdata);
         return PRTE_ERR_BAD_PARAM;
     } else {
         app->app = strdup(papp->argv[0]);

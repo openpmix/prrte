@@ -100,11 +100,13 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
 #define PRTE_PMIX_CONSTRUCT_LOCK(l)                \
     do {                                           \
         PMIX_CONSTRUCT(&(l)->mutex, pmix_mutex_t); \
+        pmix_mutex_lock(&(l)->mutex);              \
         pthread_cond_init(&(l)->cond, NULL);       \
         (l)->active = true;                        \
         (l)->status = 0;                           \
         (l)->msg = NULL;                           \
         PMIX_POST_OBJECT((l));                     \
+        pmix_mutex_unlock(&(l)->mutex);            \
     } while (0)
 
 #define PRTE_PMIX_DESTRUCT_LOCK(l)        \
@@ -163,7 +165,7 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
 #    define PRTE_PMIX_RELEASE_THREAD(lck)                                     \
         do {                                                                  \
             (lck)->active = false;                                            \
-            pthread_cond_broadcast(&(lck)->cond);                             \
+            pthread_cond_signal(&(lck)->cond);                             \
             pmix_mutex_unlock(&(lck)->mutex);                                 \
         } while (0)
 #else
@@ -171,7 +173,7 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
         do {                                                \
             assert(0 != pmix_mutex_trylock(&(lck)->mutex)); \
             (lck)->active = false;                          \
-            pthread_cond_broadcast(&(lck)->cond);           \
+            pthread_cond_signal(&(lck)->cond);           \
             pmix_mutex_unlock(&(lck)->mutex);               \
         } while (0)
 #endif
@@ -181,7 +183,7 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
         pmix_mutex_lock(&(lck)->mutex);       \
         (lck)->active = false;                \
         PMIX_POST_OBJECT(lck);                \
-        pthread_cond_broadcast(&(lck)->cond); \
+        pthread_cond_signal(&(lck)->cond); \
         pmix_mutex_unlock(&(lck)->mutex);     \
     } while (0)
 
