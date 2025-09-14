@@ -1389,6 +1389,9 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
     if (NULL != info) {
         for (sz = 0; sz < ninfo; sz++) {
             if (PMIX_CHECK_KEY(&info[sz], PMIX_REQUIRED_KEY)) {
+                if (NULL != key) {
+                    free(key);
+                }
                 key = strdup(info[sz].value.data.string);
                 continue;
             }

@@ -542,7 +542,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         cptr = strdup(ck[0]);
         *ptr = '='; // restore the option
         ++ptr;
-        if (NULL == ptr) {
+        if ('\0' == *ptr) {
             /* malformed option */
             pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
                            true, "mapping", ck[0]);
