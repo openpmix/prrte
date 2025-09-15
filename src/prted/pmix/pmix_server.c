@@ -1244,9 +1244,12 @@ static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata
         req->data = (char *) malloc(sz);
         if (NULL == req->data) {
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            req->data = NULL;
+            req->sz = 0;
+        } else {
+             memcpy(req->data, data, sz);
+             req->sz = sz;
         }
-        memcpy(req->data, data, sz);
-        req->sz = sz;
     }
     prte_event_set(prte_event_base, &(req->ev), -1, PRTE_EV_WRITE, _mdxresp, req);
     PMIX_POST_OBJECT(req);

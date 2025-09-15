@@ -345,7 +345,6 @@ addknown:
                     /* we are at the end - just append */
                     pmix_list_append(allocated_nodes, &node->super);
                 } else {
-                    nd = (prte_node_t *) item;
                     pmix_list_insert_pos(allocated_nodes, item, &node->super);
                 }
             moveon:

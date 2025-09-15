@@ -15,7 +15,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,10 +38,7 @@ BEGIN_C_DECLS
 
 typedef struct {
     prte_ras_base_component_t super;
-    int timeout;
-    bool dyn_alloc_enabled;
-    char *config_file;
-    bool rolling_alloc;
+    int max_length;
     bool use_all;
 } prte_mca_ras_slurm_component_t;
 PRTE_EXPORT extern prte_mca_ras_slurm_component_t prte_mca_ras_slurm_component;

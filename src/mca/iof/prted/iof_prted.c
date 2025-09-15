@@ -16,7 +16,7 @@
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -124,10 +124,15 @@ static int prted_push(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
      */
     if ((flags = fcntl(fd, F_GETFL, 0)) < 0) {
         pmix_output(prte_iof_base_framework.framework_output,
-                    "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n", __FILE__, __LINE__, errno);
+                    "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n",
+                    __FILE__, __LINE__, errno);
     } else {
         flags |= O_NONBLOCK;
-        fcntl(fd, F_SETFL, flags);
+        if (fcntl(fd, F_SETFL, flags) < 0) {
+            pmix_output(prte_iof_base_framework.framework_output,
+                        "[%s:%d]: fcntl(F_SETFL) failed with errno=%d\n",
+                        __FILE__, __LINE__, errno);
+        }
     }
 
     /* do we already have this process in our list? */
@@ -206,11 +211,16 @@ static int prted_pull(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
      */
     if ((flags = fcntl(fd, F_GETFL, 0)) < 0) {
         pmix_output(prte_iof_base_framework.framework_output,
-                    "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n", __FILE__, __LINE__, errno);
+                    "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n",
+                    __FILE__, __LINE__, errno);
     } else {
         flags |= O_NONBLOCK;
-        fcntl(fd, F_SETFL, flags);
-    }
+        if (fcntl(fd, F_SETFL, flags) < 0) {
+            pmix_output(prte_iof_base_framework.framework_output,
+                        "[%s:%d]: fcntl(F_SETFL) failed with errno=%d\n",
+                        __FILE__, __LINE__, errno);
+        }
+     }
 
     /* do we already have this process in our list? */
     PMIX_LIST_FOREACH(proct, &prte_mca_iof_prted_component.procs, prte_iof_proc_t)

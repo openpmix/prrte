@@ -720,6 +720,7 @@ next_state:
     /* set total slots alloc */
     jdata->total_slots_alloc = prte_ras_base.total_slots_alloc;
 
+    hosts = NULL;
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_TOPO, (void**)&hosts, PMIX_STRING)) {
         if (NULL != hosts) {
             hostlist = PMIX_ARGV_SPLIT_COMPAT(hosts, ';');
@@ -1009,8 +1010,10 @@ proceed:
         if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
+        hosts = NULL;
         if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOST,
-                               (void **) &hosts, PMIX_STRING)) {
+                               (void **) &hosts, PMIX_STRING) &&
+            NULL != hosts) {
             pmix_output_verbose(5, prte_ras_base_framework.framework_output,
                                 "%s ras:base:add_hosts checking add-host %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts);
