@@ -648,7 +648,14 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
                             PMIX_DATA_BUFFER_DESTRUCT(&data);
                             break;
                         }
-                        PMIx_Data_pack(NULL, answer, &pbo, 1, PMIX_BYTE_OBJECT);
+                        ret = PMIx_Data_pack(NULL, answer, &pbo, 1, PMIX_BYTE_OBJECT);
+                        if (PMIX_SUCCESS != ret) {
+                            PMIX_ERROR_LOG(ret);
+                            PMIX_DATA_BUFFER_DESTRUCT(&data);
+                            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+                            break;
+                        }
+                        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                     }
                     PMIX_DATA_BUFFER_DESTRUCT(&data);
                     break;

@@ -14,7 +14,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2017-2021 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -204,6 +204,11 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
 
         /* connect input to /dev/null */
         fd = open("/dev/null", O_RDONLY, 0);
+        if (0 > fd) {
+            pmix_output(0, "Failed system call to open on /dev/null - errno: %s(%d)",
+                        strerror(errno), errno);
+            return PRTE_ERROR;
+        }
         if (fd != fileno(stdin)) {
             dup2(fd, fileno(stdin));
         }

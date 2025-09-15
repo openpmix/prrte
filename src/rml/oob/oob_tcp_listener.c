@@ -96,7 +96,7 @@ static void connection_event_handler(int sd, short flags, void *cbdata);
  */
 int prte_oob_tcp_start_listening(void)
 {
-    int rc = PRTE_SUCCESS, rc2 = PRTE_SUCCESS;
+    int rc = PRTE_SUCCESS;
     prte_oob_tcp_listener_t *listener;
 
     /* if we don't have any TCP interfaces, we shouldn't be here */
@@ -113,15 +113,22 @@ int prte_oob_tcp_start_listening(void)
     rc = create_listen();
 
 #if PRTE_ENABLE_IPV6
+    int rc2;
     /* create listen socket(s) for incoming connection attempts */
     rc2 = create_listen6();
-#endif
-
     if (PRTE_SUCCESS != rc && PRTE_SUCCESS != rc2) {
         /* we were unable to open any listening sockets */
         pmix_show_help("help-oob-tcp.txt", "no-listeners", true);
         return PRTE_ERR_FATAL;
     }
+#else
+    if (PRTE_SUCCESS != rc) {
+        /* we were unable to open any listening sockets */
+        pmix_show_help("help-oob-tcp.txt", "no-listeners", true);
+        return PRTE_ERR_FATAL;
+    }
+#endif
+
 
     /* if I am the HNP, start a listening thread so we can
      * harvest connection requests as rapidly as possible
