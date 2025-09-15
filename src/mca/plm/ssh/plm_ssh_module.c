@@ -777,6 +777,10 @@ static void ssh_child(int argc, char **argv)
 
     /* Don't let ssh slurp all of our stdin! */
     fdin = open("/dev/null", O_RDWR);
+    if (0 > fdin) {
+        pmix_output(0, "plm:ssh: open of /dev/null failed with errno=%s(%d)", strerror(errno), errno);
+        exit(-1);
+    }
     dup2(fdin, 0);
     close(fdin);
 

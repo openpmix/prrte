@@ -82,3 +82,11 @@ Error message received from:
 Message:
 
 %s
+#
+[neg-fd]
+A negative value was returned from the "open" system call:
+
+  Local host:  %s
+  Path:        %s
+
+Your job will now abort.

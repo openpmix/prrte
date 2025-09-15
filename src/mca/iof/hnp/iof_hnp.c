@@ -18,7 +18,7 @@
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -141,10 +141,15 @@ SETUP:
      */
     if ((flags = fcntl(fd, F_GETFL, 0)) < 0) {
         pmix_output(prte_iof_base_framework.framework_output,
-                    "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n", __FILE__, __LINE__, errno);
+                    "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n",
+                    __FILE__, __LINE__, errno);
     } else {
         flags |= O_NONBLOCK;
-        fcntl(fd, F_SETFL, flags);
+        if (fcntl(fd, F_SETFL, flags) < 0) {
+            pmix_output(prte_iof_base_framework.framework_output,
+                        "[%s:%d]: fcntl(F_SETFL) failed with errno=%d\n",
+                        __FILE__, __LINE__, errno);
+        }
     }
 
     /* define a read event and activate it */

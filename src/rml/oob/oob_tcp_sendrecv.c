@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -355,10 +355,8 @@ static int read_bytes(prte_oob_tcp_peer_t *peer)
                 prte_event_del(&peer->send_event);
                 peer->send_ev_active = false;
             }
-            if (NULL != peer->recv_msg) {
-                PMIX_RELEASE(peer->recv_msg);
-                peer->recv_msg = NULL;
-            }
+            PMIX_RELEASE(peer->recv_msg);
+            peer->recv_msg = NULL;
             prte_oob_tcp_peer_close(peer);
             // if (NULL != mca_oob_tcp.oob_exception_callback) {
             //   mca_oob_tcp.oob_exception_callback(&peer->peer_name, PRTE_RML_PEER_DISCONNECTED);

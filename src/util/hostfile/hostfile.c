@@ -206,6 +206,9 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             if (NULL != alias) {
                 free(alias);
             }
+            if (NULL != username) {
+                free(username);
+            }
             return PRTE_SUCCESS;
         }
 
@@ -307,7 +310,9 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             username = strdup(argv[0]);
             node_name = strdup(argv[1]);
         } else {
-            pmix_output(0, "WARNING: Unhandled user@host-combination\n"); /* XXX */
+            pmix_output(0, "WARNING: Unhandled user@host-combination - %s\n", value); /* XXX */
+            PMIX_ARGV_FREE_COMPAT(argv);
+            return PRTE_ERROR;
         }
         PMIX_ARGV_FREE_COMPAT(argv);
 
