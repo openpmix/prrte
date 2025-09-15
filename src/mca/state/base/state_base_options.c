@@ -260,7 +260,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                                    &flag, PMIX_BOOL);
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_MAX_RESTARTS)) {
-                if ('\0' == *ptr) {
+                if (NULL == ptr || '\0' == *ptr) {
                     /* missing the value */
                     pmix_show_help("help-prte-rmaps-base.txt", "missing-value", true,
                                    "runtime options", options[n], "empty");

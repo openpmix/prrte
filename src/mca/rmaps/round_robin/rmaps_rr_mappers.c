@@ -545,9 +545,7 @@ errout:
     if (PRTE_ERR_SILENT != rc) {
         pmix_show_help("help-prte-rmaps-rr.txt",
                        "prte-rmaps-rr:not-enough-cpus", true,
-                       (NULL == app) ? "N/A" : app->app,
-                       (NULL == app) ? -1 : app->num_procs,
-                       savecpuset);
+                       app->app, app->num_procs, savecpuset);
     }
     if (NULL != savecpuset) {
         free(savecpuset);

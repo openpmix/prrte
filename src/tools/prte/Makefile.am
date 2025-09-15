@@ -39,8 +39,8 @@ AM_CFLAGS = \
 
 bin_PROGRAMS = prte
 
-prte_SOURCES = \
-        prte.c
+prte_SOURCES =  \
+        main.c
 
 prte_LDADD = \
     $(prte_libevent_LIBS) \
@@ -53,3 +53,4 @@ install-exec-hook:
 
 uninstall-local:
 	rm -f $(DESTDIR)$(bindir)/prterun$(EXEEXT)
+	rm -f $(DESTDIR)$(bindir)/prte$(EXEEXT)

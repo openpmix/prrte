@@ -151,9 +151,15 @@ int prte_ess_base_bootstrap(void)
 
         /* identify and cache the option */
         if (0 == strcmp(line, "ClusterName")) {
+            if (NULL != cluster) {
+                free(cluster);
+            }
             cluster = strdup(ptr);
 
         } else if (0 == strcmp(line, "DVMControllerHost")) {
+            if (NULL != ctrlhost) {
+                free(ctrlhost);
+            }
             ctrlhost = strdup(ptr);
 
         } else if (0 == strcmp(line, "DVMControllerPort")) {
@@ -163,18 +169,33 @@ int prte_ess_base_bootstrap(void)
             prtedport = strtoul(ptr, NULL, 10);
 
         } else if (0 == strcmp(line, "DVMNodes")) {
+            if (NULL == dvmnodes) {
+                free(dvmnodes);
+            }
             dvmnodes = strdup(ptr);
 
         } else if (0 == strcmp(line, "DVMTempDir")) {
+            if (NULL == dvmtmpdir) {
+                free(dvmtmpdir);
+            }
             dvmtmpdir = strdup(ptr);
 
         } else if (0 == strcmp(line, "SessionTmpDir")) {
+            if (NULL != sessiontmpdir) {
+                free(sessiontmpdir);
+            }
             sessiontmpdir = strdup(ptr);
 
         } else if (0 == strcmp(line, "ControllerLogPath")) {
+            if (NULL != ctrllogpath) {
+                free(ctrllogpath);
+            }
             ctrllogpath = strdup(ptr);
 
         } else if (0 == strcmp(line, "PRTEDLogPath")) {
+            if (NULL != prtedlogpath) {
+                free(prtedlogpath);
+            }
             prtedlogpath = strdup(ptr);
         }
         free(line);
