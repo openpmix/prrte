@@ -292,10 +292,15 @@ static int hnp_pull(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int fd)
      */
     if ((flags = fcntl(fd, F_GETFL, 0)) < 0) {
         pmix_output(prte_iof_base_framework.framework_output,
-                    "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n", __FILE__, __LINE__, errno);
+                    "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n",
+                    __FILE__, __LINE__, errno);
     } else {
         flags |= O_NONBLOCK;
-        fcntl(fd, F_SETFL, flags);
+        if (fcntl(fd, F_SETFL, flags) < 0) {
+            pmix_output(prte_iof_base_framework.framework_output,
+                        "[%s:%d]: fcntl(F_SETFL) failed with errno=%d\n",
+                        __FILE__, __LINE__, errno);
+        }
     }
 
     /* do we already have this process in our list? */
