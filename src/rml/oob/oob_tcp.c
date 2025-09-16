@@ -647,7 +647,6 @@ static void recv_handler(int sd, short flg, void *cbdata)
     if (MCA_OOB_TCP_IDENT == hdr.type) {
         if (NULL == (peer = prte_oob_tcp_peer_lookup(&hdr.origin))) {
             /* should never happen */
-            prte_oob_tcp_peer_close(peer);
             goto cleanup;
         }
         /* set socket up to be non-blocking */

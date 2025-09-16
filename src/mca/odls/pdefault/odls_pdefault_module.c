@@ -340,6 +340,11 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
         int fdnull;
         for (i = 0; i < 3; i++) {
             fdnull = open("/dev/null", O_RDONLY, 0);
+            if (0 > fdnull) {
+               send_error_show_help(write_fd, 1, "help-prte-odls-default.txt", "neg-fd",
+                                     prte_process_info.nodename, "/dev/null");
+                /* Does not return */
+             }
             if (fdnull > i && i != write_fd) {
                 dup2(fdnull, i);
             }
@@ -513,8 +518,8 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
             rc = pmix_fd_read(read_fd, msg.file_str_len, file);
             if (PMIX_SUCCESS != rc) {
                 pmix_show_help("help-prte-odls-default.txt", "syscall fail", true,
-                               prte_process_info.nodename, cd->app->app, "pmix_fd_read", __FILE__,
-                               __LINE__);
+                               prte_process_info.nodename, cd->app->app, "pmix_fd_read",
+                               __FILE__, __LINE__);
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
                 }
@@ -527,8 +532,8 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
             rc = pmix_fd_read(read_fd, msg.topic_str_len, topic);
             if (PMIX_SUCCESS != rc) {
                 pmix_show_help("help-prte-odls-default.txt", "syscall fail", true,
-                               prte_process_info.nodename, cd->app->app, "pmix_fd_read", __FILE__,
-                               __LINE__);
+                               prte_process_info.nodename, cd->app->app, "pmix_fd_read",
+                               __FILE__, __LINE__);
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
                 }
@@ -541,8 +546,8 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
             str = calloc(1, msg.msg_str_len + 1);
             if (NULL == str) {
                 pmix_show_help("help-prte-odls-default.txt", "syscall fail", true,
-                               prte_process_info.nodename, cd->app->app, "pmix_fd_read", __FILE__,
-                               __LINE__);
+                               prte_process_info.nodename, cd->app->app, "calloc",
+                               __FILE__, __LINE__);
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
                 }
@@ -550,7 +555,17 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
                 return rc;
             }
             rc = pmix_fd_read(read_fd, msg.msg_str_len, str);
-        }
+            if (PMIX_SUCCESS != rc) {
+                pmix_show_help("help-prte-odls-default.txt", "syscall fail", true,
+                               prte_process_info.nodename, cd->app->app, "pmix_fd_read",
+                               __FILE__, __LINE__);
+                if (NULL != cd->child) {
+                    cd->child->state = PRTE_PROC_STATE_UNDEF;
+                }
+                rc = prte_pmix_convert_status(rc);
+                return rc;
+            }
+         }
 
         /* Print out what we got.  We already have a rendered string,
            so use pmix_show_help_norender(). */
