@@ -29,7 +29,11 @@
 #include <unistd.h>
 
 #define SR1_PJOBS
+#if PRTE_TESTBUILD_LAUNCHERS
+#include "testbuild_lsf.h"
+#else
 #include <lsf/lsbatch.h>
+#endif
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/util/pmix_argv.h"
@@ -60,8 +64,9 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 {
     char **nodelist;
     prte_node_t *node;
-    int i, num_nodes, rc;
+    int i, num_nodes;
     char *ptr;
+    PRTE_HIDE_UNUSED_PARAMS(jdata);
 
     /* get the list of allocated nodes */
     if ((num_nodes = lsb_getalloc(&nodelist)) < 0) {

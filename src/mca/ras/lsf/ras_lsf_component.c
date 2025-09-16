@@ -27,7 +27,11 @@
 #include "prte_config.h"
 #include "constants.h"
 
+#if PRTE_TESTBUILD_LAUNCHERS
+#include "testbuild_lsf.h"
+#else
 #include <lsf/lsbatch.h>
+#endif
 
 #include "src/mca/base/pmix_base.h"
 
