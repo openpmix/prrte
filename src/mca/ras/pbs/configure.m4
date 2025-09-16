@@ -14,7 +14,7 @@
 # Copyright (c) 2011-2013 Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
-# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
 # Copyright (c) 2022      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
@@ -62,7 +62,7 @@ AC_DEFUN([MCA_prte_ras_pbs_CONFIG],[
 
     PRTE_SUMMARY_ADD([Resource Managers], [PBS], [], [$prte_check_pbs_happy (scheduler)])
 
-    AS_IF([test "$prte_check_pbs_happy" = "yes"],
+    AS_IF([test "$prte_check_pbs_happy" = "yes" || test "$prte_testbuild_launchers" = "1"],
           [$1],
           [$2])
 

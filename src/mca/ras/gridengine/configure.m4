@@ -16,6 +16,7 @@
 # Copyright (c) 2011-2013 Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2025      Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -28,7 +29,10 @@
 AC_DEFUN([MCA_prte_ras_gridengine_CONFIG],[
     AC_CONFIG_FILES([src/mca/ras/gridengine/Makefile])
 
-    PRTE_CHECK_GRIDENGINE([ras_gridengine], [ras_gridengine_happy="yes"], [ras_gridengine_happy="no"])
+    PRTE_CHECK_GRIDENGINE([ras_gridengine],
+                          [ras_gridengine_happy="yes"],
+                          [ras_gridengine_happy="no"])
 
-    AS_IF([test "$ras_gridengine_happy" = "yes"], [$1], [$2])
+    AS_IF([test "$ras_gridengine_happy" = "yes" || test "$prte_testbuild_launchers" = "1"],
+          [$1], [$2])
 ])dnl
