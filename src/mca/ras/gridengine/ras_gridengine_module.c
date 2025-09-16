@@ -70,6 +70,7 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
     FILE *fp;
     prte_node_t *node;
     bool found;
+    PRTE_HIDE_UNUSED_PARAMS(jdata);
 
     /* show the Grid Engine's JOB_ID */
     if (prte_mca_ras_gridengine_component.show_jobid || prte_mca_ras_gridengine_component.verbose != -1) {
@@ -88,7 +89,8 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
     /* parse the pe_hostfile for hostname, slots, etc, then compare the
      * current node with a list of hosts in the nodelist, if the current
      * node is not found in nodelist, add it in */
-    pmix_output(prte_mca_ras_gridengine_component.verbose, "ras:gridengine: PE_HOSTFILE: %s",
+    pmix_output(prte_mca_ras_gridengine_component.verbose,
+                "ras:gridengine: PE_HOSTFILE: %s",
                 pe_hostfile);
 
     while (fgets(buf, sizeof(buf), fp)) {
@@ -120,7 +122,8 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
             node->slots_max = 0;
             node->slots = (int) strtol(num, (char **) NULL, 10);
             pmix_output(prte_mca_ras_gridengine_component.verbose,
-                        "ras:gridengine: %s: PE_HOSTFILE shows slots=%d", node->name, node->slots);
+                        "ras:gridengine: %s: PE_HOSTFILE shows slots=%d queue=%s arch=%s",
+                        node->name, node->slots, queue, arch);
             pmix_list_append(nodelist, &node->super);
         }
     } /* finished reading the $PE_HOSTFILE */
@@ -141,47 +144,6 @@ cleanup:
     return PRTE_SUCCESS;
 }
 
-#if 0
-/**
- * This function is not used currently, but may be used eventually.
- * Parse the PE_HOSTFILE to determine the number of process
- * slots/processors available on the node.
- */
-static int get_slot_count(char* node_name, int* slot_cnt)
-{
-    char buf[1024], *tok, *name, *num, *queue, *arch;
-    char *pe_hostfile = getenv("PE_HOSTFILE");
-    FILE *fp;
-
-    /* check the PE_HOSTFILE before continuing on */
-    if (!(fp = fopen(pe_hostfile, "r"))) {
-        pmix_show_help("help-ras-gridengine.txt", "cannot-read-pe-hostfile",
-            true, pe_hostfile, strerror(errno));
-        PRTE_ERROR_LOG(PRTE_ERROR);
-        return(PRTE_ERROR);
-    }
-
-    while (fgets(buf, sizeof(buf), fp)) {
-        name = strtok_r(buf, " \n", &tok);
-        num = strtok_r(NULL, " \n", &tok);
-        queue = strtok_r(NULL, " \n", &tok);
-        arch = strtok_r(NULL, " \n", &tok);
-
-        if(strcmp(node_name,name) == 0) {
-            *slot_cnt = (int) strtol(num, (char **)NULL, 10);
-            pmix_output(prte_mca_ras_gridengine_component.verbose,
-                "ras:gridengine: %s: PE_HOSTFILE shows slots=%d",
-                node_name, *slot_cnt);
-            fclose(fp);
-            return PRTE_SUCCESS;
-        }
-    }
-
-    /* when there is no match */
-    fclose(fp);
-    return PRTE_ERROR;
-}
-#endif
 
 /**
  * finalize
