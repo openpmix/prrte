@@ -1345,6 +1345,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
         }
         while (NULL != (line = prte_schizo_base_getline(fp))) {
             if ('\0' == line[0]) {
+                free(line);
                 continue; /* skip empty lines */
             }
             opts = PMIX_ARGV_SPLIT_WITH_EMPTY_COMPAT(line, ' ');
@@ -1388,6 +1389,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                             pmix_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
                                            line);
                             free(line);
+                            free(p1);
                             PMIX_ARGV_FREE_COMPAT(tmp);
                             PMIX_ARGV_FREE_COMPAT(opts);
                             PMIX_ARGV_FREE_COMPAT(cache);

@@ -205,6 +205,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             }
             if (NULL != alias) {
                 free(alias);
+                alias = NULL;
             }
             if (NULL != username) {
                 free(username);
@@ -254,6 +255,11 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
                 PMIX_ARGV_APPEND_UNIQUE_COMPAT(&node->aliases, alias);
             }
         }
+        if (NULL != alias) {
+            free(alias);
+            alias = NULL;
+        }
+
     } else if (PRTE_HOSTFILE_RELATIVE == token) {
         /* store this for later processing */
         node = PMIX_NEW(prte_node_t);
@@ -280,6 +286,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             free(alias);
         }
         pmix_list_append(updates, &node->super);
+
     } else if (PRTE_HOSTFILE_RANK == token) {
         /* we can ignore the rank, but we need to extract the node name. we
          * first need to shift over to the other side of the equal sign as
@@ -363,6 +370,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
         }
         free(node_name);
         return PRTE_SUCCESS;
+        
     } else {
         hostfile_parse_error(token);
         return PRTE_ERROR;

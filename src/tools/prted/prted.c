@@ -587,13 +587,15 @@ int main(int argc, char *argv[])
         PMIX_ARGV_FREE_COMPAT(nonlocal);
         goto DONE;
     }
-    for (ni = 0; ni < naliases; ni++) {
-        prc = PMIx_Data_pack(NULL, buffer, &nonlocal[ni], 1, PMIX_STRING);
-        if (PMIX_SUCCESS != prc) {
-            PMIX_ERROR_LOG(prc);
-            PMIX_DATA_BUFFER_RELEASE(buffer);
-            PMIX_ARGV_FREE_COMPAT(nonlocal);
-            goto DONE;
+    if (0 < naliases) {
+        for (ni = 0; ni < naliases; ni++) {
+            prc = PMIx_Data_pack(NULL, buffer, &nonlocal[ni], 1, PMIX_STRING);
+            if (PMIX_SUCCESS != prc) {
+                PMIX_ERROR_LOG(prc);
+                PMIX_DATA_BUFFER_RELEASE(buffer);
+                PMIX_ARGV_FREE_COMPAT(nonlocal);
+                goto DONE;
+            }
         }
     }
     PMIX_ARGV_FREE_COMPAT(nonlocal);
