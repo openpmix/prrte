@@ -191,8 +191,7 @@ int main(int argc, char *argv[])
     pmix_data_buffer_t pbuf, *wbuf;
     pmix_byte_object_t pbo;
     int8_t flag;
-    uint8_t naliases, ni;
-    char **nonlocal = NULL, *personality;
+    char **nonlocal = NULL, *aliases, *personality;
     int n;
     pmix_value_t *vptr;
     char **pargv;
@@ -579,27 +578,22 @@ int main(int argc, char *argv[])
             PMIX_ARGV_APPEND_NOSIZE_COMPAT(&nonlocal, prte_process_info.aliases[n]);
         }
     }
-    naliases = PMIX_ARGV_COUNT_COMPAT(nonlocal);
-    prc = PMIx_Data_pack(NULL, buffer, &naliases, 1, PMIX_UINT8);
+    if (NULL == nonlocal) {
+        // no aliases to report
+        aliases = NULL;
+    } else {
+        aliases = PMIx_Argv_join(nonlocal, ',');
+    }
+    prc = PMIx_Data_pack(NULL, buffer, &aliases, 1, PMIX_STRING);
+    if (NULL != aliases) {
+        free(aliases);
+    }
+    PMIX_ARGV_FREE_COMPAT(nonlocal);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(buffer);
-        PMIX_ARGV_FREE_COMPAT(nonlocal);
         goto DONE;
     }
-    if (0 < naliases) {
-        for (ni = 0; ni < naliases; ni++) {
-            prc = PMIx_Data_pack(NULL, buffer, &nonlocal[ni], 1, PMIX_STRING);
-            if (PMIX_SUCCESS != prc) {
-                PMIX_ERROR_LOG(prc);
-                PMIX_DATA_BUFFER_RELEASE(buffer);
-                PMIX_ARGV_FREE_COMPAT(nonlocal);
-                goto DONE;
-            }
-        }
-    }
-    PMIX_ARGV_FREE_COMPAT(nonlocal);
-
     prc = PMIx_Data_pack(NULL, buffer, &prte_topo_signature, 1, PMIX_STRING);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);

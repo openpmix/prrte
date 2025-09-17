@@ -95,7 +95,7 @@ static void setup_sighandler(int signal, prte_event_t *ev, prte_event_cbfunc_t c
 int prte_ess_base_prted_setup(void)
 {
     int ret = PRTE_ERROR;
-    int fd;
+    int fd = -1;
     char log_file[PRTE_PATH_MAX];
     char *error = NULL;
     char *tmp = NULL;
@@ -276,17 +276,24 @@ int prte_ess_base_prted_setup(void)
         log_path = pmix_os_path(false, prte_process_info.top_session_dir, log_file, NULL);
 
         fd = open(log_path, O_RDWR | O_CREAT | O_TRUNC, 0640);
+        free(log_path);
+        log_path = NULL;
         if (fd < 0) {
             /* couldn't open the file for some reason, so
              * just connect everything to /dev/null
              */
             fd = open("/dev/null", O_RDWR | O_CREAT | O_TRUNC, 0666);
-        } else {
-            dup2(fd, STDOUT_FILENO);
-            dup2(fd, STDERR_FILENO);
-            if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
-                close(fd);
+            if (fd < 0) {
+                // cannot proceed
+                ret = PRTE_ERROR;
+                error = "open dev/null";
+                goto error;
             }
+        }
+        dup2(fd, STDOUT_FILENO);
+        dup2(fd, STDERR_FILENO);
+        if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
+            close(fd);
         }
     }
 
