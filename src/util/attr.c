@@ -517,6 +517,12 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PRTE-JOB-PMIX-PREFIX";
         case PRTE_JOB_FWD_ENVIRONMENT:
             return "FWD ENVIRONMENT";
+        case PRTE_JOB_PTY:
+            return "PTY";
+        case PRTE_JOB_PTY_TERMIO:
+            return "PTY TERMIOS";
+        case PRTE_JOB_PTY_WSIZE:
+            return "PTY WSIZES";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

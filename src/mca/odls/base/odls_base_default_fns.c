@@ -1575,7 +1575,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             } else {
                 cd->opts.connect_stdin = false;
             }
-            if (PRTE_SUCCESS != (rc = prte_iof_base_setup_prefork(&cd->opts))) {
+            if (PRTE_SUCCESS != (rc = prte_iof_base_setup_prefork(&cd->opts, jobdat))) {
                 PRTE_ERROR_LOG(rc);
                 child->exit_code = rc;
                 PMIX_RELEASE(cd);
@@ -2193,7 +2193,7 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
     } else {
         cd->opts.connect_stdin = false;
     }
-    if (PRTE_SUCCESS != (rc = prte_iof_base_setup_prefork(&cd->opts))) {
+    if (PRTE_SUCCESS != (rc = prte_iof_base_setup_prefork(&cd->opts, jobdat))) {
         PRTE_ERROR_LOG(rc);
         child->exit_code = rc;
         PMIX_RELEASE(cd);
