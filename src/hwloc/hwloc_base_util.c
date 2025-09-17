@@ -180,6 +180,7 @@ void prte_hwloc_base_setup_summary(hwloc_topology_t topo)
 {
     hwloc_obj_t root;
     prte_hwloc_topo_data_t *sum;
+    int val;
     unsigned width, w, m, N, last;
     hwloc_bitmap_t *numas;
     hwloc_obj_t obj;
@@ -220,7 +221,12 @@ void prte_hwloc_base_setup_summary(hwloc_topology_t topo)
     sum->computed = true;
 
     /* compute the CPU NUMA cutoff for this topology */
-    width = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_NUMANODE);
+    val = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_NUMANODE);
+    if (0 > val) {
+        PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        return;
+    }
+    width = val;
     if (0 == width) {
         sum->numa_cutoff = 0;
         return;

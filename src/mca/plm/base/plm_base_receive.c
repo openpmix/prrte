@@ -333,57 +333,68 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
                 rc = PRTE_ERR_NOT_FOUND;
                 goto ANSWER_LAUNCH;
             }
-
-        } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ALLOC_ID, (void **) &tmp, PMIX_STRING)) {
-            session = prte_get_session_object_from_id(tmp);
-            if (NULL == session) {
-                /* if the caller specified a session and we don't know about it, then
-                 * that is an unrecoverable error */
-                rc = PRTE_ERR_NOT_FOUND;
-                goto ANSWER_LAUNCH;
-            }
-
-        } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_REF_ID, (void **) &tmp, PMIX_STRING)) {
-            session = prte_get_session_object_from_refid(tmp);
-            if (NULL == session) {
-                /* if the caller specified a session and we don't know about it, then
-                 * that is an unrecoverable error */
-                rc = PRTE_ERR_NOT_FOUND;
-                goto ANSWER_LAUNCH;
-            }
-
-        } else {
-            /* try defaulting to parent session */
-            parent = prte_get_job_data_object(nptr->nspace);
-            if (NULL != parent) {
-                /* if the proc requesting the spawn is a tool, it does not have a
-                 * session - so assign it the default session */
-                if (PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
-                    session = prte_default_session;
-                } else {
-                    session = parent->session;
-                    if (NULL == session) {
-                        rc = PRTE_ERR_NOT_FOUND;
-                        goto ANSWER_LAUNCH;
-                    }
-                }
-
-            // (RHC) This next clause merits some thought - not sure I fully
-            // understand the conditionals
-            } else if (!prte_pmix_server_globals.scheduler_connected ||
-                       PMIX_CHECK_PROCID(nptr, &prte_pmix_server_globals.scheduler)) {
-                /* The proc requesting the spawn is a tool, hence does not have a session.
-                 * If we don't have a scheduler connected (or the tool itself is the scheduler) we allow
-                 * it to spawn into the default session, i.e. the global node pool
-                 */
-                session = prte_default_session;
-            } else {
-                PRTE_ERROR_LOG(PRTE_ERR_PERM);
-                rc = PRTE_ERR_PERM;
-                goto ANSWER_LAUNCH;
-            }
+            goto moveon;
         }
 
+        tmp = NULL;
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ALLOC_ID, (void **) &tmp, PMIX_STRING) &&
+            NULL != tmp) {
+            session = prte_get_session_object_from_id(tmp);
+            free(tmp);
+            if (NULL == session) {
+                /* if the caller specified a session and we don't know about it, then
+                 * that is an unrecoverable error */
+                rc = PRTE_ERR_NOT_FOUND;
+                goto ANSWER_LAUNCH;
+            }
+            goto moveon;
+        }
+
+        tmp = NULL;
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_REF_ID, (void **) &tmp, PMIX_STRING) &&
+            NULL != tmp) {
+            session = prte_get_session_object_from_refid(tmp);
+            free(tmp);
+            if (NULL == session) {
+                /* if the caller specified a session and we don't know about it, then
+                 * that is an unrecoverable error */
+                rc = PRTE_ERR_NOT_FOUND;
+                goto ANSWER_LAUNCH;
+            }
+            goto moveon;
+        }
+
+        /* try defaulting to parent session */
+        parent = prte_get_job_data_object(nptr->nspace);
+        if (NULL != parent) {
+            /* if the proc requesting the spawn is a tool, it does not have a
+             * session - so assign it the default session */
+            if (PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
+                session = prte_default_session;
+            } else {
+                session = parent->session;
+                if (NULL == session) {
+                    rc = PRTE_ERR_NOT_FOUND;
+                    goto ANSWER_LAUNCH;
+                }
+            }
+
+        // (RHC) This next clause merits some thought - not sure I fully
+        // understand the conditionals
+        } else if (!prte_pmix_server_globals.scheduler_connected ||
+                   PMIX_CHECK_PROCID(nptr, &prte_pmix_server_globals.scheduler)) {
+            /* The proc requesting the spawn is a tool, hence does not have a session.
+             * If we don't have a scheduler connected (or the tool itself is the scheduler) we allow
+             * it to spawn into the default session, i.e. the global node pool
+             */
+            session = prte_default_session;
+        } else {
+            PRTE_ERROR_LOG(PRTE_ERR_PERM);
+            rc = PRTE_ERR_PERM;
+            goto ANSWER_LAUNCH;
+        }
+
+moveon:
         jdata->session = session;
         pmix_pointer_array_add(jdata->session->jobs, jdata);
 
@@ -461,6 +472,8 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             goto ANSWER_LAUNCH;
         }
         break;
+
+
     ANSWER_LAUNCH:
         PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                              "%s plm:base:receive - error on launch: %d",
@@ -497,6 +510,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             PMIX_DATA_BUFFER_RELEASE(answer);
         }
         break;
+
 
     case PRTE_PLM_UPDATE_PROC_STATE:
             pmix_output_verbose(5, prte_plm_base_framework.framework_output,

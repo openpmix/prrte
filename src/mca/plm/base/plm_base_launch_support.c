@@ -130,6 +130,15 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
     if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) &&
         PMIX_CHECK_NSPACE(caddy->jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
         node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0);
+        if (NULL == node || NULL == node->topology) {
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            caddy->jdata->state = PRTE_JOB_STATE_FAILED_TO_START;
+            PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+
+            /* cleanup */
+            PMIX_RELEASE(caddy);
+            return;
+        }
         t = node->topology;
         for (i = 1; i < prte_node_pool->size; i++) {
             if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i))) {
@@ -1320,7 +1329,6 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     bool found, show_progress;
     prte_daemon_cmd_flag_t cmd;
     char *alias;
-    uint8_t naliases, ni;
     char *nodename = NULL;
     pmix_info_t *info;
     size_t ninfo;
@@ -1434,25 +1442,19 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
 
         /* unpack and store the provided aliases */
         idx = 1;
-        ret = PMIx_Data_unpack(NULL, buffer, &naliases, &idx, PMIX_UINT8);
+        ret = PMIx_Data_unpack(NULL, buffer, &alias, &idx, PMIX_STRING);
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
             prted_failed_launch = true;
             goto CLEANUP;
         }
-        for (ni = 0; ni < naliases; ni++) {
-            idx = 1;
-            ret = PMIx_Data_unpack(NULL, buffer, &alias, &idx, PMIX_STRING);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                prted_failed_launch = true;
-                goto CLEANUP;
-            }
-            PMIX_ARGV_APPEND_UNIQUE_COMPAT(&daemon->node->aliases, alias);
+        if (NULL != alias) {
+            daemon->node->aliases = PMIx_Argv_split(alias, ',');
             free(alias);
         }
 
         if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
+            int ni;
             pmix_output(0, "ALIASES FOR NODE %s (%s)", daemon->node->name, nodename);
             if (NULL != daemon->node->aliases) {
                 for (ni=0; NULL != daemon->node->aliases[ni]; ni++) {

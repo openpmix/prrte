@@ -285,9 +285,12 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
         if (NULL != alias && 0 != strcmp(alias, node->name)) {
             // new node object, so alias must be unique
             PMIX_ARGV_APPEND_NOSIZE_COMPAT(&node->aliases, alias);
-            free(alias);
         }
         pmix_list_append(updates, &node->super);
+        if (NULL != alias) {
+            free(alias);
+            alias = NULL;
+        }
 
     } else if (PRTE_HOSTFILE_RANK == token) {
         /* we can ignore the rank, but we need to extract the node name. we
@@ -357,6 +360,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             PMIX_ARGV_APPEND_UNIQUE_COMPAT(&node->aliases, alias);
             free(alias);
             node->rawname = strdup(node_name);
+            alias = NULL;
         }
         PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                              "%s hostfile: node %s slots %d nodes-given %s",

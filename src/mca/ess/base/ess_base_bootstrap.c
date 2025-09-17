@@ -412,7 +412,7 @@ static pmix_status_t regex_extract_nodes(char *regexp, char ***names)
     free(orig);
 
     /* All done */
-    return ret;
+    return PRTE_SUCCESS;
 }
 
 /*

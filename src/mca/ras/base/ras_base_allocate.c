@@ -202,10 +202,6 @@ static void display_cpus(prte_topology_t *t,
 
     parsable = prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL);
 
-    if (parsable) {
-        return;
-    }
-
     npus = prte_hwloc_base_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PU);
     ncores = prte_hwloc_base_get_nbobjs_by_type(t->topo, HWLOC_OBJ_CORE);
     if (npus == ncores && !use_hwthread_cpus) {

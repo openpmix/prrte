@@ -959,6 +959,17 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
         }
     }
 
+    if (hdr.nbytes == offset) {
+        // missing version string
+        pmix_show_help("help-oob-tcp.txt", "missing version", true,
+                       prte_process_info.nodename, PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                       pmix_fd_get_peer_name(peer->sd), PRTE_NAME_PRINT(&(peer->name)));
+        peer->state = MCA_OOB_TCP_FAILED;
+        prte_oob_tcp_peer_close(peer);
+        free(msg);
+        return PRTE_ERR_CONNECTION_REFUSED;
+    }
+
     /* check that this is from a matching version */
     version = (char *) ((char *) msg + offset);
     cnt = 0;

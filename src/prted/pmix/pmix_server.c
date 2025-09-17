@@ -2071,8 +2071,16 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
     return;
 
 reply:
-    /* send an error response */
-    send_alloc_resp(rc, NULL, 0, req, NULL, NULL);
+    if (NULL == req) {
+        // cannot send a response
+        pmix_output(0, "Unable to process/relay the scheduler controller command");
+        if (0 < ninfo) {
+            PMIX_INFO_FREE(info, ninfo);
+        }
+    } else {
+        /* send an error response */
+        send_alloc_resp(rc, NULL, 0, req, NULL, NULL);
+    }
     return;
 
 }

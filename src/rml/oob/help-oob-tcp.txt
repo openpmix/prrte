@@ -95,10 +95,18 @@ up aborting your job.
 
   Local host:             %s
   Local process name:     %s
-  Local PRTE version: %s
   Peer host:              %s
   Peer process name:      %s
   Peer PRTE version:  %s
+#
+[missing version]
+PRTE did not receive version information when connecting between two
+processes.  No immediate reason is available.
+
+  Local host:             %s
+  Local process name:     %s
+  Peer host:              %s
+  Peer process name:      %s
 #
 [no-listeners]
 No sockets were able to be opened on the available protocols
