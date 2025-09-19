@@ -543,6 +543,12 @@ int prte_oob_register(void)
                                         "Max number of times to attempt connection before giving up (-1 -> never give up)",
                                         PMIX_MCA_BASE_VAR_TYPE_INT,
                                         &prte_oob_base.max_recon_attempts);
+    prte_oob_base.max_msg_size = 100;
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "max_msg_size",
+                                        "Max size of an OOB message in Megabytes(default = 100)",
+                                        PMIX_MCA_BASE_VAR_TYPE_INT,
+                                        &prte_oob_base.max_recon_attempts);
+
     return PRTE_SUCCESS;
 }
 

@@ -247,6 +247,11 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             pmix_pointer_array_set_item(jdata->procs, name.rank, proc);
             // find the node it is on
             node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, sender->rank);
+            if (NULL == node) {
+                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                rc = PRTE_ERR_NOT_FOUND;
+                goto CLEANUP;
+            }
             PMIX_RETAIN(node);
             proc->node = node;
             jdata->num_procs = 1;

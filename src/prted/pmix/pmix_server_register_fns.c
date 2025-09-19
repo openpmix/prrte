@@ -766,6 +766,10 @@ int prte_pmix_server_register_tool(pmix_server_req_t *cd)
     pmix_pointer_array_set_item(jdata->procs, 0, proc);
     // find the node it is on
     node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, prte_process_info.myproc.rank);
+    if (NULL == node) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
+    }
     PMIX_RETAIN(node);
     proc->node = node;
     jdata->num_procs = 1;

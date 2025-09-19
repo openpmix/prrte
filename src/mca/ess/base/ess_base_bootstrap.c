@@ -169,13 +169,13 @@ int prte_ess_base_bootstrap(void)
             prtedport = strtoul(ptr, NULL, 10);
 
         } else if (0 == strcmp(line, "DVMNodes")) {
-            if (NULL == dvmnodes) {
+            if (NULL != dvmnodes) {
                 free(dvmnodes);
             }
             dvmnodes = strdup(ptr);
 
         } else if (0 == strcmp(line, "DVMTempDir")) {
-            if (NULL == dvmtmpdir) {
+            if (NULL != dvmtmpdir) {
                 free(dvmtmpdir);
             }
             dvmtmpdir = strdup(ptr);

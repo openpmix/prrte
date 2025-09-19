@@ -1454,6 +1454,11 @@ static int prep_singleton(const char *name)
     /* add our node to the map since the singleton must
      * be here */
     node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, PRTE_PROC_MY_NAME->rank);
+    if (NULL == node) {
+        // should never happen
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
+    }
     PMIX_RETAIN(node);
     pmix_pointer_array_add(jdata->map->nodes, node);
     ++(jdata->map->num_nodes);
