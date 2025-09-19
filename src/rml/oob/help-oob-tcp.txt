@@ -111,3 +111,15 @@ processes.  No immediate reason is available.
 [no-listeners]
 No sockets were able to be opened on the available protocols
 (IPv4 and/or IPv6). Please check your network and retry.
+#
+[msg-too-big]
+A message being sent between two PRRTE daemons is too large:
+
+  Sender:  %s
+  Recipient:  %s
+  Size:       %u  (Bytes)
+  Limit:      %d  (MBytes)
+
+Please increase the size limit via the "prte_max_msg_size" MCA
+parameter, or if you believe the message to be inappropriately
+large, report the problem to a PRRTE developer.

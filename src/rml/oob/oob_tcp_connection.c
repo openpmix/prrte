@@ -890,6 +890,14 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
                         PRTE_NAME_PRINT(&peer->name));
 
     /* get the authentication and version payload */
+    if (hdr.nbytes > (uint32_t)(prte_oob_base.max_msg_size * 1024 * 1024)) {
+        pmix_show_help("help-oob-tcp.txt", "msg-too-big", true,
+                        PRTE_NAME_PRINT(&peer->name), PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        hdr.nbytes, prte_oob_base.max_msg_size);
+        peer->state = MCA_OOB_TCP_FAILED;
+        prte_oob_tcp_peer_close(peer);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
     if (NULL == (msg = (char *) malloc(hdr.nbytes))) {
         peer->state = MCA_OOB_TCP_FAILED;
         prte_oob_tcp_peer_close(peer);

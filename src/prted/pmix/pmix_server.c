@@ -1405,6 +1405,9 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
                     if (NULL != info) {
                         PMIX_INFO_FREE(info, ninfo);
                     }
+                    if (NULL != key) {
+                        free(key);
+                    }
                     return;
                 }
                 continue;
