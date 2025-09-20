@@ -191,7 +191,7 @@ int main(int argc, char *argv[])
     pmix_data_buffer_t pbuf, *wbuf;
     pmix_byte_object_t pbo;
     int8_t flag;
-    char **nonlocal = NULL, *aliases, *personality;
+    char **nonlocal, *aliases, *personality;
     int n;
     pmix_value_t *vptr;
     char **pargv;
@@ -571,6 +571,7 @@ int main(int argc, char *argv[])
     }
 
     /* include any non-loopback aliases for this node */
+    nonlocal = NULL;
     for (n = 0; NULL != prte_process_info.aliases[n]; n++) {
         if (0 != strcmp(prte_process_info.aliases[n], "localhost") &&
             0 != strcmp(prte_process_info.aliases[n], "127.0.0.1") &&
