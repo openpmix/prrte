@@ -1947,7 +1947,7 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
     pmix_status_t rc = PMIX_SUCCESS;
     uint8_t cmd;
     int32_t cnt;
-    size_t ninfo;
+    size_t ninfo = 0;
     pmix_alloc_directive_t allocdir;
     uint32_t sessionID;
     pmix_info_t *info = NULL;
