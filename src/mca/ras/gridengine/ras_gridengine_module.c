@@ -63,8 +63,8 @@ prte_ras_base_module_t prte_ras_gridengine_module = {NULL, prte_ras_gridengine_a
  */
 static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist)
 {
-    char *pe_hostfile = getenv("PE_HOSTFILE");
-    char *job_id = getenv("JOB_ID");
+    char *pe_hostfile;
+    char *job_id;
     char buf[1024], *tok, *num, *queue, *arch, *ptr;
     int rc;
     FILE *fp;
@@ -72,13 +72,22 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
     bool found;
     PRTE_HIDE_UNUSED_PARAMS(jdata);
 
+    pe_hostfile = getenv("PE_HOSTFILE");
+    job_id = getenv("JOB_ID");
+
+    if (NULL == pe_hostfile || NULL == job_id) {
+        return PRTE_ERR_TAKE_NEXT_OPTION;
+    }
+
     /* show the Grid Engine's JOB_ID */
-    if (prte_mca_ras_gridengine_component.show_jobid || prte_mca_ras_gridengine_component.verbose != -1) {
+    if (prte_mca_ras_gridengine_component.show_jobid ||
+        prte_mca_ras_gridengine_component.verbose != -1) {
         pmix_output(0, "ras:gridengine: JOB_ID: %s", job_id);
     }
 
     /* check the PE_HOSTFILE before continuing on */
-    if (!(fp = fopen(pe_hostfile, "r"))) {
+    fp = fopen(pe_hostfile, "r");
+    if (NULL == fp) {
         pmix_show_help("help-ras-gridengine.txt", "cannot-read-pe-hostfile", true, pe_hostfile,
                        strerror(errno));
         rc = PRTE_ERROR;
@@ -129,7 +138,9 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
     } /* finished reading the $PE_HOSTFILE */
 
 cleanup:
-    fclose(fp);
+    if (NULL != fp) {
+        fclose(fp);
+    }
 
     /* in gridengine, if we didn't find anything, then something
      * is wrong. The user may not have indicated this was a parallel

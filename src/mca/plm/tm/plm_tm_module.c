@@ -310,7 +310,9 @@ static void launch_daemons(int fd, short args, void *cbdata)
      * prefix by default, PRTE_PREFIX given in the environment,
      * and '--prefix' from the cmd line
      */
-    if (prte_get_attribute(&daemons->attributes, PRTE_JOB_PREFIX, (void **) &prefix_dir, PMIX_STRING)) {
+    prefix_dir = NULL;
+    if (prte_get_attribute(&daemons->attributes, PRTE_JOB_PREFIX, (void **) &prefix_dir, PMIX_STRING) &&
+        NULL != prefix_dir) {
         char *newenv, *oldenv;
 
         /* Reset PATH */
@@ -342,7 +344,9 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* Similarly, we have to check for any PMIx prefix that was specified */
-    if (prte_get_attribute(&daemons->attributes, PRTE_JOB_PMIX_PREFIX, (void **) &pmix_prefix, PMIX_STRING)) {
+    pmix_prefix = NULL;
+    if (prte_get_attribute(&daemons->attributes, PRTE_JOB_PMIX_PREFIX, (void **) &pmix_prefix, PMIX_STRING) &&
+        NULL != pmix_prefix) {
         char *oldenv, *newenv;
         char *p = pmix_basename(pmix_pinstall_dirs.libdir);
 
@@ -383,7 +387,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         rc = prte_util_convert_vpid_to_string(&vpid_string, node->daemon->name.rank);
         if (PRTE_SUCCESS != rc) {
             pmix_output(0, "plm:tm: unable to get daemon vpid as string");
-            exit(-1);
+            goto cleanup;
         }
         free(argv[proc_vpid_index]);
         argv[proc_vpid_index] = strdup(vpid_string);
@@ -431,7 +435,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
 cleanup:
     /* cleanup */
     PMIX_RELEASE(state);
-
+    if (NULL != tm_events) {
+        free(tm_events);
+    }
+    if (NULL != tm_task_ids) {
+        free(tm_task_ids);
+    }
     /* check for failed launch - if so, force terminate */
     if (failed_launch) {
         PRTE_ACTIVATE_JOB_STATE(daemons, PRTE_JOB_STATE_FAILED_TO_START);

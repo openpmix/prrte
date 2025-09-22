@@ -325,6 +325,13 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                 return PRTE_ERR_SILENT;
             }
             if (NULL == jdata) {
+                if (NULL != prte_rmaps_base.file) {
+                    // cannot specify it twice
+                    pmix_show_help("help-prte-rmaps-base.txt", "multiply-defined", true, "mapping policy",
+                                   "FILE", prte_rmaps_base.file, ck2[i]);
+                    PMIX_ARGV_FREE_COMPAT(ck2);
+                    return PRTE_ERR_SILENT;
+                }
                 prte_rmaps_base.file = strdup(&ck2[i][5]);
             } else {
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_FILE, PRTE_ATTR_GLOBAL,

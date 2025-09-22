@@ -173,6 +173,15 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     tmp_obj = hwloc_get_obj_inside_cpuset_by_type(node->topology->topo,
                                                   prte_rmaps_base.available,
                                                   type, 0);
+    if (NULL == tmp_obj) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        if (PRTE_BINDING_REQUIRED(jdata->map->binding)) {
+            pmix_show_help("help-prte-rmaps-base.txt", "rmaps:no-available-cpus", true, node->name);
+            return PRTE_ERR_SILENT;
+        } else {
+            return PRTE_SUCCESS;
+        }
+    }
 
     hwloc_bitmap_andnot(node->available, node->available, tmp_obj->cpuset);
     if (hwloc_bitmap_iszero(node->available) && options->overload) {

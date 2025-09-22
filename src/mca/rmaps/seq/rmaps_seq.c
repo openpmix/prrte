@@ -137,9 +137,8 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
     prte_app_context_t *app;
     int i, n;
     int32_t j;
-    pmix_list_item_t *item;
     prte_node_t *node, *nd;
-    seq_node_t *sq, *save = NULL, *seq;
+    seq_node_t *sq, *save = NULL, *seq, *seq2;
     pmix_rank_t vpid, apprank;
     int32_t num_nodes;
     int rc;
@@ -207,9 +206,6 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
     /* start at the beginning... */
     vpid = 0;
     jdata->num_procs = 0;
-    if (0 < pmix_list_get_size(&default_seq_list)) {
-        save = (seq_node_t *) pmix_list_get_first(&default_seq_list);
-    }
 
     /* cycle through the app_contexts, mapping them sequentially */
     for (i = 0; i < jdata->apps->size; i++) {
@@ -293,6 +289,9 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
             goto process;
         }
 
+        /* if we get here, then there were no app-level directives, so try to use the
+         * default hostfile list */
+
         if (0 < pmix_list_get_size(&default_seq_list)) {
             pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using default hostfile nodes on app %s", app->app);
@@ -308,9 +307,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
 process:
         /* check for nolocal and remove the head node, if required */
         if (PRTE_GET_MAPPING_DIRECTIVE(map->mapping) & PRTE_MAPPING_NO_USE_LOCAL) {
-            for (item = pmix_list_get_first(seq_list); item != pmix_list_get_end(seq_list);
-                 item = pmix_list_get_next(item)) {
-                seq = (seq_node_t *) item;
+            PMIX_LIST_FOREACH_SAFE(seq, seq2, seq_list, seq_node_t) {
                 /* need to check ifislocal because the name in the
                  * hostfile may not have been FQDN, while name returned
                  * by gethostname may have been (or vice versa)
@@ -318,8 +315,8 @@ process:
                 if (prte_check_host_is_local(seq->hostname)) {
                     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                         "mca:rmaps:seq: removing head node %s", seq->hostname);
-                    pmix_list_remove_item(seq_list, item);
-                    PMIX_RELEASE(item); /* "un-retain" it */
+                    pmix_list_remove_item(seq_list, &seq->super);
+                    PMIX_RELEASE(seq); /* "un-retain" it */
                 }
             }
         }
@@ -345,7 +342,14 @@ process:
         }
 
         if (seq_list == &default_seq_list) {
-            sq = save;
+            /* we don't want to start in the same place for every app, so take
+             * the next item in the list - if this is the first time we are
+             * using the default list, then start at its beginning */
+            if (NULL == save) {
+                sq = (seq_node_t *) pmix_list_get_first(&default_seq_list);
+            } else {
+                sq = save;
+            }
         } else {
             sq = (seq_node_t *) pmix_list_get_first(seq_list);
         }

@@ -390,3 +390,12 @@ redefined:
    Prior policy:  %s
 
 Please check that only one policy is defined.
+#
+[multiply-defined]
+A %s was given that defines a value multiple times:
+
+  Policy:  %s
+  Given:   %s
+  Given:   %s
+
+Please provide only one value for this policy, or remove it.

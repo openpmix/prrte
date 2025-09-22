@@ -61,6 +61,7 @@
 #include "src/util/error.h"
 #include "src/util/pmix_net.h"
 #include "src/util/pmix_output.h"
+#include "src/util/pmix_show_help.h"
 #include "types.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -472,6 +473,14 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                                         "%s:tcp:recv:handler allocate data region of size %lu",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                         (unsigned long) peer->recv_msg->hdr.nbytes);
+                    if (peer->recv_msg->hdr.nbytes > (uint32_t)(prte_oob_base.max_msg_size * 1024 * 1024)) {
+                        pmix_show_help("help-oob-tcp.txt", "msg-too-big", true,
+                                        PRTE_NAME_PRINT(&peer->name), PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                        peer->recv_msg->hdr.nbytes, prte_oob_base.max_msg_size);
+                        peer->state = MCA_OOB_TCP_FAILED;
+                        prte_oob_tcp_peer_close(peer);
+                        return;
+                    }
                     /* allocate the data region */
                     peer->recv_msg->data = (char *) malloc(peer->recv_msg->hdr.nbytes);
                     /* point to it */
