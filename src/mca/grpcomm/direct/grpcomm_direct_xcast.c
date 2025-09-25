@@ -58,13 +58,10 @@ typedef struct {
     // for older ops is invalid when our subtree grows
     bool replay_pending_parent;
     // # children at time of (re)start
-    // TODO: Update when children change after a failure
     size_t nexpected;
     // # children confirmed completed
-    // TODO: Sent acks back up to parents
     size_t nreported;
     // track which acks are valid by order of faults reported from HNP
-    // TODO: Set ack_id_up = -1 whenever our lifeline changes
     pmix_rank_t ack_id_up;
     pmix_rank_t ack_id_down;
     // hold onto the user's message until completion is confirmed
@@ -318,7 +315,8 @@ void prte_grpcomm_direct_xcast_ack(
 void prte_grpcomm_direct_xcast_fault_handler(
     const prte_rml_recovery_status_t* status
 ) {
-    // We can do all handling in the local scope, for better performance
+    // We must do all xcast handling in the local scope, since reliable xcasts
+    // is how we get the global scope notifications in the first place
     if(status->scope != PRTE_RML_FAULT_SCOPE_LOCAL) return;
 
     if(status->promoted){

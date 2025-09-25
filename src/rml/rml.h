@@ -52,23 +52,18 @@ BEGIN_C_DECLS
 /**
  * Send a buffer non-blocking message
  *
- * Send a buffer to the specified peer.  The call
- * will return immediately, although the buffer may not be modified
- * until the completion callback is triggered.  The buffer *may* be
- * passed to another call to send_nb before the completion callback is
- * triggered.  The callback being triggered does not give any
- * indication of remote completion.
+ * Send a buffer to the specified peer. The RML takes ownership of the buffer,
+ * which may no longer be modified, read from, or reused in subsequent sends.
  *
  * @param[in] peer   Name of receiving process
  * @param[in] buffer Pointer to buffer to be sent
  * @param[in] tag    User defined tag for matching send/recv
- * @param[in] cbfunc Callback function on message comlpetion
- * @param[in] cbdata User data to provide during completion callback
  *
  * @retval PRTE_SUCCESS The message was successfully started
  * @retval PRTE_ERR_BAD_PARAM One of the parameters was invalid
  * @retval PRTE_ERR_ADDRESSEE_UNKNOWN Contact information for the
  *                    receiving process is not available
+ * @retval PRTE_ERR_NODE_DOWN The receiving process is believed to have failed
  * @retval PRTE_ERROR  An unspecified error occurred
  */
 PRTE_EXPORT int prte_rml_send_buffer_nb(pmix_rank_t rank,
@@ -205,6 +200,8 @@ PRTE_EXPORT void prte_rml_recv_adoption_notice(int status, pmix_proc_t *sender,
                                                void *cbdata);
 PRTE_EXPORT int prte_rml_route_lost(pmix_rank_t route);
 PRTE_EXPORT pmix_rank_t prte_rml_get_route(pmix_rank_t target);
+PRTE_EXPORT int prte_rml_get_subtree_index(pmix_rank_t target);
+PRTE_EXPORT bool prte_rml_is_node_up(pmix_rank_t node);
 
 #define PRTE_RML_POST_MESSAGE(p, t, s, b, l)                                                \
     do {                                                                                    \
@@ -241,14 +238,13 @@ PRTE_EXPORT pmix_rank_t prte_rml_get_route(pmix_rank_t target);
 
 #define PRTE_RML_SEND_COMPLETE(m)                                                             \
     do {                                                                                      \
-        pmix_output_verbose(5, prte_rml_base.rml_output,                                          \
+        pmix_output_verbose(5, prte_rml_base.rml_output,                                      \
                             "%s-%s Send message complete at %s:%d",                           \
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&((m)->dst)), \
                             __FILE__, __LINE__);                                              \
             /* non-blocking buffer send */                                                    \
-        prte_rml_send_callback((m)->status, &((m)->dst),                                      \
-                               (m)->dbuf, (m)->tag, (m)->cbdata);                            \
-        PMIX_RELEASE(m);                                                                      \
+        (m)->cbfunc((m)->status, &((m)->dst),                                                 \
+                    (m)->dbuf, (m)->tag, (m)->cbdata);                                        \
     } while (0);
 
 

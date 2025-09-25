@@ -201,12 +201,20 @@ void prte_rml_simulate_node_failure(void)
     raise(SIGKILL);
 }
 
+bool prte_rml_is_node_up(pmix_rank_t node){
+    return node < prte_rml_base.n_dmns
+        && !pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, node);
+}
+
 void prte_rml_send_callback(int status, pmix_proc_t *peer,
                             pmix_data_buffer_t *buffer,
                             prte_rml_tag_t tag, void *cbdata)
 
 {
-    PRTE_HIDE_UNUSED_PARAMS(buffer, cbdata);
+    PRTE_HIDE_UNUSED_PARAMS(cbdata);
+    if (NULL != buffer) {
+        PMIX_DATA_BUFFER_RELEASE(buffer);
+    }
 
     if (PRTE_SUCCESS != status) {
         pmix_output_verbose(2, prte_rml_base.rml_output,
@@ -227,6 +235,7 @@ void prte_rml_send_callback(int status, pmix_proc_t *peer,
 static void send_cons(prte_rml_send_t *ptr)
 {
     ptr->retries = 0;
+    ptr->cbfunc = prte_rml_send_callback;
     ptr->cbdata = NULL;
     ptr->dbuf = NULL;
     ptr->seq_num = 0xFFFFFFFF;

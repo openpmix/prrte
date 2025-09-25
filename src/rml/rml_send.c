@@ -59,6 +59,11 @@ int prte_rml_send_buffer_nb(pmix_rank_t rank,
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
     }
+    if (!prte_rml_is_node_up(rank)) {
+        /* cannot send to a down peer */
+        PRTE_ERROR_LOG(PRTE_ERR_NODE_DOWN);
+        return PRTE_ERR_NODE_DOWN;
+    }
 
     /* if this is a message to myself, then just post the message
      * for receipt - no need to dive into the oob
