@@ -95,6 +95,11 @@ pmix_rank_t prte_rml_get_route(pmix_rank_t target){
     return ret;
 }
 
+int prte_rml_get_subtree_index(pmix_rank_t target){
+    const pmix_rank_t r = radix_subtree_index(&prte_rml_base.cur_node, target);
+    return r < prte_rml_base.children.size ? (int)r : -1;
+}
+
 // Update list of ancestors after failures
 void prte_rml_update_ancestors(pmix_data_array_t* ancestors_arr){
     pmix_rank_t* ancestors = (pmix_rank_t*) ancestors_arr->array;
