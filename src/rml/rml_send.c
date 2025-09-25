@@ -15,6 +15,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -58,6 +59,11 @@ int prte_rml_send_buffer_nb(pmix_rank_t rank,
         /* cannot send to an invalid peer */
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
+    }
+    if (!prte_rml_is_node_up(rank)) {
+        /* cannot send to a down peer */
+        PRTE_ERROR_LOG(PRTE_ERR_NODE_DOWN);
+        return PRTE_ERR_NODE_DOWN;
     }
 
     /* if this is a message to myself, then just post the message
