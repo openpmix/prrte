@@ -1105,36 +1105,65 @@ static int map_colocate(prte_job_t *jdata,
             PMIX_RETAIN(node);
             pmix_list_append(&targets, &node->super);
         }
-   }
+    }
+
+    // clear the flags
+    PMIX_LIST_FOREACH(nptr, &targets, prte_node_t) {
+        PRTE_FLAG_UNSET(nptr, PRTE_NODE_FLAG_MAPPED);
+    }
+
 
     if (pernode) {
         /* cycle across the target nodes and place the specified
          * number of procs on each one */
         PMIX_LIST_FOREACH_SAFE(nptr, n2, &targets, prte_node_t) {
-            // Map the node to this job - note we already set the "mapped" flag
-            PMIX_RETAIN(nptr);
-            pmix_pointer_array_add(map->nodes, nptr);
-            map->num_nodes += 1;
-            // Assign N procs per node for each app_context
+            // setup the mapping options
+            options->ncpus = prte_rmaps_base_get_ncpus(nptr, NULL, options);
+            /* the available cpus are in the scratch location */
+            options->target = hwloc_bitmap_dup(prte_rmaps_base.available);
+            options->nprocs = procs_per_target;
+           // Assign N procs per node for each app_context
             for (i=0; i < jdata->apps->size; i++) {
                 app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, i);
                 if (NULL == app) {
                     continue;
                 }
                 // is there room on this node? daemons don't count
-                if (!daemons && !prte_rmaps_base_check_avail(jdata, app, nptr, &targets, NULL, options)) {
-                    if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(map->mapping)) {
-                        pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                                       app->num_procs, app->app, prte_process_info.nodename);
-                        PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
-                        ret = PRTE_ERR_SILENT;
+                if (!daemons) {
+                    cnt = nptr->slots_inuse + procs_per_target;
+                    // first check the absolute limit
+                    if (0 != nptr->slots_max && nptr->slots_max < cnt) {
+                        // violates the max limit
+                        ret = PRTE_ERR_OUT_OF_RESOURCE;
                         goto done;
                     }
-                    PRTE_FLAG_SET(nptr, PRTE_NODE_FLAG_OVERSUBSCRIBED);
-                    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
+                    if (nptr->slots < cnt) {
+                        // oversubscribed - we can still fit if they allow oversubscription
+                        if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(map->mapping)) {
+                            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+                                           app->num_procs, app->app, prte_process_info.nodename);
+                            PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                            ret = PRTE_ERR_SILENT;
+                            goto done;
+                        }
+                        // we can use it oversubscribed - so mark it
+                        PRTE_FLAG_SET(nptr, PRTE_NODE_FLAG_OVERSUBSCRIBED);
+                        PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
+                    }
                 }
+                // Map the node to this job
+                if (!PRTE_FLAG_TEST(nptr, PRTE_NODE_FLAG_MAPPED)) {
+                    PRTE_FLAG_SET(nptr, PRTE_NODE_FLAG_MAPPED);
+                    PMIX_RETAIN(nptr);
+                    pmix_pointer_array_add(map->nodes, nptr);
+                    map->num_nodes += 1;
+                    options->nnodes++;
+                }
+                // map the procs
                 for (j = 0; j < procs_per_target; ++j) {
-                    if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, app->idx, nptr, NULL, options))) {
+                    proc = prte_rmaps_base_setup_proc(jdata, app->idx, nptr, NULL, options);
+                    if (NULL == proc) {
+                        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                         ret = PRTE_ERR_OUT_OF_RESOURCE;
                         goto done;
                     }
@@ -1144,6 +1173,7 @@ static int map_colocate(prte_job_t *jdata,
                 }
             }
         }
+
         /* calculate the ranks for this job */
         ret = prte_rmaps_base_compute_vpids(jdata, options);
         if (PRTE_SUCCESS != ret) {
@@ -1155,6 +1185,10 @@ static int map_colocate(prte_job_t *jdata,
 
     /* handle the case of colocate by process */
     PMIX_LIST_FOREACH_SAFE(nptr, n2, &targets, prte_node_t) {
+        // setup the mapping options
+        options->ncpus = prte_rmaps_base_get_ncpus(nptr, NULL, options);
+        /* the available cpus are in the scratch location */
+        options->target = hwloc_bitmap_dup(prte_rmaps_base.available);
         // count the number of target procs on this node
         cnt = 0;
         for (i=0; i < nptr->procs->size; i++) {
@@ -1173,28 +1207,51 @@ static int map_colocate(prte_job_t *jdata,
             // should not happen
             continue;
         }
-        // Map the node to this job - note we already set the "mapped" flag
-        PMIX_RETAIN(nptr);
-        pmix_pointer_array_add(map->nodes, nptr);
-        map->num_nodes += 1;
-        cnt = cnt * procs_per_target; // total number of procs to place on this node
-        // Assign cnt procs for each app_context
+        // assign the number of procs to be placed on this node
+        options->nprocs = cnt * procs_per_target; // total number of procs to place on this node;
+        // Assign procs for each app_context
         for (i=0; i < jdata->apps->size; i++) {
             app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, i);
+            if (NULL == app) {
+                continue;
+            }
             // is there room on this node? daemons don't count
-            if (!daemons && !prte_rmaps_base_check_avail(jdata, app, nptr, &targets, NULL, options)) {
-                if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(map->mapping)) {
-                    pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                                   app->num_procs, app->app, prte_process_info.nodename);
-                    PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
-                    ret = PRTE_ERR_SILENT;
+            if (!daemons) {
+                cnt = nptr->slots_inuse + options->nprocs;
+                // first check the absolute limit
+                if (0 != nptr->slots_max && nptr->slots_max < cnt) {
+                    // violates the max limit
+                    ret = PRTE_ERR_OUT_OF_RESOURCE;
                     goto done;
                 }
-                PRTE_FLAG_SET(nptr, PRTE_NODE_FLAG_OVERSUBSCRIBED);
-                PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
+                // check oversubscribed
+                if (nptr->slots < cnt) {
+                    // oversubscribed - we can still fit if they allow oversubscription
+                    if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(map->mapping)) {
+                        pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+                                       app->num_procs, app->app, prte_process_info.nodename);
+                        PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                        ret = PRTE_ERR_SILENT;
+                        goto done;
+                    }
+                    // we can use it oversubscribed - so mark it
+                    PRTE_FLAG_SET(nptr, PRTE_NODE_FLAG_OVERSUBSCRIBED);
+                    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
+                }
             }
-            for (j = 0; j < cnt; ++j) {
-                if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, i, nptr, NULL, options))) {
+            // Map the node to this job
+            if (!PRTE_FLAG_TEST(nptr, PRTE_NODE_FLAG_MAPPED)) {
+                PRTE_FLAG_SET(nptr, PRTE_NODE_FLAG_MAPPED);
+                PMIX_RETAIN(nptr);
+                pmix_pointer_array_add(map->nodes, nptr);
+                map->num_nodes += 1;
+                options->nnodes++;
+            }
+            // map the procs
+            for (j = 0; j < options->nprocs; ++j) {
+                proc = prte_rmaps_base_setup_proc(jdata, i, nptr, NULL, options);
+                if (NULL == proc) {
+                    PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                     ret = PRTE_ERR_OUT_OF_RESOURCE;
                     goto done;
                 }

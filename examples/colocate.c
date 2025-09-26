@@ -15,7 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -118,6 +118,7 @@ static void printusage(void)
     fprintf(stderr, "Usage: colocate [options]\n");
     fprintf(stderr, "\t--cmd foo : spawn the foo executable\n");
     fprintf(stderr, "\t-n/--np/-np N : number of procs to spawn\n");
+    fprintf(stderr, "\t-perproc/--perproc : colocate with each proc\n");
 }
 
 int main(int argc, char **argv)
@@ -140,6 +141,7 @@ int main(int argc, char **argv)
     size_t dninfo;
     pmix_status_t code = PMIX_EVENT_JOB_END;
     char *cmd = "hostname";
+    bool perproc = false;
 
     pid = getpid();
 
@@ -159,6 +161,9 @@ int main(int argc, char **argv)
                 exit(1);
             }
             np = strtol(argv[n+1], NULL, 10);
+        } else if (0 == strcmp(argv[n], "--perproc") ||
+                   0 == strcmp(argv[n], "-perproc")) {
+            perproc = true;
         } else if (0 == strcmp(argv[n], "--help") ||
                    0 == strcmp(argv[n], "-h")) {
             printusage();
@@ -205,7 +210,11 @@ int main(int argc, char **argv)
     PMIX_LOAD_PROCID(&pptr[0], myproc.nspace, PMIX_RANK_WILDCARD);
     PMIX_INFO_LOAD(&jinfo[0], PMIX_COLOCATE_PROCS, &darray, PMIX_DATA_ARRAY);
     PMIX_INFO_CONSTRUCT(&jinfo[1]);
-    PMIX_INFO_LOAD(&jinfo[1], PMIX_COLOCATE_NPERNODE, &np, PMIX_UINT16);
+    if (perproc) {
+        PMIX_INFO_LOAD(&jinfo[1], PMIX_COLOCATE_NPERPROC, &np, PMIX_UINT16);
+    } else {
+        PMIX_INFO_LOAD(&jinfo[1], PMIX_COLOCATE_NPERNODE, &np, PMIX_UINT16);
+    }
 
     fprintf(stderr, "Client %s:%u: calling PMIx_Spawn\n",
             myproc.nspace, myproc.rank);
