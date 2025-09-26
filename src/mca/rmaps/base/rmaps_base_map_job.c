@@ -1324,8 +1324,8 @@ static void inherit_env_directives(prte_job_t *jdata,
         }
 
         // if it doesn't exist, then inherit it
-        prte_prepend_attribute(&jdata->attributes, attr->key, PRTE_ATTR_GLOBAL,
-                               envar, PMIX_ENVAR);
+        prte_set_attribute(&jdata->attributes, attr->key, PRTE_ATTR_GLOBAL,
+                           envar, PMIX_ENVAR);
     }
 
     /* There is no one-to-one correlation between the apps, but we can
@@ -1377,8 +1377,8 @@ static void inherit_env_directives(prte_job_t *jdata,
             }
 
             // if it doesn't exist, then inherit it
-            prte_prepend_attribute(&app2->attributes, attr->key, PRTE_ATTR_GLOBAL,
-                                   envar, PMIX_ENVAR);
+            prte_set_attribute(&app2->attributes, attr->key, PRTE_ATTR_GLOBAL,
+                               envar, PMIX_ENVAR);
         }
     }
 

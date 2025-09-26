@@ -212,6 +212,11 @@ option to the help request as "--help <option>".
 |                      | current environmental variables starting with |
 |                      | "foo")                                        |
 +----------------------+-----------------------------------------------+
+| "--set-env           | Set the named environmental variable to the   |
+|     <name>=<value>"  | specified value. This will overwrite the      |
+|                      | existing value, if it exists. Equivalent to   |
+|                      | the "-x foo=val" option                       |
++----------------------+-----------------------------------------------+
 | "--unset-env <name>" | Unset the named environmental variable. Note  |
 |                      | "--unset-env foo*" unsets all current         |
 |                      | environmental variables starting with "foo"   |
@@ -554,7 +559,12 @@ from the current environment, while "-x foo=bar" exports the environment
 variable name "foo" and sets its value to "bar" in the started processes.
 Note that "-x foo*" exports all current environmental variables starting with
 "foo"
+#
+[set-env]
 
+Set the named environmental variable to the specified value. This will overwrite the
+existing value, if it exists. Equivalent to the "-x foo=val" option
+#
 [unset-env]
 
 Unset the named environmental variable. Note "--unset-env foo*" unsets all

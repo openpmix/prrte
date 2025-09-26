@@ -84,6 +84,9 @@ Launch options
 * ``-x <var>``: Export an environment variable, optionally specifying a value.
   :ref:`See below for details <label-schizo-ompi-x>`.
 
+* ``--set-env <var>=<val>``: Set an environment variable.
+  :ref:`See below for details <label-schizo-ompi-set-env>`.
+
 * ``--unset-env <var>``: Unset an environment variable.
   :ref:`See below for details <label-schizo-ompi-unset-env>`.
 
@@ -453,6 +456,12 @@ The ``-x`` option
 ~~~~~~~~~~~~~~~~~
 
 .. include:: /prrte-rst-content/cli-x.rst
+
+.. _label-schizo-ompi-set-env:
+
+The ``--set-env`` option
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. include:: /prrte-rst-content/cli-set-env.rst
 
 .. _label-schizo-ompi-unset-env:
 
