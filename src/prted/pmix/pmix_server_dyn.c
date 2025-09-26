@@ -787,29 +787,30 @@ static void interim(int sd, short args, void *cbdata)
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
-            prte_prepend_attribute(&jdata->attributes, PRTE_JOB_SET_ENVAR,
-                                   PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_SET_ENVAR,
+                               PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
         } else if (PMIX_CHECK_KEY(info, PMIX_ADD_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
-            prte_prepend_attribute(&jdata->attributes, PRTE_JOB_ADD_ENVAR,
-                                   PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_ADD_ENVAR,
+                               PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
         } else if (PMIX_CHECK_KEY(info, PMIX_UNSET_ENVAR)) {
-            prte_prepend_attribute(&jdata->attributes, PRTE_JOB_UNSET_ENVAR,
-                                   PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_UNSET_ENVAR,
+                               PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
         } else if (PMIX_CHECK_KEY(info, PMIX_PREPEND_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
-            prte_prepend_attribute(&jdata->attributes, PRTE_JOB_PREPEND_ENVAR,
-                                   PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_PREPEND_ENVAR,
+                               PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
         } else if (PMIX_CHECK_KEY(info, PMIX_APPEND_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
-            prte_prepend_attribute(&jdata->attributes, PRTE_JOB_APPEND_ENVAR,
-                                   PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_APPEND_ENVAR,
+                               PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
+
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TOOL)) {
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
 

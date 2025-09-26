@@ -214,6 +214,11 @@ option to the help request as "--help <option>".
 |                      | current environmental variables starting with |
 |                      | "foo")                                        |
 +----------------------+-----------------------------------------------+
+| "--set-env           | Set the named environmental variable to the   |
+|     <name>=<value>"  | specified value. This will overwrite the      |
+|                      | existing value, if it exists. Equivalent to   |
+|                      | the "-x foo=val" option                       |
++----------------------+-----------------------------------------------+
 | "--unset-env <name>" | Unset the named environmental variable. Note  |
 |                      | "--unset-env foo*" unsets all current         |
 |                      | environmental variables starting with "foo"   |
@@ -317,7 +322,46 @@ about the PRRTE session directory.
 [wait-to-connect]
 
 Delay specified number of seconds before trying to connect
+#
+[x]
 
+Export an environment variable, optionally specifying a value. For example,
+"-x foo" exports the environment variable "foo" and takes its value
+from the current environment, while "-x foo=bar" exports the environment
+variable name "foo" and sets its value to "bar" in the started processes.
+Note that "-x foo*" exports all current environmental variables starting with
+"foo"
+#
+[set-env]
+
+Set the named environmental variable to the specified value. This will overwrite the
+existing value, if it exists. Equivalent to the "-x foo=val" option
+#
+[unset-env]
+
+Unset the named environmental variable. Note "--unset-env foo*" unsets all
+current environmental variables starting with "foo"
+#
+[append-env]
+
+Append the named environment variable with the given value. The "[c]" must
+be appended to the name to specify the separator to be used when appending
+the value.
+
+Example: "--append-envar LD_LIBRARY_PATH[:] foo/lib" will result in:
+
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:foo/lib
+#
+[prepend-env]
+
+Prepend the named environment variable with the given value. The "[c]" must
+be appended to the name to specify the separator to be used when appending
+the value.
+
+Example: "--prepend-envar LD_LIBRARY_PATH[:] foo/lib" will result in:
+
+LD_LIBRARY_PATH=foo/lib:$LD_LIBRARY_PATH
+#
 [hostfile]
 
 PRRTE supports several levels of user-specified hostfiles based on an

@@ -46,6 +46,7 @@ dist_rst_DATA = \
     cli-no-app-prefix.rst \
     cli-rank-by.rst \
     cli-runtime-options.rst \
+    cli-set-env.rst \
     cli-stream-buffering.rst \
     cli-tune.rst \
     cli-unset-env.rst \
