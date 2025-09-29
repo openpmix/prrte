@@ -150,7 +150,7 @@ hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
             pu = prte_hwloc_base_get_pu(topo, use_hwthread_cpus, cpu);
             if (NULL == pu) {
                 pmix_show_help("help-prte-hwloc-base.txt", "unfound-cpu", true,
-                               cpulist, cpu, physical ? "physical" : "logical",
+                               *cpulist, cpu, physical ? "physical" : "logical",
                                use_hwthread_cpus ? "hwthread" : "core");
                 PMIX_ARGV_FREE_COMPAT(ranges);
                 PMIX_ARGV_FREE_COMPAT(range);
