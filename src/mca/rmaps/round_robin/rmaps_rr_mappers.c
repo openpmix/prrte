@@ -545,9 +545,7 @@ errout:
     if (PRTE_ERR_SILENT != rc) {
         pmix_show_help("help-prte-rmaps-rr.txt",
                        "prte-rmaps-rr:not-enough-cpus", true,
-                       (NULL == app) ? "N/A" : app->app,
-                       (NULL == app) ? -1 : app->num_procs,
-                       savecpuset);
+                       app->app, app->num_procs, savecpuset);
     }
     if (NULL != savecpuset) {
         free(savecpuset);
@@ -665,7 +663,8 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
                 if (!prte_rmaps_base_check_avail(jdata, app, node, node_list, obj, options)) {
                     rc = PRTE_ERR_OUT_OF_RESOURCE;
                     PRTE_ERROR_LOG(rc);
-                    continue;
+                    // out of resources on this node
+                    break;
                 }
 
                 proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, obj, options);
@@ -715,8 +714,7 @@ errout:
         /* ran out of cpus */
         pmix_show_help("help-prte-rmaps-base.txt",
                        "allocation-overload", true,
-                       (NULL == app) ? "N/A" : app->app,
-                       (NULL == app) ? -1 : app->num_procs,
+                       app->app, app->num_procs,
                        prte_rmaps_base_print_mapping(options->map),
                        prte_hwloc_base_print_binding(options->bind));
         return PRTE_ERR_SILENT;
@@ -724,8 +722,7 @@ errout:
     pmix_show_help("help-prte-rmaps-base.txt",
                    "failed-map", true,
                    PRTE_ERROR_NAME(rc),
-                   (NULL == app) ? "N/A" : app->app,
-                   (NULL == app) ? -1 : app->num_procs,
+                   app->app, app->num_procs,
                    prte_rmaps_base_print_mapping(options->map),
                    prte_hwloc_base_print_binding(options->bind));
     return PRTE_ERR_SILENT;

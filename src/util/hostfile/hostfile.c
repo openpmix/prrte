@@ -136,7 +136,9 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             username = strdup(argv[0]);
             node_name = strdup(argv[1]);
         } else {
-            pmix_output(0, "WARNING: Unhandled user@host-combination\n"); /* XXX */
+            pmix_output(0, "WARNING: Unhandled user@host-combination - %s\n", value); /* XXX */
+            PMIX_ARGV_FREE_COMPAT(argv);
+            return PRTE_ERROR;
         }
         PMIX_ARGV_FREE_COMPAT(argv);
 
@@ -205,6 +207,10 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             }
             if (NULL != alias) {
                 free(alias);
+                alias = NULL;
+            }
+            if (NULL != username) {
+                free(username);
             }
             return PRTE_SUCCESS;
         }
@@ -251,6 +257,11 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
                 PMIX_ARGV_APPEND_UNIQUE_COMPAT(&node->aliases, alias);
             }
         }
+        if (NULL != alias) {
+            free(alias);
+            alias = NULL;
+        }
+
     } else if (PRTE_HOSTFILE_RELATIVE == token) {
         /* store this for later processing */
         node = PMIX_NEW(prte_node_t);
@@ -274,9 +285,13 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
         if (NULL != alias && 0 != strcmp(alias, node->name)) {
             // new node object, so alias must be unique
             PMIX_ARGV_APPEND_NOSIZE_COMPAT(&node->aliases, alias);
-            free(alias);
         }
         pmix_list_append(updates, &node->super);
+        if (NULL != alias) {
+            free(alias);
+            alias = NULL;
+        }
+
     } else if (PRTE_HOSTFILE_RANK == token) {
         /* we can ignore the rank, but we need to extract the node name. we
          * first need to shift over to the other side of the equal sign as
@@ -307,7 +322,9 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             username = strdup(argv[0]);
             node_name = strdup(argv[1]);
         } else {
-            pmix_output(0, "WARNING: Unhandled user@host-combination\n"); /* XXX */
+            pmix_output(0, "WARNING: Unhandled user@host-combination - %s\n", value); /* XXX */
+            PMIX_ARGV_FREE_COMPAT(argv);
+            return PRTE_ERROR;
         }
         PMIX_ARGV_FREE_COMPAT(argv);
 
@@ -343,6 +360,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             PMIX_ARGV_APPEND_UNIQUE_COMPAT(&node->aliases, alias);
             free(alias);
             node->rawname = strdup(node_name);
+            alias = NULL;
         }
         PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                              "%s hostfile: node %s slots %d nodes-given %s",
@@ -358,6 +376,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
         }
         free(node_name);
         return PRTE_SUCCESS;
+        
     } else {
         hostfile_parse_error(token);
         return PRTE_ERROR;

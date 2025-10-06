@@ -517,7 +517,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PRTE-JOB-PMIX-PREFIX";
         case PRTE_JOB_FWD_ENVIRONMENT:
             return "FWD ENVIRONMENT";
-
+        case PRTE_JOB_REPORT_PHYSICAL_CPUS:
+            return "REPORT PHYSICAL CPUS";
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";
         case PRTE_PROC_PRIOR_NODE:
@@ -632,11 +633,7 @@ int prte_attr_load(prte_attribute_t *kv, void *data, pmix_data_type_t type)
         if (NULL != kv->data.data.string) {
             free(kv->data.data.string);
         }
-        if (NULL != data) {
-            kv->data.data.string = strdup((const char *) data);
-        } else {
-            kv->data.data.string = NULL;
-        }
+        kv->data.data.string = strdup((const char *) data);
         break;
     case PMIX_SIZE:
         kv->data.data.size = *(size_t *) (data);

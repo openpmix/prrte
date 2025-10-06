@@ -14,7 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -62,11 +62,14 @@ PRTE_EXPORT prte_process_info_t prte_process_info = {
     .num_nodes = 1,
     .nodename = NULL,
     .aliases = NULL,
+    .euid = 0,
+    .egid = 0,
     .pid = 0,
     .proc_type = PRTE_PROC_TYPE_NONE,
     .my_uri = NULL,
     .my_port = 0,
     .tmpdir_base = NULL,
+    .sessdir_prefix = NULL,
     .top_session_dir = NULL,
     .cpuset = NULL,
     .shared_fs = false
@@ -151,15 +154,16 @@ void prte_setup_hostname(void)
         }
     }
 
+    // add the localhost names
+    PMIX_ARGV_APPEND_UNIQUE_COMPAT(&prte_process_info.aliases, "localhost");
+    PMIX_ARGV_APPEND_UNIQUE_COMPAT(&prte_process_info.aliases, "127.0.0.1");
 }
 
 bool prte_check_host_is_local(const char *name)
 {
     int i;
 
-    if (0 == strcmp(name, prte_process_info.nodename) ||
-        0 == strcmp(name, "localhost") ||
-        0 == strcmp(name, "127.0.0.1")) {
+    if (0 == strcmp(name, prte_process_info.nodename)) {
         return true;
     }
 
@@ -209,6 +213,18 @@ int prte_proc_info(void)
         }
     }
 
+    /* get the real uid */
+    prte_process_info.uid = getuid();
+
+    /* get the effective uid */
+    prte_process_info.euid = geteuid();
+
+    /* get the real gid */
+    prte_process_info.gid = getgid();
+
+    /* get the effective gid */
+    prte_process_info.egid = getegid();
+
     /* get the process id */
     prte_process_info.pid = getpid();
 
@@ -231,6 +247,11 @@ int prte_proc_info_finalize(void)
     if (NULL != prte_process_info.tmpdir_base) {
         free(prte_process_info.tmpdir_base);
         prte_process_info.tmpdir_base = NULL;
+    }
+
+    if (NULL != prte_process_info.sessdir_prefix) {
+        free(prte_process_info.sessdir_prefix);
+        prte_process_info.sessdir_prefix = NULL;
     }
 
     if (NULL != prte_process_info.top_session_dir) {

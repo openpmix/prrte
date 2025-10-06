@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
    Copyright (c) 2023 Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -50,4 +50,8 @@ colon (``:``) and any combination of one or more of the following
   is easily parsed by machines. Note that ``PARSABLE`` is also accepted as
   a typical spelling for the qualifier.
 
-Provided qualifiers will apply to *all* of the display directives.
+* ``PHYSICAL`` directs that the output of the ``BINDINGS`` option be displayed
+  using physical (instead of logical) CPU IDs.
+
+Provided qualifiers will apply to *all* of the display directives unless
+noted.

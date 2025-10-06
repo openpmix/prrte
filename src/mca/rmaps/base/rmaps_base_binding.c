@@ -151,7 +151,10 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     hwloc_bitmap_list_asprintf(&proc->cpuset, tgtcpus); // bind to the entire target object
     if (4 < pmix_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
         char *tmp1;
-        tmp1 = prte_hwloc_base_cset2str(trg_obj->cpuset, options->use_hwthreads, node->topology->topo);
+        bool physical;
+        physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
+        tmp1 = prte_hwloc_base_cset2str(trg_obj->cpuset, options->use_hwthreads,
+                                        physical, node->topology->topo);
         pmix_output(prte_rmaps_base_framework.framework_output, "%s BOUND PROC %s[%s] TO %s",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name),
                     node->name, tmp1);
@@ -173,6 +176,15 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     tmp_obj = hwloc_get_obj_inside_cpuset_by_type(node->topology->topo,
                                                   prte_rmaps_base.available,
                                                   type, 0);
+    if (NULL == tmp_obj) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        if (PRTE_BINDING_REQUIRED(jdata->map->binding)) {
+            pmix_show_help("help-prte-rmaps-base.txt", "rmaps:no-available-cpus", true, node->name);
+            return PRTE_ERR_SILENT;
+        } else {
+            return PRTE_SUCCESS;
+        }
+    }
 
     hwloc_bitmap_andnot(node->available, node->available, tmp_obj->cpuset);
     if (hwloc_bitmap_iszero(node->available) && options->overload) {

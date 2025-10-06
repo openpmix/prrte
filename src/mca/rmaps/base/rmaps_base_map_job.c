@@ -57,6 +57,10 @@ static int map_colocate(prte_job_t *jdata,
                         uint16_t procs_per_target,
                         prte_rmaps_options_t *options);
 
+static void inherit_env_directives(prte_job_t *jdata,
+                                   prte_job_t *parent,
+                                   pmix_proc_t *proxy);
+
 void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
@@ -70,7 +74,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_job_t *parent = NULL;
     prte_app_context_t *app;
     bool inherit = false;
-    pmix_proc_t *nptr, *target_proc;
+    pmix_proc_t *nptr = NULL, *target_proc;
     char *tmp, **ck, **env;
     uint16_t u16 = 0, procs_per_target = 0;
     uint16_t *u16ptr = &u16;
@@ -86,6 +90,11 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(caddy);
+    // init options
+    memset(&options, 0, sizeof(prte_rmaps_options_t));
+    options.stream = prte_rmaps_base_framework.framework_output;
+    options.verbosity = 5;  // usual value for base-level functions
+    // set and check convenience vars
     jdata = caddy->jdata;
     schizo = (prte_schizo_base_module_t*)jdata->schizo;
     if (NULL == schizo) {
@@ -98,9 +107,6 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         jdata->map = PMIX_NEW(prte_job_map_t);
     }
     jdata->state = PRTE_JOB_STATE_MAP;
-    memset(&options, 0, sizeof(prte_rmaps_options_t));
-    options.stream = prte_rmaps_base_framework.framework_output;
-    options.verbosity = 5;  // usual value for base-level functions
     fptr = &flag;
 
     /* check and set some general options */
@@ -227,6 +233,11 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     /* if this is a dynamic job launch and they didn't explicitly
      * request inheritance, then don't inherit the launch directives */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC)) {
+        if (NULL == nptr) {
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
+        }
         /* if the launch proxy is me, then this is the initial launch from
          * a proxy scenario, so we don't really have a parent */
         if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, nptr->nspace)) {
@@ -234,11 +245,23 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             /* we do allow inheritance of the defaults */
             inherit = true;
         } else if (NULL != (parent = prte_get_job_data_object(nptr->nspace))) {
-            if (prte_get_attribute(&parent->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL)) {
+            if (PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
+                // we don't inherit anything from tools as they were not
+                // mapped by us
+                inherit = false;
+                parent = NULL;
+
+            } else if (prte_get_attribute(&parent->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL)) {
                 inherit = true;
+                // if they didn't specifically direct it not inherit, then pass this on to the child
+                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, NULL, PMIX_BOOL)) {
+                    prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_INHERIT, NULL, PMIX_BOOL);
+                }
+
             } else if (prte_get_attribute(&parent->attributes, PRTE_JOB_NOINHERIT, NULL, PMIX_BOOL)) {
                 inherit = false;
                 parent = NULL;
+
             } else {
                 inherit = prte_rmaps_base.inherit;
             }
@@ -249,7 +272,6 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         } else {
             inherit = true;
         }
-        PMIX_PROC_RELEASE(nptr);
     } else {
         /* initial launch always takes on default MCA params for non-specified policies */
         inherit = true;
@@ -295,6 +317,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
                 }
             }
+            // copy over any env directives, but do not overwrite anything already specified
+            inherit_env_directives(jdata, parent, nptr);
         } else {
             if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) &&
                 !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
@@ -306,6 +330,9 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 }
             }
         }
+    }
+    if (NULL != nptr) {
+        PMIX_PROC_RELEASE(nptr);
     }
 
     /* we always inherit a parent's oversubscribe flag unless the job assigned it */
@@ -1001,7 +1028,10 @@ void prte_rmaps_base_report_bindings(prte_job_t *jdata,
     char **cache = NULL;
     char *out, *tmp;
     pmix_proc_t source;
+    bool physical;
 
+    // see if we are to report physical (vs logical) cpu IDs
+    physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
     for (n=0; n < jdata->procs->size; n++) {
         proc = (prte_proc_t*)pmix_pointer_array_get_item(jdata->procs, n);
         if (NULL == proc) {
@@ -1014,6 +1044,7 @@ void prte_rmaps_base_report_bindings(prte_job_t *jdata,
             hwloc_bitmap_list_sscanf(prte_rmaps_base.available, proc->cpuset);
             tmp = prte_hwloc_base_cset2str(prte_rmaps_base.available,
                                            options->use_hwthreads,
+                                           physical,
                                            proc->node->topology->topo);
             pmix_asprintf(&out, "Proc %s Node %s bound to %s",
                           PRTE_NAME_PRINT(&proc->name),
@@ -1023,12 +1054,14 @@ void prte_rmaps_base_report_bindings(prte_job_t *jdata,
         PMIX_ARGV_APPEND_NOSIZE_COMPAT(&cache, out);
         free(out);
     }
+
     if (NULL == cache) {
         out = strdup("Error: job has no procs");
     } else {
         /* add a blank line with \n on it so IOF will output the last line */
         PMIX_ARGV_APPEND_NOSIZE_COMPAT(&cache, "");
         out = PMIX_ARGV_JOIN_COMPAT(cache, '\n');
+        PMIX_ARGV_FREE_COMPAT(cache);
     }
     PMIX_LOAD_PROCID(&source, jdata->nspace, PMIX_RANK_WILDCARD);
     prte_iof_base_output(&source, PMIX_FWD_STDOUT_CHANNEL, out);
@@ -1120,36 +1153,65 @@ static int map_colocate(prte_job_t *jdata,
             PMIX_RETAIN(node);
             pmix_list_append(&targets, &node->super);
         }
-   }
+    }
+
+    // clear the flags
+    PMIX_LIST_FOREACH(nptr, &targets, prte_node_t) {
+        PRTE_FLAG_UNSET(nptr, PRTE_NODE_FLAG_MAPPED);
+    }
+
 
     if (pernode) {
         /* cycle across the target nodes and place the specified
          * number of procs on each one */
         PMIX_LIST_FOREACH_SAFE(nptr, n2, &targets, prte_node_t) {
-            // Map the node to this job - note we already set the "mapped" flag
-            PMIX_RETAIN(nptr);
-            pmix_pointer_array_add(map->nodes, nptr);
-            map->num_nodes += 1;
-            // Assign N procs per node for each app_context
+            // setup the mapping options
+            options->ncpus = prte_rmaps_base_get_ncpus(nptr, NULL, options);
+            /* the available cpus are in the scratch location */
+            options->target = hwloc_bitmap_dup(prte_rmaps_base.available);
+            options->nprocs = procs_per_target;
+           // Assign N procs per node for each app_context
             for (i=0; i < jdata->apps->size; i++) {
                 app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, i);
                 if (NULL == app) {
                     continue;
                 }
                 // is there room on this node? daemons don't count
-                if (!daemons && !prte_rmaps_base_check_avail(jdata, app, nptr, &targets, NULL, options)) {
-                    if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(map->mapping)) {
-                        pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                                       app->num_procs, app->app, prte_process_info.nodename);
-                        PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
-                        ret = PRTE_ERR_SILENT;
+                if (!daemons) {
+                    cnt = nptr->slots_inuse + procs_per_target;
+                    // first check the absolute limit
+                    if (0 != nptr->slots_max && nptr->slots_max < cnt) {
+                        // violates the max limit
+                        ret = PRTE_ERR_OUT_OF_RESOURCE;
                         goto done;
                     }
-                    PRTE_FLAG_SET(nptr, PRTE_NODE_FLAG_OVERSUBSCRIBED);
-                    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
+                    if (nptr->slots < cnt) {
+                        // oversubscribed - we can still fit if they allow oversubscription
+                        if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(map->mapping)) {
+                            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+                                           app->num_procs, app->app, prte_process_info.nodename);
+                            PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                            ret = PRTE_ERR_SILENT;
+                            goto done;
+                        }
+                        // we can use it oversubscribed - so mark it
+                        PRTE_FLAG_SET(nptr, PRTE_NODE_FLAG_OVERSUBSCRIBED);
+                        PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
+                    }
                 }
+                // Map the node to this job
+                if (!PRTE_FLAG_TEST(nptr, PRTE_NODE_FLAG_MAPPED)) {
+                    PRTE_FLAG_SET(nptr, PRTE_NODE_FLAG_MAPPED);
+                    PMIX_RETAIN(nptr);
+                    pmix_pointer_array_add(map->nodes, nptr);
+                    map->num_nodes += 1;
+                    options->nnodes++;
+                }
+                // map the procs
                 for (j = 0; j < procs_per_target; ++j) {
-                    if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, app->idx, nptr, NULL, options))) {
+                    proc = prte_rmaps_base_setup_proc(jdata, app->idx, nptr, NULL, options);
+                    if (NULL == proc) {
+                        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                         ret = PRTE_ERR_OUT_OF_RESOURCE;
                         goto done;
                     }
@@ -1159,6 +1221,7 @@ static int map_colocate(prte_job_t *jdata,
                 }
             }
         }
+
         /* calculate the ranks for this job */
         ret = prte_rmaps_base_compute_vpids(jdata, options);
         if (PRTE_SUCCESS != ret) {
@@ -1170,6 +1233,10 @@ static int map_colocate(prte_job_t *jdata,
 
     /* handle the case of colocate by process */
     PMIX_LIST_FOREACH_SAFE(nptr, n2, &targets, prte_node_t) {
+        // setup the mapping options
+        options->ncpus = prte_rmaps_base_get_ncpus(nptr, NULL, options);
+        /* the available cpus are in the scratch location */
+        options->target = hwloc_bitmap_dup(prte_rmaps_base.available);
         // count the number of target procs on this node
         cnt = 0;
         for (i=0; i < nptr->procs->size; i++) {
@@ -1188,28 +1255,51 @@ static int map_colocate(prte_job_t *jdata,
             // should not happen
             continue;
         }
-        // Map the node to this job - note we already set the "mapped" flag
-        PMIX_RETAIN(nptr);
-        pmix_pointer_array_add(map->nodes, nptr);
-        map->num_nodes += 1;
-        cnt = cnt * procs_per_target; // total number of procs to place on this node
-        // Assign cnt procs for each app_context
+        // assign the number of procs to be placed on this node
+        options->nprocs = cnt * procs_per_target; // total number of procs to place on this node;
+        // Assign procs for each app_context
         for (i=0; i < jdata->apps->size; i++) {
             app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, i);
+            if (NULL == app) {
+                continue;
+            }
             // is there room on this node? daemons don't count
-            if (!daemons && !prte_rmaps_base_check_avail(jdata, app, nptr, &targets, NULL, options)) {
-                if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(map->mapping)) {
-                    pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                                   app->num_procs, app->app, prte_process_info.nodename);
-                    PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
-                    ret = PRTE_ERR_SILENT;
+            if (!daemons) {
+                cnt = nptr->slots_inuse + options->nprocs;
+                // first check the absolute limit
+                if (0 != nptr->slots_max && nptr->slots_max < cnt) {
+                    // violates the max limit
+                    ret = PRTE_ERR_OUT_OF_RESOURCE;
                     goto done;
                 }
-                PRTE_FLAG_SET(nptr, PRTE_NODE_FLAG_OVERSUBSCRIBED);
-                PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
+                // check oversubscribed
+                if (nptr->slots < cnt) {
+                    // oversubscribed - we can still fit if they allow oversubscription
+                    if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(map->mapping)) {
+                        pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+                                       app->num_procs, app->app, prte_process_info.nodename);
+                        PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                        ret = PRTE_ERR_SILENT;
+                        goto done;
+                    }
+                    // we can use it oversubscribed - so mark it
+                    PRTE_FLAG_SET(nptr, PRTE_NODE_FLAG_OVERSUBSCRIBED);
+                    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
+                }
             }
-            for (j = 0; j < cnt; ++j) {
-                if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, i, nptr, NULL, options))) {
+            // Map the node to this job
+            if (!PRTE_FLAG_TEST(nptr, PRTE_NODE_FLAG_MAPPED)) {
+                PRTE_FLAG_SET(nptr, PRTE_NODE_FLAG_MAPPED);
+                PMIX_RETAIN(nptr);
+                pmix_pointer_array_add(map->nodes, nptr);
+                map->num_nodes += 1;
+                options->nnodes++;
+            }
+            // map the procs
+            for (j = 0; j < options->nprocs; ++j) {
+                proc = prte_rmaps_base_setup_proc(jdata, i, nptr, NULL, options);
+                if (NULL == proc) {
+                    PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                     ret = PRTE_ERR_OUT_OF_RESOURCE;
                     goto done;
                 }
@@ -1235,4 +1325,109 @@ done:
     }
     PMIX_LIST_DESTRUCT(&targets);
     return ret;
+}
+
+static void inherit_env_directives(prte_job_t *jdata,
+                                   prte_job_t *parent,
+                                   pmix_proc_t *proxy)
+{
+    prte_app_context_t *app, *app2;
+    prte_proc_t *p;
+    prte_attribute_t *attr, *attr2;
+    pmix_value_t *val, *val2;
+    pmix_envar_t *envar, *envar2;
+    int n;
+    bool exists;
+
+    // deal with job-level attributes first
+    PMIX_LIST_FOREACH(attr, &parent->attributes, prte_attribute_t) {
+        if (PMIX_ENVAR != attr->data.type) {
+            continue;
+        }
+        val = &attr->data;
+        envar = &val->data.envar;
+
+        // do we have a matching attribute in the new job?
+        exists = false;
+        PMIX_LIST_FOREACH(attr2, &jdata->attributes, prte_attribute_t) {
+            if (PMIX_ENVAR != attr->data.type) {
+                continue;
+            }
+            val2 = &attr2->data;
+            envar2 = &val2->data.envar;
+
+            if (attr->key == attr2->key) {
+                // operation is same - check if the target envars match
+                if (0 == strcmp(envar->envar, envar2->envar)) {
+                    // these match, so don't overwrite it
+                    exists = true;
+                    break;
+                }
+            }
+        }
+
+        if (exists) {
+            // leave this alone
+            continue;
+        }
+
+        // if it doesn't exist, then inherit it
+        prte_set_attribute(&jdata->attributes, attr->key, PRTE_ATTR_GLOBAL,
+                           envar, PMIX_ENVAR);
+    }
+
+    /* There is no one-to-one correlation between the apps, but we can
+     * inherit the directives from the proc that called spawn, so do that
+     * much here */
+    p = prte_get_proc_object(proxy);
+    if (NULL == p) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return;
+    }
+    app = (prte_app_context_t*)pmix_pointer_array_get_item(parent->apps, p->app_idx);
+    if (NULL == app) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return;
+    }
+    for (n=0; n < jdata->apps->size; n++) {
+        app2 = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, n);
+        if (NULL == app2) {
+            continue;
+        }
+        PMIX_LIST_FOREACH(attr, &app->attributes, prte_attribute_t) {
+            if (PMIX_ENVAR != attr->data.type) {
+                continue;
+            }
+            val = &attr->data;
+            envar = &val->data.envar;
+
+            exists = false;
+            PMIX_LIST_FOREACH(attr2, &app2->attributes, prte_attribute_t) {
+                if (PMIX_ENVAR != attr->data.type) {
+                    continue;
+                }
+                val2 = &attr2->data;
+                envar2 = &val2->data.envar;
+
+                if (attr->key == attr2->key) {
+                    // operation is same - check if the target envars match
+                    if (0 == strcmp(envar->envar, envar2->envar)) {
+                        // these match, so don't overwrite it
+                        exists = true;
+                        break;
+                    }
+                }
+            }
+
+            if (exists) {
+                // leave this alone
+                continue;
+            }
+
+            // if it doesn't exist, then inherit it
+            prte_set_attribute(&app2->attributes, attr->key, PRTE_ATTR_GLOBAL,
+                               envar, PMIX_ENVAR);
+        }
+    }
+
 }

@@ -304,11 +304,25 @@ static void ssh_wait_daemon(int sd, short flags, void *cbdata)
             daemon->state = PRTE_PROC_STATE_FAILED_TO_START;
         } else {
             jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+            pmix_output(prte_clean_output,
+                        "------------------------------------------------------------\n"
+                        "A daemon failed to report back after being spawned. This could\n"
+                        "be due to several factors, including inability to find the\n"
+                        "daemon executable, or the executable was unable to find its\n"
+                        "required supporting libraries. In some cases, the daemon was\n"
+                        "able to execute, but was unable to complete a TCP connection\n"
+                        "back to %s:\n\n"
+                        "  Local host:    %s\n"
+                        "  Remote host:   %s\n"
+                        "  Daemon exit status: %d\n\n"
+                        "This may also be caused by a firewall on the remote host. Please\n"
+                        "check that any firewall (e.g., iptables) has been disabled and\n"
+                        "try again.\n"
+                        "------------------------------------------------------------",
+                        prte_tool_basename, prte_process_info.nodename,
+                        (NULL == daemon->node->name) ? "<unknown>" : daemon->node->name,
+                        WEXITSTATUS(daemon->exit_code));
 
-            PMIX_OUTPUT_VERBOSE(
-                (1, prte_plm_base_framework.framework_output, "%s daemon %s failed with status %d",
-                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_VPID_PRINT(daemon->name.rank),
-                 WEXITSTATUS(daemon->exit_code)));
             /* set the exit status */
             PRTE_UPDATE_EXIT_STATUS(WEXITSTATUS(daemon->exit_code));
             /* note that this daemon failed */
@@ -637,6 +651,17 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
                 full_orted_cmd = strdup(orted_cmd);
             }
             free(orted_cmd);
+        } else {
+            /* use our standard one and add the prefix */
+            value = pmix_basename(prte_install_dirs.bindir);
+            if ('/' == prefix_dir[strlen(prefix_dir)-1]) {
+                pmix_asprintf(&tmp, "%s%s", prefix_dir, value);
+            } else {
+                pmix_asprintf(&tmp, "%s/%s", prefix_dir, value);
+            }
+            free(value);
+            pmix_asprintf(&full_orted_cmd, "%s/prted", tmp);
+            free(tmp);
         }
     } else {
         full_orted_cmd = orted_cmd;
@@ -752,6 +777,10 @@ static void ssh_child(int argc, char **argv)
 
     /* Don't let ssh slurp all of our stdin! */
     fdin = open("/dev/null", O_RDWR);
+    if (0 > fdin) {
+        pmix_output(0, "plm:ssh: open of /dev/null failed with errno=%s(%d)", strerror(errno), errno);
+        exit(-1);
+    }
     dup2(fdin, 0);
     close(fdin);
 

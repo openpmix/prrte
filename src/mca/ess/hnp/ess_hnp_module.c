@@ -221,8 +221,6 @@ static int rte_init(int argc, char **argv)
     node->daemon = proc;
     PRTE_FLAG_SET(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED);
     node->state = PRTE_NODE_STATE_UP;
-    /* get our aliases - will include all the interface aliases captured in prte_init */
-    node->aliases = PMIX_ARGV_COPY_COMPAT(prte_process_info.aliases);
     /* record that the daemon job is running */
     jdata->num_procs = 1;
     jdata->state = PRTE_JOB_STATE_RUNNING;
@@ -251,6 +249,13 @@ static int rte_init(int argc, char **argv)
         error = "pmix_server_init";
         goto error;
     }
+
+    /* add network aliases to our list of alias hostnames - must
+     * wait until after we init PMIx before getting them */
+    pmix_ifgetaliases(&prte_process_info.aliases);
+
+    /* get our aliases - will include all the interface aliases captured in prte_init */
+    node->aliases = PMIX_ARGV_COPY_COMPAT(prte_process_info.aliases);
 
     /* if we are using xml for output, put a start tag */
     if (prte_xml_output) {

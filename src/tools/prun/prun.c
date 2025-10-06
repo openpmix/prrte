@@ -242,7 +242,7 @@ int prun(int argc, char *argv[])
                 /* stitch together the var names and URI */
                 pmix_asprintf(&leftover, "%lu", (unsigned long) getpid());
                 /* output to the pipe */
-                rc = pmix_fd_write(outpipe, strlen(leftover) + 1, leftover);
+                pmix_fd_write(outpipe, strlen(leftover) + 1, leftover);
                 free(leftover);
                 close(outpipe);
             } else {
@@ -274,6 +274,9 @@ int prun(int argc, char *argv[])
         fp = fopen(opt->values[0], "r");
         if (NULL == fp) {
             pmix_show_help("help-prun.txt", "appfile-failure", true, opt->values[0]);
+            if (NULL != mypidfile) {
+                free(mypidfile);
+            }
             return 1;
         }
         first = true;

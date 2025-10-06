@@ -153,6 +153,7 @@ static struct option prterunoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_SET_SID, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_PID, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_URI, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_SYSTEM_SERVER, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_DEFAULT_HOSTFILE, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_KEEPALIVE, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_LAUNCH_AGENT, PMIX_ARG_REQD),
@@ -186,6 +187,9 @@ static struct option prterunoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_STOP_IN_INIT, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_STOP_IN_APP, PMIX_ARG_NONE),
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_FWD_ENVAR, PMIX_ARG_REQD, 'x'),
+#ifdef PMIX_CLI_SET_ENVAR
+    PMIX_OPTION_DEFINE(PMIX_CLI_SET_ENVAR, PMIX_ARG_REQD),
+#endif
 #ifdef PMIX_CLI_PREPEND_ENVAR
     PMIX_OPTION_DEFINE(PMIX_CLI_PREPEND_ENVAR, PMIX_ARG_REQD),
 #endif
@@ -314,6 +318,9 @@ static struct option prunoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_STOP_IN_INIT, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_STOP_IN_APP, PMIX_ARG_NONE),
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_FWD_ENVAR, PMIX_ARG_REQD, 'x'),
+#ifdef PMIX_CLI_SET_ENVAR
+    PMIX_OPTION_DEFINE(PMIX_CLI_SET_ENVAR, PMIX_ARG_REQD),
+#endif
 #ifdef PMIX_CLI_PREPEND_ENVAR
     PMIX_OPTION_DEFINE(PMIX_CLI_PREPEND_ENVAR, PMIX_ARG_REQD),
 #endif
@@ -488,36 +495,46 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
     struct option *myoptions = NULL;
     int rc, n;
     pmix_cli_item_t *opt = NULL;
+    char *sdprefix = "prte";
 
     if (0 == strcmp(prte_tool_actual, "prte")) {
         myoptions = prteoptions;
         shorts = prteshorts;
         helpfile = "help-prte.txt";
+        sdprefix = "prte";
     } else if (0 == strcmp(prte_tool_actual, "prterun")) {
         myoptions = prterunoptions;
         shorts = prterunshorts;
         helpfile = "help-prterun.txt";
+        sdprefix = "prtrn";
     } else if (0 == strcmp(prte_tool_actual, "prted")) {
         myoptions = prtedoptions;
         shorts = prtedshorts;
         helpfile = "help-prted.txt";
+        sdprefix = "prted";
     } else if (0 == strcmp(prte_tool_actual, "prun")) {
         myoptions = prunoptions;
         shorts = prunshorts;
         helpfile = "help-prun.txt";
+        sdprefix = "prun";
     } else if (0 == strcmp(prte_tool_actual, "pterm")) {
         myoptions = ptermoptions;
         shorts = ptermshorts;
         helpfile = "help-pterm.txt";
+        sdprefix = "prte";
     } else if (0 == strcmp(prte_tool_actual, "prte_info")) {
         myoptions = pinfooptions;
         shorts = pinfoshorts;
         helpfile = "help-prte-info.txt";
+        sdprefix = "prte";
     }
     pmix_tool_msg = "Report bugs to: https://github.com/openpmix/prrte";
     pmix_tool_org = "PRRTE";
     pmix_tool_version = prte_util_make_version_string("all", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
                                                       PRTE_RELEASE_VERSION, PRTE_GREEK_VERSION, NULL);
+    if (NULL == prte_process_info.sessdir_prefix) {
+        prte_process_info.sessdir_prefix = strdup(sdprefix);
+    }
 
     rc = pmix_cmd_line_parse(argv, shorts, myoptions, NULL,
                              results, helpfile);

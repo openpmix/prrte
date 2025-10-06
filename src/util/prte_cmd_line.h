@@ -194,12 +194,13 @@ BEGIN_C_DECLS
 #define PRTE_CLI_FILE       "filename"
 
 // Display directives
-#define PRTE_CLI_ALLOC      "allocation"
-#define PRTE_CLI_MAP        "map"
-#define PRTE_CLI_BIND       "bind"
-#define PRTE_CLI_MAPDEV     "map-devel"
-#define PRTE_CLI_TOPO       "topo="
-#define PRTE_CLI_CPUS       "cpus="
+#define PRTE_CLI_ALLOC      	"allocation"
+#define PRTE_CLI_MAP        	"map"
+#define PRTE_CLI_BIND       	"bind"
+#define PRTE_CLI_MAPDEV     	"map-devel"
+#define PRTE_CLI_TOPO       	"topo="
+#define PRTE_CLI_CPUS       	"cpus="
+#define PRTE_CLI_PHYSICAL_CPUS 	"physical"
 
 // Runtime directives
 #define PRTE_CLI_ERROR_NZ           "error-nonzero-status"          // optional arg

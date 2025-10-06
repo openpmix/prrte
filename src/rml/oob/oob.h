@@ -15,7 +15,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -66,7 +66,8 @@ typedef struct {
     pmix_list_t events;              /**< events for monitoring connections */
     int peer_limit;                  /**< max size of tcp peer cache */
     pmix_list_t peers;               // connection addresses for peers
-
+    int max_msg_size;                // max size of an OOB msg (in MBytes)
+    
     /* Port specifications */
     int tcp_sndbuf;   /**< socket send buffer size */
     int tcp_rcvbuf;   /**< socket recv buffer size */

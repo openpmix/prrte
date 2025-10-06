@@ -5,7 +5,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -247,6 +247,7 @@ static int raw_preposition_files(prte_job_t *jdata,
         if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
+
         if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN, NULL, PMIX_BOOL)) {
             /* add the executable to our list */
             PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
@@ -270,8 +271,11 @@ static int raw_preposition_files(prte_job_t *jdata,
             prte_set_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD,
                                PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, (void **) &filestring,
-                               PMIX_STRING)) {
+
+        filestring = NULL;
+        if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES,
+                               (void **) &filestring, PMIX_STRING) &&
+            NULL != filestring) {
             files = PMIX_ARGV_SPLIT_COMPAT(filestring, ',');
             free(filestring);
             for (j = 0; NULL != files[j]; j++) {
@@ -610,8 +614,10 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
     }
 
     /* get the list of files this app wants */
-    if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, (void **) &filestring,
-                           PMIX_STRING)) {
+    filestring = NULL;
+    if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES,
+                           (void **) &filestring, PMIX_STRING) &&
+        NULL != filestring) {
         files = PMIX_ARGV_SPLIT_COMPAT(filestring, ',');
         free(filestring);
     }
@@ -902,7 +908,7 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     prte_filem_raw_output_t *output;
     prte_filem_raw_incoming_t *ptr, *incoming;
     pmix_list_item_t *item;
-    int32_t type;
+    int32_t type = PRTE_FILEM_TYPE_UNKNOWN;
     char *cptr;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 

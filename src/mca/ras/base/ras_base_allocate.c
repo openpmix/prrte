@@ -202,10 +202,6 @@ static void display_cpus(prte_topology_t *t,
 
     parsable = prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL);
 
-    if (parsable) {
-        return;
-    }
-
     npus = prte_hwloc_base_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PU);
     ncores = prte_hwloc_base_get_nbobjs_by_type(t->topo, HWLOC_OBJ_CORE);
     if (npus == ncores && !use_hwthread_cpus) {
@@ -306,7 +302,6 @@ void prte_ras_base_display_cpus(prte_job_t *jdata, char *nodelist)
             }
             if (0 == strcmp(nptr->name, nodes[j])) {
                 display_cpus(nptr->topology, jdata, nodes[j]);
-                moveon = true;
                 break;
             }
             if (NULL == nptr->aliases) {
@@ -482,7 +477,9 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     /* nothing was found, or no active module was alive. We first see
      * if we were given a rank/seqfile - if so, use it as the hosts will be
      * taken from the mapping */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void **) &hosts, PMIX_STRING)) {
+    hosts = NULL;
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void **) &hosts, PMIX_STRING) &&
+        NULL != hosts) {
         PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                              "%s ras:base:allocate parsing rank/seqfile %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
@@ -530,7 +527,9 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING)) {
+        hosts = NULL;
+        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING) &&
+            NULL != hosts) {
             PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:allocate adding dash_hosts",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -582,7 +581,9 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts, PMIX_STRING)) {
+        hosts = NULL;
+        if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts, PMIX_STRING) &&
+            NULL != hosts) {
             PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:allocate adding hostfile %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
@@ -721,6 +722,7 @@ next_state:
     /* set total slots alloc */
     jdata->total_slots_alloc = prte_ras_base.total_slots_alloc;
 
+    hosts = NULL;
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_TOPO, (void**)&hosts, PMIX_STRING)) {
         if (NULL != hosts) {
             hostlist = PMIX_ARGV_SPLIT_COMPAT(hosts, ';');
@@ -785,14 +787,18 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
         if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
+        hosts = NULL;
         if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE,
-                       (void **) &hosts, PMIX_STRING)) {
+                       (void **) &hosts, PMIX_STRING) &&
+            NULL != hosts) {
             // found one
             free(hosts);
             goto proceed;
         }
+        hosts = NULL;
         if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOST,
-                               (void **) &hosts, PMIX_STRING)) {
+                               (void **) &hosts, PMIX_STRING) &&
+            NULL != hosts) {
             // found one
             free(hosts);
             goto proceed;
@@ -845,8 +851,10 @@ proceed:
         if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
+        hosts = NULL;
         if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE,
-                               (void **) &hosts, PMIX_STRING)) {
+                               (void **) &hosts, PMIX_STRING) &&
+            NULL != hosts) {
             PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:add_hosts checking add-hostfile %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
@@ -1010,8 +1018,10 @@ proceed:
         if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
+        hosts = NULL;
         if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOST,
-                               (void **) &hosts, PMIX_STRING)) {
+                               (void **) &hosts, PMIX_STRING) &&
+            NULL != hosts) {
             pmix_output_verbose(5, prte_ras_base_framework.framework_output,
                                 "%s ras:base:add_hosts checking add-host %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts);

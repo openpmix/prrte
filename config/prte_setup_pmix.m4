@@ -106,6 +106,7 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     # $pmix_min_version.
     prte_pmix_min_num_version=PRTE_PMIX_NUMERIC_MIN_VERSION
     prte_pmix_min_version=PRTE_PMIX_MIN_VERSION
+    prte_pmix_max_version=PRTE_PMIX_MAX_VERSION
     AC_MSG_CHECKING([version at or above v$prte_pmix_min_version])
     AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
                                         #include <pmix_version.h>
@@ -116,6 +117,22 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                       [AC_MSG_RESULT([yes])],
                       [AC_MSG_RESULT(no)
                        AC_MSG_WARN([PRRTE requires PMIx v$prte_pmix_min_num_version or above.])
+                       AC_MSG_ERROR([Please select a supported version and configure again])])
+
+    # NOTE: We have already read PRRTE's VERSION file, so we can use
+    # $pmix_max_version.
+    prte_pmix_max_num_version=PRTE_PMIX_NUMERIC_MAX_VERSION
+    prte_pmix_max_version=PRTE_PMIX_MAX_VERSION
+    AC_MSG_CHECKING([version below v$prte_pmix_max_version])
+    AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
+                                        #include <pmix_version.h>
+                                        #if !(PMIX_NUMERIC_VERSION < $prte_pmix_max_num_version)
+                                        #error "not below version $prte_pmix_max_num_version"
+                                        #endif
+                                       ], [])],
+                      [AC_MSG_RESULT([yes])],
+                      [AC_MSG_RESULT(no)
+                       AC_MSG_WARN([PRRTE requires PMIx be below v$prte_pmix_max_num_version.])
                        AC_MSG_ERROR([Please select a supported version and configure again])])
 
     AC_CHECK_HEADER([src/util/pmix_argv.h], [],
@@ -131,6 +148,14 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     AC_DEFINE_UNQUOTED([PRTE_PMIX_MINIMUM_VERSION],
                        [$prte_pmix_min_num_version],
                        [Minimum supported PMIx version])
+
+    AC_DEFINE_UNQUOTED([PRTE_PMIX_MIN_VERSION_STRING],
+                       ["$prte_pmix_min_version"],
+                       [Minimum supported PMIx version])
+
+    AC_DEFINE_UNQUOTED([PRTE_PMIX_MAX_VERSION_STRING],
+                       ["$prte_pmix_max_version"],
+                       [Maximum supported PMIx version])
 
     found_pmixcc=0
     PMIXCC_PATH="pmixcc"

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,6 +40,7 @@ static int process_directive(pmix_server_req_t *req)
     pmix_app_t *apps;
     size_t napps;
     size_t n, i;
+    int j;
     pmix_status_t rc;
     bool terminate = false;
     bool pause = false;
@@ -246,8 +247,11 @@ static int process_directive(pmix_server_req_t *req)
         /* add the designation to the apps in the job, if one was provided. These
          * will be added to the global pool when the job is setup for launch */
         if (NULL != jdata) {
-            for (n=0; n < jdata->num_apps; n++) {
-                app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, n);
+            for (j=0; j < jdata->apps->size; j++) {
+                app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, j);
+                if (NULL == app) {
+                    continue;
+                }
                 // the add_host attribute will be removed after processing
                 prte_set_attribute(&app->attributes, PRTE_APP_ADD_HOST, PRTE_ATTR_GLOBAL,
                                    hosts, PMIX_STRING);

@@ -87,6 +87,7 @@
 #include "src/util/pmix_getcwd.h"
 #include "src/util/pmix_show_help.h"
 #include "src/util/pmix_string_copy.h"
+#include "src/util/session_dir.h"
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_progress_threads.h"
@@ -103,10 +104,10 @@
 #include "src/runtime/prte_wait.h"
 #include "src/runtime/runtime.h"
 
-#include "include/prte.h"
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/prted/prted.h"
+#include "include/prte.h"
 
 typedef struct {
     prte_pmix_lock_t lock;
@@ -255,7 +256,7 @@ static char *pmix_getline(FILE *fp)
 }
 #endif
 
-int main(int argc, char *argv[])
+int prte(int argc, char *argv[])
 {
     int rc = 1, i;
     char *param, *tpath, *cptr;
@@ -685,6 +686,9 @@ int main(int argc, char *argv[])
     /* setup PRTE infrastructure */
     if (PRTE_SUCCESS != (ret = prte_init(&pargc, &pargv, PRTE_PROC_MASTER))) {
         PRTE_ERROR_LOG(ret);
+        // ensure we cleanup any session dir we might have dropped
+        prte_finalizing = true;
+        prte_job_session_dir_finalize(NULL);
         return ret;
     }
     /* get my proc ID */
@@ -1450,6 +1454,11 @@ static int prep_singleton(const char *name)
     /* add our node to the map since the singleton must
      * be here */
     node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, PRTE_PROC_MY_NAME->rank);
+    if (NULL == node) {
+        // should never happen
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
+    }
     PMIX_RETAIN(node);
     pmix_pointer_array_add(jdata->map->nodes, node);
     ++(jdata->map->num_nodes);

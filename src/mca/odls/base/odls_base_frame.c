@@ -78,7 +78,6 @@ prte_odls_globals_t prte_odls_globals = {
     .ev_threads = NULL,
     .next_base = 0,
     .signal_direct_children_only = false,
-    .lock = PMIX_LOCK_STATIC_INIT,
     .exec_agent = NULL
 };
 
@@ -126,7 +125,6 @@ void prte_odls_base_harvest_threads(void)
 {
     int i;
 
-    PMIX_ACQUIRE_THREAD(&prte_odls_globals.lock);
     if (0 < prte_odls_globals.num_threads) {
         /* stop the progress threads */
         if (NULL != prte_odls_globals.ev_threads) {
@@ -144,7 +142,6 @@ void prte_odls_base_harvest_threads(void)
             prte_odls_globals.ev_threads = NULL;
         }
     }
-    PMIX_RELEASE_THREAD(&prte_odls_globals.lock);
 }
 
 void prte_odls_base_start_threads(prte_job_t *jdata)
@@ -152,10 +149,8 @@ void prte_odls_base_start_threads(prte_job_t *jdata)
     int i;
     char *tmp;
 
-    PMIX_ACQUIRE_THREAD(&prte_odls_globals.lock);
     /* only do this once */
     if (NULL != prte_odls_globals.ev_threads) {
-        PMIX_RELEASE_THREAD(&prte_odls_globals.lock);
         return;
     }
 
@@ -205,7 +200,6 @@ startup:
             free(tmp);
         }
     }
-    PMIX_RELEASE_THREAD(&prte_odls_globals.lock);
 }
 
 static int prte_odls_base_close(void)
@@ -230,8 +224,6 @@ static int prte_odls_base_close(void)
 
     prte_odls_base_harvest_threads();
 
-    PMIX_DESTRUCT_LOCK(&prte_odls_globals.lock);
-
     return pmix_mca_base_framework_components_close(&prte_odls_base_framework, NULL);
 }
 
@@ -247,9 +239,6 @@ static int prte_odls_base_open(pmix_mca_base_open_flag_t flags)
     bool xterm_hold;
     sigset_t unblock;
 
-    PMIX_CONSTRUCT_LOCK(&prte_odls_globals.lock);
-    prte_odls_globals.lock.active = false; // start with nobody having the thread
-
     /* initialize the global array of local children */
     prte_local_children = PMIX_NEW(pmix_pointer_array_t);
     if (PRTE_SUCCESS
@@ -263,12 +252,9 @@ static int prte_odls_base_open(pmix_mca_base_open_flag_t flags)
     prte_odls_globals.xtermcmd = NULL;
 
     /* ensure that SIGCHLD is unblocked as we need to capture it */
-    if (0 != sigemptyset(&unblock)) {
-        return PRTE_ERROR;
-    }
-    if (0 != sigaddset(&unblock, SIGCHLD)) {
-        return PRTE_ERROR;
-    }
+    sigemptyset(&unblock);
+    sigaddset(&unblock, SIGCHLD);
+
     if (0 != sigprocmask(SIG_UNBLOCK, &unblock, NULL)) {
         return PRTE_ERR_NOT_SUPPORTED;
     }

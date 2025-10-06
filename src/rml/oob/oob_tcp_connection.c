@@ -407,8 +407,8 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
          * not be connected to the HNP at this point */
         pmix_output(prte_clean_output,
                     "------------------------------------------------------------\n"
-                    "A process or daemon was unable to complete a TCP connection\n"
-                    "to another process:\n"
+                    "A daemon was unable to complete a TCP connection\n"
+                    "to another daemon:\n"
                     "  Local host:    %s\n"
                     "  Remote host:   %s\n"
                     "This is usually caused by a firewall on the remote host. Please\n"
@@ -890,6 +890,14 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
                         PRTE_NAME_PRINT(&peer->name));
 
     /* get the authentication and version payload */
+    if (hdr.nbytes > (uint32_t)(prte_oob_base.max_msg_size * 1024 * 1024)) {
+        pmix_show_help("help-oob-tcp.txt", "msg-too-big", true,
+                        PRTE_NAME_PRINT(&peer->name), PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        hdr.nbytes, prte_oob_base.max_msg_size);
+        peer->state = MCA_OOB_TCP_FAILED;
+        prte_oob_tcp_peer_close(peer);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
     if (NULL == (msg = (char *) malloc(hdr.nbytes))) {
         peer->state = MCA_OOB_TCP_FAILED;
         prte_oob_tcp_peer_close(peer);
@@ -957,6 +965,17 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
             free(msg);
             return PRTE_ERR_UNREACH;
         }
+    }
+
+    if (hdr.nbytes == offset) {
+        // missing version string
+        pmix_show_help("help-oob-tcp.txt", "missing version", true,
+                       prte_process_info.nodename, PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                       pmix_fd_get_peer_name(peer->sd), PRTE_NAME_PRINT(&(peer->name)));
+        peer->state = MCA_OOB_TCP_FAILED;
+        prte_oob_tcp_peer_close(peer);
+        free(msg);
+        return PRTE_ERR_CONNECTION_REFUSED;
     }
 
     /* check that this is from a matching version */
@@ -1058,6 +1077,13 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
         return;
     }
 
+    /* if we were connected, then inform the component-level that we have lost a connection so
+     * it can decide what to do about it.
+     */
+    if (MCA_OOB_TCP_CONNECTED == peer->state) {
+        PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_mca_oob_tcp_component_lost_connection);
+    }
+
     peer->state = MCA_OOB_TCP_CLOSED;
     if (NULL != peer->active_addr) {
         peer->active_addr->state = MCA_OOB_TCP_CLOSED;
@@ -1072,11 +1098,6 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
         prte_event_del(&peer->send_event);
         peer->send_ev_active = false;
     }
-
-    /* inform the component-level that we have lost a connection so
-     * it can decide what to do about it.
-     */
-    PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_mca_oob_tcp_component_lost_connection);
 
     if (prte_prteds_term_ordered || prte_finalizing || prte_abnormal_term_ordered) {
         /* nothing more to do */
