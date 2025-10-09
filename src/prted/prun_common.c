@@ -830,6 +830,7 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
 
     /* mark if recovery was enabled on the cmd line */
     if (pmix_cmd_line_is_taken(results, PRTE_CLI_ENABLE_RECOVERY)) {
+        flag = true;
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_RECOVERABLE, &flag, PMIX_BOOL);
     }
     /* record the max restarts */
