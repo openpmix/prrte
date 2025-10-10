@@ -101,8 +101,6 @@ else
 		--root $(abs_top_srcdir) \
 		--out prte_show_help_content.c
 endif
-=======
->>>>>>> downstream/master
 
 
 prte_show_help_content.c: prte-convert-help.py
