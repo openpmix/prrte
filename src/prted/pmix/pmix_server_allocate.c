@@ -56,6 +56,10 @@ void pmix_server_alloc_request_resp(int status, pmix_proc_t *sender,
     }
 
     req = pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, req_index);
+    if (NULL == req) {
+        // nothing we can do
+        return;
+    }
 
     /* Report the error */
     if (ret != PMIX_SUCCESS) {

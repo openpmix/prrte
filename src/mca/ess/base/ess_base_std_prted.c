@@ -43,6 +43,7 @@
 #include "src/event/event-internal.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
+#include "src/util/pmix_if.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_environ.h"
 
@@ -94,7 +95,7 @@ static void setup_sighandler(int signal, prte_event_t *ev, prte_event_cbfunc_t c
 int prte_ess_base_prted_setup(void)
 {
     int ret = PRTE_ERROR;
-    int fd;
+    int fd = -1;
     char log_file[PRTE_PATH_MAX];
     char *error = NULL;
     char *tmp = NULL;
@@ -275,17 +276,24 @@ int prte_ess_base_prted_setup(void)
         log_path = pmix_os_path(false, prte_process_info.top_session_dir, log_file, NULL);
 
         fd = open(log_path, O_RDWR | O_CREAT | O_TRUNC, 0640);
+        free(log_path);
+        log_path = NULL;
         if (fd < 0) {
             /* couldn't open the file for some reason, so
              * just connect everything to /dev/null
              */
             fd = open("/dev/null", O_RDWR | O_CREAT | O_TRUNC, 0666);
-        } else {
-            dup2(fd, STDOUT_FILENO);
-            dup2(fd, STDERR_FILENO);
-            if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
-                close(fd);
+            if (fd < 0) {
+                // cannot proceed
+                ret = PRTE_ERROR;
+                error = "open dev/null";
+                goto error;
             }
+        }
+        dup2(fd, STDOUT_FILENO);
+        dup2(fd, STDERR_FILENO);
+        if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
+            close(fd);
         }
     }
 
@@ -298,6 +306,10 @@ int prte_ess_base_prted_setup(void)
         error = "pmix_server_init";
         goto error;
     }
+
+    /* add network aliases to our list of alias hostnames - must
+     * wait until after we init PMIx before getting them */
+    pmix_ifgetaliases(&prte_process_info.aliases);
 
     /* Setup the communication infrastructure */
     if (PRTE_SUCCESS
@@ -441,8 +453,9 @@ int prte_ess_base_prted_setup(void)
 error:
     pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
                    error, PRTE_ERROR_NAME(ret), ret);
-    /* remove our use of the session directory tree */
-    PMIX_RELEASE(jdata);
+    if (NULL != jdata) {
+        PMIX_RELEASE(jdata);
+    }
     return PRTE_ERR_SILENT;
 }
 

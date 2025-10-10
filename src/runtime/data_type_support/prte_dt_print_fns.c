@@ -259,17 +259,15 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
     pmix_asprintf(&tmp, "\nData for node: %s\tState: %0x\t%s",
                   (NULL == src->name) ? "UNKNOWN" : src->name, src->state, tmp3);
     free(tmp3);
-    /* does this node have any aliases? */
     tmp3 = NULL;
+
+    /* does this node have any aliases? */
     if (NULL != src->aliases) {
         for (i = 0; NULL != src->aliases[i]; i++) {
             pmix_asprintf(&tmp2, "%s\n                resolved from %s", tmp, src->aliases[i]);
             free(tmp);
             tmp = tmp2;
         }
-    }
-    if (NULL != tmp3) {
-        free(tmp3);
     }
 
     pmix_asprintf(&tmp2, "%s\n        Daemon: %s\tDaemon launched: %s", tmp,
@@ -290,7 +288,8 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
     tmp = tmp2;
 
     tmp3 = NULL;
-    if (prte_get_attribute(&src->attributes, PRTE_NODE_USERNAME, (void **) &tmp3, PMIX_STRING)) {
+    if (prte_get_attribute(&src->attributes, PRTE_NODE_USERNAME, (void **) &tmp3, PMIX_STRING) &&
+        NULL != tmp3) {
         pmix_asprintf(&tmp2, "%s\n            Username on node: %s", tmp, tmp3);
         free(tmp3);
         free(tmp);
@@ -335,6 +334,7 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     int npus;
     char *cores = NULL;
     char xmlsp = ' ';
+    bool physical;
 
     /* set default result */
     *output = NULL;
@@ -345,6 +345,8 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     } else {
         use_hwthread_cpus = false;
     }
+
+    physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
         if (NULL != src->cpuset && NULL != src->node->topology &&
@@ -387,7 +389,7 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
             && NULL != src->node->topology->topo) {
             mycpus = hwloc_bitmap_alloc();
             hwloc_bitmap_list_sscanf(mycpus, src->cpuset);
-            str = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus,
+            str = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, physical,
                                            src->node->topology->topo);
             if (NULL == str) {
                 str = strdup("UNBOUND");
@@ -420,7 +422,8 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     if (NULL != src->cpuset) {
         mycpus = hwloc_bitmap_alloc();
         hwloc_bitmap_list_sscanf(mycpus, src->cpuset);
-        tmp2 = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, src->node->topology->topo);
+        tmp2 = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus,
+                                        physical, src->node->topology->topo);
         hwloc_bitmap_free(mycpus);
     } else {
         tmp2 = strdup("UNBOUND");
@@ -545,26 +548,34 @@ void prte_map_print(char **output, prte_job_t *jdata)
         return;
     }
 
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void **) &ppr, PMIX_STRING)) {
+    ppr = NULL;
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void **) &ppr, PMIX_STRING) ||
+        NULL == ppr) {
         ppr = strdup("N/A");
     }
+
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void **) &u16ptr,
                            PMIX_UINT16)) {
         pmix_asprintf(&cpus_per_rank, "%d", (int) u16);
     } else {
         cpus_per_rank = strdup("N/A");
     }
+
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
         cpu_type = "HWT";
     } else {
         cpu_type = "CORE";
     }
+
+    cpuset = NULL;
     if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void **) &cpuset, PMIX_STRING)) {
         if (NULL == prte_hwloc_default_cpu_list) {
             cpuset = strdup("N/A");
         } else {
             cpuset = strdup(prte_hwloc_default_cpu_list);
         }
+    } else if (NULL == cpuset) {
+        cpuset = strdup("N/A");
     }
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {

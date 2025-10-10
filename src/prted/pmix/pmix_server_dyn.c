@@ -272,6 +272,14 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
             prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS,
                                PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 
+#ifdef PMIX_REPORT_PHYSICAL_CPUS
+            /***   USE PHYSICAL CPUS  ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_REPORT_PHYSICAL_CPUS)) {
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS,
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
+#endif
+
             /***   DISPLAY TOPOLOGY   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_TOPOLOGY)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_TOPO,
@@ -598,29 +606,30 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
-            prte_prepend_attribute(&jdata->attributes, PRTE_JOB_SET_ENVAR,
-                                   PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_SET_ENVAR,
+                               PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
         } else if (PMIX_CHECK_KEY(info, PMIX_ADD_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
-            prte_prepend_attribute(&jdata->attributes, PRTE_JOB_ADD_ENVAR,
-                                   PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_ADD_ENVAR,
+                               PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
         } else if (PMIX_CHECK_KEY(info, PMIX_UNSET_ENVAR)) {
-            prte_prepend_attribute(&jdata->attributes, PRTE_JOB_UNSET_ENVAR,
-                                   PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_UNSET_ENVAR,
+                               PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
         } else if (PMIX_CHECK_KEY(info, PMIX_PREPEND_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
-            prte_prepend_attribute(&jdata->attributes, PRTE_JOB_PREPEND_ENVAR,
-                                   PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_PREPEND_ENVAR,
+                               PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
         } else if (PMIX_CHECK_KEY(info, PMIX_APPEND_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
-            prte_prepend_attribute(&jdata->attributes, PRTE_JOB_APPEND_ENVAR,
-                                   PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_APPEND_ENVAR,
+                               PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
+
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TOOL)) {
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
 
@@ -714,7 +723,6 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
         app->app = strdup(papp->cmd);
     } else if (NULL == papp->argv || NULL == papp->argv[0]) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        PMIX_RELEASE(jdata);
         return PRTE_ERR_BAD_PARAM;
     } else {
         app->app = strdup(papp->argv[0]);
@@ -1102,7 +1110,11 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
     for (n=0; n < ninfo; n++) {
         if (PMIX_CHECK_KEY(&info[n], PMIX_PROC_DATA) ||
             PMIX_CHECK_KEY(&info[n], PMIX_JOB_INFO_ARRAY)) {
-            PMIx_Data_pack(NULL, &cd->msg, (pmix_info_t*)&info[n], 1, PMIX_INFO);
+            rc = PMIx_Data_pack(NULL, &cd->msg, (pmix_info_t*)&info[n], 1, PMIX_INFO);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_RELEASE(cd);
+                return rc;
+            }
         }
     }
     cd->opcbfunc = cbfunc;

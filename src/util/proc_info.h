@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2020 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -73,6 +73,10 @@ typedef struct prte_process_info_t {
     int num_nodes;              /**< number of nodes in the job */
     char *nodename;             /**< string name for this node */
     char **aliases;             /**< aliases for this node */
+    uid_t uid;                  /**< Real user UD */
+    uid_t euid;                 /**< Effective user ID */
+    gid_t gid;                  /**< Real group ID */
+    gid_t egid;                 /**< Effective group ID */
     pid_t pid;                  /**< Local process ID for this process */
     prte_proc_type_t proc_type; /**< Type of process */
     char *my_uri;               /**< My contact info */
@@ -84,6 +88,7 @@ typedef struct prte_process_info_t {
      * environmental variables, or else a default location.
      */
     char *tmpdir_base;        /**< Base directory of the session dir tree */
+    char *sessdir_prefix;     /**< starting string for top session dir name */
     char *top_session_dir;    /**< Top-most directory of the session tree */
     bool rm_session_dirs;     /**< Session directories will be cleaned up by RM */
 

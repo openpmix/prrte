@@ -86,7 +86,6 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
     int i, n, count, rc;
     char *param, *value, *ptr;
     prte_pmix_app_t *app = NULL;
-    char *appname = NULL;
     pmix_cli_item_t *opt, *opt2;
     pmix_cli_result_t results;
     char *tval;
@@ -440,6 +439,32 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
         }
     }
 #endif
+    
+#ifdef PMIX_CLI_SET_ENVAR
+    opt = pmix_cmd_line_get_param(&results, PMIX_CLI_SET_ENVAR);
+    if (NULL != opt) {
+        for (n=0; NULL != opt->values[n]; n+=2) {
+            param = strdup(opt->values[n]);
+            // find the '=' separating name from value
+            tval = strchr(param, '=');
+            if (NULL == tval) {
+                pmix_show_help("help-prun.txt", "malformed-envar", true,
+                               "set", app->app.cmd, param);
+                rc = PRTE_ERR_SILENT;
+                free(param);
+                goto cleanup;
+            }
+            *tval = '\0';
+            ++tval;
+            PMIX_ENVAR_CONSTRUCT(&envt);
+            envt.envar = param;
+            envt.value = strdup(tval);
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_ENVAR, &envt, PMIX_ENVAR);
+            PMIX_ENVAR_DESTRUCT(&envt);
+        }
+    }
+#endif
+
 #ifdef PMIX_CLI_UNSET_ENVAR
     opt = pmix_cmd_line_get_param(&results, PMIX_CLI_UNSET_ENVAR);
     if (NULL != opt) {
@@ -504,9 +529,6 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
 cleanup:
     if (NULL != app) {
         PMIX_RELEASE(app);
-    }
-    if (NULL != appname) {
-        free(appname);
     }
     PMIX_DESTRUCT(&results);
     return rc;

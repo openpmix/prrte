@@ -12,7 +12,7 @@
  * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -56,7 +56,6 @@ typedef struct {
     char **ev_threads;            // event progress thread names
     int next_base;                // counter to load-level thread use
     bool signal_direct_children_only;
-    pmix_lock_t lock;
     char *exec_agent;
 } prte_odls_globals_t;
 

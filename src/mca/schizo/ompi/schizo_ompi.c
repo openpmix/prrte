@@ -159,6 +159,9 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_PRELOAD_FILES, PMIX_ARG_REQD),
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_PRELOAD_BIN, PMIX_ARG_NONE, 's'),
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_FWD_ENVAR, PMIX_ARG_REQD, 'x'),
+#ifdef PMIX_CLI_SET_ENVAR
+    PMIX_OPTION_DEFINE(PMIX_CLI_SET_ENVAR, PMIX_ARG_REQD),
+#endif
 #ifdef PMIX_CLI_PREPEND_ENVAR
     PMIX_OPTION_DEFINE(PMIX_CLI_PREPEND_ENVAR, PMIX_ARG_REQD),
 #endif
@@ -514,23 +517,26 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
         pmix_tool_org      = "Open MPI";
         pmix_tool_msg      = "Report bugs to https://www.open-mpi.org/community/help/";
     }
+    if (NULL == prte_process_info.sessdir_prefix) {
+        prte_process_info.sessdir_prefix = strdup("ompi");
+    }
 
     rc = pmix_cmd_line_parse(pargv, ompishorts, ompioptions, NULL,
                              results, "help-schizo-ompi.txt");
     if (PMIX_SUCCESS != rc) {
         PMIX_ARGV_FREE_COMPAT(pargv);
-        if (PMIX_OPERATION_SUCCEEDED == rc) {
-            /* pmix cmd line interpreter output result
-             * successfully - usually means version or
-             * some other stock output was generated */
-            return PRTE_OPERATION_SUCCEEDED;
-        }
-        if(warn) {
+        if (warn) {
             for(n = 0; n < cur_caught_pos; n++) {
                 free(caught_single_dashes[n]);
             }
             free(caught_single_dashes);
             free(caught_positions);
+        }
+        if (PMIX_OPERATION_SUCCEEDED == rc) {
+            /* pmix cmd line interpreter output result
+             * successfully - usually means version or
+             * some other stock output was generated */
+            return PRTE_OPERATION_SUCCEEDED;
         }
         return prte_pmix_convert_status(rc);
     }
@@ -584,13 +590,19 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
             free(orig_args);
             free(corrected_args);
         }
+   }
+
+    // cleanup
+    if (warn) {
         for(n = 0; n < cur_caught_pos; n++) {
             free(caught_single_dashes[n]);
         }
         free(caught_single_dashes);
+        caught_single_dashes = NULL;
         free(caught_positions);
+        caught_positions = NULL;
     }
-
+ 
     PMIX_ARGV_FREE_COMPAT(pargv);
     /* check for deprecated options - warn and convert them */
     rc = convert_deprecated_cli(results, silent);
@@ -1336,6 +1348,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
         }
         while (NULL != (line = prte_schizo_base_getline(fp))) {
             if ('\0' == line[0]) {
+                free(line);
                 continue; /* skip empty lines */
             }
             opts = PMIX_ARGV_SPLIT_WITH_EMPTY_COMPAT(line, ' ');
@@ -1379,6 +1392,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                             pmix_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
                                            line);
                             free(line);
+                            free(p1);
                             PMIX_ARGV_FREE_COMPAT(tmp);
                             PMIX_ARGV_FREE_COMPAT(opts);
                             PMIX_ARGV_FREE_COMPAT(cache);

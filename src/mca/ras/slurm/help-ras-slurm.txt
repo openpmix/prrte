@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2024      Nanook Consulting  All rights reserved.
+# Copyright (c) 2024-2025 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -47,37 +47,13 @@ However, an error was encountered when trying to parse the following variable:
 
 This is a fatal error.
 #
-[slurm-dyn-alloc-timeout]
-We attempted to obtain a dynamic allocation from Slurm, but
-contact with the Slurm control daemon timed out. Please check
-that the Slurm dynamic allocation plug-in is properly operating.
-#
-[slurm-dyn-alloc-failed]
+[tainted-envar]
+While trying to determine what resources are available, the SLURM
+resource allocator expects to find the following environment variable:
 
-  Allocation request: %s
-#
-[dyn-alloc-no-config]
-Dynamic allocation was enabled, but no Slurm configuration
-file was given. Please provide the required configuration file.
-#
-[host-not-resolved]
-The Slurm control host could not be resolved.
+  Envar:  %s
 
-  Host: %s
-
-Please check the Slurm configuration and try again.
-#
-[connection-failed]
-Connection to the Slurm controller failed:
-
-  Host: %s
-  Port: %d
-
-Please check the Slurm configuration and try again.
-#
-[config-file-not-found]
-The Slurm configuration file was not found.
-
-  File: %s
-
-Please check the filename and path and try again.
+The variable was found, but a length check has failed, indicating that
+the envar is more than %d characters long. This indicates that the envar
+may be tainted. We will therefore not print it out. However, if you check
+and feel it is valid, then please adjust the length limit and try again.

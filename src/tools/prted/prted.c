@@ -191,8 +191,7 @@ int main(int argc, char *argv[])
     pmix_data_buffer_t pbuf, *wbuf;
     pmix_byte_object_t pbo;
     int8_t flag;
-    uint8_t naliases, ni;
-    char **nonlocal = NULL, *personality;
+    char **nonlocal, *aliases, *personality;
     int n;
     pmix_value_t *vptr;
     char **pargv;
@@ -352,13 +351,16 @@ int main(int argc, char *argv[])
         prte_state_base.parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);
         close(wait_pipe[0]);
+    } else {
+        // the daemon_init_callback fn already setsid, so don't
+        // do it twice!
+    #if defined(HAVE_SETSID)
+        /* see if we were directed to separate from current session */
+        if (pmix_cmd_line_is_taken(&results, PRTE_CLI_SET_SID)) {
+            setsid();
+        }
+    #endif
     }
-#if defined(HAVE_SETSID)
-    /* see if we were directed to separate from current session */
-    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_SET_SID)) {
-        setsid();
-    }
-#endif
 
     /* ensure we silence any compression warnings */
     PMIX_SETENV_COMPAT("PMIX_MCA_compress_base_silence_warning", "1", true, &environ);
@@ -377,6 +379,8 @@ int main(int argc, char *argv[])
         PRTE_ERROR_LOG(ret);
         return ret;
     }
+    // get the daemon job object
+    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
 
     /* bind ourselves if so directed */
     if (NULL != prte_daemon_cores) {
@@ -384,11 +388,13 @@ int main(int argc, char *argv[])
         hwloc_obj_t pu;
         hwloc_cpuset_t ours, res;
         int core;
+        bool physical;
 
         /* could be a collection of comma-delimited ranges, so
          * use our handy utility to parse it
          */
         pmix_util_parse_range_options(prte_daemon_cores, &cores);
+        physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
         if (NULL != cores) {
             ours = hwloc_bitmap_alloc();
             hwloc_bitmap_zero(ours);
@@ -411,7 +417,7 @@ int main(int argc, char *argv[])
             if (!hwloc_bitmap_iszero(ours)) {
                 (void) hwloc_set_cpubind(prte_hwloc_topology, ours, 0);
                 if (prte_debug_daemons_flag) {
-                    tmp = prte_hwloc_base_cset2str(ours, false, prte_hwloc_topology);
+                    tmp = prte_hwloc_base_cset2str(ours, false, physical, prte_hwloc_topology);
                     pmix_output(0, "Daemon %s is bound to cores %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), tmp);
                     free(tmp);
@@ -569,32 +575,30 @@ int main(int argc, char *argv[])
     }
 
     /* include any non-loopback aliases for this node */
+    nonlocal = NULL;
     for (n = 0; NULL != prte_process_info.aliases[n]; n++) {
-        if (0 != strcmp(prte_process_info.aliases[n], "localhost")
-            && 0 != strcmp(prte_process_info.aliases[n], "127.0.0.1")
-            && 0 != strcmp(prte_process_info.aliases[n], prte_process_info.nodename)) {
+        if (0 != strcmp(prte_process_info.aliases[n], "localhost") &&
+            0 != strcmp(prte_process_info.aliases[n], "127.0.0.1") &&
+            0 != strcmp(prte_process_info.aliases[n], prte_process_info.nodename)) {
             PMIX_ARGV_APPEND_NOSIZE_COMPAT(&nonlocal, prte_process_info.aliases[n]);
         }
     }
-    naliases = PMIX_ARGV_COUNT_COMPAT(nonlocal);
-    prc = PMIx_Data_pack(NULL, buffer, &naliases, 1, PMIX_UINT8);
+    if (NULL == nonlocal) {
+        // no aliases to report
+        aliases = NULL;
+    } else {
+        aliases = PMIx_Argv_join(nonlocal, ',');
+    }
+    prc = PMIx_Data_pack(NULL, buffer, &aliases, 1, PMIX_STRING);
+    if (NULL != aliases) {
+        free(aliases);
+    }
+    PMIX_ARGV_FREE_COMPAT(nonlocal);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(buffer);
-        PMIX_ARGV_FREE_COMPAT(nonlocal);
         goto DONE;
     }
-    for (ni = 0; ni < naliases; ni++) {
-        prc = PMIx_Data_pack(NULL, buffer, &nonlocal[ni], 1, PMIX_STRING);
-        if (PMIX_SUCCESS != prc) {
-            PMIX_ERROR_LOG(prc);
-            PMIX_DATA_BUFFER_RELEASE(buffer);
-            PMIX_ARGV_FREE_COMPAT(nonlocal);
-            goto DONE;
-        }
-    }
-    PMIX_ARGV_FREE_COMPAT(nonlocal);
-
     prc = PMIx_Data_pack(NULL, buffer, &prte_topo_signature, 1, PMIX_STRING);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);

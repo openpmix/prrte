@@ -125,7 +125,8 @@ int prte_ess_base_bootstrap(void)
                            prte_process_info.nodename, path, line);
             free(path);
             fclose(fp);
-            return PRTE_ERR_SILENT;
+            rc = PRTE_ERR_SILENT;
+            goto cleanup;
         }
         *ptr = '\0';
         if (0 == strlen(line)) {   // missing the field name
@@ -135,34 +136,66 @@ int prte_ess_base_bootstrap(void)
                            prte_process_info.nodename, path, ptr);
             free(path);
             fclose(fp);
-            return PRTE_ERR_SILENT;
+            rc = PRTE_ERR_SILENT;
+            goto cleanup;
         }
         ++ptr;
-        if (NULL == ptr) {    // missing the value
+        if ('\0' == *ptr) {    // missing the value
             pmix_show_help("help-prte-runtime.txt", "bootstrap-missing-value", true,
                            prte_process_info.nodename, path, line);
             free(path);
             fclose(fp);
-            return PRTE_ERR_SILENT;
+            rc = PRTE_ERR_SILENT;
+            goto cleanup;
         }
+
         /* identify and cache the option */
         if (0 == strcmp(line, "ClusterName")) {
+            if (NULL != cluster) {
+                free(cluster);
+            }
             cluster = strdup(ptr);
+
         } else if (0 == strcmp(line, "DVMControllerHost")) {
+            if (NULL != ctrlhost) {
+                free(ctrlhost);
+            }
             ctrlhost = strdup(ptr);
+
         } else if (0 == strcmp(line, "DVMControllerPort")) {
             ctrlport = strtoul(ptr, NULL, 10);
+
         } else if (0 == strcmp(line, "PRTEDPort")) {
             prtedport = strtoul(ptr, NULL, 10);
+
         } else if (0 == strcmp(line, "DVMNodes")) {
+            if (NULL != dvmnodes) {
+                free(dvmnodes);
+            }
             dvmnodes = strdup(ptr);
+
         } else if (0 == strcmp(line, "DVMTempDir")) {
+            if (NULL != dvmtmpdir) {
+                free(dvmtmpdir);
+            }
             dvmtmpdir = strdup(ptr);
+
         } else if (0 == strcmp(line, "SessionTmpDir")) {
+            if (NULL != sessiontmpdir) {
+                free(sessiontmpdir);
+            }
             sessiontmpdir = strdup(ptr);
+
         } else if (0 == strcmp(line, "ControllerLogPath")) {
+            if (NULL != ctrllogpath) {
+                free(ctrllogpath);
+            }
             ctrllogpath = strdup(ptr);
+
         } else if (0 == strcmp(line, "PRTEDLogPath")) {
+            if (NULL != prtedlogpath) {
+                free(prtedlogpath);
+            }
             prtedlogpath = strdup(ptr);
         }
         free(line);
@@ -210,6 +243,9 @@ int prte_ess_base_bootstrap(void)
 cleanup:
     if (NULL != cluster) {
         free(cluster);
+    }
+    if (NULL != ctrlhost) {
+        free(ctrlhost);
     }
     if (NULL != dvmnodes) {
         free(dvmnodes);
@@ -376,7 +412,7 @@ static pmix_status_t regex_extract_nodes(char *regexp, char ***names)
     free(orig);
 
     /* All done */
-    return ret;
+    return PRTE_SUCCESS;
 }
 
 /*

@@ -106,22 +106,6 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     gid = getegid();
     topo.source = "hwloc";
 
-    /* pass our nspace/rank */
-    PMIX_INFO_LIST_ADD(ret, info, PMIX_SERVER_NSPACE, prte_process_info.myproc.nspace, PMIX_STRING);
-    if (PMIX_SUCCESS != ret) {
-        PMIX_ERROR_LOG(ret);
-        PMIX_INFO_LIST_RELEASE(info);
-        rc = prte_pmix_convert_status(ret);
-        return rc;
-    }
-    PMIX_INFO_LIST_ADD(ret, info, PMIX_SERVER_RANK, &prte_process_info.myproc.rank, PMIX_PROC_RANK);
-    if (PMIX_SUCCESS != ret) {
-        PMIX_ERROR_LOG(ret);
-        PMIX_INFO_LIST_RELEASE(info);
-        rc = prte_pmix_convert_status(ret);
-        return rc;
-    }
-
     /* pass the session ID */
     ui32_ptr = &ui32;
     if(prte_get_attribute(&jdata->attributes, PRTE_JOB_SESSION_ID, (void **) &ui32_ptr, PMIX_UINT32)){
@@ -427,11 +411,11 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                 }
             }
             pset->num_members = pmix_list_get_size(&members);
-            if (0 < (i = pmix_list_get_size(&members))) {
-                PMIX_DATA_ARRAY_CONSTRUCT(&darray, i, PMIX_PROC);
+            if (0 < pset->num_members) {
+                PMIX_DATA_ARRAY_CONSTRUCT(&darray, pset->num_members, PMIX_PROC);
                 procptr = (pmix_proc_t*)darray.array;
                 k = 0;
-                pset->members = (pmix_proc_t *)malloc(i * sizeof (pmix_proc_t));
+                pset->members = (pmix_proc_t *)malloc(pset->num_members * sizeof (pmix_proc_t));
                 PMIX_LIST_FOREACH(nm, &members, prte_namelist_t) {
                     PMIX_LOAD_PROCID(&procptr[k], nm->name.nspace, nm->name.rank);
                     PMIX_LOAD_PROCID(&pset->members[k], nm->name.nspace, nm->name.rank);
@@ -439,6 +423,11 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                 }
                 PMIX_INFO_LIST_ADD(ret, iarray, PMIX_PSET_MEMBERS, &darray, PMIX_DATA_ARRAY);
                 PMIX_DATA_ARRAY_DESTRUCT(&darray);
+                // let the PMIx server know
+                ret = PMIx_server_define_process_set(pset->members, pset->num_members, pset->name);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                }
             }
             PMIX_LIST_DESTRUCT(&members);
         }
@@ -734,29 +723,314 @@ static void opcbfunc(pmix_status_t status, void *cbdata)
 }
 
 /* add any info that the tool couldn't self-assign */
-int prte_pmix_server_register_tool(pmix_nspace_t nspace)
+int prte_pmix_server_register_tool(pmix_server_req_t *cd)
 {
     pmix_status_t ret;
     prte_pmix_lock_t lock;
     int rc;
-    prte_pmix_tool_t *tl;
+    uint32_t u32;
+    uint16_t u16;
+    prte_job_t *jdata;
+    prte_app_context_t *app;
+    prte_proc_t *proc;
+    prte_node_t *node;
+    void *ilist, *joblist;
+    pmix_data_array_t darray;
+    pmix_info_t *pinfo;
+    size_t ninfo;
 
-    /* record this tool */
-    tl = PMIX_NEW(prte_pmix_tool_t);
-    PMIX_LOAD_PROCID(&tl->name, nspace, 0);
-    pmix_list_append(&prte_pmix_server_globals.tools, &tl->super);
+    // see if we already did this
+    jdata = prte_get_job_data_object(cd->target.nspace);
+    if (NULL != jdata) {
+        // we did
+        return PMIX_SUCCESS;
+    }
 
+    // create a job tracker for it
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, cd->target.nspace);
+    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
+    rc = prte_set_job_data_object(jdata);
+    app = PMIX_NEW(prte_app_context_t);
+    app->argv = PMIx_Argv_split(cd->cmdline, ' ');
+    app->app = strdup(app->argv[0]);
+    app->idx = 0;
+    app->num_procs = 1;
+    app->first_rank = 0;
+    pmix_pointer_array_set_item(jdata->apps, 0, app);
+    jdata->num_apps++;
+    proc = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&proc->name, cd->target.nspace, 0);
+    proc->pid = cd->pid;
+    proc->state = PRTE_PROC_STATE_RUNNING;
+    pmix_pointer_array_set_item(jdata->procs, 0, proc);
+    // find the node it is on
+    node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, prte_process_info.myproc.rank);
+    if (NULL == node) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
+    }
+    PMIX_RETAIN(node);
+    proc->node = node;
+    jdata->num_procs = 1;
+
+    // construct the data to register
+    joblist = PMIx_Info_list_start();
+    PMIX_INFO_LIST_ADD(ret, joblist, PMIX_JOBID, jdata->nspace, PMIX_STRING);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    u32 = 1;
+    /* pass the number of nodes in the job */
+    PMIX_INFO_LIST_ADD(ret, joblist, PMIX_NUM_NODES, &u32, PMIX_UINT32);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+
+    /* job size */
+    PMIX_INFO_LIST_ADD(ret, joblist, PMIX_JOB_SIZE, &u32, PMIX_UINT32);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+
+    /* number of apps in this job */
+    PMIX_INFO_LIST_ADD(ret, joblist, PMIX_JOB_NUM_APPS, &u32, PMIX_UINT32);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+
+
+    // create the node info array
+    ilist = PMIx_Info_list_start();
+    /* start with the hostname */
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_HOSTNAME, prte_process_info.nodename, PMIX_STRING);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    /* add local size for this job */
+    u32 = 1;
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_LOCAL_SIZE, &u32, PMIX_UINT32);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    /* pass the local ldr */
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_LOCALLDR, &cd->target.rank, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    /* add to the main payload */
+    PMIX_INFO_LIST_CONVERT(ret, ilist, &darray);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    PMIX_INFO_LIST_ADD(ret, joblist, PMIX_NODE_INFO_ARRAY, &darray, PMIX_DATA_ARRAY);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    PMIX_DATA_ARRAY_DESTRUCT(&darray);
+    PMIX_INFO_LIST_RELEASE(ilist);
+
+
+    // create the app info array
+    ilist = PMIx_Info_list_start();
+    /* start with the app number */
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_APPNUM, &app->idx, PMIX_UINT32);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    /* add the app size */
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_APP_SIZE, &app->num_procs, PMIX_UINT32);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    /* add the app leader */
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_APPLDR, &app->first_rank, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    /* add the cmd line */
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_APP_ARGV, cd->cmdline, PMIX_STRING);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    /* add to the main payload */
+    PMIX_INFO_LIST_CONVERT(ret, ilist, &darray);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    PMIX_INFO_LIST_ADD(ret, joblist, PMIX_APP_INFO_ARRAY, &darray, PMIX_DATA_ARRAY);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    PMIX_DATA_ARRAY_DESTRUCT(&darray);
+    PMIX_INFO_LIST_RELEASE(ilist);
+
+
+    // create the proc info array
+    ilist = PMIx_Info_list_start();
+    /* must start with rank */
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_RANK, &proc->name.rank, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    /* appnum */
+    u32 = 0;
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_APPNUM, &u32, PMIX_UINT32);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    /* app rank */
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_APP_RANK, &proc->name.rank, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    /* local rank */
+    u16 = 0;
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_LOCAL_RANK, &u16, PMIX_UINT16);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    /* node rank */
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_NODE_RANK, &u16, PMIX_UINT16);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    /* node ID */
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_NODEID, &PRTE_PROC_MY_NAME->rank, PMIX_UINT32);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    /* add to the main payload */
+    PMIX_INFO_LIST_CONVERT(ret, ilist, &darray);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    PMIX_INFO_LIST_ADD(ret, joblist, PMIX_PROC_INFO_ARRAY, &darray, PMIX_DATA_ARRAY);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    PMIX_DATA_ARRAY_DESTRUCT(&darray);
+    PMIX_INFO_LIST_RELEASE(ilist);
+
+
+    /* mark the job as registered */
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_NSPACE_REGISTERED, PRTE_ATTR_LOCAL, NULL,
+                       PMIX_BOOL);
+
+
+    /* register it */
+    PMIX_INFO_LIST_CONVERT(ret, joblist, &darray);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(joblist);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+    pinfo = (pmix_info_t*)darray.array;
+    ninfo = darray.size;
+    PMIX_INFO_LIST_RELEASE(joblist);
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    ret = PMIx_server_register_nspace(nspace, 1, NULL, 0,
+    ret = PMIx_server_register_nspace(cd->target.nspace, 1,
+                                      pinfo, ninfo,
                                       opcbfunc, &lock);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         rc = prte_pmix_convert_status(ret);
         PRTE_PMIX_DESTRUCT_LOCK(&lock);
+        PMIX_INFO_FREE(pinfo, ninfo);
         return rc;
     }
     PRTE_PMIX_WAIT_THREAD(&lock);
     rc = lock.status;
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
+    PMIX_INFO_FREE(pinfo, ninfo);
     return rc;
 }

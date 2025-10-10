@@ -325,6 +325,13 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                 return PRTE_ERR_SILENT;
             }
             if (NULL == jdata) {
+                if (NULL != prte_rmaps_base.file) {
+                    // cannot specify it twice
+                    pmix_show_help("help-prte-rmaps-base.txt", "multiply-defined", true, "mapping policy",
+                                   "FILE", prte_rmaps_base.file, ck2[i]);
+                    PMIX_ARGV_FREE_COMPAT(ck2);
+                    return PRTE_ERR_SILENT;
+                }
                 prte_rmaps_base.file = strdup(&ck2[i][5]);
             } else {
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_FILE, PRTE_ATTR_GLOBAL,
@@ -542,7 +549,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         cptr = strdup(ck[0]);
         *ptr = '='; // restore the option
         ++ptr;
-        if (NULL == ptr) {
+        if ('\0' == *ptr) {
             /* malformed option */
             pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
                            true, "mapping", ck[0]);
@@ -651,9 +658,6 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                            true, "mapping", ck[0]);
             PMIX_ARGV_FREE_COMPAT(ck);
             free(cptr);
-            if (NULL != val) {
-                free(val);
-            }
             return PRTE_ERR_SILENT;
         }
         /* Verify the list is composed of comma-delimited ranges */
@@ -671,6 +675,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                 if (NULL != val) {
                     free(val);
                 }
+                return PRTE_ERR_SILENT;
              }
              for (n=0; NULL != range[n]; n++) {
                 (void)strtol(range[n], &parm_delimiter, 10);

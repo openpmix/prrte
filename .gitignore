@@ -136,6 +136,7 @@ examples/pset
 examples/nodeid
 examples/client-threaded
 examples/dynamic-dep
+examples/abort
 
 src/sys/powerpc/atomic-32.s
 src/sys/powerpc/atomic-64.s

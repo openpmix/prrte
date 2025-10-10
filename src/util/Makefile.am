@@ -45,8 +45,6 @@ EXTRA_DIST = \
 
 headers = \
         attr.h \
-        bipartite_graph.h \
-        bipartite_graph_internal.h \
         bit_ops.h \
         prte_cmd_line.h \
         crc.h \
@@ -65,10 +63,9 @@ headers = \
         sys_limits.h \
         uri.h
 
-lib@PRTE_BINARY_PREFIX@prrteutil_la_SOURCES = \
+sources = \
         $(headers) \
         attr.c \
-        bipartite_graph.c \
         crc.c \
         daemon_init.c \
         dash_host/dash_host.c \
@@ -86,12 +83,25 @@ lib@PRTE_BINARY_PREFIX@prrteutil_la_SOURCES = \
         uri.c \
         prte_show_help_content.c
 
-libprrteutil_la_SOURCES = $(headers) $(sources)
+lib@PRTE_BINARY_PREFIX@prrteutil_la_SOURCES = $(headers) $(sources)
 
 lib@PRTE_BINARY_PREFIX@prrteutil_la_LIBADD = \
         hostfile/lib@PRTE_BINARY_PREFIX@prrteutilhostfile.la
 lib@PRTE_BINARY_PREFIX@prrteutil_la_DEPENDENCIES = \
         hostfile/lib@PRTE_BINARY_PREFIX@prrteutilhostfile.la
+
+prte_show_help_content.c: prte-convert-help.py
+if PRTE_PICKY_COMPILERS
+	$(PRTE_V_GEN) $(PYTHON) $(abs_srcdir)/prte-convert-help.py \
+		--root $(abs_top_srcdir) \
+		--out prte_show_help_content.c \
+		--purge
+else
+	$(PRTE_V_GEN) $(PYTHON) $(abs_srcdir)/prte-convert-help.py \
+		--root $(abs_top_srcdir) \
+		--out prte_show_help_content.c
+endif
+
 
 prte_show_help_content.c: prte-convert-help.py
 if PRTE_PICKY_COMPILERS

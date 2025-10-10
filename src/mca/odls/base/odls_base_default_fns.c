@@ -655,8 +655,8 @@ next:
         /* add any cache'd values to the front of the job attributes  */
         for (m = 0; m < ninfo; m++) {
             if (0 == strcmp(info[m].key, PMIX_SET_ENVAR)) {
-                envt.envar = strdup(info[m].value.data.envar.envar);
-                envt.value = strdup(info[m].value.data.envar.value);
+                envt.envar = info[m].value.data.envar.envar;
+                envt.value = info[m].value.data.envar.value;
                 envt.separator = info[m].value.data.envar.separator;
                 prte_prepend_attribute(&jdata->attributes, PRTE_JOB_SET_ENVAR, PRTE_ATTR_GLOBAL,
                                        &envt, PMIX_ENVAR);
@@ -708,9 +708,8 @@ next:
                 goto REPORT_ERROR;
             }
             /* connect the proc to its node object */
-            if (NULL
-                == (dmn = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs,
-                                                                      pptr->parent))) {
+            dmn = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs, pptr->parent);
+            if (NULL == dmn) {
                 PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                 rc = PRTE_ERR_NOT_FOUND;
                 goto REPORT_ERROR;
@@ -753,6 +752,11 @@ next:
             }
             /* mark that this app_context is being used on this node */
             app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, pptr->app_idx);
+            if (NULL == app) {
+                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                rc = PRTE_ERR_NOT_FOUND;
+                goto REPORT_ERROR;
+            }
             PRTE_FLAG_SET(app, PRTE_APP_FLAG_USED_ON_NODE);
         }
     }
@@ -1108,6 +1112,9 @@ static void process_envars(prte_job_t *jdata,
     bool found;
 
     PMIX_LIST_FOREACH(attr, &jdata->attributes, prte_attribute_t) {
+        if (PMIX_ENVAR != attr->data.type) {
+            continue;
+        }
         val = &attr->data;
         envar = &val->data.envar;
         if (attr->key == PRTE_JOB_SET_ENVAR) {
@@ -1182,6 +1189,9 @@ static void process_envars(prte_job_t *jdata,
 
     // app trumps job, so do it after the job
     PMIX_LIST_FOREACH(attr, &app->attributes, prte_attribute_t) {
+        if (PMIX_ENVAR != attr->data.type) {
+            continue;
+        }
         val = &attr->data;
         envar = &val->data.envar;
         if (attr->key == PRTE_APP_SET_ENVAR) {
@@ -2147,6 +2157,11 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
         child->rml_uri = NULL;
     }
     app = (prte_app_context_t *) pmix_pointer_array_get_item(jobdat->apps, child->app_idx);
+    if (NULL == app) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        rc = PRTE_ERR_NOT_FOUND;
+        goto CLEANUP;
+    }
 
     /* setup the path */
     if (PRTE_SUCCESS != (rc = setup_path(app, &wdir))) {

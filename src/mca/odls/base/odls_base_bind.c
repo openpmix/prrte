@@ -64,6 +64,7 @@ static void report_binding(prte_job_t *jobdat, int rank)
     char *tmp1;
     hwloc_cpuset_t mycpus;
     bool use_hwthread_cpus;
+    bool physical;
 
     /* check for type of cpu being used */
     if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
@@ -76,7 +77,8 @@ static void report_binding(prte_job_t *jobdat, int rank)
     if (hwloc_get_cpubind(prte_hwloc_topology, mycpus, HWLOC_CPUBIND_PROCESS) < 0) {
         pmix_output(0, "Rank %d is not bound", rank);
     } else {
-        tmp1 = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, prte_hwloc_topology);
+        physical = prte_get_attribute(&jobdat->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
+        tmp1 = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, physical, prte_hwloc_topology);
         pmix_output(0, "Rank %d bound to %s", rank, tmp1);
         free(tmp1);
     }
@@ -275,11 +277,10 @@ void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd)
         hwloc_bitmap_free(cpuset);
         /* if we got an error and this wasn't a default binding policy, then report it */
         if (rc < 0 && PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding)) {
-            char *tmp = NULL;
             if (errno == ENOSYS) {
-                msg = "hwloc indicates cpu binding not supported";
+                msg = strdup("hwloc indicates cpu binding not supported");
             } else if (errno == EXDEV) {
-                msg = "hwloc indicates cpu binding cannot be enforced";
+                msg = strdup("hwloc indicates cpu binding cannot be enforced");
             } else {
                 pmix_asprintf(&msg, "hwloc_set_cpubind returned \"%s\" for bitmap \"%s\"",
                               prte_strerror(rc), child->cpuset);
@@ -291,19 +292,13 @@ void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd)
                                      "binding generic error",
                                      prte_process_info.nodename, context->app, msg,
                                      __FILE__, __LINE__);
+                free(msg);  // silence static analyzer warning
             } else {
                 send_warn_show_help(write_fd, "help-prte-odls-default.txt",
                                     "not bound", prte_process_info.nodename,
                                     context->app, msg, __FILE__, __LINE__);
-                if (NULL != tmp) {
-                    free(tmp);
-                    free(msg);
-                }
-                return;
-            }
-            if (NULL != tmp) {
-                free(tmp);
                 free(msg);
+                return;
             }
         }
 

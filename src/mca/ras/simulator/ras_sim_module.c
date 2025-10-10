@@ -5,7 +5,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  *
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -168,9 +168,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     if (NULL != slot_cnt) {
         PMIX_ARGV_FREE_COMPAT(slot_cnt);
     }
-    if (NULL != node_cnt) {
-        PMIX_ARGV_FREE_COMPAT(node_cnt);
-    }
+    PMIX_ARGV_FREE_COMPAT(node_cnt);
     if (NULL != job_cpuset) {
         free(job_cpuset);
     }
