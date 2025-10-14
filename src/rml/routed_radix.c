@@ -70,13 +70,23 @@ static void shrink_ranks(pmix_data_array_t* arr){
 }
 
 pmix_rank_t prte_rml_get_route(pmix_rank_t target){
-    pmix_rank_t ret;
+    pmix_rank_t ret = PMIX_RANK_INVALID;
 
     if (PRTE_PROC_MY_NAME->rank == target) {
         ret = target;
     } else if(!radix_subtree_contains(&prte_rml_base.cur_node, target)){
         ret = PRTE_PROC_MY_PARENT->rank;
     } else {
+        // This could still be an ancestor promoted up out of my current subtree
+        pmix_rank_t* ancestors = (pmix_rank_t*)prte_rml_base.ancestors.array;
+        for(size_t i = 0; i < prte_rml_base.ancestors.size; i++){
+            if(ancestors[i] == target){
+                ret = PRTE_PROC_MY_PARENT->rank;
+            }
+        }
+    }
+
+    if(PMIX_RANK_INVALID == ret) {
         pmix_rank_t idx = radix_subtree_index(&prte_rml_base.cur_node, target);
         if(idx >= prte_rml_base.children.size){
             // this is a failed rank that we can't get any closer to
@@ -254,6 +264,7 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global){
 
     if(status.prev_ancestors.size != prte_rml_base.ancestors.size){
         status.ancestors_changed = true;
+        status.promoted = true;
     } else {
         for(size_t i = 0; i < status.prev_ancestors.size; i++){
             pmix_rank_t prev = ((pmix_rank_t*)status.prev_ancestors.array)[i];
@@ -285,23 +296,49 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global){
         }
     }
 
+    if(status.parent_changed){
+        PMIX_OUTPUT_VERBOSE((1, prte_rml_base.routed_output,
+                             "%s routed:radix: recovering with parent update"
+                             " %s->%s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             PRTE_VPID_PRINT(status.prev_parent),
+                             PRTE_VPID_PRINT(prte_rml_base.lifeline)));
+    }
+    if(status.children_changed){
+        pmix_rank_t* c = (pmix_rank_t*) prte_rml_base.children.array;
+        size_t n_c = prte_rml_base.children.size;
+        pmix_rank_t* pc = (pmix_rank_t*) status.prev_children.array;
+        size_t n_pc = status.prev_children.size;
+        for(size_t i = 0; i < n_c; i++){
+            PMIX_OUTPUT_VERBOSE((1, prte_rml_base.routed_output,
+                                 "%s routed:radix: recovering with child update"
+                                 " %s->%s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 PRTE_VPID_PRINT(pc[i]),
+                                 PRTE_VPID_PRINT(c[i])));
+        }
+        for(size_t i = n_c; i < n_pc; i++){
+            PMIX_OUTPUT_VERBOSE((1, prte_rml_base.routed_output,
+                                 "%s routed:radix: recovering with child update"
+                                 " %s->%s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 PRTE_VPID_PRINT(pc[i]),
+                                 PRTE_VPID_PRINT(PMIX_RANK_INVALID)));
+        }
+    }
+    if(status.promoted){
+        PMIX_OUTPUT_VERBOSE((1, prte_rml_base.routed_output,
+                             "%s routed:radix: recovering with new depth"
+                             " %lu->%lu", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             status.prev_ancestors.size,
+                             prte_rml_base.ancestors.size));
+
+    }
+
     // Notify components
     const prte_rml_recovery_status_t* s = &status;
     prte_rml_fault_handler(s);
     // TODO: Should this fn become the central point responsible for setting
     // failed procs to PRTE_PROC_STATE_COMM_FAILED?
-    // TODO: Any reason to add a 'fault_handler' function to the errmgr MCA?
     prte_grpcomm.fault_handler(s);
     prte_filem  .fault_handler(s);
-    // TODO: Fault handlers for less operation-oriented components like iof.
-    // Should be easier to manage reliable P2P message replay after implementing
-    // global fault acknowledgement w/ consistent ordering. Probably something
-    // like marking messages w/ an 'epoch' that is just the global fault count
-    // so we ignore any old messages that just took longer to arrive.
-    // Some details to consider w.r.t ensuring correct ordering, but we can
-    // probably just make a generic PRTE_RML_SEND_RELIABLY macro to handle all
-    // that. Maybe offload the actual code to the oob? A new MCA seems like too
-    // much
 
     PMIX_DESTRUCT(&status);
 }

@@ -80,6 +80,23 @@ PRTE_EXPORT int prte_rml_send_buffer_nb(pmix_rank_t rank,
     } while(0)
 
 /**
+ * As prte_rml_send_buffer_nb, but attempts to deliver message even after daemon
+ * failures
+ */
+PRTE_EXPORT int prte_rml_send_buffer_reliable_nb(pmix_rank_t rank,
+                                                 pmix_data_buffer_t *buffer,
+                                                 prte_rml_tag_t tag);
+
+#define PRTE_RML_RELIABLE_SEND(_r, r, b, t)                       \
+    do {                                                          \
+        pmix_output_verbose(2, prte_rml_base.rml_output,          \
+                            "RML-RELIABLE-SEND(%s:%d): %s:%s:%d", \
+                            PMIX_RANK_PRINT(r), t,                \
+                            __FILE__, __func__, __LINE__);        \
+        (_r) = prte_rml_send_buffer_reliable_nb(r, b, t);         \
+    } while(0)
+
+/**
  * Purge the RML/OOB of contact info and pending messages
  * to/from a specified process. Used when a process aborts
  */
@@ -203,6 +220,14 @@ PRTE_EXPORT pmix_rank_t prte_rml_get_route(pmix_rank_t target);
 PRTE_EXPORT int prte_rml_get_subtree_index(pmix_rank_t target);
 PRTE_EXPORT bool prte_rml_is_node_up(pmix_rank_t node);
 
+#define PRTE_RML_ACTIVATE_MESSAGE(m)                                           \
+    do {                                                                       \
+        /* setup the event */                                                  \
+        prte_event_set(prte_event_base, &(m)->ev, -1, PRTE_EV_WRITE,           \
+                       prte_rml_base_process_msg, (m));                        \
+        prte_event_active(&(m)->ev, PRTE_EV_WRITE, 1);                         \
+    } while (0);
+
 #define PRTE_RML_POST_MESSAGE(p, t, s, b, l)                                                \
     do {                                                                                    \
         prte_rml_recv_t *_msg;                                                              \
@@ -222,18 +247,7 @@ PRTE_EXPORT bool prte_rml_is_node_up(pmix_rank_t node);
         if (PMIX_SUCCESS != _rc) {                                                          \
             PMIX_ERROR_LOG(_rc);                                                            \
         }                                                                                   \
-        /* setup the event */                                                               \
-        prte_event_set(prte_event_base, &_msg->ev, -1, PRTE_EV_WRITE,                       \
-                       prte_rml_base_process_msg, _msg);                                    \
-        prte_event_active(&_msg->ev, PRTE_EV_WRITE, 1);                                     \
-    } while (0);
-
-#define PRTE_RML_ACTIVATE_MESSAGE(m)                                                            \
-    do {                                                                                        \
-        /* setup the event */                                                                   \
-        prte_event_set(prte_event_base, &(m)->ev, -1, PRTE_EV_WRITE,                            \
-                       prte_rml_base_process_msg, (m));                                         \
-        prte_event_active(&(m)->ev, PRTE_EV_WRITE, 1);                                          \
+        PRTE_RML_ACTIVATE_MESSAGE(_msg);                                                    \
     } while (0);
 
 #define PRTE_RML_SEND_COMPLETE(m)                                                             \

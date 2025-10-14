@@ -1119,9 +1119,11 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
      * unavoidable when a node in the communication tree dies, so safely
      * replaying messages must be handled at a higher level.
      */
+    int err = prte_rml_is_node_up(peer->name.rank) ?
+        PRTE_ERR_UNREACH : PRTE_ERR_NODE_DOWN;
     prte_oob_tcp_send_t *send, *next;
     PMIX_LIST_FOREACH_SAFE(send, next, &peer->send_queue, prte_oob_tcp_send_t){
-        send->msg->status = PRTE_ERR_UNREACH;
+        send->msg->status = err;
         PRTE_RML_SEND_COMPLETE(send->msg);
         pmix_list_remove_item(&peer->send_queue, &send->super);
         PMIX_RELEASE(send);

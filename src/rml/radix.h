@@ -253,6 +253,7 @@ static radix_node_t radix_right_sibling(const radix_node_t* node){
         sibling.base = PMIX_RANK_INVALID;
     } else {
         sibling.base = node->rank + node->width/prte_rml_base.radix;
+        if(sibling.base >= node->count) sibling.base = PMIX_RANK_INVALID;
     }
     radix_update_rank(&sibling);
     return sibling;

@@ -48,10 +48,9 @@ prte_rml_base_t prte_rml_base = {
     .n_children = 0,
     .ancestors = PMIX_DATA_ARRAY_STATIC_INIT,
     .lifeline = PMIX_RANK_INVALID,
-    .n_dmns = 0
-    // TODO?
-    //.failed_dmns = PMIX_BITMAP_STATIC_INIT,
-    //.global_failed_dmns = PMIX_BITMAP_STATIC_INIT
+    .n_dmns = 0,
+    .failed_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
+    .global_failed_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
 };
 
 static int verbosity = 0;
@@ -225,7 +224,7 @@ void prte_rml_send_callback(int status, pmix_proc_t *peer,
             PRTE_ACTIVATE_PROC_STATE(peer, PRTE_PROC_STATE_NO_PATH_TO_TARGET);
         } else if (PRTE_ERR_ADDRESSEE_UNKNOWN == status) {
             PRTE_ACTIVATE_PROC_STATE(peer, PRTE_PROC_STATE_PEER_UNKNOWN);
-        } else {
+        } else if (PRTE_ERR_NODE_DOWN != status) {
             PRTE_ACTIVATE_PROC_STATE(peer, PRTE_PROC_STATE_UNABLE_TO_SEND_MSG);
         }
     }
