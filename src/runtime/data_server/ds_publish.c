@@ -298,7 +298,7 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
             PMIX_RELEASE(req);
             return rc;
         }
-        PRTE_RML_SEND(rc, req->proxy.rank, reply, PRTE_RML_TAG_DATA_CLIENT);
+        PRTE_RML_RELIABLE_SEND(rc, req->proxy.rank, reply, PRTE_RML_TAG_DATA_CLIENT);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
@@ -325,7 +325,7 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
         }
-        PRTE_RML_SEND(rc, sender->rank, answer, PRTE_RML_TAG_DATA_CLIENT);
+        PRTE_RML_RELIABLE_SEND(rc, sender->rank, answer, PRTE_RML_TAG_DATA_CLIENT);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(answer);
