@@ -5,13 +5,16 @@
 # Copyright (c) 2004-2005 The University of Tennessee and The University
 #                         of Tennessee Research Foundation.  All rights
 #                         reserved.
-# Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
+# Copyright (c) 2004-2009 High Performance Computing Center Stuttgart,
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2019      Intel, Inc.  All rights reserved.
-# Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
+# Copyright (c) 2012-2013 Los Alamos National Security, LLC.
+#                         All rights reserved
+# Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017      IBM Corporation.  All rights reserved.
+# Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -19,22 +22,16 @@
 # $HEADER$
 #
 
-# local files
 headers += \
-    rml/rml.h \
-    rml/rml_types.h \
-    rml/rml_contact.h \
-    rml/radix.h
+      rml/relm/relm.h \
+      rml/relm/state_machine.h \
+      rml/relm/types.h \
+      rml/relm/util.h
 
 libprrte_la_SOURCES += \
-    rml/rml.c \
-    rml/rml_send.c \
-    rml/rml_recv.c \
-    rml/rml_purge.c \
-    rml/rml_base_contact.c \
-    rml/rml_base_msg_handlers.c \
-    rml/rml_fault_handler.c \
-    rml/routed_radix.c
+      rml/relm/relm.c \
+      rml/relm/state_machine.c \
+      rml/relm/types.c \
+      rml/relm/util.c
 
-include rml/oob/Makefile.am
-include rml/relm/Makefile.am
+include rml/relm/base/Makefile.am

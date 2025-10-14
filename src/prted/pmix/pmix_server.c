@@ -1143,7 +1143,7 @@ static void send_error(int status, pmix_proc_t *idreq, pmix_proc_t *remote, int 
     }
 
     /* send the response */
-    PRTE_RML_SEND(prc, remote->rank, reply, PRTE_RML_TAG_DIRECT_MODEX_RESP);
+    PRTE_RML_RELIABLE_SEND(prc, remote->rank, reply, PRTE_RML_TAG_DIRECT_MODEX_RESP);
     if (PRTE_SUCCESS != prc) {
         PRTE_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(reply);
@@ -1206,7 +1206,7 @@ static void _mdxresp(int sd, short args, void *cbdata)
     }
 
     /* send the response */
-    PRTE_RML_SEND(prc, req->proxy.rank, reply, PRTE_RML_TAG_DIRECT_MODEX_RESP);
+    PRTE_RML_RELIABLE_SEND(prc, req->proxy.rank, reply, PRTE_RML_TAG_DIRECT_MODEX_RESP);
     if (PRTE_SUCCESS != prc) {
         PRTE_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(reply);
@@ -1924,7 +1924,7 @@ static void send_alloc_resp(pmix_status_t status,
     }
 
     /* send the response */
-    PRTE_RML_SEND(rc, req->proxy.rank, buf, PRTE_RML_TAG_SCHED_RESP);
+    PRTE_RML_RELIABLE_SEND(rc, req->proxy.rank, buf, PRTE_RML_TAG_SCHED_RESP);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);

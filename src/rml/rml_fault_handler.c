@@ -280,6 +280,9 @@ static void send_failures_notice(const prte_rml_recovery_status_t* status){
     // Build array of failures to pass up to my parent
     pmix_data_array_t arr = PMIX_DATA_ARRAY_STATIC_INIT;
     if(status->parent_changed){
+        // TODO: Include current ancestor list, to ensure new parent understands
+        // that they are my new parent.
+
         // New parent might not be aware of old failures, report all non-global
         // failures in my subtree
         pmix_bitmap_t local_only;

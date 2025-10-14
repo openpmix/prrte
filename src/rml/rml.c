@@ -34,6 +34,7 @@
 #include "src/rml/rml.h"
 #include "src/rml/rml_contact.h"
 #include "src/rml/oob/oob.h"
+#include "src/rml/relm/relm.h"
 
 prte_rml_base_t prte_rml_base = {
     .rml_output = -1,
@@ -103,10 +104,13 @@ void prte_rml_register(void)
         prte_oob_base.output = pmix_output_open(NULL);
         pmix_output_set_verbosity(prte_oob_base.output, verbosity);
     }
+
+    prte_relm_register();
 }
 
 void prte_rml_close(void)
 {
+    prte_relm_close();
     prte_oob_close();
     PMIX_LIST_DESTRUCT(&prte_rml_base.posted_recvs);
     PMIX_LIST_DESTRUCT(&prte_rml_base.unmatched_msgs);
@@ -191,6 +195,7 @@ int prte_rml_open(void)
         PMIX_VALUE_DESTRUCT(&val);
     }
 
+    prte_relm_open();
     return PRTE_SUCCESS;
 }
 

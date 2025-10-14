@@ -883,7 +883,7 @@ static void _toolconn(int sd, short args, void *cbdata)
     }
 
     /* send it to the HNP for processing - might be myself! */
-    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank,
+    PRTE_RML_RELIABLE_SEND(rc, PRTE_PROC_MY_HNP->rank,
                   buf, PRTE_RML_TAG_PLM);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
@@ -1016,7 +1016,7 @@ void pmix_server_log_fn(const pmix_proc_t *client, const pmix_info_t data[], siz
         rc = PMIx_Data_pack(NULL, buf, &dbo, 1, PMIX_BYTE_OBJECT);
         PMIX_BYTE_OBJECT_DESTRUCT(&dbo);
         /* send the result to the HNP */
-        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf,
+        PRTE_RML_RELIABLE_SEND(rc, PRTE_PROC_MY_HNP->rank, buf,
                       PRTE_RML_TAG_LOGGING);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);

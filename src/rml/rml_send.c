@@ -36,6 +36,7 @@
 
 #include "src/rml/rml.h"
 #include "src/rml/oob/oob.h"
+#include "src/rml/relm/relm.h"
 
 int prte_rml_send_buffer_nb(pmix_rank_t rank,
                             pmix_data_buffer_t *buffer,
@@ -94,4 +95,16 @@ int prte_rml_send_buffer_nb(pmix_rank_t rank,
     PRTE_OOB_SEND(snd);
 
     return PRTE_SUCCESS;
+}
+
+int prte_rml_send_buffer_reliable_nb(pmix_rank_t rank,
+                                     pmix_data_buffer_t *buffer,
+                                     prte_rml_tag_t tag)
+{
+    if(PRTE_PROC_MY_NAME->rank == rank){
+        // Sends to self don't need reliability
+        return prte_rml_send_buffer_nb(rank, buffer, tag);
+    }
+
+    return prte_relm.reliable_send(rank, buffer, tag);
 }

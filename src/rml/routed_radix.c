@@ -35,6 +35,7 @@
 
 #include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/filem/filem.h"
+#include "src/rml/relm/relm.h"
 
 
 static void resize_ranks(pmix_data_array_t* arr, size_t size){
@@ -339,6 +340,7 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global){
     // failed procs to PRTE_PROC_STATE_COMM_FAILED?
     prte_grpcomm.fault_handler(s);
     prte_filem  .fault_handler(s);
+    prte_relm   .fault_handler(s);
 
     PMIX_DESTRUCT(&status);
 }

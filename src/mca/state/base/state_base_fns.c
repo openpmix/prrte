@@ -406,7 +406,7 @@ void prte_state_base_notify_data_server(pmix_proc_t *target)
     }
 
     /* send the request to the server */
-    PRTE_RML_SEND(rc, prte_pmix_server_globals.server.rank,
+    PRTE_RML_RELIABLE_SEND(rc, prte_pmix_server_globals.server.rank,
                   buf, PRTE_RML_TAG_DATA_SERVER);
     if (PRTE_SUCCESS != rc) {
         PMIX_DATA_BUFFER_RELEASE(buf);

@@ -174,6 +174,10 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 #define PRTE_RML_TAG_GROUP         74
 #define PRTE_RML_TAG_GROUP_RELEASE 75
 
+/* reliable messaging */
+#define PRTE_RML_TAG_RELM_STATE 76
+#define PRTE_RML_TAG_RELM_LINK  77
+
 #define PRTE_RML_TAG_MAX                 100
 
 #define PRTE_RML_TAG_NTOH(t) ntohl(t)

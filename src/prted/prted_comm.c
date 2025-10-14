@@ -572,7 +572,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
         }
         PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
         /* send the data */
-        PRTE_RML_SEND(ret, sender->rank, answer, PRTE_RML_TAG_TOPOLOGY_REPORT);
+        PRTE_RML_RELIABLE_SEND(ret, sender->rank, answer, PRTE_RML_TAG_TOPOLOGY_REPORT);
         if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_RELEASE(answer);
@@ -689,7 +689,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
             free(gstack_exec);
         }
         /* always send our response */
-        PRTE_RML_SEND(ret, PRTE_PROC_MY_HNP->rank, answer, PRTE_RML_TAG_STACK_TRACE);
+        PRTE_RML_RELIABLE_SEND(ret, PRTE_PROC_MY_HNP->rank, answer, PRTE_RML_TAG_STACK_TRACE);
         if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_RELEASE(answer);

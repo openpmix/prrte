@@ -41,9 +41,7 @@
 
 /* internal signature used to uniquely track a particular xcast */
 typedef struct {
-    size_t global_op_id;    // HNP's assigned collective ID, globally unique
-    size_t initiator_op_id; // Initiator's locally-assigned ID
-    pmix_rank_t initiator;
+    size_t op_id;    // HNP's assigned collective ID, globally unique
 } signature_t;
 
 /* internal component object for tracking ongoing operations */
@@ -75,11 +73,7 @@ PMIX_CLASS_DECLARATION(op_t);
 // event handler for prte_grpcomm_direct_xcast to safely access global data
 //   void* = a built op_t*
 static void begin_xcast(int, short, void*);
-// Forward op to the HNP to initiate
-static void launch_op(op_t* op);
-// Returns NULL if not found. Fuzzy search, allowing global_op_id=0 to match
-// any other global_op_id. Handles updating the stored global id and moving from
-// pending_ops to ops based on the search signature
+// Returns NULL if not found
 static op_t* find_op(signature_t *sig);
 // Returns op after constructing & inserting it into our tracking list
 static op_t* insert_forwarded_op(signature_t *sig);
@@ -87,9 +81,9 @@ static op_t* insert_forwarded_op(signature_t *sig);
 static void forward_op(op_t *op);
 // Forward to specific destination
 static void forward_op_to(op_t *op, pmix_rank_t dest);
-// Locally process the message being broadcast
+// Locally process the message being broadcast, if not already done
 static void process_msg(op_t *op);
-// Ack that myself and my full subtree have processed this message
+// Ack that myself and my full subtree have received this message
 static void send_ack(signature_t* sig, pmix_rank_t ack_id);
 // Request an ack after a failure without resending full user message
 static void request_ack(pmix_rank_t from, signature_t* sig, pmix_rank_t ack_id);
@@ -98,13 +92,15 @@ static void finish_op(op_t *op);
 
 // Pack the full xcast message to be forwarded to our children or HNP
 static int pack_forward_msg(pmix_data_buffer_t *buffer, op_t *op);
-// (un)pack components - listed in correct order.
+// (un)pack components
 static int pack_sig     (pmix_data_buffer_t* buffer, signature_t* sig);
 static int unpack_sig   (pmix_data_buffer_t* buffer, signature_t* sig);
 static int pack_ack_id  (pmix_data_buffer_t* buffer, pmix_rank_t* ack_id);
 static int unpack_ack_id(pmix_data_buffer_t* buffer, pmix_rank_t* ack_id);
 static int pack_msg     (pmix_data_buffer_t* buffer, op_t* op);
 static int unpack_msg   (pmix_data_buffer_t* buffer, op_t* op);
+static int pack_bool    (pmix_data_buffer_t* buffer, bool* boolean);
+static int unpack_bool  (pmix_data_buffer_t* buffer, bool* boolean);
 
 int prte_grpcomm_direct_xcast(prte_rml_tag_t tag, pmix_data_buffer_t *msg){
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
@@ -164,40 +160,37 @@ void prte_grpcomm_direct_xcast_recv(
     signature_t sig;
     if(PMIX_SUCCESS != unpack_sig(buffer, &sig)) return;
 
-    pmix_rank_t ack_id;
-    if(PMIX_SUCCESS != unpack_ack_id(buffer, &ack_id)) return;
-
-    PMIX_OUTPUT_VERBOSE((
-        1, prte_grpcomm_base_framework.framework_output,
-        "%s grpcomm:direct:xcast:recv: %lu, initiated by %s with id %lu",
-        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sig.global_op_id,
-        PRTE_VPID_PRINT(sig.initiator), sig.initiator_op_id
-    ));
-
-    if(!sig.global_op_id && !PRTE_PROC_IS_MASTER){
-        // If I'm not HNP, I expect HNP has assigned a global ID
+    if(PRTE_PROC_IS_MASTER){
+        if(sig.op_id){
+            // If I'm HNP, I expect sender has not assigned a global ID
+            PRTE_ERROR_LOG( PRTE_ERR_DUPLICATE_MSG );
+            return;
+        }
+        sig.op_id = ++XCAST.op_id_inited;
+    }
+    if(!sig.op_id){
         PRTE_ERROR_LOG( PRTE_ERR_NOT_INITIALIZED );
         return;
-    } else if(sig.global_op_id && PRTE_PROC_IS_MASTER){
-        // If I'm HNP, I expect sender has not assigned a global ID, so if this
-        // has one they have likely repeated an init after seeing the xcast
-        // start, which shouldn't happen
-        PRTE_ERROR_LOG( PRTE_ERR_DUPLICATE_MSG );
-        return;
+    }
+    if(sig.op_id > XCAST.op_id_inited){
+        XCAST.op_id_inited = sig.op_id;
     }
 
     // If we marked our subtree as completed, but then were promoted, our
-    // subtree is now larger and may not have actually completed everywhere
-    bool assume_incomplete = sig.global_op_id &&
-        sig.global_op_id <= XCAST.op_id_completed_at_promotion;
+    // subtree is now larger and may not have actually completed everywhere.
     // But ops complete in order, so if we have completed anything since our
     // promotion, we know our new subtree has also completed all the older ops
-    assume_incomplete = assume_incomplete &&
-        XCAST.op_id_completed == XCAST.op_id_completed_at_promotion;
+    bool assume_incomplete =
+        sig.op_id <= XCAST.op_id_completed_at_promotion
+        && XCAST.op_id_completed == XCAST.op_id_completed_at_promotion;
 
     // If we're certain our subtree has already completed this, we can just ack
-    bool complete = !assume_incomplete && sig.global_op_id &&
-        sig.global_op_id <= XCAST.op_id_completed;
+    bool complete = !assume_incomplete &&
+        sig.op_id <= XCAST.op_id_completed;
+
+    pmix_rank_t ack_id;
+    if(PMIX_SUCCESS != unpack_ack_id(buffer, &ack_id)) return;
+
     if(complete) {
         send_ack(&sig, ack_id);
         return;
@@ -213,30 +206,23 @@ void prte_grpcomm_direct_xcast_recv(
         }
     }
 
-    if(!op->sig.global_op_id){
-        op->sig.global_op_id = ++XCAST.op_id_global;
-        if(PRTE_PROC_MY_NAME->rank == op->sig.initiator){
-            pmix_list_remove_item(&XCAST.pending_ops, &op->super);
-            pmix_list_append(&XCAST.ops, &op->super);
-        }
-    } else if(PRTE_PROC_IS_MASTER && op->processed) {
-        // Sender confirming op wasn't lost after a failure
-        PMIX_OUTPUT_VERBOSE((
-            1, prte_grpcomm_base_framework.framework_output,
-            "%s grpcomm:direct:xcast:recv: safely ignoring duplicate init",
-            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)
-        ));
-        return;
-    }
-
+    op->ack_id_up = ack_id;
     if(assume_incomplete){
         op->processed = true;
         op->replay_pending_parent = true;
     }
 
-    op->ack_id_up = ack_id;
-    if(op->replay_pending_parent) forward_op(op);
+    if(op->replay_pending_parent){
+        forward_op(op);
+        if(0 == prte_rml_base.n_children) finish_op(op);
+    }
     if(op->processed) return;
+
+    PMIX_OUTPUT_VERBOSE((
+        1, prte_grpcomm_base_framework.framework_output,
+        "%s grpcomm:direct:xcast:recv: new xcast of tag %u with op_id %lu",
+        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), op->msg_tag, sig.op_id
+    ));
 
     // We need to process (invoke the user msg's callback, generally) and
     // forward to our children.
@@ -247,9 +233,11 @@ void prte_grpcomm_direct_xcast_recv(
     if(process_first){
         process_msg(op);
         forward_op(op);
+        if(0 == prte_rml_base.n_children) finish_op(op);
     } else {
         forward_op(op);
         process_msg(op);
+        if(0 == prte_rml_base.n_children) finish_op(op);
     }
 }
 
@@ -259,28 +247,17 @@ void prte_grpcomm_direct_xcast_ack(
 ) {
     PRTE_HIDE_UNUSED_PARAMS(status,tag,cbdata);
 
+    int ret = PMIX_SUCCESS;
+
     signature_t sig;
-    int ret = unpack_sig(buffer, &sig);
-    if(PMIX_SUCCESS != ret){
-        PMIX_ERROR_LOG(ret);
-        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-        return;
-    }
-
     pmix_rank_t ack_id;
-    ret = unpack_ack_id(buffer, &ack_id);
-    if(PMIX_SUCCESS != ret){
-        PMIX_ERROR_LOG(ret);
-        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-        return;
-    }
-
     bool is_request;
-    int cnt = 1;
-    ret = PMIx_Data_unpack(NULL, buffer, &is_request, &cnt, PMIX_BOOL);
+
+    if(PMIX_SUCCESS == ret) ret = unpack_sig(buffer, &sig);
+    if(PMIX_SUCCESS == ret) ret = unpack_ack_id(buffer, &ack_id);
+    if(PMIX_SUCCESS == ret) ret = unpack_bool(buffer, &is_request);
     if(PMIX_SUCCESS != ret){
         PMIX_ERROR_LOG(ret);
-        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         return;
     }
 
@@ -294,7 +271,7 @@ void prte_grpcomm_direct_xcast_ack(
         if(NULL != op){
             // We'll send with the new id once we're done
             op->ack_id_up = ack_id;
-        } else if(sig.global_op_id <= XCAST.op_id_completed){
+        } else if(sig.op_id <= XCAST.op_id_completed){
             // We've finished this one, ack now
             send_ack(&sig, ack_id);
         } else {
@@ -323,16 +300,6 @@ void prte_grpcomm_direct_xcast_fault_handler(
         XCAST.op_id_completed_at_promotion =
             XCAST.op_id_completed;
     }
-    if(status->ancestors_changed){
-        // Anything still pending may have been lost, so relaunch.
-        // Launching is idempotent as long as the op hasn't already
-        // completed when we repeat the launch, so relaunching ops
-        // not yet seen is always safe.
-        op_t* op;
-        PMIX_LIST_FOREACH(op, &XCAST.pending_ops, op_t){
-            launch_op(op);
-        }
-    }
     if(status->parent_changed || status->promoted){
         // Avoid confusing new parent by accidentally acking with
         // the valid ack id. They'll tell us what id to use.
@@ -348,7 +315,13 @@ void prte_grpcomm_direct_xcast_fault_handler(
             (const pmix_rank_t*) prte_rml_base.children.array;
 
         op_t* op;
-        PMIX_LIST_FOREACH(op, &XCAST.ops, op_t){
+        op_t* next_op;
+        PMIX_LIST_FOREACH_SAFE(op, next_op, &XCAST.ops, op_t){
+            if(0 == prte_rml_base.n_children){
+                finish_op(op);
+                continue;
+            }
+
             op->nexpected = prte_rml_base.n_children;
 
             // If this op is currently pending replay, so are all after it.
@@ -391,16 +364,7 @@ static void begin_xcast(int sd, short args, void* cbdata){
     op_t* op = (op_t*) cbdata;
     PMIX_ACQUIRE_OBJECT(&op);
 
-    op->sig.initiator = PRTE_PROC_MY_NAME->rank;
-    op->sig.initiator_op_id = ++XCAST.op_id_local;
-    op->processed = false;
-
-    pmix_list_append(&XCAST.pending_ops, &op->super);
-    launch_op(op);
-}
-
-static void launch_op(op_t* op){
-    /* setup the payload */
+    // setup the payload
     pmix_data_buffer_t *xcast_msg = PMIx_Data_buffer_create();
     int rc = pack_forward_msg(xcast_msg, op);
     if (PMIX_SUCCESS != rc) {
@@ -409,8 +373,10 @@ static void launch_op(op_t* op){
         return;
     }
 
-    /* send it to the HNP (could be myself) for relay */
-    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, xcast_msg, PRTE_RML_TAG_XCAST);
+    // send it to the HNP (could be myself) for relay
+    PRTE_RML_RELIABLE_SEND(
+        rc, PRTE_PROC_MY_HNP->rank, xcast_msg, PRTE_RML_TAG_XCAST
+    );
     if (PMIX_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(xcast_msg);
@@ -422,25 +388,12 @@ static void send_ack_msg(
     signature_t* sig, pmix_rank_t ack_id, bool is_request, pmix_rank_t dest
 ) {
     pmix_data_buffer_t* msg = PMIx_Data_buffer_create();
-    int ret = pack_sig(msg, sig);
-    if(PMIX_SUCCESS != ret){
+    int ret = PMIX_SUCCESS;
+    if(PMIX_SUCCESS == ret) ret = pack_sig(msg, sig);
+    if(PMIX_SUCCESS == ret) ret = pack_ack_id(msg, &ack_id);
+    if(PMIX_SUCCESS == ret) ret = pack_bool(msg, &is_request);
+    if(PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
-        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-        PMIx_Data_buffer_release(msg);
-        return;
-    }
-    ret = pack_ack_id(msg, &ack_id);
-    if(PMIX_SUCCESS != ret){
-        PMIX_ERROR_LOG(ret);
-        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-        PMIx_Data_buffer_release(msg);
-        return;
-    }
-
-    ret = PMIx_Data_pack(NULL, msg, &is_request, 1, PMIX_BOOL);
-    if(PMIX_SUCCESS != ret){
-        PMIX_ERROR_LOG(ret);
-        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIx_Data_buffer_release(msg);
         return;
     }
@@ -450,7 +403,6 @@ static void send_ack_msg(
         PMIX_ERROR_LOG(ret);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIx_Data_buffer_release(msg);
-        return;
     }
 }
 
@@ -466,12 +418,14 @@ static void request_ack(pmix_rank_t from, signature_t* sig, pmix_rank_t ack_id){
 static void finish_op(op_t* op) {
     send_ack(&op->sig, op->ack_id_up);
     pmix_list_remove_item(&XCAST.ops, &op->super);
-    if(op->sig.global_op_id > XCAST.op_id_completed_at_promotion &&
-        op->sig.global_op_id != XCAST.op_id_completed+1){
-        PRTE_ERROR_LOG( PRTE_ERR_OUT_OF_ORDER_MSG );
-    } else {
-        XCAST.op_id_completed++;
+    if(op->sig.op_id > XCAST.op_id_completed_at_promotion){
+        if(op->sig.op_id != XCAST.op_id_completed+1){
+            PRTE_ERROR_LOG( PRTE_ERR_OUT_OF_ORDER_MSG );
+        } else {
+            XCAST.op_id_completed++;
+        }
     }
+    process_msg(op); // If not already processed, process before releasing
     PMIX_RELEASE(op);
 }
 
@@ -496,9 +450,7 @@ static void finish_op(op_t* op) {
     }
 
 static int pack_sig(pmix_data_buffer_t* buffer, signature_t* sig){
-    DIRECT_XCAST_PACK(buffer, &sig->global_op_id,    PMIX_SIZE);
-    DIRECT_XCAST_PACK(buffer, &sig->initiator_op_id, PMIX_SIZE);
-    DIRECT_XCAST_PACK(buffer, &sig->initiator,       PMIX_PROC_RANK);
+    DIRECT_XCAST_PACK(buffer, &sig->op_id,    PMIX_SIZE);
     return PMIX_SUCCESS;
 }
 static int pack_ack_id(pmix_data_buffer_t* buffer, pmix_rank_t* ack_id){
@@ -511,11 +463,13 @@ static int pack_msg(pmix_data_buffer_t* buffer, op_t* op){
     DIRECT_XCAST_PACK(buffer, &op->msg,            PMIX_BYTE_OBJECT);
     return PMIX_SUCCESS;
 }
+static int pack_bool(pmix_data_buffer_t* buffer, bool* boolean){
+    DIRECT_XCAST_PACK(buffer, boolean, PMIX_BOOL);
+    return PMIX_SUCCESS;
+}
 
 static int unpack_sig(pmix_data_buffer_t* buffer, signature_t* sig){
-    DIRECT_XCAST_UNPACK(buffer, &sig->global_op_id,    PMIX_SIZE);
-    DIRECT_XCAST_UNPACK(buffer, &sig->initiator_op_id, PMIX_SIZE);
-    DIRECT_XCAST_UNPACK(buffer, &sig->initiator,       PMIX_PROC_RANK);
+    DIRECT_XCAST_UNPACK(buffer, &sig->op_id, PMIX_SIZE);
     return PMIX_SUCCESS;
 }
 static int unpack_ack_id(pmix_data_buffer_t* buffer, pmix_rank_t* ack_id){
@@ -528,6 +482,10 @@ static int unpack_msg(pmix_data_buffer_t* buffer, op_t* op){
     DIRECT_XCAST_UNPACK(buffer, &op->msg,            PMIX_BYTE_OBJECT);
     return PMIX_SUCCESS;
 }
+static int unpack_bool(pmix_data_buffer_t* buffer, bool* boolean){
+    DIRECT_XCAST_UNPACK(buffer, boolean, PMIX_BOOL);
+    return PMIX_SUCCESS;
+}
 
 static int pack_forward_msg(pmix_data_buffer_t* buffer, op_t* op){
     int rc = pack_sig(buffer, &op->sig);
@@ -538,33 +496,8 @@ static int pack_forward_msg(pmix_data_buffer_t* buffer, op_t* op){
 
 static op_t* find_op(signature_t* sig){
     op_t* op = NULL;
-    if(sig->initiator == PRTE_PROC_MY_NAME->rank){
-        bool found = false;
-        PMIX_LIST_FOREACH(op, &XCAST.pending_ops, op_t){
-            found = sig->initiator_op_id == op->sig.initiator_op_id;
-            if(found) break;
-        }
-        // Move this to the right list
-        if(found && sig->global_op_id){
-            op->sig.global_op_id = sig->global_op_id;
-            pmix_list_remove_item(&XCAST.pending_ops, &op->super);
-            pmix_list_append(&XCAST.ops, &op->super);
-        }
-        if(found) return op;
-    }
-
     PMIX_LIST_FOREACH(op, &XCAST.ops, op_t){
-        if(sig->initiator != op->sig.initiator) continue;
-        if(sig->initiator_op_id != op->sig.initiator_op_id) continue;
-        if(!sig->global_op_id || sig->global_op_id == op->sig.global_op_id){
-            return op;
-        }
-
-        // initiator and initiator_op_id match, but both have global_op_id
-        // assigned and different, which should never happen
-        // If you see this, there's an issue with PRRTE's failure recovery logic
-        //   (or something is messing up memory with invalid accesses)
-        PRTE_ERROR_LOG(PRTE_ERR_DUPLICATE_MSG);
+        if(sig->op_id == op->sig.op_id) return op;
     }
     return NULL;
 }
@@ -573,20 +506,24 @@ static op_t* insert_forwarded_op(signature_t* sig) {
     op_t* op = PMIX_NEW(op_t);
     op->sig = *sig;
 
-    if(!sig->global_op_id){
-        // Only possible on HNP, this op will be assigned the next global ID, so
-        // put it at the end
+    if(sig->op_id == XCAST.op_id_inited){
         pmix_list_append(&XCAST.ops, &op->super);
     } else {
         op_t* next_op = NULL;
         PMIX_LIST_FOREACH(next_op, &XCAST.ops, op_t){
-            if(next_op->sig.global_op_id > sig->global_op_id) break;
-            if(next_op->sig.global_op_id == sig->global_op_id) {
-                // Should not happen
-                PRTE_ERROR_LOG(PRTE_ERR_DUPLICATE_MSG);
-            }
+            if(next_op->sig.op_id > sig->op_id) break;
         }
         pmix_list_insert_pos(&XCAST.ops, &next_op->super, &op->super);
+    }
+
+    op_t* prev = (op_t*) pmix_list_get_prev(op);
+    bool dup = prev != (op_t*) &XCAST.ops.pmix_list_sentinel
+        && prev->sig.op_id == op->sig.op_id;
+    if(dup){
+        PRTE_ERROR_LOG(PRTE_ERR_DUPLICATE_MSG);
+        pmix_list_remove_item(&XCAST.ops, &op->super);
+        PMIX_RELEASE(op);
+        return prev;
     }
     return op;
 }
@@ -607,9 +544,6 @@ static void forward_op(op_t* op){
         if(children[i] == PMIX_RANK_INVALID) continue;
         forward_op_to(op, children[i]);
     }
-
-    // No children, ack immediately
-    if(op->nexpected == 0) send_ack(&op->sig, op->ack_id_up);
 
     return;
 }
@@ -680,11 +614,9 @@ static void process_wireup(pmix_data_buffer_t *msg){
 }
 
 static void process_msg(op_t* op){
-    int ret = op->processed ? PRTE_ERR_DUPLICATE_MSG : PMIX_SUCCESS;
-    if(PRTE_SUCCESS != ret){
-        PRTE_ERROR_LOG( ret );
-        return;
-    }
+    int ret = PMIX_SUCCESS;
+
+    if(op->processed) return;
     op->processed = true;
 
     pmix_data_buffer_t *msg = PMIx_Data_buffer_create();
@@ -719,8 +651,6 @@ static void process_msg(op_t* op){
          * the RML system via send as that will compete with the relay messages
          * down in the OOB. Instead, pass it directly to the RML message
          * processor */
-        // TODO: Would be best to set the sender to op->sig.initiator, but do
-        // any current xcast recv handlers rely on current behavior?
         PRTE_RML_POST_MESSAGE(
             PRTE_PROC_MY_NAME, op->msg_tag, 1, msg->base_ptr, msg->bytes_used
         );
@@ -734,9 +664,7 @@ static void process_msg(op_t* op){
 
 static void op_con(op_t* p)
 {
-    p->sig.initiator = -1;
-    p->sig.initiator_op_id = 0;
-    p->sig.global_op_id = 0;
+    p->sig.op_id = 0;
 
     p->processed = false;
     p->replay_pending_parent = false;
@@ -760,16 +688,13 @@ PMIX_CLASS_INSTANCE(op_t, pmix_list_item_t, op_con, op_des);
 static void xcast_con(prte_grpcomm_xcast_t* p)
 {
     PMIX_CONSTRUCT(&p->ops, pmix_list_t);
-    PMIX_CONSTRUCT(&p->pending_ops, pmix_list_t);
     p->op_id_completed = 0;
     p->op_id_completed_at_promotion = 0;
-    p->op_id_local = 0;
-    p->op_id_global = 0;
+    p->op_id_inited = 0;
 }
 static void xcast_des(prte_grpcomm_xcast_t* p)
 {
     PMIX_LIST_DESTRUCT(&p->ops);
-    PMIX_LIST_DESTRUCT(&p->pending_ops);
 }
 PMIX_CLASS_INSTANCE(prte_grpcomm_xcast_t, pmix_object_t, xcast_con, xcast_des);
 

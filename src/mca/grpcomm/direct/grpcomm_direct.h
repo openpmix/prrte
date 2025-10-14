@@ -27,18 +27,13 @@ typedef struct {
     pmix_object_t super;
     // list of ongoing operations, defined in grpcomm_direct_xcast.c
     pmix_list_t ops;
-    // list of operations sent to HNP to be started, but not seen since
-    pmix_list_t pending_ops;
-    // global op id of the last known completed (in our subtree) operation
+    // ID of the last known completed (in our subtree) operation
     size_t op_id_completed;
-    // global op id of what was completed (in our subtree) when we were last
-    // promoted (meaning our subtree grew, so we can't assume completion in the
-    // new subtree)
+    // op_id_completed when we were last promoted
+    // (our subtree grew, so we can't assume completion in our new subtree)
     size_t op_id_completed_at_promotion;
-    // local op id of the last op generated here
-    size_t op_id_local;
-    // used by HNP to assign global op id
-    size_t op_id_global;
+    // ID of the last known initiated operation
+    size_t op_id_inited;
 } prte_grpcomm_xcast_t;
 PRTE_MODULE_EXPORT PMIX_CLASS_DECLARATION(prte_grpcomm_xcast_t);
 
