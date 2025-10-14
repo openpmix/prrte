@@ -5,6 +5,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -52,6 +53,16 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
                         "%s oob:base:send to target %s - attempt %u",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&msg->dst),
                         msg->retries);
+
+    if (!prte_rml_is_node_up(msg->dst.rank)) {
+        pmix_output_verbose(4, prte_oob_base.output,
+                            "%s oob:base:send adressee died %s",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PRTE_NAME_PRINT(&msg->dst));
+        msg->status = PRTE_ERR_NODE_DOWN;
+        PRTE_RML_SEND_COMPLETE(msg);
+        return;
+    }
 
     /* don't try forever - if we have exceeded the number of retries,
      * then report this message as undeliverable even if someone continues
@@ -102,6 +113,7 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
                 PMIX_RELEASE(msg);
                 return;
             }
+            PMIX_ERROR_LOG(rc);
             PRTE_ACTIVATE_PROC_STATE(&hop, PRTE_PROC_STATE_UNABLE_TO_SEND_MSG);
             PMIX_RELEASE(msg);
             return;
