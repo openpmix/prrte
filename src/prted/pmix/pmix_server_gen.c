@@ -109,7 +109,7 @@ static void _client_conn(int sd, short args, void *cbdata)
     // check if the uid, gid, and pid match
     for (n=0; n < cd->ninfo; n++) {
         if (PMIx_Check_key(cd->info[n].key, PMIX_USERID)) {
-            rc = PMIx_Value_get_number(&cd->info[n].value, (void*)&euid, PMIX_UINT32);
+            PMIX_VALUE_GET_NUMBER(rc, &cd->info[n].value, euid, uint32_t);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 goto complete;
@@ -122,7 +122,7 @@ static void _client_conn(int sd, short args, void *cbdata)
             continue;
         }
         if (PMIx_Check_key(cd->info[n].key, PMIX_GRPID)) {
-            rc = PMIx_Value_get_number(&cd->info[n].value, (void*)&egid, PMIX_UINT32);
+            PMIX_VALUE_GET_NUMBER(rc, &cd->info[n].value, egid, uint32_t);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 goto complete;
@@ -136,7 +136,7 @@ static void _client_conn(int sd, short args, void *cbdata)
         }
         if (prte_pmix_server_globals.require_pid_match) {
             if (PMIx_Check_key(cd->info[n].key, PMIX_PROC_PID)) {
-                rc = PMIx_Value_get_number(&cd->info[n].value, (void*)&pid, PMIX_PID);
+                PMIX_VALUE_GET_NUMBER(rc, &cd->info[n].value, pid, pid_t);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     goto complete;
