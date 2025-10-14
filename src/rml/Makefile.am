@@ -38,3 +38,4 @@ libprrte_la_SOURCES += \
     rml/routed_radix.c
 
 include rml/oob/Makefile.am
+include rml/relm/Makefile.am

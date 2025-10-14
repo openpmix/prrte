@@ -701,7 +701,7 @@ static void check_complete(int fd, short args, void *cbdata)
             goto release;
         }
         /* send it to the data server */
-        PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME->rank, buf, PRTE_RML_TAG_DATA_SERVER);
+        PRTE_RML_RELIABLE_SEND(rc, PRTE_PROC_MY_NAME->rank, buf, PRTE_RML_TAG_DATA_SERVER);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(buf);

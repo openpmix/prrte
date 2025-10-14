@@ -235,7 +235,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
     }
 
     /* send it to the host daemon */
-    PRTE_RML_SEND(rc, dmn->name.rank, buf, PRTE_RML_TAG_DIRECT_MODEX);
+    PRTE_RML_RELIABLE_SEND(rc, dmn->name.rank, buf, PRTE_RML_TAG_DIRECT_MODEX);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
