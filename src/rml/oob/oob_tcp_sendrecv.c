@@ -168,8 +168,10 @@ retry:
             return PRTE_ERR_WOULD_BLOCK;
         } else {
             /* we hit an error and cannot progress this message */
-            pmix_output(0, "oob:tcp: send_msg: write failed: %s (%d) [sd = %d]",
-                        strerror(prte_socket_errno), prte_socket_errno, peer->sd);
+            if (!prte_prteds_term_ordered && !prte_abnormal_term_ordered) {
+                pmix_output(0, "oob:tcp: send_msg: write failed: %s (%d) [sd = %d]",
+                            strerror(prte_socket_errno), prte_socket_errno, peer->sd);
+            }
             return PRTE_ERR_UNREACH;
         }
     } else {
@@ -261,9 +263,13 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
                 return;
             } else {
                 // report the error
-                pmix_output(
-                    0, "%s-%s prte_oob_tcp_peer_send_handler: unable to send message ON SOCKET %d",
-                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)), peer->sd);
+                if (!prte_prteds_term_ordered && !prte_abnormal_term_ordered) {
+                    pmix_output(
+                        0, "%s-%s prte_oob_tcp_peer_send_handler: "
+                        "unable to send message ON SOCKET %d",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&(peer->name)), peer->sd);
+                }
                 prte_oob_tcp_peer_close(peer);
                 return;
             }
