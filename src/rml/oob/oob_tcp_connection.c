@@ -1059,18 +1059,20 @@ static void tcp_peer_connected(prte_oob_tcp_peer_t *peer)
  */
 void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
 {
+    if (MCA_OOB_TCP_CLOSED == peer->state) {
+        return;
+    }
+
     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                         "%s tcp_peer_close for %s sd %d state %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)),
                         peer->sd, prte_oob_tcp_state_print(peer->state));
 
-    /* release the socket */
-    close(peer->sd);
-    peer->sd = -1;
-
     /* if we were CONNECTING, then we need to mark the address as
      * failed and cycle back to try the next address */
     if (MCA_OOB_TCP_CONNECTING == peer->state) {
+        close(peer->sd);
+        peer->sd = -1;
         if (NULL != peer->active_addr) {
             peer->active_addr->state = MCA_OOB_TCP_FAILED;
         }
@@ -1078,13 +1080,7 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
         return;
     }
 
-    /* if we were connected, then inform the component-level that we have lost a connection so
-     * it can decide what to do about it.
-     */
-    if (MCA_OOB_TCP_CONNECTED == peer->state) {
-        PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_mca_oob_tcp_component_lost_connection);
-    }
-
+    prte_oob_tcp_state_t old_state = peer->state;
     peer->state = MCA_OOB_TCP_CLOSED;
     if (NULL != peer->active_addr) {
         peer->active_addr->state = MCA_OOB_TCP_CLOSED;
@@ -1103,6 +1099,8 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
         prte_event_del(&peer->timer_event);
         peer->timer_ev_active = false;
     }
+    close(peer->sd);
+    peer->sd = -1;
 
     /* clean up any partial send/recv data */
     if (NULL != peer->recv_msg) {
@@ -1138,7 +1136,9 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
     /* inform the component-level that we have lost a connection so
      * it can decide what to do about it.
      */
-    PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_mca_oob_tcp_component_lost_connection);
+    if (MCA_OOB_TCP_CONNECTED == old_state) {
+        PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_mca_oob_tcp_component_lost_connection);
+    }
 }
 
 /*
