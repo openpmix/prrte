@@ -1246,8 +1246,8 @@ while attempting to start process rank %lu.
 #
 [prun:wdir-not-accessible]
 
-%s was unable to launch the specified application as it lacks
-permissions to change to the specified working directory:
+%s was unable to launch the specified application as it could not
+access the specified working directory:
 
    Working directory: %s
    Node: %s
@@ -1269,8 +1269,8 @@ NOTE: A common cause for this error is misspelling a %s command
 #
 [prun:exe-not-accessible]
 
-%s was unable to launch the specified application as it lacked
-permissions to execute an executable:
+%s was unable to launch the specified application as it could not
+access an executable:
 
    Executable: %s
    Node: %s
