@@ -266,9 +266,20 @@ PRTE_EXPORT extern pmix_status_t pmix_server_query_fn(pmix_proc_t *proct, pmix_q
 PRTE_EXPORT extern void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo,
                                                pmix_tool_connection_cbfunc_t cbfunc, void *cbdata);
 
+#ifdef pmix_server_tool_connected2_fn
+PRTE_EXPORT extern pmix_status_t pmix_tool_connected2_fn(pmix_info_t *info, size_t ninfo,
+                                                         pmix_tool_connection_cbfunc_t cbfunc, void *cbdata);
+#endif
+
 PRTE_EXPORT extern void pmix_server_log_fn(const pmix_proc_t *client, const pmix_info_t data[],
                                            size_t ndata, const pmix_info_t directives[],
                                            size_t ndirs, pmix_op_cbfunc_t cbfunc, void *cbdata);
+
+#ifdef pmix_server_log2_fn
+PRTE_EXPORT extern pmix_status_t pmix_server_log2_fn(const pmix_proc_t *client, const pmix_info_t data[],
+                                                     size_t ndata, const pmix_info_t directives[],
+                                                     size_t ndirs, pmix_op_cbfunc_t cbfunc, void *cbdata);
+#endif
 
 PRTE_EXPORT extern pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client,
                                                       pmix_alloc_directive_t directive,
