@@ -18,6 +18,8 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2025      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -416,7 +418,13 @@ int prte_register_params(void)
                                       &prte_do_not_resolve);
 
     /* allow specification of the launch agent */
+#ifdef PRTE_BINARY_PREFIX
+    char cmd[PRTE_PATH_MAX];
+    snprintf(cmd, PRTE_PATH_MAX, "%s%s", PRTE_BINARY_PREFIX, "prted");
+    prte_launch_agent = strdup(cmd);
+#else
     prte_launch_agent = "prted";
+#endif
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "launch_agent",
                                       "Executable for DVM daemons on remote nodes [default: prted]",
                                       PMIX_MCA_BASE_VAR_TYPE_STRING,
