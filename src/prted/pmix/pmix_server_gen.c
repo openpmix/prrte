@@ -928,7 +928,8 @@ void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo,
     prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
 }
 
-#ifdef pmix_server_tool_connected2_fn
+#if PRTE_PMIX_SERVER2_UPCALLS
+
 pmix_status_t pmix_tool_connected2_fn(pmix_info_t *info, size_t ninfo,
                                       pmix_tool_connection_cbfunc_t cbfunc,
                                       void *cbdata)
@@ -1058,7 +1059,7 @@ done:
     PRTE_SERVER_PMIX_THREADSHIFT(PRTE_NAME_WILDCARD, NULL, rc, NULL, NULL, 0, lgcbfn, cbfunc, cbdata);
 }
 
-#ifdef pmix_server_log2_fn
+#if PRTE_PMIX_SERVER2_UPCALLS
 pmix_status_t pmix_server_log2_fn(const pmix_proc_t *client, const pmix_info_t data[], size_t ndata,
                                   const pmix_info_t directives[], size_t ndirs, pmix_op_cbfunc_t cbfunc,
                                   void *cbdata)
