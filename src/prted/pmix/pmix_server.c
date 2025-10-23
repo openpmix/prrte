@@ -114,11 +114,11 @@ static pmix_server_module_t pmix_server = {
     .notify_event = pmix_server_notify_event,
     .query = pmix_server_query_fn,
     .tool_connected = pmix_tool_connected_fn,
-#ifdef pmix_server_tool_connected2_fn
+#if PRTE_PMIX_SERVER2_UPCALLS
     .tool_connected2 = pmix_tool_connected2_fn,
 #endif
     .log = pmix_server_log_fn,
-#ifdef pmix_server_log2_fn
+#if PRTE_PMIX_SERVER2_UPCALLS
     .log2 = pmix_server_log2_fn,
 #endif
     .job_control = pmix_server_job_ctrl_fn,

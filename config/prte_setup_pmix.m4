@@ -183,6 +183,16 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     PRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $PRTE_FINAL_LDFLAGS)
     PRTE_FLAGS_APPEND_UNIQ(LIBS, $PRTE_FINAL_LIBS)
 
+    AC_MSG_CHECKING([for support of version 2 server upcalls])
+    PRTE_CHECK_PMIX_CAP([UPCALLS2],
+                        [AC_MSG_RESULT([yes])
+                         prte_server2_upcalls=1],
+                        [AC_MSG_RESULT([no])
+                         prte_server2_upcalls=0])
+    AC_DEFINE_UNQUOTED([PRTE_PMIX_SERVER2_UPCALLS],
+                       [$prte_server2_upcalls],
+                       [Whether or not PMIx supports server2 upcalls])
+
     AC_MSG_CHECKING([for in-memory show-help content compatibility])
     PRTE_CHECK_PMIX_CAP([INMEMHELP],
                         [AC_MSG_RESULT([yes])],
