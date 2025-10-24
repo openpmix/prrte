@@ -39,10 +39,7 @@ AC_DEFUN([PRTE_CHECK_PMIX_CAP],[
                           #error This PMIx does not have any capability flags
                           #endif
                           #if !defined(PMIX_CAP_$1)
-                          #error This PMIx does not have the PMIX_CAP_$1 capability flag at all
-                          #endif
-                          #if (PMIX_CAPABILITIES & PMIX_CAP_$1) == 0
-                          #error This PMIx does not have the PMIX_CAP_$1 capability flag set
+                          #error This PMIx does not have the PMIX_CAP_$1 capability flag
                           #endif
                          ]
                         )
