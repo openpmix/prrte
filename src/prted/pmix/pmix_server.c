@@ -1771,6 +1771,10 @@ static void pmix_server_log(int status, pmix_proc_t *sender,
     bool flag;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
 
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "Logging info relayed by %s",
+                        PRTE_NAME_PRINT(sender));
+
     /* unpack the source of the request */
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &source, &cnt, PMIX_PROC);
