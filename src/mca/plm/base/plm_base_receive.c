@@ -446,7 +446,8 @@ moveon:
             goto ANSWER_LAUNCH;
         }
 
-        if (NULL != parent && !PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
+        if (NULL != parent && !PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL) &&
+            !PMIX_CHECK_NSPACE(parent->nspace, PRTE_PROC_MY_NAME->nspace)) {
             if (NULL == parent->bookmark) {
                 /* find the sender's node in the job map */
                 proc = (prte_proc_t *) pmix_pointer_array_get_item(parent->procs, sender->rank);
