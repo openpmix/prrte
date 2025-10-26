@@ -155,6 +155,12 @@ option to the help request as "--help <option>".
 | "--machinefile       | Provide a hostfile (synonym for "--hostfile") |
 | <file>"              |                                               |
 +----------------------+-----------------------------------------------+
+| "--default-hostfile  | Provide a default hostfile                    |
+| <file>"              |                                               |
++----------------------+-----------------------------------------------+
+| "--path <path>"      | PATH to be used to look for executables to    |
+|                      | start processes                               |
++----------------------+-----------------------------------------------+
 | "--add-hostfile      | Provide a hostfile listing hosts to add to    |
 | <file>"              | the DVM prior to launching the given app      |
 +----------------------+-----------------------------------------------+
@@ -721,7 +727,13 @@ Output a brief periodic report on launch progress
 
 User-specified name assigned to the processes in their given
 application
+#
+[default-hostfile]
 
+Specify a default hostfile.
+
+Also see "--help hostfile".
+#
 [hostfile]
 
 PRRTE supports several levels of user-specified hostfiles based on an
@@ -2813,3 +2825,11 @@ Then 81 processes are mapped to the first package and 80 to the second
 package.  At binding time we have an overloading scenario because
 there are only 80 CPUs (hwthreads) available in the package at the
 hardware level.  So the first package is overloaded.
+#
+[multiple-default-hostfiles]
+Multiple default hostfile values were provided:
+
+  Values:  %s
+
+Only one default hostfile can be specified. Please correct the input
+and try again.
