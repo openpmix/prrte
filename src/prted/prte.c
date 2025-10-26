@@ -475,6 +475,33 @@ int prte(int argc, char *argv[])
         PMIX_ARGV_FREE_COMPAT(split);
     }
 
+   /* Did the user specify a default hostfile? */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DEFAULT_HOSTFILE);
+    if (NULL != opt) {
+        char cwd[PRTE_PATH_MAX];
+        if (PRTE_SUCCESS != (rc = pmix_getcwd(cwd, sizeof(cwd)))) {
+            pmix_show_help("help-prun.txt", "prun:init-failure", true, "get the cwd", rc);
+            return 1;
+        }
+        // can only be one value
+        if (1 < PMIx_Argv_count(opt->values)) {
+            // report the error and abort
+            param = PMIx_Argv_join(opt->values, ',');
+            pmix_show_help("help-prterun.txt", "multiple-default-hostfiles", true, param);
+            return 1;
+         }
+        if (!pmix_path_is_absolute(opt->values[0])) {
+            param = pmix_os_path(false, cwd, opt->values[0], NULL);
+        } else {
+            param = opt->values[0];
+        }
+        if (NULL != prte_default_hostfile) {
+            free(prte_default_hostfile);
+        }
+        prte_default_hostfile = strdup(param);
+        prte_default_hostfile_given = true;
+    }
+
     /* check if we are running as root - if we are, then only allow
      * us to proceed if the allow-run-as-root flag was given. Otherwise,
      * exit with a giant warning message
