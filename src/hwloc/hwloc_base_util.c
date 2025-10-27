@@ -1566,6 +1566,8 @@ char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
     }
 
     for (n = 0; n < npkgs; n++) {
+        memset(tmp, 0, sizeof(tmp));
+        memset(ans, 0, sizeof(ans));
         pkg = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, n);
         /* see if we have any here */
         hwloc_bitmap_and(avail, cpuset, pkg->cpuset);
