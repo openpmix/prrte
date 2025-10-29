@@ -357,7 +357,7 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
     prte_plm_ssh_shell_t remote_shell, local_shell;
     int orted_argc;
     char **orted_argv;
-    char *orted_cmd, *orted_prefix, *final_cmd;
+    char *orted_cmd, *orted_prefix, *final_cmd, *daemon_name;
     int orted_index;
     int rc;
     int i;
@@ -635,7 +635,12 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
          * with the prefix directory
          */
         if (NULL != orted_cmd) {
-            if (0 == strcmp(orted_cmd, "prted")) {
+#ifdef PRTE_BINARY_PREFIX
+            pmix_asprintf(&daemon_name, "%s%s", PRTE_BINARY_PREFIX, "prted");
+#else
+            daemon_name = strdup("prted");
+#endif
+            if (0 == strcmp(orted_cmd, daemon_name)) {
                 /* if the cmd is our standard one, then add the prefix */
                 value = pmix_basename(prte_install_dirs.bindir);
                 if ('/' == prefix_dir[strlen(prefix_dir)-1]) {
@@ -650,6 +655,7 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
                 /* someone specified something different, so don't prefix it */
                 full_orted_cmd = strdup(orted_cmd);
             }
+            free(daemon_name);
             free(orted_cmd);
         } else {
             /* use our standard one and add the prefix */
