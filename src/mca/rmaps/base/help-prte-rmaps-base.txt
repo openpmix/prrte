@@ -399,3 +399,16 @@ A %s was given that defines a value multiple times:
   Given:   %s
 
 Please provide only one value for this policy, or remove it.
+#
+[not-enough-cpus]
+A request was made to map a specified number of processes to
+each object of a given type, and to bind each process to a given
+number of CPUs with that object. Unfortunately, at least one
+such object lacks enough CPUs to meet that combination of
+requirements:
+
+  #procs/obj:   %d
+  Object type:  %s
+  cpus/proc:    %d
+
+Please adjust the request and try again.
