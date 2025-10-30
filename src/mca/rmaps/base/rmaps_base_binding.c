@@ -370,6 +370,12 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
     }
     hwloc_bitmap_list_asprintf(&proc->cpuset, result);
     hwloc_bitmap_free(result);
+    if (NULL == proc->cpuset || 0 == strlen(proc->cpuset)) {
+        pmix_show_help("help-prte-rmaps-base.txt", "not-enough-cpus", true,
+                       options->pprn, hwloc_obj_type_string(options->maptype),
+                       options->cpus_per_rank);
+        return PRTE_ERR_SILENT;
+    }
     return PRTE_SUCCESS;
 }
 
