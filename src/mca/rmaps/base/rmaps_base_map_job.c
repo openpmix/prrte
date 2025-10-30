@@ -504,6 +504,13 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             options.nprocs += app->num_procs;
             continue;
         }
+
+        if (PRTE_MAPPING_SEQ == PRTE_GET_MAPPING_POLICY(jdata->map->mapping) ||
+            PRTE_MAPPING_BYUSER == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+            // these mappers compute their #procs as they go
+            continue;
+        }
+
         if (1 < jdata->num_apps && 0 == app->num_procs) {
             pmix_show_help("help-prte-rmaps-base.txt",
                            "multi-apps-and-zero-np", true,
@@ -562,6 +569,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                                                                               HWLOC_OBJ_PU);
                 }
             }
+
         } else {
            if (NULL != options.cpuset) {
                 ck = PMIX_ARGV_SPLIT_COMPAT(options.cpuset, ',');
