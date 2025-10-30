@@ -450,14 +450,19 @@ cleanup:
  */
 static int parse_dash_host(char ***mapped_nodes, char *hosts)
 {
-    int32_t j, k;
+    int32_t j, k, start;
     int rc = PRTE_SUCCESS;
     char **mini_map = NULL, *cptr;
-    int nodeidx;
+    int nodeidx, nnodes, p;
     prte_node_t *node;
     char **host_argv = NULL;
 
     host_argv = PMIX_ARGV_SPLIT_COMPAT(hosts, ',');
+    if (prte_hnp_is_allocated) {
+        start = 0;
+    } else {
+        start = 1;
+    }
 
     /* Accumulate all of the host name mappings */
     for (j = 0; j < PMIX_ARGV_COUNT_COMPAT(host_argv); ++j) {
@@ -472,8 +477,35 @@ static int parse_dash_host(char ***mapped_nodes, char *hosts)
                      */
                     if (NULL != (cptr = strchr(mini_map[k], ':'))) {
                         /* the colon indicates a specific # are requested */
-                        *cptr = '*';
-                        PMIX_ARGV_APPEND_NOSIZE_COMPAT(mapped_nodes, cptr);
+                        ++cptr;
+                        if (NULL == cptr) {
+                            // missing number of nodes being requested
+                            pmix_show_help("help-dash-host.txt",
+                                           "dash-host:invalid-relative-node-syntax", true,
+                                           mini_map[k]);
+                            rc = PRTE_ERR_SILENT;
+                            goto cleanup;
+                        }
+                        nnodes = strtol(cptr, NULL, 10);
+                        for (j=start, p=0; j < (int32_t)prte_node_pool->size && p < nnodes; j++) {
+                            node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, j);
+                            if (NULL == node) {
+                                continue;
+                            }
+                            // if the node is empty, capture it
+                            if (0 == node->num_procs) {
+                                PMIX_ARGV_APPEND_NOSIZE_COMPAT(mapped_nodes, node->name);
+                                ++p;
+                            }
+                        }
+                        if (p < nnodes) {
+                            // not enough empty nodes
+                            pmix_show_help("help-dash-host.txt",
+                                           "dash-host:not-enough-empty", true,
+                                           nnodes-p);
+                            rc = PRTE_ERR_SILENT;
+                            goto cleanup;
+                        }
                     } else {
                         /* add a marker to the list */
                         PMIX_ARGV_APPEND_NOSIZE_COMPAT(mapped_nodes, "*");
