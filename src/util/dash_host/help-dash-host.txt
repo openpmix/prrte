@@ -48,7 +48,9 @@ A relative host was improperly specified — the value provided was.
    --host: %s
 
 You may have forgotten to preface a node with "N" or "n", or used the
-"e" or "E" to indicate empty nodes.
+"e" or "E" to indicate empty nodes, or you ended the value with a
+colon but forgot to include the number of empty nodes you were
+requesting.
 
 Re-run this command with "--help hosts" for further information.
 #
