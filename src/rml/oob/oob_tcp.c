@@ -287,7 +287,7 @@ int prte_oob_open(void)
                sizeof(copied_interface->if_mac));
         copied_interface->ifmtu = selected_interface->ifmtu;
         /* Add the if_mask to the list */
-        sprintf(string, "%d", selected_interface->if_mask);
+        snprintf(string, 50, "%d", selected_interface->if_mask);
         PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_oob_base.if_masks, string);
         pmix_list_append(&prte_oob_base.local_ifs, &(copied_interface->super));
     }

@@ -564,7 +564,7 @@ static pmix_status_t spawn_app(void)
     } else {
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL); // All procs stop in PMIx_Init
     }
-    sprintf(map_str, "ppr:%d:node", app_npernode);
+    snprintf(map_str, 30, "ppr:%d:node", app_npernode);
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_MAPBY, map_str, PMIX_STRING); // app procs/node
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_RANKBY, "slot", PMIX_STRING); // match baseline
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_FWD_STDOUT, NULL, PMIX_BOOL); // forward stdout to me

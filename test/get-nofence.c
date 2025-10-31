@@ -163,7 +163,7 @@ int main(int argc, char *argv[])
     PMIX_VALUE_RELEASE(pvalue);
 
     /* the below two lines break the subsequent PMIx_Get query on a key set later */
-    sprintf(data, "FIRST TIME rank %d", myproc.rank);
+    snprintf(data, 256, "FIRST TIME rank %d", myproc.rank);
     pmi_set_string("test-key-1", data, 256);
 
     if (timeout) {

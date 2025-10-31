@@ -562,7 +562,7 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
             case PRTE_RANKFILE_INT:
             case PRTE_RANKFILE_RELATIVE:
                 if (PRTE_RANKFILE_INT == token) {
-                    sprintf(buff, "%d", prte_rmaps_rank_file_value.ival);
+                    snprintf(buff,RMAPS_RANK_FILE_MAX_SLOTS,  "%d", prte_rmaps_rank_file_value.ival);
                     value = buff;
                 } else {
                     value = prte_rmaps_rank_file_value.sval;
@@ -627,7 +627,7 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
                 goto unlock;
             } else {
                 /* prepare rank assignment string for the help message in case of a bad-assign */
-                sprintf(tmp_rank_assignment, "%s slot=%s", node_name, value);
+                snprintf(tmp_rank_assignment, RMAPS_RANK_FILE_MAX_SLOTS, "%s slot=%s", node_name, value);
                 pmix_pointer_array_set_item(assigned_ranks_array, 0, tmp_rank_assignment);
             }
 
@@ -671,7 +671,7 @@ static char *prte_rmaps_rank_file_parse_string_or_int(void)
     case PRTE_RANKFILE_STRING:
         return strdup(prte_rmaps_rank_file_value.sval);
     case PRTE_RANKFILE_INT:
-        sprintf(tmp_str, "%d", prte_rmaps_rank_file_value.ival);
+        snprintf(tmp_str, RMAPS_RANK_FILE_MAX_SLOTS, "%d", prte_rmaps_rank_file_value.ival);
         return strdup(tmp_str);
     default:
         return NULL;
@@ -787,7 +787,7 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
     // session dir + / (1) + lsf_rf. (7) + XXXXXX (6) + \0 (1)
     len = strlen(prte_process_info.top_session_dir) + 1 + 7 + 6 + 1;
     (*aff_rankfile) = (char*) malloc(sizeof(char) * len);
-    sprintf(*aff_rankfile, "%s/lsf_rf.XXXXXX", prte_process_info.top_session_dir);
+    snprintf(*aff_rankfile, len, "%s/lsf_rf.XXXXXX", prte_process_info.top_session_dir);
 
     /* open the file */
     fp = fopen(affinity_file, "r");
@@ -882,7 +882,7 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
             free(cpus[i]);
             // 10 max number of digits in an int
             cpus[i] = (char*)malloc(sizeof(char) * 10);
-            sprintf(cpus[i], "%d", obj->logical_index);
+            snprintf(cpus[i], 10, "%d", obj->logical_index);
         }
         sep = PMIX_ARGV_JOIN_COMPAT(cpus, ',');
         PMIX_ARGV_FREE_COMPAT(cpus);
@@ -893,7 +893,7 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
         // "rank " (5) + id (max 10) + = (1) + host (?) + " slot=" (6) + ids (?) + '\0' (1)
         len = 5 + 10 + 1 + strlen(hstname) + 6 + strlen(sep) + 1;
         tmp_str = (char *)malloc(sizeof(char) * len);
-        sprintf(tmp_str, "rank %d=%s slot=%s\n", cur_rank, hstname, sep);
+        snprintf(tmp_str, len, "rank %d=%s slot=%s\n", cur_rank, hstname, sep);
         pmix_fd_write(fp_rank, strlen(tmp_str), tmp_str);
         free(tmp_str);
         ++cur_rank;
