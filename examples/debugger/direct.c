@@ -338,7 +338,7 @@ static int cospawn_launch(myrel_t *myrel)
     /* Process that is spawning processes is a tool process */
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_REQUESTOR_IS_TOOL, NULL, PMIX_BOOL);
     /* Map spawned processes by slot */
-    sprintf(map_str, "ppr:%d:node", app_npernode);
+    snprintf(map_str, 128, "ppr:%d:node", app_npernode);
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_MAPBY, map_str, PMIX_STRING);
     PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
     PMIX_INFO_LIST_RELEASE(dirs);
@@ -824,7 +824,7 @@ int main(int argc, char **argv)
             // procs are to pause in PMIx_Init for debugger attach
             PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);
         }
-        sprintf(map_str, "ppr:%d:node", app_npernode);
+        snprintf(map_str, 128, "ppr:%d:node", app_npernode);
         PMIX_INFO_LIST_ADD(rc, dirs, PMIX_MAPBY, map_str, PMIX_STRING); // 1 per node
         PMIX_INFO_LIST_ADD(rc, dirs, PMIX_FWD_STDOUT, NULL, PMIX_BOOL); // forward stdout to me
         PMIX_INFO_LIST_ADD(rc, dirs, PMIX_FWD_STDERR, NULL, PMIX_BOOL); // forward stderr to me
