@@ -154,8 +154,8 @@ int main(int argc, char *argv[])
     PMIX_VALUE_RELEASE(pvalue);
 
     /* the below two lines break the subsequent PMIx_Get query on a key set later */
-    sprintf(data, "FIRST TIME rank %d", myproc.rank);
-    pmi_set_string("test-key-1", data, 256);
+    snprintf(data, 256, "FIRST TIME rank %d", myproc.rank);
+    pnmi_set_string("test-key-1", data, 256);
     pmix_exchange(true);
 
     if (1 == myproc.rank) {
@@ -166,7 +166,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    sprintf(data, "SECOND TIME rank %d", myproc.rank);
+    snprintf(data, 256, "SECOND TIME rank %d", myproc.rank);
     if (0 == myproc.rank) {
         pmi_set_string("test-key-2", data, 256);
     } else {
