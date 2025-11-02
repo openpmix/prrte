@@ -193,6 +193,7 @@ test/iostress
 test/spawn_multiple
 test/clichk
 test/chkfs
+test/spawn_timeout
 
 test/mpi/spawn_multiple
 test/mpi/create_comm_from_group

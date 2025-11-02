@@ -14,7 +14,7 @@
 # Copyright (c) 2012      Los Alamos National Security, Inc.  All rights reserved.
 # Copyright (c) 2013      Mellanox Technologies, Inc.  All rights reserved.
 # Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
 # Copyright (c) 2023      Triad National Security, LLC. All rights reserved.
 # $COPYRIGHT$
 #
@@ -52,7 +52,8 @@ TESTS = \
 	iostress \
 	filegen \
 	clichk \
-	chkfs
+	chkfs \
+	spawn_timeout
 
 all: $(TESTS)
 
