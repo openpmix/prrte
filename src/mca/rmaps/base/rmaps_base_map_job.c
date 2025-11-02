@@ -317,6 +317,23 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
                 }
             }
+            /* if not already assigned, inherit the parent's output directives */
+            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, NULL, PMIX_BOOL)) {
+                if (prte_get_attribute(&parent->attributes, PRTE_JOB_TAG_OUTPUT, (void **) &fptr, PMIX_BOOL)) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
+                }
+            }
+            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL)) {
+                if (prte_get_attribute(&parent->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, (void **) &fptr, PMIX_BOOL)) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
+                }
+            }
+            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL)) {
+                if (prte_get_attribute(&parent->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, (void **) &fptr, PMIX_BOOL)) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
+                }
+            }
+
             // copy over any env directives, but do not overwrite anything already specified
             inherit_env_directives(jdata, parent, nptr);
         } else {

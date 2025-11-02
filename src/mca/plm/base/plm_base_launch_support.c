@@ -343,8 +343,9 @@ static void spawn_timeout_cb(int fd, short event, void *cbdata)
     }
 }
 
-static void stack_trace_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
-                             prte_rml_tag_t tag, void *cbdata)
+void prte_plm_base_stack_trace_recv(int status, pmix_proc_t *sender,
+                                    pmix_data_buffer_t *buffer,
+                                    prte_rml_tag_t tag, void *cbdata)
 {
     pmix_byte_object_t pbo;
     pmix_data_buffer_t blob;
@@ -494,13 +495,101 @@ static void stack_trace_timeout(int sd, short args, void *cbdata)
     PMIX_DESTRUCT(&parray);
 }
 
+static void dump_job(prte_job_t *jdata)
+{
+    pmix_proc_t pc;
+    prte_proc_t *proc;
+    pmix_byte_object_t bo;
+    char *st;
+    int i;
+
+    PMIX_LOAD_PROCID(&pc, jdata->nspace, PMIX_RANK_WILDCARD);
+    pmix_asprintf(&st, "DATA FOR JOB: %s\n", PRTE_JOBID_PRINT(jdata->nspace));
+    bo.bytes = st;
+    bo.size = strlen(st);
+    PMIx_server_IOF_deliver(&pc, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
+    free(st);
+    pmix_asprintf(&st, "\tNum apps: %d\tNum procs: %d\tJobState: %s\tAbort: %s\n",
+                  (int) jdata->num_apps, (int) jdata->num_procs, prte_job_state_to_str(jdata->state),
+                  (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) ? "True" : "False");
+    bo.bytes = st;
+    bo.size = strlen(st);
+    PMIx_server_IOF_deliver(&pc, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
+    free(st);
+    pmix_asprintf(&st, "\tNum launched: %ld\tNum reported: %ld\tNum terminated: %ld\n\n\tProcs:\n",
+                  (long) jdata->num_launched, (long) jdata->num_reported,
+                  (long) jdata->num_terminated);
+    bo.bytes = st;
+    bo.size = strlen(st);
+    PMIx_server_IOF_deliver(&pc, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
+    free(st);
+    for (i = 0; i < jdata->procs->size; i++) {
+        if (NULL != (proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, i))) {
+            pmix_asprintf(&st, "\t\tRank: %s\tNode: %s\tPID: %u\tState: %s\tExitCode %d\n",
+                          PRTE_VPID_PRINT(proc->name.rank),
+                          (NULL == proc->node) ? "UNKNOWN" : proc->node->name,
+                          (unsigned int) proc->pid, prte_proc_state_to_str(proc->state),
+                          proc->exit_code);
+            bo.bytes = st;
+            bo.size = strlen(st);
+            PMIx_server_IOF_deliver(&pc, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
+            free(st);
+        }
+    }
+    st = "\n";
+    bo.bytes = st;
+    bo.size = strlen(st);
+    PMIx_server_IOF_deliver(&pc, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
+}
+
+static int get_traces(prte_job_t *jdata)
+{
+    prte_daemon_cmd_flag_t command = PRTE_DAEMON_GET_STACK_TRACES;
+    pmix_data_buffer_t buffer;
+    pmix_byte_object_t bo;
+    pmix_proc_t pc;
+    pmix_status_t rc;
+
+    PMIX_LOAD_PROCID(&pc, jdata->nspace, PMIX_RANK_WILDCARD);
+    bo.bytes = "Waiting for stack traces (this may take a few moments)...\n";
+    bo.size = strlen(bo.bytes);
+    PMIx_server_IOF_deliver(&pc, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
+
+
+    /* setup the buffer */
+    PMIX_DATA_BUFFER_CONSTRUCT(&buffer);
+    /* pack the command */
+    rc = PMIx_Data_pack(NULL, &buffer, &command, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+        return PRTE_ERROR;
+    }
+    /* pack the jobid */
+    rc = PMIx_Data_pack(NULL, &buffer, &jdata->nspace, 1, PMIX_PROC_NSPACE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+        return PRTE_ERROR;
+    }
+    /* goes to all daemons */
+    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &buffer))) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+        return PRTE_ERROR;
+    }
+    PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+    return PRTE_SUCCESS;
+}
+
 static void job_timeout_cb(int fd, short event, void *cbdata)
 {
     prte_job_t *jdata = (prte_job_t *) cbdata;
     prte_timer_t *timer = NULL;
-    prte_proc_t *proc, prc;
+    prte_proc_t *prc;
+    prte_job_t *child;
     pmix_proc_t pc;
-    int i, rc, timeout, *tp;
+    int rc, timeout, *tp, i;
     pmix_pointer_array_t parray;
     pmix_byte_object_t bo;
     char *st;
@@ -534,83 +623,31 @@ static void job_timeout_cb(int fd, short event, void *cbdata)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE, NULL, PMIX_BOOL)) {
         /* output the results - note that the output might need to go to a
          * tool instead of just to stderr, so we use the PMIx IOF deliver
-         * function to ensure it gets where it needs to go */
-        pmix_asprintf(&st, "DATA FOR JOB: %s\n", PRTE_JOBID_PRINT(jdata->nspace));
-        bo.bytes = st;
-        bo.size = strlen(st);
-        PMIx_server_IOF_deliver(&pc, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
-        free(st);
-        pmix_asprintf(&st, "\tNum apps: %d\tNum procs: %d\tJobState: %s\tAbort: %s\n",
-                      (int) jdata->num_apps, (int) jdata->num_procs, prte_job_state_to_str(jdata->state),
-                      (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) ? "True" : "False");
-        bo.bytes = st;
-        bo.size = strlen(st);
-        PMIx_server_IOF_deliver(&pc, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
-        free(st);
-        pmix_asprintf(&st, "\tNum launched: %ld\tNum reported: %ld\tNum terminated: %ld\n\n\tProcs:\n",
-                      (long) jdata->num_launched, (long) jdata->num_reported,
-                      (long) jdata->num_terminated);
-        bo.bytes = st;
-        bo.size = strlen(st);
-        PMIx_server_IOF_deliver(&pc, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
-        free(st);
-        for (i = 0; i < jdata->procs->size; i++) {
-            if (NULL != (proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, i))) {
-                pmix_asprintf(&st, "\t\tRank: %s\tNode: %s\tPID: %u\tState: %s\tExitCode %d\n",
-                              PRTE_VPID_PRINT(proc->name.rank),
-                              (NULL == proc->node) ? "UNKNOWN" : proc->node->name,
-                              (unsigned int) proc->pid, prte_proc_state_to_str(proc->state),
-                              proc->exit_code);
-                bo.bytes = st;
-                bo.size = strlen(st);
-                PMIx_server_IOF_deliver(&pc, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
-                free(st);
-            }
-        }
-        st = "\n";
-        bo.bytes = st;
-        bo.size = strlen(st);
-        PMIx_server_IOF_deliver(&pc, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
+         * function to ensure it gets where it needs to go. */
+        dump_job(jdata);
+    }
+
+    /* Do this for all its child jobs, if any */
+    PMIX_LIST_FOREACH(child, &jdata->children, prte_job_t) {
+        dump_job(child);
     }
 
     /* see if they want stacktraces */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_STACKTRACES, NULL, PMIX_BOOL)) {
         /* if they asked for stack_traces, attempt to get them, but timeout
          * if we cannot do so */
-        prte_daemon_cmd_flag_t command = PRTE_DAEMON_GET_STACK_TRACES;
-        pmix_data_buffer_t buffer;
-
-        bo.bytes = "Waiting for stack traces (this may take a few moments)...\n";
-        bo.size = strlen(bo.bytes);
-        PMIx_server_IOF_deliver(&pc, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
-
-        /* set the recv */
-        PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_STACK_TRACE,
-                      PRTE_RML_PERSISTENT, stack_trace_recv, NULL);
-
-        /* setup the buffer */
-        PMIX_DATA_BUFFER_CONSTRUCT(&buffer);
-        /* pack the command */
-        rc = PMIx_Data_pack(NULL, &buffer, &command, 1, PMIX_UINT8);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+        rc = get_traces(jdata);
+        if (PRTE_SUCCESS != rc) {
             goto giveup;
         }
-        /* pack the jobid */
-        rc = PMIx_Data_pack(NULL, &buffer, &jdata->nspace, 1, PMIX_PROC_NSPACE);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
-            goto giveup;
+        // get traces for child jobs too
+        PMIX_LIST_FOREACH(child, &jdata->children, prte_job_t) {
+            rc = get_traces(child);
+            if (PRTE_SUCCESS != rc) {
+                goto giveup;
+            }
         }
-        /* goes to all daemons */
-        if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &buffer))) {
-            PRTE_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
-            goto giveup;
-        }
-        PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+
         /* we will terminate after we get the stack_traces, but set a timeout
          * just in case we never hear back from everyone */
         if (prte_stack_trace_wait_timeout > 0) {
@@ -629,10 +666,29 @@ static void job_timeout_cb(int fd, short event, void *cbdata)
 giveup:
     /* abort the job */
     PMIX_CONSTRUCT(&parray, pmix_pointer_array_t);
-    PMIX_LOAD_PROCID(&prc.name, jdata->nspace, PMIX_RANK_WILDCARD);
-    pmix_pointer_array_add(&parray, &prc);
+    pmix_pointer_array_init(&parray,
+                            PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                            PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                            PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+
+    prc = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&prc->name, jdata->nspace, PMIX_RANK_WILDCARD);
+    pmix_pointer_array_add(&parray, prc);
+    PMIX_LIST_FOREACH(child, &jdata->children, prte_job_t) {
+        prc = PMIX_NEW(prte_proc_t);
+        PMIX_LOAD_PROCID(&prc->name, child->nspace, PMIX_RANK_WILDCARD);
+        pmix_pointer_array_add(&parray, prc);
+    }
     if (PRTE_SUCCESS != (rc = prte_plm.terminate_procs(&parray))) {
         PRTE_ERROR_LOG(rc);
+    }
+    for (i=0; i < parray.size; i++) {
+        prc = (prte_proc_t *) pmix_pointer_array_get_item(&parray, i);
+        if (NULL == prc) {
+            continue;
+        }
+        pmix_pointer_array_set_item(&parray, i, NULL);
+        PMIX_RELEASE(prc);
     }
     PMIX_DESTRUCT(&parray);
 }

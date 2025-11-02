@@ -86,6 +86,8 @@ int prte_plm_base_comm_start(void)
                       PRTE_RML_PERSISTENT, prte_plm_base_daemon_failed, NULL);
         PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_TOPOLOGY_REPORT,
                       PRTE_RML_PERSISTENT, prte_plm_base_daemon_topology, NULL);
+        PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_STACK_TRACE,
+                      PRTE_RML_PERSISTENT, prte_plm_base_stack_trace_recv, NULL);
     }
     recv_issued = true;
 
@@ -106,6 +108,7 @@ int prte_plm_base_comm_stop(void)
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_PRTED_CALLBACK);
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_REPORT_REMOTE_LAUNCH);
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_TOPOLOGY_REPORT);
+        PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_STACK_TRACE);
     }
     recv_issued = false;
 
