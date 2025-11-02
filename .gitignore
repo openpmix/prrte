@@ -187,6 +187,9 @@ test/filegen
 test/iostress
 test/spawn_multiple
 test/clichk
+test/chkfs
+test/chkfs
+test/spawn_timeout
 test/mpi/spawn_multiple
 
 docs/_build
