@@ -34,6 +34,7 @@ Table of contents
    how-things-work/index
    hosts/index
    placement/index
+   launching-apps/index
    notifications
    session-directory
    developers/index
