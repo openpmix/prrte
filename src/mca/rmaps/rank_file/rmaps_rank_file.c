@@ -330,6 +330,11 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                 }
             }
             prte_rmaps_base_get_cpuset(jdata, node, options);
+            if (NULL == options->job_cpuset) {
+                // the prior function will have printed out the error
+                rc = PRTE_ERR_SILENT;
+                goto error;
+            }
             if (!prte_rmaps_base_check_avail(jdata, app, node, &node_list, NULL, options)) {
                 pmix_show_help("help-rmaps_rank_file.txt", "bad-host", true, rfmap->node_name);
                 rc = PRTE_ERR_SILENT;

@@ -109,7 +109,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     }
     topo = t->topo;
     if (NULL != job_cpuset) {
-        available = prte_hwloc_base_generate_cpuset(topo, use_hwthread_cpus, job_cpuset);
+        available = prte_hwloc_base_generate_cpuset(topo, use_hwthread_cpus, &job_cpuset);
     } else {
         available = prte_hwloc_base_filter_cpus(topo);
     }

@@ -83,3 +83,16 @@ but will not be able to output the binding locations.
 At least one process in your application is bound to too many sites
 for us to report in a string. There will be no impact to your application
 so we will continue but will not be able to output the binding locations.
+#
+[unfound-cpu]
+The CPU list provided on your cmd line contains at least one ID that was
+not found:
+
+  CPU list:  %s
+  CPU ID:    %u (%s)
+  CPU type:  %s
+
+The most common reason for this is specifying the CPU list in terms of
+HWTs while failing to request that we treat HWTs as independent CPUs
+(which means we default to treating the CPU IDs as cores).
+Please correct your input and try again.

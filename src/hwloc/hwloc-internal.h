@@ -262,7 +262,8 @@ PRTE_EXPORT int prte_hwloc_base_set_topology(char *topofile);
 PRTE_EXPORT void prte_hwloc_base_setup_summary(hwloc_topology_t topo);
 
 PRTE_EXPORT hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
-                                                           bool use_hwthread_cpus, char *cpulist);
+                                                           bool use_hwthread_cpus,
+                                                           char **cpulist);
 
 PRTE_EXPORT hwloc_cpuset_t prte_hwloc_base_filter_cpus(hwloc_topology_t topo);
 
