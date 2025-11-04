@@ -744,7 +744,7 @@ void prte_rmaps_base_get_cpuset(prte_job_t *jdata,
     if (NULL != options->cpuset) {
         options->job_cpuset = prte_hwloc_base_generate_cpuset(node->topology->topo,
                                                               options->use_hwthreads,
-                                                              options->cpuset);
+                                                              &options->cpuset);
     } else {
         options->job_cpuset = hwloc_bitmap_dup(node->available);
     }

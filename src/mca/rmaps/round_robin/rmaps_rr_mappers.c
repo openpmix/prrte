@@ -84,6 +84,11 @@ pass:
                             "mca:rmaps:rr:slot working node %s", node->name);
 
         prte_rmaps_base_get_cpuset(jdata, node, options);
+        if (NULL == options->job_cpuset) {
+            // the prior function will have printed out the error
+            rc = PRTE_ERR_SILENT;
+            goto errout;
+        }
 
         /* compute the number of procs to go on this node */
         if (second_pass) {
@@ -269,6 +274,11 @@ pass:
     PMIX_LIST_FOREACH_SAFE(node, nd, node_list, prte_node_t)
     {
         prte_rmaps_base_get_cpuset(jdata, node, options);
+        if (NULL == options->job_cpuset) {
+            // the prior function will have printed out the error
+            rc = PRTE_ERR_SILENT;
+            goto errout;
+        }
 
         if (!options->oversubscribe) {
             /* since oversubscribe is not allowed, cap our usage
@@ -400,9 +410,6 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
     }
 
     nprocs_mapped = 0;
-    tmp = PMIX_ARGV_SPLIT_COMPAT(options->cpuset, ',');
-    ntomap = PMIX_ARGV_COUNT_COMPAT(tmp);
-    PMIX_ARGV_FREE_COMPAT(tmp);
     savecpuset = strdup(options->cpuset);
 
 pass:
@@ -411,7 +418,14 @@ pass:
         pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr:cpu working node %s", node->name);
 
+        // get the cpuset and check that all specified PEs are available
+        // on this node
         prte_rmaps_base_get_cpuset(jdata, node, options);
+        if (NULL == options->job_cpuset) {
+            // the prior function will have printed out the error
+            rc = PRTE_ERR_SILENT;
+            goto errout;
+        }
 
         if (second_pass) {
             options->nprocs = extra_procs_to_assign;
@@ -422,6 +436,10 @@ pass:
                 }
             }
         } else  if (options->ordered || !options->overload) {
+            // see how many PEs we were given
+            tmp = PMIX_ARGV_SPLIT_COMPAT(options->cpuset, ',');
+            ntomap = PMIX_ARGV_COUNT_COMPAT(tmp);
+            PMIX_ARGV_FREE_COMPAT(tmp);
             options->nprocs = ntomap;
         } else {
             /* assign a number of procs equal to the number of available slots */
@@ -613,6 +631,11 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
         {
             outofcpus = false;
             prte_rmaps_base_get_cpuset(jdata, node, options);
+            if (NULL == options->job_cpuset) {
+                // the prior function will have printed out the error
+                rc = PRTE_ERR_SILENT;
+                goto errout;
+            }
             if (!options->donotlaunch) {
                 rc = prte_rmaps_base_check_support(jdata, node, options);
                 if (PRTE_SUCCESS != rc) {

@@ -186,6 +186,11 @@ static int ppr_mapper(prte_job_t *jdata,
         PMIX_LIST_FOREACH_SAFE(node, nd, &node_list, prte_node_t) {
             options->nobjs = 0;
             prte_rmaps_base_get_cpuset(jdata, node, options);
+            if (NULL == options->job_cpuset) {
+                // the prior function will have printed out the error
+                rc = PRTE_ERR_SILENT;
+                goto error;
+            }
 
             if (!options->donotlaunch) {
                 rc = prte_rmaps_base_check_support(jdata, node, options);

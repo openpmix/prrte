@@ -378,6 +378,11 @@ process:
             }
             /* check availability */
             prte_rmaps_base_get_cpuset(jdata, node, options);
+            if (NULL == options->job_cpuset) {
+                // the prior function will have printed out the error
+                rc = PRTE_ERR_SILENT;
+                goto error;
+            }
             if (!prte_rmaps_base_check_avail(jdata, app, node, seq_list, NULL, options)) {
                 continue;
             }
