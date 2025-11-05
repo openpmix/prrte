@@ -4,7 +4,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -62,6 +62,8 @@ typedef struct {
     bool follower;
     pmix_proc_t *addmembers;  // procs supplied as add-members
     size_t naddmembers;
+    pmix_proc_t *final_order;
+    size_t nfinal;
 } prte_grpcomm_direct_group_signature_t;
 PRTE_MODULE_EXPORT PMIX_CLASS_DECLARATION(prte_grpcomm_direct_group_signature_t);
 
