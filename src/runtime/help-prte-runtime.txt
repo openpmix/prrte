@@ -122,3 +122,10 @@ other nodes using the "prte_remote_tmpdir_base" param.
 This is only a warning advisory and your job will continue. You can
 disable this warning in the future by setting the
 "prte_silence_shared_fs" MCA param to "1".
+#
+[bad-final-order]
+A PMIx group construct operation was provided with a final order
+directive that caused some group members to be dropped - i.e., the
+provided final order does not cover some of the final group members.
+Please revise your final order directive so that all final group
+members can be included in the returned final membership.

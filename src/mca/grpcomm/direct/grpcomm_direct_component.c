@@ -82,6 +82,8 @@ static void sgcon(prte_grpcomm_direct_group_signature_t *p)\
     p->follower = false;
     p->addmembers = NULL;
     p->naddmembers = 0;
+    p->final_order = NULL;
+    p->nfinal = 0;
 }
 static void sgdes(prte_grpcomm_direct_group_signature_t *p)
 {

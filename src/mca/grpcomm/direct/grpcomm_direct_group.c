@@ -175,6 +175,12 @@ static void group(int sd, short args, void *cbdata)
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
             }
+
+#ifdef PMIX_GROUP_FINAL_MEMBERSHIP_ORDER
+        } else if (PMIX_CHECK_KEY(&cd->directives[i], PMIX_GROUP_FINAL_MEMBERSHIP_ORDER)) {
+            sig.final_order = (pmix_proc_t*)cd->directives[i].value.data.darray->array;
+            sig.nfinal = cd->directives[i].value.data.darray->size;
+#endif
         }
     }
 
@@ -535,10 +541,56 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
                 }
                 PMIX_LIST_DESTRUCT(&nmlist);
 
-                /* sort the procs so everyone gets the same order */
-                qsort(finalmembership, nfinal, sizeof(pmix_proc_t), pmix_util_compare_proc);
+                // if they gave us a final order, then sort the final membership
+                // accordingly. Note that order entries that consist of nspace,wildcard
+                // indicate that all participants from the given nspace should be
+                // included in the final membership at that point - it does NOT mean
+                // that all procs from that nspace are included in the final membership
+                if (NULL != coll->sig->final_order) {
+                    PMIX_CONSTRUCT(&nmlist, pmix_list_t);
+                    for (m=0; m < coll->sig->nfinal; m++) {
+                        // search the array of final members to capture those that match
+                        for (n=0; n < nfinal; n++) {
+                            if (PMIX_CHECK_PROCID(&coll->sig->final_order[m], &finalmembership[n])) {
+                                // add this proc to the final list
+                                nm = PMIX_NEW(prte_namelist_t);
+                                memcpy(&nm->name, &finalmembership[n], sizeof(pmix_proc_t));
+                                pmix_list_append(&nmlist, &nm->super);
+                                // the final order may have included rank=wildcard - if so,
+                                // then we have to continue
+                                if (PMIX_RANK_WILDCARD != coll->sig->final_order[m].rank) {
+                                    // nope - can only match once
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    // did we lose anyone?
+                    if (nfinal != pmix_list_get_size(&nmlist)) {
+                        pmix_show_help("help-prte-runtime.txt", "bad-final-order", true);
+                        coll->status = PMIX_ERR_BAD_PARAM;
+                        goto answer;
+                    }
+                    // just overwrite the final array
+                    m = 0;
+                    PMIX_LIST_FOREACH(nm, &nmlist, prte_namelist_t) {
+                        memcpy(&finalmembership[m], &nm->name, sizeof(pmix_proc_t));
+                        ++m;
+                    }
+                    PMIX_LIST_DESTRUCT(&nmlist);
+ 
+                    // zero out the final order cache - no need to send it around
+                    PMIX_PROC_FREE(coll->sig->final_order, coll->sig->nfinal);
+                    coll->sig->final_order = NULL;
+                    coll->sig->nfinal = 0;
+
+                } else {
+                     /* sort the procs so everyone gets the same order */
+                    qsort(finalmembership, nfinal, sizeof(pmix_proc_t), pmix_util_compare_proc);
+                }
             }
 
+answer:
             // CONSTRUCT THE RELEASE MESSAGE
             PMIX_DATA_BUFFER_CREATE(reply);
 
@@ -1132,6 +1184,28 @@ static prte_grpcomm_group_t *get_tracker(prte_grpcomm_direct_group_signature_t *
                     coll->nfollowers = n;
                 }
             }
+            // if they specified a final order, see if one was already given
+            if (NULL != sig->final_order) {
+                if (NULL == coll->sig->final_order) {
+                    // cache the directive
+                    PMIX_PROC_CREATE(coll->sig->final_order, sig->nfinal);
+                    memcpy(coll->sig->final_order, sig->final_order, sig->nfinal * sizeof(pmix_proc_t));
+                    coll->sig->nfinal = sig->nfinal;
+                } else {
+                    // see if they match - for now, do a direct match
+                    if (coll->sig->nfinal != sig->nfinal) {
+                        // this is an error
+                        PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+                        return NULL;
+                    }
+                    if (0 != memcmp(coll->sig->final_order, sig->final_order, sig->nfinal * sizeof(pmix_proc_t))) {
+                        // this is an error
+                        PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+                        return NULL;
+                    }
+                    // they are the same, so just ignore the new directive
+                }
+            }
             if (!coll->sig->assignID && sig->assignID) {
                 coll->sig->assignID = true;
             }
@@ -1413,6 +1487,20 @@ static int pack_signature(pmix_data_buffer_t *bkt,
         }
     }
 
+    // pack final order, if given
+    rc = PMIx_Data_pack(NULL, bkt, &sig->nfinal, 1, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    if (0 < sig->nfinal) {
+        rc = PMIx_Data_pack(NULL, bkt, sig->final_order, sig->nfinal, PMIX_PROC);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
+        }
+    }
+
     return PRTE_SUCCESS;
 }
 
@@ -1519,6 +1607,25 @@ static int unpack_signature(pmix_data_buffer_t *buffer,
         PMIX_PROC_CREATE(s->addmembers, s->naddmembers);
         cnt = s->naddmembers;
         rc = PMIx_Data_unpack(NULL, buffer, s->addmembers, &cnt, PMIX_PROC);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_RELEASE(s);
+            return prte_pmix_convert_status(rc);
+        }
+    }
+
+    // unpack the final order
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &s->nfinal, &cnt, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(s);
+        return prte_pmix_convert_status(rc);
+    }
+    if (0 < s->nfinal) {
+        PMIX_PROC_CREATE(s->final_order, s->nfinal);
+        cnt = s->nfinal;
+        rc = PMIx_Data_unpack(NULL, buffer, s->final_order, &cnt, PMIX_PROC);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_RELEASE(s);
