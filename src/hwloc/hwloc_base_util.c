@@ -1645,14 +1645,10 @@ char *prte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
     int rc;
 
     obj = hwloc_get_root_obj(topo);
-    if (obj->symmetric_subtree) {
-        rc = hwloc_topology_export_synthetic(topo, buffer, 4096,
-                                             HWLOC_TOPOLOGY_EXPORT_SYNTHETIC_FLAG_NO_ATTRS);
-        if (-1 == rc) {
-            snprintf(buffer, 4096, "NON-SYMMETRIC");
-        }
-    } else {
-        snprintf(buffer, 4096, "NON-SYMMETRIC");
+    rc = hwloc_topology_export_synthetic(topo, buffer, 4096,
+                                         HWLOC_TOPOLOGY_EXPORT_SYNTHETIC_FLAG_NO_ATTRS);
+    if (-1 == rc) {
+        snprintf(buffer, 4096, "NON-SYMMETRIC[%u]", prte_process_info.myproc.rank);
     }
 
 
