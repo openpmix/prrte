@@ -1638,19 +1638,23 @@ char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
 
 char *prte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
 {
-    int nnuma, npackage, nl3, nl2, nl1, ncore, nhwt;
-    char *sig = NULL, *arch = NULL, *endian, *pus, *cpus;
+    char *sig = NULL, *arch = NULL, *endian;
     hwloc_obj_t obj;
     unsigned i;
-    hwloc_bitmap_t complete, allowed;
+    char buffer[4096];
+    int rc;
 
-    nnuma = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_NUMANODE);
-    npackage = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE);
-    nl3 = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L3CACHE);
-    nl2 = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L2CACHE);
-    nl1 = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L1CACHE);
-    ncore = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE);
-    nhwt = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PU);
+    obj = hwloc_get_root_obj(topo);
+    if (obj->symmetric_subtree) {
+        rc = hwloc_topology_export_synthetic(topo, buffer, 4096,
+                                             HWLOC_TOPOLOGY_EXPORT_SYNTHETIC_FLAG_NO_ATTRS);
+        if (-1 == rc) {
+            snprintf(buffer, 4096, "NON-SYMMETRIC");
+        }
+    } else {
+        snprintf(buffer, 4096, "NON-SYMMETRIC");
+    }
+
 
     /* get the root object so we can add the processor architecture */
     obj = hwloc_get_root_obj(topo);
@@ -1674,33 +1678,8 @@ char *prte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
     endian = "unknown";
 #endif
 
-    /* print the cpu bitmap itself so we can detect mismatches in the available
-     * cores across the nodes - we send the complete set along with the available
-     * one in cases where the two differ */
-    complete = (hwloc_bitmap_t) hwloc_topology_get_complete_cpuset(topo);
-    allowed = (hwloc_bitmap_t) hwloc_topology_get_allowed_cpuset(topo);
-    pus = NULL;
-    if (0 >= hwloc_bitmap_list_asprintf(&pus, allowed)) {
-        if (NULL != pus) {
-            free(pus);
-        }
-        pus = strdup("unknown");
-    }
-    if (hwloc_bitmap_isequal(complete, allowed)) {
-        cpus = strdup("");
-    } else {
-        cpus = NULL;
-        if (0 >= hwloc_bitmap_list_asprintf(&cpus, complete)) {
-            if (NULL != cpus) {
-                free(cpus);
-            }
-            cpus = strdup("unknown");
-        }
-    }
-    pmix_asprintf(&sig, "%dN:%dS:%dL3:%dL2:%dL1:%dC:%dH:%s:%s:%s:%s", nnuma, npackage, nl3, nl2,
-                  nl1, ncore, nhwt, pus, cpus, arch, endian);
-    free(pus);
-    free(cpus);
+    // form the final signature
+    pmix_asprintf(&sig, "%s:%s:%s", buffer, arch, endian);
     return sig;
 }
 
