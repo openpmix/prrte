@@ -53,7 +53,7 @@ char *prte_ess_base_nspace = NULL;
 char *prte_ess_base_vpid = NULL;
 pmix_list_t prte_ess_base_signals = PMIX_LIST_STATIC_INIT;
 
-static char *forwarded_signals = NULL;
+static char *forwarded_signals = "all";
 
 static int prte_ess_base_register(pmix_mca_base_register_flag_t flags)
 {
@@ -82,11 +82,13 @@ static int prte_ess_base_register(pmix_mca_base_register_flag_t flags)
     pmix_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "num_procs",
                                        PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
-    forwarded_signals = NULL;
+    forwarded_signals = "all";
     ret = pmix_mca_base_var_register("prte", "ess", "base", "forward_signals",
-                                     "Comma-delimited list of additional signals (names or integers) to forward to "
-                                     "application processes [\"none\" => forward nothing]. Signals provided by "
-                                     "default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT",
+                                     "Comma-delimited list of signals (names or integers) to be forwarded to "
+                                     "application processes [\"none\" => forward nothing, \"all\" => forward all]. "
+                                     "Signals provided by default depends upon system definitions. The SIGTERM, SIGHUP, "
+                                     "SIGINT signals are always forwarded regardless of this param's settings. The "
+                                     "SIGKILL and SIGPIPE signals cannot be forwarded.",
                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
                                      &forwarded_signals);
     pmix_mca_base_var_register_synonym(ret, "prte", "ess", "hnp", "forward_signals",
@@ -104,13 +106,7 @@ static int prte_ess_base_close(void)
 
 static int prte_ess_base_open(pmix_mca_base_open_flag_t flags)
 {
-    int rc;
-
     PMIX_CONSTRUCT(&prte_ess_base_signals, pmix_list_t);
-
-    if (PRTE_SUCCESS != (rc = prte_ess_base_setup_signals(forwarded_signals))) {
-        return rc;
-    }
 
     return pmix_mca_base_framework_components_open(&prte_ess_base_framework, flags);
 }
@@ -200,95 +196,110 @@ static struct known_signal known_signals[] = {
 
 static bool signals_added = false;
 
-int prte_ess_base_setup_signals(char *mysignals)
+pmix_status_t prte_ess_base_setup_signals(char *input)
 {
     int i, sval, nsigs;
-    char **signals, *tmp;
+    char *mysignals, **signals, *tmp, *sname=NULL;
     prte_ess_base_signal_t *sig;
     bool ignore, found;
 
-    /* if they told us "none", then nothing to do */
-    if (NULL != mysignals && 0 == strcmp(mysignals, "none")) {
-        return PRTE_SUCCESS;
+    if (NULL == input) {
+        mysignals = forwarded_signals;
+    } else {
+        mysignals = input;
     }
 
-    if (!signals_added) {
-        /* we know that some signals are (nearly) always defined, regardless
-         * of environment, so add them here */
+    /* if they told us "none", then nothing to do */
+    if (0 == strcasecmp(mysignals, "none") || signals_added) {
+        return PMIX_SUCCESS;
+    }
+    signals_added = true; // only do this once
+
+    // handle the "all" special case
+    if (0 == strcasecmp(mysignals, "all")) {
         nsigs = sizeof(known_signals) / sizeof(struct known_signal);
         for (i = 0; i < nsigs; i++) {
             if (known_signals[i].can_forward) {
+                pmix_output_verbose(2,  prte_ess_base_framework.framework_output,
+                                    "Forwarding signal: %s", known_signals[i].signame);
                 ESS_ADDSIGNAL(known_signals[i].signal, known_signals[i].signame);
             }
         }
-        signals_added = true; // only do this once
+        return PMIX_SUCCESS;
     }
 
-    /* see if they asked for anything beyond those - note that they may
-     * have asked for some we already cover, and so we ignore any duplicates */
-    if (NULL != mysignals) {
-        /* if they told us "none", then dump the list */
-        signals = PMIX_ARGV_SPLIT_COMPAT(mysignals, ',');
-        for (i = 0; NULL != signals[i]; i++) {
-            sval = 0;
-            if (0 != strncmp(signals[i], "SIG", 3)) {
-                /* treat it like a number */
-                errno = 0;
-                sval = strtoul(signals[i], &tmp, 10);
-                if (0 != errno || '\0' != *tmp) {
-                    pmix_show_help("help-ess-base.txt", "ess-base:unknown-signal", true, signals[i],
-                                   forwarded_signals);
-                    PMIX_ARGV_FREE_COMPAT(signals);
-                    return PRTE_ERR_SILENT;
-                }
+    /* see what they asked for - ignore any duplicates */
+    signals = PMIX_ARGV_SPLIT_COMPAT(mysignals, ',');
+    for (i = 0; NULL != signals[i]; i++) {
+        sval = 0;
+        if (0 != strncasecmp(signals[i], "SIG", 3)) {
+            /* treat it like a number */
+            errno = 0;
+            sval = strtoul(signals[i], &tmp, 10);
+            if (0 != errno || '\0' != *tmp) {
+                pmix_show_help("help-ess-base.txt", "ess-base:unknown-signal", true,
+                               signals[i], mysignals);
+                PMIX_ARGV_FREE_COMPAT(signals);
+                return PMIX_ERR_SILENT;
             }
-
-            /* see if it is one we already covered */
-            ignore = false;
-            PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
-            {
-                if (0 == strcasecmp(signals[i], sig->signame) || sval == sig->signal) {
-                    /* got it - we will ignore */
-                    ignore = true;
+            // see if it's a known signal number
+            sname = NULL;
+            for (int j = 0; NULL != known_signals[j].signame; ++j) {
+                if (sval == known_signals[j].signal) {
+                    sname = known_signals[j].signame;
                     break;
                 }
             }
-
-            if (ignore) {
-                continue;
+            if (NULL == sname) {
+                sname = signals[i];
             }
-
-            /* see if they gave us a signal name */
+        } else {
+            /* they gave us a signal name */
             found = false;
-            for (int j = 0; known_signals[j].signame; ++j) {
-                if (0 == strcasecmp(signals[i], known_signals[j].signame)
-                    || sval == known_signals[j].signal) {
+            for (int j = 0; NULL != known_signals[j].signame; ++j) {
+                if (0 == strcasecmp(signals[i], known_signals[j].signame) ||
+                    sval == known_signals[j].signal) {
                     if (!known_signals[j].can_forward) {
                         pmix_show_help("help-ess-base.txt", "ess-base:cannot-forward", true,
-                                       known_signals[j].signame, forwarded_signals);
+                                       known_signals[j].signame, mysignals);
                         PMIX_ARGV_FREE_COMPAT(signals);
-                        return PRTE_ERR_SILENT;
+                        return PMIX_ERR_SILENT;
                     }
                     found = true;
-                    ESS_ADDSIGNAL(known_signals[j].signal, known_signals[j].signame);
+                    sval = known_signals[j].signal;
+                    sname = known_signals[j].signame;
                     break;
                 }
             }
-
             if (!found) {
-                if (0 == strncmp(signals[i], "SIG", 3)) {
-                    pmix_show_help("help-ess-base.txt", "ess-base:unknown-signal", true, signals[i],
-                                   forwarded_signals);
-                    PMIX_ARGV_FREE_COMPAT(signals);
-                    return PRTE_ERR_SILENT;
-                }
-
-                ESS_ADDSIGNAL(sval, signals[i]);
+                pmix_show_help("help-ess-base.txt", "ess-base:unknown-signal", true,
+                               signals[i], mysignals);
+                PMIX_ARGV_FREE_COMPAT(signals);
+                return PMIX_ERR_SILENT;
             }
         }
-        PMIX_ARGV_FREE_COMPAT(signals);
+
+        /* see if it is one we already covered */
+        ignore = false;
+        PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t) {
+            if (0 == strcasecmp(sname, sig->signame) || sval == sig->signal) {
+                /* got it - we will ignore */
+                ignore = true;
+                break;
+            }
+        }
+
+        if (ignore) {
+            continue;
+        }
+
+        pmix_output_verbose(2,  prte_ess_base_framework.framework_output,
+                            "Forwarding signal: %s", sname);
+        ESS_ADDSIGNAL(sval, sname);
     }
-    return PRTE_SUCCESS;
+
+    PMIX_ARGV_FREE_COMPAT(signals);
+    return PMIX_SUCCESS;
 }
 
 /* instantiate the class */
