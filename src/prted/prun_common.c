@@ -359,14 +359,13 @@ int prun_common(pmix_cli_result_t *results,
     }
 
     /** setup callbacks for signals we should forward */
-    PMIX_CONSTRUCT(&prte_ess_base_signals, pmix_list_t);
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_FWD_SIGNALS);
     if (NULL != opt) {
         param = opt->values[0];
     } else {
         param = NULL;
     }
-    if (PRTE_SUCCESS != (rc = prte_ess_base_setup_signals(param))) {
+    if (PMIX_SUCCESS != (rc = prte_ess_base_setup_signals(param))) {
         return rc;
     }
     PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
