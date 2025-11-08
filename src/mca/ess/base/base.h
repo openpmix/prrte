@@ -15,7 +15,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -68,7 +68,7 @@ PRTE_EXPORT int prte_ess_base_std_prolog(void);
 PRTE_EXPORT int prte_ess_base_prted_setup(void);
 PRTE_EXPORT int prte_ess_base_prted_finalize(void);
 
-PRTE_EXPORT int prte_ess_base_setup_signals(char *signals);
+PRTE_EXPORT pmix_status_t prte_ess_base_setup_signals(char *signals);
 
 /* Detect whether or not this proc is bound - if not,
  * see if it should bind itself

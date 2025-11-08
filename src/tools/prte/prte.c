@@ -733,7 +733,7 @@ int main(int argc, char *argv[])
     } else {
         param = NULL;
     }
-    if (PRTE_SUCCESS != (rc = prte_ess_base_setup_signals(param))) {
+    if (PMIX_SUCCESS != (rc = prte_ess_base_setup_signals(param))) {
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
         goto DONE;
     }
