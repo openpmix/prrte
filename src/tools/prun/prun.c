@@ -298,6 +298,16 @@ int prun(int argc, char *argv[])
         fclose(fp);
     }
 
+    // open the ess framework so it can init the signal forwarding
+    // list - we don't actually need the components
+    rc = pmix_mca_base_framework_open(&prte_ess_base_framework,
+                                      PMIX_MCA_BASE_OPEN_DEFAULT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto DONE;
+    }
+
+ 
     rc = prun_common(&results, schizo, pargc, pargv);
 
 DONE:
@@ -305,7 +315,7 @@ DONE:
     if (NULL != mypidfile) {
         unlink(mypidfile);
     }
-
+    (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
 
     exit(prte_exit_status);
 }
