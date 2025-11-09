@@ -80,6 +80,7 @@
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/pmix_string_copy.h"
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_progress_threads.h"
@@ -92,6 +93,8 @@
 #include "src/prted/prted.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/runtime.h"
+#include "src/prted/pmix/pmix_server.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 
 typedef struct {
     prte_pmix_lock_t lock;
@@ -109,6 +112,13 @@ int prun(int argc, char *argv[])
     char hostname[PRTE_PATH_MAX];
     char *personality;
     pmix_cli_result_t results;
+    pmix_cli_item_t *opt;
+    FILE *fp;
+    char *mypidfile = NULL;
+    bool first;
+    char **split;
+    char *param;
+    int n;
 
     /* init the globals */
     PMIX_CONSTRUCT(&apps, pmix_list_t);
@@ -215,6 +225,97 @@ int prun(int argc, char *argv[])
         schizo->allow_run_as_root(&results); // will exit us if not allowed
     }
 
-    rc = prun_common(&results, schizo, pargc, pargv);
-    return rc;
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_REPORT_PID);
+    if (NULL != opt) {
+        /* if the string is a "-", then output to stdout */
+        if (0 == strcmp(opt->values[0], "-")) {
+            fprintf(stdout, "%lu\n", (unsigned long) getpid());
+        } else if (0 == strcmp(opt->values[0], "+")) {
+            /* output to stderr */
+            fprintf(stderr, "%lu\n", (unsigned long) getpid());
+        } else {
+            char *leftover;
+            int outpipe;
+            /* see if it is an integer pipe */
+            leftover = NULL;
+            outpipe = strtol(opt->values[0], &leftover, 10);
+            if (NULL == leftover || 0 == strlen(leftover)) {
+                /* stitch together the var names and URI */
+                pmix_asprintf(&leftover, "%lu", (unsigned long) getpid());
+                /* output to the pipe */
+                pmix_fd_write(outpipe, strlen(leftover) + 1, leftover);
+                free(leftover);
+                close(outpipe);
+            } else {
+                /* must be a file */
+                fp = fopen(opt->values[0], "w");
+                if (NULL == fp) {
+                    pmix_output(0, "Impossible to open the file %s in write mode\n", opt->values[0]);
+                    PRTE_UPDATE_EXIT_STATUS(1);
+                    goto DONE;
+                }
+                /* output my PID */
+                fprintf(fp, "%lu\n", (unsigned long) getpid());
+                fclose(fp);
+                mypidfile = strdup(opt->values[0]);
+            }
+        }
+    }
+
+    /* if we were asked to report a uri, set the MCA param to do so */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_REPORT_URI);
+    if (NULL != opt) {
+        prte_pmix_server_globals.report_uri = strdup(opt->values[0]);
+    }
+
+    // check for an appfile
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_APPFILE);
+    if (NULL != opt) {
+        // parse the file and add its context to the argv array
+        fp = fopen(opt->values[0], "r");
+        if (NULL == fp) {
+            pmix_show_help("help-prun.txt", "appfile-failure", true, opt->values[0]);
+            if (NULL != mypidfile) {
+                free(mypidfile);
+            }
+            return 1;
+        }
+        first = true;
+        while (NULL != (param = pmix_getline(fp))) {
+            if (!first) {
+                // add a colon delimiter
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&pargv, ":");
+                ++pargc;
+            }
+            // break the line down into parts
+            split = PMIX_ARGV_SPLIT_COMPAT(param, ' ');
+            for (n=0; NULL != split[n]; n++) {
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&pargv, split[n]);
+                ++pargc;
+            }
+            PMIX_ARGV_FREE_COMPAT(split);
+            first = false;
+        }
+        fclose(fp);
+    }
+
+    // open the ess framework so it can init the signal forwarding
+    // list - we don't actually need the components
+    rc = pmix_mca_base_framework_open(&prte_ess_base_framework,
+                                      PMIX_MCA_BASE_OPEN_DEFAULT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto DONE;
+    }
+
+     rc = prun_common(&results, schizo, pargc, pargv);
+
+DONE:
+    // cleanup and leave
+    if (NULL != mypidfile) {
+        unlink(mypidfile);
+    }
+    (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
+
+    exit(prte_exit_status);
 }
