@@ -4,6 +4,28 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
+3.0.13 -- xx Nov 2025
+---------------------
+- PR #2309: Multiple commits
+   - Inherit env directives if requested
+   - Extend inheritance to app level
+   - Extend testbuild launchers support
+   - Fix the colocation algorithm
+   - Fix precedence ordering on envar operations
+   - Bugfix: inconsistently setting PMIX_JOB_RECOVERABLE
+   - Clarify help messages
+   - Do not assign DVM's bookmark to the application job
+   - Error out when asymmetric topologies cannot support ppr requests
+   - Let seq and rankfile mappers compute their own num-procs
+   - Fix relative node processing
+   - Replace sprintf with snprintf
+   - Add launching-apps section to docs
+   - Improve hetero node detection a bit
+   - Tweak the forwarding of signals
+   - Cleanup and improve autohandling of hetero nodes
+   - Fix prun tool
+
+
 3.0.12 -- 9 Sept 2025
 ---------------------
 - PR #2269: Final update of NEWS and VERSION for release
