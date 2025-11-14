@@ -1893,6 +1893,9 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                 }
                 continue;
             }
+            // Signature already found, we can mark this node as completed now
+            jdatorted->num_reported++;
+            jdatorted->num_daemons_reported++;
         }
 
     CLEANUP:
