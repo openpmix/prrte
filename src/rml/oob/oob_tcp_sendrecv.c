@@ -531,8 +531,6 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                         PMIX_ERROR_LOG(rc);
                     }
                     snd->seq_num = peer->recv_msg->hdr.seq_num;
-                    snd->cbfunc = NULL;
-                    snd->cbdata = NULL;
                     /* activate the OOB send state */
                     PRTE_OOB_SEND(snd);
                     /* cleanup */
