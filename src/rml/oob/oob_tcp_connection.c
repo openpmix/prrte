@@ -1127,12 +1127,7 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
         pmix_list_remove_item(&peer->send_queue, &send->super);
         PMIX_RELEASE(send);
     }
-
-    if (prte_prteds_term_ordered || prte_finalizing || prte_abnormal_term_ordered) {
-        /* nothing more to do */
-        return;
-    }
-
+    
     /* inform the component-level that we have lost a connection so
      * it can decide what to do about it.
      */
