@@ -6,6 +6,8 @@ series, in reverse chronological order.
 
 3.0.13 -- xx Nov 2025
 ---------------------
+- PR #2314: Roll rc1
+- PR #2312: Mark uncached daemons as reported
 - PR #2309: Multiple commits
    - Inherit env directives if requested
    - Extend inheritance to app level
