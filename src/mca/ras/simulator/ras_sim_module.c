@@ -39,7 +39,13 @@ static int finalize(void);
 /*
  * Global variable
  */
-prte_ras_base_module_t prte_ras_sim_module = {NULL, allocate, NULL, finalize};
+prte_ras_base_module_t prte_ras_sim_module = {
+    .init = NULL,
+    .allocate = allocate,
+    .deallocate = NULL,
+    .modify = NULL,
+    .finalize = finalize
+};
 
 static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 {

@@ -68,7 +68,7 @@
 
 static void rlfn(void *cbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
 
     pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
     PMIX_RELEASE(req);
@@ -76,7 +76,7 @@ static void rlfn(void *cbdata)
 
 static void mfn(int sd, short args, void *cbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
     pmix_data_buffer_t msg;
     pmix_status_t rc;
     int ret;
@@ -170,7 +170,7 @@ pmix_status_t pmix_server_monitor_fn(const pmix_proc_t *requestor,
                                      const pmix_info_t directives[], size_t ndirs,
                                      pmix_info_cbfunc_t cbfunc, void *cbdata)
 {
-    pmix_server_req_t *req;
+    prte_pmix_server_req_t *req;
     PRTE_HIDE_UNUSED_PARAMS(error);
 
     // protection
@@ -179,7 +179,7 @@ pmix_status_t pmix_server_monitor_fn(const pmix_proc_t *requestor,
     }
 
     // create a tracking object
-    req = PMIX_NEW(pmix_server_req_t);
+    req = PMIX_NEW(prte_pmix_server_req_t);
     memcpy(&req->target, requestor, sizeof(pmix_proc_t));
     req->monitor = (pmix_info_t*)monitor;
     req->pstatus = error;
@@ -199,8 +199,8 @@ pmix_status_t pmix_server_monitor_fn(const pmix_proc_t *requestor,
 
 static void mycbfn(int sd, short args, void *cbdata)
 {
-    pmix_server_req_t *rq2 = (pmix_server_req_t*)cbdata;
-    pmix_server_req_t *req = (pmix_server_req_t*)rq2->cbdata;
+    prte_pmix_server_req_t *rq2 = (prte_pmix_server_req_t*)cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)rq2->cbdata;
     pmix_data_buffer_t *msg;
     pmix_status_t rc;
     int ret;
@@ -275,10 +275,10 @@ errorout:
 static void mycb(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *cbdata,
                  pmix_release_cbfunc_t release_fn, void *release_cbdata)
 {
-    pmix_server_req_t *rq2;
+    prte_pmix_server_req_t *rq2;
 
     // need to threadshift this into our progress thread
-    rq2 = PMIX_NEW(pmix_server_req_t);
+    rq2 = PMIX_NEW(prte_pmix_server_req_t);
     rq2->pstatus = status;
     rq2->info = info;
     rq2->ninfo = ninfo;
@@ -302,7 +302,7 @@ void pmix_server_monitor_request(int status, pmix_proc_t *sender,
     pmix_info_t *monitor;
     size_t ndirs;
     pmix_info_t *directives = NULL;
-    pmix_server_req_t *req;
+    prte_pmix_server_req_t *req;
     pmix_data_buffer_t *msg;
     pmix_proc_t requestor;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
@@ -384,7 +384,7 @@ void pmix_server_monitor_request(int status, pmix_proc_t *sender,
     ++ndirs;
 
     // cache this request
-    req = PMIX_NEW(pmix_server_req_t);
+    req = PMIX_NEW(prte_pmix_server_req_t);
     PMIx_Load_procid(&req->proxy, prte_process_info.myproc.nspace, dvpid);
     req->monitor = monitor;
     req->moncopy = true;
@@ -449,7 +449,7 @@ void pmix_server_monitor_resp(int status, pmix_proc_t *sender,
     pmix_status_t rc, rstatus;
     pmix_rank_t dvpid;
     int local_index;
-    pmix_server_req_t *req;
+    prte_pmix_server_req_t *req;
     pmix_info_t *info=NULL, *results;
     size_t ninfo=0, sz, m, n;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
@@ -471,7 +471,7 @@ void pmix_server_monitor_resp(int status, pmix_proc_t *sender,
     }
 
     // lookup the request
-    req = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, local_index);
+    req = (prte_pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, local_index);
     if (NULL == req) {
         // bad index, or we no longer have this request
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);

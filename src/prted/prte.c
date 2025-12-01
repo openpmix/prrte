@@ -161,14 +161,14 @@ static void parent_died_fn(size_t evhdlr_registration_id, pmix_status_t status,
                            pmix_info_t results[], size_t nresults,
                            pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
-    pmix_server_req_t *cd;
+    prte_pmix_server_req_t *cd;
     PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, status, source, info, ninfo, results, nresults);
 
     // allow the pmix event base to continue
     cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
 
     // shift this into our event base
-    cd = PMIX_NEW(pmix_server_req_t);
+    cd = PMIX_NEW(prte_pmix_server_req_t);
     prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, clean_abort, cd);
     prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,7 +17,7 @@
 
 static void localrelease(void *cbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
 
     pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
     PMIX_RELEASE(req);
@@ -31,7 +31,7 @@ void pmix_server_alloc_request_resp(int status, pmix_proc_t *sender,
 
     int req_index, cnt;
     pmix_status_t ret, rc;
-    pmix_server_req_t *req;
+    prte_pmix_server_req_t *req;
 
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
 
@@ -129,7 +129,7 @@ pmix_status_t prte_pmix_set_scheduler(void)
     return PMIX_SUCCESS;
 }
 
-pmix_status_t prte_server_send_request(uint8_t cmd, pmix_server_req_t *req)
+pmix_status_t prte_server_send_request(uint8_t cmd, prte_pmix_server_req_t *req)
 {
     pmix_data_buffer_t *buf;
     pmix_status_t rc;
@@ -205,12 +205,13 @@ pmix_status_t prte_server_send_request(uint8_t cmd, pmix_server_req_t *req)
     return PMIX_SUCCESS;
 }
 
+#if 0
 /* Callbacks to process an allocate request answer from the scheduler
  * and pass on any results to the requesting client
  */
 static void passthru(int sd, short args, void *cbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     if (NULL != req->infocbfunc) {
@@ -230,7 +231,7 @@ static void infocbfunc(pmix_status_t status,
                        void *cbdata,
                        pmix_release_cbfunc_t rel, void *relcbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
     // need to pass this into our progress thread for processing
     // since we touch the global request array
     req->status = status;
@@ -250,24 +251,11 @@ static void infocbfunc(pmix_status_t status,
 
 static void pass_request(int sd, short args, void *cbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
     pmix_status_t rc;
     size_t n = 0;
     pmix_info_t *xfer = NULL;
     PRTE_HIDE_UNUSED_PARAMS(sd, args, n, xfer);
-
-    /* add this request to our local request tracker array */
-    req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
-
-    if (!PRTE_PROC_IS_MASTER) {
-        /* if we are not the DVM master, then we have to send
-         * this request to the master for processing */
-        rc = prte_server_send_request(PRTE_PMIX_ALLOC_REQ, req);
-        if (PRTE_SUCCESS != rc) {
-            goto callback;
-        }
-        return;
-    }
 
     /* if we are the DVM master, then handle this ourselves - start
      * by ensuring the scheduler is connected to us */
@@ -307,6 +295,7 @@ callback:
     pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
     PMIX_RELEASE(req);
 }
+#endif
 
 /* this is the upcall from the PMIx server for the allocation
  * request support. Since we are going to touch global structures
@@ -319,16 +308,16 @@ pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client,
                                    const pmix_info_t data[], size_t ndata,
                                    pmix_info_cbfunc_t cbfunc, void *cbdata)
 {
-    pmix_server_req_t *req;
-
+    prte_pmix_server_req_t *req;
+    pmix_status_t rc;
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s allocate upcalled on behalf of proc %s:%u with %" PRIsize_t " infos",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), client->nspace, client->rank, ndata);
 
     /* create a request tracker for this operation */
-    req = PMIX_NEW(pmix_server_req_t);
-    pmix_asprintf(&req->operation, "ALLOCATE: %u", directive);
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    pmix_asprintf(&req->operation, "ALLOCATE: %s", PMIx_Alloc_directive_string(directive));
     PMIX_PROC_LOAD(&req->tproc, client->nspace, client->rank);
     req->allocdir = directive;
     req->info = (pmix_info_t *) data;
@@ -336,8 +325,24 @@ pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client,
     req->infocbfunc = cbfunc;
     req->cbdata = cbdata;
 
-    prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, pass_request, req);
+    /* add this request to our local request tracker array */
+    req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+
+    if (!PRTE_PROC_IS_MASTER) {
+        /* if we are not the DVM master, then we have to send
+         * this request to the master for processing */
+        rc = prte_server_send_request(PRTE_PMIX_ALLOC_REQ, req);
+        if (PRTE_SUCCESS != rc) {
+            pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
+            PMIX_RELEASE(req);
+            return rc;
+        }
+        return rc;
+    }
+
+    // pass this to the RAS framework for handling
+    prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, prte_ras_base_modify, req);
     PMIX_POST_OBJECT(req);
     prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
-    return PRTE_SUCCESS;
+    return PMIX_SUCCESS;
 }

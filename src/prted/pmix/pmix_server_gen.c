@@ -348,7 +348,7 @@ void pmix_server_tconn_return(int status, pmix_proc_t *sender,
                               pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
                               void *cbdata)
 {
-    pmix_server_req_t *req;
+    prte_pmix_server_req_t *req;
     int rc, room;
     int32_t ret, cnt;
     pmix_nspace_t jobid;
@@ -372,7 +372,7 @@ void pmix_server_tconn_return(int status, pmix_proc_t *sender,
     }
 
     /* retrieve the request */
-    req = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, room);
+    req = (prte_pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, room);
     pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, room, NULL);
 
     if (NULL == req) {
@@ -407,7 +407,7 @@ void pmix_server_tconn_return(int status, pmix_proc_t *sender,
 
 static void _toolconn(int sd, short args, void *cbdata)
 {
-    pmix_server_req_t *cd = (pmix_server_req_t *) cbdata;
+    prte_pmix_server_req_t *cd = (prte_pmix_server_req_t *) cbdata;
     int rc;
     char *tmp;
     size_t n;
@@ -626,14 +626,14 @@ void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo,
                             pmix_tool_connection_cbfunc_t cbfunc,
                             void *cbdata)
 {
-    pmix_server_req_t *cd;
+    prte_pmix_server_req_t *cd;
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s TOOL CONNECTION REQUEST RECVD",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* need to threadshift this request */
-    cd = PMIX_NEW(pmix_server_req_t);
+    cd = PMIX_NEW(prte_pmix_server_req_t);
     cd->toolcbfunc = cbfunc;
     cd->cbdata = cbdata;
     cd->target.rank = 0; // set default for tool
@@ -651,14 +651,14 @@ pmix_status_t pmix_tool_connected2_fn(pmix_info_t *info, size_t ninfo,
                                       pmix_tool_connection_cbfunc_t cbfunc,
                                       void *cbdata)
 {
-    pmix_server_req_t *cd;
+    prte_pmix_server_req_t *cd;
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s TOOL CONNECTION2 REQUEST RECVD",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* need to threadshift this request */
-    cd = PMIX_NEW(pmix_server_req_t);
+    cd = PMIX_NEW(prte_pmix_server_req_t);
     cd->toolcbfunc = cbfunc;
     cd->cbdata = cbdata;
     cd->target.rank = 0; // set default for tool

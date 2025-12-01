@@ -767,6 +767,34 @@ next_state:
     PMIX_RELEASE(caddy);
 }
 
+static void localrelease(void *cbdata)
+{
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
+
+    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
+    PMIX_RELEASE(req);
+}
+
+void prte_ras_base_modify(int fd, short args, void *cbdata)
+{
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
+
+    if (NULL != prte_ras_base.active_module && NULL != prte_ras_base.active_module->modify) {
+        prte_ras_base.active_module->modify(req);
+    } else {
+        req->pstatus = PMIX_ERR_NOT_SUPPORTED;
+    }
+
+    // execute the callback
+    if (NULL != req->infocbfunc) {
+        req->infocbfunc(req->pstatus, req->info, req->ninfo, req->cbdata, localrelease, req);
+        return;
+    }
+    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
+    PMIX_RELEASE(req);
+}
+
 int prte_ras_base_add_hosts(prte_job_t *jdata)
 {
     int rc;

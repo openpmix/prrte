@@ -21,14 +21,14 @@
 
 static void localrelease(void *cbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
 
     pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
     PMIX_RELEASE(req);
 }
 
 /* Process the session control directive from the scheduler */
-static int process_directive(pmix_server_req_t *req)
+static int process_directive(prte_pmix_server_req_t *req)
 {
     char *user_refid = NULL, *alloc_refid = NULL;
     pmix_info_t *personality = NULL, *iptr;
@@ -281,7 +281,7 @@ ANSWER:
  */
 static void passthru(int sd, short args, void *cbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     if (NULL != req->infocbfunc) {
@@ -301,7 +301,7 @@ static void infocbfunc(pmix_status_t status,
                        void *cbdata,
                        pmix_release_cbfunc_t rel, void *relcbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
 
     // need to pass this into our progress thread for processing
     // since we touch the global request array
@@ -322,7 +322,7 @@ static void infocbfunc(pmix_status_t status,
 
 static void pass_request(int sd, short args, void *cbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
     pmix_status_t rc;
     size_t n;
     pmix_info_t *xfer;
@@ -396,14 +396,14 @@ pmix_status_t pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,
                                           const pmix_info_t directives[], size_t ndirs,
                                           pmix_info_cbfunc_t cbfunc, void *cbdata)
 {
-    pmix_server_req_t *req;
+    prte_pmix_server_req_t *req;
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s session ctrl upcalled on behalf of proc %s:%u with %" PRIsize_t " directives",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), requestor->nspace, requestor->rank, ndirs);
 
     /* create a request tracker for this operation */
-    req = PMIX_NEW(pmix_server_req_t);
+    req = PMIX_NEW(prte_pmix_server_req_t);
     pmix_asprintf(&req->operation, "SESSIONCTRL: %u", sessionID);
     PMIX_PROC_LOAD(&req->tproc, requestor->nspace, requestor->rank);
     req->sessionID = sessionID;

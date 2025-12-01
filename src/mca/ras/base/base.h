@@ -13,7 +13,7 @@
  *                         reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -67,6 +67,8 @@ PRTE_EXPORT void prte_ras_base_display_alloc(prte_job_t *jdata);
 PRTE_EXPORT void prte_ras_base_display_cpus(prte_job_t *jdata, char *nodelist);
 
 PRTE_EXPORT void prte_ras_base_allocate(int fd, short args, void *cbdata);
+
+PRTE_EXPORT void prte_ras_base_modify(int fd, short args, void *cbdata);
 
 PRTE_EXPORT int prte_ras_base_add_hosts(prte_job_t *jdata);
 
