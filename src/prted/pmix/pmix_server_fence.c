@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -72,8 +72,8 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
 
 static void dmodex_req(int sd, short args, void *cbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t *) cbdata;
-    pmix_server_req_t *r;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
+    prte_pmix_server_req_t *r;
     prte_job_t *jdata;
     prte_proc_t *proct, *dmn;
     int rc, rnum;
@@ -131,7 +131,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
     /* has anyone already requested data for this target? If so,
      * then the data is already on its way */
     for (rnum = 0; rnum < prte_pmix_server_globals.local_reqs.size; rnum++) {
-        r = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, rnum);
+        r = (prte_pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, rnum);
         if (NULL == r) {
             continue;
         }

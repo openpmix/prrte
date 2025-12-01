@@ -59,7 +59,7 @@
 
 void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret)
 {
-    pmix_server_req_t *req;
+    prte_pmix_server_req_t *req;
     prte_job_t *jdata;
 
     jdata = prte_get_job_data_object(jobid);
@@ -70,7 +70,7 @@ void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret)
     }
 
     /* retrieve the request */
-    req = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, room);
+    req = (prte_pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, room);
     if (NULL == req) {
         /* we are hosed */
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -137,7 +137,7 @@ void pmix_server_launch_resp(int status, pmix_proc_t *sender,
 
 static void spawn(int sd, short args, void *cbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t *) cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
     int rc;
     pmix_data_buffer_t *buf;
     prte_plm_cmd_flag_t command;
@@ -1006,7 +1006,7 @@ static void connect_release(pmix_status_t status,
                             void *cbdata,
                             pmix_release_cbfunc_t rel, void *relcbdata)
 {
-    pmix_server_req_t *md = (pmix_server_req_t*)cbdata;
+    prte_pmix_server_req_t *md = (prte_pmix_server_req_t*)cbdata;
     pmix_byte_object_t bo;
     pmix_data_buffer_t pbkt;
     pmix_info_t *info = NULL, infostat;
@@ -1089,7 +1089,7 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
                                      const pmix_info_t info[], size_t ninfo,
                                      pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
-    pmix_server_req_t *cd;
+    prte_pmix_server_req_t *cd;
     size_t n;
     pmix_status_t rc;
 
@@ -1106,7 +1106,7 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
      * nodes, and (b) send along any endpt information posted by the participants
      * for "remote" scope */
 
-    cd = PMIX_NEW(pmix_server_req_t);
+    cd = PMIX_NEW(prte_pmix_server_req_t);
     for (n=0; n < ninfo; n++) {
         if (PMIX_CHECK_KEY(&info[n], PMIX_PROC_DATA) ||
             PMIX_CHECK_KEY(&info[n], PMIX_JOB_INFO_ARRAY)) {

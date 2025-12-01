@@ -138,7 +138,7 @@ static int init_server(void)
 
 static void execute(int sd, short args, void *cbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t *) cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
     int rc;
     pmix_data_buffer_t *xfer;
     pmix_proc_t *target;
@@ -218,7 +218,7 @@ callback:
 pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc, const pmix_info_t info[],
                                      size_t ninfo, pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
-    pmix_server_req_t *req;
+    prte_pmix_server_req_t *req;
     pmix_status_t rc;
     int ret;
     uint8_t cmd = PRTE_PMIX_PUBLISH_CMD;
@@ -228,7 +228,7 @@ pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc, const pmix_info_t 
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* create the caddy */
-    req = PMIX_NEW(pmix_server_req_t);
+    req = PMIX_NEW(prte_pmix_server_req_t);
     pmix_asprintf(&req->operation, "PUBLISH: %s:%d", __FILE__, __LINE__);
     req->opcbfunc = cbfunc;
     req->cbdata = cbdata;
@@ -284,7 +284,7 @@ pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc, const pmix_info_t 
 pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const pmix_info_t info[],
                                     size_t ninfo, pmix_lookup_cbfunc_t cbfunc, void *cbdata)
 {
-    pmix_server_req_t *req;
+    prte_pmix_server_req_t *req;
     int ret;
     uint8_t cmd = PRTE_PMIX_LOOKUP_CMD;
     size_t m, n;
@@ -295,7 +295,7 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const 
     }
 
     /* create the caddy */
-    req = PMIX_NEW(pmix_server_req_t);
+    req = PMIX_NEW(prte_pmix_server_req_t);
     pmix_asprintf(&req->operation, "LOOKUP: %s:%d", __FILE__, __LINE__);
     req->lkcbfunc = cbfunc;
     req->cbdata = cbdata;
@@ -369,7 +369,7 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
                                        const pmix_info_t info[], size_t ninfo,
                                        pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
-    pmix_server_req_t *req;
+    prte_pmix_server_req_t *req;
     int ret;
     uint8_t cmd;
     size_t m, n;
@@ -378,7 +378,7 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
     // check for a "purge" command
     if (NULL == keys) {
         /* create the caddy */
-        req = PMIX_NEW(pmix_server_req_t);
+        req = PMIX_NEW(prte_pmix_server_req_t);
         pmix_asprintf(&req->operation, "PURGE: %s:%d", __FILE__, __LINE__);
         req->opcbfunc = cbfunc;
         req->cbdata = cbdata;
@@ -409,7 +409,7 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
 
 
     /* create the caddy */
-    req = PMIX_NEW(pmix_server_req_t);
+    req = PMIX_NEW(prte_pmix_server_req_t);
     pmix_asprintf(&req->operation, "UNPUBLISH: %s:%d", __FILE__, __LINE__);
     req->opcbfunc = cbfunc;
     req->cbdata = cbdata;
@@ -487,7 +487,7 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender,
     uint8_t command;
     int rc, room_num = -1;
     int32_t cnt;
-    pmix_server_req_t *req = NULL;
+    prte_pmix_server_req_t *req = NULL;
     pmix_byte_object_t bo;
     pmix_data_buffer_t pbkt;
     pmix_status_t ret = PMIX_SUCCESS;
@@ -603,7 +603,7 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender,
 
 release:
     if (0 <= room_num) {
-        req = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, room_num);
+        req = (prte_pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, room_num);
         pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, room_num, NULL);
     }
 

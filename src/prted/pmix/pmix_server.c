@@ -95,7 +95,7 @@ static void pmix_server_sched(int status, pmix_proc_t *sender, pmix_data_buffer_
 
 #define PRTE_PMIX_SERVER_MIN_ROOMS 4096
 
-pmix_server_globals_t prte_pmix_server_globals = {0};
+prte_pmix_server_globals_t prte_pmix_server_globals = {0};
 static pmix_topology_t mytopology = {0};
 
 static pmix_server_module_t pmix_server = {
@@ -502,7 +502,7 @@ void pmix_server_register_params(void)
 
 static void timeout_cbfunc(int sd, short args, void *cbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
@@ -545,10 +545,10 @@ static void timeout_cbfunc(int sd, short args, void *cbdata)
 void prte_pmix_server_clear(pmix_proc_t *pname)
 {
     int n;
-    pmix_server_req_t *req;
+    prte_pmix_server_req_t *req;
 
     for (n = 0; n < prte_pmix_server_globals.remote_reqs.size; n++) {
-        req = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.remote_reqs, n);
+        req = (prte_pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.remote_reqs, n);
         if (NULL != req) {
             if (!PMIX_CHECK_NSPACE(req->tproc.nspace, pname->nspace) ||
                 !PMIX_CHECK_RANK(req->tproc.rank, pname->rank)) {
@@ -1108,15 +1108,15 @@ void pmix_server_finalize(void)
     prte_data_server_finalize();
 
     /* cleanup collectives */
-    pmix_server_req_t *cd;
+    prte_pmix_server_req_t *cd;
     for (int i = 0; i < prte_pmix_server_globals.local_reqs.size; i++) {
-      cd = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, i);
+      cd = (prte_pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, i);
       if (NULL != cd) {
           PMIX_RELEASE(cd);
       }
     }
     for (int i = 0; i < prte_pmix_server_globals.remote_reqs.size; i++) {
-      cd = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.remote_reqs, i);
+      cd = (prte_pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.remote_reqs, i);
       if (NULL != cd) {
           PMIX_RELEASE(cd);
       }
@@ -1169,7 +1169,7 @@ static void send_error(int status, pmix_proc_t *idreq, pmix_proc_t *remote, int 
 
 static void _mdxresp(int sd, short args, void *cbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t *) cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
     pmix_data_buffer_t *reply;
     pmix_status_t prc;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
@@ -1239,7 +1239,7 @@ error:
  * access our global data */
 static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t *) cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
 
     PMIX_ACQUIRE_OBJECT(req);
 
@@ -1275,7 +1275,7 @@ static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata
 
 static void dmdx_check(int sd, short args, void *cbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
     prte_job_t *jdata;
     prte_proc_t *proc;
     struct timeval tv = {2, 0};
@@ -1364,7 +1364,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
     struct timeval tv = {0, 0};
     prte_job_t *jdata;
     prte_proc_t *proc;
-    pmix_server_req_t *req;
+    prte_pmix_server_req_t *req;
     pmix_proc_t pproc;
     pmix_status_t prc;
     pmix_info_t *info = NULL, *iptr;
@@ -1470,7 +1470,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
         pmix_output_verbose(2, prte_pmix_server_globals.output,
                             "%s dmdx:recv request cannot find job object - delaying",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-        req = PMIX_NEW(pmix_server_req_t);
+        req = PMIX_NEW(prte_pmix_server_req_t);
         pmix_asprintf(&req->operation, "DMDX: %s:%d", __FILE__, __LINE__);
         req->proxy = *sender;
         memcpy(&req->tproc, &pproc, sizeof(pmix_proc_t));
@@ -1533,7 +1533,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
                                 "%s dmdx:recv key %s not found - delaying",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), key);
             /* we don't - wait for awhile */
-            req = PMIX_NEW(pmix_server_req_t);
+            req = PMIX_NEW(prte_pmix_server_req_t);
             pmix_asprintf(&req->operation, "DMDX: %s:%d", __FILE__, __LINE__);
             req->proxy = *sender;
             memcpy(&req->tproc, &pproc, sizeof(pmix_proc_t));
@@ -1577,7 +1577,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
 
     /* track the request since the call down to the PMIx server
      * is asynchronous */
-    req = PMIX_NEW(pmix_server_req_t);
+    req = PMIX_NEW(prte_pmix_server_req_t);
     pmix_asprintf(&req->operation, "DMDX: %s:%d", __FILE__, __LINE__);
     req->proxy = *sender;
     memcpy(&req->tproc, &pproc, sizeof(pmix_proc_t));
@@ -1651,7 +1651,7 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender,
 {
     int index, n;
     int32_t cnt;
-    pmix_server_req_t *req;
+    prte_pmix_server_req_t *req;
     datacaddy_t *d;
     pmix_proc_t pproc;
     size_t psz;
@@ -1713,7 +1713,7 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender,
     }
 
     /* get the request out of the tracking array */
-    req = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, index);
+    req = (prte_pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, index);
     /* return the returned data to the requestor */
     if (NULL != req) {
         if (NULL != req->mdxcbfunc) {
@@ -1730,7 +1730,7 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender,
 
     /* now see if anyone else was waiting for data from this target */
     for (n = 0; n < prte_pmix_server_globals.local_reqs.size; n++) {
-        req = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, n);
+        req = (prte_pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, n);
         if (NULL == req) {
             continue;
         }
@@ -1910,7 +1910,7 @@ static void send_alloc_resp(pmix_status_t status,
                             pmix_release_cbfunc_t release_fn,
                             void *release_cbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
     pmix_data_buffer_t *buf;
     pmix_status_t rc;
 
@@ -1973,7 +1973,7 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
     uint32_t sessionID;
     pmix_info_t *info = NULL;
     pmix_proc_t source;
-    pmix_server_req_t *req = NULL;
+    prte_pmix_server_req_t *req = NULL;
     int refid;
     PRTE_HIDE_UNUSED_PARAMS(status, tg, cbdata);
 
@@ -2057,6 +2057,32 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
    }
 #endif
 
+    if (PRTE_PMIX_ALLOC_REQ == cmd) {
+        req = PMIX_NEW(prte_pmix_server_req_t);
+        pmix_asprintf(&req->operation, "ALLOCATE: %s",
+                      PMIx_Alloc_directive_string(allocdir));
+        req->allocdir = allocdir;
+        req->remote_index = refid;
+        req->copy = true;
+        req->info = info;
+        req->ninfo = ninfo;
+        PMIX_PROC_LOAD(&req->proxy, sender->nspace, sender->rank);
+        PMIX_PROC_LOAD(&req->tproc, source.nspace, source.rank);
+        /* add this request to our local request tracker array */
+        PMIX_RETAIN(req);
+        req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+        // point to the proper callback function
+        req->infocbfunc = send_alloc_resp;
+        req->cbdata = req;  // so the callback function finds it correctly
+        // pass this to the RAS framework for handling
+        prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, prte_ras_base_modify, req);
+        PMIX_POST_OBJECT(req);
+        prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
+        return;
+    }
+
+    // session control request
+
     /* we are the DVM master, so handle this ourselves - start
      * by ensuring the scheduler is connected to us */
     rc = prte_pmix_set_scheduler();
@@ -2068,27 +2094,24 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
         goto reply;
     }
 
-    /* track the request */
-    req = PMIX_NEW(pmix_server_req_t);
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    pmix_asprintf(&req->operation, "SESSIONCTRL: %u", sessionID);
     req->remote_index = refid;
     req->copy = true;
     req->info = info;
     req->ninfo = ninfo;
     PMIX_PROC_LOAD(&req->proxy, sender->nspace, sender->rank);
     PMIX_PROC_LOAD(&req->tproc, source.nspace, source.rank);
-    if (PRTE_PMIX_ALLOC_REQ == cmd) {
-        pmix_asprintf(&req->operation, "ALLOCATE: %u", allocdir);
-        rc = PMIx_Allocation_request_nb(allocdir, req->info, req->ninfo,
-                                        send_alloc_resp, req);
-    } else {
-        pmix_asprintf(&req->operation, "SESSIONCTRL: %u", sessionID);
+    /* add this request to our local request tracker array */
+    PMIX_RETAIN(req);
+    req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+
 #if PMIX_NUMERIC_VERSION < 0x00050000
-        rc = PMIX_ERR_NOT_SUPPORTED;
+    rc = PMIX_ERR_NOT_SUPPORTED;
 #else
-        rc = PMIx_Session_control(sessionID, req->info, req->ninfo,
-                                  send_alloc_resp, req);
+    rc = PMIx_Session_control(sessionID, req->info, req->ninfo,
+                              send_alloc_resp, req);
 #endif
-    }
     if (PMIX_SUCCESS != rc) {
         goto reply;
     }
@@ -2156,7 +2179,7 @@ PMIX_CLASS_INSTANCE(prte_pmix_server_op_caddy_t,
                     pmix_object_t,
                     opcon, NULL);
 
-static void rqcon(pmix_server_req_t *p)
+static void rqcon(prte_pmix_server_req_t *p)
 {
     p->event_active = false;
     p->cycle_active = false;
@@ -2205,7 +2228,7 @@ static void rqcon(pmix_server_req_t *p)
     p->cbdata = NULL;
     p->rlcbdata = NULL;
 }
-static void rqdes(pmix_server_req_t *p)
+static void rqdes(prte_pmix_server_req_t *p)
 {
     if (NULL != p->operation) {
         free(p->operation);
@@ -2230,18 +2253,18 @@ static void rqdes(pmix_server_req_t *p)
     }
     PMIX_DATA_BUFFER_DESTRUCT(&p->msg);
 }
-PMIX_CLASS_INSTANCE(pmix_server_req_t,
+PMIX_CLASS_INSTANCE(prte_pmix_server_req_t,
                     pmix_object_t,
                     rqcon, rqdes);
 
-static void pscon(pmix_server_pset_t *p)
+static void pscon(prte_pmix_server_pset_t *p)
 {
     p->name = NULL;
     p->jdata = NULL;
     p->members = NULL;
     p->num_members = 0;
 }
-static void psdes(pmix_server_pset_t *p)
+static void psdes(prte_pmix_server_pset_t *p)
 {
     if (NULL != p->name) {
         free(p->name);
@@ -2253,6 +2276,6 @@ static void psdes(pmix_server_pset_t *p)
         free(p->members);
     }
 }
-PMIX_CLASS_INSTANCE(pmix_server_pset_t,
+PMIX_CLASS_INSTANCE(prte_pmix_server_pset_t,
                     pmix_list_item_t,
                     pscon, psdes);

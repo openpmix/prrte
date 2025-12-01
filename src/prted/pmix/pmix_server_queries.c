@@ -165,8 +165,8 @@ static void _query(int sd, short args, void *cbdata)
                      */
                     /* Make sure the qualifier group exists */
                     matched = 0;
-                    pmix_server_pset_t *ps;
-                    PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.groups, pmix_server_pset_t)
+                    prte_pmix_server_pset_t *ps;
+                    PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.groups, prte_pmix_server_pset_t)
                     {
                         if (PMIX_CHECK_NSPACE(q->qualifiers[n].value.data.string, ps->name)) {
                             matched = 1;
@@ -587,9 +587,9 @@ static void _query(int sd, short args, void *cbdata)
                 }
 
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_PSET_NAMES)) {
-                pmix_server_pset_t *ps;
+                prte_pmix_server_pset_t *ps;
                 ans = NULL;
-                PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.psets, pmix_server_pset_t)
+                PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.psets, prte_pmix_server_pset_t)
                 {
                     PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, ps->name);
                 }
@@ -610,7 +610,7 @@ static void _query(int sd, short args, void *cbdata)
                 }
 
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_PSET_MEMBERSHIP)) {
-                pmix_server_pset_t *ps, *psptr;
+                prte_pmix_server_pset_t *ps, *psptr;
                 /* must have provided us with a pset name qualifier */
                 if (NULL == psetname) {
                     ret = PMIX_ERR_BAD_PARAM;
@@ -619,7 +619,7 @@ static void _query(int sd, short args, void *cbdata)
                 ans = NULL;
                 /* find the referenced pset */
                 psptr = NULL;
-                PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.psets, pmix_server_pset_t) {
+                PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.psets, prte_pmix_server_pset_t) {
                     if (0 == strcmp(psetname, ps->name)) {
                         psptr = ps;
                         break;
@@ -665,9 +665,9 @@ static void _query(int sd, short args, void *cbdata)
                 }
 
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_GROUP_NAMES)) {
-                pmix_server_pset_t *ps;
+                prte_pmix_server_pset_t *ps;
                 ans = NULL;
-                PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.groups, pmix_server_pset_t)
+                PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.groups, prte_pmix_server_pset_t)
                 {
                     PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, ps->name);
                 }
@@ -683,8 +683,8 @@ static void _query(int sd, short args, void *cbdata)
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_GROUP_MEMBERSHIP)) {
                 /* construct a list of values with pmix_proc_t
                  * entries for each proc in the indicated group */
-                pmix_server_pset_t *ps, *grp = NULL;
-                PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.groups, pmix_server_pset_t)
+                prte_pmix_server_pset_t *ps, *grp = NULL;
+                PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.groups, prte_pmix_server_pset_t)
                 {
                     if (PMIX_CHECK_NSPACE(ps->name, jobid)) {
                         grp = ps;

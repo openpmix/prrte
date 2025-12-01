@@ -810,7 +810,7 @@ void prte_grpcomm_direct_grp_release(int status, pmix_proc_t *sender,
     pmix_data_array_t darray;
     pmix_info_t *grpinfo = NULL;
     pmix_info_t *endpts = NULL;
-    pmix_server_pset_t *pset;
+    prte_pmix_server_pset_t *pset;
     void *ilist;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
@@ -844,7 +844,7 @@ void prte_grpcomm_direct_grp_release(int status, pmix_proc_t *sender,
      * further to unpack */
     if (PMIX_GROUP_DESTRUCT == sig->op) {
         /* find this group ID on our list of groups */
-        PMIX_LIST_FOREACH(pset, &prte_pmix_server_globals.groups, pmix_server_pset_t)
+        PMIX_LIST_FOREACH(pset, &prte_pmix_server_globals.groups, prte_pmix_server_pset_t)
         {
             if (0 == strcmp(pset->name, sig->groupID)) {
                 pmix_list_remove_item(&prte_pmix_server_globals.groups, &pset->super);
@@ -970,7 +970,7 @@ void prte_grpcomm_direct_grp_release(int status, pmix_proc_t *sender,
 
     if (PMIX_SUCCESS == st) {
        /* add it to our list of known groups */
-        pset = PMIX_NEW(pmix_server_pset_t);
+        pset = PMIX_NEW(prte_pmix_server_pset_t);
         pset->name = strdup(sig->groupID);
         if (NULL != finalmembership) {
             pset->num_members = nfinal;

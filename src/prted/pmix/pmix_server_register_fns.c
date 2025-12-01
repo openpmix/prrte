@@ -86,7 +86,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     pmix_list_t local_procs, members;
     prte_namelist_t *nm;
     size_t nmsize;
-    pmix_server_pset_t *pset;
+    prte_pmix_server_pset_t *pset;
     pmix_cpuset_t cpuset;
     uint32_t ui32, *ui32_ptr;
     prte_job_t *parent = NULL;
@@ -391,7 +391,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             && NULL != tmp) {
             PMIX_INFO_LIST_ADD(ret, iarray, PMIX_PSET_NAME, tmp, PMIX_STRING);
             /* register it */
-            pset = PMIX_NEW(pmix_server_pset_t);
+            pset = PMIX_NEW(prte_pmix_server_pset_t);
             pset->name = strdup(tmp);
             PMIX_RETAIN(jdata);
             pset->jdata = jdata;
@@ -723,7 +723,7 @@ static void opcbfunc(pmix_status_t status, void *cbdata)
 }
 
 /* add any info that the tool couldn't self-assign */
-int prte_pmix_server_register_tool(pmix_server_req_t *cd)
+int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd)
 {
     pmix_status_t ret;
     prte_pmix_lock_t lock;
