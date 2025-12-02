@@ -4,7 +4,7 @@
 # Copyright (c) 2013      Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -18,7 +18,7 @@
   Filename: %s
 Check to make sure the path and filename are correct.
 
-usage:  %s -mca rmaps_rankfile_path rankfile ./app
+usage:  %s --map-by rankfile:file=<path> ./app
 
 Examples of proper syntax include:
   cat hostfile
