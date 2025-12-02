@@ -1528,7 +1528,16 @@ static bool build_map(char *answer, size_t size,
             start = indices[n];
             end = indices[n];
         } else {
-            inrange = true;
+            if (first) {
+                snprintf(tmp, 128, "%u", start);
+                first = false;
+            } else {
+                snprintf(tmp, 128, ",%u", start);
+            }
+            memcpy(&answer[idx], tmp, strlen(tmp));
+            idx += strlen(tmp);
+            inrange = false;
+            start = indices[n];
             end = indices[n];
         }
     }
