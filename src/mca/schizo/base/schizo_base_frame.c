@@ -112,7 +112,7 @@ bool prte_schizo_base_check_qualifiers(char *directive,
     char *v;
 
     for (n=0; NULL != valid[n]; n++) {
-        if (PMIX_CHECK_CLI_OPTION(valid[n], qual)) {
+        if (PMIX_CHECK_CLI_OPTION(qual, valid[n])) {
             return true;
         }
     }
