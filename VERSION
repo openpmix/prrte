@@ -61,7 +61,7 @@ tarball_version=gitclone
 
 # The date when this release was created
 
-date="Nov 24, 2018"
+date="N/A"
 
 # The shared library version of each of PRRTE's public libraries.
 # These versions are maintained in accordance with the "Library
