@@ -347,7 +347,7 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global){
 }
 
 int prte_rml_route_lost(pmix_rank_t route){
-    if(prte_finalizing){
+    if(prte_finalizing || prte_prteds_term_ordered || prte_abnormal_term_ordered){
         /* see if it is one of our children - if so, remove it */
         pmix_rank_t* children = (pmix_rank_t*)prte_rml_base.children.array;
         size_t size = prte_rml_base.children.size;
