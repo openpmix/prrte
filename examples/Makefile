@@ -63,7 +63,7 @@ EXAMPLES = \
 	pset \
 	nodeid \
 	client-threaded \
-|	abort
+	abort
 
 all: $(EXAMPLES)
 
