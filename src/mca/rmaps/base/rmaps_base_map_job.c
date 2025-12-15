@@ -619,6 +619,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
         PMIX_LIST_DESTRUCT(&nodes);
         options.nprocs += app->num_procs;
+        PRTE_FLAG_SET(app, PRTE_APP_FLAG_COMPUTED);
     }
 
     /* check for oversubscribe directives */

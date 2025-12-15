@@ -1023,6 +1023,33 @@ char* prte_print_node_flags(struct prte_node_t *ptr)
     return ans;
 }
 
+char* prte_print_app_flags(struct prte_app_context_t *ptr)
+{
+    prte_app_context_t *p = (prte_app_context_t*)ptr;
+    char **tmp = NULL;
+    char *ans;
+
+    // start with the app command
+    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, p->app);
+    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, ": ");
+
+    if (PRTE_FLAG_TEST(p, PRTE_APP_FLAG_USED_ON_NODE)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "USED-LOCAL-NODE");
+    }
+
+    if (PRTE_FLAG_TEST(p, PRTE_APP_FLAG_TOOL)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "TOOL");
+    }
+
+    if (PRTE_FLAG_TEST(p, PRTE_APP_FLAG_COMPUTED)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "NPROCS-COMPUTED");
+    }
+
+    ans = PMIX_ARGV_JOIN_COMPAT(tmp, '|');
+    PMIX_ARGV_FREE_COMPAT(tmp);
+    return ans;
+}
+
 char* prte_print_job_flags(struct prte_job_t *ptr)
 {
     prte_job_t *p = (prte_job_t*)ptr;
