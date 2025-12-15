@@ -36,6 +36,9 @@ typedef uint8_t prte_app_context_flags_t;
 #define PRTE_APP_FLAG_TOOL          0x02    // this app describes daemons to be co-launched
                                             //    with the application procs in the other apps
                                             //    and does not count against allocation
+#define PRTE_APP_FLAG_COMPUTED      0x04    // num procs for this app were computed and not
+                                            //    given by the user
+
 
 /* APP_CONTEXT ATTRIBUTE KEYS */
 #define PRTE_APP_HOSTFILE            1  // string  - hostfile
@@ -345,8 +348,10 @@ PRTE_EXPORT int prte_attr_register(const char *project, prte_attribute_key_t key
 // forward declarations
 struct prte_proc_t;
 struct prte_node_t;
+struct prte_app_context_t;
 struct prte_job_t;
 
 PRTE_EXPORT char* prte_print_proc_flags(struct prte_proc_t *p);
 PRTE_EXPORT char* prte_print_node_flags(struct prte_node_t *p);
+PRTE_EXPORT char* prte_print_app_flags(struct prte_app_context_t *p);
 PRTE_EXPORT char* prte_print_job_flags(struct prte_job_t *p);
