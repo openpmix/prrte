@@ -234,11 +234,8 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
         /* flag that all subsequent requests should not reset the node->mapped flag */
         initial_map = false;
 
-        /* we already checked for sanity, so it's okay to just do here */
-        if (0 == app->num_procs) {
-            /* set the number of procs to the number of entries in that rankfile */
-            app->num_procs = num_ranks;
-        }
+        /* set the number of procs to the number of entries in that rankfile */
+        app->num_procs = num_ranks;
         if (0 == app->num_procs) {
             pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
             rc = PRTE_ERR_SILENT;
