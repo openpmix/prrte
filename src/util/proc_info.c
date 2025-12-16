@@ -139,14 +139,9 @@ void prte_setup_hostname(void)
     }
 
     // if we are not keeping FQDN, then strip it off if not an IP address
-    if (!pmix_net_isaddr(prte_process_info.nodename) &&
-        NULL != (ptr = strchr(prte_process_info.nodename, '.'))) {
-        if (prte_keep_fqdn_hostnames) {
-            /* retain the non-fqdn name as an alias */
-            *ptr = '\0';
-            PMIX_ARGV_APPEND_UNIQUE_COMPAT(&prte_process_info.aliases, prte_process_info.nodename);
-            *ptr = '.';
-        } else {
+    if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(prte_process_info.nodename)) {
+        ptr = strchr(prte_process_info.nodename, '.');
+        if (NULL != ptr) {
             /* add the fqdn name as an alias */
             PMIX_ARGV_APPEND_UNIQUE_COMPAT(&prte_process_info.aliases, prte_process_info.nodename);
             /* retain the non-fqdn name as the node's name */

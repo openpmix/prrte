@@ -270,14 +270,17 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
         /* check for local name and compute non-fqdn name */
         shortname = NULL;
         rawname = NULL;
+
         if (prte_check_host_is_local(mini_map[i])) {
             ndname = prte_process_info.nodename;
         } else {
             ndname = mini_map[i];
-            /* compute the non-fqdn version */
-            if (!prte_keep_fqdn_hostnames &&
-                !pmix_net_isaddr(ndname)) {
-                cptr = strchr(ndname, '.');
+        }
+
+        if (!prte_keep_fqdn_hostnames) {
+            // Strip off the FQDN if present, ignore IP addresses
+            if (!pmix_net_isaddr(mini_map[i])) {
+                 cptr = strchr(ndname, '.');
                 if (NULL != cptr) {
                     rawname = strdup(ndname);
                     *cptr = '\0';
@@ -286,6 +289,7 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
                 }
             }
         }
+
         /* see if a node of this name is already on the list */
         node = prte_node_match(&adds, ndname);
         if (NULL == node && NULL != shortname) {

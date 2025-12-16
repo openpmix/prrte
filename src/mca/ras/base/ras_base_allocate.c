@@ -124,6 +124,11 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
     bool parsable;
     pmix_proc_t source;
 
+
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ALLOC_DISPLAYED, NULL, PMIX_BOOL)) {
+        return;
+    }
+
     parsable = prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL);
     PMIX_LOAD_PROCID(&source, jdata->nspace, PMIX_RANK_WILDCARD);
 
@@ -131,7 +136,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
         pmix_asprintf(&tmp, "<allocation>\n");
     } else {
         pmix_asprintf(&tmp,
-                      "\n======================   ALLOCATED NODES   ======================\n");
+                      "\n======================   ALLOCATED NODES FOR JOB %s  ======================\n", jdata->nspace);
     }
     if (prte_hnp_is_allocated) {
         istart = 0;
@@ -184,6 +189,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
     }
     free(tmp);
     prte_iof_base_output(&source, PMIX_FWD_STDOUT_CHANNEL, tmp2);
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_ALLOC_DISPLAYED, PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
 }
 
 static void display_cpus(prte_topology_t *t,
