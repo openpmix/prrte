@@ -140,12 +140,14 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
         }
         PMIX_ARGV_FREE_COMPAT(argv);
 
-        // Strip off the FQDN if present, ignore IP addresses
-        if (!pmix_net_isaddr(node_name)) {
-            char *ptr;
-            alias = strdup(node_name);
-            if (NULL != (ptr = strchr(alias, '.'))) {
-                *ptr = '\0';
+        if (!prte_keep_fqdn_hostnames) {
+            // Strip off the FQDN if present, ignore IP addresses
+            if (!pmix_net_isaddr(node_name)) {
+                char *ptr;
+                alias = strdup(node_name);
+                if (NULL != (ptr = strchr(node_name, '.'))) {
+                    *ptr = '\0';
+                }
             }
         }
 
@@ -214,9 +216,17 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
          */
 
         PMIX_OUTPUT_VERBOSE((3, prte_ras_base_framework.framework_output,
-                             "%s hostfile: node %s is being included - keep all is %s",
+                             "%s hostfile: node %s is being included - keep all is %s alias %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node_name,
-                             keep_all ? "TRUE" : "FALSE"));
+                             keep_all ? "TRUE" : "FALSE",
+                             (NULL == alias) ? "NULL" : alias));
+
+        /* see if this is another name for us */
+        if (prte_check_host_is_local(node_name)) {
+            /* Nodename has been allocated, that is for sure */
+            free(node_name);
+            node_name = strdup(prte_process_info.nodename);
+        }
 
         /* Do we need to make a new node object? */
         if (keep_all || NULL == (node = prte_node_match(updates, node_name))) {
@@ -224,9 +234,10 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             if (prte_keep_fqdn_hostnames || NULL == alias) {
                 node->name = strdup(node_name);
             } else {
-                node->name = strdup(alias);
-                node->rawname = strdup(node_name);
+                node->name = strdup(node_name);
+                node->rawname = strdup(alias);
             }
+            free(node_name);
             node->slots = 1;
             if (NULL != username) {
                 prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL, username,
@@ -358,6 +369,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
         }
         free(node_name);
         return PRTE_SUCCESS;
+
     } else {
         hostfile_parse_error(token);
         return PRTE_ERROR;
