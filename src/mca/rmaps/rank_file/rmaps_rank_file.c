@@ -70,8 +70,6 @@ static char *prte_rmaps_rank_file_parse_string_or_int(void);
 static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, char **aff_rankfile);
 static int prte_rmaps_rf_process_lsf_affinity_hostfile(prte_job_t *jdata, prte_rmaps_options_t *options, char *affinity_file);
 
-char *prte_rmaps_rank_file_slot_list = NULL;
-
 #if PMIX_NUMERIC_VERSION < 0x00040205
 static char *pmix_getline(FILE *fp)
 {
@@ -128,16 +126,6 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                             PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
-    /* check to see if any mapping or binding directives were given */
-    if (!(PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) &&
-        !(PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping))) {
-        if (NULL != (affinity_file = getenv("LSB_AFFINITY_HOSTFILE"))) {
-            /* Process the affinity hostfile (if valid) and update jdata
-             * structure approprately.
-             */
-            prte_rmaps_rf_process_lsf_affinity_hostfile(jdata, options, affinity_file);
-        }
-    }
     if (NULL != jdata->map->req_mapper
         && 0 != strcasecmp(jdata->map->req_mapper, c->pmix_mca_component_name)) {
         /* a mapper has been specified, and it isn't me */
@@ -177,6 +165,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
         free(jdata->map->last_mapper);
     }
     jdata->map->last_mapper = strdup(c->pmix_mca_component_name);
+    options->map = PRTE_MAPPING_BYUSER;
 
     /* setup the node list */
     PMIX_CONSTRUCT(&node_list, pmix_list_t);
@@ -207,6 +196,14 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     vpid_start = 0;
     jdata->num_procs = 0;
     PMIX_CONSTRUCT(&rankmap, pmix_pointer_array_t);
+    rc = pmix_pointer_array_init(&rankmap,
+                                 PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                 PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                 PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_DESTRUCT(&rankmap);
+        return PRTE_ERROR;
+    }
 
     /* parse the rankfile, storing its results in the rankmap */
     if (PRTE_SUCCESS != (rc = prte_rmaps_rank_file_parse(rankfile))) {
@@ -292,14 +289,11 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                     goto error;
                 }
             } else {
-                if (0 == strlen(rfmap->slot_list)) {
-                    /* rank was specified but no slot list given - that's an error */
-                    pmix_show_help("help-rmaps_rank_file.txt", "no-slot-list", true, rank,
-                                   rfmap->node_name);
-                    rc = PRTE_ERR_SILENT;
-                    goto error;
+                if (0 < strlen(rfmap->slot_list)) {
+                    slots = rfmap->slot_list;
+                } else {
+                    slots = NULL;
                 }
-                slots = rfmap->slot_list;
                 /* find the node where this proc was assigned */
                 node = NULL;
                 PMIX_LIST_FOREACH(nd, &node_list, prte_node_t)
@@ -352,7 +346,6 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                 PMIX_RELEASE(proc);
                 goto error;
             }
-            options->map = PRTE_MAPPING_BYUSER;
             proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, NULL, options);
             if (NULL == proc) {
                 PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
@@ -361,6 +354,16 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
             }
             /* set the vpid */
             proc->name.rank = rank;
+            /* insert the proc into the proper place */
+            PMIX_RETAIN(proc);
+            rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
+            if (PRTE_SUCCESS != rc) {
+                PRTE_ERROR_LOG(rc);
+                PMIX_RELEASE(proc);
+                goto error;
+            }
+            jdata->num_procs++;
+            PMIX_RELEASE(proc);
             /* Assign this process to these slots
              * Allow for overload in cases where different ranks are assigned to
              * the same PU, but it must be requested by the user.
@@ -442,16 +445,6 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                 free(cpu_bitmap);
                 hwloc_bitmap_free(proc_bitmap);
             }
-            /* insert the proc into the proper place */
-            PMIX_RETAIN(proc);
-            rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
-            if (PRTE_SUCCESS != rc) {
-                PRTE_ERROR_LOG(rc);
-                PMIX_RELEASE(proc);
-                goto error;
-            }
-            jdata->num_procs++;
-            PMIX_RELEASE(proc);
         }
         /* update the starting point */
         vpid_start += app->num_procs;
@@ -504,6 +497,14 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
 
     /* keep track of rank assignments */
     assigned_ranks_array = PMIX_NEW(pmix_pointer_array_t);
+    rc = pmix_pointer_array_init(assigned_ranks_array,
+                                 PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                 PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                 PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_RELEASE(assigned_ranks_array);
+        return PRTE_ERROR;
+    }
 
     /* get the hnp node's info */
     hnp_node = (prte_node_t *) (prte_node_pool->addr[0]);
@@ -691,230 +692,4 @@ static char *prte_rmaps_rank_file_parse_string_or_int(void)
     default:
         return NULL;
     }
-}
-
-static int prte_rmaps_rf_process_lsf_affinity_hostfile(prte_job_t *jdata,
-                                                       prte_rmaps_options_t *options,
-                                                       char *affinity_file)
-{
-    char *aff_rankfile = NULL;
-    struct stat buf;
-    int rc;
-
-    /* check to see if the file is empty - if it is,
-     * then affinity wasn't actually set for this job */
-    if (0 != stat(affinity_file, &buf)) {
-        pmix_show_help("help-rmaps_rank_file.txt", "lsf-affinity-file-not-found", true, affinity_file);
-        return PRTE_ERR_SILENT;
-    }
-    if (0 == buf.st_size) {
-        /* no affinity, so just return */
-        return PRTE_SUCCESS;
-    }
-
-    /* the affinity file sequentially lists rank locations, with
-     * cpusets given as physical cpu-ids. Setup the job object
-     * so it knows to process this accordingly */
-    if (NULL == jdata->map) {
-        jdata->map = PMIX_NEW(prte_job_map_t);
-    }
-
-    /* We need to use the rank file mapper since each line in the affinity
-     * file is the specification for a single rank.
-     */
-    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYUSER);
-    jdata->map->req_mapper = strdup("rank_file");
-
-    /*
-     * Ranking is also determined by the rank file that we generate
-     */
-    options->userranked = true;
-    PRTE_SET_MAPPING_POLICY(jdata->map->ranking, PRTE_RANKING_BYUSER);
-
-    /* Setup a temporary hostfile with logical cpu-ids converted from the the physical
-     * cpu-ids provided by LSF. Further convert the format to match the rankfile
-     *  - https://github.com/openpmix/prrte/pull/580 removed support for Physical CPU IDs
-     *
-     * LSF Provides a "LSF_BINDIR/openmpi_rankfile.sh" script to convert the
-     * format of the LSB_AFFINITY_HOSTFILE to a rankfile. However, it does not
-     * adjust the CPU IDs. So we need a custom function to do this.
-     */
-    rc = prte_rmaps_rf_lsf_convert_affinity_to_rankfile(affinity_file, &aff_rankfile);
-    if (PRTE_SUCCESS != rc ) {
-        pmix_show_help("help-rmaps_rank_file.txt", "lsf-affinity-file-failed-convert", true, affinity_file);
-        return PRTE_ERR_SILENT;
-    }
-    pmix_output_verbose(10, prte_rmaps_base_framework.framework_output,
-                        "mca:rmaps:rf: (lsf) Converted LSB_AFFINITY_HOSTFILE to rankfile %s",
-                        aff_rankfile);
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_FILE, PRTE_ATTR_GLOBAL, aff_rankfile, PMIX_STRING);
-
-    /* LSF provides its info as hwthreads, so set the hwthread-as-cpus flag */
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-    options->use_hwthreads = true;
-    /* don't override something provided by the user, but default to bind-to hwthread */
-    if (!PRTE_BINDING_POLICY_IS_SET(prte_hwloc_default_binding_policy)) {
-        PRTE_SET_BINDING_POLICY(prte_hwloc_default_binding_policy, PRTE_BIND_TO_HWTHREAD);
-    }
-
-    return PRTE_SUCCESS;
-}
-
-static bool quickmatch(prte_node_t *nd, char *name)
-{
-    int n;
-
-    if (0 == strcmp(nd->name, name)) {
-        return true;
-    }
-    if (0 == strcmp(nd->name, prte_process_info.nodename) &&
-        (0 == strcmp(name, "localhost") ||
-         0 == strcmp(name, "127.0.0.1"))) {
-        return true;
-    }
-    if (NULL != nd->aliases) {
-        for (n=0; NULL != nd->aliases[n]; n++) {
-            if (0 == strcmp(nd->aliases[n], name)) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, char **aff_rankfile)
-{
-    FILE *fp;
-    int fp_rank, cur_rank = 0;
-    char *hstname = NULL;
-    char *sep, *eptr, *membind_opt;
-    char *tmp_str = NULL;
-    size_t len;
-    char **cpus;
-    int i, j;
-    hwloc_obj_t obj;
-    prte_node_t *node, *nptr;
-
-    if( NULL != *aff_rankfile) {
-        free(*aff_rankfile);
-    }
-
-    // session dir + / (1) + lsf_rf. (7) + XXXXXX (6) + \0 (1)
-    len = strlen(prte_process_info.top_session_dir) + 1 + 7 + 6 + 1;
-    (*aff_rankfile) = (char*) malloc(sizeof(char) * len);
-    snprintf(*aff_rankfile, len, "%s/lsf_rf.XXXXXX", prte_process_info.top_session_dir);
-
-    /* open the file */
-    fp = fopen(affinity_file, "r");
-    if (NULL == fp) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
-    }
-    fp_rank = mkstemp((*aff_rankfile));
-    if (-1 == fp_rank) {
-        fclose(fp);
-        free((*aff_rankfile));
-        (*aff_rankfile) = NULL;
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
-    }
-
-    while (NULL != (hstname = pmix_getline(fp))) {
-        if (0 == strlen(hstname)) {
-            free(hstname);
-            /* blank line - ignore */
-            continue;
-        }
-        if ('#' == hstname[0]) {
-            free(hstname);
-            /* Comment line - ignore */
-            continue;
-        }
-        if (NULL != (sep = strchr(hstname, ' '))) {
-            *sep = '\0';
-            sep++;
-            /* remove any trailing space */
-            eptr = sep + strlen(sep) - 1;
-            while (eptr > sep && isspace(*eptr)) {
-                eptr--;
-            }
-            *(eptr + 1) = 0;
-            /*
-             * If the submitted LSF job has memory binding related resource requirement, after
-             * the cpu id list there are memory binding options.
-             *
-             * The following is the format of LSB_AFFINITY_HOSTFILE file:
-             *
-             * Host1 0,1,2,3 0 2
-             * Host1 4,5,6,7 1 2
-             *
-             * Each line includes: host_name, cpu_id_list, NUMA_node_id_list, and memory_policy.
-             * In this fix we will drop the last two sections (NUMA_node_id_list and memory_policy)
-             * of each line and keep them in 'membind_opt' for future use.
-             */
-            if (NULL != (membind_opt = strchr(sep, ' '))) {
-                *membind_opt = '\0';
-                membind_opt++;
-            }
-        }
-
-        // Convert the Physical CPU set from LSF to a Hwloc logical CPU set
-        pmix_output_verbose(20, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:rf: (lsf) Convert Physical CPUSET from <%s>", sep);
-
-        // find the named host
-        nptr = NULL;
-        for (j = 0; j < prte_node_pool->size; j++) {
-            node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, j);
-            if (NULL == node) {
-                continue;
-            }
-            if (quickmatch(node, hstname)) {
-                nptr = node;
-                break;
-            }
-        }
-        if (NULL == nptr) {
-            /* wasn't found - that is an error */
-            pmix_show_help("help-rmaps_rank_file.txt",
-                           "resource-not-found", true,
-                           hstname);
-            fclose(fp);
-            close(fp_rank);
-            return PRTE_ERROR;
-        }
-
-        cpus = PMIX_ARGV_SPLIT_COMPAT(sep, ',');
-        for(i = 0; NULL != cpus[i]; ++i) {
-            // get the specified object
-            obj = hwloc_get_pu_obj_by_os_index(nptr->topology->topo, strtol(cpus[i], NULL, 10)) ;
-            if (NULL == obj) {
-                PMIX_ARGV_FREE_COMPAT(cpus);
-                fclose(fp);
-                close(fp_rank);
-                return PRTE_ERROR;
-            }
-            free(cpus[i]);
-            // 10 max number of digits in an int
-            cpus[i] = (char*)malloc(sizeof(char) * 10);
-            snprintf(cpus[i], 10, "%d", obj->logical_index);
-        }
-        sep = PMIX_ARGV_JOIN_COMPAT(cpus, ',');
-        PMIX_ARGV_FREE_COMPAT(cpus);
-        pmix_output_verbose(20, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:rf: (lsf) Convert Physical CPUSET to   <%s>", sep);
-
-        // Format: rank 1=host1 slot=0,1,2,3,4
-        // "rank " (5) + id (max 10) + = (1) + host (?) + " slot=" (6) + ids (?) + '\0' (1)
-        len = 5 + 10 + 1 + strlen(hstname) + 6 + strlen(sep) + 1;
-        tmp_str = (char *)malloc(sizeof(char) * len);
-        snprintf(tmp_str, len, "rank %d=%s slot=%s\n", cur_rank, hstname, sep);
-        pmix_fd_write(fp_rank, strlen(tmp_str), tmp_str);
-        free(tmp_str);
-        ++cur_rank;
-    }
-    fclose(fp);
-    close(fp_rank);
-
-    return PRTE_SUCCESS;
 }
