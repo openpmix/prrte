@@ -57,7 +57,7 @@
 #include "src/util/proc_info.h"
 #include "src/util/prte_cmd_line.h"
 
-#include "src/mca/ras/base/ras_private.h"
+#include "src/mca/ras/base/base.h"
 
 #if PMIX_NUMERIC_VERSION < 0x00040205
 static char *pmix_getline(FILE *fp)
@@ -353,6 +353,9 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
 
     /* convenience */
     jdata = caddy->jdata;
+    /* construct a list to hold the results */
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+
     if (prte_ras_base.simulated) {
         prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH,
                            PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
@@ -361,14 +364,22 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     /* if we already did this, don't do it again - the pool of
      * global resources is set.
      */
-    if (prte_ras_base.allocation_read) {
+    if (prte_ras_base.first_pass_completed) {
 
+        if (!prte_managed_allocation && !prte_ras_base.allocation_read) {
+            // unmanaged system and no prior allocation read - check hostfiles
+            goto parsehostfile;
+
+        }
+
+        // already read an allocation
         PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                              "%s ras:base:allocate allocation already read",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        PMIX_DESTRUCT(&nodes);
         goto next_state;
     }
-    prte_ras_base.allocation_read = true;
+    prte_ras_base.first_pass_completed = true;
 
     /* Otherwise, we have to create
      * the initial set of resources that will delineate all
@@ -378,9 +389,6 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
      * In other words, if a node isn't found in this step, then
      * no job launched by this HNP will be able to utilize it.
      */
-
-    /* construct a list to hold the results */
-    PMIX_CONSTRUCT(&nodes, pmix_list_t);
 
     /* if a component was selected, then we know we are in a managed
      * environment.  - the active module will return a list of what it found
@@ -434,6 +442,8 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         prte_managed_allocation = true;
         /* since this is a managed allocation, we do not resolve */
         prte_do_not_resolve = true;
+        // mark that we received an allocation
+        prte_ras_base.allocation_read = true;
         /* if we are not retaining FQDN hostnames, then record
          * aliases where appropriate */
         PMIX_LIST_FOREACH(node, &nodes, prte_node_t) {
@@ -476,6 +486,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         return;
     }
 
+parsehostfile:
     PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                          "%s ras:base:allocate nothing found in module - proceeding to hostfile",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -505,6 +516,8 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
      * pool - set it and we are done
      */
     if (!pmix_list_is_empty(&nodes)) {
+        // mark that we received an allocation
+        prte_ras_base.allocation_read = true;
         /* store the results in the global resource pool - this removes the
          * list items
          */
@@ -554,6 +567,8 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
      * pool - set it and we are done
      */
     if (!pmix_list_is_empty(&nodes)) {
+        // mark that we received an allocation
+        prte_ras_base.allocation_read = true;
         /* store the results in the global resource pool - this removes the
          * list items
          */
@@ -615,6 +630,8 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
      * pool - set it and we are done
      */
     if (!pmix_list_is_empty(&nodes)) {
+        // mark that we received an allocation
+        prte_ras_base.allocation_read = true;
         /* store the results in the global resource pool - this removes the
          * list items
          */
@@ -648,6 +665,8 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
      * pool - set it and we are done
      */
     if (!pmix_list_is_empty(&nodes)) {
+        // mark that we received an allocation
+        prte_ras_base.allocation_read = true;
         /* store the results in the global resource pool - this removes the
          * list items
          */

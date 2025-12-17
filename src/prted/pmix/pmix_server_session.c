@@ -13,7 +13,7 @@
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/rml/rml.h"
 #include "src/util/dash_host/dash_host.h"
-#include "src/mca/ras/base/ras_private.h"
+#include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/rmaps.h"
 #include "src/mca/schizo/base/base.h"
 

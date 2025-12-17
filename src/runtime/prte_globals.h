@@ -525,6 +525,7 @@ PRTE_EXPORT prte_node_rank_t prte_get_proc_node_rank(const pmix_proc_t *proc);
 /* check to see if two nodes match */
 PRTE_EXPORT prte_node_t* prte_node_match(pmix_list_t *nodes, const char *name);
 PRTE_EXPORT bool prte_nptr_match(prte_node_t *n1, prte_node_t *n2);
+PRTE_EXPORT bool prte_quickmatch(prte_node_t *nd, char *name);
 
 /* global variables used by RTE - instanced in prte_globals.c */
 PRTE_EXPORT extern bool prte_debug_daemons_flag;

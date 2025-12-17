@@ -34,7 +34,7 @@
 #include <unistd.h>
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/ras/base/ras_private.h"
+#include "src/mca/ras/base/base.h"
 #include "src/mca/ras/gridengine/ras_gridengine.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_net.h"

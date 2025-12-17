@@ -525,6 +525,27 @@ bool prte_nptr_match(prte_node_t *n1, prte_node_t *n2)
     return false;
 }
 
+bool prte_quickmatch(prte_node_t *nd, char *name)
+{
+    int n;
+
+    if (0 == strcmp(nd->name, name)) {
+        return true;
+    }
+    if (prte_check_host_is_local(nd->name) &&
+        prte_check_host_is_local(name)) {
+        return true;
+    }
+    if (NULL != nd->aliases) {
+        for (n=0; NULL != nd->aliases[n]; n++) {
+            if (0 == strcmp(nd->aliases[n], name)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 /*
  * CONSTRUCTORS, DESTRUCTORS, AND CLASS INSTANTIATIONS
  * FOR PRTE CLASSES

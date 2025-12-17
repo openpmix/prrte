@@ -32,7 +32,7 @@
 #include "src/util/pmix_basename.h"
 
 #include "ras_pbs.h"
-#include "src/mca/ras/base/ras_private.h"
+#include "src/mca/ras/base/base.h"
 
 /*
  * Local variables

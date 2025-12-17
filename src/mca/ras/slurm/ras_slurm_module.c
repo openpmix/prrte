@@ -57,7 +57,7 @@
 #include "src/util/pmix_show_help.h"
 
 #include "ras_slurm.h"
-#include "src/mca/ras/base/ras_private.h"
+#include "src/mca/ras/base/base.h"
 
 #define PRTE_SLURM_DYN_MAX_SIZE 256
 

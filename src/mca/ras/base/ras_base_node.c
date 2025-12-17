@@ -38,7 +38,7 @@
 #include "src/util/pmix_net.h"
 #include "src/util/proc_info.h"
 
-#include "src/mca/ras/base/ras_private.h"
+#include "src/mca/ras/base/base.h"
 
 /*
  * Add the specified node definitions to the global data store

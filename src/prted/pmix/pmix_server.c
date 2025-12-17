@@ -65,7 +65,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/grpcomm/grpcomm.h"
-#include "src/mca/ras/base/ras_private.h"
+#include "src/mca/ras/base/base.h"
 #include "src/mca/state/state.h"
 #include "src/rml/rml_contact.h"
 #include "src/rml/rml.h"
