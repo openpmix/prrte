@@ -52,6 +52,7 @@ PRTE_EXPORT int prte_ras_base_select(void);
  * globals that might be needed
  */
 typedef struct prte_ras_base_t {
+    bool first_pass_completed;
     bool allocation_read;
     prte_ras_base_module_t *active_module;
     int total_slots_alloc;
@@ -61,6 +62,11 @@ typedef struct prte_ras_base_t {
 } prte_ras_base_t;
 
 PRTE_EXPORT extern prte_ras_base_t prte_ras_base;
+
+/**
+ * Add the specified node definitions to the registry
+ */
+PRTE_EXPORT int prte_ras_base_node_insert(pmix_list_t *, prte_job_t *);
 
 PRTE_EXPORT void prte_ras_base_display_alloc(prte_job_t *jdata);
 

@@ -37,7 +37,7 @@
 #include "src/util/name_fns.h"
 
 #include "ras_slurm.h"
-#include "src/mca/ras/base/ras_private.h"
+#include "src/mca/ras/base/base.h"
 
 /*
  * Local functions

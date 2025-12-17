@@ -23,8 +23,7 @@ EXTRA_DIST += \
         base/help-ras-base.txt
 
 headers += \
-        base/base.h \
-        base/ras_private.h
+        base/base.h
 
 libprtemca_ras_la_SOURCES += \
         base/ras_base_frame.c \
