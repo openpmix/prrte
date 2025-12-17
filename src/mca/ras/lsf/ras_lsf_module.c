@@ -65,10 +65,9 @@ prte_ras_base_module_t prte_ras_lsf_module = {
 
 static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 {
-    char **nodelist;
+    char **nodelist = NULL;
     prte_node_t *node;
     int i, num_nodes;
-    char *ptr;
     PRTE_HIDE_UNUSED_PARAMS(jdata);
 
     /* get the list of allocated nodes */
@@ -76,23 +75,18 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
         pmix_show_help("help-ras-lsf.txt", "nodelist-failed", true);
         return PRTE_ERR_NOT_AVAILABLE;
     }
-
     node = NULL;
 
     /* step through the list */
     for (i = 0; i < num_nodes; i++) {
-        if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(nodelist[i])) {
-            if (NULL != (ptr = strchr(nodelist[i], '.'))) {
-                *ptr = '\0';
-            }
-        }
 
         /* is this a repeat of the current node? */
         if (NULL != node && 0 == strcmp(nodelist[i], node->name)) {
             /* it is a repeat - just bump the slot count */
             ++node->slots;
             pmix_output_verbose(10, prte_ras_base_framework.framework_output,
-                                "ras/lsf: +++ Node (%s) [slots=%d]", node->name, node->slots);
+                                "ras/lsf: +++ Node (%s) [slots=%d]",
+                                node->name, node->slots);
             continue;
         }
 
@@ -106,7 +100,8 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
         pmix_list_append(nodes, &node->super);
 
         pmix_output_verbose(10, prte_ras_base_framework.framework_output,
-                            "ras/lsf: New Node (%s) [slots=%d]", node->name, node->slots);
+                            "ras/lsf: New Node (%s) [slots=%d]",
+                            node->name, node->slots);
     }
 
     /* release the nodelist from lsf */
