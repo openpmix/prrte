@@ -521,6 +521,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             options.nprocs += app->num_procs;
             continue;
         }
+        PRTE_FLAG_SET(app, PRTE_APP_FLAG_COMPUTED);
 
         if (PRTE_MAPPING_SEQ == PRTE_GET_MAPPING_POLICY(jdata->map->mapping) ||
             PRTE_MAPPING_BYUSER == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
@@ -619,7 +620,6 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
         PMIX_LIST_DESTRUCT(&nodes);
         options.nprocs += app->num_procs;
-        PRTE_FLAG_SET(app, PRTE_APP_FLAG_COMPUTED);
     }
 
     /* check for oversubscribe directives */
