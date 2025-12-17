@@ -32,7 +32,6 @@
 #include "src/runtime/prte_globals.h"
 
 #include "src/mca/ras/base/base.h"
-#include "src/mca/ras/base/ras_private.h"
 
 /* NOTE: the RAS does not require a proxy as only the
  * HNP can open the framework in prte_init - non-HNP
@@ -51,6 +50,7 @@
  * Global variables
  */
 prte_ras_base_t prte_ras_base = {
+    .first_pass_completed = false,
     .allocation_read = false,
     .active_module = NULL,
     .total_slots_alloc = 0,
