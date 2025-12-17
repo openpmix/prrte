@@ -17,7 +17,7 @@
  *                         reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,46 +37,49 @@
 
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
-#include "src/mca/rmaps/rank_file/rmaps_rank_file.h"
-#include "src/mca/rmaps/rank_file/rmaps_rank_file_lex.h"
+#include "src/mca/rmaps/lsf/rmaps_lsf.h"
 
 /*
  * Local functions
  */
 
-static int prte_rmaps_rank_file_query(pmix_mca_base_module_t **module, int *priority);
+static int lsf_query(pmix_mca_base_module_t **module, int *priority);
 
-prte_rmaps_rf_component_t prte_mca_rmaps_rank_file_component = {
+prte_rmaps_rf_component_t prte_mca_rmaps_lsf_component = {
     .super = {
         PRTE_RMAPS_BASE_VERSION_4_0_0,
 
-        .pmix_mca_component_name = "rank_file",
+        .pmix_mca_component_name = "lsf",
         PMIX_MCA_BASE_MAKE_VERSION(component,
                                    PRTE_MAJOR_VERSION,
                                    PRTE_MINOR_VERSION,
                                    PMIX_RELEASE_VERSION),
-        .pmix_mca_query_component = prte_rmaps_rank_file_query,
+        .pmix_mca_query_component = lsf_query,
     }
 };
 
-static int prte_rmaps_rank_file_query(pmix_mca_base_module_t **module, int *priority)
+static int lsf_query(pmix_mca_base_module_t **module, int *priority)
 {
-    /* Set the rankfile priority to be LESS than the lsf component
-     * so that the LSF component can decide if it needs to run
+    /*
+     * Set the component priority to the highest:
+     * - If we are in an LSF environment with affinity information (LSB_AFFINITY_HOSTFILE)
+     *   the LSF ras component will have forced this mapper
      */
-    *priority = 95;
-    *module = (pmix_mca_base_module_t *) &prte_rmaps_rank_file_module;
+    *priority = 100;
+    *module = (pmix_mca_base_module_t *) &prte_rmaps_lsf_module;
     return PRTE_SUCCESS;
 }
 
-static void rf_map_construct(prte_rmaps_rank_file_map_t *ptr)
+static void map_construct(prte_rmaps_lsf_map_t *ptr)
 {
     ptr->node_name = NULL;
-    memset(ptr->slot_list, (char) 0x00, RMAPS_RANK_FILE_MAX_SLOTS);
+    memset(ptr->slot_list, (char) 0x00, RMAPS_LSF_MAX_SLOTS);
 }
-static void rf_map_destruct(prte_rmaps_rank_file_map_t *ptr)
+static void map_destruct(prte_rmaps_lsf_map_t *ptr)
 {
     if (NULL != ptr->node_name)
         free(ptr->node_name);
 }
-PMIX_CLASS_INSTANCE(prte_rmaps_rank_file_map_t, pmix_object_t, rf_map_construct, rf_map_destruct);
+PMIX_CLASS_INSTANCE(prte_rmaps_lsf_map_t,
+                    pmix_object_t,
+                    map_construct, map_destruct);

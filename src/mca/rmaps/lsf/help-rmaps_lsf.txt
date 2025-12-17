@@ -1,0 +1,80 @@
+# Copyright (c) 2004-2005 The Regents of the University of California.
+#                         All rights reserved.
+# Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2013      Los Alamos National Security, LLC.
+#                         All rights reserved.
+# Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+# This is the US/English general help file for rankle utilities.
+#
+[bad-syntax]
+Error, invalid syntax in the rankfile (%s)
+syntax must be the following
+
+rank i=host_i slot=string
+
+Examples of proper syntax include:
+    rank 1=host1 slot=1:0,1
+    rank 0=host2 slot=0:*
+    rank 2=host4 slot=1-2
+    rank 3=host3 slot=0:1;1:0-2
+#
+[missing-rank]
+A rank is missing its location specification:
+
+  Rank:        %d
+  Rank file:   %s
+
+All processes must have their location specified in the rank file. Either
+add an entry to the file, or provide a default slot_list to use for
+any unspecified ranks.
+#
+[missing-cpu]
+While parsing the rankfile, %s encountered a line that specified
+a non-existent CPU:
+
+  Slots: %s
+  Available CPUs: %s
+
+Please correct the line and try again.
+#
+[lsf-affinity-file-not-found]
+The affinity file provided in LSB_AFFINITY_HOSTFILE could not be found:
+
+  File:  %s
+
+We cannot continue.
+#
+[rmaps:proc-slots-overloaded]
+A process attempted to bind to resources already allocated on a node
+to a different process.
+ Process : %s
+ Node    : %s
+ Process Requested CPU Set : %s
+ Node Available CPU Set    : %s
+ Overlapping CPU Set       : %s
+
+If this is intentional then you must pass the "overload-allowed"
+qualifier to the --bind-to option.
+  --bind-to :overload-allowed
+#
+[resource-not-found]
+The specified LSF affinity file contained a node (%s) that is not in your
+allocation. We therefore cannot map a process rank to it. Please
+check your allocation and affinity file to ensure the latter only
+contains allocated nodes.
+#
+[bad-host]
+The rankfile that was used claimed that a host was either not
+allocated or oversubscribed its slots.  Please review your rank-slot
+assignments and your host allocation to ensure a proper match.  Also,
+some systems may require using full hostnames, such as
+"host1.example.com" (instead of just plain "host1").
+
+  Host: %s
