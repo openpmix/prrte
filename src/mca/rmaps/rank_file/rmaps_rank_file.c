@@ -298,7 +298,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                 node = NULL;
                 PMIX_LIST_FOREACH(nd, &node_list, prte_node_t)
                 {
-                    if (NULL != rfmap->node_name && 0 == strcmp(nd->name, rfmap->node_name)) {
+                    if (NULL != rfmap->node_name && prte_quickmatch(nd, rfmap->node_name) ){
                         node = nd;
                         break;
                     } else if (NULL != rfmap->node_name

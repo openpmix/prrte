@@ -47,7 +47,6 @@
 
 #include "ras_lsf.h"
 #include "src/mca/ras/base/base.h"
-#include "src/mca/ras/base/ras_private.h"
 
 /*
  * Local functions
