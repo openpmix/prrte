@@ -43,23 +43,6 @@
 
 #include "dash_host.h"
 
-static bool quickmatch(prte_node_t *nd, char *name)
-{
-    int n;
-
-    if (0 == strcmp(nd->name, name)) {
-        return true;
-    }
-    if (NULL != nd->aliases) {
-        for (n=0; NULL != nd->aliases[n]; n++) {
-            if (0 == strcmp(nd->aliases[n], name)) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts)
 {
     char **specs, *cptr;
@@ -77,7 +60,7 @@ int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts)
         } else {
             cptr = NULL;
         }
-        if (quickmatch(node, specs[n])) {
+        if (prte_quickmatch(node, specs[n])) {
             if (NULL != cptr) {
                 if ('*' == *cptr || 0 == strcmp(cptr, "auto")) {
                     slots += node->slots - node->slots_inuse;
@@ -698,7 +681,7 @@ int prte_util_filter_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool remov
                         test = (lmn == lst) ? 0 : 1;
                     }
                 } else {
-                    test = (quickmatch(node, mapped_nodes[i])) ? 0 : 1;
+                    test = (prte_quickmatch(node, mapped_nodes[i])) ? 0 : 1;
                 }
                 if (0 == test) {
                     if (remove) {
