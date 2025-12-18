@@ -1034,7 +1034,8 @@ int prte(int argc, char *argv[])
     PMIX_INFO_LIST_START(jinfo);
 
     /* see if we ourselves were spawned by someone */
-    ret = PMIx_Get(&prte_process_info.myproc, PMIX_PARENT_ID, NULL, 0, &val);
+    PMIX_LOAD_PROCID(&pname, myproc.nspace, PMIX_RANK_WILDCARD);
+    ret = PMIx_Get(&pname, PMIX_PARENT_ID, NULL, 0, &val);
     if (PMIX_SUCCESS == ret) {
         PMIX_LOAD_PROCID(&prte_process_info.my_parent, val->data.proc->nspace, val->data.proc->rank);
         PMIX_VALUE_RELEASE(val);
