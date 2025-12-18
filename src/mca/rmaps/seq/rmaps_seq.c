@@ -87,28 +87,6 @@ PMIX_CLASS_INSTANCE(seq_node_t, pmix_list_item_t, sn_con, sn_des);
 
 static int process_file(char *path, pmix_list_t *list);
 
-static bool quickmatch(prte_node_t *nd, char *name)
-{
-    int n;
-
-    if (0 == strcmp(nd->name, name)) {
-        return true;
-    }
-    if (0 == strcmp(nd->name, prte_process_info.nodename) &&
-        (0 == strcmp(name, "localhost") ||
-         0 == strcmp(name, "127.0.0.1"))) {
-        return true;
-    }
-    if (NULL != nd->aliases) {
-        for (n=0; NULL != nd->aliases[n]; n++) {
-            if (0 == strcmp(nd->aliases[n], name)) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 #if PMIX_NUMERIC_VERSION < 0x00040205
 static char *pmix_getline(FILE *fp)
 {
@@ -364,7 +342,7 @@ process:
                 if (NULL == node) {
                     continue;
                 }
-                if (quickmatch(node, sq->hostname)) {
+                if (prte_quickmatch(node, sq->hostname)) {
                     match = true;
                     break;
                 }
