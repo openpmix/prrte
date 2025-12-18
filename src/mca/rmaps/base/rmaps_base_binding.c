@@ -392,8 +392,7 @@ int prte_rmaps_base_bind_proc(prte_job_t *jdata,
                         PRTE_JOBID_PRINT(jdata->nspace),
                         prte_hwloc_base_print_binding(jdata->map->binding), jdata->map->binding);
 
-    if (PRTE_MAPPING_BYUSER == options->map ||
-        PRTE_MAPPING_LIKWID == options->map) {
+    if (PRTE_MAPPING_BYUSER == options->map) {
         /* user specified binding by rankfile or it was computed
          * by the likwid mapper - nothing for us to do */
         return PRTE_SUCCESS;

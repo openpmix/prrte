@@ -699,9 +699,6 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_PELIST);
         PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
 
-    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_LIKWID)) {
-        PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_LIKWID);
-
     } else {
         pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
                        true, "mapping", cptr);

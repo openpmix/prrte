@@ -669,7 +669,6 @@ ranking:
             break;
         case PRTE_MAPPING_BYUSER:
         case PRTE_MAPPING_SEQ:
-        case PRTE_MAPPING_LIKWID:
             options.mapdepth = PRTE_BIND_TO_NONE;
             options.userranked = true;
             options.maptype = HWLOC_OBJ_MACHINE;
