@@ -315,6 +315,13 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
 
             /***   MAP-BY   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_MAPBY)) {
+            if (PRTE_MAPPING_POLICY_IS_SET(jdata->map->mapping)) {
+                /* not allowed to provide multiple mapping policies */
+                pmix_show_help("help-prte-rmaps-base.txt", "redefining-policy", true, "mapping",
+                               info->value.data.string,
+                               prte_rmaps_base_print_mapping(jdata->map->mapping));
+                return PRTE_ERR_BAD_PARAM;
+            }
             rc = prte_rmaps_base_set_mapping_policy(jdata, info->value.data.string);
             if (PRTE_SUCCESS != rc) {
                 return rc;
@@ -338,6 +345,13 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
 
             /***   RANK-BY   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_RANKBY)) {
+            if (PRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
+                /* not allowed to provide multiple mapping policies */
+                pmix_show_help("help-prte-rmaps-base.txt", "redefining-policy", true, "ranking",
+                               info->value.data.string,
+                               prte_rmaps_base_print_ranking(jdata->map->ranking));
+                return PRTE_ERR_BAD_PARAM;
+            }
             rc = prte_rmaps_base_set_ranking_policy(jdata, info->value.data.string);
             if (PRTE_SUCCESS != rc) {
                 return rc;
@@ -345,6 +359,13 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
 
             /***   BIND-TO   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_BINDTO)) {
+            if (PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
+                /* not allowed to provide multiple mapping policies */
+                pmix_show_help("help-prte-rmaps-base.txt", "redefining-policy", true, "binding",
+                               info->value.data.string,
+                               prte_hwloc_base_print_binding(jdata->map->binding));
+                return PRTE_ERR_BAD_PARAM;
+            }
             rc = prte_hwloc_base_set_binding_policy(jdata, info->value.data.string);
             if (PRTE_SUCCESS != rc) {
                 return rc;
