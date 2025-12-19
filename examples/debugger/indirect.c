@@ -373,9 +373,9 @@ int main(int argc, char **argv)
         struct timespec tp = {0, 500000000};
         nanosleep(&tp, NULL);
         ++icount;
-        if (icount > 20) {
+        if (icount > 10) {
             fprintf(stderr, "Error: Failed to launch by the timeout\n");
-            goto done;
+            exit(1);
         }
     }
     if (!ilactive) {
