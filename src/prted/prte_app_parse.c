@@ -439,7 +439,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
         }
     }
 #endif
-    
+
 #ifdef PMIX_CLI_SET_ENVAR
     opt = pmix_cmd_line_get_param(&results, PMIX_CLI_SET_ENVAR);
     if (NULL != opt) {

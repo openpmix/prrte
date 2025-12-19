@@ -103,8 +103,8 @@ We cannot determine which value was intended, and therefore are unable to procee
 Please correct your command line.
 #
 [multi-instances]
-ERROR: The "%s" command line option was listed more than once on the command line.
-Only one instance of this option is permitted.
+ERROR: The "%s" command line option was listed more than once on
+the command line. Only one instance of this option is permitted.
 Please correct your command line.
 #
 [no-proxy]
