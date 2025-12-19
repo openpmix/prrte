@@ -713,12 +713,12 @@ bool prte_rmaps_base_check_avail(prte_job_t *jdata,
     options->target = hwloc_bitmap_dup(prte_rmaps_base.available);
 
     nprocs = options->ncpus / options->cpus_per_rank;
-    if (options->nprocs < nprocs) {
+    if (options->nprocs <= nprocs) {
         avail = true;
     } else if (options->overload) {
         /* doesn't matter how many cpus are in use */
         avail = true;
-    } else if (0 < nprocs) {
+    } else if (0 == options->pprn && 0 < nprocs) {
         options->nprocs = nprocs;
         avail = true;
     }

@@ -372,7 +372,8 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
             pmix_show_help("help-prte-rmaps-base.txt", "span-packages-multiple", true,
                            prte_rmaps_base_print_mapping(jdata->map->mapping),
                            prte_hwloc_base_print_binding(jdata->map->binding),
-                           options->cpus_per_rank);
+                           options->cpus_per_rank,
+                           node->name);
             return PRTE_ERR_SILENT;
         }
     } else {
