@@ -96,19 +96,29 @@ mapping operation.
 
 #
 [span-packages-multiple]
-Your job failed to map because the resulting process placement
-would cause the process to be bound to CPUs in more than one
-package:
+Your job failed to map because either a package with sufficient
+available cpus could not be found on the node, or the resulting
+process placement would cause the process to be bound to CPUs in
+more than one package on the node:
 
   Mapping policy:  %s
   Binding policy:  %s
   CPUs/rank:       %d
+  Node:            %s
 
-This configuration almost always results in a loss of performance
-that can significantly impact applications. Either alter the
-mapping, binding, and/or cpus/rank policies so that each process
-can fit into a single package, or consider using an alternative
-mapper that can handle this configuration (e.g., the rankfile mapper).
+If we couldn't find a package on the node that had sufficient
+available cpus, then you may need to alter your mapping request.
+For example, your ppr request may include more procs than the
+node can support.
+
+If we failed to map due to cross-package placement, then you may
+need to alter your policy. A configuration that causes a single
+process to operate across multiple packages almost always results
+in a loss of performance that can significantly impact applications.
+Either alter the mapping, binding, and/or cpus/rank policies so
+that each process can fit into a single package, or consider using
+an alternative mapper that can handle this configuration (e.g., the
+rankfile mapper).
 #
 [span-packages-cpuset]
 Your job failed to map because the resulting process placement
