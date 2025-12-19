@@ -292,6 +292,9 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 /* get the parent job's pes/proc, if it had one */
                 if (prte_get_attribute(&parent->attributes, PRTE_JOB_PES_PER_PROC, (void **) &u16ptr, PMIX_UINT16)) {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL, u16ptr, PMIX_UINT16);
+                } else if (0 < prte_rmaps_base.default_pes) {
+                    u16 = prte_rmaps_base.default_pes;
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL, u16ptr, PMIX_UINT16);
                 }
             }
             /* if not already assigned, inherit the parent's cpu designation */
@@ -430,6 +433,11 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps mapping given by MCA param");
                 jdata->map->mapping = prte_rmaps_base.mapping;
+                if (0 < prte_rmaps_base.default_pes) {
+                    u16 = prte_rmaps_base.default_pes;
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL, u16ptr, PMIX_UINT16);
+                    options.cpus_per_rank = u16;
+                }
                 if (PRTE_MAPPING_PPR == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
                     tmp = strchr(prte_rmaps_base.default_mapping_policy, ':');
                     ++tmp;
