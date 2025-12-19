@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -75,8 +75,12 @@ typedef struct {
     /* default file for use in sequential and rankfile mapping
      * when the directive comes thru MCA param */
     char *file;
+    // default number of pe's per proc
+    uint16_t default_pes;
+    // some general storage values
     hwloc_cpuset_t available, baseset;  // scratch for binding calculation
     char *default_mapping_policy;
+    char *default_ranking_policy;
     /* whether or not to require hwtcpus due to topology limitations */
     bool require_hwtcpus;
 } prte_rmaps_base_t;
