@@ -6,6 +6,24 @@ series, in reverse chronological order.
 
 3.0.13 -- xx Nov 2025
 ---------------------
+- PR #2342: Update VERSION and NEWS
+- PR #2341: Slight mod to the indirect debugger example
+- PR #2339: Correct the nprocs check to support moving to next node
+- PR #2336: Allow setting default cpus/rank
+- PR #2334: Retrieve PMIX_PARENT_ID with wildcard rank
+- PR #2330: Centralize quickmatch to ensure consistency
+- PR #2328: Multiple commits
+   - Correctly set the number of procs for rankfile apps
+   - Do not override user-specified num procs
+   - Some cleanup on hostfile parsing
+   - Remove LSF references in rank_file mapper
+   - Update ras to allow rank/seq files to define allocation
+   - Add the rmaps/lsf component
+- PR #2321: Fix typo in examples Makefile
+- PR #2320: Fix prte_info to output correct version
+- PR #2318: Multiple commits
+   - Correct ordering of macro variables
+   - Fix printing of binding ranges
 - PR #2314: Roll rc1
 - PR #2312: Mark uncached daemons as reported
 - PR #2309: Multiple commits
