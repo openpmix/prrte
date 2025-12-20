@@ -6,6 +6,17 @@ series, in reverse chronological order.
 
 3.0.13 -- xx Nov 2025
 ---------------------
+.. important:: This release includes the following critical changes:
+
+               * repair of the indirect debugger connection procedure. The
+                 prterun launcher was using the incorrect proc name to
+                 retrieve its parent's processID
+               * repair of the LSF mapper when LSF affinity has been specified
+               * a number of fixes to various mapper components and printing
+                 of binding ranges
+               * an improved mechanism for automatically detecting the
+                 presence of heterogeneous nodes
+
 - PR #2342: Update VERSION and NEWS
 - PR #2341: Slight mod to the indirect debugger example
 - PR #2339: Correct the nprocs check to support moving to next node
