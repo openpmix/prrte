@@ -274,11 +274,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
         // check for topology limitations
         prte_rmaps_base.require_hwtcpus = !prte_hwloc_base_core_cpus(node->topology->topo);
 
-        // display the allocation, if requested
-        if (prte_get_attribute(&state->jdata->attributes, PRTE_JOB_DISPLAY_ALLOC, NULL, PMIX_BOOL)) {
-            prte_ras_base_display_alloc(state->jdata);
-        }
-
         /* jump to mapping */
         state->jdata->state = PRTE_JOB_STATE_VM_READY;
         PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);

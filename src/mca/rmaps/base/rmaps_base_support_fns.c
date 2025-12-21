@@ -711,15 +711,25 @@ bool prte_rmaps_base_check_avail(prte_job_t *jdata,
     /* the available cpus are in the scratch location */
     options->target = hwloc_bitmap_dup(prte_rmaps_base.available);
 
+    // compute how many procs we can support on this object
     nprocs = options->ncpus / options->cpus_per_rank;
-    if (options->nprocs <= nprocs) {
-        avail = true;
-    } else if (options->overload) {
-        /* doesn't matter how many cpus are in use */
-        avail = true;
-    } else if (0 == options->pprn && 0 < nprocs) {
-        options->nprocs = nprocs;
-        avail = true;
+
+    if (0 < options->pprn) {
+        // we are ppr mapping, so there must be enough cpus to
+        // support at least pprn procs on this object
+        if (options->pprn <= nprocs) {
+            avail = true;
+        }
+    } else {
+        if (options->nprocs <= nprocs) {
+            avail = true;
+        } else if (options->overload) {
+            /* doesn't matter how many cpus are in use */
+            avail = true;
+        } else if (0 < nprocs) {
+            options->nprocs = nprocs;
+            avail = true;
+        }
     }
 
 done:
