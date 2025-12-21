@@ -75,7 +75,17 @@ jobs:
             LDFLAGS=$libevent_ldflags
         make -j
         make install
-        make uninstall
+    - name: Build examples
+      run: |
+        pushd examples
+        export PATH=$RUNNER_TEMP/prteinstall/bin:$RUNNER_TEMP/pmixinstall/bin:${PATH}
+        make
+        popd
+    - name: Test sanity check
+      run: |
+        export PATH=$RUNNER_TEMP/prteinstall/bin:$RUNNER_TEMP/pmixinstall/bin:${PATH}
+        export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
+        prterun --map-by ppr:1:core examples/hello
 
   ubuntu:
     runs-on: ubuntu-latest
@@ -129,7 +139,19 @@ jobs:
             --enable-testbuild-launchers
         make -j
         make install
-        make uninstall
+    - name: Build examples
+      run: |
+        pushd examples
+        export PATH=$RUNNER_TEMP/prteinstall/bin:$RUNNER_TEMP/pmixinstall/bin:${PATH}
+        export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
+        make
+        popd
+    - name: Test sanity check
+      run: |
+        export PATH=$RUNNER_TEMP/prteinstall/bin:$RUNNER_TEMP/pmixinstall/bin:${PATH}
+        export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
+        prterun --map-by ppr:1:core examples/hello
+        prterun --map-by ppr:1:core examples/legacy
 
   ubuntuClang:
     runs-on: ubuntu-latest
@@ -170,7 +192,19 @@ jobs:
             --enable-testbuild-launchers
         make -j
         make install
-        make uninstall
+    - name: Build examples
+      run: |
+        pushd examples
+        export PATH=$RUNNER_TEMP/prteinstall/bin:$RUNNER_TEMP/pmixinstall/bin:${PATH}
+        export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
+        make
+        popd
+    - name: Test sanity check
+      run: |
+        export PATH=$RUNNER_TEMP/prteinstall/bin:$RUNNER_TEMP/pmixinstall/bin:${PATH}
+        export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
+        prterun --map-by ppr:1:core examples/hello
+        prterun --map-by ppr:1:core examples/legacy
 
   distcheck:
     runs-on: ubuntu-latest
