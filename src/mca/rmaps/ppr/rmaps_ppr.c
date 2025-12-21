@@ -207,13 +207,15 @@ static int ppr_mapper(prte_job_t *jdata,
 
             if (HWLOC_OBJ_MACHINE == options->maptype) {
                 options->nprocs = options->pprn;
-                /* if the number of procs is greater than the number of CPUs
-                 * on this node, but less or equal to the number of slots,
+                /* if the number of procs times the number of pes/proc
+                 * is greater than the number of CPUs
+                 * on this node, but the number of procs is less or equal
+                 * to the number of slots,
                  * then we are not oversubscribed but we are overloaded. If
                  * the user didn't specify a required binding, then we set
                  * the binding policy to do-not-bind for this node */
                 ncpus = prte_rmaps_base_get_ncpus(node, NULL, options);
-                if (options->nprocs > ncpus &&
+                if ((options->nprocs * options->cpus_per_rank) > ncpus &&
                     options->nprocs <= node->slots_available &&
                     !PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
                     options->bind = PRTE_BIND_TO_NONE;
@@ -253,13 +255,15 @@ static int ppr_mapper(prte_job_t *jdata,
                     continue;
                 }
                 options->nprocs = options->pprn * nobjs;
-                /* if the number of procs is greater than the number of CPUs
-                 * on this node, but less or equal to the number of slots,
+                /* if the number of procs times the number of pes/proc
+                 * is greater than the number of CPUs
+                 * on this node, but the number of procs is less or equal
+                 * to the number of slots,
                  * then we are not oversubscribed but we are overloaded. If
                  * the user didn't specify a required binding, then we set
                  * the binding policy to do-not-bind for this node */
                 ncpus = prte_rmaps_base_get_ncpus(node, NULL, options);
-                if (options->nprocs > ncpus &&
+                if ((options->nprocs * options->cpus_per_rank) > ncpus &&
                     options->nprocs <= node->slots_available &&
                     !PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
                     options->bind = PRTE_BIND_TO_NONE;
@@ -269,6 +273,7 @@ static int ppr_mapper(prte_job_t *jdata,
                 for (i = 0; i < nobjs && nprocs_mapped < app->num_procs; i++) {
                     obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
                                                           options->maptype, options->cmaplvl, i);
+                    // are there enough cpus on this obj to meet the request?
                     if (!prte_rmaps_base_check_avail(jdata, app, node, &node_list, obj, options)) {
                         continue;
                     }
