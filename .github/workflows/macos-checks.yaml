@@ -1,0 +1,50 @@
+name: macOS
+
+on: [pull_request]
+
+jobs:
+  macOS:
+    runs-on: macos-latest
+    steps:
+    - name: Setup macOS
+      run: |
+        # install autotools
+        brew install autoconf
+        brew install automake
+        brew install libtool
+        brew install libevent
+        brew install hwloc
+    - name: Git clone PMIx
+      uses: actions/checkout@v3
+      with:
+            submodules: recursive
+            repository: openpmix/openpmix
+            path: openpmix/master
+            ref: master
+    - name: Build PMIx
+      run: |
+        cd openpmix/master
+        ./autogen.pl
+        ./configure --prefix=$RUNNER_TEMP/pmixinstall
+        make -j
+        make install
+    - name: Git clone PRRTE
+      uses: actions/checkout@v3
+      with:
+            submodules: recursive
+            clean: false
+    - name: Build PRRTE
+      run: |
+        ./autogen.pl
+        ./configure --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall --enable-devel-check
+        make -j
+        make install
+    - name: Build examples
+      run: |
+        pushd examples
+        make
+        popd
+    - name: Test sanity check
+      run: |
+        mpirun --map-by ppr:1:core examples/hello
+        mpirun --map-by ppr:1:core examples/legacy
