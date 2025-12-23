@@ -172,8 +172,20 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             PMIX_ERROR_LOG(rc);
             goto CLEANUP;
         }
-        // if so, then get the rank of the tool
+        // if found, then the tool already has a jobid and they will
+        // be passing us the full procID of the tool
         if (found) {
+            // get the full procID of the tool
+            count = 1;
+            rc = PMIx_Data_unpack(NULL, buffer, &name, &count, PMIX_PROC);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                goto CLEANUP;
+            }
+
+        } else {
+            // if not found, then they will pass us the rank and we will
+            // assign a new jobID for the tool
             count = 1;
             rc = PMIx_Data_unpack(NULL, buffer, &name.rank, &count, PMIX_PROC_RANK);
             if (PMIX_SUCCESS != rc) {
@@ -185,15 +197,6 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             PMIX_LOAD_NSPACE(name.nspace, tmp);
             free(tmp);
             prte_plm_globals.next_jobid++;
-
-        } else {
-            // get the full procID of the tool
-            count = 1;
-            rc = PMIx_Data_unpack(NULL, buffer, &name, &count, PMIX_PROC);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                goto CLEANUP;
-            }
         }
         // see if we already have this job
         jdata = prte_get_job_data_object(name.nspace);
@@ -207,9 +210,9 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
                 proc->state = PRTE_PROC_STATE_RUNNING;
                 pmix_pointer_array_set_item(jdata->procs, name.rank, proc);
                 jdata->num_procs++;
-            } else {
-                ret = PMIX_ERR_VALUE_OUT_OF_BOUNDS;
             }
+            ret = PMIX_SUCCESS;
+
         } else {
             // unpack the cmd line
             count = 1;
