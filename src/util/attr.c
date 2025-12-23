@@ -273,6 +273,10 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PRTE_APP_ADD_ENVAR";
         case PRTE_APP_PSET_NAME:
             return "PRTE_APP_PSET_NAME";
+        case PRTE_APP_PES_PER_PROC:
+            return "PRTE_APP_PES_PER_PROC";
+        case PRTE_APP_PPR:
+            return "PRTE_APP_PPR";
 
         case PRTE_NODE_USERNAME:
             return "NODE-USERNAME";

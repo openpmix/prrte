@@ -410,6 +410,7 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
     }
 
     nprocs_mapped = 0;
+    pmix_output(0, "CPUSET %s", (NULL == options->cpuset) ? "NULL" : options->cpuset);
     savecpuset = strdup(options->cpuset);
 
 pass:

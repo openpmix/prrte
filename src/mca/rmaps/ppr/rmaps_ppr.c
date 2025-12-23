@@ -58,6 +58,8 @@ static int ppr_mapper(prte_job_t *jdata,
     char *jobppr = NULL;
     bool initial_map = true;
     prte_binding_policy_t savebind = options->bind;
+    uint16_t ppn, pes, *ppnptr, *pesptr;
+    uint16_t jobppn, jobpes;
 
     /* only handle initial launch of loadbalanced
      * or NPERxxx jobs - allow restarting of failed apps
@@ -147,6 +149,12 @@ static int ppr_mapper(prte_job_t *jdata,
                         prte_rmaps_base_print_mapping(options->map),
                         prte_rmaps_base_print_ranking(options->rank));
 
+    // cache job-level values
+    jobppn = options->pprn;
+    jobpes = options->cpus_per_rank;
+    ppnptr = &ppn;
+    pesptr = &pes;
+
     /* cycle thru the apps */
     for (idx = 0; idx < jdata->apps->size; idx++) {
         app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, idx);
@@ -154,6 +162,17 @@ static int ppr_mapper(prte_job_t *jdata,
             continue;
         }
         options->total_nobjs = 0;
+
+        if (prte_get_attribute(&app->attributes, PRTE_APP_PPR, (void**)&ppnptr, PMIX_UINT16)) {
+            options->pprn = ppn;
+        } else {
+            options->pprn = jobppn;
+        }
+        if (prte_get_attribute(&app->attributes, PRTE_APP_PES_PER_PROC, (void**)&pesptr, PMIX_UINT16)) {
+            options->cpus_per_rank = pes;
+        } else {
+            options->cpus_per_rank = jobpes;
+        }
 
         /* get the available nodes */
         PMIX_CONSTRUCT(&node_list, pmix_list_t);
@@ -165,6 +184,49 @@ static int ppr_mapper(prte_job_t *jdata,
         }
         /* flag that all subsequent requests should not reset the node->mapped flag */
         initial_map = false;
+
+        // compute the number of procs
+        if (HWLOC_OBJ_MACHINE == options->maptype) {
+            app->num_procs = options->pprn * pmix_list_get_size(&node_list);
+        } else if (HWLOC_OBJ_PACKAGE == options->maptype) {
+            /* add in #packages for each node */
+            PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
+                nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                           HWLOC_OBJ_PACKAGE);
+                app->num_procs += options->pprn * nobjs;
+            }
+        } else if (HWLOC_OBJ_NUMANODE== options->maptype) {
+            /* add in #numa for each node */
+            PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
+                nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                           HWLOC_OBJ_NUMANODE);
+                app->num_procs += options->pprn * nobjs;
+            }
+        } else if (HWLOC_OBJ_L1CACHE == options->maptype ||
+                   HWLOC_OBJ_L2CACHE == options->maptype ||
+                   HWLOC_OBJ_L3CACHE == options->maptype) {
+            /* add in #cache for each node */
+            PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
+                nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                           options->maptype);
+                app->num_procs += options->pprn * nobjs;
+            }
+        } else if (HWLOC_OBJ_CORE == options->maptype) {
+            /* add in #cores for each node */
+            PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
+                nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                           HWLOC_OBJ_CORE);
+                app->num_procs += options->pprn * nobjs;
+            }
+        } else if (HWLOC_OBJ_PU == options->maptype) {
+            /* add in #hwt for each node */
+            PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
+                nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                           HWLOC_OBJ_PU);
+                app->num_procs += options->pprn * nobjs;
+            }
+        }
+
         /* check to see if we can map all the procs */
         if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
             num_slots < (int) app->num_procs) {

@@ -520,6 +520,14 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PREFIX, NULL, PMIX_STRING);
     }
 
+    // check for a mapping directive - we don't allow you to change the base
+    // mapper (e.g., from ppr to map-by core), but you could change the pe=N
+    // value or the ppr number itself
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_MAPBY);
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_MAPBY, opt->values[0], PMIX_STRING);
+    }
+
     *app_ptr = app;
     app = NULL;
     *made_app = true;
