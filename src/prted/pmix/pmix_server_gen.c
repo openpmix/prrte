@@ -576,7 +576,7 @@ static void _toolconn(int sd, short args, void *cbdata)
         PMIX_ERROR_LOG(rc);
     }
     // if we do, then pass along the rank so they have it
-    if (nspace_given) {
+    if (!nspace_given) {
         rc = PMIx_Data_pack(NULL, buf, &cd->target.rank, 1, PMIX_PROC_RANK);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);

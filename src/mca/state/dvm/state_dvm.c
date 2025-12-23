@@ -837,7 +837,6 @@ release:
         PMIX_LIST_FOREACH(jptr, &jdata->children, prte_job_t)
         {
             if (prte_get_attribute(&jptr->attributes, PRTE_JOB_CHILD_SEP, (void**)&sepptr, PMIX_BOOL) && !sep) {
-                pmix_output(0, "TERMINATING CHILD");
                 proc = PMIX_NEW(prte_proc_t);
                 PMIX_LOAD_PROCID(&proc->name, jptr->nspace, PMIX_RANK_WILDCARD);
                 pmix_pointer_array_add(&procs, proc);
