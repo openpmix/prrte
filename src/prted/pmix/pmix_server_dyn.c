@@ -816,6 +816,75 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                 prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN, PRTE_ATTR_GLOBAL,
                                    NULL, PMIX_BOOL);
 
+            /***   PPR (PROCS-PER-RESOURCE)   ***/
+            } else if (PMIX_CHECK_KEY(info, PMIX_PPR)) {
+                char **ck, *p;
+                uint16_t ppn, pes;
+                int n;
+                ck = PMIX_ARGV_SPLIT_COMPAT(info->value.data.string, ':');
+                if (3 > PMIX_ARGV_COUNT_COMPAT(ck)) {
+                    PMIX_ARGV_FREE_COMPAT(ck);
+                    return PMIX_ERR_BAD_PARAM;
+                }
+                if (0 == strcasecmp(ck[0], "ppr")) {
+                    ppn =  strtoul(ck[1], NULL, 10);
+                    prte_set_attribute(&app->attributes, PRTE_APP_PPR,
+                                       PRTE_ATTR_GLOBAL, &ppn, PMIX_UINT16);
+                    // ck[2] has the object type
+                    pes = 0;
+                    for (n=2; NULL != ck[n]; n++) {
+                        p = strchr(ck[n], '=');
+                        if (NULL != p && 0 == strncmp(ck[n], "pe", 2)) {
+                            ++p;
+                            pes = strtol(p, NULL, 10);
+                            break;
+                        }
+                    }
+                    if (0 < pes) {
+                        prte_set_attribute(&app->attributes, PRTE_APP_PES_PER_PROC,
+                                           PRTE_ATTR_GLOBAL, &pes, PMIX_UINT16);
+                    }
+                } 
+                PMIX_ARGV_FREE_COMPAT(ck);
+ 
+                /***   MAP-BY   ***/
+            } else if (PMIX_CHECK_KEY(info, PMIX_MAPBY)) {
+                char **ck, *p;
+                uint16_t ppn, pes;
+                int n;
+                ck = PMIX_ARGV_SPLIT_COMPAT(info->value.data.string, ':');
+                for (n=0; NULL != ck[n]; n++) {
+                    if (0 == strcasecmp(ck[n], "ppr")) {
+                        ppn =  strtoul(ck[1], NULL, 10);
+                        prte_set_attribute(&app->attributes, PRTE_APP_PPR,
+                                           PRTE_ATTR_GLOBAL, &ppn, PMIX_UINT16);
+                    } else if (0 == strncmp(ck[n], "pe", 2) &&
+                               0 != strncmp(ck[n], "pe-", 3)) {
+                        p = strchr(ck[n], '=');
+                        if (NULL == p) {
+                            /* missing the value or value is invalid */
+                            pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true, "mapping policy",
+                                           "PE", ck[n]);
+                            PMIX_ARGV_FREE_COMPAT(ck);
+                            return PRTE_ERR_SILENT;
+                        }
+                        ++p;
+                        if (NULL == p || '\0' == *p) {
+                            /* missing the value or value is invalid */
+                            pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true, "mapping policy",
+                                           "PE", ck[n]);
+                            PMIX_ARGV_FREE_COMPAT(ck);
+                            return PRTE_ERR_SILENT;
+                        }
+                        pes = strtol(p, NULL, 10);                
+                        if (0 < pes) {
+                            prte_set_attribute(&app->attributes, PRTE_APP_PES_PER_PROC,
+                                               PRTE_ATTR_GLOBAL, &pes, PMIX_UINT16);
+                        }
+                    }
+                }
+                PMIX_ARGV_FREE_COMPAT(ck);
+
                 /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
                 /* there can be multiple of these, so we add them to the attribute list */
             } else if (PMIX_CHECK_KEY(info, PMIX_SET_ENVAR)) {

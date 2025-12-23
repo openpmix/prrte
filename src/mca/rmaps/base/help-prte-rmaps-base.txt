@@ -23,12 +23,6 @@
 #
 # This is the US/English general help file for PRRTE's prun.
 #
-[multi-apps-and-zero-np]
-PRTE found multiple applications to be launched, with
-at least one that failed to specify the number of processes to execute.
-When specifying multiple applications, you must specify how many processes
-of each to launch via the -np argument.
-#
 [prte-rmaps-base:alloc-error]
 There are not enough slots available in the system to satisfy the %d
 slots that were requested by the application:

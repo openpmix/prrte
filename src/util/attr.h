@@ -64,6 +64,9 @@ typedef uint8_t prte_app_context_flags_t;
 #define PRTE_APP_ADD_ENVAR          21 // prte_envar_t - add envar, do not override pre-existing one
 #define PRTE_APP_PSET_NAME          23 // string - user-assigned name for the process
                                        //          set containing the given process
+#define PRTE_APP_PES_PER_PROC       24 // uint16_t - number of cpus to be assigned to each process
+#define PRTE_APP_PPR                25 // uint16_t - number of procs to place on the resource specified
+                                       //           in the job ppr string
 
 #define PRTE_APP_MAX_KEY 100
 

@@ -401,20 +401,11 @@ int prte(int argc, char *argv[])
 
     /* look for any personality specification and do a quick sanity check */
     personality = NULL;
-    bool mapby_found = false;
     bool rankby_found = false;
     bool bindto_found = false;
     for (i = 0; NULL != argv[i]; i++) {
         if (0 == strcmp(argv[i], "--personality")) {
             personality = argv[i + 1];
-            continue;
-        }
-        if (0 == strcmp(argv[i], "--map-by")) {
-            if (mapby_found) {
-                pmix_show_help("help-schizo-base.txt", "multi-instances", true, "map-by");
-                return PRTE_ERR_BAD_PARAM;
-            }
-            mapby_found = true;
             continue;
         }
         if (0 == strcmp(argv[i], "--rank-by")) {
