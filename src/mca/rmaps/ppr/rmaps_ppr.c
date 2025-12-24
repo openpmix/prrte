@@ -185,45 +185,47 @@ static int ppr_mapper(prte_job_t *jdata,
         /* flag that all subsequent requests should not reset the node->mapped flag */
         initial_map = false;
 
-        // compute the number of procs
-        if (HWLOC_OBJ_MACHINE == options->maptype) {
-            app->num_procs = options->pprn * pmix_list_get_size(&node_list);
-        } else if (HWLOC_OBJ_PACKAGE == options->maptype) {
-            /* add in #packages for each node */
-            PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
-                nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                           HWLOC_OBJ_PACKAGE);
-                app->num_procs += options->pprn * nobjs;
-            }
-        } else if (HWLOC_OBJ_NUMANODE== options->maptype) {
-            /* add in #numa for each node */
-            PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
-                nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                           HWLOC_OBJ_NUMANODE);
-                app->num_procs += options->pprn * nobjs;
-            }
-        } else if (HWLOC_OBJ_L1CACHE == options->maptype ||
-                   HWLOC_OBJ_L2CACHE == options->maptype ||
-                   HWLOC_OBJ_L3CACHE == options->maptype) {
-            /* add in #cache for each node */
-            PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
-                nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                           options->maptype);
-                app->num_procs += options->pprn * nobjs;
-            }
-        } else if (HWLOC_OBJ_CORE == options->maptype) {
-            /* add in #cores for each node */
-            PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
-                nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                           HWLOC_OBJ_CORE);
-                app->num_procs += options->pprn * nobjs;
-            }
-        } else if (HWLOC_OBJ_PU == options->maptype) {
-            /* add in #hwt for each node */
-            PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
-                nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                           HWLOC_OBJ_PU);
-                app->num_procs += options->pprn * nobjs;
+        if (0 == app->num_procs) {
+            // compute the number of procs
+            if (HWLOC_OBJ_MACHINE == options->maptype) {
+                app->num_procs = options->pprn * pmix_list_get_size(&node_list);
+            } else if (HWLOC_OBJ_PACKAGE == options->maptype) {
+                /* add in #packages for each node */
+                PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
+                    nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                               HWLOC_OBJ_PACKAGE);
+                    app->num_procs += options->pprn * nobjs;
+                }
+            } else if (HWLOC_OBJ_NUMANODE== options->maptype) {
+                /* add in #numa for each node */
+                PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
+                    nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                               HWLOC_OBJ_NUMANODE);
+                    app->num_procs += options->pprn * nobjs;
+                }
+            } else if (HWLOC_OBJ_L1CACHE == options->maptype ||
+                       HWLOC_OBJ_L2CACHE == options->maptype ||
+                       HWLOC_OBJ_L3CACHE == options->maptype) {
+                /* add in #cache for each node */
+                PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
+                    nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                               options->maptype);
+                    app->num_procs += options->pprn * nobjs;
+                }
+            } else if (HWLOC_OBJ_CORE == options->maptype) {
+                /* add in #cores for each node */
+                PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
+                    nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                               HWLOC_OBJ_CORE);
+                    app->num_procs += options->pprn * nobjs;
+                }
+            } else if (HWLOC_OBJ_PU == options->maptype) {
+                /* add in #hwt for each node */
+                PMIX_LIST_FOREACH (node, &node_list, prte_node_t) {
+                    nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                               HWLOC_OBJ_PU);
+                    app->num_procs += options->pprn * nobjs;
+                }
             }
         }
 
@@ -263,6 +265,14 @@ static int ppr_mapper(prte_job_t *jdata,
 
             if (HWLOC_OBJ_MACHINE == options->maptype) {
                 options->nprocs = options->pprn;
+                /* if there are not enough slots to support the required
+                 * number of procs, and they didn't specify oversubscribe,
+                 * then we cannot use this node */
+                if (options->nprocs > node->slots_available &&
+                    !options->oversubscribe) {
+                    // skip this node
+                    continue;
+                }
                 /* if the number of procs times the number of pes/proc
                  * is greater than the number of CPUs
                  * on this node, but the number of procs is less or equal
@@ -311,6 +321,14 @@ static int ppr_mapper(prte_job_t *jdata,
                     continue;
                 }
                 options->nprocs = options->pprn * nobjs;
+                /* if there are not enough slots to support the required
+                 * number of procs, and they didn't specify oversubscribe,
+                 * then we cannot use this node */
+                if (options->nprocs > node->slots_available &&
+                    !options->oversubscribe) {
+                    // skip this node
+                    continue;
+                }
                 /* if the number of procs times the number of pes/proc
                  * is greater than the number of CPUs
                  * on this node, but the number of procs is less or equal
