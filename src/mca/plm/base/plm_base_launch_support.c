@@ -1682,6 +1682,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             dc = PMIX_NEW(dcaddy_t);
             dc->rank = daemon->name.rank;
             dc->sig = sig;
+            sig = NULL;  // protect from release
             dc->daemon = daemon;
             pmix_list_append(&prte_plm_globals.daemon_cache, &dc->super);
             free(nodename);
@@ -1698,6 +1699,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             // always record the topology
             t = PMIX_NEW(prte_topology_t);
             t->sig = sig;
+            sig = NULL;  // protect from release
             t->topo = topo;
             t->index = pmix_pointer_array_add(prte_node_topologies, t);
             daemon->node->topology = t;
@@ -1739,7 +1741,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                     hwloc_bitmap_free(daemon->node->available);
                 }
                 daemon->node->available = prte_hwloc_base_filter_cpus(t->topo);
-                free(sig);
+                prte_hwloc_base_setup_summary(t->topo);
                 break;
             }
         }
@@ -1748,7 +1750,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             // if the signature wasn't found, then add it
             if (!found) {
                 t = PMIX_NEW(prte_topology_t);
-                t->sig = sig;
+                t->sig = strdup(sig);
                 t->topo = topo;
                 t->index = pmix_pointer_array_add(prte_node_topologies, t);
                 daemon->node->topology = t;
@@ -1841,7 +1843,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                                     "%s NEW TOPOLOGY - ADDING SIGNATURE",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
                 t = PMIX_NEW(prte_topology_t);
-                t->sig = sig;
+                t->sig = strdup(sig);
                 t->index = pmix_pointer_array_add(prte_node_topologies, t);
                 daemon->node->topology = t;
                 if (NULL != topo) {
@@ -1885,6 +1887,10 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                     free(nodename);
                     nodename = NULL;
                 }
+                if (NULL != sig) {
+                    free(sig);
+                    sig = NULL;
+                }
                 idx = 1;
                 ret = PMIx_Data_unpack(NULL, buffer, &dname, &idx, PMIX_PROC);
                 continue;
@@ -1904,6 +1910,10 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
         if (NULL != nodename) {
             free(nodename);
             nodename = NULL;
+        }
+        if (NULL != sig) {
+            free(sig);
+            sig = NULL;
         }
 
         idx = 1;
