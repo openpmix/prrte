@@ -263,6 +263,10 @@ static int raw_preposition_files(prte_job_t *jdata,
             cptr = pmix_basename(app->app);
             free(app->app);
             pmix_asprintf(&app->app, "./%s", cptr);
+            if (NULL == app->app) {
+                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                return PRTE_ERR_OUT_OF_RESOURCE;
+            }
             free(app->argv[0]);
             app->argv[0] = strdup(app->app);
             fs->remote_target = strdup(app->app);
