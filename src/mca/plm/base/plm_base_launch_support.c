@@ -1710,9 +1710,15 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             nodename = NULL;
             idx = 1;
             ret = PMIx_Data_unpack(NULL, buffer, &dname, &idx, PMIX_PROC);
-            if (PMIX_SUCCESS != ret) {
-                break;
+            if (PMIX_SUCCESS != ret &&
+                PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != ret) {
+                PMIX_ERROR_LOG(ret);
+                PRTE_ACTIVATE_JOB_STATE(jdatorted, PRTE_JOB_STATE_FAILED_TO_START);
+                return;
             }
+            jdatorted->num_reported++;
+            jdatorted->num_daemons_reported++;
+            progress_daemons(jdatorted, show_progress);
             continue;
         }
 
@@ -1854,6 +1860,9 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                     }
                     daemon->node->available = prte_hwloc_base_filter_cpus(t->topo);
                     prte_hwloc_base_setup_summary(t->topo);
+                    jdatorted->num_reported++;
+                    jdatorted->num_daemons_reported++;
+                    progress_daemons(jdatorted, show_progress);
                 } else {
                     // add this daemon to our cache
                     dc = PMIX_NEW(dcaddy_t);
@@ -1880,9 +1889,9 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                         prted_failed_launch = true;
                         goto CLEANUP;
                     }
+                    /* we will count this node as completed
+                     * when we get the full topology back */
                 }
-                /* we will count this node as completed
-                 * when we get the full topology back */
                 if (NULL != nodename) {
                     free(nodename);
                     nodename = NULL;
