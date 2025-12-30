@@ -525,9 +525,9 @@ moveon:
 
 
     case PRTE_PLM_UPDATE_PROC_STATE:
-            pmix_output_verbose(5, prte_plm_base_framework.framework_output,
-                                "\n\n%s plm:base:receive update proc state command from %s\n\n",
-                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender));
+        pmix_output_verbose(5, prte_plm_base_framework.framework_output,
+                            "%s plm:base:receive update proc state command from %s",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender));
         count = 1;
         rc = PMIx_Data_unpack(NULL, buffer, &job, &count, PMIX_PROC_NSPACE);
         while (PMIX_SUCCESS == rc) {
