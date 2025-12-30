@@ -4,7 +4,7 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
-3.0.13 -- xx Nov 2025
+3.0.13 -- xx Jan 2026
 ---------------------
 .. important:: This release includes the following critical changes:
 
@@ -17,6 +17,16 @@ series, in reverse chronological order.
                * an improved mechanism for automatically detecting the
                  presence of heterogeneous nodes
 
+- PR #2355: Update NEWS and VERSION to rc3
+- PR #2354: Don't force map display for donotlaunch if bind display requested
+- PR #2352: Multiple commits
+   - Extend existing build check CI
+   - Fix debugger daemon rendezvous on remote nodes
+   - Workflow does not contain permissions
+   - Potential use after free (alerts 10-12)
+   - Fix hetero launch
+- PR #2345: Fix ppr mapper
+- PR #2343: Update NEWS with important note
 - PR #2342: Update VERSION and NEWS
 - PR #2341: Slight mod to the indirect debugger example
 - PR #2339: Correct the nprocs check to support moving to next node
