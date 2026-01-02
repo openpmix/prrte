@@ -17,6 +17,9 @@ series, in reverse chronological order.
                * an improved mechanism for automatically detecting the
                  presence of heterogeneous nodes
 
+- PR #2358: Multiple commits
+   - Enable MCA param support for display and runtime-options
+   - Update prun to new cmd line option spellings
 - PR #2355: Update NEWS and VERSION to rc3
 - PR #2354: Don't force map display for donotlaunch if bind display requested
 - PR #2352: Multiple commits
