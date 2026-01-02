@@ -5,7 +5,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -48,16 +48,6 @@
 #include "src/util/pmix_show_help.h"
 
 #include "src/mca/state/base/base.h"
-
-int prte_state_base_set_default_rto(prte_job_t *jdata,
-                                    prte_rmaps_options_t *options)
-{
-    int rc;
-    PRTE_HIDE_UNUSED_PARAMS(options);
-
-    rc = prte_state_base_set_runtime_options(jdata, NULL);
-    return rc;
-}
 
 /* this function is called if pmix_server_dyn receives a
  * PMIX_RUNTIME_OPTIONS info struct */

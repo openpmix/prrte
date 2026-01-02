@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -71,27 +71,43 @@ prte_rmaps_base_t prte_rmaps_base = {
 
 static int prte_rmaps_base_register(pmix_mca_base_register_flag_t flags)
 {
+    int ret;
     PRTE_HIDE_UNUSED_PARAMS(flags);
 
     /* define default mapping policy */
     prte_rmaps_base.default_mapping_policy = NULL;
-    (void) pmix_mca_base_var_register("prte", "rmaps", "default", "mapping_policy",
-                                      "Default mapping Policy [slot | hwthread | core | l1cache | "
+    ret = pmix_mca_base_var_register("prte", NULL, NULL, "mapby",
+                                     "Default mapping Policy [slot | hwthread | core | l1cache | "
                                       "l2cache | l3cache | numa | package | node | seq | dist | ppr | "
                                       "rankfile | pe-list=a,b (comma-delimited ranges of cpus to use for this job)],"
                                       " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
                                       "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
                                       "DEVICE=dev (for dist policy), INHERIT, NOINHERIT, ORDERED, FILE=%s (path to file containing sequential "
-                                      "or rankfile entries)",
-                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                      &prte_rmaps_base.default_mapping_policy);
+                                      "or rankfile entries). For more details, see \"prterun --help map-by\". "
+                                      "The full directive need not be provided — "
+                                      "only enough characters are required to uniquely identify the "
+                                      "directive. Directive values are case insensitive",
+                                     PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                     &prte_rmaps_base.default_mapping_policy);
+    (void) pmix_mca_base_var_register_synonym(ret, "prte", NULL, NULL, "map_by",
+                                              PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+    (void) pmix_mca_base_var_register_synonym(ret, "prte", "rmaps", "default", "mapping_policy",
+                                              PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     /* define default ranking policy */
     prte_rmaps_base.default_ranking_policy = NULL;
-    (void) pmix_mca_base_var_register("prte", "rmaps", "default", "ranking_policy",
-                                      "Default ranking Policy [slot | node | span | fill]",
-                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                      &prte_rmaps_base.default_ranking_policy);
+    ret = pmix_mca_base_var_register("prte", NULL, NULL, "rankby",
+                                     "Default ranking Policy [slot | node | span | fill]. "
+                                     "For more details, see \"prterun --help rank-by\". The full "
+                                     "directive need not be provided — only enough characters are "
+                                     "required to uniquely identify the directive. Directive values "
+                                     "are case insensitive",
+                                     PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                     &prte_rmaps_base.default_ranking_policy);
+    (void) pmix_mca_base_var_register_synonym(ret, "prte", NULL, NULL, "rank_by",
+                                              PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+    (void) pmix_mca_base_var_register_synonym(ret, "prte", "rmaps", "default", "ranking_policy",
+                                              PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     prte_rmaps_base.inherit = false;
     (void) pmix_mca_base_var_register("prte", "rmaps", "default", "inherit",

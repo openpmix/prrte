@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies Ltd. All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -175,9 +175,10 @@ void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd)
     char *msg;
 
     pmix_output_verbose(2, prte_odls_base_framework.framework_output,
-                        "%s hwloc:set on child %s",
+                        "%s hwloc:set on child %s cpuset %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        (NULL == child) ? "NULL" : PRTE_NAME_PRINT(&child->name));
+                        (NULL == child) ? "NULL" : PRTE_NAME_PRINT(&child->name),
+                        (NULL == child->cpuset) ? "NULL" : child->cpuset);
 
     if (NULL == jobdat || NULL == child) {
         /* nothing for us to do */
@@ -254,8 +255,8 @@ void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd)
             if (NULL == msg) {
                 msg = "failed to convert bitmap list to hwloc bitmap";
             }
-            if (PRTE_BINDING_REQUIRED(jobdat->map->binding)
-                && PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding)) {
+            if (PRTE_BINDING_REQUIRED(jobdat->map->binding) &&
+                PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding)) {
                 /* If binding is required and a binding directive was explicitly
                  * given (i.e., we are not binding due to a default policy),
                  * send an error up the pipe (which exits -- it doesn't return).

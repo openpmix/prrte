@@ -3,7 +3,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,19 +43,57 @@
  */
 prte_schizo_base_t prte_schizo_base = {
     .active_modules = PMIX_LIST_STATIC_INIT,
-    .test_proxy_launch = false
+    .test_proxy_launch = false,
+    .default_display_options = NULL,
+    .default_runtime_options = NULL
 };
 
 static int prte_schizo_base_register(pmix_mca_base_register_flag_t flags)
 {
+    int ret;
     PRTE_HIDE_UNUSED_PARAMS(flags);
 
     /* test proxy launch */
     prte_schizo_base.test_proxy_launch = false;
-    pmix_mca_base_var_register("prte", "schizo", "base", "test_proxy_launch",
-                               "Test proxy launches",
-                               PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                               &prte_schizo_base.test_proxy_launch);
+    (void)pmix_mca_base_var_register("prte", "schizo", "base", "test_proxy_launch",
+                                     "Test proxy launches",
+                                     PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                     &prte_schizo_base.test_proxy_launch);
+
+    prte_schizo_base.default_display_options = NULL;
+    (void)pmix_mca_base_var_register("prte", NULL, NULL, "display",
+                                     "Comma-delimited list of values about the job and/or allocation "
+                                     "that are to be displayed. Supported values include: [allocation | bindings "
+                                     "| map | map-devel | topo[=semi-colon delimited list of nodes whose topology is to be displayed] "
+                                     "| cpus[=semi-colon delimited list of nodes whose cpus are to be displayed], with supported colon-delimited "
+                                     "modifiers: [parseable | physical]. For more details, see \"prterun --help display\". "
+                                     "The full directive need not be provided — "
+                                     "only enough characters are required to uniquely identify the "
+                                     "directive. For example, \"ALL\" is sufficient to represent "
+                                     "the \"ALLOCATION\" directive — while \"MAP\" can not be used "
+                                     "to represent \"MAP-DEVEL\" (though \"MAP-D\" would suffice).",
+                                     PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                     &prte_schizo_base.default_display_options);
+
+    prte_schizo_base.default_runtime_options = NULL;
+    ret = pmix_mca_base_var_register("prte", NULL, NULL, "rtos",
+                                     "Comma-delimited list of options specifying desired behavior of "
+                                     "the runtime itself. Supported values include: [error-nonzero-status, donotlaunch, "
+                                     "show-progress, notifyerrors, recoverable, autorestart, continuous, max-restarts, "
+                                     "exec-agent, default-exec-agent, output-proctable, stop-on-exec, stop-in-init, "
+                                     "stop-in-app, timeout, spawn-timeout, report-state-on-timeout, get-stack-traces, "
+                                     "report-child-jobs-seperately, aggregate-help-messages, fwd-environment]. "
+                                     "For more details, see \"prterun --help runtime-options\". "
+                                     "The full directive need not be provided — "
+                                     "only enough characters are required to uniquely identify the "
+                                     "directive. For example, \"donot\" is sufficient to represent "
+                                     "the \"donotlaunch\" directive — while \"STOP\" can not be used "
+                                     "to represent \"STOP-ON-EXEC\" (though \"STOP-ON-E\" would suffice).",
+                                     PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                     &prte_schizo_base.default_runtime_options);
+    (void) pmix_mca_base_var_register_synonym(ret, "prte", NULL, NULL, "runtime_options",
+                                              PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+
     return PRTE_SUCCESS;
 }
 
