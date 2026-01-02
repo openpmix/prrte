@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -168,12 +168,50 @@ int prun(int argc, char *argv[])
         return rc;
     }
 
-    /* look for any personality specification */
+    /* look for any personality specification and do a quick sanity check */
     personality = NULL;
-    for (i = 0; NULL != argv[i]; i++) {
-        if (0 == strcmp(argv[i], "--personality")) {
-            personality = argv[i + 1];
-            break;
+    bool rankby_found = false;
+    bool bindto_found = false;
+    for (i = 0; NULL != pargv[i]; i++) {
+        if (0 == strcmp(pargv[i], "--personality")) {
+            personality = pargv[i + 1];
+            continue;
+        }
+        if (0 == strcmp(pargv[i], "--map-by")) {
+            free(pargv[i]);
+            pargv[i] = strdup("--mapby");
+            continue;
+        }
+        if (0 == strcmp(pargv[i], "--rank-by") ||
+            0 == strcmp(pargv[i], "--rankby")) {
+            if (rankby_found) {
+                pmix_show_help("help-schizo-base.txt", "multi-instances", true, pargv[i]);
+                return PRTE_ERR_BAD_PARAM;
+            }
+            rankby_found = true;
+            if (0 == strcmp(pargv[i], "--rank-by")) {
+                free(pargv[i]);
+                pargv[i] = strdup("--rankby");
+            }
+            continue;
+        }
+        if (0 == strcmp(pargv[i], "--bind-to") ||
+            0 == strcmp(pargv[i], "--bindto")) {
+            if (bindto_found) {
+                pmix_show_help("help-schizo-base.txt", "multi-instances", true, "bind-to");
+                return PRTE_ERR_BAD_PARAM;
+            }
+            bindto_found = true;
+            if (0 == strcmp(pargv[i], "--bind-to")) {
+                free(pargv[i]);
+                pargv[i] = strdup("--bindto");
+            }
+            continue;
+        }
+        if (0 == strcmp(pargv[i], "--runtime-options")) {
+            free(pargv[i]);
+            pargv[i] = strdup("--rtos");
+            continue;
         }
     }
 
@@ -308,7 +346,7 @@ int prun(int argc, char *argv[])
         goto DONE;
     }
 
-     rc = prun_common(&results, schizo, pargc, pargv);
+    rc = prun_common(&results, schizo, pargc, pargv);
 
 DONE:
     // cleanup and leave
