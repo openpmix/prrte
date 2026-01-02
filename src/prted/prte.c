@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2022-2023 Triad National Security, LLC. All rights
@@ -403,25 +403,45 @@ int prte(int argc, char *argv[])
     personality = NULL;
     bool rankby_found = false;
     bool bindto_found = false;
-    for (i = 0; NULL != argv[i]; i++) {
-        if (0 == strcmp(argv[i], "--personality")) {
-            personality = argv[i + 1];
+    for (i = 0; NULL != pargv[i]; i++) {
+        if (0 == strcmp(pargv[i], "--personality")) {
+            personality = pargv[i + 1];
             continue;
         }
-        if (0 == strcmp(argv[i], "--rank-by")) {
+        if (0 == strcmp(pargv[i], "--map-by")) {
+            free(pargv[i]);
+            pargv[i] = strdup("--mapby");
+            continue;
+        }
+        if (0 == strcmp(pargv[i], "--rank-by") ||
+            0 == strcmp(pargv[i], "--rankby")) {
             if (rankby_found) {
-                pmix_show_help("help-schizo-base.txt", "multi-instances", true, "rank-by");
+                pmix_show_help("help-schizo-base.txt", "multi-instances", true, pargv[i]);
                 return PRTE_ERR_BAD_PARAM;
             }
             rankby_found = true;
+            if (0 == strcmp(pargv[i], "--rank-by")) {
+                free(pargv[i]);
+                pargv[i] = strdup("--rankby");
+            }
             continue;
         }
-        if (0 == strcmp(argv[i], "--bind-to")) {
+        if (0 == strcmp(pargv[i], "--bind-to") ||
+            0 == strcmp(pargv[i], "--bindto")) {
             if (bindto_found) {
                 pmix_show_help("help-schizo-base.txt", "multi-instances", true, "bind-to");
                 return PRTE_ERR_BAD_PARAM;
             }
             bindto_found = true;
+            if (0 == strcmp(pargv[i], "--bind-to")) {
+                free(pargv[i]);
+                pargv[i] = strdup("--bindto");
+            }
+            continue;
+        }
+        if (0 == strcmp(pargv[i], "--runtime-options")) {
+            free(pargv[i]);
+            pargv[i] = strdup("--rtos");
             continue;
         }
     }
@@ -1014,26 +1034,80 @@ int prte(int argc, char *argv[])
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_RTOS);
     if (NULL != opt) {
         rc = prte_state_base_set_runtime_options(jdata, opt->values[0]);
-        if (PRTE_SUCCESS != rc) {
-            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-            goto DONE;
-        }
+    } else {
+        rc = prte_state_base_set_runtime_options(jdata, prte_schizo_base.default_runtime_options);
+    }
+    if (PRTE_SUCCESS != rc) {
+        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+        goto DONE;
     }
 
     /* check a couple of display options for the DVM itself */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DISPLAY);
     if (NULL != opt) {
         char **targv;
+        char *tptr;
+        int m;
         for (n=0; NULL != opt->values[n]; n++) {
             targv = PMIX_ARGV_SPLIT_COMPAT(opt->values[n], ',');
             for (i=0; NULL != targv[i]; i++) {
                 if (PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_ALLOC)) {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC,
                                        PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                    break;
                 } else if (PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_PARSEABLE) ||
                            PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_PARSABLE)) {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT,
                                        PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                }
+            }
+            PMIX_ARGV_FREE_COMPAT(targv);
+            /* check for qualifiers */
+            tptr = strchr(opt->values[n], ':');
+            if (NULL != tptr) {
+                ++tptr;
+                targv = PMIX_ARGV_SPLIT_COMPAT(tptr, ':');
+                /* check qualifiers */
+                for (m=0; NULL != targv[m]; m++) {
+                    if (PMIX_CHECK_CLI_OPTION(targv[m], PRTE_CLI_PARSEABLE) ||
+                        PMIX_CHECK_CLI_OPTION(targv[m], PRTE_CLI_PARSABLE)) {
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT,
+                                           PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                        break;
+                    }
+                }
+                PMIX_ARGV_FREE_COMPAT(targv);
+            }
+        }
+
+    } else if (NULL != prte_schizo_base.default_display_options) {
+        char **targv;
+        char *tptr;
+        int m;
+        targv = PMIX_ARGV_SPLIT_COMPAT(prte_schizo_base.default_display_options, ',');
+        for (i=0; NULL != targv[i]; i++) {
+            if (PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_ALLOC)) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC,
+                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+            } else if (PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_PARSEABLE) ||
+                       PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_PARSABLE)) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT,
+                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+            }
+        }
+        PMIX_ARGV_FREE_COMPAT(targv);
+        /* check for qualifiers */
+        tptr = strchr(prte_schizo_base.default_display_options, ':');
+        if (NULL != tptr) {
+            ++tptr;
+            targv = PMIX_ARGV_SPLIT_COMPAT(tptr, ':');
+            /* check qualifiers */
+            for (m=0; NULL != targv[m]; m++) {
+                if (PMIX_CHECK_CLI_OPTION(targv[m], PRTE_CLI_PARSEABLE) ||
+                    PMIX_CHECK_CLI_OPTION(targv[m], PRTE_CLI_PARSABLE)) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT,
+                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                    break;
                 }
             }
             PMIX_ARGV_FREE_COMPAT(targv);

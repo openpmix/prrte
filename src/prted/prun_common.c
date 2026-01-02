@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -762,7 +762,7 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
                                prte_schizo_base_module_t *schizo,
                                pmix_list_t *apps)
 {
-    pmix_cli_item_t *opt;
+    pmix_cli_item_t *opt, opt2;
     int ret, i;
     uint32_t ui32;
     bool flag;
@@ -776,10 +776,16 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_DISPLAY);
     if (NULL != opt) {
         ret = prte_schizo_base_parse_display(opt, jinfo);
-        if (PRTE_SUCCESS != ret) {
-            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-            return ret;
-        }
+    } else if (NULL != prte_schizo_base.default_display_options) {
+        PMIX_CONSTRUCT(&opt2, pmix_cli_item_t);
+        opt2.key = strdup(PRTE_CLI_DISPLAY);
+        PMIx_Argv_append_nosize(&opt2.values, prte_schizo_base.default_display_options);
+        ret = prte_schizo_base_parse_display(&opt2, jinfo);
+        PMIX_DESTRUCT(&opt2);
+    }
+    if (PRTE_SUCCESS != ret) {
+        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+        return ret;
     }
 
     /* check for output options */
@@ -796,6 +802,9 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_RTOS);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RUNTIME_OPTIONS, opt->values[0], PMIX_STRING);
+    } else if (NULL != prte_schizo_base.default_runtime_options) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RUNTIME_OPTIONS,
+                           prte_schizo_base.default_runtime_options, PMIX_STRING);
     }
 
     /* check what user wants us to do with stdin */

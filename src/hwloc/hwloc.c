@@ -3,7 +3,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -160,15 +160,22 @@ int prte_hwloc_base_register(void)
      *                     generate an error if it cannot be done
      */
     prte_hwloc_base_binding_policy = NULL;
-    ret = pmix_mca_base_var_register("prte", "hwloc", "default", "binding_policy",
+    ret = pmix_mca_base_var_register("prte", NULL, NULL, "bindto",
                                      "Default policy for binding processes. Allowed values: none, hwthread, core, l1cache, "
                                      "l2cache, "
                                      "l3cache, numa, package, (\"none\" is the default when oversubscribed, \"core\" is "
                                      "the default otherwise). Allowed "
                                      "colon-delimited qualifiers: "
-                                     "overload-allowed, if-supported, limit",
+                                     "overload-allowed, if-supported, limit. For more details, see \"prterun --help bind-to\""
+                                     "The full directive need not be provided — "
+                                      "only enough characters are required to uniquely identify the "
+                                      "directive. Directive values are case insensitive",
                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
                                      &prte_hwloc_base_binding_policy);
+    (void) pmix_mca_base_var_register_synonym(ret, "prte", NULL, NULL, "bind_to",
+                                              PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+    (void) pmix_mca_base_var_register_synonym(ret, "prte", "hwloc", "default", "binding_policy",
+                                              PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
     if (NULL == prte_hwloc_base_binding_policy) {
         if (bind_to_core) {
             prte_hwloc_base_binding_policy = "core";

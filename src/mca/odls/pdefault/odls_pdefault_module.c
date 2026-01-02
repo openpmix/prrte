@@ -21,7 +21,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -475,11 +475,11 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
                 /* record that this proc is ready for debug */
                 PRTE_ACTIVATE_PROC_STATE(&cd->child->name, PRTE_PROC_STATE_READY_FOR_DEBUG);
             }
+            cd->child->state = PRTE_PROC_STATE_RUNNING;
+            PRTE_FLAG_SET(cd->child, PRTE_PROC_FLAG_ALIVE);
+            close(read_fd);
+            return PRTE_SUCCESS;
         }
-        cd->child->state = PRTE_PROC_STATE_RUNNING;
-        PRTE_FLAG_SET(cd->child, PRTE_PROC_FLAG_ALIVE);
-        close(read_fd);
-        return PRTE_SUCCESS;
     }
 #endif
 
@@ -586,7 +586,7 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
                 PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
             }
             close(read_fd);
-            return PRTE_ERR_FAILED_TO_START;
+            return PRTE_ERR_SILENT;
         }
     }
 
