@@ -20,7 +20,7 @@
  *                         All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
@@ -286,7 +286,7 @@ int prte_hwloc_base_get_topology(void)
         pmix_output_verbose(1, prte_hwloc_base_output,
                             "hwloc:base discovering topology");
         if (0 != hwloc_topology_init(&prte_hwloc_topology) ||
-            0 != prte_hwloc_base_topology_set_flags(prte_hwloc_topology, 0, true) ||
+            0 != prte_hwloc_base_topology_set_flags(prte_hwloc_topology, HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM, true) ||
             0 != hwloc_topology_load(prte_hwloc_topology)) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_SUPPORTED);
             return PRTE_ERR_NOT_SUPPORTED;
@@ -310,11 +310,12 @@ int prte_hwloc_base_get_topology(void)
 
 int prte_hwloc_base_set_topology(char *topofile)
 {
-    struct hwloc_topology_support *support;
     hwloc_obj_t obj;
     unsigned j, k;
+    int rc;
 
-    PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:set_topology %s", topofile));
+    PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
+                        "hwloc:base:set_topology %s", topofile));
 
     if (NULL != prte_hwloc_topology) {
         hwloc_topology_destroy(prte_hwloc_topology);
@@ -330,11 +331,30 @@ int prte_hwloc_base_set_topology(char *topofile)
     /* since we are loading this from an external source, we have to
      * explicitly set a flag so hwloc sets things up correctly
      */
-    if (0 != prte_hwloc_base_topology_set_flags(prte_hwloc_topology,
-                                                HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM, true)) {
+#ifdef HWLOC_TOPOLOGY_FLAG_IMPORT_SUPPORT
+    rc = prte_hwloc_base_topology_set_flags(prte_hwloc_topology,
+                                            HWLOC_TOPOLOGY_FLAG_IMPORT_SUPPORT, true);
+    if (0 != rc) {
         hwloc_topology_destroy(prte_hwloc_topology);
         return PRTE_ERR_NOT_SUPPORTED;
     }
+#else
+    struct hwloc_topology_support *support;
+    rc = prte_hwloc_base_topology_set_flags(prte_hwloc_topology, 0, true);
+    if (0 != rc) {
+        hwloc_topology_destroy(prte_hwloc_topology);
+        return PRTE_ERR_NOT_SUPPORTED;
+    }
+    /* unfortunately, early hwloc does not include support info in its
+     * xml output :-(( We default to assuming it is present as
+     * systems that use this option are likely to provide
+     * binding support
+     */
+    support = (struct hwloc_topology_support *) hwloc_topology_get_support(prte_hwloc_topology);
+    support->cpubind->set_thisproc_cpubind = true;
+    support->membind->set_thisproc_membind = true;
+#endif
+
     if (0 != hwloc_topology_load(prte_hwloc_topology)) {
         hwloc_topology_destroy(prte_hwloc_topology);
         PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:set_topology failed to load"));
@@ -366,15 +386,6 @@ int prte_hwloc_base_set_topology(char *topofile)
             break;
         }
     }
-
-    /* unfortunately, hwloc does not include support info in its
-     * xml output :-(( We default to assuming it is present as
-     * systems that use this option are likely to provide
-     * binding support
-     */
-    support = (struct hwloc_topology_support *) hwloc_topology_get_support(prte_hwloc_topology);
-    support->cpubind->set_thisproc_cpubind = true;
-    support->membind->set_thisproc_membind = true;
 
     /* fill prte_cache_line_size global with the smallest L1 cache
        line size */

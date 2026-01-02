@@ -5,7 +5,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -57,9 +57,6 @@ PRTE_EXPORT int prte_state_base_select(void);
 PRTE_EXPORT void prte_state_base_print_job_state_machine(void);
 
 PRTE_EXPORT void prte_state_base_print_proc_state_machine(void);
-
-PRTE_EXPORT int prte_state_base_set_default_rto(prte_job_t *jdata,
-                                                prte_rmaps_options_t *options);
 
 PRTE_EXPORT int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec);
 

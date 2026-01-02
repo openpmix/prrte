@@ -2,7 +2,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -48,6 +48,8 @@ typedef struct {
     /* list of active modules */
     pmix_list_t active_modules;
     bool test_proxy_launch;
+    char *default_display_options;
+    char *default_runtime_options;
 } prte_schizo_base_t;
 
 /**
