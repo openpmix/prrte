@@ -16,7 +16,7 @@
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Inria.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -65,8 +65,9 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     prte_hwloc_obj_data_t *objcnt;
 
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                        "mca:rmaps: bind %s with policy %s",
+                        "mca:rmaps: bind %s to %s with policy %s",
                         PRTE_NAME_PRINT(&proc->name),
+                        hwloc_obj_type_string(options->maptype),
                         prte_hwloc_base_print_binding(jdata->map->binding));
     /* initialize */
     if (NULL == obj) {
