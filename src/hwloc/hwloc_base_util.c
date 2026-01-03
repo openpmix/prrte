@@ -313,6 +313,7 @@ int prte_hwloc_base_set_topology(char *topofile)
     hwloc_obj_t obj;
     unsigned j, k;
     int rc;
+    struct hwloc_topology_support *support;
 
     PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                         "hwloc:base:set_topology %s", topofile));
@@ -328,18 +329,10 @@ int prte_hwloc_base_set_topology(char *topofile)
         PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:set_topology bad topo file"));
         return PRTE_ERR_NOT_SUPPORTED;
     }
+
     /* since we are loading this from an external source, we have to
      * explicitly set a flag so hwloc sets things up correctly
      */
-#ifdef HWLOC_TOPOLOGY_FLAG_IMPORT_SUPPORT
-    rc = prte_hwloc_base_topology_set_flags(prte_hwloc_topology,
-                                            HWLOC_TOPOLOGY_FLAG_IMPORT_SUPPORT, true);
-    if (0 != rc) {
-        hwloc_topology_destroy(prte_hwloc_topology);
-        return PRTE_ERR_NOT_SUPPORTED;
-    }
-#else
-    struct hwloc_topology_support *support;
     rc = prte_hwloc_base_topology_set_flags(prte_hwloc_topology, 0, true);
     if (0 != rc) {
         hwloc_topology_destroy(prte_hwloc_topology);
@@ -353,7 +346,6 @@ int prte_hwloc_base_set_topology(char *topofile)
     support = (struct hwloc_topology_support *) hwloc_topology_get_support(prte_hwloc_topology);
     support->cpubind->set_thisproc_cpubind = true;
     support->membind->set_thisproc_membind = true;
-#endif
 
     if (0 != hwloc_topology_load(prte_hwloc_topology)) {
         hwloc_topology_destroy(prte_hwloc_topology);
