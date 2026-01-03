@@ -16,7 +16,7 @@
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Inria.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -64,8 +64,9 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     int nobjs, n;
 
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                        "mca:rmaps: bind %s with policy %s",
+                        "mca:rmaps: bind %s to %s with policy %s",
                         PRTE_NAME_PRINT(&proc->name),
+                        hwloc_obj_type_string(options->maptype),
                         prte_hwloc_base_print_binding(jdata->map->binding));
     /* initialize */
     if (NULL == obj) {
@@ -147,7 +148,8 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     hwloc_bitmap_list_asprintf(&proc->cpuset, tgtcpus); // bind to the entire target object
     if (4 < pmix_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
         char *tmp1;
-        tmp1 = prte_hwloc_base_cset2str(trg_obj->cpuset, options->use_hwthreads, node->topology->topo);
+        tmp1 = prte_hwloc_base_cset2str(trg_obj->cpuset, options->use_hwthreads,
+                                        false, node->topology->topo);
         pmix_output(prte_rmaps_base_framework.framework_output, "%s BOUND PROC %s[%s] TO %s",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name),
                     node->name, tmp1);

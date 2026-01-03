@@ -19,7 +19,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2022      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -414,7 +414,7 @@ int main(int argc, char *argv[])
             if (!hwloc_bitmap_iszero(ours)) {
                 (void) hwloc_set_cpubind(prte_hwloc_topology, ours, 0);
                 if (prte_debug_daemons_flag) {
-                    tmp = prte_hwloc_base_cset2str(ours, false, prte_hwloc_topology);
+                    tmp = prte_hwloc_base_cset2str(ours, false, false, prte_hwloc_topology);
                     pmix_output(0, "Daemon %s is bound to cores %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), tmp);
                     free(tmp);

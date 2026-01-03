@@ -17,7 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      UT-Battelle, LLC. All rights reserved.
  *
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2022      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -1042,6 +1042,7 @@ void prte_rmaps_base_report_bindings(prte_job_t *jdata,
             hwloc_bitmap_list_sscanf(prte_rmaps_base.available, proc->cpuset);
             tmp = prte_hwloc_base_cset2str(prte_rmaps_base.available,
                                            options->use_hwthreads,
+                                           false,
                                            proc->node->topology->topo);
             pmix_asprintf(&out, "Proc %s Node %s bound to %s",
                           PRTE_NAME_PRINT(&proc->name),

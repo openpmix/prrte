@@ -13,7 +13,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -491,6 +491,7 @@ pass:
                 hwloc_bitmap_free(options->job_cpuset);
                 options->job_cpuset = NULL;
             }
+            options->cpuset = strdup(savecpuset);
             if (NULL != savecpuset) {
                 free(savecpuset);
             }
