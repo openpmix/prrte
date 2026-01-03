@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2022 IBM Corporation.  All rights reserved.
  *
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -355,7 +355,7 @@ static int lsf_map(prte_job_t *jdata,
                 rc = prte_hwloc_base_cpu_list_parse(slots, node->topology->topo, options->use_hwthreads, proc_bitmap);
                 if (PRTE_ERR_NOT_FOUND == rc) {
                     char *tmp = prte_hwloc_base_cset2str(hwloc_topology_get_allowed_cpuset(node->topology->topo),
-                                                         options->use_hwthreads, node->topology->topo);
+                                                         options->use_hwthreads, false, node->topology->topo);
                     pmix_show_help("help-rmaps_lsf.txt", "missing-cpu", true,
                                    prte_tool_basename, slots, tmp);
                     free(tmp);

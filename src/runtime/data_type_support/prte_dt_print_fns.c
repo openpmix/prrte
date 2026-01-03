@@ -14,7 +14,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
@@ -387,7 +387,7 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
             mycpus = hwloc_bitmap_alloc();
             hwloc_bitmap_list_sscanf(mycpus, src->cpuset);
             str = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus,
-                                           src->node->topology->topo);
+                                           false, src->node->topology->topo);
             if (NULL == str) {
                 str = strdup("UNBOUND");
             }
@@ -419,7 +419,7 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     if (NULL != src->cpuset) {
         mycpus = hwloc_bitmap_alloc();
         hwloc_bitmap_list_sscanf(mycpus, src->cpuset);
-        tmp2 = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, src->node->topology->topo);
+        tmp2 = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, false, src->node->topology->topo);
         hwloc_bitmap_free(mycpus);
     } else {
         tmp2 = strdup("UNBOUND");

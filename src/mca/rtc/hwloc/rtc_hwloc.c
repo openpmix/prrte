@@ -286,7 +286,7 @@ static void report_binding(prte_job_t *jobdat, int rank)
     if (hwloc_get_cpubind(prte_hwloc_topology, mycpus, HWLOC_CPUBIND_PROCESS) < 0) {
         pmix_output(0, "Rank %d is not bound", rank);
     } else {
-        tmp1 = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, prte_hwloc_topology);
+        tmp1 = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, false, prte_hwloc_topology);
         pmix_output(0, "Rank %d bound to %s", rank, tmp1);
         free(tmp1);
     }
