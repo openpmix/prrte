@@ -1647,21 +1647,135 @@ char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
     return result;
 }
 
+static char* construct_range(char **vals)
+{
+    int n, cnt;
+    char buf[4096], **ans = NULL, *str;
+
+    cnt = 1;
+    for (n=0; NULL != vals[n]; n++) {
+        if (NULL == vals[n+1]) {
+            if (1 == cnt) {
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, vals[n]);
+            } else {
+                snprintf(buf, 4096, "%d:%s", cnt, vals[n]);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, buf);
+            }
+            break;
+        }
+        if (0 == strcmp(vals[n], vals[n+1])) {
+            cnt++;
+        } else {
+            if (1 == cnt) {
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, vals[n]);
+            } else {
+                snprintf(buf, 4096, "%d:%s", cnt, vals[n]);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, buf);
+            }
+            cnt = 1;
+        }
+    }
+
+    str = PMIX_ARGV_JOIN_COMPAT(ans, ',');
+    return str;
+}
+
 char *prte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
 {
     char *sig = NULL, *arch = NULL, *endian;
     hwloc_obj_t obj;
-    unsigned i;
-    char buffer[4096];
+    unsigned i, nobjs, n, ncpus;
+    char buffer[4096], **scratch = NULL, **answer = NULL;
     int rc;
+    hwloc_cpuset_t avail, available;
 
-    obj = hwloc_get_root_obj(topo);
     rc = hwloc_topology_export_synthetic(topo, buffer, 4096,
                                          HWLOC_TOPOLOGY_EXPORT_SYNTHETIC_FLAG_NO_ATTRS);
-    if (-1 == rc) {
-        snprintf(buffer, 4096, "NON-SYMMETRIC[%u]", prte_process_info.myproc.rank);
+    if (0 > rc) {
+        // create out own signature - start with packages
+        scratch = NULL;
+        available = hwloc_bitmap_alloc();
+        avail = prte_hwloc_base_filter_cpus(prte_hwloc_topology);
+        nobjs = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE);
+        for (n=0; n < nobjs; n++) {
+            obj = prte_hwloc_base_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, n);
+            hwloc_bitmap_and(available, avail, obj->cpuset);
+            ncpus = hwloc_bitmap_weight(available);
+            snprintf(buffer, 4096, "%u", ncpus);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&scratch, buffer);
+        }
+        sig = construct_range(scratch);
+        snprintf(buffer, 4096, "PKG[%s]", sig);
+        free(sig);
+        PMIX_ARGV_FREE_COMPAT(scratch);
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&answer, buffer);
+        // now account for NUMA
+        scratch = NULL;
+        nobjs = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_NUMANODE);
+        for (n=0; n < nobjs; n++) {
+            obj = prte_hwloc_base_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NUMANODE, n);
+            hwloc_bitmap_and(available, avail, obj->cpuset);
+            ncpus = hwloc_bitmap_weight(available);
+            snprintf(buffer, 4096, "%u", ncpus);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&scratch, buffer);
+        }
+        sig = construct_range(scratch);
+        snprintf(buffer, 4096, "NUMA[%s]", sig);
+        free(sig);
+        PMIX_ARGV_FREE_COMPAT(scratch);
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&answer, buffer);
+        // L3caches
+        scratch = NULL;
+        nobjs = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L3CACHE);
+        for (n=0; n < nobjs; n++) {
+            obj = prte_hwloc_base_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_L3CACHE, n);
+            hwloc_bitmap_and(available, avail, obj->cpuset);
+            ncpus = hwloc_bitmap_weight(available);
+            snprintf(buffer, 4096, "%u", ncpus);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&scratch, buffer);
+        }
+        sig = construct_range(scratch);
+        snprintf(buffer, 4096, "L3[%s]", sig);
+        free(sig);
+        PMIX_ARGV_FREE_COMPAT(scratch);
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&answer, buffer);
+        // L2caches
+        scratch = NULL;
+        nobjs = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L2CACHE);
+        for (n=0; n < nobjs; n++) {
+            obj = prte_hwloc_base_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_L2CACHE, n);
+            hwloc_bitmap_and(available, avail, obj->cpuset);
+            ncpus = hwloc_bitmap_weight(available);
+            snprintf(buffer, 4096, "%u", ncpus);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&scratch, buffer);
+        }
+        sig = construct_range(scratch);
+        snprintf(buffer, 4096, "L2[%s]", sig);
+        free(sig);
+        PMIX_ARGV_FREE_COMPAT(scratch);
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&answer, buffer);
+        // L1caches
+        scratch = NULL;
+        nobjs = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L1CACHE);
+        for (n=0; n < nobjs; n++) {
+            obj = prte_hwloc_base_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_L1CACHE, n);
+            hwloc_bitmap_and(available, avail, obj->cpuset);
+            ncpus = hwloc_bitmap_weight(available);
+            snprintf(buffer, 4096, "%u", ncpus);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&scratch, buffer);
+        }
+        sig = construct_range(scratch);
+        snprintf(buffer, 4096, "L1[%s]", sig);
+        free(sig);
+        PMIX_ARGV_FREE_COMPAT(scratch);
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&answer, buffer);
+        // setup the signature
+        sig = PMIX_ARGV_JOIN_COMPAT(answer, ';');
+        snprintf(buffer, 4096, "%s", sig);
+        free(sig);
+        PMIX_ARGV_FREE_COMPAT(answer);
+        hwloc_bitmap_free(avail);
     }
-
 
     /* get the root object so we can add the processor architecture */
     obj = hwloc_get_root_obj(topo);

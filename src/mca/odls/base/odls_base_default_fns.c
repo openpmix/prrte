@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies Ltd. All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -952,6 +952,13 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(cd);
 
+
+    if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_DO_NOT_SPAWN, NULL, PMIX_BOOL)) {
+        // if we aren't spawning the apps, then just mark them as
+        // terminated and return
+        PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_TERMINATED);
+        return;
+    }
 
     /* ensure we clear any prior info regarding state or exit status in
      * case this is a restart

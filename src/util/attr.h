@@ -3,7 +3,7 @@
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
@@ -243,6 +243,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_FWD_ENVIRONMENT            (PRTE_JOB_START_KEY + 120) // bool - forward local environment to procs in this job
 #define PRTE_JOB_REPORT_PHYSICAL_CPUS       (PRTE_JOB_START_KEY + 121) // bool - report using physical (vs logical) cpu IDs
 #define PRTE_JOB_ALLOC_DISPLAYED            (PRTE_JOB_START_KEY + 122) // bool - allocation has been displayed
+#define PRTE_JOB_DO_NOT_SPAWN               (PRTE_JOB_START_KEY + 123) // bool - do not spawn app procs
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 
