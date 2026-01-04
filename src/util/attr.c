@@ -3,7 +3,7 @@
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2020 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
@@ -525,6 +525,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "REPORT PHYSICAL CPUS";
         case PRTE_JOB_ALLOC_DISPLAYED:
             return "ALLOCATION DISPLAYED";
+        case PRTE_JOB_DO_NOT_SPAWN:
+            return "DO_NOT_SPAWN";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

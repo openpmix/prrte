@@ -224,6 +224,18 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                                        &flag, PMIX_BOOL);
                 }
 
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_NOSPAWN)) {
+                flag = PMIX_CHECK_TRUE(&value);
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_SPAWN, PRTE_ATTR_GLOBAL,
+                                   &flag, PMIX_BOOL);
+                /* if we are not in a persistent DVM, then make sure we also
+                 * apply this to the daemons */
+                if (!prte_persistent) {
+                    djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+                    prte_set_attribute(&djob->attributes, PRTE_JOB_DO_NOT_SPAWN, PRTE_ATTR_GLOBAL,
+                                       &flag, PMIX_BOOL);
+                }
+
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_SHOW_PROGRESS)) {
                 flag = PMIX_CHECK_TRUE(&value);
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, PRTE_ATTR_GLOBAL,

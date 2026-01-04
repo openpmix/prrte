@@ -204,6 +204,7 @@ BEGIN_C_DECLS
 // Runtime directives
 #define PRTE_CLI_ERROR_NZ           "error-nonzero-status"          // optional arg
 #define PRTE_CLI_NOLAUNCH           "donotlaunch"                   // no arg
+#define PRTE_CLI_NOSPAWN            "donotspawn"                    // no arg
 #define PRTE_CLI_SHOW_PROGRESS      "show-progress"                 // optional arg
 #define PRTE_CLI_RECOVERABLE        "recoverable"                   // optional arg
 #define PRTE_CLI_AUTORESTART        "autorestart"                   // optional arg
