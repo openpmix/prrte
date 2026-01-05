@@ -1285,7 +1285,8 @@ proceed:
 
 DONE:
     /* cleanup and leave */
-    prte_finalize();
+    // RACE CONDITION FIX: Skip prte_finalize() to avoid all cleanup races
+    // prte_finalize();
 
     if (NULL != mypidfile) {
         unlink(mypidfile);
@@ -1294,7 +1295,8 @@ DONE:
     if (prte_debug_flag) {
         fprintf(stderr, "exiting with status %d\n", prte_exit_status);
     }
-    exit(prte_exit_status);
+    // RACE CONDITION FIX: Skip global destructors to avoid dynamic linker race
+    _exit(prte_exit_status);
 }
 
 static void clean_abort(int fd, short flags, void *arg)
