@@ -797,7 +797,7 @@ int prte(int argc, char *argv[])
     /* if we are supporting a singleton, add it to our jobs */
     if (NULL != prte_pmix_server_globals.singleton) {
         rc = prep_singleton(prte_pmix_server_globals.singleton);
-        if (PRTE_SUCCESS != ret) {
+        if (PRTE_SUCCESS != rc) {
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
             goto DONE;
         }

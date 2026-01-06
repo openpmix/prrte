@@ -131,7 +131,6 @@ hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
     char **ranges = NULL, **range = NULL;
     int idx, cpu, start, end;
     hwloc_obj_t pu;
-    bool physical = false;
     char **cache = NULL;
     char tmp[256];
 
@@ -150,7 +149,7 @@ hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
             pu = prte_hwloc_base_get_pu(topo, use_hwthread_cpus, cpu);
             if (NULL == pu) {
                 pmix_show_help("help-prte-hwloc-base.txt", "unfound-cpu", true,
-                               *cpulist, cpu, physical ? "physical" : "logical",
+                               *cpulist, cpu, "logical",
                                use_hwthread_cpus ? "hwthread" : "core");
                 PMIX_ARGV_FREE_COMPAT(ranges);
                 PMIX_ARGV_FREE_COMPAT(range);
@@ -174,7 +173,7 @@ hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
                 pu = prte_hwloc_base_get_pu(topo, use_hwthread_cpus, cpu);
                 if (NULL == pu) {
                     pmix_show_help("help-prte-hwloc-base.txt", "unfound-cpu", true,
-                                   cpulist, cpu, physical ? "physical" : "logical",
+                                   cpulist, cpu, "logical",
                                    use_hwthread_cpus ? "hwthread" : "core");
                     PMIX_ARGV_FREE_COMPAT(ranges);
                     PMIX_ARGV_FREE_COMPAT(range);
@@ -1621,11 +1620,7 @@ char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
             complete = build_map(tmp, 2048, avail,
                                  physical, prefix, topo);
             if (PRTE_SUCCESS == complete) {
-                if (physical) {
-                    snprintf(ans, 4096, "package[%d][%s]", n, tmp);
-                } else {
-                    snprintf(ans, 4096, "package[%d][%s]", n, tmp);
-                }
+                snprintf(ans, 4096, "package[%d][%s]", n, tmp);
             } else {
                 PMIX_ARGV_FREE_COMPAT(output);
                 return NULL;
