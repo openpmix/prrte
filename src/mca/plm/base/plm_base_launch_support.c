@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
@@ -1377,7 +1377,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     prte_proc_t *daemon = NULL, *dptr;
     pmix_proc_t dname;
     pmix_data_buffer_t *relay;
-    char *sig;
+    char *sig = NULL;
     prte_topology_t *t, *mytopo;
     hwloc_topology_t topo;
     int i;
@@ -1540,6 +1540,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             prted_failed_launch = true;
             if (NULL != sig) {
                 free(sig);
+                sig = NULL;
             }
             goto CLEANUP;
         }
@@ -1755,7 +1756,8 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             // if the signature wasn't found, then add it
             if (!found) {
                 t = PMIX_NEW(prte_topology_t);
-                t->sig = strdup(sig);
+                t->sig = sig;
+                sig = NULL;
                 t->topo = topo;
                 t->index = pmix_pointer_array_add(prte_node_topologies, t);
                 daemon->node->topology = t;

@@ -14,7 +14,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -465,7 +465,7 @@ static int parse_dash_host(char ***mapped_nodes, char *hosts)
                     if (NULL != (cptr = strchr(mini_map[k], ':'))) {
                         /* the colon indicates a specific # are requested */
                         ++cptr;
-                        if (NULL == cptr) {
+                        if ('\0' == *cptr) {
                             // missing number of nodes being requested
                             pmix_show_help("help-dash-host.txt",
                                            "dash-host:invalid-relative-node-syntax", true,
