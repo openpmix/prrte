@@ -45,7 +45,8 @@ prte_schizo_base_t prte_schizo_base = {
     .active_modules = PMIX_LIST_STATIC_INIT,
     .test_proxy_launch = false,
     .default_display_options = NULL,
-    .default_runtime_options = NULL
+    .default_runtime_options = NULL,
+    .default_personality = NULL
 };
 
 static int prte_schizo_base_register(pmix_mca_base_register_flag_t flags)
@@ -59,6 +60,13 @@ static int prte_schizo_base_register(pmix_mca_base_register_flag_t flags)
                                      "Test proxy launches",
                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                      &prte_schizo_base.test_proxy_launch);
+    prte_schizo_base.default_personality = NULL;
+    ret = pmix_mca_base_var_register("prte", NULL, NULL, "personality",
+                                     "Default personality to use",
+                                     PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                     &prte_schizo_base.default_personality);
+    (void) pmix_mca_base_var_register_synonym(ret, "prte", NULL, "schizo", "proxy",
+                                              PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     prte_schizo_base.default_display_options = NULL;
     (void)pmix_mca_base_var_register("prte", NULL, NULL, "display",

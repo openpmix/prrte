@@ -50,6 +50,7 @@ typedef struct {
     bool test_proxy_launch;
     char *default_display_options;
     char *default_runtime_options;
+    char *default_personality;
 } prte_schizo_base_t;
 
 /**
