@@ -18,7 +18,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2022 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2022-2024 Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -602,7 +602,7 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
         free(caught_positions);
         caught_positions = NULL;
     }
- 
+
     PMIX_ARGV_FREE_COMPAT(pargv);
     /* check for deprecated options - warn and convert them */
     rc = convert_deprecated_cli(results, silent);
@@ -2163,7 +2163,8 @@ static int detect_proxy(char *personalities)
     }
 
     /* if we were told the proxy, then use it */
-    if (NULL != (evar = getenv("PRTE_MCA_schizo_proxy"))) {
+    if (NULL != (evar = getenv("PRTE_MCA_schizo_proxy")) ||
+        NULL != (evar = getenv("PRTE_MCA_personality"))) {
         if (0 == strcmp(evar, "ompi")) {
             return 100;
         } else {

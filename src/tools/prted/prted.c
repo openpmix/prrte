@@ -19,7 +19,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2022      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -212,6 +212,7 @@ int main(int argc, char *argv[])
     /* ensure we aren't misdirected on choice of proxy since
      * some environments forward their envars */
     unsetenv("PRTE_MCA_schizo_proxy");
+    unsetenv("PRTE_MCA_personality");
 
     /* initialize the globals */
     PMIX_DATA_BUFFER_CREATE(bucket);

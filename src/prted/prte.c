@@ -471,6 +471,7 @@ int prte(int argc, char *argv[])
     /* ensure we don't confuse any downstream PRRTE tools on
      * choice of proxy since some environments forward their envars */
     unsetenv("PRTE_MCA_schizo_proxy");
+    unsetenv("PRTE_MCA_personality");
 
     /* Register all global MCA Params */
     if (PRTE_SUCCESS != (rc = prte_register_params())) {
