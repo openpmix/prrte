@@ -783,7 +783,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
         }
 
         /* --output-filename DIR  ->  --output file=file */
-        else if (0 == strcmp(option, "--output-filename")) {
+        else if (0 == strcmp(option, "output-filename")) {
             pmix_asprintf(&p2, "file=%s", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_OUTPUT, p2,
