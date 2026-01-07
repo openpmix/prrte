@@ -46,6 +46,7 @@ prte_schizo_base_t prte_schizo_base = {
     .test_proxy_launch = false,
     .default_display_options = NULL,
     .default_runtime_options = NULL,
+    .default_output_options = NULL,
     .default_personality = NULL
 };
 
@@ -82,6 +83,19 @@ static int prte_schizo_base_register(pmix_mca_base_register_flag_t flags)
                                      "to represent \"MAP-DEVEL\" (though \"MAP-D\" would suffice).",
                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
                                      &prte_schizo_base.default_display_options);
+
+    prte_schizo_base.default_output_options = NULL;
+    (void)pmix_mca_base_var_register("prte", NULL, NULL, "output",
+                                     "Comma-delimited list of case-insensitive options that control how "
+                                     "output is generated. The full directive need not be provided — only "
+                                     "enough characters are required to uniquely identify the directive. For "
+                                     "example, \"MERGE\" is sufficient to represent the \"MERGE-STDERR-TO-STDOUT\" "
+                                     "directive — while \"TAG\" can not be used to represent \"TAG-DETAILED\" "
+                                     "(though \"TAG-D\" would suffice). Supported values include: [tag | "
+                                     "tag-detailed | tag-fullname | timestamp | xml | dir=[dirname] | "
+                                     "file=[filename]. Supported qualifiers include [nocopy | raw]",
+                                     PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                     &prte_schizo_base.default_output_options);
 
     prte_schizo_base.default_runtime_options = NULL;
     ret = pmix_mca_base_var_register("prte", NULL, NULL, "rtos",
