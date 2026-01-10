@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -673,6 +673,55 @@ pmix_status_t pmix_tool_connected2_fn(pmix_info_t *info, size_t ninfo,
 }
 #endif
 
+void pmix_server_logging_resp(int status, pmix_proc_t *sender,
+                              pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
+                              void *cbdata)
+{
+    prte_pmix_server_req_t *req;
+    int32_t cnt;
+    int local_index;
+    pmix_status_t rc, lstat;
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
+
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s LOGGING RESPONSE RECVD",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+
+    // unpack our local index
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &local_index, &cnt, PMIX_INT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+
+    // lookup our req
+    req = (prte_pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, local_index);
+    if (NULL == req) {
+        // nothing we can do
+        PMIX_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return;
+    }
+    // clear the local tracker
+    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, local_index, NULL);
+
+    // unpack the returned status
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &lstat, &cnt, PMIX_STATUS);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        lstat = rc;
+    }
+
+    // execute the callback
+    if (NULL != req->opcbfunc) {
+        req->opcbfunc(lstat, req->cbdata);
+    }
+
+    // cleanup
+    PMIX_RELEASE(req);
+}
+
 static void lgcbfn(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
@@ -684,96 +733,129 @@ static void lgcbfn(int sd, short args, void *cbdata)
     PMIX_RELEASE(cd);
 }
 
+static void process_log(int sd, short args, void *cbdata)
+{
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
+    pmix_data_buffer_t *buf;
+    pmix_status_t rc;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_DATA_BUFFER_CREATE(buf);
+
+    // cache the operation
+    req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+    // pack the local index
+    rc = PMIx_Data_pack(NULL, buf, &req->local_index, 1, PMIX_INT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        goto done;
+    }
+
+    /* pack the source of this log request */
+    rc = PMIx_Data_pack(NULL, buf, (void*)&req->proxy, 1, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        goto done;
+    }
+    /* pack number of info provided */
+    rc = PMIx_Data_pack(NULL, buf, &req->ninfo, 1, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        goto done;
+    }
+    // pack the info
+    if (0 < req->ninfo) {
+        rc = PMIx_Data_pack(NULL, buf, req->info, req->ninfo, PMIX_INFO);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            goto done;
+        }
+    }
+    /* pack number of directives given */
+    rc = PMIx_Data_pack(NULL, buf, &req->ndirs, 1, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        goto done;
+    }
+    if (0 < req->ndirs) {
+        // pack directives
+        rc = PMIx_Data_pack(NULL, buf, req->directives, req->ndirs, PMIX_INFO);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            goto done;
+        }
+    }
+
+    /* send the result to the HNP */
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf,
+                  PRTE_RML_TAG_LOGGING);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        rc = prte_pmix_convert_rc(rc);
+    }
+
+done:
+    if (PMIX_SUCCESS != rc) {
+        // must complete the callback to release the PMIx server
+        if (NULL != req->opcbfunc) {
+            req->opcbfunc(rc, req->cbdata);
+        }
+        // cleanup the local tracker
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
+        // cleanup memory
+        PMIX_RELEASE(req);
+    }
+}
+
 void pmix_server_log_fn(const pmix_proc_t *client, const pmix_info_t data[], size_t ndata,
                         const pmix_info_t directives[], size_t ndirs, pmix_op_cbfunc_t cbfunc,
                         void *cbdata)
 {
-    size_t n, cnt, dcnt;
-    pmix_data_buffer_t *buf;
-    int rc = PRTE_SUCCESS;
-    pmix_data_buffer_t pbuf, dbuf;
-    pmix_byte_object_t pbo, dbo;
-    pmix_status_t ret;
+    prte_pmix_server_req_t *req;
+    size_t n;
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s logging info",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
-    PMIX_DATA_BUFFER_CONSTRUCT(&dbuf);
+    if (0 == ndata) {
+        goto done;
+    }
+
     /* if we are the one that passed it down, then we don't pass it back */
-    dcnt = 0;
     for (n = 0; n < ndirs; n++) {
         if (PMIX_CHECK_KEY(&directives[n], "prte.log.noloop")) {
             if (PMIX_INFO_TRUE(&directives[n])) {
-                rc = PMIX_SUCCESS;
                 goto done;
             }
         }
-        else {
-            ret = PMIx_Data_pack(NULL, &dbuf, (pmix_info_t *) &directives[n], 1, PMIX_INFO);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-            }
-            dcnt++;
-        }
     }
 
-    PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
-    cnt = 0;
-
-    for (n = 0; n < ndata; n++) {
-        /* ship this to our HNP/MASTER for processing, even if that is us */
-        ret = PMIx_Data_pack(NULL, &pbuf, (pmix_info_t *) &data[n], 1, PMIX_INFO);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-        }
-        ++cnt;
-    }
-    if (0 < cnt) {
-        PMIX_DATA_BUFFER_CREATE(buf);
-        /* pack the source of this log request */
-        rc = PMIx_Data_pack(NULL, buf, (void*)client, 1, PMIX_PROC);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-        }
-        /* pack number of info provided */
-        rc = PMIx_Data_pack(NULL, buf, &cnt, 1, PMIX_SIZE);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-        }
-        /* pack number of directives given */
-        rc = PMIx_Data_pack(NULL, buf, &dcnt, 1, PMIX_SIZE);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-        }
-        /* bring over the packed info blob */
-        rc = PMIx_Data_unload(&pbuf, &pbo);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-        }
-        rc = PMIx_Data_pack(NULL, buf, &pbo, 1, PMIX_BYTE_OBJECT);
-        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-        /* pack the directives blob */
-        rc = PMIx_Data_unload(&dbuf, &dbo);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-        }
-        rc = PMIx_Data_pack(NULL, buf, &dbo, 1, PMIX_BYTE_OBJECT);
-        PMIX_BYTE_OBJECT_DESTRUCT(&dbo);
-        /* send the result to the HNP */
-        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf,
-                      PRTE_RML_TAG_LOGGING);
-        if (PRTE_SUCCESS != rc) {
-            PRTE_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buf);
-        }
-    }
+    // need to threadshift this to process
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    memcpy(&req->proxy, client, sizeof(pmix_proc_t));
+    req->info = (pmix_info_t*)data;
+    req->ninfo = ndata;
+    req->directives = (pmix_info_t*)directives;
+    req->ndirs = ndirs;
+    req->opcbfunc = cbfunc;
+    req->cbdata = cbdata;
+    PRTE_PMIX_THREADSHIFT(req, prte_event_base, process_log);
+    return;
 
 done:
     /* we cannot directly execute the callback here
      * as it would threadlock - so shift to somewhere
      * safe */
-    PRTE_SERVER_PMIX_THREADSHIFT(PRTE_NAME_WILDCARD, NULL, rc, NULL, NULL, 0, lgcbfn, cbfunc, cbdata);
+    PRTE_SERVER_PMIX_THREADSHIFT(PRTE_NAME_WILDCARD, NULL, PMIX_OPERATION_SUCCEEDED,
+                                 NULL, NULL, 0, lgcbfn, cbfunc, cbdata);
 }
 
 #if PRTE_PMIX_SERVER2_UPCALLS
@@ -781,110 +863,36 @@ pmix_status_t pmix_server_log2_fn(const pmix_proc_t *client, const pmix_info_t d
                                   const pmix_info_t directives[], size_t ndirs, pmix_op_cbfunc_t cbfunc,
                                   void *cbdata)
 {
-    size_t n, cnt, dcnt;
-    pmix_data_buffer_t *buf;
-    int rc = PRTE_SUCCESS;
-    pmix_data_buffer_t pbuf, dbuf;
-    pmix_byte_object_t pbo, dbo;
-    pmix_status_t ret;
+    prte_pmix_server_req_t *req;
+    size_t n;
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s logging2 info",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
-    PMIX_DATA_BUFFER_CONSTRUCT(&dbuf);
+    if (0 == ndata) {
+        return PMIX_OPERATION_SUCCEEDED;
+    }
+
     /* if we are the one that passed it down, then we don't pass it back */
-    dcnt = 0;
     for (n = 0; n < ndirs; n++) {
         if (PMIX_CHECK_KEY(&directives[n], "prte.log.noloop")) {
             if (PMIX_INFO_TRUE(&directives[n])) {
-                rc = PMIX_SUCCESS;
-                goto done;
+                return PMIX_OPERATION_SUCCEEDED;
             }
         }
-        else {
-            ret = PMIx_Data_pack(NULL, &dbuf, (pmix_info_t *) &directives[n], 1, PMIX_INFO);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                return ret;
-            }
-            dcnt++;
-        }
     }
 
-    PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
-    cnt = 0;
-
-    for (n = 0; n < ndata; n++) {
-        /* ship this to our HNP/MASTER for processing, even if that is us */
-        ret = PMIx_Data_pack(NULL, &pbuf, (pmix_info_t *) &data[n], 1, PMIX_INFO);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-            return ret;
-        }
-        ++cnt;
-    }
-    if (0 < cnt) {
-        PMIX_DATA_BUFFER_CREATE(buf);
-        /* pack the source of this log request */
-        rc = PMIx_Data_pack(NULL, buf, (void*)client, 1, PMIX_PROC);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buf);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-            return rc;
-        }
-        /* pack number of info provided */
-        rc = PMIx_Data_pack(NULL, buf, &cnt, 1, PMIX_SIZE);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buf);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-            return rc;
-        }
-        /* pack number of directives given */
-        rc = PMIx_Data_pack(NULL, buf, &dcnt, 1, PMIX_SIZE);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buf);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-            return rc;
-        }
-        /* bring over the packed info blob */
-        rc = PMIx_Data_unload(&pbuf, &pbo);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buf);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-            return rc;
-        }
-        rc = PMIx_Data_pack(NULL, buf, &pbo, 1, PMIX_BYTE_OBJECT);
-        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-        /* pack the directives blob */
-        rc = PMIx_Data_unload(&dbuf, &dbo);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buf);
-            return rc;
-        }
-        rc = PMIx_Data_pack(NULL, buf, &dbo, 1, PMIX_BYTE_OBJECT);
-        PMIX_BYTE_OBJECT_DESTRUCT(&dbo);
-        /* send the result to the HNP */
-        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf,
-                      PRTE_RML_TAG_LOGGING);
-        if (PRTE_SUCCESS != rc) {
-            PRTE_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buf);
-            return rc;
-        }
-    }
-
-done:
-    /* we cannot directly execute the callback here
-     * as it would threadlock - so shift to somewhere
-     * safe */
-    PRTE_SERVER_PMIX_THREADSHIFT(PRTE_NAME_WILDCARD, NULL, rc, NULL, NULL, 0, lgcbfn, cbfunc, cbdata);
+    // need to threadshift this to process
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    memcpy(&req->proxy, client, sizeof(pmix_proc_t));
+    req->info = (pmix_info_t*)data;
+    req->ninfo = ndata;
+    req->directives = (pmix_info_t*)directives;
+    req->ndirs = ndirs;
+    req->opcbfunc = cbfunc;
+    req->cbdata = cbdata;
+    PRTE_PMIX_THREADSHIFT(req, prte_event_base, process_log);
     return PMIX_SUCCESS;
 }
 #endif

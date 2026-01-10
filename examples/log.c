@@ -15,7 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -44,6 +44,7 @@ int main(int argc, char **argv)
     bool flag;
     pmix_proc_t proc;
     bool syslog = false, global = false;
+    char *msg;
 
     /* check for CLI directives */
     if (1 < argc) {
@@ -63,10 +64,12 @@ int main(int argc, char **argv)
     fprintf(stderr, "Client ns %s rank %d: Running\n", myproc.nspace, myproc.rank);
 
     /* have rank 0 do the logs - doesn't really matter who does it */
-    if (0 == myproc.rank) {
+    if (0 == (myproc.rank % 2)) {
         /* always output a log message to stderr */
         PMIX_INFO_CREATE(info, 1);
-        PMIX_INFO_LOAD(&info[0], PMIX_LOG_STDERR, "stderr log message\n", PMIX_STRING);
+        asprintf(&msg, "[%u]: stderr log message\n", myproc.rank);
+        PMIX_INFO_LOAD(&info[0], PMIX_LOG_STDERR, msg, PMIX_STRING);
+        free(msg);
         PMIX_INFO_CREATE(directives, 1);
         PMIX_INFO_LOAD(&directives[0], PMIX_LOG_GENERATE_TIMESTAMP, NULL, PMIX_BOOL);
         rc = PMIx_Log(info, 1, directives, 1);
@@ -77,9 +80,11 @@ int main(int argc, char **argv)
         }
         /* if requested, output one to syslog */
         if (syslog) {
-            fprintf(stderr, "LOG TO LOCAL SYSLOG\n");
+            fprintf(stderr, "[%u]: LOG TO LOCAL SYSLOG\n", myproc.rank);
             PMIX_INFO_CREATE(info, 1);
-            PMIX_INFO_LOAD(&info[0], PMIX_LOG_LOCAL_SYSLOG, "SYSLOG message\n", PMIX_STRING);
+            asprintf(&msg, "[%u]: SYSLOG message\n", myproc.rank);
+            PMIX_INFO_LOAD(&info[0], PMIX_LOG_LOCAL_SYSLOG, msg, PMIX_STRING);
+            free(msg);
             rc = PMIx_Log(info, 1, NULL, 0);
             if (PMIX_SUCCESS != rc) {
                 fprintf(stderr, "Client ns %s rank %d: PMIx_Log syslog failed: %s\n", myproc.nspace,
@@ -88,10 +93,52 @@ int main(int argc, char **argv)
             }
         }
         if (global) {
-            fprintf(stderr, "LOG TO GLOBAL SYSLOG\n");
+            fprintf(stderr, "[%u]: LOG TO GLOBAL SYSLOG\n", myproc.rank);
             PMIX_INFO_CREATE(info, 1);
-            PMIX_INFO_LOAD(&info[0], PMIX_LOG_GLOBAL_SYSLOG, "GLOBAL SYSLOG message\n",
-                           PMIX_STRING);
+            asprintf(&msg, "[%u]: GLOBAL SYSLOG message\n", myproc.rank);
+            PMIX_INFO_LOAD(&info[0], PMIX_LOG_GLOBAL_SYSLOG, msg, PMIX_STRING);
+            free(msg);
+            rc = PMIx_Log(info, 1, NULL, 0);
+            if (PMIX_SUCCESS != rc) {
+                fprintf(stderr, "Client ns %s rank %d: PMIx_Log GLOBAL syslog failed: %s\n",
+                        myproc.nspace, myproc.rank, PMIx_Error_string(rc));
+                goto fence;
+            }
+        }
+    } else {
+        /* always output a log message to stdout */
+        PMIX_INFO_CREATE(info, 1);
+        asprintf(&msg, "[%u]: stdout log message\n", myproc.rank);
+        PMIX_INFO_LOAD(&info[0], PMIX_LOG_STDERR, msg, PMIX_STRING);
+        free(msg);
+        PMIX_INFO_CREATE(directives, 1);
+        PMIX_INFO_LOAD(&directives[0], PMIX_LOG_GENERATE_TIMESTAMP, NULL, PMIX_BOOL);
+        rc = PMIx_Log(info, 1, directives, 1);
+        if (PMIX_SUCCESS != rc) {
+            fprintf(stderr, "Client ns %s rank %d: PMIx_Log stderr failed: %s\n", myproc.nspace,
+                    myproc.rank, PMIx_Error_string(rc));
+            goto fence;
+        }
+        /* if requested, output one to syslog */
+        if (syslog) {
+            fprintf(stderr, "[%u]: LOG TO LOCAL SYSLOG\n", myproc.rank);
+            PMIX_INFO_CREATE(info, 1);
+            asprintf(&msg, "[%u]: SYSLOG message\n", myproc.rank);
+            PMIX_INFO_LOAD(&info[0], PMIX_LOG_LOCAL_SYSLOG, msg, PMIX_STRING);
+            free(msg);
+            rc = PMIx_Log(info, 1, NULL, 0);
+            if (PMIX_SUCCESS != rc) {
+                fprintf(stderr, "Client ns %s rank %d: PMIx_Log syslog failed: %s\n", myproc.nspace,
+                        myproc.rank, PMIx_Error_string(rc));
+                goto fence;
+            }
+        }
+        if (global) {
+            fprintf(stderr, "[%u]: LOG TO GLOBAL SYSLOG\n", myproc.rank);
+            PMIX_INFO_CREATE(info, 1);
+            asprintf(&msg, "[%u]: GLOBAL SYSLOG message\n", myproc.rank);
+            PMIX_INFO_LOAD(&info[0], PMIX_LOG_GLOBAL_SYSLOG, msg, PMIX_STRING);
+            free(msg);
             rc = PMIx_Log(info, 1, NULL, 0);
             if (PMIX_SUCCESS != rc) {
                 fprintf(stderr, "Client ns %s rank %d: PMIx_Log GLOBAL syslog failed: %s\n",

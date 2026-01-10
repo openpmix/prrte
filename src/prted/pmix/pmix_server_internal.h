@@ -18,7 +18,7 @@
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -287,6 +287,10 @@ PRTE_EXPORT extern pmix_status_t pmix_server_log2_fn(const pmix_proc_t *client, 
                                                      size_t ndata, const pmix_info_t directives[],
                                                      size_t ndirs, pmix_op_cbfunc_t cbfunc, void *cbdata);
 #endif
+
+PRTE_EXPORT extern void pmix_server_logging_resp(int status, pmix_proc_t *sender,
+                                                 pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
+                                                 void *cbdata);
 
 PRTE_EXPORT extern pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client,
                                                       pmix_alloc_directive_t directive,

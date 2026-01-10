@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Triad National Security, LLC. All rights reserved.
  * $COPYRIGHT$
  *
@@ -1069,6 +1069,10 @@ void pmix_server_start(void)
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_MONITOR_RESP,
                   PRTE_RML_PERSISTENT, pmix_server_monitor_resp, NULL);
 
+    // setup recv for logging responses
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING_RESP,
+                  PRTE_RML_PERSISTENT, pmix_server_logging_resp, NULL);
+
     if (PRTE_PROC_IS_MASTER) {
         /* setup recv for logging requests */
         PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING,
@@ -1099,6 +1103,7 @@ void pmix_server_finalize(void)
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED_RESP);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_MONITOR_REQUEST);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_MONITOR_RESP);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING_RESP);
     if (PRTE_PROC_IS_MASTER) {
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING);
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED);
@@ -1749,18 +1754,54 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender,
 
 static void log_cbfunc(pmix_status_t status, void *cbdata)
 {
-    prte_pmix_server_op_caddy_t *scd = (prte_pmix_server_op_caddy_t *) cbdata;
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
+    pmix_data_buffer_t *buf;
+    pmix_status_t rc, lstat;
+
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "Logging callback called");
 
     if (PMIX_SUCCESS != status && PMIX_OPERATION_SUCCEEDED != status) {
         pmix_output(prte_pmix_server_globals.output, "LOG FAILED");
     }
-    if (NULL != scd->info) {
-        PMIX_INFO_FREE(scd->info, scd->ninfo);
+    if (PMIX_OPERATION_SUCCEEDED == status) {
+        lstat = PMIX_SUCCESS;
+    } else {
+        lstat = status;
     }
-    if (NULL != scd->directives) {
-        PMIX_INFO_FREE(scd->directives, scd->ndirs);
+
+    PMIX_DATA_BUFFER_CREATE(buf);
+
+    // pack the requestors index
+    rc = PMIx_Data_pack(NULL, buf, &req->remote_index, 1, PMIX_INT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        goto done;
     }
-    PMIX_RELEASE(scd);
+
+    // pack the operation's status
+    rc = PMIx_Data_pack(NULL, buf, &lstat, 1, PMIX_STATUS);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        goto done;
+    }
+
+    /* send the result to the requestor */
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "Logging response %s sent to daemon %u",
+                        PMIx_Error_string(lstat), req->proxy.rank);
+
+    PRTE_RML_SEND(rc, req->proxy.rank, buf,
+                  PRTE_RML_TAG_LOGGING_RESP);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+    }
+
+done:
+    PMIX_RELEASE(req);
 }
 
 
@@ -1770,136 +1811,108 @@ static void pmix_server_log(int status, pmix_proc_t *sender,
 {
     int rc;
     int32_t cnt;
-    size_t n, ninfo, ndirs;
-    pmix_info_t *info;
-    pmix_status_t ret;
-    pmix_byte_object_t boptr;
-    pmix_data_buffer_t pbkt;
-    prte_pmix_server_op_caddy_t *scd;
+    size_t ndirs;
+    prte_pmix_server_req_t *req = NULL;
     pmix_proc_t source;
     prte_job_t *jdata;
     bool noagg;
     bool flag;
-    PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
+    PRTE_HIDE_UNUSED_PARAMS(status, tg, cbdata);
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "Logging info relayed by %s",
                         PRTE_NAME_PRINT(sender));
+
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    memcpy(&req->proxy, sender, sizeof(pmix_proc_t));
+    // unpack the requestor's local index - this is our remote_index
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &req->remote_index, &cnt, PMIX_INT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto respond;
+    }
 
     /* unpack the source of the request */
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &source, &cnt, PMIX_PROC);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        return;
+        goto respond;
     }
     /* look up the job for this source */
     jdata = prte_get_job_data_object(source.nspace);
     if (NULL == jdata) {
         /* should never happen */
         PMIX_ERROR_LOG(PMIX_ERR_NOT_FOUND);
-        return;
+        rc = PMIX_ERR_NOT_FOUND;
+        goto respond;
     }
     noagg = prte_get_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, NULL, PMIX_BOOL);
 
     /* unpack the number of info */
     cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &ninfo, &cnt, PMIX_SIZE);
+    rc = PMIx_Data_unpack(NULL, buffer, &req->ninfo, &cnt, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        return;
+        goto respond;
     }
-
-   /* unpack the number of directives */
-   cnt = 1;
-   rc = PMIx_Data_unpack(NULL, buffer, &ndirs, &cnt, PMIX_SIZE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return;
-    }
-
-    PMIX_BYTE_OBJECT_CONSTRUCT(&boptr);
-    /* unpack the info blob */
-    cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &boptr, &cnt, PMIX_BYTE_OBJECT);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return;
-    }
-
-    PMIX_INFO_CREATE(info, ninfo);
-    PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-    rc = PMIx_Data_load(&pbkt, &boptr);
-    for (n = 0; n < ninfo; n++) {
-        cnt = 1;
-        ret = PMIx_Data_unpack(NULL, &pbkt, (void *) &info[n], &cnt, PMIX_INFO);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_INFO_FREE(info, ninfo);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-            PMIX_BYTE_OBJECT_DESTRUCT(&boptr);
-            return;
+    if (0 < req->ninfo) {
+        req->copy = true;
+        PMIX_INFO_CREATE(req->info, req->ninfo);
+        cnt = req->ninfo;
+        rc = PMIx_Data_unpack(NULL, buffer, req->info, &cnt, PMIX_INFO);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            goto respond;
         }
     }
-    PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-    PMIX_BYTE_OBJECT_DESTRUCT(&boptr);
 
-    PMIX_BYTE_OBJECT_CONSTRUCT(&boptr);
-    /* unpack the directives blob */
+    /* unpack the number of directives */
     cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &boptr, &cnt, PMIX_BYTE_OBJECT);
+    rc = PMIx_Data_unpack(NULL, buffer, &ndirs, &cnt, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
-        PMIX_BYTE_OBJECT_CONSTRUCT(&boptr);
         PMIX_ERROR_LOG(rc);
-        return;
+        goto respond;
     }
 
-    scd = PMIX_NEW(prte_pmix_server_op_caddy_t);
     /* if we are not going to aggregate, then indicate so */
     if (noagg) {
-        scd->ndirs = ndirs + 3;
+        req->ndirs = ndirs + 3;
     } else {
-        scd->ndirs = ndirs + 2;  // need to locally add two directives
+        req->ndirs = ndirs + 2;  // need to locally add two directives
     }
-    PMIX_INFO_CREATE(scd->directives, scd->ndirs);
-    PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-    rc = PMIx_Data_load(&pbkt, &boptr);
-    for (n = 0; n < ndirs; n++) {
-        cnt = 1;
-        ret = PMIx_Data_unpack(NULL, &pbkt, (void *) &scd->directives[n], &cnt, PMIX_INFO);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_INFO_FREE(scd->directives, scd->ndirs);
-            PMIX_RELEASE(scd);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-            PMIX_BYTE_OBJECT_CONSTRUCT(&boptr);
-            return;
+    PMIX_INFO_CREATE(req->directives, req->ndirs);
+    req->dircopy = true;
+    if (0 < ndirs) {
+        cnt = ndirs;
+        rc = PMIx_Data_unpack(NULL, buffer, req->directives, &cnt, PMIX_INFO);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            goto respond;
         }
     }
-    PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-    PMIX_BYTE_OBJECT_CONSTRUCT(&boptr);
 
     /* indicate that only ONE PMIx log component should handle this request */
-    PMIX_INFO_LOAD(&scd->directives[ndirs], PMIX_LOG_ONCE, NULL, PMIX_BOOL);
+    PMIX_INFO_LOAD(&req->directives[ndirs], PMIX_LOG_ONCE, NULL, PMIX_BOOL);
     /* protect against infinite loop should the PMIx server push
      * this back up to us */
-    PMIX_INFO_LOAD(&scd->directives[ndirs+1], "prte.log.noloop", NULL, PMIX_BOOL);
+    PMIX_INFO_LOAD(&req->directives[ndirs+1], "prte.log.noloop", NULL, PMIX_BOOL);
     if (noagg) {
         flag = false;
-        PMIX_INFO_LOAD(&scd->directives[ndirs+2], PMIX_LOG_AGG, &flag, PMIX_BOOL);
+        PMIX_INFO_LOAD(&req->directives[ndirs+2], PMIX_LOG_AGG, &flag, PMIX_BOOL);
     }
-    scd->info = info;
-    scd->ninfo = ninfo;
+
     /* pass the array down to be logged */
-    rc = PMIx_Log_nb(scd->info, scd->ninfo, scd->directives, scd->ndirs, log_cbfunc, scd);
+    rc = PMIx_Log_nb(req->info, req->ninfo, req->directives, req->ndirs, log_cbfunc, req);
+
+respond:
     if (PMIX_SUCCESS != rc) {
-        if (NULL != scd->info) {
-            PMIX_INFO_FREE(scd->info, scd->ninfo);
+        // callback fn will not be called - send a message to the requestor
+        if (PMIX_OPERATION_SUCCEEDED == rc) {
+            rc = PMIX_SUCCESS;
         }
-        if (NULL != scd->directives) {
-            PMIX_INFO_FREE(scd->directives, scd->ndirs);
-        }
-        PMIX_RELEASE(scd);
+        log_cbfunc(rc, req); // will clear memory
     }
 }
 
