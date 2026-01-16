@@ -386,6 +386,8 @@ static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata
 static bool remote_connections_specified = false;
 static char *remote_cncts = NULL;
 static char *generate_dist = "fabric,gpu,network";
+static bool share_hwloc_memory = true;
+
 void pmix_server_register_params(void)
 {
     int i;
@@ -498,6 +500,10 @@ void pmix_server_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_pmix_server_globals.system_controller);
 
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "hwloc_shared_memory",
+                                      "Whether or not to share HWLOC topology via shared memory",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &share_hwloc_memory);
 }
 
 static void timeout_cbfunc(int sd, short args, void *cbdata)
@@ -709,7 +715,8 @@ int pmix_server_init(void)
         return rc;
     }
     // tell the server to share this topology for us
-    PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SHARE_TOPOLOGY, NULL, PMIX_BOOL);
+    PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SHARE_TOPOLOGY,
+                       (void*)&share_hwloc_memory, PMIX_BOOL);
     if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
         rc = prte_pmix_convert_status(prc);
