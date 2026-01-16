@@ -30,6 +30,7 @@
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_cmd_line.h"
 
 prte_schizo_base_module_t *prte_schizo_base_detect_proxy(char *cmdpath)
 {
@@ -70,10 +71,10 @@ PRTE_EXPORT void prte_schizo_base_root_error_msg(void)
 static bool check_multi(const char *target)
 {
     char *multi_dirs[] = {
-        "display",
-        "output",
-        "tune",
-        "runtime-options",
+        PRTE_CLI_DISPLAY,
+        PRTE_CLI_OUTPUT,
+        PRTE_CLI_TUNE,
+        PRTE_CLI_RTOS,
         NULL
     };
     int n;
