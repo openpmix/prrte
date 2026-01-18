@@ -17,7 +17,7 @@
 # Copyright (c) 2014-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
-# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
 # Copyright (c) 2021-2022 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
@@ -179,6 +179,16 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     PRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, $PRTE_FINAL_CPPFLAGS)
     PRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $PRTE_FINAL_LDFLAGS)
     PRTE_FLAGS_APPEND_UNIQ(LIBS, $PRTE_FINAL_LIBS)
+
+    AC_MSG_CHECKING([for support of stop progress thread API])
+    PRTE_CHECK_PMIX_CAP([STOP_PRGTHRD],
+                        [AC_MSG_RESULT([yes])
+                         prte_pmix_stop_progress_thread=1],
+                        [AC_MSG_RESULT([no])
+                         prte_pmix_stop_progress_thread=0])
+    AC_DEFINE_UNQUOTED([PRTE_PMIX_STOP_PRGTHRD],
+                       [$prte_pmix_stop_progress_thread],
+                       [Whether or not PMIx supports the stop progress thread API])
 
     AC_MSG_CHECKING([for support of version 2 server upcalls])
     PRTE_CHECK_PMIX_CAP([UPCALLS2],

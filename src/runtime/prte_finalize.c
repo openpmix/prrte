@@ -16,7 +16,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -33,6 +33,7 @@
 
 #include "src/mca/base/pmix_mca_base_framework.h"
 #include "src/util/pmix_argv.h"
+#include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_output.h"
 
 #include "src/mca/base/pmix_mca_base_alias.h"
@@ -68,9 +69,19 @@ int prte_finalize(void)
         return PRTE_SUCCESS;
     }
 
+#ifdef PRTE_PMIX_STOP_PRGTHRD
+    /* Stop the PMIx server's internal progress thread and wait here
+     * until all active events have been processed */
+    PMIx_Progress_thread_stop(NULL, 0);
+#endif
+
     /* flag that we are finalizing */
     prte_finalizing = true;
 
+    // we always must cleanup the session directory tree
+    pmix_os_dirpath_destroy(prte_process_info.top_session_dir, true, NULL);
+
+#ifdef PRTE_PICKY_COMPILERS
     /* release the cache */
     PMIX_RELEASE(prte_cache);
 
@@ -142,6 +153,7 @@ int prte_finalize(void)
     prte_proc_info_finalize();
 
     pmix_output_finalize();
+#endif
 
     /* now shutdown PMIx - need to do this last as it finalizes
      * the utilities and class system we depend upon */
