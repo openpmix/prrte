@@ -1541,7 +1541,7 @@ static void abort_signal_callback(int fd)
         second = false;
     } else {
         surekill();  // ensure we attempt to kill everything
-        pmix_os_dirpath_destroy(prte_process_info.top_session_dir, true, NULL);
+        prte_job_session_dir_finalize(NULL);
         exit(1);
     }
 }

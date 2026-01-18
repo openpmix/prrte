@@ -13,7 +13,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -293,6 +293,7 @@ void prte_job_session_dir_finalize(prte_job_t *jdata)
         if (prte_finalizing) {
             if (NULL != prte_process_info.top_session_dir) {
                 pmix_os_dirpath_destroy(prte_process_info.top_session_dir, true, _check_file);
+                /* if the top session dir is now empty, remove it */
                 rmdir(prte_process_info.top_session_dir);
                 free(prte_process_info.top_session_dir);
                 prte_process_info.top_session_dir = NULL;
