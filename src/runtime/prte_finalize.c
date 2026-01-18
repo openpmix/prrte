@@ -46,6 +46,7 @@
 #include "src/runtime/runtime.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
+#include "src/util/session_dir.h"
 
 int prte_finalize(void)
 {
@@ -79,7 +80,7 @@ int prte_finalize(void)
     prte_finalizing = true;
 
     // we always must cleanup the session directory tree
-    pmix_os_dirpath_destroy(prte_process_info.top_session_dir, true, NULL);
+    prte_job_session_dir_finalize(NULL);
 
 #ifdef PRTE_PICKY_COMPILERS
     /* release the cache */
