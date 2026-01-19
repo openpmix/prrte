@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -378,15 +378,7 @@ int prte_progress_thread_finalize(const char *name)
     PMIX_LIST_FOREACH(trk, &tracking, prte_progress_tracker_t)
     {
         if (0 == strcmp(name, trk->name)) {
-            /* decrement the refcount */
-            --trk->refcount;
-
-            /* If the refcount is still above 0, we're done here */
-            if (trk->refcount > 0) {
-                return PRTE_SUCCESS;
-            }
-
-            /* If the progress thread is active, stop it */
+           /* If the progress thread is active, stop it */
             if (trk->ev_active) {
                 stop_progress_engine(trk);
             }
@@ -412,23 +404,20 @@ int prte_progress_thread_pause(const char *name)
         return PRTE_ERR_NOT_FOUND;
     }
 
-    if (NULL == name) {
-        name = shared_thread_name;
-    }
-
     /* find the specified engine */
     PMIX_LIST_FOREACH(trk, &tracking, prte_progress_tracker_t)
     {
-        if (0 == strcmp(name, trk->name)) {
+        if (NULL == name || 0 == strcmp(name, trk->name)) {
             if (trk->ev_active) {
                 stop_progress_engine(trk);
             }
-
-            return PRTE_SUCCESS;
+            if (NULL != name) {
+                break;
+            }
         }
     }
 
-    return PRTE_ERR_NOT_FOUND;
+    return PRTE_SUCCESS;
 }
 
 #if PRTE_HAVE_LIBEV

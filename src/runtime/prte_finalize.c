@@ -43,6 +43,7 @@
 #include "src/mca/ess/ess.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
+#include "src/runtime/prte_progress_threads.h"
 #include "src/runtime/runtime.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
@@ -78,6 +79,9 @@ int prte_finalize(void)
 
     /* flag that we are finalizing */
     prte_finalizing = true;
+
+    // stop ALL prte progress threads
+    prte_progress_thread_pause(NULL);
 
     // we always must cleanup the session directory tree
     prte_job_session_dir_finalize(NULL);
