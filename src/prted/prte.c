@@ -233,7 +233,7 @@ static void shutdown_callback(int fd, short flags, void *arg)
     prte_odls.kill_local_procs(NULL);
     // mark that we are finalizing so the session directory will cleanup
     prte_finalizing = true;
-#ifdef PRTE_PMIX_STOP_PRGTHRD
+#if PRTE_PMIX_STOP_PRGTHRD
     PMIx_Progress_thread_stop(NULL, 0);
 #endif
     prte_job_session_dir_finalize(NULL);
@@ -1227,7 +1227,7 @@ int prte(int argc, char *argv[])
                  * the local session_dir tree and exit
                  */
                 prte_finalizing = true;
-#ifdef PRTE_PMIX_STOP_PRGTHRD
+#if PRTE_PMIX_STOP_PRGTHRD
                 PMIx_Progress_thread_stop(NULL, 0);
 #endif
                 prte_job_session_dir_finalize(NULL);
@@ -1496,7 +1496,7 @@ static void clean_abort(int fd, short flags, void *arg)
     fflush(stderr);
     prte_finalizing = true;
     /* ensure we exit with a non-zero status */
-#ifdef PRTE_PMIX_STOP_PRGTHRD
+#if PRTE_PMIX_STOP_PRGTHRD
     PMIx_Progress_thread_stop(NULL, 0);
 #endif
     surekill();  // ensure we attempt to kill everything
@@ -1536,7 +1536,7 @@ static void abort_signal_callback(int fd)
     } else {
         surekill();  // ensure we attempt to kill everything
         prte_finalizing = true;
-#ifdef PRTE_PMIX_STOP_PRGTHRD
+#if PRTE_PMIX_STOP_PRGTHRD
         PMIx_Progress_thread_stop(NULL, 0);
 #endif
         prte_job_session_dir_finalize(NULL);

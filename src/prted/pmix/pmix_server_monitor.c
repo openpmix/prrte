@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -197,6 +197,7 @@ pmix_status_t pmix_server_monitor_fn(const pmix_proc_t *requestor,
     return PMIX_SUCCESS;
 }
 
+#ifdef PMIX_MONITOR_LOCAL_ONLY
 static void mycbfn(int sd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *rq2 = (prte_pmix_server_req_t*)cbdata;
@@ -290,21 +291,25 @@ static void mycb(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *cb
     PMIX_POST_OBJECT(rq2);
     prte_event_active(&(rq2->ev), PRTE_EV_WRITE, 1);
 }
+#endif
 
 void pmix_server_monitor_request(int status, pmix_proc_t *sender,
                                  pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
                                  void *cbdata)
 {
-    pmix_status_t rc, event, ret;
+    pmix_status_t rc, ret;
     pmix_rank_t dvpid;
     int32_t cnt;
     int remote_index;
+    pmix_data_buffer_t *msg;
+#ifdef PMIX_MONITOR_LOCAL_ONLY
+    pmix_status_t event;
     pmix_info_t *monitor;
     size_t ndirs;
     pmix_info_t *directives = NULL;
     prte_pmix_server_req_t *req;
-    pmix_data_buffer_t *msg;
     pmix_proc_t requestor;
+#endif
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
 
     // unpack the requesting daemon's vpid
@@ -328,6 +333,7 @@ void pmix_server_monitor_request(int status, pmix_proc_t *sender,
         return;
     }
 
+#ifdef PMIX_MONITOR_LOCAL_ONLY
     // unpack the requestor
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &requestor, &cnt, PMIX_PROC);
@@ -407,6 +413,9 @@ void pmix_server_monitor_request(int status, pmix_proc_t *sender,
     return;
 
 errorout:
+#else
+    rc = PMIX_ERR_NOT_SUPPORTED;
+#endif
     // cannot allow the collective to hang
     PMIX_DATA_BUFFER_CREATE(msg);
 
@@ -438,7 +447,7 @@ errorout:
     if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_RELEASE(msg);
-    }
+    }    
 }
 
 void pmix_server_monitor_resp(int status, pmix_proc_t *sender,

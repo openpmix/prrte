@@ -109,7 +109,11 @@ static void _client_conn(int sd, short args, void *cbdata)
     // check if the uid, gid, and pid match
     for (n=0; n < cd->ninfo; n++) {
         if (PMIx_Check_key(cd->info[n].key, PMIX_USERID)) {
+#if PRTE_PMIX_GET_NUMBER_FN
             rc = PMIx_Value_get_number(&cd->info[n].value, (void*)&euid, PMIX_UINT32);
+#else
+            PMIX_VALUE_GET_NUMBER(rc, &cd->info[n].value, euid, uid_t);
+#endif
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 goto complete;
@@ -122,7 +126,11 @@ static void _client_conn(int sd, short args, void *cbdata)
             continue;
         }
         if (PMIx_Check_key(cd->info[n].key, PMIX_GRPID)) {
+#if PRTE_PMIX_GET_NUMBER_FN
             rc = PMIx_Value_get_number(&cd->info[n].value, (void*)&egid, PMIX_UINT32);
+#else
+            PMIX_VALUE_GET_NUMBER(rc, &cd->info[n].value, egid, gid_t);
+#endif
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 goto complete;
@@ -136,7 +144,11 @@ static void _client_conn(int sd, short args, void *cbdata)
         }
         if (prte_pmix_server_globals.require_pid_match) {
             if (PMIx_Check_key(cd->info[n].key, PMIX_PROC_PID)) {
+#if PRTE_PMIX_GET_NUMBER_FN
                 rc = PMIx_Value_get_number(&cd->info[n].value, (void*)&pid, PMIX_PID);
+#else
+                PMIX_VALUE_GET_NUMBER(rc, &cd->info[n].value, pid, pid_t);
+#endif
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     goto complete;
@@ -435,13 +447,21 @@ static void _toolconn(int sd, short args, void *cbdata)
                 /* we ignore this for now */
 
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_USERID)) {
+#if PRTE_PMIX_GET_NUMBER_FN
+                trc = PMIx_Value_get_number(&cd->info[n].value, (void*)&cd->uid, PMIX_UINT32);
+#else
                 PMIX_VALUE_GET_NUMBER(trc, &cd->info[n].value, cd->uid, uid_t);
+#endif
                 if (PMIX_SUCCESS == xrc && PMIX_SUCCESS != trc) {
                     xrc = trc;
                 }
 
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_GRPID)) {
+#if PRTE_PMIX_GET_NUMBER_FN
+                trc = PMIx_Value_get_number(&cd->info[n].value, (void*)&cd->gid, PMIX_UINT32);
+#else
                 PMIX_VALUE_GET_NUMBER(trc, &cd->info[n].value, cd->gid, gid_t);
+#endif
                 if (PMIX_SUCCESS == xrc && PMIX_SUCCESS != trc) {
                     xrc = trc;
                 }
@@ -470,7 +490,11 @@ static void _toolconn(int sd, short args, void *cbdata)
                 primary = PMIX_INFO_TRUE(&cd->info[n]);
 
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PROC_PID)) {
+#if PRTE_PMIX_GET_NUMBER_FN
+                trc = PMIx_Value_get_number(&cd->info[n].value, (void*)&cd->pid, PMIX_PID);
+#else
                 PMIX_VALUE_GET_NUMBER(trc, &cd->info[n].value, cd->pid, pid_t);
+#endif
                 if (PMIX_SUCCESS == xrc && PMIX_SUCCESS != trc) {
                     xrc = trc;
                 }

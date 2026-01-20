@@ -71,7 +71,7 @@ int prte_finalize(void)
         return PRTE_SUCCESS;
     }
 
-#ifdef PRTE_PMIX_STOP_PRGTHRD
+#if PRTE_PMIX_STOP_PRGTHRD
     /* Stop the PMIx server's internal progress thread and wait here
      * until all active events have been processed */
     PMIx_Progress_thread_stop(NULL, 0);
