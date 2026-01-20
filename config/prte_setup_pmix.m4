@@ -180,6 +180,16 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     PRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $PRTE_FINAL_LDFLAGS)
     PRTE_FLAGS_APPEND_UNIQ(LIBS, $PRTE_FINAL_LIBS)
 
+    AC_MSG_CHECKING([for functional form of GET_NUMBER macro])
+    PRTE_CHECK_PMIX_CAP([GET_NUMBER_FN],
+                        [AC_MSG_RESULT([yes])
+                         prte_get_number_macro=1],
+                        [AC_MSG_RESULT([no])
+                         prte_get_number_macro=0])
+    AC_DEFINE_UNQUOTED([PRTE_PMIX_GET_NUMBER_FN],
+                       [$prte_get_number_macro],
+                       [Whether or not PMIx has the GET_NUMBER FN])
+
     AC_MSG_CHECKING([for support of stop progress thread API])
     PRTE_CHECK_PMIX_CAP([STOP_PRGTHRD],
                         [AC_MSG_RESULT([yes])
