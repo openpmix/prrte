@@ -216,7 +216,6 @@ static void setup_sighandler(int signal, prte_event_t *ev, prte_event_cbfunc_t c
 static void shutdown_callback(int fd, short flags, void *arg)
 {
     prte_timer_t *tm = (prte_timer_t *) arg;
-    prte_job_t *jdata;
     PRTE_HIDE_UNUSED_PARAMS(fd, flags);
 
     if (NULL != tm) {
@@ -234,8 +233,11 @@ static void shutdown_callback(int fd, short flags, void *arg)
     prte_odls.kill_local_procs(NULL);
     // mark that we are finalizing so the session directory will cleanup
     prte_finalizing = true;
-    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-    PMIX_RELEASE(jdata);
+#ifdef PRTE_PMIX_STOP_PRGTHRD
+    PMIx_Progress_thread_stop(NULL, 0);
+#endif
+    prte_job_session_dir_finalize(NULL);
+    PMIx_server_finalize();
     exit(PRTE_ERROR_DEFAULT_EXIT_CODE);
 }
 
@@ -1224,12 +1226,13 @@ int prte(int argc, char *argv[])
                  * indicating clean termination! Instead, just forcibly cleanup
                  * the local session_dir tree and exit
                  */
-                jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-                PMIX_RELEASE(jdata);
-
-                /* return with non-zero status */
-                ret = PRTE_ERROR_DEFAULT_EXIT_CODE;
-                goto DONE;
+                prte_finalizing = true;
+#ifdef PRTE_PMIX_STOP_PRGTHRD
+                PMIx_Progress_thread_stop(NULL, 0);
+#endif
+                prte_job_session_dir_finalize(NULL);
+                PMIx_server_finalize();
+                exit(PRTE_ERROR_DEFAULT_EXIT_CODE);
             }
         }
     }
@@ -1430,56 +1433,6 @@ DONE:
     exit(prte_exit_status);
 }
 
-static void clean_abort(int fd, short flags, void *arg)
-{
-    PRTE_HIDE_UNUSED_PARAMS(fd, flags);
-
-    if (keepalive && NULL == arg) {
-        // ignore this
-        return;
-    }
-
-    /* if we have already ordered this once, don't keep
-     * doing it to avoid race conditions
-     */
-    if (pmix_mutex_trylock(&prun_abort_inprogress_lock)) { /* returns 1 if already locked */
-        if (forcibly_die) {
-            /* exit with a non-zero status */
-            exit(1);
-        }
-        fprintf(stderr,
-                "%s: abort is already in progress...hit ctrl-c again to forcibly terminate\n\n",
-                prte_tool_basename);
-        forcibly_die = true;
-        /* reset the event */
-        prte_event_add(&term_handler, NULL);
-        return;
-    }
-
-    fflush(stderr);
-    /* ensure we exit with a non-zero status */
-    PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
-    /* ensure that the forwarding of stdin stops */
-    prte_dvm_abort_ordered = true;
-    /* tell us to be quiet - hey, the user killed us with a ctrl-c,
-     * so need to tell them that!
-     */
-    prte_execute_quiet = true;
-    prte_abnormal_term_ordered = true;
-    /* We are in an event handler; the job completed procedure
-     will delete the signal handler that is currently running
-     (which is a Bad Thing), so we can't call it directly.
-     Instead, we have to exit this handler and setup to call
-     job_completed() after this. */
-    prte_plm.terminate_orteds();
-    if (NULL != arg) {
-        PMIX_RELEASE(arg);
-    }
-}
-
-static bool first = true;
-static bool second = true;
-
 static void surekill(void)
 {
     prte_proc_t *child;
@@ -1514,6 +1467,47 @@ static void surekill(void)
     }
 }
 
+static void clean_abort(int fd, short flags, void *arg)
+{
+    PRTE_HIDE_UNUSED_PARAMS(fd, flags);
+
+    if (keepalive && NULL == arg) {
+        // ignore this
+        return;
+    }
+
+    /* if we have already ordered this once, don't keep
+     * doing it to avoid race conditions
+     */
+    if (pmix_mutex_trylock(&prun_abort_inprogress_lock)) { /* returns 1 if already locked */
+        if (forcibly_die) {
+            /* exit with a non-zero status */
+            exit(1);
+        }
+        fprintf(stderr,
+                "%s: abort is already in progress...hit ctrl-c again to forcibly terminate\n\n",
+                prte_tool_basename);
+        forcibly_die = true;
+        /* reset the event */
+        prte_event_add(&term_handler, NULL);
+        return;
+    }
+
+    fflush(stderr);
+    prte_finalizing = true;
+    /* ensure we exit with a non-zero status */
+#ifdef PRTE_PMIX_STOP_PRGTHRD
+    PMIx_Progress_thread_stop(NULL, 0);
+#endif
+    surekill();  // ensure we attempt to kill everything
+    prte_job_session_dir_finalize(NULL);
+    PMIx_server_finalize();
+    exit(PRTE_ERROR_DEFAULT_EXIT_CODE);
+}
+
+static bool first = true;
+static bool second = true;
+
 /*
  * Attempt to terminate the job and wait for callback indicating
  * the job has been aborted.
@@ -1541,7 +1535,12 @@ static void abort_signal_callback(int fd)
         second = false;
     } else {
         surekill();  // ensure we attempt to kill everything
+        prte_finalizing = true;
+#ifdef PRTE_PMIX_STOP_PRGTHRD
+        PMIx_Progress_thread_stop(NULL, 0);
+#endif
         prte_job_session_dir_finalize(NULL);
+        PMIx_server_finalize();
         exit(1);
     }
 }
