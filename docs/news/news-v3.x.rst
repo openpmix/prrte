@@ -4,7 +4,7 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
-3.0.13 -- xx Jan 2026
+3.0.13 -- 23 Jan 2026
 ---------------------
 .. important:: This release includes the following critical changes:
 
@@ -17,7 +17,8 @@ series, in reverse chronological order.
                * an improved mechanism for automatically detecting the
                  presence of heterogeneous nodes
 
-- PR #2: Update NEWS and VERSION for release
+- PR #2385: Final update of NEWS
+- PR #2384: Update NEWS and VERSION for release
 - PR #2377: Multiple commits
    - Provide an MCA param to control hwloc shmem sharing
    - Update the directive list in check_multi
