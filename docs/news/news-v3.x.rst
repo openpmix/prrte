@@ -17,6 +17,14 @@ series, in reverse chronological order.
                * an improved mechanism for automatically detecting the
                  presence of heterogeneous nodes
 
+- PR #2: Update NEWS and VERSION for release
+- PR #2377: Multiple commits
+   - Provide an MCA param to control hwloc shmem sharing
+   - Update the directive list in check_multi
+- PR #2362: Multiple commits
+   - Revert back to explicitly setting hwloc support for xml import
+   - Cleanup bind output when partial allocations exist
+- PR #2359: Update NEWS
 - PR #2358: Multiple commits
    - Enable MCA param support for display and runtime-options
    - Update prun to new cmd line option spellings
