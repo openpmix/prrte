@@ -6,7 +6,7 @@
  * Copyright (c) 2010      Sandia National Laboratories. All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -142,9 +142,9 @@ static char *prte_install_dirs_expand_internal(const char *input, bool is_setup)
             EXPAND_STRING(includedir);
             EXPAND_STRING(infodir);
             EXPAND_STRING(mandir);
-            EXPAND_STRING2(prtedatadir, pkgdatadir);
-            EXPAND_STRING2(prtelibdir, pkglibdir);
-            EXPAND_STRING2(prteincludedir, pkgincludedir);
+            EXPAND_STRING2(pmixdatadir, pkgdatadir);
+            EXPAND_STRING2(pmixlibdir, pkglibdir);
+            EXPAND_STRING2(pmixincludedir, pkgincludedir);
         } while (changed);
     }
 

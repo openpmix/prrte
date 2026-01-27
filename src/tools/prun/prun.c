@@ -225,16 +225,6 @@ int prun(int argc, char *argv[])
         personality = schizo->name;
     }
 
-    /* Register all global MCA Params */
-    if (PRTE_SUCCESS != (rc = prte_register_params())) {
-        if (PRTE_ERR_SILENT != rc) {
-            pmix_show_help("help-prte-runtime", "prte_init:startup:internal-failure", true,
-                           "prte register params",
-                           PRTE_ERROR_NAME(rc), rc);
-        }
-        return 1;
-    }
-
     /* parse the input argv to get values, including everyone's MCA params */
     PMIX_CONSTRUCT(&results, pmix_cli_result_t);
     // check for special case of executable immediately following tool

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # Copyright (c) 2025      Jeffrey M. Squyres.  All rights reserved.
-# Copyright (c) 2025      Nanook Consulting  All rights reserved.
+# Copyright (c) 2025-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -241,8 +241,6 @@ def parse_tool_files(help_files, citations, verbose=False):
                 if line.startswith('#'):
                     inUsage = False
                 if line.startswith('[') and line.endswith(']'):
-                    if "node01" in line:
-                        print("LINE", line)
                     # topic - save it
                     start = line.find('[') + 1
                     end = line.find(']')

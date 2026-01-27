@@ -5,7 +5,7 @@
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,7 +37,7 @@ prte_prteinstalldirs_base_component_t prte_mca_prteinstalldirs_env_component = {
         /* Component open and close functions */
         .pmix_mca_open_component = prteinstalldirs_env_open
     },
-    /* Next the prte_install_dirs_t install_dirs_data information */
+    /* Next the pmix_install_dirs_t install_dirs_data information */
     .install_dirs_data =
     {
         .prefix = NULL,
@@ -54,9 +54,9 @@ prte_prteinstalldirs_base_component_t prte_mca_prteinstalldirs_env_component = {
         .includedir = NULL,
         .infodir = NULL,
         .mandir = NULL,
-        .prtedatadir = NULL,
-        .prtelibdir = NULL,
-        .prteincludedir = NULL,
+        .pmixdatadir = NULL,
+        .pmixlibdir = NULL,
+        .pmixincludedir = NULL,
     },
 };
 PMIX_MCA_BASE_COMPONENT_INIT(prte, prteinstalldirs, env)
@@ -86,9 +86,9 @@ static int prteinstalldirs_env_open(void)
     SET_FIELD(includedir, "PRTE_INCLUDEDIR");
     SET_FIELD(infodir, "PRTE_INFODIR");
     SET_FIELD(mandir, "PRTE_MANDIR");
-    SET_FIELD(prtedatadir, "PRTE_PKGDATADIR");
-    SET_FIELD(prtelibdir, "PRTE_PKGLIBDIR");
-    SET_FIELD(prteincludedir, "PRTE_PKGINCLUDEDIR");
+    SET_FIELD(pmixdatadir, "PRTE_PKGDATADIR");
+    SET_FIELD(pmixlibdir, "PRTE_PKGLIBDIR");
+    SET_FIELD(pmixincludedir, "PRTE_PKGINCLUDEDIR");
 
     return PRTE_SUCCESS;
 }

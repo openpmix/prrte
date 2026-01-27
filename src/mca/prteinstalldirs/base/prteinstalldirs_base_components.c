@@ -6,7 +6,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,7 +23,7 @@
 #include "src/mca/prteinstalldirs/base/static-components.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 
-prte_install_dirs_t prte_install_dirs = {0};
+pmix_pinstall_dirs_t prte_install_dirs = {0};
 
 #define CONDITIONAL_COPY(target, origin, field)             \
     do {                                                    \
@@ -63,9 +63,9 @@ static int prte_prteinstalldirs_base_open(pmix_mca_base_open_flag_t flags)
         CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, includedir);
         CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, infodir);
         CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, mandir);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, prtedatadir);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, prtelibdir);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, prteincludedir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, pmixdatadir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, pmixlibdir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, pmixincludedir);
     }
 
     /* expand out all the fields */
@@ -85,10 +85,10 @@ static int prte_prteinstalldirs_base_open(pmix_mca_base_open_flag_t flags)
     prte_install_dirs.includedir = prte_install_dirs_expand_setup(prte_install_dirs.includedir);
     prte_install_dirs.infodir = prte_install_dirs_expand_setup(prte_install_dirs.infodir);
     prte_install_dirs.mandir = prte_install_dirs_expand_setup(prte_install_dirs.mandir);
-    prte_install_dirs.prtedatadir = prte_install_dirs_expand_setup(prte_install_dirs.prtedatadir);
-    prte_install_dirs.prtelibdir = prte_install_dirs_expand_setup(prte_install_dirs.prtelibdir);
-    prte_install_dirs.prteincludedir = prte_install_dirs_expand_setup(
-        prte_install_dirs.prteincludedir);
+    prte_install_dirs.pmixdatadir = prte_install_dirs_expand_setup(prte_install_dirs.pmixdatadir);
+    prte_install_dirs.pmixlibdir = prte_install_dirs_expand_setup(prte_install_dirs.pmixlibdir);
+    prte_install_dirs.pmixincludedir = prte_install_dirs_expand_setup(
+        prte_install_dirs.pmixincludedir);
 
 #if 0
     fprintf(stderr, "prefix:           %s\n", prte_install_dirs.prefix);
@@ -132,9 +132,9 @@ static int prte_prteinstalldirs_base_close(void)
     free(prte_install_dirs.includedir);
     free(prte_install_dirs.infodir);
     free(prte_install_dirs.mandir);
-    free(prte_install_dirs.prtedatadir);
-    free(prte_install_dirs.prtelibdir);
-    free(prte_install_dirs.prteincludedir);
+    free(prte_install_dirs.pmixdatadir);
+    free(prte_install_dirs.pmixlibdir);
+    free(prte_install_dirs.pmixincludedir);
     memset(&prte_install_dirs, 0, sizeof(prte_install_dirs));
 
     return pmix_mca_base_framework_components_close(&prte_prteinstalldirs_base_framework, NULL);

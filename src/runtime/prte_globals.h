@@ -17,7 +17,7 @@
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -640,6 +640,9 @@ extern char *prte_net_private_ipv4;
 extern char *prte_set_max_sys_limits;
 extern char *prte_if_include;
 extern char *prte_if_exclude;
+extern char *prte_param_files;
+extern char* prte_override_param_file;
+extern bool prte_suppress_override_warning;
 
 #if PRTE_PICKY_COMPILERS
 #define PRTE_HIDE_UNUSED_PARAMS(...)                \
