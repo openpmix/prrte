@@ -18,7 +18,7 @@
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -259,8 +259,8 @@ int prte_init_minimum(void)
     }
 
     /* initialize the MCA infrastructure */
-    if (check_exist(prte_install_dirs.prtelibdir)) {
-        pmix_asprintf(&path, "prte@%s", prte_install_dirs.prtelibdir);
+    if (check_exist(prte_install_dirs.pmixlibdir)) {
+        pmix_asprintf(&path, "prte@%s", prte_install_dirs.pmixlibdir);
     }
     ret = pmix_init_util(NULL, 0, path);
     if (NULL != path) {
@@ -275,6 +275,16 @@ int prte_init_minimum(void)
     /* Setup the parameter system */
     if (PRTE_SUCCESS != (ret = pmix_mca_base_var_init())) {
         return ret;
+    }
+
+    /* Register all global MCA Params */
+    if (PRTE_SUCCESS != (ret = prte_register_params())) {
+        if (PRTE_ERR_SILENT != ret) {
+            pmix_show_help("help-prte-runtime", "prte_init:startup:internal-failure", true,
+                           "prte register params",
+                           PRTE_ERROR_NAME(ret), ret);
+        }
+        return 1;
     }
 
     /* pre-load any default mca param files */
@@ -496,62 +506,85 @@ error:
     return ret;
 }
 
-static bool check_pmix_overlap(char *var, char *value)
+static bool check_pmix_overlap(char *var, char *value, bool overwrite)
 {
     char *tmp;
 
     if (0 == strncmp(var, "dl_", 3)) {
         pmix_asprintf(&tmp, "PMIX_MCA_pdl_%s", &var[3]);
-        setenv(tmp, value, false);
+        setenv(tmp, value, overwrite);
         free(tmp);
         return true;
     } else if (0 == strncmp(var, "oob_", 4) &&
                NULL == strstr(var, "verbose")) {
         pmix_asprintf(&tmp, "PMIX_MCA_ptl_%s", &var[4]);
-        setenv(tmp, value, false);
+        setenv(tmp, value, overwrite);
         free(tmp);
         return true;
     } else if (0 == strncmp(var, "hwloc_", 6)) {
         pmix_asprintf(&tmp, "PMIX_MCA_%s", var);
-        setenv(tmp, value, false);
+        setenv(tmp, value, overwrite);
         free(tmp);
         return true;
     } else if (0 == strncmp(var, "if_", 3)) {
         // need to convert if to pif
         pmix_asprintf(&tmp, "PMIX_MCA_pif_%s", &var[3]);
-        setenv(tmp, value, false);
+        setenv(tmp, value, overwrite);
         free(tmp);
         return true;
     } else if (0 == strncmp(var, "mca_", 4)) {
         pmix_asprintf(&tmp, "PMIX_MCA_%s", var);
-        setenv(tmp, value, false);
+        setenv(tmp, value, overwrite);
         free(tmp);
         return true;
     }
     return false;
 }
 
-void prte_preload_default_mca_params(void)
+int prte_preload_default_mca_params(void)
 {
-    char *file, *home, *tmp;
+    char *file, *home, *tmp, **paths = NULL;
     pmix_list_t params, params2, pfinal;
     pmix_mca_base_var_file_value_t *fv, *fv2, *fvnext, *fvnext2;
     bool match;
+    int i, rc;
 
     home = (char*)pmix_home_directory(-1);
     PMIX_CONSTRUCT(&params, pmix_list_t);
     PMIX_CONSTRUCT(&params2, pmix_list_t);
     PMIX_CONSTRUCT(&pfinal, pmix_list_t);
 
-    /* start with the system-level defaults */
-    file = pmix_os_path(false, prte_install_dirs.sysconfdir, "prte-mca-params.conf", NULL);
-    pmix_mca_base_parse_paramfile(file, &params);
-    free(file);
-
-    /* now get the user-level defaults */
-    file = pmix_os_path(false, home, ".prte", "mca-params.conf", NULL);
-    pmix_mca_base_parse_paramfile(file, &params2);
-    free(file);
+    if (NULL == prte_param_files) {
+        /* start with the system-level defaults */
+        file = pmix_os_path(false, prte_install_dirs.sysconfdir, "prte-mca-params.conf", NULL);
+        rc = pmix_mca_base_parse_paramfile(file, &params);
+        free(file);
+        if (PMIX_SUCCESS != rc && PMIX_ERR_NOT_FOUND != rc) {
+            // it is okay if the file isn't found
+            return rc;
+        }
+        /* now get the user-level defaults */
+        file = pmix_os_path(false, home, ".prte", "mca-params.conf", NULL);
+        rc = pmix_mca_base_parse_paramfile(file, &params2);
+        free(file);
+        if (PMIX_SUCCESS != rc && PMIX_ERR_NOT_FOUND != rc) {
+            // it is okay if the file isn't found
+            return rc;
+        }
+    } else {
+        // split the string on commas
+        paths = PMIx_Argv_split(prte_param_files, ',');
+        // process each path
+        for (i=0; NULL != paths[i]; i++) {
+            rc = pmix_mca_base_parse_paramfile(paths[i], &params);
+            if (PMIX_SUCCESS != rc && PMIX_ERR_NOT_FOUND != rc) {
+                // it is okay if the file isn't found
+                PMIx_Argv_free(paths);
+                return rc;
+            }
+        }
+        PMIx_Argv_free(paths);
+    }
 
     /* cross-check the lists, keeping the params2 entries over any
      * matching params entries as they overwrite the system ones */
@@ -581,6 +614,68 @@ void prte_preload_default_mca_params(void)
     while (NULL != (fv2 = (pmix_mca_base_var_file_value_t*)pmix_list_remove_first(&params2))) {
         pmix_list_append(&pfinal, &fv2->super);
     }
+    PMIX_LIST_DESTRUCT(&params);
+    PMIX_LIST_DESTRUCT(&params2);
+
+    // process any override params
+    PMIX_CONSTRUCT(&params, pmix_list_t);
+    if (NULL != prte_override_param_file) {
+        // process the file
+        rc = pmix_mca_base_parse_paramfile(prte_override_param_file, &params);
+        if (PMIX_SUCCESS != rc && PMIX_ERR_NOT_FOUND != rc) {
+            // it is okay if the file isn't found
+            PMIX_LIST_DESTRUCT(&params);
+            PMIX_LIST_DESTRUCT(&pfinal);
+            return rc;
+        }
+        if (0 < pmix_list_get_size(&params)) {
+            // check the params against any given
+            PMIX_LIST_FOREACH(fv, &pfinal, pmix_mca_base_var_file_value_t) {
+                PMIX_LIST_FOREACH(fv2, &params, pmix_mca_base_var_file_value_t) {
+                    if (0 == strcmp(fv->mbvfv_var, fv2->mbvfv_var)) {
+                        if (!prte_suppress_override_warning) {
+                            pmix_show_help("help-pmix-mca-var.txt", "overridden-param-set", true, fv->mbvfv_var);
+                        }
+                        free(fv->mbvfv_var);
+                        fv->mbvfv_var = strdup(fv2->mbvfv_var);
+                        free(fv->mbvfv_value);
+                        fv->mbvfv_value = strdup(fv2->mbvfv_value);
+                        break;
+                    }
+                }
+            }
+            // now overwrite any envars
+            PMIX_LIST_FOREACH(fv, &params, pmix_mca_base_var_file_value_t) {
+                if (pmix_pmdl_base_check_pmix_param(fv->mbvfv_var)) {
+                    pmix_asprintf(&tmp, "PMIX_MCA_%s", fv->mbvfv_var);
+                    if (!prte_suppress_override_warning && NULL != getenv(tmp)) {
+                        pmix_show_help("help-pmix-mca-var.txt", "overridden-param-set", true, tmp);
+                    }
+                    // set it, and overwrite if they already
+                    // have a value in our environment
+                    setenv(tmp, fv->mbvfv_value, true);
+                    free(tmp);
+                } else {
+                    pmix_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
+                    if (!prte_suppress_override_warning && NULL != getenv(tmp)) {
+                        pmix_show_help("help-pmix-mca-var.txt", "overridden-param-set", true, tmp);
+                    }
+                    // set it, and overwrite if they already
+                    // have a value in our environment
+                    setenv(tmp, fv->mbvfv_value, true);
+                    free(tmp);
+                    // if this relates to the DL, OOB, HWLOC, or IF,
+                    // or mca frameworks, then we also need to set
+                    // the equivalent PMIx value
+                    if (check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value, true) &&
+                        !prte_suppress_override_warning) {
+                        pmix_show_help("help-pmix-mca-var.txt", "overridden-param-set", true, fv->mbvfv_var);
+                    }
+                }
+            }
+        }
+        PMIX_LIST_DESTRUCT(&params);
+    }
 
     /* now process the final list - but do not overwrite if the
      * user already has the param in our environment as their
@@ -601,12 +696,10 @@ void prte_preload_default_mca_params(void)
             // if this relates to the DL, OOB, HWLOC, or IF,
             // or mca frameworks, then we also need to set
             // the equivalent PMIx value
-            check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
+            check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value, false);
         }
     }
 
-    PMIX_LIST_DESTRUCT(&params);
-    PMIX_LIST_DESTRUCT(&params2);
     PMIX_LIST_DESTRUCT(&pfinal);
-
+    return PRTE_SUCCESS;
 }

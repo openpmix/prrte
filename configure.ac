@@ -25,7 +25,7 @@
 # Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
 # Copyright (c) 2018-2022 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
-# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
 # Copyright (c) 2021      FUJITSU LIMITED.  All rights reserved.
 # Copyright (c) 2023-2024 Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
@@ -554,7 +554,7 @@ PRTE_SEARCH_LIBS_CORE([socket], [socket])
 # Darwin doesn't need -lm, as it's a symlink to libSystem.dylib
 PRTE_SEARCH_LIBS_CORE([ceil], [m])
 
-AC_CHECK_FUNCS([asprintf snprintf vasprintf vsnprintf fork  setsid strsignal syslog setpgid fileno_unlocked])
+AC_CHECK_FUNCS([asprintf snprintf vasprintf vsnprintf fork setsid strsignal syslog setpgid fileno_unlocked isatty])
 
 # On some hosts, htonl is a define, so the AC_CHECK_FUNC will get
 # confused.  On others, it's in the standard library, but stubbed with

@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -68,6 +68,9 @@ char *prte_progress_thread_cpus = NULL;
 bool prte_bind_progress_thread_reqd = false;
 bool prte_silence_shared_fs = false;
 int prte_max_thread_in_progress = 1;
+char *prte_param_files = NULL;
+char *prte_override_param_file = NULL;
+bool prte_suppress_override_warning = false;
 
 int prte_register_params(void)
 {
@@ -75,6 +78,8 @@ int prte_register_params(void)
     pmix_output_stream_t lds;
     char *string = NULL;
     char *fstype = NULL;
+    char *home;
+    char cwd[MAXPATHLEN];
 
     /* only go thru this once - mpirun calls it twice, which causes
      * any error messages to show up twice
@@ -506,7 +511,7 @@ int prte_register_params(void)
                                &prte_pmix_verbose_output);
 
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "progress_thread_cpus",
-                                      "Comma-delimited list of ranges of CPUs to which"
+                                      "Comma-delimited list of ranges of CPUs to which "
                                       "the internal PRRTE progress thread is to be bound",
                                       PMIX_MCA_BASE_VAR_TYPE_STRING,
                                       &prte_progress_thread_cpus);
@@ -520,6 +525,40 @@ int prte_register_params(void)
                                       "Allocation contains hetero nodes",
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_hetero_nodes);
+
+    home = (char *) pmix_home_directory(geteuid());
+    if (NULL == getcwd(cwd, MAXPATHLEN)) {
+        return PRTE_ERROR;
+    }
+
+#if PRTE_WANT_HOME_CONFIG_FILES
+    pmix_asprintf(&prte_param_files,
+                   "%s" PMIX_PATH_SEP ".prte" PMIX_PATH_SEP "mca-params.conf%c%s" PMIX_PATH_SEP
+                   "prte-mca-params.conf",
+                   home, ',', prte_install_dirs.sysconfdir);
+#else
+    pmix_sprintf(&prte_param_files, "%s" PMIX_PATH_SEP "prte-mca-params.conf",
+                  prte_install_dirs.sysconfdir);
+#endif
+
+   (void) pmix_mca_base_var_register("prte", "prte", NULL, "param_files",
+                                      "Path for MCA configuration files containing "
+                                      "variable values",
+                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                      &prte_param_files);
+
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "override_param_file",
+                                      "Variables set in this file will override any value "
+                                      "set in the environment or another configuration file",
+                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                      &prte_override_param_file);
+
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "suppress_override_warning",
+                                      "Suppress warnings when attempting to set an "
+                                      "overridden value (default: false)",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_suppress_override_warning);
+
 
     /* pickup the RML params */
     prte_rml_register();
