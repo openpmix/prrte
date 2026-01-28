@@ -17,7 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      UT-Battelle, LLC. All rights reserved.
  *
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2022      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -543,21 +543,21 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             app->num_procs = PMIX_ARGV_COUNT_COMPAT(ck);
             PMIX_ARGV_FREE_COMPAT(ck);
         } else {
+            /*
+             * get the target nodes for this app - the base function
+             * will take any host or hostfile directive into account
+             */
+            PMIX_CONSTRUCT(&nodes, pmix_list_t);
+            rc = prte_rmaps_base_get_target_nodes(&nodes, &slots,
+                                                  jdata, app, jdata->map->mapping,
+                                                  true, true, false);
+            if (PRTE_SUCCESS != rc) {
+                PMIX_LIST_DESTRUCT(&nodes);
+                jdata->exit_code = rc;
+                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+                goto cleanup;
+            }
             if (1 < options.cpus_per_rank) {
-                /*
-                 * get the target nodes for this app - the base function
-                 * will take any host or hostfile directive into account
-                 */
-                PMIX_CONSTRUCT(&nodes, pmix_list_t);
-                rc = prte_rmaps_base_get_target_nodes(&nodes, &slots,
-                                                      jdata, app, jdata->map->mapping,
-                                                      true, true, false);
-                if (PRTE_SUCCESS != rc) {
-                    PMIX_LIST_DESTRUCT(&nodes);
-                    jdata->exit_code = rc;
-                    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
-                    goto cleanup;
-                }
                 // compute the number of cpus on each node
                 len = 0;
                 PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
@@ -569,7 +569,6 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                                                                   HWLOC_OBJ_CORE) / options.cpus_per_rank;
                     }
                 }
-                PMIX_LIST_DESTRUCT(&nodes);
                 app->num_procs = len;
                 // ensure we always wind up with at least one proc
                 if (0 == app->num_procs) {
@@ -580,6 +579,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             } else {
                 app->num_procs = slots;
             }
+            PMIX_LIST_DESTRUCT(&nodes);
         }
         options.nprocs += app->num_procs;
     }
