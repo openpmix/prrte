@@ -119,14 +119,12 @@ static void group(int sd, short args, void *cbdata)
         if (PMIX_CHECK_KEY(&cd->directives[i], PMIX_GROUP_ASSIGN_CONTEXT_ID)) {
             sig.assignID = PMIX_INFO_TRUE(&cd->directives[i]);
 
-#ifdef PMIX_GROUP_BOOTSTRAP
         } else if (PMIX_CHECK_KEY(&cd->directives[i], PMIX_GROUP_BOOTSTRAP)) {
             PMIX_VALUE_GET_NUMBER(rc, &cd->directives[i].value, sig.bootstrap, size_t);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DESTRUCT(&sig);
             }
-#endif
 
         } else if (PMIX_CHECK_KEY(&cd->directives[i], PMIX_LOCAL_COLLECTIVE_STATUS)) {
             PMIX_VALUE_GET_NUMBER(rc, &cd->directives[i].value, st, pmix_status_t);
@@ -435,24 +433,24 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
     if (0 < sig->bootstrap) {
         // this came from a bootstrap leader
         coll->nleaders_reported++;
-        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+        pmix_output_verbose(1, prte_grpcomm_base_framework.framework_output,
                              "%s grpcomm:direct group recv leader nrep %d of %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) coll->nleaders_reported,
-                             (int) coll->nleaders));
+                             (int) coll->nleaders);
     } else if (sig->follower) {
         // came from a bootstrap follower
         coll->nfollowers_reported++;
-        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+        pmix_output_verbose(1, prte_grpcomm_base_framework.framework_output,
                              "%s grpcomm:direct group recv follower nrep %d of %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) coll->nfollowers_reported,
-                             (int) coll->nfollowers));
+                             (int) coll->nfollowers);
     } else {
         // group collective op
         coll->nreported++;
-        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+        pmix_output_verbose(1, prte_grpcomm_base_framework.framework_output,
                              "%s grpcomm:direct group recv nexpected %d nrep %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) coll->nexpected,
-                             (int) coll->nreported));
+                             (int) coll->nreported);
     }
 
 
@@ -462,9 +460,9 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
         (!coll->bootstrap && coll->nreported == coll->nexpected)) {
 
         if (PRTE_PROC_IS_MASTER) {
-            PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+            pmix_output_verbose(1, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:direct group HNP reports complete for %s",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->sig->groupID));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->sig->groupID);
 
             /* the allgather is complete - send the xcast */
             if (PMIX_GROUP_CONSTRUCT == sig->op) {
@@ -564,7 +562,7 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
                         ++m;
                     }
                     PMIX_LIST_DESTRUCT(&nmlist);
- 
+
                     // zero out the final order cache - no need to send it around
                     PMIX_PROC_FREE(coll->sig->final_order, coll->sig->nfinal);
                     coll->sig->final_order = NULL;
@@ -1097,10 +1095,10 @@ static prte_grpcomm_group_t *get_tracker(prte_grpcomm_direct_group_signature_t *
         // must match groupID's and ops
         if (0 == strcmp(sig->groupID, coll->sig->groupID) &&
             sig->op == coll->sig->op) {
-            PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+            pmix_output_verbose(1, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:direct:group:returning existing collective %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 sig->groupID));
+                                 sig->groupID);
             // if this is a bootstrap, then we have to track the number of leaders
             if (0 < sig->bootstrap) {
                 if (0 < coll->nleaders) {
@@ -1240,9 +1238,9 @@ static prte_grpcomm_group_t *get_tracker(prte_grpcomm_direct_group_signature_t *
     /* if we get here, then this is a new collective - so create
      * the tracker for it unless directed otherwise */
     if (!create) {
-        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+        pmix_output_verbose(1, prte_grpcomm_base_framework.framework_output,
                              "%s grpcomm:base: not creating new coll",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
         return NULL;
     }
