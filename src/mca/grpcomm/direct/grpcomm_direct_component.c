@@ -6,7 +6,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -135,6 +135,7 @@ static void gccon(prte_grpcomm_group_t *p)
     p->status = PMIX_SUCCESS;
     p->dmns = NULL;
     p->ndmns = 0;
+    p->bootstrap = false;
     p->nexpected = 0;
     p->nreported = 0;
     p->nleaders = 0;
