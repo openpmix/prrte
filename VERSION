@@ -15,8 +15,8 @@
 # major, minor, and release are generally combined in the form
 # <major>.<minor>.<release>.
 
-major=5
-minor=0
+major=4
+minor=1
 release=0
 
 # PRRTE required dependency versions.
@@ -40,7 +40,7 @@ python_min_version=3.6
 # requirement is that it must be entirely printable ASCII characters
 # and have no white space.
 
-greek=a1
+greek=rc1
 
 # If repo_rev is empty, then the repository version number will be
 # obtained during "make dist" via the "git describe --tags --always"
@@ -92,7 +92,7 @@ date="N/A"
 # Version numbers are described in the Libtool current:revision:age
 # format.
 
-libprrte_so_version=4:0:0
+libprrte_so_version=4:0:1
 
 # "Common" components install standalone libraries that are run-time
 # linked by one or more components.  So they need to be versioned as
