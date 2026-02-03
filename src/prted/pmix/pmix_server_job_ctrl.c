@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -189,7 +189,6 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
             return PMIX_OPERATION_SUCCEEDED;
         }
 
-#ifdef PMIX_JOB_CTRL_DEFINE_PSET
         if (PMIX_CHECK_KEY(&directives[m], PMIX_JOB_CTRL_DEFINE_PSET)) {
             // goes to all daemons
             PMIX_DATA_BUFFER_CREATE(cmd);
@@ -231,7 +230,6 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
             }
             return PMIX_OPERATION_SUCCEEDED;
         }
-#endif
     }
 
     return PMIX_ERR_NOT_SUPPORTED;

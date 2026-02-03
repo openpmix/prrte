@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2022-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -16,8 +16,6 @@
 #include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/rmaps.h"
 #include "src/mca/schizo/base/base.h"
-
-#ifdef PMIX_SESSION_INSTANTIATE
 
 static void localrelease(void *cbdata)
 {
@@ -417,5 +415,3 @@ pmix_status_t pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,
     prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
     return PRTE_SUCCESS;
 }
-
-#endif

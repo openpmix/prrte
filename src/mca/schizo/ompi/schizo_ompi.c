@@ -131,12 +131,8 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_TIMEOUT, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_STATE, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_STACK_TRACES, PMIX_ARG_NONE),
-#ifdef PMIX_SPAWN_TIMEOUT
     PMIX_OPTION_DEFINE(PRTE_CLI_SPAWN_TIMEOUT, PMIX_ARG_REQD),
-#endif
-#ifdef PMIX_LOG_AGG
     PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_AGG_HELP, PMIX_ARG_NONE),
-#endif
 
     /* Conventional options - for historical compatibility, support
      * both single and multi dash versions */
@@ -159,18 +155,10 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_PRELOAD_FILES, PMIX_ARG_REQD),
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_PRELOAD_BIN, PMIX_ARG_NONE, 's'),
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_FWD_ENVAR, PMIX_ARG_REQD, 'x'),
-#ifdef PMIX_CLI_SET_ENVAR
     PMIX_OPTION_DEFINE(PMIX_CLI_SET_ENVAR, PMIX_ARG_REQD),
-#endif
-#ifdef PMIX_CLI_PREPEND_ENVAR
     PMIX_OPTION_DEFINE(PMIX_CLI_PREPEND_ENVAR, PMIX_ARG_REQD),
-#endif
-#ifdef PMIX_CLI_APPEND_ENVAR
     PMIX_OPTION_DEFINE(PMIX_CLI_APPEND_ENVAR, PMIX_ARG_REQD),
-#endif
-#ifdef PMIX_CLI_UNSET_ENVAR
     PMIX_OPTION_DEFINE(PMIX_CLI_UNSET_ENVAR, PMIX_ARG_REQD),
-#endif
     PMIX_OPTION_DEFINE(PRTE_CLI_WDIR, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("wd", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_PATH, PMIX_ARG_REQD),
@@ -1892,7 +1880,6 @@ static int parse_env(char **srcenv, char ***dstenv,
         PMIX_ARGV_FREE_COMPAT(xvals);
     }
 
-#if PMIX_NUMERIC_VERSION != 0x00040208
     /* add a flag indicating that we did indeed check the tmpdir
      * for a shared file system */
     if (prte_process_info.shared_fs) {
@@ -1901,7 +1888,6 @@ static int parse_env(char **srcenv, char ***dstenv,
         p1 = "FALSE";
     }
     PMIX_SETENV_COMPAT("PRTE_SHARED_FS", p1, true, dstenv);
-#endif
 
     return PRTE_SUCCESS;
 }

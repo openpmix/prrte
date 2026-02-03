@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2024      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -711,7 +711,6 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 
-#if PMIX_NUMERIC_VERSION >= 0x00050000
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_ALLOCATION)) {
                 /* collect all the node info */
                 void *nodelist, *nodeinfolist;
@@ -768,9 +767,7 @@ static void _query(int sd, short args, void *cbdata)
                     PMIX_ERROR_LOG(rc);
                     goto done;
                 }
-#endif
 
-#ifdef PMIX_QUERY_AVAILABLE_SLOTS
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_AVAILABLE_SLOTS)) {
                 /* compute the slots currently available for assignment. Note that
                  * this is purely a point-in-time measurement as jobs may be working
@@ -810,9 +807,7 @@ static void _query(int sd, short args, void *cbdata)
                     PMIX_ERROR_LOG(rc);
                     goto done;
                 }
-#endif
 
-#ifdef PMIX_MEM_ALLOC_KIND
             } else if (PMIx_Check_key(q->keys[n], PMIX_MEM_ALLOC_KIND)) {
                 pmix_proc_t pproc;
                 pmix_info_t info;
@@ -834,9 +829,7 @@ static void _query(int sd, short args, void *cbdata)
                     PMIX_ERROR_LOG(rc);
                     goto done;
                 }
-#endif
 
-#ifdef PMIX_QUERY_RESOLVE_PEERS
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_RESOLVE_PEERS)) {
                 char *nm;
                 pmix_list_t procs;
@@ -922,9 +915,7 @@ static void _query(int sd, short args, void *cbdata)
                     free(proc);
                 }
                 PMIX_DESTRUCT(&procs);
-#endif
 
-#ifdef PMIX_QUERY_RESOLVE_NODE
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_RESOLVE_NODE)) {
                 char **nodes = NULL, *nodelist;
                 // could ask for info on all jobs, so have to check for that case
@@ -952,17 +943,11 @@ static void _query(int sd, short args, void *cbdata)
                 nodelist = PMIx_Argv_join(nodes, ',');
                 PMIx_Argv_free(nodes);
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_RESOLVE_NODE, nodelist, PMIX_STRING);
-#endif
 
-#ifdef PMIX_QUERY_PROC_RESOURCE_USAGE
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_PROC_RESOURCE_USAGE)) {
 
-#endif
-
-#ifdef PMIX_QUERY_NODE_RESOURCE_USAGE
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_NODE_RESOURCE_USAGE)) {
 
-#endif
 
             } else {
                 pmix_output_verbose(2, prte_pmix_server_globals.output,

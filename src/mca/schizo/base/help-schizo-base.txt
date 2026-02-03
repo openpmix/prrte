@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2020      Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      IBM Corporation.  All rights reserved.
-# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -162,13 +162,3 @@ values:
   Option:  %s <MCA param name> <param value>
 
 Please provide the missing values and try again.
-#
-[non-supporting-pmix]
-The given command line directive is technically valid, but the
-underlying PMIx version being employed lacks the necessary attribute
-definitions to support it.
-
-  Directive:  %s
-  Option:     %s
-
-We are therefore unable to satisfy this request.
