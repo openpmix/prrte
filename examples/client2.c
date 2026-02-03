@@ -15,7 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -128,7 +128,6 @@ int main(int argc, char **argv)
     PMIX_VALUE_RELEASE(val);
     fprintf(stderr, "Client %s:%d job size %d\n", myproc.nspace, myproc.rank, nprocs);
 
-#ifdef PMIX_GPU_SUPPORT
     /* see if we were given a GPU directive */
     rc = PMIx_Get(&proc, PMIX_GPU_SUPPORT, NULL, 0, &val);
     if (PMIX_SUCCESS == rc) {
@@ -136,7 +135,6 @@ int main(int argc, char **argv)
     } else {
         fprintf(stderr, "%s:%d GPU support: NOT GIVEN\n", myproc.nspace, myproc.rank);
     }
-#endif
 
     /* put a data array of pmix_value's */
     val = (pmix_value_t *) malloc(32 * sizeof(pmix_value_t));

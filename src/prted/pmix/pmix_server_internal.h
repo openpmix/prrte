@@ -384,16 +384,12 @@ PRTE_EXPORT extern void pmix_server_monitor_resp(int status, pmix_proc_t *sender
 #define PRTE_PMIX_ALLOC_REQ      0
 #define PRTE_PMIX_SESSION_CTRL   1
 
-
-#ifdef PMIX_SESSION_INSTANTIATE
-
 PRTE_EXPORT extern pmix_status_t
 pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,
                             uint32_t sessionID,
                             const pmix_info_t directives[], size_t ndirs,
                             pmix_info_cbfunc_t cbfunc, void *cbdata);
 
-#endif
 
 /* exposed shared variables */
 typedef struct {

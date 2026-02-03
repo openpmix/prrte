@@ -15,7 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -404,11 +404,7 @@ int main(int argc, char **argv)
            (unsigned long) pid);
 
     /* get server URI as we will need it later */
-#ifdef PMIX_MYSERVER_URI
     rc = PMIx_Get(&myproc, PMIX_MYSERVER_URI, NULL, 0, &val);
-#else
-    rc = PMIx_Get(&myproc, PMIX_SERVER_URI, NULL, 0, &val);
-#endif
     if (PMIX_SUCCESS != rc) {
         fprintf(stderr, "Failed to retrieve server URI: %s\n", PMIx_Error_string(rc));
         PMIx_tool_finalize();

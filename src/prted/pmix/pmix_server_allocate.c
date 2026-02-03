@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2022-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -264,7 +264,6 @@ static void pass_request(int sd, short args, void *cbdata)
         goto callback;
     }
 
-#ifdef PMIX_REQUESTOR
     // we need to pass the request on to the scheduler
     // need to add the requestor's ID to the info array
     PMIX_INFO_CREATE(xfer, req->ninfo + 1);
@@ -276,7 +275,7 @@ static void pass_request(int sd, short args, void *cbdata)
     req->copy = true;
     req->info = xfer;
     req->ninfo++;
-#endif
+
     /* pass the request to the scheduler */
     rc = PMIx_Allocation_request_nb(req->allocdir, req->info, req->ninfo,
                                     infocbfunc, req);
