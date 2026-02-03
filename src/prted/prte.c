@@ -241,23 +241,6 @@ static void shutdown_callback(int fd, short flags, void *arg)
     exit(PRTE_ERROR_DEFAULT_EXIT_CODE);
 }
 
-#if PMIX_NUMERIC_VERSION < 0x00040205
-static char *pmix_getline(FILE *fp)
-{
-    char *ret, *buff;
-    char input[1024];
-
-    ret = fgets(input, 1024, fp);
-    if (NULL != ret) {
-        input[strlen(input) - 1] = '\0'; /* remove newline */
-        buff = strdup(input);
-        return buff;
-    }
-
-    return NULL;
-}
-#endif
-
 int prte(int argc, char *argv[])
 {
     int rc = 1, i;

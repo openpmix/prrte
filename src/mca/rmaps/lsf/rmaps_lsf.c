@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2022 IBM Corporation.  All rights reserved.
  *
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -64,23 +64,6 @@ prte_rmaps_base_module_t prte_rmaps_lsf_module = {
 };
 
 static int file_parse(const char *);
-
-#if PMIX_NUMERIC_VERSION < 0x00040205
-static char *pmix_getline(FILE *fp)
-{
-    char *ret, *buff;
-    char input[1024];
-
-    ret = fgets(input, 1024, fp);
-    if (NULL != ret) {
-        input[strlen(input) - 1] = '\0'; /* remove newline */
-        buff = strdup(input);
-        return buff;
-    }
-
-    return NULL;
-}
-#endif
 
 /*
  * Local variable

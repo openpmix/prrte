@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2022 IBM Corporation.  All rights reserved.
  *
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -69,23 +69,6 @@ static char *prte_rmaps_rank_file_parse_string_or_int(void);
 
 static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, char **aff_rankfile);
 static int prte_rmaps_rf_process_lsf_affinity_hostfile(prte_job_t *jdata, prte_rmaps_options_t *options, char *affinity_file);
-
-#if PMIX_NUMERIC_VERSION < 0x00040205
-static char *pmix_getline(FILE *fp)
-{
-    char *ret, *buff;
-    char input[1024];
-
-    ret = fgets(input, 1024, fp);
-    if (NULL != ret) {
-        input[strlen(input) - 1] = '\0'; /* remove newline */
-        buff = strdup(input);
-        return buff;
-    }
-
-    return NULL;
-}
-#endif
 
 /*
  * Local variable

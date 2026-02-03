@@ -862,13 +862,7 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
         flag = true;
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_CONTINUOUS, &flag, PMIX_BOOL);
     }
-#ifdef PMIX_ABORT_NONZERO_EXIT
-    /* if ignore non-zero exit was specified */
-    if (pmix_cmd_line_is_taken(results, PRTE_CLI_TERM_NONZERO)) {
-        /* mark this job to not terminate if a proc exits with non-zero status */
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_ABORT_NONZERO_EXIT, NULL, PMIX_BOOL);
-    }
-#endif
+
     /* if stop-on-exec was specified */
     if (pmix_cmd_line_is_taken(results, PRTE_CLI_STOP_ON_EXEC)) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DEBUG_STOP_ON_EXEC, NULL, PMIX_BOOL);
@@ -905,13 +899,11 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_LOG_AGG, &flag, PMIX_BOOL);
     }
 
-#ifdef PMIX_MEM_ALLOC_KIND
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_MEM_ALLOC_KIND);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MEM_ALLOC_KIND, opt->values[0], PMIX_STRING);
     }
-#endif
-#ifdef PMIX_GPU_SUPPORT
+
     pmix_info_t info;
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_GPU_SUPPORT);
     if (NULL != opt) {
@@ -921,7 +913,6 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
         flag = PMIX_INFO_TRUE(&info);
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_GPU_SUPPORT, &flag, PMIX_BOOL);
     }
-#endif
 
     /* give the schizo components a chance to add to the job info */
     schizo->job_info(results, jinfo);

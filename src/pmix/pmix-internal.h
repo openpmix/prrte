@@ -6,7 +6,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -270,85 +270,32 @@ PRTE_EXPORT int prte_pmix_register_cleanup(char *path, bool directory, bool igno
     PMIX_MCA_BASE_VERSION_2_1_0("prte", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, \
                                 PRTE_RELEASE_VERSION, type, type_major, type_minor, type_release)
 
-#if PMIX_NUMERIC_VERSION < 0x00040203
-#define PMIX_ARGV_JOIN_COMPAT(a, b) \
-        pmix_argv_join(a, b)
-#else
 #define PMIX_ARGV_JOIN_COMPAT(a, b) \
         PMIx_Argv_join(a, b)
-#endif
 
-#if PMIX_NUMERIC_VERSION < 0x00040203
-#define PMIX_ARGV_SPLIT_COMPAT(a, b) \
-        pmix_argv_split(a, b)
-#else
 #define PMIX_ARGV_SPLIT_COMPAT(a, b) \
         PMIx_Argv_split(a, b)
-#endif
 
-#if PMIX_NUMERIC_VERSION < 0x00040203
-#define PMIX_ARGV_SPLIT_WITH_EMPTY_COMPAT(a, b) \
-        pmix_argv_split_with_empty(a, b)
-#else
 #define PMIX_ARGV_SPLIT_WITH_EMPTY_COMPAT(a, b) \
         PMIx_Argv_split_with_empty(a, b)
-#endif
 
-#if PMIX_NUMERIC_VERSION < 0x00040203
-#define PMIX_ARGV_COUNT_COMPAT(a) \
-        pmix_argv_count(a)
-#else
 #define PMIX_ARGV_COUNT_COMPAT(a) \
         PMIx_Argv_count(a)
-#endif
 
-#if PMIX_NUMERIC_VERSION < 0x00040203
-#define PMIX_ARGV_FREE_COMPAT(a) \
-        pmix_argv_free(a)
-#else
 #define PMIX_ARGV_FREE_COMPAT(a) \
         PMIx_Argv_free(a)
-#endif
 
-#if PMIX_NUMERIC_VERSION < 0x00040203
-#define PMIX_ARGV_APPEND_UNIQUE_COMPAT(a, b) \
-        pmix_argv_append_unique_nosize(a, b)
-#else
 #define PMIX_ARGV_APPEND_UNIQUE_COMPAT(a, b) \
         PMIx_Argv_append_unique_nosize(a, b)
-#endif
 
-#if PMIX_NUMERIC_VERSION < 0x00040203
-#define PMIX_ARGV_APPEND_NOSIZE_COMPAT(a, b) \
-        pmix_argv_append_nosize(a, b)
-#else
 #define PMIX_ARGV_APPEND_NOSIZE_COMPAT(a, b) \
         PMIx_Argv_append_nosize(a, b)
-#endif
 
-#if PMIX_NUMERIC_VERSION < 0x00040203
-#define PMIX_ARGV_COPY_COMPAT(a) \
-        pmix_argv_copy(a)
-#else
 #define PMIX_ARGV_COPY_COMPAT(a) \
         PMIx_Argv_copy(a)
-#endif
 
-#if PMIX_NUMERIC_VERSION < 0x00040203
-#define PMIX_SETENV_COMPAT(a, b, c, d) \
-        pmix_setenv(a, b, c, d)
-#else
 #define PMIX_SETENV_COMPAT(a, b, c, d) \
         PMIx_Setenv(a, b, c, d)
-#endif
-
-#ifndef PMIX_GROUP_NONE
-#define PMIX_GROUP_NONE 2
-#endif
-
-#ifndef PMIX_MCA_BASE_COMPONENT_INIT
-#define PMIX_MCA_BASE_COMPONENT_INIT(prte, a, b)
-#endif
 
 END_C_DECLS
 

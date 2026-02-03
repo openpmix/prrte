@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2024      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -354,18 +354,15 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, (void**)&fptr, PMIX_BOOL)) {
         PMIX_INFO_LIST_ADD(ret, info, PMIX_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
     }
-#ifdef PMIX_IOF_OUTPUT_RAW
+
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_RAW_OUTPUT, (void**)&fptr, PMIX_BOOL)) {
         PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_OUTPUT_RAW, &flag, PMIX_BOOL);
     }
-#endif
 
     // check for GPU directives
-#ifdef PMIX_GPU_SUPPORT
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, (void**)&fptr, PMIX_BOOL)) {
         PMIX_INFO_LIST_ADD(ret, info, PMIX_GPU_SUPPORT, &flag, PMIX_BOOL);
     }
-#endif
 
     /* for each app in the job, create an app-array */
     for (n = 0; n < jdata->apps->size; n++) {

@@ -160,11 +160,9 @@ static void group(int sd, short args, void *cbdata)
                 PMIX_ERROR_LOG(rc);
             }
 
-#ifdef PMIX_GROUP_FINAL_MEMBERSHIP_ORDER
         } else if (PMIX_CHECK_KEY(&cd->directives[i], PMIX_GROUP_FINAL_MEMBERSHIP_ORDER)) {
             sig.final_order = (pmix_proc_t*)cd->directives[i].value.data.darray->array;
             sig.nfinal = cd->directives[i].value.data.darray->size;
-#endif
         }
     }
 
