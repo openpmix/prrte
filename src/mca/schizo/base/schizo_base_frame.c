@@ -646,7 +646,6 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                 for (m=0; NULL != quals[m]; m++) {
                     if (PMIX_CHECK_CLI_OPTION(quals[m], PRTE_CLI_PARSEABLE) ||
                         PMIX_CHECK_CLI_OPTION(quals[m], PRTE_CLI_PARSABLE)) {
-    #ifdef PMIX_DISPLAY_PARSEABLE_OUTPUT
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL);
                         if (PMIX_SUCCESS != ret) {
                             PMIX_ERROR_LOG(ret);
@@ -654,15 +653,8 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                             PMIX_ARGV_FREE_COMPAT(targv);
                             return ret;
                         }
-    #else
-                        pmix_show_help("help-schizo-base.txt", "non-supporting-pmix", true,
-                                       "display", quals[m]);
-                        PMIX_ARGV_FREE_COMPAT(targv);
-                        PMIX_ARGV_FREE_COMPAT(quals);
-                        return PRTE_ERR_FATAL;
-    #endif
+
                     } else if (PMIX_CHECK_CLI_OPTION(quals[m], PRTE_CLI_PHYSICAL_CPUS)) {
-    #ifdef PMIX_REPORT_PHYSICAL_CPUS
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
                         if (PMIX_SUCCESS != ret) {
                             PMIX_ERROR_LOG(ret);
@@ -670,13 +662,7 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                             PMIX_ARGV_FREE_COMPAT(targv);
                             return ret;
                         }
-    #else
-                        pmix_show_help("help-schizo-base.txt", "non-supporting-pmix", true,
-                                       "display", quals[m]);
-                        PMIX_ARGV_FREE_COMPAT(targv);
-                        PMIX_ARGV_FREE_COMPAT(quals);
-                        return PRTE_ERR_FATAL;
-    #endif
+
                     } else {
                         pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-qualifier", true,
                                        "display", cptr, "PARSEABLE,PARSABLE");
@@ -748,14 +734,7 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                         return PRTE_ERR_FATAL;
                     }
                 }
-#ifdef PMIX_DISPLAY_PROCESSORS
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_PROCESSORS, ptr, PMIX_STRING);
-#else
-                pmix_show_help("help-schizo-base.txt", "non-supporting-pmix", true,
-                               "display", targv[idx]);
-                PMIX_ARGV_FREE_COMPAT(targv);
-                return PRTE_ERR_FATAL;
-#endif
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
                     PMIX_ARGV_FREE_COMPAT(targv);

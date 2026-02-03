@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -272,33 +272,27 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
             prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS,
                                PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 
-#ifdef PMIX_REPORT_PHYSICAL_CPUS
             /***   USE PHYSICAL CPUS  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_REPORT_PHYSICAL_CPUS)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS,
                                PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
-#endif
 
             /***   DISPLAY TOPOLOGY   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_TOPOLOGY)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_TOPO,
                                PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
 
-#ifdef PMIX_DISPLAY_PROCESSORS
             /***   DISPLAY PROCESSORS   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_PROCESSORS)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PROCESSORS,
                                PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
-#endif
 
-#ifdef PMIX_DISPLAY_PARSEABLE_OUTPUT
             /***   DISPLAY PARSEABLE OUTPUT   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_PARSEABLE_OUTPUT)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT,
                                PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
-#endif
 
         /***   PPR (PROCS-PER-RESOURCE)   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_PPR)) {
@@ -415,13 +409,11 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
             prte_set_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
 
-#ifdef PMIX_SPAWN_CHILD_SEP
             /*** CHILD INDEPENDENCE  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_CHILD_SEP)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_CHILD_SEP, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
-#endif
 
             /***   MAX RESTARTS  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_MAX_RESTARTS)) {
@@ -703,19 +695,15 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
             prte_set_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
 
-#ifdef PMIX_GPU_SUPPORT
         } else if (PMIX_CHECK_KEY(info, PMIX_GPU_SUPPORT)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
-#endif
 
-#ifdef PMIX_FWD_ENVIRONMENT
         } else if (PMIX_CHECK_KEY(info, PMIX_FWD_ENVIRONMENT)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_FWD_ENVIRONMENT, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
-#endif
 
             /***   DEFAULT - CACHE FOR INCLUSION WITH JOB INFO   ***/
         } else {

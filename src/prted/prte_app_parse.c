@@ -18,7 +18,7 @@
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2022-2023 Triad National Security, LLC.
  *                         All rights reserved.
  * $COPYRIGHT$
@@ -393,7 +393,6 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
         }
     }
 
-#ifdef PMIX_CLI_PREPEND_ENVAR
     opt = pmix_cmd_line_get_param(&results, PMIX_CLI_PREPEND_ENVAR);
     if (NULL != opt) {
         for (n=0; NULL != opt->values[n]; n+=2) {
@@ -415,8 +414,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
             PMIX_ENVAR_DESTRUCT(&envt);
         }
     }
-#endif
-#ifdef PMIX_CLI_APPEND_ENVAR
+
     opt = pmix_cmd_line_get_param(&results, PMIX_CLI_APPEND_ENVAR);
     if (NULL != opt) {
         for (n=0; NULL != opt->values[n]; n+=2) {
@@ -438,9 +436,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
             PMIX_ENVAR_DESTRUCT(&envt);
         }
     }
-#endif
 
-#ifdef PMIX_CLI_SET_ENVAR
     opt = pmix_cmd_line_get_param(&results, PMIX_CLI_SET_ENVAR);
     if (NULL != opt) {
         for (n=0; NULL != opt->values[n]; n+=2) {
@@ -463,16 +459,13 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
             PMIX_ENVAR_DESTRUCT(&envt);
         }
     }
-#endif
 
-#ifdef PMIX_CLI_UNSET_ENVAR
     opt = pmix_cmd_line_get_param(&results, PMIX_CLI_UNSET_ENVAR);
     if (NULL != opt) {
         for (n=0; NULL != opt->values[n]; n++) {
             PMIX_INFO_LIST_ADD(rc, app->info, PMIX_UNSET_ENVAR, opt->values[n], PMIX_STRING);
         }
     }
-#endif
 
     // check for PMIx prefix for the application
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_APP_PREFIX);

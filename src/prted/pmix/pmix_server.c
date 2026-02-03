@@ -128,9 +128,7 @@ static pmix_server_module_t pmix_server = {
     .group = pmix_server_group_fn,
     .allocate = pmix_server_alloc_fn,
     .client_connected2 = pmix_server_client_connected2_fn,
-#ifdef PMIX_SESSION_INSTANTIATE
     .session_control = pmix_server_session_ctrl_fn
-#endif
 };
 
 typedef struct {
@@ -363,7 +361,6 @@ static prte_regattr_input_t prte_attributes[] = {
                          "PMIX_ALLOC_QUEUE",
                          "PMIX_ALLOC_PREEMPTIBLE",
                          NULL}},
-#if PMIX_NUMERIC_VERSION >= 0x00050000
     {.function = "PMIx_Session_control",
      .attrs = (char *[]){"PMIX_SESSION_CTRL_ID",
                          "PMIX_SESSION_APP",
@@ -375,7 +372,6 @@ static prte_regattr_input_t prte_attributes[] = {
                          "PMIX_SESSION_SIGNAL",
                          "PMIX_SESSION_COMPLETE",
                          NULL}},
-#endif
     {.function = ""},
 };
 
@@ -689,7 +685,6 @@ int pmix_server_init(void)
         return rc;
     }
 
-#ifdef PMIX_EXTERNAL_AUX_EVENT_BASE
     /* give the server our event base to use for signal trapping */
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_EXTERNAL_AUX_EVENT_BASE, prte_event_base, PMIX_POINTER);
     if (PMIX_SUCCESS != prc) {
@@ -697,7 +692,6 @@ int pmix_server_init(void)
         rc = prte_pmix_convert_status(prc);
         return rc;
     }
-#endif
 
     /* if PMIx is version 4 or higher, then we can pass our
      * topology object down to the server library for its use
@@ -803,7 +797,6 @@ int pmix_server_init(void)
            return rc;
        }
 
-#ifdef PMIX_SERVER_ALLOW_FOREIGN_TOOLS
         // tell if they want to allow tools from other users
        flag = !prte_pmix_server_globals.no_foreign_tools;
        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_ALLOW_FOREIGN_TOOLS,
@@ -813,9 +806,7 @@ int pmix_server_init(void)
            rc = prte_pmix_convert_status(prc);
            return rc;
        }
-#endif
 
-#ifdef PMIX_SERVER_SYS_CONTROLLER
         /* if requested and persistent, tell the server that we are the system
          * controller - don't do this for the non-persistent mode */
         if (prte_persistent && prte_pmix_server_globals.system_controller) {
@@ -842,7 +833,7 @@ int pmix_server_init(void)
                 return rc;
             }
         }
-#endif
+
     } else {
         /* prted's never locally output */
         flag = false;
@@ -894,7 +885,6 @@ int pmix_server_init(void)
          }
     }
 
-#ifdef PMIX_ALLOW_CLIENT_CLONES
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_ALLOW_CLIENT_CLONES,
                       (void*)&prte_pmix_server_globals.allow_client_clones, PMIX_BOOL);
     if (PMIX_SUCCESS != prc) {
@@ -902,7 +892,6 @@ int pmix_server_init(void)
         rc = prte_pmix_convert_status(prc);
         return rc;
     }
-#endif
 
     /* if we were launched by a debugger, then we need to have
      * notification of our termination sent */
@@ -957,7 +946,6 @@ int pmix_server_init(void)
     PMIX_INFO_FREE(info, ninfo);
     rc = PRTE_SUCCESS;
 
-#ifdef PMIX_VERSION_NUMERIC
     /* find out what version of PMIx is being used - note that
      * it is NOT an error to not be able to retrieve this
      * value as it just means the PMIx library pre-dates
@@ -973,7 +961,6 @@ int pmix_server_init(void)
         }
         PMIX_VALUE_RELEASE(val);
     }
-#endif
 
     /* register our support */
     for (n = 0; 0 != strlen(prte_attributes[n].function); n++) {
@@ -2048,7 +2035,7 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
         PMIX_ERROR_LOG(rc);
             goto reply;
     }
-#ifdef PMIX_REQUESTOR
+
     // need to add the requestor's ID to the info array, so expand it
     if (0 < ninfo) {
         PMIX_INFO_CREATE(info, ninfo+1);
@@ -2064,18 +2051,6 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
         PMIX_INFO_CREATE(info, 1);
     }
     PMIX_INFO_LOAD(&info[ninfo], PMIX_REQUESTOR, &source, PMIX_PROC);
-#else
-    if (0 < ninfo) {
-        PMIX_INFO_CREATE(info, ninfo);
-        cnt = ninfo;
-        rc = PMIx_Data_unpack(NULL, buffer, info, &cnt, PMIX_INFO);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_INFO_FREE(info, ninfo);
-            goto reply;
-        }
-   }
-#endif
 
     if (PRTE_PMIX_ALLOC_REQ == cmd) {
         req = PMIX_NEW(prte_pmix_server_req_t);
@@ -2126,12 +2101,8 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
     PMIX_RETAIN(req);
     req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
 
-#if PMIX_NUMERIC_VERSION < 0x00050000
-    rc = PMIX_ERR_NOT_SUPPORTED;
-#else
     rc = PMIx_Session_control(sessionID, req->info, req->ninfo,
                               send_alloc_resp, req);
-#endif
     if (PMIX_SUCCESS != rc) {
         goto reply;
     }
