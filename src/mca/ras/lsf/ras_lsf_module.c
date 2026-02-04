@@ -12,7 +12,7 @@
  * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2022 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -105,7 +105,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     }
 
     /* release the nodelist from lsf */
-    PMIX_ARGV_FREE_COMPAT(nodelist);
+    PMIx_Argv_free(nodelist);
 
     return PRTE_SUCCESS;
 }

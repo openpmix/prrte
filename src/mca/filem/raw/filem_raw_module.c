@@ -5,7 +5,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -280,7 +280,7 @@ static int raw_preposition_files(prte_job_t *jdata,
         if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES,
                                (void **) &filestring, PMIX_STRING) &&
             NULL != filestring) {
-            files = PMIX_ARGV_SPLIT_COMPAT(filestring, ',');
+            files = PMIx_Argv_split(filestring, ',');
             free(filestring);
             for (j = 0; NULL != files[j]; j++) {
                 fs = PMIX_NEW(prte_filem_base_file_set_t);
@@ -369,11 +369,11 @@ static int raw_preposition_files(prte_job_t *jdata,
             /* replace the app's file list with the revised one so we
              * can find them on the remote end
              */
-            filestring = PMIX_ARGV_JOIN_COMPAT(files, ',');
+            filestring = PMIx_Argv_join(files, ',');
             prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, PRTE_ATTR_GLOBAL,
                                filestring, PMIX_STRING);
             /* cleanup for the next app */
-            PMIX_ARGV_FREE_COMPAT(files);
+            PMIx_Argv_free(files);
             free(filestring);
         }
     }
@@ -622,13 +622,13 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
     if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES,
                            (void **) &filestring, PMIX_STRING) &&
         NULL != filestring) {
-        files = PMIX_ARGV_SPLIT_COMPAT(filestring, ',');
+        files = PMIx_Argv_split(filestring, ',');
         free(filestring);
     }
     if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN, NULL, PMIX_BOOL)) {
         /* add the app itself to the list */
         bname = pmix_basename(app->app);
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&files, bname);
+        PMIx_Argv_append_nosize(&files, bname);
         free(bname);
     }
 
@@ -708,7 +708,7 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
         }
         free(path);
     }
-    PMIX_ARGV_FREE_COMPAT(files);
+    PMIx_Argv_free(files);
     return PRTE_SUCCESS;
 }
 
@@ -895,7 +895,7 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
         PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                              "%s filem:raw: adding path %s to link points",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&inbnd->link_pts, path);
+        PMIx_Argv_append_nosize(&inbnd->link_pts, path);
     }
     /* close */
     pclose(fp);
@@ -1097,7 +1097,7 @@ static void write_handler(int fd, short event, void *cbdata)
                 /* just link to the top as this will be the
                  * name we will want in each proc's session dir
                  */
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&sink->link_pts, sink->top);
+                PMIx_Argv_append_nosize(&sink->link_pts, sink->top);
                 send_complete(sink->file, PRTE_SUCCESS);
             } else {
                 /* unarchive the file */
@@ -1264,7 +1264,7 @@ static void in_destruct(prte_filem_raw_incoming_t *ptr)
     if (NULL != ptr->fullpath) {
         free(ptr->fullpath);
     }
-    PMIX_ARGV_FREE_COMPAT(ptr->link_pts);
+    PMIx_Argv_free(ptr->link_pts);
     PMIX_LIST_DESTRUCT(&ptr->outputs);
 }
 PMIX_CLASS_INSTANCE(prte_filem_raw_incoming_t,

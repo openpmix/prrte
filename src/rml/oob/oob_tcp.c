@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -210,7 +210,7 @@ int prte_oob_open(void)
              */
             if (PRTE_ERR_NETWORK_NOT_PARSEABLE == rc) {
                 pmix_show_help("help-oob-tcp.txt", "not-parseable", true);
-                PMIX_ARGV_FREE_COMPAT(interfaces);
+                PMIx_Argv_free(interfaces);
                 return PRTE_ERR_BAD_PARAM;
             }
             /* if we are including, then ignore this if not present */
@@ -247,7 +247,7 @@ int prte_oob_open(void)
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                 pmix_net_get_hostname((struct sockaddr *) &my_ss),
                                 (AF_INET == my_ss.ss_family) ? "V4" : "V6");
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_oob_base.ipv4conns,
+            PMIx_Argv_append_nosize(&prte_oob_base.ipv4conns,
                                            pmix_net_get_hostname((struct sockaddr *) &my_ss));
         } else if (AF_INET6 == my_ss.ss_family) {
 #if PRTE_ENABLE_IPV6
@@ -256,7 +256,7 @@ int prte_oob_open(void)
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                 pmix_net_get_hostname((struct sockaddr *) &my_ss),
                                 (AF_INET == my_ss.ss_family) ? "V4" : "V6");
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_oob_base.ipv6conns,
+            PMIx_Argv_append_nosize(&prte_oob_base.ipv6conns,
                                            pmix_net_get_hostname((struct sockaddr *) &my_ss));
 #endif // PRTE_ENABLE_IPV6
         } else {
@@ -288,16 +288,16 @@ int prte_oob_open(void)
         copied_interface->ifmtu = selected_interface->ifmtu;
         /* Add the if_mask to the list */
         snprintf(string, 50, "%d", selected_interface->if_mask);
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_oob_base.if_masks, string);
+        PMIx_Argv_append_nosize(&prte_oob_base.if_masks, string);
         pmix_list_append(&prte_oob_base.local_ifs, &(copied_interface->super));
     }
     if (NULL != interfaces) {
-        PMIX_ARGV_FREE_COMPAT(interfaces);
+        PMIx_Argv_free(interfaces);
     }
 
-    if (0 == PMIX_ARGV_COUNT_COMPAT(prte_oob_base.ipv4conns)
+    if (0 == PMIx_Argv_count(prte_oob_base.ipv4conns)
 #if PRTE_ENABLE_IPV6
-        && 0 == PMIX_ARGV_COUNT_COMPAT(prte_oob_base.ipv6conns)
+        && 0 == PMIx_Argv_count(prte_oob_base.ipv6conns)
 #endif
     ) {
         return PRTE_ERR_NOT_AVAILABLE;
@@ -331,22 +331,22 @@ void prte_oob_close(void)
     PMIX_LIST_DESTRUCT(&prte_oob_base.peers);
 
     if (NULL != prte_oob_base.ipv4conns) {
-        PMIX_ARGV_FREE_COMPAT(prte_oob_base.ipv4conns);
+        PMIx_Argv_free(prte_oob_base.ipv4conns);
     }
     if (NULL != prte_oob_base.ipv4ports) {
-        PMIX_ARGV_FREE_COMPAT(prte_oob_base.ipv4ports);
+        PMIx_Argv_free(prte_oob_base.ipv4ports);
     }
 
 #if PRTE_ENABLE_IPV6
     if (NULL != prte_oob_base.ipv6conns) {
-        PMIX_ARGV_FREE_COMPAT(prte_oob_base.ipv6conns);
+        PMIx_Argv_free(prte_oob_base.ipv6conns);
     }
     if (NULL != prte_oob_base.ipv6ports) {
-        PMIX_ARGV_FREE_COMPAT(prte_oob_base.ipv6ports);
+        PMIx_Argv_free(prte_oob_base.ipv6ports);
     }
 #endif
     if (NULL != prte_oob_base.if_masks) {
-        PMIX_ARGV_FREE_COMPAT(prte_oob_base.if_masks);
+        PMIx_Argv_free(prte_oob_base.if_masks);
     }
 
     if (0 <= prte_oob_base.output) {
@@ -401,7 +401,7 @@ int prte_oob_register(void)
     if (NULL != static_port_string) {
         pmix_util_parse_range_options(static_port_string, &prte_oob_base.tcp_static_ports);
         if (0 == strcmp(prte_oob_base.tcp_static_ports[0], "-1")) {
-            PMIX_ARGV_FREE_COMPAT(prte_oob_base.tcp_static_ports);
+            PMIx_Argv_free(prte_oob_base.tcp_static_ports);
             prte_oob_base.tcp_static_ports = NULL;
         }
     } else {
@@ -420,7 +420,7 @@ int prte_oob_register(void)
         pmix_util_parse_range_options(static_port_string6,
                                       &prte_oob_base.tcp6_static_ports);
         if (0 == strcmp(prte_oob_base.tcp6_static_ports[0], "-1")) {
-            PMIX_ARGV_FREE_COMPAT(prte_oob_base.tcp6_static_ports);
+            PMIx_Argv_free(prte_oob_base.tcp6_static_ports);
             prte_oob_base.tcp6_static_ports = NULL;
         }
     } else {
@@ -442,14 +442,14 @@ int prte_oob_register(void)
     if (NULL != dyn_port_string) {
         /* can't have both static and dynamic ports! */
         if (prte_static_ports) {
-            char *err = PMIX_ARGV_JOIN_COMPAT(prte_oob_base.tcp_static_ports, ',');
+            char *err = PMIx_Argv_join(prte_oob_base.tcp_static_ports, ',');
             pmix_show_help("help-oob-tcp.txt", "static-and-dynamic", true, err, dyn_port_string);
             free(err);
             return PRTE_ERROR;
         }
         pmix_util_parse_range_options(dyn_port_string, &prte_oob_base.tcp_dyn_ports);
         if (0 == strcmp(prte_oob_base.tcp_dyn_ports[0], "-1")) {
-            PMIX_ARGV_FREE_COMPAT(prte_oob_base.tcp_dyn_ports);
+            PMIx_Argv_free(prte_oob_base.tcp_dyn_ports);
             prte_oob_base.tcp_dyn_ports = NULL;
         }
     } else {
@@ -468,10 +468,10 @@ int prte_oob_register(void)
         if (prte_static_ports) {
             char *err4 = NULL, *err6 = NULL;
             if (NULL != prte_oob_base.tcp_static_ports) {
-                err4 = PMIX_ARGV_JOIN_COMPAT(prte_oob_base.tcp_static_ports, ',');
+                err4 = PMIx_Argv_join(prte_oob_base.tcp_static_ports, ',');
             }
             if (NULL != prte_oob_base.tcp6_static_ports) {
-                err6 = PMIX_ARGV_JOIN_COMPAT(prte_oob_base.tcp6_static_ports, ',');
+                err6 = PMIx_Argv_join(prte_oob_base.tcp6_static_ports, ',');
             }
             pmix_show_help("help-oob-tcp.txt", "static-and-dynamic-ipv6", true,
                            (NULL == err4) ? "N/A" : err4, (NULL == err6) ? "N/A" : err6,
@@ -486,7 +486,7 @@ int prte_oob_register(void)
         }
         pmix_util_parse_range_options(dyn_port_string6, &prte_oob_base.tcp6_dyn_ports);
         if (0 == strcmp(prte_oob_base.tcp6_dyn_ports[0], "-1")) {
-            PMIX_ARGV_FREE_COMPAT(prte_oob_base.tcp6_dyn_ports);
+            PMIx_Argv_free(prte_oob_base.tcp6_dyn_ports);
             prte_oob_base.tcp6_dyn_ports = NULL;
         }
     } else {
@@ -708,7 +708,7 @@ static void split_and_resolve(char **orig_str, char *name,
         return;
     }
 
-    argv = PMIX_ARGV_SPLIT_COMPAT(*orig_str, ',');
+    argv = PMIx_Argv_split(*orig_str, ',');
     if (NULL == argv) {
         return;
     }
@@ -728,7 +728,7 @@ static void split_and_resolve(char **orig_str, char *name,
                 pmix_output_verbose(20,
                                     prte_oob_base.output,
                                     "oob:tcp: Using interface: %s ", argv[i]);
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(interfaces, argv[i]);
+                PMIx_Argv_append_nosize(interfaces, argv[i]);
             }
             continue;
         }
@@ -798,7 +798,7 @@ static void split_and_resolve(char **orig_str, char *name,
                                         "oob:tcp: Found match: %s (%s)",
                                         pmix_net_get_hostname((struct sockaddr*) &if_inaddr),
                                         if_name);
-                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(interfaces, if_name);
+                    PMIx_Argv_append_nosize(interfaces, if_name);
                 }
             }
         }
@@ -818,7 +818,7 @@ static void split_and_resolve(char **orig_str, char *name,
     free(argv);
     free(*orig_str);
     if (NULL != interfaces) {
-        *orig_str = PMIX_ARGV_JOIN_COMPAT(*interfaces, ',');
+        *orig_str = PMIx_Argv_join(*interfaces, ',');
     } else {
         *orig_str = NULL;
     }

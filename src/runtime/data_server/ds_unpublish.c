@@ -15,7 +15,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2025      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -107,7 +107,7 @@ pmix_status_t prte_ds_unpublish(pmix_proc_t *sender,
             PMIX_DESTRUCT(&rq);
             return rc;
         }
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&rq.keys, str);
+        PMIx_Argv_append_nosize(&rq.keys, str);
         free(str);
     }
 

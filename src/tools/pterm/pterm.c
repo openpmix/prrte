@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -302,7 +302,7 @@ int main(int argc, char *argv[])
 
     // we do NOT accept arguments other than our own
     if (NULL != results.tail) {
-        param = PMIX_ARGV_JOIN_COMPAT(results.tail, ' ');
+        param = PMIx_Argv_join(results.tail, ' ');
         if (0 != strcmp(param, argv[0])) {
             ptr = pmix_show_help_string("help-pterm.txt", "no-args", false,
                                         prte_tool_basename, param, prte_tool_basename);

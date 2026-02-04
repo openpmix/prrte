@@ -14,7 +14,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -65,11 +65,11 @@ void pmix_util_parse_range_options(char *inp, char ***output)
     }
 
     /* split on commas */
-    r1 = PMIX_ARGV_SPLIT_COMPAT(input, ',');
+    r1 = PMIx_Argv_split(input, ',');
     /* for each resulting element, check for range */
-    for (i = 0; i < PMIX_ARGV_COUNT_COMPAT(r1); i++) {
-        r2 = PMIX_ARGV_SPLIT_COMPAT(r1[i], '-');
-        if (1 < PMIX_ARGV_COUNT_COMPAT(r2)) {
+    for (i = 0; i < PMIx_Argv_count(r1); i++) {
+        r2 = PMIx_Argv_split(r1[i], '-');
+        if (1 < PMIx_Argv_count(r2)) {
             /* given range - get start and end */
             start = strtol(r2[0], NULL, 10);
             end = strtol(r2[1], NULL, 10);
@@ -79,10 +79,10 @@ void pmix_util_parse_range_options(char *inp, char ***output)
              */
             vint = strtol(r1[i], NULL, 10);
             if (-1 == vint) {
-                PMIX_ARGV_FREE_COMPAT(*output);
+                PMIx_Argv_free(*output);
                 *output = NULL;
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(output, "-1");
-                PMIX_ARGV_FREE_COMPAT(r2);
+                PMIx_Argv_append_nosize(output, "-1");
+                PMIx_Argv_free(r2);
                 goto cleanup;
             }
             start = strtol(r2[0], NULL, 10);
@@ -90,17 +90,17 @@ void pmix_util_parse_range_options(char *inp, char ***output)
         }
         for (n = start; n <= end; n++) {
             snprintf(nstr, 32, "%d", n);
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(output, nstr);
+            PMIx_Argv_append_nosize(output, nstr);
         }
-        PMIX_ARGV_FREE_COMPAT(r2);
+        PMIx_Argv_free(r2);
     }
 
 cleanup:
     if (bang_option) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(output, "BANG");
+        PMIx_Argv_append_nosize(output, "BANG");
     }
     free(input);
-    PMIX_ARGV_FREE_COMPAT(r1);
+    PMIx_Argv_free(r1);
 }
 
 void prte_util_get_ranges(char *inp, char ***startpts, char ***endpts)
@@ -118,28 +118,28 @@ void prte_util_get_ranges(char *inp, char ***startpts, char ***endpts)
     input = strdup(inp);
 
     /* split on commas */
-    r1 = PMIX_ARGV_SPLIT_COMPAT(input, ',');
+    r1 = PMIx_Argv_split(input, ',');
     /* for each resulting element, check for range */
-    for (i = 0; i < PMIX_ARGV_COUNT_COMPAT(r1); i++) {
-        r2 = PMIX_ARGV_SPLIT_COMPAT(r1[i], '-');
-        if (2 == PMIX_ARGV_COUNT_COMPAT(r2)) {
+    for (i = 0; i < PMIx_Argv_count(r1); i++) {
+        r2 = PMIx_Argv_split(r1[i], '-');
+        if (2 == PMIx_Argv_count(r2)) {
             /* given range - get start and end */
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(startpts, r2[0]);
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(endpts, r2[1]);
-        } else if (1 == PMIX_ARGV_COUNT_COMPAT(r2)) {
+            PMIx_Argv_append_nosize(startpts, r2[0]);
+            PMIx_Argv_append_nosize(endpts, r2[1]);
+        } else if (1 == PMIx_Argv_count(r2)) {
             /* only one value provided, so it is both the start
              * and the end
              */
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(startpts, r2[0]);
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(endpts, r2[0]);
+            PMIx_Argv_append_nosize(startpts, r2[0]);
+            PMIx_Argv_append_nosize(endpts, r2[0]);
         } else {
             /* no idea how to parse this */
             pmix_output(0, "%s Unknown parse error on string: %s(%s)",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), inp, r1[i]);
         }
-        PMIX_ARGV_FREE_COMPAT(r2);
+        PMIx_Argv_free(r2);
     }
 
     free(input);
-    PMIX_ARGV_FREE_COMPAT(r1);
+    PMIx_Argv_free(r1);
 }

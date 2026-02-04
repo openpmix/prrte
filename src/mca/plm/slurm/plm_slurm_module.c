@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -290,12 +290,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* Append user defined arguments to srun */
     if (NULL != prte_mca_plm_slurm_component.custom_args) {
-        custom_strings = PMIX_ARGV_SPLIT_COMPAT(prte_mca_plm_slurm_component.custom_args, ' ');
-        num_args = PMIX_ARGV_COUNT_COMPAT(custom_strings);
+        custom_strings = PMIx_Argv_split(prte_mca_plm_slurm_component.custom_args, ' ');
+        num_args = PMIx_Argv_count(custom_strings);
         for (i = 0; i < num_args; ++i) {
             pmix_argv_append(&argc, &argv, custom_strings[i]);
         }
-        PMIX_ARGV_FREE_COMPAT(custom_strings);
+        PMIx_Argv_free(custom_strings);
     }
 
     /* create nodelist */
@@ -315,15 +315,15 @@ static void launch_daemons(int fd, short args, void *cbdata)
         /* otherwise, add it to the list of nodes upon which
          * we need to launch a daemon
          */
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&nodelist_argv, node->name);
+        PMIx_Argv_append_nosize(&nodelist_argv, node->name);
     }
-    if (0 == PMIX_ARGV_COUNT_COMPAT(nodelist_argv)) {
+    if (0 == PMIx_Argv_count(nodelist_argv)) {
         pmix_show_help("help-plm-slurm.txt", "no-hosts-in-list", true);
         rc = PRTE_ERR_FAILED_TO_START;
         goto cleanup;
     }
-    nodelist_flat = PMIX_ARGV_JOIN_COMPAT(nodelist_argv, ',');
-    PMIX_ARGV_FREE_COMPAT(nodelist_argv);
+    nodelist_flat = PMIx_Argv_join(nodelist_argv, ',');
+    PMIx_Argv_free(nodelist_argv);
 
     /* if we are using all allocated nodes, then srun doesn't
      * require any further arguments
@@ -389,7 +389,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_plm_base_wrap_args(argv);
 
     if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
-        param = PMIX_ARGV_JOIN_COMPAT(argv, ' ');
+        param = PMIx_Argv_join(argv, ' ');
         pmix_output(prte_plm_base_framework.framework_output,
                     "%s plm:slurm: final top-level argv:\n\t%s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                     (NULL == param) ? "NULL" : param);
@@ -412,7 +412,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
 cleanup:
     if (NULL != argv) {
-        PMIX_ARGV_FREE_COMPAT(argv);
+        PMIx_Argv_free(argv);
     }
     if (NULL != cur_prefix) {
         free(cur_prefix);
@@ -605,7 +605,7 @@ static int plm_slurm_start_proc(int argc, char **argv,
         for (n=0; NULL != environ[n]; n++) {
             if (0 == strncmp(environ[n], "PMIX_", 5) ||
                 0 == strncmp(environ[n], "PRTE_", 5)) {
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, environ[n]);
+                PMIx_Argv_append_nosize(&tmp, environ[n]);
             }
         }
         if (NULL != tmp) {
@@ -614,7 +614,7 @@ static int plm_slurm_start_proc(int argc, char **argv,
                 *p = '\0';
                 unsetenv(tmp[n]);
             }
-            PMIX_ARGV_FREE_COMPAT(tmp);
+            PMIx_Argv_free(tmp);
         }
 
         /* Figure out the basenames for the libdir and bindir.  There
@@ -636,7 +636,7 @@ static int plm_slurm_start_proc(int argc, char **argv,
             } else {
                 pmix_asprintf(&newenv, "%s/%s", prefix, bin_base);
             }
-            PMIX_SETENV_COMPAT("PATH", newenv, true, &environ);
+            PMIx_Setenv("PATH", newenv, true, &environ);
             PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                  "%s plm:slurm: reset PATH: %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  newenv));
@@ -649,14 +649,14 @@ static int plm_slurm_start_proc(int argc, char **argv,
             } else {
                 pmix_asprintf(&newenv, "%s/%s", prefix, lib_base);
             }
-            PMIX_SETENV_COMPAT("LD_LIBRARY_PATH", newenv, true, &environ);
+            PMIx_Setenv("LD_LIBRARY_PATH", newenv, true, &environ);
             PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                  "%s plm:slurm: reset LD_LIBRARY_PATH: %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), newenv));
             free(newenv);
 
             // need to export it as well so srun will propagate it
-            PMIX_SETENV_COMPAT("PRTE_PREFIX", prefix, true, &environ);
+            PMIx_Setenv("PRTE_PREFIX", prefix, true, &environ);
         }
 
         /* for pmix_prefix, we only have to modify the library path.
@@ -672,13 +672,13 @@ static int plm_slurm_start_proc(int argc, char **argv,
                 pmix_asprintf(&newenv, "%s/%s", pmix_prefix, p);
             }
             free(p);
-            PMIX_SETENV_COMPAT("LD_LIBRARY_PATH", newenv, true, &environ);
+            PMIx_Setenv("LD_LIBRARY_PATH", newenv, true, &environ);
             PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                  "%s plm:slurm: reset LD_LIBRARY_PATH: %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), newenv));
             free(newenv);
              // need to export it as well so srun will propagate it
-            PMIX_SETENV_COMPAT("PMIX_PREFIX", pmix_prefix, true, &environ);
+            PMIx_Setenv("PMIX_PREFIX", pmix_prefix, true, &environ);
        }
 
         fd = open("/dev/null", O_CREAT | O_RDWR | O_TRUNC, 0666);

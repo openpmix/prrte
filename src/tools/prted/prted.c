@@ -231,7 +231,7 @@ int main(int argc, char *argv[])
     for (i=0; NULL != environ[i]; i++) {
         if (0 != strncmp(environ[i], "PMIX_", 5) &&
             0 != strncmp(environ[i], "PRTE_", 5)) {
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_launch_environ, environ[i]);
+            PMIx_Argv_append_nosize(&prte_launch_environ, environ[i]);
         }
     }
 
@@ -364,7 +364,7 @@ int main(int argc, char *argv[])
     }
 
     /* ensure we silence any compression warnings */
-    PMIX_SETENV_COMPAT("PMIX_MCA_compress_base_silence_warning", "1", true, &environ);
+    PMIx_Setenv("PMIX_MCA_compress_base_silence_warning", "1", true, &environ);
 
     /* check for bootstrap operation */
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_BOOTSTRAP)) {
@@ -427,7 +427,7 @@ int main(int argc, char *argv[])
             /* cleanup */
             hwloc_bitmap_free(ours);
             hwloc_bitmap_free(res);
-            PMIX_ARGV_FREE_COMPAT(cores);
+            PMIx_Argv_free(cores);
         }
     }
 
@@ -581,7 +581,7 @@ int main(int argc, char *argv[])
         if (0 != strcmp(prte_process_info.aliases[n], "localhost") &&
             0 != strcmp(prte_process_info.aliases[n], "127.0.0.1") &&
             0 != strcmp(prte_process_info.aliases[n], prte_process_info.nodename)) {
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&nonlocal, prte_process_info.aliases[n]);
+            PMIx_Argv_append_nosize(&nonlocal, prte_process_info.aliases[n]);
         }
     }
     if (NULL == nonlocal) {
@@ -594,7 +594,7 @@ int main(int argc, char *argv[])
     if (NULL != aliases) {
         free(aliases);
     }
-    PMIX_ARGV_FREE_COMPAT(nonlocal);
+    PMIx_Argv_free(nonlocal);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(buffer);
@@ -765,9 +765,9 @@ int main(int argc, char *argv[])
                     }
                 }
                 if (!ignore) {
-                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prted_cmd_line, "--"PRTE_CLI_PRTEMCA);
-                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prted_cmd_line, opt->values[i]);
-                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prted_cmd_line, t);
+                    PMIx_Argv_append_nosize(&prted_cmd_line, "--"PRTE_CLI_PRTEMCA);
+                    PMIx_Argv_append_nosize(&prted_cmd_line, opt->values[i]);
+                    PMIx_Argv_append_nosize(&prted_cmd_line, t);
                 }
                 --t;
                 *t = '=';
@@ -780,9 +780,9 @@ int main(int argc, char *argv[])
                 char *t = strchr(opt->values[i], '=');
                 *t = '\0';
                 ++t;
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prted_cmd_line, "--"PRTE_CLI_PMIXMCA);
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prted_cmd_line, opt->values[i]);
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prted_cmd_line, t);
+                PMIx_Argv_append_nosize(&prted_cmd_line, "--"PRTE_CLI_PMIXMCA);
+                PMIx_Argv_append_nosize(&prted_cmd_line, opt->values[i]);
+                PMIx_Argv_append_nosize(&prted_cmd_line, t);
                 --t;
                 *t = '=';
             }

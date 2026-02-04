@@ -409,14 +409,14 @@ void prte_plm_base_stack_trace_recv(int status, pmix_proc_t *sender,
         pmix_asprintf(&st, "STACK TRACE FOR PROC %s (%s, PID %lu)\n",
                       PRTE_NAME_PRINT(&name), hostname,
                       (unsigned long) pid);
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&jdata->traces, st);
+        PMIx_Argv_append_nosize(&jdata->traces, st);
         free(hostname);
         free(st);
         /* unpack the stack_trace until complete */
         cnt = 1;
         while (PRTE_SUCCESS == (rc = PMIx_Data_unpack(NULL, &blob, &st, &cnt, PMIX_STRING))) {
             pmix_asprintf(&st2, "\t%s", st); // has its own newline
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&jdata->traces, st2);
+            PMIx_Argv_append_nosize(&jdata->traces, st2);
             free(st);
             free(st2);
             cnt = 1;
@@ -972,7 +972,7 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
                 free(name);
             }
             /* pass the argv from each app */
-            name = PMIX_ARGV_JOIN_COMPAT(app->argv, ' ');
+            name = PMIx_Argv_join(app->argv, ' ');
             PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_APP_ARGV, name, PMIX_STRING);
             free(name);
         }
@@ -1468,7 +1468,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             NULL != (ptr = strchr(nodename, '.'))) {
             /* retain the non-fqdn name as an alias */
             *ptr = '\0';
-            PMIX_ARGV_APPEND_UNIQUE_COMPAT(&daemon->node->aliases, nodename);
+            PMIx_Argv_append_unique_nosize(&daemon->node->aliases, nodename);
             *ptr = '.';
         }
 
@@ -1490,7 +1490,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
          * and apps may refer to the host by that name
          */
         if (0 != strcmp(nodename, daemon->node->name)) {
-            PMIX_ARGV_APPEND_UNIQUE_COMPAT(&daemon->node->aliases, daemon->node->name);
+            PMIx_Argv_append_unique_nosize(&daemon->node->aliases, daemon->node->name);
             free(daemon->node->name);
             daemon->node->name = strdup(nodename);
         }
@@ -2006,14 +2006,14 @@ int prte_plm_base_setup_prted_cmd(int *argc, char ***argv)
      */
     loc = 0;
     /* split the command apart in case it is multi-word */
-    tmpv = PMIX_ARGV_SPLIT_COMPAT(prte_launch_agent, ' ');
+    tmpv = PMIx_Argv_split(prte_launch_agent, ' ');
     for (i = 0; NULL != tmpv && NULL != tmpv[i]; ++i) {
         if (0 == strcmp(tmpv[i], "prted")) {
             loc = i;
         }
         pmix_argv_append(argc, argv, tmpv[i]);
     }
-    PMIX_ARGV_FREE_COMPAT(tmpv);
+    PMIx_Argv_free(tmpv);
 
     return loc;
 }
@@ -2106,7 +2106,7 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
     for (i=0; NULL != environ[i]; i++) {
         if (0 == strncmp(environ[i], "PMIX_MCA_", offset) ||
             0 == strncmp(environ[i], "PRTE_MCA_", offset)) {
-            tmpv = PMIX_ARGV_SPLIT_COMPAT(environ[i], '=');
+            tmpv = PMIx_Argv_split(environ[i], '=');
             /* check for duplicate */
             ignore = false;
             for (j = 0; j < *argc; j++) {
@@ -2125,7 +2125,7 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
                 pmix_argv_append(argc, argv, &tmpv[0][offset]);
                 pmix_argv_append(argc, argv, tmpv[1]);
             }
-            PMIX_ARGV_FREE_COMPAT(tmpv);
+            PMIx_Argv_free(tmpv);
         }
     }
 
@@ -2133,7 +2133,7 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
      * being sure to "purge" any that would cause problems
      * on backend nodes and ignoring all duplicates
      */
-    cnt = PMIX_ARGV_COUNT_COMPAT(prted_cmd_line);
+    cnt = PMIx_Argv_count(prted_cmd_line);
     for (i = 0; i < cnt; i += 3) {
         /* if the specified option is more than one word, we don't
          * have a generic way of passing it as some environments ignore

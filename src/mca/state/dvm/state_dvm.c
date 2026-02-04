@@ -4,7 +4,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -446,7 +446,7 @@ static void ready_for_debug(int fd, short args, void *cbdata)
            free(name);
         }
         /* pass the argv from each app */
-        name = PMIX_ARGV_JOIN_COMPAT(app->argv, ' ');
+        name = PMIx_Argv_join(app->argv, ' ');
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_APP_ARGV, name, PMIX_STRING);
         free(name);
     }

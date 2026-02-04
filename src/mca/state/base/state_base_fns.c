@@ -5,7 +5,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -909,13 +909,13 @@ void prte_state_base_check_fds(prte_job_t *jdata)
         }
         /* construct the list of capabilities */
         if (fdflags & FD_CLOEXEC) {
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, "cloexec");
+            PMIx_Argv_append_nosize(&list, "cloexec");
         }
         if (flflags & O_APPEND) {
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, "append");
+            PMIx_Argv_append_nosize(&list, "append");
         }
         if (flflags & O_NONBLOCK) {
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, "nonblock");
+            PMIx_Argv_append_nosize(&list, "nonblock");
         }
         /* from the man page:
          *  Unlike the other values that can be specified in flags,
@@ -924,22 +924,22 @@ void prte_state_base_check_fds(prte_job_t *jdata)
          * the low order two bits of flags, and defined respectively
          * as 0, 1, and 2. */
         if (O_RDONLY == (flflags & 3)) {
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, "rdonly");
+            PMIx_Argv_append_nosize(&list, "rdonly");
         } else if (O_WRONLY == (flflags & 3)) {
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, "wronly");
+            PMIx_Argv_append_nosize(&list, "wronly");
         } else {
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, "rdwr");
+            PMIx_Argv_append_nosize(&list, "rdwr");
         }
         if (flk && F_UNLCK != fl.l_type) {
             if (F_WRLCK == fl.l_type) {
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, "wrlock");
+                PMIx_Argv_append_nosize(&list, "wrlock");
             } else {
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, "rdlock");
+                PMIx_Argv_append_nosize(&list, "rdlock");
             }
         }
         if (NULL != list) {
-            status = PMIX_ARGV_JOIN_COMPAT(list, ' ');
-            PMIX_ARGV_FREE_COMPAT(list);
+            status = PMIx_Argv_join(list, ' ');
+            PMIx_Argv_free(list);
             list = NULL;
             if (NULL == result) {
                 pmix_asprintf(&result, "    %d\t(%s)\t%s\n", i, info, status);

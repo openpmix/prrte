@@ -16,7 +16,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023-2024 Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -254,12 +254,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* Append user defined arguments to aprun */
     if (NULL != prte_mca_plm_pals_component.custom_args) {
-        custom_strings = PMIX_ARGV_SPLIT_COMPAT(prte_mca_plm_pals_component.custom_args, ' ');
-        num_args = PMIX_ARGV_COUNT_COMPAT(custom_strings);
+        custom_strings = PMIx_Argv_split(prte_mca_plm_pals_component.custom_args, ' ');
+        num_args = PMIx_Argv_count(custom_strings);
         for (i = 0; i < num_args; ++i) {
             pmix_argv_append(&argc, &argv, custom_strings[i]);
         }
-        PMIX_ARGV_FREE_COMPAT(custom_strings);
+        PMIx_Argv_free(custom_strings);
     }
 
     /* number of processors needed */
@@ -298,13 +298,13 @@ static void launch_daemons(int fd, short args, void *cbdata)
              */
             pmix_argv_append(&nodelist_argc, &nodelist_argv, node->name);
         }
-        if (0 == PMIX_ARGV_COUNT_COMPAT(nodelist_argv)) {
+        if (0 == PMIx_Argv_count(nodelist_argv)) {
             pmix_show_help("help-plm-pals.txt", "no-hosts-in-list", true);
             rc = PRTE_ERR_FAILED_TO_START;
             goto cleanup;
         }
-        nodelist_flat = PMIX_ARGV_JOIN_COMPAT(nodelist_argv, ',');
-        PMIX_ARGV_FREE_COMPAT(nodelist_argv);
+        nodelist_flat = PMIx_Argv_join(nodelist_argv, ',');
+        PMIx_Argv_free(nodelist_argv);
 
         pmix_argv_append(&argc, &argv, "-L");
         pmix_argv_append(&argc, &argv, nodelist_flat);
@@ -336,7 +336,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     free(vpid_string);
 
     if (prte_mca_plm_pals_component.debug) {
-        param = PMIX_ARGV_JOIN_COMPAT(argv, ' ');
+        param = PMIx_Argv_join(argv, ' ');
         if (NULL != param) {
             pmix_output(0, "plm:pals: final top-level argv:");
             pmix_output(0, "plm:pals:     %s", param);
@@ -363,10 +363,10 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* setup environment - this is the pristine version that PRRTE
      * has already stripped of all PRTE_ and PMIX_ prefixed values */
-    env = PMIX_ARGV_COPY_COMPAT(prte_launch_environ);
+    env = PMIx_Argv_copy(prte_launch_environ);
 
     if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
-        param = PMIX_ARGV_JOIN_COMPAT(argv, ' ');
+        param = PMIx_Argv_join(argv, ' ');
         PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:pals: final top-level argv:\n\t%s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (NULL == param) ? "NULL" : param));
@@ -389,10 +389,10 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
 cleanup:
     if (NULL != argv) {
-        PMIX_ARGV_FREE_COMPAT(argv);
+        PMIx_Argv_free(argv);
     }
     if (NULL != env) {
-        PMIX_ARGV_FREE_COMPAT(env);
+        PMIx_Argv_free(env);
     }
 
     /* check for failed launch - if so, force terminate */
@@ -550,7 +550,7 @@ static int plm_pals_start_proc(int argc, char **argv, char **env,
             } else {
                 pmix_asprintf(&newenv, "%s/%s", prefix, bin_base);
             }
-            PMIX_SETENV_COMPAT("PATH", newenv, true, &env);
+            PMIx_Setenv("PATH", newenv, true, &env);
             if (prte_mca_plm_pals_component.debug) {
                 pmix_output(0, "plm:pals: reset PATH: %s", newenv);
             }
@@ -563,13 +563,13 @@ static int plm_pals_start_proc(int argc, char **argv, char **env,
             } else {
                 pmix_asprintf(&newenv, "%s/%s", prefix, lib_base);
             }
-            PMIX_SETENV_COMPAT("LD_LIBRARY_PATH", newenv, true, &env);
+            PMIx_Setenv("LD_LIBRARY_PATH", newenv, true, &env);
             if (prte_mca_plm_pals_component.debug) {
                 pmix_output(0, "plm:pals: reset LD_LIBRARY_PATH: %s", newenv);
             }
             free(newenv);
             // add the prefix itself to the environment
-            PMIX_SETENV_COMPAT("PRTE_PREFIX", prefix, true, &env);
+            PMIx_Setenv("PRTE_PREFIX", prefix, true, &env);
         }
 
         /* for pmix_prefix, we only have to modify the library path.
@@ -585,13 +585,13 @@ static int plm_pals_start_proc(int argc, char **argv, char **env,
                 pmix_asprintf(&newenv, "%s/%s", pmix_prefix, p);
             }
             free(p);
-            PMIX_SETENV_COMPAT("LD_LIBRARY_PATH", newenv, true, &env);
+            PMIx_Setenv("LD_LIBRARY_PATH", newenv, true, &env);
             if (prte_mca_plm_pals_component.debug) {
                 pmix_output(0, "plm:pals: reset LD_LIBRARY_PATH: %s", newenv);
             }
             free(newenv);
             // add the prefix itself to the environment
-            PMIX_SETENV_COMPAT("PMIX_PREFIX", pmix_prefix, true, &env);
+            PMIx_Setenv("PMIX_PREFIX", pmix_prefix, true, &env);
         }
 
         fd = open("/dev/null", O_CREAT | O_WRONLY | O_TRUNC, 0666);

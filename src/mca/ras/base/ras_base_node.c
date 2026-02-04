@@ -15,7 +15,7 @@
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -147,12 +147,12 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
             }
             /* if the node name is different, store it as an alias */
             if (0 != strcmp(hnp_node->name, node->name)) {
-                PMIX_ARGV_APPEND_UNIQUE_COMPAT(&hnp_node->aliases, node->name);
+                PMIx_Argv_append_unique_nosize(&hnp_node->aliases, node->name);
             }
              // transfer across any new aliases
             if (NULL != node->aliases) {
                 for (i=0; NULL != node->aliases[i]; i++) {
-                    PMIX_ARGV_APPEND_UNIQUE_COMPAT(&hnp_node->aliases, node->aliases[i]);
+                    PMIx_Argv_append_unique_nosize(&hnp_node->aliases, node->aliases[i]);
                 }
             }
             if (NULL != node->rawname) {

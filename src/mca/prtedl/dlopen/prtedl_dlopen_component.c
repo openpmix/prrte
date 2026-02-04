@@ -6,7 +6,7 @@
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -80,7 +80,7 @@ static int dlopen_component_register(void)
         return ret;
     }
     prte_mca_prtedl_dlopen_component.filename_suffixes
-        = PMIX_ARGV_SPLIT_COMPAT(prte_mca_prtedl_dlopen_component.filename_suffixes_mca_storage, ',');
+        = PMIx_Argv_split(prte_mca_prtedl_dlopen_component.filename_suffixes_mca_storage, ',');
 
     return PRTE_SUCCESS;
 }
@@ -93,7 +93,7 @@ static int dlopen_component_open(void)
 static int dlopen_component_close(void)
 {
     if (NULL != prte_mca_prtedl_dlopen_component.filename_suffixes) {
-        PMIX_ARGV_FREE_COMPAT(prte_mca_prtedl_dlopen_component.filename_suffixes);
+        PMIx_Argv_free(prte_mca_prtedl_dlopen_component.filename_suffixes);
         prte_mca_prtedl_dlopen_component.filename_suffixes = NULL;
     }
 

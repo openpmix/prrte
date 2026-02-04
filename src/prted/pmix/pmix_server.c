@@ -477,7 +477,7 @@ void pmix_server_register_params(void)
                                       &generate_dist);
     prte_pmix_server_globals.generate_dist = 0;
     if (NULL != generate_dist) {
-        char **tmp = PMIX_ARGV_SPLIT_COMPAT(generate_dist, ',');
+        char **tmp = PMIx_Argv_split(generate_dist, ',');
         for (i=0; NULL != tmp[i]; i++) {
             if (0 == strcasecmp(tmp[i], "fabric")) {
                 prte_pmix_server_globals.generate_dist |= PMIX_DEVTYPE_OPENFABRICS;
@@ -487,7 +487,7 @@ void pmix_server_register_params(void)
                 prte_pmix_server_globals.generate_dist |= PMIX_DEVTYPE_NETWORK;
             }
         }
-        PMIX_ARGV_FREE_COMPAT(tmp);
+        PMIx_Argv_free(tmp);
     }
 
     prte_pmix_server_globals.system_controller = false;
@@ -982,7 +982,7 @@ int pmix_server_init(void)
 
     // check for aliases
     if (NULL != prte_process_info.aliases) {
-        tmp = PMIX_ARGV_JOIN_COMPAT(prte_process_info.aliases, ',');
+        tmp = PMIx_Argv_join(prte_process_info.aliases, ',');
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_HOSTNAME_ALIASES, tmp, PMIX_STRING);
         free(tmp);
         if (PMIX_SUCCESS != rc) {

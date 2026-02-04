@@ -15,7 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -366,14 +366,14 @@ int main(int argc, char **argv)
         goto done;
     }
     /* split the returned string to get the rank of each local peer */
-    peers = PMIX_ARGV_SPLIT_COMPAT(val->data.string, ',');
+    peers = PMIx_Argv_split(val->data.string, ',');
     PMIX_VALUE_RELEASE(val);
-    nlocal = PMIX_ARGV_COUNT_COMPAT(peers);
+    nlocal = PMIx_Argv_count(peers);
     if (nprocs == nlocal) {
         all_local = true;
     } else {
         all_local = false;
-        locals = (pmix_rank_t *) malloc(PMIX_ARGV_COUNT_COMPAT(peers) * sizeof(pmix_rank_t));
+        locals = (pmix_rank_t *) malloc(PMIx_Argv_count(peers) * sizeof(pmix_rank_t));
         for (n = 0; NULL != peers[n]; n++) {
             locals[n] = strtoul(peers[n], NULL, 10);
         }

@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -168,23 +168,23 @@ char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
     }
 
     if (PRTE_MAPPING_NO_USE_LOCAL & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&qls, "NO_USE_LOCAL");
+        PMIx_Argv_append_nosize(&qls, "NO_USE_LOCAL");
     }
     if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&qls, "NOOVERSUBSCRIBE");
+        PMIx_Argv_append_nosize(&qls, "NOOVERSUBSCRIBE");
     } else if (PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&qls, "OVERSUBSCRIBE");
+        PMIx_Argv_append_nosize(&qls, "OVERSUBSCRIBE");
     }
     if (PRTE_MAPPING_SPAN & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&qls, "SPAN");
+        PMIx_Argv_append_nosize(&qls, "SPAN");
     }
     if (PRTE_MAPPING_ORDERED & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&qls, "ORDERED");
+        PMIx_Argv_append_nosize(&qls, "ORDERED");
     }
 
     if (NULL != qls) {
-        tmp = PMIX_ARGV_JOIN_COMPAT(qls, ':');
-        PMIX_ARGV_FREE_COMPAT(qls);
+        tmp = PMIx_Argv_join(qls, ':');
+        PMIx_Argv_free(qls);
         pmix_asprintf(&mymap, "%s:%s", map, tmp);
         free(tmp);
     } else {
