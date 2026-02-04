@@ -209,11 +209,11 @@ char *prte_attr_print_list(pmix_list_t *attributes)
 
     PMIX_LIST_FOREACH(attr, attributes, prte_attribute_t)
     {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&cache, prte_attr_key_to_str(attr->key));
+        PMIx_Argv_append_nosize(&cache, prte_attr_key_to_str(attr->key));
     }
     if (NULL != cache) {
-        out1 = PMIX_ARGV_JOIN_COMPAT(cache, '\n');
-        PMIX_ARGV_FREE_COMPAT(cache);
+        out1 = PMIx_Argv_join(cache, '\n');
+        PMIx_Argv_free(cache);
     } else {
         out1 = NULL;
     }
@@ -945,56 +945,56 @@ char* prte_print_proc_flags(struct prte_proc_t *ptr)
     char *ans;
 
     // start with the proc name
-    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, PRTE_NAME_PRINT(&p->name));
-    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, ": ");
+    PMIx_Argv_append_nosize(&tmp, PRTE_NAME_PRINT(&p->name));
+    PMIx_Argv_append_nosize(&tmp, ": ");
 
     if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_ALIVE)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "ALIVE");
+        PMIx_Argv_append_nosize(&tmp, "ALIVE");
     }
     if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_ABORT)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "ABORT");
+        PMIx_Argv_append_nosize(&tmp, "ABORT");
     }
     if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_UPDATED)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "UPDATED");
+        PMIx_Argv_append_nosize(&tmp, "UPDATED");
     }
     if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_LOCAL)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "LOCAL");
+        PMIx_Argv_append_nosize(&tmp, "LOCAL");
     }
     if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_REPORTED)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "REPORTED");
+        PMIx_Argv_append_nosize(&tmp, "REPORTED");
     }
     if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_REG)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "REGISTERED");
+        PMIx_Argv_append_nosize(&tmp, "REGISTERED");
     }
     if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_HAS_DEREG)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "DEREGISTERED");
+        PMIx_Argv_append_nosize(&tmp, "DEREGISTERED");
     }
     if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_AS_MPI)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "MPI");
+        PMIx_Argv_append_nosize(&tmp, "MPI");
     }
     if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_IOF_COMPLETE)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "IOF-COMPLETE");
+        PMIx_Argv_append_nosize(&tmp, "IOF-COMPLETE");
     }
     if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_WAITPID)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "WAITPID");
+        PMIx_Argv_append_nosize(&tmp, "WAITPID");
     }
     if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_RECORDED)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "RECORDED");
+        PMIx_Argv_append_nosize(&tmp, "RECORDED");
     }
     if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_DATA_IN_SM)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "DATA-IN-SM");
+        PMIx_Argv_append_nosize(&tmp, "DATA-IN-SM");
     }
     if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_DATA_RECVD)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "DATA-RECVD");
+        PMIx_Argv_append_nosize(&tmp, "DATA-RECVD");
     }
     if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_SM_ACCESS)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "SM-ACCESS");
+        PMIx_Argv_append_nosize(&tmp, "SM-ACCESS");
     }
     if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_TERM_REPORTED)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "TERMINATED");
+        PMIx_Argv_append_nosize(&tmp, "TERMINATED");
     }
-    ans = PMIX_ARGV_JOIN_COMPAT(tmp, '|');
-    PMIX_ARGV_FREE_COMPAT(tmp);
+    ans = PMIx_Argv_join(tmp, '|');
+    PMIx_Argv_free(tmp);
     return ans;
 }
 
@@ -1005,29 +1005,29 @@ char* prte_print_node_flags(struct prte_node_t *ptr)
     char *ans;
 
     // start with the node name
-    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, p->name);
-    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, ": ");
+    PMIx_Argv_append_nosize(&tmp, p->name);
+    PMIx_Argv_append_nosize(&tmp, ": ");
 
     if (PRTE_FLAG_TEST(p, PRTE_NODE_FLAG_DAEMON_LAUNCHED)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "DAEMON-LAUNCHED");
+        PMIx_Argv_append_nosize(&tmp, "DAEMON-LAUNCHED");
     }
     if (PRTE_FLAG_TEST(p, PRTE_NODE_FLAG_LOC_VERIFIED)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "LOCATION");
+        PMIx_Argv_append_nosize(&tmp, "LOCATION");
     }
     if (PRTE_FLAG_TEST(p, PRTE_NODE_FLAG_OVERSUBSCRIBED)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "OVERSUBSCRIBED");
+        PMIx_Argv_append_nosize(&tmp, "OVERSUBSCRIBED");
     }
     if (PRTE_FLAG_TEST(p, PRTE_NODE_FLAG_MAPPED)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "MAPPED");
+        PMIx_Argv_append_nosize(&tmp, "MAPPED");
     }
     if (PRTE_FLAG_TEST(p, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "SLOTS-GIVEN");
+        PMIx_Argv_append_nosize(&tmp, "SLOTS-GIVEN");
     }
     if (PRTE_FLAG_TEST(p, PRTE_NODE_NON_USABLE)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "NONUSABLE");
+        PMIx_Argv_append_nosize(&tmp, "NONUSABLE");
     }
-    ans = PMIX_ARGV_JOIN_COMPAT(tmp, '|');
-    PMIX_ARGV_FREE_COMPAT(tmp);
+    ans = PMIx_Argv_join(tmp, '|');
+    PMIx_Argv_free(tmp);
     return ans;
 }
 
@@ -1038,23 +1038,23 @@ char* prte_print_app_flags(struct prte_app_context_t *ptr)
     char *ans;
 
     // start with the app command
-    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, p->app);
-    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, ": ");
+    PMIx_Argv_append_nosize(&tmp, p->app);
+    PMIx_Argv_append_nosize(&tmp, ": ");
 
     if (PRTE_FLAG_TEST(p, PRTE_APP_FLAG_USED_ON_NODE)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "USED-LOCAL-NODE");
+        PMIx_Argv_append_nosize(&tmp, "USED-LOCAL-NODE");
     }
 
     if (PRTE_FLAG_TEST(p, PRTE_APP_FLAG_TOOL)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "TOOL");
+        PMIx_Argv_append_nosize(&tmp, "TOOL");
     }
 
     if (PRTE_FLAG_TEST(p, PRTE_APP_FLAG_COMPUTED)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "NPROCS-COMPUTED");
+        PMIx_Argv_append_nosize(&tmp, "NPROCS-COMPUTED");
     }
 
-    ans = PMIX_ARGV_JOIN_COMPAT(tmp, '|');
-    PMIX_ARGV_FREE_COMPAT(tmp);
+    ans = PMIx_Argv_join(tmp, '|');
+    PMIx_Argv_free(tmp);
     return ans;
 }
 
@@ -1065,46 +1065,46 @@ char* prte_print_job_flags(struct prte_job_t *ptr)
     char *ans;
 
     // start with the job name
-    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, PRTE_JOBID_PRINT(p->nspace));
-    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, ": ");
+    PMIx_Argv_append_nosize(&tmp, PRTE_JOBID_PRINT(p->nspace));
+    PMIx_Argv_append_nosize(&tmp, ": ");
 
     if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_UPDATED)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "UPDATED");
+        PMIx_Argv_append_nosize(&tmp, "UPDATED");
     }
     if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_RESTARTED)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "RESTARTED");
+        PMIx_Argv_append_nosize(&tmp, "RESTARTED");
     }
     if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_ABORTED)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "ABORTED");
+        PMIx_Argv_append_nosize(&tmp, "ABORTED");
     }
     if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_FORWARD_OUTPUT)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "FORWARD-OUTPUT");
+        PMIx_Argv_append_nosize(&tmp, "FORWARD-OUTPUT");
     }
     if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_DO_NOT_MONITOR)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "DO-NOT-MONITOR");
+        PMIx_Argv_append_nosize(&tmp, "DO-NOT-MONITOR");
     }
     if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_FORWARD_COMM)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "FWD-COM");
+        PMIx_Argv_append_nosize(&tmp, "FWD-COM");
     }
     if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_RESTART)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "RESTART");
+        PMIx_Argv_append_nosize(&tmp, "RESTART");
     }
     if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_PROCS_MIGRATING)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "MIGRATING");
+        PMIx_Argv_append_nosize(&tmp, "MIGRATING");
     }
     if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_OVERSUBSCRIBED)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "OVERSUBSCRIBED");
+        PMIx_Argv_append_nosize(&tmp, "OVERSUBSCRIBED");
     }
     if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_TOOL)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "TOOL");
+        PMIx_Argv_append_nosize(&tmp, "TOOL");
     }
     if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_LAUNCHER)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "LAUNCHER");
+        PMIx_Argv_append_nosize(&tmp, "LAUNCHER");
     }
     if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_ERR_REPORTED)) {
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "ERROR-REPORTED");
+        PMIx_Argv_append_nosize(&tmp, "ERROR-REPORTED");
     }
-    ans = PMIX_ARGV_JOIN_COMPAT(tmp, '|');
-    PMIX_ARGV_FREE_COMPAT(tmp);
+    ans = PMIx_Argv_join(tmp, '|');
+    PMIx_Argv_free(tmp);
     return ans;
 }

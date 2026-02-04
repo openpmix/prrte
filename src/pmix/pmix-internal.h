@@ -270,32 +270,6 @@ PRTE_EXPORT int prte_pmix_register_cleanup(char *path, bool directory, bool igno
     PMIX_MCA_BASE_VERSION_2_1_0("prte", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, \
                                 PRTE_RELEASE_VERSION, type, type_major, type_minor, type_release)
 
-#define PMIX_ARGV_JOIN_COMPAT(a, b) \
-        PMIx_Argv_join(a, b)
-
-#define PMIX_ARGV_SPLIT_COMPAT(a, b) \
-        PMIx_Argv_split(a, b)
-
-#define PMIX_ARGV_SPLIT_WITH_EMPTY_COMPAT(a, b) \
-        PMIx_Argv_split_with_empty(a, b)
-
-#define PMIX_ARGV_COUNT_COMPAT(a) \
-        PMIx_Argv_count(a)
-
-#define PMIX_ARGV_FREE_COMPAT(a) \
-        PMIx_Argv_free(a)
-
-#define PMIX_ARGV_APPEND_UNIQUE_COMPAT(a, b) \
-        PMIx_Argv_append_unique_nosize(a, b)
-
-#define PMIX_ARGV_APPEND_NOSIZE_COMPAT(a, b) \
-        PMIx_Argv_append_nosize(a, b)
-
-#define PMIX_ARGV_COPY_COMPAT(a) \
-        PMIx_Argv_copy(a)
-
-#define PMIX_SETENV_COMPAT(a, b, c, d) \
-        PMIx_Setenv(a, b, c, d)
 
 END_C_DECLS
 

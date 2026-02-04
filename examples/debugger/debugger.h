@@ -94,30 +94,3 @@ typedef struct {
     int exit_code;
     bool exit_code_given;
 } myrel_t;
-
-#define PMIX_ARGV_JOIN_COMPAT(a, b) \
-        PMIx_Argv_join(a, b)
-
-#define PMIX_ARGV_SPLIT_COMPAT(a, b) \
-        PMIx_Argv_split(a, b)
-
-#define PMIX_ARGV_SPLIT_WITH_EMPTY_COMPAT(a, b) \
-        PMIx_Argv_split_with_empty(a, b)
-
-#define PMIX_ARGV_COUNT_COMPAT(a) \
-        PMIx_Argv_count(a)
-
-#define PMIX_ARGV_FREE_COMPAT(a) \
-        PMIx_Argv_free(a)
-
-#define PMIX_ARGV_APPEND_UNIQUE_COMPAT(a, b) \
-        PMIx_Argv_append_unique_nosize(a, b)
-
-#define PMIX_ARGV_APPEND_NOSIZE_COMPAT(a, b) \
-        PMIx_Argv_append_nosize(a, b)
-
-#define PMIX_ARGV_COPY_COMPAT(a) \
-        PMIx_Argv_copy(a)
-
-#define PMIX_SETENV_COMPAT(a, b, c, d) \
-        PMIx_Setenv(a, b, c, d)

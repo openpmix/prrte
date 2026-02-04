@@ -15,7 +15,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2025      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -101,10 +101,10 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
         rc = PMIx_Data_unpack(NULL, buffer, &str, &count, PMIX_STRING);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            PMIX_ARGV_FREE_COMPAT(keys);
+            PMIx_Argv_free(keys);
             return rc;
         }
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&keys, str);
+        PMIx_Argv_append_nosize(&keys, str);
         free(str);
     }
 
@@ -113,7 +113,7 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
     rc = PMIx_Data_unpack(NULL, buffer, &ninfo, &count, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PMIX_ARGV_FREE_COMPAT(keys);
+        PMIx_Argv_free(keys);
         return rc;
     }
     if (0 < ninfo) {
@@ -123,7 +123,7 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_INFO_FREE(info, ninfo);
-            PMIX_ARGV_FREE_COMPAT(keys);
+            PMIx_Argv_free(keys);
             return rc;
         }
         /* scan the directives for things we care about */
@@ -201,7 +201,7 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
         } // loop over stored data
         if (!found) {
             // cache the key
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&cache, keys[i]);
+            PMIx_Argv_append_nosize(&cache, keys[i]);
         }
     }     // loop over keys
 
@@ -213,8 +213,8 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_LIST_DESTRUCT(&answers);
-            PMIX_ARGV_FREE_COMPAT(keys);
-            PMIX_ARGV_FREE_COMPAT(cache);
+            PMIx_Argv_free(keys);
+            PMIx_Argv_free(cache);
             return rc;
         }
         /* loop thru and pack the individual responses - this is somewhat less
@@ -228,29 +228,29 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_LIST_DESTRUCT(&answers);
-                PMIX_ARGV_FREE_COMPAT(keys);
-                PMIX_ARGV_FREE_COMPAT(cache);
+                PMIx_Argv_free(keys);
+                PMIx_Argv_free(cache);
                 return rc;
             }
             rc = PMIx_Data_pack(NULL, &pbkt, &rinfo->info, 1, PMIX_INFO);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_LIST_DESTRUCT(&answers);
-                PMIX_ARGV_FREE_COMPAT(keys);
-                PMIX_ARGV_FREE_COMPAT(cache);
+                PMIx_Argv_free(keys);
+                PMIx_Argv_free(cache);
                 return rc;
             }
         }
     }
     PMIX_LIST_DESTRUCT(&answers);
 
-    i = PMIX_ARGV_COUNT_COMPAT(cache);
+    i = PMIx_Argv_count(cache);
     if (0 < i) {
         if (wait) {
             pmix_output_verbose(1, prte_data_store.output,
                                 "%s data server:lookup: at least some data not found %d vs %d",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) nanswers,
-                                (int) PMIX_ARGV_COUNT_COMPAT(keys));
+                                (int) PMIx_Argv_count(keys));
 
             req = PMIX_NEW(prte_data_req_t);
             req->room_number = room_number;
@@ -261,15 +261,15 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
             req->keys = cache;
             cache = NULL;
             pmix_list_append(&prte_data_store.pending, &req->super);
-            PMIX_ARGV_FREE_COMPAT(keys);
+            PMIx_Argv_free(keys);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             return PMIX_SUCCESS; // do not return an answer
         } else {
-            PMIX_ARGV_FREE_COMPAT(cache);
+            PMIx_Argv_free(cache);
             if (0 == nanswers) {
                 /* nothing was found - indicate that situation */
                 rc = PMIX_ERR_NOT_FOUND;
-                PMIX_ARGV_FREE_COMPAT(keys);
+                PMIx_Argv_free(keys);
                 PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                 return rc;
             } else {
@@ -277,7 +277,7 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
             }
         }
     }
-    PMIX_ARGV_FREE_COMPAT(keys);
+    PMIx_Argv_free(keys);
 
     pmix_output_verbose(1, prte_data_store.output,
                         "%s data server:lookup: data found - status %s",

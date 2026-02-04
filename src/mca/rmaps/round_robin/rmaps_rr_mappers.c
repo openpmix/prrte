@@ -437,9 +437,9 @@ pass:
             }
         } else  if (options->ordered || !options->overload) {
             // see how many PEs we were given
-            tmp = PMIX_ARGV_SPLIT_COMPAT(options->cpuset, ',');
-            ntomap = PMIX_ARGV_COUNT_COMPAT(tmp);
-            PMIX_ARGV_FREE_COMPAT(tmp);
+            tmp = PMIx_Argv_split(options->cpuset, ',');
+            ntomap = PMIx_Argv_count(tmp);
+            PMIx_Argv_free(tmp);
             options->nprocs = ntomap;
         } else {
             /* assign a number of procs equal to the number of available slots */

@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -262,7 +262,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_plm_base_prted_append_basic_args(&argc, &argv, "tm", &proc_vpid_index);
 
     if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
-        param = PMIX_ARGV_JOIN_COMPAT(argv, ' ');
+        param = PMIx_Argv_join(argv, ' ');
         PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:tm: final top-level argv:\n\t%s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (NULL == param) ? "NULL" : param));
@@ -292,16 +292,16 @@ static void launch_daemons(int fd, short args, void *cbdata)
     bin_base = pmix_basename(prte_install_dirs.bindir);
 
     /* setup environment */
-    env = PMIX_ARGV_COPY_COMPAT(prte_launch_environ);
+    env = PMIx_Argv_copy(prte_launch_environ);
 
     /* enable local launch by the orteds */
-    PMIX_SETENV_COMPAT("PRTE_MCA_plm", "ssh", true, &env);
+    PMIx_Setenv("PRTE_MCA_plm", "ssh", true, &env);
 
     /* add our umask -- see big note in orted.c */
     current_umask = umask(0);
     umask(current_umask);
     pmix_asprintf(&var, "0%o", current_umask);
-    PMIX_SETENV_COMPAT("PRTE_DAEMON_UMASK_VALUE", var, true, &env);
+    PMIx_Setenv("PRTE_DAEMON_UMASK_VALUE", var, true, &env);
     free(var);
 
     /*
@@ -322,7 +322,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         } else {
             pmix_asprintf(&newenv, "%s/%s", prefix_dir, bin_base);
         }
-        PMIX_SETENV_COMPAT("PATH", newenv, true, &env);
+        PMIx_Setenv("PATH", newenv, true, &env);
         PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "plm:tm: reset PATH: %s", newenv));
         free(newenv);
@@ -334,12 +334,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
         } else {
             pmix_asprintf(&newenv, "%s/%s", prefix_dir, lib_base);
         }
-        PMIX_SETENV_COMPAT("LD_LIBRARY_PATH", newenv, true, &env);
+        PMIx_Setenv("LD_LIBRARY_PATH", newenv, true, &env);
         PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "plm:tm: reset LD_LIBRARY_PATH: %s", newenv));
         free(newenv);
         // add the prefix itself to the environment
-        PMIX_SETENV_COMPAT("PRTE_PREFIX", prefix_dir, true, &env);
+        PMIx_Setenv("PRTE_PREFIX", prefix_dir, true, &env);
         free(prefix_dir);
     }
 
@@ -357,12 +357,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
             pmix_asprintf(&newenv, "%s/%s", pmix_prefix, p);
         }
         free(p);
-        PMIX_SETENV_COMPAT("LD_LIBRARY_PATH", newenv, true, &env);
+        PMIx_Setenv("LD_LIBRARY_PATH", newenv, true, &env);
         PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "plm:tm: reset LD_LIBRARY_PATH: %s", newenv));
         free(newenv);
         // add the prefix itself to the environment
-        PMIX_SETENV_COMPAT("PMIX_PREFIX", pmix_prefix, true, &env);
+        PMIx_Setenv("PMIX_PREFIX", pmix_prefix, true, &env);
         free(pmix_prefix);
     }
 
@@ -395,7 +395,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
         /* exec the daemon */
         if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
-            param = PMIX_ARGV_JOIN_COMPAT(argv, ' ');
+            param = PMIx_Argv_join(argv, ' ');
             PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                  "%s plm:tm: executing:\n\t%s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  (NULL == param) ? "NULL" : param));

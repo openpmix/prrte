@@ -552,12 +552,12 @@ static int file_parse(const char *affinity_file)
         }
 
         if (NULL != sep) {
-            cpus = PMIX_ARGV_SPLIT_COMPAT(sep, ',');
+            cpus = PMIx_Argv_split(sep, ',');
             for(i = 0; NULL != cpus[i]; ++i) {
                 // get the specified object
                 obj = hwloc_get_pu_obj_by_os_index(nptr->topology->topo, strtol(cpus[i], NULL, 10)) ;
                 if (NULL == obj) {
-                    PMIX_ARGV_FREE_COMPAT(cpus);
+                    PMIx_Argv_free(cpus);
                     fclose(fp);
                     free(hstname);
                     return PRTE_ERROR;
@@ -567,8 +567,8 @@ static int file_parse(const char *affinity_file)
                 cpus[i] = (char*)malloc(sizeof(char) * 10);
                 snprintf(cpus[i], 10, "%d", obj->logical_index);
             }
-            sep = PMIX_ARGV_JOIN_COMPAT(cpus, ',');
-            PMIX_ARGV_FREE_COMPAT(cpus);
+            sep = PMIx_Argv_join(cpus, ',');
+            PMIx_Argv_free(cpus);
             pmix_output_verbose(20, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:lsf: (lsf) Convert Physical CPUSET to   <%s>", sep);
         }

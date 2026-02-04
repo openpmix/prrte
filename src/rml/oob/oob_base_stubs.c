@@ -4,7 +4,7 @@
  *                         reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -177,9 +177,9 @@ void prte_oob_base_get_addr(char **uri)
 
     if (!prte_oob_base.disable_ipv4_family &&
         NULL != prte_oob_base.ipv4conns) {
-        tmp = PMIX_ARGV_JOIN_COMPAT(prte_oob_base.ipv4conns, ',');
-        tp = PMIX_ARGV_JOIN_COMPAT(prte_oob_base.ipv4ports, ',');
-        tm = PMIX_ARGV_JOIN_COMPAT(prte_oob_base.if_masks, ',');
+        tmp = PMIx_Argv_join(prte_oob_base.ipv4conns, ',');
+        tp = PMIx_Argv_join(prte_oob_base.ipv4ports, ',');
+        tm = PMIx_Argv_join(prte_oob_base.if_masks, ',');
         pmix_asprintf(&cptr, "tcp://%s:%s:%s", tmp, tp, tm);
         free(tmp);
         free(tp);
@@ -201,9 +201,9 @@ void prte_oob_base_get_addr(char **uri)
          * an implementation may use an optional version flag to indicate such a format
          * explicitly rather than rely on heuristic determination.
          */
-        tmp = PMIX_ARGV_JOIN_COMPAT(prte_oob_base.ipv6conns, ',');
-        tp = PMIX_ARGV_JOIN_COMPAT(prte_oob_base.ipv6ports, ',');
-        tm = PMIX_ARGV_JOIN_COMPAT(prte_oob_base.if_masks, ',');
+        tmp = PMIx_Argv_join(prte_oob_base.ipv6conns, ',');
+        tp = PMIx_Argv_join(prte_oob_base.ipv6ports, ',');
+        tm = PMIx_Argv_join(prte_oob_base.if_masks, ',');
         if (NULL == cptr) {
             /* no ipv4 stuff */
             pmix_asprintf(&cptr, "tcp6://[%s]:%s:%s", tmp, tp, tm);
@@ -336,7 +336,7 @@ static void set_addr(pmix_proc_t *peer, char **uris)
         }
         *masks_string = '\0';
         masks_string++;
-        masks = PMIX_ARGV_SPLIT_COMPAT(masks_string, ',');
+        masks = PMIx_Argv_split(masks_string, ',');
 
         /* separate the ports from the network addrs */
         ports = strrchr(tcpuri, ':');
@@ -364,7 +364,7 @@ static void set_addr(pmix_proc_t *peer, char **uris)
             }
         }
 #endif // PRTE_ENABLE_IPV6
-        addrs = PMIX_ARGV_SPLIT_COMPAT(hptr, ',');
+        addrs = PMIx_Argv_split(hptr, ',');
 
         /* cycle across the provided addrs */
         for (j = 0; NULL != addrs[j]; j++) {
@@ -426,7 +426,7 @@ static void set_addr(pmix_proc_t *peer, char **uris)
                                 (NULL == host) ? "NULL" : host, (NULL == ports) ? "NULL" : ports);
             pmix_list_append(&pr->addrs, &maddr->super);
         }
-        PMIX_ARGV_FREE_COMPAT(addrs);
+        PMIx_Argv_free(addrs);
         free(tcpuri);
     }
 }
@@ -471,7 +471,7 @@ static prte_oob_tcp_peer_t* process_uri(char *uri)
     }
 
     /* split the rest of the uri into component parts */
-    uris = PMIX_ARGV_SPLIT_COMPAT(cptr, ';');
+    uris = PMIx_Argv_split(cptr, ';');
 
     /* get the peer object for this process */
     pr = get_peer(&peer);
@@ -482,7 +482,7 @@ static prte_oob_tcp_peer_t* process_uri(char *uri)
     }
 
     set_addr(&pr->name, uris);
-    PMIX_ARGV_FREE_COMPAT(uris);
+    PMIx_Argv_free(uris);
     return pr;
 }
 

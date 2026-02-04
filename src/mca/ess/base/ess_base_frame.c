@@ -14,7 +14,7 @@
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -229,7 +229,7 @@ pmix_status_t prte_ess_base_setup_signals(char *input)
     }
 
     /* see what they asked for - ignore any duplicates */
-    signals = PMIX_ARGV_SPLIT_COMPAT(mysignals, ',');
+    signals = PMIx_Argv_split(mysignals, ',');
     for (i = 0; NULL != signals[i]; i++) {
         sval = 0;
         if (0 != strncasecmp(signals[i], "SIG", 3)) {
@@ -239,7 +239,7 @@ pmix_status_t prte_ess_base_setup_signals(char *input)
             if (0 != errno || '\0' != *tmp) {
                 pmix_show_help("help-ess-base.txt", "ess-base:unknown-signal", true,
                                signals[i], mysignals);
-                PMIX_ARGV_FREE_COMPAT(signals);
+                PMIx_Argv_free(signals);
                 return PMIX_ERR_SILENT;
             }
             // see if it's a known signal number
@@ -262,7 +262,7 @@ pmix_status_t prte_ess_base_setup_signals(char *input)
                     if (!known_signals[j].can_forward) {
                         pmix_show_help("help-ess-base.txt", "ess-base:cannot-forward", true,
                                        known_signals[j].signame, mysignals);
-                        PMIX_ARGV_FREE_COMPAT(signals);
+                        PMIx_Argv_free(signals);
                         return PMIX_ERR_SILENT;
                     }
                     found = true;
@@ -274,7 +274,7 @@ pmix_status_t prte_ess_base_setup_signals(char *input)
             if (!found) {
                 pmix_show_help("help-ess-base.txt", "ess-base:unknown-signal", true,
                                signals[i], mysignals);
-                PMIX_ARGV_FREE_COMPAT(signals);
+                PMIx_Argv_free(signals);
                 return PMIX_ERR_SILENT;
             }
         }
@@ -298,7 +298,7 @@ pmix_status_t prte_ess_base_setup_signals(char *input)
         ESS_ADDSIGNAL(sval, sname);
     }
 
-    PMIX_ARGV_FREE_COMPAT(signals);
+    PMIx_Argv_free(signals);
     return PMIX_SUCCESS;
 }
 
