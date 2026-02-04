@@ -5,7 +5,7 @@
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -90,7 +90,7 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
             continue;
         }
         /* add the hostname to the argv */
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&names, nptr->name);
+        PMIx_Argv_append_nosize(&names, nptr->name);
         als = NULL;
         if (NULL != nptr->aliases) {
             for (m=0; NULL != nptr->aliases[m]; m++) {
@@ -99,14 +99,14 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
                     0 == strcmp(nptr->aliases[m], "127.0.0.1")) {
                     continue;
                 }
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&als, nptr->aliases[m]);
+                PMIx_Argv_append_nosize(&als, nptr->aliases[m]);
             }
-            raw = PMIX_ARGV_JOIN_COMPAT(als, ',');
-            PMIX_ARGV_FREE_COMPAT(als);
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&aliases, raw);
+            raw = PMIx_Argv_join(als, ',');
+            PMIx_Argv_free(als);
+            PMIx_Argv_append_nosize(&aliases, raw);
             free(raw);
         } else {
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&aliases, "PRTENONE");
+            PMIx_Argv_append_nosize(&aliases, "PRTENONE");
         }
         /* store the vpid */
         vpids[ndaemons] = nptr->daemon->name.rank;
@@ -121,8 +121,8 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
     }
 
     /* construct the string of node names for compression */
-    raw = PMIX_ARGV_JOIN_COMPAT(names, ',');
-    PMIX_ARGV_FREE_COMPAT(names);
+    raw = PMIx_Argv_join(names, ',');
+    PMIx_Argv_free(names);
     if (PMIx_Data_compress((uint8_t *) raw, strlen(raw) + 1, (uint8_t **) &bo.bytes, &sz)) {
         /* mark that this was compressed */
         compressed = true;
@@ -153,8 +153,8 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
     free(bo.bytes);
 
     /* construct the string of aliases for compression */
-    raw = PMIX_ARGV_JOIN_COMPAT(aliases, ';');
-    PMIX_ARGV_FREE_COMPAT(aliases);
+    raw = PMIx_Argv_join(aliases, ';');
+    PMIx_Argv_free(aliases);
     if (PMIx_Data_compress((uint8_t *) raw, strlen(raw) + 1, (uint8_t **) &bo.bytes, &sz)) {
         /* mark that this was compressed */
         compressed = true;
@@ -286,7 +286,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         pbo.size = 0;
     }
     PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-    names = PMIX_ARGV_SPLIT_COMPAT(raw, ',');
+    names = PMIx_Argv_split(raw, ',');
     free(raw);
 
     /* unpack compression flag for node aliases */
@@ -319,7 +319,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         pbo.size = 0;
     }
     PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-    aliases = PMIX_ARGV_SPLIT_COMPAT(raw, ';');
+    aliases = PMIx_Argv_split(raw, ';');
     free(raw);
 
     /* unpack compression flag for daemon vpids */
@@ -384,9 +384,9 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
             }
             if (0 != strcmp(aliases[n], "PRTENONE")) {
                 if (NULL != nd->aliases) {
-                    PMIX_ARGV_FREE_COMPAT(nd->aliases);
+                    PMIx_Argv_free(nd->aliases);
                 }
-                nd->aliases = PMIX_ARGV_SPLIT_COMPAT(aliases[n], ',');
+                nd->aliases = PMIx_Argv_split(aliases[n], ',');
             }
             continue;
         }
@@ -397,7 +397,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         pmix_pointer_array_set_item(prte_node_pool, n, nd);
         /* add any aliases */
         if (0 != strcmp(aliases[n], "PRTENONE")) {
-            nd->aliases = PMIX_ARGV_SPLIT_COMPAT(aliases[n], ',');
+            nd->aliases = PMIx_Argv_split(aliases[n], ',');
         }
         /* set the topology - always default to homogeneous
          * as that is the most common scenario */
@@ -431,7 +431,7 @@ cleanup:
         free(vpid);
     }
     if (NULL != names) {
-        PMIX_ARGV_FREE_COMPAT(names);
+        PMIx_Argv_free(names);
     }
     return rc;
 }

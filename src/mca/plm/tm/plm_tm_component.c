@@ -16,7 +16,7 @@
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -104,7 +104,7 @@ static int plm_tm_open(void)
 static int plm_tm_close(void)
 {
     if (NULL != prte_mca_plm_tm_component.checked_paths) {
-        PMIX_ARGV_FREE_COMPAT(prte_mca_plm_tm_component.checked_paths);
+        PMIx_Argv_free(prte_mca_plm_tm_component.checked_paths);
     }
 
     return PRTE_SUCCESS;

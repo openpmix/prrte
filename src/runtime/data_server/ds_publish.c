@@ -15,7 +15,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2025      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -192,12 +192,12 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
                 }
             }
             if (!found) {
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&cache, req->keys[i]);
+                PMIx_Argv_append_nosize(&cache, req->keys[i]);
             }
         }
         // update the keys to remove all that have been resolved
-        if (0 < PMIX_ARGV_COUNT_COMPAT(cache)) {
-            PMIX_ARGV_FREE_COMPAT(req->keys);
+        if (0 < PMIx_Argv_count(cache)) {
+            PMIx_Argv_free(req->keys);
             req->keys = cache;
         } else {
             // if no keys are in the cache, then all keys were resolved
@@ -236,7 +236,7 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
             return rc;
         }
         /* if we found all of the requested keys, then indicate so */
-        if (n == (size_t) PMIX_ARGV_COUNT_COMPAT(req->keys)) {
+        if (n == (size_t) PMIx_Argv_count(req->keys)) {
             rc = PMIX_SUCCESS;
         } else {
             rc = PMIX_ERR_PARTIAL_SUCCESS;

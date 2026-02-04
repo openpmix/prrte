@@ -581,7 +581,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
     if (NULL != ptr) {
         *ptr = '\0';
         ++ptr;
-        quals = PMIX_ARGV_SPLIT_COMPAT(ptr, ':');
+        quals = PMIx_Argv_split(ptr, ':');
         for (i = 0; NULL != quals[i]; i++) {
             if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_IF_SUPP)) {
                 tmp |= PRTE_BIND_IF_SUPPORTED;
@@ -616,7 +616,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                     /* missing the value or value is invalid */
                     pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
                                    "binding limit", "LIMIT", quals[i]);
-                    PMIX_ARGV_FREE_COMPAT(quals);
+                    PMIx_Argv_free(quals);
                     return PRTE_ERR_SILENT;
                 }
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_BINDING_LIMIT, PRTE_ATTR_GLOBAL,
@@ -625,12 +625,12 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
             } else {
                 /* unknown option */
                 pmix_show_help("help-prte-hwloc-base.txt", "unrecognized-modifier", true, spec);
-                PMIX_ARGV_FREE_COMPAT(quals);
+                PMIx_Argv_free(quals);
                 free(myspec);
                 return PRTE_ERR_BAD_PARAM;
             }
         }
-        PMIX_ARGV_FREE_COMPAT(quals);
+        PMIx_Argv_free(quals);
     }
 
     if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_NONE)) {

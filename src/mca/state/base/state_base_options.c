@@ -190,7 +190,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
         }
 
     } else {
-        options = PMIX_ARGV_SPLIT_COMPAT(spec, ',');
+        options = PMIx_Argv_split(spec, ',');
         for (n=0; NULL != options[n]; n++) {
             /* see if there is an '=' */
             ptr = strchr(options[n], '=');
@@ -201,7 +201,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                     /* missing the value */
                     pmix_show_help("help-prte-rmaps-base.txt", "missing-value", true,
                                    "runtime options", options[n], "empty");
-                    PMIX_ARGV_FREE_COMPAT(options);
+                    PMIx_Argv_free(options);
                     return PRTE_ERR_BAD_PARAM;
                 }
             }
@@ -266,7 +266,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                     /* missing the value */
                     pmix_show_help("help-prte-rmaps-base.txt", "missing-value", true,
                                    "runtime options", options[n], "empty");
-                    PMIX_ARGV_FREE_COMPAT(options);
+                    PMIx_Argv_free(options);
                     return PRTE_ERR_BAD_PARAM;
                 }
                 i32 = strtol(ptr, NULL, 10);
@@ -363,7 +363,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                 return PRTE_ERR_SILENT;
             }
         }
-        PMIX_ARGV_FREE_COMPAT(options);
+        PMIx_Argv_free(options);
     }
     /* if notify-error is set but neither recovery nor continuous were specified,
      * then notifications will not be given as we will terminate the job upon

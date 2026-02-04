@@ -311,16 +311,16 @@ int prun(int argc, char *argv[])
         while (NULL != (param = pmix_getline(fp))) {
             if (!first) {
                 // add a colon delimiter
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&pargv, ":");
+                PMIx_Argv_append_nosize(&pargv, ":");
                 ++pargc;
             }
             // break the line down into parts
-            split = PMIX_ARGV_SPLIT_COMPAT(param, ' ');
+            split = PMIx_Argv_split(param, ' ');
             for (n=0; NULL != split[n]; n++) {
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&pargv, split[n]);
+                PMIx_Argv_append_nosize(&pargv, split[n]);
                 ++pargc;
             }
-            PMIX_ARGV_FREE_COMPAT(split);
+            PMIx_Argv_free(split);
             first = false;
         }
         fclose(fp);

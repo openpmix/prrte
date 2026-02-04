@@ -17,7 +17,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -341,7 +341,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
                                  "%s ras:slurm:allocate:discover: found node %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), base));
 
-            if (PRTE_SUCCESS != (ret = PMIX_ARGV_APPEND_NOSIZE_COMPAT(&names, base))) {
+            if (PRTE_SUCCESS != (ret = PMIx_Argv_append_nosize(&names, base))) {
                 PRTE_ERROR_LOG(ret);
                 free(orig);
                 return ret;
@@ -353,7 +353,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
 
     free(orig);
 
-    num_nodes = PMIX_ARGV_COUNT_COMPAT(names);
+    num_nodes = PMIx_Argv_count(names);
 
     /* Find the number of slots per node */
 
@@ -439,7 +439,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
         pmix_list_append(nodelist, &node->super);
     }
     free(slots);
-    PMIX_ARGV_FREE_COMPAT(names);
+    PMIx_Argv_free(names);
 
     /* All done */
     return ret;
@@ -585,7 +585,7 @@ static int prte_ras_slurm_parse_range(char *base, char *range, char ***names)
             str[j] = '\0';
         }
         strcat(str, temp1);
-        ret = PMIX_ARGV_APPEND_NOSIZE_COMPAT(names, str);
+        ret = PMIx_Argv_append_nosize(names, str);
         if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             free(str);

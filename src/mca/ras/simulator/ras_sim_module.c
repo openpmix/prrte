@@ -5,7 +5,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  *
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -62,32 +62,32 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     bool use_hwthread_cpus = false;
     hwloc_cpuset_t available;
 
-    node_cnt = PMIX_ARGV_SPLIT_COMPAT(prte_mca_ras_simulator_component.num_nodes, ',');
-    num_nodes = PMIX_ARGV_COUNT_COMPAT(node_cnt);
+    node_cnt = PMIx_Argv_split(prte_mca_ras_simulator_component.num_nodes, ',');
+    num_nodes = PMIx_Argv_count(node_cnt);
 
     if (NULL != prte_mca_ras_simulator_component.slots) {
-        slot_cnt = PMIX_ARGV_SPLIT_COMPAT(prte_mca_ras_simulator_component.slots, ',');
+        slot_cnt = PMIx_Argv_split(prte_mca_ras_simulator_component.slots, ',');
         /* if they didn't provide a slot count for each node, then
          * backfill the slot_cnt so every node has a cnt */
-        nslots = PMIX_ARGV_COUNT_COMPAT(slot_cnt);
+        nslots = PMIx_Argv_count(slot_cnt);
         if (nslots < num_nodes) {
             // take the last one given and extend it to cover remaining nodes
             tmp = slot_cnt[nslots - 1];
             for (n = nslots; n < num_nodes; n++) {
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&slot_cnt, tmp);
+                PMIx_Argv_append_nosize(&slot_cnt, tmp);
             }
         }
     }
     if (NULL != prte_mca_ras_simulator_component.slots_max) {
-        max_slot_cnt = PMIX_ARGV_SPLIT_COMPAT(prte_mca_ras_simulator_component.slots_max, ',');
+        max_slot_cnt = PMIx_Argv_split(prte_mca_ras_simulator_component.slots_max, ',');
         /* if they didn't provide a max slot count for each node, then
          * backfill the slot_cnt so every node has a cnt */
-        nslots = PMIX_ARGV_COUNT_COMPAT(max_slot_cnt);
+        nslots = PMIx_Argv_count(max_slot_cnt);
          if (nslots < num_nodes) {
             // take the last one given and extend it to cover remaining nodes
             tmp = max_slot_cnt[nslots - 1];
             for (n = nslots; n < num_nodes; n++) {
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&max_slot_cnt, tmp);
+                PMIx_Argv_append_nosize(&max_slot_cnt, tmp);
             }
         }
     }
@@ -169,12 +169,12 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
                        NULL, PMIX_BOOL);
 
     if (NULL != max_slot_cnt) {
-        PMIX_ARGV_FREE_COMPAT(max_slot_cnt);
+        PMIx_Argv_free(max_slot_cnt);
     }
     if (NULL != slot_cnt) {
-        PMIX_ARGV_FREE_COMPAT(slot_cnt);
+        PMIx_Argv_free(slot_cnt);
     }
-    PMIX_ARGV_FREE_COMPAT(node_cnt);
+    PMIx_Argv_free(node_cnt);
     if (NULL != job_cpuset) {
         free(job_cpuset);
     }

@@ -15,7 +15,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2025      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -307,7 +307,7 @@ static void rqcon(prte_data_req_t *p)
 }
 static void rqdes(prte_data_req_t *p)
 {
-    PMIX_ARGV_FREE_COMPAT(p->keys);
+    PMIx_Argv_free(p->keys);
 }
 PMIX_CLASS_INSTANCE(prte_data_req_t,
                     pmix_list_item_t,

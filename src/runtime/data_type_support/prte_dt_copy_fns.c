@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -97,8 +97,8 @@ int prte_app_copy(prte_app_context_t **dest, prte_app_context_t *src)
         (*dest)->app = strdup(src->app);
     }
     (*dest)->num_procs = src->num_procs;
-    (*dest)->argv = PMIX_ARGV_COPY_COMPAT(src->argv);
-    (*dest)->env = PMIX_ARGV_COPY_COMPAT(src->env);
+    (*dest)->argv = PMIx_Argv_copy(src->argv);
+    (*dest)->env = PMIx_Argv_copy(src->env);
     if (NULL != src->cwd) {
         (*dest)->cwd = strdup(src->cwd);
     }

@@ -16,7 +16,7 @@
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -127,9 +127,9 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
         } else {
             value = prte_util_hostfile_value.sval;
         }
-        argv = PMIX_ARGV_SPLIT_COMPAT(value, '@');
+        argv = PMIx_Argv_split(value, '@');
 
-        cnt = PMIX_ARGV_COUNT_COMPAT(argv);
+        cnt = PMIx_Argv_count(argv);
         if (1 == cnt) {
             node_name = strdup(argv[0]);
         } else if (2 == cnt) {
@@ -137,10 +137,10 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             node_name = strdup(argv[1]);
         } else {
             pmix_output(0, "WARNING: Unhandled user@host-combination - %s\n", value); /* XXX */
-            PMIX_ARGV_FREE_COMPAT(argv);
+            PMIx_Argv_free(argv);
             return PRTE_ERROR;
         }
-        PMIX_ARGV_FREE_COMPAT(argv);
+        PMIx_Argv_free(argv);
 
         if (!prte_keep_fqdn_hostnames) {
             // Strip off the FQDN if present, ignore IP addresses
@@ -193,18 +193,18 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
                 }
                 if (NULL != alias && 0 != strcmp(alias, node->name)) {
                     // new node object, so alias must be unique
-                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&node->aliases, alias);
+                    PMIx_Argv_append_nosize(&node->aliases, alias);
                 }
                 pmix_list_append(exclude, &node->super);
             } else {
                 /* the node name may not match the prior entry, so ensure we
                  * keep it if necessary */
                 if (0 != strcmp(node_name, node->name)) {
-                    PMIX_ARGV_APPEND_UNIQUE_COMPAT(&node->aliases, node_name);
+                    PMIx_Argv_append_unique_nosize(&node->aliases, node_name);
                 }
                 free(node_name);
                 if (NULL != alias && 0 != strcmp(alias, node->name)) {
-                    PMIX_ARGV_APPEND_UNIQUE_COMPAT(&node->aliases, alias);
+                    PMIx_Argv_append_unique_nosize(&node->aliases, alias);
                 }
             }
             if (NULL != alias) {
@@ -251,7 +251,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             }
             if (NULL != alias && 0 != strcmp(alias, node->name)) {
                 // new node object, so alias must be unique
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&node->aliases, alias);
+                PMIx_Argv_append_nosize(&node->aliases, alias);
             }
             pmix_list_append(updates, &node->super);
         } else {
@@ -261,11 +261,11 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             /* the node name may not match the prior entry, so ensure we
              * keep it if necessary */
             if (0 != strcmp(node_name, node->name)) {
-                PMIX_ARGV_APPEND_UNIQUE_COMPAT(&node->aliases, node_name);
+                PMIx_Argv_append_unique_nosize(&node->aliases, node_name);
             }
             free(node_name);
             if (NULL != alias && 0 != strcmp(alias, node->name)) {
-                PMIX_ARGV_APPEND_UNIQUE_COMPAT(&node->aliases, alias);
+                PMIx_Argv_append_unique_nosize(&node->aliases, alias);
             }
         }
         if (NULL != alias) {
@@ -295,7 +295,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
         }
         if (NULL != alias && 0 != strcmp(alias, node->name)) {
             // new node object, so alias must be unique
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&node->aliases, alias);
+            PMIx_Argv_append_nosize(&node->aliases, alias);
         }
         pmix_list_append(updates, &node->super);
         if (NULL != alias) {
@@ -324,9 +324,9 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             value = prte_util_hostfile_value.sval;
         }
 
-        argv = PMIX_ARGV_SPLIT_COMPAT(value, '@');
+        argv = PMIx_Argv_split(value, '@');
 
-        cnt = PMIX_ARGV_COUNT_COMPAT(argv);
+        cnt = PMIx_Argv_count(argv);
         if (1 == cnt) {
             node_name = strdup(argv[0]);
         } else if (2 == cnt) {
@@ -334,10 +334,10 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             node_name = strdup(argv[1]);
         } else {
             pmix_output(0, "WARNING: Unhandled user@host-combination - %s\n", value); /* XXX */
-            PMIX_ARGV_FREE_COMPAT(argv);
+            PMIx_Argv_free(argv);
             return PRTE_ERROR;
         }
-        PMIX_ARGV_FREE_COMPAT(argv);
+        PMIx_Argv_free(argv);
 
         // Strip off the FQDN if present, ignore IP addresses
         if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(node_name)) {
@@ -364,11 +364,11 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             /* the node name may not match the prior entry, so ensure we
              * keep it if necessary */
             if (0 != strcmp(node_name, node->name)) {
-                PMIX_ARGV_APPEND_UNIQUE_COMPAT(&node->aliases, node_name);
+                PMIx_Argv_append_unique_nosize(&node->aliases, node_name);
             }
         }
         if (NULL != alias) {
-            PMIX_ARGV_APPEND_UNIQUE_COMPAT(&node->aliases, alias);
+            PMIx_Argv_append_unique_nosize(&node->aliases, alias);
             free(alias);
             node->rawname = strdup(node_name);
             alias = NULL;
@@ -645,11 +645,11 @@ int prte_util_add_hostfile_nodes(pmix_list_t *nodes, char *hostfile)
         }
         if (found) {
             /* add this node name as alias */
-            PMIX_ARGV_APPEND_UNIQUE_COMPAT(&node->aliases, nd->name);
+            PMIx_Argv_append_unique_nosize(&node->aliases, nd->name);
             /* ensure all other aliases are also transferred */
             if (NULL != nd->aliases) {
                 for (i=0; NULL != nd->aliases[i]; i++) {
-                    PMIX_ARGV_APPEND_UNIQUE_COMPAT(&node->aliases, nd->aliases[i]);
+                    PMIx_Argv_append_unique_nosize(&node->aliases, nd->aliases[i]);
                 }
             }
            PMIX_RELEASE(item);

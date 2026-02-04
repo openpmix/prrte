@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -150,7 +150,7 @@ int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job)
             PMIX_RELEASE(jptr);
             return prte_pmix_convert_status(rc);
         }
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&jptr->personality, tmp);
+        PMIx_Argv_append_nosize(&jptr->personality, tmp);
         free(tmp);
     }
 
@@ -560,7 +560,7 @@ int prte_app_unpack(pmix_data_buffer_t *bkt, prte_app_context_t **ap)
             PMIX_RELEASE(app);
             return prte_pmix_convert_status(rc);
         }
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&app->argv, tmp);
+        PMIx_Argv_append_nosize(&app->argv, tmp);
         free(tmp);
     }
 
@@ -580,7 +580,7 @@ int prte_app_unpack(pmix_data_buffer_t *bkt, prte_app_context_t **ap)
             PMIX_RELEASE(app);
             return prte_pmix_convert_status(rc);
         }
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&app->env, tmp);
+        PMIx_Argv_append_nosize(&app->env, tmp);
         free(tmp);
     }
 

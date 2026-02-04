@@ -555,8 +555,8 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
                 } else {
                     value = prte_rmaps_rank_file_value.sval;
                 }
-                argv = PMIX_ARGV_SPLIT_COMPAT(value, '@');
-                cnt = PMIX_ARGV_COUNT_COMPAT(argv);
+                argv = PMIx_Argv_split(value, '@');
+                cnt = PMIx_Argv_count(argv);
                 if (NULL != node_name) {
                     free(node_name);
                 }
@@ -568,11 +568,11 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
                     pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
                     rc = PRTE_ERR_BAD_PARAM;
                     PRTE_ERROR_LOG(rc);
-                    PMIX_ARGV_FREE_COMPAT(argv);
+                    PMIx_Argv_free(argv);
                     node_name = NULL;
                     goto unlock;
                 }
-                PMIX_ARGV_FREE_COMPAT(argv);
+                PMIx_Argv_free(argv);
 
                 // Strip off the FQDN if present, ignore IP addresses
                 if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(node_name)) {

@@ -17,7 +17,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      NVIDIA Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -118,15 +118,15 @@ int prte_util_init_sys_limits(char **errmsg)
     }
 
     /* parse the requested limits to set */
-    lims = PMIX_ARGV_SPLIT_COMPAT(prte_set_max_sys_limits, ',');
+    lims = PMIx_Argv_split(prte_set_max_sys_limits, ',');
     if (NULL == lims) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
     /* each limit is expressed as a "param:value" pair */
     for (i = 0; NULL != lims[i]; i++) {
-        lim = PMIX_ARGV_SPLIT_COMPAT(lims[i], ':');
-        if (1 == PMIX_ARGV_COUNT_COMPAT(lim)) {
+        lim = PMIx_Argv_split(lims[i], ':');
+        if (1 == PMIx_Argv_count(lim)) {
             setlim = "max";
         } else {
             setlim = lim[1];
@@ -224,7 +224,7 @@ int prte_util_init_sys_limits(char **errmsg)
                                             lim[0], setlim);
             goto out;
         }
-        PMIX_ARGV_FREE_COMPAT(lim);
+        PMIx_Argv_free(lim);
         lim = NULL;
     }
 
@@ -234,9 +234,9 @@ int prte_util_init_sys_limits(char **errmsg)
     rc = PRTE_SUCCESS;
 
 out:
-    PMIX_ARGV_FREE_COMPAT(lims);
+    PMIx_Argv_free(lims);
     if (NULL != lim) {
-        PMIX_ARGV_FREE_COMPAT(lim);
+        PMIx_Argv_free(lim);
     }
 
     return rc;

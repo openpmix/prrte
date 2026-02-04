@@ -165,12 +165,12 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             tmp = NULL;
             vpid = PMIX_RANK_VALID;
             ui32 = 0;
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, node->name);
+            PMIx_Argv_append_nosize(&list, node->name);
             /* assemble all the ranks for this job that are on this node */
             for (k = 0; k < node->procs->size; k++) {
                 if (NULL != (pptr = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, k))) {
                     if (PMIX_CHECK_NSPACE(jdata->nspace, pptr->name.nspace)) {
-                        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&micro, PRTE_VPID_PRINT(pptr->name.rank));
+                        PMIx_Argv_append_nosize(&micro, PRTE_VPID_PRINT(pptr->name.rank));
                         if (pptr->name.rank < vpid) {
                             vpid = pptr->name.rank;
                         }
@@ -196,9 +196,9 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             }
             /* assemble the rank/node map */
             if (NULL != micro) {
-                tmp = PMIX_ARGV_JOIN_COMPAT(micro, ',');
-                PMIX_ARGV_FREE_COMPAT(micro);
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&procs, tmp);
+                tmp = PMIx_Argv_join(micro, ',');
+                PMIx_Argv_free(micro);
+                PMIx_Argv_append_nosize(&procs, tmp);
             }
             /* construct the node info array */
             PMIX_INFO_LIST_START(iarray);
@@ -206,7 +206,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             PMIX_INFO_LIST_ADD(ret, iarray, PMIX_HOSTNAME, node->name, PMIX_STRING);
             /* add any aliases */
             if (NULL != node->aliases) {
-                regex = PMIX_ARGV_JOIN_COMPAT(node->aliases, ',');
+                regex = PMIx_Argv_join(node->aliases, ',');
                 PMIX_INFO_LIST_ADD(ret, iarray, PMIX_HOSTNAME_ALIASES, regex, PMIX_STRING);
                 free(regex);
             }
@@ -236,8 +236,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     }
     /* let the PMIx server generate the nodemap regex */
     if (NULL != list) {
-        tmp = PMIX_ARGV_JOIN_COMPAT(list, ',');
-        PMIX_ARGV_FREE_COMPAT(list);
+        tmp = PMIx_Argv_join(list, ',');
+        PMIx_Argv_free(list);
         list = NULL;
         if (PMIX_SUCCESS != (ret = PMIx_generate_regex(tmp, &regex))) {
             PMIX_ERROR_LOG(ret);
@@ -253,8 +253,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
 
     /* let the PMIx server generate the procmap regex */
     if (NULL != procs) {
-        tmp = PMIX_ARGV_JOIN_COMPAT(procs, ';');
-        PMIX_ARGV_FREE_COMPAT(procs);
+        tmp = PMIx_Argv_join(procs, ';');
+        PMIx_Argv_free(procs);
         procs = NULL;
         if (PMIX_SUCCESS != (ret = PMIx_generate_ppn(tmp, &regex))) {
             PMIX_ERROR_LOG(ret);
@@ -379,7 +379,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         /* add the wdir */
         PMIX_INFO_LIST_ADD(ret, iarray, PMIX_WDIR, app->cwd, PMIX_STRING);
         /* add the argv */
-        tmp = PMIX_ARGV_JOIN_COMPAT(app->argv, ' ');
+        tmp = PMIx_Argv_join(app->argv, ' ');
         PMIX_INFO_LIST_ADD(ret, iarray, PMIX_APP_ARGV, tmp, PMIX_STRING);
         free(tmp);
         /* add the pset name */
