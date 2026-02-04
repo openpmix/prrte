@@ -17,7 +17,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -191,7 +191,7 @@ static int rte_init(int argc, char **argv)
     /* every job requires at least one app */
     app = PMIX_NEW(prte_app_context_t);
     app->app = strdup(argv[0]);
-    app->argv = PMIX_ARGV_COPY_COMPAT(argv);
+    app->argv = PMIx_Argv_copy(argv);
     app->job = (struct prte_job_t*)jdata;
     pmix_pointer_array_set_item(jdata->apps, 0, app);
     jdata->num_apps++;
@@ -255,7 +255,7 @@ static int rte_init(int argc, char **argv)
     pmix_ifgetaliases(&prte_process_info.aliases);
 
     /* get our aliases - will include all the interface aliases captured in prte_init */
-    node->aliases = PMIX_ARGV_COPY_COMPAT(prte_process_info.aliases);
+    node->aliases = PMIx_Argv_copy(prte_process_info.aliases);
 
     /* if we are using xml for output, put a start tag */
     if (prte_xml_output) {

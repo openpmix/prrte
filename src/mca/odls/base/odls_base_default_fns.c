@@ -281,20 +281,20 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
     for (i = 0; i < map->nodes->size; i++) {
         micro = NULL;
         if (NULL != (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, i))) {
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, node->name);
+            PMIx_Argv_append_nosize(&list, node->name);
             /* assemble all the ranks for this job that are on this node */
             for (k = 0; k < node->procs->size; k++) {
                 if (NULL != (pptr = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, k))) {
                     if (PMIX_CHECK_NSPACE(jdata->nspace, pptr->name.nspace)) {
-                        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&micro, PRTE_VPID_PRINT(pptr->name.rank));
+                        PMIx_Argv_append_nosize(&micro, PRTE_VPID_PRINT(pptr->name.rank));
                     }
                 }
             }
             /* assemble the rank/node map */
             if (NULL != micro) {
-                tmp = PMIX_ARGV_JOIN_COMPAT(micro, ',');
-                PMIX_ARGV_FREE_COMPAT(micro);
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&procs, tmp);
+                tmp = PMIx_Argv_join(micro, ',');
+                PMIx_Argv_free(micro);
+                PMIx_Argv_append_nosize(&procs, tmp);
                 free(tmp);
             }
         }
@@ -302,8 +302,8 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
 
     /* let the PMIx server generate the nodemap regex */
     if (NULL != list) {
-        tmp = PMIX_ARGV_JOIN_COMPAT(list, ',');
-        PMIX_ARGV_FREE_COMPAT(list);
+        tmp = PMIx_Argv_join(list, ',');
+        PMIx_Argv_free(list);
         list = NULL;
         if (PMIX_SUCCESS != (ret = PMIx_generate_regex(tmp, &regex))) {
             PMIX_ERROR_LOG(ret);
@@ -318,8 +318,8 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
 
     /* let the PMIx server generate the procmap regex */
     if (NULL != procs) {
-        tmp = PMIX_ARGV_JOIN_COMPAT(procs, ';');
-        PMIX_ARGV_FREE_COMPAT(procs);
+        tmp = PMIx_Argv_join(procs, ';');
+        PMIx_Argv_free(procs);
         procs = NULL;
         if (PMIX_SUCCESS != (ret = PMIx_generate_ppn(tmp, &regex))) {
             PMIX_ERROR_LOG(ret);
@@ -334,7 +334,7 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
 
     /* add in the personality */
     if (NULL != jdata->personality) {
-        tmp = PMIX_ARGV_JOIN_COMPAT(jdata->personality, ',');
+        tmp = PMIx_Argv_join(jdata->personality, ',');
         PMIX_INFO_LIST_ADD(ret, ilist, PMIX_PERSONALITY, tmp, PMIX_STRING);
         free(tmp);
     }
@@ -601,7 +601,7 @@ next:
         }
         /* get the associated schizo module */
         if (NULL != jdata->personality) {
-            tmp = PMIX_ARGV_JOIN_COMPAT(jdata->personality, ',');
+            tmp = PMIx_Argv_join(jdata->personality, ',');
         } else {
             tmp = NULL;
         }
@@ -849,7 +849,7 @@ static int setup_path(prte_app_context_t *app, char **wdir)
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
         *wdir = strdup(dir);
-        PMIX_SETENV_COMPAT("PWD", dir, true, &app->env);
+        PMIx_Setenv("PWD", dir, true, &app->env);
     } else {
         /* Try to change to the app's cwd and check that the app
            exists and is executable The function will
@@ -881,7 +881,7 @@ static int setup_path(prte_app_context_t *app, char **wdir)
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
         *wdir = strdup(dir);
-        PMIX_SETENV_COMPAT("PWD", dir, true, &app->env);
+        PMIx_Setenv("PWD", dir, true, &app->env);
     }
 
 CLEANUP:
@@ -967,7 +967,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     PRTE_FLAG_UNSET(child, PRTE_PROC_FLAG_WAITPID);
 
     /* setup the pmix environment */
-    cd->env = PMIX_ARGV_COPY_COMPAT(app->env);
+    cd->env = PMIx_Argv_copy(app->env);
     PMIX_LOAD_PROCID(&pproc, child->name.nspace, child->name.rank);
     if (PMIX_SUCCESS != (ret = PMIx_server_setup_fork(&pproc, &cd->env))) {
         PMIX_ERROR_LOG(ret);
@@ -1003,13 +1003,13 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
             if (PMIX_RANK_WILDCARD == nm->name.rank || child->name.rank == nm->name.rank) {
                 /* we want this one - modify the app's command to include
                  * the prte xterm cmd that starts with the xtermcmd */
-                cd->argv = PMIX_ARGV_COPY_COMPAT(prte_odls_globals.xtermcmd);
+                cd->argv = PMIx_Argv_copy(prte_odls_globals.xtermcmd);
                 /* insert the rank into the correct place as a window title */
                 free(cd->argv[2]);
                 pmix_asprintf(&cd->argv[2], "Rank %s", PRTE_VPID_PRINT(child->name.rank));
                 /* add in the argv from the app */
                 for (i = 0; NULL != app->argv[i]; i++) {
-                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&cd->argv, app->argv[i]);
+                    PMIx_Argv_append_nosize(&cd->argv, app->argv[i]);
                 }
                 /* use the xterm cmd as the app string */
                 cd->cmd = strdup(prte_odls_globals.xtermcmd[0]);
@@ -1025,14 +1025,14 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         }
         if (!found) {
             cd->cmd = strdup(app->app);
-            cd->argv = PMIX_ARGV_COPY_COMPAT(app->argv);
+            cd->argv = PMIx_Argv_copy(app->argv);
         }
     } else if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_EXEC_AGENT, (void**)&ptr, PMIX_STRING)) {
         /* we were given a fork agent - use it */
-        cd->argv = PMIX_ARGV_SPLIT_COMPAT(ptr, ' ');
+        cd->argv = PMIx_Argv_split(ptr, ' ');
         /* add in the argv from the app */
         for (i = 0; NULL != app->argv[i]; i++) {
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&cd->argv, app->argv[i]);
+            PMIx_Argv_append_nosize(&cd->argv, app->argv[i]);
         }
         cd->cmd = pmix_path_findv(cd->argv[0], X_OK, prte_launch_environ, NULL);
         if (NULL == cd->cmd) {
@@ -1045,10 +1045,10 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         free(ptr);
     } else if (NULL != prte_odls_globals.exec_agent) {
         /* we were given a fork agent - use it */
-        cd->argv = PMIX_ARGV_SPLIT_COMPAT(prte_odls_globals.exec_agent, ' ');
+        cd->argv = PMIx_Argv_split(prte_odls_globals.exec_agent, ' ');
         /* add in the argv from the app */
         for (i = 0; NULL != app->argv[i]; i++) {
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&cd->argv, app->argv[i]);
+            PMIx_Argv_append_nosize(&cd->argv, app->argv[i]);
         }
         cd->cmd = pmix_path_findv(cd->argv[0], X_OK, prte_launch_environ, NULL);
         if (NULL == cd->cmd) {
@@ -1059,7 +1059,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         }
     } else {
         cd->cmd = strdup(app->app);
-        cd->argv = PMIX_ARGV_COPY_COMPAT(app->argv);
+        cd->argv = PMIx_Argv_copy(app->argv);
     }
 
     /* if we are indexing the argv by rank, do so now */
@@ -1125,10 +1125,10 @@ static void process_envars(prte_job_t *jdata,
         val = &attr->data;
         envar = &val->data.envar;
         if (attr->key == PRTE_JOB_SET_ENVAR) {
-            PMIX_SETENV_COMPAT(envar->envar, envar->value, true, &app->env);
+            PMIx_Setenv(envar->envar, envar->value, true, &app->env);
 
         } else if (attr->key == PRTE_JOB_ADD_ENVAR) {
-            PMIX_SETENV_COMPAT(envar->envar, envar->value, true, &app->env);
+            PMIx_Setenv(envar->envar, envar->value, true, &app->env);
 
         } else if (attr->key == PRTE_JOB_UNSET_ENVAR) {
             // need to support the wildcard here
@@ -1168,7 +1168,7 @@ static void process_envars(prte_job_t *jdata,
             }
             if (!found) {
                 // didn't find it
-                PMIX_SETENV_COMPAT(envar->envar, envar->value, true, &app->env);
+                PMIx_Setenv(envar->envar, envar->value, true, &app->env);
             }
 
         } else if (attr->key == PRTE_JOB_APPEND_ENVAR) {
@@ -1189,7 +1189,7 @@ static void process_envars(prte_job_t *jdata,
             }
             if (!found) {
                 // didn't find it
-                PMIX_SETENV_COMPAT(envar->envar, envar->value, true, &app->env);
+                PMIx_Setenv(envar->envar, envar->value, true, &app->env);
             }
         }
     }
@@ -1202,10 +1202,10 @@ static void process_envars(prte_job_t *jdata,
         val = &attr->data;
         envar = &val->data.envar;
         if (attr->key == PRTE_APP_SET_ENVAR) {
-            PMIX_SETENV_COMPAT(envar->envar, envar->value, true, &app->env);
+            PMIx_Setenv(envar->envar, envar->value, true, &app->env);
 
         } else if (attr->key == PRTE_APP_ADD_ENVAR) {
-            PMIX_SETENV_COMPAT(envar->envar, envar->value, true, &app->env);
+            PMIx_Setenv(envar->envar, envar->value, true, &app->env);
 
         } else if (attr->key == PRTE_APP_UNSET_ENVAR) {
             pmix_unsetenv(envar->envar, &app->env);
@@ -1228,7 +1228,7 @@ static void process_envars(prte_job_t *jdata,
             }
             if (!found) {
                 // didn't find it
-                PMIX_SETENV_COMPAT(envar->envar, envar->value, true, &app->env);
+                PMIx_Setenv(envar->envar, envar->value, true, &app->env);
             }
 
         } else if (attr->key == PRTE_APP_APPEND_ENVAR) {
@@ -1249,7 +1249,7 @@ static void process_envars(prte_job_t *jdata,
             }
             if (!found) {
                 // didn't find it
-                PMIX_SETENV_COMPAT(envar->envar, envar->value, true, &app->env);
+                PMIx_Setenv(envar->envar, envar->value, true, &app->env);
             }
         }
     }
@@ -1400,10 +1400,10 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
 
         /* setup the environment for this app */
         if (NULL == app->env) {
-            app->env = PMIX_ARGV_COPY_COMPAT(prte_launch_environ);
+            app->env = PMIx_Argv_copy(prte_launch_environ);
         } else {
             xfer = pmix_environ_merge(prte_launch_environ, app->env);
-            PMIX_ARGV_FREE_COMPAT(app->env);
+            PMIx_Argv_free(app->env);
             app->env = xfer;
         }
 

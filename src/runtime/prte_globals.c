@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -588,12 +588,12 @@ static void prte_app_context_destructor(prte_app_context_t *app_context)
 
     /* argv and env lists created by util/argv copy functions */
     if (NULL != app_context->argv) {
-        PMIX_ARGV_FREE_COMPAT(app_context->argv);
+        PMIx_Argv_free(app_context->argv);
         app_context->argv = NULL;
     }
 
     if (NULL != app_context->env) {
-        PMIX_ARGV_FREE_COMPAT(app_context->env);
+        PMIx_Argv_free(app_context->env);
         app_context->env = NULL;
     }
 
@@ -668,7 +668,7 @@ static void prte_job_destruct(prte_job_t *job)
     }
 
     if (NULL != job->personality) {
-        PMIX_ARGV_FREE_COMPAT(job->personality);
+        PMIx_Argv_free(job->personality);
     }
 
     for (n = 0; n < job->apps->size; n++) {
@@ -741,7 +741,7 @@ static void prte_job_destruct(prte_job_t *job)
         pmix_pointer_array_set_item(prte_job_data, job->index, NULL);
     }
     if (NULL != job->traces) {
-        PMIX_ARGV_FREE_COMPAT(job->traces);
+        PMIx_Argv_free(job->traces);
     }
     PMIX_DESTRUCT(&job->cli);
 }
@@ -792,7 +792,7 @@ static void prte_node_destruct(prte_node_t *node)
         node->rawname = NULL;
     }
     if (NULL != node->aliases) {
-        PMIX_ARGV_FREE_COMPAT(node->aliases);
+        PMIx_Argv_free(node->aliases);
         node->aliases = NULL;
     }
     if (NULL != node->daemon) {

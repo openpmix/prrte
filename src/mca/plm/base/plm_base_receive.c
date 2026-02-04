@@ -17,7 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -312,9 +312,9 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
 
         /* assign a schizo module */
         if (NULL == jdata->personality) {
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&jdata->personality, "prte");
+            PMIx_Argv_append_nosize(&jdata->personality, "prte");
         }
-        tmp = PMIX_ARGV_JOIN_COMPAT(jdata->personality, ',');
+        tmp = PMIx_Argv_join(jdata->personality, ',');
         jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(tmp);
         if (NULL == jdata->schizo) {
             pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, tmp);

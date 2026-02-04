@@ -20,7 +20,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -350,9 +350,9 @@ char **prte_plm_ssh_search(const char *agent_list, const char *path)
         pmix_string_copy(cwd, path, PRTE_PATH_MAX);
     }
     if (NULL == agent_list) {
-        lines = PMIX_ARGV_SPLIT_COMPAT(prte_mca_plm_ssh_component.agent, ':');
+        lines = PMIx_Argv_split(prte_mca_plm_ssh_component.agent, ':');
     } else {
-        lines = PMIX_ARGV_SPLIT_COMPAT(agent_list, ':');
+        lines = PMIx_Argv_split(agent_list, ':');
     }
     for (i = 0; NULL != lines[i]; ++i) {
         line = lines[i];
@@ -369,23 +369,23 @@ char **prte_plm_ssh_search(const char *agent_list, const char *path)
         }
 
         /* Split it */
-        tokens = PMIX_ARGV_SPLIT_COMPAT(line, ' ');
+        tokens = PMIx_Argv_split(line, ' ');
 
         /* Look for the first token in the PATH */
         tmp = pmix_path_findv(tokens[0], X_OK, environ, cwd);
         if (NULL != tmp) {
             free(tokens[0]);
             tokens[0] = tmp;
-            PMIX_ARGV_FREE_COMPAT(lines);
+            PMIx_Argv_free(lines);
             return tokens;
         }
 
         /* Didn't find it */
-        PMIX_ARGV_FREE_COMPAT(tokens);
+        PMIx_Argv_free(tokens);
     }
 
     /* Doh -- didn't find anything */
-    PMIX_ARGV_FREE_COMPAT(lines);
+    PMIx_Argv_free(lines);
     return NULL;
 }
 
@@ -424,7 +424,7 @@ static int ssh_launch_agent_lookup(const char *agent_list, char *path)
     if (0 == strcmp(bname, "ssh")) {
         /* if xterm option was given, add '-X', ensuring we don't do it twice */
         if (NULL != prte_xterm) {
-            PMIX_ARGV_APPEND_UNIQUE_COMPAT(&prte_mca_plm_ssh_component.agent_argv, "-X");
+            PMIx_Argv_append_unique_nosize(&prte_mca_plm_ssh_component.agent_argv, "-X");
         } else if (0 >= pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
             /* if debug was not specified, and the user didn't explicitly
              * specify X11 forwarding/non-forwarding, add "-x" if it
@@ -436,7 +436,7 @@ static int ssh_launch_agent_lookup(const char *agent_list, char *path)
                 }
             }
             if (NULL == prte_mca_plm_ssh_component.agent_argv[i]) {
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_mca_plm_ssh_component.agent_argv, "-x");
+                PMIx_Argv_append_nosize(&prte_mca_plm_ssh_component.agent_argv, "-x");
             }
         }
     }

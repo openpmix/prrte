@@ -17,7 +17,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -274,14 +274,14 @@ int main(int argc, char **argv)
         PMIX_ARGV_APPEND_COMPAT(&atmp, tmp);
         free(tmp);
     }
-    tmp = PMIX_ARGV_JOIN_COMPAT(atmp, ',');
-    PMIX_ARGV_FREE_COMPAT(atmp);
+    tmp = PMIx_Argv_join(atmp, ',');
+    PMIx_Argv_free(atmp);
     /* register the nspace */
     x = PMIX_NEW(myxfer_t);
     set_namespace(nprocs, tmp, "foobar", opcbfunc, x);
 
     /* set common argv and env */
-    client_env = PMIX_ARGV_COPY_COMPAT(environ);
+    client_env = PMIx_Argv_copy(environ);
     pmix_argv_prepend_nosize(&client_argv, executable);
 
     wakeup = nprocs;
@@ -345,8 +345,8 @@ int main(int argc, char **argv)
         }
     }
     free(executable);
-    PMIX_ARGV_FREE_COMPAT(client_argv);
-    PMIX_ARGV_FREE_COMPAT(client_env);
+    PMIx_Argv_free(client_argv);
+    PMIx_Argv_free(client_env);
 
     /* hang around until the client(s) finalize */
     while (0 < wakeup) {

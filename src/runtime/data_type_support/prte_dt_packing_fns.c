@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -126,7 +126,7 @@ int prte_job_pack(pmix_data_buffer_t *bkt, prte_job_t *job)
     }
 
     /* pack the personality */
-    count = PMIX_ARGV_COUNT_COMPAT(job->personality);
+    count = PMIx_Argv_count(job->personality);
     rc = PMIx_Data_pack(NULL, bkt, (void *) &count, 1, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
@@ -470,7 +470,7 @@ int prte_app_pack(pmix_data_buffer_t *bkt, prte_app_context_t *app)
     }
 
     /* pack the number of entries in the argv array */
-    count = PMIX_ARGV_COUNT_COMPAT(app->argv);
+    count = PMIx_Argv_count(app->argv);
     rc = PMIx_Data_pack(NULL, bkt, &count, 1, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
@@ -487,7 +487,7 @@ int prte_app_pack(pmix_data_buffer_t *bkt, prte_app_context_t *app)
     }
 
     /* pack the number of entries in the enviro array */
-    count = PMIX_ARGV_COUNT_COMPAT(app->env);
+    count = PMIx_Argv_count(app->env);
     rc = PMIx_Data_pack(NULL, bkt, &count, 1, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);

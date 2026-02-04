@@ -8,7 +8,7 @@
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -169,7 +169,7 @@ static int dlopen_foreachfile(const char *search_path,
     char **dirs = NULL;
     char **good_files = NULL;
 
-    dirs = PMIX_ARGV_SPLIT_COMPAT(search_path, PRTE_ENV_SEP);
+    dirs = PMIx_Argv_split(search_path, PRTE_ENV_SEP);
     for (int i = 0; NULL != dirs && NULL != dirs[i]; ++i) {
 
         dp = opendir(dirs[i]);
@@ -227,7 +227,7 @@ static int dlopen_foreachfile(const char *search_path,
             }
 
             if (!found) {
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&good_files, abs_name);
+                PMIx_Argv_append_nosize(&good_files, abs_name);
             }
             free(abs_name);
         }
@@ -252,10 +252,10 @@ error:
         closedir(dp);
     }
     if (NULL != dirs) {
-        PMIX_ARGV_FREE_COMPAT(dirs);
+        PMIx_Argv_free(dirs);
     }
     if (NULL != good_files) {
-        PMIX_ARGV_FREE_COMPAT(good_files);
+        PMIx_Argv_free(good_files);
     }
 
     return ret;

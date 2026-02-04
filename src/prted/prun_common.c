@@ -617,8 +617,8 @@ int prun_common(pmix_cli_result_t *results,
     PMIX_LIST_FOREACH(app, &apps, prte_pmix_app_t)
     {
         papps[n].cmd = strdup(app->app.cmd);
-        papps[n].argv = PMIX_ARGV_COPY_COMPAT(app->app.argv);
-        papps[n].env = PMIX_ARGV_COPY_COMPAT(app->app.env);
+        papps[n].argv = PMIx_Argv_copy(app->app.argv);
+        papps[n].env = PMIx_Argv_copy(app->app.env);
         papps[n].cwd = strdup(app->app.cwd);
         papps[n].maxprocs = app->app.maxprocs;
         PMIX_INFO_LIST_CONVERT(ret, app->info, &darray);

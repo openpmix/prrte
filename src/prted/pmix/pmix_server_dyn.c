@@ -737,10 +737,10 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
         app->app = strdup(papp->argv[0]);
     }
     if (NULL != papp->argv) {
-        app->argv = PMIX_ARGV_COPY_COMPAT(papp->argv);
+        app->argv = PMIx_Argv_copy(papp->argv);
     }
     if (NULL != papp->env) {
-        app->env = PMIX_ARGV_COPY_COMPAT(papp->env);
+        app->env = PMIx_Argv_copy(papp->env);
     }
     if (NULL != papp->cwd) {
         app->cwd = strdup(papp->cwd);
@@ -809,9 +809,9 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                 char **ck, *p;
                 uint16_t ppn, pes;
                 int n;
-                ck = PMIX_ARGV_SPLIT_COMPAT(info->value.data.string, ':');
-                if (3 > PMIX_ARGV_COUNT_COMPAT(ck)) {
-                    PMIX_ARGV_FREE_COMPAT(ck);
+                ck = PMIx_Argv_split(info->value.data.string, ':');
+                if (3 > PMIx_Argv_count(ck)) {
+                    PMIx_Argv_free(ck);
                     return PMIX_ERR_BAD_PARAM;
                 }
                 if (0 == strcasecmp(ck[0], "ppr")) {
@@ -833,14 +833,14 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                                            PRTE_ATTR_GLOBAL, &pes, PMIX_UINT16);
                     }
                 } 
-                PMIX_ARGV_FREE_COMPAT(ck);
+                PMIx_Argv_free(ck);
  
                 /***   MAP-BY   ***/
             } else if (PMIX_CHECK_KEY(info, PMIX_MAPBY)) {
                 char **ck, *p;
                 uint16_t ppn, pes;
                 int n;
-                ck = PMIX_ARGV_SPLIT_COMPAT(info->value.data.string, ':');
+                ck = PMIx_Argv_split(info->value.data.string, ':');
                 for (n=0; NULL != ck[n]; n++) {
                     if (0 == strcasecmp(ck[n], "ppr")) {
                         ppn =  strtoul(ck[1], NULL, 10);
@@ -853,7 +853,7 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                             /* missing the value or value is invalid */
                             pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true, "mapping policy",
                                            "PE", ck[n]);
-                            PMIX_ARGV_FREE_COMPAT(ck);
+                            PMIx_Argv_free(ck);
                             return PRTE_ERR_SILENT;
                         }
                         ++p;
@@ -861,7 +861,7 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                             /* missing the value or value is invalid */
                             pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true, "mapping policy",
                                            "PE", ck[n]);
-                            PMIX_ARGV_FREE_COMPAT(ck);
+                            PMIx_Argv_free(ck);
                             return PRTE_ERR_SILENT;
                         }
                         pes = strtol(p, NULL, 10);                
@@ -871,7 +871,7 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                         }
                     }
                 }
-                PMIX_ARGV_FREE_COMPAT(ck);
+                PMIx_Argv_free(ck);
 
                 /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
                 /* there can be multiple of these, so we add them to the attribute list */
@@ -979,7 +979,7 @@ static void interim(int sd, short args, void *cbdata)
      * option parsing */
     for (n=0; n < cd->ninfo; n++) {
         if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PERSONALITY)) {
-            jdata->personality = PMIX_ARGV_SPLIT_COMPAT(cd->info[n].value.data.string, ',');
+            jdata->personality = PMIx_Argv_split(cd->info[n].value.data.string, ',');
             jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(cd->info[n].value.data.string);
             pmix_server_cache_job_info(jdata, &cd->info[n]);
             break;

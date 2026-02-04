@@ -438,7 +438,7 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
     char **pargv;
 
     /* backup the argv */
-    pargv = PMIX_ARGV_COPY_COMPAT(argv);
+    pargv = PMIx_Argv_copy(argv);
 
     char **caught_single_dashes = NULL;
     int  *caught_positions = NULL;
@@ -512,7 +512,7 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
     rc = pmix_cmd_line_parse(pargv, ompishorts, ompioptions, NULL,
                              results, "help-schizo-ompi.txt");
     if (PMIX_SUCCESS != rc) {
-        PMIX_ARGV_FREE_COMPAT(pargv);
+        PMIx_Argv_free(pargv);
         if (warn) {
             for(n = 0; n < cur_caught_pos; n++) {
                 free(caught_single_dashes[n]);
@@ -591,7 +591,7 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
         caught_positions = NULL;
     }
 
-    PMIX_ARGV_FREE_COMPAT(pargv);
+    PMIx_Argv_free(pargv);
     /* check for deprecated options - warn and convert them */
     rc = convert_deprecated_cli(results, silent);
     if (PRTE_SUCCESS != rc) {
@@ -626,8 +626,8 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
             if (0 == strcmp(results->tail[0], argv[n])) {
                 /* this starts the tail - replace the rest of the
                  * tail with the original argv */
-                PMIX_ARGV_FREE_COMPAT(results->tail);
-                results->tail = PMIX_ARGV_COPY_COMPAT(&argv[n]);
+                PMIx_Argv_free(results->tail);
+                results->tail = PMIx_Argv_copy(&argv[n]);
                 break;
             }
         }
@@ -1100,7 +1100,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                     // add the output directive
                     opt2 = PMIX_NEW(pmix_cli_item_t);
                     opt2->key = strdup(PRTE_CLI_OUTPUT);
-                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&opt2->values, ":raw");
+                    PMIx_Argv_append_nosize(&opt2->values, ":raw");
                     pmix_list_append(&results->instances, &opt2->super);
                 } else {
                     // see if the "raw" modifier is already present
@@ -1159,8 +1159,8 @@ static int check_cache(char ***c1, char ***c2, char *p1, char *p2)
 
     if (PRTE_SUCCESS == rc) {
         /* add them to the cache */
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(c1, p1);
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(c2, p2);
+        PMIx_Argv_append_nosize(c1, p1);
+        PMIx_Argv_append_nosize(c2, p2);
     }
     return rc;
 }
@@ -1270,7 +1270,7 @@ static int process_env_list(const char *env_list, char ***xparams, char ***xvals
     char **tokens;
     int rc = PRTE_SUCCESS;
 
-    tokens = PMIX_ARGV_SPLIT_COMPAT(env_list, (int) sep);
+    tokens = PMIx_Argv_split(env_list, (int) sep);
     if (NULL == tokens) {
         return PRTE_SUCCESS;
     }
@@ -1286,7 +1286,7 @@ static int process_env_list(const char *env_list, char ***xparams, char ***xvals
         }
     }
 
-    PMIX_ARGV_FREE_COMPAT(tokens);
+    PMIx_Argv_free(tokens);
     return rc;
 }
 
@@ -1298,7 +1298,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
     char **cache = NULL, **cachevals = NULL;
     char **xparams = NULL, **xvals = NULL;
 
-    tmp = PMIX_ARGV_SPLIT_COMPAT(filename, sep);
+    tmp = PMIx_Argv_split(filename, sep);
     if (NULL == tmp) {
         return PRTE_SUCCESS;
     }
@@ -1315,22 +1315,22 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                 fp = fopen(p1, "r");
                 if (NULL == fp) {
                     pmix_show_help("help-schizo-base.txt", "missing-param-file-def", true, tmp[i], p1);;
-                    PMIX_ARGV_FREE_COMPAT(tmp);
-                    PMIX_ARGV_FREE_COMPAT(cache);
-                    PMIX_ARGV_FREE_COMPAT(cachevals);
-                    PMIX_ARGV_FREE_COMPAT(xparams);
-                    PMIX_ARGV_FREE_COMPAT(xvals);
+                    PMIx_Argv_free(tmp);
+                    PMIx_Argv_free(cache);
+                    PMIx_Argv_free(cachevals);
+                    PMIx_Argv_free(xparams);
+                    PMIx_Argv_free(xvals);
                     free(p1);
                     return PRTE_ERR_NOT_FOUND;
                 }
                 free(p1);
             } else {
                 pmix_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i]);;
-                PMIX_ARGV_FREE_COMPAT(tmp);
-                PMIX_ARGV_FREE_COMPAT(cache);
-                PMIX_ARGV_FREE_COMPAT(cachevals);
-                PMIX_ARGV_FREE_COMPAT(xparams);
-                PMIX_ARGV_FREE_COMPAT(xvals);
+                PMIx_Argv_free(tmp);
+                PMIx_Argv_free(cache);
+                PMIx_Argv_free(cachevals);
+                PMIx_Argv_free(xparams);
+                PMIx_Argv_free(xvals);
                 return PRTE_ERR_NOT_FOUND;
             }
         }
@@ -1339,15 +1339,15 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                 free(line);
                 continue; /* skip empty lines */
             }
-            opts = PMIX_ARGV_SPLIT_WITH_EMPTY_COMPAT(line, ' ');
+            opts = PMIx_Argv_split_with_empty(line, ' ');
             if (NULL == opts) {
                 pmix_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
                 free(line);
-                PMIX_ARGV_FREE_COMPAT(tmp);
-                PMIX_ARGV_FREE_COMPAT(cache);
-                PMIX_ARGV_FREE_COMPAT(cachevals);
-                PMIX_ARGV_FREE_COMPAT(xparams);
-                PMIX_ARGV_FREE_COMPAT(xvals);
+                PMIx_Argv_free(tmp);
+                PMIx_Argv_free(cache);
+                PMIx_Argv_free(cachevals);
+                PMIx_Argv_free(xparams);
+                PMIx_Argv_free(xvals);
                 fclose(fp);
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -1362,12 +1362,12 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         pmix_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
                                        line);
                         free(line);
-                        PMIX_ARGV_FREE_COMPAT(tmp);
-                        PMIX_ARGV_FREE_COMPAT(opts);
-                        PMIX_ARGV_FREE_COMPAT(cache);
-                        PMIX_ARGV_FREE_COMPAT(cachevals);
-                        PMIX_ARGV_FREE_COMPAT(xparams);
-                        PMIX_ARGV_FREE_COMPAT(xvals);
+                        PMIx_Argv_free(tmp);
+                        PMIx_Argv_free(opts);
+                        PMIx_Argv_free(cache);
+                        PMIx_Argv_free(cachevals);
+                        PMIx_Argv_free(xparams);
+                        PMIx_Argv_free(xvals);
                         fclose(fp);
                         return PRTE_ERR_BAD_PARAM;
                     }
@@ -1381,12 +1381,12 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                                            line);
                             free(line);
                             free(p1);
-                            PMIX_ARGV_FREE_COMPAT(tmp);
-                            PMIX_ARGV_FREE_COMPAT(opts);
-                            PMIX_ARGV_FREE_COMPAT(cache);
-                            PMIX_ARGV_FREE_COMPAT(cachevals);
-                            PMIX_ARGV_FREE_COMPAT(xparams);
-                            PMIX_ARGV_FREE_COMPAT(xvals);
+                            PMIx_Argv_free(tmp);
+                            PMIx_Argv_free(opts);
+                            PMIx_Argv_free(cache);
+                            PMIx_Argv_free(cachevals);
+                            PMIx_Argv_free(xparams);
+                            PMIx_Argv_free(xvals);
                             fclose(fp);
                             return PRTE_ERR_BAD_PARAM;
                         }
@@ -1401,12 +1401,12 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                     free(p1);
                     if (PRTE_SUCCESS != rc) {
                         fclose(fp);
-                        PMIX_ARGV_FREE_COMPAT(tmp);
-                        PMIX_ARGV_FREE_COMPAT(opts);
-                        PMIX_ARGV_FREE_COMPAT(cache);
-                        PMIX_ARGV_FREE_COMPAT(cachevals);
-                        PMIX_ARGV_FREE_COMPAT(xparams);
-                        PMIX_ARGV_FREE_COMPAT(xvals);
+                        PMIx_Argv_free(tmp);
+                        PMIx_Argv_free(opts);
+                        PMIx_Argv_free(cache);
+                        PMIx_Argv_free(cachevals);
+                        PMIx_Argv_free(xparams);
+                        PMIx_Argv_free(xvals);
                         free(line);
                         return rc;
                     }
@@ -1416,12 +1416,12 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         pmix_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
                                        line);
                         free(line);
-                        PMIX_ARGV_FREE_COMPAT(tmp);
-                        PMIX_ARGV_FREE_COMPAT(opts);
-                        PMIX_ARGV_FREE_COMPAT(cache);
-                        PMIX_ARGV_FREE_COMPAT(cachevals);
-                        PMIX_ARGV_FREE_COMPAT(xparams);
-                        PMIX_ARGV_FREE_COMPAT(xvals);
+                        PMIx_Argv_free(tmp);
+                        PMIx_Argv_free(opts);
+                        PMIx_Argv_free(cache);
+                        PMIx_Argv_free(cachevals);
+                        PMIx_Argv_free(xparams);
+                        PMIx_Argv_free(xvals);
                         fclose(fp);
                         return PRTE_ERR_BAD_PARAM;
                     }
@@ -1438,12 +1438,12 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                     free(p2);
                     if (PRTE_SUCCESS != rc) {
                         fclose(fp);
-                        PMIX_ARGV_FREE_COMPAT(tmp);
-                        PMIX_ARGV_FREE_COMPAT(opts);
-                        PMIX_ARGV_FREE_COMPAT(cache);
-                        PMIX_ARGV_FREE_COMPAT(cachevals);
-                        PMIX_ARGV_FREE_COMPAT(xparams);
-                        PMIX_ARGV_FREE_COMPAT(xvals);
+                        PMIx_Argv_free(tmp);
+                        PMIx_Argv_free(opts);
+                        PMIx_Argv_free(cache);
+                        PMIx_Argv_free(cachevals);
+                        PMIx_Argv_free(xparams);
+                        PMIx_Argv_free(xvals);
                         free(line);
                         return rc;
                     }
@@ -1455,12 +1455,12 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         pmix_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
                                        line);
                         free(line);
-                        PMIX_ARGV_FREE_COMPAT(tmp);
-                        PMIX_ARGV_FREE_COMPAT(opts);
-                        PMIX_ARGV_FREE_COMPAT(cache);
-                        PMIX_ARGV_FREE_COMPAT(cachevals);
-                        PMIX_ARGV_FREE_COMPAT(xparams);
-                        PMIX_ARGV_FREE_COMPAT(xvals);
+                        PMIx_Argv_free(tmp);
+                        PMIx_Argv_free(opts);
+                        PMIx_Argv_free(cache);
+                        PMIx_Argv_free(cachevals);
+                        PMIx_Argv_free(xparams);
+                        PMIx_Argv_free(xvals);
                         fclose(fp);
                         return PRTE_ERR_BAD_PARAM;
                     }
@@ -1468,12 +1468,12 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                     rc = process_env_list(p1, &xparams, &xvals, ';');
                     if (PRTE_SUCCESS != rc) {
                         fclose(fp);
-                        PMIX_ARGV_FREE_COMPAT(tmp);
-                        PMIX_ARGV_FREE_COMPAT(opts);
-                        PMIX_ARGV_FREE_COMPAT(cache);
-                        PMIX_ARGV_FREE_COMPAT(cachevals);
-                        PMIX_ARGV_FREE_COMPAT(xparams);
-                        PMIX_ARGV_FREE_COMPAT(xvals);
+                        PMIx_Argv_free(tmp);
+                        PMIx_Argv_free(opts);
+                        PMIx_Argv_free(cache);
+                        PMIx_Argv_free(cachevals);
+                        PMIx_Argv_free(xparams);
+                        PMIx_Argv_free(xvals);
                         free(line);
                         return rc;
                     }
@@ -1483,12 +1483,12 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         pmix_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
                                        line);
                         fclose(fp);
-                        PMIX_ARGV_FREE_COMPAT(tmp);
-                        PMIX_ARGV_FREE_COMPAT(opts);
-                        PMIX_ARGV_FREE_COMPAT(cache);
-                        PMIX_ARGV_FREE_COMPAT(cachevals);
-                        PMIX_ARGV_FREE_COMPAT(xparams);
-                        PMIX_ARGV_FREE_COMPAT(xvals);
+                        PMIx_Argv_free(tmp);
+                        PMIx_Argv_free(opts);
+                        PMIx_Argv_free(cache);
+                        PMIx_Argv_free(cachevals);
+                        PMIx_Argv_free(xparams);
+                        PMIx_Argv_free(xvals);
                         free(line);
                         return rc;
                     }
@@ -1499,30 +1499,30 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
         fclose(fp);
     }
 
-    PMIX_ARGV_FREE_COMPAT(tmp);
+    PMIx_Argv_free(tmp);
 
     if (NULL != cache) {
         /* add the results into dstenv */
         for (i = 0; NULL != cache[i]; i++) {
             if (0 != strncmp(cache[i], "OMPI_MCA_", strlen("OMPI_MCA_"))) {
                 pmix_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
-                PMIX_SETENV_COMPAT(p1, cachevals[i], true, dstenv);
+                PMIx_Setenv(p1, cachevals[i], true, dstenv);
                 free(p1);
             } else {
-                PMIX_SETENV_COMPAT(cache[i], cachevals[i], true, dstenv);
+                PMIx_Setenv(cache[i], cachevals[i], true, dstenv);
             }
         }
-        PMIX_ARGV_FREE_COMPAT(cache);
-        PMIX_ARGV_FREE_COMPAT(cachevals);
+        PMIx_Argv_free(cache);
+        PMIx_Argv_free(cachevals);
     }
 
     /* add the -x values */
     if (NULL != xparams) {
         for (i = 0; NULL != xparams[i]; i++) {
-            PMIX_SETENV_COMPAT(xparams[i], xvals[i], true, dstenv);
+            PMIx_Setenv(xparams[i], xvals[i], true, dstenv);
         }
-        PMIX_ARGV_FREE_COMPAT(xparams);
-        PMIX_ARGV_FREE_COMPAT(xvals);
+        PMIx_Argv_free(xparams);
+        PMIx_Argv_free(xvals);
     }
 
     return PRTE_SUCCESS;
@@ -1597,7 +1597,7 @@ static void setup_ompi_frameworks(void)
 
     // If we found the env variable, it will be a comma-delimited list
     // of values.  Split it into an argv-style array.
-    char **tmp = PMIX_ARGV_SPLIT_COMPAT(env, ',');
+    char **tmp = PMIx_Argv_split(env, ',');
     if (NULL != tmp) {
         ompi_frameworks = tmp;
     }
@@ -1644,26 +1644,26 @@ static int parse_env(char **srcenv, char ***dstenv,
     if (NULL != env_set_flag) {
         rc = process_env_list(env_set_flag, &xparams, &xvals, ';');
         if (PRTE_SUCCESS != rc) {
-            PMIX_ARGV_FREE_COMPAT(xparams);
-            PMIX_ARGV_FREE_COMPAT(xvals);
+            PMIx_Argv_free(xparams);
+            PMIx_Argv_free(xvals);
             return rc;
         }
     }
     /* process the resulting cache into the dstenv */
     if (NULL != xparams) {
         for (i = 0; NULL != xparams[i]; i++) {
-            PMIX_SETENV_COMPAT(xparams[i], xvals[i], true, dstenv);
+            PMIx_Setenv(xparams[i], xvals[i], true, dstenv);
         }
-        PMIX_ARGV_FREE_COMPAT(xparams);
+        PMIx_Argv_free(xparams);
         xparams = NULL;
-        PMIX_ARGV_FREE_COMPAT(xvals);
+        PMIx_Argv_free(xvals);
         xvals = NULL;
     }
 
     /* now process any tune file specification - the tune file processor
      * will police itself for duplicate values */
     if (NULL != (opt = pmix_cmd_line_get_param(results, "tune"))) {
-        p1 = PMIX_ARGV_JOIN_COMPAT(opt->values, ',');
+        p1 = PMIx_Argv_join(opt->values, ',');
         rc = process_tune_files(p1, dstenv, ',');
         free(p1);
         if (PRTE_SUCCESS != rc) {
@@ -1674,8 +1674,8 @@ static int parse_env(char **srcenv, char ***dstenv,
     if (NULL != (opt = pmix_cmd_line_get_param(results, "initial-errhandler"))) {
         rc = check_cache(&cache, &cachevals, "mpi_initial_errhandler", opt->values[0]);
         if (PRTE_SUCCESS != rc) {
-            PMIX_ARGV_FREE_COMPAT(cache);
-            PMIX_ARGV_FREE_COMPAT(cachevals);
+            PMIx_Argv_free(cache);
+            PMIx_Argv_free(cachevals);
             return rc;
         }
     }
@@ -1683,19 +1683,19 @@ static int parse_env(char **srcenv, char ***dstenv,
     if (NULL != (opt = pmix_cmd_line_get_param(results, PRTE_CLI_MEM_ALLOC_KIND))) {
         rc = check_cache(&cache, &cachevals, "mpi_memory_alloc_kinds", opt->values[0]);
         if (PRTE_SUCCESS != rc) {
-            PMIX_ARGV_FREE_COMPAT(cache);
-            PMIX_ARGV_FREE_COMPAT(cachevals);
+            PMIx_Argv_free(cache);
+            PMIx_Argv_free(cachevals);
             return rc;
         }
     }
 
     if (pmix_cmd_line_is_taken(results, "display-comm") &&
         pmix_cmd_line_is_taken(results, "display-comm-finalize")) {
-        PMIX_SETENV_COMPAT("OMPI_MCA_ompi_display_comm", "mpi_init,mpi_finalize", true, dstenv);
+        PMIx_Setenv("OMPI_MCA_ompi_display_comm", "mpi_init,mpi_finalize", true, dstenv);
     } else if (pmix_cmd_line_is_taken(results, "display-comm")) {
-        PMIX_SETENV_COMPAT("OMPI_MCA_ompi_display_comm", "mpi_init", true, dstenv);
+        PMIx_Setenv("OMPI_MCA_ompi_display_comm", "mpi_init", true, dstenv);
     } else if (pmix_cmd_line_is_taken(results, "display-comm-finalize")) {
-        PMIX_SETENV_COMPAT("OMPI_MCA_ompi_display_comm", "mpi_finalize", true, dstenv);
+        PMIx_Setenv("OMPI_MCA_ompi_display_comm", "mpi_finalize", true, dstenv);
     }
 
     /* --stream-buffering will be deprecated starting with Open MPI v5 */
@@ -1711,7 +1711,7 @@ static int parse_env(char **srcenv, char ***dstenv,
             /* bad value */
             pmix_show_help("help-schizo-base.txt", "bad-stream-buffering-value", true, u16);
         }
-        PMIX_SETENV_COMPAT("OMPI_MCA_ompi_stream_buffering", opt->values[0], true, dstenv);
+        PMIx_Setenv("OMPI_MCA_ompi_stream_buffering", opt->values[0], true, dstenv);
     }
 
     /* now look for any "--mca" options - note that it is an error
@@ -1728,13 +1728,13 @@ static int parse_env(char **srcenv, char ***dstenv,
             p1 = opt->values[i];
             /* treat mca_base_env_list as a special case */
             if (0 == strcmp(p1, "mca_base_env_list")) {
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&envlist, p3);
+                PMIx_Argv_append_nosize(&envlist, p3);
                 continue;
             }
             rc = check_cache(&cache, &cachevals, p1, p3);
             if (PRTE_SUCCESS != rc) {
-                PMIX_ARGV_FREE_COMPAT(cache);
-                PMIX_ARGV_FREE_COMPAT(cachevals);
+                PMIx_Argv_free(cache);
+                PMIx_Argv_free(cachevals);
                 return rc;
             }
         }
@@ -1750,13 +1750,13 @@ static int parse_env(char **srcenv, char ***dstenv,
             p1 = opt->values[i];
             /* treat mca_base_env_list as a special case */
             if (0 == strcmp(p1, "mca_base_env_list")) {
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&envlist, p3);
+                PMIx_Argv_append_nosize(&envlist, p3);
                 continue;
             }
             rc = check_cache(&cache, &cachevals, p1, p3);
             if (PRTE_SUCCESS != rc) {
-                PMIX_ARGV_FREE_COMPAT(cache);
-                PMIX_ARGV_FREE_COMPAT(cachevals);
+                PMIx_Argv_free(cache);
+                PMIx_Argv_free(cachevals);
                 return rc;
             }
         }
@@ -1774,14 +1774,14 @@ static int parse_env(char **srcenv, char ***dstenv,
             if (check_generic(p1)) {
                 /* treat mca_base_env_list as a special case */
                 if (0 == strcmp(p1, "mca_base_env_list")) {
-                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&envlist, p3);
+                    PMIx_Argv_append_nosize(&envlist, p3);
                     continue;
                 }
                 rc = check_cache(&cache, &cachevals, p1, p3);
                 if (PRTE_SUCCESS != rc) {
-                    PMIX_ARGV_FREE_COMPAT(cache);
-                    PMIX_ARGV_FREE_COMPAT(cachevals);
-                    PMIX_ARGV_FREE_COMPAT(envlist);
+                    PMIx_Argv_free(cache);
+                    PMIx_Argv_free(cachevals);
+                    PMIx_Argv_free(envlist);
                     return rc;
                 }
             }
@@ -1800,14 +1800,14 @@ static int parse_env(char **srcenv, char ***dstenv,
             if (check_generic(p1)) {
                 /* treat mca_base_env_list as a special case */
                 if (0 == strcmp(p1, "mca_base_env_list")) {
-                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&envlist, p3);
+                    PMIx_Argv_append_nosize(&envlist, p3);
                     continue;
                 }
                 rc = check_cache(&cache, &cachevals, p1, p3);
                 if (PRTE_SUCCESS != rc) {
-                    PMIX_ARGV_FREE_COMPAT(cache);
-                    PMIX_ARGV_FREE_COMPAT(cachevals);
-                    PMIX_ARGV_FREE_COMPAT(envlist);
+                    PMIx_Argv_free(cache);
+                    PMIx_Argv_free(cachevals);
+                    PMIx_Argv_free(envlist);
                     return rc;
                 }
             }
@@ -1817,7 +1817,7 @@ static int parse_env(char **srcenv, char ***dstenv,
     /* if we got any env lists, process them here */
     if (NULL != envlist) {
         for (i = 0; NULL != envlist[i]; i++) {
-            envtgt = PMIX_ARGV_SPLIT_COMPAT(envlist[i], ';');
+            envtgt = PMIx_Argv_split(envlist[i], ';');
             for (j = 0; NULL != envtgt[j]; j++) {
                 if (NULL == (p2 = strchr(envtgt[j], '='))) {
                     p1 = getenv(envtgt[j]);
@@ -1833,51 +1833,51 @@ static int parse_env(char **srcenv, char ***dstenv,
                     }
                     free(p1);
                     if (PRTE_SUCCESS != rc) {
-                        PMIX_ARGV_FREE_COMPAT(cache);
-                        PMIX_ARGV_FREE_COMPAT(cachevals);
-                        PMIX_ARGV_FREE_COMPAT(envtgt);
-                        PMIX_ARGV_FREE_COMPAT(envlist);
+                        PMIx_Argv_free(cache);
+                        PMIx_Argv_free(cachevals);
+                        PMIx_Argv_free(envtgt);
+                        PMIx_Argv_free(envlist);
                         return rc;
                     }
                 } else {
                     *p2 = '\0';
                     rc = check_cache(&xparams, &xvals, envtgt[j], p2 + 1);
                     if (PRTE_SUCCESS != rc) {
-                        PMIX_ARGV_FREE_COMPAT(cache);
-                        PMIX_ARGV_FREE_COMPAT(cachevals);
-                        PMIX_ARGV_FREE_COMPAT(envtgt);
-                        PMIX_ARGV_FREE_COMPAT(envlist);
+                        PMIx_Argv_free(cache);
+                        PMIx_Argv_free(cachevals);
+                        PMIx_Argv_free(envtgt);
+                        PMIx_Argv_free(envlist);
                         return rc;
                     }
                 }
             }
-            PMIX_ARGV_FREE_COMPAT(envtgt);
+            PMIx_Argv_free(envtgt);
         }
     }
-    PMIX_ARGV_FREE_COMPAT(envlist);
+    PMIx_Argv_free(envlist);
 
     /* process the resulting cache into the dstenv */
     if (NULL != cache) {
         for (i = 0; NULL != cache[i]; i++) {
             if (0 != strncmp(cache[i], "OMPI_MCA_", strlen("OMPI_MCA_"))) {
                 pmix_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
-                PMIX_SETENV_COMPAT(p1, cachevals[i], true, dstenv);
+                PMIx_Setenv(p1, cachevals[i], true, dstenv);
                 free(p1);
             } else {
-                PMIX_SETENV_COMPAT(cache[i], cachevals[i], true, dstenv);
+                PMIx_Setenv(cache[i], cachevals[i], true, dstenv);
             }
         }
     }
-    PMIX_ARGV_FREE_COMPAT(cache);
-    PMIX_ARGV_FREE_COMPAT(cachevals);
+    PMIx_Argv_free(cache);
+    PMIx_Argv_free(cachevals);
 
     /* add the -x values */
     if (NULL != xparams) {
         for (i = 0; NULL != xparams[i]; i++) {
-            PMIX_SETENV_COMPAT(xparams[i], xvals[i], true, dstenv);
+            PMIx_Setenv(xparams[i], xvals[i], true, dstenv);
         }
-        PMIX_ARGV_FREE_COMPAT(xparams);
-        PMIX_ARGV_FREE_COMPAT(xvals);
+        PMIx_Argv_free(xparams);
+        PMIx_Argv_free(xvals);
     }
 
     /* add a flag indicating that we did indeed check the tmpdir
@@ -1887,7 +1887,7 @@ static int parse_env(char **srcenv, char ***dstenv,
     } else {
         p1 = "FALSE";
     }
-    PMIX_SETENV_COMPAT("PRTE_SHARED_FS", p1, true, dstenv);
+    PMIx_Setenv("PRTE_SHARED_FS", p1, true, dstenv);
 
     return PRTE_SUCCESS;
 }

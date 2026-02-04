@@ -299,7 +299,7 @@ int prte(int argc, char *argv[])
     for (i=0; NULL != environ[i]; i++) {
         if (0 != strncmp(environ[i], "PMIX_", 5) &&
             0 != strncmp(environ[i], "PRTE_", 5)) {
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_launch_environ, environ[i]);
+            PMIx_Argv_append_nosize(&prte_launch_environ, environ[i]);
         }
     }
 
@@ -489,14 +489,14 @@ int prte(int argc, char *argv[])
     // check if they asked for XML output from us
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_OUTPUT);
     if (NULL != opt) {
-        split = PMIX_ARGV_SPLIT_COMPAT(opt->values[0], ',');
+        split = PMIx_Argv_split(opt->values[0], ',');
         for (n = 0; NULL != split[n]; n++) {
             if (PMIX_CHECK_CLI_OPTION(split[n], PRTE_CLI_XML)) {
                 prte_xml_output = true;
                 break;
             }
         }
-        PMIX_ARGV_FREE_COMPAT(split);
+        PMIx_Argv_free(split);
     }
 
    /* Did the user specify a default hostfile? */
@@ -547,16 +547,16 @@ int prte(int argc, char *argv[])
         while (NULL != (param = pmix_getline(fp))) {
             if (!first) {
                 // add a colon delimiter
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&pargv, ":");
+                PMIx_Argv_append_nosize(&pargv, ":");
                 ++pargc;
             }
             // break the line down into parts
-            split = PMIX_ARGV_SPLIT_COMPAT(param, ' ');
+            split = PMIx_Argv_split(param, ' ');
             for (n=0; NULL != split[n]; n++) {
-                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&pargv, split[n]);
+                PMIx_Argv_append_nosize(&pargv, split[n]);
                 ++pargc;
             }
-            PMIX_ARGV_FREE_COMPAT(split);
+            PMIx_Argv_free(split);
             first = false;
         }
         fclose(fp);
@@ -638,7 +638,7 @@ int prte(int argc, char *argv[])
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_KEEPALIVE);
     if (NULL != opt) {
         keepalive = true;
-        PMIX_SETENV_COMPAT("PMIX_KEEPALIVE_PIPE", opt->values[0], true, &environ);
+        PMIx_Setenv("PMIX_KEEPALIVE_PIPE", opt->values[0], true, &environ);
     }
 
     /* check for debug options */
@@ -687,10 +687,10 @@ int prte(int argc, char *argv[])
 
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_SYSTEM_SERVER)) {
         /* we should act as system-level PMIx server */
-        PMIX_SETENV_COMPAT("PRTE_MCA_pmix_system_server", "1", true, &environ);
+        PMIx_Setenv("PRTE_MCA_pmix_system_server", "1", true, &environ);
     }
     /* always act as session-level PMIx server */
-    PMIX_SETENV_COMPAT("PRTE_MCA_pmix_session_server", "1", true, &environ);
+    PMIx_Setenv("PRTE_MCA_pmix_session_server", "1", true, &environ);
     /* if we were asked to report a uri, set the MCA param to do so */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_REPORT_URI);
     if (NULL != opt) {
@@ -1047,7 +1047,7 @@ int prte(int argc, char *argv[])
         char *tptr;
         int m;
         for (n=0; NULL != opt->values[n]; n++) {
-            targv = PMIX_ARGV_SPLIT_COMPAT(opt->values[n], ',');
+            targv = PMIx_Argv_split(opt->values[n], ',');
             for (i=0; NULL != targv[i]; i++) {
                 if (PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_ALLOC)) {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC,
@@ -1059,12 +1059,12 @@ int prte(int argc, char *argv[])
                                        PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
                 }
             }
-            PMIX_ARGV_FREE_COMPAT(targv);
+            PMIx_Argv_free(targv);
             /* check for qualifiers */
             tptr = strchr(opt->values[n], ':');
             if (NULL != tptr) {
                 ++tptr;
-                targv = PMIX_ARGV_SPLIT_COMPAT(tptr, ':');
+                targv = PMIx_Argv_split(tptr, ':');
                 /* check qualifiers */
                 for (m=0; NULL != targv[m]; m++) {
                     if (PMIX_CHECK_CLI_OPTION(targv[m], PRTE_CLI_PARSEABLE) ||
@@ -1074,7 +1074,7 @@ int prte(int argc, char *argv[])
                         break;
                     }
                 }
-                PMIX_ARGV_FREE_COMPAT(targv);
+                PMIx_Argv_free(targv);
             }
         }
 
@@ -1082,7 +1082,7 @@ int prte(int argc, char *argv[])
         char **targv;
         char *tptr;
         int m;
-        targv = PMIX_ARGV_SPLIT_COMPAT(prte_schizo_base.default_display_options, ',');
+        targv = PMIx_Argv_split(prte_schizo_base.default_display_options, ',');
         for (i=0; NULL != targv[i]; i++) {
             if (PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_ALLOC)) {
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC,
@@ -1093,12 +1093,12 @@ int prte(int argc, char *argv[])
                                    PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
             }
         }
-        PMIX_ARGV_FREE_COMPAT(targv);
+        PMIx_Argv_free(targv);
         /* check for qualifiers */
         tptr = strchr(prte_schizo_base.default_display_options, ':');
         if (NULL != tptr) {
             ++tptr;
-            targv = PMIX_ARGV_SPLIT_COMPAT(tptr, ':');
+            targv = PMIx_Argv_split(tptr, ':');
             /* check qualifiers */
             for (m=0; NULL != targv[m]; m++) {
                 if (PMIX_CHECK_CLI_OPTION(targv[m], PRTE_CLI_PARSEABLE) ||
@@ -1108,7 +1108,7 @@ int prte(int argc, char *argv[])
                     break;
                 }
             }
-            PMIX_ARGV_FREE_COMPAT(targv);
+            PMIx_Argv_free(targv);
         }
     }
 
@@ -1140,7 +1140,7 @@ int prte(int argc, char *argv[])
     if (prte_persistent) {
         opt = pmix_cmd_line_get_param(&results, PRTE_CLI_HOSTFILE);
         if (NULL != opt) {
-            tpath = PMIX_ARGV_JOIN_COMPAT(opt->values, ',');
+            tpath = PMIx_Argv_join(opt->values, ',');
             prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE,
                                PRTE_ATTR_GLOBAL, tpath, PMIX_STRING);
             free(tpath);
@@ -1150,7 +1150,7 @@ int prte(int argc, char *argv[])
         opt = pmix_cmd_line_get_param(&results, PRTE_CLI_HOST);
         if (NULL != opt) {
             char *tval;
-            tval = PMIX_ARGV_JOIN_COMPAT(opt->values, ',');
+            tval = PMIx_Argv_join(opt->values, ',');
             prte_set_attribute(&dapp->attributes, PRTE_APP_DASH_HOST,
                                PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
             free(tval);
@@ -1159,19 +1159,19 @@ int prte(int argc, char *argv[])
         /* the directives might be in the app(s) */
         if (NULL != hostfiles) {
             char *tval;
-            tval = PMIX_ARGV_JOIN_COMPAT(hostfiles, ',');
+            tval = PMIx_Argv_join(hostfiles, ',');
             prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE,
                                PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
             free(tval);
-            PMIX_ARGV_FREE_COMPAT(hostfiles);
+            PMIx_Argv_free(hostfiles);
         }
         if (NULL != hosts) {
             char *tval;
-            tval = PMIX_ARGV_JOIN_COMPAT(hosts, ',');
+            tval = PMIx_Argv_join(hosts, ',');
             prte_set_attribute(&dapp->attributes, PRTE_APP_DASH_HOST,
                                PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
             free(tval);
-            PMIX_ARGV_FREE_COMPAT(hosts);
+            PMIx_Argv_free(hosts);
         }
     }
 
@@ -1303,8 +1303,8 @@ int prte(int argc, char *argv[])
     PMIX_LIST_FOREACH(app, &apps, prte_pmix_app_t)
     {
         papps[n].cmd = strdup(app->app.cmd);
-        papps[n].argv = PMIX_ARGV_COPY_COMPAT(app->app.argv);
-        papps[n].env = PMIX_ARGV_COPY_COMPAT(app->app.env);
+        papps[n].argv = PMIx_Argv_copy(app->app.argv);
+        papps[n].env = PMIx_Argv_copy(app->app.env);
         papps[n].cwd = strdup(app->app.cwd);
         papps[n].maxprocs = app->app.maxprocs;
         PMIX_INFO_LIST_CONVERT(ret, app->info, &darray);
@@ -1558,7 +1558,7 @@ static int prep_singleton(const char *name)
     app = PMIX_NEW(prte_app_context_t);
     app->app = strdup(jdata->nspace);
     app->num_procs = 1;
-    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&app->argv, app->app);
+    PMIx_Argv_append_nosize(&app->argv, app->app);
     pmix_getcwd(cwd, sizeof(cwd));
     app->cwd = strdup(cwd);
     pmix_pointer_array_set_item(jdata->apps, 0, app);

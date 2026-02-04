@@ -234,7 +234,7 @@ cleanup:
         free(dvmnodes);
     }
     if (NULL != nodes) {
-        PMIX_ARGV_FREE_COMPAT(nodes);
+        PMIx_Argv_free(nodes);
     }
     if (NULL != dvmtmpdir) {
         free(dvmtmpdir);
@@ -384,7 +384,7 @@ static pmix_status_t regex_extract_nodes(char *regexp, char ***names)
             }
         } else {
             /* If we didn't find a range, just add the value */
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(names, base);
+            PMIx_Argv_append_nosize(names, base);
             /* step over the comma */
             i++;
             /* set base equal to the (possible) next base to look at */
@@ -546,7 +546,7 @@ static pmix_status_t regex_parse_value_range(char *base, char *range, int num_di
         if (NULL != suffix) {
             strcat(str, suffix);
         }
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(names, str);
+        PMIx_Argv_append_nosize(names, str);
     }
     free(str);
 
@@ -569,7 +569,7 @@ static pmix_status_t read_file(char *regexp, char ***names)
             free(line);
             continue;
         }
-        PMIX_ARGV_APPEND_NOSIZE_COMPAT(names, line);
+        PMIx_Argv_append_nosize(names, line);
         free(line);
     }
     fclose(fp);
