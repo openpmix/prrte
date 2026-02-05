@@ -4,6 +4,238 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
+3.0.13 -- 23 Jan 2026
+---------------------
+.. important:: This release includes the following critical changes:
+
+               * repair of the indirect debugger connection procedure. The
+                 prterun launcher was using the incorrect proc name to
+                 retrieve its parent's processID
+               * repair of the LSF mapper when LSF affinity has been specified
+               * a number of fixes to various mapper components and printing
+                 of binding ranges
+               * an improved mechanism for automatically detecting the
+                 presence of heterogeneous nodes
+
+- PR #2385: Final update of NEWS
+- PR #2384: Update NEWS and VERSION for release
+- PR #2377: Multiple commits
+   - Provide an MCA param to control hwloc shmem sharing
+   - Update the directive list in check_multi
+- PR #2362: Multiple commits
+   - Revert back to explicitly setting hwloc support for xml import
+   - Cleanup bind output when partial allocations exist
+- PR #2359: Update NEWS
+- PR #2358: Multiple commits
+   - Enable MCA param support for display and runtime-options
+   - Update prun to new cmd line option spellings
+- PR #2355: Update NEWS and VERSION to rc3
+- PR #2354: Don't force map display for donotlaunch if bind display requested
+- PR #2352: Multiple commits
+   - Extend existing build check CI
+   - Fix debugger daemon rendezvous on remote nodes
+   - Workflow does not contain permissions
+   - Potential use after free (alerts 10-12)
+   - Fix hetero launch
+- PR #2345: Fix ppr mapper
+- PR #2343: Update NEWS with important note
+- PR #2342: Update VERSION and NEWS
+- PR #2341: Slight mod to the indirect debugger example
+- PR #2339: Correct the nprocs check to support moving to next node
+- PR #2336: Allow setting default cpus/rank
+- PR #2334: Retrieve PMIX_PARENT_ID with wildcard rank
+- PR #2330: Centralize quickmatch to ensure consistency
+- PR #2328: Multiple commits
+   - Correctly set the number of procs for rankfile apps
+   - Do not override user-specified num procs
+   - Some cleanup on hostfile parsing
+   - Remove LSF references in rank_file mapper
+   - Update ras to allow rank/seq files to define allocation
+   - Add the rmaps/lsf component
+- PR #2321: Fix typo in examples Makefile
+- PR #2320: Fix prte_info to output correct version
+- PR #2318: Multiple commits
+   - Correct ordering of macro variables
+   - Fix printing of binding ranges
+- PR #2314: Roll rc1
+- PR #2312: Mark uncached daemons as reported
+- PR #2309: Multiple commits
+   - Inherit env directives if requested
+   - Extend inheritance to app level
+   - Extend testbuild launchers support
+   - Fix the colocation algorithm
+   - Fix precedence ordering on envar operations
+   - Bugfix: inconsistently setting PMIX_JOB_RECOVERABLE
+   - Clarify help messages
+   - Do not assign DVM's bookmark to the application job
+   - Error out when asymmetric topologies cannot support ppr requests
+   - Let seq and rankfile mappers compute their own num-procs
+   - Fix relative node processing
+   - Replace sprintf with snprintf
+   - Add launching-apps section to docs
+   - Improve hetero node detection a bit
+   - Tweak the forwarding of signals
+   - Cleanup and improve autohandling of hetero nodes
+   - Fix prun tool
+
+
+3.0.12 -- 9 Sept 2025
+---------------------
+- PR #2269: Final update of NEWS and VERSION for release
+- PR #2263: Multiple commits
+   - Extend control over client connections
+   - Ensure we have HNP node aliases
+- PR #2255: Update NEWS
+- PR #2254: Replace some incorrectly removed code
+- PR #2253: Multiple commits
+   - Update NEWS
+   - Extend support for specifying tool connection parameters
+   - Cleanup queries and completely register tools
+   - Correct handling of tool-based spawn requests
+   - Change no-foreign-tools default to "false"
+   - Include node object when registering tool
+   - Properly implement the "abort" operation
+- PR #2245: Multiple commits
+   - Adjust top session dir name
+   - Update NEWS
+- PR #2244: Multiple commits
+   - Declare the process set during registration
+   - Add support for client_connected2 server module upcall
+   - Customize the OMPI "allow-run-as-root" doc snippet
+   - Add some finer-grained connection support
+- PR #2236: Protect against running with PMIx versions too high
+- PR #2235: Check for PMIx version too high
+- PR #2232: Multiple commits
+   - Properly handle sigterm when started by singleton
+   - Ensure to progress job launch for singleton
+   - Update CI
+   - Process deprecated "stop" CLI
+   - Minor cleanups in tool connection
+   - Add some missing command strings for debug output
+   - Provide error message when ssh fails
+- PR #2222: Multiple commits
+   - iof/hnp: correctly handle short write to stdin
+   - check for pthread_np.h header
+- PR #2219: Update OAC submodule
+- PR #2214: Multiple commits
+   - Preserve source ID across API call
+   - src/docs/prrte-rst-content: Add missing file to Makefile.am
+   - Add external OMPI build CI
+   - Remove debug output
+
+
+3.0.11 -- 18 May 2025
+---------------------
+.. note:: This is a minor bug fix release to resolve
+          a problem when running with schedulers that
+          allocate at the individual CPU (vs the node)
+          level. Users operating in such an environment
+          need to add the ``--hetero-nodes`` option to
+          their ``prte`` or ``prterun`` cmd lines, or
+          set the ``prte_hetero_nodes`` MCA param to
+          a value of 1, `t`, `T`, "true", or "True".
+          Administrators of such systems can set the
+          MCA param for their users by adding it to
+          the default MCA param file for the 3.0.11
+          installation.
+
+- PR #2203: Update VERSION and NEWS for release
+- PR #2201: Add missing OMPI cmd line option
+- PR #2199: Properly handle hetero node configurations
+
+
+3.0.10 -- 10 May 2025
+---------------------
+- PR #2195: Update NEWS for release
+- PR #2194: Multiple commits
+   - Remove stale Solaris references
+   - docs: Add a "Last updated on:" HTML footer
+- PR #2190: Multiple commits
+   - Enable shim-based testing of PLM launchers
+   - Roll version to 3.0.10
+- PR #2186: Fix one more typo
+- PR #2184: Fix typo
+- PR #2182: Properly terminate RST label
+- PR #2181: Add new CI test - build OMPI internally
+- PR #2178: Don't link to pmixcc if we don't find it
+- PR #2176: Multiple commits
+   - Extend support for envar operations
+   - Do not require PMIx wrapper compiler
+
+
+3.0.9 -- 19 Mar 2025
+--------------------
+.. important:: This release contains configure logic to
+               protect it from PMIx versions that have been
+               updated to support the LTO optimizer as that
+               infrastructure conflicts with the PRRTE v3.0
+               series. PMIx versions v6.0 and above are not
+               supported by the PRRTE v3.0 series.
+
+- PR #2172: Update NEWS for release
+- PR #2171: Multiple commits
+   - Remove ALPS support
+   - Require pmixcc be available to build PRRTE
+   - Fix oob include/exclude matching
+   - Constrain PMIx versions
+- PR #2163: Protect against stone age HWLOC
+- PR #2162: Multiple commits
+   - Break thread deadlock
+   - data_server: changes to handle first_read better
+   - Allow "not supported" to be returned by query upcall
+   - Try adding timeout to CI
+   - Add PMIx v4.2 build
+   - Fix the data server
+   - Just ignore any lto settings
+   - Accommodate changes in Slurm version string
+   - Correctly support the OMPI stream-buffering option
+   - Correct the handling of "prefix"
+   - Correct syntax errors in RST files
+- PR #2157: Update OAC submodule pointer
+- PR #2147: Cleanup the pending lookup request when resolved
+- PR #2145: Multiple commits
+   - Fix inheritance
+   - Provide a user error message when srun fails
+   - Update NEWS
+- PR #2142: Multiple commits
+   - gcc compilation failure fixes
+   - Update CI workflow
+   - Silence warnings exposed by revised CI
+- PR #2141: Multiple commits
+   - Silence warnings exposed by revised CI
+   - Add build against older PMIx CI
+   - Add mpi4py CI
+- PR #2137: Multiple commits
+   - Add spawn_multiple test
+   - Minor cleanups
+   - Implement query support for PMIx resolve functions
+   - Add ability to direct app GPU support
+- PR #2125: hurd: fix build
+- PR #2123: Refactor ranking algorithms
+- PR #2109: Multiple commits
+   - Add a test for CI purposes
+   - Try a DVM-based action
+   - Update users of pmix_os_dirpath_create
+   - Remove the group CI as this release branch doesn't support it
+
+
+3.0.8 -- 15 Dec 2024
+--------------------
+- PR #2103: Final update for release
+- PR #2102: Remove stale config .m4 files
+- PR #2100: Update NEWS and VERSION
+- PR #2099: maintain correct ref count of child jobs
+- PR #2097: Correctly parse map-by modifiers
+- PR #2086: Propertly compute number of procs when not given
+- PR #2082: Multiple commits
+   - Enclose XML output in a high-level tag
+   - Add support for show_help XML output
+   - Properly build the nidmap
+- PR #2076: Multiple commits
+   - Register the singleton's nspace with the PMIx server
+   - Fix data type declaration in data server
+
+
 3.0.7 -- 13 Nov 2024
 --------------------
 .. important:: This release represents the expected end of
