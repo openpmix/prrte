@@ -21,7 +21,12 @@ series, in reverse chronological order.
                  connection to launcher spawned by the debugger itself
 
 Commits since branch was forked:
- - PR #: Update NEWS and VERSION
+ - PR #2397: Update NEWS for rc1
+ - PR #2396: Remove the "compat" macro definitions
+ - PR #2394: Purge checks for earlier PMIx versions
+ - PR #2392: Require cherry-picks on this release branch
+ - PR #2391: Update NEWS and VERSION
+
 
 Commits from master branch since v4.0.0 include:
  - PR #2389: Initialize variable
