@@ -385,7 +385,12 @@ void prte_plm_base_stack_trace_recv(int status, pmix_proc_t *sender,
     free(nspace);
 
     while (PMIX_SUCCESS == (rc = PMIx_Data_unpack(NULL, buffer, &pbo, &cnt, PMIX_BYTE_OBJECT))) {
-        PMIx_Data_load(&blob, &pbo);
+        rc = PMIx_Data_load(&blob, &pbo);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&blob);
+            goto DONE;
+        }
         /* first piece is the name of the process */
         cnt = 1;
         rc = PMIx_Data_unpack(NULL, &blob, &name, &cnt, PMIX_PROC);

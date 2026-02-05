@@ -909,7 +909,6 @@ void prte_grpcomm_direct_grp_release(int status, pmix_proc_t *sender,
         darray.size = nfinal;
         // load the array - note: this copies the array!
         PMIX_INFO_LIST_ADD(rc, nlist, PMIX_GROUP_MEMBERSHIP, &darray, PMIX_DATA_ARRAY);
-        PMIX_PROC_FREE(finalmembership, nfinal);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             st = rc;
@@ -1063,6 +1062,9 @@ notify:
     }
     if (0 < ngrpinfo) {
         PMIX_INFO_FREE(grpinfo, ngrpinfo);
+    }
+    if (0 < nfinal) {
+        PMIX_PROC_FREE(finalmembership, nfinal);
     }
     PMIX_INFO_LIST_RELEASE(nlist);
     // remove this collective from our tracker
