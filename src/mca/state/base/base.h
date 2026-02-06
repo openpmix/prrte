@@ -94,6 +94,9 @@ PRTE_EXPORT void prte_state_base_check_all_complete(int fd, short args, void *cb
 PRTE_EXPORT void prte_state_base_check_fds(prte_job_t *jdata);
 PRTE_EXPORT void prte_state_base_notify_data_server(pmix_proc_t *target);
 
+// resource recovery
+PRTE_EXPORT void prte_state_base_recover_resources(prte_job_t *jdata, prte_proc_t *pptr);
+
 END_C_DECLS
 
 #endif
