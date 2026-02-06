@@ -36,7 +36,7 @@
 #include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/plm/plm.h"
-#include "src/mca/rmaps/rmaps_types.h"
+#include "src/mca/rmaps/base/base.h"
 #include "src/rml/rml.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/runtime/data_server/prte_data_server.h"
@@ -957,4 +957,123 @@ void prte_state_base_check_fds(prte_job_t *jdata)
     pmix_output(0, "%s", r2);
     free(result);
     free(r2);
+}
+
+void prte_state_base_recover_resources(prte_job_t *jdata, prte_proc_t *pptr)
+{
+    prte_node_t *node, *nptr;
+    prte_job_map_t *map;
+    prte_proc_t *p;
+    int n, node_idx, proc_idx, rc;
+    bool takeall, empty;
+    hwloc_obj_t obj;
+    hwloc_obj_type_t type;
+    hwloc_cpuset_t boundcpus, tgt;
+    PRTE_HIDE_UNUSED_PARAMS(jdata, pptr);
+
+    node = pptr->node;
+    map = jdata->map;
+
+    // recover node resources
+    node->slots_inuse--;
+    node->num_procs--;
+    node->next_node_rank--;
+
+    // find the node in the map
+    node_idx = INT_MAX;
+    for (n=0; n < jdata->map->nodes->size; n++) {
+        nptr = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, n);
+        if (NULL == nptr) {
+            continue;
+        }
+        if (nptr == node) {
+            node_idx = n;
+        }
+    }
+
+    // find the proc in the node array
+    proc_idx = INT_MAX;
+    for (n=0; n < node->procs->size; n++) {
+        p = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, n);
+        if (NULL == p) {
+            continue;
+        }
+        if (p == pptr) {
+            proc_idx = n;
+        }
+    }
+
+    // determine how cpus were handled
+    takeall = false;
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
+        type = HWLOC_OBJ_PU;
+    } else {
+        type = HWLOC_OBJ_CORE;
+    }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, NULL, PMIX_UINT16) ||
+        PRTE_MAPPING_BYUSER == PRTE_GET_MAPPING_POLICY(map->mapping) ||
+        PRTE_MAPPING_SEQ == PRTE_GET_MAPPING_POLICY(map->mapping)) {
+        takeall = true;
+    }
+
+    boundcpus = hwloc_bitmap_alloc();
+    /* release the resources held by the proc - only the first
+     * cpu in the proc's cpuset was used to mark usage */
+    if (NULL != pptr->cpuset) {
+        if (0 != (rc = hwloc_bitmap_list_sscanf(boundcpus, pptr->cpuset))) {
+            pmix_output(0, "hwloc_bitmap_sscanf returned %s for the string %s",
+                        prte_strerror(rc), pptr->cpuset);
+            goto next;
+        }
+        if (takeall) {
+            tgt = boundcpus;
+        } else {
+            /* we only want to restore the first CPU of whatever region
+             * the proc was bound to, so we have to first narrow the
+             * bitmap down to only that region */
+            hwloc_bitmap_andnot(prte_rmaps_base.available, boundcpus, node->available);
+            /* the set bits in the result are the bound cpus that are still
+             * marked as in-use */
+            obj = hwloc_get_obj_inside_cpuset_by_type(node->topology->topo,
+                                                      prte_rmaps_base.available, type, 0);
+            if (NULL == obj) {
+                pmix_output(0, "COULD NOT GET BOUND CPU FOR RESOURCE RELEASE");
+                goto next;
+            }
+            tgt = obj->cpuset;
+        }
+        hwloc_bitmap_or(node->available, node->available, tgt);
+    }
+
+next:
+    if (proc_idx < INT_MAX) {
+        /* set the entry in the node's proc array to NULL */
+        pmix_pointer_array_set_item(node->procs, proc_idx, NULL);
+    }
+    /* release the proc once for the map entry */
+    PMIX_RELEASE(pptr);
+
+    // if the node is empty for this job, then remove it from the map
+    empty = true;
+    for (n=0; n < node->procs->size; n++) {
+        p = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, n);
+        if (NULL != p && PMIx_Check_nspace(p->name.nspace, jdata->nspace)) {
+            empty = false;
+            break;
+        }
+    }
+    if (empty) {
+        if (node_idx < INT_MAX) {
+            /* set the node location to NULL */
+            pmix_pointer_array_set_item(map->nodes, node_idx, NULL);
+        }
+        /* maintain accounting */
+        PMIX_RELEASE(node);
+        /* flag that the node is no longer in a map */
+        PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
+    }
+
+    // release the scratch bitmap
+    hwloc_bitmap_free(boundcpus);
+
 }

@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -44,7 +44,7 @@
 #include "src/mca/plm/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml.h"
-#include "src/mca/state/state.h"
+#include "src/mca/state/base/base.h"
 
 #include "src/threads/pmix_threads.h"
 #include "src/util/error_strings.h"
@@ -404,6 +404,8 @@ keep_going:
         } else if (flag) {
             /* at least one proc survives - send out a notification if one is requested */
             check_send_notification(jdata, pptr, PMIX_ERR_PROC_KILLED_BY_CMD);
+            // recover the resources used by this proc
+            prte_state_base_recover_resources(jdata, pptr);
         }
         break;
 
@@ -414,6 +416,8 @@ keep_going:
         if (flag) {
             /* send out a notification if one is requested */
             check_send_notification(jdata, pptr, PMIX_ERR_PROC_ABORTED_BY_SIG);
+            // recover the resources used by this proc
+            prte_state_base_recover_resources(jdata, pptr);
         } else {
             if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
                 jdata->state = PRTE_JOB_STATE_ABORTED_BY_SIG;
@@ -436,6 +440,8 @@ keep_going:
         if (flag) {
             /* send out a notification if one is requested */
             check_send_notification(jdata, pptr, PMIX_ERR_PROC_TERM_WO_SYNC);
+            // recover the resources used by this proc
+            prte_state_base_recover_resources(jdata, pptr);
         } else {
             if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
                 jdata->state = PRTE_JOB_STATE_ABORTED_WO_SYNC;
@@ -507,6 +513,8 @@ keep_going:
         if (flag) {
             /* send out a notification if one is requested */
             check_send_notification(jdata, pptr, PMIX_ERR_PROC_REQUESTED_ABORT);
+            // recover the resources used by this proc
+            prte_state_base_recover_resources(jdata, pptr);
         } else {
             if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
                 jdata->state = PRTE_JOB_STATE_CALLED_ABORT;
@@ -544,6 +552,8 @@ keep_going:
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
         } else if (flag && prte_get_attribute(&jdata->attributes, PRTE_JOB_ERROR_NONZERO_EXIT, NULL, PMIX_BOOL)) {
             check_send_notification(jdata, pptr, PMIX_ERR_EXIT_NONZERO_TERM);
+            // recover the resources used by this proc
+            prte_state_base_recover_resources(jdata, pptr);
         } else {
             if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
                 jdata->state = PRTE_JOB_STATE_NON_ZERO_TERM;
