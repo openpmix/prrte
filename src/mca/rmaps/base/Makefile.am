@@ -13,7 +13,7 @@
 # Copyright (c) 2011      Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
-# Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2022-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -22,7 +22,11 @@
 #
 
 EXTRA_DIST += \
-        base/help-prte-rmaps-base.txt
+        base/help-prte-rmaps-base.txt \
+        base/help-placement.txt \
+        base/help-bindto.txt \
+        base/help-mapby.txt \
+        base/help-rankby.txt
 
 headers += \
         base/base.h \
