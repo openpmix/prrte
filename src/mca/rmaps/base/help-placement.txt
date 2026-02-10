@@ -1,0 +1,1186 @@
+# -*- text -*-
+#
+# Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
+#                         University Research and Technology
+#                         Corporation.  All rights reserved.
+# Copyright (c) 2004-2005 The University of Tennessee and The University
+#                         of Tennessee Research Foundation.  All rights
+#                         reserved.
+# Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
+#                         University of Stuttgart.  All rights reserved.
+# Copyright (c) 2004-2005 The Regents of the University of California.
+#                         All rights reserved.
+# Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2011      Los Alamos National Security, LLC.
+#                         All rights reserved.
+# Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+# This is the US/English general help file for PRRTE's prun.
+#
+[placement]
+
+
+Overview
+--------
+
+PRRTE provides a set of three controls for assigning process locations
+and ranks:
+
+1. Mapping: Assigns a default location to each process
+
+2. Ranking: Assigns a unique integer rank value to each process
+
+3. Binding: Constrains each process to run on specific processors
+
+This section provides an overview of these three controls.  Unless
+otherwise this behavior is shared by "prun(1)" (working with a PRRTE
+DVM), and "prterun(1)". More detail about PRRTE process placement is
+available in the following sections (using "--help
+placement-<section>"):
+
+* "examples": some examples of the interactions between mapping,
+  ranking, and binding options.
+
+* "fundamentals": provides deeper insight into PRRTE's mapping,
+  ranking, and binding options.
+
+* "limits": explains the difference between *overloading* and
+  *oversubscribing* resources.
+
+* "diagnostics": describes options for obtaining various diagnostic
+  reports that aid the user in verifying and tuning the placement for
+  a specific job.
+
+* "rankfiles": explains the format and use of the rankfile mapper for
+  specifying arbitrary process placements.
+
+* "deprecated": a list of deprecated options and their new
+  equivalents.
+
+* "all": outputs all the placement help except for the "deprecated"
+  and "rankfile" sections.
+
+
+Quick Summary
+=============
+
+The two binaries that most influence process layout are "prte(1)" and
+"prun(1)".  The "prte(1)" process discovers the allocation,
+establishes a Distributed Virtual Machine by starting a "prted(1)"
+daemon on each node of the allocation, and defines the efault
+mapping/ranking/binding policies for all jobs.  The "prun(1)" process
+defines the specific mapping/ranking/binding for a specific job. Most
+of the command line controls are targeted to "prun(1)" since each job
+has its own unique requirements.
+
+"prterun(1)" is just a wrapper around "prte(1)" for a single job PRRTE
+DVM. It is doing the job of both "prte(1)" and "prun(1)", and, as
+such, accepts the sum all of their command line arguments. Any example
+that uses "prun(1)" can substitute the use of "prterun(1)" except
+where otherwise noted.
+
+The "prte(1)" process attempts to automatically discover the nodes in
+the allocation by querying supported resource managers. If a supported
+resource manager is not present then "prte(1)" relies on a hostfile
+provided by the user.  In the absence of such a hostfile it will run
+all processes on the localhost.
+
+If running under a supported resource manager, the "prte(1)" process
+will start the daemon processes ("prted(1)") on the remote nodes using
+the corresponding resource manager process starter. If no such starter
+is available then "ssh" (or "rsh") is used.
+
+Minus user direction, PRRTE will automatically map processes in a
+round-robin fashion by CPU, binding each process to its own CPU. The
+type of CPU used (core vs hwthread) is determined by (in priority
+order):
+
+* user directive on the command line via the HWTCPUS qualifier to the
+  "--map-by" directive
+
+* setting the "rmaps_default_mapping_policy" MCA parameter to include
+  the "HWTCPUS" qualifier. This parameter sets the default value for a
+  PRRTE DVM — qualifiers are carried across to DVM jobs started via
+  "prun" unless overridden by the user's command line
+
+* defaulting to "CORE" in topologies where core CPUs are defined, and
+  to "hwthreads" otherwise.
+
+By default, the ranks are assigned in accordance with the mapping
+directive — e.g., jobs that are mapped by-node will have the process
+ranks assigned round-robin on a per-node basis.
+
+PRRTE automatically binds processes unless directed not to do so by
+the user. Minus direction, PRRTE will bind individual processes to
+their own CPU within the object to which they were mapped. Should a
+node become oversubscribed during the mapping process, and if
+oversubscription is allowed, all subsequent processes assigned to that
+node will *not* be bound.
+
+
+Definition of 'slot'
+--------------------
+
+The term "slot" is used extensively in the rest of this documentation.
+A slot is an allocation unit for a process.  The number of slots on a
+node indicate how many processes can potentially execute on that node.
+By default, PRRTE will allow one process per slot.
+
+If PRRTE is not explicitly told how many slots are available on a node
+(e.g., if a hostfile is used and the number of slots is not specified
+for a given node), it will determine a maximum number of slots for
+that node in one of two ways:
+
+1. Default behavior: By default, PRRTE will attempt to discover the
+   number of processor cores on the node, and use that as the number
+   of slots available.
+
+2. When "--use-hwthread-cpus" is used: If "--use-hwthread-cpus" is
+   specified on the command line, then PRRTE will attempt to discover
+   the number of hardware threads on the node, and use that as the
+   number of slots available.
+
+This default behavior also occurs when specifying the "--host" option
+with a single host.  Thus, the command:
+
+   shell$ prun --host node1 ./a.out
+
+launches a number of processes equal to the number of cores on node
+"node1", whereas:
+
+   shell$ prun --host node1 --use-hwthread-cpus ./a.out
+
+launches a number of processes equal to the number of hardware threads
+on "node1".
+
+When PRRTE applications are invoked in an environment managed by a
+resource manager (e.g., inside of a Slurm job), and PRRTE was built
+with appropriate support for that resource manager, then PRRTE will be
+informed of the number of slots for each node by the resource manager.
+For example:
+
+   shell$ prun ./a.out
+
+launches one process for every slot (on every node) as dictated by the
+resource manager job specification.
+
+Also note that the one-process-per-slot restriction can be overridden
+in unmanaged environments (e.g., when using hostfiles without a
+resource manager) if oversubscription is enabled (by default, it is
+disabled).  Most parallel applications and HPC environments do not
+oversubscribe; for simplicity, the majority of this documentation
+assumes that oversubscription is not enabled.
+
+
+Slots are not hardware resources
+================================
+
+Slots are frequently incorrectly conflated with hardware resources. It
+is important to realize that slots are an entirely different metric
+than the number (and type) of hardware resources available.
+
+Here are some examples that may help illustrate the difference:
+
+1. More processor cores than slots: Consider a resource manager job
+   environment that tells PRRTE that there is a single node with 20
+   processor cores and 2 slots available.  By default, PRRTE will only
+   let you run up to 2 processes.
+
+   Meaning: you run out of slots long before you run out of processor
+   cores.
+
+2. More slots than processor cores: Consider a hostfile with a single
+   node listed with a "slots=50" qualification.  The node has 20
+   processor cores.  By default, PRRTE will let you run up to 50
+   processes.
+
+   Meaning: you can run many more processes than you have processor
+   cores.
+
+
+Definition of "processor element"
+---------------------------------
+
+By default, PRRTE defines that a "processing element" is a processor
+core.  However, if "--use-hwthread-cpus" is specified on the command
+line, then a "processing element" is a hardware thread.
+#
+[placement-all]
+
+#include#help-placement.txt#placement-fundamentals
+
+#include#help-placement.txt#placement-limits
+
+#include#help-placement.txt#placement-examples
+
+#include#help-placement.txt#placement-diagnostics
+
+#
+[placement-examples]
+
+
+Examples
+--------
+
+Listed here are the subset of command line options that will be used
+in the process mapping/ranking/binding examples below.
+
+
+Specifying Host Nodes
+=====================
+
+Use one of the following options to specify which hosts (nodes) within
+the PRRTE DVM environment to run on.
+
+   --host <host1,host2,...,hostN>
+
+   # or
+
+   --host <host1:X,host2:Y,...,hostN:Z>
+
+* List of hosts on which to invoke processes. After each hostname a
+  colon (":") followed by a positive integer can be used to specify
+  the number of slots on that host (":X", ":Y", and ":Z"). The default
+  is "1".
+
+   --hostfile <hostfile>
+
+* Provide a hostfile to use.
+
+
+Process Mapping / Ranking / Binding Options
+===========================================
+
+* "-c #", "-n #", "--n #", "--np <#>": Run this many copies of the
+  program on the given nodes. This option indicates that the specified
+  file is an executable program and not an application context. If no
+  value is provided for the number of copies to execute (i.e., neither
+  the "-np" nor its synonyms are provided on the command line), "prun"
+  will automatically execute a copy of the program on each process
+  slot (see below for description of a "process slot"). This feature,
+  however, can only be used in the SPMD model and will return an error
+  (without beginning execution of the application) otherwise.
+
+  Note:
+
+    These options specify the number of processes to launch. None of
+    the options imply a particular binding policy — e.g., requesting
+    "N" processes for each package does not imply that the processes
+    will be bound to the package.
+
+* "--map-by <object>": Map to the specified object. Supported objects
+  include:
+
+  * "slot"
+
+  * "hwthread"
+
+  * "core" (default)
+
+  * "l1cache"
+
+  * "l2cache"
+
+  * "l3cache"
+
+  * "numa"
+
+  * "package"
+
+  * "node"
+
+  * "seq"
+
+  * "ppr"
+
+  * "rankfile"
+
+  * "pe-list"
+
+  Any object can include qualifiers by adding a colon (":") and any
+  colon-delimited combination of one or more of the following to the "
+  --map-by" options:
+
+  * "PE=n" bind "n" processing elements to each process (can not be
+    used in combination with rankfile or pe-list directives)
+
+    Error:
+
+      JMS Several of the options below refer to "pe-list". Is this
+      option supposed to be "PE-LIST=n", not "PE=n"?
+
+  * "SPAN" load balance the processes across the allocation (cannot be
+    used in combination with "slot", "node", "seq", "ppr", "rankfile",
+    or "pe-list" directives)
+
+  * "OVERSUBSCRIBE" allow more processes on a node than processing
+    elements
+
+  * "NOOVERSUBSCRIBE" means "!OVERSUBSCRIBE"
+
+  * "NOLOCAL" do not launch processes on the same node as "prun"
+
+  * "HWTCPUS" use hardware threads as CPU slots
+
+  * "CORECPUS" use cores as CPU slots (default)
+
+  * "INHERIT" indicates that a child job (i.e., one spawned from
+    within an application) shall inherit the placement policies of the
+    parent job that spawned it.
+
+  * "NOINHERIT" means "!INHERIT"
+
+  * "FILE=<path>" (path to file containing sequential or rankfile
+    entries).
+
+  * "ORDERED" only applies to the PE-LIST option to indicate that
+    procs are to be bound to each of the specified CPUs in the order
+    in which they are assigned (i.e., the first proc on a node shall
+    be bound to the first CPU in the list, the second proc shall be
+    bound to the second CPU, etc.)
+
+  "ppr" policy example: "--map-by ppr:N:<object>" will launch "N"
+  times the number of objects of the specified type on each node.
+
+  Note:
+
+    Directives and qualifiers are case-insensitive and can be
+    shortened to the minimum number of characters to uniquely identify
+    them. Thus, "L1CACHE" can be given as "l1cache" or simply as "L1".
+
+* "--rank-by <object>": This assigns ranks in round-robin fashion
+  according to the specified object. The default follows the mapping
+  pattern. Supported rank-by objects include:
+
+  * "slot"
+
+  * "node"
+
+  * "fill"
+
+  * "span"
+
+  There are no qualifiers for the "--rank-by" directive.
+
+* "--bind-to <object>": This binds processes to the specified object.
+  See defaults in Quick Summary.  Supported bind-to objects include:
+
+  * "none"
+
+  * "hwthread"
+
+  * "core"
+
+  * "l1cache"
+
+  * "l2cache"
+
+  * "l3cache"
+
+  * "numa"
+
+  * "package"
+
+  Any object can include qualifiers by adding a colon (":") and any
+  colon-delimited combination of one or more of the following to the "
+  --bind-to" options:
+
+  * "overload-allowed" allows for binding more than one process in
+    relation to a CPU
+
+  * "if-supported" if binding to that object is supported on this
+    system.
+
+
+Specifying Host Nodes
+=====================
+
+Host nodes can be identified on the command line with the "--host"
+option or in a hostfile.
+
+For example, assuming no other resource manager or scheduler is
+involved:
+
+   prun --host aa,aa,bb ./a.out
+
+This launches two processes on node "aa" and one on "bb".
+
+   prun --host aa ./a.out
+
+This launches one process on node "aa".
+
+   prun --host aa:5 ./a.out
+
+This launches five processes on node "aa".
+
+Or, consider the hostfile:
+
+   $ cat myhostfile
+   aa slots=2
+   bb slots=2
+   cc slots=2
+
+Here, we list both the host names ("aa", "bb", and "cc") but also how
+many "slots" there are for each. Slots indicate how many processes can
+potentially execute on a node. For best performance, the number of
+slots may be chosen to be the number of cores on the node or the
+number of processor sockets.
+
+If the hostfile does not provide slots information, the PRRTE DVM will
+attempt to discover the number of cores (or hwthreads, if the
+":HWTCPUS" qualifier to the "--map-by" option is set) and set the
+number of slots to that value.
+
+Examples using the hostfile above with and without the "--host"
+option:
+
+   prun --hostfile myhostfile ./a.out
+
+This will launch two processes on each of the three nodes.
+
+   prun --hostfile myhostfile --host aa ./a.out
+
+This will launch two processes, both on node "aa".
+
+   prun --hostfile myhostfile --host dd ./a.out
+
+This will find no hosts to run on and abort with an error. That is,
+the specified host "dd" is not in the specified hostfile.
+
+When running under resource managers (e.g., SLURM, Torque, etc.), PRTE
+will obtain both the hostnames and the number of slots directly from
+the resource manger. The behavior of "--host" in that environment will
+behave the same as if a hostfile was provided (since it is provided by
+the resource manager).
+
+
+Specifying Number of Processes
+==============================
+
+As we have just seen, the number of processes to run can be set using
+the hostfile. Other mechanisms exist.
+
+The number of processes launched can be specified as a multiple of the
+number of nodes or processor sockets available. Consider the hostfile
+below for the examples that follow.
+
+   $ cat myhostfile
+   aa
+   bb
+
+For example:
+
+   prun --hostfile myhostfile --map-by ppr:2:package ./a.out
+
+This launches processes 0-3 on node "aa" and process 4-7 on node "bb",
+where "aa" and "bb" are both dual-package nodes. The "--map-by
+ppr:2:package" option also turns on the "--bind-to package" option,
+which is discussed in a later section.
+
+   prun --hostfile myhostfile --map-by ppr:2:node ./a.out
+
+This launches processes 0-1 on node "aa" and processes 2-3 on node
+"bb".
+
+   prun --hostfile myhostfile --map-by ppr:1:node ./a.out
+
+This launches one process per host node.
+
+Another alternative is to specify the number of processes with the "--
+np" option. Consider now the hostfile:
+
+   $ cat myhostfile
+   aa slots=4
+   bb slots=4
+   cc slots=4
+
+With this hostfile:
+
+   prun --hostfile myhostfile --np 6 ./a.out
+
+This will launch processes 0-3 on node "aa" and processes 4-5 on node
+"bb".  The remaining slots in the hostfile will not be used since the
+"-np" option indicated that only 6 processes should be launched.
+
+
+Mapping Processes to Nodes Using Policies
+=========================================
+
+The examples above illustrate the default mapping of process processes
+to nodes. This mapping can also be controlled with various "prun" /
+"prterun" options that describe mapping policies.
+
+   $ cat myhostfile
+   aa slots=4
+   bb slots=4
+   cc slots=4
+
+Consider the hostfile above, with "--np 6":
+
++---------------------------+---------------------------+---------------------------+---------------------------+
+| Command                   | Ranks on "aa"             | Ranks on "bb"             | Ranks on "cc"             |
+|===========================|===========================|===========================|===========================|
+| "prun"                    | 0 1 2 3                   | 4 5                       |                           |
++---------------------------+---------------------------+---------------------------+---------------------------+
+| "prun --map-by node"      | 0 3                       | 1 4                       | 2 5                       |
++---------------------------+---------------------------+---------------------------+---------------------------+
+| "prun --map-by            |                           | 0 2 4                     | 1 3 5                     |
+| node:NOLOCAL"             |                           |                           |                           |
++---------------------------+---------------------------+---------------------------+---------------------------+
+
+The "--map-by node" option will load balance the processes across the
+available nodes, numbering each process by node in a round-robin
+fashion.
+
+The ":NOLOCAL" qualifier to "--map-by" prevents any processes from
+being mapped onto the local host (in this case node "aa"). While
+"prun" typically consumes few system resources, the ":NOLOCAL"
+qualifier can be helpful for launching very large jobs where "prun"
+may actually need to use noticeable amounts of memory and/or
+processing time.
+
+Just as "--np" can specify fewer processes than there are slots, it
+can also oversubscribe the slots. For example, with the same hostfile:
+
+   prun --hostfile myhostfile --np 14 ./a.out
+
+This will produce an error since the default ":NOOVERSUBSCRIBE"
+qualifier to "--map-by" prevents oversubscription.
+
+To oversubscribe the nodes you can use the ":OVERSUBSCRIBE" qualifier
+to "--map-by":
+
+   prun --hostfile myhostfile --np 14 --map-by :OVERSUBSCRIBE ./a.out
+
+This will launch processes 0-5 on node "aa", 6-9 on "bb", and 10-13 on
+"cc".
+
+Limits to oversubscription can also be specified in the hostfile
+itself with the "max_slots" field:
+
+   $ cat myhostfile
+   aa slots=4 max_slots=4
+   bb         max_slots=8
+   cc slots=4
+
+The "max_slots" field specifies such a limit. When it does, the
+"slots" value defaults to the limit. Now:
+
+   prun --hostfile myhostfile --np 14 --map-by :OVERSUBSCRIBE ./a.out
+
+This causes the first 12 processes to be launched as before, but the
+remaining two processes will be forced onto node cc. The other two
+nodes are protected by the hostfile against oversubscription by this
+job.
+
+Using the ":NOOVERSUBSCRIBE" qualifier to "--map-by" option can be
+helpful since the PRTE DVM currently does not get "max_slots" values
+from the resource manager.
+
+Of course, "--np" can also be used with the "--host" option. For
+example,
+
+   prun --host aa,bb --np 8 ./a.out
+
+This will produce an error since the default ":NOOVERSUBSCRIBE"
+qualifier to "--map-by" prevents oversubscription.
+
+   prun --host aa,bb --np 8 --map-by :OVERSUBSCRIBE ./a.out
+
+This launches 8 processes. Since only two hosts are specified, after
+the first two processes are mapped, one to "aa" and one to "bb", the
+remaining processes oversubscribe the specified hosts evenly.
+
+   prun --host aa:2,bb:6 --np 8 ./a.out
+
+This launches 8 processes. Processes 0-1 on node "aa" since it has 2
+slots and processes 2-7 on node "bb" since it has 6 slots.
+
+And here is a MIMD example:
+
+   prun --host aa --np 1 hostname : --host bb,cc --np 2 uptime
+
+This will launch process 0 running "hostname" on node "aa" and
+processes 1 and 2 each running "uptime" on nodes "bb" and "cc",
+respectively.
+#
+[placement-rankfiles]
+
+
+Rankfiles
+---------
+
+Another way to specify arbitrary mappings is with a rankfile, which
+gives you detailed control over process binding as well.
+
+Rankfiles are text files that specify detailed information about how
+individual processes should be mapped to nodes, and to which
+processor(s) they should be bound. Each line of a rankfile specifies
+the location of one process. The general form of each line in the
+rankfile is:
+
+   rank <N>=<hostname> slot=<slot list>
+
+For example:
+
+   $ cat myrankfile
+   rank 0=aa slot=10-12
+   rank 1=bb slot=0,1,4
+   rank 2=cc slot=1-2
+   $ prun --host aa,bb,cc,dd --map-by rankfile:FILE=myrankfile ./a.out
+
+Means that:
+
+* Rank 0 runs on node aa, bound to logical cores 10-12.
+
+* Rank 1 runs on node bb, bound to logical cores 0, 1, and 4.
+
+* Rank 2 runs on node cc, bound to logical cores 1 and 2.
+
+Similarly:
+
+   $ cat myrankfile
+   rank 0=aa slot=1:0-2
+   rank 1=bb slot=0:0,1,4
+   rank 2=cc slot=1-2
+   $ prun --host aa,bb,cc,dd --map-by rankfile:FILE=myrankfile ./a.out
+
+Means that:
+
+* Rank 0 runs on node aa, bound to logical package 1, cores 10-12 (the
+  0th through 2nd cores on that package).
+
+* Rank 1 runs on node bb, bound to logical package 0, cores 0, 1, and
+  4.
+
+* Rank 2 runs on node cc, bound to logical cores 1 and 2.
+
+The hostnames listed above are "absolute," meaning that actual
+resolvable hostnames are specified. However, hostnames can also be
+specified as "relative," meaning that they are specified in relation
+to an externally-specified list of hostnames (e.g., by "prun"'s "--
+host" argument, a hostfile, or a job scheduler).
+
+The "relative" specification is of the form ""+n<X>"", where "X" is an
+integer specifying the Xth hostname in the set of all available
+hostnames, indexed from 0. For example:
+
+   $ cat myrankfile
+   rank 0=+n0 slot=10-12
+   rank 1=+n1 slot=0,1,4
+   rank 2=+n2 slot=1-2
+   $ prun --host aa,bb,cc,dd --map-by rankfile:FILE=myrankfile ./a.out
+
+All package/core slot locations are be specified as *logical* indexes.
+You can use tools such as HWLOC's "lstopo" to find the logical indexes
+of packages and cores.
+#
+[placement-deprecated]
+
+
+Deprecated options
+------------------
+
+These deprecated options will be removed in a future release.
+
++----------------------+----------------------+--------------------------------+
+| Deprecated Option    | Replacement          | Description                    |
+|======================|======================|================================|
+| "--bind-to-core"     | "--bind-to core"     | Bind processes to cores        |
++----------------------+----------------------+--------------------------------+
+| "--bind-to-socket"   | "--bind-to package"  | Bind processes to processor    |
+|                      |                      | sockets                        |
++----------------------+----------------------+--------------------------------+
+| "--bycore"           | "--map-by core"      | Map processes by core          |
++----------------------+----------------------+--------------------------------+
+| "--bynode"           | "--map-by node"      | Launch processes one per node, |
+|                      |                      | cycling by node in a round-    |
+|                      |                      | robin fashion. This spreads    |
+|                      |                      | processes evenly among nodes   |
+|                      |                      | and assigns ranks in a round-  |
+|                      |                      | robin, "by node" manner.       |
++----------------------+----------------------+--------------------------------+
+| "--byslot"           | "--map-by slot"      | Map and rank processes round-  |
+|                      |                      | robin by slot                  |
++----------------------+----------------------+--------------------------------+
+| "--cpus-per-proc     | *--map-by <obj>:PE=  | Bind each process to the       |
+| <#perproc>"          | <#perproc>`*         | specified number of CPUs       |
++----------------------+----------------------+--------------------------------+
+| "--cpus-per-rank     | "--map-by            | Alias for "--cpus-per-proc"    |
+| <#perrank>"          | <obj>:PE=<#perrank>" |                                |
++----------------------+----------------------+--------------------------------+
+| "--display-          | "--display ALLOC"    | Display the detected resource  |
+| allocation"          |                      | allocation                     |
++----------------------+----------------------+--------------------------------+
+| "-display-devel-map" | "--display MAP-      | Display a detailed process map |
+|                      | DEVEL"               | (mostly intended for           |
+|                      |                      | developers) just before        |
+|                      |                      | launch.                        |
++----------------------+----------------------+--------------------------------+
+| "--display-map"      | "--display MAP"      | Display a table showing the    |
+|                      |                      | mapped location of each        |
+|                      |                      | process prior to launch.       |
++----------------------+----------------------+--------------------------------+
+| "--display-topo"     | "--display TOPO"     | Display the topology as part   |
+|                      |                      | of the process map (mostly     |
+|                      |                      | intended for developers) just  |
+|                      |                      | before launch.                 |
++----------------------+----------------------+--------------------------------+
+| "--do-not-launch"    | "--map-by            | Perform all necessary          |
+|                      | :DONOTLAUNCH"        | operations to prepare to       |
+|                      |                      | launch the application, but do |
+|                      |                      | not actually launch it         |
+|                      |                      | (usually used to test mapping  |
+|                      |                      | patterns).                     |
++----------------------+----------------------+--------------------------------+
+| "--do-not-resolve"   | "--map-by            | Do not attempt to resolve      |
+|                      | :DONOTRESOLVE"       | interfaces — usually used to   |
+|                      |                      | determine proposed process     |
+|                      |                      | placement/binding prior to     |
+|                      |                      | obtaining an allocation.       |
++----------------------+----------------------+--------------------------------+
+| "-N <num>"           | "--map-by            | Launch "num" processes per     |
+|                      | prr:<num>:node"      | node on all allocated nodes    |
++----------------------+----------------------+--------------------------------+
+| "--nolocal"          | "--map-by :NOLOCAL"  | Do not run any copies of the   |
+|                      |                      | launched application on the    |
+|                      |                      | same node as "prun" is         |
+|                      |                      | running. This option will      |
+|                      |                      | override listing the           |
+|                      |                      | "localhost" with "--host" or   |
+|                      |                      | any other host-specifying      |
+|                      |                      | mechanism.                     |
++----------------------+----------------------+--------------------------------+
+| "--nooversubscribe"  | "--map-by            | Do not oversubscribe any       |
+|                      | :NOOVERSUBSCRIBE"    | nodes; error (without starting |
+|                      |                      | any processes) if the          |
+|                      |                      | requested number of processes  |
+|                      |                      | would cause oversubscription.  |
+|                      |                      | This option implicitly sets    |
+|                      |                      | "max_slots" equal to the       |
+|                      |                      | "slots" value for each node.   |
+|                      |                      | (Enabled by default).          |
++----------------------+----------------------+--------------------------------+
+| "--npernode          | "--map-by            | On each node, launch this many |
+| <#pernode>"          | ppr:<#pernode>:node" | processes                      |
++----------------------+----------------------+--------------------------------+
+| "--npersocket        | "--map-by ppr:<#per  | On each node, launch this many |
+| <#persocket>"        | package>:package"    | processes times the number of  |
+|                      |                      | processor sockets on the node. |
+|                      |                      | The "--npersocket" option also |
+|                      |                      | turns on the "-- bind-to       |
+|                      |                      | socket" option. The term       |
+|                      |                      | "socket" has been globally     |
+|                      |                      | replaced with "package".       |
++----------------------+----------------------+--------------------------------+
+| "--oversubscribe"    | "--map-by            | Nodes are allowed to be        |
+|                      | :OVERSUBSCRIBE"      | oversubscribed, even on a      |
+|                      |                      | managed system, and            |
+|                      |                      | overloading of processing      |
+|                      |                      | elements.                      |
++----------------------+----------------------+--------------------------------+
+| "--pernode"          | "--map-by            | On each node, launch one       |
+|                      | ppr:1:node"          | process                        |
++----------------------+----------------------+--------------------------------+
+| "--ppr"              | *--map-by            | Comma-separated list of number |
+|                      | ppr:<list>`*         | of processes on a given        |
+|                      |                      | resource type [default:        |
+|                      |                      | "none"].                       |
++----------------------+----------------------+--------------------------------+
+| "--rankfile          | "--map-by rankfile:  | Use a rankfile for             |
+| <FILENAME>"          | FILE=<FILENAME>"     | mapping/ranking/binding        |
++----------------------+----------------------+--------------------------------+
+| "--report-bindings"  | "--display BINDINGS" | Report any bindings for        |
+|                      |                      | launched processes             |
++----------------------+----------------------+--------------------------------+
+| "--tag-output"       | "--output TAG"       | Tag all output with            |
+|                      |                      | "[job,rank]"                   |
++----------------------+----------------------+--------------------------------+
+| "--timestamp-output" | "--output TIMESTAMP" | Timestamp all application      |
+|                      |                      | process output                 |
++----------------------+----------------------+--------------------------------+
+| "--use-hwthread-     | "--map-by :HWTCPUS"  | Use hardware threads as        |
+| cpus"                |                      | independent CPUs               |
++----------------------+----------------------+--------------------------------+
+| "--xml"              | "--output XML"       | Provide all output in XML      |
+|                      |                      | format                         |
++----------------------+----------------------+--------------------------------+
+#
+[placement-diagnostics]
+
+
+Diagnostics
+-----------
+
+PRRTE provides various diagnostic reports that aid the user in
+verifying and tuning the mapping/ranking/binding for a specific job.
+
+The ":REPORT" qualifier to the "--bind-to" command line option can be
+used to report process bindings.
+
+As an example, consider a node with:
+
+* 2 processor packages,
+
+* 4 cores per package, and
+
+* 8 hardware threads per core.
+
+In each of the examples below the binding is reported in a human
+readable format.
+
+   $ prun --np 4 --map-by core --bind-to core:REPORT ./a.out
+   [node01:103137] MCW rank 0 bound to package[0][core:0]
+   [node01:103137] MCW rank 1 bound to package[0][core:1]
+   [node01:103137] MCW rank 2 bound to package[0][core:2]
+   [node01:103137] MCW rank 3 bound to package[0][core:3]
+
+In the example above, processes are bound to successive cores on the
+first package.
+
+   $ prun --np 4 --map-by package --bind-to package:REPORT ./a.out
+   [node01:103115] MCW rank 0 bound to package[0][core:0-9]
+   [node01:103115] MCW rank 1 bound to package[1][core:10-19]
+   [node01:103115] MCW rank 2 bound to package[0][core:0-9]
+   [node01:103115] MCW rank 3 bound to package[1][core:10-19]
+
+In the example above, processes are bound to all cores on successive
+packages in a round-robin fashion.
+
+   $ prun --np 4 --map-by package:PE=2 --bind-to core:REPORT ./a.out
+   [node01:103328] MCW rank 0 bound to package[0][core:0-1]
+   [node01:103328] MCW rank 1 bound to package[1][core:10-11]
+   [node01:103328] MCW rank 2 bound to package[0][core:2-3]
+   [node01:103328] MCW rank 3 bound to package[1][core:12-13]
+
+The example above shows us that 2 cores have been bound per process.
+The ":PE=2" qualifier states that 2 CPUs underneath the package (which
+would be cores in this case) are mapped to each process.
+
+   $ prun --np 4 --map-by core:PE=2:HWTCPUS --bind-to :REPORT  hostname
+   [node01:103506] MCW rank 0 bound to package[0][hwt:0-1]
+   [node01:103506] MCW rank 1 bound to package[0][hwt:8-9]
+   [node01:103506] MCW rank 2 bound to package[0][hwt:16-17]
+   [node01:103506] MCW rank 3 bound to package[0][hwt:24-25]
+
+The example above shows us that 2 hardware threads have been bound per
+process.  In this case "prun" is directing the DVM to map by hardware
+threads since we used the ":HWTCPUS" qualifier. Without that qualifier
+this command would return an error since by default the DVM will not
+map to resources smaller than a core.  The ":PE=2" qualifier states
+that 2 processing elements underneath the core (which would be
+hardware threads in this case) are mapped to each process.
+
+   $ prun --np 4 --bind-to none:REPORT  hostname
+   [node01:107126] MCW rank 0 is not bound (or bound to all available processors)
+   [node01:107126] MCW rank 1 is not bound (or bound to all available processors)
+   [node01:107126] MCW rank 2 is not bound (or bound to all available processors)
+   [node01:107126] MCW rank 3 is not bound (or bound to all available processors)
+
+Binding is turned off in the above example, as reported.
+#
+[placement-fundamentals]
+
+
+Fundamentals
+------------
+
+The mapping of processes to nodes can be defined not just with general
+policies but also, if necessary, using arbitrary mappings that cannot
+be described by a simple policy. Supported directives, given on the
+command line via the "--map-by" option, include:
+
+* "SEQ": (often accompanied by the "file=<path>" qualifier) assigns
+  one process to each node specified in the file. The sequential file
+  is to contain an entry for each desired process, one per line of the
+  file.
+
+* "RANKFILE": (often accompanied by the "file=<path>" qualifier)
+  assigns one process to the node/resource specified in each entry of
+  the file, one per line of the file.
+
+For example, using the hostfile below:
+
+   $ cat myhostfile
+   aa slots=4
+   bb slots=4
+   cc slots=4
+
+The command below will launch three processes, one on each of nodes
+"aa", "bb", and "cc", respectively. The slot counts don't matter; one
+process is launched per line on whatever node is listed on the line.
+
+   $ prun --hostfile myhostfile --map-by seq ./a.out
+
+Impact of the ranking option is best illustrated by considering the
+following hostfile and test cases where each node contains two
+packages (each package with two cores). Using the "--map-by
+ppr:2:package" option, we map two processes onto each package and
+utilize the "--rank-by" option as show below:
+
+   $ cat myhostfile
+   aa
+   bb
+
++-----------------------------------+-----------------------------------+-----------------------------------+
+| Command                           | Ranks on "aa"                     | Ranks on "bb"                     |
+|===================================|===================================|===================================|
+| "--rank-by core"                  | 0 1 ! 2 3                         | 4 5 ! 6 7                         |
++-----------------------------------+-----------------------------------+-----------------------------------+
+| "--rank-by package"               | 0 2 ! 1 3                         | 4 6 ! 5 7                         |
++-----------------------------------+-----------------------------------+-----------------------------------+
+| "--rank-by package:SPAN"          | 0 4 ! 1 5                         | 2 6 ! 3 7                         |
++-----------------------------------+-----------------------------------+-----------------------------------+
+
+Ranking by slot provides the identical result as ranking by core in
+this case — a simple progression of ranks across each node. Ranking by
+package does a round-robin ranking across packages within each node
+until all processes have been assigned a rank, and then progresses to
+the next node.  Adding the ":SPAN" qualifier to the ranking directive
+causes the ranking algorithm to treat the entire allocation as a
+single entity — thus, the process ranks are assigned across all
+packages before circling back around to the beginning.
+
+The binding operation restricts the process to a subset of the CPU
+resources on the node.
+
+The processors to be used for binding can be identified in terms of
+topological groupings — e.g., binding to an l3cache will bind each
+process to all processors within the scope of a single L3 cache within
+their assigned location. Thus, if a process is assigned by the mapper
+to a certain package, then a "--bind-to l3cache" directive will cause
+the process to be bound to the processors that share a single L3 cache
+within that package.
+
+To help balance loads, the binding directive uses a round-robin
+method, binding a process to the first available specified object type
+within the object where the process was mapped. For example, consider
+the case where a job is mapped to the package level, and then bound to
+core. Each package will have multiple cores, so if multiple processes
+are mapped to a given package, the binding algorithm will assign each
+process located to a package to a unique core in a round-robin manner.
+
+Binding can only be done to the mapped object or to a resource located
+within that object.
+
+An object is considered completely consumed when the number of
+processes bound to it equals the number of CPUs within it. Unbound
+processes are not considered in this computation. Additional processes
+cannot be mapped to consumed objects unless the OVERLOAD qualifier is
+provided via the "--bind-to" command line option.
+
+Default process mapping/ranking/binding policies can also be set with
+MCA parameters, overridden by the command line options when provided.
+MCA parameters can be set on the "prte" command line when starting the
+DVM (or in the "prterun" command line for a single-execution job), but
+also in a system or user "mca-params.conf" file or as environment
+variables, as described in the MCA section below. Some examples
+include:
+
++-----------------------------------+-----------------------------------+-----------------------------------+
+| "prun" option                     | MCA parameter key                 | Value                             |
+|===================================|===================================|===================================|
+| "--map-by core"                   | "rmaps_default_mapping_policy"    | "core"                            |
++-----------------------------------+-----------------------------------+-----------------------------------+
+| "--map-by package"                | "rmaps_default_mapping_policy"    | "package"                         |
++-----------------------------------+-----------------------------------+-----------------------------------+
+| "--rank-by core"                  | "rmaps_default_ranking_policy"    | "core"                            |
++-----------------------------------+-----------------------------------+-----------------------------------+
+| "--bind-to core"                  | "hwloc_default_binding_policy"    | "core`"                           |
++-----------------------------------+-----------------------------------+-----------------------------------+
+| "--bind-to package"               | "hwloc_default_binding_policy"    | "package"                         |
++-----------------------------------+-----------------------------------+-----------------------------------+
+| "--bind-to none"                  | "hwloc_default_binding_policy"    | "none"                            |
++-----------------------------------+-----------------------------------+-----------------------------------+
+#
+[placement-limits]
+
+
+Overloading and Oversubscribing
+-------------------------------
+
+This section explores the difference between the terms "overloading"
+and "oversubscribing". Users are often confused by the difference
+between these two scenarios. As such, this section provides a number
+of scenarios to help illustrate the differences.
+
+* "--map-by :OVERSUBSCRIBE" allow more processes on a node than
+  allocated
+
+* "--bind-to <object>:overload-allowed" allows for binding more than
+  one process in relation to a CPU
+
+The important thing to remember with *oversubscribing* is that it can
+be defined separately from the actual number of CPUs on a node. This
+allows the mapper to place more or fewer processes per node than CPUs.
+By default, PRRTE uses cores to determine slots in the absence of such
+information provided in the hostfile or by the resource manager
+(except in the case of the "--host" as described in the section on
+that command line option.
+
+The important thing to remember with *overloading* is that it is
+defined as binding more processes than CPUs. By default, PRRTE uses
+cores as a means of counting the number of CPUs. However, the user can
+adjust this. For example when using the ":HWTCPUS" qualifier to the "
+--map-by" option PRRTE will use hardware threads as a means of
+counting the number of CPUs.
+
+For the following examples consider a node with:
+
+* 2 processor packages,
+
+* 10 cores per package, and
+
+* 8 hardware threads per core.
+
+Consider the node from above with the hostfile below:
+
+   $ cat myhostfile
+   node01 slots=32
+   node02 slots=32
+
+The "slots" token tells PRRTE that it can place up to 32 processes
+before *oversubscribing* the node.
+
+If we run the following:
+
+   prun --np 34 --hostfile myhostfile --map-by core
+       --bind-to core hostname
+
+It will return an error at the binding time indicating an
+*overloading* scenario.
+
+The mapping mechanism assigns 32 processes to "node01" matching the
+"slots" specification in the hostfile. The binding mechanism will bind
+the first 20 processes to unique cores leaving it with 12 processes
+that it cannot bind without overloading one of the cores (putting more
+than one process on the core).
+
+Using the "overload-allowed" qualifier to the "--bind-to core" option
+tells PRRTE that it may assign more than one process to a core.
+
+If we run the following:
+
+   prun --np 34 --hostfile myhostfile --map-by core
+       --bind-to core:overload-allowed hostname
+
+This will run correctly placing 32 processes on "node01", and 2
+processes on "node02". On "node01" two processes are bound to cores
+0-11 accounting for the overloading of those cores.
+
+Alternatively, we could use hardware threads to give binding a lower
+level CPU to bind to without overloading.
+
+If we run the following:
+
+   prun --np 34 --hostfile myhostfile --map-by core:HWTCPUS
+       --bind-to hwthread hostname
+
+This will run correctly placing 32 processes on "node01", and 2
+processes on "node02". On "node01" two processes are mapped to cores
+0-11 but bound to different hardware threads on those cores (the
+logical first and second hardware thread). Thus no hardware threads
+are overloaded at binding time.
+
+In both of the examples above the node is not oversubscribed at
+mapping time because the hostfile set the oversubscription limit to
+"slots=32" for each node. It is only after we exceed that limit that
+PRRTE will throw an oversubscription error.
+
+Consider next if we ran the following:
+
+   prun --np 66 --hostfile myhostfile
+       --map-by core:HWTCPUS --bind-to hwthread hostname
+
+This will return an error at mapping time indicating an
+oversubscription scenario. The mapping mechanism will assign all of
+the available slots (64 across 2 nodes) and be left two processes to
+map. The only way to map those processes is to exceed the number of
+available slots putting the job into an oversubscription scenario.
+
+You can force PRRTE to oversubscribe the nodes by using the
+":OVERSUBSCRIBE" qualifier to the "--map-by" option as seen in the
+example below:
+
+   prun --np 66 --hostfile myhostfile
+       --map-by core:HWTCPUS:OVERSUBSCRIBE --bind-to hwthread hostname
+
+This will run correctly placing 34 processes on "node01" and 32 on
+"node02".  Each process is bound to a unique hardware thread.
+
+
+Overloading vs. Oversubscription: Package Example
+=================================================
+
+Let's extend these examples by considering the package level. Consider
+the same node as before, but with the hostfile below:
+
+   $ cat myhostfile
+   node01 slots=22
+   node02 slots=22
+
+The lowest level CPUs are "cores" and we have 20 total (10 per
+package).
+
+If we run:
+
+   prun --np 20 --hostfile myhostfile --map-by package
+       --bind-to package:REPORT hostname
+
+Then 10 processes are mapped to each package, and bound at the package
+level.  This is not overloading since we have 10 CPUs (cores)
+available in the package at the hardware level.
+
+However, if we run:
+
+   prun --np 21 --hostfile myhostfile --map-by package
+       --bind-to package:REPORT hostname
+
+Then 11 processes are mapped to the first package and 10 to the second
+package.  At binding time we have an overloading scenario because
+there are only 10 CPUs (cores) available in the package at the
+hardware level. So the first package is overloaded.
+
+
+Overloading vs. Oversubscription: Hardware Threads Example
+==========================================================
+
+Similarly, if we consider hardware threads.
+
+Consider the same node as before, but with the hostfile below:
+
+   $ cat myhostfile
+   node01 slots=165
+   node02 slots=165
+
+The lowest level CPUs are "hwthreads" (because we are going to use the
+":HWTCPUS" qualifier) and we have 160 total (80 per package).
+
+If we re-run (from the package example) and add the ":HWTCPUS"
+qualifier:
+
+   prun --np 21 --hostfile myhostfile --map-by package:HWTCPUS
+       --bind-to package:REPORT hostname
+
+Without the ":HWTCPUS" qualifier this would be overloading (as we saw
+previously). The mapper places 11 processes on the first package and
+10 to the second package. The processes are still bound to the package
+level. However, with the ":HWTCPUS" qualifier, it is not overloading
+since we have 80 CPUs (hwthreads) available in the package at the
+hardware level.
+
+Alternatively, if we run:
+
+   prun --np 161 --hostfile myhostfile --map-by package:HWTCPUS
+       --bind-to package:REPORT hostname
+
+Then 81 processes are mapped to the first package and 80 to the second
+package.  At binding time we have an overloading scenario because
+there are only 80 CPUs (hwthreads) available in the package at the
+hardware level.  So the first package is overloaded.

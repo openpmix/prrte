@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -10,7 +10,10 @@
 #
 
 EXTRA_DIST += \
-        base/help-schizo-base.txt
+        base/help-schizo-base.txt \
+        base/help-schizo-display.txt \
+        base/help-schizo-output.txt \
+        base/help-schizo-rtos.txt
 
 headers += \
         base/base.h
