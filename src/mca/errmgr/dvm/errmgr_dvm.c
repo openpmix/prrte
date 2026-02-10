@@ -146,10 +146,10 @@ static void job_errors(int fd, short args, void *cbdata)
     jobstate = caddy->job_state;
     jdata->state = jobstate;
 
-    PMIX_OUTPUT_VERBOSE((1, prte_errmgr_base_framework.framework_output,
+    pmix_output_verbose(1, prte_errmgr_base_framework.framework_output,
                          "%s errmgr:dvm: job %s reported state %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace),
-                         prte_job_state_to_str(jobstate)));
+                         prte_job_state_to_str(jobstate));
 
     if (PMIX_CHECK_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
         if (PRTE_JOB_STATE_FAILED_TO_START == jdata->state
@@ -231,10 +231,10 @@ static void proc_errors(int fd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(caddy);
 
-    PMIX_OUTPUT_VERBOSE((1, prte_errmgr_base_framework.framework_output,
+    pmix_output_verbose(1, prte_errmgr_base_framework.framework_output,
                          "%s errmgr:dvm: for proc %s state %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(proc), prte_proc_state_to_str(state)));
+                         PRTE_NAME_PRINT(proc), prte_proc_state_to_str(state));
 
     /* get the job object */
     if (prte_finalizing || NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
@@ -365,9 +365,9 @@ static void proc_errors(int fd, short args, void *cbdata)
         /* if all my routes and children are gone, then terminate
            ourselves nicely (i.e., this is a normal termination) */
         if (0 == pmix_list_get_size(&prte_rml_base.children)) {
-            PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
+            pmix_output_verbose(2, prte_errmgr_base_framework.framework_output,
                                  "%s errmgr:default:dvm all routes gone - exiting",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
         }
     }
@@ -392,9 +392,9 @@ keep_going:
      */
     switch (state) {
     case PRTE_PROC_STATE_KILLED_BY_CMD:
-        PMIX_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+        pmix_output_verbose(5, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:dvm: proc %s killed by cmd",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc));
         /* we ordered this proc to die, so it isn't an abnormal termination
          * and we don't flag it as such
          */
@@ -410,9 +410,9 @@ keep_going:
         break;
 
     case PRTE_PROC_STATE_ABORTED_BY_SIG:
-        PMIX_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+        pmix_output_verbose(5, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:dvm: proc %s aborted by signal",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc));
         if (flag) {
             /* send out a notification if one is requested */
             check_send_notification(jdata, pptr, PMIX_ERR_PROC_ABORTED_BY_SIG);
@@ -434,9 +434,9 @@ keep_going:
         break;
 
     case PRTE_PROC_STATE_TERM_WO_SYNC:
-        PMIX_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+        pmix_output_verbose(5, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:dvm: proc %s terminated without sync",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc));
         if (flag) {
             /* send out a notification if one is requested */
             check_send_notification(jdata, pptr, PMIX_ERR_PROC_TERM_WO_SYNC);
@@ -470,9 +470,9 @@ keep_going:
 
     case PRTE_PROC_STATE_FAILED_TO_START:
     case PRTE_PROC_STATE_FAILED_TO_LAUNCH:
-        PMIX_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+        pmix_output_verbose(5, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:dvm: proc %s %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(proc), prte_proc_state_to_str(state)));
+                             PRTE_NAME_PRINT(proc), prte_proc_state_to_str(state));
         if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
             if (PRTE_PROC_STATE_FAILED_TO_START) {
                 jdata->state = PRTE_JOB_STATE_FAILED_TO_START;
@@ -505,10 +505,10 @@ keep_going:
         break;
 
     case PRTE_PROC_STATE_CALLED_ABORT:
-        PMIX_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+        pmix_output_verbose(5, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:dvm: proc %s called abort with exit code %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
-                             pptr->exit_code));
+                             pptr->exit_code);
         /* this proc ordered the job to abort */
         if (flag) {
             /* send out a notification if one is requested */
@@ -532,13 +532,12 @@ keep_going:
         break;
 
     case PRTE_PROC_STATE_TERM_NON_ZERO:
-        PMIX_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+        pmix_output_verbose(5, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:dvm: proc %s exited with non-zero status %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
-                             pptr->exit_code));
+                             pptr->exit_code);
         jdata->exit_code = pptr->exit_code;
         PRTE_FLAG_UNSET(pptr, PRTE_PROC_FLAG_ALIVE);
-        jdata->num_terminated++;
         /* track the number of non-zero exits */
         i32 = 0;
         i32ptr = &i32;
@@ -547,10 +546,7 @@ keep_going:
         ++i32;
         prte_set_attribute(&jdata->attributes, PRTE_JOB_NUM_NONZERO_EXIT, PRTE_ATTR_LOCAL, i32ptr,
                            PMIX_INT32);
-        if (jdata->num_terminated >= jdata->num_procs) {
-            /* this job has terminated */
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
-        } else if (flag && prte_get_attribute(&jdata->attributes, PRTE_JOB_ERROR_NONZERO_EXIT, NULL, PMIX_BOOL)) {
+        if (flag && prte_get_attribute(&jdata->attributes, PRTE_JOB_ERROR_NONZERO_EXIT, NULL, PMIX_BOOL)) {
             check_send_notification(jdata, pptr, PMIX_ERR_EXIT_NONZERO_TERM);
             // recover the resources used by this proc
             prte_state_base_recover_resources(jdata, pptr);
