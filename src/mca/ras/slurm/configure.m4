@@ -14,7 +14,7 @@
 # Copyright (c) 2011-2013 Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
-# Copyright (c) 2025      Nanook Consulting  All rights reserved.
+# Copyright (c) 2025-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -28,6 +28,7 @@ AC_DEFUN([MCA_prte_ras_slurm_CONFIG],[
     AC_CONFIG_FILES([src/mca/ras/slurm/Makefile])
 
     PRTE_CHECK_SLURM([ras_slurm], [ras_slurm_good=1], [ras_slurm_good=0])
+    PRTE_CHECK_JANSSON([ras_slurm_jansson], [ras_slurm_jansson_good=1], [ras_slurm_jansson_good=0])
 
     # if check worked, set wrapper flags if so.
     # Evaluate succeed / fail
@@ -39,4 +40,7 @@ AC_DEFUN([MCA_prte_ras_slurm_CONFIG],[
     AC_SUBST([ras_slurm_CPPFLAGS])
     AC_SUBST([ras_slurm_LDFLAGS])
     AC_SUBST([ras_slurm_LIBS])
+    AC_SUBST([ras_slurm_jansson_CPPFLAGS])
+    AC_SUBST([ras_slurm_jansson_LDFLAGS])
+    AC_SUBST([ras_slurm_jansson_LIBS])
 ])dnl

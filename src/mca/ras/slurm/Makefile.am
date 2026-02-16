@@ -12,7 +12,7 @@
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -50,9 +50,12 @@ endif
 mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component)
 prte_mca_ras_slurm_la_SOURCES = $(component_sources)
-prte_mca_ras_slurm_la_LDFLAGS = -module -avoid-version
-prte_mca_ras_slurm_la_LIBADD = $(top_builddir)/src/libprrte.la
+prte_mca_ras_slurm_la_CPPFLAGS = $(ras_slurm_jansson_CPPFLAGS)
+prte_mca_ras_slurm_la_LDFLAGS = -module -avoid-version $(ras_slurm_jansson_LDFLAGS)
+prte_mca_ras_slurm_la_LIBADD = $(top_builddir)/src/libprrte.la $(ras_slurm_jansson_LIBS)
 
 noinst_LTLIBRARIES = $(lib)
 libprtemca_ras_slurm_la_SOURCES = $(lib_sources)
-libprtemca_ras_slurm_la_LDFLAGS = -module -avoid-version
+libprtemca_ras_slurm_la_CPPFLAGS = $(ras_slurm_jansson_CPPFLAGS)
+libprtemca_ras_slurm_la_LDFLAGS = -module -avoid-version $(ras_slurm_jansson_LDFLAGS)
+libprtemca_ras_slurm_la_LIBADD = $(ras_slurm_jansson_LIBS)
