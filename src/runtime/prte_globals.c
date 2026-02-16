@@ -1013,7 +1013,7 @@ PMIX_CLASS_INSTANCE(prte_session_t,
 void prte_hide_unused_params(int x, ...)
 {
     va_list ap;
-
+    (void)x;
     va_start(ap, x);
     va_end(ap);
 }
