@@ -21,6 +21,14 @@ series, in reverse chronological order.
                  connection to launcher spawned by the debugger itself
 
 Commits since branch was forked:
+ - PR #2408: Multiple commits
+    - Silence some Coverity warnings
+    - Recover resources from failed procs
+    - Support the include directive for help entries
+    - Do not double-count error termination of procs
+    - Allow hello example to run as singleton
+    - Silence warnings from gcc15
+    - Update NEWS and VERSION
  - PR #2397: Update NEWS for rc1
  - PR #2396: Remove the "compat" macro definitions
  - PR #2394: Purge checks for earlier PMIx versions
