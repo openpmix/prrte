@@ -23,9 +23,8 @@ release=0
 # List in x.y.z format.
 
 pmix_min_version=6.1.0
-hwloc_min_version=2.1.0
 pmix_max_version=1000.0.0
-hwloc_min_version=1.11.0
+hwloc_min_version=2.1.0
 event_min_version=2.0.21
 automake_min_version=1.13.4
 autoconf_min_version=2.69.0
@@ -40,7 +39,7 @@ python_min_version=3.6
 # requirement is that it must be entirely printable ASCII characters
 # and have no white space.
 
-greek=rc1
+greek=rc2
 
 # If repo_rev is empty, then the repository version number will be
 # obtained during "make dist" via the "git describe --tags --always"
