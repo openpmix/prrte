@@ -4,8 +4,8 @@ PRRTE v4.x series
 This file contains all the NEWS updates for the PRRTE v4.x
 series, in reverse chronological order.
 
-4.1.0 -- TBD
-------------
+4.1.0 -- 27 Feb 2025
+--------------------
 .. important:: This is the second release in the v4 family. This series
                is based on a forking of the PRRTE master branch. The
                v4.1.0 release contains quite a few bug fixes, plus
