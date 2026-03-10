@@ -79,7 +79,10 @@ applied at the job level:
   the ORDERED qualifier. The list is comprised of comma-delimited
   ranges of CPUs to use for this job. If the ORDERED qualifier is not
   provided, then each node will be assigned procs up to the number of
-  available slots, capped by the availability of the specified CPUs.
+  available slots, capped by the total number of specified processes and
+  availability of the specified CPUs (i.e. the number of procs cannot exceed
+  the number of specified CPUs), with each proc bound to all the
+  specified CPUs.
   If ORDERED is given, then one proc will be assigned to each of the
   specified CPUs, if available, capped by the number of slots on each
   node and the total number of specified processes. Providing the
