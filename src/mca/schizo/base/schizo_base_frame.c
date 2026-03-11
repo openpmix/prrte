@@ -454,6 +454,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         NULL
     };
     char *outquals[] = {
+        PRTE_CLI_COPY,
         PRTE_CLI_NOCOPY,
         PRTE_CLI_RAW,
         NULL
@@ -755,6 +756,8 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
     char **targv, *ptr, *cptr, **options;
     int m, n, idx;
     pmix_status_t ret;
+    bool fileonly = true;
+    bool copyqualgiven = false;
 
     for (n=0; NULL != opt->values[n]; n++) {
         targv = PMIx_Argv_split(opt->values[0], ',');
@@ -769,13 +772,28 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 for (m=0; NULL != options[m]; m++) {
 
                     if (PMIX_CHECK_CLI_OPTION(options[m], PRTE_CLI_NOCOPY)) {
-                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
-                        if (PMIX_SUCCESS != ret) {
-                            PMIX_ERROR_LOG(ret);
-                            PMIx_Argv_free(targv);
+                        if (copyqualgiven) {
+                            // cannot give both copy and nocopy
+                            pmix_show_help("help-schizo-output.txt", "copy-nocopy", true, cptr);
+                            ret = PRTE_ERR_SILENT;
                             PMIx_Argv_free(options);
+                            PMIx_Argv_free(targv);
                             return ret;
                         }
+                        fileonly = true;
+                        copyqualgiven = true;
+
+                    } else if (PMIX_CHECK_CLI_OPTION(options[m], PRTE_CLI_COPY)) {
+                        if (copyqualgiven) {
+                            // cannot give both copy and nocopy
+                            pmix_show_help("help-schizo-output.txt", "copy-nocopy", true, cptr);
+                            ret = PRTE_ERR_SILENT;
+                            PMIx_Argv_free(options);
+                            PMIx_Argv_free(targv);
+                            return ret;
+                        }
+                        fileonly = false;
+                        copyqualgiven = true;
 
                     } else if (PMIX_CHECK_CLI_OPTION(options[m], PRTE_CLI_PATTERN)) {
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
@@ -930,6 +948,14 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     PMIX_ERROR_LOG(ret);
                     PMIx_Argv_free(targv);
                     return ret;
+                }
+                if (copyqualgiven) {
+                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, &fileonly, PMIX_BOOL);
+                    if (PMIX_SUCCESS != ret) {
+                        PMIX_ERROR_LOG(ret);
+                        PMIx_Argv_free(targv);
+                        return ret;
+                    }
                 }
             }
         }
