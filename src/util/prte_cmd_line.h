@@ -251,6 +251,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_LIMIT      "limit="
 
 // Output qualifiers
+#define PRTE_CLI_COPY       "copy"
 #define PRTE_CLI_NOCOPY     "nocopy"
 #define PRTE_CLI_RAW        "raw"
 #define PRTE_CLI_PATTERN    "pattern"

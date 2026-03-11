@@ -49,8 +49,19 @@ Supported values include:
   "filename.rank." The provided name will be converted to an absolute
   path
 
-Supported qualifiers include "NOCOPY" (do not copy the output to the
-stdout/err streams), and "RAW" (do not buffer the output into complete
-lines, but instead output it as it is received).
+Supported qualifiers include:
+
+* "COPY" - when combined with the "FILE" option, directs that a copy of
+  the output be sent to the stdout/err streams as well as the file
+
+* "NOCOPY" - when combined with the "FILE" option, do not copy the output
+  to the stdout/err streams (default)
+
+* "RAW" - do not buffer the output into complete lines, but instead output
+  it as it is received.
 
 Note that directives and qualifiers are case-insensitive.
+#
+[copy-nocopy]
+Both the "copy" and "nocopy" qualifiers were given. This is a contradictory
+set of directives. Please correct the input and try again.
