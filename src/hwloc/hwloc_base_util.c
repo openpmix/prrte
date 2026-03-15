@@ -1647,6 +1647,11 @@ static char* construct_range(char **vals)
     int n, cnt;
     char buf[4096], **ans = NULL, *str;
 
+    if (NULL == vals) {
+        str = strdup("-");
+        return str;
+    }
+
     cnt = 1;
     for (n=0; NULL != vals[n]; n++) {
         if (NULL == vals[n+1]) {
