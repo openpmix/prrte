@@ -784,6 +784,7 @@ static void localrelease(void *cbdata)
 void prte_ras_base_modify(int fd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
+    prte_job_t *daemons;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     if (NULL != prte_ras_base.active_module && NULL != prte_ras_base.active_module->modify) {
@@ -798,6 +799,13 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
         return;
     }
     pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
+
+    // if we met the request, then we need to launch any new daemons
+    if (PMIX_SUCCESS == req->pstatus) {
+        daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+        PRTE_ACTIVATE_JOB_STATE(daemons, PRTE_JOB_STATE_LAUNCH_DAEMONS);
+    }
+
     PMIX_RELEASE(req);
 }
 
