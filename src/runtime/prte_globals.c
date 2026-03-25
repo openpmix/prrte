@@ -18,6 +18,8 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+ *                         All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -974,7 +976,7 @@ static void session_des(prte_session_t *s)
         free(s->alloc_refid);
     }
 
-    for (n=0; n < s->nodes->size; s++) {
+    for (n=0; n < s->nodes->size; n++) {
         nd = (prte_node_t*)pmix_pointer_array_get_item(s->nodes, n);
         if (NULL != nd) {
             PMIX_RELEASE(nd);
@@ -983,7 +985,7 @@ static void session_des(prte_session_t *s)
     }
     PMIX_RELEASE(s->nodes);
 
-    for (n=0; n < s->jobs->size; s++) {
+    for (n=0; n < s->jobs->size; n++) {
         job = (prte_job_t*)pmix_pointer_array_get_item(s->jobs, n);
         if (NULL != job) {
             PMIX_RELEASE(job);
@@ -992,7 +994,7 @@ static void session_des(prte_session_t *s)
     }
     PMIX_RELEASE(s->jobs);
 
-    for (n=0; n < s->children->size; s++) {
+    for (n=0; n < s->children->size; n++) {
         session = (prte_session_t*)pmix_pointer_array_get_item(s->children, n);
         if (NULL != session) {
             PMIX_RELEASE(session);
