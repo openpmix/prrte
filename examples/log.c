@@ -57,9 +57,12 @@ int main(int argc, char **argv)
     /* init us - note that the call to "init" includes the return of
      * any job-related info provided by the RM. */
     if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, NULL, 0))) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Init failed: %d\n", myproc.nspace, myproc.rank,
-                rc);
-        exit(0);
+        if (PMIX_ERR_UNREACH != rc) {
+            fprintf(stderr, "Client ns %s rank %d: PMIx_Init failed: %s\n",
+                    myproc.nspace, myproc.rank,
+                    PMIx_Error_string(rc));
+            exit(0);
+        }
     }
     fprintf(stderr, "Client ns %s rank %d: Running\n", myproc.nspace, myproc.rank);
 
