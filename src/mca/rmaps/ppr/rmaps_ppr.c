@@ -5,7 +5,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -351,7 +351,7 @@ static int ppr_mapper(prte_job_t *jdata,
                     if (!prte_rmaps_base_check_avail(jdata, app, node, &node_list, obj, options)) {
                         continue;
                     }
-                    for (j=0; j < options->pprn && app->num_procs; j++) {
+                    for (j=0; j < options->pprn && nprocs_mapped < app->num_procs; j++) {
                         proc = prte_rmaps_base_setup_proc(jdata, idx, node, obj, options);
                         if (NULL == proc) {
                             rc = PRTE_ERR_OUT_OF_RESOURCE;
