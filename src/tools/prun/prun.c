@@ -225,6 +225,25 @@ int prun(int argc, char *argv[])
         personality = schizo->name;
     }
 
+    // check for bozo case
+    if (1 == argc) {
+        // prun cannot run without arguments
+        char *str;
+        param = prte_util_make_version_string("all", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                              PRTE_RELEASE_VERSION, PRTE_GREEK_VERSION, NULL);
+        str = pmix_show_help_string("help-prun.txt", "usage", false,
+                                    prte_tool_basename, "PRRTE",
+                                    param,
+                                    prte_tool_basename,
+                                    "Report bugs to: https://github.com/openpmix/prrte");
+        if (NULL != str) {
+            printf("%s\n", str);
+            fflush(stdout);
+            free(str);
+        }
+        exit(1);
+    }
+
     /* parse the input argv to get values, including everyone's MCA params */
     PMIX_CONSTRUCT(&results, pmix_cli_result_t);
     // check for special case of executable immediately following tool
