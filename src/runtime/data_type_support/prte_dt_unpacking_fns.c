@@ -704,3 +704,89 @@ int prte_map_unpack(pmix_data_buffer_t *bkt, struct prte_job_map_t **mp)
     *mp = map;
     return PRTE_SUCCESS;
 }
+
+/*
+ * TOPOLOGY
+ * Atomistically unpack the topology
+ */
+pmix_status_t prte_topology_unpack(pmix_data_buffer_t *buf, hwloc_topology_t *dest)
+{
+    /* NOTE: hwloc defines topology_t as a pointer to a struct! */
+    pmix_status_t rc;
+    pmix_byte_object_t bo;
+    struct hwloc_topology_support *support;
+    hwloc_topology_t t;
+    unsigned long flags;
+    int cnt;
+
+    /* unpack the xml byte object */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buf, &bo, &cnt, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != rc) {
+        return rc;
+    }
+    /* if it is NULL, then return a NULL topology */
+    if (NULL == bo.bytes) {
+        *dest = NULL;
+        return PMIX_SUCCESS;
+    }
+
+    /* convert the xml */
+    if (0 != hwloc_topology_init(&t)) {
+        rc = PMIX_ERROR;
+        PMIx_Byte_object_destruct(&bo);
+        return rc;
+    }
+    if (0 != hwloc_topology_set_xmlbuffer(t, bo.bytes, bo.size)) {
+        rc = PMIX_ERROR;
+        PMIx_Byte_object_destruct(&bo);
+        hwloc_topology_destroy(t);
+        return rc;
+    }
+    PMIx_Byte_object_destruct(&bo);
+
+    /* since we are loading this from an external source, we have to
+     * explicitly set a flag so hwloc sets things up correctly
+     */
+    if (0 != hwloc_topology_set_io_types_filter(t, HWLOC_TYPE_FILTER_KEEP_IMPORTANT)) {
+        hwloc_topology_destroy(t);
+        return PMIX_ERROR;
+    }
+    flags = HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM | HWLOC_TOPOLOGY_FLAG_INCLUDE_DISALLOWED;
+    if (0 != hwloc_topology_set_flags(t, flags)) {
+        hwloc_topology_destroy(t);
+        return PMIX_ERROR;
+    }
+    /* now load the topology */
+    if (0 != hwloc_topology_load(t)) {
+        hwloc_topology_destroy(t);
+        return PMIX_ERROR;
+    }
+
+    /* get the available support - hwloc unfortunately does
+     * not include this info in its xml import!
+     */
+    support = (struct hwloc_topology_support *) hwloc_topology_get_support(t);
+    cnt = sizeof(struct hwloc_topology_discovery_support);
+    rc = PMIx_Data_unpack(NULL, buf, support->discovery, &cnt, PMIX_BYTE);
+    if (PMIX_SUCCESS != rc) {
+        hwloc_topology_destroy(t);
+        return PMIX_ERROR;
+    }
+    cnt = sizeof(struct hwloc_topology_cpubind_support);
+    rc = PMIx_Data_unpack(NULL, buf, support->cpubind, &cnt, PMIX_BYTE);
+    if (PMIX_SUCCESS != rc) {
+        hwloc_topology_destroy(t);
+        return PMIX_ERROR;
+    }
+    cnt = sizeof(struct hwloc_topology_membind_support);
+    rc = PMIx_Data_unpack(NULL, buf, support->membind, &cnt, PMIX_BYTE);
+    if (PMIX_SUCCESS != rc) {
+        hwloc_topology_destroy(t);
+        return PMIX_ERROR;
+    }
+
+    *dest = t;
+
+    return PMIX_SUCCESS;
+}

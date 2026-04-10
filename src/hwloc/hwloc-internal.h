@@ -7,7 +7,7 @@
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
@@ -344,10 +344,6 @@ PRTE_EXPORT void prte_hwloc_get_binding_info(hwloc_const_cpuset_t cpuset,
 /* get the hwloc object that corresponds to the given processor id  and type */
 PRTE_EXPORT hwloc_obj_t prte_hwloc_base_get_pu(hwloc_topology_t topo, bool use_hwthread_cpus,
                                                int lid);
-
-/* get the topology "signature" so we can check for differences - caller
- * if responsible for freeing the returned string */
-PRTE_EXPORT char *prte_hwloc_base_get_topo_signature(hwloc_topology_t topo);
 
 /* get a string describing the locality of a given process */
 PRTE_EXPORT char *prte_hwloc_base_get_locality_string(hwloc_topology_t topo, char *bitmap);

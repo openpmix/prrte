@@ -199,6 +199,8 @@ int main(int argc, char *argv[])
     prte_schizo_base_module_t *schizo;
     pmix_cli_item_t *opt;
     prte_job_t *jdata;
+    pmix_data_buffer_t data;
+    bool compressed;
 
     char *umask_str = getenv("PRTE_DAEMON_UMASK_VALUE");
     if (NULL != umask_str) {
@@ -327,11 +329,6 @@ int main(int argc, char *argv[])
     }
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_LEAVE_SESSION_ATTACHED)) {
         prte_leave_session_attached = true;
-    }
-
-    // check for hetero nodes
-    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_HETERO_NODES)) {
-        prte_hetero_nodes = true;
     }
 
     /* if prte_daemon_debug is set, let someone know we are alive right
@@ -600,61 +597,45 @@ int main(int argc, char *argv[])
         PMIX_DATA_BUFFER_RELEASE(buffer);
         goto DONE;
     }
-    prc = PMIx_Data_pack(NULL, buffer, &prte_topo_signature, 1, PMIX_STRING);
+
+    /* send our topology back */
+    PMIX_DATA_BUFFER_CONSTRUCT(&data);
+
+    prc = prte_topology_pack(&data, prte_hwloc_topology);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(buffer);
+        PMIX_DATA_BUFFER_DESTRUCT(&data);
         goto DONE;
     }
-
-    /* if we are rank=1 or designated as having hetero node, then send our
-     * topology back - otherwise, prte will request it if necessary */
-    if (1 == PRTE_PROC_MY_NAME->rank || prte_hetero_nodes) {
-        pmix_data_buffer_t data;
-        pmix_topology_t ptopo;
-        bool compressed;
-
-        /* setup an intermediate buffer */
-        PMIX_DATA_BUFFER_CONSTRUCT(&data);
-
-        ptopo.source = "hwloc";
-        ptopo.topology = prte_hwloc_topology;
-        prc = PMIx_Data_pack(NULL, &data, &ptopo, 1, PMIX_TOPO);
-        if (PMIX_SUCCESS != prc) {
-            PMIX_ERROR_LOG(prc);
-            PMIX_DATA_BUFFER_RELEASE(buffer);
-            PMIX_DATA_BUFFER_DESTRUCT(&data);
-            goto DONE;
-        }
-        if (PMIx_Data_compress((uint8_t *) data.base_ptr, data.bytes_used, (uint8_t **) &pbo.bytes,
-                               &pbo.size)) {
-            /* the data was compressed - mark that we compressed it */
-            compressed = true;
-        } else {
-            compressed = false;
-            pbo.bytes = data.base_ptr;
-            pbo.size = data.bytes_used;
-            data.base_ptr = NULL;
-            data.bytes_used = 0;
-        }
-        PMIX_DATA_BUFFER_DESTRUCT(&data);
-        prc = PMIx_Data_pack(NULL, buffer, &compressed, 1, PMIX_BOOL);
-        if (PMIX_SUCCESS != prc) {
-            PMIX_ERROR_LOG(prc);
-            PMIX_DATA_BUFFER_RELEASE(buffer);
-            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-            goto DONE;
-        }
-        /* pack the data */
-        prc = PMIx_Data_pack(NULL, buffer, &pbo, 1, PMIX_BYTE_OBJECT);
-        if (PMIX_SUCCESS != prc) {
-            PMIX_ERROR_LOG(prc);
-            PMIX_DATA_BUFFER_RELEASE(buffer);
-            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-            goto DONE;
-        }
-        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+    if (PMIx_Data_compress((uint8_t *) data.base_ptr, data.bytes_used,
+                           (uint8_t **) &pbo.bytes, &pbo.size)) {
+        /* the data was compressed - mark that we compressed it */
+        compressed = true;
+    } else {
+        compressed = false;
+        pbo.bytes = data.base_ptr;
+        pbo.size = data.bytes_used;
+        data.base_ptr = NULL;
+        data.bytes_used = 0;
     }
+    PMIX_DATA_BUFFER_DESTRUCT(&data);
+    prc = PMIx_Data_pack(NULL, buffer, &compressed, 1, PMIX_BOOL);
+    if (PMIX_SUCCESS != prc) {
+        PMIX_ERROR_LOG(prc);
+        PMIX_DATA_BUFFER_RELEASE(buffer);
+        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+        goto DONE;
+    }
+    /* pack the data */
+    prc = PMIx_Data_pack(NULL, buffer, &pbo, 1, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != prc) {
+        PMIX_ERROR_LOG(prc);
+        PMIX_DATA_BUFFER_RELEASE(buffer);
+        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+        goto DONE;
+    }
+    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
 
     /* collect our network inventory */
     memset(&xfer, 0, sizeof(myxfer_t));

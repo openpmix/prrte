@@ -133,7 +133,6 @@ pmix_pointer_array_t *prte_node_topologies = NULL;
 pmix_pointer_array_t *prte_local_children = NULL;
 pmix_rank_t prte_total_procs = 0;
 char *prte_base_compute_node_sig = NULL;
-bool prte_hetero_nodes = false;
 
 /* IOF controls */
 /* generate new xterm windows to display output from specified ranks */
@@ -923,6 +922,7 @@ static void tcon(prte_topology_t *t)
 {
     t->topo = NULL;
     t->sig = NULL;
+    t->len = 0;
 }
 static void tdes(prte_topology_t *t)
 {

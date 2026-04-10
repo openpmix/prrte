@@ -360,6 +360,38 @@ static void fill_cache_line_size(void)
     }
 }
 
+static void strip_topo(void)
+{
+    hwloc_obj_t obj;
+    unsigned j, k;
+
+    /* remove the hostname from the topology. Unfortunately, hwloc
+     * decided to add the source hostname to the "topology", thus
+     * rendering it unusable as a pure topological description. So
+     * we remove that information here.
+     */
+    obj = hwloc_get_root_obj(prte_hwloc_topology);
+    for (k = 0; k < obj->infos_count; k++) {
+        if (NULL == obj->infos ||
+            NULL == obj->infos[k].name ||
+            NULL == obj->infos[k].value) {
+            continue;
+        }
+        if (0 == strncmp(obj->infos[k].name, "HostName", strlen("HostName")) ||
+            0 == strncmp(obj->infos[k].name, "ProcessName", strlen("ProcessName"))) {
+            free(obj->infos[k].name);
+            free(obj->infos[k].value);
+            /* left justify the array */
+            for (j = k; j < obj->infos_count - 1; j++) {
+                obj->infos[j] = obj->infos[j + 1];
+            }
+            obj->infos[obj->infos_count - 1].name = NULL;
+            obj->infos[obj->infos_count - 1].value = NULL;
+            obj->infos_count--;
+        }
+    }
+}
+
 int prte_hwloc_base_get_topology(void)
 {
     int rc;
@@ -381,6 +413,7 @@ int prte_hwloc_base_get_topology(void)
             PRTE_ERROR_LOG(PRTE_ERR_NOT_SUPPORTED);
             return PRTE_ERR_NOT_SUPPORTED;
         }
+
     } else {
         pmix_output_verbose(1, prte_hwloc_base_output,
                             "hwloc:base loading topology from file %s",
@@ -390,6 +423,9 @@ int prte_hwloc_base_get_topology(void)
         }
         prte_hwloc_synthetic_topo = true;
     }
+
+    // clean out cruft
+    strip_topo();
 
     /* fill prte_cache_line_size global with the smallest L1 cache
        line size */
@@ -402,8 +438,6 @@ int prte_hwloc_base_get_topology(void)
 
 int prte_hwloc_base_set_topology(char *topofile)
 {
-    hwloc_obj_t obj;
-    unsigned j, k;
     int rc;
     struct hwloc_topology_support *support;
 
@@ -444,36 +478,6 @@ int prte_hwloc_base_set_topology(char *topofile)
         PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:set_topology failed to load"));
         return PRTE_ERR_NOT_SUPPORTED;
     }
-
-    /* remove the hostname from the topology. Unfortunately, hwloc
-     * decided to add the source hostname to the "topology", thus
-     * rendering it unusable as a pure topological description. So
-     * we remove that information here.
-     */
-    obj = hwloc_get_root_obj(prte_hwloc_topology);
-    for (k = 0; k < obj->infos_count; k++) {
-        if (NULL == obj->infos ||
-            NULL == obj->infos[k].name ||
-            NULL == obj->infos[k].value) {
-            continue;
-        }
-        if (0 == strncmp(obj->infos[k].name, "HostName", strlen("HostName"))) {
-            free(obj->infos[k].name);
-            free(obj->infos[k].value);
-            /* left justify the array */
-            for (j = k; j < obj->infos_count - 1; j++) {
-                obj->infos[j] = obj->infos[j + 1];
-            }
-            obj->infos[obj->infos_count - 1].name = NULL;
-            obj->infos[obj->infos_count - 1].value = NULL;
-            obj->infos_count--;
-            break;
-        }
-    }
-
-    /* fill prte_cache_line_size global with the smallest L1 cache
-       line size */
-    fill_cache_line_size();
 
     /* all done */
     return PRTE_SUCCESS;
@@ -1640,168 +1644,6 @@ char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
         hwloc_bitmap_free(coreset);
     }
     return result;
-}
-
-static char* construct_range(char **vals)
-{
-    int n, cnt;
-    char buf[4096], **ans = NULL, *str;
-
-    if (NULL == vals) {
-        str = strdup("-");
-        return str;
-    }
-
-    cnt = 1;
-    for (n=0; NULL != vals[n]; n++) {
-        if (NULL == vals[n+1]) {
-            if (1 == cnt) {
-                PMIx_Argv_append_nosize(&ans, vals[n]);
-            } else {
-                snprintf(buf, 4096, "%d:%s", cnt, vals[n]);
-                PMIx_Argv_append_nosize(&ans, buf);
-            }
-            break;
-        }
-        if (0 == strcmp(vals[n], vals[n+1])) {
-            cnt++;
-        } else {
-            if (1 == cnt) {
-                PMIx_Argv_append_nosize(&ans, vals[n]);
-            } else {
-                snprintf(buf, 4096, "%d:%s", cnt, vals[n]);
-                PMIx_Argv_append_nosize(&ans, buf);
-            }
-            cnt = 1;
-        }
-    }
-
-    str = PMIx_Argv_join(ans, ',');
-    return str;
-}
-
-char *prte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
-{
-    char *sig = NULL, *arch = NULL, *endian;
-    hwloc_obj_t obj;
-    unsigned i, nobjs, n, ncpus;
-    char buffer[4096], **scratch = NULL, **answer = NULL;
-    int rc;
-    hwloc_cpuset_t avail, available;
-
-    rc = hwloc_topology_export_synthetic(topo, buffer, 4096,
-                                         HWLOC_TOPOLOGY_EXPORT_SYNTHETIC_FLAG_NO_ATTRS);
-    if (0 > rc) {
-        // create out own signature - start with packages
-        scratch = NULL;
-        available = hwloc_bitmap_alloc();
-        avail = prte_hwloc_base_filter_cpus(prte_hwloc_topology);
-        nobjs = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE);
-        for (n=0; n < nobjs; n++) {
-            obj = prte_hwloc_base_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, n);
-            hwloc_bitmap_and(available, avail, obj->cpuset);
-            ncpus = hwloc_bitmap_weight(available);
-            snprintf(buffer, 4096, "%u", ncpus);
-            PMIx_Argv_append_nosize(&scratch, buffer);
-        }
-        sig = construct_range(scratch);
-        snprintf(buffer, 4096, "PKG[%s]", sig);
-        free(sig);
-        PMIx_Argv_free(scratch);
-        PMIx_Argv_append_nosize(&answer, buffer);
-        // now account for NUMA
-        scratch = NULL;
-        nobjs = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_NUMANODE);
-        for (n=0; n < nobjs; n++) {
-            obj = prte_hwloc_base_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NUMANODE, n);
-            hwloc_bitmap_and(available, avail, obj->cpuset);
-            ncpus = hwloc_bitmap_weight(available);
-            snprintf(buffer, 4096, "%u", ncpus);
-            PMIx_Argv_append_nosize(&scratch, buffer);
-        }
-        sig = construct_range(scratch);
-        snprintf(buffer, 4096, "NUMA[%s]", sig);
-        free(sig);
-        PMIx_Argv_free(scratch);
-        PMIx_Argv_append_nosize(&answer, buffer);
-        // L3caches
-        scratch = NULL;
-        nobjs = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L3CACHE);
-        for (n=0; n < nobjs; n++) {
-            obj = prte_hwloc_base_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_L3CACHE, n);
-            hwloc_bitmap_and(available, avail, obj->cpuset);
-            ncpus = hwloc_bitmap_weight(available);
-            snprintf(buffer, 4096, "%u", ncpus);
-            PMIx_Argv_append_nosize(&scratch, buffer);
-        }
-        sig = construct_range(scratch);
-        snprintf(buffer, 4096, "L3[%s]", sig);
-        free(sig);
-        PMIx_Argv_free(scratch);
-        PMIx_Argv_append_nosize(&answer, buffer);
-        // L2caches
-        scratch = NULL;
-        nobjs = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L2CACHE);
-        for (n=0; n < nobjs; n++) {
-            obj = prte_hwloc_base_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_L2CACHE, n);
-            hwloc_bitmap_and(available, avail, obj->cpuset);
-            ncpus = hwloc_bitmap_weight(available);
-            snprintf(buffer, 4096, "%u", ncpus);
-            PMIx_Argv_append_nosize(&scratch, buffer);
-        }
-        sig = construct_range(scratch);
-        snprintf(buffer, 4096, "L2[%s]", sig);
-        free(sig);
-        PMIx_Argv_free(scratch);
-        PMIx_Argv_append_nosize(&answer, buffer);
-        // L1caches
-        scratch = NULL;
-        nobjs = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L1CACHE);
-        for (n=0; n < nobjs; n++) {
-            obj = prte_hwloc_base_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_L1CACHE, n);
-            hwloc_bitmap_and(available, avail, obj->cpuset);
-            ncpus = hwloc_bitmap_weight(available);
-            snprintf(buffer, 4096, "%u", ncpus);
-            PMIx_Argv_append_nosize(&scratch, buffer);
-        }
-        sig = construct_range(scratch);
-        snprintf(buffer, 4096, "L1[%s]", sig);
-        free(sig);
-        PMIx_Argv_free(scratch);
-        PMIx_Argv_append_nosize(&answer, buffer);
-        // setup the signature
-        sig = PMIx_Argv_join(answer, ';');
-        snprintf(buffer, 4096, "%s", sig);
-        free(sig);
-        PMIx_Argv_free(answer);
-        hwloc_bitmap_free(avail);
-    }
-
-    /* get the root object so we can add the processor architecture */
-    obj = hwloc_get_root_obj(topo);
-    for (i = 0; i < obj->infos_count; i++) {
-        if (0 == strcmp(obj->infos[i].name, "Architecture")) {
-            arch = obj->infos[i].value;
-            break;
-        }
-    }
-    if (NULL == arch) {
-        arch = "unknown";
-    }
-
-#ifdef __BYTE_ORDER
-#    if __BYTE_ORDER == __LITTLE_ENDIAN
-    endian = "le";
-#    else
-    endian = "be";
-#    endif
-#else
-    endian = "unknown";
-#endif
-
-    // form the final signature
-    pmix_asprintf(&sig, "%s:%s:%s", buffer, arch, endian);
-    return sig;
 }
 
 static int prte_hwloc_base_get_locality_string_by_depth(hwloc_topology_t topo, int d,

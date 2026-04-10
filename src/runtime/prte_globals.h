@@ -205,6 +205,7 @@ typedef struct {
     int index;
     hwloc_topology_t topo;
     char *sig;
+    int len;
 } prte_topology_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_topology_t);
 
@@ -506,6 +507,10 @@ PRTE_EXPORT int prte_node_unpack(pmix_data_buffer_t *bkt, prte_node_t **node);
 PRTE_EXPORT int prte_node_copy(prte_node_t **dest, prte_node_t *src);
 PRTE_EXPORT void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src);
 
+// pack/unpack topology
+PRTE_EXPORT int prte_topology_pack(pmix_data_buffer_t *bkt, hwloc_topology_t t);
+PRTE_EXPORT int prte_topology_unpack(pmix_data_buffer_t *bkt, hwloc_topology_t *dest);
+
 /**
  * Get a proc data object
  */
@@ -593,7 +598,6 @@ PRTE_EXPORT extern pmix_pointer_array_t *prte_node_topologies;
 PRTE_EXPORT extern pmix_pointer_array_t *prte_local_children;
 PRTE_EXPORT extern pmix_rank_t prte_total_procs;
 PRTE_EXPORT extern char *prte_base_compute_node_sig;
-PRTE_EXPORT extern bool prte_hetero_nodes;
 
 /* IOF controls */
 /* generate new xterm windows to display output from specified ranks */

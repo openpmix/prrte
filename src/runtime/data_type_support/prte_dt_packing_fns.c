@@ -601,3 +601,62 @@ int prte_map_pack(pmix_data_buffer_t *bkt, struct prte_job_map_t *mp)
 
     return PRTE_SUCCESS;
 }
+
+/*
+ * TOPOLOGY
+ * Pack the topology atomistically so we can unpack just
+ * pieces of it
+ */
+pmix_status_t prte_topology_pack(pmix_data_buffer_t *buf, hwloc_topology_t src)
+{
+    /* NOTE: hwloc defines topology_t as a pointer to a struct! */
+    pmix_status_t rc;
+    pmix_byte_object_t bo;
+    struct hwloc_topology_support *support;
+    char *xml;
+    int len;
+
+    /* extract an xml-buffer representation of the tree */
+    if (0 != hwloc_topology_export_xmlbuffer(src, &xml, &len, 0)) {
+        return PMIX_ERROR;
+    }
+    bo.bytes = xml;
+    bo.size = len;
+
+    /* add to buffer */
+    rc = PMIx_Data_pack(NULL, buf, &bo, 1, PMIX_BYTE_OBJECT);
+    PMIx_Byte_object_destruct(&bo);
+    if (PMIX_SUCCESS != rc) {
+        return rc;
+    }
+
+    /* get the available support - hwloc unfortunately does
+     * not include this info in its xml export!
+     */
+    support = (struct hwloc_topology_support *) hwloc_topology_get_support(src);
+    /* pack the discovery support */
+    rc = PMIx_Data_pack(NULL, buf, support->discovery,
+                        sizeof(struct hwloc_topology_discovery_support),
+                        PMIX_BYTE);
+    if (PMIX_SUCCESS != rc) {
+        return rc;
+    }
+    /* pack the cpubind support */
+    rc = PMIx_Data_pack(NULL, buf, support->cpubind,
+                        sizeof(struct hwloc_topology_cpubind_support),
+                        PMIX_BYTE);
+    if (PMIX_SUCCESS != rc) {
+        return rc;
+    }
+
+    /* pack the membind support */
+    rc = PMIx_Data_pack(NULL, buf, support->membind,
+                        sizeof(struct hwloc_topology_membind_support),
+                        PMIX_BYTE);
+    if (PMIX_SUCCESS != rc) {
+        return rc;
+    }
+
+    return PMIX_SUCCESS;
+
+}
