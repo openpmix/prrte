@@ -313,13 +313,12 @@ option to the help request as "--help <option>".
 |                      | argument indicates the PID, URI, file         |
 |                      | containing the URI, or namespace of the DVM.  |
 +----------------------+-----------------------------------------------+
-| "--hetero-nodes"     | The allocation contains multiple topologies,  |
-|                      | so optimize the launch for that scenario. For |
-|                      | example, the scheduler could be allocating    |
-|                      | individual CPUs instead of entire nodes, thus |
-|                      | effectively creating different topologies     |
-|                      | (due to differing allocated CPUs) on each     |
-|                      | node.                                         |
+| "--uniform-nodes"    | The allocation contains only one topology,    |
+|                      | so optimize the launch for that scenario.     |
+|                      | This includes ensuring that all CPU           |
+|                      | allocations are the same on each node, that   |
+|                      | each node contains the same number of devices |
+|                      | and topological layers, etc.                  |
 +----------------------+-----------------------------------------------+
 
 
@@ -376,11 +375,12 @@ Examples:
 
    prterun --dvm search --np 4 ./a.out
 #
-[hetero-nodes]
-The allocation contains multiple topologies, so optimize the launch for
-that scenario. For example, the scheduler could be allocating individual
-CPUs instead of entire nodes, thus effectively creating different topologies
-(due to differing allocated CPUs) on each node.
+[uniform-nodes]
+
+The allocation contains only one topology, so optimize the launch for
+that scenario. This includes ensuring that all CPU allocations are the
+same on each node, that each node contains the same number of devices
+and topological layers, etc.
 #
 [prtemca]
 

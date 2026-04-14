@@ -655,9 +655,9 @@ int prte(int argc, char *argv[])
         prte_leave_session_attached = true;
     }
 
-    // check for hetero nodes
-    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_HETERO_NODES)) {
-        prte_hetero_nodes = true;
+    // check for homo nodes
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_HOMO_NODES)) {
+        prte_homo_nodes = true;
     }
 
     /* detach from controlling terminal

@@ -66,7 +66,6 @@ int prte_clean_output = -1;
 /* globals used by RTE */
 bool prte_debug_daemons_file_flag = false;
 bool prte_leave_session_attached = false;
-char *prte_topo_signature = NULL;
 char *prte_data_server_uri = NULL;
 char *prte_tool_basename = NULL;
 char *prte_tool_actual = NULL;
@@ -131,7 +130,7 @@ pmix_pointer_array_t *prte_node_topologies = NULL;
 pmix_pointer_array_t *prte_local_children = NULL;
 pmix_rank_t prte_total_procs = 0;
 char *prte_base_compute_node_sig = NULL;
-bool prte_hetero_nodes = false;
+bool prte_homo_nodes = false;
 
 /* IOF controls */
 /* generate new xterm windows to display output from specified ranks */
@@ -773,6 +772,7 @@ static void prte_node_construct(prte_node_t *node)
     node->slots_inuse = 0;
     node->slots_max = 0;
     node->topology = NULL;
+    node->topodiff = NULL;
 
     node->flags = 0;
     PMIX_CONSTRUCT(&node->attributes, pmix_list_t);
@@ -815,6 +815,11 @@ static void prte_node_destruct(prte_node_t *node)
     PMIX_RELEASE(node->procs);
 
     /* do NOT destroy the topology */
+
+    // release any diffs
+    if (NULL != node->topodiff) {
+        hwloc_topology_diff_destroy(node->topodiff);
+    }
 
     /* release the attributes */
     PMIX_LIST_DESTRUCT(&node->attributes);
@@ -920,7 +925,6 @@ PMIX_CLASS_INSTANCE(prte_attribute_t, pmix_list_item_t,
 static void tcon(prte_topology_t *t)
 {
     t->topo = NULL;
-    t->sig = NULL;
 }
 static void tdes(prte_topology_t *t)
 {
@@ -932,9 +936,6 @@ static void tdes(prte_topology_t *t)
             PMIX_RELEASE(root->userdata);
         }
         hwloc_topology_destroy(t->topo);
-    }
-    if (NULL != t->sig) {
-        free(t->sig);
     }
 }
 PMIX_CLASS_INSTANCE(prte_topology_t, pmix_object_t,
