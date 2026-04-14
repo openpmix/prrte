@@ -521,10 +521,10 @@ int prte_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_bind_progress_thread_reqd);
 
-    (void) pmix_mca_base_var_register("prte", "prte", NULL, "hetero_nodes",
-                                      "Allocation contains hetero nodes",
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "uniform_nodes",
+                                      "Allocation contains homogeneous nodes",
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                      &prte_hetero_nodes);
+                                      &prte_homo_nodes);
 
     home = (char *) pmix_home_directory(geteuid());
     if (NULL == getcwd(cwd, MAXPATHLEN)) {

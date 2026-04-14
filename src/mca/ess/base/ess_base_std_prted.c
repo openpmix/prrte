@@ -18,7 +18,7 @@
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -102,8 +102,6 @@ int prte_ess_base_prted_setup(void)
     prte_job_t *jdata = NULL;
     prte_proc_t *proc;
     prte_app_context_t *app = NULL;
-    hwloc_obj_t obj;
-    unsigned i, j;
     prte_topology_t *t = NULL;
     prte_ess_base_signal_t *sig = NULL;
     int idx;
@@ -139,31 +137,6 @@ int prte_ess_base_prted_setup(void)
         if (PRTE_SUCCESS != (ret = prte_hwloc_base_get_topology())) {
             error = "topology discovery";
             goto error;
-        }
-    }
-    /* generate the signature */
-    prte_topo_signature = prte_hwloc_base_get_topo_signature(prte_hwloc_topology);
-    /* remove the hostname from the topology. Unfortunately, hwloc
-     * decided to add the source hostname to the "topology", thus
-     * rendering it unusable as a pure topological description. So
-     * we remove that information here.
-     */
-    obj = hwloc_get_root_obj(prte_hwloc_topology);
-    for (i = 0; i < obj->infos_count; i++) {
-        if (NULL == obj->infos[i].name || NULL == obj->infos[i].value) {
-            continue;
-        }
-        if (0 == strncmp(obj->infos[i].name, "HostName", strlen("HostName"))) {
-            free(obj->infos[i].name);
-            free(obj->infos[i].value);
-            /* left justify the array */
-            for (j = i; j < obj->infos_count - 1; j++) {
-                obj->infos[j] = obj->infos[j + 1];
-            }
-            obj->infos[obj->infos_count - 1].name = NULL;
-            obj->infos[obj->infos_count - 1].value = NULL;
-            obj->infos_count--;
-            break;
         }
     }
 
@@ -386,8 +359,6 @@ int prte_ess_base_prted_setup(void)
      */
     t = PMIX_NEW(prte_topology_t);
     t->topo = prte_hwloc_topology;
-    /* save the signature */
-    t->sig = strdup(prte_topo_signature);
     /* save the topology - note that this may have to be moved later
      * to ensure a common array position with the DVM master */
     t->index = pmix_pointer_array_add(prte_node_topologies, t);

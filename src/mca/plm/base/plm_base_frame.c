@@ -15,7 +15,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -58,9 +58,7 @@ prte_plm_globals_t prte_plm_globals = {
     .daemonlaunchstart = {0, 0},
     .tree_spawn_cmd = PMIX_DATA_BUFFER_STATIC_INIT,
     .daemon_nodes_assigned_at_launch = true,
-    .node_regex_threshold = 0,
-    .daemon_cache = PMIX_LIST_STATIC_INIT,
-    .daemon1_has_reported = false
+    .node_regex_threshold = 0
 };
 
 /*
@@ -137,7 +135,6 @@ static int prte_plm_base_close(void)
     if (NULL != prte_plm_globals.base_nspace) {
         free(prte_plm_globals.base_nspace);
     }
-    PMIX_LIST_DESTRUCT(&prte_plm_globals.daemon_cache);
 
     return pmix_mca_base_framework_components_close(&prte_plm_base_framework, NULL);
 }
@@ -153,8 +150,6 @@ static int prte_plm_base_open(pmix_mca_base_open_flag_t flags)
 
     /* default to assigning daemons to nodes at launch */
     prte_plm_globals.daemon_nodes_assigned_at_launch = true;
-
-    PMIX_CONSTRUCT(&prte_plm_globals.daemon_cache, pmix_list_t);
 
     /* Open up all available components */
     return pmix_mca_base_framework_components_open(&prte_plm_base_framework, flags);

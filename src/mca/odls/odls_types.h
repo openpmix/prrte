@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -84,9 +84,6 @@ typedef uint8_t prte_daemon_cmd_flag_t;
 
 /* for memory profiling */
 #define PRTE_DAEMON_GET_MEMPROFILE (prte_daemon_cmd_flag_t) 32
-
-/* request full topology string */
-#define PRTE_DAEMON_REPORT_TOPOLOGY_CMD (prte_daemon_cmd_flag_t) 33
 
 /* tell DVM daemons to cleanup resources from job */
 #define PRTE_DAEMON_DVM_CLEANUP_JOB_CMD (prte_daemon_cmd_flag_t) 34

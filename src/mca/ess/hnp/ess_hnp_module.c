@@ -360,9 +360,6 @@ static int rte_init(int argc, char **argv)
     /* add the topology to the array of known topologies */
     t = PMIX_NEW(prte_topology_t);
     t->topo = prte_hwloc_topology;
-    /* generate the signature */
-    prte_topo_signature = prte_hwloc_base_get_topo_signature(prte_hwloc_topology);
-    t->sig = strdup(prte_topo_signature);
     t->index = pmix_pointer_array_add(prte_node_topologies, t);
     node->topology = t;
     node->available = prte_hwloc_base_filter_cpus(prte_hwloc_topology);
@@ -456,8 +453,6 @@ static int rte_finalize(void)
     (void) pmix_mca_base_framework_close(&prte_prtereachable_base_framework);
     (void) pmix_mca_base_framework_close(&prte_errmgr_base_framework);
     (void) pmix_mca_base_framework_close(&prte_state_base_framework);
-
-    free(prte_topo_signature);
 
     if (prte_xml_output) {
         fprintf(stdout, "</%s>\n", prte_tool_basename);
