@@ -114,7 +114,7 @@ static struct option prteoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_FWD_SIGNALS, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_RUN_AS_ROOT, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_AGG_HELP, PMIX_ARG_NONE),
-    PMIX_OPTION_DEFINE(PRTE_CLI_HETERO_NODES, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_HOMO_NODES, PMIX_ARG_NONE),
 
     // Launch options
     PMIX_OPTION_DEFINE(PRTE_CLI_TIMEOUT, PMIX_ARG_REQD),
@@ -133,6 +133,7 @@ static struct option prteoptions[] = {
 
     // deprecated options
     PMIX_OPTION_DEFINE("machinefile", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("hetero-nodes", PMIX_ARG_NONE),
 
     PMIX_OPTION_END
 };
@@ -171,7 +172,7 @@ static struct option prterunoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_RUN_AS_ROOT, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_CHILD_SEP, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_DVM, PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE(PRTE_CLI_HETERO_NODES, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_HOMO_NODES, PMIX_ARG_NONE),
 
     // Launch options
     PMIX_OPTION_DEFINE(PRTE_CLI_TIMEOUT, PMIX_ARG_REQD),
@@ -265,6 +266,7 @@ static struct option prterunoptions[] = {
     PMIX_OPTION_DEFINE("debug", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("do-not-launch", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT_PROCTABLE, PMIX_ARG_OPTIONAL),
+    PMIX_OPTION_DEFINE("hetero-nodes", PMIX_ARG_NONE),
 
     PMIX_OPTION_END
 };
@@ -423,7 +425,10 @@ static struct option prtedoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_LEAVE_SESSION_ATTACHED, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_BOOTSTRAP, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_RUN_AS_ROOT, PMIX_ARG_NONE),
-    PMIX_OPTION_DEFINE(PRTE_CLI_HETERO_NODES, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_HOMO_NODES, PMIX_ARG_NONE),
+
+    // deprecated options
+    PMIX_OPTION_DEFINE("hetero-nodes", PMIX_ARG_NONE),
 
     PMIX_OPTION_END
 };
@@ -583,6 +588,10 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
     } else {
         warn = prte_mca_schizo_prte_component.warn_deprecations;
     }
+    if (prte_mca_schizo_prte_component.warned) {
+        warn = false;
+    }
+    prte_mca_schizo_prte_component.warned = true;
 
     PMIX_LIST_FOREACH_SAFE(opt, nxt, &results->instances, pmix_cli_item_t) {
         option = opt->key;
@@ -1028,6 +1037,14 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                 free(opt->values[0]);
                 opt->values[0] = tmp;
             }
+        }
+
+        // --hetero-nodes
+        else if (0 == strcmp(option, "hetero-nodes")) {
+            if (warn) {
+                pmix_show_help("help-schizo-base.txt", "deprecated-hetero-nodes", true);
+            }
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
     }
 

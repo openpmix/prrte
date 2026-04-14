@@ -150,9 +150,6 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 /* memory profile */
 #define PRTE_RML_TAG_MEMPROFILE           61
 
-/* topology report */
-#define PRTE_RML_TAG_TOPOLOGY_REPORT      62
-
 /* warmup connection - simply establishes the connection */
 #define PRTE_RML_TAG_WARMUP_CONNECTION    63
 

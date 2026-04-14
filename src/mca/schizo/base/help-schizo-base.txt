@@ -72,6 +72,16 @@ WARNING: A deprecated command line option was used.
   Deprecated option:   %s
   Reason: %s
 #
+[deprecated-hetero-nodes]
+WARNING: The "hetero-nodes" command line option has been deprecated
+and removed. Heterogeneous nodes are now automatically detected and
+processed.
+
+If you are certain your nodes are homogeneous (i.e., identical cpusets
+and hardware layout) and you do not wish to use the automatic detection
+logic for some reason, you may opt to include "--uniform-nodes" on your
+cmd line.
+#
 [bad-ppr]
 The proc-per-resource request is not correct. The request must include both
 the number of procs for each resource and the type of resource to be used.

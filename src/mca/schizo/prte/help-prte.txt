@@ -156,13 +156,12 @@ option to the help request as "--help <option>".
 | "--timeout           | Timeout DVM startup if time exceeds the       |
 | <seconds>"           | specified number of seconds                   |
 +----------------------+-----------------------------------------------+
-| "--hetero-nodes"     | The allocation contains multiple topologies,  |
-|                      | so optimize the launch for that scenario. For |
-|                      | example, the scheduler could be allocating    |
-|                      | individual CPUs instead of entire nodes, thus |
-|                      | effectively creating different topologies     |
-|                      | (due to differing allocated CPUs) on each     |
-|                      | node.                                         |
+| "--uniform-nodes"    | The allocation contains only one topology,    |
+|                      | so optimize the launch for that scenario.     |
+|                      | This includes ensuring that all CPU           |
+|                      | allocations are the same on each node, that   |
+|                      | each node contains the same number of devices |
+|                      | and topological layers, etc.                  |
 +----------------------+-----------------------------------------------+
 
 Report bugs to %s
@@ -197,11 +196,12 @@ with one parameter and its associated value per line. Empty lines and
 lines beginning with the "#" character are ignored, as is any
 whitespace around the "=" character.
 #
-[hetero-nodes]
-The allocation contains multiple topologies, so optimize the launch for
-that scenario. For example, the scheduler could be allocating individual
-CPUs instead of entire nodes, thus effectively creating different topologies
-(due to differing allocated CPUs) on each node.
+[uniform-nodes]
+
+The allocation contains only one topology, so optimize the launch for
+that scenario. This includes ensuring that all CPU allocations are the
+same on each node, that each node contains the same number of devices
+and topological layers, etc.
 #
 [no-ready-msg]
 
