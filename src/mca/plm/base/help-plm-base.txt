@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -124,14 +124,3 @@ for an application context:
 
 We cannot execute both of those, so please correct this and
 try again.
-#
-[multi-endian]
-PRRTE does not currently support multi-endian operations. We have
-detected that the following node differs in endianness:
-
-
-  Nodename:      %s
-  Endian:        %s
-  Local endian:  %s
-
-Please correct the situation and try again.

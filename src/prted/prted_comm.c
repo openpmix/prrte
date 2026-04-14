@@ -18,7 +18,7 @@
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -113,15 +113,12 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
     int32_t num_procs, num_new_procs = 0, p;
     prte_proc_t *cur_proc = NULL, *prev_proc = NULL;
     bool found = false;
-    bool compressed;
     FILE *fp;
     char gscmd[256], path[1035], *pathptr;
     char string[256], *string_ptr = string;
-    char *coprocessors;
     prte_pmix_lock_t lk;
     pmix_proc_t pname;
     pmix_byte_object_t pbo;
-    pmix_topology_t ptopo;
     char *tmp;
     pmix_info_t info[4];
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
@@ -503,82 +500,6 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
 
         break;
 
-        /****     REPORT TOPOLOGY COMMAND    ****/
-    case PRTE_DAEMON_REPORT_TOPOLOGY_CMD:
-        PMIX_DATA_BUFFER_CONSTRUCT(&data);
-        /* pack the topology signature */
-        ret = PMIx_Data_pack(NULL, &data, &prte_topo_signature, 1, PMIX_STRING);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&data);
-            goto CLEANUP;
-        }
-        /* pack the topology */
-        ptopo.source = "hwloc";
-        ptopo.topology = prte_hwloc_topology;
-        ret = PMIx_Data_pack(NULL, &data, &ptopo, 1, PMIX_TOPO);
-        if (PMIX_SUCCESS != ret) {
-            PRTE_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&data);
-            goto CLEANUP;
-        }
-
-        /* detect and add any coprocessors */
-        coprocessors = prte_hwloc_base_find_coprocessors(prte_hwloc_topology);
-        ret = PMIx_Data_pack(NULL, &data, &coprocessors, 1, PMIX_STRING);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-        }
-        if (NULL != coprocessors) {
-            free(coprocessors);
-        }
-        /* see if I am on a coprocessor */
-        coprocessors = prte_hwloc_base_check_on_coprocessor();
-        ret = PMIx_Data_pack(NULL, &data, &coprocessors, 1, PMIX_STRING);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-        }
-        if (NULL != coprocessors) {
-            free(coprocessors);
-        }
-        PMIX_DATA_BUFFER_CREATE(answer);
-        if (PMIx_Data_compress((uint8_t *) data.base_ptr, data.bytes_used, (uint8_t **) &pbo.bytes,
-                               &pbo.size)) {
-            /* the data was compressed - mark that we compressed it */
-            compressed = true;
-        } else {
-            /* mark that it was not compressed */
-            compressed = false;
-            pbo.bytes = data.base_ptr;
-            pbo.size = data.bytes_used;
-            data.base_ptr = NULL;
-            data.bytes_used = 0;
-        }
-        PMIX_DATA_BUFFER_DESTRUCT(&data);
-        ret = PMIx_Data_pack(NULL, answer, &compressed, 1, PMIX_BOOL);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-            PMIX_DATA_BUFFER_RELEASE(answer);
-            goto CLEANUP;
-        }
-        /* pack the payload */
-        ret = PMIx_Data_pack(NULL, answer, &pbo, 1, PMIX_BYTE_OBJECT);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-            PMIX_DATA_BUFFER_RELEASE(answer);
-            goto CLEANUP;
-        }
-        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-        /* send the data */
-        PRTE_RML_SEND(ret, sender->rank, answer, PRTE_RML_TAG_TOPOLOGY_REPORT);
-        if (PRTE_SUCCESS != ret) {
-            PRTE_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_RELEASE(answer);
-        }
-        break;
-
     case PRTE_DAEMON_GET_STACK_TRACES:
         /* prep the response */
         PMIX_DATA_BUFFER_CREATE(answer);
@@ -767,9 +688,6 @@ static char *get_prted_comm_cmd_str(int command)
 
     case PRTE_DAEMON_GET_MEMPROFILE:
         return strdup("PRTE_DAEMON_GET_MEMPROFILE");
-
-    case PRTE_DAEMON_REPORT_TOPOLOGY_CMD:
-        return strdup("PRTE_DAEMON_REPORT_TOPOLOGY_CMD");
 
     case PRTE_DAEMON_DVM_CLEANUP_JOB_CMD:
         return strdup("PRTE_DAEMON_DVM_CLEANUP_JOB_CMD");

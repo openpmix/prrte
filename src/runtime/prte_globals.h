@@ -204,7 +204,6 @@ typedef struct {
     pmix_object_t super;
     int index;
     hwloc_topology_t topo;
-    char *sig;
 } prte_topology_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_topology_t);
 
@@ -314,6 +313,8 @@ typedef struct {
     int32_t slots_max;
     /* system topology for this node */
     prte_topology_t *topology;
+    // topology diff from referenced topology
+    hwloc_topology_diff_t topodiff;
     /* flags */
     prte_node_flags_t flags;
     /* list of prte_attribute_t */
@@ -531,7 +532,6 @@ PRTE_EXPORT bool prte_quickmatch(prte_node_t *nd, char *name);
 PRTE_EXPORT extern bool prte_debug_daemons_flag;
 PRTE_EXPORT extern bool prte_debug_daemons_file_flag;
 PRTE_EXPORT extern bool prte_leave_session_attached;
-PRTE_EXPORT extern char *prte_topo_signature;
 PRTE_EXPORT extern char *prte_data_server_uri;
 PRTE_EXPORT extern bool prte_dvm_ready;
 PRTE_EXPORT extern pmix_pointer_array_t *prte_cache;
@@ -593,7 +593,7 @@ PRTE_EXPORT extern pmix_pointer_array_t *prte_node_topologies;
 PRTE_EXPORT extern pmix_pointer_array_t *prte_local_children;
 PRTE_EXPORT extern pmix_rank_t prte_total_procs;
 PRTE_EXPORT extern char *prte_base_compute_node_sig;
-PRTE_EXPORT extern bool prte_hetero_nodes;
+PRTE_EXPORT extern bool prte_homo_nodes;
 
 /* IOF controls */
 /* generate new xterm windows to display output from specified ranks */

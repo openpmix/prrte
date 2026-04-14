@@ -363,6 +363,8 @@ static void fill_cache_line_size(void)
 int prte_hwloc_base_get_topology(void)
 {
     int rc;
+    unsigned i, j;
+    hwloc_obj_t obj;
 
     pmix_output_verbose(2, prte_hwloc_base_output,
                         "hwloc:base:get_topology");
@@ -391,6 +393,28 @@ int prte_hwloc_base_get_topology(void)
         prte_hwloc_synthetic_topo = true;
     }
 
+   /* remove a few things that we know cause topology differences
+    * that aren't really of interest
+    */
+    obj = hwloc_get_root_obj(prte_hwloc_topology);
+    for (i = 0; i < obj->infos_count; i++) {
+        if (NULL == obj->infos[i].name || NULL == obj->infos[i].value) {
+            continue;
+        }
+        if (0 == strncmp(obj->infos[i].name, "HostName", strlen("HostName")) ||
+            0 == strncmp(obj->infos[i].name, "ProcessName", strlen("ProcessName"))) {
+            free(obj->infos[i].name);
+            free(obj->infos[i].value);
+            /* left justify the array */
+            for (j = i; j < obj->infos_count - 1; j++) {
+                obj->infos[j] = obj->infos[j + 1];
+            }
+            obj->infos[obj->infos_count - 1].name = NULL;
+            obj->infos[obj->infos_count - 1].value = NULL;
+            obj->infos_count--;
+        }
+    }
+
     /* fill prte_cache_line_size global with the smallest L1 cache
        line size */
     fill_cache_line_size();
@@ -402,10 +426,7 @@ int prte_hwloc_base_get_topology(void)
 
 int prte_hwloc_base_set_topology(char *topofile)
 {
-    hwloc_obj_t obj;
-    unsigned j, k;
     int rc;
-    struct hwloc_topology_support *support;
 
     PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                         "hwloc:base:set_topology %s", topofile));
@@ -430,50 +451,12 @@ int prte_hwloc_base_set_topology(char *topofile)
         hwloc_topology_destroy(prte_hwloc_topology);
         return PRTE_ERR_NOT_SUPPORTED;
     }
-    /* unfortunately, early hwloc does not include support info in its
-     * xml output :-(( We default to assuming it is present as
-     * systems that use this option are likely to provide
-     * binding support
-     */
-    support = (struct hwloc_topology_support *) hwloc_topology_get_support(prte_hwloc_topology);
-    support->cpubind->set_thisproc_cpubind = true;
-    support->membind->set_thisproc_membind = true;
 
     if (0 != hwloc_topology_load(prte_hwloc_topology)) {
         hwloc_topology_destroy(prte_hwloc_topology);
         PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:set_topology failed to load"));
         return PRTE_ERR_NOT_SUPPORTED;
     }
-
-    /* remove the hostname from the topology. Unfortunately, hwloc
-     * decided to add the source hostname to the "topology", thus
-     * rendering it unusable as a pure topological description. So
-     * we remove that information here.
-     */
-    obj = hwloc_get_root_obj(prte_hwloc_topology);
-    for (k = 0; k < obj->infos_count; k++) {
-        if (NULL == obj->infos ||
-            NULL == obj->infos[k].name ||
-            NULL == obj->infos[k].value) {
-            continue;
-        }
-        if (0 == strncmp(obj->infos[k].name, "HostName", strlen("HostName"))) {
-            free(obj->infos[k].name);
-            free(obj->infos[k].value);
-            /* left justify the array */
-            for (j = k; j < obj->infos_count - 1; j++) {
-                obj->infos[j] = obj->infos[j + 1];
-            }
-            obj->infos[obj->infos_count - 1].name = NULL;
-            obj->infos[obj->infos_count - 1].value = NULL;
-            obj->infos_count--;
-            break;
-        }
-    }
-
-    /* fill prte_cache_line_size global with the smallest L1 cache
-       line size */
-    fill_cache_line_size();
 
     /* all done */
     return PRTE_SUCCESS;

@@ -121,7 +121,7 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_FWD_SIGNALS, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_RUN_AS_ROOT, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_CHILD_SEP, PMIX_ARG_NONE),
-    PMIX_OPTION_DEFINE(PRTE_CLI_HETERO_NODES, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_HOMO_NODES, PMIX_ARG_NONE),
 
     /* debug options */
     PMIX_OPTION_DEFINE(PRTE_CLI_XTERM, PMIX_ARG_REQD),
@@ -254,6 +254,7 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT_PROCTABLE, PMIX_ARG_OPTIONAL),
     PMIX_OPTION_DEFINE("debug", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("stream-buffering", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("hetero-nodes", PMIX_ARG_NONE),
 
     PMIX_OPTION_END
 };
@@ -649,6 +650,10 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
     } else {
         warn = prte_mca_schizo_ompi_component.warn_deprecations;
     }
+    if (prte_mca_schizo_ompi_component.warned) {
+        warn = false;
+    }
+    prte_mca_schizo_ompi_component.warned = true;
 
     PMIX_LIST_FOREACH_SAFE(opt, nxt, &results->instances, pmix_cli_item_t) {
         option = opt->key;
@@ -1115,7 +1120,13 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                     }
                 }
             }
+        } else if (0 == strcmp(option, "hetero-nodes")) {
+            if (warn) {
+                pmix_show_help("help-schizo-base.txt", "deprecated-hetero-nodes", true);
+            }
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
+
     }
 
     return rc;

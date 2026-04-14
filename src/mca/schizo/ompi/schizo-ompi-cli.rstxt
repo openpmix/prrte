@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+   Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
    Copyright (c) 2022      Cisco Systems, Inc.  All rights reserved.
    Copyright (c) 2022      IBM Corporation.  All rights reserved.
    Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
@@ -179,8 +179,8 @@ Specific options
   operations.
   :ref:`See below for details <label-schizo-ompi-tune>`.
 
-* ``--hetero-nodes``: Allocated nodes should be treated as having different
-  topologies
+* ``--uniform-nodes``: All allocated nodes should be treated as having
+  the same topology
 
 MPI Options
 ^^^^^^^^^^^
@@ -449,6 +449,13 @@ The ``--tune`` option
 ~~~~~~~~~~~~~~~~~~~~~
 
 .. include:: /prrte-rst-content/cli-tune.rst
+
+.. _label-schizo-ompi-uniform-nodes:
+
+The ``--uniform-nodes`` option
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. include:: /prrte-rst-content/cli-homo-nodes.rst
 
 .. _label-schizo-ompi-x:
 
