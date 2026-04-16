@@ -68,8 +68,7 @@
  */
 static int init(void);
 static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes);
-static void deallocate(prte_job_t *jdata, prte_app_context_t *app);
-static void modify(prte_pmix_server_req_t *req);
+static pmix_status_t modify(prte_pmix_server_req_t *req);
 static int prte_ras_slurm_finalize(void);
 
 /*
@@ -78,7 +77,6 @@ static int prte_ras_slurm_finalize(void);
 prte_ras_base_module_t prte_ras_slurm_module = {
     .init = init,
     .allocate = prte_ras_slurm_allocate,
-    .deallocate = deallocate,
     .modify = modify,
     .finalize = prte_ras_slurm_finalize
 };
@@ -221,30 +219,24 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
     return PRTE_SUCCESS;
 }
 
-static void deallocate(prte_job_t *jdata, prte_app_context_t *app)
-{
-    PRTE_HIDE_UNUSED_PARAMS(jdata, app);
-    return;
-}
-
-static void modify(prte_pmix_server_req_t *req)
+static pmix_status_t modify(prte_pmix_server_req_t *req)
 {
     int err = PRTE_SUCCESS;
 
     if(PMIX_ALLOC_EXTEND == req->allocdir) {
-     
+
        err = prte_ras_slurm_serve_extend_req(req);
-        
+
     } else if(PMIX_ALLOC_RELEASE == req->allocdir) {
 
         err = prte_ras_slurm_serve_release_req(req);
 
         req->status = PMIX_ERR_NOT_SUPPORTED;
-        return;
+        return PMIX_ERR_NOT_SUPPORTED;;
     }
 
     req->pstatus = prte_pmix_convert_rc(err);
-
+    return req->pstatus;
 }
 
 static int prte_ras_slurm_finalize(void)

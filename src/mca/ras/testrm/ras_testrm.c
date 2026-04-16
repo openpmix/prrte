@@ -5,7 +5,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  *
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,9 +31,7 @@ static int finalize(void);
  * Global variable
  */
 prte_ras_base_module_t prte_ras_testrm_module = {
-    .init = NULL,
     .allocate = allocate,
-    .deallocate = NULL,
     .finalize = finalize
 };
 

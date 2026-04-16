@@ -114,7 +114,7 @@ pmix_status_t prte_pmix_set_scheduler(void)
         if (PMIX_SUCCESS != rc) {
             return rc;
         }
-        prte_pmix_server_globals.scheduler_set_as_server = true;
+        prte_pmix_server_globals.scheduler_connected = true;
     }
 
     /* if we have not yet set the scheduler as our server, do so */
@@ -204,97 +204,6 @@ pmix_status_t prte_server_send_request(uint8_t cmd, prte_pmix_server_req_t *req)
     }
     return PMIX_SUCCESS;
 }
-
-#if 0
-/* Callbacks to process an allocate request answer from the scheduler
- * and pass on any results to the requesting client
- */
-static void passthru(int sd, short args, void *cbdata)
-{
-    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
-    PRTE_HIDE_UNUSED_PARAMS(sd, args);
-
-    if (NULL != req->infocbfunc) {
-        // call the requestor's callback with the returned info
-        req->infocbfunc(req->status, req->info, req->ninfo, req->cbdata, req->rlcbfunc, req->rlcbdata);
-    } else {
-        // let them cleanup
-        req->rlcbfunc(req->rlcbdata);
-    }
-    // cleanup our request
-    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
-    PMIX_RELEASE(req);
-}
-
-static void infocbfunc(pmix_status_t status,
-                       pmix_info_t *info, size_t ninfo,
-                       void *cbdata,
-                       pmix_release_cbfunc_t rel, void *relcbdata)
-{
-    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
-    // need to pass this into our progress thread for processing
-    // since we touch the global request array
-    req->status = status;
-    if (req->copy && NULL != req->info) {
-        PMIX_INFO_FREE(req->info, req->ninfo);
-        req->copy = false;
-    }
-    req->info = info;
-    req->ninfo = ninfo;
-    req->rlcbfunc = rel;
-    req->rlcbdata = relcbdata;
-
-    prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, passthru, req);
-    PMIX_POST_OBJECT(req);
-    prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
-}
-
-static void pass_request(int sd, short args, void *cbdata)
-{
-    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
-    pmix_status_t rc;
-    size_t n = 0;
-    pmix_info_t *xfer = NULL;
-    PRTE_HIDE_UNUSED_PARAMS(sd, args, n, xfer);
-
-    /* if we are the DVM master, then handle this ourselves - start
-     * by ensuring the scheduler is connected to us */
-    rc = prte_pmix_set_scheduler();
-    if (PMIX_SUCCESS != rc) {
-        goto callback;
-    }
-
-    // we need to pass the request on to the scheduler
-    // need to add the requestor's ID to the info array
-    PMIX_INFO_CREATE(xfer, req->ninfo + 1);
-    for (n=0; n < req->ninfo; n++) {
-        PMIX_INFO_XFER(&xfer[n], &req->info[n]);
-    }
-    PMIX_INFO_LOAD(&xfer[req->ninfo], PMIX_REQUESTOR, &req->tproc, PMIX_PROC);
-    // the current req object points to the caller's info array, so leave it alone
-    req->copy = true;
-    req->info = xfer;
-    req->ninfo++;
-
-    /* pass the request to the scheduler */
-    rc = PMIx_Allocation_request_nb(req->allocdir, req->info, req->ninfo,
-                                    infocbfunc, req);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        goto callback;
-    }
-    return;
-
-callback:
-    /* this section gets executed solely upon an error */
-    if (NULL != req->infocbfunc) {
-        req->infocbfunc(rc, req->info, req->ninfo, req->cbdata, localrelease, req);
-        return;
-    }
-    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
-    PMIX_RELEASE(req);
-}
-#endif
 
 /* this is the upcall from the PMIx server for the allocation
  * request support. Since we are going to touch global structures

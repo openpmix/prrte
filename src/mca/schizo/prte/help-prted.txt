@@ -1,6 +1,6 @@
 # -*- text -*-
 #
-# Copyright (c) 2025      Nanook Consulting  All rights reserved.
+# Copyright (c) 2025-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -168,6 +168,10 @@ tree-based spawn operation
 [tree-spawn]
 
 A tree-based spawn operation is in progress
+#
+[bootstrap]
+
+Self-construct the DVM based on a configuration file
 #
 [pubsub-server]
 

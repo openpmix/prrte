@@ -559,6 +559,10 @@ int prte_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_suppress_override_warning);
 
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "bootstrap",
+                                      "Self-construct the DVM based on a configuration file (default: false)",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_bootstrap_setup);
 
     /* pickup the RML params */
     prte_rml_register();

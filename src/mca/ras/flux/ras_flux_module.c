@@ -14,7 +14,7 @@
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2025-2026 Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -54,8 +54,7 @@
 static int init(void);
 static int allocate(prte_job_t *jdata, pmix_list_t *nodes);
 static int finalize(void);
-static void modify(prte_pmix_server_req_t *req);
-static void deallocate(prte_job_t *jdata, prte_app_context_t *app);
+static pmix_status_t modify(prte_pmix_server_req_t *req);
 static struct hostlist *hostlist_from_R_nodelist (json_t *nodelist);
 static struct R_hostinfo *hostinfo_array_create (struct hostlist *hl);
 static void hostinfo_array_destroy (struct R_hostinfo *hostinfo, int n);
@@ -70,7 +69,6 @@ static int parse_json_payload(json_t *root,  pmix_list_t *prte_nodelist);
 prte_ras_base_module_t prte_ras_flux_module = {
     .init = init,
     .allocate = allocate,
-    .deallocate = deallocate,
     .modify = modify,
     .finalize = finalize
 };
@@ -86,7 +84,7 @@ struct R_hostinfo {
 };
 
 static struct hostlist *hostlist_from_R_nodelist (json_t *nodelist)
-{   
+{
     size_t i;
     json_t *val;
     struct hostlist *hl = NULL;
@@ -109,28 +107,28 @@ error:
 }
 
 static struct R_hostinfo *hostinfo_array_create (struct hostlist *hl)
-{   
+{
     int i;
     int n;
     const char *host;
     struct R_hostinfo *hostinfo;
-        
+
     n = hostlist_count (hl);
     if (!(hostinfo = calloc (n, sizeof (struct R_hostinfo))))
-        return NULL;     
-                          
-    i = 0;  
+        return NULL;
+
+    i = 0;
     host = hostlist_first (hl);
     while (host) {
         if (!(hostinfo[i++].hostname = strdup (host)))
-            goto error;                  
-        host = hostlist_next (hl);       
-    }                                    
-    return hostinfo;                     
-error:                                   
+            goto error;
+        host = hostlist_next (hl);
+    }
+    return hostinfo;
+error:
     hostinfo_array_destroy (hostinfo, n);
-    return NULL; 
-}  
+    return NULL;
+}
 
 static void hostinfo_array_destroy (struct R_hostinfo *hostinfo, int n)
 {
@@ -147,25 +145,25 @@ static int hostinfo_append_ranks (struct R_hostinfo *hostinfo,
                                   const char *rankstr,
                                   const char *corestr,
                                   char **error_str)
-{                        
-    unsigned int i;       
+{
+    unsigned int i;
     struct idset *ranks = NULL;
     struct idset *cores = NULL;
     int ncores;
     int count = 0;
-                                         
+
     if (!(ranks = idset_decode (rankstr))
         || !(cores = idset_decode (corestr))) {
         *error_str = strdup("failed to decode ranks/core idset");
-        goto out;                        
-    }       
-        
+        goto out;
+    }
+
     if (idset_count (ranks) <= 0
         || (ncores = idset_count (cores)) <= 0) {
         *error_str = strdup("invalid rank or core count in Rv1");
         goto out;
     }
-    
+
     i = idset_first (ranks);
     while (i != IDSET_INVALID_ID) {
         if (start + count > nnodes - 1) {
@@ -249,7 +247,7 @@ static int parse_json_payload(json_t *root,  pmix_list_t *prte_nodelist)
         ret = PRTE_ERR_NOT_AVAILABLE;
         goto err;
     }
- 
+
     start = 0;
     json_array_foreach (R_lite, i, entry) {
         const char *ranks;
@@ -349,7 +347,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     }
 
     /*
-     * first get job id attribute from local broker 
+     * first get job id attribute from local broker
      */
 
     flux_job_id = flux_attr_get (h, "jobid");
@@ -421,23 +419,13 @@ err:
 /*
  * This method is not currently available using Flux
  */
-static void deallocate(prte_job_t *jdata, prte_app_context_t *app)
-{
-    PRTE_HIDE_UNUSED_PARAMS(jdata, app);
-    PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-                         "%s ras:flux:deallocate: not implemented",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-}
-
-/*
- * This method is not currently available using Flux
- */
-static void modify(prte_pmix_server_req_t *req)
+static pmix_status_t modify(prte_pmix_server_req_t *req)
 {
     PRTE_HIDE_UNUSED_PARAMS(req);
     PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                          "%s ras:flux:modify: not implemented",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+    return PMIX_ERR_NOT_SUPPORTED;
 }
 
 

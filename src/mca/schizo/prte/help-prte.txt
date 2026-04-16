@@ -89,6 +89,9 @@ option to the help request as "--help <option>".
 | "--machinefile       | Provide a hostfile (synonym for "--hostfile") |
 | <filename>"          |                                               |
 +----------------------+-----------------------------------------------+
+| "--bootstrap"        | Self-construct the DVM based on a             |
+|                      | configuration file                            |
++----------------------+-----------------------------------------------+
 | "--pmixmca <key>     | Pass PMIx MCA parameters                      |
 | <value>"             |                                               |
 +----------------------+-----------------------------------------------+
@@ -403,6 +406,11 @@ Output a brief periodic report on DVM startup progress
 [host]
 
 #include#help-hostfile.txt#host
+
+#
+[bootstrap]
+
+Self-construct the DVM based on a configuration file
 
 #
 [display]
