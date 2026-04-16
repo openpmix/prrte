@@ -344,6 +344,7 @@ int main(int argc, char *argv[])
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_BOOTSTRAP)) {
         /* fill in our procID and other information
          * from the configuration file */
+        prte_bootstrap_setup = true;
         ret = prte_ess_base_bootstrap();
         if (PRTE_SUCCESS != ret) {
             return ret;

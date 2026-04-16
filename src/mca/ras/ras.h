@@ -16,7 +16,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -86,11 +86,8 @@ typedef int (*prte_ras_base_module_init_fn_t)(void);
  */
 typedef int (*prte_ras_base_module_allocate_fn_t)(prte_job_t *jdata, pmix_list_t *nodes);
 
-/* deallocate resources */
-typedef void (*prte_ras_base_module_dealloc_fn_t)(prte_job_t *jdata, prte_app_context_t *app);
-
-/* modify allocation */
-typedef void (*prte_ras_base_module_modify_fn_t)(prte_pmix_server_req_t *req);
+/* modify allocation - includes deallocation */
+typedef pmix_status_t (*prte_ras_base_module_modify_fn_t)(prte_pmix_server_req_t *req);
 
 /**
  * Cleanup module resources.
@@ -105,7 +102,7 @@ struct prte_ras_base_module_2_0_0_t {
     prte_ras_base_module_init_fn_t      init;
     /** Allocation function pointer */
     prte_ras_base_module_allocate_fn_t  allocate;
-    prte_ras_base_module_dealloc_fn_t   deallocate;
+    // modify function pointer
     prte_ras_base_module_modify_fn_t    modify;
     /** Finalization function pointer */
     prte_ras_base_module_finalize_fn_t  finalize;

@@ -171,7 +171,9 @@ PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, rmaps, "PRTE Mapping Subsystem", prte_rmap
                                 prte_rmaps_base_static_components,
                                 PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
-PMIX_CLASS_INSTANCE(prte_rmaps_base_selected_module_t, pmix_list_item_t, NULL, NULL);
+PMIX_CLASS_INSTANCE(prte_rmaps_base_selected_module_t,
+                    pmix_list_item_t,
+                    NULL, NULL);
 
 static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *tmp)
 {

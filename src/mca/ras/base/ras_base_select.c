@@ -1,4 +1,3 @@
-/* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
  * Copyright (c) 2004-2008 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
@@ -10,11 +9,9 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2011-2015 Los Alamos National Security, LLC.  All rights
- *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,40 +22,103 @@
 #include "prte_config.h"
 #include "constants.h"
 
+#include <string.h>
+
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 
 #include "src/mca/ras/base/base.h"
 
+static bool selected = false;
+
 /*
- * Select one RAS component from all those that are available.
+ * Function for selecting one component from all those that are
+ * available.
  */
 int prte_ras_base_select(void)
 {
-    /* For all other systems, provide the following support */
+    pmix_mca_base_component_list_item_t *cli = NULL;
+    pmix_mca_base_component_t *component = NULL;
+    pmix_mca_base_module_t *module = NULL;
+    prte_ras_base_module_t *nmodule;
+    prte_ras_base_selected_module_t *newmodule, *mod;
+    int rc, priority;
+    bool inserted;
 
-    prte_ras_base_component_t *best_component = NULL;
-    prte_ras_base_module_t *best_module = NULL;
-
-    /*
-     * Select the best component
-     */
-    if (PRTE_SUCCESS
-        != pmix_mca_base_select("ras", prte_ras_base_framework.framework_output,
-                                &prte_ras_base_framework.framework_components,
-                                (pmix_mca_base_module_t **) &best_module,
-                                (pmix_mca_base_component_t **) &best_component, NULL)) {
-        /* This will only happen if no component was selected */
-        /* If we didn't find one to select, that is okay */
+    if (selected) {
+        /* ensure we don't do this twice */
         return PRTE_SUCCESS;
     }
+    selected = true;
 
-    /* Save the winner */
-    /* No component saved */
-    prte_ras_base.active_module = best_module;
-    if (NULL != prte_ras_base.active_module->init) {
-        return prte_ras_base.active_module->init();
+    /* Query all available components and ask if they have a module */
+    PMIX_LIST_FOREACH(cli, &prte_ras_base_framework.framework_components,
+                      pmix_mca_base_component_list_item_t)
+    {
+        component = (pmix_mca_base_component_t *) cli->cli_component;
+
+        pmix_output_verbose(5, prte_ras_base_framework.framework_output,
+                            "mca:ras:select: checking available component %s",
+                            component->pmix_mca_component_name);
+
+        /* If there's no query function, skip it */
+        if (NULL == component->pmix_mca_query_component) {
+            pmix_output_verbose(
+                5, prte_ras_base_framework.framework_output,
+                "mca:ras:select: Skipping component [%s]. It does not implement a query function",
+                component->pmix_mca_component_name);
+            continue;
+        }
+
+        /* Query the component */
+        pmix_output_verbose(5, prte_ras_base_framework.framework_output,
+                            "mca:ras:select: Querying component [%s]",
+                            component->pmix_mca_component_name);
+        rc = component->pmix_mca_query_component(&module, &priority);
+
+        /* If no module was returned, then skip component */
+        if (PRTE_SUCCESS != rc || NULL == module) {
+            pmix_output_verbose(
+                5, prte_ras_base_framework.framework_output,
+                "mca:ras:select: Skipping component [%s]. Query failed to return a module",
+                component->pmix_mca_component_name);
+            continue;
+        }
+
+        /* If we got a module, keep it */
+        nmodule = (prte_ras_base_module_t *) module;
+        /* add to the list of selected modules */
+        newmodule = PMIX_NEW(prte_ras_base_selected_module_t);
+        newmodule->pri = priority;
+        newmodule->module = nmodule;
+        newmodule->component = component;
+
+        /* maintain priority order */
+        inserted = false;
+        PMIX_LIST_FOREACH(mod, &prte_ras_base.selected_modules, prte_ras_base_selected_module_t)
+        {
+            if (priority > mod->pri) {
+                pmix_list_insert_pos(&prte_ras_base.selected_modules, (pmix_list_item_t *) mod,
+                                     &newmodule->super);
+                inserted = true;
+                break;
+            }
+        }
+        if (!inserted) {
+            /* must be lowest priority - add to end */
+            pmix_list_append(&prte_ras_base.selected_modules, &newmodule->super);
+        }
+    }
+    if (4 < pmix_output_get_verbosity(prte_ras_base_framework.framework_output)) {
+        pmix_output(0, "%s: Final ras priorities", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+        /* show the prioritized list */
+        PMIX_LIST_FOREACH(mod, &prte_ras_base.selected_modules, prte_ras_base_selected_module_t)
+        {
+            pmix_output(0, "\tComponent: %s Priority: %d", mod->component->pmix_mca_component_name,
+                        mod->pri);
+        }
     }
 
     return PRTE_SUCCESS;
+    ;
 }

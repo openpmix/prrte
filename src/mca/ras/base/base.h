@@ -13,7 +13,7 @@
  *                         reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -52,9 +52,8 @@ PRTE_EXPORT int prte_ras_base_select(void);
  * globals that might be needed
  */
 typedef struct prte_ras_base_t {
-    bool first_pass_completed;
-    bool allocation_read;
-    prte_ras_base_module_t *active_module;
+    /* list of selected modules */
+    pmix_list_t selected_modules;
     int total_slots_alloc;
     int multiplier;
     bool launch_orted_on_hn;
@@ -62,6 +61,14 @@ typedef struct prte_ras_base_t {
 } prte_ras_base_t;
 
 PRTE_EXPORT extern prte_ras_base_t prte_ras_base;
+
+typedef struct {
+    pmix_list_item_t super;
+    int pri;
+    prte_ras_base_module_t *module;
+    pmix_mca_base_component_t *component;
+} prte_ras_base_selected_module_t;
+PMIX_CLASS_DECLARATION(prte_ras_base_selected_module_t);
 
 /**
  * Add the specified node definitions to the registry

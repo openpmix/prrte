@@ -534,6 +534,12 @@ int prte(int argc, char *argv[])
         schizo->allow_run_as_root(&results); // will exit us if not allowed
     }
 
+    /* check for bootstrap operation */
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_BOOTSTRAP)) {
+        /* flag that allocation is read from config file */
+        prte_bootstrap_setup = true;
+    }
+
     // check for an appfile
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_APPFILE);
     if (NULL != opt) {

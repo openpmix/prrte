@@ -379,8 +379,6 @@ static void send_error(int status, pmix_proc_t *idreq, pmix_proc_t *remote, int 
 static void _mdxresp(int sd, short args, void *cbdata);
 static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata);
 
-static bool remote_connections_specified = false;
-static char *remote_cncts = NULL;
 static char *generate_dist = "fabric,gpu,network";
 static bool share_hwloc_memory = true;
 
@@ -419,20 +417,8 @@ void pmix_server_register_params(void)
     prte_pmix_server_globals.remote_connections = false;
     (void) pmix_mca_base_var_register("prte", "pmix", NULL, "remote_connections",
                                       "Whether or not to support remote connections",
-                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                      &remote_cncts);
-     if (NULL != remote_cncts) {
-          if (0 == strcasecmp(remote_cncts, "false") ||
-              0 == strcasecmp(remote_cncts, "f") ||
-              0 == strcmp(remote_cncts, "0")) {
-               prte_pmix_server_globals.remote_connections = false;
-          } else if (0 == strcasecmp(remote_cncts, "true") ||
-                     0 == strcasecmp(remote_cncts, "t") ||
-                     0 == strcmp(remote_cncts, "1")) {
-               prte_pmix_server_globals.remote_connections = true;
-          }
-          remote_connections_specified = true;
-     }
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_pmix_server_globals.remote_connections);
 
     /* whether or not to require client pid to match */
     prte_pmix_server_globals.require_pid_match = false;
@@ -875,15 +861,13 @@ int pmix_server_init(void)
     }
 
     /* tell if we allow remote tool connections */
-    if (remote_connections_specified) {
-         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_REMOTE_CONNECTIONS,
-                           (void*)&prte_pmix_server_globals.remote_connections, PMIX_BOOL);
-         if (PMIX_SUCCESS != prc) {
-             PMIX_INFO_LIST_RELEASE(ilist);
-             rc = prte_pmix_convert_status(prc);
-             return rc;
-         }
-    }
+     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_REMOTE_CONNECTIONS,
+                       (void*)&prte_pmix_server_globals.remote_connections, PMIX_BOOL);
+     if (PMIX_SUCCESS != prc) {
+         PMIX_INFO_LIST_RELEASE(ilist);
+         rc = prte_pmix_convert_status(prc);
+         return rc;
+     }
 
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_ALLOW_CLIENT_CLONES,
                       (void*)&prte_pmix_server_globals.allow_client_clones, PMIX_BOOL);
