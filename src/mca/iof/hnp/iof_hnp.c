@@ -18,7 +18,7 @@
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -219,7 +219,9 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
     PMIX_LOAD_PROCID(&p, PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
     p.rank = prte_get_proc_daemon_vpid(dst_name);
     if (PMIX_RANK_INVALID == p.rank) {
-        PRTE_ERROR_LOG(PRTE_ERR_ADDRESSEE_UNKNOWN);
+        // proc must have finalized, so we can just ignore
+        // it - no need to error log, this is just a
+        // race condition
         return PRTE_ERR_ADDRESSEE_UNKNOWN;
     }
 
