@@ -13,6 +13,8 @@
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+# Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+#                         All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -28,8 +30,13 @@ EXTRA_DIST = \
 sources = \
         ras_slurm.h \
         ras_slurm_component.c \
-        ras_slurm_module.c
+        ras_slurm_module.c \
+        ras_slurm_modify_utils.c
 
+if PRTE_HAVE_JANSSON
+sources += \
+        ras_slurm_jansson.c
+endif
 
 # Make the output library in this directory, and name it either
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
