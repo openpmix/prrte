@@ -185,40 +185,6 @@ static int prte_ras_slurm_token_has_control_chars(const char *s, size_t len, boo
 }
 
 /*
- * Convert a Slurm job ID string to uint32_t.
- *
- * Expects a strictly decimal, non-negative string.
- *
- * @param[in]  slurm_jobid           Input string containing digits only.
- * @param[out] slurm_jobid_numeric   Converted value.
- */
-static int prte_ras_slurm_convert_jobid(const char *slurm_jobid, uint32_t *slurm_jobid_numeric) {
-
-    if (NULL == slurm_jobid || NULL == slurm_jobid_numeric) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    if (!isdigit((unsigned char)slurm_jobid[0])) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    char *end = NULL;
-
-    unsigned long slurm_id_ulong;
-    
-    errno = 0;
-    slurm_id_ulong = strtoul(slurm_jobid, &end, 10);
-
-    if ('\0' != *end || ERANGE == errno || slurm_id_ulong > UINT32_MAX) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    *slurm_jobid_numeric = (uint32_t)slurm_id_ulong;
-
-    return PRTE_SUCCESS;
-}
-
-/*
  * Run sbatch and capture the submitted Slurm job ID.
  *
  * Executes the command specified by argv in a child process, captures the
@@ -233,8 +199,8 @@ static int prte_ras_slurm_convert_jobid(const char *slurm_jobid, uint32_t *slurm
  * @param[out] job_id Buffer of size PRTE_SLURM_JOB_ID_MAX_LEN+1 that receives
  *                    the null-terminated numeric job ID on success.
  */
-static int prte_ras_slurm_exec_sbatch(char * const *argv, char *job_id) {
-    
+static int prte_ras_slurm_exec_sbatch(char * const *argv, char *job_id)
+{    
     if(NULL == argv || NULL == argv[0] || NULL == job_id) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
@@ -408,131 +374,6 @@ static int prte_ras_slurm_exec_sbatch(char * const *argv, char *job_id) {
 }
 
 /*
- * Validate that a Slurm job ID is valid according to expected syntax
- *
- * A valid Slurm job ID must be non-NULL, non-empty, must not exceed
- * PRTE_SLURM_JOB_ID_MAX_LEN characters, and must contain only decimal digits.
- * 
- * @param[in] slurm_jobid  Null-terminated Slurm job ID string to validate.
- */
-static int prte_ras_slurm_validate_jobid(const char *slurm_jobid) {
-
-    if (NULL == slurm_jobid) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    size_t id_len = strnlen(slurm_jobid, PRTE_SLURM_JOB_ID_MAX_LEN+1);
-    if (0 == id_len || id_len > PRTE_SLURM_JOB_ID_MAX_LEN) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    for (size_t i = 0; i < id_len; ++i) {
-        if (!isdigit((unsigned char)slurm_jobid[i])) {
-            return PRTE_ERR_BAD_PARAM;
-        }
-    }
-
-    return PRTE_SUCCESS;
-}
-
-/*
- * Cancel a Slurm job using scancel.
- *
- * If scancel returns an error, the first line of stderr/stdout output is copied
- * into err_msg. On success, err_msg is cleared.
- *
- * @param[in]  slurm_jobid  Null-terminated Slurm job ID string to cancel.
- * @param[out] err_msg      Writable buffer of size PRTE_SLURM_ERR_STR_MAX_SIZE
- *                          for Slurm output on failure, or NULL if not required.
- */
-static int prte_ras_slurm_kill_job(const char *slurm_jobid, char *err_msg) {
-
-    if(NULL == slurm_jobid) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    if(NULL != err_msg) {
-        err_msg[0] = '\0';
-    }
-
-    int err = PRTE_SUCCESS;
-
-    /* Make sure the job ID given is something reasonable */
-    err = prte_ras_slurm_validate_jobid(slurm_jobid);
-
-    if(PRTE_SUCCESS != err) {
-        PRTE_ERROR_LOG(err);
-        return err;
-    }
-
-    static const char *cmd_format = "scancel %s 2>&1";
-
-    char *cmd = NULL;
-
-    FILE *fp = NULL;
-
-    if(0 > asprintf(&cmd, cmd_format, slurm_jobid)) {
-        cmd = NULL;
-        err = PRTE_ERR_OUT_OF_RESOURCE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    fp = popen(cmd, "r");
-
-    if(NULL == fp) {
-        err = PRTE_ERR_FILE_OPEN_FAILURE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    if(NULL != err_msg) {
-        char *buf = fgets(err_msg, PRTE_SLURM_ERR_STR_MAX_SIZE, fp);
-
-        /* Copy output into provided memory, truncating if necessary */
-        if(NULL != buf) {
-            size_t len = strcspn(buf, "\n");
-
-            if (buf[len] == '\n') {
-                buf[len] = '\0';
-            } else if (len == PRTE_SLURM_ERR_STR_MAX_SIZE - 1) {
-                memcpy(buf + PRTE_SLURM_ERR_STR_MAX_SIZE - 4, "...", 3);
-            }
-        } 
-    }
-
-    int status = pclose(fp);
-    fp = NULL;
-
-    if (-1 == status) {
-        pmix_output(0, "ras:slurm:kill_job: pclose failed: %s.", strerror(errno));
-        err = PRTE_ERR_IN_ERRNO;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    if (!WIFEXITED(status) || 0 != WEXITSTATUS(status)) {
-        err = PRTE_ERR_SLURM_CANCEL_FAILURE;
-        goto cleanup;
-    }
-
-    cleanup:
-
-    if(NULL != err_msg && PRTE_ERR_SLURM_CANCEL_FAILURE != err) {
-        err_msg[0] = '\0';
-    }
-
-    if(NULL != fp) {
-        pclose(fp);
-    }
-
-    free(cmd);
-
-    return err;
-}
-
-/*
  * Construct and launch a Slurm "expander" job via sbatch.
  *
  * Constructs an sbatch command using parameters stored in the provided
@@ -546,7 +387,7 @@ static int prte_ras_slurm_kill_job(const char *slurm_jobid, char *err_msg) {
  *     Hash table containing job configuration inputs and receiving the
  *     resulting job ID on success.
  */
-int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
+static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
 {
     if(NULL == fields) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
@@ -730,8 +571,8 @@ int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
  * @param[in] alloc_refid  Optional allocation reference ID (may be NULL)
  * @param[in] node_list    List of prte_node_t to attach to the session
  */
-int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *alloc_refid, pmix_list_t *node_list) {
-    
+static int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *alloc_refid, pmix_list_t *node_list)
+{    
     if(NULL == slurm_jobid || NULL == node_list) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
@@ -835,8 +676,8 @@ int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *alloc
  *
  * @param[in] node_list  List of prte_node_t to validate
  */
-int prte_ras_slurm_reject_node_duplicates(pmix_list_t *node_list) {
-
+static int prte_ras_slurm_reject_node_duplicates(pmix_list_t *node_list)
+{
     if (NULL == node_list) {
         return PRTE_ERR_BAD_PARAM;
     }
@@ -850,6 +691,167 @@ int prte_ras_slurm_reject_node_duplicates(pmix_list_t *node_list) {
         }
     }
     return PRTE_SUCCESS;
+}
+
+/**
+ * @brief Coordinate a resource-extension request with Slurm
+ *
+ * Service a PMIx allocation request (PMIX_ALLOC_EXTEND) by requesting 
+ * additional nodes from Slurm and adding the resulting resources to PRRTE.
+ * Current implementation requires specifying PMIX_ALLOC_NUM_NODES as a PMIX_UINT64.
+ *
+ * @param[in] req PMIx server request describing the resource extension.
+ */
+int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
+{
+    int err = PRTE_SUCCESS;
+    int pmix_err = PMIX_SUCCESS;
+
+    pmix_hash_table_t slurm_jobfields;
+    pmix_list_t added_nodes;
+
+    bool have_slurm_jobfields = false;
+    bool have_added_nodes = false;
+    
+    char *nodes_string = NULL;
+
+    uint64_t num_nodes;
+    bool found = false;
+
+    for (size_t i = 0; i < req->ninfo; i++) {
+
+        if (0 == strcmp(req->info[i].key, PMIX_ALLOC_NUM_NODES)) {
+
+            if (req->info[i].value.type != PMIX_UINT64) {
+                err = PRTE_ERR_BAD_PARAM;
+                goto cleanup;
+            }
+        
+            num_nodes = req->info[i].value.data.uint64;
+            found = true;
+            break;
+        }
+    }
+
+    if(!found) {
+        pmix_output(0, "ras:slurm:modify: modify request invalid or unsupported.");
+        err = PRTE_ERR_REQUEST;
+        goto cleanup;
+    }
+    
+    PMIX_CONSTRUCT(&slurm_jobfields, pmix_hash_table_t);
+
+    have_slurm_jobfields = true;
+
+    pmix_err = pmix_hash_table_init(&slurm_jobfields, total_fields_len);
+
+    if(PMIX_SUCCESS != pmix_err) {
+        err = prte_pmix_convert_status(pmix_err);
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+    
+    err = prte_ras_slurm_extract_job_fields(&slurm_jobfields);
+
+    if(PRTE_SUCCESS != err) {
+        goto cleanup;
+    }
+
+    int rc = asprintf(&nodes_string, "%" PRIu64, num_nodes);
+    
+    if(0 > rc) {
+        err = PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+
+    pmix_err = pmix_hash_table_set_value_ptr(&slurm_jobfields, record_job_data_fields[PRTE_JOB_DATA_NODES],
+                            strlen(record_job_data_fields[PRTE_JOB_DATA_NODES]), (void*)nodes_string);
+
+    if(PMIX_SUCCESS != pmix_err) {
+        err = prte_pmix_convert_status(pmix_err);
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+
+    err = prte_ras_slurm_launch_expander_job(&slurm_jobfields);
+
+    if(PRTE_SUCCESS != err) {
+        pmix_output(0, "ras:slurm:modify: error launching Slurm job with new resources.");
+        goto cleanup;
+    }
+
+    char *job_id;
+    pmix_err = pmix_hash_table_get_value_ptr(&slurm_jobfields, record_job_data_fields[PRTE_JOB_DATA_JOB_ID],
+                    strlen(record_job_data_fields[PRTE_JOB_DATA_JOB_ID]), (void**)&job_id);
+
+    if(PMIX_SUCCESS != pmix_err) {
+        err = prte_pmix_convert_status(pmix_err);
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+
+    err = prte_ras_slurm_wait_resources(job_id);
+    
+    if(PRTE_SUCCESS != err) {
+        goto cleanup;
+    }
+
+    PMIX_CONSTRUCT(&added_nodes, pmix_list_t);
+
+    have_added_nodes = true;
+
+    err = prte_ras_slurm_add_modified_resources(job_id, &added_nodes);
+
+    if(PRTE_SUCCESS != err) {
+        goto cleanup;
+    }
+
+    /* Reject nodes that are already present in prte_node_pool.
+    * This avoids duplicate node entries, as merge semantics
+    * are not currently implemented. */
+    err = prte_ras_slurm_reject_node_duplicates(&added_nodes);
+
+    if(PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+
+    /* Create session and tag nodes with session ID (slurm job ID) */
+    err = prte_ras_slurm_assign_new_session(job_id, NULL, &added_nodes);
+
+    if(PRTE_SUCCESS != err) {
+        goto cleanup;
+    }
+    
+    /* Insert into global node list. This consumes the list. */
+    err = prte_ras_base_node_insert(added_nodes, NULL);
+
+    if(PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+        
+    cleanup:
+
+    free(nodes_string);
+
+    if(have_slurm_jobfields) {
+        void *key;
+        void *val;
+
+        PMIX_HASH_TABLE_FOREACH_PTR(key, val, slurm_jobfields, {
+            free(val);
+        });
+
+        PMIX_DESTRUCT(&slurm_jobfields);
+    }
+
+    if(have_added_nodes) {
+        PMIX_DESTRUCT(&added_nodes);
+    }
+
+    return err;
 }
 
 #ifndef HAVE_JANSSON
