@@ -45,6 +45,9 @@ BEGIN_C_DECLS
 int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table);
 int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *node_list);
 int prte_ras_slurm_wait_resources(const char *slurm_jobid);
+int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields);
+int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *alloc_refid, pmix_list_t *node_list);
+int prte_ras_slurm_reject_node_duplicates(pmix_list_t *node_list);
 
 typedef struct {
     prte_ras_base_component_t super;

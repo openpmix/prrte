@@ -418,6 +418,15 @@ const char *prte_strerror(int errnum)
     case PRTE_ERR_SLURM_BAD_JOB_STATUS:
         retval = "Found a pending Slurm job in an unexpected state";
         break;
+    case PRTE_ERR_SLURM_SUBMIT_FAILURE:
+        retval = "Request for new resources from Slurm failed";
+        break;
+    case PRTE_ERR_SLURM_CANCEL_FAILURE:
+        retval = "Request to cancel Slurm job failed";
+        break;
+    case PRTE_ERR_SLURM_SHRINK_FAILURE:
+        retval = "Request to shrink Slurm job failed";
+        break;
     default:
         retval = "Unknown error";
     }

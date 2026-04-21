@@ -18,6 +18,8 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+ *                         All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -69,6 +71,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes);
 static void deallocate(prte_job_t *jdata, prte_app_context_t *app);
 static void modify(prte_pmix_server_req_t *req);
 static int prte_ras_slurm_finalize(void);
+static int prte_ras_slurm_serve_modify_add_req(prte_pmix_server_req_t *req);
 
 /*
  * RAS slurm module
@@ -227,8 +230,22 @@ static void deallocate(prte_job_t *jdata, prte_app_context_t *app)
 
 static void modify(prte_pmix_server_req_t *req)
 {
-    req->status = PMIX_ERR_NOT_SUPPORTED;
-    return;
+    int err = PRTE_SUCCESS;
+
+    if(PMIX_ALLOC_EXTEND == req->allocdir) {
+     
+       err = prte_ras_slurm_serve_modify_add_req(req);
+        
+    } else if(PMIX_ALLOC_RELEASE == req->allocdir) {
+        req->status = PMIX_ERR_NOT_SUPPORTED;
+        return;
+    }
+
+    if(err == PRTE_SUCCESS) {
+        req->pstatus = PMIX_SUCCESS;
+    } else {
+        req->pstatus = PMIX_ERROR;
+    }
 }
 
 static int prte_ras_slurm_finalize(void)
@@ -596,4 +613,165 @@ static int prte_ras_slurm_parse_range(char *base, char *range, char ***names)
 
     /* All done */
     return PRTE_SUCCESS;
+}
+
+/**
+ * @brief Coordinate a resource-extension request with Slurm
+ *
+ * Service a PMIx allocation request (PMIX_ALLOC_EXTEND) by requesting 
+ * additional nodes from Slurm and adding the resulting resources to PRRTE.
+ * Current implementation requires specifying PMIX_ALLOC_NUM_NODES as a PMIX_UINT64.
+ *
+ * @param[in] req PMIx server request describing the resource extension.
+ */
+static int prte_ras_slurm_serve_modify_add_req(prte_pmix_server_req_t *req)
+{
+    int err = PRTE_SUCCESS;
+    int pmix_err = PMIX_SUCCESS;
+
+    pmix_hash_table_t slurm_jobfields;
+    pmix_list_t added_nodes;
+
+    bool have_slurm_jobfields = false;
+    bool have_added_nodes = false;
+    
+    char *nodes_string = NULL;
+
+    uint64_t num_nodes;
+    bool found = false;
+
+    for (size_t i = 0; i < req->ninfo; i++) {
+
+        if (0 == strcmp(req->info[i].key, PMIX_ALLOC_NUM_NODES)) {
+
+            if (req->info[i].value.type != PMIX_UINT64) {
+                err = PRTE_ERR_BAD_PARAM;
+                goto cleanup;
+            }
+        
+            num_nodes = req->info[i].value.data.uint64;
+            found = true;
+            break;
+        }
+    }
+
+    if(!found) {
+        pmix_output(0, "ras:slurm:modify: modify request invalid or unsupported.");
+        err = PRTE_ERR_REQUEST;
+        goto cleanup;
+    }
+    
+    PMIX_CONSTRUCT(&slurm_jobfields, pmix_hash_table_t);
+
+    have_slurm_jobfields = true;
+
+    pmix_err = pmix_hash_table_init(&slurm_jobfields, total_fields_len);
+
+    if(PMIX_SUCCESS != pmix_err) {
+        err = prte_pmix_convert_status(pmix_err);
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+    
+    err = prte_ras_slurm_extract_job_fields(&slurm_jobfields);
+
+    if(PRTE_SUCCESS != err) {
+        goto cleanup;
+    }
+
+    int rc = asprintf(&nodes_string, "%" PRIu64, num_nodes);
+    
+    if(0 > rc) {
+        err = PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+
+    pmix_err = pmix_hash_table_set_value_ptr(&slurm_jobfields, record_job_data_fields[PRTE_JOB_DATA_NODES],
+                            strlen(record_job_data_fields[PRTE_JOB_DATA_NODES]), (void*)nodes_string);
+
+    if(PMIX_SUCCESS != pmix_err) {
+        err = prte_pmix_convert_status(pmix_err);
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+
+    err = prte_ras_slurm_launch_expander_job(&slurm_jobfields);
+
+    if(PRTE_SUCCESS != err) {
+        pmix_output(0, "ras:slurm:modify: error launching Slurm job with new resources.");
+        goto cleanup;
+    }
+
+    char *job_id;
+    pmix_err = pmix_hash_table_get_value_ptr(&slurm_jobfields, record_job_data_fields[PRTE_JOB_DATA_JOB_ID],
+                    strlen(record_job_data_fields[PRTE_JOB_DATA_JOB_ID]), (void**)&job_id);
+
+    if(PMIX_SUCCESS != pmix_err) {
+        err = prte_pmix_convert_status(pmix_err);
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+
+    err = prte_ras_slurm_wait_resources(job_id);
+    
+    if(PRTE_SUCCESS != err) {
+        goto cleanup;
+    }
+
+    PMIX_CONSTRUCT(&added_nodes, pmix_list_t);
+
+    have_added_nodes = true;
+
+    err = prte_ras_slurm_add_modified_resources(job_id, &added_nodes);
+
+    if(PRTE_SUCCESS != err) {
+        goto cleanup;
+    }
+
+    /* Reject nodes that are already present in prte_node_pool.
+    * This avoids duplicate node entries, as merge semantics
+    * are not currently implemented. */
+    err = prte_ras_slurm_reject_node_duplicates(&added_nodes);
+
+    if(PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+
+    /* Create session and tag nodes with session ID (slurm job ID) */
+    err = prte_ras_slurm_assign_new_session(job_id, NULL, &added_nodes);
+
+    if(PRTE_SUCCESS != err) {
+        goto cleanup;
+    }
+    
+    /* Insert into global node list. This consumes the list. */
+    err = prte_ras_base_node_insert(added_nodes, NULL);
+
+    if(PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+        
+    cleanup:
+
+    free(nodes_string);
+
+    if(have_slurm_jobfields) {
+        void *key;
+        void *val;
+
+        PMIX_HASH_TABLE_FOREACH_PTR(key, val, slurm_jobfields, {
+            free(val);
+        });
+
+        PMIX_DESTRUCT(&slurm_jobfields);
+    }
+
+    if(have_added_nodes) {
+        PMIX_DESTRUCT(&added_nodes);
+    }
+
+    return err;
 }
