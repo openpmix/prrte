@@ -14,7 +14,7 @@
 # Copyright (c) 2011-2013 Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
-# Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2022-2026 Nanook Consulting  All rights reserved.
 # Copyright (c) 2022      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
@@ -31,39 +31,12 @@
 AC_DEFUN([MCA_prte_ras_pbs_CONFIG],[
     AC_CONFIG_FILES([src/mca/ras/pbs/Makefile])
 
-	AC_ARG_WITH([pbs],
-           [AS_HELP_STRING([--with-pbs],
-                           [Build PBS scheduler component (default: yes)])])
+    PRTE_CHECK_PBS([ras_pbs], [ras_pbs_good=1], [ras_pbs_good=0])
 
-	if test "$with_pbs" = "no" ; then
-            prte_check_pbs_happy="no"
-	elif test "$with_pbs" = "" ; then
-            # unless user asked, only build pbs component on linux, AIX,
-            # and OS X systems (these are the platforms that PBS
-            # supports)
-            case $host in
-		*-linux*|*-aix*|*-apple-darwin*)
-                    prte_check_pbs_happy="yes"
-                    ;;
-		*)
-                    AC_MSG_CHECKING([for pbsdash in PATH])
-                    PRTE_WHICH([pbsdash], [PRTE_CHECK_PBSDASH])
-                    if test "$PRTE_CHECK_PBSDASH" = ""; then
-                        prte_check_pbs_happy="no"
-                    else
-                        prte_check_pbs_happy="yes"
-                    fi
-                    AC_MSG_RESULT([$prte_check_pbs_happy])
-                    ;;
-            esac
-    else
-        prte_check_pbs_happy="yes"
-    fi
-
-    PRTE_SUMMARY_ADD([Resource Managers], [PBS], [], [$prte_check_pbs_happy (scheduler)])
-
-    AS_IF([test "$prte_check_pbs_happy" = "yes" || test "$prte_testbuild_launchers" = "1"],
+    AS_IF([test "$ras_pbs_good" = "1" || test "$prte_testbuild_launchers" = "1"],
           [$1],
           [$2])
 
+    # there are no libraries to add to the Makefile as we don't
+    # link against any PBS libs
 ])dnl

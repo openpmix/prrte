@@ -213,6 +213,16 @@ static int ssh_init(void)
         pmix_output_verbose(1, prte_plm_base_framework.framework_output,
                             "%s plm:ssh: using \"%s\" for launching\n",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ssh_agent_path);
+
+    } else if (prte_mca_plm_ssh_component.using_tmrsh) {
+        // transfer the argv across
+        ssh_agent_argv = PMIx_Argv_copy(prte_mca_plm_ssh_component.agent_argv);
+        ssh_agent_path = strdup(prte_mca_plm_ssh_component.agent_argv[0]);
+        pmix_output_verbose(1, prte_plm_base_framework.framework_output,
+                            "%s plm:ssh: using \"%s\" for launching\n",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ssh_agent_path);
+
+
     } else {
         /* not using qrsh or llspawn - use MCA-specified agent */
         if (PRTE_SUCCESS != (rc = launch_agent_setup(prte_mca_plm_ssh_component.agent, NULL))) {
