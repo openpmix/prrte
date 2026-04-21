@@ -45,6 +45,8 @@ cov-int
 Makefile
 Makefile.in
 static-components.h
+static-components.h.new.extern
+static-components.h.new.struct
 *\\#
 config.cache
 aclocal.m4

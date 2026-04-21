@@ -17,7 +17,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020-2021 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -58,6 +58,8 @@ struct prte_mca_plm_ssh_component_t {
     bool disable_llspawn;
     bool using_llspawn;
     bool daemonize_llspawn;
+    bool disable_tmrsh;
+    bool using_tmrsh;
     struct timespec delay;
     int priority;
     bool no_tree_spawn;
