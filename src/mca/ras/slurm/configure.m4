@@ -35,8 +35,4 @@ AC_DEFUN([MCA_prte_ras_slurm_CONFIG],[
           [$1],
           [$2])
 
-    # set build flags to use in makefile
-    AC_SUBST([ras_slurm_CPPFLAGS])
-    AC_SUBST([ras_slurm_LDFLAGS])
-    AC_SUBST([ras_slurm_LIBS])
 ])dnl
