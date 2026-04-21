@@ -280,14 +280,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
      */
     pmix_argv_append(&argc, &argv, "--cpu-bind=none");
 
-    /* protect against launchers that forward the entire environment */
-    if (NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {
-        unsetenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL");
-    }
-    if (NULL != getenv("PMIX_LAUNCHER_RENDEZVOUS_FILE")) {
-        unsetenv("PMIX_LAUNCHER_RENDEZVOUS_FILE");
-    }
-
     /* Append user defined arguments to srun */
     if (NULL != prte_mca_plm_slurm_component.custom_args) {
         custom_strings = PMIx_Argv_split(prte_mca_plm_slurm_component.custom_args, ' ');
