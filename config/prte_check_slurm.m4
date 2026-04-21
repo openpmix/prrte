@@ -27,7 +27,7 @@
 # PRTE_CHECK_SLURM(prefix, [action-if-found], [action-if-not-found])
 # --------------------------------------------------------
 AC_DEFUN([PRTE_CHECK_SLURM],[
-    if test -z "$prte_check_slurm_happy" ; then
+
 	AC_ARG_WITH([slurm],
            [AS_HELP_STRING([--with-slurm],
                            [Build SLURM scheduler component (default: yes)])])
@@ -53,27 +53,26 @@ AC_DEFUN([PRTE_CHECK_SLURM],[
                     AC_MSG_RESULT([$prte_check_slurm_happy])
                     ;;
             esac
-        else
-            prte_check_slurm_happy="yes"
-        fi
+      else
+          prte_check_slurm_happy="yes"
+      fi
 
-        AS_IF([test "$prte_check_slurm_happy" = "yes"],
-              [AC_CHECK_FUNC([fork],
-                             [prte_check_slurm_happy="yes"],
-                             [prte_check_slurm_happy="no"])])
+      AS_IF([test "$prte_check_slurm_happy" = "yes"],
+            [AC_CHECK_FUNC([fork],
+                           [prte_check_slurm_happy="yes"],
+                           [prte_check_slurm_happy="no"])])
 
-        AS_IF([test "$prte_check_slurm_happy" = "yes"],
-              [AC_CHECK_FUNC([execve],
-                             [prte_check_slurm_happy="yes"],
-                             [prte_check_slurm_happy="no"])])
+      AS_IF([test "$prte_check_slurm_happy" = "yes"],
+            [AC_CHECK_FUNC([execve],
+                           [prte_check_slurm_happy="yes"],
+                           [prte_check_slurm_happy="no"])])
 
-        AS_IF([test "$prte_check_slurm_happy" = "yes"],
-              [AC_CHECK_FUNC([setpgid],
-                             [prte_check_slurm_happy="yes"],
-                             [prte_check_slurm_happy="no"])])
+      AS_IF([test "$prte_check_slurm_happy" = "yes"],
+            [AC_CHECK_FUNC([setpgid],
+                           [prte_check_slurm_happy="yes"],
+                           [prte_check_slurm_happy="no"])])
 
-        PRTE_SUMMARY_ADD([Resource Managers], [Slurm], [], [$prte_check_slurm_happy])
-    fi
+      PRTE_SUMMARY_ADD([Resource Managers], [Slurm], [], [$prte_check_slurm_happy])
 
     AS_IF([test "$prte_check_slurm_happy" = "yes"],
           [$2],
