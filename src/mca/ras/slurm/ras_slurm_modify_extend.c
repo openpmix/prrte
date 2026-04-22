@@ -16,6 +16,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <stdlib.h>
 
@@ -27,19 +28,16 @@
 #include "ras_slurm.h"
 #include "src/mca/ras/base/base.h"
 
-#define PRTE_SLURM_JOB_ID_MAX_LEN 20
-#define PRTE_SLURM_ERR_STR_MAX_SIZE 256
 #define PRTE_SLURM_MAX_SBATCH_ARGS 32
 
 /*
  * Local functions
  */
 static int prte_ras_slurm_make_sbatch_arg(pmix_hash_table_t *fields, const char *field_name, const char *field_format, bool obj_num, int *argc, char **argv);
-static int prte_ras_slurm_token_has_control_chars(const char *s, size_t len, bool *has_control_chars);
-static int prte_ras_slurm_convert_jobid(const char *slurm_jobid, uint32_t *slurm_jobid_numeric);
 static int prte_ras_slurm_exec_sbatch(char * const *argv, char *job_id);
-static int prte_ras_slurm_validate_jobid(const char *slurm_jobid);
-static int prte_ras_slurm_kill_job(const char *slurm_jobid, char *err_msg);
+static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields);
+static int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *alloc_refid, pmix_list_t *node_list);
+static int prte_ras_slurm_reject_node_duplicates(pmix_list_t *node_list);
 
 /* String fields to read from "parent" Slurm job JSON */
 const char *const str_fields[STR_FIELD_COUNT] = {
@@ -154,32 +152,6 @@ static int prte_ras_slurm_make_sbatch_arg(pmix_hash_table_t *fields,
 
     (*argc)++;
     argv[*argc] = NULL;
-
-    return PRTE_SUCCESS;
-}
-
-/*
- * Check whether a string contains control characters
- *
- * Rejects the string if it contains any control characters
- */
-static int prte_ras_slurm_token_has_control_chars(const char *s, size_t len, bool *has_control_chars)
-{
-    if (NULL == s || NULL == has_control_chars) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    *has_control_chars = false;
-
-    for (size_t i = 0; i < len; i++) {
-        unsigned char c = (unsigned char)s[i];
-
-        /* check if control character */
-        if (c < 0x20 || c == 0x7f) {
-            *has_control_chars = true;
-            break;
-        }
-    }
 
     return PRTE_SUCCESS;
 }
@@ -825,7 +797,7 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
     }
     
     /* Insert into global node list. This consumes the list. */
-    err = prte_ras_base_node_insert(added_nodes, NULL);
+    err = prte_ras_base_node_insert(&added_nodes, NULL);
 
     if(PRTE_SUCCESS != err) {
         PRTE_ERROR_LOG(err);
@@ -840,7 +812,7 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
         void *key;
         void *val;
 
-        PMIX_HASH_TABLE_FOREACH_PTR(key, val, slurm_jobfields, {
+        PMIX_HASH_TABLE_FOREACH_PTR(key, val, &slurm_jobfields, {
             free(val);
         });
 

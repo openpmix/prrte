@@ -297,7 +297,7 @@ static int prte_ras_slurm_get_jobinfo_json(const char *slurm_jobid, json_t **job
     }
 
     /* Jobs array: we expect and require exactly one job in the result  */
-    json_t *jobs_arr = json_object_get(parent_json, jobs_field);
+    json_t *jobs_arr = json_object_get(parent_json, "jobs");
     if (NULL == jobs_arr || !json_is_array(jobs_arr) || 1 != json_array_size(jobs_arr)) {
         err = PRTE_ERR_JSON_PARSE_FAILURE;
         PRTE_ERROR_LOG(err);

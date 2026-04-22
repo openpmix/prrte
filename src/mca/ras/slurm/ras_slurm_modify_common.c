@@ -24,7 +24,7 @@
  * 
  * @param[in] slurm_jobid  Null-terminated Slurm job ID string to validate.
  */
-static int prte_ras_slurm_validate_jobid(const char *slurm_jobid) {
+int prte_ras_slurm_validate_jobid(const char *slurm_jobid) {
 
     if (NULL == slurm_jobid) {
         return PRTE_ERR_BAD_PARAM;
@@ -52,7 +52,7 @@ static int prte_ras_slurm_validate_jobid(const char *slurm_jobid) {
  * @param[in]  slurm_jobid           Input string containing digits only.
  * @param[out] slurm_jobid_numeric   Converted value.
  */
-static int prte_ras_slurm_convert_jobid(const char *slurm_jobid, uint32_t *slurm_jobid_numeric) {
+int prte_ras_slurm_convert_jobid(const char *slurm_jobid, uint32_t *slurm_jobid_numeric) {
 
     if (NULL == slurm_jobid || NULL == slurm_jobid_numeric) {
         return PRTE_ERR_BAD_PARAM;
@@ -88,7 +88,7 @@ static int prte_ras_slurm_convert_jobid(const char *slurm_jobid, uint32_t *slurm
  * @param[out] err_msg      Writable buffer of size PRTE_SLURM_ERR_STR_MAX_SIZE
  *                          for Slurm output on failure, or NULL if not required.
  */
-static int prte_ras_slurm_kill_job(const char *slurm_jobid, char *err_msg) {
+int prte_ras_slurm_kill_job(const char *slurm_jobid, char *err_msg) {
 
     if(NULL == slurm_jobid) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
@@ -173,4 +173,30 @@ static int prte_ras_slurm_kill_job(const char *slurm_jobid, char *err_msg) {
     free(cmd);
 
     return err;
+}
+
+/*
+ * Check whether a string contains control characters
+ *
+ * Rejects the string if it contains any control characters
+ */
+int prte_ras_slurm_token_has_control_chars(const char *s, size_t len, bool *has_control_chars)
+{
+    if (NULL == s || NULL == has_control_chars) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    *has_control_chars = false;
+
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)s[i];
+
+        /* check if control character */
+        if (c < 0x20 || c == 0x7f) {
+            *has_control_chars = true;
+            break;
+        }
+    }
+
+    return PRTE_SUCCESS;
 }

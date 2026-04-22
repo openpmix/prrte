@@ -36,6 +36,9 @@
 #include "src/mca/ras/base/base.h"
 #include "src/mca/ras/ras.h"
 
+#define PRTE_SLURM_ERR_STR_MAX_SIZE 256
+#define PRTE_SLURM_JOB_ID_MAX_LEN 20
+
 /* Markers to indicate a given Slurm JSON-format number is set or infinite */
 #define PRTE_SLURM_UNSET_NUM_MARKER "prte_slurm_unset"
 #define PRTE_SLURM_INFINITE_NUM_MARKER "prte_slurm_inf"
@@ -57,11 +60,20 @@ int prte_ras_slurm_serve_release_req(prte_pmix_server_req_t *req);
 int prte_ras_slurm_validate_jobid(const char *slurm_jobid);
 int prte_ras_slurm_convert_jobid(const char *slurm_jobid, uint32_t *slurm_jobid_numeric);
 int prte_ras_slurm_kill_job(const char *slurm_jobid, char *err_msg);
+int prte_ras_slurm_token_has_control_chars(const char *s, size_t len, bool *has_control_chars);
 
 typedef struct {
     prte_ras_base_component_t super;
     int max_length;
     bool use_all;
+    bool propagate_account;
+    bool propagate_partition;
+    bool propagate_qos;
+    bool propagate_cwd;
+    bool propagate_mem_per_cpu;
+    bool propagate_mem_per_node;
+    bool propagate_time;
+    bool propagate_threads_per_core;
 } prte_mca_ras_slurm_component_t;
 PRTE_EXPORT extern prte_mca_ras_slurm_component_t prte_mca_ras_slurm_component;
 
@@ -104,6 +116,14 @@ enum slurm_num_obj_subfield {
 };
 
 extern const char *const num_obj_subfields[NUM_OBJ_SUBFIELD_COUNT];
+
+/* Job fields used to keep track of new allocations */
+
+enum record_job_data_field {
+    PRTE_JOB_DATA_NODES,
+    PRTE_JOB_DATA_JOB_ID,
+    PRTE_JOB_DATA_COUNT
+};
 
 END_C_DECLS
 
