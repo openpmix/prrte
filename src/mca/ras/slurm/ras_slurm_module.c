@@ -244,10 +244,13 @@ static void modify(prte_pmix_server_req_t *req)
         return;
     }
 
-    if(err == PRTE_SUCCESS) {
-        req->pstatus = PMIX_SUCCESS;
+    if(PRTE_SUCCESS != err) {
+        req->pstatus = PMIX_ERR;
+    else if(PRTE_ERR_OP_IN_PROGRESS == err) {
+        req->pstatus = PMIX_OPERATION_IN_PROGRESS;
+    }
     } else {
-        req->pstatus = PMIX_ERROR;
+        req->pstatus = PMIX_SUCCESS;
     }
 }
 

@@ -30,6 +30,18 @@
 
 #define PRTE_SLURM_MAX_SBATCH_ARGS 32
 
+/* Struct for callback after pending job wait is complete */
+typedef struct {
+    pmix_object_t super;
+    prte_event_t ev;
+    prte_pmix_server_req_t *req;
+    pmix_thread_t thr;
+    char *job_id;
+    int err;
+    bool thread_constructed;
+    bool thread_started;
+} prte_slurm_wait_tracker_t;
+
 /*
  * Local functions
  */
@@ -38,6 +50,13 @@ static int prte_ras_slurm_exec_sbatch(char * const *argv, char *job_id);
 static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields);
 static int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *alloc_refid, pmix_list_t *node_list);
 static int prte_ras_slurm_reject_node_duplicates(pmix_list_t *node_list);
+static void swt_con(prte_slurm_wait_tracker_t *p);
+static void swt_des(prte_slurm_wait_tracker_t *p);
+static void localrelease(void *cbdata);
+static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata);
+static void *prte_ras_slurm_wait_thread(pmix_object_t *obj);
+
+PMIX_CLASS_INSTANCE(prte_slurm_wait_tracker_t, pmix_object_t, swt_con, swt_des);
 
 /* String fields to read from "parent" Slurm job JSON */
 const char *const str_fields[STR_FIELD_COUNT] = {
@@ -665,6 +684,137 @@ static int prte_ras_slurm_reject_node_duplicates(pmix_list_t *node_list)
     return PRTE_SUCCESS;
 }
 
+static void swt_con(prte_slurm_wait_tracker_t *p)
+{
+    p->req = NULL;
+    p->job_id = NULL;
+    p->err = PRTE_SUCCESS;
+    p->thread_constructed = false;
+    p->thread_started = false;
+}
+
+static void swt_des(prte_slurm_wait_tracker_t *p)
+{
+    if (NULL != p->job_id) {
+        free(p->job_id);
+    }
+
+    if (NULL != p->req) {
+        PMIX_RELEASE(p->req);
+    }
+
+    if (p->thread_constructed) {
+        PMIX_DESTRUCT(&p->thr);
+    }
+}
+
+static void localrelease(void *cbdata)
+{
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
+
+    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
+    PMIX_RELEASE(req);
+}
+
+static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata)
+{
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
+ 
+    pmix_list_t added_nodes;
+    bool have_added_nodes = false;
+    
+    prte_slurm_wait_tracker_t *trk = (prte_slurm_wait_tracker_t *) cbdata;
+    
+    if (trk->thread_started) {
+        pmix_thread_join(&trk->thr, NULL);
+        trk->thread_started = false;
+    }
+
+    prte_pmix_server_req_t *req = trk->req;
+
+    char *job_id = trk->job_id;
+
+    int err = trk->err;
+
+    if(PRTE_SUCCESS != err) {
+        goto complete;
+    }
+
+    PMIX_CONSTRUCT(&added_nodes, pmix_list_t);
+    have_added_nodes = true;
+
+    err = prte_ras_slurm_add_modified_resources(job_id, &added_nodes);
+
+    if(PRTE_SUCCESS != err) {
+        goto complete;
+    }
+
+    /* Reject nodes that are already present in prte_node_pool.
+    * This avoids duplicate node entries, as merge semantics
+    * are not currently implemented. We already enforce an 
+    * --exclusive flag, so this is just a fallback. */
+    err = prte_ras_slurm_reject_node_duplicates(&added_nodes);
+
+    if(PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        goto complete;
+    }
+
+    /* Create session and tag nodes with session ID (slurm job ID) */
+    err = prte_ras_slurm_assign_new_session(job_id, NULL, &added_nodes);
+
+    if(PRTE_SUCCESS != err) {
+        goto complete;
+    }
+    
+    /* Insert into global node list. This consumes the list. */
+    err = prte_ras_base_node_insert(&added_nodes, NULL);
+
+    if(PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        goto complete;
+    }
+
+    complete:
+
+    if(have_added_nodes) {
+        PMIX_DESTRUCT(&added_nodes);
+        have_added_nodes = false;
+    }
+
+    req->pstatus = prte_pmix_convert_rc(err);
+
+    /* Launch daemons on the newly secured resources */
+    if (PMIX_SUCCESS == req->pstatus) {
+        prte_job_t *daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+        PRTE_ACTIVATE_JOB_STATE(daemons, PRTE_JOB_STATE_LAUNCH_DAEMONS);
+    }
+
+    /* Execute callback if necessary */
+    if (NULL != req->infocbfunc) {
+        req->infocbfunc(req->pstatus, req->info, req->ninfo,
+                        req->cbdata, localrelease, req);
+        PMIX_RELEASE(trk);
+        return;
+    }
+
+    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs,
+                                req->local_index, NULL);
+
+    PMIX_RELEASE(req);
+    PMIX_RELEASE(trk);
+}
+
+static void *prte_ras_slurm_wait_thread(pmix_object_t *obj)
+{
+    prte_slurm_wait_tracker_t *trk = (prte_slurm_wait_tracker_t *) obj;
+
+    trk->err = prte_ras_slurm_wait_resources(trk->job_id);
+
+    PRTE_PMIX_THREADSHIFT(trk, prte_event_base, prte_ras_slurm_extend_wait_complete);
+    return PMIX_THREAD_CANCELLED;
+}
+
 /**
  * @brief Coordinate a resource-extension request with Slurm
  *
@@ -680,10 +830,7 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
     int pmix_err = PMIX_SUCCESS;
 
     pmix_hash_table_t slurm_jobfields;
-    pmix_list_t added_nodes;
-
     bool have_slurm_jobfields = false;
-    bool have_added_nodes = false;
     
     char *nodes_string = NULL;
 
@@ -746,6 +893,9 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
         goto cleanup;
     }
 
+    /* Now owned by hash table */
+    nodes_string = NULL;
+
     err = prte_ras_slurm_launch_expander_job(&slurm_jobfields);
 
     if(PRTE_SUCCESS != err) {
@@ -763,47 +913,42 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
         goto cleanup;
     }
 
-    err = prte_ras_slurm_wait_resources(job_id);
+    /* Wait for resources in a dedicated thread, 
+     * since this could take a long time */
+
+    prte_slurm_wait_tracker_t *trk;
     
-    if(PRTE_SUCCESS != err) {
-        goto cleanup;
-    }
+    trk = PMIX_NEW(prte_slurm_wait_tracker_t);
+    trk->req = req;
+    PMIX_RETAIN(req);
 
-    PMIX_CONSTRUCT(&added_nodes, pmix_list_t);
+    trk->job_id = strdup(job_id);
 
-    have_added_nodes = true;
-
-    err = prte_ras_slurm_add_modified_resources(job_id, &added_nodes);
-
-    if(PRTE_SUCCESS != err) {
-        goto cleanup;
-    }
-
-    /* Reject nodes that are already present in prte_node_pool.
-    * This avoids duplicate node entries, as merge semantics
-    * are not currently implemented. */
-    err = prte_ras_slurm_reject_node_duplicates(&added_nodes);
-
-    if(PRTE_SUCCESS != err) {
+    if(NULL == trk->job_id) {
+        err = PRTE_ERR_OUT_OF_RESOURCE;
         PRTE_ERROR_LOG(err);
+        PMIX_RELEASE(trk);
         goto cleanup;
     }
 
-    /* Create session and tag nodes with session ID (slurm job ID) */
-    err = prte_ras_slurm_assign_new_session(job_id, NULL, &added_nodes);
-
-    if(PRTE_SUCCESS != err) {
-        goto cleanup;
-    }
-    
-    /* Insert into global node list. This consumes the list. */
-    err = prte_ras_base_node_insert(&added_nodes, NULL);
-
-    if(PRTE_SUCCESS != err) {
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
+    PMIX_CONSTRUCT(&trk->thr, pmix_thread_t);
+    trk->thr.t_run = prte_ras_slurm_wait_thread;
+    trk->thr.t_arg = trk;
+    trk->thread_constructed = true;
+    trk->thread_started = true;
+    pmix_err = pmix_thread_start(&trk->thr);
         
+    if(PMIX_SUCCESS != pmix_err) {
+        trk->thread_started = false;
+        err = prte_pmix_convert_status(pmix_err);
+        PRTE_ERROR_LOG(err);
+        PMIX_RELEASE(trk);
+        goto cleanup;
+    }
+
+    /* Return control to application while we wait */
+    err = PRTE_ERR_OP_IN_PROGRESS;
+
     cleanup:
 
     free(nodes_string);
@@ -817,10 +962,6 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
         });
 
         PMIX_DESTRUCT(&slurm_jobfields);
-    }
-
-    if(have_added_nodes) {
-        PMIX_DESTRUCT(&added_nodes);
     }
 
     return err;
