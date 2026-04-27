@@ -27,6 +27,7 @@
 
 #include "ras_slurm.h"
 #include "src/mca/ras/base/base.h"
+#include "src/mca/state/state.h"
 
 #define PRTE_SLURM_MAX_SBATCH_ARGS 32
 
@@ -35,11 +36,8 @@ typedef struct {
     pmix_object_t super;
     prte_event_t ev;
     prte_pmix_server_req_t *req;
-    pmix_thread_t thr;
     char *job_id;
     int err;
-    bool thread_constructed;
-    bool thread_started;
 } prte_slurm_wait_tracker_t;
 
 /*
@@ -54,7 +52,6 @@ static void swt_con(prte_slurm_wait_tracker_t *p);
 static void swt_des(prte_slurm_wait_tracker_t *p);
 static void localrelease(void *cbdata);
 static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata);
-static void *prte_ras_slurm_wait_thread(pmix_object_t *obj);
 
 PMIX_CLASS_INSTANCE(prte_slurm_wait_tracker_t, pmix_object_t, swt_con, swt_des);
 
@@ -101,6 +98,8 @@ static const char *mem_per_node_format = "--mem=%s";
 static const char *time_format = "--time=%s";
 static const char *nodes_format = "--nodes=%s";
 static const char *threads_per_core_format = "--threads-per-core=%s";
+
+static struct timeval five_sec = {.tv_sec = 5, .tv_usec = 0};
 
 /*
  * Append a formatted sbatch argument from a pmix hash table field.
@@ -689,8 +688,6 @@ static void swt_con(prte_slurm_wait_tracker_t *p)
     p->req = NULL;
     p->job_id = NULL;
     p->err = PRTE_SUCCESS;
-    p->thread_constructed = false;
-    p->thread_started = false;
 }
 
 static void swt_des(prte_slurm_wait_tracker_t *p)
@@ -701,10 +698,6 @@ static void swt_des(prte_slurm_wait_tracker_t *p)
 
     if (NULL != p->req) {
         PMIX_RELEASE(p->req);
-    }
-
-    if (p->thread_constructed) {
-        PMIX_DESTRUCT(&p->thr);
     }
 }
 
@@ -723,13 +716,7 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
     pmix_list_t added_nodes;
     bool have_added_nodes = false;
     
-    prte_slurm_wait_tracker_t *trk = (prte_slurm_wait_tracker_t *) cbdata;
-    
-    if (trk->thread_started) {
-        pmix_thread_join(&trk->thr, NULL);
-        trk->thread_started = false;
-    }
-
+    prte_slurm_wait_tracker_t *trk = cbdata;
     prte_pmix_server_req_t *req = trk->req;
 
     char *job_id = trk->job_id;
@@ -805,14 +792,27 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
     PMIX_RELEASE(trk);
 }
 
-static void *prte_ras_slurm_wait_thread(pmix_object_t *obj)
+static void slurm_wait_poll_cb(int fd, short args, void *cbdata)
 {
-    prte_slurm_wait_tracker_t *trk = (prte_slurm_wait_tracker_t *) obj;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
-    trk->err = prte_ras_slurm_wait_resources(trk->job_id);
+    prte_slurm_wait_tracker_t *trk = cbdata;
 
-    PRTE_PMIX_THREADSHIFT(trk, prte_event_base, prte_ras_slurm_extend_wait_complete);
-    return PMIX_THREAD_CANCELLED;
+    pmix_output(0, "slurm poll: checking job %s", trk->job_id);
+
+    int err;
+
+    err = prte_ras_slurm_check_resources(trk->job_id);
+
+    if (PRTE_ERR_RESOURCE_BUSY == err) {
+        /* Try again in 5 seconds */
+        prte_event_evtimer_add(&trk->ev, &five_sec);
+        return;
+    }
+
+    trk->err = err;
+
+    prte_ras_slurm_extend_wait_complete(-1, 0, trk);
 }
 
 /**
@@ -913,7 +913,7 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
         goto cleanup;
     }
 
-    /* Wait for resources in a dedicated thread, 
+    /* Wait for resources by polling every 5 seconds,
      * since this could take a long time */
 
     prte_slurm_wait_tracker_t *trk;
@@ -931,21 +931,9 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
         goto cleanup;
     }
 
-    PMIX_CONSTRUCT(&trk->thr, pmix_thread_t);
-    trk->thr.t_run = prte_ras_slurm_wait_thread;
-    trk->thr.t_arg = trk;
-    trk->thread_constructed = true;
-    trk->thread_started = true;
-    pmix_err = pmix_thread_start(&trk->thr);
+    prte_event_set(prte_event_base, &trk->ev, -1, 0, slurm_wait_poll_cb, trk);
+    prte_event_evtimer_add(&trk->ev, &five_sec);
         
-    if(PMIX_SUCCESS != pmix_err) {
-        trk->thread_started = false;
-        err = prte_pmix_convert_status(pmix_err);
-        PRTE_ERROR_LOG(err);
-        PMIX_RELEASE(trk);
-        goto cleanup;
-    }
-
     /* Return control to application while we wait */
     err = PRTE_ERR_OP_IN_PROGRESS;
 

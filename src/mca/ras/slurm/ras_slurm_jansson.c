@@ -52,7 +52,6 @@ typedef struct {
     bool io_error;
 } jansson_limited_reader_t;
 
-
 /*
  * Parse a numeric-object field from JSON and store it as a string in a hash table.
  *
@@ -159,7 +158,7 @@ static int prte_ras_slurm_get_json_numobj_field(json_t *job, const char *key, pm
  * @return Number of bytes read into buffer. Returns 0 when no more data
  *         should be read (EOF or limit reached).
  */
-static size_t prte_ras_slurm_jansson_cbfunc(void *buffer, size_t buflen, void *data) 
+static size_t prte_ras_slurm_jansson_cbfunc(void *buffer, size_t buflen, void *data)
 {
     jansson_limited_reader_t *reader = data;
 
@@ -196,7 +195,7 @@ static size_t prte_ras_slurm_jansson_cbfunc(void *buffer, size_t buflen, void *d
  *     Output pointer receiving the parsed JSON object for the job. Set to
  *     NULL on entry and on failure.
  */
-static int prte_ras_slurm_get_jobinfo_json(const char *slurm_jobid, json_t **job_info_out) 
+static int prte_ras_slurm_get_jobinfo_json(const char *slurm_jobid, json_t **job_info_out)
 {
     if(NULL == slurm_jobid || NULL == job_info_out) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
@@ -216,7 +215,7 @@ static int prte_ras_slurm_get_jobinfo_json(const char *slurm_jobid, json_t **job
     }
 
     static const char *cmd_format = "scontrol show job %s --json";
-    
+
     json_error_t json_err;
 
     json_t *parent_json = NULL;
@@ -346,7 +345,7 @@ static int prte_ras_slurm_get_jobinfo_json(const char *slurm_jobid, json_t **job
  * Note: On failure, values_table may be partially populated.
  */
 int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table)
-{    
+{
     if(NULL == values_table) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
@@ -363,7 +362,7 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table)
         return PRTE_ERR_NOT_FOUND;
     }
 
-    /* Read JSON from stream and extract the first and only job 
+    /* Read JSON from stream and extract the first and only job
        in the "jobs" array, taking ownership of the returned json. */
     err = prte_ras_slurm_get_jobinfo_json(slurm_jobid, &job);
 
@@ -390,12 +389,12 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table)
         if(NULL == str_field || !json_is_string(str_field)) {
             err = PRTE_ERR_JSON_PARSE_FAILURE;
             PRTE_ERROR_LOG(err);
-            goto cleanup; 
+            goto cleanup;
         }
 
         const char *str = json_string_value(str_field);
         size_t str_len = json_string_length(str_field);
-        bool has_control_chars; 
+        bool has_control_chars;
 
         /* Do not accept string if contains control characters */
         err = prte_ras_slurm_token_has_control_chars(str, str_len, &has_control_chars);
@@ -406,7 +405,7 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table)
 
         if(PRTE_SUCCESS != err) {
             PRTE_ERROR_LOG(err);
-            goto cleanup; 
+            goto cleanup;
         }
 
         char *str_dup = strdup(str);
@@ -414,7 +413,7 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table)
         if(NULL == str_dup) {
             err = PRTE_ERR_OUT_OF_RESOURCE;
             PRTE_ERROR_LOG(err);
-            goto cleanup; 
+            goto cleanup;
         }
 
         pmix_err = pmix_hash_table_set_value_ptr(values_table, str_fields[i],
@@ -456,7 +455,7 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table)
  * @param[in] slurm_jobid Slurm job ID.
  * @param[in,out] node_list. A pmix_list_t to add nodes to.
  */
-int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *node_list) 
+int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *node_list)
 {
     if(NULL == slurm_jobid || NULL == node_list) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
@@ -622,7 +621,7 @@ int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *
         if(NULL == sockets || !json_is_array(sockets)) {
             err = PRTE_ERR_JSON_PARSE_FAILURE;
             PRTE_ERROR_LOG(err);
-            goto cleanup; 
+            goto cleanup;
         }
 
         size_t socket_idx;
@@ -681,7 +680,7 @@ int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *
                             PRTE_ERROR_LOG(err);
                             goto cleanup;
                         }
-                        
+
                         break;
                     }
                 }
@@ -705,10 +704,10 @@ int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *
         if (NULL == nodename_dyn) {
             err = PRTE_ERR_OUT_OF_RESOURCE;
             PRTE_ERROR_LOG(err);
-            goto cleanup;  
+            goto cleanup;
         }
 
-        /* 
+        /*
         The "cpus" field represents the number of hardware
         threads available. To respect the preferences of the
         original job, we calculate (cores * threads_per_core),
@@ -719,13 +718,13 @@ int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *
         */
 
         int slots = core_count * threads_per_core;
-        
+
         if(slots > cpu_max_count) {
             slots = cpu_max_count;
         }
 
         prte_node_t *node = PMIX_NEW(prte_node_t);
-        
+
         node->state = PRTE_NODE_STATE_UP;
         node->name = nodename_dyn;
         node->slots_inuse = 0;
@@ -737,7 +736,7 @@ int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *
         PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
         "%s ras:slurm:add_modified_resources: discovered node %s with "
         "%d slots",
-        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, node->slots)); 
+        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, node->slots));
     }
 
     cleanup:
@@ -750,17 +749,16 @@ int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *
 }
 
 /*
- * Wait until a Slurm job contains the RUNNING state.
+ * Check the state of a Slurm job against RUNNING and PENDING.
  *
- * Polls Slurm job information once per second and inspects
- * the "job_state" JSON field until the job transitions 
- * out of PENDING. The function returns success only if the job
- * reaches RUNNING.
+ * Polls Slurm job information and inspects the "job_state" JSON
+ * field for PENDING and RUNNING. The function returns PRTE_SUCCESS
+ * if the job reaches RUNNING.
  *
  * @param[in] slurm_jobid SLURM job ID to monitor.
  */
-int prte_ras_slurm_wait_resources(const char *slurm_jobid)
-{    
+int prte_ras_slurm_check_resources(const char *slurm_jobid)
+{
     int err = PRTE_SUCCESS;
 
     err = prte_ras_slurm_validate_jobid(slurm_jobid);
@@ -771,70 +769,58 @@ int prte_ras_slurm_wait_resources(const char *slurm_jobid)
 
     json_t *job_info = NULL;
 
-    bool running;
-    bool pending;
+    bool running = false;
+    bool pending = false;
 
-    do {
-        running = false;
-        pending = false;
-        err = prte_ras_slurm_get_jobinfo_json(slurm_jobid, &job_info);
+    err = prte_ras_slurm_get_jobinfo_json(slurm_jobid, &job_info);
 
-        if(PRTE_SUCCESS != err) {
-            goto cleanup;
-        }
+    if(PRTE_SUCCESS != err) {
+        goto cleanup;
+    }
 
-        json_t *job_states = json_object_get(job_info, "job_state");
+    json_t *job_states = json_object_get(job_info, "job_state");
 
-        /* A job can have multiple states in Slurm */
-        if (NULL == job_states || !json_is_array(job_states)) {
+    /* A job can have multiple states in Slurm */
+    if (NULL == job_states || !json_is_array(job_states)) {
+        err = PRTE_ERR_JSON_PARSE_FAILURE;
+        PRTE_ERROR_LOG(PRTE_ERR_JSON_PARSE_FAILURE);
+        goto cleanup;
+    }
+
+    size_t i;
+    json_t *state_val;
+
+    json_array_foreach(job_states, i, state_val) {
+
+        if(!json_is_string(state_val)) {
             err = PRTE_ERR_JSON_PARSE_FAILURE;
-            PRTE_ERROR_LOG(PRTE_ERR_JSON_PARSE_FAILURE);
-            goto cleanup;
-        }
-        
-        size_t i;
-        json_t *state_val;
-
-        json_array_foreach(job_states, i, state_val) {
-
-            if(!json_is_string(state_val)) {
-                err = PRTE_ERR_JSON_PARSE_FAILURE;
-                PRTE_ERROR_LOG(err);
-                goto cleanup;
-            }
-
-            const char *state = json_string_value(state_val);
-
-            if (strcmp(state, "RUNNING") == 0) {
-                running = true;
-            }
-
-            else if (strcmp(state, "PENDING") == 0) {
-                pending = true;
-            }
-        }
-
-        json_decref(job_info);
-        job_info = NULL;
-
-        /* Should be mutually exclusive */
-        if (running && pending) {
-            err = PRTE_ERR_SLURM_BAD_JOB_STATUS;
             PRTE_ERROR_LOG(err);
             goto cleanup;
         }
 
-        /* Avoid overloading Slurm with requests */
-        if(pending) {
-            sleep(1);
+        const char *state = json_string_value(state_val);
+
+        if (strcmp(state, "RUNNING") == 0) {
+            running = true;
         }
 
-    } while (pending);
+        else if (strcmp(state, "PENDING") == 0) {
+            pending = true;
+        }
+    }
 
-    if(!running) {
+    json_decref(job_info);
+    job_info = NULL;
+
+    /* Should be mutually exclusive */
+    if ((running && pending) || (!running && !pending)) {
         err = PRTE_ERR_SLURM_BAD_JOB_STATUS;
         PRTE_ERROR_LOG(err);
         goto cleanup;
+    }
+
+    if(!running) {
+        err = PRTE_ERR_RESOURCE_BUSY;
     }
 
     cleanup:
