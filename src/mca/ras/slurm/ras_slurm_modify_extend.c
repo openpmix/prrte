@@ -43,14 +43,14 @@ typedef struct {
 /*
  * Local functions
  */
+static void swt_con(prte_slurm_wait_tracker_t *p);
+static void swt_des(prte_slurm_wait_tracker_t *p);
+static void localrelease(void *cbdata);
 static int prte_ras_slurm_make_sbatch_arg(pmix_hash_table_t *fields, const char *field_name, const char *field_format, bool obj_num, int *argc, char **argv);
 static int prte_ras_slurm_exec_sbatch(char * const *argv, char *job_id);
 static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields);
 static int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *alloc_refid, pmix_list_t *node_list);
 static int prte_ras_slurm_reject_node_duplicates(pmix_list_t *node_list);
-static void swt_con(prte_slurm_wait_tracker_t *p);
-static void swt_des(prte_slurm_wait_tracker_t *p);
-static void localrelease(void *cbdata);
 static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata);
 
 PMIX_CLASS_INSTANCE(prte_slurm_wait_tracker_t, pmix_object_t, swt_con, swt_des);
@@ -100,6 +100,42 @@ static const char *nodes_format = "--nodes=%s";
 static const char *threads_per_core_format = "--threads-per-core=%s";
 
 static struct timeval five_sec = {.tv_sec = 5, .tv_usec = 0};
+
+/*
+ * Constructor for prte_slurm_wait_tracker_t
+ */
+static void swt_con(prte_slurm_wait_tracker_t *p)
+{
+    p->req = NULL;
+    p->job_id = NULL;
+    p->err = PRTE_SUCCESS;
+}
+
+/*
+ * Destructor for prte_slurm_wait_tracker_t
+ */
+static void swt_des(prte_slurm_wait_tracker_t *p)
+{
+    if (NULL != p->job_id) {
+        free(p->job_id);
+    }
+
+    if (NULL != p->req) {
+        PMIX_RELEASE(p->req);
+    }
+}
+
+/*
+ * Cleanup function if user provides callback function
+ * after new resources are secured
+ */
+static void localrelease(void *cbdata)
+{
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
+
+    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
+    PMIX_RELEASE(req);
+}
 
 /*
  * Append a formatted sbatch argument from a pmix hash table field.
@@ -683,32 +719,14 @@ static int prte_ras_slurm_reject_node_duplicates(pmix_list_t *node_list)
     return PRTE_SUCCESS;
 }
 
-static void swt_con(prte_slurm_wait_tracker_t *p)
-{
-    p->req = NULL;
-    p->job_id = NULL;
-    p->err = PRTE_SUCCESS;
-}
-
-static void swt_des(prte_slurm_wait_tracker_t *p)
-{
-    if (NULL != p->job_id) {
-        free(p->job_id);
-    }
-
-    if (NULL != p->req) {
-        PMIX_RELEASE(p->req);
-    }
-}
-
-static void localrelease(void *cbdata)
-{
-    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
-
-    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
-    PMIX_RELEASE(req);
-}
-
+/**
+ * @brief Finalize a Slurm resource extension request.
+ *
+ * Processes newly allocated Slurm resources after the wait phase completes.
+ * Newly added nodes are validated, assigned to a session, and inserted into
+ * the global node pool. On success, daemon launch is triggered on the new
+ * resources and the original request callback is completed.
+ */
 static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata)
 {
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
@@ -792,13 +810,19 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
     PMIX_RELEASE(trk);
 }
 
+/**
+ * @brief Poll a pending Slurm resource request.
+ *
+ * Checks whether the tracked Slurm job allocation is ready. If resources are
+ * still pending, the callback reschedules itself to retry after a delay.
+ * Otherwise, the result is recorded and wait completion is triggered.
+ * 
+ */
 static void slurm_wait_poll_cb(int fd, short args, void *cbdata)
 {
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     prte_slurm_wait_tracker_t *trk = cbdata;
-
-    pmix_output(0, "slurm poll: checking job %s", trk->job_id);
 
     int err;
 
