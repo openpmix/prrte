@@ -826,6 +826,12 @@ static void slurm_wait_poll_cb(int fd, short args, void *cbdata)
  */
 int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
 {
+    if(!prte_ras_slurm_have_jansson()) {
+        pmix_output(0, "ras:slurm:modify: "
+            "Jansson support is required but not enabled in this build");
+        return PRTE_ERR_NOT_AVAILABLE;
+    }
+
     int err = PRTE_SUCCESS;
     int pmix_err = PMIX_SUCCESS;
 
@@ -954,43 +960,3 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
 
     return err;
 }
-
-#ifndef HAVE_JANSSON
-
-/*
- * Extract SLURM job fields; returns PRTE_ERR_NOT_SUPPORTED if built without Jansson.
- */
-int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table)
-{
-    PRTE_HIDE_UNUSED_PARAMS(values_table);
-    pmix_output(0, "ras:slurm:extract_job_fields: "
-                "Jansson support is not enabled in this build");
-
-    return PRTE_ERR_NOT_SUPPORTED;
-}
-
-/**
- * Add new SLURM job resources; returns PRTE_ERR_NOT_SUPPORTED if built without Jansson.
- */
-int prte_ras_slurm_add_modified_resources(const char *slurm_jobid,
-                                                 pmix_list_t *node_list)
-{
-    PRTE_HIDE_UNUSED_PARAMS(slurm_jobid, node_list);
-
-    pmix_output(0, "ras:slurm:add_modified_resources: "
-                "Jansson support is not enabled in this build");
-    return PRTE_ERR_NOT_SUPPORTED;
-}
-
-/**
- * Wait for SLURM job resources; returns PRTE_ERR_NOT_SUPPORTED if built without Jansson.
- */
-int prte_ras_slurm_wait_resources(const char *slurm_jobid)
-{
-    PRTE_HIDE_UNUSED_PARAMS(slurm_jobid);
-    pmix_output(0, "ras:slurm:wait_resources: "
-                "Jansson support is not enabled in this build");
-    return PRTE_ERR_NOT_SUPPORTED;
-}
-
-#endif

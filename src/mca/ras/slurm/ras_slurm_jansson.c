@@ -330,6 +330,13 @@ static int prte_ras_slurm_get_jobinfo_json(const char *slurm_jobid, json_t **job
     return err;
 }
 
+/**
+ * Check if we have the Jansson library available in compilation
+ */
+bool prte_ras_slurm_have_jansson(void)
+{
+    return true;
+}
 
 /*
  * Extract selected Slurm job fields using JSON and populate a PMIx hash table.

@@ -798,7 +798,6 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
         return;
     }
 
-
     // if we met the request, then we need to launch any new daemons
     if (PMIX_SUCCESS == req->pstatus) {
         daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);

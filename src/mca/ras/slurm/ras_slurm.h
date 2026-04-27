@@ -45,7 +45,10 @@
 
 BEGIN_C_DECLS
 
-/* Features requiring JSON parser*/
+/* To check if Jansson is available in compilation */
+bool prte_ras_slurm_have_jansson(void);
+
+/* Features requiring JSON parser */
 int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table);
 int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *node_list);
 int prte_ras_slurm_check_resources(const char *slurm_jobid);

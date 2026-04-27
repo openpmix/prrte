@@ -38,6 +38,9 @@ sources = \
 if PRTE_HAVE_JANSSON
 sources += \
         ras_slurm_jansson.c
+else
+sources += \
+        ras_slurm_jansson_stub.c
 endif
 
 # Make the output library in this directory, and name it either
