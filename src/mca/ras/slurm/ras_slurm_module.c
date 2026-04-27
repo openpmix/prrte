@@ -18,6 +18,8 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+ *                         All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -227,8 +229,22 @@ static void deallocate(prte_job_t *jdata, prte_app_context_t *app)
 
 static void modify(prte_pmix_server_req_t *req)
 {
-    req->status = PMIX_ERR_NOT_SUPPORTED;
-    return;
+    int err = PRTE_SUCCESS;
+
+    if(PMIX_ALLOC_EXTEND == req->allocdir) {
+     
+       err = prte_ras_slurm_serve_extend_req(req);
+        
+    } else if(PMIX_ALLOC_RELEASE == req->allocdir) {
+
+        err = prte_ras_slurm_serve_release_req(req);
+
+        req->status = PMIX_ERR_NOT_SUPPORTED;
+        return;
+    }
+
+    req->pstatus = prte_pmix_convert_rc(err);
+
 }
 
 static int prte_ras_slurm_finalize(void)

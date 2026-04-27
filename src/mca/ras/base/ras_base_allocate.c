@@ -17,6 +17,8 @@
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+ *                         All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -793,18 +795,24 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
         req->pstatus = PMIX_ERR_NOT_SUPPORTED;
     }
 
-    // execute the callback
-    if (NULL != req->infocbfunc) {
-        req->infocbfunc(req->pstatus, req->info, req->ninfo, req->cbdata, localrelease, req);
+    /* operation is being executed asynchronously */
+    if (PMIX_OPERATION_IN_PROGRESS == req->pstatus) {
         return;
     }
-    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
 
     // if we met the request, then we need to launch any new daemons
     if (PMIX_SUCCESS == req->pstatus) {
         daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
         PRTE_ACTIVATE_JOB_STATE(daemons, PRTE_JOB_STATE_LAUNCH_DAEMONS);
     }
+
+    // execute the callback
+    if (NULL != req->infocbfunc) {
+        req->infocbfunc(req->pstatus, req->info, req->ninfo, req->cbdata, localrelease, req);
+        return;
+    }
+   
+    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
 
     PMIX_RELEASE(req);
 }

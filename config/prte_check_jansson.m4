@@ -18,6 +18,8 @@
 # Copyright (c) 2016      Los Alamos National Security, LLC. All rights
 #                         reserved.
 # Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+# Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+#                         All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -68,12 +70,18 @@ AC_DEFUN([PRTE_CHECK_JANSSON],[
         #error "jansson API version is less than 2.11"
         #endif
                   ]])],
-                  [AC_MSG_RESULT([yes])],
+                  [AC_MSG_RESULT([yes])
+                   AC_DEFINE([HAVE_JANSSON], [1],
+                   [Define to 1 if Jansson support is available])
+                  ],
                   [AC_MSG_RESULT([no])
                    prte_check_jansson_found=0])
         fi
     fi
     AS_IF([test ${prte_check_jansson_found} -eq 0], [prte_check_jansson_happy="no"])
+
+    AM_CONDITIONAL([PRTE_HAVE_JANSSON],
+          [test "${prte_check_jansson_happy}" = "yes"])
 
     # Did we find the right stuff?
     AS_IF([test "${prte_check_jansson_happy}" = "yes"],

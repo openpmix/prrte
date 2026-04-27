@@ -7,6 +7,8 @@
  * Copyright (c) 2021      The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+ *                         All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -90,6 +92,7 @@ typedef uint8_t prte_node_flags_t;
 #define PRTE_NODE_SERIAL_NUMBER (PRTE_NODE_START_KEY + 5) // string - serial number: used if node is a coprocessor
 #define PRTE_NODE_PORT          (PRTE_NODE_START_KEY + 6) // int32 - Alternate port to be passed to plm
 #define PRTE_NODE_ADD_SLOTS     (PRTE_NODE_START_KEY + 7) // bool - slots are being added to existing node
+#define PRTE_NODE_MODIFY_ID     (PRTE_NODE_START_KEY + 8) // uint32_t - allocation session ID of extended allocation
 
 #define PRTE_NODE_MAX_KEY (PRTE_NODE_START_KEY + 100)
 
