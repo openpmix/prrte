@@ -71,7 +71,6 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes);
 static void deallocate(prte_job_t *jdata, prte_app_context_t *app);
 static void modify(prte_pmix_server_req_t *req);
 static int prte_ras_slurm_finalize(void);
-static int prte_ras_slurm_serve_modify_add_req(prte_pmix_server_req_t *req);
 
 /*
  * RAS slurm module
