@@ -151,6 +151,9 @@ pmix_status_t prte_pmix_convert_rc(int rc)
     case PRTE_ERR_MODEL_DECLARED:
         return PMIX_MODEL_DECLARED;
 
+    case PRTE_ERR_OP_IN_PROGRESS:
+        return PMIX_OPERATION_IN_PROGRESS;
+
     case PRTE_ERROR:
         return PMIX_ERROR;
     case PRTE_SUCCESS:

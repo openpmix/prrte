@@ -244,14 +244,8 @@ static void modify(prte_pmix_server_req_t *req)
         return;
     }
 
-    if(PRTE_SUCCESS != err) {
-        req->pstatus = PMIX_ERR;
-    else if(PRTE_ERR_OP_IN_PROGRESS == err) {
-        req->pstatus = PMIX_OPERATION_IN_PROGRESS;
-    }
-    } else {
-        req->pstatus = PMIX_SUCCESS;
-    }
+    req->pstatus = prte_pmix_convert_rc(err);
+
 }
 
 static int prte_ras_slurm_finalize(void)
