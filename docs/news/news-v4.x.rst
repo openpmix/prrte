@@ -4,6 +4,32 @@ PRRTE v4.x series
 This file contains all the NEWS updates for the PRRTE v4.x
 series, in reverse chronological order.
 
+4.1.1 -- xx May 2026
+--------------------
+:: important:: This release contains the following important changes:
+
+               * PBS launch support has been switched from direct linkage
+                 against the TM library to use of the pbs_tmrsh command
+                 in the ssh launcher to avoid library confusion due to
+                 mixed dependencies. The --with-tm configure option has
+                 therefore been removed. PBS users are strongly advised
+                 to upgrade to this PRRTE version as soon as possible.
+               * significant improvement has been made in the handling
+                 of heterogeneous nodes. Accordingly, the default is now
+                 to assume possible heterogeneity. Users who _know_ they
+                 have uniform nodes and do not wish to use the new logic
+                 may add the --uniform-nodes cmd line option. Note that
+                 the --hetero-nodes option has been removed.
+
+Detailed changes include:
+ - PR #2437: Multiple commits
+    - Default no-arg prun case to --help
+    - Improve hetero node handling
+    - Ignore race condition on IOF
+    - Minor updates to slurm support
+    - Switch PBS launch support to pbs_tmrsh
+
+
 4.1.0 -- 27 Feb 2025
 --------------------
 .. important:: This is the second release in the v4 family. This series
