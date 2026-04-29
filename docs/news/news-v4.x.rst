@@ -28,6 +28,8 @@ Detailed changes include:
     - Ignore race condition on IOF
     - Minor updates to slurm support
     - Switch PBS launch support to pbs_tmrsh
+    - Update NEWS
+    - Roll to rc1
 
 
 4.1.0 -- 27 Feb 2025
