@@ -277,77 +277,148 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         inherit = true;
     }
 
-    if (inherit) {
-        if (NULL != parent) {
-            /* if not already assigned, inherit the parent's ppr */
-            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, NULL, PMIX_STRING)) {
-                /* get the parent job's ppr, if it had one */
-                if (prte_get_attribute(&parent->attributes, PRTE_JOB_PPR, (void **) &tmp, PMIX_STRING)) {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_PPR, PRTE_ATTR_GLOBAL, tmp, PMIX_STRING);
-                    free(tmp);
+    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                        "mca:rmaps: setting mapping policies for job %s inherit %s hwtcpus %s",
+                        PRTE_JOBID_PRINT(jdata->nspace),
+                        inherit ? "TRUE" : "FALSE",
+                        options.use_hwthreads ? "TRUE" : "FALSE");
+
+    /* set the default mapping policy IFF it wasn't provided */
+    if (!PRTE_MAPPING_POLICY_IS_SET(jdata->map->mapping)) {
+        if (inherit) {
+            if (NULL != parent) {
+                // copy across the mapping policy
+                jdata->map->mapping = parent->map->mapping;
+
+                /* if not already assigned, inherit the parent's ppr */
+                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, NULL, PMIX_STRING)) {
+                    /* get the parent job's ppr, if it had one */
+                    if (prte_get_attribute(&parent->attributes, PRTE_JOB_PPR, (void **) &tmp, PMIX_STRING)) {
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_PPR, PRTE_ATTR_GLOBAL, tmp, PMIX_STRING);
+                        free(tmp);
+                    } else if (NULL != prte_rmaps_base.ppr) {
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_PPR, PRTE_ATTR_GLOBAL, prte_rmaps_base.ppr, PMIX_STRING);
+                    }
                 }
-            }
-            /* if not already assigned, inherit the parent's pes/proc */
-            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, NULL, PMIX_UINT16)) {
-                /* get the parent job's pes/proc, if it had one */
-                if (prte_get_attribute(&parent->attributes, PRTE_JOB_PES_PER_PROC, (void **) &u16ptr, PMIX_UINT16)) {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL, u16ptr, PMIX_UINT16);
-                } else if (0 < prte_rmaps_base.default_pes) {
+                /* if not already assigned, inherit the parent's pes/proc */
+                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, NULL, PMIX_UINT16)) {
+                    /* get the parent job's pes/proc, if it had one */
+                    if (prte_get_attribute(&parent->attributes, PRTE_JOB_PES_PER_PROC, (void **) &u16ptr, PMIX_UINT16)) {
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL, u16ptr, PMIX_UINT16);
+                    } else if (0 < prte_rmaps_base.default_pes) {
+                        u16 = prte_rmaps_base.default_pes;
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL, u16ptr, PMIX_UINT16);
+                    }
+                }
+                /* if not already assigned, inherit the parent's cpu designation */
+                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) &&
+                    !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
+                    /* get the parent job's designation, if it had one */
+                    if (prte_get_attribute(&parent->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                    } else if (prte_get_attribute(&parent->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                    } else {
+                        /* default */
+                        if (prte_rmaps_base.hwthread_cpus) {
+                            prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                        } else {
+                            prte_set_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                        }
+                    }
+                }
+                /* if not already assigned, inherit the parent's GPU support directive */
+                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, NULL, PMIX_BOOL)) {
+                    if (prte_get_attribute(&parent->attributes, PRTE_JOB_GPU_SUPPORT, (void **) &fptr, PMIX_BOOL)) {
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
+                    }
+                }
+                /* if not already assigned, inherit the parent's output directives */
+                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, NULL, PMIX_BOOL)) {
+                    if (prte_get_attribute(&parent->attributes, PRTE_JOB_TAG_OUTPUT, (void **) &fptr, PMIX_BOOL)) {
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
+                    }
+                }
+                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL)) {
+                    if (prte_get_attribute(&parent->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, (void **) &fptr, PMIX_BOOL)) {
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
+                    }
+                }
+                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL)) {
+                    if (prte_get_attribute(&parent->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, (void **) &fptr, PMIX_BOOL)) {
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
+                    }
+                }
+
+                // copy over any env directives, but do not overwrite anything already specified
+                inherit_env_directives(jdata, parent, nptr);
+
+            } else {
+                // bring over the MCA param defaults, where set and not already specified for this job
+                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, NULL, PMIX_STRING) &&
+                    NULL != prte_rmaps_base.ppr) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_PPR, PRTE_ATTR_GLOBAL, prte_rmaps_base.ppr, PMIX_STRING);
+                }
+                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, NULL, PMIX_UINT16) &&
+                    0 < prte_rmaps_base.default_pes) {
                     u16 = prte_rmaps_base.default_pes;
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL, u16ptr, PMIX_UINT16);
+                    options.cpus_per_rank = u16;
                 }
-            }
-            /* if not already assigned, inherit the parent's cpu designation */
-            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) &&
-                !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
-                /* get the parent job's designation, if it had one */
-                if (prte_get_attribute(&parent->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-                } else if (prte_get_attribute(&parent->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-                } else {
-                    /* default */
+                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) &&
+                    !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
                     if (prte_rmaps_base.hwthread_cpus) {
                         prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
                     } else {
                         prte_set_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
                     }
                 }
-            }
-            /* if not already assigned, inherit the parent's GPU support directive */
-            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, NULL, PMIX_BOOL)) {
-                if (prte_get_attribute(&parent->attributes, PRTE_JOB_GPU_SUPPORT, (void **) &fptr, PMIX_BOOL)) {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
-                }
-            }
-            /* if not already assigned, inherit the parent's output directives */
-            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, NULL, PMIX_BOOL)) {
-                if (prte_get_attribute(&parent->attributes, PRTE_JOB_TAG_OUTPUT, (void **) &fptr, PMIX_BOOL)) {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
-                }
-            }
-            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL)) {
-                if (prte_get_attribute(&parent->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, (void **) &fptr, PMIX_BOOL)) {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
-                }
-            }
-            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL)) {
-                if (prte_get_attribute(&parent->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, (void **) &fptr, PMIX_BOOL)) {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
-                }
-            }
 
-            // copy over any env directives, but do not overwrite anything already specified
-            inherit_env_directives(jdata, parent, nptr);
-        } else {
-            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) &&
-                !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
-                /* inherit the base defaults */
-                if (prte_rmaps_base.hwthread_cpus) {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-                } else {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) &&
+                    !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
+                    /* inherit the base defaults */
+                    if (prte_rmaps_base.hwthread_cpus) {
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                    } else {
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                    }
                 }
+
+                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, NULL, PMIX_STRING) &&
+                    NULL != prte_rmaps_base.file) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_FILE, PRTE_ATTR_GLOBAL,
+                                       prte_rmaps_base.file, PMIX_STRING);
+                }
+
+                if (PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping)) {
+                    jdata->map->mapping = prte_rmaps_base.mapping;
+                } else {
+                    // let the job's personality set the default mapping behavior
+                    if (NULL != schizo->set_default_mapping) {
+                        rc = schizo->set_default_mapping(jdata, &options);
+                    } else {
+                        rc = prte_rmaps_base_set_default_mapping(jdata, &options);
+                    }
+                    if (PRTE_SUCCESS != rc) {
+                        // the error message should have been printed
+                        jdata->exit_code = rc;
+                        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+                        goto cleanup;
+                    }
+                }
+            }
+        } else {
+            // let the job's personality set the default mapping behavior
+            if (NULL != schizo->set_default_mapping) {
+                rc = schizo->set_default_mapping(jdata, &options);
+            } else {
+                rc = prte_rmaps_base_set_default_mapping(jdata, &options);
+            }
+            if (PRTE_SUCCESS != rc) {
+                // the error message should have been printed
+                jdata->exit_code = rc;
+                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+                goto cleanup;
             }
         }
     }
@@ -414,53 +485,6 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PROCESSORS, (void*)&tmp, PMIX_STRING)) {
         prte_ras_base_display_cpus(jdata, tmp);
         free(tmp);
-    }
-
-    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                        "mca:rmaps: setting mapping policies for job %s inherit %s hwtcpus %s",
-                        PRTE_JOBID_PRINT(jdata->nspace),
-                        inherit ? "TRUE" : "FALSE",
-                        options.use_hwthreads ? "TRUE" : "FALSE");
-
-    /* set the default mapping policy IFF it wasn't provided */
-    if (!PRTE_MAPPING_POLICY_IS_SET(jdata->map->mapping)) {
-        did_map = false;
-        if (inherit) {
-            if (NULL != parent) {
-                jdata->map->mapping = parent->map->mapping;
-                did_map = true;
-            } else if (PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping)) {
-                pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps mapping given by MCA param");
-                jdata->map->mapping = prte_rmaps_base.mapping;
-                if (0 < prte_rmaps_base.default_pes) {
-                    u16 = prte_rmaps_base.default_pes;
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL, u16ptr, PMIX_UINT16);
-                    options.cpus_per_rank = u16;
-                }
-                if (PRTE_MAPPING_PPR == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
-                    tmp = strchr(prte_rmaps_base.default_mapping_policy, ':');
-                    ++tmp;
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_PPR,
-                                       PRTE_ATTR_GLOBAL, tmp, PMIX_STRING);
-                }
-                did_map = true;
-            }
-        }
-        if (!did_map) {
-            // let the job's personality set the default mapping behavior
-            if (NULL != schizo->set_default_mapping) {
-                rc = schizo->set_default_mapping(jdata, &options);
-            } else {
-                rc = prte_rmaps_base_set_default_mapping(jdata, &options);
-            }
-            if (PRTE_SUCCESS != rc) {
-                // the error message should have been printed
-                jdata->exit_code = rc;
-                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
-                goto cleanup;
-            }
-        }
     }
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void **) &tmp, PMIX_STRING)) {

@@ -57,6 +57,7 @@ prte_rmaps_base_t prte_rmaps_base = {
     .selected_modules = PMIX_LIST_STATIC_INIT,
     .mapping = 0,
     .ranking = 0,
+    .ppr = NULL,
     .device = NULL,
     .inherit = false,
     .hwthread_cpus = false,
@@ -494,9 +495,12 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
              * ck[2] contains the string that describes
              * the object and ck[3] is either NULL or contains any
              * modifiers (i.e., "#:obj:mod1,mod2") */
-            if (NULL != jdata) {
-                /* save the pattern */
-                pmix_asprintf(&cptr, "%s:%s", ck[1], ck[2]);
+
+            /* save the pattern */
+            pmix_asprintf(&cptr, "%s:%s", ck[1], ck[2]);
+            if (NULL == jdata) {
+                prte_rmaps_base.ppr = cptr;
+            } else {
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_PPR, PRTE_ATTR_GLOBAL, cptr, PMIX_STRING);
                 free(cptr);
             }
