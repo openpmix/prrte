@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -65,6 +65,8 @@ typedef struct {
     /* default mapping/ranking directives */
     prte_mapping_policy_t mapping;
     prte_ranking_policy_t ranking;
+    // default ppr setting
+    char *ppr;
     /* default device for dist mapping */
     char *device;
     /* whether or not child jobs should inherit mapping/ranking/binding directives from their parent
