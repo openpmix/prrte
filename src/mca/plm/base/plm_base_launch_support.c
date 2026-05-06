@@ -1601,7 +1601,6 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
     unsigned long num_procs;
     bool ignore;
     char *skips[] = {
-        "plm",
         "rmaps",
         "ras",
         NULL
@@ -1687,7 +1686,8 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
             tmpv = PMIx_Argv_split(environ[i], '=');
             ignore = false;
             for (j=0; NULL != skips[j]; j++) {
-                if (0 == strncmp(&tmpv[0][offset], skips[j], strlen(skips[j]))) {
+                if (0 == strncmp(&tmpv[0][offset], skips[j], strlen(skips[j])) ||
+                    0 == strcmp(&tmpv[0][offset], "plm")) {
                     ignore = true;;
                     break;
                 }
@@ -1744,7 +1744,8 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
          */
         ignore = false;
         for (j=0; NULL != skips[j]; j++) {
-            if (0 == strncmp(prted_cmd_line[i + 1], skips[j], strlen(skips[j]))) {
+            if (0 == strncmp(prted_cmd_line[i + 1], skips[j], strlen(skips[j])) ||
+                0 == strcmp(prted_cmd_line[i + 1], "plm")) {
                 ignore = true;;
                 break;
             }
