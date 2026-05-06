@@ -1600,6 +1600,12 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
     prte_job_t *jdata;
     unsigned long num_procs;
     bool ignore;
+    char *skips[] = {
+        "plm",
+        "rmaps",
+        "ras",
+        NULL
+    };
 
     /* check for debug flags */
     if (prte_debug_flag) {
@@ -1679,6 +1685,17 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
         if (0 == strncmp(environ[i], "PMIX_MCA_", offset) ||
             0 == strncmp(environ[i], "PRTE_MCA_", offset)) {
             tmpv = PMIx_Argv_split(environ[i], '=');
+            ignore = false;
+            for (j=0; NULL != skips[j]; j++) {
+                if (0 == strncmp(&tmpv[0][offset], skips[j], strlen(skips[j]))) {
+                    ignore = true;;
+                    break;
+                }
+            }
+            if (ignore) {
+                continue;
+            }
+
             /* check for duplicate */
             ignore = false;
             for (j = 0; j < *argc; j++) {
@@ -1722,11 +1739,20 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
          * end. Only a few environments allow this, so the daemon
          * only opens the PLM -if- it is specifically told to do
          * so by giving it a specific PLM module. To ensure we avoid
-         * confusion, do not include any directives here
+         * confusion, do not include any directives here, and ignore
+         * any frameworks the daemons do not use
          */
-        if (0 == strcmp(prted_cmd_line[i + 1], "plm")) {
+        ignore = false;
+        for (j=0; NULL != skips[j]; j++) {
+            if (0 == strncmp(prted_cmd_line[i + 1], skips[j], strlen(skips[j]))) {
+                ignore = true;;
+                break;
+            }
+        }
+        if (ignore) {
             continue;
         }
+
         /* check for duplicate */
         ignore = false;
         for (j = 0; j < *argc; j++) {
