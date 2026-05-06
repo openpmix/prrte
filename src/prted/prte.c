@@ -303,15 +303,6 @@ int prte(int argc, char *argv[])
         }
     }
 
-    /* do a minimal setup of key infrastructure, including
-     * parsing the install-level and user-level PRRTE param
-     * files
-     */
-    rc = prte_init_minimum();
-    if (PRTE_SUCCESS != rc) {
-        return rc;
-    }
-
     /* because we have to use the schizo framework and init our hostname
      * prior to parsing the incoming argv for cmd line options, do a hacky
      * search to support passing of impacted options (e.g., verbosity for schizo) */
