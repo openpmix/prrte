@@ -60,10 +60,14 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req);
 int prte_ras_slurm_serve_release_req(prte_pmix_server_req_t *req);
 
 /* Common modify extend/release features */
-int prte_ras_slurm_validate_jobid(const char *slurm_jobid);
-int prte_ras_slurm_convert_jobid(const char *slurm_jobid, uint32_t *slurm_jobid_numeric);
 int prte_ras_slurm_kill_job(const char *slurm_jobid, char *err_msg);
 int prte_ras_slurm_token_has_control_chars(const char *s, size_t len, bool *has_control_chars);
+
+/* Common features for the module */
+int prte_ras_slurm_validate_jobid(const char *slurm_jobid);
+int prte_ras_slurm_convert_jobid(const char *slurm_jobid, uint32_t *slurm_jobid_numeric);
+int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_refid, pmix_list_t *node_list);
+int prte_ras_slurm_tag_node_allocation(const char *slurm_jobid, pmix_list_t *node_list);
 
 typedef struct {
     prte_ras_base_component_t super;

@@ -350,7 +350,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         rc = mod->module->allocate(jdata, &nodes);
         if (PRTE_SUCCESS == rc) {
             // got an allocation, so we are done
-            goto DISPLAY;
+            break;
         }
         if (PRTE_ERR_ALLOCATION_PENDING == rc) {
             /* an allocation request is underway, so just do nothing */
@@ -360,6 +360,10 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         } else if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
             // this module didn't contribute anything
             continue;
+        } else if (PRTE_EXISTS == rc) {
+            /* fixed allocation has already been discovered */
+            PMIX_DESTRUCT(&nodes);
+            goto DISPLAY;
         } else {
             PRTE_ERROR_LOG(rc);
             PMIX_DESTRUCT(&nodes);
