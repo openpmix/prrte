@@ -297,6 +297,9 @@ prte_session_t *prte_get_session_object_from_id(const char *id)
         if (NULL == session) {
             continue;
         }
+        if (NULL == session->alloc_refid) {
+	     continue;
+        }
         if (0 == strcasecmp(session->alloc_refid, id)) {
             return session;
         }
