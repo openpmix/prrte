@@ -49,7 +49,6 @@ static void localrelease(void *cbdata);
 static int prte_ras_slurm_make_sbatch_arg(pmix_hash_table_t *fields, const char *field_name, const char *field_format, bool obj_num, int *argc, char **argv);
 static int prte_ras_slurm_exec_sbatch(char * const *argv, char *job_id);
 static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields);
-static int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *alloc_refid, pmix_list_t *node_list);
 static int prte_ras_slurm_reject_node_duplicates(pmix_list_t *node_list);
 static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata);
 
@@ -586,113 +585,6 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
     return err;
 }
 
-/*
- * Create and register a PRRTE session from a node list belonging to a Slurm allocation.
- *
- * Creates a new prte_session_t using slurm_jobid as the session ID,
- * associates the nodes in node_list with the session, and adds it to
- * the global session table.
- *
- * @param[in] slurm_jobid  Slurm job ID string (must be convertible to uint32_t)
- * @param[in] alloc_refid  Optional allocation reference ID (may be NULL)
- * @param[in] node_list    List of prte_node_t to attach to the session
- */
-static int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *alloc_refid, pmix_list_t *node_list)
-{    
-    if(NULL == slurm_jobid || NULL == node_list) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    int err = PRTE_SUCCESS;
-
-    err = prte_ras_slurm_validate_jobid(slurm_jobid);
-
-    if(PRTE_SUCCESS != err) {
-        PRTE_ERROR_LOG(err);
-        return err;
-    }
-    
-    prte_session_t *session = NULL;
-
-    uint32_t slurm_id_uint;
-    
-    err = prte_ras_slurm_convert_jobid(slurm_jobid, &slurm_id_uint);
-
-    if(PRTE_SUCCESS != err) {
-        PRTE_ERROR_LOG(err);
-        return err;
-    }
-
-    char *alloc_refid_dup = NULL;
-
-    if(NULL != alloc_refid) {
-        alloc_refid_dup = strdup(alloc_refid);
-        if(NULL == alloc_refid_dup) {
-            err = PRTE_ERR_OUT_OF_RESOURCE;
-            PRTE_ERROR_LOG(err);
-            return err;
-        }
-    }
-
-    session = PMIX_NEW(prte_session_t);
-
-    if (NULL == session) {
-        err = PRTE_ERR_OUT_OF_RESOURCE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    session->session_id = slurm_id_uint;
-
-    if(NULL != alloc_refid_dup) {
-        session->alloc_refid = alloc_refid_dup;
-        /* Now owned by the session */
-        alloc_refid_dup = NULL;
-    }
-
-    prte_node_t *node = NULL;
-
-    PMIX_LIST_FOREACH(node, node_list, prte_node_t) {
-
-        /* Tag the nodes with the session ID */
-        err = prte_set_attribute(&node->attributes, PRTE_NODE_MODIFY_ID, PRTE_ATTR_LOCAL,
-            &slurm_id_uint, PMIX_UINT32);
-
-        if(PRTE_SUCCESS != err) {
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-
-        PMIX_RETAIN(node);
-
-        int idx = pmix_pointer_array_add(session->nodes, node);
-        if (0 > idx) {
-            /* Negative returned idx indicates PMIX error */
-            err = prte_pmix_convert_status(idx);
-            PMIX_RELEASE(node);
-            PRTE_ERROR_LOG(err);
-            goto cleanup;
-        }
-    }
-
-    err = prte_set_session_object(session);
-    if (PRTE_SUCCESS != err) {
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
-    }
-
-    cleanup:
-
-    free(alloc_refid_dup);
-
-    if(NULL != session && err != PRTE_SUCCESS) {
-        PMIX_RELEASE(session);
-    }
-
-    return err;
-}
-
 /**
  * Reject nodes that already exist in the global node pool.
  *
@@ -765,7 +657,14 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
         goto complete;
     }
 
-    /* Create session and tag nodes with session ID (slurm job ID) */
+    /* Tag nodes with session ID (Slurm job ID) */
+    err = prte_ras_slurm_tag_node_allocation(job_id, &added_nodes);
+
+    if(PRTE_SUCCESS != err) {
+        goto complete;
+    }
+
+    /* Create a session  */
     err = prte_ras_slurm_assign_new_session(job_id, NULL, &added_nodes);
 
     if(PRTE_SUCCESS != err) {

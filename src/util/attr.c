@@ -292,8 +292,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "NODE-SERIAL-NUM";
         case PRTE_NODE_ADD_SLOTS:
             return "NODE-ADD-SLOTS";
-        case PRTE_NODE_MODIFY_ID:
-            return "PRTE-NODE-MODIFY-ID";
+        case PRTE_NODE_ALLOC_ID:
+            return "PRTE-NODE-ALLOC-ID";
 
         case PRTE_JOB_LAUNCH_MSG_SENT:
             return "JOB-LAUNCH-MSG-SENT";

@@ -17,68 +17,6 @@
 #include "src/mca/ras/base/base.h"
 
 /*
- * Validate that a Slurm job ID is valid according to expected syntax
- *
- * A valid Slurm job ID must be non-NULL, non-empty, must not exceed
- * PRTE_SLURM_JOB_ID_MAX_LEN characters, and must contain only decimal digits.
- * 
- * @param[in] slurm_jobid  Null-terminated Slurm job ID string to validate.
- */
-int prte_ras_slurm_validate_jobid(const char *slurm_jobid) {
-
-    if (NULL == slurm_jobid) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    size_t id_len = strnlen(slurm_jobid, PRTE_SLURM_JOB_ID_MAX_LEN+1);
-    if (0 == id_len || id_len > PRTE_SLURM_JOB_ID_MAX_LEN) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    for (size_t i = 0; i < id_len; ++i) {
-        if (!isdigit((unsigned char)slurm_jobid[i])) {
-            return PRTE_ERR_BAD_PARAM;
-        }
-    }
-
-    return PRTE_SUCCESS;
-}
-
-/*
- * Convert a Slurm job ID string to uint32_t.
- *
- * Expects a strictly decimal, non-negative string.
- *
- * @param[in]  slurm_jobid           Input string containing digits only.
- * @param[out] slurm_jobid_numeric   Converted value.
- */
-int prte_ras_slurm_convert_jobid(const char *slurm_jobid, uint32_t *slurm_jobid_numeric) {
-
-    if (NULL == slurm_jobid || NULL == slurm_jobid_numeric) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    if (!isdigit((unsigned char)slurm_jobid[0])) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    char *end = NULL;
-
-    unsigned long slurm_id_ulong;
-    
-    errno = 0;
-    slurm_id_ulong = strtoul(slurm_jobid, &end, 10);
-
-    if ('\0' != *end || ERANGE == errno || slurm_id_ulong > UINT32_MAX) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    *slurm_jobid_numeric = (uint32_t)slurm_id_ulong;
-
-    return PRTE_SUCCESS;
-}
-
-/*
  * Cancel a Slurm job using scancel.
  *
  * If scancel returns an error, the first line of stderr/stdout output is copied
