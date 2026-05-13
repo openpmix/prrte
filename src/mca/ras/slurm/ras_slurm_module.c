@@ -842,8 +842,6 @@ int prte_ras_slurm_tag_node_allocation(const char *slurm_jobid, pmix_list_t *nod
         return err;
     }
 
-    prte_session_t *session = NULL;
-
     uint32_t slurm_id_uint;
 
     err = prte_ras_slurm_convert_jobid(slurm_jobid, &slurm_id_uint);
