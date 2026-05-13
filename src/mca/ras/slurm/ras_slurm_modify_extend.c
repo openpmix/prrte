@@ -30,6 +30,8 @@
 #include "src/mca/state/state.h"
 
 #define PRTE_SLURM_MAX_SBATCH_ARGS 32
+#define PRTE_SLURM_WAIT_MIN_USEC 1000        /* 1 ms */
+#define PRTE_SLURM_WAIT_MAX_USEC 5000000     /* 5 sec */
 
 /* Struct for callback after pending job wait is complete */
 typedef struct {
@@ -38,6 +40,7 @@ typedef struct {
     prte_pmix_server_req_t *req;
     char *job_id;
     int err;
+    uint64_t poll_delay_usec;
 } prte_slurm_wait_tracker_t;
 
 /*
@@ -97,8 +100,6 @@ static const char *mem_per_node_format = "--mem=%s";
 static const char *time_format = "--time=%s";
 static const char *nodes_format = "--nodes=%s";
 static const char *threads_per_core_format = "--threads-per-core=%s";
-
-static struct timeval five_sec = {.tv_sec = 5, .tv_usec = 0};
 
 /*
  * Constructor for prte_slurm_wait_tracker_t
@@ -728,8 +729,23 @@ static void slurm_wait_poll_cb(int fd, short args, void *cbdata)
     err = prte_ras_slurm_check_resources(trk->job_id);
 
     if (PRTE_ERR_RESOURCE_BUSY == err) {
-        /* Try again in 5 seconds */
-        prte_event_evtimer_add(&trk->ev, &five_sec);
+
+        struct timeval delay = {
+            .tv_sec = trk->poll_delay_usec / 1000000,
+            .tv_usec = trk->poll_delay_usec % 1000000
+        };
+
+        prte_event_evtimer_add(&trk->ev, &delay);
+
+        /* double the waiting time with each failed attempt,
+         * up to the defined maximum */
+        if (PRTE_SLURM_WAIT_MAX_USEC > trk->poll_delay_usec) {
+            trk->poll_delay_usec *= 2;
+            if (PRTE_SLURM_WAIT_MAX_USEC < trk->poll_delay_usec) {
+                trk->poll_delay_usec = PRTE_SLURM_WAIT_MAX_USEC;
+            }
+        }
+
         return;
     }
 
@@ -860,8 +876,18 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
         goto cleanup;
     }
 
+    /* start by waiting just a few ms for resources
+    *  and progressively expand the wait if we fail
+    *  to secure them quickly */
+    struct timeval initial_delay = {
+        .tv_sec = PRTE_SLURM_WAIT_MIN_USEC / 1000000,
+        .tv_usec = PRTE_SLURM_WAIT_MIN_USEC % 1000000
+    };
+
+    trk->poll_delay_usec = PRTE_SLURM_WAIT_MIN_USEC;
+
     prte_event_set(prte_event_base, &trk->ev, -1, 0, slurm_wait_poll_cb, trk);
-    prte_event_evtimer_add(&trk->ev, &five_sec);
+    prte_event_evtimer_add(&trk->ev, &initial_delay);
         
     /* Return control to application while we wait */
     err = PRTE_ERR_OP_IN_PROGRESS;
