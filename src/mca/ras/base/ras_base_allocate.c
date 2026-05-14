@@ -170,7 +170,11 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
                     "%s=================================================================\n", tmp);
     }
     free(tmp);
-    prte_iof_base_output(&source, PMIX_FWD_STDOUT_CHANNEL, tmp2);
+    if (prte_persistent) {
+        fprintf(stdout, "%s", tmp2);
+    } else {
+        prte_iof_base_output(&source, PMIX_FWD_STDOUT_CHANNEL, tmp2);
+    }
     prte_set_attribute(&jdata->attributes, PRTE_JOB_ALLOC_DISPLAYED, PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
 }
 
@@ -705,7 +709,8 @@ addlocal:
 
 DISPLAY:
     /* shall we display the results? */
-    if (4 < pmix_output_get_verbosity(prte_ras_base_framework.framework_output)) {
+    if (4 < pmix_output_get_verbosity(prte_ras_base_framework.framework_output) &&
+        0 == strcmp(jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
         prte_ras_base_display_alloc(jdata);
     }
 

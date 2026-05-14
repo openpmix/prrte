@@ -175,10 +175,6 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
         caddy->jdata->total_slots_alloc = prte_ras_base.total_slots_alloc;
     }
 
-    if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DISPLAY_ALLOC, NULL, PMIX_BOOL)) {
-        prte_ras_base_display_alloc(caddy->jdata);
-    }
-
     /* progress the job */
     caddy->jdata->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
     PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_VM_READY);
