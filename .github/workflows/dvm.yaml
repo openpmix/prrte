@@ -87,3 +87,11 @@ jobs:
          prterun -n 5 ./openpmix/master/examples/pubstress 30
       if:   ${{ true }}
       timeout-minutes: 10
+
+    - name: Run MPMD
+      run: |
+         export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
+         export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
+         prterun -n 2 date : -n 1 date
+      if:   ${{ true }}
+      timeout-minutes: 10
