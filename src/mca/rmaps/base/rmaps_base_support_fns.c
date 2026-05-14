@@ -14,7 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2021 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -41,6 +41,9 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
+#include "src/mca/iof/base/base.h"
+#include "src/mca/ras/base/base.h"
+#include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/hostfile/hostfile.h"
@@ -516,14 +519,57 @@ complete:
     /* check for prior bookmark */
     prte_rmaps_base_get_starting_point(allocated_nodes, jdata);
 
-    if (4 < pmix_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
-        pmix_output(0, "AVAILABLE NODES FOR MAPPING:");
-        for (item = pmix_list_get_first(allocated_nodes);
-             item != pmix_list_get_end(allocated_nodes); item = pmix_list_get_next(item)) {
-            node = (prte_node_t *) item;
-            pmix_output(0, "    node: %s daemon: %s slots_available: %d", node->name,
-                        (NULL == node->daemon) ? "NULL" : PRTE_VPID_PRINT(node->daemon->name.rank),
-                        node->slots_available);
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC, NULL, PMIX_BOOL) ||
+        4 < pmix_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
+        bool parsable;
+        char *tmp = NULL, *tmp2, *tmp3;
+        prte_node_t *alloc;
+        pmix_proc_t source;
+
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_ALLOC_DISPLAYED, NULL, PMIX_BOOL)) {
+
+            parsable = prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL);
+            PMIX_LOAD_PROCID(&source, jdata->nspace, PMIX_RANK_WILDCARD);
+
+            if (parsable) {
+                pmix_asprintf(&tmp, "<allocation>\n");
+            } else {
+                pmix_asprintf(&tmp,
+                              "\n============   ALLOCATED NODES FOR JOB %s APP %d ============\n",
+                              jdata->nspace, app->idx);
+            }
+            for (item = pmix_list_get_first(allocated_nodes);
+                 item != pmix_list_get_end(allocated_nodes); item = pmix_list_get_next(item)) {
+                alloc = (prte_node_t *) item;
+                if (parsable) {
+                    /* need to create the output in XML format */
+                    pmix_asprintf(&tmp2,
+                                  "\t<host name=\"%s\" slots=\"%d\" max_slots=\"%d\" slots_inuse=\"%d\">\n",
+                                  (NULL == alloc->name) ? "UNKNOWN" : alloc->name, (int) alloc->slots_available,
+                                  (int) alloc->slots_max, (int) alloc->slots_inuse);
+                } else {
+                    pmix_asprintf(&tmp2, "    %s: slots=%d max_slots=%d slots_inuse=%d\n",
+                                  (NULL == alloc->name) ? "UNKNOWN" : alloc->name, (int) alloc->slots_available,
+                                  (int) alloc->slots_max, (int) alloc->slots_inuse);
+                }
+                if (NULL == tmp) {
+                    tmp = tmp2;
+                } else {
+                    pmix_asprintf(&tmp3, "%s%s", tmp, tmp2);
+                    free(tmp);
+                    free(tmp2);
+                    tmp = tmp3;
+                }
+            }
+            if (parsable) {
+                pmix_asprintf(&tmp2, "%s</allocation>\n", tmp);
+            } else {
+                pmix_asprintf(&tmp2,
+                            "%s=================================================================================\n", tmp);
+            }
+            free(tmp);
+            prte_iof_base_output(&source, PMIX_FWD_STDOUT_CHANNEL, tmp2);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_ALLOC_DISPLAYED, PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
         }
     }
 

@@ -67,19 +67,9 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
         free(hosts);
     }
 
-    /* if something was found in the rankfile, we add those resources to
-     * our global pool, use that as our global
-     * pool - set it and we are done
+    /* if something was found in the rankfile, then we are done
      */
     if (!pmix_list_is_empty(nodes)) {
-        /* store the results in the global resource pool - this removes the
-         * list items
-         */
-        rc = prte_ras_base_node_insert(nodes, jdata);
-        if (PRTE_SUCCESS != rc) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
         /* Record that the rankfile mapping policy has been selected */
         if (NULL == jdata->map) {
             jdata->map = PMIX_NEW(prte_job_map_t);
@@ -116,18 +106,9 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
         }
     }
 
-    /* if something was found in the dash-host(s), we use that as our global
-     * pool - set it and we are done
-     */
+    /* if something was found in the dash-host(s), then we are done */
     if (!pmix_list_is_empty(nodes)) {
-        /* store the results in the global resource pool - this removes the
-         * list items
-         */
-        if (PRTE_SUCCESS != (rc = prte_ras_base_node_insert(nodes, jdata))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-        }
-        return rc;
+        return PRTE_SUCCESS;
     }
 
     /* Our next option is to look for a hostfile and assign our global
@@ -171,18 +152,10 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
         }
     }
 
-    /* if something was found in the hosthosts(s), we use that as our global
-     * pool - set it and we are done
+    /* if something was found in the hosthosts(s), then we are done
      */
     if (!pmix_list_is_empty(nodes)) {
-        /* store the results in the global resource pool - this removes the
-         * list items
-         */
-        if (PRTE_SUCCESS != (rc = prte_ras_base_node_insert(nodes, jdata))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-        }
-        return rc;
+        return PRTE_SUCCESS;
     }
 
     /* if nothing was found so far, then look for a default hostfile */
@@ -198,18 +171,9 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
         }
     }
 
-    /* if something was found in the default hostfile, we use that as our global
-     * pool - set it and we are done
-     */
+    /* if something was found in the default hostfile, then we are done */
     if (!pmix_list_is_empty(nodes)) {
-        /* store the results in the global resource pool - this removes the
-         * list items
-         */
-        if (PRTE_SUCCESS != (rc = prte_ras_base_node_insert(nodes, jdata))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-        }
-        return rc;
+        return PRTE_SUCCESS;
     }
 
     PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
