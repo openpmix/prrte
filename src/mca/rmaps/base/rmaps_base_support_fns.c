@@ -820,14 +820,14 @@ int prte_rmaps_base_check_oversubscribed(prte_job_t *jdata,
         return PRTE_SUCCESS;
     }
     if (!options->oversubscribe &&
-        node->slots == node->num_procs) {
+        node->slots == node->slots_inuse) {
         return PRTE_ERR_TAKE_NEXT_OPTION;  // this node is full
     }
 
     /* not all nodes are equal, so only set oversubscribed for
      * this node if it is in that state
      */
-    if (node->slots < (int) node->num_procs) {
+    if (node->slots < (int) node->slots_inuse) {
         /* flag the node as oversubscribed so that sched-yield gets
          * properly set
          */
