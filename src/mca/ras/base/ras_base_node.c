@@ -50,7 +50,7 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
     int32_t num_nodes;
     int rc, i;
     prte_node_t *node, *hnp_node, *nptr;
-    bool skiphnp = false;
+    bool skiphnp = false, found;
     prte_attribute_t *kv;
     prte_proc_t *daemon;
     prte_job_t *djob;
@@ -178,19 +178,34 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                                  "%s ras:base:node_insert node %s slots %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  (NULL == node->name) ? "NULL" : node->name, node->slots));
-            if (prte_managed_allocation) {
-                /* the slots are always treated as sacred
-                 * in managed allocations
-                 */
-                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
+            // see if we already have this node
+            found = false;
+            for (i=0; i < prte_node_pool->size; i++) {
+                nptr = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, i);
+                if (NULL == nptr) {
+                    continue;
+                }
+                if (prte_nptr_match(nptr, node)) {
+                    found = true;
+                    break;
+                }
             }
-            /* insert it into the array */
-            node->index = pmix_pointer_array_add(prte_node_pool, (void *) node);
-            if (PRTE_SUCCESS > (rc = node->index)) {
-                PRTE_ERROR_LOG(rc);
-                return rc;
+            if (!found) {
+                if (prte_managed_allocation) {
+                    /* the slots are always treated as sacred
+                     * in managed allocations
+                     */
+                    PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
+                }
+                /* insert it into the array */
+                node->index = pmix_pointer_array_add(prte_node_pool, (void *) node);
+                if (PRTE_SUCCESS > (rc = node->index)) {
+                    PRTE_ERROR_LOG(rc);
+                    return rc;
+                }
             }
-            if (prte_get_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
+            if (prte_get_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) &&
+                NULL == node->daemon) {
                 /* create a daemon for this node since we won't be launching
                  * and the mapper needs to see a daemon - this is used solely
                  * for testing the mappers */

@@ -680,16 +680,16 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                     return ret;
                 }
 
-            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MAPDEV)) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_MAP_DETAILED, NULL, PMIX_BOOL);
+            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MAP)) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_MAP, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
                     PMIx_Argv_free(targv);
                     return ret;
                 }
 
-            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MAP)) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_MAP, NULL, PMIX_BOOL);
+            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MAPDEV)) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_MAP_DETAILED, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
                     PMIx_Argv_free(targv);
