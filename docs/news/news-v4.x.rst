@@ -22,6 +22,12 @@ series, in reverse chronological order.
                  the --hetero-nodes option has been removed.
 
 Detailed changes include:
+ - PR #2450: Multiple commits
+    - Ensure cmd line MCA params are recognized
+    - Ignore irrelevant MCA params for prted cmd line
+    - Transfer the default mapby modifiers to jobs
+    - config: make m4 type-name sanitization locale-independen
+    - Update NEWS and VERSION
  - PR #2437: Multiple commits
     - Default no-arg prun case to --help
     - Improve hetero node handling
