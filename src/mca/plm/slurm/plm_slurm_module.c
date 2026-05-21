@@ -17,6 +17,8 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+ *                         All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -192,6 +194,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     bool failed_launch = true;
     prte_job_t *daemons;
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
+    uint32_t job_id = UINT32_MAX;
+    prte_session_t *session = NULL;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(state);
@@ -319,13 +323,56 @@ static void launch_daemons(int fd, short args, void *cbdata)
         rc = PRTE_ERR_FAILED_TO_START;
         goto cleanup;
     }
+
     nodelist_flat = PMIx_Argv_join(nodelist_argv, ',');
     PMIx_Argv_free(nodelist_argv);
 
-    /* if we are using all allocated nodes, then srun doesn't
+    /* find job ID of first node to launch; we make the assumption here that
+     * all other nodes in the launch share that job ID */
+    for (n = 0; n < map->nodes->size; n++) {
+        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, n))) {
+            continue;
+        }
+        if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED)) {
+            continue;
+        }
+
+        uint32_t node_job_id;
+        void *data = &node_job_id;
+        if(prte_get_attribute(&node->attributes, PRTE_NODE_ALLOC_ID, &data, PMIX_UINT32)) {
+            job_id = node_job_id;
+            break;
+        }
+
+        break;
+    }
+
+    /* could not find job ID of nodes to launch */
+    if(UINT32_MAX == job_id) {
+        rc = PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(rc);
+        goto cleanup;
+    }
+
+    session = prte_get_session_object(job_id);
+
+    if(NULL == session) {
+        rc = PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(rc);
+        goto cleanup;
+    }
+
+    /* by specifying a job ID explicitly, we can launch
+    *  daemons into other allocations than the one we are in,
+    *  if necessary. */
+    pmix_asprintf(&tmp, "--jobid=%"PRIu32, job_id);
+    pmix_argv_append(&argc, &argv, tmp);
+    free(tmp);
+
+    /* if we are using all nodes in the job, then srun doesn't
      * require any further arguments
      */
-    if (map->num_new_daemons < prte_num_allocated_nodes) {
+    if (map->num_new_daemons < session->nodes->size) {
         pmix_asprintf(&tmp, "--nodes=%lu", (unsigned long) map->num_new_daemons);
         pmix_argv_append(&argc, &argv, tmp);
         free(tmp);
