@@ -35,7 +35,7 @@ jobs:
         sudo apt-get install -y --no-install-recommends software-properties-common libhwloc-dev libevent-dev
 
     - name: Git clone OpenPMIx
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
         repository: openpmix/openpmix
@@ -51,7 +51,7 @@ jobs:
         make install
 
     - name: Git clone PRRTE
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
         clean: false
@@ -67,7 +67,7 @@ jobs:
         make install
 
     - name: Checkout Open MPI
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
         repository: open-mpi/ompi
