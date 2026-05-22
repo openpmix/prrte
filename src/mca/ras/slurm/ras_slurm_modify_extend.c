@@ -693,6 +693,7 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
     if (PMIX_SUCCESS == req->pstatus) {
         prte_job_t *daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
         PRTE_ACTIVATE_JOB_STATE(daemons, PRTE_JOB_STATE_LAUNCH_DAEMONS);
+        prte_set_attribute(&daemons->attributes, PRTE_JOB_EXTEND_DVM, PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
     }
 
     /* Execute callback if necessary */
