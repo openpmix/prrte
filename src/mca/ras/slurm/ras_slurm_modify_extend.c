@@ -680,6 +680,8 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
         goto complete;
     }
 
+    prte_num_allocated_nodes += pmix_list_get_size(&added_nodes);
+
     complete:
 
     if(have_added_nodes) {
