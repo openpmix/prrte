@@ -86,6 +86,13 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
 static int prte_ras_slurm_parse_ranges(char *base, char *ranges, char ***nodelist);
 static int prte_ras_slurm_parse_range(char *base, char *range, char ***nodelist);
 
+pmix_list_t *prte_slurm_session_stack = NULL;
+
+PMIX_CLASS_INSTANCE(prte_session_stack_item_t,
+                    pmix_list_item_t,
+                    NULL,
+                    NULL);
+
 static bool check_taint(char *name, char *evar)
 {
     int n;
@@ -104,6 +111,8 @@ static bool check_taint(char *name, char *evar)
 /* init the module */
 static int init(void)
 {
+    PMIX_CONSTRUCT(prte_slurm_session_stack, pmix_list_t);
+
     return PRTE_SUCCESS;
 }
 
@@ -270,6 +279,8 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
 
 static int prte_ras_slurm_finalize(void)
 {
+    PMIX_LIST_DESTRUCT(prte_slurm_session_stack);
+
     return PRTE_SUCCESS;
 }
 
@@ -703,7 +714,7 @@ int prte_ras_slurm_convert_jobid(const char *slurm_jobid, uint32_t *slurm_jobid_
  *
  * Creates a new prte_session_t using slurm_jobid as the session ID,
  * associates the nodes in node_list with the session, and adds it to
- * the global session table.
+ * the global session table and the internal session tracker list.
  * 
  * @note Nodes in the list are duplicates of the originals
  *
@@ -719,6 +730,7 @@ int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_
     }
 
     int err = PRTE_SUCCESS;
+    int pmix_err = PMIX_SUCCESS;
 
     err = prte_ras_slurm_validate_jobid(slurm_jobid);
 
@@ -788,10 +800,9 @@ int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_
             goto cleanup;
         }
 
-        int idx = pmix_pointer_array_add(session->nodes, node_cpy);
-        if (0 > idx) {
-            /* Negative returned idx indicates PMIX error */
-            err = prte_pmix_convert_status(idx);
+        pmix_err = pmix_pointer_array_add(session->nodes, node_cpy);
+        if (0 > pmix_err) {
+            err = prte_pmix_convert_status(pmix_err);
             PMIX_RELEASE(node);
             PRTE_ERROR_LOG(err);
             goto cleanup;
@@ -803,6 +814,11 @@ int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_
         PRTE_ERROR_LOG(err);
         goto cleanup;
     }
+
+    prte_session_stack_item_t *item = PMIX_NEW(prte_session_stack_item_t);
+    item->session = session;
+
+    pmix_list_append(prte_slurm_session_stack, &item->super);
 
     cleanup:
 
