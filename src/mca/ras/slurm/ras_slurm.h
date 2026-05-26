@@ -132,6 +132,18 @@ enum record_job_data_field {
     PRTE_JOB_DATA_COUNT
 };
 
+/* Stack item type for our session stack */
+
+typedef struct {
+    pmix_list_item_t super;
+    prte_session_t *session;
+} prte_session_stack_item_t;
+PMIX_CLASS_DECLARATION(prte_session_stack_item_t);
+
+/* Stack to keep track of our Slurm allocations in LIFO order */
+
+extern pmix_list_t *prte_slurm_session_stack;
+
 END_C_DECLS
 
 #endif
