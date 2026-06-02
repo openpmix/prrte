@@ -47,6 +47,10 @@ int prte_ras_slurm_kill_job(const char *slurm_jobid, char *err_msg) {
         return err;
     }
 
+    PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+                        "%s ras:slurm:kill_job: killing job %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), slurm_jobid));
+
     static const char *cmd_format = "scancel %s 2>&1";
 
     char *cmd = NULL;

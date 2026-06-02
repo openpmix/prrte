@@ -262,18 +262,15 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
     int err = PRTE_SUCCESS;
 
     if(PMIX_ALLOC_EXTEND == req->allocdir) {
-
-       err = prte_ras_slurm_serve_extend_req(req);
-
+        err = prte_ras_slurm_serve_extend_req(req);
+        req->pstatus = prte_pmix_convert_rc(err);
     } else if(PMIX_ALLOC_RELEASE == req->allocdir) {
-
         err = prte_ras_slurm_serve_release_req(req);
-
-        req->status = PMIX_ERR_NOT_SUPPORTED;
-        return PMIX_ERR_NOT_SUPPORTED;;
+        req->pstatus = prte_pmix_convert_rc(err);
+    } else {
+        req->pstatus = PMIX_ERR_NOT_SUPPORTED;
     }
 
-    req->pstatus = prte_pmix_convert_rc(err);
     return req->pstatus;
 }
 
@@ -817,6 +814,7 @@ int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_
 
     prte_session_stack_item_t *item = PMIX_NEW(prte_session_stack_item_t);
     item->session = session;
+    item->nodes_in_session = pmix_list_get_size(node_list);
 
     pmix_list_append(prte_slurm_session_stack, &item->super);
 
