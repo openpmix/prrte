@@ -12,6 +12,8 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+ *                         All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -87,6 +89,18 @@ int prte_ras_base_select(void)
 
         /* If we got a module, keep it */
         nmodule = (prte_ras_base_module_t *) module;
+
+        /* Initialize the module */
+        if (NULL != nmodule->init) {
+            rc = nmodule->init();
+            if (PRTE_SUCCESS != rc) {
+                pmix_output_verbose(5, prte_ras_base_framework.framework_output,
+                                    "mca:ras:select: Skipping component [%s]. Module init failed",
+                                    component->pmix_mca_component_name);
+                continue;
+            }
+        }
+
         /* add to the list of selected modules */
         newmodule = PMIX_NEW(prte_ras_base_selected_module_t);
         newmodule->pri = priority;

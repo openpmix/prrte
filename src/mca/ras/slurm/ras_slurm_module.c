@@ -111,8 +111,7 @@ static bool check_taint(char *name, char *evar)
 /* init the module */
 static int init(void)
 {
-    PMIX_CONSTRUCT(prte_slurm_session_stack, pmix_list_t);
-
+    prte_slurm_session_stack = PMIX_NEW(pmix_list_t);
     return PRTE_SUCCESS;
 }
 
@@ -276,8 +275,7 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
 
 static int prte_ras_slurm_finalize(void)
 {
-    PMIX_LIST_DESTRUCT(prte_slurm_session_stack);
-
+    PMIX_RELEASE(prte_slurm_session_stack);
     return PRTE_SUCCESS;
 }
 
@@ -813,6 +811,7 @@ int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_
     }
 
     prte_session_stack_item_t *item = PMIX_NEW(prte_session_stack_item_t);
+
     item->session = session;
     item->nodes_in_session = pmix_list_get_size(node_list);
 
