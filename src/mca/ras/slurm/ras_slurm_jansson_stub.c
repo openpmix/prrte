@@ -47,6 +47,15 @@ int prte_ras_slurm_add_modified_resources(const char *slurm_jobid,
     return PRTE_ERR_NOT_AVAILABLE;
 }
 
+int prte_ras_slurm_detach_nodes(const char *slurm_jobid, prte_session_t *session, pmix_pointer_array_t *removed_nodes)
+{
+    PRTE_HIDE_UNUSED_PARAMS(slurm_jobid, session, removed_nodes);
+
+    pmix_output(0, "ras:slurm:detach_nodes: "
+                "Jansson support is required but not enabled in this build");
+    return PRTE_ERR_NOT_AVAILABLE;
+}
+
 /**
  * Wait for SLURM job resources; returns PRTE_ERR_NOT_AVAILABLE if built without Jansson.
  */
