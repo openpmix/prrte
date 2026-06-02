@@ -137,7 +137,8 @@ static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count) {
 
             pmix_list_remove_last(prte_slurm_session_stack);
             
-            /* TODO: take nodes in session and remove them */
+            /* TODO: nodes in session need to be detached
+             * from PRRTE. */
 
             nodes_removed += session_item->nodes_in_session;
 
@@ -162,8 +163,6 @@ static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count) {
                 goto cleanup;
             }
 
-            /* Magic needs to happen to remove nodes from PRRTE */
-
             pmix_pointer_array_t nodes_in_removal;
             PMIX_CONSTRUCT(&nodes_in_removal, pmix_pointer_array_t);
 
@@ -175,7 +174,8 @@ static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count) {
                 goto cleanup;
             }
             
-            /* TODO: use nodes_in_removal to remove from PRRTE node lists */
+            /* TODO: use nodes_in_removal 
+             * to detach removed nodes from PRRTE */
 
             PMIX_DESTRUCT(&nodes_in_removal);
 
