@@ -7,7 +7,7 @@ Grid Engine, Open Cluster Scheduler (OCS), Gridware Cluster Scheduler (GCS)
 and others.
 
 This documentation will collectively refer to all of them as "Grid
-Engine", unless a referring to a specific flavor of the Grid Engine
+Engine", unless referring to a specific flavor of the Grid Engine
 family.
 
 Verify Grid Engine support
@@ -34,7 +34,7 @@ When Grid Engine support is included, PRRTE will automatically
 detect when it is running inside SGE and will just "do the Right
 Thing."
 
-Specifically, if you execute an ``prterun`` command in a Grid Engine
+Specifically, if you execute a ``prterun`` command in a Grid Engine
 job, it will automatically use the Grid Engine mechanisms to launch
 and kill processes.  There is no need to specify what nodes to run on
 |mdash| PRRTE will obtain this information directly from Grid

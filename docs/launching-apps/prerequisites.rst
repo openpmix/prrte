@@ -194,7 +194,7 @@ There are some situations where you cannot modify the ``PATH`` or
 all parallelism from the user, and therefore do not want to make the
 user modify their shell startup files.
 
-In such cases, you can use the ``prterun````--prefix`` command line
+In such cases, you can use the ``prterun`` ``--prefix`` command line
 option, which takes as an argument the
 top-level directory where PRRTE was installed.  While relative
 directory names are possible, they can become ambiguous depending on

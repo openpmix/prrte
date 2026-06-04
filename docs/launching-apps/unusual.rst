@@ -121,7 +121,7 @@ Connecting independent MPI applications
 ---------------------------------------
 
 In certain environments, Open MPI supports connecting multiple,
-independent MPI applications using mechanism defined in the MPI
+independent MPI applications using mechanisms defined in the MPI
 specification such as ``MPI_Comm_connect() / MPI_Comm_accept()`` and
 publishing connection information using ``MPI_Publish_name() /
 MPI_Lookup_name()``. These mechanisms require a centralized service

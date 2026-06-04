@@ -73,7 +73,7 @@ Supported process events include:
   include the process ID that was killed and the corresponding
   reported signal.
 
-* ``PMIX_ERR_PROC_REQUESTED_ABORT:`` indicates that the specified
+* ``PMIX_ERR_PROC_REQUESTED_ABORT``: indicates that the specified
   process has aborted by calling the ``PMIx_Abort``
   function. Notification will include the process ID that called abort
   and its exit status.
