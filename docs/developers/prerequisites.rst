@@ -111,7 +111,7 @@ still have both the HTML documentation and man pages installed as part
 of the normal configure / build / install process.
 
 However, the HTML documentation and man pages are *not* stored in PRRTE's
-Git repository; only the ReStructred Text source code of the
+Git repository; only the ReStructured Text source code of the
 documentation is in the Git repository.  Hence, if you are building
 PRRTE from a Git clone, you will need Sphinx (and some Python
 modules) in order to build the HTML documentation and man pages.
