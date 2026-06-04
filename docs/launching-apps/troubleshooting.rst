@@ -115,7 +115,7 @@ them across multiple hosts, try the following:
    :ref:`this section <running-prerequisites-label>` for
    the correct values.  Keep in mind that it is fine to have multiple
    PRRTE installations installed on a machine; the *first* PRRTE
-   installation found by ``PATH`` and ``LD_LIBARY_PATH`` is the one
+   installation found by ``PATH`` and ``LD_LIBRARY_PATH`` is the one
    that matters.
 
 #. Run a simple operating system job across multiple hosts.  This verifies

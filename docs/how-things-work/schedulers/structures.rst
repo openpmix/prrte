@@ -205,7 +205,7 @@ with the following fields:
 * num_daemons_reported: bookkeeping counter of number of daemons
   spawned in support of the job that have reported "ready"
 
-* num_ready_for_debug: bookkeeping counter of number of processed
+* num_ready_for_debug: bookkeeping counter of number of processes
   that have registered as ready for debug
 
 * originator: ID of process that requested spawn of this job

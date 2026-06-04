@@ -82,7 +82,7 @@ VPATH builds are fully supported.  For example:
 
 Parallel builds are also supported (although some versions of ``make``,
 such as GNU make, will only use the first target listed on the command
-line when executable parallel builds).  For example (assume GNU make):
+line when executing parallel builds).  For example (assume GNU make):
 
 .. code-block:: sh
 

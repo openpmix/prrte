@@ -64,8 +64,8 @@ on the remaining system nodes.
 on the other system nodes.
 
 ``DVMNodes=<regex of DVM nodes> (default: none)`` provides a regular expression
-identifying the nodes that upon which user applications can run. IP addresses can
-be provided in place of hostnames if desired.The regular expression can consist of
+identifying the nodes upon which user applications can run. IP addresses can
+be provided in place of hostnames if desired. The regular expression can consist of
 a simple comma-delimited list of hostnames, or a comma-delimited list of hostname
 ranges (e.g., "linux0,linux[2-10]"), or a PMIx "native" regular expression.
 

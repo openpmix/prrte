@@ -14,7 +14,7 @@ More detail on session directories is provided in the How Things Work
 Directory location
 ------------------
 
-PRRTE decides where to located the root of the session directory by
+PRRTE decides where to locate the root of the session directory by
 examining the following (in precedence order):
 
 #. If the value of the ``prte_top_session_dir`` MCA parameter is not
