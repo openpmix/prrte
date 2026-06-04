@@ -112,6 +112,12 @@ static bool check_taint(char *name, char *evar)
 static int init(void)
 {
     prte_slurm_session_stack = PMIX_NEW(pmix_list_t);
+
+    if(NULL == prte_slurm_session_stack) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
     return PRTE_SUCCESS;
 }
 
@@ -671,6 +677,40 @@ int prte_ras_slurm_validate_jobid(const char *slurm_jobid) {
 }
 
 /*
+ * Validate that a Slurm hostname does not contain unexpected characters.
+ *
+ * A valid Slurm hostname must be non-NULL, non-empty, must not exceed
+ * PRTE_SLURM_HOSTNAME_MAX_LEN characters, and may contain only characters
+ * from a restricted allowlist.
+ *
+ * @param[in] hostname  Null-terminated Slurm hostname string to validate.
+ */
+int prte_ras_slurm_validate_hostname(const char *hostname)
+{
+    if (NULL == hostname) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    size_t len = strnlen(hostname, PRTE_SLURM_HOSTNAME_MAX_LEN + 1);
+    if (0 == len || len > PRTE_SLURM_HOSTNAME_MAX_LEN) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    for (size_t i = 0; i < len; ++i) {
+        unsigned char c = (unsigned char) hostname[i];
+
+        if (!(isalnum(c) ||
+              c == '-' || c == '_' || c == '.' ||
+              c == '+' || c == ':' || c == '@' ||
+              c == '%' || c == '=')) {
+            return PRTE_ERR_BAD_PARAM;
+        }
+    }
+
+    return PRTE_SUCCESS;
+}
+
+/*
  * Convert a Slurm job ID string to uint32_t.
  *
  * Expects a strictly decimal, non-negative string.
@@ -811,6 +851,12 @@ int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_
     }
 
     prte_session_stack_item_t *item = PMIX_NEW(prte_session_stack_item_t);
+
+    if(NULL == item) {
+        err = PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
 
     item->session = session;
     item->nodes_in_session = pmix_list_get_size(node_list);

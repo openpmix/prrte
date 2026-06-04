@@ -18,7 +18,8 @@
 
 /* Local functions */
 static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count);
-static int prte_ras_slurm_shrink_job(const char *slurm_jobid, int new_node_count, char *err_msg);
+static int prte_ras_slurm_shrink_job(const char *slurm_jobid, const char *exclude_hostname, int new_node_count, char *err_msg, size_t err_msg_size);
+static int prte_ras_slurm_build_req_nodelist(const char *slurm_jobid, const char *protected_hostname, int new_node_count, char **req_nodes_arg);
 
 /**
  * @brief Process a PMIx resource release request.
@@ -95,6 +96,12 @@ static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count) {
         return PRTE_ERR_REQUEST;
     }
 
+    char *launching_jobid;
+    if (NULL == (launching_jobid = getenv("SLURM_JOBID"))) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
+    }
+
     int nodes_removed = 0;
 
     do {
@@ -117,16 +124,31 @@ static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count) {
 
         int nodes_left_to_rem = nodes_to_remove-nodes_removed;
 
-        char err_msg[PRTE_SLURM_ERR_STR_MAX_SIZE+1] = {0};
+        bool contains_invoker = false;
+        
+        if(0 == strcmp(session->alloc_refid, launching_jobid)) {
+            contains_invoker = true;
+        }
+
+        char err_msg[PRTE_SLURM_ERR_STR_MAX_LEN+1] = {0};
 
         if(nodes_left_to_rem >= session_item->nodes_in_session) {
 
-            err = prte_ras_slurm_kill_job(session->alloc_refid, err_msg);
+            /* we'd be trying cancel ourselves. probably a bad idea */
+            if(contains_invoker) {
+                pmix_output(0, "ras:slurm:remove_nodes_by_count: refusing to kill job %s "
+                               "because it contains the invoking process", session->alloc_refid);
+                err = PRTE_ERR_BAD_PARAM;
+                PRTE_ERROR_LOG(err);
+                goto cleanup;
+            }
+
+            err = prte_ras_slurm_kill_job(session->alloc_refid, err_msg, PRTE_SLURM_ERR_STR_MAX_LEN+1);
 
             if (PRTE_SUCCESS != err) {
 
                 if(PRTE_ERR_SLURM_CANCEL_FAILURE == err) {
-                    pmix_output(0, "ras:slurm:remove_resources: failed to kill job %s: %s.",
+                    pmix_output(0, "ras:slurm:remove_nodes_by_count: failed to kill job %s: %s.",
                                     session->alloc_refid, err_msg);
                 } else {
                     PRTE_ERROR_LOG(err);
@@ -149,12 +171,29 @@ static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count) {
 
             int new_node_count = session_item->nodes_in_session-nodes_left_to_rem;
 
-            err = prte_ras_slurm_shrink_job(session->alloc_refid, new_node_count, err_msg);
+            char *whitelist_node = NULL;
+
+            if(contains_invoker) {
+                whitelist_node = getenv("SLURMD_NODENAME");
+
+                if (NULL == whitelist_node) {
+                    pmix_output(0,
+                                "ras:slurm:remove_nodes_by_count: SLURMD_NODENAME is not set. "
+                                "Refusing to shrink job %s because the current node cannot be "
+                                "excluded from the resize operation.",
+                                session->alloc_refid);
+                    err = PRTE_ERR_BAD_PARAM;
+                    PRTE_ERROR_LOG(err);
+                    goto cleanup; 
+                }
+            }
+
+            err = prte_ras_slurm_shrink_job(session->alloc_refid, whitelist_node, new_node_count, err_msg, PRTE_SLURM_ERR_STR_MAX_LEN+1);
 
             if (PRTE_SUCCESS != err) {
 
                 if(PRTE_ERR_SLURM_SHRINK_FAILURE == err) {
-                    pmix_output(0, "ras:slurm:remove_resources: failed to shrink job %s" 
+                    pmix_output(0, "ras:slurm:remove_nodes_by_count: failed to shrink job %s" 
                                     ": %s.", session->alloc_refid, err_msg);
                 } else {
                     PRTE_ERROR_LOG(err);
@@ -199,13 +238,16 @@ cleanup:
  * @brief Shrink a Slurm job to a new node count.
  *
  * Runs scontrol to resize the given Slurm job. On Slurm resize failure,
- * err_msg is populated with the command output when provided.
+ * err_msg is populated with the command output when provided. This failure
+ * mode is indicated by a return of PRTE_ERR_SLURM_SHRINK_FAILURE.
  *
  * @param[in] slurm_jobid Slurm job ID to resize.
+ * @param[in] exclude_hostname Hostname to exclude from resize.
  * @param[in] new_node_count New number of nodes for the job.
  * @param[out] err_msg Optional buffer for Slurm error output.
+ * @param[in] err_msg_size Size of err_msg buffer, if applicable.
  */
-static int prte_ras_slurm_shrink_job(const char *slurm_jobid, int new_node_count, char *err_msg) {
+static int prte_ras_slurm_shrink_job(const char *slurm_jobid, const char *exclude_hostname, int new_node_count, char *err_msg, size_t err_msg_size) {
 
     if(NULL == slurm_jobid || 0 >= new_node_count) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
@@ -233,18 +275,60 @@ static int prte_ras_slurm_shrink_job(const char *slurm_jobid, int new_node_count
     char *resize_script_sh = NULL;
     char *resize_script_csh = NULL;
 
-    static const char *cmd_format = "scontrol update job %s NumNodes=%d 2>&1";
+    char *req_nodes_arg = NULL; 
+    char *num_nodes_arg = NULL;
 
     char *cmd = NULL;
 
+    static const char *cmd_format = "scontrol update job %s %s 2>&1";
+
     FILE *fp = NULL;
 
-    if(0 > asprintf(&cmd, cmd_format, slurm_jobid, new_node_count)) {
-        cmd = NULL;
-        err = PRTE_ERR_OUT_OF_RESOURCE;
-        PRTE_ERROR_LOG(err);
-        goto cleanup;
+    /* if we want to exclude a node from the shrink,
+     * then we have to specify all nodes to keep explicitly */
+    if(NULL != exclude_hostname) {
+
+        err = prte_ras_slurm_build_req_nodelist(slurm_jobid, exclude_hostname, new_node_count, &req_nodes_arg);
+
+        if (err != PRTE_SUCCESS) {
+            goto cleanup;
+        }
+
+        if(0 > asprintf(&cmd, cmd_format, slurm_jobid, req_nodes_arg)) {
+            cmd = NULL;
+            err = PRTE_ERR_OUT_OF_RESOURCE;
+            PRTE_ERROR_LOG(err);
+            goto cleanup;
+        }
+
+        free(req_nodes_arg);
+        req_nodes_arg = NULL;
+
+    } else {
+
+        static const char *num_nodes_format = "NumNodes=%d";
+
+        if(0 > asprintf(&num_nodes_arg, num_nodes_format, new_node_count)) {
+            num_nodes_arg = NULL;
+            err = PRTE_ERR_OUT_OF_RESOURCE;
+            PRTE_ERROR_LOG(err);
+            goto cleanup;
+        }
+
+        if(0 > asprintf(&cmd, cmd_format, slurm_jobid, num_nodes_arg)) {
+            cmd = NULL;
+            err = PRTE_ERR_OUT_OF_RESOURCE;
+            PRTE_ERROR_LOG(err);
+            goto cleanup;
+        }
+
+        free(num_nodes_arg);
+        num_nodes_arg = NULL;
     }
+
+    PMIX_OUTPUT_VERBOSE((20, prte_ras_base_framework.framework_output,
+                        "%s ras:slurm:shrink_job: shrink command is:\n%s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cmd));
 
     fp = popen(cmd, "r");
 
@@ -254,19 +338,11 @@ static int prte_ras_slurm_shrink_job(const char *slurm_jobid, int new_node_count
         goto cleanup;
     }
 
-    if(NULL != err_msg) {
-        char *buf = fgets(err_msg, PRTE_SLURM_ERR_STR_MAX_SIZE, fp);
+    err = prte_ras_slurm_drain_cmd_output(fp, err_msg, err_msg_size);
 
-        /* Copy output into provided memory, truncating if necessary */
-        if(NULL != buf) {
-            size_t len = strcspn(buf, "\n");
-
-            if (buf[len] == '\n') {
-                buf[len] = '\0';
-            } else if (len == PRTE_SLURM_ERR_STR_MAX_SIZE - 1) {
-                memcpy(buf + PRTE_SLURM_ERR_STR_MAX_SIZE - 4, "...", 3);
-            }
-        } 
+    if (PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
     }
 
     int status = pclose(fp);
@@ -296,7 +372,8 @@ static int prte_ras_slurm_shrink_job(const char *slurm_jobid, int new_node_count
     int rc = asprintf(&resize_script_sh, resize_script_format, slurm_jobid, "sh");
 
     if(0 > rc) {
-        pmix_output(0, "ras:slurm:shrink_job: asprintf failed during cleanup.");
+        pmix_output(0, "ras:slurm:shrink_job: asprintf failed after successful shrink.");
+        resize_script_sh = NULL;
         goto cleanup;
     }
 
@@ -312,7 +389,8 @@ static int prte_ras_slurm_shrink_job(const char *slurm_jobid, int new_node_count
     rc = asprintf(&resize_script_csh, resize_script_format, slurm_jobid, "csh");
 
     if(0 > rc) {
-        pmix_output(0, "ras:slurm:shrink_job: asprintf failed during cleanup.");
+        pmix_output(0, "ras:slurm:shrink_job: asprintf failed after successful shrink.");
+        resize_script_csh = NULL;
         goto cleanup;
     }
 
@@ -338,6 +416,167 @@ cleanup:
     free(cmd);
     free(resize_script_sh);
     free(resize_script_csh);
+    free(req_nodes_arg);
+    free(num_nodes_arg);
+
+    return err;
+}
+
+/**
+ * Build a required-node list for a Slurm shrink operation.
+ *
+ * Ensures that protected_hostname is included in the resulting
+ * comma-separated node list. Validates each hostname before it is
+ * included in the output string.
+ *
+ * @param[in]  slurm_jobid         Slurm job ID.
+ * @param[in]  protected_hostname  Hostname to preserve.
+ * @param[out] req_nodes_arg       Allocated string of the form
+ *                                 "ReqNodeList=node0,node1,...".
+ */
+static int prte_ras_slurm_build_req_nodelist(const char *slurm_jobid, const char *protected_hostname, int new_node_count, char **req_nodes_arg)
+{
+    if(!slurm_jobid || !protected_hostname || !req_nodes_arg) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    static const char *req_nodes_prefix = "ReqNodeList=";
+
+    *req_nodes_arg = NULL;
+
+    int err = prte_ras_slurm_validate_hostname(protected_hostname);
+
+    if(PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+
+    err = prte_ras_slurm_validate_jobid(slurm_jobid);
+
+    if(PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+
+    prte_session_t *session = prte_get_session_object_from_id(slurm_jobid);
+
+    if (NULL == session) {
+        err = PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+
+    /* estimate the required size for the nodes */
+    size_t size_for_nodes = strlen(protected_hostname) * new_node_count;
+    const size_t prefix_size = strlen(req_nodes_prefix);
+
+    /* prefix, commas, and nullchar */
+    const size_t size_additional = prefix_size + new_node_count;
+
+    const size_t max_size_for_nodes = PRTE_SLURM_HOSTNAME_MAX_LEN * new_node_count;
+
+    size_t curr_size = size_for_nodes + size_additional;
+    size_t curr_occupied = size_additional; /* pre-reserve space for non-node content */
+
+    *req_nodes_arg = malloc(curr_size);
+    if (NULL == *req_nodes_arg) {
+        err = PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+
+    char *req_nodes_ptr = *req_nodes_arg;
+
+    /* append the prefix */
+    memcpy(*req_nodes_arg, req_nodes_prefix, prefix_size);
+    req_nodes_ptr += prefix_size;
+
+    bool found_protected = false;
+    int nodecount = 0;
+
+    for (int i = 0; i < session->nodes->size; i++) {
+        prte_node_t *curr = pmix_pointer_array_get_item(session->nodes, i);
+
+        if (NULL == curr || NULL == curr->name) {
+            continue;
+        }
+
+        /* must be included on the list */
+        if (!found_protected && 
+            0 == strcmp(curr->name, protected_hostname)) {
+            found_protected = true;
+        } else if (!found_protected && nodecount >= new_node_count-1) {
+            /* we have enough nodes, only look for node to protect */
+            continue;   
+        }
+
+        err = prte_ras_slurm_validate_hostname(curr->name);
+
+        if(PRTE_SUCCESS != err) {
+            PRTE_ERROR_LOG(err);
+            goto cleanup;
+        }
+        
+        size_t item_size = strlen(curr->name);
+
+        if(curr_occupied+item_size > curr_size) {
+            size_t new_size = curr_size * 2;
+            size_t req_nodes_ptr_offset = req_nodes_ptr - *req_nodes_arg; 
+
+            if(new_size > max_size_for_nodes + size_additional) {
+                new_size = max_size_for_nodes + size_additional;
+            }
+
+            if(curr_occupied+item_size > new_size) {
+                err = PRTE_ERR_OUT_OF_RESOURCE;
+                PRTE_ERROR_LOG(err);
+                goto cleanup;                    
+            }
+
+            char *new_req_nodes_arg = realloc(*req_nodes_arg, new_size);
+
+            if (NULL == new_req_nodes_arg) {
+                err = PRTE_ERR_OUT_OF_RESOURCE;
+                PRTE_ERROR_LOG(err);
+                goto cleanup;
+            }
+
+            *req_nodes_arg = new_req_nodes_arg;
+            req_nodes_ptr = new_req_nodes_arg + req_nodes_ptr_offset;
+            curr_size = new_size;
+        }
+
+        /* insert a comma if not first item */
+        if(nodecount > 0) {
+            *req_nodes_ptr = ',';
+            req_nodes_ptr++;
+        }
+
+        memcpy(req_nodes_ptr, curr->name, item_size);
+
+        req_nodes_ptr += item_size;
+        curr_occupied += item_size;
+
+        if(++nodecount >= new_node_count) {
+            break;
+        }
+    }
+
+    if (nodecount != new_node_count || !found_protected) {
+        err = PRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+
+    *req_nodes_ptr = '\0';
+
+cleanup:
+
+    if (PRTE_SUCCESS != err) {
+        free(*req_nodes_arg);
+        *req_nodes_arg = NULL;
+    }
 
     return err;
 }
