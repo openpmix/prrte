@@ -572,7 +572,7 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
 
     if(PRTE_SUCCESS != err && job_id[0] != '\0') {
         /* Prevent hanging resources if failed */
-        prte_ras_slurm_kill_job(job_id, NULL);
+        prte_ras_slurm_kill_job(job_id, NULL, 0);
     }
 
     if(NULL != job_id_dyn) {

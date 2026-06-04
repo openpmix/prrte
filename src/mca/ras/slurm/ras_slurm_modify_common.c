@@ -22,11 +22,11 @@
  * If scancel returns an error, the first line of stderr/stdout output is copied
  * into err_msg. On success, err_msg is cleared.
  *
- * @param[in]  slurm_jobid  Null-terminated Slurm job ID string to cancel.
- * @param[out] err_msg      Writable buffer of size PRTE_SLURM_ERR_STR_MAX_SIZE
- *                          for Slurm output on failure, or NULL if not required.
+ * @param[in]  slurm_jobid   Null-terminated Slurm job ID string to cancel.
+ * @param[out] err_msg       Buffer for error message, or NULL.
+ * @param[in]  err_msg_size  Size of err_msg buffer, if applicable
  */
-int prte_ras_slurm_kill_job(const char *slurm_jobid, char *err_msg) {
+int prte_ras_slurm_kill_job(const char *slurm_jobid, char *err_msg, size_t err_msg_size) {
 
     if(NULL == slurm_jobid) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
@@ -72,19 +72,11 @@ int prte_ras_slurm_kill_job(const char *slurm_jobid, char *err_msg) {
         goto cleanup;
     }
 
-    if(NULL != err_msg) {
-        char *buf = fgets(err_msg, PRTE_SLURM_ERR_STR_MAX_SIZE, fp);
+    err = prte_ras_slurm_drain_cmd_output(fp, err_msg, err_msg_size);
 
-        /* Copy output into provided memory, truncating if necessary */
-        if(NULL != buf) {
-            size_t len = strcspn(buf, "\n");
-
-            if (buf[len] == '\n') {
-                buf[len] = '\0';
-            } else if (len == PRTE_SLURM_ERR_STR_MAX_SIZE - 1) {
-                memcpy(buf + PRTE_SLURM_ERR_STR_MAX_SIZE - 4, "...", 3);
-            }
-        } 
+    if (PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
     }
 
     int status = pclose(fp);
@@ -138,6 +130,73 @@ int prte_ras_slurm_token_has_control_chars(const char *s, size_t len, bool *has_
             *has_control_chars = true;
             break;
         }
+    }
+
+    return PRTE_SUCCESS;
+}
+
+/**
+ * @brief Drain command output and optionally capture it.
+ *
+ * Consumes all data from a popen() stream. When provided, output is
+ * populated with command output, potentially truncated to fit the buffer.
+ *
+ * @param[in] fp Stream returned by popen().
+ * @param[out] output Optional output buffer.
+ * @param[in] output_size Size of output buffer.
+ */
+int prte_ras_slurm_drain_cmd_output(FILE *fp, char *output, size_t output_size)
+{
+    if (NULL == fp) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    if (NULL != output && 0 == output_size) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    char buf[256];
+    size_t used = 0;
+    bool truncated = false;
+
+    if (NULL != output) {
+        output[0] = '\0';
+    }
+
+    while (NULL != fgets(buf, sizeof(buf), fp)) {
+        if (NULL == output || truncated) {
+            continue;
+        }
+
+        if (used >= output_size - 1) {
+            truncated = true;
+            continue;
+        }
+
+        size_t len = strlen(buf);
+        size_t avail = output_size - used - 1;
+
+        if (len > avail) {
+            memcpy(output + used, buf, avail);
+            used += avail;
+            output[used] = '\0';
+            truncated = true;
+        } else {
+            memcpy(output + used, buf, len);
+            used += len;
+            output[used] = '\0';
+        }
+    }
+
+    if (ferror(fp)) {
+        PRTE_ERROR_LOG(PRTE_ERR_FILE_READ_FAILURE);
+        return PRTE_ERR_FILE_READ_FAILURE;
+    }
+
+    if (NULL != output && truncated && output_size >= 4) {
+        strcpy(output + output_size - 4, "...");
     }
 
     return PRTE_SUCCESS;

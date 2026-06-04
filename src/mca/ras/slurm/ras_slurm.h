@@ -36,8 +36,9 @@
 #include "src/mca/ras/base/base.h"
 #include "src/mca/ras/ras.h"
 
-#define PRTE_SLURM_ERR_STR_MAX_SIZE 256
+#define PRTE_SLURM_ERR_STR_MAX_LEN 256
 #define PRTE_SLURM_JOB_ID_MAX_LEN 20
+#define PRTE_SLURM_HOSTNAME_MAX_LEN 256
 
 /* Markers to indicate a given Slurm JSON-format number is set or infinite */
 #define PRTE_SLURM_UNSET_NUM_MARKER "prte_slurm_unset"
@@ -61,11 +62,13 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req);
 int prte_ras_slurm_serve_release_req(prte_pmix_server_req_t *req);
 
 /* Common modify extend/release features */
-int prte_ras_slurm_kill_job(const char *slurm_jobid, char *err_msg);
+int prte_ras_slurm_kill_job(const char *slurm_jobid, char *err_msg, size_t err_msg_size);
 int prte_ras_slurm_token_has_control_chars(const char *s, size_t len, bool *has_control_chars);
+int prte_ras_slurm_drain_cmd_output(FILE *fp, char *output, size_t output_size);
 
 /* Common features for the module */
 int prte_ras_slurm_validate_jobid(const char *slurm_jobid);
+int prte_ras_slurm_validate_hostname(const char *hostname);
 int prte_ras_slurm_convert_jobid(const char *slurm_jobid, uint32_t *slurm_jobid_numeric);
 int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_refid, pmix_list_t *node_list);
 int prte_ras_slurm_tag_node_allocation(const char *slurm_jobid, pmix_list_t *node_list);
