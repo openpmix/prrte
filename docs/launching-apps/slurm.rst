@@ -4,7 +4,7 @@ Launching with Slurm
 PRRTE supports two modes of launching parallel jobs under
 Slurm:
 
-#. Using PRRTE's full-features ``prterun`` launcher.
+#. Using PRRTE's full-featured ``prterun`` launcher.
 #. Using Slurm's "direct launch" capability.
 
 Unless there is a strong reason to use ``srun`` for direct launch, the

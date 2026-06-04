@@ -75,7 +75,7 @@ option:
 .. code-block:: sh
 
    shell$ prterun -n 6 mpi-hello-world
-   Hello world, I am 0 of 6 (running on my-laptop))
+   Hello world, I am 0 of 6 (running on my-laptop)
    Hello world, I am 1 of 6 (running on my-laptop)
    ...
    Hello world, I am 5 of 6 (running on my-laptop)
@@ -87,7 +87,7 @@ If you do not specify the ``-n`` option, ``prterun`` will
 default to launching as many processes as
 there are processor cores (not hyperthreads) on the machine.
 
-Launching in a non-scheduled environments (via ``ssh``)
+Launching in non-scheduled environments (via ``ssh``)
 -------------------------------------------------------
 
 In general, PRRTE requires the following to launch and run
@@ -141,7 +141,7 @@ each node:
 * node1: 16, because no ``slots`` was specified
 * node2: 16, because no ``slots`` was specified
 * node3: 2, because ``slots=2`` was specified
-* node2: 10, because ``slots=10`` was specified
+* node4: 10, because ``slots=10`` was specified
 
 Note, however, that not all environments require a hostfile.  For
 example, PRRTE will automatically detect when it is running in
@@ -155,7 +155,7 @@ Launching in scheduled environments
 -----------------------------------
 
 In scheduled environments (e.g., in a Slurm job, or PBS/Pro, or LSF,
-or any other schedule), the user tells the scheduler how many MPI
+or any other scheduler), the user tells the scheduler how many MPI
 processes to launch, and the scheduler decides which hosts to use.
 The scheduler then passes both pieces of information (the number of
 processes and the hosts to use) to PRRTE.

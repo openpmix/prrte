@@ -18,7 +18,7 @@ PRRTE's Git repositories are `hosted at GitHub
       shell$ git clone --recursive https://github.com/openpmix/prrte.git
 
 Note that Git is natively capable of using many forms of web
-proxies. If your network setup requires the user of a web proxy,
+proxies. If your network setup requires the use of a web proxy,
 `consult the Git documentation for more details
 <https://git-scm.com/>`_.
 

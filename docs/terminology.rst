@@ -25,5 +25,5 @@ execution contexts within a job.
 
 ``Client`` refers to a process that was registered with the PMIx server prior to being started, and connects to that PMIx server via ``PMIx_Init`` using its assigned namespace and rank with the information required to connect to that server being provided to the process at time of start of execution.
 
-``Tool`` refers to a process that may or may not have been registered with the PMIx server prior to being started and intializes using ``PMIx_tool_init``.
+``Tool`` refers to a process that may or may not have been registered with the PMIx server prior to being started and initializes using ``PMIx_tool_init``.
 
