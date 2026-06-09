@@ -77,6 +77,7 @@ PRTE_EXPORT extern bool prte_show_launch_progress;
 PRTE_EXPORT extern bool prte_bootstrap_setup;
 PRTE_EXPORT extern bool prte_silence_shared_fs;
 PRTE_EXPORT extern pmix_show_help_file_t prte_show_help_data[];
+PRTE_EXPORT extern bool prte_elastic_mode;
 
 /**
  * Global indicating where this process was bound to at launch (will

@@ -9,15 +9,15 @@ following:
 
 #. You must be able to non-interactively login |mdash| without
    entering a password or passphrase |mdash| to all remote nodes from
-   all remotes nodes.
-#. PRRTE's daemon executablesmust be findable (e.g., in your ``PATH``).
+   all remote nodes.
+#. PRRTE's daemon executables must be findable (e.g., in your ``PATH``).
 #. PRRTE's libraries must be findable (e.g., in your
    ``LD_LIBRARY_PATH``).
 
 Specifying the hosts for a job
 ------------------------------
 
-There are three mechanisms for specifying the hosts that an job will run on:
+There are three mechanisms for specifying the hosts that a job will run on:
 
 #. The ``--hostfile`` option to ``prterun``.
 
@@ -35,7 +35,7 @@ There are three mechanisms for specifying the hosts that an job will run on:
    If you are running in a scheduled environment (e.g., in a Slurm,
    Torque, or LSF job), PRRTE will automatically get the lists of
    hosts from the scheduler.  See the next subsections for details about
-   launching jobs in supported scheduled environements.
+   launching jobs in supported scheduled environments.
 
 .. important:: The specification of hosts using any of the above
                methods has nothing to do with the network interfaces
@@ -152,7 +152,7 @@ Consider the case where PRRTE was configured with:
 
    shell$ ./configure --prefix=$HOME/my-prrte ...
 
-In this cause, PRRTE will be installed into ``$HOME/my-prrte``.
+In this case, PRRTE will be installed into ``$HOME/my-prrte``.
 This path is almost certainly not in any system-default search paths,
 so it must be added to the ``$PATH`` and ``$LD_LIBRARY_PATH``
 environment variables.
@@ -177,7 +177,7 @@ Ensure that you do not see any errors about libraries that cannot be
 found.
 
 All shells have some kind of script file that is executed at login
-time perform environmental setup tasks.  This startup file is the one
+time to perform environmental setup tasks.  This startup file is the one
 that needs to be edited to:
 
 #. Add PRRTE's daemon executable path (which is likely ``$prefix/bin``, or

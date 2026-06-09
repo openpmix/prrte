@@ -79,6 +79,7 @@ bool prte_fwd_environment = false;
 bool prte_show_launch_progress = false;
 bool prte_bootstrap_setup = false;
 bool prte_xml_output = false;
+bool prte_elastic_mode = false;
 
 /* PRTE OOB port flags */
 bool prte_static_ports = false;

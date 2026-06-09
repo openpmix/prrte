@@ -564,6 +564,11 @@ int prte_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_bootstrap_setup);
 
+    (void) pmix_mca_base_var_register("prte", "prte", "elastic", "mode",
+                                      "Allow DVM to expand and contract as directed (default: false)",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_elastic_mode);
+
     /* pickup the RML params */
     prte_rml_register();
 

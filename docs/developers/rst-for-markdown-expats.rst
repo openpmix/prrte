@@ -76,9 +76,9 @@ Chapter and section delimiters
 * RST: Have a single line of text, underlined by non-ASCII
   characters.
 
-  * The length of the underlying *must* be at least as long as the
+  * The length of the underline *must* be at least as long as the
     line of text
-  * Which non-ASCII character is used for the underlying does not
+  * Which non-ASCII character is used for the underline does not
     matter, but the order in which they are used denotes chapters
     / sections / subsections / etc.
 
@@ -152,7 +152,7 @@ Multi-line code/fixed-width font
     case, the example code block will be rendered in the bulleted
     item.
 
-Whereas this parargraph and code block will be outside of the
+Whereas this paragraph and code block will be outside of the
 above bulleted list:
 
 .. code-block:: sh

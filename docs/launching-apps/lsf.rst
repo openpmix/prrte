@@ -28,7 +28,7 @@ Launching
 When properly configured, PRRTE obtains both the list of hosts and
 how many processes to start on each host from LSF directly.  Hence, it
 is unnecessary to specify the ``--hostfile``, ``--host``, or ``-n``
-options to ``mpirun``.  PRRTE will use LSF-native mechanisms
+options to ``prterun``.  PRRTE will use LSF-native mechanisms
 to launch and kill processes (``ssh`` is not required).
 
 For example:
