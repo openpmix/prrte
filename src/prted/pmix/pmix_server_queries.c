@@ -761,7 +761,7 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LIST_CONVERT(rc, nodelist, &dry);
                 PMIX_INFO_LIST_RELEASE(nodelist);
                 /* add to results */
-                PMIX_INFO_LIST_ADD(rc, nodelist, PMIX_QUERY_ALLOCATION, &dry, PMIX_DATA_ARRAY);
+                PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_ALLOCATION, &dry, PMIX_DATA_ARRAY);
                 PMIX_DATA_ARRAY_DESTRUCT(&dry);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
