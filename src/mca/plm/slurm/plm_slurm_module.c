@@ -268,9 +268,16 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* start one orted on each node */
     pmix_argv_append(&argc, &argv, "--ntasks-per-node=1");
 
-    /* don't kill if a node or prted dies */
-    pmix_argv_append(&argc, &argv, "--no-kill");
-    pmix_argv_append(&argc, &argv, "--kill-on-bad-exit=0");
+    if (!prte_get_attribute(&state->jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL) &&
+        !prte_get_attribute(&state->jdata->attributes, PRTE_JOB_CONTINUOUS, NULL, PMIX_BOOL) &&
+        !prte_elastic_mode) {
+        /* kill the job if any prteds die */
+        pmix_argv_append(&argc, &argv, "--kill-on-bad-exit");
+    } else {
+        /* don't kill if a node or prted dies */
+        pmix_argv_append(&argc, &argv, "--no-kill");
+        pmix_argv_append(&argc, &argv, "--kill-on-bad-exit=0");
+    }
 
     /* our daemons are not an MPI task */
     pmix_argv_append(&argc, &argv, "--mpi=none");
