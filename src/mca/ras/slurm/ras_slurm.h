@@ -55,10 +55,19 @@ int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *
 int prte_ras_slurm_detach_nodes(const char *slurm_jobid, prte_session_t *session, pmix_pointer_array_t *removed_nodes);
 int prte_ras_slurm_check_resources(const char *slurm_jobid);
 
-/* Features to serve request extension */
+/* Features to serve cancel requests */
+int prte_ras_slurm_add_pending_req(const char *request_id);
+int prte_ras_slurm_remove_pending_req(const char *request_id);
+bool prte_ras_slurm_pending_req_exists(const char *request_id);
+int prte_ras_slurm_cancel_pending_req(const char *request_id);
+int prte_ras_slurm_modify_cancel_init(void);
+int prte_ras_slurm_modify_cancel_finalize(void);
+int prte_ras_slurm_serve_cancel_req(prte_pmix_server_req_t *req);
+
+/* Features to serve extension requests */
 int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req);
 
-/* Features to serve request release */
+/* Features to serve release requests */
 int prte_ras_slurm_serve_release_req(prte_pmix_server_req_t *req);
 
 /* Common modify extend/release features */

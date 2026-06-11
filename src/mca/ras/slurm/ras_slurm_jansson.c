@@ -953,6 +953,7 @@ int prte_ras_slurm_check_resources(const char *slurm_jobid)
 
     bool running = false;
     bool pending = false;
+    bool cancelled = false;
 
     err = prte_ras_slurm_get_jobinfo_json(slurm_jobid, &job_info);
 
@@ -989,19 +990,27 @@ int prte_ras_slurm_check_resources(const char *slurm_jobid)
         else if (strcmp(state, "PENDING") == 0) {
             pending = true;
         }
+
+        else if (strcmp(state, "CANCELLED") == 0) {
+            cancelled = true;
+        }
     }
 
     json_decref(job_info);
     job_info = NULL;
 
-    /* Should be mutually exclusive */
-    if ((running && pending) || (!running && !pending)) {
+    /* Exactly one recognized Slurm state is expected here. */
+    int recognized_states = (running ? 1 : 0) + (pending ? 1 : 0) + (cancelled ? 1 : 0);
+
+    if (1 != recognized_states) {
         err = PRTE_ERR_SLURM_BAD_JOB_STATUS;
         PRTE_ERROR_LOG(err);
         goto cleanup;
     }
 
-    if(!running) {
+    if(cancelled) {
+        err = PRTE_ERR_JOB_CANCELLED;
+    } else if(!running) {
         err = PRTE_ERR_RESOURCE_BUSY;
     }
 

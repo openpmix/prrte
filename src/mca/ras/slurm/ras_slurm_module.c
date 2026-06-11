@@ -111,14 +111,29 @@ static bool check_taint(char *name, char *evar)
 /* init the module */
 static int init(void)
 {
+    int err = PRTE_SUCCESS;
+
     prte_slurm_session_stack = PMIX_NEW(pmix_list_t);
 
     if(NULL == prte_slurm_session_stack) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
+        err = PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
     }
 
-    return PRTE_SUCCESS;
+    err = prte_ras_slurm_modify_cancel_init();
+    if (PRTE_SUCCESS != err) {
+        goto cleanup;
+    }
+
+cleanup:
+
+    if (PRTE_SUCCESS != err) {
+        PMIX_RELEASE(prte_slurm_session_stack);
+        prte_slurm_session_stack = NULL;
+    }
+
+    return err;
 }
 
 /**
@@ -272,6 +287,9 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
     } else if(PMIX_ALLOC_RELEASE == req->allocdir) {
         err = prte_ras_slurm_serve_release_req(req);
         req->pstatus = prte_pmix_convert_rc(err);
+    } else if(PMIX_ALLOC_REQ_CANCEL == req->allocdir) {
+        err = prte_ras_slurm_serve_cancel_req(req);
+        req->pstatus = prte_pmix_convert_rc(err);
     } else {
         req->pstatus = PMIX_ERR_NOT_SUPPORTED;
     }
@@ -281,6 +299,7 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
 
 static int prte_ras_slurm_finalize(void)
 {
+    prte_ras_slurm_modify_cancel_finalize();
     PMIX_RELEASE(prte_slurm_session_stack);
     return PRTE_SUCCESS;
 }
