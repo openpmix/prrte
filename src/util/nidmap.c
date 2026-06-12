@@ -151,6 +151,7 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
         return rc;
     }
     free(bo.bytes);
+    bo.bytes = NULL;
 
     /* construct the string of aliases for compression */
     raw = PMIx_Argv_join(aliases, ';');
@@ -183,6 +184,7 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
         return rc;
     }
     free(bo.bytes);
+    bo.bytes = NULL;
 
     /* compress the vpids */
     if (PMIx_Data_compress((uint8_t *) vpids, nbytes, (uint8_t **) &bo.bytes, &sz)) {
