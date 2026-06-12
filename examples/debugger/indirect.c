@@ -115,6 +115,15 @@ static void spawn_cbfunc(size_t evhdlr_registration_id, pmix_status_t status,
 {
     size_t n;
 
+    /* PMIX_READY_FOR_DEBUG fires once per job (all nodes coalesced), but guard
+     * against any future change that could deliver it more than once. */
+    if (NULL != appnspace) {
+        if (NULL != cbfunc) {
+            cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+        }
+        return;
+    }
+
     for (n = 0; n < ninfo; n++) {
         if (PMIX_CHECK_KEY(&info[n], PMIX_NSPACE)) {
             appnspace = strdup(info[n].value.data.string);
@@ -139,7 +148,7 @@ int main(int argc, char **argv)
     pmix_app_t *app;
     size_t ninfo, napps;
     char *requested_launcher;
-    int timeout;
+    int timeout, c;
     size_t n;
     char cwd[1024];
     pmix_status_t code = PMIX_EVENT_JOB_END;
@@ -147,7 +156,7 @@ int main(int argc, char **argv)
     pid_t pid;
     char *launchers[] = {"prun", "mpirun", "mpiexec", "prterun", NULL};
     pmix_proc_t proc, target_proc;
-    bool found;
+    bool found, stop_on_exec = false;
     pmix_data_array_t darray, darray2;
     pmix_nspace_t clientspace, dbnspace;
     pmix_value_t *val;
@@ -156,16 +165,32 @@ int main(int argc, char **argv)
     myquery_data_t *mydata = NULL;
     pmix_rank_t rank;
 
-    /* need to provide args */
-    if (2 > argc) {
-        fprintf(stderr, "Usage: %s [launcher] [app]\n", argv[0]);
+    /* parse options */
+    {
+        static struct option long_opts[] = {
+            { "stop-on-exec", no_argument, NULL, 'e' },
+            { NULL, 0, NULL, 0 }
+        };
+        while (-1 != (c = getopt_long(argc, argv, "+e", long_opts, NULL))) {
+            switch (c) {
+            case 'e':
+                stop_on_exec = true;
+                break;
+            default:
+                fprintf(stderr, "Usage: %s [-e|--stop-on-exec] [launcher] [app]\n", argv[0]);
+                exit(1);
+            }
+        }
+    }
+    if (optind >= argc) {
+        fprintf(stderr, "Usage: %s [-e|--stop-on-exec] [launcher] [app]\n", argv[0]);
         exit(0);
     }
 
     /* check to see if we are using an intermediate launcher - we only
      * support those we recognize */
     found = false;
-    requested_launcher = basename(argv[1]);
+    requested_launcher = basename(argv[optind]);
     for (n = 0; NULL != launchers[n]; n++) {
         if (0 == strcmp(requested_launcher, launchers[n])) {
             found = true;
@@ -247,11 +272,11 @@ int main(int argc, char **argv)
     napps = 1;
     PMIX_APP_CREATE(app, napps);
     /* setup the executable */
-    app[0].cmd = strdup(argv[1]);
-    PMIX_ARGV_APPEND(rc, app[0].argv, argv[1]);
+    app[0].cmd = strdup(argv[optind]);
+    PMIX_ARGV_APPEND(rc, app[0].argv, argv[optind]);
     /* pass it the rest of the cmd line as we don't know
      * how to parse it */
-    for (n = 2; n < argc; n++) {
+    for (n = (size_t) optind + 1; n < (size_t) argc; n++) {
         PMIX_ARGV_APPEND(rc, app[0].argv, argv[n]);
     }
     if (NULL == getcwd(cwd, 1024)) { // point us to our current directory
@@ -278,8 +303,10 @@ int main(int argc, char **argv)
      * to do with the app it is going to spawn for us */
     PMIX_INFO_LIST_START(linfo);
     rank = PMIX_RANK_WILDCARD;
-    if (NULL != strstr(argv[1], "mpi")) {
-        PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_IN_APP, NULL, PMIX_BOOL); // stop all procs in MPI_Init
+    if (NULL != strstr(argv[optind], "mpi")) {
+        PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_IN_APP, NULL, PMIX_BOOL);   // stop all procs in MPI_Init
+    } else if (stop_on_exec) {
+        PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_ON_EXEC, NULL, PMIX_BOOL);  // stop all procs at first exec
     } else {
         PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);  // stop all procs in PMIx_Init
     }
@@ -421,6 +448,10 @@ int main(int argc, char **argv)
     }
     mydata->apps[0].cwd = strdup(cwd);
     mydata->apps[0].maxprocs = 1;
+    if (stop_on_exec) {
+        /* tell the daemon which release mechanism to use */
+        PMIX_SETENV(rc, "PRTE_DBG_STOP_ON_EXEC", "1", &mydata->apps[0].env);
+    }
     PMIX_LOAD_PROCID(&target_proc, (void *) appnspace, PMIX_RANK_WILDCARD);
     /* provide directives so the daemons go where we want, and
      * let the RM know these are debugger daemons */
