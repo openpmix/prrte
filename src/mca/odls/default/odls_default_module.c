@@ -371,7 +371,6 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     set_handler_default(SIGHUP);
     set_handler_default(SIGPIPE);
     set_handler_default(SIGCHLD);
-    set_handler_default(SIGTRAP);
 
     /* Unblock all signals, for many of the same reasons that we
        set the default handlers, above.  This is noticable on
@@ -424,7 +423,7 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
 
 static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
 {
-    int rc, status;
+    int rc;
     prte_odls_pipe_err_msg_t msg;
     char file[PRTE_ODLS_MAX_FILE_LEN + 1], topic[PRTE_ODLS_MAX_TOPIC_LEN + 1], *str = NULL;
 
@@ -433,51 +432,6 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
     }
     close(cd->opts.p_stdout[1]);
     close(cd->opts.p_stderr[1]);
-
-#if PRTE_HAVE_STOP_ON_EXEC
-    if (NULL != cd->child) {
-        if (prte_get_attribute(&cd->jdata->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL)) {
-            rc = waitpid(cd->child->pid, &status, WUNTRACED);
-            if (-1 == rc) {
-                /* doomed */
-                cd->child->state = PRTE_PROC_STATE_FAILED_TO_START;
-                PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
-                close(read_fd);
-                return PRTE_ERR_FAILED_TO_START;
-            }
-            /* tell the child to stop */
-            if (WIFSTOPPED(status)) {
-                rc = kill(cd->child->pid, SIGSTOP);
-                if (-1 == rc) {
-                    /* doomed */
-                    cd->child->state = PRTE_PROC_STATE_FAILED_TO_START;
-                    PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
-                    close(read_fd);
-                    return PRTE_ERR_FAILED_TO_START;
-                }
-                errno = 0;
-#    if PRTE_HAVE_LINUX_PTRACE
-                ptrace(PRTE_DETACH, cd->child->pid, 0, (void *) SIGSTOP);
-#    else
-                ptrace(PRTE_DETACH, cd->child->pid, 0, SIGSTOP);
-#    endif
-                if (0 != errno) {
-                    /* couldn't detach */
-                    cd->child->state = PRTE_PROC_STATE_FAILED_TO_START;
-                    PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
-                    close(read_fd);
-                    return PRTE_ERR_FAILED_TO_START;
-                }
-                /* record that this proc is ready for debug */
-                PRTE_ACTIVATE_PROC_STATE(&cd->child->name, PRTE_PROC_STATE_READY_FOR_DEBUG);
-            }
-            cd->child->state = PRTE_PROC_STATE_RUNNING;
-            PRTE_FLAG_SET(cd->child, PRTE_PROC_FLAG_ALIVE);
-            close(read_fd);
-            return PRTE_SUCCESS;
-        }
-    }
-#endif
 
     /* Block reading a message from the pipe */
     while (1) {
