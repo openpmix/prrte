@@ -239,6 +239,19 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         tmp = PMIx_Argv_join(list, ',');
         PMIx_Argv_free(list);
         list = NULL;
+#if PRTE_PMIX_HAVE_REGEX2
+        pmix_regex2_t nregex = PMIX_REGEX2_STATIC_INIT;
+        if (PMIX_SUCCESS != (ret = PMIx_generate_regex2(tmp, NULL, 0, &nregex))) {
+            PMIX_ERROR_LOG(ret);
+            free(tmp);
+            PMIX_INFO_LIST_RELEASE(info);
+            rc = prte_pmix_convert_status(ret);
+            return rc;
+        }
+        free(tmp);
+        PMIX_INFO_LIST_ADD(ret, info, PMIX_NODE_MAP, &nregex, PMIX_REGEX2);
+        PMIx_Regex2_destruct(&nregex);
+#else
         if (PMIX_SUCCESS != (ret = PMIx_generate_regex(tmp, &regex))) {
             PMIX_ERROR_LOG(ret);
             free(tmp);
@@ -249,6 +262,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         free(tmp);
         PMIX_INFO_LIST_ADD(ret, info, PMIX_NODE_MAP, regex, PMIX_REGEX);
         free(regex);
+#endif
     }
 
     /* let the PMIx server generate the procmap regex */
@@ -256,6 +270,19 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         tmp = PMIx_Argv_join(procs, ';');
         PMIx_Argv_free(procs);
         procs = NULL;
+#if PRTE_PMIX_HAVE_REGEX2
+        pmix_regex2_t pregex = PMIX_REGEX2_STATIC_INIT;
+        if (PMIX_SUCCESS != (ret = PMIx_generate_regex2(tmp, NULL, 0, &pregex))) {
+            PMIX_ERROR_LOG(ret);
+            free(tmp);
+            PMIX_INFO_LIST_RELEASE(info);
+            rc = prte_pmix_convert_status(ret);
+            return rc;
+        }
+        free(tmp);
+        PMIX_INFO_LIST_ADD(ret, info, PMIX_PROC_MAP, &pregex, PMIX_REGEX2);
+        PMIx_Regex2_destruct(&pregex);
+#else
         if (PMIX_SUCCESS != (ret = PMIx_generate_ppn(tmp, &regex))) {
             PMIX_ERROR_LOG(ret);
             free(tmp);
@@ -266,6 +293,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         free(tmp);
         PMIX_INFO_LIST_ADD(ret, info, PMIX_PROC_MAP, regex, PMIX_REGEX);
         free(regex);
+#endif
     }
 
     /* pass the number of nodes in the job */
