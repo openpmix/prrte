@@ -45,6 +45,9 @@
 #include <pmix_server.h>
 #include <signal.h>
 #include <time.h>
+#ifdef HAVE_SYS_PTRACE_H
+#    include <sys/ptrace.h>
+#endif
 
 #include "prte_stdint.h"
 #include "src/hwloc/hwloc-internal.h"
@@ -1753,6 +1756,46 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
         goto MOVEON;
     }
+
+#if PRTE_HAVE_STOP_ON_EXEC
+    /* If the child stopped due to the ptrace TRACEME+exec SIGTRAP, this is the
+     * stop-on-exec debug-attach point.  The wait_signal_callback consumed the
+     * ptrace-stop notification before do_parent could see it; handle it here
+     * instead.  Detach with SIGSTOP injected so the child stays stopped for
+     * the debugger, re-register for its eventual exit, and fire READY_FOR_DEBUG.
+     * Do NOT fall through to the exit-handling logic below. */
+    if (WIFSTOPPED(proc->exit_code) && WSTOPSIG(proc->exit_code) == SIGTRAP) {
+        if (NULL != jobdat &&
+            prte_get_attribute(&jobdat->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL)) {
+            PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+                                 "%s odls:waitpid_fired ptrace-stop for %s, detaching with SIGSTOP",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 PRTE_NAME_PRINT(&proc->name)));
+            errno = 0;
+#    if PRTE_HAVE_LINUX_PTRACE
+            ptrace(PRTE_DETACH, proc->pid, 0, (void *) SIGSTOP);
+#    else
+            ptrace(PRTE_DETACH, proc->pid, 0, SIGSTOP);
+#    endif
+            if (0 != errno) {
+                PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+                                     "%s odls:waitpid_fired ptrace detach failed for %s: %s",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                     PRTE_NAME_PRINT(&proc->name), strerror(errno)));
+                state = PRTE_PROC_STATE_FAILED_TO_START;
+                PRTE_FLAG_UNSET(proc, PRTE_PROC_FLAG_ALIVE);
+                goto MOVEON;
+            }
+            proc->state = PRTE_PROC_STATE_RUNNING;
+            PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_ALIVE);
+            /* re-register to catch the child's eventual exit after the debugger releases it */
+            prte_wait_cb(proc, prte_odls_base_default_wait_local_proc, NULL);
+            PRTE_ACTIVATE_PROC_STATE(&proc->name, PRTE_PROC_STATE_READY_FOR_DEBUG);
+            PMIX_RELEASE(t2);
+            return;
+        }
+    }
+#endif
 
     /* determine the state of this process */
     if (WIFEXITED(proc->exit_code)) {
