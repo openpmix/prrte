@@ -95,7 +95,7 @@ AC_ARG_ENABLE(debug-symbols,
 AC_MSG_CHECKING([if want developer-level compiler pickyness])
 AC_ARG_ENABLE(devel-check,
     AS_HELP_STRING([--enable-devel-check],
-                   [enable developer-level compiler pickyness when building PRRTE (default: disabled)]))
+                   [enable developer-level compiler pickyness when building PRRTE (default: enabled for git repo debug builds, disabled otherwise)]))
 if test "$enable_devel_check" = "yes"; then
     AC_MSG_RESULT([yes])
     WANT_PICKY_COMPILER=1
