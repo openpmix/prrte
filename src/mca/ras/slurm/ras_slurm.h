@@ -56,7 +56,7 @@ int prte_ras_slurm_detach_nodes(const char *slurm_jobid, prte_session_t *session
 int prte_ras_slurm_check_resources(const char *slurm_jobid);
 
 /* Features to serve cancel requests */
-int prte_ras_slurm_add_pending_req(const char *request_id);
+int prte_ras_slurm_add_pending_req(const char *request_id, const char *slurm_job_id);
 int prte_ras_slurm_remove_pending_req(const char *request_id);
 bool prte_ras_slurm_pending_req_exists(const char *request_id);
 int prte_ras_slurm_cancel_pending_req(const char *request_id);

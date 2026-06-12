@@ -23,7 +23,13 @@
 static pmix_pointer_array_t pending_reqs;
 static bool initialized = false;
 
+typedef struct {
+    char *request_id;
+    char *slurm_job_id;
+} prte_ras_slurm_pending_req_t;
+
 /* Local functions */
+static void prte_ras_slurm_pending_req_free(prte_ras_slurm_pending_req_t *pending_req);
 static int prte_ras_slurm_find_pending_req(const char *request_id, int *idx);
 
 /**
@@ -32,7 +38,7 @@ static int prte_ras_slurm_find_pending_req(const char *request_id, int *idx);
  * Cancels a previously registered pending Slurm request identified by
  * PMIX_ALLOC_REQ_ID.
  *
- * @param[in] req PMIx server request containing a Slurm job ID as PMIX_ALLOC_REQ_ID.
+ * @param[in] req PMIx server request containing PMIX_ALLOC_REQ_ID.
  */
 int prte_ras_slurm_serve_cancel_req(prte_pmix_server_req_t *req)
 {
@@ -76,18 +82,21 @@ cleanup:
 /**
  * @brief Add a pending request to the cancellable request list.
  *
- * Stores a copy of the provided request ID string. Duplicate additions are
- * treated as success.
+ * Stores copies of the PMIx-visible request ID and the Slurm job ID needed to
+ * cancel the scheduler request. Duplicate additions are treated as success if
+ * they refer to the same Slurm job.
  *
- * @param[in] request_id Pending request identifier; must be a Slurm job ID.
+ * @param[in] request_id PMIx request identifier.
+ * @param[in] slurm_job_id Slurm job ID backing the request.
  */
-int prte_ras_slurm_add_pending_req(const char *request_id)
+int prte_ras_slurm_add_pending_req(const char *request_id, const char *slurm_job_id)
 {
     if (!initialized) {
         return PRTE_ERR_NOT_AVAILABLE;
     }
 
-    if (NULL == request_id || '\0' == request_id[0]) {
+    if (NULL == request_id || '\0' == request_id[0]
+        || NULL == slurm_job_id || '\0' == slurm_job_id[0]) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
     }
@@ -96,7 +105,13 @@ int prte_ras_slurm_add_pending_req(const char *request_id)
     int err = prte_ras_slurm_find_pending_req(request_id, &idx);
 
     if (PRTE_SUCCESS == err) {
-        return PRTE_SUCCESS;
+        prte_ras_slurm_pending_req_t *pending_req =
+            (prte_ras_slurm_pending_req_t *) pmix_pointer_array_get_item(&pending_reqs, idx);
+        if (NULL != pending_req && 0 == strcmp(pending_req->slurm_job_id, slurm_job_id)) {
+            return PRTE_SUCCESS;
+        }
+        PRTE_ERROR_LOG(PRTE_EXISTS);
+        return PRTE_EXISTS;
     }
 
     if (PRTE_ERR_NOT_FOUND != err) {
@@ -104,17 +119,26 @@ int prte_ras_slurm_add_pending_req(const char *request_id)
         return err;
     }
 
-    char *request_copy = strdup(request_id);
+    prte_ras_slurm_pending_req_t *pending_req = calloc(1, sizeof(*pending_req));
 
-    if (NULL == request_copy) {
+    if (NULL == pending_req) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    int pmix_err = pmix_pointer_array_add(&pending_reqs, request_copy);
+    pending_req->request_id = strdup(request_id);
+    pending_req->slurm_job_id = strdup(slurm_job_id);
+
+    if (NULL == pending_req->request_id || NULL == pending_req->slurm_job_id) {
+        prte_ras_slurm_pending_req_free(pending_req);
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    int pmix_err = pmix_pointer_array_add(&pending_reqs, pending_req);
 
     if (0 > pmix_err) {
-        free(request_copy);
+        prte_ras_slurm_pending_req_free(pending_req);
         err = prte_pmix_convert_status(pmix_err);
         PRTE_ERROR_LOG(err);
         return err;
@@ -126,7 +150,7 @@ int prte_ras_slurm_add_pending_req(const char *request_id)
 /**
  * @brief Remove a pending request from the cancellable request list.
  *
- * @param[in] request_id Pending request identifier; must be a Slurm job ID.
+ * @param[in] request_id PMIx request identifier.
  */
 int prte_ras_slurm_remove_pending_req(const char *request_id)
 {
@@ -146,8 +170,9 @@ int prte_ras_slurm_remove_pending_req(const char *request_id)
         return err;
     }
 
-    char *stored_req = (char *) pmix_pointer_array_get_item(&pending_reqs, idx);
-    free(stored_req);
+    prte_ras_slurm_pending_req_t *pending_req =
+        (prte_ras_slurm_pending_req_t *) pmix_pointer_array_get_item(&pending_reqs, idx);
+    prte_ras_slurm_pending_req_free(pending_req);
     pmix_pointer_array_set_item(&pending_reqs, idx, NULL);
 
     return PRTE_SUCCESS;
@@ -156,7 +181,7 @@ int prte_ras_slurm_remove_pending_req(const char *request_id)
 /**
  * @brief Check whether a request is still pending cancellation.
  *
- * @param[in] request_id Pending request identifier; must be a Slurm job ID.
+ * @param[in] request_id PMIx request identifier.
  */
 bool prte_ras_slurm_pending_req_exists(const char *request_id)
 {
@@ -171,7 +196,7 @@ bool prte_ras_slurm_pending_req_exists(const char *request_id)
  * Invokes Slurm cancellation for the matching pending request and removes it
  * from the list.
  *
- * @param[in] request_id Pending request identifier; must be a Slurm job ID.
+ * @param[in] request_id PMIx request identifier.
  */
 int prte_ras_slurm_cancel_pending_req(const char *request_id)
 {
@@ -191,19 +216,37 @@ int prte_ras_slurm_cancel_pending_req(const char *request_id)
         return err;
     }
 
-    prte_ras_slurm_kill_job(request_id, NULL, 0);
+    prte_ras_slurm_pending_req_t *pending_req =
+        (prte_ras_slurm_pending_req_t *) pmix_pointer_array_get_item(&pending_reqs, idx);
 
-    char *stored_req = (char *) pmix_pointer_array_get_item(&pending_reqs, idx);
-    free(stored_req);
+    prte_ras_slurm_kill_job(pending_req->slurm_job_id, NULL, 0);
+
+    prte_ras_slurm_pending_req_free(pending_req);
     pmix_pointer_array_set_item(&pending_reqs, idx, NULL);
 
     return PRTE_SUCCESS;
 }
 
 /**
+ * @brief Free a pending request mapping.
+ *
+ * @param[in] pending_req Pending request entry.
+ */
+static void prte_ras_slurm_pending_req_free(prte_ras_slurm_pending_req_t *pending_req)
+{
+    if (NULL == pending_req) {
+        return;
+    }
+
+    free(pending_req->request_id);
+    free(pending_req->slurm_job_id);
+    free(pending_req);
+}
+
+/**
  * @brief Find a pending request in the cancellable request list.
  *
- * @param[in] request_id Pending request identifier.
+ * @param[in] request_id PMIx request identifier.
  * @param[out] idx Array index containing the request.
  */
 static int prte_ras_slurm_find_pending_req(const char *request_id, int *idx)
@@ -218,9 +261,10 @@ static int prte_ras_slurm_find_pending_req(const char *request_id, int *idx)
     }
 
     for (int i = 0; i < pending_reqs.size; i++) {
-        char *stored_req = (char *) pmix_pointer_array_get_item(&pending_reqs, i);
+        prte_ras_slurm_pending_req_t *pending_req =
+            (prte_ras_slurm_pending_req_t *) pmix_pointer_array_get_item(&pending_reqs, i);
 
-        if (NULL != stored_req && 0 == strcmp(stored_req, request_id)) {
+        if (NULL != pending_req && 0 == strcmp(pending_req->request_id, request_id)) {
             *idx = i;
             return PRTE_SUCCESS;
         }
@@ -266,7 +310,7 @@ int prte_ras_slurm_modify_cancel_finalize(void)
     for (int i = 0; i < pending_reqs.size; i++) {
         void *ptr = pmix_pointer_array_get_item(&pending_reqs, i);
         if (NULL != ptr) {
-            free(ptr);
+            prte_ras_slurm_pending_req_free((prte_ras_slurm_pending_req_t *) ptr);
             pmix_pointer_array_set_item(&pending_reqs, i, NULL);
         }
     }

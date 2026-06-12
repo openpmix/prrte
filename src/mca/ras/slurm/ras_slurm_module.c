@@ -294,6 +294,14 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
         req->pstatus = PMIX_ERR_NOT_SUPPORTED;
     }
 
+    /* Success at this stage means the request was served atomically.
+    * Return PMIX_OPERATION_SUCCEEDED so the RAS base completes the
+    * request instead of waiting for an asynchronous callback.
+    */
+    if (PMIX_SUCCESS == req->pstatus) {
+        return PMIX_OPERATION_SUCCEEDED;
+    }
+
     return req->pstatus;
 }
 
