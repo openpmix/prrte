@@ -730,6 +730,25 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
 
     req->pstatus = prte_pmix_convert_rc(err);
 
+    /* Report back: job ID and resource manager used */
+    if (PMIX_SUCCESS == req->pstatus) {
+        pmix_info_t *result_info = NULL;
+
+        PMIX_INFO_CREATE(result_info, 2);
+        if (NULL == result_info) {
+            req->pstatus = PMIX_ERR_NOMEM;
+        } else {
+            if (req->copy && NULL != req->info) {
+                PMIX_INFO_FREE(req->info, req->ninfo);
+            }
+            PMIX_INFO_LOAD(&result_info[0], PMIX_ALLOC_ID, job_id, PMIX_STRING);
+            PMIX_INFO_LOAD(&result_info[1], PMIX_RM_NAME, "slurm", PMIX_STRING);
+            req->info = result_info;
+            req->ninfo = 2;
+            req->copy = true;
+        }
+    }
+
     /* Launch daemons on the newly secured resources */
     if (PMIX_SUCCESS == req->pstatus) {
         prte_job_t *daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
