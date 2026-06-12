@@ -38,6 +38,8 @@ typedef struct {
     pmix_object_t super;
     prte_event_t ev;
     prte_pmix_server_req_t *req;
+    char *request_id;
+    bool user_request_id_provided;
     char *job_id;
     int err;
     uint64_t poll_delay_usec;
@@ -107,6 +109,8 @@ static const char *threads_per_core_format = "--threads-per-core=%s";
 static void swt_con(prte_slurm_wait_tracker_t *p)
 {
     p->req = NULL;
+    p->request_id = NULL;
+    p->user_request_id_provided = false;
     p->job_id = NULL;
     p->err = PRTE_SUCCESS;
 }
@@ -118,6 +122,10 @@ static void swt_des(prte_slurm_wait_tracker_t *p)
 {
     if (NULL != p->job_id) {
         free(p->job_id);
+    }
+
+    if (NULL != p->request_id) {
+        free(p->request_id);
     }
 
     if (NULL != p->req) {
@@ -632,6 +640,7 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
     prte_pmix_server_req_t *req = trk->req;
 
     char *job_id = trk->job_id;
+    char *request_id = trk->request_id;
 
     int err = trk->err;
 
@@ -667,7 +676,9 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
     }
 
     /* Create a session  */
-    err = prte_ras_slurm_assign_new_session(job_id, NULL, &added_nodes);
+    err = prte_ras_slurm_assign_new_session(job_id,
+                                            trk->user_request_id_provided ? request_id : NULL,
+                                            &added_nodes);
 
     if(PRTE_SUCCESS != err) {
         goto complete;
@@ -699,17 +710,17 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
     prte_num_allocated_nodes += pmix_list_get_size(&added_nodes);
     resources_added = true;
 
-    int pending_err = prte_ras_slurm_remove_pending_req(job_id);
+    int pending_err = prte_ras_slurm_remove_pending_req(request_id);
     if(PRTE_SUCCESS != pending_err) {
         pmix_output(0, "ras:slurm:modify: failed to remove completed request %s "
                        "from the pending cancellation list: %s",
-                       job_id, prte_strerror(pending_err));
+                       request_id, prte_strerror(pending_err));
     }
 
     complete:
 
     if(PRTE_SUCCESS != err && PRTE_ERR_JOB_CANCELLED != err && !resources_added) {
-        prte_ras_slurm_cancel_pending_req(job_id);
+        prte_ras_slurm_cancel_pending_req(request_id);
     }
 
     if(have_added_nodes) {
@@ -758,7 +769,7 @@ static void slurm_wait_poll_cb(int fd, short args, void *cbdata)
     int err;
 
     /* While waiting, this request was cancelled */
-    if (!prte_ras_slurm_pending_req_exists(trk->job_id)) {
+    if (!prte_ras_slurm_pending_req_exists(trk->request_id)) {
         trk->err = PRTE_ERR_JOB_CANCELLED;
         prte_ras_slurm_extend_wait_complete(-1, 0, trk);
         return;
@@ -824,6 +835,8 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
     
     char *nodes_string = NULL;
     char *job_id = NULL;
+    char *request_id = NULL;
+    bool user_request_id_provided = false;
 
     uint64_t num_nodes;
     bool found = false;
@@ -839,7 +852,13 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
         
             num_nodes = req->info[i].value.data.uint64;
             found = true;
-            break;
+        } else if (0 == strcmp(req->info[i].key, PMIX_ALLOC_REQ_ID)) {
+            if (req->info[i].value.type != PMIX_STRING) {
+                err = PRTE_ERR_BAD_PARAM;
+                goto cleanup;
+            }
+            request_id = req->info[i].value.data.string;
+            user_request_id_provided = (NULL != request_id && '\0' != request_id[0]);
         }
     }
 
@@ -903,7 +922,11 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
         goto cleanup;
     }
 
-    err = prte_ras_slurm_add_pending_req(job_id);
+    if (NULL == request_id || '\0' == request_id[0]) {
+        request_id = job_id;
+    }
+
+    err = prte_ras_slurm_add_pending_req(request_id, job_id);
 
     if(PRTE_SUCCESS != err) {
         prte_ras_slurm_kill_job(job_id, NULL, 0);
@@ -927,6 +950,17 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
 
     trk->req = req;
     PMIX_RETAIN(req);
+
+    trk->request_id = strdup(request_id);
+
+    if(NULL == trk->request_id) {
+        err = PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(err);
+        PMIX_RELEASE(trk);
+        goto cleanup;
+    }
+
+    trk->user_request_id_provided = user_request_id_provided;
 
     trk->job_id = strdup(job_id);
 
@@ -956,7 +990,7 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
     cleanup:
 
     if(PRTE_SUCCESS != err && PRTE_ERR_OP_IN_PROGRESS != err && pending_req_added) {
-        prte_ras_slurm_cancel_pending_req(job_id);
+        prte_ras_slurm_cancel_pending_req(request_id);
     }
 
     free(nodes_string);
