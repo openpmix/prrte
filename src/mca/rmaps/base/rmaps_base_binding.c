@@ -304,8 +304,7 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
     hwloc_obj_type_t type;
     hwloc_cpuset_t result, tgtcpus;
     hwloc_obj_t target, tmp_obj, pkg;
-    uint16_t n;
-    unsigned npkgs, ncpus;
+    unsigned n, npkgs, ncpus;
     bool moveon = false;
     PRTE_HIDE_UNUSED_PARAMS(jdata);
 
