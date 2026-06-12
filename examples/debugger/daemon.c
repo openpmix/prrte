@@ -26,11 +26,14 @@
  */
 
 #define _GNU_SOURCE
+#include <errno.h>
 #include <libgen.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -216,10 +219,12 @@ int main(int argc, char **argv)
     int i;
     pmix_data_array_t darray;
     int cospawned_namespace = 0;
+    bool stop_on_exec;
     char hostname[256];
 
     pid = getpid();
     gethostname(hostname, sizeof hostname);
+    stop_on_exec = (NULL != getenv("PRTE_DBG_STOP_ON_EXEC"));
 
     /* Initialize this daemon - since we were launched by the RM, our
      * connection info * will have been provided at startup. */
@@ -414,34 +419,55 @@ int main(int argc, char **argv)
      */
     (void) strncpy(proc.nspace, target_namespace, PMIX_MAX_NSLEN);
     proc.rank = PMIX_RANK_WILDCARD;
-    // Since we are using the 'wildcard' only one daemon should send
-    // the release message.
-    // If we are 'cospawned' then the daemons are not ranked separately
-    // from the application (this is a bug) so just have everyone
-    // send the release.
-    if (0 == myproc.rank || 1 == cospawned_namespace) {
 
-        PMIX_INFO_LIST_START(dirs);
-        /* Send release notification to application namespace */
-        PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_CUSTOM_RANGE, &proc, PMIX_PROC);
-        /* Don't send notification to default event handlers */
-        PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
-        PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
-        PMIX_INFO_LIST_RELEASE(dirs);
-        info = darray.array;
-        ninfo = darray.size;
+    if (stop_on_exec) {
+        /* Processes were stopped at exec with SIGSTOP before connecting to PMIx.
+         * Each daemon releases only its own local processes via SIGCONT; no
+         * rank-0 gating needed since every daemon operates on its own proctable. */
+        for (i = 0; i < (int) myquery_data.info[0].value.data.darray->size; i++) {
+            printf("[%s:%u:%lu] Sending SIGCONT to pid %lu (rank %u)\n",
+                   myproc.nspace, myproc.rank, (unsigned long) pid,
+                   (unsigned long) proctable[i].pid, proctable[i].proc.rank);
+            if (-1 == kill(proctable[i].pid, SIGCONT)) {
+                fprintf(stderr, "[%s:%u:%lu] kill(%lu, SIGCONT) failed: %s\n",
+                        myproc.nspace, myproc.rank, (unsigned long) pid,
+                        (unsigned long) proctable[i].pid, strerror(errno));
+            }
+        }
+    } else {
+        /* Processes are stopped inside PMIx_Init / MPI_Init and have a PMIx
+         * event handler registered.  Send a single wildcard release; only one
+         * daemon needs to send it to avoid duplicate deliveries. */
+        // Since we are using the 'wildcard' only one daemon should send
+        // the release message.
+        // If we are 'cospawned' then the daemons are not ranked separately
+        // from the application (this is a bug) so just have everyone
+        // send the release.
+        if (0 == myproc.rank || 1 == cospawned_namespace) {
 
-        // Todo: Move this to the main tool
-        // https://github.com/openpmix/prrte/pull/857#discussion_r600849033
-        sleep(1);
-        printf("[%s:%u:%lu] Sending release\n", myproc.nspace, myproc.rank, (unsigned long) pid);
-        rc = PMIx_Notify_event(PMIX_DEBUGGER_RELEASE, NULL, PMIX_RANGE_CUSTOM, info, ninfo, NULL,
-                               NULL);
-        PMIX_DATA_ARRAY_DESTRUCT(&darray);
-        if (PMIX_SUCCESS != rc) {
-            fprintf(stderr, "[%s:%u:%lu] Sending release failed with error %s(%d)\n", myproc.nspace,
-                    myproc.rank, (unsigned long) pid, PMIx_Error_string(rc), rc);
-            goto done;
+            PMIX_INFO_LIST_START(dirs);
+            /* Send release notification to application namespace */
+            PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_CUSTOM_RANGE, &proc, PMIX_PROC);
+            /* Don't send notification to default event handlers */
+            PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
+            PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
+            PMIX_INFO_LIST_RELEASE(dirs);
+            info = darray.array;
+            ninfo = darray.size;
+
+            // Todo: Move this to the main tool
+            // https://github.com/openpmix/prrte/pull/857#discussion_r600849033
+            sleep(1);
+            printf("[%s:%u:%lu] Sending release\n", myproc.nspace, myproc.rank, (unsigned long) pid);
+            rc = PMIx_Notify_event(PMIX_DEBUGGER_RELEASE, NULL, PMIX_RANGE_CUSTOM, info, ninfo,
+                                   NULL, NULL);
+            PMIX_DATA_ARRAY_DESTRUCT(&darray);
+            if (PMIX_SUCCESS != rc) {
+                fprintf(stderr, "[%s:%u:%lu] Sending release failed with error %s(%d)\n",
+                        myproc.nspace, myproc.rank, (unsigned long) pid,
+                        PMIx_Error_string(rc), rc);
+                goto done;
+            }
         }
     }
 
