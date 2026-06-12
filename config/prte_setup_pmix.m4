@@ -222,6 +222,16 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                          AC_MSG_WARN([PMIx installation with the required capability.])
                          AC_MSG_ERROR([Cannot continue.])])
 
+    AC_MSG_CHECKING([for PMIx regex2 API support])
+    PRTE_CHECK_PMIX_CAP([REGEX2],
+                        [AC_MSG_RESULT([yes])
+                         prte_pmix_have_regex2=1],
+                        [AC_MSG_RESULT([no])
+                         prte_pmix_have_regex2=0])
+    AC_DEFINE_UNQUOTED([PRTE_PMIX_HAVE_REGEX2],
+                       [$prte_pmix_have_regex2],
+                       [Whether or not PMIx supports the PMIx_generate_regex2 API])
+
     AC_MSG_CHECKING([for LTO compatibility])
     PRTE_CHECK_PMIX_CAP([LTO],
                         [PRTE_PMIX_LTO_CAPABILITY=1
