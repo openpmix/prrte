@@ -61,6 +61,72 @@ static void inherit_env_directives(prte_job_t *jdata,
                                    prte_job_t *parent,
                                    pmix_proc_t *proxy);
 
+/* Override job-level opts with per-app attributes where present.
+ * Does not modify jdata->map. */
+static int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
+                                               prte_app_context_t *app,
+                                               prte_rmaps_options_t *opts)
+{
+    uint16_t u16;
+    uint16_t *u16ptr = &u16;
+    char *str;
+
+    PRTE_HIDE_UNUSED_PARAMS(jdata);
+
+    /* 1. PRTE_APP_MAPBY → opts->map */
+    if (prte_get_attribute(&app->attributes, PRTE_APP_MAPBY, (void **)&u16ptr, PMIX_UINT16)) {
+        opts->map = u16;
+    }
+
+    /* 2. PPR count: read PRTE_APP_PPR; fall back to existing opts->pprn */
+    if (PRTE_MAPPING_PPR == PRTE_GET_MAPPING_POLICY(opts->map)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_PPR, (void **)&u16ptr, PMIX_UINT16)) {
+            opts->pprn = u16;
+        }
+    }
+
+    /* 3. PRTE_APP_PES_PER_PROC → opts->cpus_per_rank */
+    if (prte_get_attribute(&app->attributes, PRTE_APP_PES_PER_PROC, (void **)&u16ptr, PMIX_UINT16)) {
+        opts->cpus_per_rank = u16;
+    }
+
+    /* 4. PRTE_APP_HWT_CPUS → opts->use_hwthreads */
+    if (prte_get_attribute(&app->attributes, PRTE_APP_HWT_CPUS, NULL, PMIX_BOOL)) {
+        opts->use_hwthreads = true;
+    }
+
+    /* 5. PRTE_APP_CPUSET → opts->cpuset */
+    str = NULL;
+    if (prte_get_attribute(&app->attributes, PRTE_APP_CPUSET, (void **)&str, PMIX_STRING)) {
+        opts->cpuset = str;  /* caller owns this allocation */
+    }
+
+    /* 6. PRTE_APP_MAP_FILE — read directly by seq/rank_file components via app->attributes */
+
+    /* 7. PRTE_APP_DIST_DEVICE → opts->dist_device */
+    str = NULL;
+    if (prte_get_attribute(&app->attributes, PRTE_APP_DIST_DEVICE, (void **)&str, PMIX_STRING)) {
+        opts->dist_device = str;
+    }
+
+    /* 8. PRTE_APP_BINDING_LIMIT → opts->limit */
+    if (prte_get_attribute(&app->attributes, PRTE_APP_BINDING_LIMIT, (void **)&u16ptr, PMIX_UINT16)) {
+        opts->limit = u16;
+    }
+
+    /* 9. PRTE_APP_RANKBY → opts->rank */
+    if (prte_get_attribute(&app->attributes, PRTE_APP_RANKBY, (void **)&u16ptr, PMIX_UINT16)) {
+        opts->rank = u16;
+    }
+
+    /* 10. PRTE_APP_BINDTO → opts->bind */
+    if (prte_get_attribute(&app->attributes, PRTE_APP_BINDTO, (void **)&u16ptr, PMIX_UINT16)) {
+        opts->bind = u16;
+    }
+
+    return PRTE_SUCCESS;
+}
+
 void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
@@ -79,6 +145,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     uint16_t u16 = 0, procs_per_target = 0;
     uint16_t *u16ptr = &u16;
     bool colocate_daemons = false;
+    bool any_per_app = false;
+    uint32_t next_vpid;
     bool colocate = false;
     prte_schizo_base_module_t *schizo;
     prte_rmaps_options_t options;
@@ -92,6 +160,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     PMIX_ACQUIRE_OBJECT(caddy);
     // init options
     memset(&options, 0, sizeof(prte_rmaps_options_t));
+    options.app_idx = -1;   /* -1 = map all apps (default) */
     options.stream = prte_rmaps_base_framework.framework_output;
     options.verbosity = 5;  // usual value for base-level functions
     // set and check convenience vars
@@ -904,6 +973,20 @@ ranking:
         }
     }
 
+    /* scan for per-app mapping directives */
+    for (n = 0; n < jdata->apps->size; n++) {
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
+        if (NULL == app) {
+            continue;
+        }
+        if (prte_get_attribute(&app->attributes, PRTE_APP_MAPBY, NULL, PMIX_UINT16) ||
+            prte_get_attribute(&app->attributes, PRTE_APP_RANKBY, NULL, PMIX_UINT16) ||
+            prte_get_attribute(&app->attributes, PRTE_APP_BINDTO, NULL, PMIX_UINT16)) {
+            any_per_app = true;
+            break;
+        }
+    }
+
     if (colocate_daemons || colocate) {
         /* This is a colocation request, so we don't run any mapping modules */
         if (procs_per_target == 0) {
@@ -922,7 +1005,7 @@ ranking:
             goto cleanup;
         }
         did_map = true;
-    } else {
+    } else if (!any_per_app) {
         /* cycle thru the available mappers until one agrees to map
          * the job
          */
@@ -948,6 +1031,62 @@ ranking:
                 PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
                 goto cleanup;
             }
+        }
+    } else {
+        /* per-app dispatch: call mappers once per app with per-app options */
+        did_map = false;
+        next_vpid = 0;
+        for (n = 0; n < jdata->apps->size; n++) {
+            app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
+            if (NULL == app) {
+                continue;
+            }
+
+            prte_rmaps_options_t app_options = options;   /* shallow copy of job defaults */
+            app_options.app_idx = n;
+
+            rc = prte_rmaps_base_resolve_app_options(jdata, app, &app_options);
+            if (PRTE_SUCCESS != rc) {
+                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+                goto cleanup;
+            }
+
+            bool app_did_map = false;
+            PMIX_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules,
+                              prte_rmaps_base_selected_module_t) {
+                rc = mod->module->map_job(jdata, &app_options);
+                if (PRTE_SUCCESS == rc) {
+                    app_did_map = true;
+                    break;
+                }
+                if (PRTE_ERR_RESOURCE_BUSY == rc) {
+                    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+                    goto cleanup;
+                }
+                if (PRTE_ERR_TAKE_NEXT_OPTION != rc) {
+                    jdata->exit_code = rc;
+                    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+                    goto cleanup;
+                }
+            }
+            if (!app_did_map) {
+                pmix_show_help("help-prte-rmaps-base.txt", "failed-map", true,
+                               PRTE_ERROR_NAME(rc),
+                               app->app,
+                               app->num_procs,
+                               prte_rmaps_base_print_mapping(app_options.map),
+                               prte_hwloc_base_print_binding(app_options.bind));
+                jdata->exit_code = -PRTE_JOB_STATE_MAP_FAILED;
+                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+                goto cleanup;
+            }
+            /* rank this app's procs */
+            rc = prte_rmaps_base_compute_vpids(jdata, &app_options, n, &next_vpid);
+            if (PRTE_SUCCESS != rc) {
+                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+                goto cleanup;
+            }
+            did_map = true;
         }
     }
 
@@ -1234,7 +1373,7 @@ static int map_colocate(prte_job_t *jdata,
         }
 
         /* calculate the ranks for this job */
-        ret = prte_rmaps_base_compute_vpids(jdata, options);
+        { uint32_t _nv = 0; ret = prte_rmaps_base_compute_vpids(jdata, options, -1, &_nv); }
         if (PRTE_SUCCESS != ret) {
             return ret;
         }
@@ -1320,7 +1459,7 @@ static int map_colocate(prte_job_t *jdata,
             }
         }
     }
-    ret = prte_rmaps_base_compute_vpids(jdata, options);
+    { uint32_t _nv = 0; ret = prte_rmaps_base_compute_vpids(jdata, options, -1, &_nv); }
     if (PRTE_SUCCESS != ret) {
         return ret;
     }

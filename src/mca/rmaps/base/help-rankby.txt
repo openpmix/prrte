@@ -74,5 +74,32 @@ Note:
 
   Directives are case-insensitive.  "SPAN" is the same as "span".
 
+
+Per-App-Context Ranking (MPMD Jobs)
+-------------------------------------
+
+In a multi-program multiple-data (MPMD) job, each application context
+may carry its own "--rank-by" directive that overrides the job-level
+ranking policy for that app only.
+
+Example:
+
+  prun -n 4 app1 --rank-by fill : -n 2 app2 --rank-by node
+
+Rank assignments always span all application contexts in the job and
+remain globally contiguous: the first app in the command line receives
+ranks starting from 0, and each subsequent app starts from the next
+unassigned rank, regardless of the per-app ranking directive. The
+per-app directive controls only the order in which processes within
+that app are assigned their ranks relative to one another.
+
+For example, a command line of
+
+   -n 3 app1 --rank-by fill : -n 2 app2 --rank-by node
+
+will result in "app1" having three processes ranked 0-2 (assigned fill-
+style) and "app2" having two processes ranked 3-4 (assigned node-
+style).
+
 A more detailed description of the mapping, ranking, and binding
 procedure can be obtained via the "--help placement" option.

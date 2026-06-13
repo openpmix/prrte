@@ -96,5 +96,26 @@ Note:
   Directives and qualifiers are case-insensitive. "OVERLOAD" is the
   same as "overload".
 
+
+Per-App-Context Binding (MPMD Jobs)
+-------------------------------------
+
+In a multi-program multiple-data (MPMD) job, each application context
+may carry its own "--bind-to" directive that overrides the job-level
+binding policy for that app only. Apps that carry no per-app directive
+inherit the job-level binding policy unchanged.
+
+Example:
+
+  prun -n 4 app1 --bind-to core : -n 2 app2 --bind-to none
+
+Here "app1" processes are bound to individual cores while "app2"
+processes are left unbound, all within the same job.
+
+Per-app binding is derived from the mapping options resolved for each
+app context. It therefore follows the same constraints as job-level
+binding: binding can only be done to the mapped object or to a
+resource located beneath it.
+
 A more detailed description of the mapping, ranking, and binding
 procedure can be obtained via the "--help placement" option.

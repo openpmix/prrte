@@ -178,6 +178,9 @@ static int lsf_map(prte_job_t *jdata,
         if (NULL == app) {
             continue;
         }
+        if (options->app_idx >= 0 && (int)i != options->app_idx) {
+            continue;
+        }
 
         /* for each app_context, we have to get the list of nodes that it can
          * use since that can now be modified with a hostfile and/or -host
@@ -427,7 +430,7 @@ static int lsf_map(prte_job_t *jdata,
     }
     PMIX_DESTRUCT(&rankmap);
     /* compute local/app ranks */
-    rc = prte_rmaps_base_compute_vpids(jdata, options);
+    rc = prte_rmaps_base_compute_vpids(jdata, options, -1, NULL);
     return rc;
 
 error:

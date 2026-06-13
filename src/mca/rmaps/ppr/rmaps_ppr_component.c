@@ -34,7 +34,7 @@ static int prte_rmaps_ppr_query(pmix_mca_base_module_t **module, int *priority);
 static int prte_rmaps_ppr_register(void);
 
 prte_rmaps_base_component_t prte_mca_rmaps_ppr_component = {
-    PRTE_RMAPS_BASE_VERSION_4_0_0,
+    PRTE_RMAPS_BASE_VERSION_5_0_0,
 
     .pmix_mca_component_name = "ppr",
     PMIX_MCA_BASE_MAKE_VERSION(component,

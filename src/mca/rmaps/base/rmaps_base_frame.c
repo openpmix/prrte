@@ -827,3 +827,319 @@ int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)
 
     return PRTE_SUCCESS;
 }
+
+/* Per-app-context mapping policy parser.
+ * Stores results in app->attributes rather than jdata->map.
+ * Rejects job-level-only directives (OVERSUBSCRIBE, NOOVERSUBSCRIBE, INHERIT, NOINHERIT).
+ */
+int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec)
+{
+    char **ck, **range;
+    char *ptr, *cptr, *val;
+    prte_mapping_policy_t tmp;
+    int n;
+    bool ppr = false;
+    uint16_t u16;
+    char *temp_token, *parm_delimiter;
+
+    tmp = 0;
+
+    if (NULL == inspec) {
+        return PRTE_SUCCESS;
+    }
+
+    ck = PMIx_Argv_split(inspec, ':');
+    if (1 < PMIx_Argv_count(ck)) {
+        if (0 == strcasecmp(ck[0], "ppr")) {
+            if (3 > PMIx_Argv_count(ck)) {
+                pmix_show_help("help-prte-rmaps-base.txt", "invalid-pattern", true, inspec);
+                PMIx_Argv_free(ck);
+                return PRTE_ERR_SILENT;
+            }
+            /* ck[1] = N, ck[2] = object type */
+            u16 = (uint16_t)strtoul(ck[1], NULL, 10);
+            prte_set_attribute(&app->attributes, PRTE_APP_PPR, PRTE_ATTR_LOCAL, &u16, PMIX_UINT16);
+            PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_PPR);
+            PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
+            ppr = true;
+            if (NULL == ck[3]) {
+                PMIx_Argv_free(ck);
+                goto setpolicy;
+            }
+            PMIX_ARGV_JOIN(cptr, &ck[3], ':');
+        } else {
+            PMIX_ARGV_JOIN(cptr, &ck[1], ':');
+        }
+        /* process modifiers, rejecting job-level-only ones */
+        char **ck2 = PMIx_Argv_split(cptr, ':');
+        for (int i = 0; NULL != ck2[i]; i++) {
+            if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_OVERSUB) ||
+                PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOOVER)) {
+                pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
+                               "per-app mapping policy", ck2[i]);
+                PMIx_Argv_free(ck2);
+                PMIx_Argv_free(ck);
+                free(cptr);
+                return PRTE_ERR_BAD_PARAM;
+            } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_INHERIT) ||
+                       PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOINHERIT)) {
+                pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
+                               "per-app mapping policy", ck2[i]);
+                PMIx_Argv_free(ck2);
+                PMIx_Argv_free(ck);
+                free(cptr);
+                return PRTE_ERR_BAD_PARAM;
+            } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOLOCAL)) {
+                PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_NO_USE_LOCAL);
+            } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_PE)) {
+                u16 = (uint16_t)strtol(&ck2[i][3], &ptr, 10);
+                if ('\0' != *ptr) {
+                    pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                                   "mapping policy", "PE", ck2[i]);
+                    PMIx_Argv_free(ck2);
+                    PMIx_Argv_free(ck);
+                    free(cptr);
+                    return PRTE_ERR_SILENT;
+                }
+                prte_set_attribute(&app->attributes, PRTE_APP_PES_PER_PROC,
+                                   PRTE_ATTR_LOCAL, &u16, PMIX_UINT16);
+            } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_HWTCPUS)) {
+                prte_set_attribute(&app->attributes, PRTE_APP_HWT_CPUS,
+                                   PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+            } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_CORECPUS)) {
+                prte_set_attribute(&app->attributes, PRTE_APP_CORE_CPUS,
+                                   PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+            } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_QFILE)) {
+                if ('\0' == ck2[i][5]) {
+                    pmix_show_help("help-prte-rmaps-base.txt", "missing-value", true,
+                                   "mapping policy", "FILE", ck2[i]);
+                    PMIx_Argv_free(ck2);
+                    PMIx_Argv_free(ck);
+                    free(cptr);
+                    return PRTE_ERR_SILENT;
+                }
+                prte_set_attribute(&app->attributes, PRTE_APP_MAP_FILE,
+                                   PRTE_ATTR_LOCAL, &ck2[i][5], PMIX_STRING);
+            } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_PELIST)) {
+                /* validate comma-delimited ranges */
+                temp_token = strtok(&ck2[i][8], ",");
+                while (NULL != temp_token) {
+                    range = PMIx_Argv_split(temp_token, '-');
+                    if (2 < PMIx_Argv_count(range)) {
+                        pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                                       "mapping", "PE-LIST", ck2[i]);
+                        PMIx_Argv_free(range);
+                        PMIx_Argv_free(ck2);
+                        PMIx_Argv_free(ck);
+                        free(cptr);
+                        return PRTE_ERR_SILENT;
+                    }
+                    for (n = 0; NULL != range[n]; n++) {
+                        (void)strtol(range[n], &parm_delimiter, 10);
+                        if ('\0' != *parm_delimiter) {
+                            pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                                           "mapping", "PE-LIST", &ck2[i][8]);
+                            PMIx_Argv_free(range);
+                            PMIx_Argv_free(ck2);
+                            PMIx_Argv_free(ck);
+                            free(cptr);
+                            return PRTE_ERR_SILENT;
+                        }
+                    }
+                    PMIx_Argv_free(range);
+                    temp_token = strtok(NULL, ",");
+                }
+                prte_set_attribute(&app->attributes, PRTE_APP_CPUSET,
+                                   PRTE_ATTR_LOCAL, &ck2[i][8], PMIX_STRING);
+            } else {
+                PMIx_Argv_free(ck2);
+                PMIx_Argv_free(ck);
+                free(cptr);
+                return PRTE_ERR_BAD_PARAM;
+            }
+        }
+        PMIx_Argv_free(ck2);
+        free(cptr);
+        if (ppr) {
+            PMIx_Argv_free(ck);
+            goto setpolicy;
+        }
+    }
+
+    if (':' == inspec[0]) {
+        PMIx_Argv_free(ck);
+        goto setpolicy;
+    }
+
+    cptr = ck[0];
+    if (NULL != (ptr = strchr(ck[0], '='))) {
+        *ptr = '\0';
+        cptr = strdup(ck[0]);
+        *ptr = '=';
+        ++ptr;
+        if ('\0' == *ptr) {
+            pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
+                           true, "mapping", ck[0]);
+            PMIx_Argv_free(ck);
+            free(cptr);
+            return PRTE_ERR_SILENT;
+        }
+        val = strdup(ptr);
+    } else {
+        cptr = strdup(ck[0]);
+        val = NULL;
+    }
+
+    if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_SLOT)) {
+        PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYSLOT);
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_NODE)) {
+        PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYNODE);
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_SEQ)) {
+        PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_SEQ);
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_CORE)) {
+        if (prte_rmaps_base.require_hwtcpus) {
+            PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYHWTHREAD);
+        } else {
+            PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYCORE);
+        }
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_L1CACHE)) {
+        PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL1CACHE);
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_L2CACHE)) {
+        PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL2CACHE);
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_L3CACHE)) {
+        PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL3CACHE);
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_NUMA)) {
+        PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYNUMA);
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_PACKAGE)) {
+        PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYPACKAGE);
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_HWT)) {
+        PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYHWTHREAD);
+        prte_set_attribute(&app->attributes, PRTE_APP_HWT_CPUS,
+                           PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_NOLOCAL)) {
+        PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_NO_USE_LOCAL);
+    } else {
+        pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
+                       true, "mapping", cptr);
+        PMIx_Argv_free(ck);
+        free(cptr);
+        if (NULL != val) {
+            free(val);
+        }
+        return PRTE_ERR_SILENT;
+    }
+    PMIx_Argv_free(ck);
+    free(cptr);
+    if (NULL != val) {
+        free(val);
+    }
+    PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
+
+setpolicy:
+    prte_set_attribute(&app->attributes, PRTE_APP_MAPBY, PRTE_ATTR_LOCAL, &tmp, PMIX_UINT16);
+    return PRTE_SUCCESS;
+}
+
+int prte_rmaps_base_set_app_ranking_policy(prte_app_context_t *app, char *spec)
+{
+    prte_ranking_policy_t tmp = 0;
+
+    if (NULL == spec) {
+        return PRTE_SUCCESS;
+    }
+
+    if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_SLOT)) {
+        PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SLOT);
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_NODE)) {
+        PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_NODE);
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_FILL)) {
+        PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_FILL);
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_SPAN)) {
+        PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SPAN);
+    } else {
+        pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "ranking", spec);
+        return PRTE_ERR_SILENT;
+    }
+    PRTE_SET_RANKING_DIRECTIVE(tmp, PRTE_RANKING_GIVEN);
+    prte_set_attribute(&app->attributes, PRTE_APP_RANKBY, PRTE_ATTR_LOCAL, &tmp, PMIX_UINT16);
+    return PRTE_SUCCESS;
+}
+
+int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app, char *spec)
+{
+    int i;
+    prte_binding_policy_t tmp = 0;
+    char **quals, *myspec, *ptr, *p2;
+    uint16_t u16;
+
+    if (NULL == spec) {
+        return PRTE_SUCCESS;
+    }
+
+    myspec = strdup(spec);
+
+    ptr = strchr(myspec, ':');
+    if (NULL != ptr) {
+        *ptr = '\0';
+        ++ptr;
+        quals = PMIx_Argv_split(ptr, ':');
+        for (i = 0; NULL != quals[i]; i++) {
+            if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_IF_SUPP)) {
+                tmp |= PRTE_BIND_IF_SUPPORTED;
+            } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_OVERLOAD)) {
+                tmp |= (PRTE_BIND_ALLOW_OVERLOAD | PRTE_BIND_OVERLOAD_GIVEN);
+            } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_NOOVERLOAD)) {
+                tmp = (tmp & ~PRTE_BIND_ALLOW_OVERLOAD);
+                tmp |= PRTE_BIND_OVERLOAD_GIVEN;
+            } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_LIMIT)) {
+                u16 = (uint16_t)strtol(&quals[i][6], &p2, 10);
+                if ('\0' != *p2) {
+                    pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                                   "binding limit", "LIMIT", quals[i]);
+                    PMIx_Argv_free(quals);
+                    free(myspec);
+                    return PRTE_ERR_SILENT;
+                }
+                prte_set_attribute(&app->attributes, PRTE_APP_BINDING_LIMIT,
+                                   PRTE_ATTR_LOCAL, &u16, PMIX_UINT16);
+            } else {
+                pmix_show_help("help-prte-hwloc-base.txt", "unrecognized-modifier", true, spec);
+                PMIx_Argv_free(quals);
+                free(myspec);
+                return PRTE_ERR_BAD_PARAM;
+            }
+        }
+        PMIx_Argv_free(quals);
+    }
+
+    if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_NONE)) {
+        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_NONE);
+    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_HWT)) {
+        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
+    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_CORE)) {
+        if (prte_rmaps_base.require_hwtcpus) {
+            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
+        } else {
+            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_CORE);
+        }
+    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_L1CACHE)) {
+        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L1CACHE);
+    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_L2CACHE)) {
+        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L2CACHE);
+    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_L3CACHE)) {
+        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L3CACHE);
+    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_NUMA)) {
+        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_NUMA);
+    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_PACKAGE)) {
+        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_PACKAGE);
+    } else {
+        pmix_show_help("help-prte-hwloc-base.txt", "invalid binding_policy", true,
+                       "binding", spec);
+        free(myspec);
+        return PRTE_ERR_BAD_PARAM;
+    }
+    free(myspec);
+
+    prte_set_attribute(&app->attributes, PRTE_APP_BINDTO, PRTE_ATTR_LOCAL, &tmp, PMIX_UINT16);
+    return PRTE_SUCCESS;
+}

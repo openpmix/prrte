@@ -117,6 +117,11 @@ typedef struct {
     hwloc_cpuset_t target;
     hwloc_obj_t obj;
 
+    /* When >= 0, map only the app context at this index in jdata->apps.
+     * When < 0 (default -1), map all app contexts as today. */
+    int app_idx;
+    char *dist_device;  /* device name for dist mapping, from PRTE_APP_DIST_DEVICE */
+
 } prte_rmaps_options_t;
 
 
@@ -124,7 +129,11 @@ typedef struct {
  **
  * Macro for use in components that are of type rmaps
  */
-#define PRTE_RMAPS_BASE_VERSION_4_0_0 PRTE_MCA_BASE_VERSION_3_0_0("rmaps", 4, 0, 0)
+#define PRTE_RMAPS_BASE_VERSION_5_0_0 PRTE_MCA_BASE_VERSION_3_0_0("rmaps", 5, 0, 0)
+/* deprecated alias — out-of-tree components get a version mismatch rather than
+ * a silent ABI violation */
+#undef  PRTE_RMAPS_BASE_VERSION_4_0_0
+#define PRTE_RMAPS_BASE_VERSION_4_0_0 PRTE_RMAPS_BASE_VERSION_5_0_0
 
 /* define map-related directives */
 #define PRTE_MAPPING_NO_USE_LOCAL     0x0100

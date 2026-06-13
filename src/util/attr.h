@@ -69,6 +69,15 @@ typedef uint8_t prte_app_context_flags_t;
 #define PRTE_APP_PES_PER_PROC       24 // uint16_t - number of cpus to be assigned to each process
 #define PRTE_APP_PPR                25 // uint16_t - number of procs to place on the resource specified
                                        //           in the job ppr string
+#define PRTE_APP_MAPBY              26 /* uint16_t mapping policy enum */
+#define PRTE_APP_RANKBY             27 /* uint16_t ranking policy enum */
+#define PRTE_APP_BINDTO             28 /* uint16_t binding policy enum */
+#define PRTE_APP_MAP_FILE           29 /* char* path to seq or rankfile */
+#define PRTE_APP_DIST_DEVICE        30 /* char* dist device name */
+#define PRTE_APP_HWT_CPUS           31 /* bool: use hwthreads as CPUs */
+#define PRTE_APP_CORE_CPUS          32 /* bool: use cores as CPUs */
+#define PRTE_APP_CPUSET             33 /* char* comma-delimited CPU ranges */
+#define PRTE_APP_BINDING_LIMIT      34 /* uint16_t max procs per binding target */
 
 #define PRTE_APP_MAX_KEY 100
 
