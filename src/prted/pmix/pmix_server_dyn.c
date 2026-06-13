@@ -835,43 +835,26 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                 } 
                 PMIx_Argv_free(ck);
  
-                /***   MAP-BY   ***/
+                /***   MAP-BY (per-app)   ***/
             } else if (PMIX_CHECK_KEY(info, PMIX_MAPBY)) {
-                char **ck, *p;
-                uint16_t ppn, pes;
-                int n;
-                ck = PMIx_Argv_split(info->value.data.string, ':');
-                for (n=0; NULL != ck[n]; n++) {
-                    if (0 == strcasecmp(ck[n], "ppr")) {
-                        ppn =  strtoul(ck[1], NULL, 10);
-                        prte_set_attribute(&app->attributes, PRTE_APP_PPR,
-                                           PRTE_ATTR_GLOBAL, &ppn, PMIX_UINT16);
-                    } else if (0 == strncmp(ck[n], "pe", 2) &&
-                               0 != strncmp(ck[n], "pe-", 3)) {
-                        p = strchr(ck[n], '=');
-                        if (NULL == p) {
-                            /* missing the value or value is invalid */
-                            pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true, "mapping policy",
-                                           "PE", ck[n]);
-                            PMIx_Argv_free(ck);
-                            return PRTE_ERR_SILENT;
-                        }
-                        ++p;
-                        if (NULL == p || '\0' == *p) {
-                            /* missing the value or value is invalid */
-                            pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true, "mapping policy",
-                                           "PE", ck[n]);
-                            PMIx_Argv_free(ck);
-                            return PRTE_ERR_SILENT;
-                        }
-                        pes = strtol(p, NULL, 10);                
-                        if (0 < pes) {
-                            prte_set_attribute(&app->attributes, PRTE_APP_PES_PER_PROC,
-                                               PRTE_ATTR_GLOBAL, &pes, PMIX_UINT16);
-                        }
-                    }
+                rc = prte_rmaps_base_set_app_mapping_policy(app, info->value.data.string);
+                if (PRTE_SUCCESS != rc) {
+                    return rc;
                 }
-                PMIx_Argv_free(ck);
+
+                /***   RANK-BY (per-app)   ***/
+            } else if (PMIX_CHECK_KEY(info, PMIX_RANKBY)) {
+                rc = prte_rmaps_base_set_app_ranking_policy(app, info->value.data.string);
+                if (PRTE_SUCCESS != rc) {
+                    return rc;
+                }
+
+                /***   BIND-TO (per-app)   ***/
+            } else if (PMIX_CHECK_KEY(info, PMIX_BINDTO)) {
+                rc = prte_rmaps_base_set_app_binding_policy(app, info->value.data.string);
+                if (PRTE_SUCCESS != rc) {
+                    return rc;
+                }
 
                 /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
                 /* there can be multiple of these, so we add them to the attribute list */

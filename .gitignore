@@ -44,6 +44,10 @@ cov-int
 
 Makefile
 Makefile.in
+test/Makefile
+test/unit/Makefile
+test/unit/rmaps/Makefile
+test/unit/rmaps/test_rmaps
 static-components.h
 static-components.h.new.extern
 static-components.h.new.struct

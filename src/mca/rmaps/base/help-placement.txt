@@ -38,6 +38,12 @@ and ranks:
 
 3. Binding: Constrains each process to run on specific processors
 
+These three controls can be specified at the job level (applying to
+all application contexts in the job) or, in a multi-program multiple-
+data (MPMD) job, independently for each application context separated
+by ":" on the "prun" command line. See the "Per-App-Context Mapping"
+section under "fundamentals" for details.
+
 This section provides an overview of these three controls.  Unless
 otherwise this behavior is shared by "prun(1)" (working with a PRRTE
 DVM), and "prterun(1)". More detail about PRRTE process placement is
@@ -609,6 +615,45 @@ And here is a MIMD example:
 This will launch process 0 running "hostname" on node "aa" and
 processes 1 and 2 each running "uptime" on nodes "bb" and "cc",
 respectively.
+
+
+Per-App-Context Mapping Example
+================================
+
+In an MPMD job, each application context separated by ":" may carry
+its own "--map-by", "--rank-by", and "--bind-to" directives. Using the
+same hostfile:
+
+   $ cat myhostfile
+   aa slots=4
+   bb slots=4
+   cc slots=4
+
+   prun --hostfile myhostfile \
+       -n 6 app1 --map-by core --bind-to core \
+       : \
+       -n 2 app2 --map-by node --rank-by fill --bind-to none
+
+This will:
+
+* Map "app1"'s 6 processes by core, binding each to its own core
+  (processes 0-5).
+
+* Map "app2"'s 2 processes by node in round-robin fashion, leaving
+  them unbound (processes 6-7).
+
+Note that process ranks are globally contiguous across both apps: "app1"
+receives ranks 0-5 and "app2" receives ranks 6-7.
+
+The ":NOLOCAL" qualifier may also be applied per app context:
+
+   prun --hostfile myhostfile \
+       -n 6 app1 --map-by slot:nolocal \
+       : \
+       -n 1 app2 --map-by slot
+
+Here "app1" avoids the head node (whichever node "prun" is running on)
+while "app2" may run on any node including the head node.
 #
 [placement-rankfiles]
 
@@ -974,6 +1019,54 @@ processes bound to it equals the number of CPUs within it. Unbound
 processes are not considered in this computation. Additional processes
 cannot be mapped to consumed objects unless the OVERLOAD qualifier is
 provided via the "--bind-to" command line option.
+
+Per-App-Context Mapping
+.......................
+
+By default every application context in a job shares the same mapping,
+ranking, and binding policy. In a multi-program multiple-data (MPMD)
+job, each application context separated by ":" on the "prun" command
+line may carry its own independent "--map-by", "--rank-by", and
+"--bind-to" directives. An app that carries no per-app directive
+inherits the job-level policy unchanged.
+
+   prun -n 4 app1 --map-by core --bind-to core \
+       : -n 2 app2 --map-by node --rank-by fill --bind-to none
+
+This launches "app1" mapped by core (processes 0-3) and "app2" mapped
+by node (processes 4-5) within the same job, allowing shared-memory
+and direct PMIx communication between the two apps.
+
+Job-level-only qualifiers — the following qualifiers govern the job as
+a whole and may NOT appear in a per-app "--map-by" string:
+
+* "OVERSUBSCRIBE" / "NOOVERSUBSCRIBE": oversubscription applies to
+  all apps sharing the same nodes and must be set at the job level.
+
+* "INHERIT" / "NOINHERIT": whether a spawned child job inherits the
+  parent's policies is a job-wide property.
+
+Specifying any of the above in a per-app "--map-by" string will abort
+the job with an error.
+
+The "NOLOCAL" qualifier IS permitted per app context. It prevents
+that app's processes from running on the head node without affecting
+other apps in the same job:
+
+   prun -n 8 app1 --map-by slot:nolocal : -n 1 app2 --map-by slot
+
+Here "app1" avoids the head node; "app2" may run anywhere.
+
+Per-app directives can also be supplied via the "PMIx_Spawn" API by
+placing "PMIX_MAPBY", "PMIX_RANKBY", and "PMIX_BINDTO" keys in the
+per-app "info[]" array on the corresponding "pmix_app_t".
+
+Global rank assignment remains contiguous across all apps regardless
+of per-app ranking directives: ranks are assigned in app-context order
+starting from 0, so the first app receives ranks 0..N-1 and each
+subsequent app continues from the next unassigned rank. The per-app
+"--rank-by" directive controls only the ordering of ranks within that
+app.
 
 Default process mapping/ranking/binding policies can also be set with
 MCA parameters, overridden by the command line options when provided.

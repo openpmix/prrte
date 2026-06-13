@@ -132,8 +132,20 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                             PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void **) &rankfile, PMIX_STRING)
-        || NULL == rankfile) {
+    /* prefer per-app MAP_FILE if doing per-app dispatch for a single app */
+    rankfile = NULL;
+    if (options->app_idx >= 0) {
+        prte_app_context_t *aptr = (prte_app_context_t *)
+            pmix_pointer_array_get_item(jdata->apps, options->app_idx);
+        if (NULL != aptr) {
+            prte_get_attribute(&aptr->attributes, PRTE_APP_MAP_FILE,
+                               (void **) &rankfile, PMIX_STRING);
+        }
+    }
+    if (NULL == rankfile) {
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void **) &rankfile, PMIX_STRING);
+    }
+    if (NULL == rankfile) {
         /* we cannot do it */
         pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rf: job %s no rankfile specified",
@@ -186,6 +198,9 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     for (i = 0; i < jdata->apps->size; i++) {
         app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i);
         if (NULL == app) {
+            continue;
+        }
+        if (options->app_idx >= 0 && (int)i != options->app_idx) {
             continue;
         }
 
@@ -439,7 +454,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
         free(rankfile);
     }
     /* compute local/app ranks */
-    rc = prte_rmaps_base_compute_vpids(jdata, options);
+    rc = prte_rmaps_base_compute_vpids(jdata, options, -1, NULL);
     return rc;
 
 error:

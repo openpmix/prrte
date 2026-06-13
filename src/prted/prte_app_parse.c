@@ -520,6 +520,14 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_MAPBY, opt->values[0], PMIX_STRING);
     }
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_RANKBY);
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_RANKBY, opt->values[0], PMIX_STRING);
+    }
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_BINDTO);
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_BINDTO, opt->values[0], PMIX_STRING);
+    }
 
     *app_ptr = app;
     app = NULL;

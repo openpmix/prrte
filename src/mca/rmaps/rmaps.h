@@ -82,8 +82,10 @@ struct prte_rmaps_base_module_4_0_0_t {
 };
 /** Convenience typedef */
 typedef struct prte_rmaps_base_module_4_0_0_t prte_rmaps_base_module_4_0_0_t;
+/** Version 5.0.0 is structurally identical to 4.0.0 */
+typedef struct prte_rmaps_base_module_4_0_0_t prte_rmaps_base_module_5_0_0_t;
 /** Convenience typedef */
-typedef prte_rmaps_base_module_4_0_0_t prte_rmaps_base_module_t;
+typedef prte_rmaps_base_module_5_0_0_t prte_rmaps_base_module_t;
 
 /*
  * rmaps component

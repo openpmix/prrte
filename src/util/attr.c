@@ -279,6 +279,24 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PRTE_APP_PES_PER_PROC";
         case PRTE_APP_PPR:
             return "PRTE_APP_PPR";
+        case PRTE_APP_MAPBY:
+            return "PRTE_APP_MAPBY";
+        case PRTE_APP_RANKBY:
+            return "PRTE_APP_RANKBY";
+        case PRTE_APP_BINDTO:
+            return "PRTE_APP_BINDTO";
+        case PRTE_APP_MAP_FILE:
+            return "PRTE_APP_MAP_FILE";
+        case PRTE_APP_DIST_DEVICE:
+            return "PRTE_APP_DIST_DEVICE";
+        case PRTE_APP_HWT_CPUS:
+            return "PRTE_APP_HWT_CPUS";
+        case PRTE_APP_CORE_CPUS:
+            return "PRTE_APP_CORE_CPUS";
+        case PRTE_APP_CPUSET:
+            return "PRTE_APP_CPUSET";
+        case PRTE_APP_BINDING_LIMIT:
+            return "PRTE_APP_BINDING_LIMIT";
 
         case PRTE_NODE_USERNAME:
             return "NODE-USERNAME";

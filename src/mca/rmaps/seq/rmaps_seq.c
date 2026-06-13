@@ -174,15 +174,17 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
         if (NULL == app) {
             continue;
         }
+        if (options->app_idx >= 0 && (int)i != options->app_idx) {
+            continue;
+        }
         apprank = 0;
 
-        /* specified seq file trumps all */
+        /* per-app map file trumps job-level file; fall back to job-level */
         hosts = NULL;
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void **) &hosts, PMIX_STRING)) {
-            if (NULL == hosts) {
-                rc = PRTE_ERR_NOT_FOUND;
-                goto error;
-            }
+        if (!prte_get_attribute(&app->attributes, PRTE_APP_MAP_FILE, (void **) &hosts, PMIX_STRING)) {
+            prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void **) &hosts, PMIX_STRING);
+        }
+        if (NULL != hosts) {
             pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using hostfile %s nodes on app %s", hosts,
                                 app->app);
@@ -392,7 +394,7 @@ process:
         }
     }
     /* compute local/app ranks */
-    rc = prte_rmaps_base_compute_vpids(jdata, options);
+    rc = prte_rmaps_base_compute_vpids(jdata, options, -1, NULL);
     return rc;
 
 error:

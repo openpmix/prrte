@@ -100,6 +100,9 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
         if (NULL == app) {
             continue;
         }
+        if (options->app_idx >= 0 && (int)i != options->app_idx) {
+            continue;
+        }
 
         /* setup the nodelist here in case we jump to error */
         PMIX_CONSTRUCT(&node_list, pmix_list_t);
@@ -163,7 +166,7 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
         PMIX_LIST_DESTRUCT(&node_list);
     }
     /* calculate the ranks for this job */
-    rc = prte_rmaps_base_compute_vpids(jdata, options);
+    rc = prte_rmaps_base_compute_vpids(jdata, options, -1, NULL);
 
     return rc;
 

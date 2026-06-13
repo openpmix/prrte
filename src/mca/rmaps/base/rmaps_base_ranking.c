@@ -107,7 +107,9 @@ static void compute_local_rank(prte_job_t *jdata)
 }
 
 int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
-                                  prte_rmaps_options_t *options)
+                                  prte_rmaps_options_t *options,
+                                  int app_idx,
+                                  uint32_t *next_vpid)
 {
     int m, n, j, cnt;
     unsigned k, nobjs;
@@ -139,8 +141,11 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
      *     4 5       6 7        12 13     14 15
      */
     if (PRTE_RANK_BY_SLOT == options->rank) {
-        rank = 0;
+        rank = (app_idx >= 0 && NULL != next_vpid) ? (pmix_rank_t)*next_vpid : 0;
         for (j=0; j < jdata->apps->size; j++) {
+            if (app_idx >= 0 && j != app_idx) {
+                continue;
+            }
             if (NULL == (app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, j))) {
                 continue;
             }
@@ -177,6 +182,9 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                 }
             }
         }
+        if (app_idx >= 0 && NULL != next_vpid) {
+            *next_vpid = (uint32_t)rank;
+        }
         compute_local_rank(jdata);
         compute_app_rank(jdata);
         return PRTE_SUCCESS;
@@ -192,8 +200,11 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
      *     8 10     12 14        9 11     13 15
      */
     if (PRTE_RANK_BY_NODE == options->rank) {
-        rank = 0;
+        rank = (app_idx >= 0 && NULL != next_vpid) ? (pmix_rank_t)*next_vpid : 0;
         for (j=0; j < jdata->apps->size; j++) {
+            if (app_idx >= 0 && j != app_idx) {
+                continue;
+            }
             if (NULL == (app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, j))) {
                 continue;
             }
@@ -238,6 +249,9 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                 }
             }
         }
+        if (app_idx >= 0 && NULL != next_vpid) {
+            *next_vpid = (uint32_t)rank;
+        }
         compute_local_rank(jdata);
         compute_app_rank(jdata);
         return PRTE_SUCCESS;
@@ -252,8 +266,11 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
      *     2 3       6 7        10 11     14 15
      */
     if (PRTE_RANK_BY_FILL == options->rank) {
-        rank = 0;
+        rank = (app_idx >= 0 && NULL != next_vpid) ? (pmix_rank_t)*next_vpid : 0;
         for (j=0; j < jdata->apps->size; j++) {
+            if (app_idx >= 0 && j != app_idx) {
+                continue;
+            }
             if (NULL == (app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, j))) {
                 continue;
             }
@@ -308,6 +325,9 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                 }
             }
         }
+        if (app_idx >= 0 && NULL != next_vpid) {
+            *next_vpid = (uint32_t)rank;
+        }
         compute_local_rank(jdata);
         compute_app_rank(jdata);
         return PRTE_SUCCESS;
@@ -325,8 +345,11 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
      *     8 12      9 13       10 14     11 15
      */
     if (PRTE_RANK_BY_SPAN == options->rank) {
-        rank = 0;
+        rank = (app_idx >= 0 && NULL != next_vpid) ? (pmix_rank_t)*next_vpid : 0;
         for (j=0; j < jdata->apps->size; j++) {
+            if (app_idx >= 0 && j != app_idx) {
+                continue;
+            }
             if (NULL == (app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, j))) {
                 continue;
             }
@@ -388,6 +411,9 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                     }
                 }
             }
+        }
+        if (app_idx >= 0 && NULL != next_vpid) {
+            *next_vpid = (uint32_t)rank;
         }
         compute_local_rank(jdata);
         compute_app_rank(jdata);

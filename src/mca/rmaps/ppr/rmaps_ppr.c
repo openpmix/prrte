@@ -58,7 +58,6 @@ static int ppr_mapper(prte_job_t *jdata,
     char *jobppr = NULL;
     bool initial_map = true;
     prte_binding_policy_t savebind = options->bind;
-    uint16_t ppn, pes, *ppnptr, *pesptr;
     uint16_t jobppn, jobpes;
 
     /* only handle initial launch of loadbalanced
@@ -152,8 +151,6 @@ static int ppr_mapper(prte_job_t *jdata,
     // cache job-level values
     jobppn = options->pprn;
     jobpes = options->cpus_per_rank;
-    ppnptr = &ppn;
-    pesptr = &pes;
 
     /* cycle thru the apps */
     for (idx = 0; idx < jdata->apps->size; idx++) {
@@ -161,16 +158,17 @@ static int ppr_mapper(prte_job_t *jdata,
         if (NULL == app) {
             continue;
         }
+        if (options->app_idx >= 0 && (int)idx != options->app_idx) {
+            continue;
+        }
         options->total_nobjs = 0;
 
-        if (prte_get_attribute(&app->attributes, PRTE_APP_PPR, (void**)&ppnptr, PMIX_UINT16)) {
-            options->pprn = ppn;
-        } else {
+        /* pprn and cpus_per_rank come from options (set by resolve_app_options for
+         * per-app dispatch, or from job-level parsing for normal dispatch) */
+        if (0 == options->pprn) {
             options->pprn = jobppn;
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_PES_PER_PROC, (void**)&pesptr, PMIX_UINT16)) {
-            options->cpus_per_rank = pes;
-        } else {
+        if (0 == options->cpus_per_rank) {
             options->cpus_per_rank = jobpes;
         }
 
@@ -398,7 +396,7 @@ static int ppr_mapper(prte_job_t *jdata,
     }
     free(jobppr);
     /* calculate the ranks for this app */
-    rc = prte_rmaps_base_compute_vpids(jdata, options);
+    rc = prte_rmaps_base_compute_vpids(jdata, options, -1, NULL);
     return rc;
 
 error:

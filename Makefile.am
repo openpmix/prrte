@@ -24,7 +24,7 @@
 # $HEADER$
 #
 
-SUBDIRS = config contrib src include docs
+SUBDIRS = config contrib src include docs test
 EXTRA_DIST = README.md VERSION LICENSE autogen.pl
 
 include examples/Makefile.include
