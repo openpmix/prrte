@@ -78,6 +78,12 @@ jobs:
             LDFLAGS=$libevent_ldflags
         make -j
         make install
+    - name: Run unit tests
+      run: |
+        if test "${{ matrix.path }}" = vpath; then
+            cd build
+        fi
+        make check
     - name: Build examples
       run: |
         pushd examples
@@ -142,6 +148,12 @@ jobs:
             --enable-testbuild-launchers
         make -j
         make install
+    - name: Run unit tests
+      run: |
+        if test "${{ matrix.path }}" = vpath; then
+            cd build
+        fi
+        make check
     - name: Build examples
       run: |
         pushd examples
@@ -195,6 +207,8 @@ jobs:
             --enable-testbuild-launchers
         make -j
         make install
+    - name: Run unit tests
+      run: make check
     - name: Build examples
       run: |
         pushd examples
