@@ -411,7 +411,7 @@ def generate_c_code(parsed_data):
         for section, content_list in sections.items():
             entry = "    { .topic = \"" + section + "\",\n      .content = (const char *[]){\n"
             for content in content_list:
-                c_content = content.replace('"','\\"').replace("\n", '\\n"\n"').replace("\\;", ";")
+                c_content = content.replace("\\;", ";").replace('\\', '\\\\').replace('"','\\"').replace("\n", '\\n"\n"')
                 entry += "                 \"" + c_content + "\",\n"
             entry += "                 NULL}\n    },\n"
             ini_entries.append(entry)
