@@ -20,8 +20,18 @@ series, in reverse chronological order.
                  have uniform nodes and do not wish to use the new logic
                  may add the --uniform-nodes cmd line option. Note that
                  the --hetero-nodes option has been removed.
+               * STOP_ON_EXEC support has been fixed and is now available
 
 Detailed changes include:
+ - PR #2467: Multiple commits
+    - Update NEWS
+    - Fix show-help backslash escaping and remove committed build artifact
+    -  pmix: use PMIx_generate_regex2 API when available for node/proc maps
+    -  examples/debugger: add STOP_ON_EXEC support to indirect + daemon
+    -  odls: fix STOP_ON_EXEC race between do_parent and wait_signal_callback
+    -  Add AGENTS.md orientation guide for AI agents and contributors
+    -  PMIX_QUERY_ALLOCATION add results to correct array
+    -  Fix spelling and grammatical errors in docs
  - PR #2450: Multiple commits
     - Ensure cmd line MCA params are recognized
     - Ignore irrelevant MCA params for prted cmd line
