@@ -496,6 +496,26 @@ DISPLAY:
     PMIX_RELEASE(caddy);
 }
 
+void prte_ras_base_release_allocation(prte_session_t *session)
+{
+    prte_ras_base_selected_module_t *mod;
+    int rc;
+
+    PMIX_LIST_FOREACH(mod, &prte_ras_base.selected_modules, prte_ras_base_selected_module_t) {
+        if (NULL == mod->module->release_allocation) {
+            continue;
+        }
+        if (NULL != session->alloc_module &&
+            0 != strcmp(session->alloc_module, mod->component->pmix_mca_component_name)) {
+            continue;
+        }
+        rc = mod->module->release_allocation(session);
+        if (PRTE_ERR_TAKE_NEXT_OPTION != rc) {
+            return;
+        }
+    }
+}
+
 static void localrelease(void *cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;

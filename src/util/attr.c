@@ -1130,3 +1130,19 @@ char* prte_print_job_flags(struct prte_job_t *ptr)
     PMIx_Argv_free(tmp);
     return ans;
 }
+
+char* prte_print_session_flags(struct prte_session_t *ptr)
+{
+    prte_session_t *p = (prte_session_t*)ptr;
+    char **tmp = NULL;
+    char *ans;
+
+    if (PRTE_FLAG_TEST(p, PRTE_SESSION_FLAG_DYNAMIC)) {
+        PMIx_Argv_append_nosize(&tmp, "DYNAMIC");
+    } else {
+        PMIx_Argv_append_nosize(&tmp, "STATIC");
+    }
+    ans = PMIx_Argv_join(tmp, '|');
+    PMIx_Argv_free(tmp);
+    return ans;
+}

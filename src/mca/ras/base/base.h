@@ -83,6 +83,8 @@ PRTE_EXPORT void prte_ras_base_allocate(int fd, short args, void *cbdata);
 
 PRTE_EXPORT void prte_ras_base_modify(int fd, short args, void *cbdata);
 
+PRTE_EXPORT void prte_ras_base_release_allocation(prte_session_t *session);
+
 PRTE_EXPORT int prte_ras_base_add_hosts(prte_job_t *jdata);
 
 PRTE_EXPORT char *prte_ras_base_flag_string(prte_node_t *node);
