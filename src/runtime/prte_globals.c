@@ -54,6 +54,7 @@
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
 
+#include "src/mca/ras/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/runtime.h"
 #include "src/runtime/runtime_internals.h"
@@ -949,10 +950,12 @@ PMIX_CLASS_INSTANCE(prte_topology_t, pmix_object_t,
 
 static void session_con(prte_session_t *s)
 {
+    s->flags = 0;
     s->index = -1;
     s->session_id = UINT32_MAX;
     s->user_refid = NULL;
     s->alloc_refid = NULL;
+    s->alloc_module = NULL;
     memset(&s->timeout, 0, sizeof(struct timeval));
     s->nodes = PMIX_NEW(pmix_pointer_array_t);
     pmix_pointer_array_init(s->nodes, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
@@ -974,11 +977,17 @@ static void session_des(prte_session_t *s)
     prte_job_t *job;
     prte_session_t *session;
 
+    /* notify the RAS so it can release the underlying allocation */
+    prte_ras_base_release_allocation(s);
+
     if (NULL != s->user_refid) {
         free(s->user_refid);
     }
     if (NULL != s->alloc_refid) {
         free(s->alloc_refid);
+    }
+    if (NULL != s->alloc_module) {
+        free(s->alloc_module);
     }
 
     for (n=0; n < s->nodes->size; n++) {

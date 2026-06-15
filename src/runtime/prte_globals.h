@@ -211,10 +211,12 @@ PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_topology_t);
 /* Object for tracking allocations */
 typedef struct{
     pmix_object_t super;
+    prte_session_flags_t flags;
     int index;
     uint32_t session_id;
-    char *user_refid;  // PMIX_ALLOC_REQ_ID
-    char *alloc_refid; // PMIX_ALLOC_ID
+    char *user_refid;   // PMIX_ALLOC_REQ_ID
+    char *alloc_refid;  // PMIX_ALLOC_ID
+    char *alloc_module; // name of RAS module that created this allocation
     struct timeval timeout;  // time limit on session
     pmix_pointer_array_t *nodes;
     pmix_pointer_array_t *jobs;

@@ -313,6 +313,11 @@ typedef uint16_t prte_proc_flags_t;
 
 #define PRTE_ATTR_KEY_MAX PRTE_RML_MAX_KEY
 
+/*** SESSION FLAGS ***/
+typedef uint16_t prte_session_flags_t;
+#define PRTE_SESSION_FLAG_DYNAMIC       0x0001 // session was dynamically allocated
+
+
 /*** FLAG OPS ***/
 #define PRTE_FLAG_SET(p, f)   ((p)->flags |= (f))
 #define PRTE_FLAG_UNSET(p, f) ((p)->flags &= ~(f))
@@ -367,8 +372,10 @@ struct prte_proc_t;
 struct prte_node_t;
 struct prte_app_context_t;
 struct prte_job_t;
+struct prte_session_t;
 
 PRTE_EXPORT char* prte_print_proc_flags(struct prte_proc_t *p);
 PRTE_EXPORT char* prte_print_node_flags(struct prte_node_t *p);
 PRTE_EXPORT char* prte_print_app_flags(struct prte_app_context_t *p);
 PRTE_EXPORT char* prte_print_job_flags(struct prte_job_t *p);
+PRTE_EXPORT char* prte_print_session_flags(struct prte_session_t *ptr);

@@ -90,6 +90,14 @@ typedef int (*prte_ras_base_module_allocate_fn_t)(prte_job_t *jdata, pmix_list_t
 typedef pmix_status_t (*prte_ras_base_module_modify_fn_t)(prte_pmix_server_req_t *req);
 
 /**
+ * Release an allocation associated with the given session.
+ * Called when a prte_session_t is destructed. Returns PRTE_SUCCESS
+ * if the module handled the release, PRTE_ERR_TAKE_NEXT_OPTION to
+ * pass to the next module, or another error code on failure.
+ */
+typedef int (*prte_ras_base_module_release_fn_t)(prte_session_t *session);
+
+/**
  * Cleanup module resources.
  */
 typedef int (*prte_ras_base_module_finalize_fn_t)(void);
@@ -104,6 +112,8 @@ struct prte_ras_base_module_2_0_0_t {
     prte_ras_base_module_allocate_fn_t  allocate;
     // modify function pointer
     prte_ras_base_module_modify_fn_t    modify;
+    /** Release an allocation when its session is destructed */
+    prte_ras_base_module_release_fn_t   release_allocation;
     /** Finalization function pointer */
     prte_ras_base_module_finalize_fn_t  finalize;
 };
