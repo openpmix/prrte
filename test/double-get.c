@@ -155,7 +155,7 @@ int main(int argc, char *argv[])
 
     /* the below two lines break the subsequent PMIx_Get query on a key set later */
     snprintf(data, 256, "FIRST TIME rank %d", myproc.rank);
-    pnmi_set_string("test-key-1", data, 256);
+    pmi_set_string("test-key-1", data, 256);
     pmix_exchange(true);
 
     if (1 == myproc.rank) {

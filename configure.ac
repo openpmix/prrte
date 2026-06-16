@@ -312,6 +312,17 @@ darwin[[45678]]*)
     AC_MSG_ERROR([Cannot continue])
 esac
 
+# Some test programs use Linux-only APIs and can only be built there
+case $host_os in
+linux*)
+    prte_on_linux=1
+    ;;
+*)
+    prte_on_linux=0
+    ;;
+esac
+AM_CONDITIONAL([PRTE_OS_LINUX], [test "$prte_on_linux" = "1"])
+
 ############################################################################
 # Check for compilers and preprocessors
 ############################################################################
