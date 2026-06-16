@@ -1555,12 +1555,28 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&child->name)));
 
-            /* determine the thread that will handle this child */
-            ++prte_odls_globals.next_base;
-            if (prte_odls_globals.num_threads <= prte_odls_globals.next_base) {
-                prte_odls_globals.next_base = 0;
+            /* determine the thread that will handle this child.
+             *
+             * STOP_ON_EXEC requires that the SAME thread which calls fork()
+             * (and thereby becomes the ptrace(2) tracer of the child) also
+             * performs the later ptrace(PTRACE_DETACH) call - ptrace control
+             * operations are only permitted from the exact tracer thread,
+             * even though waitpid() for the same status is visible to any
+             * thread in the process.  Our STOP_ON_EXEC detach happens in
+             * wait_local_proc(), which always runs on prte_event_base, so
+             * force the fork onto that same base instead of handing it to
+             * one of the odls worker threads - otherwise the PTRACE_DETACH
+             * call fails (ESRCH) once the local proc count reaches the
+             * worker-thread-pool cutoff. */
+            if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL)) {
+                evb = prte_event_base;
+            } else {
+                ++prte_odls_globals.next_base;
+                if (prte_odls_globals.num_threads <= prte_odls_globals.next_base) {
+                    prte_odls_globals.next_base = 0;
+                }
+                evb = prte_odls_globals.ev_bases[prte_odls_globals.next_base];
             }
-            evb = prte_odls_globals.ev_bases[prte_odls_globals.next_base];
 
             /* set the waitpid callback here for thread protection and
              * to ensure we can capture the callback on shortlived apps */
@@ -2260,11 +2276,17 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
             goto CLEANUP;
         }
     }
-    ++prte_odls_globals.next_base;
-    if (prte_odls_globals.num_threads <= prte_odls_globals.next_base) {
-        prte_odls_globals.next_base = 0;
+    /* see comment in launch_local_procs() regarding STOP_ON_EXEC + ptrace
+     * tracer-thread affinity */
+    if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL)) {
+        evb = prte_event_base;
+    } else {
+        ++prte_odls_globals.next_base;
+        if (prte_odls_globals.num_threads <= prte_odls_globals.next_base) {
+            prte_odls_globals.next_base = 0;
+        }
+        evb = prte_odls_globals.ev_bases[prte_odls_globals.next_base];
     }
-    evb = prte_odls_globals.ev_bases[prte_odls_globals.next_base];
     prte_wait_cb(child, prte_odls_base_default_wait_local_proc, NULL);
 
     PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output, "%s restarting app %s",
