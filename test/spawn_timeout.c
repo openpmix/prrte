@@ -35,7 +35,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "examples.h"
 #include <pmix.h>
 
 static pmix_proc_t myproc;
