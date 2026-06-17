@@ -837,6 +837,16 @@ void prte_plm_base_launch_apps(int fd, short args, void *cbdata)
     /* update job state */
     caddy->jdata->state = caddy->job_state;
 
+    /* if a shrink campaign is active, hold this job until all targeted
+     * daemons have confirmed exit to avoid sending launch data to a dying daemon */
+    if (!pmix_list_is_empty(&prte_shrink_campaigns)) {
+        jdata->state = PRTE_JOB_STATE_WAITING_FOR_DAEMONS;
+        PMIX_RETAIN(jdata);
+        pmix_pointer_array_add(prte_prelaunch_held_jobs, jdata);
+        PMIX_RELEASE(caddy);
+        return;
+    }
+
     PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:launch_apps for job %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_JOBID_PRINT(jdata->nspace)));
@@ -2386,7 +2396,97 @@ process:
             PRTE_ERROR_LOG(rc);
             return rc;
         }
+        prte_dvm_launch_fence++;
     }
 
     return PRTE_SUCCESS;
+}
+
+void prte_plm_base_fence_release(bool success)
+{
+    int hi;
+    prte_job_t *held;
+    prte_shrink_campaign_t *camp, *next;
+
+    for (hi = 0; hi < prte_held_jobs->size; hi++) {
+        held = (prte_job_t *) pmix_pointer_array_get_item(prte_held_jobs, hi);
+        if (NULL == held) continue;
+        pmix_pointer_array_set_item(prte_held_jobs, hi, NULL);
+        PRTE_ACTIVATE_JOB_STATE(held,
+            success ? PRTE_JOB_STATE_VM_READY : PRTE_JOB_STATE_NEVER_LAUNCHED);
+        PMIX_RELEASE(held);
+    }
+
+    for (hi = 0; hi < prte_prelaunch_held_jobs->size; hi++) {
+        held = (prte_job_t *) pmix_pointer_array_get_item(prte_prelaunch_held_jobs, hi);
+        if (NULL == held) continue;
+        pmix_pointer_array_set_item(prte_prelaunch_held_jobs, hi, NULL);
+        if (!success) {
+            PRTE_ACTIVATE_JOB_STATE(held, PRTE_JOB_STATE_NEVER_LAUNCHED);
+        } else if (prte_plm_base_job_needs_remap(held)) {
+            prte_plm_base_reset_proc_map(held);
+            PRTE_ACTIVATE_JOB_STATE(held, PRTE_JOB_STATE_MAP);
+        } else {
+            PRTE_ACTIVATE_JOB_STATE(held, PRTE_JOB_STATE_LAUNCH_APPS);
+        }
+        PMIX_RELEASE(held);
+    }
+
+    /* safety sweep — campaigns should already be empty at fence==0 */
+    PMIX_LIST_FOREACH_SAFE(camp, next, &prte_shrink_campaigns, prte_shrink_campaign_t) {
+        pmix_list_remove_item(&prte_shrink_campaigns, &camp->super);
+        PMIX_RELEASE(camp);
+    }
+}
+
+bool prte_plm_base_job_needs_remap(prte_job_t *jdata)
+{
+    prte_shrink_campaign_t *camp;
+    prte_proc_t *proc;
+    int p, t;
+
+    PMIX_LIST_FOREACH(camp, &prte_shrink_campaigns, prte_shrink_campaign_t) {
+        for (p = 0; p < jdata->procs->size; p++) {
+            proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, p);
+            if (NULL == proc || NULL == proc->node || NULL == proc->node->daemon) continue;
+            for (t = 0; t < camp->ntargets; t++) {
+                if (camp->targets[t] == proc->node->daemon->name.rank) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+void prte_plm_base_reset_proc_map(prte_job_t *jdata)
+{
+    int p, np;
+    prte_proc_t *proc;
+    prte_node_t *node;
+    prte_app_context_t *app;
+
+    for (p = 0; p < jdata->procs->size; p++) {
+        proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, p);
+        if (NULL == proc) continue;
+        node = proc->node;
+        if (NULL != node) {
+            for (np = 0; np < node->procs->size; np++) {
+                if (pmix_pointer_array_get_item(node->procs, np) == proc) {
+                    pmix_pointer_array_set_item(node->procs, np, NULL);
+                    node->num_procs--;
+                    app = (prte_app_context_t *)
+                        pmix_pointer_array_get_item(jdata->apps, proc->app_idx);
+                    if (NULL == app || !PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
+                        node->slots_inuse--;
+                    }
+                    break;
+                }
+            }
+        }
+        pmix_pointer_array_set_item(jdata->procs, p, NULL);
+        PMIX_RELEASE(proc);
+    }
+    jdata->num_procs = 0;
+    jdata->num_launched = 0;
 }

@@ -89,6 +89,9 @@ int prte_finalize(void)
 #ifdef PRTE_PICKY_COMPILERS
     /* release the cache */
     PMIX_RELEASE(prte_cache);
+    PMIX_RELEASE(prte_held_jobs);
+    PMIX_RELEASE(prte_prelaunch_held_jobs);
+    PMIX_LIST_DESTRUCT(&prte_shrink_campaigns);
 
     /* call the finalize function for this environment */
     if (PRTE_SUCCESS != (rc = prte_ess.finalize())) {

@@ -130,6 +130,7 @@ typedef int32_t prte_job_state_t;
 #define PRTE_JOB_STATE_RUNNING               14 /* all procs have been fork'd */
 #define PRTE_JOB_STATE_SUSPENDED             15 /* job has been suspended */
 #define PRTE_JOB_STATE_REGISTERED            16 /* all procs registered for sync */
+#define PRTE_JOB_STATE_WAITING_FOR_DAEMONS   17 /* parked: daemon launch/shrink campaign in progress */
 #define PRTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE 18 /* all local procs have attempted launch */
 #define PRTE_JOB_STATE_READY_FOR_DEBUG       19 /* all local procs report ready for debug */
 #define PRTE_JOB_STATE_STARTED               20 /* first process has been started */
@@ -228,6 +229,7 @@ typedef uint8_t prte_plm_cmd_flag_t;
 #define PRTE_PLM_TOOL_ATTACHED_CMD      4
 #define PRTE_PLM_READY_FOR_DEBUG_CMD    5
 #define PRTE_PLM_LOCAL_LAUNCH_COMP_CMD  6
+#define PRTE_PLM_SHRINK_ACK_CMD         7   /* daemon → HNP: exiting due to shrink */
 
 END_C_DECLS
 

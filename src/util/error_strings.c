@@ -110,6 +110,8 @@ const char *prte_job_state_to_str(prte_job_state_t state)
         return "PROC CALLED ABORT";
     case PRTE_JOB_STATE_HEARTBEAT_FAILED:
         return "HEARTBEAT FAILED";
+    case PRTE_JOB_STATE_WAITING_FOR_DAEMONS:
+        return "WAITING FOR DAEMON CAMPAIGN";
     case PRTE_JOB_STATE_NEVER_LAUNCHED:
         return "NEVER LAUNCHED";
     case PRTE_JOB_STATE_ABORT_ORDERED:

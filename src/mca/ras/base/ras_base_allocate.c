@@ -1261,11 +1261,28 @@ void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
             req->pstatus = rc;
             return;
         }
+        /* record the shrink campaign before freeing the ranks array */
+        {
+            prte_shrink_campaign_t *_camp = PMIX_NEW(prte_shrink_campaign_t);
+            _camp->targets = (pmix_rank_t *) malloc(m * sizeof(pmix_rank_t));
+            memcpy(_camp->targets, ranks, m * sizeof(pmix_rank_t));
+            _camp->ntargets = m;
+            _camp->pending  = m;
+            pmix_list_append(&prte_shrink_campaigns, &_camp->super);
+            prte_dvm_launch_fence += m;
+        }
         free(ranks);
 
         /* goes to all daemons */
         if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &msg))) {
             PRTE_ERROR_LOG(rc);
+            /* undo the campaign we just added */
+            {
+                prte_shrink_campaign_t *_camp =
+                    (prte_shrink_campaign_t *) pmix_list_remove_last(&prte_shrink_campaigns);
+                prte_dvm_launch_fence -= _camp->pending;
+                PMIX_RELEASE(_camp);
+            }
         }
         PMIX_DATA_BUFFER_DESTRUCT(&msg);
     }

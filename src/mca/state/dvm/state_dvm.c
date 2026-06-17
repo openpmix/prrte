@@ -38,6 +38,7 @@
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/odls_types.h"
 #include "src/mca/plm/base/base.h"
+#include "src/mca/plm/base/plm_private.h"
 #include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/rml/rml.h"
@@ -285,6 +286,10 @@ static void vm_ready(int fd, short args, void *cbdata)
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_DESTRUCT(&buf);
+                prte_dvm_launch_fence--;
+                if (0 == prte_dvm_launch_fence) {
+                    prte_plm_base_fence_release(false);
+                }
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 return;
             }
@@ -299,6 +304,10 @@ static void vm_ready(int fd, short args, void *cbdata)
                     NULL == val) {
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&buf);
+                    prte_dvm_launch_fence--;
+                    if (0 == prte_dvm_launch_fence) {
+                        prte_plm_base_fence_release(false);
+                    }
                     PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                     return;
                 }
@@ -306,6 +315,10 @@ static void vm_ready(int fd, short args, void *cbdata)
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&buf);
+                    prte_dvm_launch_fence--;
+                    if (0 == prte_dvm_launch_fence) {
+                        prte_plm_base_fence_release(false);
+                    }
                     PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                     return;
                 }
@@ -314,6 +327,10 @@ static void vm_ready(int fd, short args, void *cbdata)
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&buf);
                     PMIX_VALUE_RELEASE(val);
+                    prte_dvm_launch_fence--;
+                    if (0 == prte_dvm_launch_fence) {
+                        prte_plm_base_fence_release(false);
+                    }
                     PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                     return;
                 }
@@ -324,10 +341,19 @@ static void vm_ready(int fd, short args, void *cbdata)
             if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_WIREUP, &buf))) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_DESTRUCT(&buf);
+                prte_dvm_launch_fence--;
+                if (0 == prte_dvm_launch_fence) {
+                    prte_plm_base_fence_release(false);
+                }
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 return;
             }
             PMIX_DATA_BUFFER_DESTRUCT(&buf);
+        }
+        /* success path (and DO_NOT_LAUNCH / single-daemon path) */
+        prte_dvm_launch_fence--;
+        if (0 == prte_dvm_launch_fence) {
+            prte_plm_base_fence_release(true);
         }
     }
     if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, caddy->jdata->nspace)) {
@@ -353,6 +379,15 @@ static void vm_ready(int fd, short args, void *cbdata)
         }
         /* progress the job */
         caddy->jdata->state = PRTE_JOB_STATE_VM_READY;
+        PMIX_RELEASE(caddy);
+        return;
+    }
+
+    /* if a daemon launch campaign is active, park this app job */
+    if (0 < prte_dvm_launch_fence) {
+        caddy->jdata->state = PRTE_JOB_STATE_WAITING_FOR_DAEMONS;
+        PMIX_RETAIN(caddy->jdata);
+        pmix_pointer_array_add(prte_held_jobs, caddy->jdata);
         PMIX_RELEASE(caddy);
         return;
     }
@@ -542,6 +577,16 @@ static void check_complete(int fd, short args, void *cbdata)
             (2, prte_state_base_framework.framework_output,
              "%s state:dvm:check_job_complete - received NULL job, checking daemons",
              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        /* safety net: if the daemon job held the grow fence and reached
+         * terminated state, release held jobs now */
+        if (NULL != jdata &&
+            prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCHED_DAEMONS, NULL, PMIX_BOOL) &&
+            0 < prte_dvm_launch_fence) {
+            prte_dvm_launch_fence--;
+            if (0 == prte_dvm_launch_fence) {
+                prte_plm_base_fence_release(false);
+            }
+        }
         if (0 == prte_rml_base.n_children) {
             /* orteds are done! */
             PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,

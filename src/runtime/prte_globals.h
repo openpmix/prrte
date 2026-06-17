@@ -596,6 +596,29 @@ PRTE_EXPORT extern char *prte_data_server_uri;
 PRTE_EXPORT extern bool prte_dvm_ready;
 PRTE_EXPORT extern pmix_pointer_array_t *prte_cache;
 PRTE_EXPORT extern bool prte_persistent;
+
+/* --- DVM launch fence --- */
+
+/* tracks in-progress daemon launch campaigns (grow and shrink combined) */
+PRTE_EXPORT extern int prte_dvm_launch_fence;
+
+/* app jobs parked at VM_READY → MAP while a campaign is active */
+PRTE_EXPORT extern pmix_pointer_array_t *prte_held_jobs;
+
+/* app jobs parked at LAUNCH_APPS while a shrink campaign is active */
+PRTE_EXPORT extern pmix_pointer_array_t *prte_prelaunch_held_jobs;
+
+/* one entry per in-progress shrink campaign */
+typedef struct {
+    pmix_list_item_t super;
+    pmix_rank_t     *targets;   /* daemon ranks being terminated */
+    int              ntargets;  /* initial count */
+    int              pending;   /* remaining ACKs expected */
+} prte_shrink_campaign_t;
+PMIX_CLASS_DECLARATION(prte_shrink_campaign_t);
+
+/* list of active shrink campaigns */
+PRTE_EXPORT extern pmix_list_t prte_shrink_campaigns;
 PRTE_EXPORT extern bool prte_allow_run_as_root;
 PRTE_EXPORT extern bool prte_fwd_environment;
 PRTE_EXPORT extern bool prte_xml_output;
