@@ -40,6 +40,7 @@ Table of contents
    session-directory
    developers/index
    contributing
+   code-of-conduct
    license
    man/index
    versions
