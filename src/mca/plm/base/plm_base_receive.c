@@ -112,7 +112,11 @@ int prte_plm_base_comm_stop(void)
     return PRTE_SUCCESS;
 }
 
-/* process incoming messages in order of receipt */
+/* process incoming messages in order of receipt
+ *
+ * NOTE: THIS OCCURS INSIDE OF AN EVENT AND IS
+ * THEREFORE THREAD-SAFE
+ */
 void prte_plm_base_recv(int status, pmix_proc_t *sender,
                         pmix_data_buffer_t *buffer,
                         prte_rml_tag_t tag, void *cbdata)

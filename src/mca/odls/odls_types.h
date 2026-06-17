@@ -88,6 +88,8 @@ typedef uint8_t prte_daemon_cmd_flag_t;
 /* tell DVM daemons to cleanup resources from job */
 #define PRTE_DAEMON_DVM_CLEANUP_JOB_CMD (prte_daemon_cmd_flag_t) 34
 
+#define PRTE_DAEMON_SHRINK_CMD (prte_daemon_cmd_flag_t) 35
+
 /*
  * Struct written up the pipe from the child to the parent.
  */

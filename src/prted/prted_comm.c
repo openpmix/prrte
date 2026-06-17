@@ -81,7 +81,7 @@
 /*
  * Globals
  */
-static char *get_prted_comm_cmd_str(int command);
+static const char *get_prted_comm_cmd_str(int command);
 
 static void _notify_release(pmix_status_t status, void *cbdata)
 {
@@ -121,6 +121,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
     pmix_byte_object_t pbo;
     char *tmp;
     pmix_info_t info[4];
+    pmix_rank_t *ranks;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     /* unpack the command */
@@ -131,12 +132,10 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
         return;
     }
 
-    cmd_str = get_prted_comm_cmd_str(command);
     PMIX_OUTPUT_VERBOSE((1, prte_debug_output,
                          "%s prted:comm:process_commands() Processing Command: %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cmd_str));
-    free(cmd_str);
-    cmd_str = NULL;
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         get_prted_comm_cmd_str(command)));
 
     /* now process the command locally */
     switch (command) {
@@ -466,6 +465,55 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
         }
         return;
 
+        /****    SHRINK DVM    ****/
+    case PRTE_DAEMON_SHRINK_CMD:
+        // get number of daemon ranks to be terminated
+        n = 1;
+        ret = PMIx_Data_unpack(NULL, buffer, &num_procs, &n, PMIX_INT32);
+        if (PMIX_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
+            goto CLEANUP;
+        }
+        // create space for them
+        ranks = (pmix_rank_t*)malloc(num_procs * sizeof(pmix_rank_t));
+        if (NULL == ranks) {
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            goto CLEANUP;
+        }
+        // unpack the targets
+        n = num_procs;
+        ret = PMIx_Data_unpack(NULL, buffer, ranks, &n, PMIX_PROC_RANK);
+        if (PMIX_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
+            free(ranks);
+            goto CLEANUP;
+        }
+        // see if we are one of them
+        for (i=0; i < num_procs; i++) {
+            if (ranks[i] == PRTE_PROC_MY_NAME->rank) {
+                /* this is an abnormal termination */
+                prte_abnormal_term_ordered = true;
+                /* any tools attached to us will have done so via PMIx, so
+                 * let's provide them with a friendly "job end" notification */
+                PMIX_INFO_LOAD(&info[0], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
+                PMIX_INFO_LOAD(&info[1], PMIX_EVENT_AFFECTED_PROC, &prte_process_info.myproc, PMIX_PROC);
+                PMIX_INFO_LOAD(&info[2], "prte.notify.donotloop", NULL, PMIX_BOOL);
+                PMIX_INFO_LOAD(&info[3], PMIX_EVENT_DO_NOT_CACHE, NULL, PMIX_BOOL);
+                PRTE_PMIX_CONSTRUCT_LOCK(&lk);
+                ret = PMIx_Notify_event(PMIX_EVENT_JOB_END, &prte_process_info.myproc,
+                                        PMIX_RANGE_SESSION, info, 4, _notify_release, &lk);
+                PRTE_PMIX_WAIT_THREAD(&lk);
+                PRTE_PMIX_DESTRUCT_LOCK(&lk);
+                // mark abnormal exit status
+                PRTE_UPDATE_EXIT_STATUS(-1);
+                // do a clean exit
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
+                break;
+            }
+        }
+        free(ranks);
+        break;
+
         /****     DVM CLEANUP JOB COMMAND    ****/
     case PRTE_DAEMON_DVM_CLEANUP_JOB_CMD:
         /* unpack the jobid */
@@ -625,74 +673,94 @@ CLEANUP:
     return;
 }
 
-static char *get_prted_comm_cmd_str(int command)
+static const char *get_prted_comm_cmd_str(int command)
 {
     switch (command) {
     case PRTE_DAEMON_CONTACT_QUERY_CMD:
-        return strdup("PRTE_DAEMON_CONTACT_QUERY_CMD");
+        return "PRTE_DAEMON_CONTACT_QUERY_CMD";
+
     case PRTE_DAEMON_KILL_LOCAL_PROCS:
-        return strdup("PRTE_DAEMON_KILL_LOCAL_PROCS");
+        return "PRTE_DAEMON_KILL_LOCAL_PROCS";
+
     case PRTE_DAEMON_SIGNAL_LOCAL_PROCS:
-        return strdup("PRTE_DAEMON_SIGNAL_LOCAL_PROCS");
+        return "PRTE_DAEMON_SIGNAL_LOCAL_PROCS";
+
     case PRTE_DAEMON_ADD_LOCAL_PROCS:
-        return strdup("PRTE_DAEMON_ADD_LOCAL_PROCS");
+        return "PRTE_DAEMON_ADD_LOCAL_PROCS";
+
     case PRTE_DAEMON_HEARTBEAT_CMD:
-        return strdup("PRTE_DAEMON_HEARTBEAT_CMD");
+        return "PRTE_DAEMON_HEARTBEAT_CMD";
+
     case PRTE_DAEMON_EXIT_CMD:
-        return strdup("PRTE_DAEMON_EXIT_CMD");
+        return "PRTE_DAEMON_EXIT_CMD";
+
     case PRTE_DAEMON_PROCESS_AND_RELAY_CMD:
-        return strdup("PRTE_DAEMON_PROCESS_AND_RELAY_CMD");
+        return "PRTE_DAEMON_PROCESS_AND_RELAY_CMD";
+
     case PRTE_DAEMON_NULL_CMD:
-        return strdup("NULL");
+        return "NULL";
 
     case PRTE_DAEMON_REPORT_JOB_INFO_CMD:
-        return strdup("PRTE_DAEMON_REPORT_JOB_INFO_CMD");
+        return "PRTE_DAEMON_REPORT_JOB_INFO_CMD";
+
     case PRTE_DAEMON_REPORT_NODE_INFO_CMD:
-        return strdup("PRTE_DAEMON_REPORT_NODE_INFO_CMD");
+        return "PRTE_DAEMON_REPORT_NODE_INFO_CMD";
+
     case PRTE_DAEMON_REPORT_PROC_INFO_CMD:
-        return strdup("PRTE_DAEMON_REPORT_PROC_INFO_CMD");
+        return "PRTE_DAEMON_REPORT_PROC_INFO_CMD";
+
     case PRTE_DAEMON_SPAWN_JOB_CMD:
-        return strdup("PRTE_DAEMON_SPAWN_JOB_CMD");
+        return "PRTE_DAEMON_SPAWN_JOB_CMD";
+
     case PRTE_DAEMON_TERMINATE_JOB_CMD:
-        return strdup("PRTE_DAEMON_TERMINATE_JOB_CMD");
+        return "PRTE_DAEMON_TERMINATE_JOB_CMD";
+
     case PRTE_DAEMON_HALT_VM_CMD:
-        return strdup("PRTE_DAEMON_HALT_VM_CMD");
+        return "PRTE_DAEMON_HALT_VM_CMD";
+
     case PRTE_DAEMON_HALT_DVM_CMD:
-        return strdup("PRTE_DAEMON_HALT_DVM_CMD");
+        return "PRTE_DAEMON_HALT_DVM_CMD";
+
     case PRTE_DAEMON_REPORT_JOB_COMPLETE:
-        return strdup("PRTE_DAEMON_REPORT_JOB_COMPLETE");
+        return "PRTE_DAEMON_REPORT_JOB_COMPLETE";
+
     case PRTE_DAEMON_DEFINE_PSET:
-        return strdup("PRTE_DAEMON_DEFINE_PSET");
+        return "PRTE_DAEMON_DEFINE_PSET";
 
     case PRTE_DAEMON_TOP_CMD:
-        return strdup("PRTE_DAEMON_TOP_CMD");
+        return "PRTE_DAEMON_TOP_CMD";
 
     case PRTE_DAEMON_NAME_REQ_CMD:
-        return strdup("PRTE_DAEMON_NAME_REQ_CMD");
+        return "PRTE_DAEMON_NAME_REQ_CMD";
+
     case PRTE_DAEMON_CHECKIN_CMD:
-        return strdup("PRTE_DAEMON_CHECKIN_CMD");
+        return "PRTE_DAEMON_CHECKIN_CMD";
+
     case PRTE_TOOL_CHECKIN_CMD:
-        return strdup("PRTE_TOOL_CHECKIN_CMD");
+        return "PRTE_TOOL_CHECKIN_CMD";
 
     case PRTE_DAEMON_PROCESS_CMD:
-        return strdup("PRTE_DAEMON_PROCESS_CMD");
+        return "PRTE_DAEMON_PROCESS_CMD";
 
     case PRTE_DAEMON_ABORT_PROCS_CALLED:
-        return strdup("PRTE_DAEMON_ABORT_PROCS_CALLED");
+        return "PRTE_DAEMON_ABORT_PROCS_CALLED";
 
     case PRTE_DAEMON_DVM_ADD_PROCS:
-        return strdup("PRTE_DAEMON_DVM_ADD_PROCS");
+        return "PRTE_DAEMON_DVM_ADD_PROCS";
 
     case PRTE_DAEMON_GET_STACK_TRACES:
-        return strdup("PRTE_DAEMON_GET_STACK_TRACES");
+        return "PRTE_DAEMON_GET_STACK_TRACES";
 
     case PRTE_DAEMON_GET_MEMPROFILE:
-        return strdup("PRTE_DAEMON_GET_MEMPROFILE");
+        return "PRTE_DAEMON_GET_MEMPROFILE";
 
     case PRTE_DAEMON_DVM_CLEANUP_JOB_CMD:
-        return strdup("PRTE_DAEMON_DVM_CLEANUP_JOB_CMD");
+        return "PRTE_DAEMON_DVM_CLEANUP_JOB_CMD";
+
+    case PRTE_DAEMON_SHRINK_CMD:
+        return "PRTE_DAEMON_SHRINK_CMD";
 
     default:
-        return strdup("Unknown Command!");
+        return "Unknown Command!";
     }
 }
