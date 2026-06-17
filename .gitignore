@@ -209,6 +209,9 @@ docs/_build
 docs/_static
 docs/_static/css/custom.css
 docs/_templates
+
+# Generated RST files
+docs/code-of-conduct.rst
 src/docs/_build
 src/docs/mca/mca.rst
 src/docs/mca/help*rst
