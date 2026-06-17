@@ -31,6 +31,9 @@ OUTDIR             = _build
 SPHINX_CONFIG      = conf.py
 SPHINX_OPTS       ?= -W --keep-going -j auto
 
+MARKDOWN_SOURCE_FILES = \
+        $(top_srcdir)/.github/CODE_OF_CONDUCT.md
+
 # Note: it is significantly more convenient to list all the source
 # files here using wildcards (vs. listing every single .rst file).
 # However, it is necessary to list $(srcdir) when using wildcards.
@@ -50,8 +53,10 @@ RST_SOURCE_FILES = \
 
 EXTRA_DIST = \
         requirements.txt \
+        generate-code-of-conduct-rst.py \
         _templates/configurator.html \
         $(SPHINX_CONFIG) \
+        $(MARKDOWN_SOURCE_FILES) \
         $(RST_SOURCE_FILES)
 
 ###########################################################################
@@ -93,6 +98,10 @@ if PRTE_BUILD_DOCS
 
 include $(top_srcdir)/Makefile.prte-rules
 
+# Generate this file from CODE_OF_CONDUCT.md as part of the Sphinx
+# docs build.
+CODE_OF_CONDUCT_RST = $(srcdir)/code-of-conduct.rst
+
 # Have to not list these targets in EXTRA_DIST outside of the
 # PRTE_BUILD_DOCS conditional because "make dist" will fail due to
 # these missing targets (and therefore not run the "dist-hook" target
@@ -109,6 +118,12 @@ ALL_MAN_BUILT = \
         $(PRTE_MAN1_BUILT) $(PRTE_MAN5_BUILT)
 $(ALL_MAN_BUILT): $(RST_SOURCE_FILES) $(IMAGE_SOURCE_FILES)
 $(ALL_MAN_BUILT): $(TEXT_SOURCE_FILES) $(SPHINX_CONFIG)
+$(ALL_MAN_BUILT): $(CODE_OF_CONDUCT_RST)
+
+$(CODE_OF_CONDUCT_RST): $(top_srcdir)/.github/CODE_OF_CONDUCT.md
+$(CODE_OF_CONDUCT_RST): generate-code-of-conduct-rst.py
+	$(PRTE_V_GEN) python3 $(srcdir)/generate-code-of-conduct-rst.py \
+		--input $(top_srcdir)/.github/CODE_OF_CONDUCT.md --output $@
 
 # List both commands (HTML and man) in a single rule because they
 # really need to be run in serial.  Specifically, if they were two
@@ -130,12 +145,13 @@ linkcheck:
 
 maintainer-clean-local:
 	$(SPHINX_BUILD) -M clean "$(srcdir)" "$(OUTDIR)" $(SPHINX_OPTS)
+	rm -f $(CODE_OF_CONDUCT_RST)
 
 # List all the built man pages here in the Automake BUILT_SOURCES
 # macro.  This hooks into the normal Automake build mechanisms, and
 # will ultimately cause the invocation of the above rule that runs
 # Sphinx to build the HTML and man pages.
-BUILT_SOURCES = $(ALL_MAN_BUILT)
+BUILT_SOURCES = $(CODE_OF_CONDUCT_RST) $(ALL_MAN_BUILT)
 
 endif PRTE_BUILD_DOCS
 
