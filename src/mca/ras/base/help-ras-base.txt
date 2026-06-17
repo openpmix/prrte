@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2023-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2023-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -43,17 +43,13 @@ file could not be opened for reading:
 
 Please check the filename and try again.
 #
-[ras-base:nonuniform-slots]
-A request was made to add hosts from a hostfile while operating
-in a managed allocation. In this case, either the slots must be
-specified in the given hostfile, or the number of slots assigned
-by the resource manager on the existing nodes must be uniform.
+[negative-slots]
+A host was provided in an add-hostfile that is unknown
+to the DVM but was given a negative number of slots:
 
-The current allocation does not conform to that requirement:
+  Host:  %s
+  Slots: %d
 
-   Base number of slots: %d
-   Node: %s
-   Number of slots: %d
-
-Please assign a number of slots for each node to be added to the
-allocation.
+We cannot subtract slots from an unknown host. Please
+correct the file or ensure that we are allocated the
+host in advance.

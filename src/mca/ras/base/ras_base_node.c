@@ -128,8 +128,17 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
             /* update the total slots in the job */
             prte_ras_base.total_slots_alloc += node->slots;
             /* copy the allocation data to that node's info */
-            hnp_node->slots = node->slots;
             hnp_node->slots_max = node->slots_max;
+            if (prte_get_attribute(&node->attributes, PRTE_NODE_ADD_SLOTS, NULL, PMIX_BOOL)) {
+                hnp_node->slots += node->slots;
+                if (0 > hnp_node->slots) {
+                    hnp_node->slots = 0;
+                } else if (hnp_node->slots > hnp_node->slots_max && hnp_node->slots_max > 0) {
+                    hnp_node->slots = hnp_node->slots_max;
+                }
+            } else {
+                hnp_node->slots = node->slots;
+            }
             /* copy across any attributes */
             PMIX_LIST_FOREACH(kv, &node->attributes, prte_attribute_t)
             {
@@ -173,7 +182,7 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                 node->index = pmix_pointer_array_add(prte_node_pool, node);
             }
         } else {
-            /* insert the object onto the prte_nodes global array */
+            /* insert the object into the prte_nodes global array */
             PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:node_insert node %s slots %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -187,6 +196,14 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                 }
                 if (prte_nptr_match(nptr, node)) {
                     found = true;
+                    if (prte_get_attribute(&node->attributes, PRTE_NODE_ADD_SLOTS, NULL, PMIX_BOOL)) {
+                        nptr->slots += node->slots;
+                        if (0 > nptr->slots) {
+                            nptr->slots = 0;
+                        } else if (nptr->slots > nptr->slots_max && nptr->slots_max > 0) {
+                            nptr->slots = nptr->slots_max;
+                        }
+                    }
                     break;
                 }
             }

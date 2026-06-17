@@ -61,24 +61,23 @@ static int finalize(void)
 static void passthru(int sd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
-    prte_job_t *daemons;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    // if we met the request, then we need to process it
+    if (PMIX_SUCCESS == req->pstatus) {
+        prte_ras_base_complete_request(req);
+    }
 
     if (NULL != req->infocbfunc) {
         // call the requestor's callback with the returned info
-        req->infocbfunc(req->status, req->info, req->ninfo, req->cbdata, req->rlcbfunc, req->rlcbdata);
-    } else {
+        req->infocbfunc(req->pstatus, req->info, req->ninfo, req->cbdata, req->rlcbfunc, req->rlcbdata);
+    } else if (NULL != req->rlcbfunc) {
         // let them cleanup
         req->rlcbfunc(req->rlcbdata);
     }
     // cleanup our request
     pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
 
-    // if we met the request, then we need to launch any new daemons
-    if (PMIX_SUCCESS == req->status) {
-        daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-        PRTE_ACTIVATE_JOB_STATE(daemons, PRTE_JOB_STATE_LAUNCH_DAEMONS);
-    }
 
     PMIX_RELEASE(req);
 }
@@ -112,6 +111,19 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
     pmix_status_t rc;
     pmix_info_t *xfer;
     size_t n;
+
+    if (prte_mca_ras_pmix_component.simulate) {
+        // pretend we are attached to a scheduler
+        xfer = PMIx_Info_create(1);
+        PMIX_INFO_LOAD(xfer, PMIX_ALLOC_NODE_LIST, prte_mca_ras_pmix_component.simulate_nodelist, PMIX_STRING);
+        req->pstatus = PMIX_SUCCESS;
+        req->info = xfer;
+        req->ninfo = 1;
+        prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, passthru, req);
+        PMIX_POST_OBJECT(req);
+        prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
+        return PMIX_SUCCESS;
+    }
 
     // check if scheduler is attached and try to
     // attach if not

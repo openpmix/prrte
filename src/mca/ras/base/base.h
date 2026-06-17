@@ -89,6 +89,8 @@ PRTE_EXPORT int prte_ras_base_add_hosts(prte_job_t *jdata);
 
 PRTE_EXPORT char *prte_ras_base_flag_string(prte_node_t *node);
 
+PRTE_EXPORT void prte_ras_base_complete_request(prte_pmix_server_req_t *req);
+
 END_C_DECLS
 
 #endif
