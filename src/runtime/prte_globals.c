@@ -74,6 +74,18 @@ char *prte_tool_basename = NULL;
 char *prte_tool_actual = NULL;
 bool prte_dvm_ready = false;
 pmix_pointer_array_t *prte_cache = NULL;
+
+int prte_dvm_launch_fence = 0;
+pmix_pointer_array_t *prte_held_jobs = NULL;
+pmix_pointer_array_t *prte_prelaunch_held_jobs = NULL;
+pmix_list_t prte_shrink_campaigns;
+
+static void campaign_destruct(prte_shrink_campaign_t *p)
+{
+    free(p->targets);
+}
+PMIX_CLASS_INSTANCE(prte_shrink_campaign_t, pmix_list_item_t,
+                    NULL, campaign_destruct);
 bool prte_persistent = true;
 bool prte_allow_run_as_root = false;
 bool prte_fwd_environment = false;

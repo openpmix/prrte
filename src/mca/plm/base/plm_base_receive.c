@@ -910,6 +910,44 @@ moveon:
         }
         break;
 
+    case PRTE_PLM_SHRINK_ACK_CMD: {
+        pmix_rank_t drank;
+        int32_t cnt = 1;
+        prte_shrink_campaign_t *camp;
+        int t;
+
+        PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                             "%s plm:base:receive shrink ACK from %s",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             PRTE_NAME_PRINT(sender)));
+        rc = PMIx_Data_unpack(NULL, buffer, &drank, &cnt, PMIX_PROC_RANK);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            goto CLEANUP;
+        }
+        PMIX_LIST_FOREACH(camp, &prte_shrink_campaigns, prte_shrink_campaign_t) {
+            for (t = 0; t < camp->ntargets; t++) {
+                if (camp->targets[t] != drank) continue;
+                camp->pending--;
+                prte_dvm_launch_fence--;
+                if (0 == camp->pending) {
+                    pmix_list_remove_item(&prte_shrink_campaigns, &camp->super);
+                    PMIX_RELEASE(camp);
+                }
+                if (0 == prte_dvm_launch_fence) {
+                    prte_plm_base_fence_release(true);
+                }
+                goto shrink_ack_done;
+            }
+        }
+        PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+                             "%s plm:base:receive shrink ACK from unknown daemon %lu",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             (unsigned long) drank));
+      shrink_ack_done:
+        break;
+    }
+
     default:
         PRTE_ERROR_LOG(PRTE_ERR_VALUE_OUT_OF_BOUNDS);
         rc = PRTE_ERR_VALUE_OUT_OF_BOUNDS;

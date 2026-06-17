@@ -94,6 +94,9 @@ PRTE_EXPORT void prte_plm_base_reset_job(prte_job_t *jdata);
 PRTE_EXPORT int prte_plm_base_setup_prted_cmd(int *argc, char ***argv);
 PRTE_EXPORT void prte_plm_base_check_all_complete(int fd, short args, void *cbdata);
 PRTE_EXPORT int prte_plm_base_setup_virtual_machine(prte_job_t *jdata);
+PRTE_EXPORT void prte_plm_base_fence_release(bool success);
+PRTE_EXPORT bool prte_plm_base_job_needs_remap(prte_job_t *jdata);
+PRTE_EXPORT void prte_plm_base_reset_proc_map(prte_job_t *jdata);
 
 /**
  * Utilities for plm components that use proxy daemons

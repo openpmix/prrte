@@ -60,6 +60,7 @@
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/errmgr/base/errmgr_private.h"
 #include "src/mca/errmgr/errmgr.h"
+#include "src/mca/plm/base/plm_private.h"
 
 #include "errmgr_dvm.h"
 
@@ -270,6 +271,40 @@ static void proc_errors(int fd, short args, void *cbdata)
             pptr->state = state;
             /* adjust our num_procs */
             --prte_process_info.num_daemons;
+            /* check if a grow campaign was in progress: if so, fail the fence
+             * so that held jobs are not parked indefinitely */
+            if (0 < prte_dvm_launch_fence &&
+                prte_get_attribute(&jdata->attributes,
+                                   PRTE_JOB_LAUNCHED_DAEMONS, NULL, PMIX_BOOL)) {
+                prte_dvm_launch_fence--;
+                if (0 == prte_dvm_launch_fence) {
+                    prte_plm_base_fence_release(false);
+                }
+                /* clear attribute so a second crash does not double-decrement */
+                prte_remove_attribute(&jdata->attributes, PRTE_JOB_LAUNCHED_DAEMONS);
+            }
+            /* check if this daemon was a pending shrink target */
+            {
+                prte_shrink_campaign_t *_camp, *_next;
+                int _t;
+                PMIX_LIST_FOREACH_SAFE(_camp, _next,
+                                       &prte_shrink_campaigns, prte_shrink_campaign_t) {
+                    for (_t = 0; _t < _camp->ntargets; _t++) {
+                        if (_camp->targets[_t] != proc->rank) continue;
+                        _camp->pending--;
+                        prte_dvm_launch_fence--;
+                        if (0 == _camp->pending) {
+                            pmix_list_remove_item(&prte_shrink_campaigns, &_camp->super);
+                            PMIX_RELEASE(_camp);
+                        }
+                        if (0 == prte_dvm_launch_fence) {
+                            prte_plm_base_fence_release(true);
+                        }
+                        goto errmgr_shrink_done;
+                    }
+                }
+              errmgr_shrink_done: ;
+            }
             /* if we have ordered prteds to terminate or abort
              * is in progress, record it */
             if (prte_prteds_term_ordered || prte_abnormal_term_ordered) {
