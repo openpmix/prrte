@@ -12,3 +12,4 @@ find information on that subject here.
    session_dirs.rst
    per-app-mapping.rst
    schedulers/index.rst
+   state_machine.rst

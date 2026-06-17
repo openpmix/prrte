@@ -8,3 +8,4 @@ Detailed implementation plans for in-progress and upcoming features.
 
    per_app_mapping/index.rst
    node_reservation/index.rst
+   elastic_dvm/index.rst
