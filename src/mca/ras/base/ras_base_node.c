@@ -40,6 +40,32 @@
 
 #include "src/mca/ras/base/base.h"
 
+/* Normalize a node name to the short form, storing the FQDN as rawname
+ * and as an alias so both forms resolve via prte_quickmatch / prte_nptr_match.
+ * No-op when keep_fqdn_hostnames is set or the name is an IP address. */
+static void normalize_node(prte_node_t *node)
+{
+    char *ptr, *fqdn;
+
+    if (prte_keep_fqdn_hostnames || pmix_net_isaddr(node->name)) {
+        return;
+    }
+    ptr = strchr(node->name, '.');
+    if (NULL == ptr) {
+        return;
+    }
+    /* copy the full FQDN, then truncate node->name in place to the short name */
+    fqdn = strdup(node->name);
+    *ptr = '\0';
+    if (NULL == node->rawname) {
+        node->rawname = fqdn;
+    } else {
+        PMIx_Argv_append_unique_nosize(&node->aliases, fqdn);
+        free(fqdn);
+    }
+    PMIx_Argv_append_unique_nosize(&node->aliases, node->rawname);
+}
+
 /*
  * Add the specified node definitions to the global data store
  * NOTE: this removes all items from the list!
@@ -214,6 +240,11 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                      */
                     PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
                 }
+                /* detect FQDN before normalizing, then normalize to short name */
+                if (!pmix_net_isaddr(node->name) && NULL != strchr(node->name, '.')) {
+                    prte_have_fqdn_allocation = true;
+                }
+                normalize_node(node);
                 /* insert it into the array */
                 node->index = pmix_pointer_array_add(prte_node_pool, (void *) node);
                 if (PRTE_SUCCESS > (rc = node->index)) {
@@ -238,10 +269,6 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
             }
             /* update the total slots in the job */
             prte_ras_base.total_slots_alloc += node->slots;
-            /* check if we have fqdn names in the allocation */
-            if (!pmix_net_isaddr(node->name) && NULL != strchr(node->name, '.')) {
-                prte_have_fqdn_allocation = true;
-            }
             /* duplicate the node if requested */
             for (i = 1; i < prte_ras_base.multiplier; i++) {
                 rc = prte_node_copy(&nptr, node);

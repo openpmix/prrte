@@ -93,8 +93,6 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
     int slots = 0;
     bool slots_given;
     char *cptr;
-    char *shortname;
-    char *rawname;
     bool add_slots = false;
 
     PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
@@ -250,34 +248,15 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
             }
         }
 
-        /* check for local name and compute non-fqdn name */
-        shortname = NULL;
-        rawname = NULL;
-
+        /* check for local name */
         if (prte_check_host_is_local(mini_map[i])) {
             ndname = prte_process_info.nodename;
         } else {
             ndname = mini_map[i];
         }
 
-        if (!prte_keep_fqdn_hostnames) {
-            // Strip off the FQDN if present, ignore IP addresses
-            if (!pmix_net_isaddr(mini_map[i])) {
-                 cptr = strchr(ndname, '.');
-                if (NULL != cptr) {
-                    rawname = strdup(ndname);
-                    *cptr = '\0';
-                    shortname = strdup(ndname);
-                    *cptr = '.';
-                }
-            }
-        }
-
         /* see if a node of this name is already on the list */
         node = prte_node_match(&adds, ndname);
-        if (NULL == node && NULL != shortname) {
-            node = prte_node_match(&adds, shortname);
-        }
         if (NULL != node) {
             if (slots_given) {
                 node->slots += slots;
@@ -296,36 +275,14 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
             PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                  "%s dashhost: node %s already on list - slots %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, node->slots));
-            if (NULL != shortname) {
-                free(shortname);
-                shortname = NULL;
-            }
-            if (NULL != rawname) {
-                node->rawname = rawname;
-                rawname = NULL;
-            }
         } else {
             /* if we didn't find it, add it to the list */
             node = PMIX_NEW(prte_node_t);
             if (NULL == node) {
                 PMIx_Argv_free(mapped_nodes);
-                if (NULL != shortname) {
-                    free(shortname);
-                }
-                if (NULL != rawname) {
-                    free(rawname);
-                }
                 return PRTE_ERR_OUT_OF_RESOURCE;
             }
-            if (prte_keep_fqdn_hostnames || NULL == shortname) {
-                node->name = strdup(ndname);
-            } else {
-                node->name = strdup(shortname);
-            }
-            if (NULL != rawname) {
-                node->rawname = rawname;
-                rawname = NULL;
-            }
+            node->name = strdup(ndname);
             PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                  "%s dashhost: added node %s to list - slots %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, slots));
@@ -349,18 +306,8 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
             pmix_list_append(&adds, &node->super);
         }
         if (0 != strcmp(node->name, mini_map[i])) {
-            // add the mini_map name to the list of aliases
+            // add the mini_map entry as an alias if it differs from the resolved name
             PMIx_Argv_append_unique_nosize(&node->aliases, mini_map[i]);
-        }
-        // ensure the non-fqdn version is saved
-        if (NULL != shortname && 0 != strcmp(shortname, node->name)) {
-            PMIx_Argv_append_unique_nosize(&node->aliases, shortname);
-        }
-        if (NULL != shortname) {
-            free(shortname);
-        }
-        if (NULL != rawname) {
-            free(rawname);
         }
     }
     PMIx_Argv_free(mini_map);
