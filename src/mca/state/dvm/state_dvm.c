@@ -286,10 +286,9 @@ static void vm_ready(int fd, short args, void *cbdata)
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_DESTRUCT(&buf);
-                prte_dvm_launch_fence--;
-                if (0 == prte_dvm_launch_fence) {
-                    prte_plm_base_fence_release(false);
-                }
+                /* the whole DVM is being torn down; held jobs will be
+                 * failed as part of that teardown, so leave the fence
+                 * untouched here */
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 return;
             }
@@ -304,10 +303,9 @@ static void vm_ready(int fd, short args, void *cbdata)
                     NULL == val) {
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&buf);
-                    prte_dvm_launch_fence--;
-                    if (0 == prte_dvm_launch_fence) {
-                        prte_plm_base_fence_release(false);
-                    }
+                    /* the whole DVM is being torn down; held jobs will be
+                     * failed as part of that teardown, so leave the fence
+                     * untouched here */
                     PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                     return;
                 }
@@ -315,10 +313,9 @@ static void vm_ready(int fd, short args, void *cbdata)
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&buf);
-                    prte_dvm_launch_fence--;
-                    if (0 == prte_dvm_launch_fence) {
-                        prte_plm_base_fence_release(false);
-                    }
+                    /* the whole DVM is being torn down; held jobs will be
+                     * failed as part of that teardown, so leave the fence
+                     * untouched here */
                     PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                     return;
                 }
@@ -327,10 +324,9 @@ static void vm_ready(int fd, short args, void *cbdata)
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&buf);
                     PMIX_VALUE_RELEASE(val);
-                    prte_dvm_launch_fence--;
-                    if (0 == prte_dvm_launch_fence) {
-                        prte_plm_base_fence_release(false);
-                    }
+                    /* the whole DVM is being torn down; held jobs will be
+                     * failed as part of that teardown, so leave the fence
+                     * untouched here */
                     PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                     return;
                 }
@@ -341,20 +337,22 @@ static void vm_ready(int fd, short args, void *cbdata)
             if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_WIREUP, &buf))) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_DESTRUCT(&buf);
-                prte_dvm_launch_fence--;
-                if (0 == prte_dvm_launch_fence) {
-                    prte_plm_base_fence_release(false);
-                }
+                /* the whole DVM is being torn down; held jobs will be
+                 * failed as part of that teardown, so leave the fence
+                 * untouched here */
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 return;
             }
             PMIX_DATA_BUFFER_DESTRUCT(&buf);
         }
-        /* success path (and DO_NOT_LAUNCH / single-daemon path) */
-        prte_dvm_launch_fence--;
-        if (0 == prte_dvm_launch_fence) {
-            prte_plm_base_fence_release(true);
-        }
+        /* success path (and DO_NOT_LAUNCH / single-daemon path): the new
+         * daemons (if any) are now wired up.  This callback only fires once
+         * every expected daemon has reported (num_reported == num_procs), so
+         * any in-progress grow campaigns have fully succeeded.  Drain them,
+         * dropping their fence contribution, and release any held jobs.
+         * Doing the release here — after the WIREUP xcast above — guarantees
+         * held jobs are only admitted once the new daemons are wired up. */
+        prte_plm_base_grow_drain(true);
     }
     if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, caddy->jdata->nspace)) {
         prte_dvm_ready = true;
@@ -577,15 +575,11 @@ static void check_complete(int fd, short args, void *cbdata)
             (2, prte_state_base_framework.framework_output,
              "%s state:dvm:check_job_complete - received NULL job, checking daemons",
              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        /* safety net: if the daemon job held the grow fence and reached
-         * terminated state, release held jobs now */
-        if (NULL != jdata &&
-            prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCHED_DAEMONS, NULL, PMIX_BOOL) &&
-            0 < prte_dvm_launch_fence) {
-            prte_dvm_launch_fence--;
-            if (0 == prte_dvm_launch_fence) {
-                prte_plm_base_fence_release(false);
-            }
+        /* safety net: if grow campaigns were still pending when the daemon
+         * job reached this point, drain them so held jobs are not parked
+         * indefinitely */
+        if (!pmix_list_is_empty(&prte_grow_campaigns)) {
+            prte_plm_base_grow_drain(false);
         }
         if (0 == prte_rml_base.n_children) {
             /* orteds are done! */

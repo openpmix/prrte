@@ -79,6 +79,7 @@ int prte_dvm_launch_fence = 0;
 pmix_pointer_array_t *prte_held_jobs = NULL;
 pmix_pointer_array_t *prte_prelaunch_held_jobs = NULL;
 pmix_list_t prte_shrink_campaigns;
+pmix_list_t prte_grow_campaigns;
 
 static void campaign_destruct(prte_shrink_campaign_t *p)
 {
@@ -86,6 +87,13 @@ static void campaign_destruct(prte_shrink_campaign_t *p)
 }
 PMIX_CLASS_INSTANCE(prte_shrink_campaign_t, pmix_list_item_t,
                     NULL, campaign_destruct);
+
+static void grow_campaign_destruct(prte_grow_campaign_t *p)
+{
+    free(p->targets);
+}
+PMIX_CLASS_INSTANCE(prte_grow_campaign_t, pmix_list_item_t,
+                    NULL, grow_campaign_destruct);
 bool prte_persistent = true;
 bool prte_allow_run_as_root = false;
 bool prte_fwd_environment = false;
