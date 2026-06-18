@@ -838,7 +838,7 @@ void prte_plm_base_launch_apps(int fd, short args, void *cbdata)
     caddy->jdata->state = caddy->job_state;
 
     /* if a shrink campaign is active, hold this job until all targeted
-     * daemons have confirmed exit to avoid sending launch data to a dying daemon */
+     * daemons have departed the DVM to avoid sending launch data to a dying daemon */
     if (!pmix_list_is_empty(&prte_shrink_campaigns)) {
         jdata->state = PRTE_JOB_STATE_WAITING_FOR_DAEMONS;
         PMIX_RETAIN(jdata);

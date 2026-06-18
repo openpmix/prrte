@@ -613,7 +613,7 @@ typedef struct {
     pmix_list_item_t super;
     pmix_rank_t     *targets;   /* daemon ranks being terminated */
     int              ntargets;  /* initial count */
-    int              pending;   /* remaining ACKs expected */
+    int              pending;   /* targets not yet known to have departed */
 } prte_shrink_campaign_t;
 PMIX_CLASS_DECLARATION(prte_shrink_campaign_t);
 

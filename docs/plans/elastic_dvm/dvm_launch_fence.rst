@@ -266,8 +266,60 @@ so that a concurrent grow does not unnecessarily hold jobs that have already
 been mapped to surviving nodes.
 
 Multiple concurrent shrink campaigns are supported: each campaign tracks its
-own pending-ACK count and is removed from the list when all its targets have
-confirmed exit.
+own count of still-living targets and is removed from the list when all of
+them have departed the DVM.
+
+Design Decision — Complete on Death, Not on Acknowledgement
+-----------------------------------------------------------
+
+An earlier revision of this plan had each targeted daemon send an explicit
+``PRTE_PLM_SHRINK_ACK_CMD`` to the HNP just before it exited, and the HNP
+decremented the campaign on *receipt of the ACK*.  The errmgr comm-failure
+path existed only as a *fallback* for a daemon that crashed before it could
+send its ACK.  That design was abandoned for the following reasons.
+
+**The ACK is the wrong signal.**  An ACK announces a daemon's *intent* to
+leave; it is sent while the daemon is still alive and still a participant in
+the DVM.  But the state the fence protects against — a job being mapped onto,
+or having launch data sent to, a departing daemon — is only safe once the
+daemon's routes, its ``num_daemons`` count, and its node state have actually
+been torn down.  That teardown happens on the comm-failure path
+(``errmgr_dvm.c``), *not* when the ACK is sent.  Releasing held jobs on ACK
+receipt could therefore unpark them into a DVM that still believed the
+departing daemon was present.
+
+**The reason for departure carries no information.**  The HNP only needs to
+know that a target is gone, not *why*.  A clean shrink exit and a crash have
+identical consequences for the campaign: the node is being removed either
+way, and the application processes beneath the daemon are killed (or die)
+when it terminates.  Distinguishing the two cases buys nothing, so the
+"clean ACK vs. crash fallback" split was pure complexity.
+
+**Two decrement paths caused double-counting.**  With both the ACK handler
+and the errmgr fallback live, each target could be counted twice — once when
+its ACK arrived (daemon still alive) and again when its subsequent death was
+detected — because nothing marked a target as already counted and the
+campaign was only removed once ``pending`` hit zero.  Worked through for a
+two-target campaign:
+
+.. code-block:: text
+
+   camp: ntargets=2, pending=2
+     daemon A acks   -> pending=1, fence-=1     (A still alive)
+     daemon A dies   -> errmgr matches A (still in targets, camp still listed)
+                     -> pending=0 -> camp removed+released, fence-=1
+     daemon B        -> never counted; campaign already "complete"
+
+The campaign completed and the fence released while daemon B was still
+present, re-opening exactly the race the fence was meant to close.
+
+**Resolution.**  The ACK was removed entirely (the daemon-side send, the
+``PRTE_PLM_SHRINK_ACK_CMD`` constant, and the HNP-side handler).  Campaign
+completion is driven solely by actual daemon departure on the comm-failure
+path, which is both the authoritative event and the point at which the
+relevant cleanup has occurred.  To make the single decrement idempotent
+against a daemon that emits more than one failure event, each matched target
+slot is stamped ``PMIX_RANK_INVALID`` once counted (Step 11).
 
 Step 7 — Shrink campaign type, list, and fence increment
 ---------------------------------------------------------
@@ -284,7 +336,7 @@ class instance in ``src/runtime/prte_globals.c``:
        pmix_list_item_t super;
        pmix_rank_t     *targets;   /* daemon ranks being terminated */
        int              ntargets;  /* initial count */
-       int              pending;   /* remaining ACKs expected */
+       int              pending;   /* targets not yet known to have departed */
    } prte_shrink_campaign_t;
    PMIX_CLASS_DECLARATION(prte_shrink_campaign_t);
 
@@ -356,42 +408,24 @@ Because the campaign is appended before the xcast, any ``VM_READY`` event
 that fires on the progress thread after this point will see a nonzero fence
 and park the job.
 
-Step 8 — Daemon shrink acknowledgement
----------------------------------------
+Step 8 — Daemon exit (no acknowledgement)
+------------------------------------------
 
 A daemon that decides to exit in response to ``PRTE_DAEMON_SHRINK_CMD``
-must send an acknowledgement to the HNP **before** it activates
-``PRTE_JOB_STATE_DAEMONS_TERMINATED``, so the HNP can track completions.
+does **not** send any acknowledgement to the HNP.  After firing its
+``PMIX_EVENT_JOB_END`` notification it simply activates
+``PRTE_JOB_STATE_DAEMONS_TERMINATED`` and exits.
 
-Add a new PLM command constant in ``src/mca/plm/plm_types.h``:
-
-.. code-block:: c
-
-   #define PRTE_PLM_SHRINK_ACK_CMD  7   /* daemon → HNP: I am exiting due to shrink */
-
-In ``src/prted/prted_comm.c``, in the ``PRTE_DAEMON_SHRINK_CMD`` handler
-(line 469), after ``PRTE_PMIX_WAIT_THREAD(&lk)`` completes the
-``PMIX_EVENT_JOB_END`` notification but *before*
-``PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED)``,
-insert:
-
-.. code-block:: c
-
-   {
-       pmix_data_buffer_t _ack;
-       prte_plm_cmd_flag_t _cmd = PRTE_PLM_SHRINK_ACK_CMD;
-       pmix_rank_t _myrank = PRTE_PROC_MY_NAME->rank;
-       PMIX_DATA_BUFFER_CONSTRUCT(&_ack);
-       PMIx_Data_pack(NULL, &_ack, &_cmd, 1, PMIX_UINT8);
-       PMIx_Data_pack(NULL, &_ack, &_myrank, 1, PMIX_PROC_RANK);
-       prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, &_ack,
-                               PRTE_RML_TAG_PLM,
-                               prte_rml_send_callback, NULL);
-   }
-
-The rank is packed so the HNP can match the ACK to the correct campaign
-entry.  The send is non-blocking; the daemon proceeds to shut down
-immediately after posting it.
+The HNP tracks campaign completion through the daemon's *actual departure*,
+not through a message announcing its intent to leave.  An acknowledgement
+sent before the daemon dies would be premature: the HNP cares only that the
+daemon is gone — the reason is irrelevant, and the application processes
+under it are killed when it terminates regardless.  More importantly, the
+acknowledgement would arrive *before* the daemon's routes, ``num_daemons``
+count, and node state have been torn down, so acting on it could release
+held jobs into a DVM that still believes the departing daemon is present.
+The comm-failure event (Step 12) is the only signal that coincides with that
+cleanup, so it is the sole completion trigger.
 
 Step 9 — Second hold point at LAUNCH_APPS
 ------------------------------------------
@@ -403,7 +437,7 @@ guard but before packing any data:
 .. code-block:: c
 
    /* if a shrink is in progress, hold this job until all targeted
-    * daemons have confirmed exit, to prevent sending launch data to
+    * daemons have departed the DVM, to prevent sending launch data to
     * a dying daemon */
    if (!pmix_list_is_empty(&prte_shrink_campaigns)) {
        jdata->state = PRTE_JOB_STATE_WAITING_FOR_DAEMONS;
@@ -420,8 +454,9 @@ any shrink is in progress.
 Step 10 — Fence-release helper
 --------------------------------
 
-Both grow completion (``vm_ready``) and shrink ACK receipt decrement the
-fence and, when it hits zero, must release two classes of held jobs.
+Both grow completion (``vm_ready``) and shrink target departure (detected in
+the errmgr) decrement the fence and, when it hits zero, must release two
+classes of held jobs.
 Extract this logic into a single helper declared in
 ``src/mca/plm/base/plm_base_launch_support.h`` and defined in
 ``plm_base_launch_support.c``:
@@ -462,7 +497,7 @@ Extract this logic into a single helper declared in
            PMIX_RELEASE(_held);
        }
 
-       /* campaigns are removed individually as their last ACK arrives;
+       /* campaigns are removed individually as their last target dies;
         * the list should be empty here, but do a safety sweep */
        prte_shrink_campaign_t *_camp, *_next;
        PMIX_LIST_FOREACH_SAFE(_camp, _next,
@@ -548,63 +583,15 @@ After remapping, the job re-enters ``prte_rmaps_base_map_job()`` which
 re-creates proc objects on the surviving nodes using the original
 ``app->num_procs`` counts.
 
-Step 11 — Handle PRTE_PLM_SHRINK_ACK_CMD in plm_base_receive.c
-----------------------------------------------------------------
+Step 11 — Detect target departure in the errmgr
+-------------------------------------------------
 
-In ``src/mca/plm/base/plm_base_receive.c``, add a case to the PLM receive
-switch (alongside ``PRTE_PLM_LOCAL_LAUNCH_COMP_CMD``, etc.).  The ACK
-message carries the sending daemon's rank (packed by Step 8); unpack it to
-locate and update the correct campaign:
-
-.. code-block:: c
-
-   case PRTE_PLM_SHRINK_ACK_CMD: {
-       pmix_rank_t _drank;
-       size_t _n = 1;
-       prte_shrink_campaign_t *_camp;
-       int _t;
-
-       if (PMIX_SUCCESS !=
-               PMIx_Data_unpack(NULL, buffer, &_drank, &_n, PMIX_PROC_RANK)) {
-           PRTE_ERROR_LOG(PRTE_ERR_UNPACK_FAILURE);
-           break;
-       }
-       PMIX_LIST_FOREACH(_camp, &prte_shrink_campaigns,
-                         prte_shrink_campaign_t) {
-           for (_t = 0; _t < _camp->ntargets; _t++) {
-               if (_camp->targets[_t] != _drank) continue;
-               _camp->pending--;
-               prte_dvm_launch_fence--;
-               if (0 == _camp->pending) {
-                   pmix_list_remove_item(&prte_shrink_campaigns,
-                                        &_camp->super);
-                   PMIX_RELEASE(_camp);
-               }
-               if (0 == prte_dvm_launch_fence) {
-                   prte_plm_base_fence_release(true);
-               }
-               goto shrink_ack_done;
-           }
-       }
-       /* rank not found in any campaign — log and ignore */
-       PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                            "%s shrink ACK from unknown daemon %lu",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            (unsigned long) _drank));
-       shrink_ack_done:
-       break;
-   }
-
-Because the progress thread is single-threaded, the counter decrements and
-the list manipulation are atomic with respect to all other state machine
-callbacks.
-
-Step 12 — Errmgr fallback for crashed shrink daemons
------------------------------------------------------
-
-A daemon might crash before it can send ``PRTE_PLM_SHRINK_ACK_CMD``.
-Without a fallback, the fence would remain nonzero and held jobs would park
-indefinitely.
+Campaign completion is driven entirely by the daemon-loss path: when a
+targeted daemon leaves the DVM, the HNP's comm-failure handler matches its
+rank against the active campaigns and drives the fence down.  This is the
+same event whether the daemon exited cleanly in response to the shrink
+command or crashed, so a single code path covers both — there is no separate
+"acknowledgement" message and no fallback to reconcile.
 
 In ``src/mca/errmgr/dvm/errmgr_dvm.c``, inside the ``PMIX_CHECK_NSPACE``
 daemon-proc block of ``proc_errors()`` (line 252), within the
@@ -621,6 +608,9 @@ daemon-proc block of ``proc_errors()`` (line 252), within the
                               &prte_shrink_campaigns, prte_shrink_campaign_t) {
            for (_t = 0; _t < _camp->ntargets; _t++) {
                if (_camp->targets[_t] != proc->rank) continue;
+               /* stamp this slot so a repeated comm event for the same
+                * daemon cannot decrement the campaign twice */
+               _camp->targets[_t] = PMIX_RANK_INVALID;
                _camp->pending--;
                prte_dvm_launch_fence--;
                if (0 == _camp->pending) {
@@ -637,10 +627,14 @@ daemon-proc block of ``proc_errors()`` (line 252), within the
        errmgr_shrink_done: ;
    }
 
-This ensures that a daemon crash during a shrink does not permanently stall
-held jobs.  The node was being removed anyway; jobs that were mapped to it
-will be detected by ``prte_plm_base_job_needs_remap()`` and re-routed to
-surviving nodes.
+Because the progress thread is single-threaded, the counter decrements and
+the list manipulation are atomic with respect to all other state machine
+callbacks.  Stamping the matched slot ``PMIX_RANK_INVALID`` makes the
+decrement idempotent: should the daemon generate more than one failure event,
+only the first is counted.  A daemon that crashes during a shrink is handled
+identically to one that exits cleanly — the node was being removed anyway,
+and jobs mapped to it are detected by ``prte_plm_base_job_needs_remap()`` and
+re-routed to surviving nodes.
 
 Summary of Files Changed (Shrink Fence)
 -----------------------------------------
@@ -651,8 +645,6 @@ Summary of Files Changed (Shrink Fence)
 
    * - File
      - Change
-   * - ``src/mca/plm/plm_types.h``
-     - Add ``PRTE_PLM_SHRINK_ACK_CMD = 7``.
    * - ``src/runtime/prte_globals.h``
      - Declare ``prte_shrink_campaign_t`` (type + ``PMIX_CLASS_DECLARATION``)
        and ``prte_shrink_campaigns`` (``pmix_list_t``).
@@ -673,10 +665,9 @@ Summary of Files Changed (Shrink Fence)
        and decrements the fence.
    * - ``src/prted/prted_comm.c``
      - In ``PRTE_DAEMON_SHRINK_CMD`` handler: after the ``JOB_END``
-       notification wait, pack ``PRTE_PLM_SHRINK_ACK_CMD`` and
-       ``PRTE_PROC_MY_NAME->rank`` into a message and send to HNP on
-       ``PRTE_RML_TAG_PLM`` before activating
-       ``PRTE_JOB_STATE_DAEMONS_TERMINATED``.
+       notification wait, activate ``PRTE_JOB_STATE_DAEMONS_TERMINATED`` and
+       exit.  No acknowledgement is sent; the HNP detects departure via the
+       comm-failure path.
    * - ``src/mca/plm/base/plm_base_launch_support.c``
      - Add ``prte_plm_base_fence_release()``,
        ``prte_plm_base_job_needs_remap()``, and
@@ -685,20 +676,16 @@ Summary of Files Changed (Shrink Fence)
        ``!pmix_list_is_empty(&prte_shrink_campaigns)``.
    * - ``src/mca/plm/base/plm_base_launch_support.h``
      - Declare the three new functions.
-   * - ``src/mca/plm/base/plm_base_receive.c``
-     - Handle ``PRTE_PLM_SHRINK_ACK_CMD``: unpack sender rank, find the
-       owning campaign, decrement per-campaign ``pending`` and
-       ``prte_dvm_launch_fence``; remove campaign when ``pending`` hits zero;
-       call ``prte_plm_base_fence_release(true)`` when fence hits zero.
    * - ``src/mca/state/dvm/state_dvm.c``
      - Replace inline release loop in ``vm_ready`` and ``check_complete``
        with calls to ``prte_plm_base_fence_release()``.
    * - ``src/mca/errmgr/dvm/errmgr_dvm.c``
      - In ``proc_errors()``, daemon-comm-failure block: search
-       ``prte_shrink_campaigns`` for the dead daemon's rank; if found,
-       decrement campaign ``pending`` and fence; remove campaign when
-       ``pending`` hits zero; call ``prte_plm_base_fence_release(true)``
-       when fence hits zero.
+       ``prte_shrink_campaigns`` for the dead daemon's rank; if found, stamp
+       the matched target slot ``PMIX_RANK_INVALID``, decrement campaign
+       ``pending`` and fence; remove campaign when ``pending`` hits zero;
+       call ``prte_plm_base_fence_release(true)`` when fence hits zero.  This
+       is the sole shrink-completion trigger.
 
 Summary of Files Changed (Grow Fence)
 --------------------------------------
@@ -772,9 +759,11 @@ Design Invariants
   one ``PMIX_ALLOC_RELEASE`` request.  Multiple concurrent shrink campaigns
   are supported.
 * The fence is incremented by exactly ``m`` at campaign creation and
-  decremented by 1 for each ``PRTE_PLM_SHRINK_ACK_CMD`` received or for
-  each crash detected in the errmgr fallback.  A campaign is removed from
-  the list when its ``pending`` count reaches zero.
+  decremented by 1 for each targeted daemon whose departure is detected on
+  the errmgr comm-failure path (clean exit and crash are indistinguishable
+  and handled identically).  Each target slot is stamped ``PMIX_RANK_INVALID``
+  once counted, so a repeated comm event cannot decrement twice.  A campaign
+  is removed from the list when its ``pending`` count reaches zero.
 * The ``LAUNCH_APPS`` hold uses ``!pmix_list_is_empty(&prte_shrink_campaigns)``,
   not ``prte_dvm_launch_fence > 0``, so a concurrent grow does not stall
   already-mapped jobs on surviving nodes.

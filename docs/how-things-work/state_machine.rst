@@ -609,9 +609,12 @@ function, but with ``req->allocdir == PMIX_ALLOC_RELEASE``:
 
    a. Sets ``prte_abnormal_term_ordered = true``.
    b. Fires a ``PMIX_EVENT_JOB_END`` PMIx event to notify any attached tools.
-   c. Sends a ``PRTE_PLM_SHRINK_ACK_CMD`` to the HNP on
-      ``PRTE_RML_TAG_PLM`` (**planned**; see below).
-   d. Activates ``PRTE_JOB_STATE_DAEMONS_TERMINATED`` and exits cleanly.
+   c. Activates ``PRTE_JOB_STATE_DAEMONS_TERMINATED`` and exits cleanly.
+
+   The HNP needs no acknowledgement from the daemon: it learns that the
+   daemon is gone through the normal daemon-loss (comm-failure) path, which
+   is also the only event that guarantees the daemon's routes and node state
+   have actually been torn down (see below).
 
 Unlisted daemons silently discard the command and continue running.
 
@@ -626,8 +629,8 @@ Shrink Synchronisation Requirement
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The ``PRTE_DAEMON_SHRINK_CMD`` xcast is fire-and-forget: targeted daemons
-exit on their own schedule, and the HNP currently has no signal for when all
-of them have terminated.  This creates two race windows that must be closed.
+exit on their own schedule, and the HNP must determine when all of them have
+actually terminated.  This creates two race windows that must be closed.
 
 **Race 1 — new job mapping onto a shrinking node**
 
@@ -644,11 +647,18 @@ send to a daemon that dies in the window between MAP and the actual send.
 
 Closing both races requires:
 
-1. **Daemon acknowledgement** before exit — each targeted daemon sends an
-   explicit ``PRTE_PLM_SHRINK_ACK_CMD`` to the HNP on ``PRTE_RML_TAG_PLM``
-   after its ``PMIX_EVENT_JOB_END`` notification completes but *before* it
-   activates ``PRTE_JOB_STATE_DAEMONS_TERMINATED``.  The HNP counts ACKs
-   and uses them to drive the fence counter down.
+1. **Completion on actual daemon death** — the HNP records the targeted
+   daemon ranks in a ``prte_shrink_campaign_t`` and waits for each one to
+   leave the DVM.  Departure is detected through the existing daemon-loss
+   (comm-failure) path in the ``errmgr/dvm`` component, which matches the
+   dead daemon's rank against the campaign's target list, drives the fence
+   counter down, and releases the fence once every target is gone.  The
+   HNP does not rely on any acknowledgement from the daemon: the reason a
+   targeted daemon dies is irrelevant, and the comm-failure event is the
+   only signal that also guarantees the daemon's routes, ``num_daemons``
+   count, and node state have been cleaned up.  Each target slot is stamped
+   ``PMIX_RANK_INVALID`` once counted so a repeated comm event cannot
+   decrement the campaign twice.
 
 2. **Second hold point at** ``LAUNCH_APPS`` — ``prte_plm_base_launch_apps()``
    checks a dedicated ``prte_shrink_ntargets`` counter (nonzero only when a
