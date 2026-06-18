@@ -157,6 +157,7 @@ static int lsf_map(prte_job_t *jdata,
         free(jdata->map->last_mapper);
     }
     jdata->map->last_mapper = strdup(c->pmix_mca_component_name);
+    options->map = PRTE_MAPPING_BYUSER;
 
     /* setup the node list */
     PMIX_CONSTRUCT(&node_list, pmix_list_t);
@@ -171,6 +172,7 @@ static int lsf_map(prte_job_t *jdata,
     /* start at the beginning... */
     vpid_start = 0;
     jdata->num_procs = 0;
+    num_ranks = 0;
     PMIX_CONSTRUCT(&rankmap, pmix_pointer_array_t);
     rc = pmix_pointer_array_init(&rankmap,
                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
@@ -185,6 +187,13 @@ static int lsf_map(prte_job_t *jdata,
     if (PRTE_SUCCESS != (rc = file_parse(affinity_file))) {
         rc = PRTE_ERR_SILENT;
         goto error;
+    }
+    if (0 == num_ranks) {
+        /* empty affinity file means LSF set no pinning for this job -
+         * let the next mapper handle it normally */
+        PMIX_DESTRUCT(&rankmap);
+        PMIX_LIST_DESTRUCT(&node_list);
+        return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
     /* cycle through the app_contexts, mapping them sequentially */
@@ -327,7 +336,6 @@ static int lsf_map(prte_job_t *jdata,
             if (PRTE_SUCCESS != rc) {
                 goto error;
             }
-            options->map = PRTE_MAPPING_BYUSER;
             proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, NULL, options);
             if (NULL == proc) {
                 PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
@@ -447,33 +455,27 @@ static int lsf_map(prte_job_t *jdata,
 
 error:
     PMIX_LIST_DESTRUCT(&node_list);
+    for (i = 0; i < rankmap.size; i++) {
+        if (NULL != (rfmap = pmix_pointer_array_get_item(&rankmap, i))) {
+            PMIX_RELEASE(rfmap);
+        }
+    }
+    PMIX_DESTRUCT(&rankmap);
+    num_ranks = 0;
 
     return rc;
 }
 
 static int file_parse(const char *affinity_file)
 {
-    int rc = PRTE_SUCCESS;
     int i, j;
     prte_rmaps_lsf_map_t *rfmap = NULL;
-    pmix_pointer_array_t *assigned_ranks_array;
     struct stat buf;
     FILE *fp;
     char *hstname, *membind_opt;
-    char *sep, *eptr, **cpus, *ptr;
+    char *sep = NULL, *eptr, **cpus, *ptr;
     prte_node_t *nptr, *node;
     hwloc_obj_t obj;
-
-    /* keep track of rank assignments */
-    assigned_ranks_array = PMIX_NEW(pmix_pointer_array_t);
-    rc = pmix_pointer_array_init(assigned_ranks_array,
-                                 PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                                 PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                 PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_RELEASE(assigned_ranks_array);
-        return PRTE_ERROR;
-    }
 
     /* check to see if the file is empty - if it is,
      * then affinity wasn't actually set for this job */
