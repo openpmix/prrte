@@ -88,7 +88,7 @@ to at least the versions listed below.
    :class: error
 
    The table below is almost certainly wrong; it has all the values
-   from Open MPI.  Need to update the table below with the appropriate
+   from PRRTE.  Need to update the table below with the appropriate
    values for PRRTE.
 
 .. list-table::

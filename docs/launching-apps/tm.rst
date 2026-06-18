@@ -8,7 +8,7 @@ Verify PBS/Torque support
 -------------------------
 
 The ``prte_info`` command can be used to determine whether or not an
-installed Open MPI includes Torque/PBS Pro support:
+installed PRRTE includes Torque/PBS Pro support:
 
 .. code-block::
 
@@ -16,7 +16,7 @@ installed Open MPI includes Torque/PBS Pro support:
 
 If the PRRTE installation includes support for PBS/Torque, you
 should see a line similar to that below. Note the MCA version
-information varies depending on which version of Open MPI is
+information varies depending on which version of PRRTE is
 installed.
 
 .. code-block::
