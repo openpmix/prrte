@@ -271,18 +271,11 @@ static void proc_errors(int fd, short args, void *cbdata)
             pptr->state = state;
             /* adjust our num_procs */
             --prte_process_info.num_daemons;
-            /* check if a grow campaign was in progress: if so, fail the fence
-             * so that held jobs are not parked indefinitely */
-            if (0 < prte_dvm_launch_fence &&
-                prte_get_attribute(&jdata->attributes,
-                                   PRTE_JOB_LAUNCHED_DAEMONS, NULL, PMIX_BOOL)) {
-                prte_dvm_launch_fence--;
-                if (0 == prte_dvm_launch_fence) {
-                    prte_plm_base_fence_release(false);
-                }
-                /* clear attribute so a second crash does not double-decrement */
-                prte_remove_attribute(&jdata->attributes, PRTE_JOB_LAUNCHED_DAEMONS);
-            }
+            /* if this daemon was the target of an in-progress grow campaign,
+             * resolve its rank against the launch fence (failure).  Only the
+             * specific ranks being launched affect the fence, so an unrelated
+             * daemon loss during a grow no longer consumes the fence. */
+            prte_plm_base_grow_target_failed(proc->rank);
             /* check if this daemon was a pending shrink target */
             {
                 prte_shrink_campaign_t *_camp, *_next;

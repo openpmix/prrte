@@ -497,6 +497,7 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
     prte_prelaunch_held_jobs = PMIX_NEW(pmix_pointer_array_t);
     pmix_pointer_array_init(prte_prelaunch_held_jobs, 1, INT_MAX, 1);
     PMIX_CONSTRUCT(&prte_shrink_campaigns, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grow_campaigns, pmix_list_t);
 
     /* All done */
     PMIX_ACQUIRE_THREAD(&prte_init_lock);

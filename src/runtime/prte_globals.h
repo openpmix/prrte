@@ -619,6 +619,26 @@ PMIX_CLASS_DECLARATION(prte_shrink_campaign_t);
 
 /* list of active shrink campaigns */
 PRTE_EXPORT extern pmix_list_t prte_shrink_campaigns;
+
+/* one entry per in-progress grow (daemon-launch) campaign.  The campaign
+ * records the specific daemon ranks being launched so that the launch fence
+ * is only affected by those ranks: an unrelated daemon loss during a grow
+ * must not consume the fence, and concurrent campaigns must be tracked
+ * independently.  The fence contribution (ntargets) is held in full until
+ * the campaign is drained at a safe point — on success in vm_ready, after
+ * the WIREUP xcast, or on failure when one of the targets dies — so that
+ * jobs held at the VM_READY → MAP boundary are not admitted before the new
+ * daemons are wired up. */
+typedef struct {
+    pmix_list_item_t super;
+    pmix_rank_t     *targets;   /* daemon ranks being launched */
+    int              ntargets;  /* count, == this campaign's fence contribution */
+} prte_grow_campaign_t;
+PMIX_CLASS_DECLARATION(prte_grow_campaign_t);
+
+/* list of active grow campaigns */
+PRTE_EXPORT extern pmix_list_t prte_grow_campaigns;
+
 PRTE_EXPORT extern bool prte_allow_run_as_root;
 PRTE_EXPORT extern bool prte_fwd_environment;
 PRTE_EXPORT extern bool prte_xml_output;

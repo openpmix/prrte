@@ -2390,13 +2390,32 @@ process:
     /* if new daemons are being launched, mark that this job
      * caused it to happen */
     if (0 < map->num_new_daemons) {
+        prte_grow_campaign_t *gcamp;
+        pmix_rank_t gr;
+        int gk;
+
         rc = prte_set_attribute(&jdata->attributes, PRTE_JOB_LAUNCHED_DAEMONS, true,
                                 NULL, PMIX_BOOL);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
-        prte_dvm_launch_fence++;
+        /* Record this launch campaign so the launch fence can be resolved on
+         * a per-daemon basis: each new daemon either reports home (success)
+         * or its launch fails (comm-failure / failed-to-start), and only
+         * those specific ranks affect this campaign.  This avoids an
+         * unrelated daemon loss consuming the fence, and lets concurrent
+         * campaigns be tracked independently.  The new daemons were assigned
+         * consecutive vpids starting at map->daemon_vpid_start (see the
+         * daemon-creation loop above). */
+        gcamp = PMIX_NEW(prte_grow_campaign_t);
+        gcamp->ntargets = map->num_new_daemons;
+        gcamp->targets = (pmix_rank_t *) malloc(gcamp->ntargets * sizeof(pmix_rank_t));
+        for (gk = 0, gr = map->daemon_vpid_start; gk < gcamp->ntargets; gk++, gr++) {
+            gcamp->targets[gk] = gr;
+        }
+        pmix_list_append(&prte_grow_campaigns, &gcamp->super);
+        prte_dvm_launch_fence += map->num_new_daemons;
     }
 
     return PRTE_SUCCESS;
@@ -2436,6 +2455,46 @@ void prte_plm_base_fence_release(bool success)
     PMIX_LIST_FOREACH_SAFE(camp, next, &prte_shrink_campaigns, prte_shrink_campaign_t) {
         pmix_list_remove_item(&prte_shrink_campaigns, &camp->super);
         PMIX_RELEASE(camp);
+    }
+}
+
+void prte_plm_base_grow_drain(bool success)
+{
+    prte_grow_campaign_t *camp;
+
+    /* Resolve all in-progress grow campaigns at once and drop their entire
+     * contribution from the launch fence.  This is called from exactly the
+     * two safe points: from vm_ready on the all-success path (after the
+     * WIREUP xcast, so held jobs are only admitted once the new daemons are
+     * wired up), and from the failure path when one of the launched daemons
+     * dies.  Mirroring the original single-token behavior, any grow failure
+     * fails the whole set of held jobs. */
+    while (NULL != (camp = (prte_grow_campaign_t *)
+                               pmix_list_remove_first(&prte_grow_campaigns))) {
+        prte_dvm_launch_fence -= camp->ntargets;
+        PMIX_RELEASE(camp);
+    }
+    if (0 == prte_dvm_launch_fence) {
+        prte_plm_base_fence_release(success);
+    }
+}
+
+void prte_plm_base_grow_target_failed(pmix_rank_t rank)
+{
+    prte_grow_campaign_t *camp;
+    int t;
+
+    /* A daemon has died.  Only act if it was actually the target of an
+     * in-progress grow campaign — an unrelated daemon loss must not consume
+     * the launch fence.  If it was a grow target, the grow is compromised,
+     * so drain the campaigns and fail any held jobs. */
+    PMIX_LIST_FOREACH(camp, &prte_grow_campaigns, prte_grow_campaign_t) {
+        for (t = 0; t < camp->ntargets; t++) {
+            if (camp->targets[t] == rank) {
+                prte_plm_base_grow_drain(false);
+                return;
+            }
+        }
     }
 }
 

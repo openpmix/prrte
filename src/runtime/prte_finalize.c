@@ -92,6 +92,7 @@ int prte_finalize(void)
     PMIX_RELEASE(prte_held_jobs);
     PMIX_RELEASE(prte_prelaunch_held_jobs);
     PMIX_LIST_DESTRUCT(&prte_shrink_campaigns);
+    PMIX_LIST_DESTRUCT(&prte_grow_campaigns);
 
     /* call the finalize function for this environment */
     if (PRTE_SUCCESS != (rc = prte_ess.finalize())) {

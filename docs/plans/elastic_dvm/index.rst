@@ -7,3 +7,4 @@ Implementation plans for dynamic DVM grow/shrink support.
    :maxdepth: 2
 
    dvm_launch_fence.rst
+   grow_campaign.rst
