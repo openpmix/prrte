@@ -115,7 +115,6 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
     int cnt;
     int number_of_slots = 0;
     char buff[64];
-    char *alias = NULL;
 
     if (PRTE_HOSTFILE_STRING == token || PRTE_HOSTFILE_HOSTNAME == token ||
         PRTE_HOSTFILE_INT == token || PRTE_HOSTFILE_IPV4 == token ||
@@ -141,17 +140,6 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             return PRTE_ERROR;
         }
         PMIx_Argv_free(argv);
-
-        if (!prte_keep_fqdn_hostnames) {
-            // Strip off the FQDN if present, ignore IP addresses
-            if (!pmix_net_isaddr(node_name)) {
-                char *ptr;
-                alias = strdup(node_name);
-                if (NULL != (ptr = strchr(node_name, '.'))) {
-                    *ptr = '\0';
-                }
-            }
-        }
 
         /* if the first letter of the name is '^', then this is a node
          * to be excluded. Remove the ^ character so the nodename is
@@ -181,19 +169,10 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             node = prte_node_match(exclude, node_name);
             if (NULL == node) {
                 node = PMIX_NEW(prte_node_t);
-                if (prte_keep_fqdn_hostnames || NULL == alias) {
-                    node->name = strdup(node_name);
-                } else {
-                    node->name = strdup(alias);
-                    node->rawname = strdup(node_name);
-                }
+                node->name = strdup(node_name);
                 if (NULL != username) {
                     prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL,
                                        username, PMIX_STRING);
-                }
-                if (NULL != alias && 0 != strcmp(alias, node->name)) {
-                    // new node object, so alias must be unique
-                    PMIx_Argv_append_nosize(&node->aliases, alias);
                 }
                 pmix_list_append(exclude, &node->super);
             } else {
@@ -203,13 +182,6 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
                     PMIx_Argv_append_unique_nosize(&node->aliases, node_name);
                 }
                 free(node_name);
-                if (NULL != alias && 0 != strcmp(alias, node->name)) {
-                    PMIx_Argv_append_unique_nosize(&node->aliases, alias);
-                }
-            }
-            if (NULL != alias) {
-                free(alias);
-                alias = NULL;
             }
             if (NULL != username) {
                 free(username);
@@ -237,21 +209,12 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
         /* Do we need to make a new node object? */
         if (keep_all || NULL == (node = prte_node_match(updates, node_name))) {
             node = PMIX_NEW(prte_node_t);
-            if (prte_keep_fqdn_hostnames || NULL == alias) {
-                node->name = strdup(node_name);
-            } else {
-                node->name = strdup(node_name);
-                node->rawname = strdup(alias);
-            }
+            node->name = strdup(node_name);
             free(node_name);
             node->slots = 1;
             if (NULL != username) {
                 prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL, username,
                                    PMIX_STRING);
-            }
-            if (NULL != alias && 0 != strcmp(alias, node->name)) {
-                // new node object, so alias must be unique
-                PMIx_Argv_append_nosize(&node->aliases, alias);
             }
             pmix_list_append(updates, &node->super);
         } else {
@@ -264,44 +227,13 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
                 PMIx_Argv_append_unique_nosize(&node->aliases, node_name);
             }
             free(node_name);
-            if (NULL != alias && 0 != strcmp(alias, node->name)) {
-                PMIx_Argv_append_unique_nosize(&node->aliases, alias);
-            }
-        }
-        if (NULL != alias) {
-            free(alias);
-            alias = NULL;
         }
 
     } else if (PRTE_HOSTFILE_RELATIVE == token) {
         /* store this for later processing */
         node = PMIX_NEW(prte_node_t);
-        // Strip off the FQDN if present, ignore IP addresses
-        if (!pmix_net_isaddr(prte_util_hostfile_value.sval)) {
-            char *ptr;
-            alias = strdup(prte_util_hostfile_value.sval);
-            if (NULL != (ptr = strchr(alias, '.'))) {
-                *ptr = '\0';
-            } else {
-                free(alias);
-                alias = NULL;
-            }
-        }
-        if (prte_keep_fqdn_hostnames || NULL == alias) {
-            node->name = strdup(prte_util_hostfile_value.sval);
-        } else {
-            node->name = strdup(alias);
-            node->rawname = strdup(prte_util_hostfile_value.sval);
-        }
-        if (NULL != alias && 0 != strcmp(alias, node->name)) {
-            // new node object, so alias must be unique
-            PMIx_Argv_append_nosize(&node->aliases, alias);
-        }
+        node->name = strdup(prte_util_hostfile_value.sval);
         pmix_list_append(updates, &node->super);
-        if (NULL != alias) {
-            free(alias);
-            alias = NULL;
-        }
 
     } else if (PRTE_HOSTFILE_RANK == token) {
         /* we can ignore the rank, but we need to extract the node name. we
@@ -339,15 +271,6 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
         }
         PMIx_Argv_free(argv);
 
-        // Strip off the FQDN if present, ignore IP addresses
-        if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(node_name)) {
-            char *ptr;
-            alias = strdup(node_name);
-            if (NULL != (ptr = strchr(alias, '.'))) {
-                *ptr = '\0';
-            }
-        }
-
         /* Do we need to make a new node object? */
         if (NULL == (node = prte_node_match(updates, node_name))) {
             node = PMIX_NEW(prte_node_t);
@@ -366,12 +289,6 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             if (0 != strcmp(node_name, node->name)) {
                 PMIx_Argv_append_unique_nosize(&node->aliases, node_name);
             }
-        }
-        if (NULL != alias) {
-            PMIx_Argv_append_unique_nosize(&node->aliases, alias);
-            free(alias);
-            node->rawname = strdup(node_name);
-            alias = NULL;
         }
         PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                              "%s hostfile: node %s slots %d nodes-given %s",
