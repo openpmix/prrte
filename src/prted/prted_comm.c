@@ -506,19 +506,9 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
                 PRTE_PMIX_DESTRUCT_LOCK(&lk);
                 // mark abnormal exit status
                 PRTE_UPDATE_EXIT_STATUS(-1);
-                /* notify HNP that we are exiting due to shrink before
-                 * we activate DAEMONS_TERMINATED */
-                {
-                    pmix_data_buffer_t *_ack;
-                    prte_plm_cmd_flag_t _cmd = PRTE_PLM_SHRINK_ACK_CMD;
-                    pmix_rank_t _myrank = PRTE_PROC_MY_NAME->rank;
-                    PMIX_DATA_BUFFER_CREATE(_ack);
-                    PMIx_Data_pack(NULL, _ack, &_cmd, 1, PMIX_UINT8);
-                    PMIx_Data_pack(NULL, _ack, &_myrank, 1, PMIX_PROC_RANK);
-                    PRTE_RML_RELIABLE_SEND(ret, PRTE_PROC_MY_HNP->rank, _ack,
-                                           PRTE_RML_TAG_PLM);
-                }
-                // do a clean exit
+                /* do a clean exit; the HNP detects our departure via the
+                 * normal daemon-loss (comm-failure) path and completes the
+                 * shrink campaign there */
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
                 break;
             }

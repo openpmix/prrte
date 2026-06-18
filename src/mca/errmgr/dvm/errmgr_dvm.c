@@ -291,6 +291,9 @@ static void proc_errors(int fd, short args, void *cbdata)
                                        &prte_shrink_campaigns, prte_shrink_campaign_t) {
                     for (_t = 0; _t < _camp->ntargets; _t++) {
                         if (_camp->targets[_t] != proc->rank) continue;
+                        /* stamp this slot so a repeated comm event for the
+                         * same daemon cannot decrement the campaign twice */
+                        _camp->targets[_t] = PMIX_RANK_INVALID;
                         _camp->pending--;
                         prte_dvm_launch_fence--;
                         if (0 == _camp->pending) {

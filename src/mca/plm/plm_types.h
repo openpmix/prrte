@@ -229,7 +229,6 @@ typedef uint8_t prte_plm_cmd_flag_t;
 #define PRTE_PLM_TOOL_ATTACHED_CMD      4
 #define PRTE_PLM_READY_FOR_DEBUG_CMD    5
 #define PRTE_PLM_LOCAL_LAUNCH_COMP_CMD  6
-#define PRTE_PLM_SHRINK_ACK_CMD         7   /* daemon → HNP: exiting due to shrink */
 
 END_C_DECLS
 
