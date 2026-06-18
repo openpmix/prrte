@@ -33,7 +33,7 @@ For example:
    shell$ salloc -n 4
    salloc: Granted job allocation 1234
 
-   # Now run an Open MPI job on all the slots allocated by Slurm
+   # Now run an PRRTE job on all the slots allocated by Slurm
    shell$ prterun mpi-hello-world
 
 This will run the 4 processes on the node(s) that were allocated

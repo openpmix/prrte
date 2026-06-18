@@ -120,14 +120,14 @@ from the command line.
 Connecting independent MPI applications
 ---------------------------------------
 
-In certain environments, Open MPI supports connecting multiple,
+In certain environments, PRRTE supports connecting multiple,
 independent MPI applications using mechanisms defined in the MPI
 specification such as ``MPI_Comm_connect() / MPI_Comm_accept()`` and
 publishing connection information using ``MPI_Publish_name() /
 MPI_Lookup_name()``. These mechanisms require a centralized service
 to exchange contact information across multiple jobs.
 
-Beginning with Open MPI v5.0.0 this can be achieved by starting an
+This can be achieved by starting an
 instance of the prte server with the ``report-uri`` option to
 display the contact information of the prte server. This information
 can then be used for launching subsequent MPI applications.
