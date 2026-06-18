@@ -314,6 +314,8 @@ static prte_regattr_input_t prte_attributes[] = {
                          "PMIX_QUERY_GROUP_NAMES",
                          "PMIX_QUERY_GROUP_MEMBERSHIP",
                          "PMIX_QUERY_ALLOCATION",
+                         "PMIX_QUERY_ALLOC_IDS",
+                         "PMIX_QUERY_ALLOC_PROPERTIES",
                          "PMIX_QUERY_ALLOC_STATUS",
                          NULL}},
     {.function = "PMIx_Log", .attrs = (char *[]){"NONE", NULL}},
