@@ -194,10 +194,9 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
          */
 
         PMIX_OUTPUT_VERBOSE((3, prte_ras_base_framework.framework_output,
-                             "%s hostfile: node %s is being included - keep all is %s alias %s",
+                             "%s hostfile: node %s is being included - keep all is %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node_name,
-                             keep_all ? "TRUE" : "FALSE",
-                             (NULL == alias) ? "NULL" : alias));
+                             keep_all ? "TRUE" : "FALSE"));
 
         /* see if this is another name for us */
         if (prte_check_host_is_local(node_name)) {
