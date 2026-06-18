@@ -522,7 +522,10 @@ Key Source Files
        host lists and inserts nodes into the pool (line 340).
    * - ``src/mca/ras/slurm/ras_slurm_modify_extend.c``
      - Slurm ``modify()`` entry for ``PMIX_ALLOC_EXTEND``; fires
-       ``LAUNCH_DAEMONS`` directly on the daemon job (line 752).
+       ``LAUNCH_DAEMONS`` directly on the daemon job (line 752) instead of
+       routing through ``prte_ras_base_complete_request()`` — see the
+       launch-fence warning under *DVM Extension and the Daemon-Launch
+       Race*.
    * - ``src/prted/prted_comm.c``
      - ``PRTE_DAEMON_SHRINK_CMD`` handler (line 469): checks daemon rank
        list and exits cleanly if listed.
@@ -589,6 +592,23 @@ needed it sets ``PRTE_JOB_LAUNCHED_DAEMONS`` on the daemon job and returns
 with ``map->num_new_daemons > 0``.  The PLM then spawns ``prted`` processes
 on the new nodes and the state machine parks at ``DAEMONS_LAUNCHED`` until
 they call home.
+
+.. warning::
+   A RAS component that handles a modification request (grow or shrink)
+   must route its result through ``prte_ras_base_complete_request()``
+   rather than activating ``PRTE_JOB_STATE_LAUNCH_DAEMONS`` directly on the
+   daemon job.  ``prte_ras_base_complete_request()`` is the single point
+   that performs the bookkeeping the launch fence depends on: it sets
+   ``PRTE_JOB_EXTEND_DVM`` and resets ``prte_nidmap_communicated`` on the
+   grow path, and on the shrink path it records the
+   ``prte_shrink_campaign_t`` and raises ``prte_dvm_launch_fence`` *before*
+   any daemon is asked to leave.  A component that fires
+   ``PRTE_JOB_STATE_LAUNCH_DAEMONS`` itself — as the Slurm scheduler-push
+   path historically does — skips this common handling and can leave the
+   fence out of step with the campaign it is supposed to gate, reopening
+   the daemon-launch race described below.  New RAS modules, and any
+   reworking of the existing ones, should hand their results to
+   ``prte_ras_base_complete_request()`` and let it activate the state.
 
 DVM Shrink
 ~~~~~~~~~~
