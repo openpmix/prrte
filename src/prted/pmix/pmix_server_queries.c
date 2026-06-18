@@ -22,6 +22,8 @@
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2024      Triad National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+ *                         All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -74,6 +76,7 @@ static void _query(int sd, short args, void *cbdata)
     pmix_query_t *q;
     pmix_status_t ret = PMIX_SUCCESS;
     void *results, *plist, *stack, *cache;
+    pmix_pointer_array_t *alloc_nodes;
     prte_info_item_t *kv;
     pmix_nspace_t jobid;
     prte_job_t *jdata;
@@ -83,15 +86,18 @@ static void _query(int sd, short args, void *cbdata)
     uint32_t key, nodeid, sessionid = UINT32_MAX;
     char **nspaces, *hostname, *uri;
     char *cmdline;
+    const char *allocid, *allocprop;
     char **ans, *tmp;
     char *psetname;
     prte_app_context_t *app;
+    prte_session_t *session;
     int matched;
     pmix_proc_info_t *procinfo;
     pmix_data_array_t dry;
     prte_proc_t *proct;
     pmix_proc_t *proc;
     size_t sz;
+    bool releasable;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
@@ -108,6 +114,8 @@ static void _query(int sd, short args, void *cbdata)
         hostname = NULL;
         nodeid = UINT32_MAX;
         psetname = NULL;
+        allocid = NULL;
+        allocprop = NULL;
         /* default to the requestor's jobid */
         PMIX_LOAD_NSPACE(jobid, cd->proct.nspace);
         /* see if they provided any qualifiers */
@@ -199,6 +207,11 @@ static void _query(int sd, short args, void *cbdata)
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_SESSION_ID)) {
                     PMIX_VALUE_GET_NUMBER(rc, &q->qualifiers[n].value, sessionid, uint32_t);
 
+                } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_ALLOC_ID)) {
+                    allocid = q->qualifiers[n].value.data.string;
+
+                } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_ALLOC_PROPERTY)) {
+                    allocprop = q->qualifiers[n].value.data.string;
                 }
 
             }
@@ -718,10 +731,20 @@ static void _query(int sd, short args, void *cbdata)
                 prte_topology_t *topo;
                 int len;
 
+                if (NULL == allocid) {
+                    alloc_nodes = prte_node_pool;
+                } else {
+                    session = prte_get_session_object_from_id(allocid);
+                    if (NULL == session) {
+                        ret = PMIX_ERR_NOT_FOUND;
+                        goto done;
+                    }
+                    alloc_nodes = session->nodes;
+                }
                 PMIX_INFO_LIST_START(nodelist);
                 p = 0;
-                for (k=0; k < prte_node_pool->size; k++) {
-                    node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, k);
+                for (k=0; k < alloc_nodes->size; k++) {
+                    node = (prte_node_t*)pmix_pointer_array_get_item(alloc_nodes, k);
                     if (NULL == node) {
                         continue;
                     }
@@ -735,7 +758,10 @@ static void _query(int sd, short args, void *cbdata)
                         free(str);
                     }
                     /* add topology index */
-                    PMIX_INFO_LIST_ADD(rc, nodeinfolist, PMIX_TOPOLOGY_INDEX, &node->topology->index, PMIX_INT);
+                    if (NULL != node->topology) {
+                        PMIX_INFO_LIST_ADD(rc, nodeinfolist, PMIX_TOPOLOGY_INDEX,
+                                           &node->topology->index, PMIX_INT);
+                    }
                     /* convert to array */
                     PMIX_INFO_LIST_CONVERT(rc, nodeinfolist, &dry);
                     PMIX_INFO_LIST_RELEASE(nodeinfolist);
@@ -762,6 +788,77 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LIST_RELEASE(nodelist);
                 /* add to results */
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_ALLOCATION, &dry, PMIX_DATA_ARRAY);
+                PMIX_DATA_ARRAY_DESTRUCT(&dry);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    goto done;
+                }
+
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_ALLOC_IDS)) {
+                void *alloclist;
+
+                PMIX_INFO_LIST_START(alloclist);
+                if (NULL != prte_sessions) {
+                    for (k = 0; k < prte_sessions->size; k++) {
+                        session = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, k);
+                        if (NULL == session || NULL == session->alloc_refid) {
+                            continue;
+                        }
+                        PMIX_INFO_LIST_ADD(rc, alloclist, PMIX_ALLOC_ID, session->alloc_refid, PMIX_STRING);
+                        if (PMIX_SUCCESS != rc) {
+                            PMIX_ERROR_LOG(rc);
+                            PMIX_INFO_LIST_RELEASE(alloclist);
+                            goto done;
+                        }
+                    }
+                }
+                PMIX_INFO_LIST_CONVERT(rc, alloclist, &dry);
+                PMIX_INFO_LIST_RELEASE(alloclist);
+                if (PMIX_ERR_EMPTY == rc) {
+                    PMIX_DATA_ARRAY_CONSTRUCT(&dry, 0, PMIX_INFO);
+                } else if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    goto done;
+                }
+                PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_ALLOC_IDS, &dry, PMIX_DATA_ARRAY);
+                PMIX_DATA_ARRAY_DESTRUCT(&dry);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    goto done;
+                }
+
+            } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_ALLOC_PROPERTIES)) {
+                void *proplist;
+
+                if (NULL == allocid) {
+                    ret = PMIX_ERR_BAD_PARAM;
+                    goto done;
+                }
+                session = prte_get_session_object_from_id(allocid);
+                if (NULL == session) {
+                    ret = PMIX_ERR_NOT_FOUND;
+                    goto done;
+                }
+                if (NULL != allocprop && !PMIx_Check_key(allocprop, PMIX_ALLOC_RELEASABLE)) {
+                    ret = PMIX_ERR_NOT_FOUND;
+                    goto done;
+                }
+                PMIX_INFO_LIST_START(proplist);
+                /* If we added the session dynamically to extend the DVM, we can release it fully */
+                releasable = PRTE_FLAG_TEST(session, PRTE_SESSION_FLAG_DYNAMIC);
+                PMIX_INFO_LIST_ADD(rc, proplist, PMIX_ALLOC_RELEASABLE, &releasable, PMIX_BOOL);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_INFO_LIST_RELEASE(proplist);
+                    goto done;
+                }
+                PMIX_INFO_LIST_CONVERT(rc, proplist, &dry);
+                PMIX_INFO_LIST_RELEASE(proplist);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    goto done;
+                }
+                PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_ALLOC_PROPERTIES, &dry, PMIX_DATA_ARRAY);
                 PMIX_DATA_ARRAY_DESTRUCT(&dry);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
