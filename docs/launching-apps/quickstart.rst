@@ -7,7 +7,7 @@ Although this section skips many details, it offers examples that will
 probably work in many environments.
 
 .. caution:: Note that this section is a "Quick start" |mdash| it does
-   not attempt to be comprehensive or describe how to build Open MPI
+   not attempt to be comprehensive or describe how to build PRRTE
    in all supported environments.  The examples below may therefore
    not work exactly as shown in your environment.
 
