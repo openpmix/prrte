@@ -26,7 +26,7 @@ This document specifies the changes required to:
 
 1. Treat the original startup allocation as the default session (no change to
    observable behavior — documented here for completeness).
-2. Honor ``PMIX_ALLOC_TARGET`` and ``PMIX_ALLOC_RESERVED`` on dynamic
+2. Honor ``PMIX_ALLOC_TARGET`` and ``PMIX_ALLOC_SHARE`` on dynamic
    allocation requests to decide which session receives the new nodes.
 3. Honor a new ``PMIX_SPAWN_TARGET`` attribute on spawn requests to select the
    union of allocations a job may map onto.
@@ -45,7 +45,7 @@ Goals
 3. Reservation decisions are driven entirely by PMIx attributes supplied by
    the requester (tool or application); PRRTE invents no policy of its own
    beyond the defaults specified below.
-4. Code that references ``PMIX_ALLOC_TARGET``, ``PMIX_ALLOC_RESERVED``, or
+4. Code that references ``PMIX_ALLOC_TARGET``, ``PMIX_ALLOC_SHARE``, or
    ``PMIX_SPAWN_TARGET`` is guarded so a PMIx that lacks any of these keys
    still builds warning-free and behaves as it does today.
 
@@ -106,8 +106,8 @@ routed as follows:
 * ``PMIX_ALLOC_TARGET`` absent: the new nodes are reserved to the *tool's own*
   namespace, so that processes the tool subsequently launches via
   ``PMIx_Spawn`` land on them by default.
-* ``PMIX_ALLOC_TARGET`` absent **and** ``PMIX_ALLOC_RESERVED`` present and set
-  to ``false``: the new nodes go into the default session and are available to
+* ``PMIX_ALLOC_TARGET`` absent **and** ``PMIX_ALLOC_SHARE`` present and set
+  to ``true``: the new nodes go into the default session and are available to
   all namespaces.
 
 Case 3 — Dynamic allocation requested by an application
@@ -118,7 +118,7 @@ request:
 
 * Default: the new nodes are reserved to the requesting process's namespace.
   Any process in that namespace may spawn jobs against them.
-* ``PMIX_ALLOC_RESERVED`` present and set to ``false``: the new nodes go into
+* ``PMIX_ALLOC_SHARE`` present and set to ``true``: the new nodes go into
   the default session for general use.
 
 Note that ``PMIX_ALLOC_TARGET`` is honored only for tool requesters (Case 2);
@@ -135,7 +135,7 @@ Decision summary
 
    * - Requester
      - ``PMIX_ALLOC_TARGET``
-     - ``PMIX_ALLOC_RESERVED``
+     - ``PMIX_ALLOC_SHARE``
      - Destination session
    * - Tool
      - ``<nspace>``
@@ -143,19 +143,19 @@ Decision summary
      - session owned by ``<nspace>``
    * - Tool
      - absent
-     - absent or ``true``
+     - absent or ``false``
      - session owned by the tool's namespace
    * - Tool
      - absent
-     - ``false``
+     - ``true``
      - default session
    * - Application
      - absent
-     - absent or ``true``
+     - absent or ``false``
      - session owned by the app's namespace
    * - Application
      - absent
-     - ``false``
+     - ``true``
      - default session
    * - Application
      - present
@@ -251,6 +251,29 @@ after ``PRTE_JOB_DO_NOT_SPAWN = PRTE_JOB_START_KEY + 123`` is used:
 
 ``PRTE_JOB_MAX_KEY`` already allows headroom (``+200``); no bump is required.
 
+Two registration steps are easy to overlook and both cause *silent* failures
+rather than build errors, so they are called out explicitly:
+
+* **Add a case to** ``prte_attr_key_to_str`` (``src/util/attr.c``).  That
+  switch has no ``default`` that names the key; an unregistered key prints as
+  ``UNKNOWN``, which is harmless at runtime but masks the attribute in every
+  map/state debug dump and makes the feature far harder to diagnose.
+* **Set the attribute with the global flag.**  The generic job-attribute pack
+  loop in ``prte_dt_packing_fns.c`` forwards only attributes whose ``local``
+  field is ``PRTE_ATTR_GLOBAL`` (which is ``false``).  The spawn target must
+  therefore be stored with::
+
+     prte_set_attribute(&jdata->attributes, PRTE_JOB_SPAWN_TARGET,
+                        PRTE_ATTR_GLOBAL, target_str, PMIX_STRING);
+
+  If it is set ``PRTE_ATTR_LOCAL`` instead, the attribute lives only on the
+  process that parsed ``PMIX_SPAWN_TARGET`` and never reaches the HNP, so the
+  multi-session resolution in ``plm_base_receive.c`` silently falls back to the
+  default/parent session.  Storing it global is what lets the plan claim the
+  target "is packed/unpacked with the rest of the job attributes" — no bespoke
+  pack/unpack code is needed because the generic loop handles any global
+  ``char*`` attribute.
+
 Allocation-Time Handling
 ------------------------
 
@@ -278,8 +301,8 @@ returns a non-tool job; otherwise it is a **tool**.  The directive scan in
 .. code-block:: c
 
    char *target = NULL;        /* PMIX_ALLOC_TARGET namespace, if any */
-   bool reserved = true;       /* default: reserve */
-   bool have_reserved = false;
+   bool share = false;         /* default: reserve (do not share) */
+   bool have_share = false;
 
    for (n = 0; n < req->ninfo; n++) {
    #if defined(PMIX_ALLOC_TARGET)
@@ -288,10 +311,10 @@ returns a non-tool job; otherwise it is a **tool**.  The directive scan in
            continue;
        }
    #endif
-   #if defined(PMIX_ALLOC_RESERVED)
-       if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_RESERVED)) {
-           reserved = PMIX_INFO_TRUE(&req->info[n]);
-           have_reserved = true;
+   #if defined(PMIX_ALLOC_SHARE)
+       if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_SHARE)) {
+           share = PMIX_INFO_TRUE(&req->info[n]);
+           have_share = true;
            continue;
        }
    #endif
@@ -310,7 +333,7 @@ Destination resolution then follows the decision table, with the allocation
    /* the namespace the reservation is created for / must be owned by */
    const char *owner_nspace = (NULL != target) ? target : req->tproc.nspace;
 
-   if (have_reserved && !reserved) {
+   if (have_share && share) {
        dest = prte_default_session;            /* general use */
    } else if (NULL != target && !is_tool) {
        req->pstatus = PMIX_ERR_NO_PERMISSIONS; /* app may not retarget */
@@ -339,7 +362,7 @@ allocation id.
 When the installed PMIx lacks ``PMIX_ALLOC_TARGET``, the ``target`` guard keeps
 it ``NULL`` so ``owner_nspace`` is always the requester's namespace — the
 behavior required when the key is unavailable.  Likewise, without
-``PMIX_ALLOC_RESERVED`` the ``reserved`` default of ``true`` means a bare
+``PMIX_ALLOC_SHARE`` the ``share`` default of ``false`` means a bare
 ``PMIX_ALLOC_NEW`` reserves to the requester's namespace.
 
 Placing the nodes
@@ -524,7 +547,7 @@ pool when requested).
 Backward Compatibility
 -----------------------
 
-* ``PMIX_ALLOC_TARGET``, ``PMIX_ALLOC_RESERVED``, and ``PMIX_SPAWN_TARGET`` are
+* ``PMIX_ALLOC_TARGET``, ``PMIX_ALLOC_SHARE``, and ``PMIX_SPAWN_TARGET`` are
   referenced only inside ``#if defined(<key>)`` blocks.  These keys are plain
   string ``#define``\ s supplied by PMIx; their mere presence in
   ``pmix_common.h`` is the availability signal, so ``#if defined`` (not the
@@ -533,7 +556,7 @@ Backward Compatibility
   the ``PRTE_CHECK_PMIX_CAP`` mechanism in ``config/prte_setup_pmix.m4`` and a
   configure-defined ``PRTE_HAVE_*`` macro.
 * With an older PMIx that lacks all three keys, ``target`` is always ``NULL``,
-  ``reserved`` is never observed, and ``PRTE_JOB_SPAWN_TARGET`` is never set.
+  ``share`` is never observed, and ``PRTE_JOB_SPAWN_TARGET`` is never set.
   Dynamic allocations then fall to the "reserve to the requester's namespace"
   default — which, combined with the mapping change, still partitions
   resources sensibly — while spawns continue to use the default/parent session
@@ -566,6 +589,31 @@ references in ``session->nodes``, and only then proceed with any DVM shrink for
 nodes that are being returned to the scheduler.  The clear-before-shrink
 ordering keeps the reservation bookkeeping from racing the shrink-campaign
 accounting (``prte_dvm_launch_fence`` / ``prte_shrink_campaigns``).
+
+Releasing while jobs are still mapped
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Because a reservation outlives the jobs that run in it, a release request may
+arrive while one or more jobs are still mapped onto the reservation's nodes —
+an owner releasing prematurely, or a scheduler timeout/reclaim firing under a
+running job.  The two sub-cases differ:
+
+* **Owner-initiated release** of a reservation whose nodes are *not* being
+  returned to the scheduler (the nodes stay in the DVM): no process is killed.
+  The nodes simply revert to the default pool when ``node->session`` is
+  cleared, and the already-running jobs continue on them; their
+  ``jdata->session`` still points at the now-detached session object, which is
+  kept alive by the normal ``session->jobs`` references until those jobs
+  terminate.  Mapping for *new* jobs no longer sees the reservation.
+* **Release that returns nodes to the scheduler** (scheduler reclaim, timeout,
+  or an owner release of scheduler-owned nodes): this is the existing DVM
+  shrink path, which already terminates the affected jobs and daemons before
+  the nodes leave.  The reservation cleanup adds nothing new here beyond the
+  clear-before-shrink ordering above; it reuses the established shrink-campaign
+  teardown.
+
+Either way the reservation cleanup never *itself* kills a job — termination is
+driven only by the pre-existing shrink machinery when nodes physically depart.
 
 Implementation Order
 --------------------
@@ -604,10 +652,10 @@ Open Questions
 Resolved decisions
 ~~~~~~~~~~~~~~~~~~~
 
-* **Default ``PMIX_ALLOC_RESERVED`` means "reserve."**  An
-  ``ALLOC_RESERVED``-absent dynamic request reserves the nodes to the
+* **Default (``PMIX_ALLOC_SHARE`` absent) means "reserve."**  An
+  ``ALLOC_SHARE``-absent dynamic request reserves the nodes to the
   requester's (or target's) namespace; only an explicit
-  ``PMIX_ALLOC_RESERVED == false`` routes nodes to the default pool.
+  ``PMIX_ALLOC_SHARE == true`` routes nodes to the default pool.
 * **``PMIX_SPAWN_TARGET`` is limited by an ownership check.**  A requester may
   target only the default session and reservations its namespace owns (the
   scheduler excepted).  See *Ownership check* above.
