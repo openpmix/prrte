@@ -3,20 +3,20 @@
 <topology version="2.0">
   <object type="Machine" os_index="0" cpuset="0x0000ffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff" complete_cpuset="0x0000ffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff" allowed_cpuset="0x0000ffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff" nodeset="0x0000000f" complete_nodeset="0x0000000f" allowed_nodeset="0x0000000f" gp_index="1">
     <info name="DMIProductName" value="Virtual Machine"/>
-    <info name="DMIProductVersion" value="Hyper-V UEFI Release v4.1"/>
-    <info name="DMIProductUUID" value="9967e1a5-64b6-4b01-b97c-36db2a13cabb"/>
-    <info name="DMIBoardVendor" value="Microsoft Corporation"/>
+    <info name="DMIProductVersion" value="Hypervisor"/>
+    <info name="DMIProductUUID" value="uuid"/>
+    <info name="DMIBoardVendor" value="UNKNOWN"/>
     <info name="DMIBoardName" value="Virtual Machine"/>
-    <info name="DMIBoardVersion" value="Hyper-V UEFI Release v4.1"/>
+    <info name="DMIBoardVersion" value="Hypervisor"/>
     <info name="DMIBoardAssetTag" value="None"/>
-    <info name="DMIChassisVendor" value="Microsoft Corporation"/>
+    <info name="DMIChassisVendor" value="UNKNOWN"/>
     <info name="DMIChassisType" value="3"/>
-    <info name="DMIChassisVersion" value="Hyper-V UEFI Release v4.1"/>
-    <info name="DMIChassisAssetTag" value="7783-7084-3265-9085-8269-3286-77"/>
-    <info name="DMIBIOSVendor" value="Microsoft Corporation"/>
-    <info name="DMIBIOSVersion" value="Hyper-V UEFI Release v4.1"/>
+    <info name="DMIChassisVersion" value="Hypervisor"/>
+    <info name="DMIChassisAssetTag" value="xxxxx"/>
+    <info name="DMIBIOSVendor" value="UNKNOWN"/>
+    <info name="DMIBIOSVersion" value="Hypervisor"/>
     <info name="DMIBIOSDate" value="08/23/2024"/>
-    <info name="DMISysVendor" value="Microsoft Corporation"/>
+    <info name="DMISysVendor" value="UNKNOWN"/>
     <info name="Backend" value="Linux"/>
     <info name="LinuxCgroup" value="/user.slice"/>
     <info name="OSName" value="Linux"/>
