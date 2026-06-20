@@ -1,0 +1,905 @@
+Per-App-Context Mapping Policies
+=================================
+
+Overview
+--------
+
+Today every ``prte_job_t`` carries a single ``prte_job_map_t`` (mapping/ranking/binding
+policy triple) and a single resolved ``prte_rmaps_options_t`` that is passed unchanged
+to whichever rmaps component wins selection.  All app contexts in the job are mapped
+by that one component under that one policy.
+
+This document specifies the changes required to allow each ``prte_app_context_t`` to
+carry its own mapping, ranking, and binding directives so that different apps within
+the same job can be mapped by different components under different policies.
+
+Goals
+-----
+
+1. Every directive expressible at job level via ``--map-by``, ``--rank-by``, and
+   ``--bind-to`` must be expressible at app-context level.
+2. When an app carries no per-app directives, it inherits the job-level policy
+   unchanged — no behaviour change for existing usage.
+3. The rmaps component selected for each app context is determined by that app's
+   resolved mapping policy, not by the job's.
+4. The existing component interface (``map_job(prte_job_t *, prte_rmaps_options_t *)``)
+   is preserved with a minimal, backward-compatible extension.
+5. Global rank assignment (vpid computation) remains a single coordinated pass
+   across all apps after all apps have been placed.
+
+Attributes Required on ``prte_app_context_t``
+---------------------------------------------
+
+Add the following new attribute keys to ``src/util/attr.h`` in the
+``PRTE_APP_*`` range (next available keys after ``PRTE_APP_PPR = 25``):
+
+.. code-block:: c
+
+   /* Mapping policy string for this app, same syntax as --map-by.
+    * When present overrides the job-level mapping policy for this app. */
+   #define PRTE_APP_MAPBY              26  // char* - e.g. "core:pe=2:oversubscribe"
+
+   /* Ranking policy string for this app, same syntax as --rank-by. */
+   #define PRTE_APP_RANKBY             27  // char* - e.g. "fill"
+
+   /* Binding policy string for this app, same syntax as --bind-to. */
+   #define PRTE_APP_BINDTO             28  // char* - e.g. "core"
+
+   /* File to use for sequential or rankfile mapping for this app.
+    * Distinct from PRTE_APP_HOSTFILE which lists nodes; this is the
+    * ordering/affinity file consumed by the seq and rank_file components. */
+   #define PRTE_APP_MAP_FILE           29  // char* - path to seq or rankfile
+
+   /* Device name for dist mapping for this app. */
+   #define PRTE_APP_DIST_DEVICE        30  // char* - e.g. "mlx5_0"
+
+   /* Use hwthreads as CPUs for this app. */
+   #define PRTE_APP_HWT_CPUS           31  // bool
+
+   /* Use cores as CPUs for this app (explicit, not relying on absence of HWT). */
+   #define PRTE_APP_CORE_CPUS          32  // bool
+
+   /* PE-list (CPU set) for this app, same syntax as pe-list= modifier. */
+   #define PRTE_APP_CPUSET             33  // char* - comma-delimited CPU ranges
+
+   /* Max procs to bind to a target object before moving to the next. */
+   #define PRTE_APP_BINDING_LIMIT      34  // uint16_t
+
+``PRTE_APP_MAX_KEY`` must be raised to accommodate the new keys.
+
+Relationship to existing attributes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The already-defined ``PRTE_APP_PES_PER_PROC`` (24) and ``PRTE_APP_PPR`` (25) are
+preserved as-is; their semantics are unchanged.
+
+``PRTE_APP_MAPBY`` supersedes ``PRTE_APP_PPR`` and ``PRTE_APP_PES_PER_PROC`` when
+present — the full ``PRTE_APP_MAPBY`` string is the canonical per-app mapping
+directive and is parsed by the same machinery as the job-level ``--map-by``
+string (see §Parsing below).
+
+Changes to ``prte_rmaps_options_t`` (``src/mca/rmaps/rmaps_types.h``)
+-----------------------------------------------------------------------
+
+Add one field:
+
+.. code-block:: c
+
+   typedef struct {
+       /* ... existing fields unchanged ... */
+
+       /* When >= 0, the component must map only the app context at this index
+        * within jdata->apps and must skip all others.
+        * When < 0 (default, set to -1), the component maps all app contexts
+        * as it does today. */
+       int app_idx;
+
+   } prte_rmaps_options_t;
+
+The new field is initialized to ``-1`` (map all apps) in ``prte_rmaps_base_map_job``
+via the existing ``memset(&options, 0, ...)`` plus an explicit assignment immediately
+after:
+
+.. code-block:: c
+
+   memset(&options, 0, sizeof(prte_rmaps_options_t));
+   options.app_idx = -1;   /* map all apps by default */
+
+New Parsing Functions (``src/mca/rmaps/base/rmaps_base_frame.c``)
+------------------------------------------------------------------
+
+The existing ``prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *spec)``
+and ``check_modifiers()`` store their results into ``jdata->map->mapping`` and
+``jdata->attributes``.  They must not be changed.
+
+Add three new functions with identical parsing logic but storing results into
+``app->attributes``:
+
+.. code-block:: c
+
+   /* Parse a --map-by style string and store the result on app->attributes.
+    * All mapping policy values, modifiers, and options that check_modifiers()
+    * handles at the job level are handled here at the app level.  PPR pattern
+    * is stored as PRTE_APP_PPR; pe count as PRTE_APP_PES_PER_PROC; cpuset as
+    * PRTE_APP_CPUSET; file as PRTE_APP_MAP_FILE; hwthread/core CPU mode as
+    * PRTE_APP_HWT_CPUS / PRTE_APP_CORE_CPUS.  The parsed mapping policy enum
+    * value is stored as PRTE_APP_MAPBY (as a uint16_t, not the original string,
+    * once resolved) — see §Resolution below for how this is read back. */
+   int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *spec);
+
+   /* Parse a --rank-by style string and store the result as PRTE_APP_RANKBY
+    * (uint16_t ranking policy) on app->attributes. */
+   int prte_rmaps_base_set_app_ranking_policy(prte_app_context_t *app, char *spec);
+
+   /* Parse a --bind-to style string and store the result as PRTE_APP_BINDTO
+    * (uint16_t binding policy) on app->attributes. */
+   int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app, char *spec);
+
+These are declared in ``src/mca/rmaps/base/base.h``.
+
+Attribute storage convention
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To avoid storing both a raw string and a parsed integer for the same concept,
+the new attributes store the **parsed policy value** (uint16_t), not the
+original string.  The string attribute keys defined in §Attributes are used
+only for the schizo/CLI layer to record the unparsed directive before the
+base layer processes it; once parsed, the uint16_t value replaces the string
+in the attribute.
+
+Alternatively — and this is the recommended approach for simplicity — the
+string attributes are **only** used by the schizo/CLI parsing layer; the base
+layer's new ``prte_rmaps_base_set_app_*`` functions accept the string, parse it,
+and store the **result** as additional attributes:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 35 20
+
+   * - Parsed result
+     - Attribute
+     - Type
+   * - Mapping policy enum
+     - ``PRTE_APP_MAPBY``
+     - ``PMIX_UINT16``
+   * - Ranking policy enum
+     - ``PRTE_APP_RANKBY``
+     - ``PMIX_UINT16``
+   * - Binding policy enum
+     - ``PRTE_APP_BINDTO``
+     - ``PMIX_UINT16``
+   * - PPR pattern string
+     - ``PRTE_APP_PPR``
+     - ``PMIX_STRING``
+   * - CPUs per rank
+     - ``PRTE_APP_PES_PER_PROC``
+     - ``PMIX_UINT16``
+   * - CPU set string
+     - ``PRTE_APP_CPUSET``
+     - ``PMIX_STRING``
+   * - Map/rankfile path
+     - ``PRTE_APP_MAP_FILE``
+     - ``PMIX_STRING``
+   * - Use hwthreads
+     - ``PRTE_APP_HWT_CPUS``
+     - ``PMIX_BOOL``
+   * - Use cores
+     - ``PRTE_APP_CORE_CPUS``
+     - ``PMIX_BOOL``
+   * - Binding limit
+     - ``PRTE_APP_BINDING_LIMIT``
+     - ``PMIX_UINT16``
+
+Changes to ``prte_rmaps_base_map_job()`` (``src/mca/rmaps/base/rmaps_base_map_job.c``)
+---------------------------------------------------------------------------------------
+
+This is the primary structural change.
+
+Step 1 — resolve job-level defaults (unchanged)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The existing inheritance, policy-resolution, and process-count logic runs as
+now and populates ``jdata->map->mapping``, ``jdata->map->ranking``,
+``jdata->map->binding``, and the job-level ``options`` struct.  This path is
+unchanged and provides the fallback for apps that carry no per-app directives.
+
+Step 2 — check whether any app has per-app directives
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+After job-level resolution, scan the apps array:
+
+.. code-block:: c
+
+   bool any_per_app = false;
+   for (n = 0; n < jdata->apps->size; n++) {
+       app = pmix_pointer_array_get_item(jdata->apps, n);
+       if (NULL == app) continue;
+       if (prte_get_attribute(&app->attributes, PRTE_APP_MAPBY, NULL, PMIX_UINT16) ||
+           prte_get_attribute(&app->attributes, PRTE_APP_RANKBY, NULL, PMIX_UINT16) ||
+           prte_get_attribute(&app->attributes, PRTE_APP_BINDTO, NULL, PMIX_UINT16)) {
+           any_per_app = true;
+           break;
+       }
+   }
+
+If ``any_per_app`` is false, the existing single-dispatch path runs unchanged.
+
+Step 3 — per-app dispatch loop (new path)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When ``any_per_app`` is true, replace the single component-dispatch block with
+a loop over app contexts:
+
+.. code-block:: c
+
+   for (n = 0; n < jdata->apps->size; n++) {
+       app = pmix_pointer_array_get_item(jdata->apps, n);
+       if (NULL == app) continue;
+
+       /* Build a per-app copy of options starting from the job-level defaults */
+       prte_rmaps_options_t app_options = options;   /* shallow copy */
+       app_options.app_idx = n;
+
+       /* Override with app-level directives where present */
+       rc = prte_rmaps_base_resolve_app_options(jdata, app, &app_options);
+       if (PRTE_SUCCESS != rc) {
+           PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+           goto cleanup;
+       }
+
+       /* Compute process count for this app (if not already set) */
+       rc = prte_rmaps_base_compute_nprocs(jdata, app, &app_options);
+       if (PRTE_SUCCESS != rc) {
+           PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+           goto cleanup;
+       }
+
+       /* Select and invoke the component appropriate for this app's policy */
+       did_map = false;
+       PMIX_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules,
+                         prte_rmaps_base_selected_module_t) {
+           rc = mod->module->map_job(jdata, &app_options);
+           if (PRTE_SUCCESS == rc) {
+               did_map = true;
+               break;
+           }
+           if (PRTE_ERR_RESOURCE_BUSY == rc) {
+               /* oversubscription detected */
+               PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+               goto cleanup;
+           }
+           /* PRTE_ERR_TAKE_NEXT_OPTION → try next component */
+       }
+       if (!did_map) {
+           pmix_show_help("help-prte-rmaps-base.txt", "failed-map", true, ...);
+           PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+           goto cleanup;
+       }
+   }
+
+New helper: ``prte_rmaps_base_resolve_app_options()``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Extract into a separate static (or base-exported) function the logic for
+building ``app_options`` from the job-level ``options`` plus any per-app
+overrides:
+
+.. code-block:: c
+
+   static int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
+                                                  prte_app_context_t *app,
+                                                  prte_rmaps_options_t *opts)
+
+This function:
+
+1. Reads ``PRTE_APP_MAPBY`` (uint16_t) from ``app->attributes``; if present,
+   stores into ``opts->map`` (overriding the job-level value).
+
+2. If ``opts->map`` is ``PRTE_MAPPING_PPR``, reads ``PRTE_APP_PPR`` from
+   ``app->attributes``; if absent falls back to ``PRTE_JOB_PPR`` on ``jdata``.
+
+3. Reads ``PRTE_APP_PES_PER_PROC``, ``PRTE_APP_HWT_CPUS``, ``PRTE_APP_CORE_CPUS``,
+   ``PRTE_APP_CPUSET``, ``PRTE_APP_MAP_FILE``, ``PRTE_APP_DIST_DEVICE``,
+   ``PRTE_APP_BINDING_LIMIT`` and overrides the corresponding ``opts`` fields.
+
+4. Reads ``PRTE_APP_RANKBY`` (uint16_t) and ``PRTE_APP_BINDTO`` (uint16_t);
+   stores into ``opts->rank`` and ``opts->bind`` respectively.
+
+5. Resolves defaults for any field that was not overridden, using the same
+   ``prte_rmaps_base_set_default_mapping()`` / ``prte_rmaps_base_set_default_ranking()``
+   logic but operating on ``opts`` rather than ``jdata->map``.
+
+The function must be idempotent and must not modify ``jdata->map`` — any
+per-app mapping policy lives only in ``opts`` and in ``app->attributes``.
+
+Changes to rmaps Components
+----------------------------
+
+Every component must be updated to honour ``options->app_idx``.
+
+Contract
+~~~~~~~~
+
+When ``options->app_idx >= 0``, the component processes **only** the app context
+at that index in ``jdata->apps`` and returns ``PRTE_ERR_TAKE_NEXT_OPTION`` for any
+app it cannot handle.  When ``options->app_idx < 0``, the component processes all
+app contexts as today.
+
+Required change in each component
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In the top-level loop of each ``map_job`` function, replace:
+
+.. code-block:: c
+
+   for (n = 0; n < jdata->apps->size; n++) {
+       app = pmix_pointer_array_get_item(jdata->apps, n);
+       if (NULL == app) continue;
+       ...
+   }
+
+with:
+
+.. code-block:: c
+
+   for (n = 0; n < jdata->apps->size; n++) {
+       app = pmix_pointer_array_get_item(jdata->apps, n);
+       if (NULL == app) continue;
+       /* honour per-app dispatch */
+       if (options->app_idx >= 0 && n != options->app_idx) continue;
+       ...
+   }
+
+This is the only mandatory change to each component.  All five components
+require this change: ``round_robin``, ``ppr``, ``seq``, ``rank_file``, ``lsf``.
+
+Component selection logic in the per-app path
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The mapping policy in ``options->map`` determines which component accepts the
+app.  Each component's ``map_job`` already returns ``PRTE_ERR_TAKE_NEXT_OPTION``
+when the policy is not one it handles.  No changes to per-component policy
+checking are required beyond the ``app_idx`` guard above.
+
+The existing component-selection priority ordering (determined by each
+component's query priority) is preserved.
+
+Changes to Ranking
+------------------
+
+``prte_rmaps_base_compute_vpids()`` in ``rmaps_base_ranking.c`` runs after all
+apps have been placed.  It currently reads ``jdata->map->ranking`` to determine
+the single global ranking strategy.
+
+With per-app ranking:
+
+1. ``prte_rmaps_base_compute_vpids()`` gains an ``app_idx`` parameter
+   (analogous to the mapping path).
+
+2. When called from the per-app loop it is invoked once per app with the
+   app's resolved ``opts->rank`` and ``opts->app_idx``.
+
+3. Global rank assignment is still monotonically increasing across apps
+   in app-index order so that ``pptr->name.rank`` values are contiguous and
+   non-overlapping across the whole job.
+
+4. Per-app ranking controls only the **order** in which processes within
+   that app are assigned their ranks relative to each other; the starting
+   rank for each app is the first unassigned rank after all previous apps.
+
+Changes to Binding
+------------------
+
+No structural changes are required.  ``prte_rmaps_base_bind_proc()`` already
+takes the per-call ``options`` struct.  Because ``prte_rmaps_base_setup_proc()``
+is called from within each component's inner loop with the current ``options``
+in scope, per-app binding is automatically derived from ``opts->bind`` which
+was set by ``prte_rmaps_base_resolve_app_options()``.
+
+Schizo / CLI Layer
+------------------
+
+The schizo layer (e.g. ``src/mca/schizo/prte/``) is responsible for parsing
+command-line arguments and storing them as attributes.  For per-app directives
+a mechanism is needed to associate ``--map-by``, ``--rank-by``, and ``--bind-to``
+options with a specific app context rather than the job.
+
+The expected command-line representation is:
+
+.. code-block:: sh
+
+   prun app1 --map-by core : app2 --map-by node --rank-by fill
+
+where ``:`` is the MPMD separator between app contexts.
+
+Schizo responsibilities
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+1. When the schizo parser encounters ``--map-by``, ``--rank-by``, or ``--bind-to``
+   after an MPMD separator (and thus associated with a specific app context),
+   it calls:
+
+   .. code-block:: c
+
+      prte_rmaps_base_set_app_mapping_policy(app, optval);
+      prte_rmaps_base_set_app_ranking_policy(app, optval);
+      prte_rmaps_base_set_app_binding_policy(app, optval);
+
+   rather than the job-level variants.
+
+2. When these options appear before any MPMD separator (i.e., they apply to
+   the whole job), the schizo parser continues to call the existing job-level
+   functions, which store the result on ``jdata->map``.
+
+3. The PMIx spawn path (``PMIx_Spawn`` / ``PMIx_server_spawn_fn``) passes
+   per-app directives via ``pmix_app_t.info[]`` arrays.  The schizo layer must
+   map the relevant PMIx keys (``PMIX_MAPBY``, ``PMIX_RANKBY``, ``PMIX_BINDTO``)
+   to the new per-app attributes when they appear in a per-app info array.
+
+Migration Notes
+---------------
+
+Existing per-app PPR and PES_PER_PROC
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``PRTE_APP_PPR`` (25) and ``PRTE_APP_PES_PER_PROC`` (24) are already
+stored on ``prte_app_context_t`` and checked in the ppr component.
+Their handling is absorbed into the general ``PRTE_APP_MAPBY`` path:
+
+- A standalone ``PRTE_APP_PPR`` without ``PRTE_APP_MAPBY`` continues to be
+  read by the ppr component as today (backward compatible).
+- ``PRTE_APP_MAPBY`` containing a ``ppr:N:obj`` spec stores into ``PRTE_APP_PPR``
+  in addition to setting ``PRTE_APP_MAPBY = PRTE_MAPPING_PPR``.
+
+``PRTE_JOB_FILE`` versus ``PRTE_APP_MAP_FILE``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The existing ``PRTE_JOB_FILE`` attribute stores the rankfile/seq file path on
+the job.  The new ``PRTE_APP_MAP_FILE`` (29) stores it on an individual app
+context.  The seq and rank_file components must be updated to check
+``PRTE_APP_MAP_FILE`` on the current app before falling back to ``PRTE_JOB_FILE``
+on the job.
+
+Files Modified
+--------------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 50 50
+
+   * - File
+     - Change
+   * - ``src/util/attr.h``
+     - Add ``PRTE_APP_MAPBY`` through ``PRTE_APP_BINDING_LIMIT`` (keys 26–34); raise ``PRTE_APP_MAX_KEY``
+   * - ``src/mca/rmaps/rmaps_types.h``
+     - Add ``app_idx`` field to ``prte_rmaps_options_t``
+   * - ``src/mca/rmaps/base/base.h``
+     - Declare new parsing and resolution functions
+   * - ``src/mca/rmaps/base/rmaps_base_frame.c``
+     - Add ``prte_rmaps_base_set_app_mapping_policy()``, ``prte_rmaps_base_set_app_ranking_policy()``, ``prte_rmaps_base_set_app_binding_policy()``
+   * - ``src/mca/rmaps/base/rmaps_base_map_job.c``
+     - Add per-app detection, per-app dispatch loop, ``prte_rmaps_base_resolve_app_options()``, per-app ``compute_vpids`` calls
+   * - ``src/mca/rmaps/base/rmaps_base_ranking.c``
+     - Add ``app_idx`` parameter to ``prte_rmaps_base_compute_vpids()``
+   * - ``src/mca/rmaps/round_robin/rmaps_rr.c``
+     - Add ``app_idx`` guard in app-context loop
+   * - ``src/mca/rmaps/ppr/rmaps_ppr.c``
+     - Add ``app_idx`` guard; remove duplicate per-app PPR/PES override (now handled centrally)
+   * - ``src/mca/rmaps/seq/rmaps_seq.c``
+     - Add ``app_idx`` guard; check ``PRTE_APP_MAP_FILE`` before ``PRTE_JOB_FILE``
+   * - ``src/mca/rmaps/rank_file/rmaps_rank_file.c``
+     - Add ``app_idx`` guard; check ``PRTE_APP_MAP_FILE`` before ``PRTE_JOB_FILE``
+   * - ``src/mca/rmaps/lsf/rmaps_lsf.c``
+     - Add ``app_idx`` guard
+   * - ``src/mca/schizo/prte/schizo_prte.c`` (and ompi variant)
+     - Map per-app CLI args to new ``prte_rmaps_base_set_app_*`` calls
+   * - ``src/mca/rmaps/rmaps_types.h``
+     - Rename version macro to ``PRTE_RMAPS_BASE_VERSION_5_0_0``; retain ``4_0_0`` as deprecated alias
+   * - ``src/mca/rmaps/rmaps.h``
+     - Rename module struct/typedef to ``prte_rmaps_base_module_5_0_0_t``
+   * - ``src/mca/rmaps/round_robin/rmaps_rr_component.c``
+     - Reference ``PRTE_RMAPS_BASE_VERSION_5_0_0``
+   * - ``src/mca/rmaps/ppr/rmaps_ppr_component.c``
+     - Reference ``PRTE_RMAPS_BASE_VERSION_5_0_0``
+   * - ``src/mca/rmaps/seq/rmaps_seq_component.c``
+     - Reference ``PRTE_RMAPS_BASE_VERSION_5_0_0``
+   * - ``src/mca/rmaps/rank_file/rmaps_rank_file_component.c``
+     - Reference ``PRTE_RMAPS_BASE_VERSION_5_0_0``
+   * - ``src/mca/rmaps/lsf/rmaps_lsf_component.c``
+     - Reference ``PRTE_RMAPS_BASE_VERSION_5_0_0``
+   * - ``test/unit/rmaps/`` (new directory)
+     - Unit test suite: eight ``.c`` files + ``Makefile.am``
+   * - ``test/unit/Makefile.am`` (new)
+     - ``SUBDIRS = rmaps``
+   * - ``test/Makefile.am`` (new)
+     - ``SUBDIRS = unit``
+   * - ``Makefile.am``
+     - Add ``test`` to ``SUBDIRS`` (after ``src``)
+   * - ``config/prte_config_files.m4``
+     - Add ``test/Makefile``, ``test/unit/Makefile``, ``test/unit/rmaps/Makefile`` to ``AC_CONFIG_FILES``
+
+Resolved Design Decisions
+--------------------------
+
+Oversubscription is job-level only
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``OVERSUBSCRIBE`` and ``NOOVERSUBSCRIBE`` are not per-app-context directives.
+They govern whether the job as a whole is permitted to exceed node slot counts,
+and that decision must be consistent across all apps sharing the same nodes.
+
+Consequence: if a ``--map-by`` string supplied for an individual app context
+includes an ``OVERSUBSCRIBE`` or ``NOOVERSUBSCRIBE`` modifier,
+``prte_rmaps_base_set_app_mapping_policy()`` must treat it as an error, emit a
+diagnostic via ``pmix_show_help()``, and return ``PRTE_ERR_BAD_PARAM``.  The
+mapping event aborts with ``PRTE_JOB_STATE_MAP_FAILED``.
+
+The ``PRTE_APP_MAPBY`` attribute must therefore never carry an oversubscription
+modifier; those modifiers remain valid only in the job-level ``--map-by``
+string where they are stored on ``jdata->map->mapping`` as today.
+
+Display map is job-level only
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``prte_rmaps_base_display_map()`` is called once after all app contexts have
+been mapped, and it displays the complete job map.  It is not meaningful to
+display a partial map mid-loop.
+
+``PRTE_JOB_DISPLAY_MAP`` and ``PRTE_JOB_DISPLAY_DEVEL_MAP`` remain job-level
+attributes.  There are no per-app-context display-map attributes.
+
+If a caller (e.g. schizo, PMIx spawn) sets a display-map directive on an
+individual app context, ``prte_rmaps_base_map_job()`` must promote it to the
+job level: after resolving all per-app options but before entering the
+dispatch loop, scan the apps array and, if any app carries such a directive,
+set ``PRTE_JOB_DISPLAY_MAP`` on ``jdata->attributes``.  The per-app copy of the
+directive is then ignored.
+
+Spawn inheritance is job-level only
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``INHERIT`` and ``NOINHERIT`` control whether a spawned child job copies its
+parent's mapping/ranking/binding policies.  This is a property of the job as
+a whole — a child either inherits from its parent or it does not.
+
+Consequently, ``INHERIT`` and ``NOINHERIT`` modifiers are not permitted in a
+per-app ``--map-by`` string.  ``prte_rmaps_base_set_app_mapping_policy()`` must
+reject them with ``PRTE_ERR_BAD_PARAM`` and a diagnostic, aborting the mapping
+event, exactly as it does for oversubscription modifiers.
+
+If the CLI or PMIx spawn path presents ``INHERIT``/``NOINHERIT`` at the app level
+(e.g., via per-app ``info[]`` keys), ``prte_rmaps_base_map_job()`` must scan all
+apps before entering the dispatch loop and promote the directive to the job
+level:
+
+- If all apps that carry the directive agree (all ``INHERIT`` or all ``NOINHERIT``),
+  apply it to ``jdata->attributes`` as ``PRTE_JOB_INHERIT`` or ``PRTE_JOB_NOINHERIT``.
+- If any two apps carry conflicting directives, emit a diagnostic and abort
+  with ``PRTE_JOB_STATE_MAP_FAILED``.
+
+``NOLOCAL`` may be applied per app context
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``NOLOCAL`` (``PRTE_MAPPING_NO_USE_LOCAL``) directive prevents placement of an
+app's processes on the HNP node.  It is meaningful on a per-app basis — one
+app in a job may need to avoid the head node while another does not.
+
+``NOLOCAL`` is therefore a valid modifier in a per-app ``--map-by`` string.
+``prte_rmaps_base_set_app_mapping_policy()`` stores it as a directive bit within
+the ``PRTE_APP_MAPBY`` uint16_t attribute (using ``PRTE_SET_MAPPING_DIRECTIVE``).
+
+``prte_rmaps_base_resolve_app_options()`` propagates the bit into ``opts->map``
+for the current app.  ``prte_rmaps_base_get_target_nodes()`` already tests
+``PRTE_MAPPING_NO_USE_LOCAL`` in the mapping policy it receives; no further
+changes to that function are required.
+
+Framework Version Increment
+----------------------------
+
+The ``app_idx`` field added to ``prte_rmaps_options_t`` changes the contract
+between the base layer and every component: components are now required to
+honour ``options->app_idx`` and skip apps that do not match.  This is a
+breaking interface change for any out-of-tree component built against the
+previous headers.
+
+The framework version must be incremented from **4.0.0** to **5.0.0**:
+
+.. code-block:: c
+
+   /* src/mca/rmaps/rmaps_types.h */
+   #define PRTE_RMAPS_BASE_VERSION_5_0_0 PRTE_MCA_BASE_VERSION_3_0_0("rmaps", 5, 0, 0)
+
+The old macro ``PRTE_RMAPS_BASE_VERSION_4_0_0`` should be retained as a
+deprecated alias pointing at the new value so that out-of-tree components
+that have not been updated produce a link-time or runtime mismatch rather
+than a silent ABI violation.
+
+All five in-tree component files must be updated to reference
+``PRTE_RMAPS_BASE_VERSION_5_0_0`` in their component struct:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 55 45
+
+   * - Component file
+     - Change
+   * - ``round_robin/rmaps_rr_component.c``
+     - ``PRTE_RMAPS_BASE_VERSION_4_0_0`` → ``PRTE_RMAPS_BASE_VERSION_5_0_0``
+   * - ``ppr/rmaps_ppr_component.c``
+     - same
+   * - ``seq/rmaps_seq_component.c``
+     - same
+   * - ``rank_file/rmaps_rank_file_component.c``
+     - same
+   * - ``lsf/rmaps_lsf_component.c``
+     - same
+
+The module struct typedef and convenience alias in ``rmaps.h`` must also be
+updated:
+
+.. code-block:: c
+
+   /* src/mca/rmaps/rmaps.h */
+   struct prte_rmaps_base_module_5_0_0_t { ... };
+   typedef struct prte_rmaps_base_module_5_0_0_t prte_rmaps_base_module_5_0_0_t;
+   typedef prte_rmaps_base_module_5_0_0_t prte_rmaps_base_module_t;
+
+Unit Tests
+----------
+
+PRRTE currently has no unit test suite for the rmaps framework.  This work
+introduces non-trivial new logic in ``prte_rmaps_base_map_job()`` and
+``prte_rmaps_base_resolve_app_options()`` that must be verified independently
+of a live DVM.  A new unit test tree is required.
+
+Location
+~~~~~~~~~
+
+.. code-block:: text
+
+   test/unit/rmaps/
+       Makefile.am
+       test_rmaps_main.c          — harness: init/finalize, run all suites
+       test_resolve_options.c     — prte_rmaps_base_resolve_app_options()
+       test_policy_parse.c        — prte_rmaps_base_set_app_mapping_policy() etc.
+       test_dispatch.c            — per-app dispatch loop in map_job
+       test_round_robin.c         — round_robin component with app_idx
+       test_ppr.c                 — ppr component with app_idx
+       test_seq.c                 — seq component with app_idx
+       test_rank_file.c           — rank_file component with app_idx
+
+``test/unit/rmaps/`` is added to the ``SUBDIRS`` list in ``test/unit/Makefile.am``
+(creating that file if it does not yet exist) and wired into the top-level
+``make check`` target.
+
+Test harness requirements
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The tests link against the PRRTE static libraries but do not require a running
+DVM.  They use the same minimal-init pattern as the PMIx unit tests: call
+``prte_init()`` in server-tool mode, bypassing daemon launch.  A lightweight
+stub replaces ``PRTE_ACTIVATE_JOB_STATE`` for the mapping-failed path so tests
+can assert the failure code without triggering the state machine.
+
+Coverage required per test file
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**``test_policy_parse.c``** — ``prte_rmaps_base_set_app_mapping_policy()``,
+``prte_rmaps_base_set_app_ranking_policy()``, ``prte_rmaps_base_set_app_binding_policy()``:
+
+- Valid single-word policies (``core``, ``node``, ``slot``, ``ppr:2:core``, ``hwthread``, etc.) store the correct uint16_t in ``app->attributes``.
+- All valid modifiers (``NOLOCAL``, ``PE=N``, ``ORDERED``, ``HWTCPUS``, ``CORECPUS``, ``FILE=path``) parse and store correctly.
+- Forbidden modifiers (``OVERSUBSCRIBE``, ``NOOVERSUBSCRIBE``, ``INHERIT``, ``NOINHERIT``) return ``PRTE_ERR_BAD_PARAM``.
+- Malformed strings (missing value after ``=``, unknown keyword, conflicting ``HWTCPUS``/``CORECPUS``) return appropriate error codes.
+
+**``test_resolve_options.c``** — ``prte_rmaps_base_resolve_app_options()``:
+
+- App with no per-app attributes: ``app_options`` is identical to the job-level ``options``.
+- App with ``PRTE_APP_MAPBY`` set: ``opts->map`` reflects the app value, not the job value.
+- App with ``PRTE_APP_NOLOCAL`` directive bit set: ``opts->map`` carries ``PRTE_MAPPING_NO_USE_LOCAL``.
+- App with ``PRTE_APP_PES_PER_PROC`` / ``PRTE_APP_HWT_CPUS`` / ``PRTE_APP_CPUSET``: correct override.
+- Fallback chain: ``PRTE_APP_PPR`` absent → ``PRTE_JOB_PPR`` used.
+
+**``test_dispatch.c``** — the per-app detection and dispatch loop in ``prte_rmaps_base_map_job()``:
+
+- Job with no per-app directives: single-dispatch path taken (verified by mock component call count = 1).
+- Job with at least one app carrying ``PRTE_APP_MAPBY``: per-app path taken; mock component called once per app.
+- ``OVERSUBSCRIBE`` in a per-app ``--map-by`` string: mapping aborts with ``PRTE_JOB_STATE_MAP_FAILED``.
+- Conflicting ``INHERIT``/``NOINHERIT`` across apps: mapping aborts.
+- Any app with display-map directive: ``PRTE_JOB_DISPLAY_MAP`` promoted to job level.
+- **``NOLOCAL`` on app[0], not on app[1], shared HNP node** (see below).
+
+**``test_round_robin.c``**, **``test_ppr.c``**, **``test_seq.c``**, **``test_rank_file.c``**:
+
+Each file tests its component with the ``app_idx`` field in both modes:
+
+- ``app_idx = -1``: component maps all apps (baseline, existing behaviour).
+- ``app_idx = 0`` on a two-app job: only app[0] is mapped; app[1] procs remain unplaced.
+- ``app_idx = 1`` on a two-app job: only app[1] is mapped; app[0] procs remain unplaced.
+- ``app_idx`` set to an index with ``NULL`` in the apps array: component skips gracefully.
+
+Dedicated test: ``NOLOCAL`` on app[0] with shared HNP node
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Purpose.**  Verify that excluding the HNP node from app[0]'s target list
+via ``NOLOCAL`` leaves no persistent side-effect on the ``prte_node_t`` that
+would prevent app[1] (which carries no ``NOLOCAL``) from placing processes on
+that same node.
+
+**Setup.**  Construct a synthetic allocation of three nodes: the HNP node
+(``node0``, rank 0) and two worker nodes (``node1``, ``node2``).  Create a job with
+two app contexts:
+
+- ``app[0]``: 4 processes, ``PRTE_APP_MAPBY = PRTE_MAPPING_BYSLOT`` with
+  ``PRTE_MAPPING_NO_USE_LOCAL`` set in the directive bits.
+- ``app[1]``: 2 processes, ``PRTE_APP_MAPBY = PRTE_MAPPING_BYSLOT``, no
+  ``NOLOCAL``.
+
+**Execution.**  Run the per-app dispatch loop (the same code path exercised by
+``prte_rmaps_base_map_job()`` when ``any_per_app`` is true).
+
+**Assertions.**
+
+1. None of app[0]'s four processes are assigned to ``node0``.  All four land on
+   ``node1`` and ``node2``.
+2. At least one of app[1]'s two processes is assigned to ``node0``, confirming
+   that the HNP node was not permanently marked as excluded or had its slot
+   count incorrectly zeroed by app[0]'s mapping pass.
+3. ``jdata->map->nodes`` contains all three nodes (the job map is the union of
+   nodes used by any app).
+4. ``node0``'s available slot count after both apps have been mapped reflects
+   only the slots consumed by app[1]'s processes, not a spurious reduction
+   from app[0].
+
+**What this catches.**  If ``prte_rmaps_base_get_target_nodes()`` constructs its
+target list by removing nodes in-place from a shared list, or if it sets a
+persistent flag on ``prte_node_t`` (e.g., modifying ``node->slots_inuse`` or a
+"do not use" flag without resetting it), app[1]'s target list will be missing
+``node0`` and assertion 2 will fail.  The test thereby confirms that node list
+construction is stateless with respect to per-app ``NOLOCAL`` decisions.
+
+``Makefile.am`` for the test suite
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: makefile
+
+   # test/unit/rmaps/Makefile.am
+   #
+   # Copyright (c) 2026      Nanook Consulting  All rights reserved.
+   # $COPYRIGHT$
+   # Additional copyrights may follow
+   # $HEADER$
+
+   AM_CPPFLAGS = \
+       -I$(top_srcdir)/src \
+       -I$(top_srcdir)/include \
+       -I$(top_srcdir)
+
+   check_PROGRAMS = test_rmaps
+
+   test_rmaps_SOURCES = \
+       test_rmaps_main.c      \
+       test_policy_parse.c    \
+       test_resolve_options.c \
+       test_dispatch.c        \
+       test_round_robin.c     \
+       test_ppr.c             \
+       test_seq.c             \
+       test_rank_file.c
+
+   test_rmaps_LDADD = $(top_builddir)/src/libprrte.la
+
+   TESTS = test_rmaps
+
+``make check`` Integration
+--------------------------
+
+PRRTE currently has no ``make check`` target.  This section specifies everything
+required to wire the new unit test suite into the Automake check framework so
+that ``make check`` builds and runs the tests from the top of the source tree.
+
+1. Add ``test/unit/`` to the build tree
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Create ``test/unit/Makefile.am``:
+
+.. code-block:: makefile
+
+   # test/unit/Makefile.am
+   #
+   # $COPYRIGHT$
+   # Additional copyrights may follow
+   # $HEADER$
+
+   SUBDIRS = rmaps
+
+Create ``test/Makefile.am``:
+
+.. code-block:: makefile
+
+   # test/Makefile.am
+   #
+   # $COPYRIGHT$
+   # Additional copyrights may follow
+   # $HEADER$
+
+   SUBDIRS = unit
+
+2. Wire ``test/`` into the top-level build
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In ``Makefile.am``, add ``test`` to ``SUBDIRS``:
+
+.. code-block:: makefile
+
+   # Makefile.am  (excerpt — existing SUBDIRS line)
+   SUBDIRS = config contrib src include docs test
+
+The ``test`` entry must come after ``src`` so that ``libprrte.la`` is built before
+the test programs that link against it.
+
+3. Register ``test/`` Makefiles in the configure system
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In ``config/prte_config_files.m4``, extend the ``AC_CONFIG_FILES`` call:
+
+.. code-block:: bash
+
+   AC_DEFUN([PRTE_CONFIG_FILES],[
+       AC_CONFIG_FILES([
+           src/Makefile
+           ...existing entries...
+           test/Makefile
+           test/unit/Makefile
+           test/unit/rmaps/Makefile
+       ])
+   ])
+
+4. Automake check mechanics
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Automake's ``make check`` target automatically builds everything listed in
+``check_PROGRAMS`` and then runs everything listed in ``TESTS``.  Because
+``TESTS = test_rmaps`` is set in ``test/unit/rmaps/Makefile.am``, running
+``make check`` from the top of the build tree will:
+
+1. Build ``test_rmaps`` (and its dependency ``libprrte.la`` if not already built).
+2. Execute ``./test_rmaps``.
+3. Report pass/fail based on the exit code.
+
+No additional Automake variables or test-driver configuration are required for
+a simple binary-exit-code test.  If a TAP-based driver is preferred in future,
+``AM_TESTS_ENVIRONMENT`` and ``LOG_DRIVER`` can be added at that point without
+changing the test source files.
+
+5. ``autogen.pl`` / ``configure`` impact
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Adding ``test/Makefile.am``, ``test/unit/Makefile.am``, and
+``test/unit/rmaps/Makefile.am`` to the source tree and listing them in
+``config/prte_config_files.m4`` is sufficient.  No new ``configure.ac`` macros
+are needed.  Developers must re-run ``./autogen.pl && ./configure`` after
+pulling these files for the first time.
+
+6. Isolation from normal builds
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The test programs are listed under ``check_PROGRAMS``, not ``bin_PROGRAMS`` or
+``noinst_PROGRAMS``.  Automake only builds ``check_PROGRAMS`` when ``make check``
+is explicitly invoked; a plain ``make`` or ``make install`` does not build them.
+This keeps the normal build fast and does not install test binaries.
+
+7. Developer workflow
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: sh
+
+   # After configure:
+   make -j$(nproc)          # normal build, does not compile tests
+   make check               # build and run all unit tests
+   make check -C test/unit/rmaps   # run only the rmaps suite
+
+Open Questions
+--------------
+
+None.
