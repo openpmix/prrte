@@ -410,7 +410,7 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
     }
 
     nprocs_mapped = 0;
-    savecpuset = strdup(options->cpuset);
+    savecpuset = (NULL != options->cpuset) ? strdup(options->cpuset) : NULL;
 
 pass:
     PMIX_LIST_FOREACH_SAFE(node, nd, node_list, prte_node_t)
@@ -509,7 +509,7 @@ pass:
                 hwloc_bitmap_free(options->job_cpuset);
                 options->job_cpuset = NULL;
             }
-            options->cpuset = strdup(savecpuset);
+            options->cpuset = (NULL != savecpuset) ? strdup(savecpuset) : NULL;
             if (NULL != savecpuset) {
                 free(savecpuset);
             }
@@ -526,7 +526,7 @@ pass:
         if (NULL != options->cpuset) {
             free(options->cpuset);
         }
-        options->cpuset = strdup(savecpuset);
+        options->cpuset = (NULL != savecpuset) ? strdup(savecpuset) : NULL;
     } // next node
 
     /* second pass: if we haven't mapped everyone yet, it is
@@ -553,7 +553,7 @@ pass:
         if (NULL != options->cpuset) {
             free(options->cpuset);
         }
-        options->cpuset = strdup(savecpuset);
+        options->cpuset = (NULL != savecpuset) ? strdup(savecpuset) : NULL;
         // Rescan the nodes
         second_pass = true;
         goto pass;

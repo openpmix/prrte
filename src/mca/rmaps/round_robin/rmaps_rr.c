@@ -165,8 +165,12 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
          */
         PMIX_LIST_DESTRUCT(&node_list);
     }
-    /* calculate the ranks for this job */
-    rc = prte_rmaps_base_compute_vpids(jdata, options, -1, NULL);
+    /* calculate the ranks for this job - in per-app dispatch mode
+     * (app_idx >= 0) the base computes the vpids with the correct
+     * cross-app numbering, so skip it here to avoid colliding ranks */
+    if (options->app_idx < 0) {
+        rc = prte_rmaps_base_compute_vpids(jdata, options, -1, NULL);
+    }
 
     return rc;
 

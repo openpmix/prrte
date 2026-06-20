@@ -393,8 +393,12 @@ process:
             save = sq;
         }
     }
-    /* compute local/app ranks */
-    rc = prte_rmaps_base_compute_vpids(jdata, options, -1, NULL);
+    /* compute local/app ranks - in per-app dispatch mode (app_idx >= 0)
+     * the base computes the ranks with the correct cross-app numbering,
+     * so skip it here */
+    if (options->app_idx < 0) {
+        rc = prte_rmaps_base_compute_vpids(jdata, options, -1, NULL);
+    }
     return rc;
 
 error:
