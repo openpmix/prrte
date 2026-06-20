@@ -390,6 +390,51 @@ pterm                               # shut down DVM
 For resource manager integration (SLURM, PBS, LSF), test within an actual
 allocation on the relevant system.
 
+### Testing the mapper without launching
+
+Most `rmaps` work — mapping policies, ranking, and binding — can be verified
+**without launching any daemons or processes**.  `prterun` will compute and
+print the complete job map (process-to-node placement, ranks, and CPU
+bindings) and then stop, when given the `donotlaunch` runtime option together
+with `--display map`:
+
+```sh
+prterun --rtos donotlaunch --display map \
+        --prtemca hwloc_use_topo_file test/unit/rmaps/test-topo.xml \
+        -H node0:4,node1:4,node2:4 \
+        --map-by node --rank-by node --bind-to core -n 8 hostname
+```
+
+This places the 8 procs round-robin across the three simulated nodes (3/3/2),
+ranks them by node, and binds each to a core — and prints the result without
+launching anything.
+
+What each piece does:
+
+- **`--rtos donotlaunch`** — run the mapper/ranker/binder, display the result,
+  and exit.  Nothing is forked or exec'd; no DVM is started.  (`--do-not-launch`
+  is a deprecated alias.)
+- **`--display map`** — print the resulting map.  Use `--display allocation` or
+  `--display map-devel` for more detail.  (`--display-map` is a deprecated
+  alias.)
+- **`--prtemca hwloc_use_topo_file <path>`** — bind against a *simulated* node
+  topology loaded from an hwloc XML file instead of the local machine's
+  topology.  Without it, binding is computed against the head node's own
+  topology (and `donotlaunch` warns that it could not probe the compute
+  nodes).  A ready-made multi-core topology lives at
+  `test/unit/rmaps/test-topo.xml`; generate others with `lstopo file.xml`.
+- **`-H node0:N,node1:M,...`** — declare the simulated nodes and their slot
+  counts.  The counts (`N`, `M`, …) only need to be **at least** the number of
+  procs you want placed on each node; they bound oversubscription, not the
+  topology.  All simulated nodes share the one topology from the XML file.
+
+The printed map shows, per node, each process's `App:` index, `Process rank:`,
+and `Bound:` object — exactly the values produced by `src/mca/rmaps` and the
+`src/hwloc` binding code — so different `--map-by` / `--rank-by` / `--bind-to`
+combinations (and the by-node vs. by-slot rank distinctions that are only
+visible across multiple nodes) can be compared directly.  This is the fastest
+way to confirm a mapping/ranking/binding change before any integration test.
+
 ### Reporting bugs
 
 File issues at https://github.com/openpmix/prrte/issues.  Include the
