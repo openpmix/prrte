@@ -772,6 +772,16 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
     /* pass the personality */
     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PERSONALITY, schizo->name, PMIX_STRING);
 
+    /* Display directives are job-level only: there is no way to scope a map,
+     * binding, or allocation display to an individual app context.  A second
+     * instance therefore almost always means the user attached one to an app
+     * in an MPMD line, which we cannot honor - reject it rather than silently
+     * applying just one. */
+    if (1 < pmix_cmd_line_get_ninsts(results, PRTE_CLI_DISPLAY)) {
+        pmix_show_help("help-schizo-base.txt", "multi-instances", true, PRTE_CLI_DISPLAY);
+        return PRTE_ERR_BAD_PARAM;
+    }
+
     /* get display options */
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_DISPLAY);
     if (NULL != opt) {
