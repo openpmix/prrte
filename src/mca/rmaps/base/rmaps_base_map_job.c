@@ -67,7 +67,7 @@ static void inherit_env_directives(prte_job_t *jdata,
  * NULL-spec path of prte_rmaps_base_set_ranking_policy().  Returns a bare
  * PRTE_RANK_BY_* value with no directive bits.  The full mapping value
  * (including directives) is passed so the SPAN directive can be honored. */
-static prte_ranking_policy_t prte_rmaps_base_derive_ranking(prte_mapping_policy_t mapping)
+prte_ranking_policy_t prte_rmaps_base_derive_ranking(prte_mapping_policy_t mapping)
 {
     prte_mapping_policy_t pol = PRTE_GET_MAPPING_POLICY(mapping);
 
@@ -93,7 +93,7 @@ static prte_ranking_policy_t prte_rmaps_base_derive_ranking(prte_mapping_policy_
  * fall back to the common default of binding to core - or to hwthread when
  * hwthreads are being treated as independent cpus.  Returns a bare
  * PRTE_BIND_TO_* value with no directive bits. */
-static prte_binding_policy_t prte_rmaps_base_derive_binding(prte_mapping_policy_t mapping,
+prte_binding_policy_t prte_rmaps_base_derive_binding(prte_mapping_policy_t mapping,
                                                             bool use_hwthreads)
 {
     bool hwt = use_hwthreads || prte_rmaps_base.require_hwtcpus;
@@ -118,7 +118,7 @@ static prte_binding_policy_t prte_rmaps_base_derive_binding(prte_mapping_policy_
     }
 }
 
-static int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
+int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
                                                prte_app_context_t *app,
                                                prte_rmaps_options_t *opts)
 {

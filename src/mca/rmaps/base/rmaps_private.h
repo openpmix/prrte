@@ -66,6 +66,19 @@ PRTE_EXPORT int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                                               int app_idx,
                                               uint32_t *next_vpid);
 
+/* Resolve a single app's options from the job-level defaults plus the app's
+ * per-app PRTE_APP_* attributes.  Exposed (non-static) so the unit tests can
+ * exercise the override/masking/default-derivation logic directly. */
+PRTE_EXPORT int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
+                                                    prte_app_context_t *app,
+                                                    prte_rmaps_options_t *opts);
+
+/* Derive the default ranking/binding policy from a mapping policy.  Exposed
+ * for unit testing; both return a bare PRTE_RANK_BY_* / PRTE_BIND_TO_* value. */
+PRTE_EXPORT prte_ranking_policy_t prte_rmaps_base_derive_ranking(prte_mapping_policy_t mapping);
+PRTE_EXPORT prte_binding_policy_t prte_rmaps_base_derive_binding(prte_mapping_policy_t mapping,
+                                                                 bool use_hwthreads);
+
 PRTE_EXPORT int prte_rmaps_base_bind_proc(prte_job_t *jdata,
                                           prte_proc_t *proc,
                                           prte_node_t *node,
