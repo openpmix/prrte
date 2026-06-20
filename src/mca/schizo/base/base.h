@@ -86,6 +86,11 @@ PRTE_EXPORT int prte_schizo_base_convert(pmix_cli_result_t *results,
 
 PRTE_EXPORT prte_schizo_base_module_t *prte_schizo_base_detect_proxy(char *cmdpath);
 
+/* Normalize deprecated hyphenated CLI option spellings in-place (--map-by,
+ * --rank-by, --bind-to, --runtime-options) and return any --personality value
+ * found (a pointer into argv, not a copy; NULL if none). */
+PRTE_EXPORT char *prte_schizo_base_normalize_argv(char **argv);
+
 PRTE_EXPORT void prte_schizo_base_root_error_msg(void);
 PRTE_EXPORT char *prte_schizo_base_getline(FILE *fp);
 PRTE_EXPORT char *prte_schizo_base_strip_quotes(char *p);

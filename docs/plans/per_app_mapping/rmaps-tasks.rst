@@ -488,6 +488,40 @@ setter functions.
 - [ ] Map ``PMIX_RANKBY`` → ``prte_rmaps_base_set_app_ranking_policy(app, val)``
 - [ ] Map ``PMIX_BINDTO`` → ``prte_rmaps_base_set_app_binding_policy(app, val)``
 
+T6.3 — Factor the argv pre-scan into a shared helper and relax the guards
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Both ``prun`` and the ``prte`` HNP launcher pre-scan the raw argv and reject a
+second ``--rank-by`` / ``--bind-to`` with the ``multi-instances`` error, which blocks
+per-app MPMD lines like ``prun app1 --rank-by node : app2 --rank-by slot``.
+``--map-by`` has no such guard.  The two pre-scan loops are exact copies, so the
+fix is to factor them into one helper and relax it there once.  Make ``--rank-by``
+and ``--bind-to`` behave like ``--map-by``: no ``found`` tracking, no
+``multi-instances`` rejection, rename every occurrence unconditionally.  Per-app
+vs. duplicate-job-level association is the schizo MPMD parser's responsibility, not
+the pre-scan's.
+
+``src/mca/schizo/base/schizo_base_stubs.c`` and ``src/mca/schizo/base/base.h``:
+
+- [ ] Add ``char *prte_schizo_base_normalize_argv(char **argv)`` that renames the
+  four deprecated spellings (``--map-by``, ``--rank-by``, ``--bind-to``,
+  ``--runtime-options``) in place and returns any ``--personality`` value (a
+  pointer into ``argv``, ``NULL`` if none)
+- [ ] Declare it in ``base.h`` with ``PRTE_EXPORT``
+
+``src/tools/prun/prun.c`` (``prun()``):
+
+- [ ] Replace the inline pre-scan loop with ``personality = prte_schizo_base_normalize_argv(pargv);``
+- [ ] Drop the now-unused ``i`` loop variable from the function's declarations
+
+``src/prted/prte.c`` (``main()``):
+
+- [ ] Replace the inline pre-scan loop with ``personality = prte_schizo_base_normalize_argv(pargv);``
+  (keep ``i``; it is still used by the environment-scan loop)
+
+- [ ] Smoke test: ``prun app1 --rank-by node : app2 --rank-by slot`` is accepted
+  (no longer errors with ``multi-instances``)
+
 Phase 7 — Build System
 -----------------------
 

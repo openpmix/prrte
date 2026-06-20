@@ -375,52 +375,9 @@ int prte(int argc, char *argv[])
         return rc;
     }
 
-    /* look for any personality specification and do a quick sanity check */
-    personality = NULL;
-    bool rankby_found = false;
-    bool bindto_found = false;
-    for (i = 0; NULL != pargv[i]; i++) {
-        if (0 == strcmp(pargv[i], "--personality")) {
-            personality = pargv[i + 1];
-            continue;
-        }
-        if (0 == strcmp(pargv[i], "--map-by")) {
-            free(pargv[i]);
-            pargv[i] = strdup("--mapby");
-            continue;
-        }
-        if (0 == strcmp(pargv[i], "--rank-by") ||
-            0 == strcmp(pargv[i], "--rankby")) {
-            if (rankby_found) {
-                pmix_show_help("help-schizo-base.txt", "multi-instances", true, pargv[i]);
-                return PRTE_ERR_BAD_PARAM;
-            }
-            rankby_found = true;
-            if (0 == strcmp(pargv[i], "--rank-by")) {
-                free(pargv[i]);
-                pargv[i] = strdup("--rankby");
-            }
-            continue;
-        }
-        if (0 == strcmp(pargv[i], "--bind-to") ||
-            0 == strcmp(pargv[i], "--bindto")) {
-            if (bindto_found) {
-                pmix_show_help("help-schizo-base.txt", "multi-instances", true, "bind-to");
-                return PRTE_ERR_BAD_PARAM;
-            }
-            bindto_found = true;
-            if (0 == strcmp(pargv[i], "--bind-to")) {
-                free(pargv[i]);
-                pargv[i] = strdup("--bindto");
-            }
-            continue;
-        }
-        if (0 == strcmp(pargv[i], "--runtime-options")) {
-            free(pargv[i]);
-            pargv[i] = strdup("--rtos");
-            continue;
-        }
-    }
+    /* normalize deprecated option spellings and look for any personality
+     * specification */
+    personality = prte_schizo_base_normalize_argv(pargv);
 
     /* detect if we are running as a proxy and select the active
      * schizo module for this tool */
