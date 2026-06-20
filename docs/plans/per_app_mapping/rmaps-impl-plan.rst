@@ -84,6 +84,13 @@ Sub-steps (in order):
 
 1. Add ``prte_rmaps_base_resolve_app_options()`` as a static helper — builds an
    ``app_options`` struct from the job-level ``options`` plus per-app attribute overrides.
+   It must: (a) mask the ``PRTE_APP_MAPBY``/``RANKBY``/``BINDTO`` directive bits off when
+   writing ``opts->map``/``rank``/``bind`` (route overload to ``opts->overload``);
+   (b) refresh the map-derived fields (``maptype``/``mapdepth``/``mapspan``/``ordered``)
+   when the app overrides its map; and (c) **default ranking and binding from the app's
+   own map** when no explicit per-app ``--rank-by``/``--bind-to`` is given — via small
+   pure helpers ``prte_rmaps_base_derive_ranking()`` / ``derive_binding()`` — rather than
+   inheriting the job-level ranking/binding.
 2. Add ``prte_rmaps_base_compute_nprocs()`` call per app (extract from existing
    process-count logic if not already a helper, or call the existing macro inline).
 3. Add the ``any_per_app`` scan.
@@ -94,6 +101,29 @@ Sub-steps (in order):
 File:
 
 - ``src/mca/rmaps/base/rmaps_base_map_job.c``
+
+Phase 3a — per-app attribute plumbing (CLI → attributes)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Goal:** The per-app ``PRTE_APP_*`` attributes actually reach ``map_job``.  This
+plumbing largely already exists, but two things are required for it to work:
+
+1. The ``prte_rmaps_base_set_app_*_policy()`` helpers must store every ``PRTE_APP_*``
+   attribute with **``PRTE_ATTR_GLOBAL``**, not ``PRTE_ATTR_LOCAL``.  ``LOCAL``
+   attributes are not packed and are silently dropped when the spawn request is relayed
+   to the DVM master, so per-app directives stored as ``LOCAL`` never reach ``map_job``
+   and ``any_per_app`` is always false.  This is the single most important correctness
+   fix in the whole feature and produces no error when wrong — only silent fallback to
+   the job-level policy.
+2. The spawn-assembly loops (``src/prted/prte.c`` and ``src/prted/prun_common.c``) must
+   convert each ``pmix_app_t.info`` from that app's own ``app->info`` list, not from the
+   job-level info.
+
+Files:
+
+- ``src/mca/rmaps/base/rmaps_base_frame.c`` (``LOCAL`` → ``GLOBAL`` in the three setters)
+- ``src/prted/prte_app_parse.c``, ``src/prted/pmix/pmix_server_dyn.c`` (already present)
+- ``src/prted/prte.c``, ``src/prted/prun_common.c`` (per-app info conversion)
 
 Phase 4 — Ranking with ``app_idx``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -317,6 +347,28 @@ Risk Areas
    ``PRTE_APP_PPR`` and ``PRTE_APP_PES_PER_PROC`` directly (rmaps_ppr.c lines 166, 171).
    In Phase 5 this must be removed and the values must come through
    ``resolve_app_options()`` to avoid double-application.
-5. **Schizo MPMD parsing** — the ``:`` MPMD separator logic in schizo must correctly
-   associate each ``--map-by``/``--rank-by``/``--bind-to`` with its app context index, not
-   blindly with the last-seen app.
+5. **Per-app MPMD parsing** — the ``:`` separator logic must associate each
+   ``--map-by``/``--rank-by``/``--bind-to`` with its app context.  This already happens in
+   ``src/prted/prte_app_parse.c`` (each app segment is parsed in its own ``create_app()``
+   call), so no schizo MPMD bookkeeping is needed — but the spawn-assembly loops must
+   convert each ``pmix_app_t.info`` from that app's own ``app->info``.
+6. **``PRTE_ATTR_LOCAL`` vs ``GLOBAL`` (highest-risk, silent failure)** — the
+   ``set_app_*_policy`` helpers must store every ``PRTE_APP_*`` attribute as
+   ``PRTE_ATTR_GLOBAL``.  ``LOCAL`` attributes are dropped when the spawn request is
+   packed and relayed to the DVM master, so per-app directives stored as ``LOCAL`` never
+   reach ``map_job``; ``any_per_app`` stays false and every app falls back to the
+   job-level policy with **no error**.  A single-app test masks this (its directive
+   equals the job policy); always verify with a multi-app MPMD case.
+7. **Directive-bit masking in ``resolve_app_options``** — the ``PRTE_APP_*`` attributes
+   carry directive bits (``GIVEN``, overload, ``IS_SET``) in their high bits.  Assigning
+   the raw value to ``opts->map``/``rank``/``bind`` breaks the bare-enum comparisons in
+   the components and ``compute_vpids``.  Mask with ``PRTE_GET_*_POLICY`` and route the
+   overload bit to ``opts->overload``.
+
+Verification
+------------
+
+Use the offline ``prterun --rtos donotlaunch --display map`` technique (see the spec
+§"Offline end-to-end verification" and ``AGENTS.md``) to confirm placement, ranks, and
+bindings for both single-app and **multi-app MPMD** cases before relying on the unit
+tests.  The multi-app case is what catches risks 6 and 7.
