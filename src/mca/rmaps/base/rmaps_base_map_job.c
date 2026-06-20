@@ -63,6 +63,61 @@ static void inherit_env_directives(prte_job_t *jdata,
 
 /* Override job-level opts with per-app attributes where present.
  * Does not modify jdata->map. */
+/* Derive the default ranking policy from a mapping policy, mirroring the
+ * NULL-spec path of prte_rmaps_base_set_ranking_policy().  Returns a bare
+ * PRTE_RANK_BY_* value with no directive bits.  The full mapping value
+ * (including directives) is passed so the SPAN directive can be honored. */
+static prte_ranking_policy_t prte_rmaps_base_derive_ranking(prte_mapping_policy_t mapping)
+{
+    prte_mapping_policy_t pol = PRTE_GET_MAPPING_POLICY(mapping);
+
+    if (PRTE_MAPPING_BYNODE == pol) {
+        return PRTE_RANK_BY_NODE;
+    }
+    if (PRTE_MAPPING_BYSLOT == pol) {
+        return PRTE_RANK_BY_SLOT;
+    }
+    if (0 != (PRTE_MAPPING_SPAN & PRTE_GET_MAPPING_DIRECTIVE(mapping))) {
+        return PRTE_RANK_BY_SPAN;
+    }
+    if (PRTE_MAPPING_BYNUMA <= pol && PRTE_MAPPING_BYHWTHREAD >= pol) {
+        return PRTE_RANK_BY_FILL;
+    }
+    return PRTE_RANK_BY_SLOT;
+}
+
+/* Derive the default binding policy from a mapping policy: when an app is
+ * mapped by a topology object, bind to that same object (mirroring the
+ * object branch of prte_hwloc_base_set_default_binding()).  Mappings with no
+ * natural binding object (by-node, by-slot, dist, pe-list, ppr, seq, ...)
+ * fall back to the common default of binding to core - or to hwthread when
+ * hwthreads are being treated as independent cpus.  Returns a bare
+ * PRTE_BIND_TO_* value with no directive bits. */
+static prte_binding_policy_t prte_rmaps_base_derive_binding(prte_mapping_policy_t mapping,
+                                                            bool use_hwthreads)
+{
+    bool hwt = use_hwthreads || prte_rmaps_base.require_hwtcpus;
+
+    switch (PRTE_GET_MAPPING_POLICY(mapping)) {
+        case PRTE_MAPPING_BYNUMA:
+            return PRTE_BIND_TO_NUMA;
+        case PRTE_MAPPING_BYPACKAGE:
+            return PRTE_BIND_TO_PACKAGE;
+        case PRTE_MAPPING_BYL3CACHE:
+            return PRTE_BIND_TO_L3CACHE;
+        case PRTE_MAPPING_BYL2CACHE:
+            return PRTE_BIND_TO_L2CACHE;
+        case PRTE_MAPPING_BYL1CACHE:
+            return PRTE_BIND_TO_L1CACHE;
+        case PRTE_MAPPING_BYCORE:
+            return hwt ? PRTE_BIND_TO_HWTHREAD : PRTE_BIND_TO_CORE;
+        case PRTE_MAPPING_BYHWTHREAD:
+            return PRTE_BIND_TO_HWTHREAD;
+        default:
+            return hwt ? PRTE_BIND_TO_HWTHREAD : PRTE_BIND_TO_CORE;
+    }
+}
+
 static int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
                                                prte_app_context_t *app,
                                                prte_rmaps_options_t *opts)
@@ -70,12 +125,68 @@ static int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
     uint16_t u16;
     uint16_t *u16ptr = &u16;
     char *str;
+    bool have_map, have_rank, have_bind;
+    prte_mapping_policy_t appmap = 0;
 
     PRTE_HIDE_UNUSED_PARAMS(jdata);
 
-    /* 1. PRTE_APP_MAPBY → opts->map */
-    if (prte_get_attribute(&app->attributes, PRTE_APP_MAPBY, (void **)&u16ptr, PMIX_UINT16)) {
-        opts->map = u16;
+    /* 1. PRTE_APP_MAPBY → opts->map plus the object type/depth and span/ordered
+     * directives that flow from the mapping policy.  We store the bare policy
+     * in opts->map (matching the job-level convention) and capture the full
+     * value in appmap so the rank/bind defaults below can read its directives. */
+    have_map = prte_get_attribute(&app->attributes, PRTE_APP_MAPBY, (void **)&u16ptr, PMIX_UINT16);
+    if (have_map) {
+        appmap = u16;
+        opts->map = PRTE_GET_MAPPING_POLICY(appmap);
+        opts->mapspan = (0 != (PRTE_MAPPING_SPAN & PRTE_GET_MAPPING_DIRECTIVE(appmap)));
+        opts->ordered = (0 != (PRTE_MAPPING_ORDERED & PRTE_GET_MAPPING_DIRECTIVE(appmap)));
+        switch (opts->map) {
+            case PRTE_MAPPING_BYNODE:
+            case PRTE_MAPPING_BYSLOT:
+            case PRTE_MAPPING_BYDIST:
+            case PRTE_MAPPING_PELIST:
+            case PRTE_MAPPING_COLOCATE:
+                opts->maptype = HWLOC_OBJ_MACHINE;
+                opts->mapdepth = PRTE_BIND_TO_NONE;
+                break;
+            case PRTE_MAPPING_SEQ:
+            case PRTE_MAPPING_BYUSER:
+                opts->maptype = HWLOC_OBJ_MACHINE;
+                opts->mapdepth = PRTE_BIND_TO_NONE;
+                opts->userranked = true;
+                break;
+            case PRTE_MAPPING_BYNUMA:
+                opts->maptype = HWLOC_OBJ_NUMANODE;
+                opts->mapdepth = PRTE_BIND_TO_NUMA;
+                break;
+            case PRTE_MAPPING_BYPACKAGE:
+                opts->maptype = HWLOC_OBJ_PACKAGE;
+                opts->mapdepth = PRTE_BIND_TO_PACKAGE;
+                break;
+            case PRTE_MAPPING_BYL3CACHE:
+                opts->maptype = HWLOC_OBJ_L3CACHE;
+                opts->mapdepth = PRTE_BIND_TO_L3CACHE;
+                break;
+            case PRTE_MAPPING_BYL2CACHE:
+                opts->maptype = HWLOC_OBJ_L2CACHE;
+                opts->mapdepth = PRTE_BIND_TO_L2CACHE;
+                break;
+            case PRTE_MAPPING_BYL1CACHE:
+                opts->maptype = HWLOC_OBJ_L1CACHE;
+                opts->mapdepth = PRTE_BIND_TO_L1CACHE;
+                break;
+            case PRTE_MAPPING_BYCORE:
+                opts->maptype = HWLOC_OBJ_CORE;
+                opts->mapdepth = PRTE_BIND_TO_CORE;
+                break;
+            case PRTE_MAPPING_BYHWTHREAD:
+                opts->maptype = HWLOC_OBJ_PU;
+                opts->mapdepth = PRTE_BIND_TO_HWTHREAD;
+                break;
+            default:
+                /* PPR and any other policy keep the job-level object/depth */
+                break;
+        }
     }
 
     /* 2. PPR count: read PRTE_APP_PPR; fall back to existing opts->pprn */
@@ -90,9 +201,11 @@ static int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
         opts->cpus_per_rank = u16;
     }
 
-    /* 4. PRTE_APP_HWT_CPUS → opts->use_hwthreads */
+    /* 4. PRTE_APP_HWT_CPUS / PRTE_APP_CORE_CPUS → opts->use_hwthreads */
     if (prte_get_attribute(&app->attributes, PRTE_APP_HWT_CPUS, NULL, PMIX_BOOL)) {
         opts->use_hwthreads = true;
+    } else if (prte_get_attribute(&app->attributes, PRTE_APP_CORE_CPUS, NULL, PMIX_BOOL)) {
+        opts->use_hwthreads = false;
     }
 
     /* 5. PRTE_APP_CPUSET → opts->cpuset */
@@ -114,14 +227,26 @@ static int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
         opts->limit = u16;
     }
 
-    /* 9. PRTE_APP_RANKBY → opts->rank */
-    if (prte_get_attribute(&app->attributes, PRTE_APP_RANKBY, (void **)&u16ptr, PMIX_UINT16)) {
-        opts->rank = u16;
+    /* 9. Ranking: an explicit per-app --rank-by wins.  Otherwise, when the app
+     * supplied its own mapping policy, derive the ranking default from that
+     * policy rather than inheriting the job-level ranking (which followed the
+     * job map).  When the app changed neither, the job-level ranking stands. */
+    have_rank = prte_get_attribute(&app->attributes, PRTE_APP_RANKBY, (void **)&u16ptr, PMIX_UINT16);
+    if (have_rank) {
+        opts->rank = PRTE_GET_RANKING_POLICY(u16);
+    } else if (have_map) {
+        opts->rank = prte_rmaps_base_derive_ranking(appmap);
     }
 
-    /* 10. PRTE_APP_BINDTO → opts->bind */
-    if (prte_get_attribute(&app->attributes, PRTE_APP_BINDTO, (void **)&u16ptr, PMIX_UINT16)) {
-        opts->bind = u16;
+    /* 10. Binding: same precedence as ranking - explicit per-app --bind-to
+     * wins (carrying its overload directive), otherwise default to the app's
+     * mapping policy. */
+    have_bind = prte_get_attribute(&app->attributes, PRTE_APP_BINDTO, (void **)&u16ptr, PMIX_UINT16);
+    if (have_bind) {
+        opts->bind = PRTE_GET_BINDING_POLICY(u16);
+        opts->overload = (0 != PRTE_BIND_OVERLOAD_ALLOWED(u16));
+    } else if (have_map) {
+        opts->bind = prte_rmaps_base_derive_binding(appmap, opts->use_hwthreads);
     }
 
     return PRTE_SUCCESS;
