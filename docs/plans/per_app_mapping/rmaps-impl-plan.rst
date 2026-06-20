@@ -138,6 +138,46 @@ new attributes.
 Files:
 
 - ``src/mca/schizo/prte/schizo_prte.c``
+- ``src/mca/schizo/base/schizo_base_stubs.c`` (and ``base.h``)
+- ``src/tools/prun/prun.c``
+- ``src/prted/prte.c``
+
+Relax the tool-level argv pre-scan guards
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Before schizo ever sees the command line, both ``prun`` (``src/tools/prun/prun.c``,
+``prte_prun()``) and the ``prte`` HNP launcher (``src/prted/prte.c``, ``main()``) walk
+the raw argv to normalise option spellings (``--rank-by`` → ``--rankby``,
+``--bind-to`` → ``--bindto``).  In doing so they currently track ``rankby_found`` /
+``bindto_found`` booleans and **reject a second occurrence** of ``--rank-by`` or
+``--bind-to`` with the ``help-schizo-base.txt`` ``multi-instances`` error.
+
+This guard makes per-app ranking and binding impossible: an MPMD line such as
+
+.. code-block:: sh
+
+   prun app1 --rank-by node : app2 --rank-by slot
+
+legitimately repeats ``--rank-by`` once per app context and trips the guard before
+the per-app machinery is ever reached.  Note ``--map-by`` already has **no** such
+guard — it is renamed unconditionally on every occurrence — which is exactly why
+per-app ``--map-by`` already works while ``--rank-by``/``--bind-to`` do not.
+
+The fix is to make ``--rank-by`` and ``--bind-to`` behave like ``--map-by`` in this
+pre-scan: drop the ``rankby_found`` / ``bindto_found`` tracking and the
+``multi-instances`` rejection, and rename every occurrence unconditionally.
+Distinguishing a legitimate per-app repeat from an erroneous duplicate
+job-level option is the schizo MPMD parser's job (it associates each option with
+its app context by ``:`` separator), not the argv pre-scan's — the pre-scan
+cannot tell the two apart and must not try.
+
+The two pre-scan loops in ``prun`` and ``prte`` are exact copies of each other, so
+rather than relaxing each in place the shared logic is factored into one helper,
+``prte_schizo_base_normalize_argv()`` (``src/mca/schizo/base/schizo_base_stubs.c``,
+declared in ``src/mca/schizo/base/base.h``).  It normalises all four deprecated
+spellings (``--map-by``, ``--rank-by``, ``--bind-to``, ``--runtime-options``) in
+place and returns any ``--personality`` value found.  Both tools replace their
+inline loop with a single call to it.
 
 Phase 7 — Build system wiring
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

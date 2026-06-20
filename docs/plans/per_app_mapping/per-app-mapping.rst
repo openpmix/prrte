@@ -128,14 +128,35 @@ Add three new functions with identical parsing logic but storing results into
    int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *spec);
 
    /* Parse a --rank-by style string and store the result as PRTE_APP_RANKBY
-    * (uint16_t ranking policy) on app->attributes. */
+    * (uint16_t ranking policy) on app->attributes.  Accepts the same ranking
+    * objects as the job-level --rank-by: SLOT, NODE, FILL, and SPAN.  The
+    * PRTE_RANKING_GIVEN directive bit is set so the resolve step knows the
+    * value was supplied explicitly (and must not be re-derived from the app's
+    * mapping policy).  An unrecognized object returns PRTE_ERR_SILENT after a
+    * diagnostic. */
    int prte_rmaps_base_set_app_ranking_policy(prte_app_context_t *app, char *spec);
 
    /* Parse a --bind-to style string and store the result as PRTE_APP_BINDTO
-    * (uint16_t binding policy) on app->attributes. */
+    * (uint16_t binding policy) on app->attributes.  Accepts the same binding
+    * objects as the job-level --bind-to: NONE, HWTHREAD, CORE, L1CACHE,
+    * L2CACHE, L3CACHE, NUMA, and PACKAGE.  The ":"-delimited modifiers
+    * if-supported, overload-allowed, no-overload, and LIMIT=N are parsed and
+    * recorded: if-supported/overload directives become directive bits within
+    * the PRTE_APP_BINDTO uint16_t (PRTE_BIND_IF_SUPPORTED,
+    * PRTE_BIND_ALLOW_OVERLOAD / PRTE_BIND_OVERLOAD_GIVEN), while LIMIT=N is
+    * stored separately as PRTE_APP_BINDING_LIMIT (uint16_t).  An unrecognized
+    * object or modifier returns PRTE_ERR_BAD_PARAM (or PRTE_ERR_SILENT for a
+    * malformed LIMIT value) after a diagnostic. */
    int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app, char *spec);
 
 These are declared in ``src/mca/rmaps/base/base.h``.
+
+Both functions mirror the job-level ``prte_rmaps_base_set_ranking_policy()`` and
+the binding-policy parser exactly, differing only in that they write their
+result onto ``app->attributes`` rather than ``jdata->map``.  Every ranking
+object and binding object/modifier expressible at the job level is therefore
+expressible per app, satisfying Goal 1 for ``--rank-by`` and ``--bind-to`` to
+the same degree as ``--map-by``.
 
 Attribute storage convention
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -371,21 +392,34 @@ Changes to Ranking
 apps have been placed.  It currently reads ``jdata->map->ranking`` to determine
 the single global ranking strategy.
 
-With per-app ranking:
+With per-app ranking the function signature becomes:
 
-1. ``prte_rmaps_base_compute_vpids()`` gains an ``app_idx`` parameter
-   (analogous to the mapping path).
+.. code-block:: c
+
+   int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
+                                     prte_rmaps_options_t *options,
+                                     int app_idx,
+                                     uint32_t *next_vpid);
+
+1. ``app_idx`` selects the app context to rank.  When ``app_idx < 0`` the
+   function ranks all apps in one pass exactly as it does today (the
+   job-level path passes ``-1``).
 
 2. When called from the per-app loop it is invoked once per app with the
-   app's resolved ``opts->rank`` and ``opts->app_idx``.
+   app's resolved ``opts->rank`` (which honours that app's ``PRTE_APP_RANKBY``)
+   and that app's index.
 
-3. Global rank assignment is still monotonically increasing across apps
-   in app-index order so that ``pptr->name.rank`` values are contiguous and
-   non-overlapping across the whole job.
+3. ``next_vpid`` carries the running global rank counter **between** per-app
+   calls: each invocation begins assigning at ``*next_vpid`` and updates it to
+   the first unassigned rank on return.  Global rank assignment is therefore
+   still monotonically increasing across apps in app-index order, so
+   ``pptr->name.rank`` values remain contiguous and non-overlapping across the
+   whole job.
 
 4. Per-app ranking controls only the **order** in which processes within
-   that app are assigned their ranks relative to each other; the starting
-   rank for each app is the first unassigned rank after all previous apps.
+   that app are assigned their ranks relative to each other (by SLOT, NODE,
+   FILL, or SPAN as that app requested); the starting rank for each app is the
+   first unassigned rank after all previous apps.
 
 Changes to Binding
 ------------------
@@ -395,6 +429,20 @@ takes the per-call ``options`` struct.  Because ``prte_rmaps_base_setup_proc()``
 is called from within each component's inner loop with the current ``options``
 in scope, per-app binding is automatically derived from ``opts->bind`` which
 was set by ``prte_rmaps_base_resolve_app_options()``.
+
+The full binding directive is carried per app:
+
+- ``opts->bind`` receives the app's binding object and the if-supported /
+  overload directive bits decoded from ``PRTE_APP_BINDTO``.
+- ``opts->limit`` receives the app's ``PRTE_APP_BINDING_LIMIT`` (the
+  ``LIMIT=N`` modifier), defaulting to the job-level value when the app does
+  not set one.
+- ``opts->cpus_per_rank`` (``PRTE_APP_PES_PER_PROC``), ``opts->use_hwthreads``
+  (``PRTE_APP_HWT_CPUS`` / ``PRTE_APP_CORE_CPUS``), and ``opts->cpuset``
+  (``PRTE_APP_CPUSET``) are likewise resolved per app and feed the binder.
+
+Thus an app may bind to a different object, with different overload/limit
+behaviour, than its siblings in the same job.
 
 Schizo / CLI Layer
 ------------------
@@ -435,6 +483,35 @@ Schizo responsibilities
    per-app directives via ``pmix_app_t.info[]`` arrays.  The schizo layer must
    map the relevant PMIx keys (``PMIX_MAPBY``, ``PMIX_RANKBY``, ``PMIX_BINDTO``)
    to the new per-app attributes when they appear in a per-app info array.
+
+Tool-level argv pre-scan guards
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Before schizo runs, the tool launchers themselves walk the raw argv to
+normalise option spellings.  ``prun`` (``src/tools/prun/prun.c``) and the ``prte``
+HNP launcher (``src/prted/prte.c``) both rename ``--rank-by`` → ``--rankby`` and
+``--bind-to`` → ``--bindto``, and both currently **reject a second occurrence** of
+either option with the ``multi-instances`` help message.
+
+Because a per-app MPMD command line repeats ``--rank-by``/``--bind-to`` once per
+app context, this guard must be removed.  ``--rank-by`` and ``--bind-to`` are made
+to behave like ``--map-by``, which is already renamed unconditionally with no
+such guard.  Detecting an erroneous duplicate (two job-level ``--rank-by`` with
+no intervening MPMD separator) is left to the schizo MPMD parser, which has the
+app-context boundaries the flat argv pre-scan lacks.
+
+Both launchers carry an identical copy of this pre-scan loop, so the shared
+logic is factored into a single helper rather than relaxed twice:
+
+.. code-block:: c
+
+   /* src/mca/schizo/base/schizo_base_stubs.c */
+   char *prte_schizo_base_normalize_argv(char **argv);
+
+It renames all four deprecated option spellings (``--map-by``, ``--rank-by``,
+``--bind-to``, ``--runtime-options``) in place and returns any ``--personality``
+value found (a pointer into ``argv``, ``NULL`` if none).  ``prun`` and ``prte``
+each replace their inline loop with a single call to it.
 
 Migration Notes
 ---------------
@@ -493,6 +570,12 @@ Files Modified
      - Add ``app_idx`` guard
    * - ``src/mca/schizo/prte/schizo_prte.c`` (and ompi variant)
      - Map per-app CLI args to new ``prte_rmaps_base_set_app_*`` calls
+   * - ``src/mca/schizo/base/schizo_base_stubs.c`` (and ``base.h``)
+     - Add shared ``prte_schizo_base_normalize_argv()`` helper (no ``multi-instances`` guard) used by both tool launchers
+   * - ``src/tools/prun/prun.c``
+     - Replace inline argv pre-scan loop with a call to ``prte_schizo_base_normalize_argv()``
+   * - ``src/prted/prte.c``
+     - Same replacement (the HNP launcher's argv pre-scan was a copy of ``prun``'s)
    * - ``src/mca/rmaps/rmaps_types.h``
      - Rename version macro to ``PRTE_RMAPS_BASE_VERSION_5_0_0``; retain ``4_0_0`` as deprecated alias
    * - ``src/mca/rmaps/rmaps.h``
@@ -593,6 +676,37 @@ for the current app.  ``prte_rmaps_base_get_target_nodes()`` already tests
 ``PRTE_MAPPING_NO_USE_LOCAL`` in the mapping policy it receives; no further
 changes to that function are required.
 
+All ``--rank-by`` objects are valid per app
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Ranking has no job-wide-consistency requirement analogous to oversubscription
+or inheritance: it only fixes the order in which an app's own processes receive
+their global ranks.  Every ``--rank-by`` object — ``SLOT``, ``NODE``, ``FILL``,
+``SPAN`` — is therefore accepted per app with no forbidden modifiers.
+
+``prte_rmaps_base_set_app_ranking_policy()`` sets the ``PRTE_RANKING_GIVEN``
+directive bit when it stores ``PRTE_APP_RANKBY``.  This is what lets
+``prte_rmaps_base_resolve_app_options()`` distinguish an app that explicitly
+requested a ranking from one that should fall back to the default derived from
+its mapping policy (by-node mapping → by-node ranking, etc.).  An app that sets
+``PRTE_APP_MAPBY`` but not ``PRTE_APP_RANKBY`` gets a ranking derived from its
+own per-app mapping policy, not from the job-level mapping policy.
+
+All ``--bind-to`` objects and modifiers are valid per app
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Binding is intrinsically a per-process property, so every ``--bind-to`` object
+(``NONE``, ``HWTHREAD``, ``CORE``, ``L1CACHE``, ``L2CACHE``, ``L3CACHE``,
+``NUMA``, ``PACKAGE``) and every binding modifier (``if-supported``,
+``overload-allowed``, ``no-overload``, ``LIMIT=N``) is accepted per app with no
+forbidden modifiers.
+
+The ``no-overload`` modifier records ``PRTE_BIND_OVERLOAD_GIVEN`` without
+``PRTE_BIND_ALLOW_OVERLOAD`` so that an app can explicitly forbid overload even
+when the job-level default would have permitted it; ``resolve_app_options()``
+copies these bits into ``opts->bind`` for the app, overriding the job-level
+binding directive in its entirety rather than merging bit-by-bit.
+
 Framework Version Increment
 ----------------------------
 
@@ -687,10 +801,24 @@ Coverage required per test file
 **``test_policy_parse.c``** — ``prte_rmaps_base_set_app_mapping_policy()``,
 ``prte_rmaps_base_set_app_ranking_policy()``, ``prte_rmaps_base_set_app_binding_policy()``:
 
+*Mapping* (``set_app_mapping_policy``):
+
 - Valid single-word policies (``core``, ``node``, ``slot``, ``ppr:2:core``, ``hwthread``, etc.) store the correct uint16_t in ``app->attributes``.
 - All valid modifiers (``NOLOCAL``, ``PE=N``, ``ORDERED``, ``HWTCPUS``, ``CORECPUS``, ``FILE=path``) parse and store correctly.
 - Forbidden modifiers (``OVERSUBSCRIBE``, ``NOOVERSUBSCRIBE``, ``INHERIT``, ``NOINHERIT``) return ``PRTE_ERR_BAD_PARAM``.
 - Malformed strings (missing value after ``=``, unknown keyword, conflicting ``HWTCPUS``/``CORECPUS``) return appropriate error codes.
+
+*Ranking* (``set_app_ranking_policy``):
+
+- Each object (``slot``, ``node``, ``fill``, ``span``) stores the matching ``PRTE_RANK_BY_*`` value in ``PRTE_APP_RANKBY`` with ``PRTE_RANKING_GIVEN`` set.
+- An unrecognized object returns ``PRTE_ERR_SILENT`` and leaves ``app->attributes`` unchanged.
+
+*Binding* (``set_app_binding_policy``):
+
+- Each object (``none``, ``hwthread``, ``core``, ``l1cache``, ``l2cache``, ``l3cache``, ``numa``, ``package``) stores the matching ``PRTE_BIND_TO_*`` value in ``PRTE_APP_BINDTO``.
+- Modifiers ``if-supported`` and ``overload-allowed`` set ``PRTE_BIND_IF_SUPPORTED`` / ``PRTE_BIND_ALLOW_OVERLOAD`` (with ``PRTE_BIND_OVERLOAD_GIVEN``); ``no-overload`` sets ``PRTE_BIND_OVERLOAD_GIVEN`` without the allow bit.
+- ``LIMIT=N`` stores ``N`` as ``PRTE_APP_BINDING_LIMIT``; a non-numeric ``LIMIT`` value returns ``PRTE_ERR_SILENT``.
+- An unrecognized object or modifier returns ``PRTE_ERR_BAD_PARAM``.
 
 **``test_resolve_options.c``** — ``prte_rmaps_base_resolve_app_options()``:
 

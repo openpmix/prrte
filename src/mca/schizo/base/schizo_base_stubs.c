@@ -51,6 +51,39 @@ prte_schizo_base_module_t *prte_schizo_base_detect_proxy(char *cmdpath)
     return md;
 }
 
+char *prte_schizo_base_normalize_argv(char **argv)
+{
+    char *personality = NULL;
+    int i;
+
+    /* Normalize the deprecated hyphenated option spellings to their canonical
+     * forms and capture any personality specification.  --rank-by and --bind-to
+     * may legitimately appear more than once in a command line - once per app
+     * context in an MPMD invocation - so, exactly like --map-by, they are
+     * renamed unconditionally on every occurrence.  Detecting an erroneous
+     * duplicate (e.g. two job-level --rank-by with no intervening MPMD
+     * separator) is the schizo MPMD parser's responsibility, since it has the
+     * app-context boundaries that this flat argv scan lacks. */
+    for (i = 0; NULL != argv[i]; i++) {
+        if (0 == strcmp(argv[i], "--personality")) {
+            personality = argv[i + 1];
+        } else if (0 == strcmp(argv[i], "--map-by")) {
+            free(argv[i]);
+            argv[i] = strdup("--mapby");
+        } else if (0 == strcmp(argv[i], "--rank-by")) {
+            free(argv[i]);
+            argv[i] = strdup("--rankby");
+        } else if (0 == strcmp(argv[i], "--bind-to")) {
+            free(argv[i]);
+            argv[i] = strdup("--bindto");
+        } else if (0 == strcmp(argv[i], "--runtime-options")) {
+            free(argv[i]);
+            argv[i] = strdup("--rtos");
+        }
+    }
+    return personality;
+}
+
 PRTE_EXPORT void prte_schizo_base_root_error_msg(void)
 {
     fprintf(stderr, "%s has detected an attempt to run as root.\n\n", prte_tool_basename);
