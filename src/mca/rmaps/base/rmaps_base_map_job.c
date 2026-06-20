@@ -443,16 +443,6 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                     }
                 }
 
-                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) &&
-                    !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
-                    /* inherit the base defaults */
-                    if (prte_rmaps_base.hwthread_cpus) {
-                        prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-                    } else {
-                        prte_set_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-                    }
-                }
-
                 if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, NULL, PMIX_STRING) &&
                     NULL != prte_rmaps_base.file) {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_FILE, PRTE_ATTR_GLOBAL,
@@ -919,7 +909,6 @@ ranking:
             goto cleanup;
     }
     if (1 < options.cpus_per_rank ||
-        NULL != options.job_cpuset ||
         options.ordered) {
         /* REQUIRES binding to cpu */
         if (PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
@@ -997,7 +986,6 @@ ranking:
             goto cleanup;
         }
         rc = map_colocate(jdata, colocate_daemons, pernode, darray, procs_per_target, &options);
-        PMIX_DATA_ARRAY_FREE(darray);
         if (PRTE_SUCCESS != rc) {
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
@@ -1142,6 +1130,8 @@ ranking:
     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_COMPLETE);
 
 cleanup:
+    /* release the colocation target array if one was provided/created */
+    PMIX_DATA_ARRAY_FREE(darray);
     /* reset any node map flags we used so the next job will start clean */
     for (int i = 0; i < jdata->map->nodes->size; i++) {
         if (NULL != (node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, i))) {
@@ -1373,11 +1363,7 @@ static int map_colocate(prte_job_t *jdata,
         }
 
         /* calculate the ranks for this job */
-        { uint32_t _nv = 0; ret = prte_rmaps_base_compute_vpids(jdata, options, -1, &_nv); }
-        if (PRTE_SUCCESS != ret) {
-            return ret;
-        }
-        ret = PRTE_SUCCESS;
+        ret = prte_rmaps_base_compute_vpids(jdata, options, -1, NULL);
         goto done;
     }
 
@@ -1459,11 +1445,7 @@ static int map_colocate(prte_job_t *jdata,
             }
         }
     }
-    { uint32_t _nv = 0; ret = prte_rmaps_base_compute_vpids(jdata, options, -1, &_nv); }
-    if (PRTE_SUCCESS != ret) {
-        return ret;
-    }
-    ret = PRTE_SUCCESS;
+    ret = prte_rmaps_base_compute_vpids(jdata, options, -1, NULL);
 
 done:
     // ensure all the nodes are marked as not mapped
