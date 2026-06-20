@@ -211,6 +211,28 @@ and store the **result** as additional attributes:
      - ``PRTE_APP_BINDING_LIMIT``
      - ``PMIX_UINT16``
 
+These attributes must be stored with ``PRTE_ATTR_GLOBAL``, never ``PRTE_ATTR_LOCAL``
+....................................................................................
+
+This is a correctness requirement, not a stylistic one, and it is easy to get
+wrong.  The per-app directives are set on the app context while the spawn
+request is being processed, but the request is then serialized and relayed to
+the DVM master before ``prte_rmaps_base_map_job()`` runs.  Only ``GLOBAL``
+attributes are packed; ``LOCAL`` attributes are silently dropped during that
+transfer.
+
+If the ``prte_rmaps_base_set_app_*`` helpers store these attributes as
+``PRTE_ATTR_LOCAL``, they vanish before mapping: the ``any_per_app`` scan
+(see below) finds nothing, the per-app dispatch path is never taken, and every
+app is mapped, ranked, and bound by the job-level policy regardless of its own
+directives — with no error reported.  The single-app case can appear to "work"
+only because its directive coincides with the job-level policy, which masks the
+defect.
+
+Store every ``PRTE_APP_*`` attribute listed above with ``PRTE_ATTR_GLOBAL``,
+matching the convention already used for ``PRTE_APP_PPR`` and
+``PRTE_APP_PES_PER_PROC`` in the spawn handler.
+
 Changes to ``prte_rmaps_base_map_job()`` (``src/mca/rmaps/base/rmaps_base_map_job.c``)
 ---------------------------------------------------------------------------------------
 
@@ -314,7 +336,12 @@ overrides:
 This function:
 
 1. Reads ``PRTE_APP_MAPBY`` (uint16_t) from ``app->attributes``; if present,
-   stores into ``opts->map`` (overriding the job-level value).
+   stores the **masked** policy (``PRTE_GET_MAPPING_POLICY``) into ``opts->map``
+   and refreshes the fields that are derived from the mapping policy —
+   ``opts->maptype``, ``opts->mapdepth``, ``opts->mapspan``, ``opts->ordered``
+   — exactly as the job-level path does after it resolves the job map.  The
+   raw value (with its directive bits) is kept locally so the rank/bind
+   defaults in steps 4–5 can read its ``SPAN`` directive.
 
 2. If ``opts->map`` is ``PRTE_MAPPING_PPR``, reads ``PRTE_APP_PPR`` from
    ``app->attributes``; if absent falls back to ``PRTE_JOB_PPR`` on ``jdata``.
@@ -323,12 +350,39 @@ This function:
    ``PRTE_APP_CPUSET``, ``PRTE_APP_MAP_FILE``, ``PRTE_APP_DIST_DEVICE``,
    ``PRTE_APP_BINDING_LIMIT`` and overrides the corresponding ``opts`` fields.
 
-4. Reads ``PRTE_APP_RANKBY`` (uint16_t) and ``PRTE_APP_BINDTO`` (uint16_t);
-   stores into ``opts->rank`` and ``opts->bind`` respectively.
+4. **Ranking.**  If ``PRTE_APP_RANKBY`` is present, stores the masked policy
+   (``PRTE_GET_RANKING_POLICY``) into ``opts->rank``.  Otherwise, if the app
+   supplied its own ``PRTE_APP_MAPBY`` (step 1), derives the ranking default
+   from **that app's** mapping policy — mirroring the NULL-spec path of
+   ``prte_rmaps_base_set_ranking_policy()`` (by-node map → by-node rank,
+   by-slot map → by-slot rank, object map → by-fill, ``SPAN`` → by-span).  If
+   the app changed neither, the job-level ranking carried in ``opts`` stands.
 
-5. Resolves defaults for any field that was not overridden, using the same
-   ``prte_rmaps_base_set_default_mapping()`` / ``prte_rmaps_base_set_default_ranking()``
-   logic but operating on ``opts`` rather than ``jdata->map``.
+5. **Binding.**  If ``PRTE_APP_BINDTO`` is present, stores the masked policy
+   (``PRTE_GET_BINDING_POLICY``) into ``opts->bind`` and lifts the overload
+   directive into ``opts->overload``.  Otherwise, if the app supplied its own
+   ``PRTE_APP_MAPBY``, derives the binding default from that app's mapping
+   policy — bind to the mapped object (numa/package/cache/core/hwthread), or to
+   core (hwthread when hwthreads are in use) for object-less mappings such as
+   by-node and by-slot.
+
+The crucial point for steps 4–5: when an app overrides its mapping policy but
+gives no explicit ranking or binding, the defaults must follow **that app's**
+mapping, not the job-level mapping.  Inheriting ``opts->rank``/``opts->bind``
+unchanged would silently rank and bind the app as if it had been mapped by the
+job-wide policy.
+
+Two small pure helpers, ``prte_rmaps_base_derive_ranking(mapping)`` and
+``prte_rmaps_base_derive_binding(mapping, use_hwthreads)``, encode the
+map → rank and map → bind defaults and are reused for both the explicit and
+defaulted cases.
+
+Masking note: the ``PRTE_APP_MAPBY``/``RANKBY``/``BINDTO`` attributes carry the
+policy value with its high-bit directive flags (``GIVEN``, overload,
+``IS_SET``) attached.  ``opts->map``/``rank``/``bind`` are compared against the
+bare ``PRTE_MAPPING_*``/``PRTE_RANK_BY_*``/``PRTE_BIND_TO_*`` enums elsewhere,
+so the resolver must mask off the directive bits (and route the overload bit to
+``opts->overload``) rather than assigning the raw attribute value.
 
 The function must be idempotent and must not modify ``jdata->map`` — any
 per-app mapping policy lives only in ``opts`` and in ``app->attributes``.
@@ -444,15 +498,11 @@ The full binding directive is carried per app:
 Thus an app may bind to a different object, with different overload/limit
 behaviour, than its siblings in the same job.
 
-Schizo / CLI Layer
-------------------
+Command-line / PMIx-spawn wiring
+--------------------------------
 
-The schizo layer (e.g. ``src/mca/schizo/prte/``) is responsible for parsing
-command-line arguments and storing them as attributes.  For per-app directives
-a mechanism is needed to associate ``--map-by``, ``--rank-by``, and ``--bind-to``
-options with a specific app context rather than the job.
-
-The expected command-line representation is:
+Per-app directives reach the app context through the PMIx spawn machinery, not
+through a schizo-only path.  The expected command-line representation is:
 
 .. code-block:: sh
 
@@ -460,29 +510,49 @@ The expected command-line representation is:
 
 where ``:`` is the MPMD separator between app contexts.
 
-Schizo responsibilities
-~~~~~~~~~~~~~~~~~~~~~~~~
+The flow, end to end:
 
-1. When the schizo parser encounters ``--map-by``, ``--rank-by``, or ``--bind-to``
-   after an MPMD separator (and thus associated with a specific app context),
-   it calls:
+1. **Per-app parse** — ``src/prted/prte_app_parse.c`` splits the command line at
+   each ``:`` (``prte_parse_locals()``) and parses each app segment in its own
+   ``create_app()`` call.  Each segment's ``--map-by``/``--rank-by``/``--bind-to``
+   is recorded on that app's ``pmix_app_t.info[]`` array as ``PMIX_MAPBY`` /
+   ``PMIX_RANKBY`` / ``PMIX_BINDTO``.  Because each app is parsed independently,
+   directives are already correctly scoped to their app context; no MPMD-aware
+   schizo bookkeeping is required.
+
+2. **Spawn** — the tool builds the ``pmix_app_t`` array (one entry per app, each
+   carrying its own ``info[]``) and calls ``PMIx_Spawn``.  Whichever spawn
+   assembly path is used (``src/prted/prte.c`` for the proxy HNP,
+   ``src/prted/prun_common.c`` for the tool), each app's ``info`` must be
+   converted from its own ``app->info`` list — not from the job-level info — so
+   the per-app keys are preserved.
+
+3. **Server-side translation** — ``src/prted/pmix/pmix_server_dyn.c``
+   (``prte_pmix_xfer_app()``) walks each app's ``info[]`` and converts the
+   ``PMIX_MAPBY`` / ``PMIX_RANKBY`` / ``PMIX_BINDTO`` keys into the
+   ``PRTE_APP_*`` attributes by calling:
 
    .. code-block:: c
 
-      prte_rmaps_base_set_app_mapping_policy(app, optval);
-      prte_rmaps_base_set_app_ranking_policy(app, optval);
-      prte_rmaps_base_set_app_binding_policy(app, optval);
+      prte_rmaps_base_set_app_mapping_policy(app, info->value.data.string);
+      prte_rmaps_base_set_app_ranking_policy(app, info->value.data.string);
+      prte_rmaps_base_set_app_binding_policy(app, info->value.data.string);
 
-   rather than the job-level variants.
+   These helpers parse the string and store the result with
+   ``PRTE_ATTR_GLOBAL`` (see §"These attributes must be stored with
+   ``PRTE_ATTR_GLOBAL``").  This is the same path used by a third-party caller
+   of ``PMIx_Spawn`` that supplies ``PMIX_MAPBY`` etc. in a per-app ``info[]``
+   array, so the CLI and the programmatic spawn API share one implementation.
 
-2. When these options appear before any MPMD separator (i.e., they apply to
-   the whole job), the schizo parser continues to call the existing job-level
-   functions, which store the result on ``jdata->map``.
+4. **Job-level directives** — options given before any ``:`` apply to the whole
+   job and continue to flow through the existing job-level
+   ``prte_rmaps_base_set_mapping_policy()`` / ``set_ranking_policy()`` /
+   ``set_binding_policy()`` functions, which store onto ``jdata->map``.  An app
+   that carries no per-app directive inherits these.
 
-3. The PMIx spawn path (``PMIx_Spawn`` / ``PMIx_server_spawn_fn``) passes
-   per-app directives via ``pmix_app_t.info[]`` arrays.  The schizo layer must
-   map the relevant PMIx keys (``PMIX_MAPBY``, ``PMIX_RANKBY``, ``PMIX_BINDTO``)
-   to the new per-app attributes when they appear in a per-app info array.
+No changes to ``src/mca/schizo/prte/`` are required for per-app map/rank/bind:
+the option definitions already exist, and the per-app association happens in
+``prte_app_parse.c``.
 
 Tool-level argv pre-scan guards
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -553,9 +623,9 @@ Files Modified
    * - ``src/mca/rmaps/base/base.h``
      - Declare new parsing and resolution functions
    * - ``src/mca/rmaps/base/rmaps_base_frame.c``
-     - Add ``prte_rmaps_base_set_app_mapping_policy()``, ``prte_rmaps_base_set_app_ranking_policy()``, ``prte_rmaps_base_set_app_binding_policy()``
+     - Add ``prte_rmaps_base_set_app_mapping_policy()``, ``prte_rmaps_base_set_app_ranking_policy()``, ``prte_rmaps_base_set_app_binding_policy()`` — storing every ``PRTE_APP_*`` attribute with ``PRTE_ATTR_GLOBAL`` (not ``LOCAL``)
    * - ``src/mca/rmaps/base/rmaps_base_map_job.c``
-     - Add per-app detection, per-app dispatch loop, ``prte_rmaps_base_resolve_app_options()``, per-app ``compute_vpids`` calls
+     - Add per-app detection, per-app dispatch loop, per-app ``compute_vpids`` calls, and ``prte_rmaps_base_resolve_app_options()`` (with ``prte_rmaps_base_derive_ranking()`` / ``derive_binding()`` defaulting, directive-bit masking, and map-derived field refresh)
    * - ``src/mca/rmaps/base/rmaps_base_ranking.c``
      - Add ``app_idx`` parameter to ``prte_rmaps_base_compute_vpids()``
    * - ``src/mca/rmaps/round_robin/rmaps_rr.c``
@@ -568,8 +638,12 @@ Files Modified
      - Add ``app_idx`` guard; check ``PRTE_APP_MAP_FILE`` before ``PRTE_JOB_FILE``
    * - ``src/mca/rmaps/lsf/rmaps_lsf.c``
      - Add ``app_idx`` guard
-   * - ``src/mca/schizo/prte/schizo_prte.c`` (and ompi variant)
-     - Map per-app CLI args to new ``prte_rmaps_base_set_app_*`` calls
+   * - ``src/prted/prte_app_parse.c``
+     - Record per-app ``--map-by``/``--rank-by``/``--bind-to`` as ``PMIX_MAPBY``/``PMIX_RANKBY``/``PMIX_BINDTO`` on each app's ``info[]`` (already present)
+   * - ``src/prted/pmix/pmix_server_dyn.c``
+     - Translate per-app ``PMIX_MAPBY``/``RANKBY``/``BINDTO`` info into ``PRTE_APP_*`` attributes via the ``set_app_*_policy`` helpers (already present)
+   * - ``src/prted/prte.c`` / ``src/prted/prun_common.c``
+     - Ensure each ``pmix_app_t.info`` is built from that app's ``app->info`` (per-app), not the job-level info
    * - ``src/mca/schizo/base/schizo_base_stubs.c`` (and ``base.h``)
      - Add shared ``prte_schizo_base_normalize_argv()`` helper (no ``multi-instances`` guard) used by both tool launchers
    * - ``src/tools/prun/prun.c``
@@ -765,6 +839,37 @@ PRRTE currently has no unit test suite for the rmaps framework.  This work
 introduces non-trivial new logic in ``prte_rmaps_base_map_job()`` and
 ``prte_rmaps_base_resolve_app_options()`` that must be verified independently
 of a live DVM.  A new unit test tree is required.
+
+Offline end-to-end verification (no launch)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In addition to the unit tests below, the **whole** per-app path — CLI parse →
+``pmix_app_t.info[]`` → ``PRTE_APP_*`` attributes → ``map_job`` dispatch →
+placement/ranking/binding — can and must be exercised end to end without
+launching anything:
+
+.. code-block:: sh
+
+   prterun --rtos donotlaunch --display map \
+           --prtemca hwloc_use_topo_file test/unit/rmaps/test-topo.xml \
+           -H node0:N,node1:M,node2:L \
+           --map-by node -n 4 hostname : --map-by slot --rank-by node -n 4 hostname
+
+``--rtos donotlaunch`` runs the mapper/ranker/binder and prints the map without
+forking any process; ``--prtemca hwloc_use_topo_file`` supplies a simulated
+node topology (so binding resolves against real objects); ``-H`` declares the
+simulated nodes (slot counts only need to be ≥ the procs placed on each node).
+The printed map shows each process's app index, rank, and bound object.  See
+the "Testing the mapper without launching" section of ``AGENTS.md`` for the
+full description.
+
+This offline check is what catches the class of failure described in
+§"These attributes must be stored with ``PRTE_ATTR_GLOBAL``": a per-app
+directive that parses correctly but is silently dropped before mapping shows up
+immediately here as an app whose placement/rank/binding does not change when
+its per-app policy changes.  Verification must include a **multi-app** MPMD
+case — a single-app job can pass even when per-app attributes are being lost,
+because its lone directive coincides with the job-level policy.
 
 Location
 ~~~~~~~~~

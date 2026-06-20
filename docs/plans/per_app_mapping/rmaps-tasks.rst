@@ -170,7 +170,8 @@ T2.2 — Implement ``prte_rmaps_base_set_app_ranking_policy()`` (``src/mca/rmaps
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Model on ``prte_rmaps_base_set_ranking_policy()`` (line 756).  Store the parsed
-``prte_ranking_policy_t`` as ``PRTE_APP_RANKBY`` (uint16_t) on ``app->attributes``.
+``prte_ranking_policy_t`` as ``PRTE_APP_RANKBY`` (uint16_t) on ``app->attributes``
+with ``PRTE_ATTR_GLOBAL``.
 
 - [ ] Write ``prte_rmaps_base_set_app_ranking_policy(prte_app_context_t *app, char *spec)``
 
@@ -178,9 +179,22 @@ T2.3 — Implement ``prte_rmaps_base_set_app_binding_policy()`` (``src/mca/rmaps
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Model on the existing binding policy setter.  Store the parsed ``prte_binding_policy_t``
-as ``PRTE_APP_BINDTO`` (uint16_t) on ``app->attributes``.
+as ``PRTE_APP_BINDTO`` (uint16_t) on ``app->attributes`` with ``PRTE_ATTR_GLOBAL``.
 
 - [ ] Write ``prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app, char *spec)``
+
+T2.5 — Use ``PRTE_ATTR_GLOBAL`` for every per-app attribute store
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Across all three ``set_app_*_policy`` functions, every ``prte_set_attribute(&app->attributes,
+PRTE_APP_*, ...)`` call must use ``PRTE_ATTR_GLOBAL``, never ``PRTE_ATTR_LOCAL``.  ``LOCAL``
+attributes are not packed and are dropped when the spawn request is relayed to the DVM
+master, so per-app directives stored as ``LOCAL`` silently never reach ``map_job``.  This
+covers ``PRTE_APP_MAPBY``, ``RANKBY``, ``BINDTO``, ``PPR``, ``PES_PER_PROC``, ``HWT_CPUS``,
+``CORE_CPUS``, ``CPUSET``, ``MAP_FILE``, and ``BINDING_LIMIT``.
+
+- [ ] Audit all three setters; confirm zero ``PRTE_ATTR_LOCAL`` remain in app stores
+- [ ] Verify with a multi-app MPMD offline run that the attributes reach ``map_job``
 
 T2.4 — Declare new functions (``src/mca/rmaps/base/base.h``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -215,20 +229,36 @@ Add as a ``static int`` function before ``prte_rmaps_base_map_job()``.  Signatur
 Logic (all reads from ``app->attributes``; fall through to existing ``opts`` value if
 attribute is absent):
 
-1. ``PRTE_APP_MAPBY`` (uint16_t) → ``opts->map``
+1. ``PRTE_APP_MAPBY`` (uint16_t) → ``opts->map`` (masked via ``PRTE_GET_MAPPING_POLICY``).
+   Keep the raw value locally for the SPAN directive.  When present, also refresh
+   ``opts->maptype``/``mapdepth``/``mapspan``/``ordered`` from the new policy.
 2. If ``opts->map == PRTE_MAPPING_PPR``: read ``PRTE_APP_PPR`` (uint16_t) → ``opts->pprn``;
    if absent, fall back to ``PRTE_JOB_PPR`` on ``jdata->attributes``.
 3. ``PRTE_APP_PES_PER_PROC`` (uint16_t) → ``opts->cpus_per_rank``
-4. ``PRTE_APP_HWT_CPUS`` (bool) → ``opts->use_hwthreads``
+4. ``PRTE_APP_HWT_CPUS`` (bool) → ``opts->use_hwthreads = true``; else
+   ``PRTE_APP_CORE_CPUS`` (bool) → ``opts->use_hwthreads = false``
 5. ``PRTE_APP_CPUSET`` (string) → ``opts->cpuset``
 6. ``PRTE_APP_MAP_FILE`` (string) → store somewhere accessible; see seq/rank_file notes
 7. ``PRTE_APP_DIST_DEVICE`` (string) → ``opts->dist_device``
 8. ``PRTE_APP_BINDING_LIMIT`` (uint16_t) → ``opts->limit``
-9. ``PRTE_APP_RANKBY`` (uint16_t) → ``opts->rank``
-10. ``PRTE_APP_BINDTO`` (uint16_t) → ``opts->bind``
+9. **Ranking:** if ``PRTE_APP_RANKBY`` present → ``opts->rank`` (masked via
+   ``PRTE_GET_RANKING_POLICY``); else if the app supplied ``PRTE_APP_MAPBY`` →
+   ``opts->rank = prte_rmaps_base_derive_ranking(rawmap)``; else leave job-level value.
+10. **Binding:** if ``PRTE_APP_BINDTO`` present → ``opts->bind`` (masked via
+    ``PRTE_GET_BINDING_POLICY``) and ``opts->overload`` from the overload bit; else if the
+    app supplied ``PRTE_APP_MAPBY`` →
+    ``opts->bind = prte_rmaps_base_derive_binding(rawmap, opts->use_hwthreads)``;
+    else leave job-level value.
 11. The function must not modify ``jdata->map``.
 
-- [ ] Implement ``prte_rmaps_base_resolve_app_options()`` with all ten override steps
+Also add the two pure helpers ``prte_rmaps_base_derive_ranking(mapping)`` and
+``prte_rmaps_base_derive_binding(mapping, use_hwthreads)`` (mirroring the job-level
+default logic) used by steps 9–10.
+
+- [ ] Implement ``prte_rmaps_base_resolve_app_options()`` with all override steps
+- [ ] Add ``derive_ranking`` / ``derive_binding`` helpers
+- [ ] Mask directive bits off ``opts->map``/``rank``/``bind``; route overload to ``opts->overload``
+- [ ] Default rank/bind from the app's own map when no explicit per-app directive
 - [ ] Verify function does not write to ``jdata->map``
 
 T3.2 — Add ``any_per_app`` scan (``src/mca/rmaps/base/rmaps_base_map_job.c``)
@@ -740,8 +770,19 @@ Before declaring the branch ready for review:
 - [ ] ``./autogen.pl && ./configure`` completes without errors
 - [ ] ``make -j$(nproc)`` builds cleanly (no new warnings)
 - [ ] ``make check`` passes all tests in ``test/unit/rmaps/``
-- [ ] ``prun app1 --map-by core : app2 --map-by node --rank-by fill`` produces a correct
-  two-app MPMD job (smoke test against a live DVM)
+- [ ] ``grep -rn PRTE_ATTR_LOCAL`` in the three ``set_app_*_policy`` functions returns
+  nothing (all per-app stores are ``PRTE_ATTR_GLOBAL``)
+- [ ] **Offline multi-app check** (no DVM): a per-app ``--map-by``/``--rank-by``/``--bind-to``
+  on the *second* app of an MPMD line visibly changes that app's placement/rank/binding::
+
+      prterun --rtos donotlaunch --display map \
+          --prtemca hwloc_use_topo_file test/unit/rmaps/test-topo.xml \
+          -H n0:4,n1:4 \
+          --map-by node -n 4 hostname : --map-by slot --rank-by node -n 4 hostname
+
+  Toggle the second app's ``--rank-by slot`` vs ``node`` and confirm the printed ranks
+  differ (catches the ``LOCAL``/``GLOBAL`` and masking regressions; a single-app job will
+  *not* catch them).
 - [ ] ``prun app1`` with no per-app directives produces identical output to before
   (regression test)
 - [ ] ``grep -r "PRTE_RMAPS_BASE_VERSION_4_0_0" src/mca/rmaps/`` returns only the
