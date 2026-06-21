@@ -393,6 +393,12 @@ static int ppr_mapper(prte_job_t *jdata,
             goto error;
         }
 
+        /* this app mapped successfully - the loop above can leave rc set to
+         * the per-node PRTE_ERR_TAKE_NEXT_OPTION "this node is full" signal
+         * returned by the final check_oversubscribed call, so clear it now to
+         * avoid leaking that as the mapper's overall result */
+        rc = PRTE_SUCCESS;
+
         jdata->num_procs += app->num_procs;
 
         PMIX_LIST_DESTRUCT(&node_list);
