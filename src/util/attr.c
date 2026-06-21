@@ -297,6 +297,12 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PRTE_APP_CPUSET";
         case PRTE_APP_BINDING_LIMIT:
             return "PRTE_APP_BINDING_LIMIT";
+        case PRTE_APP_RESOLVED_MAPBY:
+            return "PRTE_APP_RESOLVED_MAPBY";
+        case PRTE_APP_RESOLVED_RANKBY:
+            return "PRTE_APP_RESOLVED_RANKBY";
+        case PRTE_APP_RESOLVED_BINDTO:
+            return "PRTE_APP_RESOLVED_BINDTO";
 
         case PRTE_NODE_USERNAME:
             return "NODE-USERNAME";

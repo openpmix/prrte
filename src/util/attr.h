@@ -78,6 +78,12 @@ typedef uint8_t prte_app_context_flags_t;
 #define PRTE_APP_CORE_CPUS          32 /* bool: use cores as CPUs */
 #define PRTE_APP_CPUSET             33 /* char* comma-delimited CPU ranges */
 #define PRTE_APP_BINDING_LIMIT      34 /* uint16_t max procs per binding target */
+/* effective map/rank/bind policies resolved for this app during per-app
+ * dispatch, recorded so the map display can show per-app policy lines. Local
+ * to the HNP - never packed/sent. */
+#define PRTE_APP_RESOLVED_MAPBY     35 /* uint16_t resolved mapping policy */
+#define PRTE_APP_RESOLVED_RANKBY    36 /* uint16_t resolved ranking policy */
+#define PRTE_APP_RESOLVED_BINDTO    37 /* uint16_t resolved binding policy */
 
 #define PRTE_APP_MAX_KEY 100
 

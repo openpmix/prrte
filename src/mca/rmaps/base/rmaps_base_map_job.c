@@ -305,6 +305,53 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
     return PRTE_SUCCESS;
 }
 
+/* Record the effective map/rank/bind policies for one app of a per-app
+ * (MPMD) job so the map display can show a policy line per app. The bare
+ * resolved policies in opts are overlaid onto snapshots of the job-level
+ * policy values (captured before the per-app loop so a prior app's mapper
+ * adjustments cannot bleed through), preserving the job-wide directive bits
+ * - oversubscribe, if-supported, span, and so on. The binding policy in opts
+ * reflects any reset to BIND_TO_NONE the mapper made for a genuinely
+ * oversubscribed node. These are stored as job-local attributes and are never
+ * packed or sent off-node. */
+static void record_resolved_app_policy(prte_app_context_t *app,
+                                       prte_mapping_policy_t jobmap,
+                                       prte_ranking_policy_t jobrank,
+                                       prte_binding_policy_t jobbind,
+                                       prte_rmaps_options_t *opts)
+{
+    prte_mapping_policy_t emap = jobmap;
+    prte_ranking_policy_t erank = jobrank;
+    prte_binding_policy_t ebind = jobbind;
+
+    PRTE_SET_MAPPING_POLICY(emap, opts->map);
+    if (opts->mapspan) {
+        PRTE_SET_MAPPING_DIRECTIVE(emap, PRTE_MAPPING_SPAN);
+    } else {
+        PRTE_UNSET_MAPPING_DIRECTIVE(emap, PRTE_MAPPING_SPAN);
+    }
+    if (opts->ordered) {
+        PRTE_SET_MAPPING_DIRECTIVE(emap, PRTE_MAPPING_ORDERED);
+    } else {
+        PRTE_UNSET_MAPPING_DIRECTIVE(emap, PRTE_MAPPING_ORDERED);
+    }
+    prte_set_attribute(&app->attributes, PRTE_APP_RESOLVED_MAPBY,
+                       PRTE_ATTR_LOCAL, &emap, PMIX_UINT16);
+
+    PRTE_SET_RANKING_POLICY(erank, opts->rank);
+    prte_set_attribute(&app->attributes, PRTE_APP_RESOLVED_RANKBY,
+                       PRTE_ATTR_LOCAL, &erank, PMIX_UINT16);
+
+    PRTE_SET_BINDING_POLICY(ebind, opts->bind);
+    if (opts->overload) {
+        ebind |= PRTE_BIND_ALLOW_OVERLOAD;
+    } else {
+        ebind &= ~PRTE_BIND_ALLOW_OVERLOAD;
+    }
+    prte_set_attribute(&app->attributes, PRTE_APP_RESOLVED_BINDTO,
+                       PRTE_ATTR_LOCAL, &ebind, PMIX_UINT16);
+}
+
 void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
@@ -1208,6 +1255,12 @@ ranking:
         /* per-app dispatch: call mappers once per app with per-app options */
         did_map = false;
         next_vpid = 0;
+        /* snapshot the job-level policies before any per-app mapper runs so the
+         * recorded per-app policies carry the job-wide directives without a
+         * prior app's mapper adjustments bleeding through */
+        prte_mapping_policy_t job_map = jdata->map->mapping;
+        prte_ranking_policy_t job_rank = jdata->map->ranking;
+        prte_binding_policy_t job_bind = jdata->map->binding;
         for (n = 0; n < jdata->apps->size; n++) {
             app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
             if (NULL == app) {
@@ -1263,6 +1316,8 @@ ranking:
                 PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
                 goto cleanup;
             }
+            /* record this app's effective policies for the map display */
+            record_resolved_app_policy(app, job_map, job_rank, job_bind, &app_options);
             did_map = true;
         }
     }

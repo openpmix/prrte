@@ -491,6 +491,95 @@ void prte_app_print(char **output, prte_job_t *jdata, prte_app_context_t *src)
 }
 
 
+/* Decide whether to print per-app policy lines instead of a single job-level
+ * line. We do so only when the per-app dispatch recorded resolved policies for
+ * two or more apps AND those policies are not all identical: that is the case
+ * where "per-app policies were given" produced genuinely different placement.
+ * A single app, or multiple apps that all resolved to the same map/rank/bind,
+ * is effectively a single job-level policy and uses the existing output. */
+static bool job_show_per_app_policy(prte_job_t *jdata)
+{
+    prte_app_context_t *app;
+    int i;
+    bool have_first = false;
+    uint16_t m0 = 0, r0 = 0, b0 = 0;
+    uint16_t u16, *u16ptr;
+
+    for (i = 0; i < jdata->apps->size; i++) {
+        uint16_t m, r, b;
+
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i);
+        if (NULL == app) {
+            continue;
+        }
+        u16ptr = &u16;
+        if (!prte_get_attribute(&app->attributes, PRTE_APP_RESOLVED_MAPBY,
+                                (void **) &u16ptr, PMIX_UINT16)) {
+            /* nothing recorded for this app (non-per-app dispatch records
+             * nothing) - cannot be a per-app job */
+            return false;
+        }
+        m = u16;
+        u16ptr = &u16;
+        r = prte_get_attribute(&app->attributes, PRTE_APP_RESOLVED_RANKBY,
+                               (void **) &u16ptr, PMIX_UINT16) ? u16 : 0;
+        u16ptr = &u16;
+        b = prte_get_attribute(&app->attributes, PRTE_APP_RESOLVED_BINDTO,
+                               (void **) &u16ptr, PMIX_UINT16) ? u16 : 0;
+        if (!have_first) {
+            m0 = m;
+            r0 = r;
+            b0 = b;
+            have_first = true;
+        } else if (m != m0 || r != r0 || b != b0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Build one "App N: Mapping/Ranking/Binding policy" line per app for a job
+ * that was mapped with per-app policies, joined by newlines and each prefixed
+ * with 'indent'. An app that did not record a resolved policy falls back to
+ * the job-level value. Caller frees the returned string. */
+static char *per_app_policy_lines(prte_job_t *jdata, const char *indent)
+{
+    prte_job_map_t *src = jdata->map;
+    prte_app_context_t *app;
+    char *block, *tmp;
+    int i;
+    uint16_t u16, *u16ptr;
+
+    block = strdup("");
+    for (i = 0; i < jdata->apps->size; i++) {
+        prte_mapping_policy_t m;
+        prte_ranking_policy_t r;
+        prte_binding_policy_t b;
+
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i);
+        if (NULL == app) {
+            continue;
+        }
+        u16ptr = &u16;
+        m = prte_get_attribute(&app->attributes, PRTE_APP_RESOLVED_MAPBY, (void **) &u16ptr, PMIX_UINT16)
+                ? (prte_mapping_policy_t) u16 : src->mapping;
+        u16ptr = &u16;
+        r = prte_get_attribute(&app->attributes, PRTE_APP_RESOLVED_RANKBY, (void **) &u16ptr, PMIX_UINT16)
+                ? (prte_ranking_policy_t) u16 : src->ranking;
+        u16ptr = &u16;
+        b = prte_get_attribute(&app->attributes, PRTE_APP_RESOLVED_BINDTO, (void **) &u16ptr, PMIX_UINT16)
+                ? (prte_binding_policy_t) u16 : src->binding;
+        pmix_asprintf(&tmp, "%s%s%sApp %d: Mapping policy: %s  Ranking policy: %s  Binding policy: %s",
+                      block, ('\0' == block[0]) ? "" : "\n", indent, (int) app->idx,
+                      prte_rmaps_base_print_mapping(m),
+                      prte_rmaps_base_print_ranking(r),
+                      prte_hwloc_base_print_binding(b));
+        free(block);
+        block = tmp;
+    }
+    return block;
+}
+
 /*
  * JOB_MAP
  */
@@ -579,19 +668,36 @@ void prte_map_print(char **output, prte_job_t *jdata)
     }
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
-        pmix_asprintf(
-            &tmp,
-            "\n=================================   JOB MAP   =================================\n"
-            "Data for JOB %s offset %s Total slots allocated %lu\n"
-            "Mapper requested: %s  Last mapper: %s  Mapping policy: %s  Ranking policy: %s\n"
-            "Binding policy: %s  Cpu set: %s  PPR: %s  Cpus-per-rank: %s  Cpu Type: %s",
-            PRTE_JOBID_PRINT(jdata->nspace), PRTE_VPID_PRINT(jdata->offset),
-            (long unsigned) jdata->total_slots_alloc,
-            (NULL == src->req_mapper) ? "NULL" : src->req_mapper,
-            (NULL == src->last_mapper) ? "NULL" : src->last_mapper,
-            prte_rmaps_base_print_mapping(src->mapping),
-            prte_rmaps_base_print_ranking(src->ranking),
-            prte_hwloc_base_print_binding(src->binding), cpuset, ppr, cpus_per_rank, cpu_type);
+        if (job_show_per_app_policy(jdata)) {
+            char *plines = per_app_policy_lines(jdata, "");
+            pmix_asprintf(
+                &tmp,
+                "\n=================================   JOB MAP   =================================\n"
+                "Data for JOB %s offset %s Total slots allocated %lu\n"
+                "Mapper requested: %s  Last mapper: %s\n"
+                "%s\n"
+                "Cpu set: %s  PPR: %s  Cpus-per-rank: %s  Cpu Type: %s",
+                PRTE_JOBID_PRINT(jdata->nspace), PRTE_VPID_PRINT(jdata->offset),
+                (long unsigned) jdata->total_slots_alloc,
+                (NULL == src->req_mapper) ? "NULL" : src->req_mapper,
+                (NULL == src->last_mapper) ? "NULL" : src->last_mapper,
+                plines, cpuset, ppr, cpus_per_rank, cpu_type);
+            free(plines);
+        } else {
+            pmix_asprintf(
+                &tmp,
+                "\n=================================   JOB MAP   =================================\n"
+                "Data for JOB %s offset %s Total slots allocated %lu\n"
+                "Mapper requested: %s  Last mapper: %s  Mapping policy: %s  Ranking policy: %s\n"
+                "Binding policy: %s  Cpu set: %s  PPR: %s  Cpus-per-rank: %s  Cpu Type: %s",
+                PRTE_JOBID_PRINT(jdata->nspace), PRTE_VPID_PRINT(jdata->offset),
+                (long unsigned) jdata->total_slots_alloc,
+                (NULL == src->req_mapper) ? "NULL" : src->req_mapper,
+                (NULL == src->last_mapper) ? "NULL" : src->last_mapper,
+                prte_rmaps_base_print_mapping(src->mapping),
+                prte_rmaps_base_print_ranking(src->ranking),
+                prte_hwloc_base_print_binding(src->binding), cpuset, ppr, cpus_per_rank, cpu_type);
+        }
 
         if (PMIX_RANK_INVALID == src->daemon_vpid_start) {
             pmix_asprintf(
@@ -605,6 +711,18 @@ void prte_map_print(char **output, prte_job_t *jdata)
         }
         free(tmp);
         tmp = tmp2;
+    } else if (job_show_per_app_policy(jdata)) {
+        /* per-app (MPMD) job: show a policy line for each app */
+        char *plines = per_app_policy_lines(jdata, "    ");
+        pmix_asprintf(&tmp,
+                      "\n========================   JOB MAP   ========================\n"
+                      "Data for JOB %s offset %s Total slots allocated %lu\n"
+                      "%s\n"
+                      "    Cpu set: %s  PPR: %s  Cpus-per-rank: %s  Cpu Type: %s\n",
+                      PRTE_JOBID_PRINT(jdata->nspace), PRTE_VPID_PRINT(jdata->offset),
+                      (long unsigned) jdata->total_slots_alloc, plines,
+                      cpuset, ppr, cpus_per_rank, cpu_type);
+        free(plines);
     } else {
         /* this is being printed for a user, so let's make it easier to see */
         pmix_asprintf(&tmp,
