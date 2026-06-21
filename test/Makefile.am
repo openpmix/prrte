@@ -3,7 +3,7 @@
 # Additional copyrights may follow
 # $HEADER$
 
-SUBDIRS = unit attachtest
+SUBDIRS = topologies offline unit attachtest
 
 # These are PMIx client test programs used for manual and integration
 # testing under prte/prun. They require a running DVM and job environment

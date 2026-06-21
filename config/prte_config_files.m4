@@ -28,6 +28,8 @@ AC_DEFUN([PRTE_CONFIG_FILES],[
         src/tools/pterm/Makefile
         test/Makefile
         test/attachtest/Makefile
+        test/topologies/Makefile
+        test/offline/Makefile
         test/unit/Makefile
         test/unit/rmaps/Makefile
     ])

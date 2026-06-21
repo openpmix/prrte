@@ -851,7 +851,7 @@ launching anything:
 .. code-block:: sh
 
    prterun --rtos donotlaunch --display map \
-           --prtemca hwloc_use_topo_file test/unit/rmaps/test-topo.xml \
+           --prtemca hwloc_use_topo_file test/topologies/test-topo.xml \
            -H node0:N,node1:M,node2:L \
            --map-by node -n 4 hostname : --map-by slot --rank-by node -n 4 hostname
 
