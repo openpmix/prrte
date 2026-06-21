@@ -113,7 +113,12 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
         hwloc_bitmap_and(prte_rmaps_base.available, node->available, tmpcpus);
         hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.available, prte_rmaps_base.baseset);
 
-        if (options->use_hwthreads) {
+        if (options->use_hwthreads || HWLOC_OBJ_PU == options->hwb) {
+            /* count available hwthreads when treating them as cpus, or when
+             * the binding target itself is a hwthread - a single PU is finer
+             * than a core, so counting whole cores "inside" it would yield
+             * zero on an SMT topology and wrongly reject every PU
+             */
             ncpus = hwloc_bitmap_weight(prte_rmaps_base.available);
         } else {
             /* if we are treating cores as cpus, then we really
@@ -177,6 +182,17 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     tmp_obj = hwloc_get_obj_inside_cpuset_by_type(node->topology->topo,
                                                   prte_rmaps_base.available,
                                                   type, 0);
+    if (NULL == tmp_obj && HWLOC_OBJ_CORE == type) {
+        /* the binding target is finer than a core (e.g. --bind-to hwthread
+         * while treating cores as cpus): the consumed core is not *inside*
+         * the target's cpuset, it *covers* it. Consume the containing core so
+         * the whole core is accounted for - one process per core. */
+        tmp_obj = hwloc_get_obj_covering_cpuset(node->topology->topo,
+                                                prte_rmaps_base.available);
+        while (NULL != tmp_obj && HWLOC_OBJ_CORE != tmp_obj->type) {
+            tmp_obj = tmp_obj->parent;
+        }
+    }
     if (NULL == tmp_obj) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         if (PRTE_BINDING_REQUIRED(jdata->map->binding)) {
