@@ -50,13 +50,16 @@ BIND_TO = ["none", "hwthread", "core", "l1cache", "l2cache", "l3cache",
 OBJECT_MAPS = {"package", "numa", "l3cache", "l2cache", "l1cache",
                "core", "hwthread"}
 
-# Binding "fineness" rank (smaller == finer/deeper).  hwthread and core share
-# rank 0 on a 1-PU/core topology.  PRRTE rejects binding to an object that
-# lies *above* (coarser than) the mapped object, so for an object-level map a
-# bind is accepted only when its rank is <= the map's rank.  map-by slot/node
-# accept any bind.  (Rule derived empirically from prterun; see SPEC.)
-FINENESS = {"hwthread": 0, "core": 0, "l1cache": 1, "l2cache": 2,
-            "l3cache": 3, "numa": 4, "package": 5}
+# Binding "fineness" rank (smaller == finer/deeper).  hwthread is strictly
+# finer than core: PRRTE orders binding objects by hwloc depth (PU below Core)
+# regardless of how many hwthreads a core holds, so "--map-by hwthread
+# --bind-to core" is rejected (bind coarser than map) even on a 1-PU/core
+# topology.  PRRTE rejects binding to an object that lies *above* (coarser
+# than) the mapped object, so for an object-level map a bind is accepted only
+# when its rank is <= the map's rank.  map-by slot/node accept any bind.
+# (Rule derived empirically from prterun; see SPEC.)
+FINENESS = {"hwthread": 0, "core": 1, "l1cache": 2, "l2cache": 3,
+            "l3cache": 4, "numa": 5, "package": 6}
 
 
 def bind_compatible(map_by, bind_to):
@@ -76,17 +79,21 @@ BIND_LEVEL = {"hwthread": "PU", "core": "Core", "l1cache": "L1Cache",
               "l2cache": "L2Cache", "l3cache": "L3Cache", "numa": "NUMANode",
               "package": "Package"}
 
-# Displayed "Mapping policy" base string per directive (core==hwthread on a
-# 1-PU/core topology -- the display collapses them to BYHWTHREAD).
+# Displayed "Mapping policy" base string per directive.  PRRTE keeps the user's
+# "core" as BYCORE whenever the topology has core objects -- even on a 1-PU/core
+# topology where a core and a PU cover the same cpuset -- and only collapses to
+# BYHWTHREAD when the topology exposes no cores at all (none of the test
+# topologies do).
 MAP_DISPLAY = {"slot": "BYSLOT", "node": "BYNODE", "package": "BYPACKAGE",
                "numa": "BYNUMA", "l3cache": "BYL3CACHE", "l2cache": "BYL2CACHE",
-               "l1cache": "BYL1CACHE", "core": "BYHWTHREAD",
+               "l1cache": "BYL1CACHE", "core": "BYCORE",
                "hwthread": "BYHWTHREAD"}
 
-# Displayed "Binding policy" string per directive.  --bind-to core reports as
-# HWTHREAD on a 1-PU/core topology, so both are accepted for core/hwthread.
-BIND_DISPLAY = {"none": {"NONE"}, "hwthread": {"HWTHREAD", "CORE"},
-                "core": {"HWTHREAD", "CORE"}, "l1cache": {"L1CACHE"},
+# Displayed "Binding policy" string per directive.  PRRTE honors the user's
+# "core" as CORE wherever cores exist (see MAP_DISPLAY), so core and hwthread
+# report distinctly even on a 1-PU/core topology.
+BIND_DISPLAY = {"none": {"NONE"}, "hwthread": {"HWTHREAD"},
+                "core": {"CORE"}, "l1cache": {"L1CACHE"},
                 "l2cache": {"L2CACHE"}, "l3cache": {"L3CACHE"},
                 "numa": {"NUMA"}, "package": {"PACKAGE"}}
 
@@ -139,6 +146,15 @@ class TopoModel:
         self.pus_per_core = (npu // ncore) if ncore else 1
         self.hwthread_eq_core = (self.pus_per_core == 1)
         self.all_cores = frozenset(o.logical for o in by_level["Core"])
+        # map each PU logical id to the logical id of its containing core, so a
+        # binding reported in hwthread terms (hwt:Lnn) can be expressed in cores
+        self.pu_core = {}
+        core_list = [(c.cpuset, c.logical) for c in by_level.get("Core", [])]
+        for pu in by_level.get("PU", []):
+            for (cb, cl) in core_list:
+                if cb and (pu.cpuset & cb) == pu.cpuset:
+                    self.pu_core[pu.logical] = cl
+                    break
 
     @classmethod
     def from_xml(cls, path):
@@ -163,9 +179,13 @@ class TopoModel:
                 if lvl == "Core":
                     o.core_logical = frozenset([o.logical])
                 else:
+                    # cores this object's cpuset overlaps. For objects at or
+                    # above core level this is the set of cores contained in
+                    # the object; for a sub-core object (a PU on an SMT node)
+                    # it is the single core that contains the PU.
                     o.core_logical = frozenset(
                         cl for (cb, cl) in cores
-                        if cb and (cb & o.cpuset) == cb)
+                        if cb and (cb & o.cpuset) != 0)
         return cls(os.path.splitext(os.path.basename(path))[0], by_level)
 
     def objects_at(self, level):
@@ -206,7 +226,13 @@ class BoundSpec:
     lo: int
     hi: int
 
-    def core_set(self):
+    def core_set(self, topo):
+        # the L indices are core logicals when the binding is reported in core
+        # terms, but PU logicals when reported in hwthread terms (hwt:Lnn) -
+        # map those back to their containing cores so SMT bindings validate
+        if self.child_level in ("hwt", "pu"):
+            return frozenset(topo.pu_core.get(i, i)
+                             for i in range(self.lo, self.hi + 1))
         return frozenset(range(self.lo, self.hi + 1))
 
 
@@ -328,6 +354,11 @@ def locate_prterun(top_builddir):
 
 def build_argv(prterun, topo_path, case):
     argv = [prterun, "--rtos", "donotlaunch", "--display", "map",
+            # pin the mapping-policy baseline so the harness is hermetic: do not
+            # inherit any rmaps_default_mapping_policy a developer may have set
+            # (e.g. in ~/.prte/mca-params.conf). Defaults to the no-directive
+            # "" baseline; cases needing oversubscription pin ":oversubscribe".
+            "--prtemca", "rmaps_default_mapping_policy", case.default_map_policy,
             "--prtemca", "hwloc_use_topo_file", topo_path,
             "-H", case.hostspec]
     if case.map_by is not None:
@@ -427,6 +458,11 @@ class Case:
     extra_args: tuple = ()
     expect: str = "map"          # "map" | "reject"
     expect_banner: str = None    # substring expected on reject
+    # value pinned for rmaps_default_mapping_policy; "" = the no-directive
+    # baseline. A case that needs the DVM default to permit oversubscription
+    # sets ":oversubscribe" here (OVERSUBSCRIBE cannot be given as a per-app
+    # --map-by qualifier, so it must come from the default policy).
+    default_map_policy: str = ""
 
 
 def _expect_for(map_by, rank_by, bind_to):
@@ -472,13 +508,15 @@ def negative_cases(topo):
 
 
 def group_cases(topo):
-    # oversubscribe: more procs than slots (the default policy already permits
-    # oversubscription -- the OVERSUBSCRIBE modifier cannot be a default).
+    # oversubscribe: more procs than slots. OVERSUBSCRIBE cannot be a per-app
+    # --map-by qualifier, so this case permits it through the DVM default
+    # mapping policy instead (pinned per-case, keeping the harness hermetic).
     hostspec, pool = LAYOUTS["uneven"]   # 12 slots
     total = sum(s for _, s in pool)
     yield Case("group.%s.oversub" % topo.name, "oversubscribe", topo,
                "uneven", hostspec, pool, map_by="core", rank_by="slot",
-               bind_to="core", n=total + 4, expect="map")
+               bind_to="core", n=total + 4, expect="map",
+               default_map_policy=":oversubscribe")
 
     # ppr: 2 procs per package on a single node (npkg packages -> 2*npkg procs)
     hostspec, pool = LAYOUTS["single"]
@@ -651,7 +689,7 @@ def check_universal(case, pmap):
     # U7 bound references existing cores
     for _, p in flat:
         if p.bound is not None:
-            cs = p.bound.core_set()
+            cs = p.bound.core_set(case.topo)
             if not cs <= case.topo.all_cores:
                 v.append(("U7", "rank %d bound to cores %s outside topology"
                           % (p.rank, sorted(cs))))
@@ -739,10 +777,10 @@ def check_binding(case, pmap):
         if p.bound is None:
             v.append(("B-%s" % case.bind_to, "rank %d unbound" % p.rank))
             break
-        if p.bound.core_set() not in spans:
+        if p.bound.core_set(case.topo) not in spans:
             v.append(("B-%s" % case.bind_to,
                       "rank %d bound to cores %s, not a %s span"
-                      % (p.rank, sorted(p.bound.core_set()), level)))
+                      % (p.rank, sorted(p.bound.core_set(case.topo)), level)))
             break
     return v
 
@@ -750,8 +788,8 @@ def check_binding(case, pmap):
 def check_perapp_binding(case, pmap):
     """For MPMD cases that bind explicitly per app, verify each app's procs
     land on a span of the object that app asked to bind to.  An explicit
-    per-app --bind-to takes effect even under the default (oversubscription-
-    allowed) policy, so this is asserted directly rather than left to golden."""
+    per-app --bind-to takes effect regardless of the mapping policy, so this is
+    asserted directly rather than left to golden."""
     v = []
     if not case.apps:
         return v
@@ -775,10 +813,10 @@ def check_perapp_binding(case, pmap):
                 v.append(("PA-%s" % app.bind_to,
                           "app %d rank %d unbound" % (idx, p.rank)))
                 break
-            if p.bound.core_set() not in spans:
+            if p.bound.core_set(case.topo) not in spans:
                 v.append(("PA-%s" % app.bind_to,
                           "app %d rank %d bound to cores %s, not a %s span"
-                          % (idx, p.rank, sorted(p.bound.core_set()), level)))
+                          % (idx, p.rank, sorted(p.bound.core_set(case.topo)), level)))
                 break
     return v
 

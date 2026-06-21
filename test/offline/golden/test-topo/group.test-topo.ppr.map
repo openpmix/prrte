@@ -1,7 +1,7 @@
 
 ========================   JOB MAP   ========================
 Data for JOB prterun-JOBID@N offset 0 Total slots allocated N
-    Mapping policy: BYPACKAGE:OVERSUBSCRIBE  Ranking policy: SLOT Binding policy: PACKAGE
+    Mapping policy: BYPACKAGE:NOOVERSUBSCRIBE  Ranking policy: SLOT Binding policy: PACKAGE
     Cpu set: N/A  PPR: 2:package  Cpus-per-rank: N/A  Cpu Type: CORE
 
 
