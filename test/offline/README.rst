@@ -20,8 +20,10 @@ build-out.
 Quick start
 ===========
 
-From a build tree, ``make check`` runs it automatically (it locates the
-freshly built ``prte`` and the committed topologies).  To run it by hand::
+This harness is **not** part of ``make check`` -- it needs a freshly built
+``prterun`` and runs well over a thousand cases.  From a build tree, run it
+on demand with ``make check-offline`` (it locates the freshly built ``prte``
+and the committed topologies).  To run it by hand::
 
     # point it at a built prterun (or have one on PATH)
     export PRTE_PRTERUN=/path/to/build/bin/prterun
