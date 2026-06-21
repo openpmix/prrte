@@ -85,6 +85,9 @@ typedef struct {
     char *default_ranking_policy;
     /* whether or not to require hwtcpus due to topology limitations */
     bool require_hwtcpus;
+    /* whether the topology reports any core objects at all; when false, a
+     * user request to map or bind to "core" must fall back to hwthreads */
+    bool have_cores;
 } prte_rmaps_base_t;
 
 /**

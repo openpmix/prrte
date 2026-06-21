@@ -640,7 +640,9 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
         PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
 
     } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_CORE)) {
-        if (prte_rmaps_base.require_hwtcpus) {
+        /* honor the user's "core" unless the topology has no cores at all;
+         * a core that holds a single hwthread is still a core to bind to */
+        if (!prte_rmaps_base.have_cores) {
             PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
         } else {
             PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_CORE);

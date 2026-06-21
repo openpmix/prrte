@@ -67,7 +67,8 @@ prte_rmaps_base_t prte_rmaps_base = {
     .baseset = NULL,
     .default_mapping_policy = NULL,
     .default_ranking_policy = NULL,
-    .require_hwtcpus = false
+    .require_hwtcpus = false,
+    .have_cores = true
 };
 
 static int prte_rmaps_base_register(pmix_mca_base_register_flag_t flags)
@@ -309,7 +310,10 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
             }
-            if (prte_rmaps_base.require_hwtcpus) {
+            /* honor the user's "corecpus" unless the topology has no cores at
+             * all; a core that holds a single hwthread is still a usable core
+             * (matches the per-app path, which records corecpus as given) */
+            if (!prte_rmaps_base.have_cores) {
                 if (NULL == jdata) {
                     prte_rmaps_base.hwthread_cpus = true;
                 } else {
@@ -589,7 +593,9 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_SEQ);
 
     } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_CORE)) {
-        if (prte_rmaps_base.require_hwtcpus) {
+        /* honor the user's "core" unless the topology has no cores at all;
+         * a core that holds a single hwthread is still a core to map by */
+        if (!prte_rmaps_base.have_cores) {
             PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYHWTHREAD);
         } else {
             PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYCORE);
@@ -997,7 +1003,9 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
     } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_SEQ)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_SEQ);
     } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_CORE)) {
-        if (prte_rmaps_base.require_hwtcpus) {
+        /* honor the user's "core" unless the topology has no cores at all;
+         * a core that holds a single hwthread is still a core to map by */
+        if (!prte_rmaps_base.have_cores) {
             PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYHWTHREAD);
         } else {
             PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYCORE);
@@ -1117,7 +1125,9 @@ int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app, char *spec)
     } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_HWT)) {
         PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
     } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_CORE)) {
-        if (prte_rmaps_base.require_hwtcpus) {
+        /* honor the user's "core" unless the topology has no cores at all;
+         * a core that holds a single hwthread is still a core to bind to */
+        if (!prte_rmaps_base.have_cores) {
             PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
         } else {
             PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_CORE);

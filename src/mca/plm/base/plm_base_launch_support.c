@@ -204,6 +204,7 @@ void prte_plm_base_allocation_complete(int fd, short args, void *cbdata)
             return;
         }
         prte_rmaps_base.require_hwtcpus = !prte_hwloc_base_core_cpus(node->topology->topo);
+        prte_rmaps_base.have_cores = prte_hwloc_base_has_cores(node->topology->topo);
         PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
     } else {
         /* move the state machine along */
@@ -262,6 +263,7 @@ void prte_plm_base_vm_ready(int fd, short args, void *cbdata)
     if (NULL != node && NULL != node->topology &&
         NULL != node->topology->topo) {
         prte_rmaps_base.require_hwtcpus = !prte_hwloc_base_core_cpus(node->topology->topo);
+        prte_rmaps_base.have_cores = prte_hwloc_base_has_cores(node->topology->topo);
     }
 
     /* position any required files */

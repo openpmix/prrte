@@ -268,6 +268,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
         // check for topology limitations
         prte_rmaps_base.require_hwtcpus = !prte_hwloc_base_core_cpus(node->topology->topo);
+        prte_rmaps_base.have_cores = prte_hwloc_base_has_cores(node->topology->topo);
 
         /* jump to mapping */
         state->jdata->state = PRTE_JOB_STATE_VM_READY;
