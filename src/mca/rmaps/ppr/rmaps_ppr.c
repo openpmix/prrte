@@ -56,7 +56,10 @@ static int ppr_mapper(prte_job_t *jdata,
     pmix_list_t node_list;
     int32_t num_slots;
     char *jobppr = NULL;
-    bool initial_map = true;
+    /* see rmaps_rr.c: reset the per-node "mapped" flags only on the genuine
+     * first mapping pass so per-app dispatch (one entry per app) does not
+     * re-add nodes a previous app already placed in the job map */
+    bool initial_map = (0 == jdata->map->num_nodes);
     prte_binding_policy_t savebind = options->bind;
     uint16_t jobppn, jobpes;
 

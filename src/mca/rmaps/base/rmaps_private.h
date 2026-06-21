@@ -76,8 +76,7 @@ PRTE_EXPORT int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
 /* Derive the default ranking/binding policy from a mapping policy.  Exposed
  * for unit testing; both return a bare PRTE_RANK_BY_* / PRTE_BIND_TO_* value. */
 PRTE_EXPORT prte_ranking_policy_t prte_rmaps_base_derive_ranking(prte_mapping_policy_t mapping);
-PRTE_EXPORT prte_binding_policy_t prte_rmaps_base_derive_binding(prte_mapping_policy_t mapping,
-                                                                 bool use_hwthreads);
+PRTE_EXPORT prte_binding_policy_t prte_rmaps_base_derive_binding(prte_rmaps_options_t *opts);
 
 PRTE_EXPORT int prte_rmaps_base_bind_proc(prte_job_t *jdata,
                                           prte_proc_t *proc,
