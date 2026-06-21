@@ -1,0 +1,24 @@
+
+========================   JOB MAP   ========================
+Data for JOB prterun-JOBID@N offset 0 Total slots allocated N
+    Mapping policy: BYHWTHREAD:OVERSUBSCRIBE  Ranking policy: SLOT Binding policy: HWTHREAD
+    Cpu set: N/A  PPR: N/A  Cpus-per-rank: N/A  Cpu Type: CORE
+
+
+Data for node: node0	Num slots: 8	Max slots: 0	Num procs: 16
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 0 Bound: package[0][core:L0]
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 1 Bound: package[0][core:L1]
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 2 Bound: package[0][core:L2]
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 3 Bound: package[0][core:L3]
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 4 Bound: package[0][core:L4]
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 5 Bound: package[0][core:L5]
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 6 Bound: package[0][core:L6]
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 7 Bound: package[0][core:L7]
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 8 Bound: package[0][core:L8]
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 9 Bound: package[0][core:L9]
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 10 Bound: package[0][core:L10]
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 11 Bound: package[0][core:L11]
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 12 Bound: package[0][core:L12]
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 13 Bound: package[0][core:L13]
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 14 Bound: package[0][core:L14]
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 15 Bound: package[0][core:L15]

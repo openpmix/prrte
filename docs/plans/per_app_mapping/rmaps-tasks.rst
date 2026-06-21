@@ -772,7 +772,7 @@ Before declaring the branch ready for review:
   on the *second* app of an MPMD line visibly changes that app's placement/rank/binding::
 
       prterun --rtos donotlaunch --display map \
-          --prtemca hwloc_use_topo_file test/unit/rmaps/test-topo.xml \
+          --prtemca hwloc_use_topo_file test/topologies/test-topo.xml \
           -H n0:4,n1:4 \
           --map-by node -n 4 hostname : --map-by slot --rank-by node -n 4 hostname
 

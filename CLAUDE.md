@@ -400,7 +400,7 @@ with `--display map`:
 
 ```sh
 prterun --rtos donotlaunch --display map \
-        --prtemca hwloc_use_topo_file test/unit/rmaps/test-topo.xml \
+        --prtemca hwloc_use_topo_file test/topologies/test-topo.xml \
         -H node0:4,node1:4,node2:4 \
         --map-by node --rank-by node --bind-to core -n 8 hostname
 ```
@@ -422,7 +422,7 @@ What each piece does:
   topology.  Without it, binding is computed against the head node's own
   topology (and `donotlaunch` warns that it could not probe the compute
   nodes).  A ready-made multi-core topology lives at
-  `test/unit/rmaps/test-topo.xml`; generate others with `lstopo file.xml`.
+  `test/topologies/test-topo.xml`; generate others with `lstopo file.xml`.
 - **`-H node0:N,node1:M,...`** — declare the simulated nodes and their slot
   counts.  The counts (`N`, `M`, …) only need to be **at least** the number of
   procs you want placed on each node; they bound oversubscription, not the
