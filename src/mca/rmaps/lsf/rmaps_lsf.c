@@ -89,7 +89,10 @@ static int lsf_map(prte_job_t *jdata,
     prte_proc_t *proc;
     pmix_mca_base_component_t *c = &prte_mca_rmaps_lsf_component.super;
     char *slots = NULL;
-    bool initial_map = true;
+    /* see rmaps_rr.c: reset the per-node "mapped" flags only on the genuine
+     * first mapping pass so per-app dispatch (one entry per app) does not
+     * re-add nodes a previous app already placed in the job map */
+    bool initial_map = (0 == jdata->map->num_nodes);
     char *affinity_file = NULL;
     hwloc_cpuset_t proc_bitmap, bitmap;
     char *cpu_bitmap;

@@ -74,14 +74,27 @@ int test_resolve_options(void)
         CHECK("derive_rank package+span", PRTE_RANK_BY_SPAN == prte_rmaps_base_derive_ranking(pkgspan));
     }
 
-    /* === derive_binding(): map policy -> default binding === */
-    CHECK("derive_bind package", PRTE_BIND_TO_PACKAGE == prte_rmaps_base_derive_binding(PRTE_MAPPING_BYPACKAGE, false));
-    CHECK("derive_bind numa", PRTE_BIND_TO_NUMA == prte_rmaps_base_derive_binding(PRTE_MAPPING_BYNUMA, false));
-    CHECK("derive_bind core", PRTE_BIND_TO_CORE == prte_rmaps_base_derive_binding(PRTE_MAPPING_BYCORE, false));
-    CHECK("derive_bind core+hwt", PRTE_BIND_TO_HWTHREAD == prte_rmaps_base_derive_binding(PRTE_MAPPING_BYCORE, true));
-    CHECK("derive_bind hwthread", PRTE_BIND_TO_HWTHREAD == prte_rmaps_base_derive_binding(PRTE_MAPPING_BYHWTHREAD, false));
-    CHECK("derive_bind node->core", PRTE_BIND_TO_CORE == prte_rmaps_base_derive_binding(PRTE_MAPPING_BYNODE, false));
-    CHECK("derive_bind node+hwt", PRTE_BIND_TO_HWTHREAD == prte_rmaps_base_derive_binding(PRTE_MAPPING_BYNODE, true));
+    /* === derive_binding(): map policy -> default binding ===
+     * derive_binding() now reads an options struct; build a minimal one per
+     * case.  Object maps bind to their object; bycore now binds to core even
+     * with hwtcpus (mirroring the job-level default); the non-object maps
+     * (node) bind to a cpu for small jobs (nprocs <= 2). */
+    {
+        prte_rmaps_options_t b;
+        #define DB(MAP, HWT, NP)                                            \
+            (memset(&b, 0, sizeof(b)), b.map = (MAP), b.use_hwthreads = (HWT), \
+             b.nprocs = (NP), b.maptype = HWLOC_OBJ_MACHINE,                \
+             prte_rmaps_base_derive_binding(&b))
+        CHECK("derive_bind package", PRTE_BIND_TO_PACKAGE == DB(PRTE_MAPPING_BYPACKAGE, false, 1));
+        CHECK("derive_bind numa", PRTE_BIND_TO_NUMA == DB(PRTE_MAPPING_BYNUMA, false, 1));
+        CHECK("derive_bind core", PRTE_BIND_TO_CORE == DB(PRTE_MAPPING_BYCORE, false, 1));
+        CHECK("derive_bind core+hwt", PRTE_BIND_TO_CORE == DB(PRTE_MAPPING_BYCORE, true, 1));
+        CHECK("derive_bind hwthread", PRTE_BIND_TO_HWTHREAD == DB(PRTE_MAPPING_BYHWTHREAD, false, 1));
+        CHECK("derive_bind node->core", PRTE_BIND_TO_CORE == DB(PRTE_MAPPING_BYNODE, false, 1));
+        CHECK("derive_bind node+hwt", PRTE_BIND_TO_HWTHREAD == DB(PRTE_MAPPING_BYNODE, true, 1));
+        CHECK("derive_bind node many->numa", PRTE_BIND_TO_NUMA == DB(PRTE_MAPPING_BYNODE, false, 8));
+        #undef DB
+    }
 
     /* === resolve: app with no per-app attributes inherits the job options === */
     app = PMIX_NEW(prte_app_context_t);

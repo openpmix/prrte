@@ -86,35 +86,79 @@ prte_ranking_policy_t prte_rmaps_base_derive_ranking(prte_mapping_policy_t mappi
     return PRTE_RANK_BY_SLOT;
 }
 
-/* Derive the default binding policy from a mapping policy: when an app is
- * mapped by a topology object, bind to that same object (mirroring the
- * object branch of prte_hwloc_base_set_default_binding()).  Mappings with no
- * natural binding object (by-node, by-slot, dist, pe-list, ppr, seq, ...)
- * fall back to the common default of binding to core - or to hwthread when
- * hwthreads are being treated as independent cpus.  Returns a bare
- * PRTE_BIND_TO_* value with no directive bits. */
-prte_binding_policy_t prte_rmaps_base_derive_binding(prte_mapping_policy_t mapping,
-                                                            bool use_hwthreads)
+/* Derive the default binding policy for an app from its resolved mapping,
+ * faithfully mirroring prte_hwloc_base_set_default_binding(): an app mapped by
+ * a topology object binds to that object; pe-list and pes-per-proc bind to a
+ * cpu; ppr binds to its pattern object; and every non-object mapping (by-node,
+ * by-slot, dist, seq, ppr-by-node, ...) binds to a cpu for small jobs and to
+ * numa for larger ones.  Reads opts->map/maptype/nprocs/cpus_per_rank/
+ * use_hwthreads.  Returns a bare PRTE_BIND_TO_* value with no directive bits. */
+prte_binding_policy_t prte_rmaps_base_derive_binding(prte_rmaps_options_t *opts)
 {
-    bool hwt = use_hwthreads || prte_rmaps_base.require_hwtcpus;
+    bool hwt = opts->use_hwthreads || prte_rmaps_base.require_hwtcpus;
 
-    switch (PRTE_GET_MAPPING_POLICY(mapping)) {
+    /* pes-per-proc forces binding down to a cpu */
+    if (1 < opts->cpus_per_rank) {
+        return hwt ? PRTE_BIND_TO_HWTHREAD : PRTE_BIND_TO_CORE;
+    }
+
+    switch (PRTE_GET_MAPPING_POLICY(opts->map)) {
+        case PRTE_MAPPING_BYHWTHREAD:
+            return PRTE_BIND_TO_HWTHREAD;
+        case PRTE_MAPPING_BYCORE:
+            return PRTE_BIND_TO_CORE;
+        case PRTE_MAPPING_BYL1CACHE:
+            return PRTE_BIND_TO_L1CACHE;
+        case PRTE_MAPPING_BYL2CACHE:
+            return PRTE_BIND_TO_L2CACHE;
+        case PRTE_MAPPING_BYL3CACHE:
+            return PRTE_BIND_TO_L3CACHE;
         case PRTE_MAPPING_BYNUMA:
             return PRTE_BIND_TO_NUMA;
         case PRTE_MAPPING_BYPACKAGE:
             return PRTE_BIND_TO_PACKAGE;
-        case PRTE_MAPPING_BYL3CACHE:
-            return PRTE_BIND_TO_L3CACHE;
-        case PRTE_MAPPING_BYL2CACHE:
-            return PRTE_BIND_TO_L2CACHE;
-        case PRTE_MAPPING_BYL1CACHE:
-            return PRTE_BIND_TO_L1CACHE;
-        case PRTE_MAPPING_BYCORE:
-            return hwt ? PRTE_BIND_TO_HWTHREAD : PRTE_BIND_TO_CORE;
-        case PRTE_MAPPING_BYHWTHREAD:
-            return PRTE_BIND_TO_HWTHREAD;
+        case PRTE_MAPPING_PELIST:
+            /* pe-list follows the cpu designation only (not require_hwtcpus) */
+            return opts->use_hwthreads ? PRTE_BIND_TO_HWTHREAD : PRTE_BIND_TO_CORE;
+        case PRTE_MAPPING_PPR:
+            switch (opts->maptype) {
+                case HWLOC_OBJ_PACKAGE:  return PRTE_BIND_TO_PACKAGE;
+                case HWLOC_OBJ_NUMANODE: return PRTE_BIND_TO_NUMA;
+                case HWLOC_OBJ_L1CACHE:  return PRTE_BIND_TO_L1CACHE;
+                case HWLOC_OBJ_L2CACHE:  return PRTE_BIND_TO_L2CACHE;
+                case HWLOC_OBJ_L3CACHE:  return PRTE_BIND_TO_L3CACHE;
+                case HWLOC_OBJ_CORE:     return PRTE_BIND_TO_CORE;
+                case HWLOC_OBJ_PU:       return PRTE_BIND_TO_HWTHREAD;
+                default:
+                    /* ppr by node/machine: fall through to the nprocs rule */
+                    break;
+            }
+            break;
         default:
-            return hwt ? PRTE_BIND_TO_HWTHREAD : PRTE_BIND_TO_CORE;
+            /* by-node, by-slot, dist, seq, user: fall through to nprocs rule */
+            break;
+    }
+
+    /* non-object mappings: a couple of procs bind to a cpu, more to numa */
+    if (opts->nprocs <= 2) {
+        return hwt ? PRTE_BIND_TO_HWTHREAD : PRTE_BIND_TO_CORE;
+    }
+    return PRTE_BIND_TO_NUMA;
+}
+
+/* Map a bare binding policy to the hwloc object type the binder binds against
+ * (opts->hwb), mirroring the job-level switch in prte_rmaps_base_map_job(). */
+static hwloc_obj_type_t bind_to_hwb(prte_binding_policy_t bind)
+{
+    switch (PRTE_GET_BINDING_POLICY(bind)) {
+        case PRTE_BIND_TO_PACKAGE:  return HWLOC_OBJ_PACKAGE;
+        case PRTE_BIND_TO_NUMA:     return HWLOC_OBJ_NUMANODE;
+        case PRTE_BIND_TO_L3CACHE:  return HWLOC_OBJ_L3CACHE;
+        case PRTE_BIND_TO_L2CACHE:  return HWLOC_OBJ_L2CACHE;
+        case PRTE_BIND_TO_L1CACHE:  return HWLOC_OBJ_L1CACHE;
+        case PRTE_BIND_TO_CORE:     return HWLOC_OBJ_CORE;
+        case PRTE_BIND_TO_HWTHREAD: return HWLOC_OBJ_PU;
+        default:                    return HWLOC_OBJ_MACHINE;  /* BIND_TO_NONE */
     }
 }
 
@@ -238,16 +282,29 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
         opts->rank = prte_rmaps_base_derive_ranking(appmap);
     }
 
-    /* 10. Binding: same precedence as ranking - explicit per-app --bind-to
-     * wins (carrying its overload directive), otherwise default to the app's
-     * mapping policy. */
+    /* 10. Binding: an explicit per-app --bind-to wins (carrying its overload
+     * directive).  Otherwise, when the app supplied its own mapping policy,
+     * recompute the default binding from that policy - honoring the same
+     * oversubscribe-disables-default-binding rule the job-level path applies
+     * (prte_rmaps_base_map_job() forces BIND_TO_NONE when oversubscribing).
+     * When the app changed neither, the job-level binding (already
+     * oversubscribe-adjusted) stands. */
     have_bind = prte_get_attribute(&app->attributes, PRTE_APP_BINDTO, (void **)&u16ptr, PMIX_UINT16);
     if (have_bind) {
         opts->bind = PRTE_GET_BINDING_POLICY(u16);
         opts->overload = (0 != PRTE_BIND_OVERLOAD_ALLOWED(u16));
     } else if (have_map) {
-        opts->bind = prte_rmaps_base_derive_binding(appmap, opts->use_hwthreads);
+        if (opts->oversubscribe) {
+            opts->bind = PRTE_BIND_TO_NONE;
+        } else {
+            opts->bind = prte_rmaps_base_derive_binding(opts);
+        }
     }
+
+    /* keep the hwloc binding object in sync with the (possibly changed)
+     * binding policy - bind_generic() binds against opts->hwb, not opts->bind,
+     * so a stale hwb would bind every app to the job-level object */
+    opts->hwb = bind_to_hwb(opts->bind);
 
     return PRTE_SUCCESS;
 }
@@ -1157,6 +1214,11 @@ ranking:
 
             prte_rmaps_options_t app_options = options;   /* shallow copy of job defaults */
             app_options.app_idx = n;
+            /* the default-binding nprocs rule keys off this app's own proc
+             * count, not the job-wide total inherited from options.nprocs.
+             * (the mappers overwrite options.nprocs per node as they run, so
+             * this only feeds the pre-map binding-default derivation.) */
+            app_options.nprocs = app->num_procs;
 
             rc = prte_rmaps_base_resolve_app_options(jdata, app, &app_options);
             if (PRTE_SUCCESS != rc) {
