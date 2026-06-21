@@ -8,4 +8,4 @@
 # harness (test/offline), which auto-discovers every *.xml placed here.
 # See the "Testing the mapper without launching" section in AGENTS.md.
 
-EXTRA_DIST = test-topo.xml
+EXTRA_DIST = test-topo.xml test-topo2.xml
