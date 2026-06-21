@@ -284,21 +284,17 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
 
     /* 10. Binding: an explicit per-app --bind-to wins (carrying its overload
      * directive).  Otherwise, when the app supplied its own mapping policy,
-     * recompute the default binding from that policy - honoring the same
-     * oversubscribe-disables-default-binding rule the job-level path applies
-     * (prte_rmaps_base_map_job() forces BIND_TO_NONE when oversubscribing).
-     * When the app changed neither, the job-level binding (already
-     * oversubscribe-adjusted) stands. */
+     * recompute the default binding from that policy.  We deliberately do not
+     * disable binding here just because oversubscription is permitted: like
+     * the job-level path, the derived binding is a default that the mappers
+     * reset to BIND_TO_NONE only if this app genuinely oversubscribes a node.
+     * When the app changed neither, the job-level binding stands. */
     have_bind = prte_get_attribute(&app->attributes, PRTE_APP_BINDTO, (void **)&u16ptr, PMIX_UINT16);
     if (have_bind) {
         opts->bind = PRTE_GET_BINDING_POLICY(u16);
         opts->overload = (0 != PRTE_BIND_OVERLOAD_ALLOWED(u16));
     } else if (have_map) {
-        if (opts->oversubscribe) {
-            opts->bind = PRTE_BIND_TO_NONE;
-        } else {
-            opts->bind = prte_rmaps_base_derive_binding(opts);
-        }
+        opts->bind = prte_rmaps_base_derive_binding(opts);
     }
 
     /* keep the hwloc binding object in sync with the (possibly changed)
@@ -1009,14 +1005,20 @@ ranking:
     }
     /* define the binding policy for this job - if the user specified one
      * already (e.g., during the call to comm_spawn), then we don't
-     * override it */
+     * override it.
+     *
+     * Note: we do NOT disable binding here merely because oversubscription
+     * is permitted (options.oversubscribe). That flag only records that the
+     * job is *allowed* to oversubscribe, not that any node actually will be -
+     * a job that fits comfortably within its slots must still bind. The
+     * mappers detect genuine oversubscription/overloading as they place procs
+     * and reset an unset (default) binding to BIND_TO_NONE for the affected
+     * node(s) at that point. Forcing NONE here off the permission alone broke
+     * binding for non-oversubscribed jobs whenever a default oversubscribe
+     * policy was in effect. */
     if (!PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
         did_map = false;
-        if (options.oversubscribe) {
-            /* if we are oversubscribing, then do not bind */
-            jdata->map->binding = PRTE_BIND_TO_NONE;
-            did_map = true;
-        } else if (inherit) {
+        if (inherit) {
             if (NULL != parent) {
                 jdata->map->binding = parent->map->binding;
                 did_map = true;
