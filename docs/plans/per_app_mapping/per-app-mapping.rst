@@ -387,8 +387,42 @@ so the resolver must mask off the directive bits (and route the overload bit to
 The function must be idempotent and must not modify ``jdata->map`` — any
 per-app mapping policy lives only in ``opts`` and in ``app->attributes``.
 
-Changes to rmaps Components
-----------------------------
+Binding-default and display refinements
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Follow-on work hardened the binding-default derivation and the map display so
+they behave correctly across SMT/no-SMT topologies and per-app MPMD lines.
+These refine — but do not change — the resolver contract above:
+
+* **Oversubscribe permission no longer suppresses binding.**  The binding
+  default is derived from the mapping policy in every case (job-level and
+  per-app ``resolve_app_options()`` alike).  The mere *permission* to
+  oversubscribe (``rmaps_default_mapping_policy=:oversubscribe``) is not the
+  same as a node *being* oversubscribed; only the round_robin/ppr mappers,
+  which know the real per-node placement, reset an un-``GIVEN`` binding to
+  ``BIND_TO_NONE`` for a node they find genuinely oversubscribed or overloaded.
+  An explicit ``--bind-to`` (the policy's ``GIVEN`` bit) is never overridden.
+
+* **"core" survives on no-SMT nodes.**  A core that holds a single hwthread is
+  still a core: the core→hwthread rewrite in the ``--map-by core`` /
+  ``--bind-to core`` / ``corecpus`` paths now keys off the *absence* of core
+  objects (``prte_hwloc_base_has_cores()``), not off
+  ``prte_hwloc_base_core_cpus()``.  The displayed policy reflects the user's
+  "core" terminology, and ``--map-by core:pe=2`` errors consistently on SMT and
+  no-SMT nodes instead of being silently rewritten.
+
+* **bind-to hwthread within a mapped object works on SMT.**  A process mapped by
+  core (or any object) and bound to hwthread binds to one hwthread of its
+  object, one process per core, on topologies whose cores hold more than one
+  PU.
+
+* **Per-app policy lines in the map display.**  Each app's effective
+  (resolved) mapping/ranking/binding policy is recorded during per-app dispatch
+  as job-local attributes.  When two or more apps resolve to different
+  policies, ``--display map`` (and ``map-devel``) emits an ``App N: Mapping
+  policy …`` line per app instead of a single misleading job-level line; a
+  single-policy job keeps the existing one-line format.  These per-app display
+  attributes are never packed or sent off-node.
 
 Every component must be updated to honour ``options->app_idx``.
 
@@ -870,6 +904,18 @@ immediately here as an app whose placement/rank/binding does not change when
 its per-app policy changes.  Verification must include a **multi-app** MPMD
 case — a single-app job can pass even when per-app attributes are being lost,
 because its lone directive coincides with the job-level policy.
+
+This manual check is automated by the ``test/offline/`` harness
+(``run_offline_maps.py``), which ``make check`` runs.  It drives the same
+``prterun --rtos donotlaunch --display map`` command over a
+``--map-by``/``--rank-by``/``--bind-to`` matrix crossed with every hwloc XML in
+``test/topologies/`` (currently ``test-topo.xml`` and the SMT ``test-topo2.xml``),
+verifies each map against topology-derived invariants, and pins the per-app
+(``perapp.*``), ppr, and multi-app cases to golden snapshots under
+``test/offline/golden/``.  The multi-app per-app cases live there as
+``perapp.<topo>.map.node-slot``, ``perapp.<topo>.rank.node-slot``,
+``perapp.<topo>.bind.numa-core``, and ``perapp.<topo>.map.three``.  See
+``test/offline/README.rst`` to run it by hand or add a topology.
 
 Location
 ~~~~~~~~~

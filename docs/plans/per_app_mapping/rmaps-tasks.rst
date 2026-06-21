@@ -418,12 +418,12 @@ Grep for all calls: ``grep -n "compute_vpids" src/mca/rmaps/base/rmaps_base_map_
 - [x] Update call at line 1323
 - [x] Declare and initialise ``next_vpid`` before the per-app loop
 
-T4.3 — Update ``compute_vpids`` declaration (``src/mca/rmaps/base/base.h``)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+T4.3 — Update ``compute_vpids`` declaration (``src/mca/rmaps/base/rmaps_private.h``)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Update the exported declaration to match the new signature.
 
-- [x] Update declaration in ``base.h``
+- [x] Update declaration in ``rmaps_private.h``
 
 Phase 5 — Component ``app_idx`` Guards
 ----------------------------------------
@@ -553,19 +553,23 @@ the pre-scan's.
 Phase 7 — Build System
 -----------------------
 
-T7.1 — Create ``test/Makefile.am``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+T7.1 — Add the new subdirs to ``test/Makefile.am``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``test/Makefile.am`` already exists (it builds the standalone PMIx client test
+programs).  The mapping work only needs the new subdirectories added to its
+``SUBDIRS`` line.  As landed — including the offline harness and shared
+topology directory added in follow-on work — the line reads:
 
 .. code-block:: makefile
 
-   # Copyright (c) 2026      Nanook Consulting  All rights reserved.
-   # $COPYRIGHT$
-   # Additional copyrights may follow
-   # $HEADER$
+   SUBDIRS = topologies offline unit attachtest
 
-   SUBDIRS = unit
+``unit`` carries the ``rmaps`` unit tests (T7.2/T7.3); ``topologies`` holds the
+shared hwloc XML fixtures; ``offline`` is the ``prterun --rtos donotlaunch``
+golden-map harness (see the Offline harness note in the Completion Checklist).
 
-- [x] Create ``test/Makefile.am``
+- [x] Add ``topologies offline unit attachtest`` to ``test/Makefile.am`` ``SUBDIRS``
 
 T7.2 — Create ``test/unit/Makefile.am``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -635,15 +639,21 @@ to:
 T7.5 — Register Makefiles in ``config/prte_config_files.m4``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In the ``AC_CONFIG_FILES`` call, add:
+In the ``AC_CONFIG_FILES`` call, add an entry for every new ``Makefile.am``.
+As landed (the offline harness and shared topology directory added their own
+entries in follow-on work) the relevant lines are:
 
 .. code-block:: text
 
    test/Makefile
+   test/attachtest/Makefile
+   test/topologies/Makefile
+   test/offline/Makefile
    test/unit/Makefile
    test/unit/rmaps/Makefile
 
-- [x] Add three new ``AC_CONFIG_FILES`` entries
+- [x] Add ``AC_CONFIG_FILES`` entries for ``test/``, ``test/topologies/``,
+  ``test/offline/``, ``test/unit/``, and ``test/unit/rmaps/``
 
 Phase 8 — Unit Tests
 ---------------------
@@ -763,9 +773,15 @@ Completion Checklist
 
 Before declaring the branch ready for review:
 
-- [ ] ``./autogen.pl && ./configure`` completes without errors
+- [x] ``./autogen.pl && ./configure`` completes without errors
 - [x] ``make -j$(nproc)`` builds cleanly (no new warnings)
-- [x] ``make check`` passes all tests in ``test/unit/rmaps/``
+- [x] ``make check`` passes all tests in ``test/unit/rmaps/`` **and** runs the
+  offline mapping harness in ``test/offline/`` (``run_offline_maps.py``), which
+  drives ``prterun --rtos donotlaunch --display map`` over a directive matrix
+  crossed with every topology in ``test/topologies/`` and compares a curated
+  subset against the committed golden maps under ``test/offline/golden/``.  See
+  ``test/offline/README.rst`` for how to run it by hand and add topologies; the
+  per-app MPMD cases live under the ``perapp.*`` golden ids.
 - [x] ``grep -rn PRTE_ATTR_LOCAL`` in the three ``set_app_*_policy`` functions returns
   nothing (all per-app stores are ``PRTE_ATTR_GLOBAL``)
 - [x] **Offline multi-app check** (no DVM): a per-app ``--map-by``/``--rank-by``/``--bind-to``
