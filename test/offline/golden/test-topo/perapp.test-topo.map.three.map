@@ -1,0 +1,14 @@
+
+========================   JOB MAP   ========================
+Data for JOB prterun-JOBID@N offset 0 Total slots allocated N
+    Mapping policy: BYPACKAGE:OVERSUBSCRIBE  Ranking policy: FILL Binding policy: NONE
+    Cpu set: N/A  PPR: N/A  Cpus-per-rank: N/A  Cpu Type: CORE
+
+
+Data for node: node0	Num slots: 8	Max slots: 0	Num procs: 6
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 0 Bound: N/A
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 1 Bound: N/A
+        Process jobid: prterun-JOBID@N App: 1 Process rank: 2 Bound: N/A
+        Process jobid: prterun-JOBID@N App: 1 Process rank: 3 Bound: N/A
+        Process jobid: prterun-JOBID@N App: 2 Process rank: 4 Bound: N/A
+        Process jobid: prterun-JOBID@N App: 2 Process rank: 5 Bound: N/A
