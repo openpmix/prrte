@@ -212,16 +212,24 @@ inline loop with a single call to it.
 Phase 7 — Build system wiring
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Goal:** ``make check`` builds and runs the unit test suite.
+**Goal:** ``make check`` builds and runs the unit test suite and the offline
+mapping harness.
 
 Files:
 
 - ``Makefile.am`` — add ``test`` to ``SUBDIRS`` after ``src``
-- ``config/prte_config_files.m4`` — add ``test/Makefile``, ``test/unit/Makefile``,
+- ``config/prte_config_files.m4`` — add ``test/Makefile``,
+  ``test/attachtest/Makefile``, ``test/topologies/Makefile``,
+  ``test/offline/Makefile``, ``test/unit/Makefile``, and
   ``test/unit/rmaps/Makefile`` to ``AC_CONFIG_FILES``
-- ``test/Makefile.am`` — new, ``SUBDIRS = unit``
+- ``test/Makefile.am`` — existing; add the new subdirs to ``SUBDIRS``
+  (as landed: ``topologies offline unit attachtest``)
 - ``test/unit/Makefile.am`` — new, ``SUBDIRS = rmaps``
 - ``test/unit/rmaps/Makefile.am`` — new (see spec for contents)
+- ``test/topologies/Makefile.am`` — new; ships the shared hwloc XML fixtures
+  (``test-topo.xml`` plus the ``test-topo2.xml`` SMT topology)
+- ``test/offline/Makefile.am`` — new; wires ``run_offline_maps.py`` into
+  ``make check`` (see Phase 8 note)
 
 Phase 8 — Unit tests
 ~~~~~~~~~~~~~~~~~~~~~
@@ -238,6 +246,15 @@ New files under ``test/unit/rmaps/``:
 - ``test_ppr.c``
 - ``test_seq.c``
 - ``test_rank_file.c``
+
+The placement-level paths that need a live node pool (per-app ``app_idx``
+modes, ``NOLOCAL`` on a shared HNP node, seq/rankfile file selection) are not
+covered by these pure unit tests; they are exercised by the offline harness in
+``test/offline/`` (``run_offline_maps.py``), which drives ``prterun --rtos
+donotlaunch --display map`` over a directive matrix against the topologies in
+``test/topologies/`` and pins per-app/ppr/multi-app shapes to golden snapshots
+under ``test/offline/golden/``.  Both run under ``make check``.  See
+``test/offline/{README,SPEC,IMPL-PLAN}.rst`` for that harness's own design.
 
 Dependency Graph
 ----------------
@@ -372,3 +389,11 @@ Use the offline ``prterun --rtos donotlaunch --display map`` technique (see the 
 §"Offline end-to-end verification" and ``AGENTS.md``) to confirm placement, ranks, and
 bindings for both single-app and **multi-app MPMD** cases before relying on the unit
 tests.  The multi-app case is what catches risks 6 and 7.
+
+This technique is now automated as the ``test/offline/`` harness
+(``run_offline_maps.py``), run by ``make check``: it sweeps the
+``--map-by``/``--rank-by``/``--bind-to`` matrix across every topology in
+``test/topologies/`` and compares the per-app (``perapp.*``), ppr, and
+multi-app golden maps under ``test/offline/golden/``.  Regenerate the goldens
+with ``run_offline_maps.py --update-golden`` and review the diff when an
+intended mapping change moves placement.
