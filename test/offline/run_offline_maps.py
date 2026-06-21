@@ -339,10 +339,16 @@ def build_argv(prterun, topo_path, case):
     argv += list(case.extra_args)
     if case.apps:
         first = True
-        for (n, exe) in case.apps:
+        for app in case.apps:
             if not first:
                 argv += [":"]
-            argv += ["-n", str(n), exe]
+            if app.map_by is not None:
+                argv += ["--map-by", app.map_by]
+            if app.rank_by is not None:
+                argv += ["--rank-by", app.rank_by]
+            if app.bind_to is not None:
+                argv += ["--bind-to", app.bind_to]
+            argv += ["-n", str(app.n), app.exe]
             first = False
     else:
         argv += ["-n", str(case.n), "hostname"]
@@ -389,6 +395,23 @@ LAYOUTS = {
 
 
 @dataclass
+class AppSpec:
+    """One app context in an MPMD line, with optional per-app directives.
+
+    A --map-by/--rank-by/--bind-to belongs to the app context it appears in:
+    it may sit anywhere within that context's segment as long as it precedes
+    the executable name.  build_argv() emits any that are set just before this
+    app's ``-n`` purely for readability; PRRTE would associate them with the
+    same app context wherever in the segment they fell.  Any app carrying such
+    a directive drives rmaps down its per-app dispatch path."""
+    n: int
+    exe: str = "hostname"
+    map_by: str = None
+    rank_by: str = None
+    bind_to: str = None
+
+
+@dataclass
 class Case:
     id: str
     group: str
@@ -400,7 +423,7 @@ class Case:
     rank_by: str = None
     bind_to: str = None
     n: int = 1
-    apps: list = field(default_factory=list)
+    apps: list = field(default_factory=list)   # list[AppSpec]
     extra_args: tuple = ()
     expect: str = "map"          # "map" | "reject"
     expect_banner: str = None    # substring expected on reject
@@ -464,11 +487,49 @@ def group_cases(topo):
                pool, map_by="ppr:2:package", rank_by="slot", bind_to="package",
                n=2 * npkg, expect="map")
 
-    # multi-app: two app contexts
+    # multi-app: two app contexts sharing one job-level policy
     hostspec, pool = LAYOUTS["even"]
     yield Case("group.%s.multiapp" % topo.name, "multiapp", topo, "even",
                hostspec, pool, map_by="core", rank_by="slot", bind_to="core",
-               apps=[(2, "hostname"), (3, "hostname")], expect="map")
+               apps=[AppSpec(2), AppSpec(3)], expect="map")
+
+
+def perapp_cases(topo):
+    """MPMD lines carrying distinct per-app --map-by/--rank-by/--bind-to
+    directives - the rmaps per-app dispatch path.  Placement/ranking/binding
+    shapes are pinned by golden snapshots; apps that bind explicitly are also
+    checked against the topology (see check_perapp_binding)."""
+    hostspec, pool = LAYOUTS["even"]   # node0:8,node1:8,node2:8
+
+    # distinct per-app map-by: each app ranks per its own map default, and a
+    # node shared by both apps must appear in the job map exactly once (the
+    # duplicate-node regression).
+    yield Case("perapp.%s.map.node-slot" % topo.name, "perapp", topo, "even",
+               hostspec, pool,
+               apps=[AppSpec(3, map_by="node"), AppSpec(3, map_by="slot")],
+               expect="map")
+
+    # per-app map-by with explicit per-app bind-to: each app must bind to its
+    # own object, not the job-level binding object (the stale-hwb regression).
+    yield Case("perapp.%s.bind.numa-core" % topo.name, "perapp", topo, "even",
+               hostspec, pool,
+               apps=[AppSpec(2, map_by="numa", bind_to="numa"),
+                     AppSpec(2, map_by="core", bind_to="core")],
+               expect="map")
+
+    # per-app rank-by over a shared default map.
+    yield Case("perapp.%s.rank.node-slot" % topo.name, "perapp", topo, "even",
+               hostspec, pool,
+               apps=[AppSpec(4, rank_by="node"), AppSpec(4, rank_by="slot")],
+               expect="map")
+
+    # three app contexts, three different object maps, default rank/bind each.
+    yield Case("perapp.%s.map.three" % topo.name, "perapp", topo, "even",
+               hostspec, pool,
+               apps=[AppSpec(2, map_by="package"),
+                     AppSpec(2, map_by="l3cache"),
+                     AppSpec(2, map_by="core")],
+               expect="map")
 
 
 def generate_cases(topos, layouts, ns, full):
@@ -477,6 +538,7 @@ def generate_cases(topos, layouts, ns, full):
         cases.extend(matrix_cases(topo, layouts, ns))
         cases.extend(negative_cases(topo))
         cases.extend(group_cases(topo))
+        cases.extend(perapp_cases(topo))
     return cases
 
 
@@ -541,7 +603,7 @@ def _expected_rank_by_node(node_order, counts_by_name, n):
 
 def check_universal(case, pmap):
     v = []
-    n = case.n if not case.apps else sum(a for a, _ in case.apps)
+    n = case.n if not case.apps else sum(app.n for app in case.apps)
     flat = _flat_procs(pmap)
 
     # U1 policy strings
@@ -685,12 +747,49 @@ def check_binding(case, pmap):
     return v
 
 
+def check_perapp_binding(case, pmap):
+    """For MPMD cases that bind explicitly per app, verify each app's procs
+    land on a span of the object that app asked to bind to.  An explicit
+    per-app --bind-to takes effect even under the default (oversubscription-
+    allowed) policy, so this is asserted directly rather than left to golden."""
+    v = []
+    if not case.apps:
+        return v
+    flat = _flat_procs(pmap)
+    for idx, app in enumerate(case.apps):
+        if not app.bind_to:
+            continue
+        if app.bind_to == "none":
+            for _, p in flat:
+                if p.app == idx and p.bound is not None:
+                    v.append(("PA-none", "app %d rank %d bound but bind-to none"
+                              % (idx, p.rank)))
+                    break
+            continue
+        level = BIND_LEVEL[app.bind_to]
+        spans = case.topo.spans_at(level)
+        for _, p in flat:
+            if p.app != idx:
+                continue
+            if p.bound is None:
+                v.append(("PA-%s" % app.bind_to,
+                          "app %d rank %d unbound" % (idx, p.rank)))
+                break
+            if p.bound.core_set() not in spans:
+                v.append(("PA-%s" % app.bind_to,
+                          "app %d rank %d bound to cores %s, not a %s span"
+                          % (idx, p.rank, sorted(p.bound.core_set()), level)))
+                break
+    return v
+
+
 def check_case(case, pmap):
     violations = []
     violations += check_universal(case, pmap)
     violations += check_mapping(case, pmap)
     violations += check_ranking(case, pmap)
     violations += check_binding(case, pmap)
+    violations += check_perapp_binding(case, pmap)
     return violations
 
 
@@ -704,7 +803,7 @@ def golden_path(golden_dir, case):
 
 def is_curated_golden(c):
     """A small, human-reviewable subset pinned by golden snapshots."""
-    if c.group in ("oversubscribe", "ppr", "multiapp"):
+    if c.group in ("oversubscribe", "ppr", "multiapp", "perapp"):
         return True
     if c.group == "matrix" and c.expect == "map":
         # one representative per map-by (even layout, rank slot, bind none)
@@ -741,7 +840,11 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     here = os.path.dirname(os.path.abspath(__file__))
-    top_srcdir = os.environ.get("top_srcdir") or os.path.dirname(here)
+    # this script lives at <top_srcdir>/test/offline, so the source-tree root
+    # is two levels up.  Automake's `make check` exports top_srcdir directly;
+    # fall back to deriving it so a by-hand "./run_offline_maps.py" also finds
+    # test/topologies (a one-level fallback yields test/test/topologies).
+    top_srcdir = os.environ.get("top_srcdir") or os.path.dirname(os.path.dirname(here))
     top_builddir = os.environ.get("top_builddir")
     golden_dir = args.golden_dir or os.path.join(here, "golden")
 
