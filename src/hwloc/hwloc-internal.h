@@ -376,6 +376,13 @@ PRTE_EXPORT void prte_hwloc_build_map(hwloc_topology_t topo,
 
 PRTE_EXPORT bool prte_hwloc_base_core_cpus(hwloc_topology_t topo);
 
+/* Returns true if the topology reports any HWLOC_OBJ_CORE objects. This is
+ * distinct from prte_hwloc_base_core_cpus(), which also returns false when
+ * cores exist but each holds a single hwthread (so cores and PUs coincide):
+ * in that case cores are still usable and "core" remains a valid object to
+ * map and bind to. */
+PRTE_EXPORT bool prte_hwloc_base_has_cores(hwloc_topology_t topo);
+
 END_C_DECLS
 
 #endif /* PRTE_HWLOC_H_ */

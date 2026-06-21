@@ -82,6 +82,11 @@ bool prte_hwloc_base_core_cpus(hwloc_topology_t topo)
     return true;
 }
 
+bool prte_hwloc_base_has_cores(hwloc_topology_t topo)
+{
+    return (NULL != hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, 0));
+}
+
 /*
  * Provide the hwloc object that corresponds to the given
  * processor id of the given type.  Remember: "processor" here [usually] means "core" --
