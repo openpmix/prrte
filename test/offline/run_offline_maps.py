@@ -331,29 +331,60 @@ class RunResult:
     banner: str = None
 
 
+def _is_libtool_wrapper(path):
+    """A built-but-uninstalled libtool program is a shell wrapper script that
+    execs the real binary under .libs/."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(512)
+    except OSError:
+        return False
+    return b"libtool" in head and b"wrapper" in head
+
+
 def locate_prterun(top_builddir):
+    """Return (executable, argv0) for invoking prterun, or None.
+
+    prterun is just prte choosing its launcher personality from argv[0]; the
+    installed bindir provides it as a "prterun -> prte" symlink created by
+    prte's install-exec-hook.  An *uninstalled* VPATH build tree (as CI runs
+    `make check` in) therefore has no prterun, and prte there is a libtool
+    wrapper script that execs .libs/prte with a fixed argv[0] of "prte".
+    Symlinking prterun -> that wrapper would silently run the DVM (prte)
+    personality, which rejects --map-by -- so to get prterun behavior from a
+    build tree we run the real .libs binary directly and pass argv[0]
+    ="prterun" ourselves.
+    """
     env = os.environ.get("PRTE_PRTERUN")
     if env and os.path.exists(env):
-        return env
+        return (env, env)
     from shutil import which
     found = which("prterun")
     if found:
-        return found
+        return (found, found)
     if top_builddir:
-        prte = os.path.join(top_builddir, "src", "tools", "prte", "prte")
+        tdir = os.path.join(top_builddir, "src", "tools", "prte")
+        prte = os.path.join(tdir, "prte")
         if os.path.exists(prte):
-            link = os.path.join(os.path.dirname(prte), "prterun")
+            if _is_libtool_wrapper(prte):
+                for cand in ("lt-prte", "prte"):
+                    real = os.path.join(tdir, ".libs", cand)
+                    if os.path.exists(real):
+                        return (real, "prterun")
+            # not a libtool wrapper (e.g. a fully static build with no shared
+            # libraries): a prterun symlink beside prte selects the personality.
+            link = os.path.join(tdir, "prterun")
             if not os.path.exists(link):
                 try:
                     os.symlink("prte", link)
                 except OSError:
-                    return prte
-            return link
+                    return (prte, prte)
+            return (link, link)
     return None
 
 
-def build_argv(prterun, topo_path, case):
-    argv = [prterun, "--rtos", "donotlaunch", "--display", "map",
+def build_argv(prterun_argv0, topo_path, case):
+    argv = [prterun_argv0, "--rtos", "donotlaunch", "--display", "map",
             # pin the mapping-policy baseline so the harness is hermetic: do not
             # inherit any rmaps_default_mapping_policy a developer may have set
             # (e.g. in ~/.prte/mca-params.conf). Defaults to the no-directive
@@ -404,8 +435,9 @@ def classify(out):
 
 
 def run_case(prterun, topo_path, case, timeout=60):
-    argv = build_argv(prterun, topo_path, case)
-    proc = subprocess.run(argv, stdout=subprocess.PIPE,
+    exe, argv0 = prterun
+    argv = build_argv(argv0, topo_path, case)
+    proc = subprocess.run(argv, executable=exe, stdout=subprocess.PIPE,
                           stderr=subprocess.STDOUT, timeout=timeout,
                           universal_newlines=True)
     mapped, banner = classify(proc.stdout)
@@ -901,6 +933,7 @@ def main(argv=None):
     if not prterun:
         print("SKIP: no prterun/prte executable found", file=sys.stderr)
         return SKIP
+    prterun_exe = prterun[0]
 
     topos = []
     for p in topo_paths:
@@ -932,7 +965,7 @@ def main(argv=None):
         print("# %d cases" % len(cases))
         return 0
 
-    print("prterun: %s" % prterun)
+    print("prterun: %s" % prterun_exe)
     print("topologies: %s" % ", ".join(t.name for t in topos))
     print("cases: %d (layouts=%s, ns=%s)\n" % (len(cases), layouts, ns))
 
