@@ -141,6 +141,49 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
         }
     }
     if (NULL == trg_obj) {
+        /* None of the candidate objects has a free CPU. If overload binding
+         * is permitted, this is not an error: the node is oversubscribed -
+         * typically because another still-running job (e.g., the parent of a
+         * PMIx_Spawn) already consumed the CPUs - and the caller has
+         * explicitly accepted binding more procs to a CPU than there are
+         * CPUs. Pick a target object by round-robin (the one carrying the
+         * fewest procs from this pass) and bind to it anyway. We deliberately
+         * do not consume node->available here: those CPUs remain accounted to
+         * whatever job holds them, so a later job that does not allow overload
+         * still sees the node as full and is not bound on top of them. */
+        if (options->overload) {
+            unsigned least = 0;
+            for (n = 0; n < nobjs; n++) {
+                tmp_obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
+                                                          options->hwb, n);
+                if (NULL == tmp_obj) {
+                    continue;
+                }
+                if (NULL == tmp_obj->userdata) {
+                    objcnt = PMIX_NEW(prte_hwloc_obj_data_t);
+                    tmp_obj->userdata = (void *) objcnt;
+                } else {
+                    objcnt = (prte_hwloc_obj_data_t *) tmp_obj->userdata;
+                }
+                if (NULL == trg_obj || objcnt->nprocs < least) {
+                    least = objcnt->nprocs;
+                    trg_obj = tmp_obj;
+                }
+            }
+            if (NULL == trg_obj) {
+                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                return PRTE_ERR_SILENT;
+            }
+            objcnt = (prte_hwloc_obj_data_t *) trg_obj->userdata;
+            objcnt->nprocs++;
+            hwloc_bitmap_list_asprintf(&proc->cpuset, trg_obj->cpuset);
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                "%s BOUND PROC %s[%s] TO %s (overloaded)",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                PRTE_NAME_PRINT(&proc->name), node->name,
+                                (NULL == proc->cpuset) ? "NULL" : proc->cpuset);
+            return PRTE_SUCCESS;
+        }
         /* there aren't any appropriate targets under this object */
         if (PRTE_BINDING_REQUIRED(jdata->map->binding)) {
             pmix_show_help("help-prte-rmaps-base.txt", "rmaps:no-available-cpus", true, node->name);
