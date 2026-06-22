@@ -26,6 +26,16 @@ is required anywhere in this plan.
    ``LAUNCH_DAEMONS`` directly) where ``prte_dvm_ready`` is never cleared, and
    to ensure full correctness when both paths can interleave.
 
+.. note::
+   This document covers the **shared** fence mechanism (the counter, the
+   held-job arrays, and the two hold points) and the **shrink** path's fence
+   accounting.  The **grow** (daemon-launch) path's fence accounting was
+   originally described here as a single ``PRTE_JOB_LAUNCHED_DAEMONS`` boolean
+   plus a bare ``prte_dvm_launch_fence++``/``--``.  That design has since been
+   replaced by per-campaign, rank-tracked accounting; the authoritative
+   description now lives in :ref:`dvm-grow-campaign-label`.  The grow-specific
+   steps below have been reduced to pointers into that document.
+
 Step 1 — New state constant
 ---------------------------
 
@@ -70,76 +80,26 @@ Initialize both arrays in ``src/runtime/prte_init.c`` alongside the existing
 
 Destruct both in ``src/runtime/prte_finalize.c``.
 
-Step 3 — Increment the fence in setup_virtual_machine
+Steps 3 & 4 — Grow-path fence accounting (superseded)
 ------------------------------------------------------
 
-In ``src/mca/plm/base/plm_base_launch_support.c``, inside
-``prte_plm_base_setup_virtual_machine()``, the block at line 2380 already
-sets ``PRTE_JOB_LAUNCHED_DAEMONS`` when ``map->num_new_daemons > 0``:
+The grow (daemon-launch) path's fence increment and drain were originally
+described here — and in the now-removed Step 4 — as a bare
+``prte_dvm_launch_fence++`` in ``prte_plm_base_setup_virtual_machine()`` with
+a matching decrement in ``vm_ready``, keyed off the
+``PRTE_JOB_LAUNCHED_DAEMONS`` boolean.  **That design has been superseded.**
+The grow path now records each campaign explicitly — tracking the daemon
+ranks it is launching — and drains the whole campaign's fence contribution as
+a unit, so that an unrelated daemon death cannot consume the campaign's token
+and concurrent campaigns cannot wedge the fence.
 
-.. code-block:: c
-
-   /* existing code */
-   if (0 < map->num_new_daemons) {
-       rc = prte_set_attribute(&jdata->attributes,
-                               PRTE_JOB_LAUNCHED_DAEMONS, true, NULL, PMIX_BOOL);
-       if (PRTE_SUCCESS != rc) { ... }
-       /* ADD: increment the fence */
-       prte_dvm_launch_fence++;
-   }
-
-This location is reached by all four PLM backends (ssh, slurm, pals, lsf)
-through a single common code path, so a single insertion covers every
-extension scenario.
-
-Both expansion paths ultimately fire ``PRTE_JOB_STATE_LAUNCH_DAEMONS`` on
-the **daemon job** (app-triggered via ``prte_ras_base_complete_request()``;
-scheduler-push directly from the Slurm RAS module), so ``setup_virtual_machine()``
-always operates on the daemon job when an extension is in progress.  The
-``PRTE_JOB_EXTEND_DVM`` attribute is therefore set on the daemon job in both
-cases.
-
-Step 4 — Decrement the fence and release held jobs in vm_ready
---------------------------------------------------------------
-
-In ``src/mca/state/dvm/state_dvm.c``, ``vm_ready()`` has an outer block
-conditioned on ``PRTE_JOB_LAUNCHED_DAEMONS`` (line 275).  Inside that block,
-a nested ``if (!PRTE_JOB_DO_NOT_LAUNCH && 1 < prte_process_info.num_daemons)``
-block (lines 278–331) sends the nidmap xcast; the outer block closes at
-line 332.
-
-The fence decrement must be placed **just before the closing ``}`` of the
-outer** ``PRTE_JOB_LAUNCHED_DAEMONS`` **block** (between the inner block and
-line 332).  This position is reached by both the xcast path and the
-``DO_NOT_LAUNCH`` / single-daemon path:
-
-.. code-block:: c
-
-   if (prte_get_attribute(...PRTE_JOB_LAUNCHED_DAEMONS...)) {
-       if (!DO_NOT_LAUNCH && 1 < prte_process_info.num_daemons) {
-           /* existing xcast code (lines 283–330) */
-           /* error exits within this block each need:
-            *   prte_dvm_launch_fence--;
-            *   if (0 == prte_dvm_launch_fence)
-            *       prte_plm_base_fence_release(false);
-            * before PRTE_ACTIVATE_JOB_STATE / return          */
-           PMIX_DATA_BUFFER_DESTRUCT(&buf);   /* line 330 */
-       }
-       /* ADD: success path (and DO_NOT_LAUNCH / single-daemon path) */
-       prte_dvm_launch_fence--;
-       if (0 == prte_dvm_launch_fence) {
-           prte_plm_base_fence_release(true);
-       }
-   }   /* line 332 */
-
-Error exits inside the inner block (the ``PRTE_ACTIVATE_JOB_STATE(NULL,
-PRTE_JOB_STATE_FORCED_EXIT)`` branches at lines 288, 302, 310, 317, 327)
-return without reaching the decrement above, so each one must do its own
-decrement + ``prte_plm_base_fence_release(false)`` before returning.
-
-The held jobs re-enter ``vm_ready``; at that point ``PRTE_JOB_LAUNCHED_DAEMONS``
-is not set on them and the fence is zero, so they fall through to the
-``preposition_files → MAP`` path normally.
+See :ref:`dvm-grow-campaign-label` for the authoritative description of
+campaign creation in ``setup_virtual_machine()``, the success drain in
+``vm_ready`` (after the WIREUP xcast), the failure drain in the errmgr via
+``prte_plm_base_grow_target_failed()``, and the ``check_job_complete`` safety
+net.  The shared fence counter and held-job arrays (Step 2) and the
+``VM_READY → MAP`` hold point (Step 5) apply to both paths and are described
+in those steps.
 
 Step 5 — Park jobs at the VM_READY → MAP boundary
 --------------------------------------------------
@@ -166,75 +126,27 @@ Add the hold check here:
    }
    PMIX_RELEASE(caddy);
 
-Step 6 — Handle daemon launch failure
---------------------------------------
+Step 6 — Grow-path daemon launch failure (superseded)
+------------------------------------------------------
 
-If daemon launch fails, the normal ``vm_ready`` decrement path is never
-reached.  There are two distinct failure modes, each needing its own guard.
+Earlier revisions of this plan handled a daemon failure during a grow by
+decrementing ``prte_dvm_launch_fence`` directly in three places — the
+``vm_ready`` xcast error-exits, the ``errmgr_dvm.c`` comm-failure handler,
+and the ``check_complete`` safety net — each gated on the
+``PRTE_JOB_LAUNCHED_DAEMONS`` attribute.  **That approach has been
+superseded** by the per-campaign accounting in :ref:`dvm-grow-campaign-label`:
 
-**6a — xcast build/send errors inside** ``vm_ready``
+* The ``vm_ready`` xcast error-exits no longer touch the fence at all — the
+  whole DVM is being force-exited, and any held jobs are failed as part of
+  that teardown.
+* A daemon failure during a grow is routed to
+  ``prte_plm_base_grow_target_failed()`` in the errmgr, which acts only if the
+  dead rank belongs to an in-progress grow campaign (so an unrelated daemon
+  loss leaves the fence untouched).
+* The ``check_job_complete`` "received NULL job" branch drains any
+  still-pending grow campaigns with ``prte_plm_base_grow_drain(false)``.
 
-The error-exit paths inside the ``!DO_NOT_LAUNCH`` block (lines 288, 302,
-310, 317, 327) call ``PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT)``
-and return before reaching the common decrement at the bottom of the outer
-block.  Each of these branches must decrement and release explicitly, as
-described in Step 4.
-
-**6b — daemon crash after fence increment, before** ``vm_ready``
-
-A daemon might crash between ``setup_virtual_machine()`` (which increments
-the fence) and the ``DAEMONS_REPORTED → VM_READY`` transition.  In this case
-``vm_ready`` is never reached; the crash is routed to
-``errmgr_dvm.c:proc_errors()``.
-
-In ``src/mca/errmgr/dvm/errmgr_dvm.c``, inside the ``PMIX_CHECK_NSPACE``
-daemon block (line 252), within the ``PRTE_PROC_STATE_COMM_FAILED`` /
-``PRTE_PROC_STATE_HEARTBEAT_FAILED`` handler, add after the "mark daemon as
-gone" logic and before the early ``goto cleanup``:
-
-.. code-block:: c
-
-   /* if a grow campaign was in progress, fail the fence now so
-    * held jobs are not parked indefinitely */
-   if (0 < prte_dvm_launch_fence &&
-       prte_get_attribute(&jdata->attributes,
-                          PRTE_JOB_LAUNCHED_DAEMONS, NULL, PMIX_BOOL)) {
-       prte_dvm_launch_fence--;
-       if (0 == prte_dvm_launch_fence) {
-           prte_plm_base_fence_release(false);
-       }
-       /* remove the attribute so a second daemon crash in the same
-        * campaign does not decrement the fence again */
-       prte_remove_attribute(&jdata->attributes, PRTE_JOB_LAUNCHED_DAEMONS);
-   }
-
-**6c —** ``check_complete`` **safety net**
-
-If daemon launch fails through ``PRTE_JOB_STATE_TERMINATED`` on the daemon
-job (reached via the errmgr abort path), add a fence check **inside** the
-``if (NULL == jdata || PMIX_CHECK_NSPACE(...))`` block of ``check_complete``
-(line 539), before the early return at line 553:
-
-.. code-block:: c
-
-   if (NULL == jdata || PMIX_CHECK_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
-       /* existing NULL / daemon-count checks ... */
-
-       /* ADD: if the daemon job held the grow fence, release it */
-       if (NULL != jdata &&
-           prte_get_attribute(&jdata->attributes,
-                              PRTE_JOB_LAUNCHED_DAEMONS, NULL, PMIX_BOOL) &&
-           0 < prte_dvm_launch_fence) {
-           prte_dvm_launch_fence--;
-           if (0 == prte_dvm_launch_fence) {
-               prte_plm_base_fence_release(false);
-           }
-       }
-       /* existing early return ... */
-
-Note: this block is the only path in ``check_complete`` that is reached by
-the daemon job.  The ``jdata->state > PRTE_JOB_STATE_UNTERMINATED`` check
-at line 566 is not reachable for the daemon job.
+See :ref:`dvm-grow-campaign-label` for the authoritative description.
 
 ----
 
@@ -424,7 +336,7 @@ under it are killed when it terminates regardless.  More importantly, the
 acknowledgement would arrive *before* the daemon's routes, ``num_daemons``
 count, and node state have been torn down, so acting on it could release
 held jobs into a DVM that still believes the departing daemon is present.
-The comm-failure event (Step 12) is the only signal that coincides with that
+The comm-failure event (Step 11) is the only signal that coincides with that
 cleanup, so it is the sole completion trigger.
 
 Step 9 — Second hold point at LAUNCH_APPS
@@ -687,8 +599,8 @@ Summary of Files Changed (Shrink Fence)
        call ``prte_plm_base_fence_release(true)`` when fence hits zero.  This
        is the sole shrink-completion trigger.
 
-Summary of Files Changed (Grow Fence)
---------------------------------------
+Summary of Files Changed (Shared Fence Infrastructure)
+-------------------------------------------------------
 
 .. list-table::
    :widths: 50 50
@@ -710,48 +622,29 @@ Summary of Files Changed (Grow Fence)
    * - ``src/runtime/prte_finalize.c``
      - Destruct ``prte_held_jobs`` and ``prte_prelaunch_held_jobs``.
    * - ``src/mca/plm/base/plm_base_launch_support.c``
-     - Increment ``prte_dvm_launch_fence`` in the
-       ``0 < map->num_new_daemons`` block at the end of
-       ``prte_plm_base_setup_virtual_machine()``.
-       Declare and define ``prte_plm_base_fence_release()`` (Step 10).
+     - Declare and define ``prte_plm_base_fence_release()`` (Step 10).
    * - ``src/mca/state/dvm/state_dvm.c``
-     - In ``vm_ready``: (a) decrement fence and call
-       ``prte_plm_base_fence_release(true)`` at the bottom of the outer
-       ``PRTE_JOB_LAUNCHED_DAEMONS`` block; (b) call
-       ``prte_plm_base_fence_release(false)`` in all inner error-exit paths;
-       (c) add hold-check before ``preposition_files``.
-       In ``check_complete``: call ``prte_plm_base_fence_release(false)``
-       inside the ``PMIX_CHECK_NSPACE`` daemon block when a job with
-       ``PRTE_JOB_LAUNCHED_DAEMONS`` terminates abnormally.
-   * - ``src/mca/errmgr/dvm/errmgr_dvm.c``
-     - In ``proc_errors()``, daemon-comm-failure block: if
-       ``prte_dvm_launch_fence > 0`` and ``PRTE_JOB_LAUNCHED_DAEMONS`` is
-       set on the daemon job, decrement fence and call
-       ``prte_plm_base_fence_release(false)`` if fence hits zero; then
-       remove ``PRTE_JOB_LAUNCHED_DAEMONS`` to prevent double-decrement.
+     - In ``vm_ready``: add the ``VM_READY → MAP`` hold-check before
+       ``preposition_files`` (Step 5).
+
+For the **grow** path's file changes (campaign object, campaign creation in
+``setup_virtual_machine()``, the ``grow_drain`` / ``grow_target_failed``
+helpers, and the ``vm_ready`` / ``check_job_complete`` drains), see the
+"Touched files" table in :ref:`dvm-grow-campaign-label`.
 
 Design Invariants
 -----------------
 
 **Grow fence**
 
-* The fence counter and both held-job arrays are only accessed on the PRRTE
-  progress thread, so no locking is required anywhere.
-* The grow contribution to ``prte_dvm_launch_fence`` is incremented exactly
-  once per daemon launch campaign in ``setup_virtual_machine()``, which all
-  PLM backends call.  Symmetric decrement is at the bottom of the outer
-  ``PRTE_JOB_LAUNCHED_DAEMONS`` block in ``vm_ready`` (success or
-  ``DO_NOT_LAUNCH`` path), in each inner error-exit branch of ``vm_ready``
-  (failure), in the ``check_complete`` daemon block (late failure), and in
-  ``errmgr_dvm.c:proc_errors()`` (daemon crash during launch).
-* After ``prte_remove_attribute(...PRTE_JOB_LAUNCHED_DAEMONS...)`` is called
-  in the errmgr crash path, subsequent crashes in the same campaign do not
-  double-decrement the fence.
-* Jobs in ``prte_held_jobs`` hold a ``PMIX_RETAIN`` reference; the release
-  loop in ``prte_plm_base_fence_release()`` performs the matching
-  ``PMIX_RELEASE``.
-* Jobs already past ``MAP`` when a grow starts are unaffected: they were
-  mapped to existing nodes whose daemons are already running.
+The grow-path invariants now live with the per-campaign implementation; see
+the "Why this is correct" and "Design" sections of
+:ref:`dvm-grow-campaign-label`.  In brief: each live campaign contributes
+exactly its target count to ``prte_dvm_launch_fence`` until drained as a unit;
+the fence reaches zero (on success) only after the WIREUP xcast in
+``vm_ready``; an unrelated daemon death matches no campaign and leaves the
+fence untouched; and jobs already past ``MAP`` when a grow starts are
+unaffected.  All access is on the progress thread, so no locking is required.
 
 **Shrink fence**
 
