@@ -58,6 +58,11 @@ typedef struct prte_ras_base_t {
     int multiplier;
     bool launch_orted_on_hn;
     bool simulated;
+    /* set once the DVM's base allocation has been established (the first
+     * allocation to complete). Used to detect that a subsequent job must
+     * reuse the existing allocation rather than re-run discovery. This is
+     * independent of whether the HNP node itself is part of the allocation. */
+    bool allocation_established;
 } prte_ras_base_t;
 
 PRTE_EXPORT extern prte_ras_base_t prte_ras_base;

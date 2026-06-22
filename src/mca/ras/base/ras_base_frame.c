@@ -54,7 +54,8 @@ prte_ras_base_t prte_ras_base = {
     .total_slots_alloc = 0,
     .multiplier = 0,
     .launch_orted_on_hn = false,
-    .simulated = false
+    .simulated = false,
+    .allocation_established = false
 };
 
 static int ras_register(pmix_mca_base_register_flag_t flags)

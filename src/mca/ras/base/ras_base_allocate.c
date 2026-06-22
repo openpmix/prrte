@@ -348,6 +348,35 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     /* construct a list to hold the results */
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
 
+    /* In an unmanaged allocation, the nodes discovered for the DVM's
+     * initial (daemon-job) allocation constitute the fixed base allocation
+     * for the entire session - exactly as if a scheduler had provided them.
+     * Once that base has been established, a subsequent job (for example,
+     * the child of a PMIx_Spawn) must not re-run discovery: doing so re-reads
+     * the default hostfile and overwrites the established per-node slot counts
+     * while clearing PRTE_NODE_FLAG_SLOTS_GIVEN. That in turn lets the node be
+     * re-sized to its core count, which hides genuine oversubscription from
+     * the mapper and causes spawned processes to be bound on a node that is
+     * actually oversubscribed. The only sanctioned way to change an unmanaged
+     * allocation is an explicit add-host/add-hostfile request, which is
+     * handled separately (prte_ras_base_add_hosts -> prte_ras_base_modify)
+     * before we ever reach this point. So if the base allocation already
+     * exists and this is not the DVM's own daemon job, simply reuse it.
+     *
+     * The "established" test is deliberately independent of whether the HNP
+     * node is part of the allocation (prte_ras_base.allocation_established is
+     * set when the first allocation completes), so the protection holds even
+     * for allocations that exclude the head node. */
+    if (!prte_managed_allocation && prte_ras_base.allocation_established &&
+        0 != strcmp(jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
+        PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+                             "%s ras:base:allocate reusing established base allocation for job %s",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             PRTE_JOBID_PRINT(jdata->nspace)));
+        PMIX_DESTRUCT(&nodes);
+        goto DISPLAY;
+    }
+
     PMIX_LIST_FOREACH(mod, &prte_ras_base.selected_modules, prte_ras_base_selected_module_t) {
         // give each module an opportunity to try to make the allocation
         if (NULL == mod->module->allocate) {
@@ -429,6 +458,10 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     PMIX_DESTRUCT(&nodes);
 
 DISPLAY:
+    /* the DVM's base allocation is now established; any later job that does
+     * not bring its own scheduler/add-host directives will reuse it */
+    prte_ras_base.allocation_established = true;
+
     /* shall we display the results? */
     if (4 < pmix_output_get_verbosity(prte_ras_base_framework.framework_output) &&
         0 == strcmp(jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
