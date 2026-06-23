@@ -541,6 +541,7 @@ int prun_common(pmix_cli_result_t *results,
     }
 
     /* we want to be notified upon job completion */
+    flag = true;
     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_NOTIFY_COMPLETION, &flag, PMIX_BOOL);
 
     /* pickup any relevant envars */

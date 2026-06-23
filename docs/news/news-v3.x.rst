@@ -4,6 +4,27 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
+3.0.14 -- 23 Jun 2026
+---------------------
+.. important:: This release includes the following critical changes:
+
+               * repair of support for STOP-ON-EXEC debugger operations.
+                 The ptrace usage must be pinned to the correct thread
+                 and the wait-for-child-exit logic updated to deal with
+                 stop/wakeup of the process
+               * repair of the LSF mapper when LSB_AFFINITY_HOSTFILE is
+                 set but empty. Mapper must fallback to a different method.
+
+- PR #24: Update NEWS and VERSION for release
+- PR #2477: Multiple commits
+   - odls: fix STOP_ON_EXEC race between do_parent and wait_signal_callback
+   - examples/debugger: add STOP_ON_EXEC support to indirect + daemon
+   - odls: pin STOP_ON_EXEC children to prte_event_base (ptrace tracer-thread affinity)
+- PR #2476: Multiple commits
+   - fix: rmaps/lsf mapper broken when LSB_AFFINITY_HOSTFILE is set but empty
+   - fix: suppress unused-parameter warning in prte_hide_unused_params
+
+
 3.0.13 -- 23 Jan 2026
 ---------------------
 .. important:: This release includes the following critical changes:

@@ -17,7 +17,7 @@
 
 major=3
 minor=0
-release=13
+release=14
 
 # PRRTE required dependency versions.
 # List in x.y.z format.
@@ -90,7 +90,7 @@ date="N/A"
 # Version numbers are described in the Libtool current:revision:age
 # format.
 
-libprrte_so_version=3:13:0
+libprrte_so_version=3:14:0
 
 # "Common" components install standalone libraries that are run-time
 # linked by one or more components.  So they need to be versioned as
