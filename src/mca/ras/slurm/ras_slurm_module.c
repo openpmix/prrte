@@ -856,14 +856,15 @@ int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_
     PMIX_LIST_FOREACH(node, node_list, prte_node_t) {
 
         /* NOTE: the node-reservation/session-targeting design
-         * (docs/plans/node_reservation/node-reservation.rst) requires that a
-         * session hold *references* to the global node objects, not copies.
-         * The mapper resolves a job's candidate nodes from the global pool
-         * filtered by node->session, and copies made here are daemon-less
-         * duplicates that the mapper and launch path cannot use. This path
-         * must be migrated to retain and add the global node objects
-         * (PMIX_RETAIN + node->session backpointer) rather than
-         * prte_node_copy() once that work lands. */
+         * (docs/plans/node_reservation/node-reservation.rst) makes it a hard
+         * invariant that a session hold *references* to the global node
+         * objects, not copies. The mapper resolves a job's candidate nodes
+         * from the global pool filtered by node->session, and copies made here
+         * are daemon-less duplicates that the mapper and launch path cannot
+         * use. This path is therefore to be migrated (plan Implementation
+         * Order step 12) to insert these nodes into the global pool and store
+         * retained references (PMIX_RETAIN + node->session backpointer) rather
+         * than prte_node_copy(), once node->session lands (plan step 1). */
         prte_node_t *node_cpy;
         err = prte_node_copy(&node_cpy, node);
 
