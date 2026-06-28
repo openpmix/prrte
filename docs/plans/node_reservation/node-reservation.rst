@@ -275,6 +275,10 @@ reservation was created for, whose termination drives the ``NONE`` and
     * namespace terminates. NULL for the default session. Released at teardown. */
    prte_job_t *owner_job;
 
+   /* The process that requested this allocation (req->tproc). Target of the
+    * relayed PMIX_ALLOC_TIMEOUT_WARNING. Refreshed on EXTEND. */
+   pmix_proc_t requestor;
+
    /* Disposition recorded at creation, governing teardown when the owning
     * namespace (NONE/DEFAULT) or the last derived child (CHILD/CHILD_DEFAULT)
     * terminates. Stored as the uint8_t underlying pmix_alloc_inheritance_t so
@@ -286,12 +290,12 @@ The ``inheritance`` field is typed ``uint8_t`` rather than
 ``pmix_alloc_inheritance_t`` so the struct compiles even when the installed
 PMIx predates the type; the four disposition constants are only referenced
 inside ``#if defined`` guards.  The constructor sets ``owner`` empty,
-``owner_job`` to ``NULL``, and ``inheritance`` to the default-disposition value
-(``PMIX_ALLOC_INHERIT_DEFAULT`` when defined, else the equivalent "unreserve on
-owning-namespace termination" behavior, which is what an inheritance-unaware
-build performs unconditionally).  The destructor releases ``owner_job`` if still
-set, so DVM teardown (which runs the session destructor directly) also balances
-the reference.
+``owner_job`` to ``NULL``, ``requestor`` to an invalid proc, and ``inheritance``
+to the default-disposition value (``PMIX_ALLOC_INHERIT_DEFAULT`` when defined,
+else the equivalent "unreserve on owning-namespace termination" behavior, which
+is what an inheritance-unaware build performs unconditionally).  The destructor
+releases ``owner_job`` if still set, so DVM teardown (which runs the session
+destructor directly) also balances the reference.
 
 For the ``CHILD``-flavored dispositions, teardown is deferred until the owning
 namespace and **all of its derived children** — the full transitive spawn
@@ -410,6 +414,8 @@ returns a non-tool job; otherwise it is a **tool**.  The directive scan in
    bool have_share = false;
    uint8_t inherit = PRTE_INHERIT_DEFAULT_VALUE;  /* see below */
    bool have_inherit = false;
+   char *alloc_id = NULL;      /* PMIX_ALLOC_ID (scheduler-assigned) */
+   char *req_id = NULL;        /* PMIX_ALLOC_REQ_ID (user-provided) */
 
    for (n = 0; n < req->ninfo; n++) {
    #if defined(PMIX_ALLOC_TARGET)
@@ -432,6 +438,14 @@ returns a non-tool job; otherwise it is a **tool**.  The directive scan in
            continue;
        }
    #endif
+       if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
+           alloc_id = req->info[n].value.data.string;
+           continue;
+       }
+       if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_REQ_ID)) {
+           req_id = req->info[n].value.data.string;
+           continue;
+       }
        /* PMIX_ALLOC_WARN_TIMEOUT is not consumed here: it is left in
         * req->info to be forwarded verbatim to the scheduler; see
         * "Allocation timeout warning" below. */
@@ -465,8 +479,18 @@ Destination resolution then follows the decision table, with the allocation
        req->pstatus = PMIX_ERR_NO_PERMISSIONS; /* app may not retarget */
        return;
    } else if (PMIX_ALLOC_EXTEND == req->allocdir) {
-       /* extend an existing reservation named by its alloc id */
-       dest = prte_get_session_object_from_id(/* PMIX_ALLOC_ID from req->info */);
+       /* extend an existing reservation named by either identifier:
+        * PMIX_ALLOC_ID matches session->alloc_refid, PMIX_ALLOC_REQ_ID
+        * matches session->user_refid. ALLOC_ID is tried first. */
+       dest = (NULL != alloc_id) ? prte_get_session_object_from_id(alloc_id)
+                                 : NULL;
+       if (NULL == dest && NULL != req_id) {
+           dest = prte_get_session_object_from_refid(req_id);
+       }
+       if (NULL == alloc_id && NULL == req_id) {
+           req->pstatus = PMIX_ERR_BAD_PARAM;  /* nothing names the target */
+           return;
+       }
        if (NULL == dest ||
            !prte_session_is_owned_by(dest, req->tproc.nspace)) {
            req->pstatus = (NULL == dest) ? PMIX_ERR_NOT_FOUND
@@ -477,14 +501,22 @@ Destination resolution then follows the decision table, with the allocation
        dest = create_reservation(owner_nspace);
    }
 
+Both ``prte_get_session_object_from_id`` (``alloc_refid`` / ``PMIX_ALLOC_ID``)
+and ``prte_get_session_object_from_refid`` (``user_refid`` / ``PMIX_ALLOC_REQ_ID``)
+already exist, so an ``EXTEND`` may be named by the scheduler-assigned id or the
+requester's own request id; an ``EXTEND`` carrying neither is rejected with
+``PMIX_ERR_BAD_PARAM``.
+
 ``create_reservation(nspace, inherit)`` allocates a new ``prte_session_t``,
 assigns a fresh ``session_id`` and ``alloc_refid``, sets ``flags |=
 PRTE_SESSION_FLAG_RESERVED | PRTE_SESSION_FLAG_DYNAMIC``, records the owning
 namespace (``PMIX_LOAD_NSPACE(dest->owner, nspace)``) and the disposition
-(``dest->inheritance = inherit``), takes and stores a retained reference to the
-owning namespace's job object when one exists (``dest->owner_job`` via
-``PMIX_RETAIN``; it is ``NULL`` for a tool requester that has no job), seeds the
-owners list with ``prte_session_add_owner(dest, nspace)``, and registers it with
+(``dest->inheritance = inherit``), records the requesting process
+(``PMIX_XFER_PROCID(&dest->requestor, &req->tproc)`` for the timeout-warning
+relay), takes and stores a retained reference to the owning namespace's job
+object when one exists (``dest->owner_job`` via ``PMIX_RETAIN``; it is ``NULL``
+for a tool requester that has no job), seeds the owners list with
+``prte_session_add_owner(dest, nspace)``, and registers it with
 ``prte_set_session_object``.  A ``PMIX_ALLOC_NEW`` request always mints a new
 reservation; the same namespace may thus own several, each distinguished by its
 allocation id.  On a ``PMIX_ALLOC_EXTEND`` that carried an inheritance value,
@@ -562,14 +594,36 @@ warning.  Two directions are involved:
   backing scheduler, there is no timeout source and the attribute is simply
   never acted upon — the advisory contract permits this.
 
-* **Event (inbound).**  When the scheduler fires ``PMIX_ALLOC_TIMEOUT_WARNING``,
-  it is delivered to the HNP through the existing PMIx event channel.  PRRTE
-  relays it **only to the process that requested the allocation** — a directed
-  notification, not a DVM-wide broadcast — by setting the event range to that
-  process (the requester recorded as the reservation's creator, ``tproc`` on
-  the originating request).  The relayed payload carries the same
-  ``PMIX_ALLOC_ID``, the user's ``PMIX_ALLOC_REQ_ID`` when one was supplied, and
-  ``PMIX_TIME_REMAINING`` (``uint32_t`` seconds) unchanged from the scheduler.
+* **Event (inbound).**  PRRTE registers a **dedicated PMIx event handler** for
+  ``PMIX_ALLOC_TIMEOUT_WARNING`` at PMIx-server init, alongside the existing
+  registrations (``parent_died_fn`` in ``prte.c``, ``lost_connection_hdlr`` in
+  ``pmix_server.c``).  The handler keys off the event's ``PMIX_ALLOC_ID`` to
+  find the reservation (``prte_get_session_object_from_id``), recovers the proc
+  that requested the allocation from ``session->requestor`` (recorded at
+  creation — see below), and re-emits the event **only to that process** — a
+  directed notification, not a DVM-wide broadcast — by restricting the
+  notification range to it through the existing relay machinery
+  (``pmix_server_notify_event`` / ``PMIx_Notify_event`` with a proc-scoped
+  custom range, the same path PRRTE already uses for directed events).  The
+  relayed payload carries the same ``PMIX_ALLOC_ID``, the user's
+  ``PMIX_ALLOC_REQ_ID`` when one was supplied, and ``PMIX_TIME_REMAINING``
+  (``uint32_t`` seconds) unchanged from the scheduler.
+
+  To deliver to a specific process, the reservation must remember who requested
+  it; ``prte_session_t`` therefore also carries a ``pmix_proc_t requestor``,
+  set from ``req->tproc`` in ``create_reservation`` (and refreshed on an
+  ``EXTEND`` so the warning follows the most recent requester).
+
+.. note::
+
+   This assumes the scheduler delivers the warning as a **PMIx event** that
+   surfaces through PRRTE's registered handlers.  Some host/scheduler
+   integrations instead deliver allocation-control traffic as an RML
+   *controller command* on PRRTE's scheduler channel (see the scheduler-request
+   recv path in ``pmix_server.c``).  Confirm the delivery mechanism against the
+   target scheduler; if it is the controller-command path, the relay is wired
+   there instead, but the requester-directed forwarding and payload above are
+   unchanged.
 
 The whole path is guarded by ``#if defined(PMIX_ALLOC_TIMEOUT_WARNING)`` (and
 the companion key/event guards); a PMIx that predates the event registers no
@@ -671,7 +725,29 @@ reservations its parent may own — ownership does not propagate transitively.
 ``jdata->session`` retains its present meaning as the job's *primary* session
 (used for accounting, refids, and the ``session->jobs`` linkage).  It is set to
 the first valid targeted session, or to the default session when only the
-invalid namespace is targeted.  The full target set drives mapping.
+invalid namespace is targeted.
+
+The full target set is **resolved once here, on the HNP**, where ownership is
+already validated, and cached on the job for the mapper to consume — rather than
+re-parsed per app context inside the mapper (``get_target_nodes`` runs once per
+app).  ``prte_job_t`` gains an HNP-local, non-packed pair:
+
+.. code-block:: c
+
+   /* Sessions this job may map onto, resolved from PRTE_JOB_SPAWN_TARGET on the
+    * HNP after the ownership check. HNP-local; never packed (rebuilt from the
+    * attribute if ever needed). Defaults to { jdata->session } when no spawn
+    * target was given. */
+   prte_session_t **target_sessions;
+   size_t           num_target_sessions;
+
+These are populated in ``plm_base_receive.c`` immediately after the ownership
+check and the ``prte_session_add_owner`` step above.  When
+``PRTE_JOB_SPAWN_TARGET`` is absent, the array is the single element
+``{ jdata->session }``, so existing jobs are unchanged.  ``target_sessions``
+holds **borrowed** session pointers (the sessions are owned via
+``prte_set_session_object``, not by the job), so the job destructor frees only
+the array, not the sessions it points at.
 
 Mapping Changes
 ---------------
@@ -679,7 +755,11 @@ Mapping Changes
 ``prte_rmaps_base_get_target_nodes``
 (``src/mca/rmaps/base/rmaps_base_support_fns.c``) is generalized from "iterate
 ``jdata->session->nodes``" to "iterate the candidate pool defined by the job's
-target session set."  Define the membership predicate:
+target session set."  No signature change is needed: the function already
+receives ``jdata``, so it reads the pre-resolved
+``jdata->target_sessions`` / ``num_target_sessions`` cached on the HNP (see
+*Carrying the target to the HNP*) rather than re-resolving the attribute itself.
+Define the membership predicate:
 
 .. code-block:: c
 
@@ -692,6 +772,9 @@ target session set."  Define the membership predicate:
    /* True if nd is usable by a job targeting the given set of sessions. */
    static bool node_in_targets(prte_node_t *nd,
                                prte_session_t **targets, size_t ntargets);
+
+The two branches pass ``jdata->target_sessions`` / ``num_target_sessions`` as
+``targets`` / ``ntargets``.
 
 Both node-collection branches in ``get_target_nodes`` change:
 
@@ -857,10 +940,13 @@ Implementation Order
    no behavior change.
 5. Implement allocation-time routing in ``prte_ras_base_complete_request``
    (Cases 2 and 3), guarded by ``#if defined`` on the alloc keys, recording
-   ``owner``, ``owner_job`` (retained), and ``inheritance`` on each new
-   reservation.
+   ``owner``, ``owner_job`` (retained), ``requestor``, and ``inheritance`` on
+   each new reservation, and resolving an ``EXTEND`` target by either
+   ``PMIX_ALLOC_ID`` or ``PMIX_ALLOC_REQ_ID``.
 6. Add ``PRTE_JOB_SPAWN_TARGET`` and the ``PMIX_SPAWN_TARGET`` parsing in the
-   spawn path, plus the multi-session resolution in ``plm_base_receive.c``.
+   spawn path, plus the multi-session resolution in ``plm_base_receive.c`` that
+   caches the validated ``target_sessions`` on the job; ``get_target_nodes``
+   consumes that cache with no signature change.
 7. Return the allocation id to the requester from the alloc response.
 8. Wire reservation release/cleanup into the ``PMIX_ALLOC_RELEASE`` path
    (owner-initiated, scheduler-initiated, and DVM teardown), clearing
@@ -896,11 +982,16 @@ Open Questions
 --------------
 
 No open *design* questions remain; the decisions that shape observable
-behavior are settled below.  What is left for the implementer is purely to
-locate a few exact code sites (the inbound timeout-warning handler, the
-``PMIX_ALLOC_ID`` extraction in the ``EXTEND`` lookup, and the carrier that
-threads the resolved target set into the mapper); none of these changes the
-design.
+behavior are settled below, and the previously under-specified code sites (the
+``EXTEND`` identifier extraction, the inbound timeout-warning handler, and the
+carrier threading the target set into the mapper) are now pinned in their
+respective sections.
+
+One item is worth confirming against a real system before coding, though it
+does not change the design: whether the target scheduler delivers
+``PMIX_ALLOC_TIMEOUT_WARNING`` as a PMIx event or as an RML controller command.
+The relay logic is identical either way; only the registration site differs.
+See *Allocation timeout warning*.
 
 Resolved decisions
 ~~~~~~~~~~~~~~~~~~~
