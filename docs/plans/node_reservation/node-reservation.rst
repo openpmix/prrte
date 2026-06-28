@@ -28,11 +28,19 @@ This document specifies the changes required to:
    observable behavior — documented here for completeness).
 2. Honor ``PMIX_ALLOC_TARGET`` and ``PMIX_ALLOC_SHARE`` on dynamic
    allocation requests to decide which session receives the new nodes.
-3. Honor a new ``PMIX_SPAWN_TARGET`` attribute on spawn requests to select the
+3. Honor ``PMIX_ALLOC_INHERITANCE`` to decide what becomes of a reservation
+   when its owning namespace terminates.
+4. Relay the scheduler's allocation-timeout warning
+   (``PMIX_ALLOC_WARN_TIMEOUT`` request, ``PMIX_ALLOC_TIMEOUT_WARNING`` event)
+   to the requester.
+5. Honor a new ``PMIX_SPAWN_TARGET`` attribute on spawn requests to select the
    union of allocations a job may map onto.
 
-All three PMIx keys are optional and **must** be compiled out cleanly when the
-installed PMIx headers predate them, preserving backward compatibility.
+The observable contract for all of the above is specified in
+``node-reservation-spec.rst``; this document describes the implementation that
+realizes it.  All of these PMIx keys are optional and **must** be compiled out
+cleanly when the installed PMIx headers predate them, preserving backward
+compatibility.
 
 Goals
 -----
@@ -45,7 +53,8 @@ Goals
 3. Reservation decisions are driven entirely by PMIx attributes supplied by
    the requester (tool or application); PRRTE invents no policy of its own
    beyond the defaults specified below.
-4. Code that references ``PMIX_ALLOC_TARGET``, ``PMIX_ALLOC_SHARE``, or
+4. Code that references ``PMIX_ALLOC_TARGET``, ``PMIX_ALLOC_SHARE``,
+   ``PMIX_ALLOC_INHERITANCE``, ``PMIX_ALLOC_WARN_TIMEOUT``, or
    ``PMIX_SPAWN_TARGET`` is guarded so a PMIx that lacks any of these keys
    still builds warning-free and behaves as it does today.
 
@@ -235,6 +244,93 @@ located by their allocation id with the existing
 ``prte_get_session_object_from_id`` (which matches ``session->alloc_refid``),
 and ownership is then checked with ``prte_session_is_owned_by``.
 
+Owning namespace and inheritance disposition
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``owners`` list is the *authorization* set (who may map onto and target
+the reservation).  The inheritance rules in ``node-reservation-spec.rst`` also
+require a distinguished **owning namespace** — the single namespace the
+reservation was created for, whose termination drives the ``NONE`` and
+``DEFAULT`` dispositions — and the recorded disposition itself.
+``prte_session_t`` gains:
+
+.. code-block:: c
+
+   /* The single namespace the reservation was created for (PMIX_ALLOC_TARGET,
+    * else the requester). Empty for the default session. owners[] additionally
+    * accumulates every namespace spawned into the reservation. */
+   pmix_nspace_t owner;
+
+   /* Retained reference to the owning namespace's job object, so its children
+    * subtree stays walkable for CHILD-flavored drain even after the owning
+    * namespace terminates. NULL for the default session. Released at teardown. */
+   prte_job_t *owner_job;
+
+   /* Disposition recorded at creation, governing teardown when the owning
+    * namespace (NONE/DEFAULT) or the last derived child (CHILD/CHILD_DEFAULT)
+    * terminates. Stored as the uint8_t underlying pmix_alloc_inheritance_t so
+    * the struct compiles against a PMIx that lacks the type; defaults to the
+    * value of PMIX_ALLOC_INHERIT_DEFAULT. */
+   uint8_t inheritance;
+
+The ``inheritance`` field is typed ``uint8_t`` rather than
+``pmix_alloc_inheritance_t`` so the struct compiles even when the installed
+PMIx predates the type; the four disposition constants are only referenced
+inside ``#if defined`` guards.  The constructor sets ``owner`` empty,
+``owner_job`` to ``NULL``, and ``inheritance`` to the default-disposition value
+(``PMIX_ALLOC_INHERIT_DEFAULT`` when defined, else the equivalent "unreserve on
+owning-namespace termination" behavior, which is what an inheritance-unaware
+build performs unconditionally).  The destructor releases ``owner_job`` if still
+set, so DVM teardown (which runs the session destructor directly) also balances
+the reference.
+
+For the ``CHILD``-flavored dispositions, teardown is deferred until the owning
+namespace and **all of its derived children** — the full transitive spawn
+subtree rooted at the owning namespace, per the spec — have terminated.  The
+owner set is *not* sufficient for this: a descendant may run in some other
+session (not spawned into this reservation) yet still counts as a derived child
+that holds the reservation open.  The drain condition must therefore be
+computed from the job genealogy, not from ``owners``.
+
+PRRTE already records that genealogy on ``prte_job_t``:
+
+* ``prte_job_t::children`` — a list of the job's **immediate** child jobs,
+  populated in ``plm_base_receive.c`` when a spawn's parent is resolved.
+* ``prte_job_t::launcher`` — the nspace of the **root** launcher of the tree.
+  All descendants of an original spawn inherit the same ``launcher`` value (the
+  spawn code copies the parent's ``launcher``, or sets it to the parent when the
+  parent is itself an original spawn).
+
+The transitive subtree under an owning namespace *O* is obtained by recursively
+walking ``children`` from *O*'s job object.  PRRTE already does exactly this
+kind of genealogy traversal on the termination path: ``prte_dump_aborted_procs``
+(``src/runtime/prte_quit.c``) resolves a job's ``launcher`` and walks the
+launcher's ``children`` to report a failed descendant.  Because that tree-walk
+cost is already paid when jobs terminate, the drain condition reuses the
+**existing parentage tracking** rather than introducing parallel bookkeeping: at
+each ``PRTE_JOB_STATE_TERMINATED``, traverse the owning namespace's ``children``
+subtree and ask whether any job in it is still running.  A per-reservation
+descendant *counter* was considered and rejected — it would duplicate state the
+genealogy already holds, and add spawn-time bookkeeping for no traversal saving
+the termination path does not already incur.
+
+The walk must root at *O*'s own job object (``launcher`` names only the *root*
+of a tree, so it cannot root the subtree of an owning namespace that sits
+mid-genealogy).  Since a ``CHILD``-flavored reservation outlives *O*, that job
+object must stay queryable after *O* terminates: ``create_reservation`` takes a
+reference on it (``PMIX_RETAIN``) and stores it as ``session->owner_job``,
+released during teardown.  Each job retains its own ``children``, so retaining
+the subtree root keeps the whole subtree reachable.  This mirrors how
+``session->jobs`` already retains job objects for the session's lifetime and
+introduces no new tracking machinery.
+
+When the owning namespace is a **tool** (no ``prte_job_t``), ``owner_job`` is
+``NULL`` and there is no single root job.  The tool's derived children are the
+jobs it spawned directly into the reservation — present in ``session->jobs`` —
+so the drain walk roots at those and descends through their ``children``.  This
+covers descendants the tool's children later spawn into other sessions, since
+those are reached through the child jobs' own ``children`` links.
+
 New job attribute for spawn targeting
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -296,13 +392,15 @@ Resolving the destination session
 The requester is ``req->tproc`` (recorded in ``pmix_server_alloc_fn``).  A
 requester is an **application** iff ``prte_get_job_data_object(req->tproc.nspace)``
 returns a non-tool job; otherwise it is a **tool**.  The directive scan in
-``prte_ras_base_complete_request`` is extended to read the two new keys:
+``prte_ras_base_complete_request`` is extended to read the new keys:
 
 .. code-block:: c
 
    char *target = NULL;        /* PMIX_ALLOC_TARGET namespace, if any */
    bool share = false;         /* default: reserve (do not share) */
    bool have_share = false;
+   uint8_t inherit = PRTE_INHERIT_DEFAULT_VALUE;  /* see below */
+   bool have_inherit = false;
 
    for (n = 0; n < req->ninfo; n++) {
    #if defined(PMIX_ALLOC_TARGET)
@@ -318,8 +416,27 @@ returns a non-tool job; otherwise it is a **tool**.  The directive scan in
            continue;
        }
    #endif
+   #if defined(PMIX_ALLOC_INHERITANCE)
+       if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_INHERITANCE)) {
+           inherit = req->info[n].value.data.inheritance;
+           have_inherit = true;
+           continue;
+       }
+   #endif
+       /* PMIX_ALLOC_WARN_TIMEOUT is not consumed here: it is left in
+        * req->info to be forwarded verbatim to the scheduler; see
+        * "Allocation timeout warning" below. */
        /* ... existing PMIX_ALLOC_NODE_LIST handling ... */
    }
+
+``PRTE_INHERIT_DEFAULT_VALUE`` is a small internal macro defined as
+``PMIX_ALLOC_INHERIT_DEFAULT`` when that constant is available and as the
+equivalent literal otherwise, so the default disposition is the same whether
+or not the running PMIx defines the type.  A non-default ``inherit`` value that
+this build cannot honor (for example, because ``PMIX_ALLOC_INHERITANCE`` is
+undefined and the value arrived over the wire from a newer peer) is rejected
+with ``PMIX_ERR_NOT_SUPPORTED`` rather than silently dropped, matching the
+spec's error contract.
 
 Destination resolution then follows the decision table, with the allocation
 *directive* deciding whether a reservation is created or extended:
@@ -351,19 +468,30 @@ Destination resolution then follows the decision table, with the allocation
        dest = create_reservation(owner_nspace);
    }
 
-``create_reservation(nspace)`` allocates a new ``prte_session_t``, assigns a
-fresh ``session_id`` and ``alloc_refid``, sets ``flags |=
-PRTE_SESSION_FLAG_RESERVED | PRTE_SESSION_FLAG_DYNAMIC``, seeds the owners list
-with ``prte_session_add_owner(dest, nspace)``, and registers it with
+``create_reservation(nspace, inherit)`` allocates a new ``prte_session_t``,
+assigns a fresh ``session_id`` and ``alloc_refid``, sets ``flags |=
+PRTE_SESSION_FLAG_RESERVED | PRTE_SESSION_FLAG_DYNAMIC``, records the owning
+namespace (``PMIX_LOAD_NSPACE(dest->owner, nspace)``) and the disposition
+(``dest->inheritance = inherit``), takes and stores a retained reference to the
+owning namespace's job object when one exists (``dest->owner_job`` via
+``PMIX_RETAIN``; it is ``NULL`` for a tool requester that has no job), seeds the
+owners list with ``prte_session_add_owner(dest, nspace)``, and registers it with
 ``prte_set_session_object``.  A ``PMIX_ALLOC_NEW`` request always mints a new
 reservation; the same namespace may thus own several, each distinguished by its
-allocation id.
+allocation id.  On a ``PMIX_ALLOC_EXTEND`` that carried an inheritance value,
+``dest->inheritance`` is updated to the new value (the spec permits inheritance
+on ``EXTEND``); when the request omits it, the existing disposition is left
+untouched.
 
 When the installed PMIx lacks ``PMIX_ALLOC_TARGET``, the ``target`` guard keeps
 it ``NULL`` so ``owner_nspace`` is always the requester's namespace — the
 behavior required when the key is unavailable.  Likewise, without
 ``PMIX_ALLOC_SHARE`` the ``share`` default of ``false`` means a bare
-``PMIX_ALLOC_NEW`` reserves to the requester's namespace.
+``PMIX_ALLOC_NEW`` reserves to the requester's namespace.  Without
+``PMIX_ALLOC_INHERITANCE`` the ``inherit`` default keeps every reservation at
+``PMIX_ALLOC_INHERIT_DEFAULT`` semantics — unreserve into the session when the
+owning namespace terminates — which is exactly the disposition the spec
+prescribes for an absent attribute.
 
 Placing the nodes
 ~~~~~~~~~~~~~~~~~~
@@ -407,6 +535,36 @@ returned through ``req->infocbfunc`` includes the destination's
 ``alloc_refid`` as ``PMIX_ALLOC_ID`` (and, when newly minted, ``PMIX_ALLOC_REQ_ID``
 echoing any user-supplied ``PMIX_ALLOC_REQ_ID``).  This reuses the existing
 response array assembly in ``pmix_server_alloc_request_resp``.
+
+Allocation timeout warning
+--------------------------
+
+The spec requires PRRTE to act as the relay for the scheduler's
+allocation-timeout warning; PRRTE neither sets the timeout nor generates the
+warning.  Two directions are involved:
+
+* **Request (outbound).**  ``PMIX_ALLOC_WARN_TIMEOUT`` (``uint32_t`` seconds)
+  arriving on a ``PMIX_ALLOC_NEW`` or ``PMIX_ALLOC_EXTEND`` is not consumed by
+  the routing logic above; it is left in the info array that the RAS forwards
+  to the host/scheduler so the scheduler can honor it.  In a DVM with no
+  backing scheduler, there is no timeout source and the attribute is simply
+  never acted upon — the advisory contract permits this.
+
+* **Event (inbound).**  When the scheduler fires ``PMIX_ALLOC_TIMEOUT_WARNING``,
+  it is delivered to the HNP through the existing PMIx event channel.  PRRTE
+  relays it **only to the process that requested the allocation** — a directed
+  notification, not a DVM-wide broadcast — by setting the event range to that
+  process (the requester recorded as the reservation's creator, ``tproc`` on
+  the originating request).  The relayed payload carries the same
+  ``PMIX_ALLOC_ID``, the user's ``PMIX_ALLOC_REQ_ID`` when one was supplied, and
+  ``PMIX_TIME_REMAINING`` (``uint32_t`` seconds) unchanged from the scheduler.
+
+The whole path is guarded by ``#if defined(PMIX_ALLOC_TIMEOUT_WARNING)`` (and
+the companion key/event guards); a PMIx that predates the event registers no
+handler and relays nothing, while allocation expiry still flows through the
+ordinary scheduler-reclaim/shrink path (see *Session Lifecycle*).  The warning
+changes no reservation state by itself: only a subsequent ``PMIX_ALLOC_EXTEND``
+or the actual expiry alters the allocation.
 
 Spawn-Time Handling
 -------------------
@@ -547,70 +705,126 @@ pool when requested).
 Backward Compatibility
 -----------------------
 
-* ``PMIX_ALLOC_TARGET``, ``PMIX_ALLOC_SHARE``, and ``PMIX_SPAWN_TARGET`` are
-  referenced only inside ``#if defined(<key>)`` blocks.  These keys are plain
-  string ``#define``\ s supplied by PMIx; their mere presence in
-  ``pmix_common.h`` is the availability signal, so ``#if defined`` (not the
-  logical-macro ``#if FOO`` idiom) is the correct guard here.  Where a future
-  PMIx exposes a capability flag for any of these, the guard can be migrated to
-  the ``PRTE_CHECK_PMIX_CAP`` mechanism in ``config/prte_setup_pmix.m4`` and a
-  configure-defined ``PRTE_HAVE_*`` macro.
-* With an older PMIx that lacks all three keys, ``target`` is always ``NULL``,
-  ``share`` is never observed, and ``PRTE_JOB_SPAWN_TARGET`` is never set.
-  Dynamic allocations then fall to the "reserve to the requester's namespace"
-  default — which, combined with the mapping change, still partitions
-  resources sensibly — while spawns continue to use the default/parent session
-  exactly as today.  No new warnings are introduced under
-  ``--enable-devel-check``.
+* ``PMIX_ALLOC_TARGET``, ``PMIX_ALLOC_SHARE``, ``PMIX_ALLOC_INHERITANCE``,
+  ``PMIX_ALLOC_WARN_TIMEOUT``, ``PMIX_ALLOC_TIMEOUT_WARNING``, and
+  ``PMIX_SPAWN_TARGET`` are referenced only inside ``#if defined(<key>)``
+  blocks.  These keys are plain string ``#define``\ s supplied by PMIx (and the
+  inheritance type ``pmix_alloc_inheritance_t`` likewise); their mere presence
+  in ``pmix_common.h`` is the availability signal, so ``#if defined`` (not the
+  logical-macro ``#if FOO`` idiom) is the correct guard here.  The
+  ``session->inheritance`` field is typed ``uint8_t`` precisely so the struct
+  needs no guard.  Where a future PMIx exposes a capability flag for any of
+  these, the guard can be migrated to the ``PRTE_CHECK_PMIX_CAP`` mechanism in
+  ``config/prte_setup_pmix.m4`` and a configure-defined ``PRTE_HAVE_*`` macro.
+* With an older PMIx that lacks these keys, ``target`` is always ``NULL``,
+  ``share`` is never observed, ``inherit`` stays at the default-disposition
+  value, no timeout warning is relayed, and ``PRTE_JOB_SPAWN_TARGET`` is never
+  set.  Dynamic allocations then fall to the "reserve to the requester's
+  namespace" default, every reservation behaves as ``PMIX_ALLOC_INHERIT_DEFAULT``
+  (unreserve into the session when the owning namespace exits), and — combined
+  with the mapping change — resources are still partitioned sensibly, while
+  spawns continue to use the default/parent session exactly as today.  No new
+  warnings are introduced under ``--enable-devel-check``.
 
 Session Lifecycle
 -----------------
 
-A reservation is **not** tied to the lifetime of any single job.  Because every
-job is its own namespace, the jobs that run in a reservation come and go while
-the reservation persists; a job terminating (even the one that created the
-reservation) does not release it.  A reservation lives until one of exactly
-three events occurs:
+A reservation's lifetime is governed by two mechanisms, matching the spec:
+**unconditional triggers** that end it regardless of any other state, and the
+**namespace-termination disposition** recorded in ``session->inheritance`` at
+creation.
+
+Unconditional triggers
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Independently of the disposition, a reservation ends when:
 
 1. **An owner issues** ``PMIX_ALLOC_RELEASE`` for the reservation's allocation
    id.  Any namespace in ``session->owners`` may release it; the scheduler may
    release any reservation.
 2. **The DVM tears down.**  All sessions, default and reserved alike, are
    destroyed with the DVM.
-3. **The scheduler terminates the allocation** — for example on a timeout
-   (``session->timeout``) or an administrative reclaim.  This arrives as a
-   scheduler-driven release for the allocation id.
+3. **The scheduler terminates the allocation** — for example on a timeout or an
+   administrative reclaim.  This arrives as a scheduler-driven release for the
+   allocation id (and may be preceded by the timeout warning relayed above).
 
-In all three cases the release runs through the existing
-``prte_ras_base_release_allocation`` path.  Releasing a reservation must, in
-order: clear ``node->session`` on each member node (so any node that survives
-in the DVM falls back to the default pool), drop the reservation's retained
-references in ``session->nodes``, and only then proceed with any DVM shrink for
-nodes that are being returned to the scheduler.  The clear-before-shrink
-ordering keeps the reservation bookkeeping from racing the shrink-campaign
-accounting (``prte_dvm_launch_fence`` / ``prte_shrink_campaigns``).
+Namespace-termination disposition
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Releasing while jobs are still mapped
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The other end of a reservation's life is driven by namespace termination per
+``session->inheritance``.  PRRTE already observes job (namespace) termination
+in the state machine / errmgr at ``PRTE_JOB_STATE_TERMINATED``.  That site is
+extended: when namespace *N* terminates, walk the registered reservations and,
+for each one whose disposition fires, run the corresponding teardown.
 
-Because a reservation outlives the jobs that run in it, a release request may
-arrive while one or more jobs are still mapped onto the reservation's nodes —
-an owner releasing prematurely, or a scheduler timeout/reclaim firing under a
-running job.  The two sub-cases differ:
+* ``PMIX_ALLOC_INHERIT_NONE`` — when ``N`` equals ``session->owner``: **release**
+  (return nodes to the scheduler), even if entries of ``session->owners`` are
+  still running.
+* ``PMIX_ALLOC_INHERIT_DEFAULT`` (also the default when no value was recorded) —
+  when ``N`` equals ``session->owner``: **unreserve** (clear ``node->session``
+  and drop the reservation's references, leaving the nodes in the DVM default
+  pool; do not shrink, do not return them to the scheduler).
+* ``PMIX_ALLOC_INHERIT_CHILD`` — when ``N`` is the owning namespace or any
+  derived child of it, and after ``N`` exits no job in the owning namespace's
+  transitive spawn subtree remains running: **release**.
+* ``PMIX_ALLOC_INHERIT_CHILD_DEFAULT`` — same drain condition as ``CHILD`` but
+  the teardown is **unreserve** rather than release.
 
-* **Owner-initiated release** of a reservation whose nodes are *not* being
-  returned to the scheduler (the nodes stay in the DVM): no process is killed.
-  The nodes simply revert to the default pool when ``node->session`` is
-  cleared, and the already-running jobs continue on them; their
-  ``jdata->session`` still points at the now-detached session object, which is
-  kept alive by the normal ``session->jobs`` references until those jobs
-  terminate.  Mapping for *new* jobs no longer sees the reservation.
-* **Release that returns nodes to the scheduler** (scheduler reclaim, timeout,
-  or an owner release of scheduler-owned nodes): this is the existing DVM
-  shrink path, which already terminates the affected jobs and daemons before
-  the nodes leave.  The reservation cleanup adds nothing new here beyond the
-  clear-before-shrink ordering above; it reuses the established shrink-campaign
-  teardown.
+The ``CHILD`` drain condition is evaluated against the **job genealogy**, not
+the owner set: a derived child is any transitive spawn descendant of the owning
+namespace, even one running in another session.  As described under *Owning
+namespace and inheritance disposition*, this is computed by traversing the
+owning namespace's ``prte_job_t::children`` subtree — the same parentage walk
+``prte_dump_aborted_procs`` already performs on the termination path — so no
+counter or parallel bookkeeping is added.  The subtree root stays reachable
+after the owning namespace exits because the reservation holds a retained
+reference to it in ``session->owner_job``.  The owner set continues to serve
+only *authorization* (who may map onto and target the reservation); it is
+deliberately **not** reused for the lifetime computation.
+
+Release versus unreserve
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Both teardowns share a prefix and differ only in the tail:
+
+* **Release** runs the existing ``prte_ras_base_release_allocation`` path.  In
+  order: clear ``node->session`` on each member node (so any node that survives
+  in the DVM falls back to the default pool), drop the reservation's retained
+  references in ``session->nodes``, and only then proceed with any DVM shrink
+  for nodes being returned to the scheduler.  The clear-before-shrink ordering
+  keeps the reservation bookkeeping from racing the shrink-campaign accounting
+  (``prte_dvm_launch_fence`` / ``prte_shrink_campaigns``).
+* **Unreserve** performs the same clear-and-drop prefix but **stops there**: it
+  never shrinks and never returns nodes to the scheduler.  The nodes remain in
+  the DVM as part of the default pool, available to any job, until the DVM (the
+  PMIx "session") itself ends.  The reservation object is deregistered with
+  ``prte_set_session_object`` once its nodes and owners are cleared.
+
+Both tails also drop the reservation's retained owning-job reference
+(``PMIX_RELEASE(session->owner_job)``) as the session object is torn down,
+balancing the ``PMIX_RETAIN`` taken in ``create_reservation``.
+
+Teardown while jobs are still mapped
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A trigger or disposition may fire while jobs are still mapped onto the
+reservation's nodes — an owner releasing prematurely, a scheduler
+timeout/reclaim under a running job, or ``PMIX_ALLOC_INHERIT_NONE`` firing while
+spawned children still run.  The outcome depends only on whether the nodes
+leave the DVM:
+
+* **Nodes stay in the DVM** (an owner release or a ``*_DEFAULT`` unreserve whose
+  nodes are not returned to the scheduler): no process is killed.  The nodes
+  revert to the default pool when ``node->session`` is cleared, and
+  already-running jobs continue on them; their ``jdata->session`` still points
+  at the now-detached session object, kept alive by the normal ``session->jobs``
+  references until those jobs terminate.  Mapping for *new* jobs no longer sees
+  the reservation.
+* **Nodes leave the DVM** (scheduler reclaim or timeout, or a ``NONE``/``CHILD``
+  release of scheduler-owned nodes): this is the existing DVM shrink path, which
+  already terminates the affected jobs and daemons before the nodes leave.  The
+  reservation cleanup adds nothing beyond the clear-before-shrink ordering
+  above; it reuses the established shrink-campaign teardown.
 
 Either way the reservation cleanup never *itself* kills a job — termination is
 driven only by the pre-existing shrink machinery when nodes physically depart.
@@ -626,17 +840,38 @@ Implementation Order
    the default target set ``{ prte_default_session }`` so existing behavior is
    preserved (reserved-node exclusion becomes active but no node is reserved
    yet).
-4. Implement allocation-time routing in ``prte_ras_base_complete_request``
-   (Cases 2 and 3), guarded by ``#if defined`` on the two alloc keys.
-5. Add ``PRTE_JOB_SPAWN_TARGET`` and the ``PMIX_SPAWN_TARGET`` parsing in the
+4. Add ``prte_session_t::owner`` and ``::inheritance``, with the constructor
+   defaulting ``inheritance`` to the ``PMIX_ALLOC_INHERIT_DEFAULT`` value; still
+   no behavior change.
+5. Implement allocation-time routing in ``prte_ras_base_complete_request``
+   (Cases 2 and 3), guarded by ``#if defined`` on the alloc keys, recording
+   ``owner``, ``owner_job`` (retained), and ``inheritance`` on each new
+   reservation.
+6. Add ``PRTE_JOB_SPAWN_TARGET`` and the ``PMIX_SPAWN_TARGET`` parsing in the
    spawn path, plus the multi-session resolution in ``plm_base_receive.c``.
-6. Return the allocation id to the requester from the alloc response.
-7. Wire reservation release/cleanup into the ``PMIX_ALLOC_RELEASE`` path
+7. Return the allocation id to the requester from the alloc response.
+8. Wire reservation release/cleanup into the ``PMIX_ALLOC_RELEASE`` path
    (owner-initiated, scheduler-initiated, and DVM teardown), clearing
    ``node->session`` before any shrink — see *Session Lifecycle*.
+9. Implement the strict ``CHILD`` drain as a recursive walk of the owning
+   namespace's ``prte_job_t::children`` subtree, rooted at ``session->owner_job``
+   (or, for a tool owner, at the reservation's ``session->jobs``), reusing the
+   parentage tracking ``prte_dump_aborted_procs`` already traverses.  The
+   retained ``owner_job`` from step 5 keeps that subtree reachable after the
+   owning namespace exits.  No counter is introduced.
+10. Drive the namespace-termination disposition from
+    ``PRTE_JOB_STATE_TERMINATED``: on each namespace exit, apply
+    ``NONE``/``DEFAULT`` (owner-keyed) and ``CHILD``/``CHILD_DEFAULT``
+    (transitive-descendant drain, via a recursive ``prte_job_t::children`` walk
+    rooted at the owning namespace) teardowns, distinguishing release from
+    unreserve.  ``DEFAULT`` is in force for every reservation by default, so
+    this step also makes the absent-attribute behavior correct.
+11. Relay the allocation-timeout warning: forward ``PMIX_ALLOC_WARN_TIMEOUT`` to
+    the scheduler and relay ``PMIX_ALLOC_TIMEOUT_WARNING`` back to the
+    requesting process, guarded by ``#if defined``.
 
-Each step builds and is testable on its own; steps 1–3 are behavior-preserving
-groundwork, and the observable feature lands with steps 4–6.
+Each step builds and is testable on its own; steps 1–4 are behavior-preserving
+groundwork, and the observable feature lands with steps 5–11.
 
 Open Questions
 --------------
@@ -663,7 +898,41 @@ Resolved decisions
   job is its own namespace.  A reservation's owners are the namespace it was
   created for plus every job spawned into it; a child job owns only the
   reservation it was spawned into, not the parent's other reservations.
-* **Reservation teardown has three triggers.**  An owner's
-  ``PMIX_ALLOC_RELEASE``, DVM teardown, or scheduler termination of the
-  allocation (e.g. timeout).  A job terminating never releases a reservation.
-  See *Session Lifecycle*.
+* **Reservation teardown has unconditional triggers plus an inheritance
+  disposition.**  The unconditional triggers are an owner's
+  ``PMIX_ALLOC_RELEASE``, DVM teardown, and scheduler termination of the
+  allocation (e.g. timeout).  In addition, namespace termination drives teardown
+  per ``session->inheritance``: ``NONE``/``DEFAULT`` fire when the owning
+  namespace exits, ``CHILD``/``CHILD_DEFAULT`` when the last derived child
+  exits; the ``*_DEFAULT`` variants unreserve into the session rather than
+  returning nodes to the scheduler.  See *Session Lifecycle*.
+* **``CHILD`` tracking is strict transitive-descendant tracking, via the
+  existing parentage system.**  A derived child is *any* transitive spawn
+  descendant of the owning namespace, per the spec and the PMIx inheritance
+  overview — including descendants that run in another session.  The drain
+  condition is computed from the job genealogy (a recursive walk of
+  ``prte_job_t::children``), not from the reservation's owner set.  This reuses
+  the parentage tracking that ``prte_dump_aborted_procs`` already traverses on
+  the termination path, so the tree-walk cost is already borne; a per-reservation
+  descendant counter was considered and rejected.
+* **The owning namespace's job object is retained on the reservation.**  Because
+  a ``CHILD``/``CHILD_DEFAULT`` reservation outlives its owning namespace *O*
+  while descendants run, ``create_reservation`` takes a reference on *O*'s
+  ``prte_job_t`` (``PMIX_RETAIN``) and stores it on the session; the teardown
+  (release or unreserve) drops it.  This keeps *O*'s ``children`` subtree — each
+  job retains its own children — walkable after *O* terminates, so the drain
+  test always has a root.  It mirrors how ``session->jobs`` already retains and
+  releases job objects for the session's lifetime, and adds no new tracking
+  machinery.  ``prte_session_t`` therefore also carries a
+  ``prte_job_t *owner_job`` alongside the ``owner`` nspace.
+* **The default disposition is ``PMIX_ALLOC_INHERIT_DEFAULT``.**  When
+  ``PMIX_ALLOC_INHERITANCE`` is absent, a reservation becomes unreserved within
+  the session when its owning namespace terminates; the legacy "release to the
+  scheduler on termination" behavior requires an explicit
+  ``PMIX_ALLOC_INHERIT_NONE``.  This matches the PMIx inheritance overview, and
+  supersedes the earlier "a job terminating never releases a reservation"
+  decision.
+* **The allocation-timeout warning is relayed, not invented.**  PRRTE forwards
+  ``PMIX_ALLOC_WARN_TIMEOUT`` to the scheduler and relays the scheduler's
+  ``PMIX_ALLOC_TIMEOUT_WARNING`` event only to the requesting process.  See
+  *Allocation timeout warning*.
