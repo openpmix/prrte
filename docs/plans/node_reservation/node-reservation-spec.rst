@@ -216,8 +216,10 @@ A request carrying the ``PMIX_ALLOC_NEW`` directive always mints a fresh
 reservation, even for a namespace that already owns one; the namespace
 may thus hold several reservations, each distinguished by its allocation
 id.  A request carrying ``PMIX_ALLOC_EXTEND`` adds nodes to the existing
-reservation named by the request's ``PMIX_ALLOC_ID``, and succeeds only
-when the requester's namespace owns that reservation.
+reservation named by the request's ``PMIX_ALLOC_ID`` (the
+scheduler-assigned id) or ``PMIX_ALLOC_REQ_ID`` (the requester's own
+request id); it must carry at least one, and succeeds only when the
+requester's namespace owns the named reservation.
 
 Reporting the result
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -300,6 +302,9 @@ Error semantics
      - ``PMIX_ERR_NO_PERMISSIONS``
    * - ``PMIX_ALLOC_EXTEND`` names an allocation that does not exist
      - ``PMIX_ERR_NOT_FOUND``
+   * - ``PMIX_ALLOC_EXTEND`` carries neither ``PMIX_ALLOC_ID`` nor
+       ``PMIX_ALLOC_REQ_ID`` to name its target
+     - ``PMIX_ERR_BAD_PARAM``
    * - ``PMIX_SPAWN_TARGET`` names an allocation that resolves to no session
      - ``PMIX_ERR_NOT_FOUND``
    * - ``PMIX_SPAWN_TARGET`` names a session the requester does not own
