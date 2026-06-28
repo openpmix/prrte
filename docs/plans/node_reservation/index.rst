@@ -7,4 +7,5 @@ sessions for use by specific namespaces and jobs.
 .. toctree::
    :maxdepth: 2
 
+   node-reservation-spec.rst
    node-reservation.rst
