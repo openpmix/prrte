@@ -78,14 +78,22 @@ Consequently, "the namespace's reservation" always means "this one job's
 reservation," and any process within a job (i.e. within that namespace) may
 spawn new jobs onto resources reserved for its namespace.
 
-A reservation therefore has a **set of owning namespaces**, not a single owner.
-The set is seeded with the namespace the reservation is created for, and it
-grows by one each time a job is spawned *into* the reservation: a child job
-spawned into a reservation becomes an owner of that reservation (so it, in
-turn, may spawn further jobs onto those nodes).  Ownership is **not inherited**
-transitively — a child owns only the reservation it was spawned into, not any
-*other* reservations its parent happens to own.  The scheduler is treated as an
-implicit owner of every session.
+A reservation distinguishes two related but distinct notions.  Its **owning
+namespace** is the single namespace it was created for (the
+``PMIX_ALLOC_TARGET`` namespace, else the requester) — recorded as
+``session->owner`` — and it is the namespace whose termination drives the
+inheritance disposition.  Separately, the reservation carries a **set of
+owners** (``session->owners``): the *authorization* set of namespaces entitled
+to map onto and target the reservation.  That set is seeded with the owning
+namespace and grows by one each time a job is spawned *into* the reservation: a
+child job becomes an owner (so it, in turn, may spawn further jobs onto those
+nodes).  Authorization is **not inherited** transitively — a child owns only
+the reservation it was spawned into, not any *other* reservations its parent
+happens to own.  The scheduler is treated as an implicit owner of every session.
+(For the ``CHILD``-flavored inheritance rules, the namespaces whose drain ends a
+reservation are the owning namespace's transitive spawn *descendants*, a
+genealogy-derived set distinct from this authorization set — see *Session
+Lifecycle*.)
 
 The Three Allocation Cases
 --------------------------
@@ -199,8 +207,9 @@ node is considered part of the default session iff ``node->session == NULL``.
 Session ownership and lookup
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Because a reservation has a *set* of owning namespaces (see Terminology),
-``prte_session_t`` gains an owners list and a reserved flag:
+Because a reservation has a *set* of owner namespaces for authorization (see
+Terminology), distinct from its single owning namespace, ``prte_session_t``
+gains an owners list and a reserved flag:
 
 .. code-block:: c
 
@@ -517,10 +526,13 @@ registered with the reservation:
 
 The reservation holds **references** to the global node objects, not copies.
 This keeps live state — ``node->daemon``, ``slots_inuse``, ``topology`` — in a
-single place, which the mapper and the launch path both rely on.  (The SLURM
-RAS dynamic path in ``ras_slurm_module.c`` currently stores ``prte_node_copy``
-results in ``session->nodes``; reconciling that path to references is tracked
-as a follow-up below.)
+single place, which the mapper and the launch path both rely on.  This is a
+hard invariant: a session's ``nodes`` array must never contain
+``prte_node_copy`` duplicates, only retained references to the global pool's
+node objects.  The SLURM RAS dynamic path
+(``prte_ras_slurm_assign_new_session`` in ``ras_slurm_module.c``) is the one
+place that violates it today; it is migrated to references as part of this work
+(see *Resolved decisions* and *Implementation Order*).
 
 Because reserved nodes carry ``node->session != NULL``, they are automatically
 excluded from the default session even though they remain in the global pool
@@ -869,23 +881,39 @@ Implementation Order
 11. Relay the allocation-timeout warning: forward ``PMIX_ALLOC_WARN_TIMEOUT`` to
     the scheduler and relay ``PMIX_ALLOC_TIMEOUT_WARNING`` back to the
     requesting process, guarded by ``#if defined``.
+12. Migrate ``prte_ras_slurm_assign_new_session`` (``ras_slurm_module.c``) from
+    ``prte_node_copy`` into ``session->nodes`` to inserting its nodes into the
+    global pool and storing retained references with ``node->session`` set —
+    the same reference model the base path uses.  Depends only on step 1
+    (``node->session``); it can land any time after it and is testable in a
+    SLURM allocation independent of the rest.
 
-Each step builds and is testable on its own; steps 1–4 are behavior-preserving
-groundwork, and the observable feature lands with steps 5–11.
+Each step builds and is testable on its own; steps 1–4 (and 12) are
+behavior-preserving groundwork, and the observable feature lands with steps
+5–11.
 
 Open Questions
 --------------
 
-1. **SLURM RAS reconciliation.**  ``ras_slurm_module.c`` stores
-   ``prte_node_copy`` results in ``session->nodes`` rather than references to
-   the global node objects.  The reference-based model here is incompatible
-   with copies (the mapper would see daemon-less duplicates).  Recommendation:
-   migrate the SLURM dynamic-session path to references for a single,
-   consistent model.  A source-code note has been added at the copy site to
-   flag the required change.
+No open *design* questions remain; the decisions that shape observable
+behavior are settled below.  What is left for the implementer is purely to
+locate a few exact code sites (the inbound timeout-warning handler, the
+``PMIX_ALLOC_ID`` extraction in the ``EXTEND`` lookup, and the carrier that
+threads the resolved target set into the mapper); none of these changes the
+design.
 
 Resolved decisions
 ~~~~~~~~~~~~~~~~~~~
+
+* **The SLURM RAS holds references, never copies.**  A session's ``nodes``
+  array must contain only retained references to the global pool's node
+  objects, with ``node->session`` set — never ``prte_node_copy`` duplicates,
+  which would be daemon-less and unusable by the mapper and launch path.
+  ``prte_ras_slurm_assign_new_session`` (``ras_slurm_module.c``) is the one
+  site that copies today; it is migrated to insert its nodes into the global
+  pool and store references in ``session->nodes`` exactly as the base
+  allocation path does.  This is a hard invariant of the reference-based model,
+  not an optional cleanup.
 
 * **Default (``PMIX_ALLOC_SHARE`` absent) means "reserve."**  An
   ``ALLOC_SHARE``-absent dynamic request reserves the nodes to the
