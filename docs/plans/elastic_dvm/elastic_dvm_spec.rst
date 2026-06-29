@@ -378,10 +378,11 @@ its own (they belong to the PMIx standard and headers):
        ``PMIX_ALLOC_ID``, the underlying failure ``pmix_status_t``, and —
        when supplied — ``PMIX_ALLOC_REQ_ID``.
 
-Their use is gated at build time by a PMIx capability check (the
-``PRTE_CHECK_PMIX_CAP`` idiom): a PRRTE built against a PMIx that defines
-neither code simply omits the completion notification (see `Backward
-compatibility and transparency`_).
+Because PMIx status codes are plain preprocessor ``#define``\ s, their use is
+guarded at build time by a simple check for the codes' presence in the
+installed PMIx headers — no PMIx *capability* flag is required.  A PRRTE built
+against a PMIx that defines neither code simply omits the completion
+notification (see `Backward compatibility and transparency`_).
 
 Failure semantics
 -----------------
@@ -463,8 +464,9 @@ optional and degrade cleanly:
   requester that registers a handler for them; a requester that ignores
   them is unaffected beyond losing the completion signal.
 * When the underlying PMIx defines neither code, a PRRTE built against it
-  (gated by the ``PRTE_CHECK_PMIX_CAP`` capability check) omits the
-  asynchronous completion notification entirely.  The allocation response
+  (the call sites are guarded by a preprocessor check for the two
+  ``#define``\ d status codes) omits the asynchronous completion
+  notification entirely.  The allocation response
   (phase one) is unchanged, so a request is still accepted and the DVM
   still grows or shrinks; the requester simply receives no event-based
   signal that the operation finished or failed, exactly as before this

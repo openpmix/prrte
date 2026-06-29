@@ -244,12 +244,22 @@ grow path on the success drain in ``vm_ready`` and on the failure drain in
 target departs (success) and on the xcast-failure cleanup at campaign creation
 (failure).
 
-Because ``PMIX_DVM_IS_READY`` and ``PMIX_ERR_DVM_MOD`` are defined by PMIx and
-may be absent in an older PMIx, both the helper body and every call site are
-guarded by a build-time capability check using the ``PRTE_CHECK_PMIX_CAP``
-idiom (``config/prte_setup_pmix.m4``); when the check fails the helper compiles
-to a no-op and no completion event is delivered, exactly as the spec's
-backward-compatibility clause requires.
+``PMIX_DVM_IS_READY`` and ``PMIX_ERR_DVM_MOD`` are plain ``#define``\ d
+``pmix_status_t`` values (PMIx status codes are preprocessor macros, not enum
+constants), so their availability is decided entirely by whether the installed
+PMIx headers define the symbols — **no PMIx capability flag is involved**.  Both
+the helper body and every call site are therefore guarded by a simple
+preprocessor existence check, not by the ``PRTE_CHECK_PMIX_CAP`` machinery
+(which is for ``PMIX_CAP_*`` behavioral flags).  To preserve the project's
+``#if FOO`` discipline — so a mistyped guard is a compile error rather than a
+silent false — the recommended form is a one-line probe in
+``config/prte_setup_pmix.m4`` that defines ``PRTE_HAVE_DVM_MOD_EVENTS`` to ``0``
+or ``1`` from the presence of the two symbols, tested with
+``#if PRTE_HAVE_DVM_MOD_EVENTS``; a direct
+``#if defined(PMIX_DVM_IS_READY) && defined(PMIX_ERR_DVM_MOD)`` is equally
+correct.  When the guard is false the helper compiles to a no-op and no
+completion event is delivered, exactly as the spec's backward-compatibility
+clause requires.
 
 Summary of Files Changed (Shared Fence Infrastructure)
 -------------------------------------------------------
@@ -282,9 +292,11 @@ Summary of Files Changed (Shared Fence Infrastructure)
    * - ``src/mca/state/dvm/state_dvm.c``
      - In ``vm_ready``: add the ``VM_READY → MAP`` hold-check before
        ``preposition_files`` (Step 3).
-   * - ``config/prte_setup_pmix.m4``
-     - Add the ``PRTE_CHECK_PMIX_CAP`` check that gates use of
-       ``PMIX_DVM_IS_READY`` / ``PMIX_ERR_DVM_MOD`` (Step 5).
+   * - ``config/prte_setup_pmix.m4`` (optional)
+     - If using the macro form, add a probe that defines
+       ``PRTE_HAVE_DVM_MOD_EVENTS`` from the presence of
+       ``PMIX_DVM_IS_READY`` / ``PMIX_ERR_DVM_MOD`` (Step 5); not needed if the
+       call sites use a direct ``#if defined(...)`` guard.
 
 For the grow path's file changes see the "Touched files" table in
 :ref:`dvm-grow-campaign-label`; for the shrink path's, the "Touched files"
