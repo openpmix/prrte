@@ -694,8 +694,8 @@ Closing both races requires:
    surviving nodes; jobs whose entire mapping lies on surviving nodes are
    re-activated at ``LAUNCH_APPS`` without remapping.
 
-The full implementation plan is in :ref:`dvm-launch-fence-label`,
-*DVM Shrink Fence*.
+The full implementation plan is in :ref:`dvm-shrink-campaign-label`; the
+shared fence mechanism it builds on is in :ref:`elastic-dvm-plan-label`.
 
 The Race Condition
 ~~~~~~~~~~~~~~~~~~
@@ -744,4 +744,5 @@ checks the fence; if it is nonzero the job parks itself in a held-job array
 (``prte_held_jobs``) and is released when the fence reaches zero.
 
 The step-by-step implementation plan is in
-:ref:`dvm-launch-fence-label`.
+:ref:`elastic-dvm-plan-label`, with the grow- and shrink-specific details
+in :ref:`dvm-grow-campaign-label` and :ref:`dvm-shrink-campaign-label`.

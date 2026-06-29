@@ -18,12 +18,14 @@ node-removal campaign).  It covers two distinct audiences and contracts:
   succeeded or failed (see `Asynchronous size-change completion`_).
 
 It defines *what* the runtime guarantees, not *how* it achieves it.  The
-companion design plans — :ref:`dvm-launch-fence-label` (the shared fence
-mechanism and the shrink path) and :ref:`dvm-grow-campaign-label` (the
-grow path's per-campaign accounting) — describe the internal data
-structures, code paths, and implementation order.  Where this
-specification and those plans disagree about observable behavior, **this
-specification is authoritative** and the plan must be corrected.
+companion design plans — :ref:`elastic-dvm-plan-label` (the shared fence
+mechanism and completion-event helper), :ref:`dvm-grow-campaign-label`
+(the grow path's per-campaign accounting), and
+:ref:`dvm-shrink-campaign-label` (the shrink path's campaign tracking) —
+describe the internal data structures, code paths, and implementation
+order.  Where this specification and those plans disagree about observable
+behavior, **this specification is authoritative** and the plan must be
+corrected.
 
 The job-admission guarantees are stated purely in terms of job lifecycle
 outcomes and introduce **no** new command-line options, environment
