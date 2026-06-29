@@ -221,22 +221,24 @@ no PMIx requester (a scheduler push) leaves ``have_requester`` false and emits
 no event.
 
 A single shared helper, declared in ``plm_base_launch_support.h`` and defined in
-``plm_base_launch_support.c``, performs the emission:
+``plm_base_launch_support.c``, performs the emission.  Its prototype takes a
+``bool success`` rather than an event code, so that **the two new status codes
+are named only inside the helper body** — call sites pass a bool and a cause and
+never reference ``PMIX_DVM_IS_READY`` / ``PMIX_ERR_DVM_MOD`` themselves:
 
 .. code-block:: c
 
-   /* event_code is PMIX_DVM_IS_READY or PMIX_ERR_DVM_MOD; cause is the
-    * underlying pmix_status_t on failure (ignored on success) */
+   /* success => emit PMIX_DVM_IS_READY; otherwise emit PMIX_ERR_DVM_MOD
+    * carrying `cause` (the underlying failure pmix_status_t) */
    void prte_plm_base_dvm_mod_notify(const pmix_proc_t *requester,
                                      const char *alloc_id,
                                      const char *req_id,
-                                     pmix_status_t event_code,
+                                     bool success,
                                      pmix_status_t cause);
 
 It packs ``PMIX_ALLOC_ID`` (always), ``PMIX_ALLOC_REQ_ID`` (when ``req_id`` is
-non-NULL), and — for the failure event — the underlying ``cause`` status, then
-delivers the event **only** to ``requester`` (a directed, non-broadcast
-notification).
+non-NULL), and — on failure — the underlying ``cause`` status, then delivers the
+event **only** to ``requester`` (a directed, non-broadcast notification).
 
 The grow and shrink plans call this helper at their respective drain points: the
 grow path on the success drain in ``vm_ready`` and on the failure drain in
@@ -247,19 +249,39 @@ target departs (success) and on the xcast-failure cleanup at campaign creation
 ``PMIX_DVM_IS_READY`` and ``PMIX_ERR_DVM_MOD`` are plain ``#define``\ d
 ``pmix_status_t`` values (PMIx status codes are preprocessor macros, not enum
 constants), so their availability is decided entirely by whether the installed
-PMIx headers define the symbols — **no PMIx capability flag is involved**.  Both
-the helper body and every call site are therefore guarded by a simple
-preprocessor existence check, not by the ``PRTE_CHECK_PMIX_CAP`` machinery
-(which is for ``PMIX_CAP_*`` behavioral flags).  To preserve the project's
-``#if FOO`` discipline — so a mistyped guard is a compile error rather than a
-silent false — the recommended form is a one-line probe in
-``config/prte_setup_pmix.m4`` that defines ``PRTE_HAVE_DVM_MOD_EVENTS`` to ``0``
-or ``1`` from the presence of the two symbols, tested with
-``#if PRTE_HAVE_DVM_MOD_EVENTS``; a direct
-``#if defined(PMIX_DVM_IS_READY) && defined(PMIX_ERR_DVM_MOD)`` is equally
-correct.  When the guard is false the helper compiles to a no-op and no
-completion event is delivered, exactly as the spec's backward-compatibility
-clause requires.
+PMIx headers define the symbols — **no PMIx capability flag is involved** (the
+``PRTE_CHECK_PMIX_CAP`` machinery is for ``PMIX_CAP_*`` behavioral flags and
+does not apply here).
+
+To keep the project's ``#if FOO`` discipline — so a mistyped guard is a compile
+error rather than a silently-false ``#ifdef`` — a probe in
+``config/prte_setup_pmix.m4`` defines ``PRTE_HAVE_DVM_MOD_EVENTS`` to ``0`` or
+``1`` from the presence of the two symbols:
+
+.. code-block:: none
+
+   AC_MSG_CHECKING([for PMIx DVM modification event codes])
+   AC_PREPROC_IFELSE(
+       [AC_LANG_PROGRAM([[#include <pmix.h>
+   #if !defined(PMIX_DVM_IS_READY) || !defined(PMIX_ERR_DVM_MOD)
+   #error DVM modification event codes not present
+   #endif
+   ]], [[]])],
+       [AC_MSG_RESULT([yes])
+        AC_DEFINE([PRTE_HAVE_DVM_MOD_EVENTS], [1],
+                  [PMIx defines the DVM modification event codes])],
+       [AC_MSG_RESULT([no])
+        AC_DEFINE([PRTE_HAVE_DVM_MOD_EVENTS], [0],
+                  [PMIx defines the DVM modification event codes])])
+
+The macro is defined to ``0`` or ``1`` on both branches (never ``#undef``\ ed),
+so it can be tested with ``#if PRTE_HAVE_DVM_MOD_EVENTS``.  Because the helper's
+``bool``-based prototype keeps the two codes out of every call site, **only the
+helper body needs the guard**: when ``PRTE_HAVE_DVM_MOD_EVENTS`` is ``0`` the
+body compiles to a no-op (the ``bool``/``pmix_status_t`` prototype still
+compiles), the call sites are unchanged, and no completion event is delivered —
+exactly as the spec's backward-compatibility clause requires.  Because this
+touches ``*.m4``, ``./autogen.pl`` must be re-run before configuring.
 
 Summary of Files Changed (Shared Fence Infrastructure)
 -------------------------------------------------------
@@ -292,11 +314,11 @@ Summary of Files Changed (Shared Fence Infrastructure)
    * - ``src/mca/state/dvm/state_dvm.c``
      - In ``vm_ready``: add the ``VM_READY → MAP`` hold-check before
        ``preposition_files`` (Step 3).
-   * - ``config/prte_setup_pmix.m4`` (optional)
-     - If using the macro form, add a probe that defines
-       ``PRTE_HAVE_DVM_MOD_EVENTS`` from the presence of
-       ``PMIX_DVM_IS_READY`` / ``PMIX_ERR_DVM_MOD`` (Step 5); not needed if the
-       call sites use a direct ``#if defined(...)`` guard.
+   * - ``config/prte_setup_pmix.m4``
+     - Add the ``AC_PREPROC_IFELSE`` probe that defines
+       ``PRTE_HAVE_DVM_MOD_EVENTS`` (``0``/``1``) from the presence of
+       ``PMIX_DVM_IS_READY`` / ``PMIX_ERR_DVM_MOD`` (Step 5).  Re-run
+       ``autogen.pl`` afterward.
 
 For the grow path's file changes see the "Touched files" table in
 :ref:`dvm-grow-campaign-label`; for the shrink path's, the "Touched files"
