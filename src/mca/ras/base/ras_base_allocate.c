@@ -616,6 +616,327 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
     PMIX_RELEASE(req);
 }
 
+/* monotonic counter used to mint unique session ids for reservations that
+ * the host (rather than a scheduler) must identify on its own. */
+static uint32_t prte_ras_reservation_counter = 0;
+
+/* Create a new reservation owned by the given namespace. Returns NULL on
+ * failure. alloc_id (scheduler-assigned PMIX_ALLOC_ID) and req_id
+ * (requester PMIX_ALLOC_REQ_ID) are optional. */
+static prte_session_t *create_reservation(const char *nspace, uint8_t inherit,
+                                          pmix_proc_t *requestor,
+                                          const char *alloc_id, const char *req_id)
+{
+    prte_session_t *s;
+    prte_job_t *ownerjob;
+    int rc;
+
+    s = PMIX_NEW(prte_session_t);
+    if (NULL == s) {
+        return NULL;
+    }
+    /* assign a fresh, unique session id (UINT32_MAX is reserved for the
+     * default session) */
+    do {
+        s->session_id = ++prte_ras_reservation_counter;
+    } while (UINT32_MAX == s->session_id ||
+             NULL != prte_get_session_object(s->session_id));
+    /* prefer a scheduler-assigned allocation id; otherwise mint one */
+    if (NULL != alloc_id) {
+        s->alloc_refid = strdup(alloc_id);
+    } else {
+        pmix_asprintf(&s->alloc_refid, "%s.%u", nspace, s->session_id);
+    }
+    if (NULL != req_id) {
+        s->user_refid = strdup(req_id);
+    }
+    s->flags |= PRTE_SESSION_FLAG_RESERVED | PRTE_SESSION_FLAG_DYNAMIC;
+    PMIX_LOAD_NSPACE(s->owner, nspace);
+    s->inheritance = inherit;
+    if (NULL != requestor) {
+        PMIX_XFER_PROCID(&s->requestor, requestor);
+    }
+    /* retain the owning namespace's job object so its children subtree stays
+     * walkable for CHILD-flavored drain; NULL for a tool with no job object */
+    ownerjob = prte_get_job_data_object(nspace);
+    if (NULL != ownerjob) {
+        PMIX_RETAIN(ownerjob);
+        s->owner_job = ownerjob;
+    }
+    /* seed the owner set with the owning namespace */
+    prte_session_add_owner(s, nspace);
+
+    rc = prte_set_session_object(s);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_RELEASE(s);
+        return NULL;
+    }
+    return s;
+}
+
+/* Register the nodes named in ndlist with the destination reservation: set
+ * each node's session backpointer and store a retained reference in the
+ * reservation. The node objects themselves live in the global pool. */
+static void add_nodes_to_session(pmix_list_t *ndlist, prte_session_t *dest)
+{
+    prte_node_t *nd, *gnode;
+    int k;
+    bool present;
+
+    if (NULL == dest || dest == prte_default_session) {
+        return;
+    }
+    PMIX_LIST_FOREACH(nd, ndlist, prte_node_t) {
+        gnode = prte_node_match(NULL, nd->name);
+        if (NULL == gnode) {
+            continue;
+        }
+        gnode->session = dest;
+        /* avoid a double reference on EXTEND */
+        present = false;
+        for (k = 0; k < dest->nodes->size; k++) {
+            if (gnode == (prte_node_t *) pmix_pointer_array_get_item(dest->nodes, k)) {
+                present = true;
+                break;
+            }
+        }
+        if (!present) {
+            PMIX_RETAIN(gnode);
+            pmix_pointer_array_add(dest->nodes, gnode);
+        }
+    }
+}
+
+void prte_ras_base_teardown_reservation(prte_session_t *session,
+                                        bool return_to_scheduler)
+{
+    prte_node_t *nd;
+    int k;
+    pmix_rank_t *ranks = NULL;
+    int32_t m = 0;
+    pmix_data_buffer_t msg;
+    prte_daemon_cmd_flag_t cmd = PRTE_DAEMON_SHRINK_CMD;
+    pmix_status_t rc;
+
+    if (NULL == session || session == prte_default_session) {
+        return;
+    }
+
+    /* if the nodes are being returned to the scheduler, collect the daemon
+     * ranks of the member nodes BEFORE detaching so the DVM can shrink them
+     * out. The shrink machinery terminates any jobs/daemons on those nodes. */
+    if (return_to_scheduler) {
+        ranks = (pmix_rank_t *) malloc(session->nodes->size * sizeof(pmix_rank_t));
+        if (NULL != ranks) {
+            for (k = 0; k < session->nodes->size; k++) {
+                nd = (prte_node_t *) pmix_pointer_array_get_item(session->nodes, k);
+                if (NULL == nd || NULL == nd->daemon) {
+                    continue;
+                }
+                ranks[m++] = nd->daemon->name.rank;
+            }
+        }
+    }
+
+    /* clear the reservation's hold on its nodes BEFORE any shrink so the
+     * reservation bookkeeping does not race the shrink-campaign accounting.
+     * Each member node reverts to the default pool. */
+    for (k = 0; k < session->nodes->size; k++) {
+        nd = (prte_node_t *) pmix_pointer_array_get_item(session->nodes, k);
+        if (NULL == nd) {
+            continue;
+        }
+        if (nd->session == session) {
+            nd->session = NULL;
+        }
+        pmix_pointer_array_set_item(session->nodes, k, NULL);
+        PMIX_RELEASE(nd);
+    }
+
+    /* the reservation no longer withholds nodes */
+    session->flags &= ~PRTE_SESSION_FLAG_RESERVED;
+    if (NULL != session->owners) {
+        PMIx_Argv_free(session->owners);
+        session->owners = NULL;
+    }
+    /* drop the retained owning-job reference taken in create_reservation */
+    if (NULL != session->owner_job) {
+        PMIX_RELEASE(session->owner_job);
+        session->owner_job = NULL;
+    }
+
+    /* deregister so the reservation can no longer be looked up / targeted.
+     * The session object itself is left for any still-running jobs that
+     * reference it (via session->jobs) and is reclaimed at DVM teardown. */
+    if (0 <= session->index) {
+        pmix_pointer_array_set_item(prte_sessions, session->index, NULL);
+        session->index = -1;
+    }
+
+    if (return_to_scheduler && NULL != ranks && 0 < m) {
+        PMIX_DATA_BUFFER_CONSTRUCT(&msg);
+        rc = PMIx_Data_pack(NULL, &msg, &cmd, 1, PMIX_UINT8);
+        if (PMIX_SUCCESS == rc) {
+            rc = PMIx_Data_pack(NULL, &msg, &m, 1, PMIX_INT32);
+        }
+        if (PMIX_SUCCESS == rc) {
+            rc = PMIx_Data_pack(NULL, &msg, ranks, m, PMIX_PROC_RANK);
+        }
+        if (PMIX_SUCCESS == rc) {
+            if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &msg))) {
+                PRTE_ERROR_LOG(rc);
+            }
+        } else {
+            PMIX_ERROR_LOG(rc);
+        }
+        PMIX_DATA_BUFFER_DESTRUCT(&msg);
+    }
+    if (NULL != ranks) {
+        free(ranks);
+    }
+}
+
+/* True if nspace is the root job's namespace or any transitive spawn
+ * descendant of it (a recursive walk of prte_job_t::children). */
+static bool job_subtree_contains(prte_job_t *root, const pmix_nspace_t nspace)
+{
+    prte_job_t *child;
+
+    if (NULL == root) {
+        return false;
+    }
+    if (PMIX_CHECK_NSPACE(root->nspace, nspace)) {
+        return true;
+    }
+    PMIX_LIST_FOREACH(child, &root->children, prte_job_t) {
+        if (job_subtree_contains(child, nspace)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* True if any job in the subtree rooted at root is still running (has not yet
+ * reached PRTE_JOB_STATE_TERMINATED). */
+static bool job_subtree_running(prte_job_t *root)
+{
+    prte_job_t *child;
+
+    if (NULL == root) {
+        return false;
+    }
+    if (root->state < PRTE_JOB_STATE_TERMINATED) {
+        return true;
+    }
+    PMIX_LIST_FOREACH(child, &root->children, prte_job_t) {
+        if (job_subtree_running(child)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* True if nspace is the reservation's owning namespace or one of its derived
+ * children (the transitive spawn subtree). Roots at the retained owner_job
+ * when present, else at the jobs spawned directly into the reservation (the
+ * tool-owner case). */
+static bool reservation_term_in_genealogy(prte_session_t *s,
+                                          const pmix_nspace_t nspace)
+{
+    int k;
+    prte_job_t *j;
+
+    if (PMIX_CHECK_NSPACE(s->owner, nspace)) {
+        return true;
+    }
+    if (NULL != s->owner_job) {
+        return job_subtree_contains(s->owner_job, nspace);
+    }
+    for (k = 0; k < s->jobs->size; k++) {
+        j = (prte_job_t *) pmix_pointer_array_get_item(s->jobs, k);
+        if (NULL != j && job_subtree_contains(j, nspace)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* True if the owning namespace or any of its derived children is still
+ * running - i.e. the CHILD-flavored reservation has not yet drained. */
+static bool reservation_has_running_descendant(prte_session_t *s)
+{
+    int k;
+    prte_job_t *j;
+
+    if (NULL != s->owner_job) {
+        return job_subtree_running(s->owner_job);
+    }
+    for (k = 0; k < s->jobs->size; k++) {
+        j = (prte_job_t *) pmix_pointer_array_get_item(s->jobs, k);
+        if (NULL != j && job_subtree_running(j)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void prte_ras_base_check_reservations_on_term(prte_job_t *jdata)
+{
+    int i;
+    prte_session_t *s;
+
+    if (NULL == prte_sessions || NULL == jdata) {
+        return;
+    }
+
+    for (i = 0; i < prte_sessions->size; i++) {
+        s = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, i);
+        if (NULL == s || s == prte_default_session) {
+            continue;
+        }
+        if (!(s->flags & PRTE_SESSION_FLAG_RESERVED)) {
+            continue;
+        }
+
+        switch (s->inheritance) {
+#if defined(PMIX_ALLOC_INHERIT_NONE)
+        case PMIX_ALLOC_INHERIT_NONE:
+            /* release to scheduler when the owning namespace terminates */
+            if (PMIX_CHECK_NSPACE(s->owner, jdata->nspace)) {
+                prte_ras_base_teardown_reservation(s, true);
+            }
+            break;
+#endif
+#if defined(PMIX_ALLOC_INHERIT_CHILD)
+        case PMIX_ALLOC_INHERIT_CHILD:
+            /* release to scheduler once the last derived child terminates */
+            if (reservation_term_in_genealogy(s, jdata->nspace) &&
+                !reservation_has_running_descendant(s)) {
+                prte_ras_base_teardown_reservation(s, true);
+            }
+            break;
+#endif
+#if defined(PMIX_ALLOC_INHERIT_CHILD_DEFAULT)
+        case PMIX_ALLOC_INHERIT_CHILD_DEFAULT:
+            /* unreserve into the session once the last derived child terminates */
+            if (reservation_term_in_genealogy(s, jdata->nspace) &&
+                !reservation_has_running_descendant(s)) {
+                prte_ras_base_teardown_reservation(s, false);
+            }
+            break;
+#endif
+        default:
+            /* PMIX_ALLOC_INHERIT_DEFAULT (also the absent-attribute default):
+             * unreserve into the session when the owning namespace terminates */
+            if (PMIX_CHECK_NSPACE(s->owner, jdata->nspace)) {
+                prte_ras_base_teardown_reservation(s, false);
+            }
+            break;
+        }
+    }
+}
+
 void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
 {
     prte_job_t *daemons;
@@ -630,10 +951,111 @@ void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
     pmix_rank_t *ranks;
     pmix_list_t ndlist;
     bool found;
+    char *target = NULL;        /* PMIX_ALLOC_TARGET namespace, if any */
+    bool share = false;         /* default: reserve (do not share) */
+    bool have_share = false;
+    uint8_t inherit = PRTE_INHERIT_DEFAULT_VALUE;
+    bool have_inherit = false;
+    char *alloc_id = NULL;      /* PMIX_ALLOC_ID (scheduler-assigned) */
+    char *req_id = NULL;        /* PMIX_ALLOC_REQ_ID (user-provided) */
+    const char *owner_nspace;
+    prte_session_t *dest = NULL;
+    prte_job_t *reqjob;
+    bool is_tool;
 
     daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     if (PMIX_ALLOC_EXTEND == req->allocdir ||
         PMIX_ALLOC_NEW == req->allocdir) {
+        /* scan the request for the reservation-routing directives so we can
+         * resolve which session the new nodes will join before inserting
+         * them. The PMIX_ALLOC_NODE_LIST entries are handled in the loop
+         * below; PMIX_ALLOC_WARN_TIMEOUT is intentionally left in req->info
+         * to be forwarded verbatim to the scheduler. */
+        for (n=0; n < req->ninfo; n++) {
+#if defined(PMIX_ALLOC_TARGET)
+            if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_TARGET)) {
+                target = req->info[n].value.data.string;
+                continue;
+            }
+#endif
+#if defined(PMIX_ALLOC_SHARE)
+            if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_SHARE)) {
+                share = PMIX_INFO_TRUE(&req->info[n]);
+                have_share = true;
+                continue;
+            }
+#endif
+#if defined(PMIX_ALLOC_INHERITANCE)
+            if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_INHERITANCE)) {
+                inherit = req->info[n].value.data.uint8;
+                have_inherit = true;
+                continue;
+            }
+#endif
+            if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
+                alloc_id = req->info[n].value.data.string;
+                continue;
+            }
+            if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_REQ_ID)) {
+                req_id = req->info[n].value.data.string;
+                continue;
+            }
+        }
+        (void) have_share;
+
+        /* an inheritance value this build cannot honor is rejected rather than
+         * silently dropped (it may have arrived over the wire from a newer
+         * peer) */
+#if !defined(PMIX_ALLOC_INHERITANCE)
+        if (have_inherit && PRTE_INHERIT_DEFAULT_VALUE != inherit) {
+            req->pstatus = PMIX_ERR_NOT_SUPPORTED;
+            return;
+        }
+#endif
+
+        reqjob = prte_get_job_data_object(req->tproc.nspace);
+        is_tool = (NULL == reqjob) || PRTE_FLAG_TEST(reqjob, PRTE_JOB_FLAG_TOOL);
+        /* the namespace the reservation is created for / must be owned by */
+        owner_nspace = (NULL != target) ? target : req->tproc.nspace;
+
+        if (have_share && share) {
+            dest = prte_default_session;            /* general use */
+        } else if (NULL != target && !is_tool) {
+            req->pstatus = PMIX_ERR_NO_PERMISSIONS; /* app may not retarget */
+            return;
+        } else if (PMIX_ALLOC_EXTEND == req->allocdir) {
+            /* extend an existing reservation named by either identifier */
+            if (NULL == alloc_id && NULL == req_id) {
+                req->pstatus = PMIX_ERR_BAD_PARAM;  /* nothing names the target */
+                return;
+            }
+            dest = (NULL != alloc_id) ? prte_get_session_object_from_id(alloc_id)
+                                      : NULL;
+            if (NULL == dest && NULL != req_id) {
+                dest = prte_get_session_object_from_refid(req_id);
+            }
+            if (NULL == dest ||
+                !prte_session_is_owned_by(dest, req->tproc.nspace)) {
+                req->pstatus = (NULL == dest) ? PMIX_ERR_NOT_FOUND
+                                              : PMIX_ERR_NO_PERMISSIONS;
+                return;
+            }
+            /* a new inheritance value on EXTEND updates the disposition */
+            if (have_inherit) {
+                dest->inheritance = inherit;
+            }
+            /* refresh the requestor so a timeout warning follows the most
+             * recent requester */
+            PMIX_XFER_PROCID(&dest->requestor, &req->tproc);
+        } else {                                    /* PMIX_ALLOC_NEW */
+            dest = create_reservation(owner_nspace, inherit, &req->tproc,
+                                      alloc_id, req_id);
+            if (NULL == dest) {
+                req->pstatus = PMIX_ERR_OUT_OF_RESOURCE;
+                return;
+            }
+        }
+
         found = false;
         for (n=0; n < req->ninfo; n++) {
             if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_NODE_LIST)) {
@@ -684,6 +1106,9 @@ void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
                     req->pstatus = prte_pmix_convert_rc(ret);
                     return;
                 }
+                /* when reserving, withhold these nodes from the default pool by
+                 * registering them with the destination session */
+                add_nodes_to_session(&ndlist, dest);
                 PMIX_LIST_DESTRUCT(&ndlist);
                 found = true;
             }
@@ -696,7 +1121,53 @@ void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
             PRTE_ACTIVATE_JOB_STATE(daemons, PRTE_JOB_STATE_LAUNCH_DAEMONS);
         }
 
+        /* report the destination allocation id back to the requester so it can
+         * later target, extend, or release the reservation. The default
+         * (shared) session carries no allocation id, so nothing is reported. */
+        if (NULL != dest && dest != prte_default_session &&
+            NULL != dest->alloc_refid) {
+            pmix_info_t *rinfo;
+            size_t rn = (NULL != dest->user_refid) ? 2 : 1;
+
+            PMIX_INFO_CREATE(rinfo, rn);
+            PMIX_INFO_LOAD(&rinfo[0], PMIX_ALLOC_ID, dest->alloc_refid, PMIX_STRING);
+            if (2 == rn) {
+                PMIX_INFO_LOAD(&rinfo[1], PMIX_ALLOC_REQ_ID, dest->user_refid, PMIX_STRING);
+            }
+            /* the original req->info is borrowed from the PMIx caller; repoint
+             * to our response array and let the req destructor free it */
+            req->info = rinfo;
+            req->ninfo = rn;
+            req->copy = true;
+        }
+
     } else if (PMIX_ALLOC_RELEASE == req->allocdir) {
+
+        /* a release naming an allocation id tears down that whole reservation:
+         * any owner may release it, the scheduler may release any. The nodes
+         * are returned to the scheduler (the legacy disposition for an explicit
+         * release). */
+        char *rel_alloc_id = NULL;
+        for (n=0; n < req->ninfo; n++) {
+            if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
+                rel_alloc_id = req->info[n].value.data.string;
+                break;
+            }
+        }
+        if (NULL != rel_alloc_id) {
+            prte_session_t *rsession = prte_get_session_object_from_id(rel_alloc_id);
+            if (NULL == rsession || rsession == prte_default_session) {
+                req->pstatus = PMIX_ERR_NOT_FOUND;
+                return;
+            }
+            if (!prte_session_is_owned_by(rsession, req->tproc.nspace)) {
+                req->pstatus = PMIX_ERR_NO_PERMISSIONS;
+                return;
+            }
+            prte_ras_base_teardown_reservation(rsession, true);
+            req->pstatus = PMIX_SUCCESS;
+            return;
+        }
 
         // create the request
         PMIX_DATA_BUFFER_CONSTRUCT(&msg);

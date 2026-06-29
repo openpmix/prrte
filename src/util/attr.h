@@ -262,6 +262,8 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_REPORT_PHYSICAL_CPUS       (PRTE_JOB_START_KEY + 121) // bool - report using physical (vs logical) cpu IDs
 #define PRTE_JOB_ALLOC_DISPLAYED            (PRTE_JOB_START_KEY + 122) // bool - allocation has been displayed
 #define PRTE_JOB_DO_NOT_SPAWN               (PRTE_JOB_START_KEY + 123) // bool - do not spawn app procs
+#define PRTE_JOB_SPAWN_TARGET               (PRTE_JOB_START_KEY + 124) // char* - comma-delimited list of PMIX_ALLOC_ID strings naming the
+                                                                       // allocations (sessions) this job may map onto; empty token = default session
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 
@@ -322,6 +324,7 @@ typedef uint16_t prte_proc_flags_t;
 /*** SESSION FLAGS ***/
 typedef uint16_t prte_session_flags_t;
 #define PRTE_SESSION_FLAG_DYNAMIC       0x0001 // session was dynamically allocated
+#define PRTE_SESSION_FLAG_RESERVED      0x0002 // nodes withheld from default pool
 
 
 /*** FLAG OPS ***/

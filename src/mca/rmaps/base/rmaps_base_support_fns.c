@@ -102,6 +102,28 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes, bo
     return rc;
 }
 
+/* The session a node belongs to for targeting purposes. A node with no
+ * explicit session belongs to the default session (the unreserved pool). */
+static inline prte_session_t *node_owning_session(prte_node_t *nd)
+{
+    return (NULL == nd->session) ? prte_default_session : nd->session;
+}
+
+/* True if nd is usable by a job targeting the given set of sessions. */
+static bool node_in_targets(prte_node_t *nd,
+                            prte_session_t **targets, size_t ntargets)
+{
+    prte_session_t *owner = node_owning_session(nd);
+    size_t i;
+
+    for (i = 0; i < ntargets; i++) {
+        if (owner == targets[i]) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /*
  * Query the registry for all nodes allocated to a specified app_context
  */
@@ -121,8 +143,24 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
     pmix_list_t nodes;
     char *hosts = NULL;
     bool needhosts = false;
+    prte_session_t **targets;
+    size_t ntargets;
+    prte_session_t *deftarget[1];
     /** set default answer */
     *total_num_slots = 0;
+
+    /* determine the set of sessions whose nodes this job may map onto. The HNP
+     * resolves PRTE_JOB_SPAWN_TARGET into jdata->target_sessions; absent that,
+     * the job maps onto its own (primary) session - preserving the historical
+     * single-session behavior. */
+    if (NULL != jdata->target_sessions && 0 < jdata->num_target_sessions) {
+        targets = jdata->target_sessions;
+        ntargets = jdata->num_target_sessions;
+    } else {
+        deftarget[0] = jdata->session;
+        targets = deftarget;
+        ntargets = 1;
+    }
 
     /* get the daemon job object */
     daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
@@ -198,9 +236,13 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
          */
         PMIX_LIST_FOREACH_SAFE(nptr, next, &nodes, prte_node_t)
         {
-            for (i = 0; i < jdata->session->nodes->size; i++) {
-                node = (prte_node_t *) pmix_pointer_array_get_item(jdata->session->nodes, i);
+            for (i = 0; i < prte_node_pool->size; i++) {
+                node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i);
                 if (NULL == node) {
+                    continue;
+                }
+                /* ignore nodes that are not in the job's targeted session set */
+                if (!node_in_targets(node, targets, ntargets)) {
                     continue;
                 }
                 /* ignore nodes that are non-usable */
@@ -276,10 +318,13 @@ addknown:
     } else {
         nd = (prte_node_t *) pmix_list_get_last(allocated_nodes);
     }
-    for (i = 0; i < jdata->session->nodes->size; i++) {
-        if (NULL != (node = (prte_node_t *) pmix_pointer_array_get_item(jdata->session->nodes, i))) {
+    for (i = 0; i < prte_node_pool->size; i++) {
+        if (NULL != (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i))) {
 
-
+            /* ignore nodes that are not in the job's targeted session set */
+            if (!node_in_targets(node, targets, ntargets)) {
+                continue;
+            }
             /* ignore nodes that are non-usable */
             if (PRTE_FLAG_TEST(node, PRTE_NODE_NON_USABLE)) {
                 continue;

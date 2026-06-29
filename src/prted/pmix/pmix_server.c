@@ -628,6 +628,80 @@ static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 
+#if defined(PMIX_ALLOC_TIMEOUT_WARNING)
+/* Relay the scheduler's allocation-timeout warning to the process that
+ * requested the allocation. PRRTE is a pure relay here: it neither sets the
+ * timeout nor generates the warning, only re-emits it as a directed event to
+ * the recorded requestor. */
+static void alloc_timeout_warning_hdlr(size_t evhdlr_registration_id, pmix_status_t status,
+                                       const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
+                                       pmix_info_t *results, size_t nresults,
+                                       pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
+{
+    size_t n, idx, nrinfo;
+    char *alloc_id = NULL;
+    uint32_t time_remaining = 0;
+    bool have_time = false;
+    prte_session_t *session;
+    pmix_info_t *rinfo;
+    pmix_data_array_t parray;
+    pmix_proc_t ptarg;
+    pmix_status_t rc;
+    PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, status, source, results, nresults);
+
+    for (n = 0; n < ninfo; n++) {
+        if (PMIx_Check_key(info[n].key, PMIX_ALLOC_ID)) {
+            alloc_id = info[n].value.data.string;
+        } else if (PMIx_Check_key(info[n].key, PMIX_TIME_REMAINING)) {
+            time_remaining = info[n].value.data.uint32;
+            have_time = true;
+        }
+    }
+    if (NULL == alloc_id) {
+        goto done;
+    }
+    session = prte_get_session_object_from_id(alloc_id);
+    if (NULL == session || PMIX_RANK_INVALID == session->requestor.rank) {
+        goto done;
+    }
+
+    /* assemble a directed (custom-range) notification to the requestor only */
+    nrinfo = 2;  /* custom range + alloc id */
+    if (NULL != session->user_refid) {
+        nrinfo++;
+    }
+    if (have_time) {
+        nrinfo++;
+    }
+    PMIX_INFO_CREATE(rinfo, nrinfo);
+    idx = 0;
+    PMIX_LOAD_PROCID(&ptarg, session->requestor.nspace, session->requestor.rank);
+    parray.type = PMIX_PROC;
+    parray.size = 1;
+    parray.array = &ptarg;
+    /* PMIX_INFO_LOAD deep-copies the data array, so the stack copy is fine */
+    PMIX_INFO_LOAD(&rinfo[idx++], PMIX_EVENT_CUSTOM_RANGE, &parray, PMIX_DATA_ARRAY);
+    PMIX_INFO_LOAD(&rinfo[idx++], PMIX_ALLOC_ID, session->alloc_refid, PMIX_STRING);
+    if (NULL != session->user_refid) {
+        PMIX_INFO_LOAD(&rinfo[idx++], PMIX_ALLOC_REQ_ID, session->user_refid, PMIX_STRING);
+    }
+    if (have_time) {
+        PMIX_INFO_LOAD(&rinfo[idx++], PMIX_TIME_REMAINING, &time_remaining, PMIX_UINT32);
+    }
+    rc = PMIx_Notify_event(PMIX_ALLOC_TIMEOUT_WARNING, PRTE_PROC_MY_NAME,
+                           PMIX_RANGE_CUSTOM, rinfo, nrinfo, NULL, NULL);
+    if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
+        PMIX_ERROR_LOG(rc);
+    }
+    PMIX_INFO_FREE(rinfo, nrinfo);
+
+done:
+    if (NULL != cbfunc) {
+        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    }
+}
+#endif
+
 /*
  * Initialize global variables used w/in the server.
  */
@@ -1002,6 +1076,21 @@ int pmix_server_init(void)
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_FREE(info, ninfo);
     rc = prte_pmix_convert_status(prc);
+
+#if defined(PMIX_ALLOC_TIMEOUT_WARNING)
+    /* register the allocation-timeout-warning relay handler */
+    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
+    prc = PMIX_ALLOC_TIMEOUT_WARNING;
+    ninfo = 1;
+    PMIX_INFO_CREATE(info, ninfo);
+    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_HDLR_NAME, "ALLOC-TIMEOUT-WARNING", PMIX_STRING);
+    PMIx_Register_event_handler(&prc, 1, info, ninfo, alloc_timeout_warning_hdlr, regcbfunc, &lock);
+    PRTE_PMIX_WAIT_THREAD(&lock);
+    prc = lock.status;
+    PRTE_PMIX_DESTRUCT_LOCK(&lock);
+    PMIX_INFO_FREE(info, ninfo);
+    rc = prte_pmix_convert_status(prc);
+#endif
 
     return rc;
 }

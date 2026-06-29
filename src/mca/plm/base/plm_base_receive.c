@@ -68,6 +68,84 @@
 
 static bool recv_issued = false;
 
+/* Resolve the PRTE_JOB_SPAWN_TARGET list (a comma-delimited list of
+ * PMIX_ALLOC_ID strings, with an empty token denoting the default session)
+ * into the job's validated target_sessions set. The requester must own every
+ * named reservation. On success the spawned job becomes an owner of each
+ * targeted reservation and jdata->session is set to the primary (first)
+ * targeted session. Returns a PRTE error code on failure. */
+static int resolve_spawn_targets(prte_job_t *jdata, pmix_proc_t *requestor,
+                                 char *target_str)
+{
+    char *p, *start, saved;
+    prte_session_t *s, **tlist = NULL, *primary = NULL;
+    size_t ntl = 0;
+    bool done = false;
+
+    start = target_str;
+    for (p = target_str; !done; p++) {
+        if (',' != *p && '\0' != *p) {
+            continue;
+        }
+        saved = *p;
+        *p = '\0';
+        if ('\0' == saved) {
+            done = true;
+        }
+        /* an empty token denotes the default session */
+        if ('\0' == *start) {
+            s = prte_default_session;
+        } else {
+            s = prte_get_session_object_from_id(start);
+            if (NULL == s) {
+                free(tlist);
+                return PRTE_ERR_NOT_FOUND;
+            }
+        }
+        /* the requester may target only the default session and reservations
+         * its namespace owns (the scheduler excepted) */
+        if (!prte_session_is_owned_by(s, requestor->nspace)) {
+            free(tlist);
+            return PRTE_ERR_PERM;
+        }
+        /* add to the target set, de-duplicating */
+        {
+            size_t k;
+            bool present = false;
+            for (k = 0; k < ntl; k++) {
+                if (tlist[k] == s) {
+                    present = true;
+                    break;
+                }
+            }
+            if (!present) {
+                prte_session_t **t2 = (prte_session_t **)
+                    realloc(tlist, (ntl + 1) * sizeof(prte_session_t *));
+                if (NULL == t2) {
+                    free(tlist);
+                    return PRTE_ERR_OUT_OF_RESOURCE;
+                }
+                tlist = t2;
+                tlist[ntl++] = s;
+                if (NULL == primary) {
+                    primary = s;
+                }
+            }
+        }
+        /* the spawned job becomes an owner of the reservation it targets, so
+         * it may in turn spawn further jobs onto those nodes (no-op for the
+         * default session) */
+        prte_session_add_owner(s, jdata->nspace);
+        start = p + 1;
+    }
+
+    jdata->target_sessions = tlist;
+    jdata->num_target_sessions = ntl;
+    /* primary session: first targeted, or default if only invalid was named */
+    jdata->session = (NULL != primary) ? primary : prte_default_session;
+    return PRTE_SUCCESS;
+}
+
 int prte_plm_base_comm_start(void)
 {
     if (recv_issued) {
@@ -333,6 +411,21 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             goto ANSWER_LAUNCH;
         }
 
+        /* A spawn-target list takes precedence and may name multiple sessions
+         * (the union of allocations the job may map onto). Resolve it, validate
+         * ownership of each, cache the set on the job, and continue. */
+        tmp = NULL;
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_TARGET, (void **) &tmp, PMIX_STRING) &&
+            NULL != tmp) {
+            rc = resolve_spawn_targets(jdata, nptr, tmp);
+            free(tmp);
+            if (PRTE_SUCCESS != rc) {
+                goto ANSWER_LAUNCH;
+            }
+            session = jdata->session;
+            goto moveon;
+        }
+
         /* If an alloc id was given specifying the session within which
          * the job is to be spawned, then use it - otherwise default to parent session */
         session = NULL;
@@ -409,6 +502,19 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
 moveon:
         jdata->session = session;
         pmix_pointer_array_add(jdata->session->jobs, jdata);
+
+        /* a job reaching a reservation through the legacy single-session
+         * attributes (no spawn-target list) must still pass the ownership
+         * check and become an owner of that reservation */
+        if (NULL == jdata->target_sessions && NULL != session &&
+            session != prte_default_session &&
+            (PRTE_SESSION_FLAG_RESERVED & session->flags)) {
+            if (!prte_session_is_owned_by(session, nptr->nspace)) {
+                rc = PRTE_ERR_PERM;
+                goto ANSWER_LAUNCH;
+            }
+            prte_session_add_owner(session, jdata->nspace);
+        }
 
         /* get the parent's job object */
         if (NULL != (parent = prte_get_job_data_object(nptr->nspace)) &&

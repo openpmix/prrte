@@ -555,6 +555,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "ALLOCATION DISPLAYED";
         case PRTE_JOB_DO_NOT_SPAWN:
             return "DO_NOT_SPAWN";
+        case PRTE_JOB_SPAWN_TARGET:
+            return "SPAWN_TARGET";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";
