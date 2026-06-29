@@ -13,6 +13,11 @@ fence mechanism itself and the race it closes, see
 The state machine is single-threaded on the progress thread, so no locking is
 required anywhere in this plan.
 
+The observable job-admission and placement guarantees that the grow path
+upholds are specified in :ref:`elastic-dvm-spec-label`, which is
+authoritative for observable behavior; this document describes the
+implementation that delivers them.
+
 Motivation
 ----------
 
