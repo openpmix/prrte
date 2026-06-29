@@ -17,6 +17,12 @@ checks the fence; if it is nonzero the job parks itself in a held-job array
 The state machine is single-threaded on the progress thread, so no locking
 is required anywhere in this plan.
 
+The externally observable contract that this mechanism implements — the
+job-admission and placement guarantees a caller may rely on while the DVM
+grows or shrinks — is specified in :ref:`elastic-dvm-spec-label`; that
+document is authoritative for observable behavior, and this one describes
+the implementation that delivers it.
+
 .. note::
    The app-triggered expansion path (``--add-host`` / ``--add-hostfile``)
    already sets ``prte_dvm_ready = false`` in ``add_hosts()`` before posting
