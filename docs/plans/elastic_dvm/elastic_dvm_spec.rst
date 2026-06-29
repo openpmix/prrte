@@ -40,8 +40,9 @@ In scope
 * The disposition of a job that was already mapped onto a node that is
   about to depart in a shrink.
 * The outcome of a daemon failure that occurs during a grow or a shrink,
-  and the distinction between a failure that belongs to the in-progress
-  campaign and an unrelated one.
+  the distinction between a failure that belongs to the in-progress
+  campaign and an unrelated one, and the rollback of a failed grow to the
+  DVM's pre-grow membership.
 * The behavior when grow and shrink campaigns, or multiple campaigns of
   the same kind, overlap in time.
 * The single observable artifact this feature adds: the
@@ -153,10 +154,17 @@ While a grow campaign is in progress:
   consider the newly added nodes.
 
 * If a daemon belonging to the grow campaign **fails** before the
-  campaign completes, the grow is treated as failed as a whole, and every
-  job parked on account of the grow is aborted (it never launches) rather
-  than being admitted onto an incomplete DVM.  This matches the
-  first-failure semantics of a non-elastic launch.
+  campaign completes, the grow is treated as failed as a whole and is
+  **rolled back**: every daemon that the same campaign had already
+  started is terminated, and the nodes the campaign was adding leave the
+  DVM, so the DVM is restored to exactly the membership it had before that
+  campaign began.  A failed grow never leaves the DVM half-extended with a
+  partial, un-wired set of new daemons.  Every job parked on account of
+  the grow is then aborted (it never launches) rather than being admitted
+  onto an incomplete DVM.  This matches the first-failure semantics of a
+  non-elastic launch.  The rollback is scoped to the failed campaign: an
+  unrelated grow campaign running concurrently keeps its own daemons and
+  completes normally, and pre-existing daemons and nodes are untouched.
 
 * A daemon failure that does **not** belong to any in-progress grow
   campaign (for example, a pre-existing daemon dying for an unrelated
@@ -228,8 +236,10 @@ Failure semantics
    * - Event
      - Observable outcome
    * - A grow-target daemon fails before its grow completes
-     - The grow fails as a whole; all jobs parked on account of the grow
-       are aborted and never launch.
+     - The grow fails as a whole and is rolled back: every daemon the same
+       campaign had already started is terminated and its nodes leave the
+       DVM, restoring the pre-grow membership; all jobs parked on account
+       of the grow are aborted and never launch.
    * - A daemon unrelated to any in-progress grow fails during a grow
      - The grow is unaffected; parked jobs are neither released early nor
        aborted.
@@ -296,6 +306,11 @@ A conforming implementation guarantees that:
 #. A daemon failure affects only the jobs waiting on the campaign that
    failure belongs to; an unrelated daemon loss neither releases nor
    aborts parked jobs.
+#. A grow that fails is rolled back to the DVM's pre-grow membership: the
+   campaign's already-started daemons are terminated and its nodes leave
+   the DVM, so a failed grow never leaves the DVM half-extended.  The
+   rollback is scoped to the failed campaign and leaves concurrent
+   campaigns and pre-existing daemons untouched.
 #. Shrink completion is driven by the actual departure of every targeted
    daemon — clean exit and crash being indistinguishable — and is
    idempotent against a daemon that reports its departure more than once.
