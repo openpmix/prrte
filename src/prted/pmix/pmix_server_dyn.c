@@ -1031,6 +1031,22 @@ complete:
         PMIX_LOAD_NSPACE(nspace, NULL);
         prc = prte_pmix_convert_rc(rc);
         cd->spcbfunc(prc, nspace, cd->cbdata);
+        /* record the failure on the job itself for any consumer of its state */
+        if (0 == jdata->exit_code) {
+            jdata->exit_code = rc;
+        }
+        /* A spawn-setup failure (e.g. an unrecognized map-by directive) must
+         * be reflected in our process exit status. The spawn-completion
+         * notification above carries the error to the requestor, but when we
+         * are the requestor (prterun) that notification races the DVM teardown
+         * triggered by NEVER_LAUNCHED below - if teardown wins, the status is
+         * lost and we would exit 0. So, exactly as check_complete() does on
+         * normal termination, record it directly here for a one-shot launch.
+         * A persistent DVM survives the failed spawn, so its status is left
+         * untouched (the requestor still learns of the error via the cbfunc). */
+        if (!prte_persistent) {
+            PRTE_UPDATE_EXIT_STATUS(rc);
+        }
         /* this isn't going to launch, so indicate that */
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
     }
