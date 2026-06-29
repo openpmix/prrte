@@ -947,9 +947,15 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                 // see if they specified "socket" as the resource
                 p1 = strdup(opt->values[0]);
                 p2 = strrchr(p1, ':');
-                ++p2;
-                if (0 == strncasecmp(p2, "socket", strlen("socket")) ||
-                    0 == strncasecmp(p2, "skt", strlen("skt"))) {
+                /* a bare "ppr" with no ":resource" qualifier has nothing to
+                 * inspect - strrchr returns NULL, so guard against advancing
+                 * past it (which would dereference address 0x1 and crash) */
+                if (NULL != p2) {
+                    ++p2;
+                }
+                if (NULL != p2 &&
+                    (0 == strncasecmp(p2, "socket", strlen("socket")) ||
+                     0 == strncasecmp(p2, "skt", strlen("skt")))) {
                     *p2 = '\0';
                     pmix_asprintf(&p2, "%spackage", p1);
                     if (warn) {
