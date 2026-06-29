@@ -1,0 +1,317 @@
+.. _elastic-dvm-plan-label:
+
+Elastic DVM Implementation Plan
+===============================
+
+This document describes the implementation of the **launch fence** — the
+shared mechanism that serialises application-job dispatch against in-progress
+DVM grow and shrink campaigns, closing the race between a DVM size change and
+concurrently-running application jobs.  For background on the race itself see
+:ref:`state-machine-label`, section *DVM Extension and the Daemon-Launch Race*.
+
+The externally observable contract this implementation delivers — the
+job-admission and placement guarantees, and the two-phase completion
+notification — is specified in :ref:`elastic-dvm-spec-label`, which is
+authoritative for observable behavior.  Where this plan and that specification
+disagree about observable behavior, the specification wins and this plan must
+be corrected.
+
+This plan is the **parent** of two campaign-specific plans:
+
+* :ref:`dvm-grow-campaign-label` — the grow (daemon-launch) path's per-campaign
+  fence accounting, failure rollback, and success/failure completion events.
+* :ref:`dvm-shrink-campaign-label` — the shrink (node-removal) path's campaign
+  tracking, the second (``LAUNCH_APPS``) hold point, completion detection, and
+  completion events.
+
+It covers the **shared** infrastructure both paths build on: the fence counter,
+the held-job arrays, the ``VM_READY → MAP`` hold point, the fence-release
+helper, and the completion-event emission common to both.
+
+The mechanism is a **global launch fence** — a counter
+(``prte_dvm_launch_fence``) that tracks the number of in-progress daemon launch
+campaigns.  An app job that reaches the ``VM_READY → MAP`` transition checks the
+fence; if it is nonzero the job parks itself in a held-job array
+(``prte_held_jobs``) and is released when the fence reaches zero.
+
+The state machine is single-threaded on the progress thread, so no locking is
+required anywhere in this plan.
+
+.. note::
+   The app-triggered expansion path (``--add-host`` / ``--add-hostfile``)
+   already sets ``prte_dvm_ready = false`` in ``add_hosts()`` before posting
+   the asynchronous RAS modify request, which causes newly-arriving jobs to be
+   stashed in ``prte_cache`` rather than dispatched immediately.  The launch
+   fence is still required for the scheduler-push path (e.g., Slurm firing
+   ``LAUNCH_DAEMONS`` directly) where ``prte_dvm_ready`` is never cleared, and
+   to ensure full correctness when both paths can interleave.
+
+Step 1 — New state constant
+---------------------------
+
+In ``src/mca/plm/plm_types.h``, add:
+
+.. code-block:: c
+
+   /* value 17 is currently unused in the running-state band */
+   #define PRTE_JOB_STATE_WAITING_FOR_DAEMONS  17
+
+Add a corresponding string to ``src/util/error_strings.c``.
+
+This state is used purely as a marker so that debugging tools and verbose
+output show clearly why a job is parked; no callback is registered for it.
+
+Step 2 — New global fence and held-job arrays
+---------------------------------------------
+
+In ``src/runtime/prte_globals.c`` and ``src/runtime/prte_globals.h``, add:
+
+.. code-block:: c
+
+   /* counts in-progress daemon launch campaigns */
+   int prte_dvm_launch_fence = 0;
+
+   /* jobs parked at the VM_READY → MAP boundary */
+   pmix_pointer_array_t *prte_held_jobs;
+
+   /* jobs parked at the LAUNCH_APPS boundary during a shrink */
+   pmix_pointer_array_t *prte_prelaunch_held_jobs;
+
+Initialize both arrays in ``src/runtime/prte_init.c`` alongside the existing
+``prte_cache`` initialization:
+
+.. code-block:: c
+
+   prte_held_jobs = PMIX_NEW(pmix_pointer_array_t);
+   pmix_pointer_array_init(prte_held_jobs, 1, INT_MAX, 1);
+
+   prte_prelaunch_held_jobs = PMIX_NEW(pmix_pointer_array_t);
+   pmix_pointer_array_init(prte_prelaunch_held_jobs, 1, INT_MAX, 1);
+
+Destruct both in ``src/runtime/prte_finalize.c``.
+
+The grow and shrink campaign lists (``prte_grow_campaigns`` and
+``prte_shrink_campaigns``) that drive the fence are declared, constructed, and
+destructed alongside these globals; their types and lifecycles are specified in
+the two child plans.
+
+Step 3 — Park jobs at the VM_READY → MAP boundary
+--------------------------------------------------
+
+This is the first of the two hold points and is shared by both paths: it stops
+*any* in-progress campaign (grow or shrink) from letting a freshly-arriving job
+map onto a node whose daemon is not ready.
+
+In ``vm_ready()``, the code at line 360 is reached only by app jobs (the
+daemon-job branch returns at line 357).  This is immediately before
+``prte_filem.preposition_files()`` which leads to ``files_ready → MAP``.
+Add the hold check here:
+
+.. code-block:: c
+
+   /* position any required files */
+   if (0 < prte_dvm_launch_fence) {
+       /* daemon launch in progress — park this job */
+       caddy->jdata->state = PRTE_JOB_STATE_WAITING_FOR_DAEMONS;
+       PMIX_RETAIN(caddy->jdata);
+       pmix_pointer_array_add(prte_held_jobs, caddy->jdata);
+       PMIX_RELEASE(caddy);
+       return;
+   }
+   if (PRTE_SUCCESS !=
+           prte_filem.preposition_files(caddy->jdata, files_ready, caddy->jdata)) {
+       PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_FILES_POSN_FAILED);
+   }
+   PMIX_RELEASE(caddy);
+
+The second hold point — at ``LAUNCH_APPS``, guarded by the shrink campaign list
+rather than the fence counter — is shrink-specific and is described in
+:ref:`dvm-shrink-campaign-label`.
+
+Step 4 — Fence-release helper
+-----------------------------
+
+Both grow completion (``vm_ready``) and shrink target departure (detected in
+the errmgr) decrement the fence and, when it hits zero, must release two
+classes of held jobs.  Extract this logic into a single helper declared in
+``src/mca/plm/base/plm_base_launch_support.h`` and defined in
+``plm_base_launch_support.c``:
+
+.. code-block:: c
+
+   void prte_plm_base_fence_release(bool success)
+   {
+       int _hi;
+       prte_job_t *_held;
+
+       /* --- pre-map held jobs (parked at VM_READY) --- */
+       for (_hi = 0; _hi < prte_held_jobs->size; _hi++) {
+           _held = (prte_job_t *)
+               pmix_pointer_array_get_item(prte_held_jobs, _hi);
+           if (NULL == _held) continue;
+           pmix_pointer_array_set_item(prte_held_jobs, _hi, NULL);
+           PRTE_ACTIVATE_JOB_STATE(_held,
+               success ? PRTE_JOB_STATE_VM_READY
+                       : PRTE_JOB_STATE_NEVER_LAUNCHED);
+           PMIX_RELEASE(_held);
+       }
+
+       /* --- pre-launch held jobs (parked at LAUNCH_APPS) --- */
+       for (_hi = 0; _hi < prte_prelaunch_held_jobs->size; _hi++) {
+           _held = (prte_job_t *)
+               pmix_pointer_array_get_item(prte_prelaunch_held_jobs, _hi);
+           if (NULL == _held) continue;
+           pmix_pointer_array_set_item(prte_prelaunch_held_jobs, _hi, NULL);
+           if (!success) {
+               PRTE_ACTIVATE_JOB_STATE(_held, PRTE_JOB_STATE_NEVER_LAUNCHED);
+           } else if (prte_plm_base_job_needs_remap(_held)) {
+               prte_plm_base_reset_proc_map(_held);
+               PRTE_ACTIVATE_JOB_STATE(_held, PRTE_JOB_STATE_MAP);
+           } else {
+               PRTE_ACTIVATE_JOB_STATE(_held, PRTE_JOB_STATE_LAUNCH_APPS);
+           }
+           PMIX_RELEASE(_held);
+       }
+
+       /* campaigns are removed individually as their last target dies;
+        * the list should be empty here, but do a safety sweep */
+       prte_shrink_campaign_t *_camp, *_next;
+       PMIX_LIST_FOREACH_SAFE(_camp, _next,
+                              &prte_shrink_campaigns, prte_shrink_campaign_t) {
+           pmix_list_remove_item(&prte_shrink_campaigns, &_camp->super);
+           PMIX_RELEASE(_camp);
+       }
+   }
+
+This helper releases held jobs only; the pre-launch branch's two
+shrink-specific helpers — ``prte_plm_base_job_needs_remap()`` (does any held
+proc sit on a departing daemon?) and ``prte_plm_base_reset_proc_map()``
+(un-claim the previous mapping so the job can be remapped onto survivors) — are
+specified in :ref:`dvm-shrink-campaign-label`.
+
+``prte_plm_base_fence_release()`` acts when the **global** fence reaches zero,
+which requires *all* grow and shrink campaigns to have completed.  The
+per-campaign **completion event** (Step 5) is distinct: it fires for an
+individual request's campaign when that campaign drains, independent of whether
+other campaigns are still in flight.
+
+Step 5 — Completion-event emission (shared helper)
+--------------------------------------------------
+
+The spec's two-phase contract (see :ref:`elastic-dvm-spec-label`,
+*Asynchronous size-change completion*) requires that, when an accepted DVM
+operation finishes, the runtime deliver a directed event to the process that
+requested the size change: ``PMIX_DVM_IS_READY`` on success or
+``PMIX_ERR_DVM_MOD`` (carrying the underlying cause) on failure.
+
+Both campaign objects therefore record the requester so the event can be
+directed once the campaign drains:
+
+.. code-block:: c
+
+   pmix_proc_t  requester;       /* who requested the size change */
+   char        *alloc_id;        /* PMIX_ALLOC_ID of the affected allocation */
+   char        *req_id;          /* requester's PMIX_ALLOC_REQ_ID, or NULL */
+   bool         have_requester;  /* false for a scheduler push */
+
+These fields are populated where the campaign is created — for a shrink in the
+``PMIX_ALLOC_RELEASE`` handler, for a grow in ``setup_virtual_machine()`` — from
+the allocation request that drove the operation.  A size change initiated with
+no PMIx requester (a scheduler push) leaves ``have_requester`` false and emits
+no event.
+
+A single shared helper, declared in ``plm_base_launch_support.h`` and defined in
+``plm_base_launch_support.c``, performs the emission:
+
+.. code-block:: c
+
+   /* event_code is PMIX_DVM_IS_READY or PMIX_ERR_DVM_MOD; cause is the
+    * underlying pmix_status_t on failure (ignored on success) */
+   void prte_plm_base_dvm_mod_notify(const pmix_proc_t *requester,
+                                     const char *alloc_id,
+                                     const char *req_id,
+                                     pmix_status_t event_code,
+                                     pmix_status_t cause);
+
+It packs ``PMIX_ALLOC_ID`` (always), ``PMIX_ALLOC_REQ_ID`` (when ``req_id`` is
+non-NULL), and — for the failure event — the underlying ``cause`` status, then
+delivers the event **only** to ``requester`` (a directed, non-broadcast
+notification).
+
+The grow and shrink plans call this helper at their respective drain points: the
+grow path on the success drain in ``vm_ready`` and on the failure drain in
+``prte_plm_base_grow_target_failed()``; the shrink path when a campaign's last
+target departs (success) and on the xcast-failure cleanup at campaign creation
+(failure).
+
+Because ``PMIX_DVM_IS_READY`` and ``PMIX_ERR_DVM_MOD`` are defined by PMIx and
+may be absent in an older PMIx, both the helper body and every call site are
+guarded by a build-time capability check using the ``PRTE_CHECK_PMIX_CAP``
+idiom (``config/prte_setup_pmix.m4``); when the check fails the helper compiles
+to a no-op and no completion event is delivered, exactly as the spec's
+backward-compatibility clause requires.
+
+Summary of Files Changed (Shared Fence Infrastructure)
+-------------------------------------------------------
+
+.. list-table::
+   :widths: 50 50
+   :header-rows: 1
+
+   * - File
+     - Change
+   * - ``src/mca/plm/plm_types.h``
+     - Add ``PRTE_JOB_STATE_WAITING_FOR_DAEMONS = 17``.
+   * - ``src/util/error_strings.c``
+     - Add string for ``PRTE_JOB_STATE_WAITING_FOR_DAEMONS``.
+   * - ``src/runtime/prte_globals.h``
+     - Declare ``prte_dvm_launch_fence``, ``prte_held_jobs``, and
+       ``prte_prelaunch_held_jobs``.
+   * - ``src/runtime/prte_globals.c``
+     - Define and initialize ``prte_dvm_launch_fence = 0``.
+   * - ``src/runtime/prte_init.c``
+     - Allocate and init ``prte_held_jobs`` and ``prte_prelaunch_held_jobs``.
+   * - ``src/runtime/prte_finalize.c``
+     - Destruct ``prte_held_jobs`` and ``prte_prelaunch_held_jobs``.
+   * - ``src/mca/plm/base/plm_base_launch_support.c``
+     - Declare and define ``prte_plm_base_fence_release()`` (Step 4) and
+       ``prte_plm_base_dvm_mod_notify()`` (Step 5).
+   * - ``src/mca/plm/base/plm_base_launch_support.h``
+     - Declare ``prte_plm_base_fence_release()`` and
+       ``prte_plm_base_dvm_mod_notify()``.
+   * - ``src/mca/state/dvm/state_dvm.c``
+     - In ``vm_ready``: add the ``VM_READY → MAP`` hold-check before
+       ``preposition_files`` (Step 3).
+   * - ``config/prte_setup_pmix.m4``
+     - Add the ``PRTE_CHECK_PMIX_CAP`` check that gates use of
+       ``PMIX_DVM_IS_READY`` / ``PMIX_ERR_DVM_MOD`` (Step 5).
+
+For the grow path's file changes see the "Touched files" table in
+:ref:`dvm-grow-campaign-label`; for the shrink path's, the "Touched files"
+table in :ref:`dvm-shrink-campaign-label`.
+
+Design Invariants
+-----------------
+
+**Shared fence**
+
+* The fence is a single ``int`` accessed only on the progress thread, so all
+  increments, decrements, and the zero test are race-free without locking.
+* A job is parked iff the fence is nonzero at the ``VM_READY → MAP`` boundary
+  (Step 3); the ``LAUNCH_APPS`` hold (shrink plan) is gated on the shrink
+  campaign list, not the fence, so a concurrent grow does not stall an
+  already-mapped job on surviving nodes.
+* ``prte_plm_base_fence_release()`` is called only when the fence reaches zero,
+  which requires *all* grow and shrink campaigns to have completed; the campaign
+  lists are therefore empty (or nearly so — ``fence_release`` does a safety
+  sweep for the degenerate case where an xcast failure left a partially-setup
+  campaign).
+* The per-campaign completion event (Step 5) is independent of the global fence:
+  it fires when an individual request's campaign drains, even if other campaigns
+  keep the fence nonzero.
+
+**Grow fence** — see the "Why this is correct" and "Design" sections of
+:ref:`dvm-grow-campaign-label`.
+
+**Shrink fence** — see the "Design Invariants" section of
+:ref:`dvm-shrink-campaign-label`.

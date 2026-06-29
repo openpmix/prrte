@@ -5,10 +5,10 @@ DVM Grow-Campaign Fence Tracking
 
 This document describes the implementation that makes the DVM **grow**
 (daemon-launch) path account for the launch fence on a per-daemon, rank-tracked
-basis, mirroring the design already used by the DVM **shrink** path.  For the
-fence mechanism itself and the race it closes, see
-:ref:`dvm-launch-fence-label` and :ref:`state-machine-label`, section
-*DVM Extension and the Daemon-Launch Race*.
+basis, mirroring the design already used by the DVM **shrink** path
+(:ref:`dvm-shrink-campaign-label`).  For the shared fence mechanism itself and
+the race it closes, see the parent plan :ref:`elastic-dvm-plan-label` and
+:ref:`state-machine-label`, section *DVM Extension and the Daemon-Launch Race*.
 
 The state machine is single-threaded on the progress thread, so no locking is
 required anywhere in this plan.
@@ -68,12 +68,19 @@ In ``src/runtime/prte_globals.h`` / ``prte_globals.c``:
 
    typedef struct {
        pmix_list_item_t super;
-       pmix_rank_t     *targets;   /* daemon ranks being launched */
-       int              ntargets;  /* == this campaign's fence contribution */
+       pmix_rank_t     *targets;        /* daemon ranks being launched */
+       int              ntargets;       /* == this campaign's fence contribution */
+       /* requester recorded for the spec's phase-two completion event */
+       pmix_proc_t      requester;      /* who requested the grow */
+       char            *alloc_id;       /* PMIX_ALLOC_ID of the allocation */
+       char            *req_id;         /* PMIX_ALLOC_REQ_ID, or NULL */
+       bool             have_requester; /* false for a scheduler-driven push */
    } prte_grow_campaign_t;
    PMIX_CLASS_DECLARATION(prte_grow_campaign_t);
 
    PRTE_EXPORT extern pmix_list_t prte_grow_campaigns;
+
+The campaign's destructor frees ``targets``, ``alloc_id``, and ``req_id``.
 
 The list is constructed in ``prte_init.c`` and destructed in
 ``prte_finalize.c`` alongside ``prte_shrink_campaigns``.  A separate list (as
@@ -106,6 +113,8 @@ Lifecycle
 #. **Create** — in ``prte_plm_base_setup_virtual_machine()``, when
    ``map->num_new_daemons > 0``: build a ``prte_grow_campaign_t`` recording the
    ``num_new_daemons`` consecutive vpids starting at ``map->daemon_vpid_start``,
+   record the requester / ``PMIX_ALLOC_ID`` / ``PMIX_ALLOC_REQ_ID`` (when the
+   grow was driven by an allocation request rather than a scheduler push),
    append it to ``prte_grow_campaigns``, and add ``num_new_daemons`` to the
    fence.  ``PRTE_JOB_LAUNCHED_DAEMONS`` is still set on the daemon job for its
    unrelated uses (the WIREUP gate in ``vm_ready`` and the odls path); it is no
@@ -115,8 +124,11 @@ Lifecycle
    reported (``num_reported == num_procs``), which means any in-progress grow
    campaigns have fully succeeded.  After performing the WIREUP xcast, it calls
    ``prte_plm_base_grow_drain(true)``, which removes every grow campaign,
-   subtracts each ``ntargets`` from the fence, and — if the fence has reached
-   zero — releases the held jobs with ``success == true``.
+   subtracts each ``ntargets`` from the fence, emits a ``PMIX_DVM_IS_READY``
+   completion event to each drained campaign's requester (via
+   ``prte_plm_base_dvm_mod_notify()`` — see :ref:`elastic-dvm-plan-label`,
+   Step 5), and — if the fence has reached zero — releases the held jobs with
+   ``success == true``.
 
 #. **Failure drain and rollback** — in the ``errmgr/dvm`` comm-failure /
    ``FAILED_TO_START`` handler, the dead daemon's rank is passed to
@@ -127,10 +139,12 @@ Lifecycle
    back: its still-living daemons are terminated and all of its nodes are
    removed from the DVM, returning the DVM to exactly the membership it had
    before the campaign began (see `Rollback on failure`_).  The function then
-   calls ``prte_plm_base_grow_drain(false)`` — failing the held jobs.
-   Mirroring the original single-token behavior, any grow failure fails the
-   whole held-job set, and the rollback ensures the DVM is never left
-   half-extended with a partial, un-wired set of new daemons.
+   calls ``prte_plm_base_grow_drain(false)`` — emitting a ``PMIX_ERR_DVM_MOD``
+   completion event (carrying the underlying failure status) to each drained
+   campaign's requester, and failing the held jobs.  Mirroring the original
+   single-token behavior, any grow failure fails the whole held-job set, and
+   the rollback ensures the DVM is never left half-extended with a partial,
+   un-wired set of new daemons.
 
 #. **Safety net** — ``check_job_complete``'s "received NULL job" branch drains
    any still-pending grow campaigns with ``success == false`` so held jobs are
@@ -217,15 +231,21 @@ Touched files
    * - File
      - Change
    * - ``src/runtime/prte_globals.{h,c}``
-     - Add ``prte_grow_campaign_t``, ``prte_grow_campaigns`` list, and class.
+     - Add ``prte_grow_campaign_t`` (including the requester fields),
+       ``prte_grow_campaigns`` list, and class (destructor frees ``targets``,
+       ``alloc_id``, ``req_id``).
    * - ``src/runtime/prte_init.c`` / ``prte_finalize.c``
      - Construct / destruct ``prte_grow_campaigns``.
    * - ``src/mca/plm/base/plm_base_launch_support.c``
-     - Create the campaign in ``setup_virtual_machine``; add
+     - Create the campaign in ``setup_virtual_machine`` (recording the
+       requester / ``PMIX_ALLOC_ID`` / ``PMIX_ALLOC_REQ_ID``); add
        ``prte_plm_base_grow_drain()`` and ``prte_plm_base_grow_target_failed()``.
-       The latter rolls the failed campaign back — terminating its surviving
-       daemons and removing its nodes from the DVM via the shrink-path
-       machinery — before draining the held jobs.
+       ``grow_drain()`` emits the per-campaign completion event
+       (``PMIX_DVM_IS_READY`` on success, ``PMIX_ERR_DVM_MOD`` on failure) via
+       the shared ``prte_plm_base_dvm_mod_notify()`` helper.  ``grow_target_failed()``
+       rolls the failed campaign back — terminating its surviving daemons and
+       removing its nodes from the DVM via the shrink-path machinery — before
+       draining the held jobs.
    * - ``src/mca/plm/base/plm_private.h``
      - Declare the two new helpers.
    * - ``src/mca/errmgr/dvm/errmgr_dvm.c``

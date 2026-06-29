@@ -7,5 +7,6 @@ Implementation plans for dynamic DVM grow/shrink support.
    :maxdepth: 2
 
    elastic_dvm_spec.rst
-   dvm_launch_fence.rst
+   elastic_dvm_plan.rst
    grow_campaign.rst
+   shrink_campaign.rst
