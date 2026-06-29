@@ -90,6 +90,22 @@ PRTE_EXPORT void prte_ras_base_modify(int fd, short args, void *cbdata);
 
 PRTE_EXPORT void prte_ras_base_release_allocation(prte_session_t *session);
 
+/* Tear down a reservation: drop its hold on its nodes (clearing the
+ * node->session backpointer so the nodes revert to the default pool) and
+ * deregister it so it can no longer be targeted. When return_to_scheduler is
+ * true, member nodes carrying a daemon are additionally shrunk out of the DVM
+ * and handed back to the scheduler; otherwise the nodes simply become
+ * unreserved within the session. */
+PRTE_EXPORT void prte_ras_base_teardown_reservation(prte_session_t *session,
+                                                    bool return_to_scheduler);
+
+/* Apply the namespace-termination inheritance disposition of every reservation
+ * when the namespace owning jdata terminates. NONE/DEFAULT fire when the owning
+ * namespace exits; CHILD/CHILD_DEFAULT fire when the last derived child of the
+ * owning namespace exits. The *_DEFAULT variants unreserve into the session
+ * rather than returning nodes to the scheduler. */
+PRTE_EXPORT void prte_ras_base_check_reservations_on_term(prte_job_t *jdata);
+
 PRTE_EXPORT int prte_ras_base_add_hosts(prte_job_t *jdata);
 
 PRTE_EXPORT char *prte_ras_base_flag_string(prte_node_t *node);

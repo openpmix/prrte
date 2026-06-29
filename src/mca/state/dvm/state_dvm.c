@@ -567,6 +567,10 @@ static void check_complete(int fd, short args, void *cbdata)
         jdata->state = PRTE_JOB_STATE_TERMINATED;
     }
 
+    /* apply any reservation inheritance dispositions triggered by the
+     * termination of this namespace */
+    prte_ras_base_check_reservations_on_term(jdata);
+
     /* see if there was any problem */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, NULL, PMIX_POINTER)) {
         rc = prte_pmix_convert_rc(jdata->exit_code);

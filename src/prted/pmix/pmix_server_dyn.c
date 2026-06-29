@@ -254,6 +254,42 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
             prte_set_attribute(&jdata->attributes, PRTE_JOB_REF_ID,
                                PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
 
+#if defined(PMIX_SPAWN_TARGET)
+            /***   SPAWN TARGET ALLOCATION(S)   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TARGET)) {
+            /* the value is either a single PMIX_ALLOC_ID string or a
+             * pmix_data_array_t of PMIX_ALLOC_ID strings. Flatten it into a
+             * comma-delimited list (preserving empty tokens, which denote the
+             * default session) and stash it as PRTE_JOB_SPAWN_TARGET. Stored
+             * GLOBAL so the generic job-attribute pack loop forwards it to the
+             * HNP, where the multi-session resolution happens. */
+            char *tstr = NULL, *tmp2, *tok;
+            if (PMIX_STRING == info->value.type) {
+                tok = info->value.data.string;
+                tstr = strdup((NULL == tok) ? "" : tok);
+            } else if (PMIX_DATA_ARRAY == info->value.type &&
+                       NULL != info->value.data.darray &&
+                       PMIX_STRING == info->value.data.darray->type) {
+                char **strs = (char **) info->value.data.darray->array;
+                size_t k;
+                for (k = 0; k < info->value.data.darray->size; k++) {
+                    tok = (NULL == strs || NULL == strs[k]) ? "" : strs[k];
+                    if (NULL == tstr) {
+                        tstr = strdup(tok);
+                    } else {
+                        pmix_asprintf(&tmp2, "%s,%s", tstr, tok);
+                        free(tstr);
+                        tstr = tmp2;
+                    }
+                }
+            }
+            if (NULL != tstr) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_SPAWN_TARGET,
+                                   PRTE_ATTR_GLOBAL, tstr, PMIX_STRING);
+                free(tstr);
+            }
+#endif
+
             /***   DISPLAY MAP   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_MAP)) {
             flag = PMIX_INFO_TRUE(info);

@@ -655,6 +655,8 @@ static void prte_job_construct(prte_job_t *job)
     PMIX_DATA_BUFFER_CONSTRUCT(&job->launch_msg);
     PMIX_CONSTRUCT(&job->children, pmix_list_t);
     PMIX_LOAD_NSPACE(job->launcher, NULL);
+    job->target_sessions = NULL;
+    job->num_target_sessions = 0;
     job->ntraces = 0;
     job->traces = NULL;
     PMIX_CONSTRUCT(&job->cli, pmix_cli_result_t);
@@ -749,6 +751,12 @@ static void prte_job_destruct(prte_job_t *job)
     if (NULL != job->traces) {
         PMIx_Argv_free(job->traces);
     }
+    /* target_sessions holds borrowed session pointers - free only the array */
+    if (NULL != job->target_sessions) {
+        free(job->target_sessions);
+        job->target_sessions = NULL;
+    }
+    job->num_target_sessions = 0;
     PMIX_DESTRUCT(&job->cli);
 }
 
@@ -783,6 +791,7 @@ static void prte_node_construct(prte_node_t *node)
 
     node->flags = 0;
     PMIX_CONSTRUCT(&node->attributes, pmix_list_t);
+    node->session = NULL;
 }
 
 static void prte_node_destruct(prte_node_t *node)
@@ -830,6 +839,9 @@ static void prte_node_destruct(prte_node_t *node)
 
     /* release the attributes */
     PMIX_LIST_DESTRUCT(&node->attributes);
+
+    /* the session backpointer is borrowed, not retained - just clear it */
+    node->session = NULL;
 }
 
 PMIX_CLASS_INSTANCE(prte_node_t, pmix_list_item_t,
@@ -969,6 +981,11 @@ static void session_con(prte_session_t *s)
     pmix_pointer_array_init(s->children, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
                             PRTE_GLOBAL_ARRAY_MAX_SIZE,
                             PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    s->owners = NULL;
+    PMIX_LOAD_NSPACE(s->owner, NULL);
+    s->owner_job = NULL;
+    PMIX_LOAD_PROCID(&s->requestor, NULL, PMIX_RANK_INVALID);
+    s->inheritance = PRTE_INHERIT_DEFAULT_VALUE;
 }
 static void session_des(prte_session_t *s)
 {
@@ -1016,6 +1033,16 @@ static void session_des(prte_session_t *s)
         }
     }
     PMIX_RELEASE(s->children);
+
+    if (NULL != s->owners) {
+        PMIx_Argv_free(s->owners);
+        s->owners = NULL;
+    }
+    /* balance the PMIX_RETAIN taken in create_reservation */
+    if (NULL != s->owner_job) {
+        PMIX_RELEASE(s->owner_job);
+        s->owner_job = NULL;
+    }
     // remove this from the global array
     if (0 <= s->index) {
         pmix_pointer_array_set_item(prte_sessions, s->index, NULL);
@@ -1024,6 +1051,50 @@ static void session_des(prte_session_t *s)
 PMIX_CLASS_INSTANCE(prte_session_t,
                     pmix_list_item_t,
                     session_con, session_des);
+
+bool prte_session_is_owned_by(prte_session_t *session,
+                              const pmix_nspace_t nspace)
+{
+    int n;
+
+    /* the default session is usable by everyone */
+    if (NULL == session || session == prte_default_session) {
+        return true;
+    }
+    /* the scheduler is an implicit owner of every session */
+    if (PMIX_CHECK_NSPACE(prte_pmix_server_globals.scheduler.nspace, nspace)) {
+        return true;
+    }
+    if (NULL == session->owners) {
+        return false;
+    }
+    for (n = 0; NULL != session->owners[n]; n++) {
+        if (PMIX_CHECK_NSPACE(session->owners[n], nspace)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void prte_session_add_owner(prte_session_t *session,
+                            const pmix_nspace_t nspace)
+{
+    int n;
+
+    /* the default session is owned by everyone - nothing to record */
+    if (NULL == session || session == prte_default_session) {
+        return;
+    }
+    if (NULL != session->owners) {
+        for (n = 0; NULL != session->owners[n]; n++) {
+            if (PMIX_CHECK_NSPACE(session->owners[n], nspace)) {
+                /* already present */
+                return;
+            }
+        }
+    }
+    PMIx_Argv_append_nosize(&session->owners, nspace);
+}
 
 #if PRTE_PICKY_COMPILERS
 void prte_hide_unused_params(int x, ...)

@@ -208,6 +208,17 @@ typedef struct {
 } prte_topology_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_topology_t);
 
+/* Default reservation inheritance disposition: a reservation becomes
+ * unreserved within the session when its owning namespace terminates. Defined
+ * as PMIX_ALLOC_INHERIT_DEFAULT when the installed PMIx provides the type, else
+ * the equivalent literal so the runtime builds against an inheritance-unaware
+ * PMIx (which performs this disposition unconditionally). */
+#if defined(PMIX_ALLOC_INHERIT_DEFAULT)
+#    define PRTE_INHERIT_DEFAULT_VALUE PMIX_ALLOC_INHERIT_DEFAULT
+#else
+#    define PRTE_INHERIT_DEFAULT_VALUE 3
+#endif
+
 /* Object for tracking allocations */
 typedef struct{
     pmix_object_t super;
@@ -221,6 +232,29 @@ typedef struct{
     pmix_pointer_array_t *nodes;
     pmix_pointer_array_t *jobs;
     pmix_pointer_array_t *children;
+    /* namespaces entitled to spawn onto this session's nodes. Seeded with the
+     * namespace the reservation was created for, then extended with each job
+     * spawned into the session. Empty for the default session (which everyone
+     * may use) and for scheduler-instantiated sessions not owned by a
+     * namespace. Stored as an argv-style array of nspace strings. */
+    char **owners;
+    /* The single namespace the reservation was created for (PMIX_ALLOC_TARGET,
+     * else the requester). Empty for the default session. owners[] additionally
+     * accumulates every namespace spawned into the reservation. */
+    pmix_nspace_t owner;
+    /* Retained reference to the owning namespace's job object, so its children
+     * subtree stays walkable for CHILD-flavored drain even after the owning
+     * namespace terminates. NULL for the default session. Released at teardown. */
+    struct prte_job_t *owner_job;
+    /* The process that requested this allocation (req->tproc). Target of the
+     * relayed PMIX_ALLOC_TIMEOUT_WARNING. Refreshed on EXTEND. */
+    pmix_proc_t requestor;
+    /* Disposition recorded at creation, governing teardown when the owning
+     * namespace (NONE/DEFAULT) or the last derived child (CHILD/CHILD_DEFAULT)
+     * terminates. Stored as the uint8_t underlying pmix_alloc_inheritance_t so
+     * the struct compiles against a PMIx that lacks the type; defaults to the
+     * value of PMIX_ALLOC_INHERIT_DEFAULT. */
+    uint8_t inheritance;
 } prte_session_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_session_t);
 
@@ -322,10 +356,14 @@ typedef struct {
     prte_node_flags_t flags;
     /* list of prte_attribute_t */
     pmix_list_t attributes;
+    /* session that owns this node; NULL means the node belongs to the
+     * default session (the general, unreserved pool). Not reference-counted
+     * to avoid an ownership cycle with prte_session_t->nodes. */
+    prte_session_t *session;
 } prte_node_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_node_t);
 
-typedef struct {
+typedef struct prte_job_t {
     /** Base object so this can be put on a list */
     pmix_list_item_t super;
     /* record the exit status for this job */
@@ -391,6 +429,14 @@ typedef struct {
     pmix_list_t children;
     /* track the launcher of these jobs */
     pmix_nspace_t launcher;
+    /* Sessions this job may map onto, resolved from PRTE_JOB_SPAWN_TARGET on the
+     * HNP after the ownership check. HNP-local; never packed (rebuilt from the
+     * attribute if ever needed). Defaults to { jdata->session } when no spawn
+     * target was given. target_sessions holds borrowed session pointers (owned
+     * via prte_set_session_object, not by the job), so the destructor frees only
+     * the array, not the sessions it points at. */
+    prte_session_t **target_sessions;
+    size_t num_target_sessions;
     /* track the number of stack traces recv'd */
     uint32_t ntraces;
     char **traces;
@@ -464,6 +510,17 @@ PRTE_EXPORT prte_session_t *prte_get_session_object_from_refid(const char *refid
 PRTE_EXPORT int prte_set_session_object(prte_session_t *session);
 
 PRTE_EXPORT bool prte_sessions_related(prte_session_t *session1, prte_session_t *session2);
+
+/* True if nspace is in session->owners, or session is the default session,
+ * or nspace is the scheduler. */
+PRTE_EXPORT bool prte_session_is_owned_by(prte_session_t *session,
+                                          const pmix_nspace_t nspace);
+
+/* Add nspace to session->owners if not already present (no-op for the
+ * default session). Called when a reservation is created and each time a
+ * job is spawned into the session. */
+PRTE_EXPORT void prte_session_add_owner(prte_session_t *session,
+                                        const pmix_nspace_t nspace);
 
 /**
  * Get a job data object
