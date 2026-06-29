@@ -379,6 +379,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     pmix_list_t nodes;
     int slots, len;
     bool flag, *fptr;
+    bool map_succeeded = false;
 
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
@@ -1371,9 +1372,21 @@ ranking:
     }
 
     /* set the job state to the next position */
+    map_succeeded = true;
     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_COMPLETE);
 
 cleanup:
+    /* Every failure path above reaches this label via "goto cleanup" after
+     * activating PRTE_JOB_STATE_MAP_FAILED, but only some of them set an exit
+     * code first. Because the job state is activated asynchronously, we cannot
+     * read jdata->state here to tell success from failure - so we rely on the
+     * map_succeeded flag, which is only set on the success fall-through. Ensure
+     * a failed map always leaves a non-zero exit_code so the eventual
+     * PRTE_UPDATE_EXIT_STATUS() reflects the failure rather than defaulting
+     * to 0 (success). Do not overwrite a more specific code already set. */
+    if (!map_succeeded && 0 == jdata->exit_code) {
+        jdata->exit_code = -PRTE_JOB_STATE_MAP_FAILED;
+    }
     /* release the colocation target array if one was provided/created */
     PMIX_DATA_ARRAY_FREE(darray);
     /* reset any node map flags we used so the next job will start clean */
