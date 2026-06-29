@@ -1,31 +1,41 @@
 .. _elastic-dvm-spec-label:
 
-Elastic DVM Job Admission: Specification
-========================================
+Elastic DVM: Specification
+==========================
 
 Purpose
 -------
 
-This document specifies the externally observable behavior of job
-admission while the DVM changes size — that is, what an application,
-tool, or scheduler may rely on when a job is submitted during a DVM
-**grow** (a new-daemon launch campaign) or **shrink** (a node-removal
-campaign).  It defines *what* the runtime guarantees, not *how* it
-achieves it.  The companion design plans —
-:ref:`dvm-launch-fence-label` (the shared fence mechanism and the shrink
-path) and :ref:`dvm-grow-campaign-label` (the grow path's per-campaign
-accounting) — describe the internal data structures, code paths, and
-implementation order.  Where this specification and those plans disagree
-about observable behavior, **this specification is authoritative** and
-the plan must be corrected.
+This document specifies the externally observable behavior of the DVM
+while it changes size — what an application, tool, or scheduler may rely
+on when the DVM **grows** (a new-daemon launch campaign) or **shrinks** (a
+node-removal campaign).  It covers two distinct audiences and contracts:
 
-The guarantees below are stated purely in terms of job lifecycle
-outcomes.  This feature introduces **no** new command-line options,
-environment variables, or PMIx attributes: the grow and shrink triggers
-that already exist (``--add-host`` / ``--add-hostfile``, a
-scheduler-driven daemon launch, and a ``PMIX_ALLOC_RELEASE`` that removes
-nodes) acquire correct concurrency semantics, and nothing else about a
-caller's interface changes.
+* **Job admission** — what happens to an application job that is submitted
+  *while* a grow or shrink is in progress (the bulk of this document).
+* **Size-change completion** — how the process that *requested* the size
+  change learns, asynchronously, whether the DVM operation eventually
+  succeeded or failed (see `Asynchronous size-change completion`_).
+
+It defines *what* the runtime guarantees, not *how* it achieves it.  The
+companion design plans — :ref:`dvm-launch-fence-label` (the shared fence
+mechanism and the shrink path) and :ref:`dvm-grow-campaign-label` (the
+grow path's per-campaign accounting) — describe the internal data
+structures, code paths, and implementation order.  Where this
+specification and those plans disagree about observable behavior, **this
+specification is authoritative** and the plan must be corrected.
+
+The job-admission guarantees are stated purely in terms of job lifecycle
+outcomes and introduce **no** new command-line options, environment
+variables, or PMIx attributes: the grow and shrink triggers that already
+exist (``--add-host`` / ``--add-hostfile``, a scheduler-driven daemon
+launch, and a ``PMIX_ALLOC_RELEASE`` that removes nodes) simply acquire
+correct concurrency semantics.  The completion contract does introduce two
+new PMIx event (status) codes — ``PMIX_DVM_IS_READY`` and
+``PMIX_ERR_DVM_MOD`` — used to notify the requester when the asynchronous
+DVM operation finishes; these are the only new caller-visible interface
+this feature adds, and both are optional (see `Backward compatibility and
+transparency`_).
 
 Scope
 -----
@@ -45,9 +55,15 @@ In scope
   DVM's pre-grow membership.
 * The behavior when grow and shrink campaigns, or multiple campaigns of
   the same kind, overlap in time.
-* The single observable artifact this feature adds: the
-  ``PRTE_JOB_STATE_WAITING_FOR_DAEMONS`` job state reported for a parked
-  job in verbose and debugging output.
+* The two-phase model by which a dynamic allocation request that drives a
+  size change is answered: a synchronous response when the request is
+  *accepted*, and a later asynchronous event when the DVM operation
+  *completes* or *fails*.
+* The two new PMIx event codes — ``PMIX_DVM_IS_READY`` and
+  ``PMIX_ERR_DVM_MOD`` — that carry the asynchronous completion result to
+  the requester, and the allocation-identifying payload each delivers.
+* The ``PRTE_JOB_STATE_WAITING_FOR_DAEMONS`` job state reported for a
+  parked job in verbose and debugging output.
 
 Out of scope / non-goals
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -109,6 +125,26 @@ Surviving node
 
 Departing node
    A node whose daemon is a target of an in-progress shrink campaign.
+
+Size-change requester
+   The process whose request initiated a grow or shrink — for a dynamic
+   allocation this is the process that issued the ``PMIX_ALLOC_NEW`` /
+   ``PMIX_ALLOC_EXTEND`` (grow) or ``PMIX_ALLOC_RELEASE`` (shrink) request.
+   A size change initiated without a PMIx requester (for example a
+   scheduler pushing daemons directly) has no requester.
+
+Request acceptance
+   The point at which the runtime has finished *processing* a size-change
+   request — validated it and initiated the corresponding DVM operation —
+   and returns its synchronous response.  Acceptance is **phase one**; it
+   does not assert that the operation has finished.
+
+Operation completion
+   The point at which the initiated DVM operation actually finishes — the
+   grow's new daemons are launched and wired, or the shrink's targeted
+   daemons have departed and the routing tree is repaired — or
+   definitively fails.  Completion is **phase two** and is reported
+   asynchronously by event (see `Asynchronous size-change completion`_).
 
 Admission contract
 -------------------
@@ -226,6 +262,125 @@ Concurrency
   partially-overlapping pair of campaigns cannot leave a job parked
   indefinitely once the last campaign it is waiting on completes.
 
+Asynchronous size-change completion
+-----------------------------------
+
+A dynamic allocation request that grows or shrinks the DVM is answered in
+**two phases**, and the runtime separates the point at which the
+*allocation is complete* from the point at which the *runtime is ready*.
+
+Two-phase model
+~~~~~~~~~~~~~~~
+
+#. **Acceptance (synchronous).**  When the runtime has finished
+   *processing* the request — validated it, decided the resulting
+   session/reservation, and initiated the corresponding grow or shrink —
+   it returns the allocation response (status plus ``PMIX_ALLOC_ID``, as
+   specified in the companion allocation contract
+   ``node-reservation-spec.rst``).  This response confirms only that the
+   request was **accepted** and the DVM operation has **begun**.  It does
+   *not* assert that a grow's new daemons are up and wired, or that a
+   shrink's targeted daemons have departed.
+
+#. **Completion (asynchronous, by event).**  When the DVM operation later
+   finishes — or fails — the runtime delivers a directed PMIx event to the
+   **size-change requester**.  This is the signal that the *runtime is
+   ready* (or that the change will not happen), as distinct from the
+   acceptance in phase one.
+
+The two phases are decoupled because the DVM operation is inherently
+asynchronous and unbounded in time (daemon launch and wireup, or daemon
+termination and tree repair).  Blocking the allocation response until the
+operation finished would stall the requester and entangle the request's
+validity with unrelated launch/teardown failures.  Decoupling lets the
+requester learn promptly that its request was accepted and then act only
+when the runtime actually reflects the new size.
+
+Success event — ``PMIX_DVM_IS_READY``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When the DVM operation completes successfully — for a grow, the new
+daemons are launched and wired into the DVM; for a shrink, every targeted
+daemon has departed and the routing tree is repaired — the runtime
+delivers a ``PMIX_DVM_IS_READY`` event to the requester.  After this event
+the DVM reflects the requested size: a grow's new nodes are available to
+spawn onto, a shrink's removed nodes are gone.  The event payload carries:
+
+* ``PMIX_ALLOC_ID`` (``char*``) — the allocation whose operation
+  completed; always present.
+* ``PMIX_ALLOC_REQ_ID`` (``char*``) — the requester's own request id,
+  included whenever one was supplied on the original request, so the
+  recipient can match the event by either identifier.
+
+Failure event — ``PMIX_ERR_DVM_MOD``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If the accepted DVM modification fails — a grow cannot launch or wire its
+new daemons (and is rolled back per `Failure semantics`_), a shrink cannot
+be carried out, or any other condition leaves the requested change
+unrealized — the runtime delivers a ``PMIX_ERR_DVM_MOD`` event to the
+requester.  The event states that **no (further) DVM modification will be
+made** for this request and that the DVM has been returned to a stable
+state (for a failed grow, its pre-grow membership).  The payload carries:
+
+* ``PMIX_ALLOC_ID`` (``char*``) — always present.
+* ``PMIX_ALLOC_REQ_ID`` (``char*``) — when one was supplied.
+* The **underlying cause** — the specific ``pmix_status_t`` that prevented
+  the modification (for example a daemon-launch failure versus a resource
+  error), conveyed in the event's info array so the requester can
+  distinguish what went wrong rather than only that *something* did.
+
+Both events are **directed to the requesting process only** — they are not
+broadcast — mirroring the delivery of ``PMIX_ALLOC_TIMEOUT_WARNING``
+specified in ``node-reservation-spec.rst``.
+
+Delivery guarantees
+~~~~~~~~~~~~~~~~~~~
+
+* **Exactly one terminal event per operation.**  Each accepted request
+  that initiates a DVM grow or shrink yields exactly one of
+  ``PMIX_DVM_IS_READY`` or ``PMIX_ERR_DVM_MOD`` to its requester.
+* **No event for a phase-one rejection.**  A request rejected during
+  *processing* (the error cases in the companion
+  ``node-reservation-spec.rst``, e.g. a malformed or unauthorized request)
+  fails synchronously in the allocation response and produces **no**
+  completion event; the phase-two events report only the outcome of an
+  *accepted* request's DVM operation.
+* **No event when nothing changes.**  A request that is accepted but
+  initiates no actual DVM size change (for example an extend that adds no
+  new daemons) is fully complete at acceptance and emits no asynchronous
+  event.
+* **No requester, no directed event.**  A size change with no PMIx
+  requester (a scheduler-driven push) updates the runtime's own state but
+  has no specific process to direct a completion event to; none is sent.
+
+Proposed PMIx status codes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This contract requires two PMIx event codes that PRRTE cannot define on
+its own (they belong to the PMIx standard and headers):
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - Code
+     - Meaning
+   * - ``PMIX_DVM_IS_READY``
+     - Non-error event: an accepted DVM size change has completed and the
+       runtime now reflects the new size.  Carries ``PMIX_ALLOC_ID`` and,
+       when supplied, ``PMIX_ALLOC_REQ_ID``.
+   * - ``PMIX_ERR_DVM_MOD``
+     - Error event: an accepted DVM size change failed and will not be
+       made; the DVM has returned to a stable state.  Carries
+       ``PMIX_ALLOC_ID``, the underlying failure ``pmix_status_t``, and —
+       when supplied — ``PMIX_ALLOC_REQ_ID``.
+
+Their use is gated at build time by a PMIx capability check (the
+``PRTE_CHECK_PMIX_CAP`` idiom): a PRRTE built against a PMIx that defines
+neither code simply omits the completion notification (see `Backward
+compatibility and transparency`_).
+
 Failure semantics
 -----------------
 
@@ -265,29 +420,55 @@ leaves nothing running.
 Observability
 -------------
 
-The only externally visible artifact this feature introduces is a job
-state.  A parked job is reported as ``PRTE_JOB_STATE_WAITING_FOR_DAEMONS``
-in verbose and debugging output (for example under
-``--prtemca state_base_verbose``), so an operator can see precisely why a
-job has not yet been mapped or launched.  The state is a passive marker:
-it triggers no callback and changes no other behavior.  Once the size
-change the job is waiting on completes, the job advances out of this state
-on its own.
+This feature introduces two externally visible artifacts.
+
+The first is a **job state**.  A parked job is reported as
+``PRTE_JOB_STATE_WAITING_FOR_DAEMONS`` in verbose and debugging output (for
+example under ``--prtemca state_base_verbose``), so an operator can see
+precisely why a job has not yet been mapped or launched.  The state is a
+passive marker: it triggers no callback and changes no other behavior.
+Once the size change the job is waiting on completes, the job advances out
+of this state on its own.
+
+The second is the pair of **completion events** described under
+`Asynchronous size-change completion`_: ``PMIX_DVM_IS_READY`` on success
+and ``PMIX_ERR_DVM_MOD`` on failure, each directed to the requester of the
+size change and carrying the allocation identifiers (and, on failure, the
+underlying cause).  Unlike the job state, these are an active interface a
+requester registers an event handler for; they are the requester's only
+signal that the asynchronous DVM operation has finished.
 
 Backward compatibility and transparency
 ----------------------------------------
 
-This feature is transparent to every caller:
+The **job-admission** contract is transparent to every caller:
 
 * No new command-line option, environment variable, or PMIx attribute is
-  defined or required.  A tool, application, or scheduler issues the same
-  requests it always has.
+  defined or required for it.  A tool, application, or scheduler issues the
+  same requests it always has.
 * On a DVM that never grows or shrinks, no job is ever parked and behavior
   is identical to a non-elastic DVM.
-* The only difference a caller can observe when a size change *is* in
-  progress is a launch delay for an affected job and, in debugging output,
-  the ``PRTE_JOB_STATE_WAITING_FOR_DAEMONS`` state — never a spurious
-  failure and never a launch onto a node that is not ready or is leaving.
+* The only difference a submitting caller can observe when a size change
+  *is* in progress is a launch delay for an affected job and, in debugging
+  output, the ``PRTE_JOB_STATE_WAITING_FOR_DAEMONS`` state — never a
+  spurious failure and never a launch onto a node that is not ready or is
+  leaving.
+
+The **completion** contract adds the two new PMIx event codes, which are
+optional and degrade cleanly:
+
+* ``PMIX_DVM_IS_READY`` and ``PMIX_ERR_DVM_MOD`` are delivered only to a
+  requester that registers a handler for them; a requester that ignores
+  them is unaffected beyond losing the completion signal.
+* When the underlying PMIx defines neither code, a PRRTE built against it
+  (gated by the ``PRTE_CHECK_PMIX_CAP`` capability check) omits the
+  asynchronous completion notification entirely.  The allocation response
+  (phase one) is unchanged, so a request is still accepted and the DVM
+  still grows or shrinks; the requester simply receives no event-based
+  signal that the operation finished or failed, exactly as before this
+  feature existed.  This is a functional gap, not merely a cosmetic one:
+  without the event a requester cannot reliably know when the runtime is
+  ready and must fall back to whatever coarse means it used previously.
 
 Conformance summary
 -------------------
@@ -317,6 +498,16 @@ A conforming implementation guarantees that:
 #. Concurrent campaigns of either kind never deadlock a parked job: it is
    admitted once, and only once, every campaign it is waiting on has
    completed.
-#. The feature adds no new caller-visible interface; its only observable
-   artifact is the ``PRTE_JOB_STATE_WAITING_FOR_DAEMONS`` state shown for
-   a parked job in verbose and debugging output.
+#. A dynamic allocation that drives a size change is answered in two
+   phases: a synchronous response on acceptance (which does not assert the
+   operation has finished), and exactly one asynchronous terminal event —
+   ``PMIX_DVM_IS_READY`` on success or ``PMIX_ERR_DVM_MOD`` (carrying the
+   underlying cause) on failure — directed to the requester when the DVM
+   operation completes.  A phase-one rejection, a request that changes
+   nothing, and a requester-less scheduler push each produce no such event.
+#. The job-admission contract adds no caller-visible interface; the
+   completion contract adds only the two optional PMIx event codes above,
+   and when the underlying PMIx lacks them the runtime omits the
+   completion notification while leaving every other guarantee intact.
+   The job state ``PRTE_JOB_STATE_WAITING_FOR_DAEMONS`` remains observable
+   for a parked job in verbose and debugging output.
