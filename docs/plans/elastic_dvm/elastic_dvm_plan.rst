@@ -128,18 +128,48 @@ The second hold point — at ``LAUNCH_APPS``, guarded by the shrink campaign lis
 rather than the fence counter — is shrink-specific and is described in
 :ref:`dvm-shrink-campaign-label`.
 
-Step 4 — Fence-release helper
------------------------------
+Step 4 — Held-job release helpers
+---------------------------------
 
-Both grow completion (``vm_ready``) and shrink target departure (detected in
-the errmgr) decrement the fence and, when it hits zero, must release two
-classes of held jobs.  Extract this logic into a single helper declared in
-``src/mca/plm/base/plm_base_launch_support.h`` and defined in
-``plm_base_launch_support.c``:
+There are two distinct ways a held job leaves its parked state, and they are
+**not** symmetric, so they are handled by two separate helpers rather than a
+single ``bool success`` flag:
+
+* **Global success.**  When the global fence reaches zero — every grow and
+  shrink campaign has completed *successfully* — both classes of held job are
+  admitted.  This is ``prte_plm_base_fence_release()``.
+
+* **Grow failure.**  When a grow campaign fails (see
+  :ref:`dvm-grow-campaign-label`, *Failure drain and rollback*), the spec
+  requires the whole **pre-map** held-job set to be aborted — the first-failure
+  semantics of a non-elastic launch.  But a grow failure must **not** touch the
+  **pre-launch** held jobs: those are parked solely on account of an in-progress
+  shrink (the ``LAUNCH_APPS`` hold is gated on the shrink list, not the fence),
+  so they do not wait on the grow, and the spec's conformance guarantee #4
+  states that a daemon failure may affect only the jobs waiting on the campaign
+  it belongs to.  This asymmetric abort is ``prte_plm_base_abort_premap_held()``.
+
+Folding both paths into one ``fence_release(bool success)`` was the original
+shape of this plan, but it could not honor the spec when a grow failed while a
+shrink was still in progress.  A single global ``success`` flag cannot express
+"abort the grow's waiters but leave the shrink's waiters parked," and gating the
+failure abort on the fence reaching zero would let a *later* shrink-success
+release **admit** a pre-map job whose grow dependency had already failed (the
+last campaign to drain — the shrink — would call the release with
+``success == true``).  Splitting the two release paths closes that gap: the
+grow-failure abort fires immediately on the pre-map array regardless of the
+fence value, and the success release is reached only when no campaign has
+failed.
+
+Both helpers are declared in ``src/mca/plm/base/plm_base_launch_support.h`` and
+defined in ``plm_base_launch_support.c``:
 
 .. code-block:: c
 
-   void prte_plm_base_fence_release(bool success)
+   /* SUCCESS release — invoked only when the global fence reaches zero, i.e.
+    * every grow and shrink campaign has completed successfully.  Admits both
+    * classes of held job and defensively sweeps any residual campaigns. */
+   void prte_plm_base_fence_release(void)
    {
        int _hi;
        prte_job_t *_held;
@@ -148,11 +178,11 @@ classes of held jobs.  Extract this logic into a single helper declared in
        for (_hi = 0; _hi < prte_held_jobs->size; _hi++) {
            _held = (prte_job_t *)
                pmix_pointer_array_get_item(prte_held_jobs, _hi);
-           if (NULL == _held) continue;
+           if (NULL == _held) {
+               continue;
+           }
            pmix_pointer_array_set_item(prte_held_jobs, _hi, NULL);
-           PRTE_ACTIVATE_JOB_STATE(_held,
-               success ? PRTE_JOB_STATE_VM_READY
-                       : PRTE_JOB_STATE_NEVER_LAUNCHED);
+           PRTE_ACTIVATE_JOB_STATE(_held, PRTE_JOB_STATE_VM_READY);
            PMIX_RELEASE(_held);
        }
 
@@ -160,11 +190,11 @@ classes of held jobs.  Extract this logic into a single helper declared in
        for (_hi = 0; _hi < prte_prelaunch_held_jobs->size; _hi++) {
            _held = (prte_job_t *)
                pmix_pointer_array_get_item(prte_prelaunch_held_jobs, _hi);
-           if (NULL == _held) continue;
+           if (NULL == _held) {
+               continue;
+           }
            pmix_pointer_array_set_item(prte_prelaunch_held_jobs, _hi, NULL);
-           if (!success) {
-               PRTE_ACTIVATE_JOB_STATE(_held, PRTE_JOB_STATE_NEVER_LAUNCHED);
-           } else if (prte_plm_base_job_needs_remap(_held)) {
+           if (prte_plm_base_job_needs_remap(_held)) {
                prte_plm_base_reset_proc_map(_held);
                PRTE_ACTIVATE_JOB_STATE(_held, PRTE_JOB_STATE_MAP);
            } else {
@@ -173,21 +203,59 @@ classes of held jobs.  Extract this logic into a single helper declared in
            PMIX_RELEASE(_held);
        }
 
-       /* campaigns are removed individually as their last target dies;
-        * the list should be empty here, but do a safety sweep */
-       prte_shrink_campaign_t *_camp, *_next;
-       PMIX_LIST_FOREACH_SAFE(_camp, _next,
-                              &prte_shrink_campaigns, prte_shrink_campaign_t) {
-           pmix_list_remove_item(&prte_shrink_campaigns, &_camp->super);
-           PMIX_RELEASE(_camp);
+       /* Campaigns are removed individually as their last target drains, so
+        * both lists should be empty here.  Sweep each defensively anyway — so
+        * a future change that can leave a residual campaign behind cannot wedge
+        * the fence — and sweep *both* kinds for symmetry, not just shrink. */
+       {
+           prte_shrink_campaign_t *_sc, *_sn;
+           PMIX_LIST_FOREACH_SAFE(_sc, _sn,
+                                  &prte_shrink_campaigns, prte_shrink_campaign_t) {
+               pmix_list_remove_item(&prte_shrink_campaigns, &_sc->super);
+               PMIX_RELEASE(_sc);
+           }
+       }
+       {
+           prte_grow_campaign_t *_gc, *_gn;
+           PMIX_LIST_FOREACH_SAFE(_gc, _gn,
+                                  &prte_grow_campaigns, prte_grow_campaign_t) {
+               pmix_list_remove_item(&prte_grow_campaigns, &_gc->super);
+               PMIX_RELEASE(_gc);
+           }
        }
    }
 
-This helper releases held jobs only; the pre-launch branch's two
-shrink-specific helpers — ``prte_plm_base_job_needs_remap()`` (does any held
-proc sit on a departing daemon?) and ``prte_plm_base_reset_proc_map()``
-(un-claim the previous mapping so the job can be remapped onto survivors) — are
-specified in :ref:`dvm-shrink-campaign-label`.
+   /* GROW-FAILURE abort — fails every job parked at the VM_READY -> MAP
+    * boundary to NEVER_LAUNCHED.  Called from the grow failure drain only, and
+    * independent of the fence value, so a grow failure aborts its pre-map
+    * waiters even while a concurrent shrink keeps the fence nonzero.  It
+    * deliberately leaves prte_prelaunch_held_jobs untouched: those jobs wait
+    * only on a shrink, never on the grow (conformance #4). */
+   void prte_plm_base_abort_premap_held(void)
+   {
+       int _hi;
+       prte_job_t *_held;
+
+       for (_hi = 0; _hi < prte_held_jobs->size; _hi++) {
+           _held = (prte_job_t *)
+               pmix_pointer_array_get_item(prte_held_jobs, _hi);
+           if (NULL == _held) {
+               continue;
+           }
+           pmix_pointer_array_set_item(prte_held_jobs, _hi, NULL);
+           PRTE_ACTIVATE_JOB_STATE(_held, PRTE_JOB_STATE_NEVER_LAUNCHED);
+           PMIX_RELEASE(_held);
+       }
+   }
+
+The pre-launch branch of ``fence_release()`` calls two shrink-specific
+helpers — ``prte_plm_base_job_needs_remap()`` (does any held proc sit on a
+departing daemon?) and ``prte_plm_base_reset_proc_map()`` (un-claim the previous
+mapping so the job can be remapped onto survivors) — specified in
+:ref:`dvm-shrink-campaign-label`.  Because shrink completion treats a clean exit
+and a crash identically (a targeted daemon's departure is always a success for
+its campaign), neither held-job array is ever failed on the shrink path; the
+only failure disposition of a held job is the grow-failure abort above.
 
 ``prte_plm_base_fence_release()`` acts when the **global** fence reaches zero,
 which requires *all* grow and shrink campaigns to have completed.  The
@@ -306,11 +374,15 @@ Summary of Files Changed (Shared Fence Infrastructure)
    * - ``src/runtime/prte_finalize.c``
      - Destruct ``prte_held_jobs`` and ``prte_prelaunch_held_jobs``.
    * - ``src/mca/plm/base/plm_base_launch_support.c``
-     - Declare and define ``prte_plm_base_fence_release()`` (Step 4) and
+     - Define ``prte_plm_base_fence_release()`` and
+       ``prte_plm_base_abort_premap_held()`` (Step 4) and
        ``prte_plm_base_dvm_mod_notify()`` (Step 5).
    * - ``src/mca/plm/base/plm_base_launch_support.h``
-     - Declare ``prte_plm_base_fence_release()`` and
-       ``prte_plm_base_dvm_mod_notify()``.
+     - Declare ``prte_plm_base_fence_release()``,
+       ``prte_plm_base_abort_premap_held()``, and
+       ``prte_plm_base_dvm_mod_notify()`` (and, for the grow path,
+       ``prte_plm_base_grow_drain()`` / ``prte_plm_base_grow_target_failed()`` —
+       see :ref:`dvm-grow-campaign-label`).
    * - ``src/mca/state/dvm/state_dvm.c``
      - In ``vm_ready``: add the ``VM_READY → MAP`` hold-check before
        ``preposition_files`` (Step 3).
@@ -335,11 +407,18 @@ Design Invariants
   (Step 3); the ``LAUNCH_APPS`` hold (shrink plan) is gated on the shrink
   campaign list, not the fence, so a concurrent grow does not stall an
   already-mapped job on surviving nodes.
-* ``prte_plm_base_fence_release()`` is called only when the fence reaches zero,
-  which requires *all* grow and shrink campaigns to have completed; the campaign
-  lists are therefore empty (or nearly so — ``fence_release`` does a safety
-  sweep for the degenerate case where an xcast failure left a partially-setup
-  campaign).
+* ``prte_plm_base_fence_release()`` is the **success-only** release; it is
+  called only when the fence reaches zero, which requires *all* grow and shrink
+  campaigns to have completed successfully.  The campaign lists are therefore
+  empty (or nearly so — ``fence_release`` does a defensive sweep of **both** the
+  grow and shrink lists for the degenerate case where some future change leaves
+  a partially-setup campaign behind).
+* A grow failure is the only path that fails a held job.  It calls
+  ``prte_plm_base_abort_premap_held()``, which aborts the pre-map held jobs
+  (``prte_held_jobs`` → ``NEVER_LAUNCHED``) immediately and independently of the
+  fence, and never touches ``prte_prelaunch_held_jobs``: those jobs wait only on
+  a shrink, so per conformance #4 a grow failure must leave them parked until the
+  shrink completes.
 * The per-campaign completion event (Step 5) is independent of the global fence:
   it fires when an individual request's campaign drains, even if other campaigns
   keep the fence nonzero.

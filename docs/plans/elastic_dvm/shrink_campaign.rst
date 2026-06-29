@@ -160,12 +160,20 @@ branch of ``prte_ras_base_complete_request()`` builds the daemon rank array
 (``ranks``, count ``m``) and then calls ``free(ranks)`` at line 760 before
 the xcast at line 763.  Insert the campaign setup **before** ``free(ranks)``
 (between lines 758 and 760), recording the requester (from the originating
-request) so the completion event can be directed at it:
+request) so the completion event can be directed at it.  Guard the whole setup
+on ``0 < m``: a release that removes no daemons creates no campaign, exactly as
+the grow path creates none when ``map->num_new_daemons == 0``:
 
 .. code-block:: c
 
-   /* record the campaign — must be before free(ranks) */
-   {
+   /* record the campaign — must be before free(ranks).  Skip entirely when the
+    * release removes no daemons (m == 0): an empty campaign would never drain
+    * (no target ever departs on the comm-failure path), so it would leave
+    * prte_shrink_campaigns non-empty forever — wedging every later job at the
+    * LAUNCH_APPS hold — and would emit no completion event.  Mirrors the grow
+    * path's `map->num_new_daemons > 0` guard and the spec's "no event when
+    * nothing changes" clause. */
+   if (0 < m) {
        prte_shrink_campaign_t *_camp = PMIX_NEW(prte_shrink_campaign_t);
        _camp->targets = (pmix_rank_t *) malloc(m * sizeof(pmix_rank_t));
        memcpy(_camp->targets, ranks, m * sizeof(pmix_rank_t));
@@ -186,17 +194,20 @@ request) so the completion event can be directed at it:
 
    /* existing xcast */
    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &msg))) {
-       /* clean up the campaign we just added, and tell the requester the
-        * DVM modification failed (spec phase-two failure event) */
-       prte_shrink_campaign_t *_camp =
-           (prte_shrink_campaign_t *) pmix_list_remove_last(&prte_shrink_campaigns);
-       prte_dvm_launch_fence -= _camp->pending;
-       if (_camp->have_requester) {
-           /* success == false => PMIX_ERR_DVM_MOD carrying rc */
-           prte_plm_base_dvm_mod_notify(&_camp->requester, _camp->alloc_id,
-                                        _camp->req_id, false, rc);
+       /* clean up the campaign we just added (only if one was created), and
+        * tell the requester the DVM modification failed (spec phase-two
+        * failure event) */
+       if (0 < m) {
+           prte_shrink_campaign_t *_camp =
+               (prte_shrink_campaign_t *) pmix_list_remove_last(&prte_shrink_campaigns);
+           prte_dvm_launch_fence -= _camp->pending;
+           if (_camp->have_requester) {
+               /* success == false => PMIX_ERR_DVM_MOD carrying rc */
+               prte_plm_base_dvm_mod_notify(&_camp->requester, _camp->alloc_id,
+                                            _camp->req_id, false, rc);
+           }
+           PMIX_RELEASE(_camp);
        }
-       PMIX_RELEASE(_camp);
        PRTE_ERROR_LOG(rc);
    }
 
@@ -377,7 +388,7 @@ daemon-proc block of ``proc_errors()`` (line 252), within the
                    PMIX_RELEASE(_camp);
                }
                if (0 == prte_dvm_launch_fence) {
-                   prte_plm_base_fence_release(true);
+                   prte_plm_base_fence_release();
                }
                goto errmgr_shrink_done;
            }
@@ -451,7 +462,7 @@ Summary of Files Changed (Shrink Fence)
        the matched target slot ``PMIX_RANK_INVALID``, decrement campaign
        ``pending`` and fence; when ``pending`` hits zero emit
        ``PMIX_DVM_IS_READY`` to the requester and remove the campaign; call
-       ``prte_plm_base_fence_release(true)`` when the fence hits zero.  This is
+       ``prte_plm_base_fence_release()`` when the fence hits zero.  This is
        the sole shrink-completion trigger.
 
 The shared infrastructure this path relies on — the fence counter, held-job
@@ -478,8 +489,10 @@ Design Invariants
   array for a given campaign is valid from creation through removal, so
   ``prte_plm_base_job_needs_remap()`` can safely iterate it during release.
 * Jobs in ``prte_prelaunch_held_jobs`` hold a ``PMIX_RETAIN`` reference;
-  ``prte_plm_base_fence_release()`` releases it after re-activating or
-  aborting the job.
+  ``prte_plm_base_fence_release()`` releases it after re-activating the job.
+  These jobs wait only on a shrink and are never aborted by a concurrent
+  grow failure (the grow-failure abort touches only ``prte_held_jobs``); since
+  shrink completion is success-only, they are always re-activated, not failed.
 * The completion event is per campaign and fires from the campaign-removal
   point (``pending == 0``), so each accepted release yields exactly one
   ``PMIX_DVM_IS_READY`` (success) or, on an xcast failure at creation, exactly

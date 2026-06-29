@@ -127,8 +127,8 @@ Lifecycle
    subtracts each ``ntargets`` from the fence, emits a ``PMIX_DVM_IS_READY``
    completion event to each drained campaign's requester (via
    ``prte_plm_base_dvm_mod_notify()`` — see :ref:`elastic-dvm-plan-label`,
-   Step 5), and — if the fence has reached zero — releases the held jobs with
-   ``success == true``.
+   Step 5), and — if the fence has reached zero — admits the held jobs by
+   calling ``prte_plm_base_fence_release()``.
 
 #. **Failure drain and rollback** — in the ``errmgr/dvm`` comm-failure /
    ``FAILED_TO_START`` handler, the dead daemon's rank is passed to
@@ -139,16 +139,22 @@ Lifecycle
    back: its still-living daemons are terminated and all of its nodes are
    removed from the DVM, returning the DVM to exactly the membership it had
    before the campaign began (see `Rollback on failure`_).  The function then
-   calls ``prte_plm_base_grow_drain(false)`` — emitting a ``PMIX_ERR_DVM_MOD``
+   calls ``prte_plm_base_grow_drain(false)``, which emits a ``PMIX_ERR_DVM_MOD``
    completion event (carrying the underlying failure status) to each drained
-   campaign's requester, and failing the held jobs.  Mirroring the original
-   single-token behavior, any grow failure fails the whole held-job set, and
-   the rollback ensures the DVM is never left half-extended with a partial,
-   un-wired set of new daemons.
+   campaign's requester and then aborts the pre-map held jobs via
+   ``prte_plm_base_abort_premap_held()`` (see :ref:`elastic-dvm-plan-label`,
+   Step 4).  Mirroring the original single-token behavior, any grow failure
+   fails the whole **pre-map** held-job set — and does so immediately,
+   regardless of the fence value, so a concurrent shrink cannot later admit a
+   job whose grow dependency has failed.  It deliberately does **not** disturb
+   the pre-launch (``LAUNCH_APPS``) held jobs: those wait only on a shrink, not
+   on the grow, so per the spec's conformance guarantee #4 a grow failure must
+   leave them parked.  The rollback ensures the DVM is never left half-extended
+   with a partial, un-wired set of new daemons.
 
 #. **Safety net** — ``check_job_complete``'s "received NULL job" branch drains
-   any still-pending grow campaigns with ``success == false`` so held jobs are
-   never parked across a daemon-job teardown.
+   any still-pending grow campaigns with ``success == false`` so pre-map held
+   jobs are never parked across a daemon-job teardown.
 
 Because every live campaign contributes exactly its ``ntargets`` to the fence
 until drained as a unit, the fence's grow contribution is always the sum of the
@@ -216,10 +222,11 @@ Why this is correct
 * **Partial failure.**  A grow in which any target dies is failed as a whole:
   the dying daemon triggers ``grow_target_failed()``, which rolls the campaign
   back — terminating its still-living daemons and removing its nodes from the
-  DVM — and then calls ``grow_drain(false)`` so the held jobs are activated to
-  ``NEVER_LAUNCHED``.  This matches the original first-failure semantics and,
-  per the spec, leaves the DVM at its exact pre-grow membership rather than
-  half-extended.
+  DVM — and then calls ``grow_drain(false)`` so the pre-map held jobs are
+  activated to ``NEVER_LAUNCHED`` (the pre-launch held jobs, which wait only on
+  a shrink, are left untouched).  This matches the original first-failure
+  semantics and, per the spec, leaves the DVM at its exact pre-grow membership
+  rather than half-extended.
 
 Touched files
 -------------
@@ -242,16 +249,21 @@ Touched files
        ``prte_plm_base_grow_drain()`` and ``prte_plm_base_grow_target_failed()``.
        ``grow_drain()`` emits the per-campaign completion event
        (``PMIX_DVM_IS_READY`` on success, ``PMIX_ERR_DVM_MOD`` on failure) via
-       the shared ``prte_plm_base_dvm_mod_notify()`` helper.  ``grow_target_failed()``
-       rolls the failed campaign back — terminating its surviving daemons and
-       removing its nodes from the DVM via the shrink-path machinery — before
-       draining the held jobs.
-   * - ``src/mca/plm/base/plm_private.h``
-     - Declare the two new helpers.
+       the shared ``prte_plm_base_dvm_mod_notify()`` helper, and disposes of the
+       held jobs: on success via ``prte_plm_base_fence_release()`` when the
+       fence reaches zero, on failure via ``prte_plm_base_abort_premap_held()``
+       (pre-map jobs only).  ``grow_target_failed()`` rolls the failed campaign
+       back — terminating its surviving daemons and removing its nodes from the
+       DVM via the shrink-path machinery — before draining.
+   * - ``src/mca/plm/base/plm_base_launch_support.h``
+     - Declare ``prte_plm_base_grow_drain()`` and
+       ``prte_plm_base_grow_target_failed()`` (alongside the shared
+       ``fence_release`` / ``abort_premap_held`` / ``dvm_mod_notify`` helpers, so
+       all four ``prte_plm_base_*`` launch-fence helpers live in one header).
    * - ``src/mca/errmgr/dvm/errmgr_dvm.c``
      - Replace the coarse ``PRTE_JOB_LAUNCHED_DAEMONS`` fence block with a call
-       to ``prte_plm_base_grow_target_failed()``, which both fails the held jobs
-       and rolls the campaign's daemons/nodes back out of the DVM.
+       to ``prte_plm_base_grow_target_failed()``, which both aborts the pre-map
+       held jobs and rolls the campaign's daemons/nodes back out of the DVM.
    * - ``src/mca/state/dvm/state_dvm.c``
      - Drain on success in ``vm_ready`` after WIREUP; drop the per-error fence
        manipulation (the DVM is force-exiting); convert the
