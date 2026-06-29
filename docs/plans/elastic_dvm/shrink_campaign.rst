@@ -192,8 +192,9 @@ request) so the completion event can be directed at it:
            (prte_shrink_campaign_t *) pmix_list_remove_last(&prte_shrink_campaigns);
        prte_dvm_launch_fence -= _camp->pending;
        if (_camp->have_requester) {
+           /* success == false => PMIX_ERR_DVM_MOD carrying rc */
            prte_plm_base_dvm_mod_notify(&_camp->requester, _camp->alloc_id,
-                                        _camp->req_id, PMIX_ERR_DVM_MOD, rc);
+                                        _camp->req_id, false, rc);
        }
        PMIX_RELEASE(_camp);
        PRTE_ERROR_LOG(rc);
@@ -365,11 +366,11 @@ daemon-proc block of ``proc_errors()`` (line 252), within the
                    /* this request's shrink is complete — notify the
                     * requester that the DVM now reflects the new size */
                    if (_camp->have_requester) {
+                       /* success == true => PMIX_DVM_IS_READY */
                        prte_plm_base_dvm_mod_notify(&_camp->requester,
                                                     _camp->alloc_id,
                                                     _camp->req_id,
-                                                    PMIX_DVM_IS_READY,
-                                                    PMIX_SUCCESS);
+                                                    true, PMIX_SUCCESS);
                    }
                    pmix_list_remove_item(&prte_shrink_campaigns,
                                         &_camp->super);
