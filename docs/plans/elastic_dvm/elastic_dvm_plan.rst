@@ -284,11 +284,23 @@ directed once the campaign drains:
    char        *req_id;          /* requester's PMIX_ALLOC_REQ_ID, or NULL */
    bool         have_requester;  /* false for a scheduler push */
 
-These fields are populated where the campaign is created — for a shrink in the
-``PMIX_ALLOC_RELEASE`` handler, for a grow in ``setup_virtual_machine()`` — from
-the allocation request that drove the operation.  A size change initiated with
-no PMIx requester (a scheduler push) leaves ``have_requester`` false and emits
-no event.
+These fields are populated where the campaign is created, from the allocation
+request that drove the operation:
+
+* **Shrink** — directly in the ``PMIX_ALLOC_RELEASE`` handler, from the request
+  object: ``requester`` is the request's ``tproc``, and ``alloc_id`` / ``req_id``
+  are read from its ``PMIX_ALLOC_ID`` / ``PMIX_ALLOC_REQ_ID`` info keys.
+* **Grow** — in ``setup_virtual_machine()``, *indirectly through the session*.
+  The RAS reservation machinery already records the driving request on the
+  session and back-points every reserved node at it
+  (``add_nodes_to_session()`` sets ``node->session``; the session carries
+  ``requestor``, ``alloc_refid``, and ``user_refid``).  The grow campaign reads
+  those from the first new daemon's ``node->session``, so the originating
+  request need not be threaded explicitly into the launch path.
+
+A size change initiated with no PMIx requester (a scheduler push, or the initial
+DVM bring-up, where the session is the default one or its ``requestor`` rank is
+``PMIX_RANK_INVALID``) leaves ``have_requester`` false and emits no event.
 
 A single shared helper, declared in ``src/mca/plm/base/plm_private.h`` and
 defined in ``plm_base_launch_support.c``, performs the emission.  Its prototype
@@ -308,14 +320,19 @@ never reference ``PMIX_DVM_IS_READY`` / ``PMIX_ERR_DVM_MOD`` themselves:
                                      pmix_status_t cause);
 
 It packs ``PMIX_ALLOC_ID`` (always), ``PMIX_ALLOC_REQ_ID`` (when ``req_id`` is
-non-NULL), and — on failure — the underlying ``cause`` status, then delivers the
-event **only** to ``requester`` (a directed, non-broadcast notification).
+non-NULL), and — on failure — the underlying ``cause`` status (carried under
+``PMIX_JOB_TERM_STATUS``, the standard ``pmix_status_t``-typed info key; the PMIx
+contract for ``PMIX_ERR_DVM_MOD`` asks only for "any available information
+describing the cause"), then delivers the event **only** to ``requester`` as a
+directed, custom-range notification — the same ``PMIX_RANGE_CUSTOM`` mechanism
+used for ``PMIX_ALLOC_TIMEOUT_WARNING``.
 
 The grow and shrink plans call this helper at their respective drain points: the
-grow path on the success drain in ``vm_ready`` and on the failure drain in
-``prte_plm_base_grow_target_failed()``; the shrink path when a campaign's last
-target departs (success) and on the xcast-failure cleanup at campaign creation
-(failure).
+grow path inside ``prte_plm_base_grow_drain()`` (reached on success from
+``vm_ready`` after the WIREUP xcast, and on failure from
+``prte_plm_base_grow_target_failed()`` and the ``check_job_complete`` safety
+net); the shrink path when a campaign's last target departs (success, in the
+errmgr) and on the xcast-failure cleanup at campaign creation (failure).
 
 ``PMIX_DVM_IS_READY`` and ``PMIX_ERR_DVM_MOD`` are plain ``#define``\ d
 ``pmix_status_t`` values (PMIx status codes are preprocessor macros, not enum

@@ -157,12 +157,14 @@ Destruct in ``src/runtime/prte_finalize.c``:
 
 In ``src/mca/ras/base/ras_base_allocate.c``, the ``PMIX_ALLOC_RELEASE``
 branch of ``prte_ras_base_complete_request()`` builds the daemon rank array
-(``ranks``, count ``m``) and then calls ``free(ranks)`` at line 760 before
-the xcast at line 763.  Insert the campaign setup **before** ``free(ranks)``
-(between lines 758 and 760), recording the requester (from the originating
-request) so the completion event can be directed at it.  Guard the whole setup
-on ``0 < m``: a release that removes no daemons creates no campaign, exactly as
-the grow path creates none when ``map->num_new_daemons == 0``:
+(``ranks``, count ``m``) and then calls ``free(ranks)`` before the xcast that
+carries ``PRTE_DAEMON_SHRINK_CMD`` to the daemons.  Insert the campaign setup
+**before** ``free(ranks)``, recording the requester directly from the request
+object (``req``) so the completion event can be directed at it.  Guard the whole
+setup on ``0 < m``: a release that removes no daemons creates no campaign,
+exactly as the grow path creates none when ``map->num_new_daemons == 0``.  The
+file must ``#include "src/mca/plm/base/plm_private.h"`` to see
+``prte_plm_base_dvm_mod_notify()``.
 
 .. code-block:: c
 
@@ -179,36 +181,41 @@ the grow path creates none when ``map->num_new_daemons == 0``:
        memcpy(_camp->targets, ranks, m * sizeof(pmix_rank_t));
        _camp->ntargets = m;
        _camp->pending  = m;
-       /* requester / ids captured from the PMIX_ALLOC_RELEASE request;
-        * have_requester stays false for a scheduler-driven release */
-       if (have_requester) {
-           PMIX_XFER_PROCID(&_camp->requester, &requester);
-           _camp->alloc_id = (NULL != alloc_id) ? strdup(alloc_id) : NULL;
-           _camp->req_id   = (NULL != req_id)   ? strdup(req_id)   : NULL;
-           _camp->have_requester = true;
+       /* this path always has a requesting process (req->tproc); a
+        * scheduler-driven release that has no requester does not pass through
+        * here.  Capture the requester and the allocation ids from the request. */
+       PMIX_XFER_PROCID(&_camp->requester, &req->tproc);
+       for (n = 0; n < req->ninfo; n++) {
+           if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
+               _camp->alloc_id = strdup(req->info[n].value.data.string);
+           } else if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_REQ_ID)) {
+               _camp->req_id = strdup(req->info[n].value.data.string);
+           }
        }
+       _camp->have_requester = true;
        pmix_list_append(&prte_shrink_campaigns, &_camp->super);
        prte_dvm_launch_fence += m;
    }
-   free(ranks);   /* existing line 760 */
+   free(ranks);
 
    /* existing xcast */
    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &msg))) {
+       PRTE_ERROR_LOG(rc);
        /* clean up the campaign we just added (only if one was created), and
         * tell the requester the DVM modification failed (spec phase-two
-        * failure event) */
+        * failure event).  rc is a PRTE code, so convert it to the
+        * pmix_status_t the event carries. */
        if (0 < m) {
            prte_shrink_campaign_t *_camp =
                (prte_shrink_campaign_t *) pmix_list_remove_last(&prte_shrink_campaigns);
            prte_dvm_launch_fence -= _camp->pending;
            if (_camp->have_requester) {
-               /* success == false => PMIX_ERR_DVM_MOD carrying rc */
                prte_plm_base_dvm_mod_notify(&_camp->requester, _camp->alloc_id,
-                                            _camp->req_id, false, rc);
+                                            _camp->req_id, false,
+                                            prte_pmix_convert_rc(rc));
            }
            PMIX_RELEASE(_camp);
        }
-       PRTE_ERROR_LOG(rc);
    }
 
 Because the campaign is appended before the xcast, any ``VM_READY`` event
@@ -437,13 +444,16 @@ Summary of Files Changed (Shrink Fence)
    * - ``src/runtime/prte_finalize.c``
      - ``PMIX_LIST_DESTRUCT(&prte_shrink_campaigns)``.
    * - ``src/mca/ras/base/ras_base_allocate.c``
-     - In ``PMIX_ALLOC_RELEASE`` branch of
-       ``prte_ras_base_complete_request()``: create a ``prte_shrink_campaign_t``,
-       copy the rank array into it, record the requester / ``PMIX_ALLOC_ID`` /
-       ``PMIX_ALLOC_REQ_ID``, append to ``prte_shrink_campaigns``, and increment
+     - Add ``#include "src/mca/plm/base/plm_private.h"`` for
+       ``prte_plm_base_dvm_mod_notify()``.  In the ``PMIX_ALLOC_RELEASE`` branch
+       of ``prte_ras_base_complete_request()``, guarded on ``0 < m``: create a
+       ``prte_shrink_campaign_t``, copy the rank array into it, record the
+       requester from ``req->tproc`` and ``PMIX_ALLOC_ID`` / ``PMIX_ALLOC_REQ_ID``
+       from ``req->info``, append to ``prte_shrink_campaigns``, and increment
        ``prte_dvm_launch_fence`` by ``m`` — all before ``free(ranks)``.  Add
        xcast-failure cleanup that removes the campaign, decrements the fence,
-       and emits ``PMIX_ERR_DVM_MOD`` to the requester.
+       and emits ``PMIX_ERR_DVM_MOD`` (carrying ``prte_pmix_convert_rc(rc)``) to
+       the requester.
    * - ``src/prted/prted_comm.c``
      - In ``PRTE_DAEMON_SHRINK_CMD`` handler: after the ``JOB_END``
        notification wait, activate ``PRTE_JOB_STATE_DAEMONS_TERMINATED`` and
