@@ -88,6 +88,12 @@ PRTE_EXPORT void prte_ras_base_allocate(int fd, short args, void *cbdata);
 
 PRTE_EXPORT void prte_ras_base_modify(int fd, short args, void *cbdata);
 
+/* Notify the active RAS modules that a shrink campaign has completed so they
+ * can release the freed resources back to the scheduler. Cycles across every
+ * selected module, calling the shrink_complete entry point on each that
+ * provides one. */
+PRTE_EXPORT void prte_ras_base_shrink_complete(prte_shrink_campaign_t *campaign);
+
 PRTE_EXPORT void prte_ras_base_release_allocation(prte_session_t *session);
 
 /* Tear down a reservation: drop its hold on its nodes (clearing the

@@ -381,8 +381,11 @@ daemon-proc block of ``proc_errors()`` (line 252), within the
                _camp->pending--;
                prte_dvm_launch_fence--;
                if (0 == _camp->pending) {
-                   /* this request's shrink is complete — notify the
+                   /* this request's shrink is complete — first let the
+                    * active RAS modules release the freed resources back
+                    * to their resource manager(s), then notify the
                     * requester that the DVM now reflects the new size */
+                   prte_ras_base_shrink_complete(_camp);
                    if (_camp->have_requester) {
                        /* success == true => PMIX_DVM_IS_READY */
                        prte_plm_base_dvm_mod_notify(&_camp->requester,
@@ -411,6 +414,23 @@ only the first is counted.  A daemon that crashes during a shrink is handled
 identically to one that exits cleanly — the node was being removed anyway,
 and jobs mapped to it are detected by ``prte_plm_base_job_needs_remap()`` and
 re-routed to surviving nodes.
+
+Before the completion event is emitted, ``prte_ras_base_shrink_complete()``
+cycles across every active RAS module (``prte_ras_base.selected_modules``) and
+invokes the optional ``shrink_complete`` entry point on each, passing the
+completed ``prte_shrink_campaign_t``.  This is the component's opportunity to
+release the freed resources back to its resource manager; what it does with that
+opportunity is up to the component.  Unlike ``modify``, the cycle is not keyed
+to a single component: a single ``PMIX_ALLOC_RELEASE`` may remove nodes drawn
+from more than one allocation (see the "Resource release at shrink completion"
+section of :ref:`elastic-dvm-spec-label`), so every module is offered the
+campaign and each handles only the share that belongs to it.  A module with no
+``shrink_complete`` pointer, or with no stake in the operation, is a no-op.
+The runtime guarantees only the ordering: the release cycle runs ahead of
+``prte_plm_base_dvm_mod_notify()``, so by the time the requester sees
+``PMIX_DVM_IS_READY`` every component has been given its chance to act — not
+that any particular resource was in fact returned, which is the component's
+decision.
 
 The ``PMIX_DVM_IS_READY`` notification is **per campaign**: it fires when *this*
 request's last target departs, regardless of whether other (grow or shrink)
@@ -466,14 +486,28 @@ Summary of Files Changed (Shrink Fence)
        ``!pmix_list_is_empty(&prte_shrink_campaigns)``.
    * - ``src/mca/plm/base/plm_private.h``
      - Declare the two remap helpers.
+   * - ``src/mca/ras/ras.h``
+     - Add the ``shrink_complete`` module entry point: a
+       ``prte_ras_base_module_shrink_complete_fn_t`` taking the completed
+       ``prte_shrink_campaign_t``, and a field for it in
+       ``prte_ras_base_module_t`` (after ``modify``).  Components that hand
+       resources back to a scheduler implement it; others leave it ``NULL``.
+   * - ``src/mca/ras/base/base.h``
+     - Declare ``prte_ras_base_shrink_complete(prte_shrink_campaign_t *)``.
+   * - ``src/mca/ras/base/ras_base_allocate.c``
+     - Define ``prte_ras_base_shrink_complete()``: cycle across
+       ``prte_ras_base.selected_modules`` and invoke each module's
+       ``shrink_complete`` (when non-NULL), passing the campaign.  Not keyed to
+       one component, since a release may span multiple allocations.
    * - ``src/mca/errmgr/dvm/errmgr_dvm.c``
-     - In ``proc_errors()``, daemon-comm-failure block: search
-       ``prte_shrink_campaigns`` for the dead daemon's rank; if found, stamp
-       the matched target slot ``PMIX_RANK_INVALID``, decrement campaign
-       ``pending`` and fence; when ``pending`` hits zero emit
-       ``PMIX_DVM_IS_READY`` to the requester and remove the campaign; call
-       ``prte_plm_base_fence_release()`` when the fence hits zero.  This is
-       the sole shrink-completion trigger.
+     - Add ``#include "src/mca/ras/base/base.h"``.  In ``proc_errors()``,
+       daemon-comm-failure block: search ``prte_shrink_campaigns`` for the dead
+       daemon's rank; if found, stamp the matched target slot
+       ``PMIX_RANK_INVALID``, decrement campaign ``pending`` and fence; when
+       ``pending`` hits zero call ``prte_ras_base_shrink_complete()`` to release
+       the resources RM-side, then emit ``PMIX_DVM_IS_READY`` to the requester
+       and remove the campaign; call ``prte_plm_base_fence_release()`` when the
+       fence hits zero.  This is the sole shrink-completion trigger.
 
 The shared infrastructure this path relies on — the fence counter, held-job
 arrays, ``VM_READY → MAP`` hold point, ``prte_plm_base_fence_release()``, and
@@ -508,6 +542,15 @@ Design Invariants
   ``PMIX_DVM_IS_READY`` (success) or, on an xcast failure at creation, exactly
   one ``PMIX_ERR_DVM_MOD`` — never both, and never for a scheduler-driven
   release with no requester.
+* The RM-side release cycle runs strictly *before* the completion event.  At
+  ``pending == 0`` the campaign-removal point calls
+  ``prte_ras_base_shrink_complete()``, which offers the campaign to every active
+  RAS module, and only then emits ``PMIX_DVM_IS_READY``.  Because the departing
+  nodes may span multiple allocations, all modules are cycled — each handling
+  only its own share.  The invariant is the *ordering* (every component is
+  offered the campaign before the event fires), not that any resource was
+  actually returned: that is the component's decision, outside the runtime's
+  control.
 
 Follow-up — collective shrink completion
 -----------------------------------------

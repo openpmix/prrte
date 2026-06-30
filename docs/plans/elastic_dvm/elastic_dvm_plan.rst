@@ -21,8 +21,10 @@ This plan is the **parent** of two campaign-specific plans:
 * :ref:`dvm-grow-campaign-label` — the grow (daemon-launch) path's per-campaign
   fence accounting, failure rollback, and success/failure completion events.
 * :ref:`dvm-shrink-campaign-label` — the shrink (node-removal) path's campaign
-  tracking, the second (``LAUNCH_APPS``) hold point, completion detection, and
-  completion events.
+  tracking, the second (``LAUNCH_APPS``) hold point, completion detection, the
+  RM-side resource release that runs at completion (a release may span multiple
+  allocations, so every active RAS module is offered the completed campaign),
+  and completion events.
 
 It covers the **shared** infrastructure both paths build on: the fence counter,
 the held-job arrays, the ``VM_READY → MAP`` hold point, the fence-release

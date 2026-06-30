@@ -307,13 +307,39 @@ validity with unrelated launch/teardown failures.  Decoupling lets the
 requester learn promptly that its request was accepted and then act only
 when the runtime actually reflects the new size.
 
+Resource release at shrink completion
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The nodes a single shrink removes need not all come from the same
+underlying allocation.  A ``PMIX_ALLOC_RELEASE`` may name resources that
+the runtime originally obtained from more than one source — for example
+nodes acquired through different resource managers, or a mixture of
+scheduler-provided and statically-configured nodes — so the set of
+departing nodes can span several allocations, each managed by a different
+resource component.
+
+Accordingly, when a shrink completes — every targeted daemon has departed
+— the runtime offers the completed operation to **each** active resource
+component in turn *before* it emits the completion event, giving each the
+opportunity to release the share of the departing resources that belongs
+to it back to its resource manager.  What a component does with that
+opportunity is up to the component: it may return the nodes to a
+scheduler, defer, or do nothing if it has no stake in the operation.  The
+runtime guarantees only the *ordering* — that the release cycle is offered
+to every component, and runs to completion, before the completion event is
+delivered.  It does not guarantee that any particular resource was in fact
+handed back, since that is the component's decision, not the runtime's.
+
 Success event — ``PMIX_DVM_IS_READY``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 When the DVM operation completes successfully — for a grow, the new
 daemons are launched and wired into the DVM; for a shrink, every targeted
-daemon has departed and the routing tree is repaired — the runtime
-delivers a ``PMIX_DVM_IS_READY`` event to the requester.  After this event
+daemon has departed, the routing tree is repaired, and each resource
+component has been given the opportunity to release the freed resources
+back to its resource manager (see `Resource release at shrink
+completion`_) — the runtime delivers a ``PMIX_DVM_IS_READY`` event to the
+requester.  After this event
 the DVM reflects the requested size: a grow's new nodes are available to
 spawn onto, a shrink's removed nodes are gone.  The event payload carries:
 

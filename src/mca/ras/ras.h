@@ -90,6 +90,17 @@ typedef int (*prte_ras_base_module_allocate_fn_t)(prte_job_t *jdata, pmix_list_t
 typedef pmix_status_t (*prte_ras_base_module_modify_fn_t)(prte_pmix_server_req_t *req);
 
 /**
+ * Notify the resource manager that a shrink campaign has completed.
+ *
+ * Called once the campaign's targeted daemons have departed and before
+ * the final completion notification is emitted to the requester, so the
+ * module can release the freed resources back to the scheduler. The
+ * campaign object is passed so the module can identify which shrink
+ * completed.
+ */
+typedef void (*prte_ras_base_module_shrink_complete_fn_t)(prte_shrink_campaign_t *campaign);
+
+/**
  * Release an allocation associated with the given session.
  * Called when a prte_session_t is destructed. Returns PRTE_SUCCESS
  * if the module handled the release, PRTE_ERR_TAKE_NEXT_OPTION to
@@ -112,6 +123,8 @@ struct prte_ras_base_module_2_0_0_t {
     prte_ras_base_module_allocate_fn_t  allocate;
     // modify function pointer
     prte_ras_base_module_modify_fn_t    modify;
+    /** Notify the RM that a shrink campaign has completed */
+    prte_ras_base_module_shrink_complete_fn_t shrink_complete;
     /** Release an allocation when its session is destructed */
     prte_ras_base_module_release_fn_t   release_allocation;
     /** Finalization function pointer */
