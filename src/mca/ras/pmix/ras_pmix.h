@@ -22,8 +22,6 @@ BEGIN_C_DECLS
 
 struct prte_ras_pmix_component_t {
     prte_ras_base_component_t super;
-    bool simulate;
-    char *simulate_nodelist;
     bool connect_to_system_scheduler;
     pmix_proc_t server;
     char *uri;

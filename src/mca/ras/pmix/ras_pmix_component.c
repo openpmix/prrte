@@ -67,18 +67,6 @@ static int ras_pmix_register(void)
 {
     pmix_mca_base_component_t *component = &prte_mca_ras_pmix_component.super;
 
-    prte_mca_ras_pmix_component.simulate = false;
-    (void) pmix_mca_base_component_var_register(component, "simulate",
-                                                "Simulate a scheduler interaction",
-                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                                &prte_mca_ras_pmix_component.simulate);
-
-    prte_mca_ras_pmix_component.simulate_nodelist = NULL;
-    (void) pmix_mca_base_component_var_register(component, "simulate_nodelist",
-                                                "Comma-delimited list of nodes to use in simulation",
-                                                PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                                &prte_mca_ras_pmix_component.simulate_nodelist);
-
     prte_mca_ras_pmix_component.uri = NULL;
     (void) pmix_mca_base_component_var_register(component, "uri",
                                                 "Specify the URI of the scheduler to which we are to connect, "
