@@ -27,17 +27,26 @@ order.  Where this specification and those plans disagree about observable
 behavior, **this specification is authoritative** and the plan must be
 corrected.
 
-The job-admission guarantees are stated purely in terms of job lifecycle
-outcomes and introduce **no** new command-line options, environment
-variables, or PMIx attributes: the grow and shrink triggers that already
-exist (``--add-host`` / ``--add-hostfile``, a scheduler-driven daemon
-launch, and a ``PMIX_ALLOC_RELEASE`` that removes nodes) simply acquire
-correct concurrency semantics.  The completion contract does introduce two
-new PMIx event (status) codes — ``PMIX_DVM_IS_READY`` and
-``PMIX_ERR_DVM_MOD`` — used to notify the requester when the asynchronous
-DVM operation finishes; these are the only new caller-visible interface
-this feature adds, and both are optional (see `Backward compatibility and
-transparency`_).
+The whole of this behavior is gated on the DVM being in **elastic mode**,
+selected by the pre-existing ``prte_elastic_mode`` MCA parameter (off by
+default).  When it is not set the DVM is fixed-size: none of the
+job-admission deferral, parking, or completion-event machinery is active,
+and the runtime behaves exactly as it did before this feature — a daemon
+loss, for instance, is handled by the ordinary error path rather than
+absorbed as a campaign event.  Everything below describes the behavior
+**when elastic mode is enabled**.
+
+Within elastic mode, the job-admission guarantees are stated purely in
+terms of job lifecycle outcomes and introduce **no** new command-line
+options, environment variables, or PMIx attributes: the grow and shrink
+triggers that already exist (``--add-host`` / ``--add-hostfile``, a
+scheduler-driven daemon launch, and a ``PMIX_ALLOC_RELEASE`` that removes
+nodes) simply acquire correct concurrency semantics.  The completion
+contract does introduce two new PMIx event (status) codes —
+``PMIX_DVM_IS_READY`` and ``PMIX_ERR_DVM_MOD`` — used to notify the
+requester when the asynchronous DVM operation finishes; these are the only
+new caller-visible interface this feature adds, and both are optional (see
+`Backward compatibility and transparency`_).
 
 Scope
 -----
@@ -446,9 +455,13 @@ Backward compatibility and transparency
 
 The **job-admission** contract is transparent to every caller:
 
+* It is inert unless the DVM is in elastic mode (``prte_elastic_mode``, off
+  by default).  A DVM started without that parameter is fixed-size and runs
+  exactly as it did before this feature — the launch fence is never raised,
+  no job is ever parked, and daemon losses follow the ordinary error path.
 * No new command-line option, environment variable, or PMIx attribute is
-  defined or required for it.  A tool, application, or scheduler issues the
-  same requests it always has.
+  defined or required for it (``prte_elastic_mode`` already existed).  A
+  tool, application, or scheduler issues the same requests it always has.
 * On a DVM that never grows or shrinks, no job is ever parked and behavior
   is identical to a non-elastic DVM.
 * The only difference a submitting caller can observe when a size change
