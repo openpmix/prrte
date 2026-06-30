@@ -43,6 +43,7 @@
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/base/base.h"
 #include "src/mca/plm/base/base.h"
+#include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml.h"
 #include "src/mca/state/base/base.h"
@@ -296,10 +297,13 @@ static void proc_errors(int fd, short args, void *cbdata)
                         _camp->pending--;
                         prte_dvm_launch_fence--;
                         if (0 == _camp->pending) {
-                            /* this request's shrink is complete — notify the
-                             * requester that the DVM now reflects the new size
-                             * (clean exit and crash are both successes for the
-                             * campaign, so this drain is always success) */
+                            /* this request's shrink is complete — first let the
+                             * active RAS modules release the freed resources
+                             * back to the scheduler, then notify the requester
+                             * that the DVM now reflects the new size (clean exit
+                             * and crash are both successes for the campaign, so
+                             * this drain is always success) */
+                            prte_ras_base_shrink_complete(_camp);
                             if (_camp->have_requester) {
                                 prte_plm_base_dvm_mod_notify(&_camp->requester,
                                                              _camp->alloc_id,

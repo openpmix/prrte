@@ -617,6 +617,21 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
     PMIX_RELEASE(req);
 }
 
+void prte_ras_base_shrink_complete(prte_shrink_campaign_t *campaign)
+{
+    prte_ras_base_selected_module_t *mod;
+
+    /* cycle across the active modules and give each that supports the
+     * entry point a chance to release the freed resources back to the
+     * scheduler. Unlike modify, a shrink completion is not keyed to a
+     * single component, so every module is offered the campaign. */
+    PMIX_LIST_FOREACH(mod, &prte_ras_base.selected_modules, prte_ras_base_selected_module_t) {
+        if (NULL != mod->module->shrink_complete) {
+            mod->module->shrink_complete(campaign);
+        }
+    }
+}
+
 /* monotonic counter used to mint unique session ids for reservations that
  * the host (rather than a scheduler) must identify on its own. */
 static uint32_t prte_ras_reservation_counter = 0;
