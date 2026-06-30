@@ -161,9 +161,10 @@ grow-failure abort fires immediately on the pre-map array regardless of the
 fence value, and the success release is reached only when no campaign has
 failed.
 
-Both helpers are declared in the public plm-base header
-``src/mca/plm/base/base.h`` (so the errmgr, ras, and state callers outside
-plm-base can see them) and defined in ``plm_base_launch_support.c``:
+Both helpers are declared in ``src/mca/plm/base/plm_private.h`` (the header the
+errmgr, ras, and state callers already include for the existing
+``prte_plm_base_*`` launch helpers) and defined in
+``plm_base_launch_support.c``:
 
 .. code-block:: c
 
@@ -289,8 +290,9 @@ the allocation request that drove the operation.  A size change initiated with
 no PMIx requester (a scheduler push) leaves ``have_requester`` false and emits
 no event.
 
-A single shared helper, declared in ``src/mca/plm/base/base.h`` and defined in
-``plm_base_launch_support.c``, performs the emission.  Its prototype takes a
+A single shared helper, declared in ``src/mca/plm/base/plm_private.h`` and
+defined in ``plm_base_launch_support.c``, performs the emission.  Its prototype
+takes a
 ``bool success`` rather than an event code, so that **the two new status codes
 are named only inside the helper body** — call sites pass a bool and a cause and
 never reference ``PMIX_DVM_IS_READY`` / ``PMIX_ERR_DVM_MOD`` themselves:
@@ -378,13 +380,13 @@ Summary of Files Changed (Shared Fence Infrastructure)
      - Define ``prte_plm_base_fence_release()`` and
        ``prte_plm_base_abort_premap_held()`` (Step 4) and
        ``prte_plm_base_dvm_mod_notify()`` (Step 5).
-   * - ``src/mca/plm/base/base.h``
+   * - ``src/mca/plm/base/plm_private.h``
      - Declare ``prte_plm_base_fence_release()``,
        ``prte_plm_base_abort_premap_held()``, and
        ``prte_plm_base_dvm_mod_notify()`` (and, for the grow path,
        ``prte_plm_base_grow_drain()`` / ``prte_plm_base_grow_target_failed()`` —
-       see :ref:`dvm-grow-campaign-label`).  This is the public plm-base header,
-       so the errmgr/ras/state callers outside plm-base can include it.
+       see :ref:`dvm-grow-campaign-label`).  This is the header the errmgr, ras,
+       and state callers already include.
    * - ``src/mca/state/dvm/state_dvm.c``
      - In ``vm_ready``: add the ``VM_READY → MAP`` hold-check before
        ``preposition_files`` (Step 3).

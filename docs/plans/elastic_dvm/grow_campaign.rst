@@ -255,12 +255,12 @@ Touched files
        (pre-map jobs only).  ``grow_target_failed()`` rolls the failed campaign
        back — terminating its surviving daemons and removing its nodes from the
        DVM via the shrink-path machinery — before draining.
-   * - ``src/mca/plm/base/base.h``
+   * - ``src/mca/plm/base/plm_private.h``
      - Declare ``prte_plm_base_grow_drain()`` and
        ``prte_plm_base_grow_target_failed()`` (alongside the shared
        ``fence_release`` / ``abort_premap_held`` / ``dvm_mod_notify`` helpers, so
-       all the ``prte_plm_base_*`` launch-fence helpers live in the one public
-       plm-base header the errmgr also includes).
+       all the ``prte_plm_base_*`` launch-fence helpers live in the one header
+       the errmgr already includes).
    * - ``src/mca/errmgr/dvm/errmgr_dvm.c``
      - Replace the coarse ``PRTE_JOB_LAUNCHED_DAEMONS`` fence block with a call
        to ``prte_plm_base_grow_target_failed()``, which both aborts the pre-map

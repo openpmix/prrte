@@ -265,7 +265,7 @@ Step 4 — Remap helpers
 
 The pre-launch branch of the shared ``prte_plm_base_fence_release()`` (parent
 plan, Step 4) calls two shrink-specific helpers, both defined in
-``plm_base_launch_support.c`` and declared in ``src/mca/plm/base/base.h``.
+``plm_base_launch_support.c`` and declared in ``src/mca/plm/base/plm_private.h``.
 
 **``prte_plm_base_job_needs_remap(jdata)``** iterates over ``jdata->procs``
 and returns ``true`` if any proc's assigned node has a daemon rank appearing
@@ -454,7 +454,7 @@ Summary of Files Changed (Shrink Fence)
        ``prte_plm_base_reset_proc_map()``.  Add hold check in
        ``prte_plm_base_launch_apps()`` on
        ``!pmix_list_is_empty(&prte_shrink_campaigns)``.
-   * - ``src/mca/plm/base/base.h``
+   * - ``src/mca/plm/base/plm_private.h``
      - Declare the two remap helpers.
    * - ``src/mca/errmgr/dvm/errmgr_dvm.c``
      - In ``proc_errors()``, daemon-comm-failure block: search
