@@ -397,9 +397,8 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
      *     the named nodes and extend the DVM;
      *   - PMIX_ALLOC_RELEASE removes the named nodes (PMIX_ALLOC_NODE_LIST) or
      *     tears down a whole reservation (PMIX_ALLOC_ID).
-     * This is the schedulerless path that replaces the ras/pmix "simulate"
-     * shortcut, which discarded the request's node list and allocation ids and
-     * so could not target a specific reservation for release. */
+     * Keeping the original request info intact preserves the node list and the
+     * allocation ids, so a release can target a specific reservation. */
     switch (req->allocdir) {
     case PMIX_ALLOC_NEW:
     case PMIX_ALLOC_EXTEND:

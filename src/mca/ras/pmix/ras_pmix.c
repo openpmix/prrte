@@ -112,19 +112,6 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
     pmix_info_t *xfer;
     size_t n;
 
-    if (prte_mca_ras_pmix_component.simulate) {
-        // pretend we are attached to a scheduler
-        xfer = PMIx_Info_create(1);
-        PMIX_INFO_LOAD(xfer, PMIX_ALLOC_NODE_LIST, prte_mca_ras_pmix_component.simulate_nodelist, PMIX_STRING);
-        req->pstatus = PMIX_SUCCESS;
-        req->info = xfer;
-        req->ninfo = 1;
-        prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, passthru, req);
-        PMIX_POST_OBJECT(req);
-        prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
-        return PMIX_SUCCESS;
-    }
-
     // check if scheduler is attached and try to
     // attach if not
     rc = prte_pmix_set_scheduler();
