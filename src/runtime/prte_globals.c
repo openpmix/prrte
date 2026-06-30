@@ -81,6 +81,19 @@ pmix_pointer_array_t *prte_prelaunch_held_jobs = NULL;
 pmix_list_t prte_shrink_campaigns;
 pmix_list_t prte_grow_campaigns;
 
+static void campaign_construct(prte_shrink_campaign_t *p)
+{
+    /* zero the pointer/count fields: PMIX_NEW does not zero the object, and the
+     * creators set alloc_id/req_id only when the corresponding key is present,
+     * so without this the destructor would free() uninitialized garbage. */
+    p->targets = NULL;
+    p->ntargets = 0;
+    p->pending = 0;
+    PMIX_PROC_LOAD(&p->requester, NULL, PMIX_RANK_INVALID);
+    p->alloc_id = NULL;
+    p->req_id = NULL;
+    p->have_requester = false;
+}
 static void campaign_destruct(prte_shrink_campaign_t *p)
 {
     free(p->targets);
@@ -88,8 +101,17 @@ static void campaign_destruct(prte_shrink_campaign_t *p)
     free(p->req_id);
 }
 PMIX_CLASS_INSTANCE(prte_shrink_campaign_t, pmix_list_item_t,
-                    NULL, campaign_destruct);
+                    campaign_construct, campaign_destruct);
 
+static void grow_campaign_construct(prte_grow_campaign_t *p)
+{
+    p->targets = NULL;
+    p->ntargets = 0;
+    PMIX_PROC_LOAD(&p->requester, NULL, PMIX_RANK_INVALID);
+    p->alloc_id = NULL;
+    p->req_id = NULL;
+    p->have_requester = false;
+}
 static void grow_campaign_destruct(prte_grow_campaign_t *p)
 {
     free(p->targets);
@@ -97,7 +119,7 @@ static void grow_campaign_destruct(prte_grow_campaign_t *p)
     free(p->req_id);
 }
 PMIX_CLASS_INSTANCE(prte_grow_campaign_t, pmix_list_item_t,
-                    NULL, grow_campaign_destruct);
+                    grow_campaign_construct, grow_campaign_destruct);
 bool prte_persistent = true;
 bool prte_allow_run_as_root = false;
 bool prte_fwd_environment = false;
