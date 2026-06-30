@@ -42,6 +42,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/odls_types.h"
+#include "src/mca/plm/base/plm_private.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
@@ -1261,13 +1262,30 @@ void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
             req->pstatus = rc;
             return;
         }
-        /* record the shrink campaign before freeing the ranks array */
-        {
+        /* Record the shrink campaign before freeing the ranks array.  Skip
+         * entirely when the release removes no daemons (m == 0): an empty
+         * campaign would never drain (no target ever departs on the comm-
+         * failure path), so prte_shrink_campaigns would stay non-empty forever
+         * and stall every later job at the LAUNCH_APPS hold, and no completion
+         * event would fire.  This mirrors the grow path's num_new_daemons > 0
+         * guard and the spec's "no event when nothing changes" clause. */
+        if (0 < m) {
             prte_shrink_campaign_t *_camp = PMIX_NEW(prte_shrink_campaign_t);
             _camp->targets = (pmix_rank_t *) malloc(m * sizeof(pmix_rank_t));
             memcpy(_camp->targets, ranks, m * sizeof(pmix_rank_t));
             _camp->ntargets = m;
             _camp->pending  = m;
+            /* record the requester so the phase-two completion event can be
+             * directed at the process that issued this PMIX_ALLOC_RELEASE */
+            PMIX_XFER_PROCID(&_camp->requester, &req->tproc);
+            for (n = 0; n < req->ninfo; n++) {
+                if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
+                    _camp->alloc_id = strdup(req->info[n].value.data.string);
+                } else if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_REQ_ID)) {
+                    _camp->req_id = strdup(req->info[n].value.data.string);
+                }
+            }
+            _camp->have_requester = true;
             pmix_list_append(&prte_shrink_campaigns, &_camp->super);
             prte_dvm_launch_fence += m;
         }
@@ -1276,11 +1294,17 @@ void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
         /* goes to all daemons */
         if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &msg))) {
             PRTE_ERROR_LOG(rc);
-            /* undo the campaign we just added */
-            {
+            /* undo the campaign we just added (only if one was created), and
+             * tell the requester the DVM modification failed */
+            if (0 < m) {
                 prte_shrink_campaign_t *_camp =
                     (prte_shrink_campaign_t *) pmix_list_remove_last(&prte_shrink_campaigns);
                 prte_dvm_launch_fence -= _camp->pending;
+                if (_camp->have_requester) {
+                    prte_plm_base_dvm_mod_notify(&_camp->requester, _camp->alloc_id,
+                                                 _camp->req_id, false,
+                                                 prte_pmix_convert_rc(rc));
+                }
                 PMIX_RELEASE(_camp);
             }
         }

@@ -249,6 +249,27 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                        [$PRTE_PMIX_LTO_CAPABILITY],
                        [Whether or not PMIx has the LTO capability flag set])
 
+    dnl The elastic-DVM completion contract directs two PMIx events at the
+    dnl process that requested a DVM size change: PMIX_DVM_IS_READY on success
+    dnl and PMIX_ERR_DVM_MOD on failure.  These are plain #define'd status
+    dnl codes, not behavioral capability flags, so probe for the symbols
+    dnl themselves rather than a PMIX_CAP_* flag.  A PMIx that defines neither
+    dnl leaves the completion notification compiled out (see
+    dnl docs/plans/elastic_dvm/).
+    AC_MSG_CHECKING([for PMIx DVM modification event codes])
+    AC_PREPROC_IFELSE(
+        [AC_LANG_PROGRAM([[#include <pmix.h>
+#if !defined(PMIX_DVM_IS_READY) || !defined(PMIX_ERR_DVM_MOD)
+#error DVM modification event codes not present
+#endif
+]], [[]])],
+        [AC_MSG_RESULT([yes])
+         AC_DEFINE([PRTE_HAVE_DVM_MOD_EVENTS], [1],
+                   [Whether PMIx defines the DVM modification event codes])],
+        [AC_MSG_RESULT([no])
+         AC_DEFINE([PRTE_HAVE_DVM_MOD_EVENTS], [0],
+                   [Whether PMIx defines the DVM modification event codes])])
+
     # restore the global flags
     CPPFLAGS=$prte_external_pmix_save_CPPFLAGS
     LDFLAGS=$prte_external_pmix_save_LDFLAGS

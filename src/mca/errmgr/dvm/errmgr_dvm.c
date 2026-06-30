@@ -290,11 +290,21 @@ static void proc_errors(int fd, short args, void *cbdata)
                         _camp->pending--;
                         prte_dvm_launch_fence--;
                         if (0 == _camp->pending) {
+                            /* this request's shrink is complete — notify the
+                             * requester that the DVM now reflects the new size
+                             * (clean exit and crash are both successes for the
+                             * campaign, so this drain is always success) */
+                            if (_camp->have_requester) {
+                                prte_plm_base_dvm_mod_notify(&_camp->requester,
+                                                             _camp->alloc_id,
+                                                             _camp->req_id,
+                                                             true, PMIX_SUCCESS);
+                            }
                             pmix_list_remove_item(&prte_shrink_campaigns, &_camp->super);
                             PMIX_RELEASE(_camp);
                         }
                         if (0 == prte_dvm_launch_fence) {
-                            prte_plm_base_fence_release(true);
+                            prte_plm_base_fence_release();
                         }
                         goto errmgr_shrink_done;
                     }

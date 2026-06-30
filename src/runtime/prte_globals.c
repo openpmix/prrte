@@ -84,6 +84,8 @@ pmix_list_t prte_grow_campaigns;
 static void campaign_destruct(prte_shrink_campaign_t *p)
 {
     free(p->targets);
+    free(p->alloc_id);
+    free(p->req_id);
 }
 PMIX_CLASS_INSTANCE(prte_shrink_campaign_t, pmix_list_item_t,
                     NULL, campaign_destruct);
@@ -91,6 +93,8 @@ PMIX_CLASS_INSTANCE(prte_shrink_campaign_t, pmix_list_item_t,
 static void grow_campaign_destruct(prte_grow_campaign_t *p)
 {
     free(p->targets);
+    free(p->alloc_id);
+    free(p->req_id);
 }
 PMIX_CLASS_INSTANCE(prte_grow_campaign_t, pmix_list_item_t,
                     NULL, grow_campaign_destruct);
