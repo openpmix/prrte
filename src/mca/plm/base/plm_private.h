@@ -94,11 +94,20 @@ PRTE_EXPORT void prte_plm_base_reset_job(prte_job_t *jdata);
 PRTE_EXPORT int prte_plm_base_setup_prted_cmd(int *argc, char ***argv);
 PRTE_EXPORT void prte_plm_base_check_all_complete(int fd, short args, void *cbdata);
 PRTE_EXPORT int prte_plm_base_setup_virtual_machine(prte_job_t *jdata);
-PRTE_EXPORT void prte_plm_base_fence_release(bool success);
+PRTE_EXPORT void prte_plm_base_fence_release(void);
+PRTE_EXPORT void prte_plm_base_abort_premap_held(void);
 PRTE_EXPORT void prte_plm_base_grow_drain(bool success);
 PRTE_EXPORT void prte_plm_base_grow_target_failed(pmix_rank_t rank);
 PRTE_EXPORT bool prte_plm_base_job_needs_remap(prte_job_t *jdata);
 PRTE_EXPORT void prte_plm_base_reset_proc_map(prte_job_t *jdata);
+/* emit the spec's phase-two completion event to the size-change requester:
+ * PMIX_DVM_IS_READY when success, else PMIX_ERR_DVM_MOD carrying `cause`.
+ * Compiles to a no-op when PMIx lacks the DVM modification event codes. */
+PRTE_EXPORT void prte_plm_base_dvm_mod_notify(const pmix_proc_t *requester,
+                                              const char *alloc_id,
+                                              const char *req_id,
+                                              bool success,
+                                              pmix_status_t cause);
 
 /**
  * Utilities for plm components that use proxy daemons

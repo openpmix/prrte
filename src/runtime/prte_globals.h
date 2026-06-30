@@ -614,6 +614,13 @@ typedef struct {
     pmix_rank_t     *targets;   /* daemon ranks being terminated */
     int              ntargets;  /* initial count */
     int              pending;   /* targets not yet known to have departed */
+    /* requester recorded so the spec's phase-two completion event can be
+     * directed at the process that issued the PMIX_ALLOC_RELEASE; left unset
+     * (have_requester == false) for a scheduler-driven release */
+    pmix_proc_t      requester;
+    char            *alloc_id;       /* PMIX_ALLOC_ID of the allocation, or NULL */
+    char            *req_id;         /* requester's PMIX_ALLOC_REQ_ID, or NULL */
+    bool             have_requester;
 } prte_shrink_campaign_t;
 PMIX_CLASS_DECLARATION(prte_shrink_campaign_t);
 
@@ -633,6 +640,13 @@ typedef struct {
     pmix_list_item_t super;
     pmix_rank_t     *targets;   /* daemon ranks being launched */
     int              ntargets;  /* count, == this campaign's fence contribution */
+    /* requester recorded so the spec's phase-two completion event can be
+     * directed at the process that drove the grow; left unset
+     * (have_requester == false) for a scheduler-driven push */
+    pmix_proc_t      requester;
+    char            *alloc_id;       /* PMIX_ALLOC_ID of the allocation, or NULL */
+    char            *req_id;         /* requester's PMIX_ALLOC_REQ_ID, or NULL */
+    bool             have_requester;
 } prte_grow_campaign_t;
 PMIX_CLASS_DECLARATION(prte_grow_campaign_t);
 
