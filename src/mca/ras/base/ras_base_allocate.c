@@ -676,20 +676,23 @@ static prte_session_t *create_reservation(const char *nspace, uint8_t inherit,
     return s;
 }
 
-/* Register the nodes named in ndlist with the destination reservation: set
- * each node's session backpointer and store a retained reference in the
- * reservation. The node objects themselves live in the global pool. */
-static void add_nodes_to_session(pmix_list_t *ndlist, prte_session_t *dest)
+/* Register the named nodes with the destination reservation: set each node's
+ * session backpointer and store a retained reference in the reservation. The
+ * node objects themselves live in the global pool, which is why this takes the
+ * node *names* and resolves them with prte_node_match: the caller's working
+ * list has already been drained into the pool by prte_ras_base_node_insert, so
+ * the names must be snapshotted before that insert and handed in here. */
+static void add_nodes_to_session(char **names, prte_session_t *dest)
 {
-    prte_node_t *nd, *gnode;
-    int k;
+    prte_node_t *gnode;
+    int k, i;
     bool present;
 
-    if (NULL == dest || dest == prte_default_session) {
+    if (NULL == dest || dest == prte_default_session || NULL == names) {
         return;
     }
-    PMIX_LIST_FOREACH(nd, ndlist, prte_node_t) {
-        gnode = prte_node_match(NULL, nd->name);
+    for (i = 0; NULL != names[i]; i++) {
+        gnode = prte_node_match(NULL, names[i]);
         if (NULL == gnode) {
             continue;
         }
@@ -946,6 +949,7 @@ void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
     prte_daemon_cmd_flag_t cmd = PRTE_DAEMON_SHRINK_CMD;
     size_t n;
     char **nodes, *ndstring;
+    char **rsv_names = NULL;
     int32_t cnt=0, m;
     int ret;
     prte_node_t *node;
@@ -1100,16 +1104,30 @@ void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
                     return;
                 }
                 free(ndstring);
+                /* prte_ras_base_node_insert() drains ndlist into the global
+                 * pool, so snapshot the node names first: add_nodes_to_session()
+                 * below needs them to re-find the pool objects and set their
+                 * session backpointer (which carries the requestor for the
+                 * phase-two completion event). */
+                {
+                    prte_node_t *snap;
+                    PMIX_LIST_FOREACH(snap, &ndlist, prte_node_t) {
+                        PMIx_Argv_append_nosize(&rsv_names, snap->name);
+                    }
+                }
                 ret = prte_ras_base_node_insert(&ndlist, NULL);
                 if (PRTE_SUCCESS != ret) {
                     PRTE_ERROR_LOG(ret);
                     PMIX_LIST_DESTRUCT(&ndlist);
+                    PMIx_Argv_free(rsv_names);
                     req->pstatus = prte_pmix_convert_rc(ret);
                     return;
                 }
                 /* when reserving, withhold these nodes from the default pool by
                  * registering them with the destination session */
-                add_nodes_to_session(&ndlist, dest);
+                add_nodes_to_session(rsv_names, dest);
+                PMIx_Argv_free(rsv_names);
+                rsv_names = NULL;
                 PMIX_LIST_DESTRUCT(&ndlist);
                 found = true;
             }
