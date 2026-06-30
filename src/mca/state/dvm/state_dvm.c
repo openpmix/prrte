@@ -351,8 +351,11 @@ static void vm_ready(int fd, short args, void *cbdata)
          * any in-progress grow campaigns have fully succeeded.  Drain them,
          * dropping their fence contribution, and release any held jobs.
          * Doing the release here — after the WIREUP xcast above — guarantees
-         * held jobs are only admitted once the new daemons are wired up. */
-        prte_plm_base_grow_drain(true);
+         * held jobs are only admitted once the new daemons are wired up.
+         * Nothing to drain outside elastic mode (no campaign was ever made). */
+        if (prte_elastic_mode) {
+            prte_plm_base_grow_drain(true);
+        }
     }
     if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, caddy->jdata->nspace)) {
         prte_dvm_ready = true;
@@ -381,8 +384,10 @@ static void vm_ready(int fd, short args, void *cbdata)
         return;
     }
 
-    /* if a daemon launch campaign is active, park this app job */
-    if (0 < prte_dvm_launch_fence) {
+    /* if a daemon launch campaign is active, park this app job (only possible
+     * in elastic mode, where the fence is raised; the explicit guard keeps the
+     * non-elastic path identical even if the fence were ever left nonzero) */
+    if (prte_elastic_mode && 0 < prte_dvm_launch_fence) {
         caddy->jdata->state = PRTE_JOB_STATE_WAITING_FOR_DAEMONS;
         PMIX_RETAIN(caddy->jdata);
         pmix_pointer_array_add(prte_held_jobs, caddy->jdata);

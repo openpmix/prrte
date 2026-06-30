@@ -838,8 +838,10 @@ void prte_plm_base_launch_apps(int fd, short args, void *cbdata)
     caddy->jdata->state = caddy->job_state;
 
     /* if a shrink campaign is active, hold this job until all targeted
-     * daemons have departed the DVM to avoid sending launch data to a dying daemon */
-    if (!pmix_list_is_empty(&prte_shrink_campaigns)) {
+     * daemons have departed the DVM to avoid sending launch data to a dying
+     * daemon (shrink campaigns are only ever created in elastic mode, so the
+     * explicit guard keeps the non-elastic launch path identical) */
+    if (prte_elastic_mode && !pmix_list_is_empty(&prte_shrink_campaigns)) {
         jdata->state = PRTE_JOB_STATE_WAITING_FOR_DAEMONS;
         PMIX_RETAIN(jdata);
         pmix_pointer_array_add(prte_prelaunch_held_jobs, jdata);
@@ -2390,16 +2392,23 @@ process:
     /* if new daemons are being launched, mark that this job
      * caused it to happen */
     if (0 < map->num_new_daemons) {
-        prte_grow_campaign_t *gcamp;
-        pmix_rank_t gr;
-        int gk;
-
         rc = prte_set_attribute(&jdata->attributes, PRTE_JOB_LAUNCHED_DAEMONS, true,
                                 NULL, PMIX_BOOL);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
+    }
+
+    /* The launch fence only operates when the DVM is permitted to grow/shrink.
+     * Outside elastic mode the DVM is fixed-size, so no campaign is recorded
+     * and the fence is never raised — leaving the normal launch path, and the
+     * normal daemon-failure handling, completely unchanged. */
+    if (prte_elastic_mode && 0 < map->num_new_daemons) {
+        prte_grow_campaign_t *gcamp;
+        pmix_rank_t gr;
+        int gk;
+
         /* Record this launch campaign so the launch fence can be resolved on
          * a per-daemon basis: each new daemon either reports home (success)
          * or its launch fails (comm-failure / failed-to-start), and only
@@ -2718,6 +2727,13 @@ bool prte_plm_base_grow_target_failed(pmix_rank_t rank)
 {
     prte_grow_campaign_t *camp;
     int t;
+
+    /* Outside elastic mode there are no grow campaigns and the daemon loss is
+     * the errmgr's to handle exactly as it always has — never report it as
+     * handled here, so the normal DVM-failure path is preserved. */
+    if (!prte_elastic_mode) {
+        return false;
+    }
 
     /* A daemon has died.  Only act if it was actually the target of an
      * in-progress grow campaign — an unrelated daemon loss must not consume

@@ -37,6 +37,20 @@ fence; if it is nonzero the job parks itself in a held-job array
 The state machine is single-threaded on the progress thread, so no locking is
 required anywhere in this plan.
 
+**Gated on elastic mode.**  Every piece of this machinery is active only when
+the DVM is in elastic mode (the pre-existing ``prte_elastic_mode`` MCA
+parameter, off by default).  The gate is applied at the two points that *raise*
+the fence — grow-campaign creation in ``setup_virtual_machine()`` and
+shrink-campaign creation in the ``PMIX_ALLOC_RELEASE`` handler — so that outside
+elastic mode the fence is never raised, the campaign lists stay empty, and every
+downstream check (the ``VM_READY`` and ``LAUNCH_APPS`` holds, the errmgr
+campaign matching, the drains) is naturally inert.  The consumer sites also
+carry an explicit ``prte_elastic_mode`` guard so the non-elastic path is
+provably identical to the pre-feature behavior — in particular,
+``prte_plm_base_grow_target_failed()`` returns ``false`` immediately, so a
+daemon loss on a fixed-size DVM is handled by the ordinary errmgr abort path
+exactly as before.
+
 .. note::
    The app-triggered expansion path (``--add-host`` / ``--add-hostfile``)
    already sets ``prte_dvm_ready = false`` in ``add_hosts()`` before posting

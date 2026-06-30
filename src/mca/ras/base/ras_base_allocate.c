@@ -1262,14 +1262,17 @@ void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
             req->pstatus = rc;
             return;
         }
-        /* Record the shrink campaign before freeing the ranks array.  Skip
-         * entirely when the release removes no daemons (m == 0): an empty
-         * campaign would never drain (no target ever departs on the comm-
-         * failure path), so prte_shrink_campaigns would stay non-empty forever
-         * and stall every later job at the LAUNCH_APPS hold, and no completion
-         * event would fire.  This mirrors the grow path's num_new_daemons > 0
-         * guard and the spec's "no event when nothing changes" clause. */
-        if (0 < m) {
+        /* Record the shrink campaign before freeing the ranks array.  Only in
+         * elastic mode: outside it the DVM is fixed-size, so the release still
+         * xcasts the shrink command below but no campaign is recorded and the
+         * fence is never raised — the legacy fire-and-forget behavior.  Also
+         * skip when the release removes no daemons (m == 0): an empty campaign
+         * would never drain (no target ever departs on the comm-failure path),
+         * so prte_shrink_campaigns would stay non-empty forever and stall every
+         * later job at the LAUNCH_APPS hold, and no completion event would fire.
+         * This mirrors the grow path's num_new_daemons > 0 guard and the spec's
+         * "no event when nothing changes" clause. */
+        if (prte_elastic_mode && 0 < m) {
             prte_shrink_campaign_t *_camp = PMIX_NEW(prte_shrink_campaign_t);
             _camp->targets = (pmix_rank_t *) malloc(m * sizeof(pmix_rank_t));
             memcpy(_camp->targets, ranks, m * sizeof(pmix_rank_t));
@@ -1296,7 +1299,7 @@ void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
             PRTE_ERROR_LOG(rc);
             /* undo the campaign we just added (only if one was created), and
              * tell the requester the DVM modification failed */
-            if (0 < m) {
+            if (prte_elastic_mode && 0 < m) {
                 prte_shrink_campaign_t *_camp =
                     (prte_shrink_campaign_t *) pmix_list_remove_last(&prte_shrink_campaigns);
                 prte_dvm_launch_fence -= _camp->pending;
