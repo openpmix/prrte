@@ -343,6 +343,7 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
     pmix_list_t nodes;
     size_t n, k;
     char **hostfiles;
+    bool handled = false;
 
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
 
@@ -361,6 +362,7 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
                 }
             }
             PMIx_Argv_free(hostfiles);
+            handled = true;
         }
         if (PMIx_Check_key(req->info[n].key, PMIX_ADD_HOST)) {
             // comma-delimited list of hosts to add or delete
@@ -371,6 +373,7 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
                 req->pstatus = prte_pmix_convert_rc(rc);
                 return req->pstatus;
             }
+            handled = true;
         }
     }
 
@@ -384,5 +387,33 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
             return req->pstatus;
         }
     }
-    return PMIX_OPERATION_SUCCEEDED;
+    PMIX_LIST_DESTRUCT(&nodes);
+
+    /* When no external scheduler is present, this component is the DVM's local
+     * resource authority for elastic operations.  Claim the size-change
+     * directives so the base prte_ras_base_complete_request() logic runs with
+     * the ORIGINAL request info intact:
+     *   - PMIX_ALLOC_NEW / PMIX_ALLOC_EXTEND carrying PMIX_ALLOC_NODE_LIST add
+     *     the named nodes and extend the DVM;
+     *   - PMIX_ALLOC_RELEASE removes the named nodes (PMIX_ALLOC_NODE_LIST) or
+     *     tears down a whole reservation (PMIX_ALLOC_ID).
+     * This is the schedulerless path that replaces the ras/pmix "simulate"
+     * shortcut, which discarded the request's node list and allocation ids and
+     * so could not target a specific reservation for release. */
+    switch (req->allocdir) {
+    case PMIX_ALLOC_NEW:
+    case PMIX_ALLOC_EXTEND:
+    case PMIX_ALLOC_RELEASE:
+        handled = true;
+        break;
+    default:
+        break;
+    }
+
+    /* If we satisfied something, let the base layer finish it; otherwise defer
+     * to the next module (this component is the lowest-priority RAS). */
+    if (handled) {
+        return PMIX_OPERATION_SUCCEEDED;
+    }
+    return PMIX_ERR_TAKE_NEXT_OPTION;
 }

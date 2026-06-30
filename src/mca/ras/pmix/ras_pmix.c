@@ -129,7 +129,12 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
     // attach if not
     rc = prte_pmix_set_scheduler();
     if (PMIX_SUCCESS != rc) {
-        return rc;
+        /* No scheduler is reachable, so we cannot forward this request.  Defer
+         * to the next RAS module rather than failing the whole request: in a
+         * schedulerless DVM the ras/hosts component handles node-list grow and
+         * shrink locally.  Returning a hard error here (e.g. PMIX_ERR_UNREACH)
+         * would instead abort the modify loop before hosts is consulted. */
+        return PMIX_ERR_TAKE_NEXT_OPTION;
     }
 
     // we need to pass the request on to the scheduler
