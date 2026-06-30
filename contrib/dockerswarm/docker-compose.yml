@@ -1,0 +1,33 @@
+# A 4-"node" PRRTE DVM on a private docker network for elastic grow/shrink
+# testing.  node1 is the head node (where you start `prte` and run the tests);
+# node2..node4 are spare nodes the DVM can grow onto and shrink back out of.
+# Each container just runs sshd; we `docker exec` into node1 to drive the DVM.
+services:
+  node1:
+    image: prte-elastic:latest
+    hostname: node1
+    container_name: prte-node1
+    networks: [dvm]
+    tty: true
+  node2:
+    image: prte-elastic:latest
+    hostname: node2
+    container_name: prte-node2
+    networks: [dvm]
+    tty: true
+  node3:
+    image: prte-elastic:latest
+    hostname: node3
+    container_name: prte-node3
+    networks: [dvm]
+    tty: true
+  node4:
+    image: prte-elastic:latest
+    hostname: node4
+    container_name: prte-node4
+    networks: [dvm]
+    tty: true
+
+networks:
+  dvm:
+    driver: bridge
