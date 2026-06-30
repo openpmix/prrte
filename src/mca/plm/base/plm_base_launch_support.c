@@ -2612,23 +2612,142 @@ void prte_plm_base_grow_drain(bool success)
     }
 }
 
-void prte_plm_base_grow_target_failed(pmix_rank_t rank)
+/* Roll a failed grow campaign back out of the DVM so a failed grow leaves the
+ * DVM at its exact pre-grow membership rather than half-extended (spec
+ * conformance #5).  `trigger` is the rank whose death triggered the failure;
+ * the errmgr has already marked it not-alive and decremented num_daemons, and
+ * its routing is repaired here.  Every *other* target is handled by whether a
+ * daemon actually came up:
+ *
+ *   - a target that started (PRTE_PROC_FLAG_ALIVE) is terminated using the same
+ *     PRTE_DAEMON_SHRINK_CMD machinery the DVM shrink path uses; its departure
+ *     is then reconciled on the normal daemon-loss path as it exits;
+ *   - a target that never started has no daemon to signal, so its launch-time
+ *     daemon-count bump is reverted here (no comm-failure event will arrive for
+ *     it).
+ *
+ * In all cases the node's daemon backpointer is cleared so the mapper can no
+ * longer place a later job on it.  The new nodes carry no application procs —
+ * the jobs that would have used them were held at the fence, never launched —
+ * so clearing ``node->daemon`` is sufficient to remove the node from the DVM's
+ * usable set.  The teardown is strictly campaign-scoped: it touches only the
+ * ranks in this campaign's ``targets`` array. */
+static void grow_rollback(prte_grow_campaign_t *camp, pmix_rank_t trigger)
+{
+    prte_job_t *daemons;
+    prte_proc_t *dproc;
+    prte_node_t *node;
+    pmix_rank_t *kill;
+    int32_t nkill = 0;
+    int t;
+
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    if (NULL == daemons) {
+        return;
+    }
+    kill = (pmix_rank_t *) malloc(camp->ntargets * sizeof(pmix_rank_t));
+    if (NULL == kill) {
+        return;
+    }
+
+    /* repair routing for the daemon whose loss triggered the failure — the
+     * errmgr's own route_lost call is skipped because grow_target_failed()
+     * reports the death as handled (so the errmgr does not abort the DVM) */
+    prte_rml_route_lost(trigger);
+
+    for (t = 0; t < camp->ntargets; t++) {
+        pmix_rank_t r = camp->targets[t];
+        if (PMIX_RANK_INVALID == r) {
+            continue;
+        }
+        dproc = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs, r);
+        if (NULL == dproc) {
+            continue;
+        }
+        node = dproc->node;
+        if (r != trigger) {
+            if (PRTE_FLAG_TEST(dproc, PRTE_PROC_FLAG_ALIVE)) {
+                /* a started daemon — terminate it via the shrink command */
+                kill[nkill++] = r;
+            } else {
+                /* never started: no comm-failure event will arrive, so revert
+                 * its launch-time daemon-count bump here */
+                if (0 < prte_process_info.num_daemons) {
+                    --prte_process_info.num_daemons;
+                }
+            }
+        }
+        /* detach the node from the DVM's usable set */
+        if (NULL != node) {
+            if (NULL != node->session && node->session != prte_default_session) {
+                node->session = NULL;
+            }
+            if (node->daemon == dproc) {
+                node->daemon = NULL;
+                PMIX_RELEASE(dproc);
+            }
+        }
+    }
+
+    if (0 < nkill) {
+        pmix_data_buffer_t msg;
+        prte_daemon_cmd_flag_t cmd = PRTE_DAEMON_SHRINK_CMD;
+        pmix_status_t rc;
+
+        PMIX_DATA_BUFFER_CONSTRUCT(&msg);
+        rc = PMIx_Data_pack(NULL, &msg, &cmd, 1, PMIX_UINT8);
+        if (PMIX_SUCCESS == rc) {
+            rc = PMIx_Data_pack(NULL, &msg, &nkill, 1, PMIX_INT32);
+        }
+        if (PMIX_SUCCESS == rc) {
+            rc = PMIx_Data_pack(NULL, &msg, kill, nkill, PMIX_PROC_RANK);
+        }
+        if (PMIX_SUCCESS == rc) {
+            if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &msg))) {
+                PRTE_ERROR_LOG(rc);
+            }
+        } else {
+            PMIX_ERROR_LOG(rc);
+        }
+        PMIX_DATA_BUFFER_DESTRUCT(&msg);
+    }
+    free(kill);
+}
+
+bool prte_plm_base_grow_target_failed(pmix_rank_t rank)
 {
     prte_grow_campaign_t *camp;
     int t;
 
     /* A daemon has died.  Only act if it was actually the target of an
      * in-progress grow campaign — an unrelated daemon loss must not consume
-     * the launch fence.  If it was a grow target, the grow is compromised,
-     * so drain the campaigns and fail any held jobs. */
+     * the launch fence (and must be left to the errmgr's normal handling).
+     * If it was a grow target, that campaign is compromised: roll it back out
+     * of the DVM, drop its fence contribution, notify its requester of the
+     * failure, and abort the pre-map held jobs.  The teardown is scoped to the
+     * matched campaign, so any concurrent grow keeps its own daemons and
+     * completes normally (spec conformance #5). */
     PMIX_LIST_FOREACH(camp, &prte_grow_campaigns, prte_grow_campaign_t) {
         for (t = 0; t < camp->ntargets; t++) {
-            if (camp->targets[t] == rank) {
-                prte_plm_base_grow_drain(false);
-                return;
+            if (camp->targets[t] != rank) {
+                continue;
             }
+            pmix_list_remove_item(&prte_grow_campaigns, &camp->super);
+            prte_dvm_launch_fence -= camp->ntargets;
+            grow_rollback(camp, rank);
+            if (camp->have_requester) {
+                /* the specific daemon-failure status is not threaded down to
+                 * this layer yet, so report a generic cause */
+                prte_plm_base_dvm_mod_notify(&camp->requester, camp->alloc_id,
+                                             camp->req_id, false, PMIX_ERROR);
+            }
+            PMIX_RELEASE(camp);
+            /* any grow failure fails the whole pre-map held-job set */
+            prte_plm_base_abort_premap_held();
+            return true;
         }
     }
+    return false;
 }
 
 bool prte_plm_base_job_needs_remap(prte_job_t *jdata)

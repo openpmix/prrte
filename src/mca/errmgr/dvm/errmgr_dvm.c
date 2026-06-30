@@ -274,8 +274,14 @@ static void proc_errors(int fd, short args, void *cbdata)
             /* if this daemon was the target of an in-progress grow campaign,
              * resolve its rank against the launch fence (failure).  Only the
              * specific ranks being launched affect the fence, so an unrelated
-             * daemon loss during a grow no longer consumes the fence. */
-            prte_plm_base_grow_target_failed(proc->rank);
+             * daemon loss during a grow no longer consumes the fence.  When it
+             * was a grow target the campaign is rolled back out of the DVM and
+             * the loss is fully handled here, so skip the general daemon-loss
+             * handling below — that path would otherwise abort the whole DVM
+             * over a failure the grow rollback has already absorbed. */
+            if (prte_plm_base_grow_target_failed(proc->rank)) {
+                goto cleanup;
+            }
             /* check if this daemon was a pending shrink target */
             {
                 prte_shrink_campaign_t *_camp, *_next;
