@@ -202,6 +202,7 @@ Do not use `PMIX_` or `pmix_` prefixes for new PRRTE symbols.
 
 ### New files need the standard copyright/license header.
 
+Copy the multi-institution BSD header block — including the `Copyright (c) 2026      Nanook Consulting  All rights reserved.
 Copy the multi-institution BSD header block — including the `$COPYRIGHT$` and
 `$HEADER$` tokens — from a neighboring file. If you substantially
 change an existing file, add your copyright line to its block.
@@ -291,6 +292,16 @@ buffers unless interfacing with PMIx routines that require it.
 
 PRRTE targets C11.  Do not add `-Wno-*` flags to suppress warnings —
 fix the underlying issue.
+
+### Use the `__prte_attribute_*__` macros for compiler attributes.**
+  [`src/include/prte_config_bottom.h`](src/include/prte_config_bottom.h),
+  pulled in transitively by `prte_config.h`, defines portable wrappers —
+  `__prte_attribute_unused__`, `__prte_attribute_noreturn__`,
+  `__prte_attribute_format__`, `__prte_attribute_deprecated__`, and many
+  more — that expand to the appropriate `__attribute__((...))` on
+  compilers that support it and to nothing elsewhere. Reach for these
+  (for example, to mark an unused function parameter) rather than writing
+  a bare `__attribute__` or leaving a warning unaddressed.
 
 ---
 
