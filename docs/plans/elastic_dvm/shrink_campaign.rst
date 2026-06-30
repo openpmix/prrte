@@ -512,62 +512,7 @@ Design Invariants
 Follow-up — collective shrink completion
 -----------------------------------------
 
-The shrink design above drains a campaign **one daemon at a time**: every
-targeted daemon exits on its own and the HNP discovers each departure
-independently through the errmgr comm-failure path (Step 5), decrementing the
-campaign's ``pending`` count and the fence once per death.  This is correct,
-but each individual departure drives a separate routing-tree repair —
-``prte_rml_repair_routing_tree()`` runs ``handle_promotion()`` and
-``update_descendants()`` for that single rank.  Shrinking ``m`` daemons that
-sit along one branch of the radix routing tree therefore triggers up to ``m``
-sequential promotions/descendant rewrites, which review of PR `#2472
-<https://github.com/openpmix/prrte/pull/2472>`_ flagged as potentially
-expensive for a large shrink (unprofiled).
-
-A **collective** completion scheme would repair the tree once per campaign
-instead of once per daemon:
-
-#. Broadcast the ``PRTE_DAEMON_SHRINK_CMD`` as today.
-#. Each targeted daemon records that it is leaving and does any local
-   processing, but **does not exit yet**.
-#. The HNP hooks the *broadcast's* completion.  The reliable xcast in
-   ``src/mca/grpcomm/direct/grpcomm_direct_xcast.c`` already tracks completion
-   via ACKs flowing up the tree (``finish_op`` on the master means every daemon
-   received the op); a per-op completion callback would be added, or the shrink
-   xcast special-cased, to fire a handler at that point.
-#. That handler reports **all** of the campaign's targets as failed in a single
-   batch via ``prte_rml_repair_routing_tree(failed_ranks, /*global=*/false)``,
-   which already accepts a rank array and performs one promotion/descendant
-   pass for the whole set (``src/rml/routed_radix.c``).
-#. Each doomed daemon exits once its lifeline disconnects — driven by the batch
-   failure report — rather than self-exiting.
-
-This is **not** the per-daemon acknowledgement that the
-*Design Decision — Complete on Death, Not on Acknowledgement* section above
-rejected.  That ACK announced a daemon's *intent* to leave and, acted upon,
-would have released held jobs while the HNP still believed the daemon present.
-Here the authoritative HNP-side teardown (route removal, ``num_daemons``, node
-state) still happens at the batch failure report, and held jobs are released
-only after it — so the invariant "act once teardown has occurred, not on
-intent" is preserved.  The doomed daemons exiting slightly later is harmless:
-they are already excluded from routing and mapping, so released jobs remap onto
-survivors correctly.  Completion would collapse to a single event per campaign,
-which also retires the per-rank ``PMIX_RANK_INVALID`` idempotency stamping and
-the double-count analysis that the per-death path requires.  The completion
-event (``PMIX_DVM_IS_READY``) would then fire from that single batch point
-rather than from the last individual departure.
-
-This is an **optimization, not a correctness fix**, so it is deliberately
-deferred out of the launch-fence work:
-
-* It needs a new xcast-completion callback hook (or a shrink special case).
-* It moves the daemon-side ``PRTE_DAEMON_SHRINK_CMD`` handler from self-exit to
-  record-and-wait-for-lifeline.
-* It moves the fence-completion trigger from the errmgr comm-failure path to the
-  batch-repair callback, and must verify that all daemon-loss bookkeeping that
-  currently rides on the comm-failure event still runs when the loss is
-  declared proactively.
-* The collective / whole-branch failure path is far less exercised than
-  individual daemon deaths and may surface bugs in the tree-repair and
-  fault-handling code, so it warrants validation against large multi-daemon and
-  single-branch shrinks.
+A possible optimization — repairing the routing tree once per shrink campaign
+(a collective completion scheme) rather than once per departing daemon — has
+been deferred out of the launch-fence work and tracked separately as
+`openpmix/prrte#2492 <https://github.com/openpmix/prrte/issues/2492>`_.
