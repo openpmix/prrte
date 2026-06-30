@@ -2414,13 +2414,26 @@ process:
         for (gk = 0, gr = map->daemon_vpid_start; gk < gcamp->ntargets; gk++, gr++) {
             gcamp->targets[gk] = gr;
         }
-        /* The phase-two completion event needs the requester that drove this
-         * grow, but the originating allocation request is not threaded through
-         * to setup_virtual_machine yet, so leave have_requester false for now
-         * (PMIX_NEW zero-inits it).  grow_drain() therefore emits no event for
-         * a grow until that plumbing lands; the fence accounting and rollback
-         * are unaffected.  A scheduler-driven push legitimately has no
-         * requester and stays false regardless. */
+        /* Record the requester for the spec's phase-two completion event.  The
+         * RAS reservation machinery sets each reserved node's ->session
+         * backpointer (add_nodes_to_session), and that session carries the
+         * requestor and the allocation ids; take them from the first new
+         * daemon's node.  The initial DVM bring-up and a scheduler-driven push
+         * have no such requestor (the default session, or an invalid requestor
+         * rank), so have_requester stays false and grow_drain() emits no event
+         * for them. */
+        {
+            prte_proc_t *dproc = (prte_proc_t *)
+                pmix_pointer_array_get_item(daemons->procs, map->daemon_vpid_start);
+            prte_session_t *sess =
+                (NULL != dproc && NULL != dproc->node) ? dproc->node->session : NULL;
+            if (NULL != sess && PMIX_RANK_INVALID != sess->requestor.rank) {
+                PMIX_XFER_PROCID(&gcamp->requester, &sess->requestor);
+                gcamp->alloc_id = (NULL != sess->alloc_refid) ? strdup(sess->alloc_refid) : NULL;
+                gcamp->req_id = (NULL != sess->user_refid) ? strdup(sess->user_refid) : NULL;
+                gcamp->have_requester = true;
+            }
+        }
         pmix_list_append(&prte_grow_campaigns, &gcamp->super);
         prte_dvm_launch_fence += map->num_new_daemons;
     }
