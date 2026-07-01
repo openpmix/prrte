@@ -304,30 +304,80 @@ Design invariants preserved
   xcast-failure cleanup in :ref:`dvm-shrink-campaign-label` Step 1; once the
   shrink command is on the wire, every departure is a success for the campaign.
 
-Validation
-----------
+Implementation status
+---------------------
 
-The collective / whole-branch failure path is far less exercised than
-individual daemon deaths and may surface bugs in the tree-repair and
-fault-handling code.  Validate on the in-repo Docker testbed
-(``contrib/dockerswarm/``), which is now sized to **ten** nodes precisely so a
-shrink can target several daemons on one branch of the radix tree at once:
+This plan has been implemented and validated on the ten-node Docker testbed.
+The change spans ``grpcomm/grpcomm.h``, ``grpcomm/direct/`` (the ``xcast_nb``
+entry point plus the completion FIFO), ``ras/base/ras_base_allocate.c`` (the
+collective completion handler), ``prted/prted_comm.c`` and ``rml/routed_radix.c``
+(the daemon leaving mode), ``errmgr/dvm/errmgr_dvm.c`` (the already-departed
+guard), and ``runtime/prte_globals.{h,c}``.  It builds warning-free under
+``--enable-devel-check`` (``-Werror`` plus the full picky set).
 
-#. **Deep tree.**  Start the DVM in elastic mode and grow onto eight nodes in a
-   single request (``elastic grow node2:2,...,node9:2``); this builds a
-   nine-daemon radix tree with real depth.
-#. **Single-branch shrink.**  Shrink a contiguous set of daemons that sit on one
-   branch and confirm exactly **one** promotion/descendant pass runs (trace with
-   ``--prtemca ... routed/rml verbosity``), a single ``PMIX_DVM_IS_READY`` fires,
-   the HNP survives, and ``prun -n 1 hostname`` still works afterward.
-#. **Multi-daemon, multi-branch shrink.**  Shrink daemons drawn from more than
-   one branch in a single request; confirm the batch repair and the single
-   completion event still hold.
-#. **In-flight job.**  Drive a shrink while a job is held at the ``LAUNCH_APPS``
-   hold point and confirm it remaps onto survivors after completion.
-#. **Crash during shrink.**  Kill a doomed daemon (``docker exec ... pkill -9
-   prted``) after the broadcast but before its lifeline drops, and confirm the
-   campaign still drains exactly once.
+Two implementation choices settled the open questions the plan had flagged:
+
+* The completion hook is the **general** ``xcast_nb`` facility (open question #2's
+  preferred option), not a shrink special case.
+* The daemon departs on a **bounded timer** with a lifeline-loss fast path (the
+  plan's endorsed fallback); the "survivor actively closes the connection" half
+  of open question #1 was *not* built — the timer covers it.
+
+One scope reduction is worth recording: **survivors are not batched.**  A survivor
+that loses several targets still repairs once per departure, exactly as before.
+Batching the survivors would require them to repair from the broadcast target
+list *mid-broadcast*, which races the reliable xcast's own ACK bookkeeping on the
+same tree — the interaction the plan flags as needing validation.  The HNP-side
+repair — the cost issue #2492 actually names — is collapsed to one pass; the
+survivor-side batching is left as a follow-up.
+
+Validation results
+------------------
+
+The collective / whole-branch failure path is far less exercised than individual
+daemon deaths, so it was exercised on the in-repo Docker testbed
+(``contrib/dockerswarm/``), sized to **ten** nodes and driven with
+``--prtemca rml_radix 2`` to force a real multi-level tree
+(``0 → 1,2   1 → 3,4   2 → 5,6   3 → 7,8``) rather than the default flat fan-out.
+
+#. **Single-branch multi-daemon shrink** (subtree ``{3,7,8}``): completed with a
+   single ``PMIX_DVM_IS_READY``; the HNP survived and ``prun`` still worked.  With
+   ``routed_base_verbose`` on the flat tree the collapse is visible directly — a
+   **single** repair pass takes children ``4,5,6 → INVALID`` in one shot, and
+   every one of the departing daemons' comm-failures is absorbed by the
+   already-departed guard (``errmgr_base_verbose`` shows the "ignoring it" line),
+   driving **zero** per-death repairs.
+#. **Multi-branch shrink** (ranks ``4`` and ``6``, one leaf under each of the
+   HNP's two children): one completion event, correct survivors, ``prun`` works.
+#. **Crash during shrink** (``pkill -9`` a target's ``prted`` inside the
+   departure window): the campaign still drained to a single completion event and
+   the HNP survived — confirming clean exit and crash are indistinguishable.
+#. **Fence under load** (forty rapid ``prun`` launches spanning a shrink): all
+   forty succeeded and the DVM stayed healthy, so the fence raised during a shrink
+   does not wedge concurrent traffic.
+
+The **in-flight-job remap-onto-survivors** path (a job held at the ``LAUNCH_APPS``
+hold point during a shrink, then remapped) could **not** be exercised in this
+harness: a plain ``prun`` maps only onto the head node's base pool, not the
+reservation the grown/shrunk nodes belong to, so a normal job is never held for a
+reservation-node shrink; and the ``elastic`` tool cannot connect while concurrent
+``prun`` sessions litter ``$TMPDIR`` with rendezvous files (it fails
+``PMIX_ERR_UNREACH`` — "multiple possible servers").  The hold/remap machinery is
+inherited unchanged from :ref:`dvm-shrink-campaign-label`; this plan only moves
+*when* the fence releases, which the tests above confirm fires correctly.  A
+reservation-targeted in-flight shrink remains to be validated.
+
+Two bugs surfaced and were fixed during validation, both worth noting because
+they are easy to reintroduce:
+
+* The completion callback was **lost across the master's relay-to-self**: the
+  op created in ``xcast_nb`` is discarded by ``begin_xcast`` and the master
+  rebuilds a fresh op on receipt, so the callback has to be carried in the FIFO
+  and re-attached when the master relays its own broadcast back.
+* The FIFO was first declared with ``PMIX_LIST_STATIC_INIT``, whose sentinel
+  ``next``/``prev`` are ``NULL``; appending to such a list corrupts memory and
+  silently wedged normal launches.  The list must be ``PMIX_CONSTRUCT``-ed — it
+  now lives in the xcast-ops object and is constructed in ``xcast_con``.
 
 See ``contrib/dockerswarm/README.md`` for the elastic-mode flag, the cleanup
 loop between runs, and the known re-grow flake (#2491).
@@ -335,28 +385,31 @@ loop between runs, and the known re-grow flake (#2491).
 Open questions
 --------------
 
-#. **Terminate-on-lifeline mode (design decided; code to build).**  Confirmed:
-   no terminate-on-lifeline-loss path exists today — a daemon that loses its
-   lifeline recovers/promotes, it does not exit — so this path must be *created*
-   as part of this effort.  The *race* concern (lifeline failing before the
-   daemon knows it is leaving) is resolved by construction — leaving mode rides
-   in the shrink command, which reaches each doomed daemon through its own
-   lifeline ahead of that lifeline's failure (see *Design Decision — Leaving mode
-   rides in the shrink command*).  The remaining build work is to (a) set and
-   honor the leaving-mode flag on the daemon side when it processes a shrink
-   command naming its own rank (Step 3) and (b) ensure the survivor-side rewire
-   actually closes the connection to each departing child so the lifeline drops.
-   Keep a bounded self-exit fallback until both halves are proven on the testbed.
-#. **General callback vs. shrink special case (Step 1).**  Is a general per-op
-   xcast completion callback wanted now, or a narrow shrink special case with a
-   later generalization?  Affects the ``grpcomm`` API surface.
-#. **Comm-failure fall-through (Step 4).**  Exactly which branches of the
-   post-shrink daemon-loss handling in ``errmgr_dvm.c`` must be taught to ignore
-   a rank the HNP already tore down, so the doomed daemons' eventual real deaths
-   are harmless?
+#. **Terminate-on-lifeline mode — resolved (with a fallback).**  Implemented: a
+   target sets ``prte_dvm_leaving`` as it processes the shrink command naming its
+   own rank, and departs on a bounded timer or, sooner, when its lifeline drops
+   (``prte_rml_route_lost`` exits early only while ``prte_dvm_leaving`` is set, so
+   a genuine unrelated fault still recovers).  The race is closed by construction
+   as the design decision argues.  The half that was **not** built is the
+   survivor *actively closing* the connection to each departing child; the timer
+   makes that unnecessary for correctness, at the cost of the doomed daemons
+   lingering a second or two after completion.  Building the active close would
+   let the fast path fire deterministically and retire the timer.
+#. **General callback vs. shrink special case — resolved.**  Implemented as the
+   general ``xcast_nb`` facility, usable beyond shrink.
+#. **Comm-failure fall-through — resolved.**  A daemon comm-failure is ignored
+   when the daemon is already not-alive **and** its recorded state is at or past
+   ``PRTE_PROC_STATE_TERMINATED`` (the state the completion handler stamps).  The
+   state test is what keeps the guard from swallowing a ``FAILED_TO_START`` daemon
+   (never alive, but its state is still below ``TERMINATED`` at that point).
+#. **Survivor-side batching — open follow-up.**  See *Implementation status*:
+   survivors still repair once per departure.  Batching them means repairing from
+   the broadcast list mid-broadcast, which must be reconciled with the reliable
+   xcast's ACK bookkeeping on the same tree.
 #. **Profiling.**  The original concern was unprofiled.  Worth measuring the
    per-daemon vs. batch repair cost on a large single-branch shrink to confirm
-   the optimization earns its complexity before committing to it.
+   the optimization earns its complexity — especially since only the HNP side is
+   batched so far.
 
 Summary of files changed
 ------------------------
