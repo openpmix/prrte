@@ -158,6 +158,19 @@ whole batch, and exactly once:
    comm-failure event*; when the loss is declared proactively it must be done
    here instead.  **This is the highest-risk part of the change** — see
    *Validation* below.
+#. **Reset the node's launch state for re-grow.**  Detaching the daemon
+   (``node->daemon = NULL``, ``node->session = NULL``) is not enough to make the
+   node re-growable: the node object persists in the pool carrying the
+   ``PRTE_NODE_FLAG_DAEMON_LAUNCHED`` flag every plm launcher checks, and it
+   stays in the daemon-job map.  Left as-is, a later grow onto the same node is
+   skipped ("daemon already exists") and its prted never relaunches, and the
+   stale map entry lets ``setup_vm`` add the node a second time.  Call the shared
+   helper ``prte_plm_base_reset_dvm_node()`` for each detached node — it clears
+   ``PRTE_NODE_FLAG_DAEMON_LAUNCHED``/``PRTE_NODE_FLAG_LOC_VERIFIED`` and drops
+   the node from the daemon-job map.  This is launcher-agnostic and is a
+   prerequisite for re-growing a previously shrunk node (see #2491); it does not
+   by itself complete the re-grow, which additionally needs the daemon vpid space
+   left dense enough for the positional radix routing tree.
 #. **Fence and completion.**  Decrement ``prte_dvm_launch_fence`` by
    ``camp->pending`` (all at once), invoke
    ``prte_ras_base_shrink_complete(camp)`` to give the RAS modules their release
@@ -287,6 +300,18 @@ unaffected: a rank cannot be simultaneously a grow target and a shrink target,
 and the grow path still relies on the real comm-failure event.  Only the shrink
 branch moves to the collective callback.
 
+The grow-failure rollback (``prte_plm_base_grow_rollback``) tears nodes out of
+the DVM for the same reason a shrink does, so it shares the same
+``prte_plm_base_reset_dvm_node()`` step: a node whose grow was rolled back must
+also return to a pristine, never-launched state so a subsequent grow can reuse
+it.  Relatedly, the errmgr must treat ``PRTE_PROC_STATE_FAILED_TO_CONNECT`` like
+the other daemon comm-failures (``COMM_FAILED``, ``HEARTBEAT_FAILED``,
+``UNABLE_TO_SEND_MSG``, ``FAILED_TO_START``) so it flows into the
+``grow_target_failed`` rollback rather than the fatal
+"UNSUPPORTED DAEMON ERROR STATE" path — otherwise a daemon that comes up during
+a grow but cannot complete its connect-back takes the whole DVM down instead of
+failing just that grow.
+
 Design invariants preserved
 ----------------------------
 
@@ -314,6 +339,12 @@ collective completion handler), ``prted/prted_comm.c`` and ``rml/routed_radix.c`
 (the daemon leaving mode), ``errmgr/dvm/errmgr_dvm.c`` (the already-departed
 guard), and ``runtime/prte_globals.{h,c}``.  It builds warning-free under
 ``--enable-devel-check`` (``-Werror`` plus the full picky set).
+
+A follow-on commit adds the shared ``prte_plm_base_reset_dvm_node()`` helper
+(``plm/base/plm_base_launch_support.c``, declared in ``plm/base/plm_private.h``),
+called from the shrink-completion teardown and the grow-failure rollback, plus
+the ``PRTE_PROC_STATE_FAILED_TO_CONNECT`` routing in ``errmgr/dvm/errmgr_dvm.c``.
+Both are launcher-agnostic and build warning-free under the same picky set.
 
 The entire machinery is gated behind ``prte_elastic_mode``.  The master only
 enqueues an ``xcast_nb`` completion (and pops it on the relay-to-self) when
@@ -402,8 +433,20 @@ they are easy to reintroduce:
   silently wedged normal launches.  The list must be ``PMIX_CONSTRUCT``-ed — it
   now lives in the xcast-ops object and is constructed in ``xcast_con``.
 
-See ``contrib/dockerswarm/README.md`` for the elastic-mode flag, the cleanup
-loop between runs, and the known re-grow flake (#2491).
+See ``contrib/dockerswarm/README.md`` for the elastic-mode flag and the cleanup
+loop between runs.
+
+Re-grow of a just-shrunk node (#2491) is **partially** addressed here.  The
+``prte_plm_base_reset_dvm_node()`` step above fixes the launcher-agnostic half —
+a shrunk node is no longer skipped ("daemon already exists") or duplicated on a
+later grow, verified on the testbed.  The remaining half is the daemon vpid
+space: a shrink leaves a dead vpid that the positional radix routing tree
+(``prte_rml_compute_routing_tree``) treats as a live daemon on the next grow, so
+the re-grown daemon fails wireup.  Reusing the vacated vpid would fix it for the
+ssh launcher but breaks the non-ssh launchers (slurm/pals/lsf), which launch
+daemons as a **sequential** vpid range; a launcher-agnostic fix therefore has to
+route the tree around the dead rank instead.  That routing-side fix is tracked
+separately and is not part of this change.
 
 Open questions
 --------------
