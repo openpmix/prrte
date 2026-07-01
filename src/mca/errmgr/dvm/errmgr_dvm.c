@@ -266,6 +266,25 @@ static void proc_errors(int fd, short args, void *cbdata)
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                 goto cleanup;
             }
+            /* If we have already torn this daemon out of the DVM, a later
+             * comm-failure for it is a harmless echo and must be ignored: acting
+             * on it again would double-decrement num_daemons and could re-drive
+             * the abort logic below.  This is the fall-through the collective
+             * DVM-shrink path relies on — its completion handler proactively
+             * marks each target not-alive and sets its state to TERMINATED (see
+             * ras_base_allocate.c), so the target's eventual real departure
+             * arrives here already handled.  The state test keeps this from
+             * swallowing a FAILED_TO_START daemon (never alive, but its recorded
+             * state is still below TERMINATED at this point) so that genuine
+             * start failures are still handled below. */
+            if (!PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_ALIVE) &&
+                PRTE_PROC_STATE_TERMINATED <= pptr->state) {
+                PMIX_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+                                     "%s Comm failure for already-departed daemon %s - ignoring it",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                     PRTE_NAME_PRINT(proc)));
+                goto cleanup;
+            }
             /* mark the daemon as gone */
             PRTE_FLAG_UNSET(pptr, PRTE_PROC_FLAG_ALIVE);
             /* update the state */
@@ -283,44 +302,11 @@ static void proc_errors(int fd, short args, void *cbdata)
             if (prte_plm_base_grow_target_failed(proc->rank)) {
                 goto cleanup;
             }
-            /* check if this daemon was a pending shrink target */
-            {
-                prte_shrink_campaign_t *_camp, *_next;
-                int _t;
-                PMIX_LIST_FOREACH_SAFE(_camp, _next,
-                                       &prte_shrink_campaigns, prte_shrink_campaign_t) {
-                    for (_t = 0; _t < _camp->ntargets; _t++) {
-                        if (_camp->targets[_t] != proc->rank) continue;
-                        /* stamp this slot so a repeated comm event for the
-                         * same daemon cannot decrement the campaign twice */
-                        _camp->targets[_t] = PMIX_RANK_INVALID;
-                        _camp->pending--;
-                        prte_dvm_launch_fence--;
-                        if (0 == _camp->pending) {
-                            /* this request's shrink is complete — first let the
-                             * active RAS modules release the freed resources
-                             * back to the scheduler, then notify the requester
-                             * that the DVM now reflects the new size (clean exit
-                             * and crash are both successes for the campaign, so
-                             * this drain is always success) */
-                            prte_ras_base_shrink_complete(_camp);
-                            if (_camp->have_requester) {
-                                prte_plm_base_dvm_mod_notify(&_camp->requester,
-                                                             _camp->alloc_id,
-                                                             _camp->req_id,
-                                                             true, PMIX_SUCCESS);
-                            }
-                            pmix_list_remove_item(&prte_shrink_campaigns, &_camp->super);
-                            PMIX_RELEASE(_camp);
-                        }
-                        if (0 == prte_dvm_launch_fence) {
-                            prte_plm_base_fence_release();
-                        }
-                        goto errmgr_shrink_done;
-                    }
-                }
-              errmgr_shrink_done: ;
-            }
+            /* NOTE: a daemon departing as part of a DVM *shrink* is not handled
+             * here.  The collective shrink-completion handler tears each target
+             * out of the DVM proactively when the shrink broadcast completes, so
+             * by the time the target's real comm-failure arrives it has already
+             * been marked not-alive and is caught by the guard above. */
             /* if we have ordered prteds to terminate or abort
              * is in progress, record it */
             if (prte_prteds_term_ordered || prte_abnormal_term_ordered) {

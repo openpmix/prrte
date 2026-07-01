@@ -165,6 +165,7 @@ bool prte_routing_is_enabled = true;
 bool prte_dvm_abort_ordered = false;
 bool prte_prteds_term_ordered = false;
 bool prte_allowed_exit_without_sync = false;
+bool prte_dvm_leaving = false;
 
 int prte_timeout_usec_per_proc = -1;
 float prte_max_timeout = -1.0;

@@ -49,6 +49,7 @@ prte_grpcomm_base_module_t prte_grpcomm_direct_module = {
     .finalize = finalize,
     .fault_handler = fault_handler,
     .xcast = prte_grpcomm_direct_xcast,
+    .xcast_nb = prte_grpcomm_direct_xcast_nb,
     .fence = prte_grpcomm_direct_fence,
     .group = prte_grpcomm_direct_group
 };

@@ -28,6 +28,9 @@ typedef struct {
     pmix_object_t super;
     // list of ongoing operations, defined in grpcomm_direct_xcast.c
     pmix_list_t ops;
+    // FIFO of completion callbacks for master-originated broadcasts awaiting
+    // relay back to the master (see grpcomm_direct_xcast.c)
+    pmix_list_t pending_completions;
     // ID of the last known completed (in our subtree) operation
     size_t op_id_completed;
     // op_id_completed when we were last promoted
@@ -181,6 +184,12 @@ PMIX_CLASS_DECLARATION(prte_pmix_fence_caddy_t);
 PRTE_MODULE_EXPORT extern
 int prte_grpcomm_direct_xcast(prte_rml_tag_t tag,
                               pmix_data_buffer_t *msg);
+
+PRTE_MODULE_EXPORT extern
+int prte_grpcomm_direct_xcast_nb(prte_rml_tag_t tag,
+                                 pmix_data_buffer_t *msg,
+                                 prte_grpcomm_xcast_complete_fn_t cbfunc,
+                                 void *cbdata);
 
 PRTE_MODULE_EXPORT extern
 void prte_grpcomm_direct_xcast_recv(int status, pmix_proc_t *sender,
