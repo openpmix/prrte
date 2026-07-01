@@ -258,6 +258,7 @@ static void proc_errors(int fd, short args, void *cbdata)
         if (PRTE_PROC_STATE_COMM_FAILED == state ||
             PRTE_PROC_STATE_HEARTBEAT_FAILED == state ||
             PRTE_PROC_STATE_UNABLE_TO_SEND_MSG == state ||
+            PRTE_PROC_STATE_FAILED_TO_CONNECT == state ||
             PRTE_PROC_STATE_FAILED_TO_START == state) {
             /* if this is my own connection, ignore it */
             if (PRTE_PROC_MY_NAME->rank == proc->rank) {
