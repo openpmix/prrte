@@ -45,6 +45,7 @@
 #include "src/mca/plm/base/plm_private.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/state/state.h"
+#include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_quit.h"
 #include "src/runtime/prte_wait.h"
@@ -630,6 +631,105 @@ void prte_ras_base_shrink_complete(prte_shrink_campaign_t *campaign)
             mod->module->shrink_complete(campaign);
         }
     }
+}
+
+/* Thread-shift target: collectively complete a DVM shrink campaign.  Runs once
+ * per campaign on the DVM master, on a fresh event (posted from the grpcomm
+ * xcast-completion callback below) so it never executes nested inside the xcast
+ * call stack.  By this point the reliable shrink broadcast has been received by
+ * every daemon, so the master tears the whole set of targets out of the DVM in
+ * a single batch — one routing-tree repair for all of them — rather than once
+ * per daemon as each departs.  Because every target is marked failed and its
+ * node detached here, the later real departures fall through the errmgr as
+ * harmless no-ops (see errmgr_dvm.c). */
+static void shrink_campaign_complete(int sd, short args, void *cbdata)
+{
+    prte_shrink_campaign_t *camp = (prte_shrink_campaign_t *) cbdata;
+    prte_job_t *daemons;
+    prte_proc_t *dproc;
+    prte_node_t *node;
+    pmix_data_array_t failed = PMIX_DATA_ARRAY_STATIC_INIT;
+    pmix_rank_t *fr;
+    int t;
+
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+
+    /* one batch routing-tree repair for the whole campaign: report every target
+     * as failed in a single promotion/descendant pass, replacing the up-to-m
+     * per-daemon repairs the individual departures would otherwise drive. */
+    failed.type = PMIX_PROC_RANK;
+    failed.size = camp->ntargets;
+    failed.array = malloc(camp->ntargets * sizeof(pmix_rank_t));
+    if (NULL != failed.array) {
+        fr = (pmix_rank_t *) failed.array;
+        for (t = 0; t < camp->ntargets; t++) {
+            fr[t] = camp->targets[t];
+        }
+        prte_rml_repair_routing_tree(&failed, false);
+        free(failed.array);
+        failed.array = NULL;
+    }
+
+    /* per-target HNP teardown: mark the daemon gone and detach its node from the
+     * DVM's usable set so a released job cannot remap onto it.  This mirrors the
+     * comm-failure bookkeeping (unset ALIVE, set state, decrement num_daemons)
+     * plus the node detach the grow-rollback path uses. */
+    if (NULL != daemons) {
+        for (t = 0; t < camp->ntargets; t++) {
+            dproc = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs,
+                                                                camp->targets[t]);
+            if (NULL == dproc) {
+                continue;
+            }
+            node = dproc->node;
+            if (PRTE_FLAG_TEST(dproc, PRTE_PROC_FLAG_ALIVE)) {
+                PRTE_FLAG_UNSET(dproc, PRTE_PROC_FLAG_ALIVE);
+                dproc->state = PRTE_PROC_STATE_TERMINATED;
+                if (0 < prte_process_info.num_daemons) {
+                    --prte_process_info.num_daemons;
+                }
+            }
+            if (NULL != node) {
+                if (NULL != node->session && node->session != prte_default_session) {
+                    node->session = NULL;
+                }
+                if (node->daemon == dproc) {
+                    node->daemon = NULL;
+                    PMIX_RELEASE(dproc);
+                }
+            }
+        }
+    }
+
+    /* the campaign has drained: drop the fence it raised, give the RAS modules
+     * their release hook, tell the requester the DVM now reflects the new size,
+     * and release any jobs held behind the fence once it reaches zero. */
+    prte_dvm_launch_fence -= camp->pending;
+    prte_ras_base_shrink_complete(camp);
+    if (camp->have_requester) {
+        prte_plm_base_dvm_mod_notify(&camp->requester, camp->alloc_id,
+                                     camp->req_id, true, PMIX_SUCCESS);
+    }
+    pmix_list_remove_item(&prte_shrink_campaigns, &camp->super);
+    if (0 == prte_dvm_launch_fence) {
+        prte_plm_base_fence_release();
+    }
+    PMIX_RELEASE(camp);
+}
+
+/* grpcomm xcast-completion callback: fires on the master, inside the xcast call
+ * stack, once the whole DVM has received the shrink broadcast.  Keep it trivial
+ * — thread-shift the real teardown onto a fresh event, because that teardown
+ * drives routing-tree fault handlers that must not run nested inside grpcomm. */
+static void shrink_xcast_complete(void *cbdata)
+{
+    prte_shrink_campaign_t *camp = (prte_shrink_campaign_t *) cbdata;
+    prte_event_set(prte_event_base, &camp->ev, -1, PRTE_EV_WRITE,
+                   shrink_campaign_complete, camp);
+    PMIX_POST_OBJECT(camp);
+    prte_event_active(&camp->ev, PRTE_EV_WRITE, 1);
 }
 
 /* monotonic counter used to mint unique session ids for reservations that
@@ -1305,43 +1405,53 @@ void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
          * later job at the LAUNCH_APPS hold, and no completion event would fire.
          * This mirrors the grow path's num_new_daemons > 0 guard and the spec's
          * "no event when nothing changes" clause. */
+        prte_shrink_campaign_t *camp = NULL;
         if (prte_elastic_mode && 0 < m) {
-            prte_shrink_campaign_t *_camp = PMIX_NEW(prte_shrink_campaign_t);
-            _camp->targets = (pmix_rank_t *) malloc(m * sizeof(pmix_rank_t));
-            memcpy(_camp->targets, ranks, m * sizeof(pmix_rank_t));
-            _camp->ntargets = m;
-            _camp->pending  = m;
+            camp = PMIX_NEW(prte_shrink_campaign_t);
+            camp->targets = (pmix_rank_t *) malloc(m * sizeof(pmix_rank_t));
+            memcpy(camp->targets, ranks, m * sizeof(pmix_rank_t));
+            camp->ntargets = m;
+            camp->pending  = m;
             /* record the requester so the phase-two completion event can be
              * directed at the process that issued this PMIX_ALLOC_RELEASE */
-            PMIX_XFER_PROCID(&_camp->requester, &req->tproc);
+            PMIX_XFER_PROCID(&camp->requester, &req->tproc);
             for (n = 0; n < req->ninfo; n++) {
                 if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
-                    _camp->alloc_id = strdup(req->info[n].value.data.string);
+                    camp->alloc_id = strdup(req->info[n].value.data.string);
                 } else if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_REQ_ID)) {
-                    _camp->req_id = strdup(req->info[n].value.data.string);
+                    camp->req_id = strdup(req->info[n].value.data.string);
                 }
             }
-            _camp->have_requester = true;
-            pmix_list_append(&prte_shrink_campaigns, &_camp->super);
+            camp->have_requester = true;
+            pmix_list_append(&prte_shrink_campaigns, &camp->super);
             prte_dvm_launch_fence += m;
         }
         free(ranks);
 
-        /* goes to all daemons */
-        if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &msg))) {
+        /* goes to all daemons.  When a campaign was recorded, request a
+         * completion callback so the collective shrink-completion handler runs
+         * exactly once — when the whole DVM has received the command — driving a
+         * single routing-tree repair and one completion event, rather than
+         * discovering the departures one daemon at a time. */
+        if (NULL != camp) {
+            rc = prte_grpcomm.xcast_nb(PRTE_RML_TAG_DAEMON, &msg,
+                                       shrink_xcast_complete, camp);
+        } else {
+            rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &msg);
+        }
+        if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             /* undo the campaign we just added (only if one was created), and
              * tell the requester the DVM modification failed */
-            if (prte_elastic_mode && 0 < m) {
-                prte_shrink_campaign_t *_camp =
-                    (prte_shrink_campaign_t *) pmix_list_remove_last(&prte_shrink_campaigns);
-                prte_dvm_launch_fence -= _camp->pending;
-                if (_camp->have_requester) {
-                    prte_plm_base_dvm_mod_notify(&_camp->requester, _camp->alloc_id,
-                                                 _camp->req_id, false,
+            if (NULL != camp) {
+                pmix_list_remove_item(&prte_shrink_campaigns, &camp->super);
+                prte_dvm_launch_fence -= camp->pending;
+                if (camp->have_requester) {
+                    prte_plm_base_dvm_mod_notify(&camp->requester, camp->alloc_id,
+                                                 camp->req_id, false,
                                                  prte_pmix_convert_rc(rc));
                 }
-                PMIX_RELEASE(_camp);
+                PMIX_RELEASE(camp);
             }
         }
         PMIX_DATA_BUFFER_DESTRUCT(&msg);

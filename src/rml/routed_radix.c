@@ -36,6 +36,7 @@
 
 #include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/filem/filem.h"
+#include "src/mca/state/state.h"
 #include "src/rml/relm/relm.h"
 
 
@@ -347,6 +348,17 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global){
 }
 
 int prte_rml_route_lost(pmix_rank_t route){
+    /* If we have been named as a shrink target and it is our lifeline to the
+     * DVM that has dropped, depart now rather than trying to recover: the DVM
+     * has removed us on purpose.  This fires only when prte_dvm_leaving is set,
+     * i.e., only after we processed a shrink command naming our own rank, so a
+     * genuine (unrelated) lifeline fault still takes the normal recovery path
+     * below.  It is a fast path only — a bounded timer (prted_comm.c) guarantees
+     * departure even if the connection never actually drops. */
+    if(prte_dvm_leaving && route == prte_rml_base.lifeline){
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
+        return PRTE_SUCCESS;
+    }
     if(prte_finalizing || prte_prteds_term_ordered || prte_abnormal_term_ordered){
         /* see if it is one of our children - if so, remove it */
         pmix_rank_t* children = (pmix_rank_t*)prte_rml_base.children.array;

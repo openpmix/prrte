@@ -93,6 +93,22 @@ typedef void (*prte_grpcomm_base_module_fault_handler_fn_t)(const prte_rml_recov
 typedef int (*prte_grpcomm_base_module_xcast_fn_t)(prte_rml_tag_t tag,
                                                    pmix_data_buffer_t *msg);
 
+/* Completion callback for xcast_nb: invoked on the DVM master once the reliable
+ * xcast has been confirmed received by every daemon in the DVM (i.e., when the
+ * broadcast's ACKs have all flowed back up the tree).  It fires on the progress
+ * thread; a handler that needs to do more than trivial work should thread-shift
+ * onto a fresh event rather than run inside the xcast call stack. */
+typedef void (*prte_grpcomm_xcast_complete_fn_t)(void *cbdata);
+
+/* Scalably send a message, requesting a completion callback.  Identical to
+ * xcast() except that, when cbfunc is non-NULL, it is invoked on the master when
+ * the whole DVM has received the broadcast.  cbfunc/cbdata are ignored on
+ * non-master daemons. */
+typedef int (*prte_grpcomm_base_module_xcast_nb_fn_t)(prte_rml_tag_t tag,
+                                                      pmix_data_buffer_t *msg,
+                                                      prte_grpcomm_xcast_complete_fn_t cbfunc,
+                                                      void *cbdata);
+
 
 /* fence - gather data from all specified procs. Barrier operations
  * will provide NULL data.
@@ -121,6 +137,7 @@ typedef struct {
     prte_grpcomm_base_module_fault_handler_fn_t fault_handler;
     /* collective operations */
     prte_grpcomm_base_module_xcast_fn_t         xcast;
+    prte_grpcomm_base_module_xcast_nb_fn_t      xcast_nb;
     prte_grpcomm_base_module_fence_fn_t         fence;
     prte_grpcomm_base_module_grp_fn_t           group;
 } prte_grpcomm_base_module_t;

@@ -621,6 +621,10 @@ typedef struct {
     char            *alloc_id;       /* PMIX_ALLOC_ID of the allocation, or NULL */
     char            *req_id;         /* requester's PMIX_ALLOC_REQ_ID, or NULL */
     bool             have_requester;
+    /* used to thread-shift the shrink-broadcast completion callback off the
+     * grpcomm xcast call stack and onto a fresh event (see the collective
+     * shrink-completion handler in ras_base_allocate.c) */
+    prte_event_t     ev;
 } prte_shrink_campaign_t;
 PMIX_CLASS_DECLARATION(prte_shrink_campaign_t);
 
@@ -697,6 +701,12 @@ PRTE_EXPORT extern bool prte_routing_is_enabled;
 PRTE_EXPORT extern bool prte_dvm_abort_ordered;
 PRTE_EXPORT extern bool prte_prteds_term_ordered;
 PRTE_EXPORT extern bool prte_allowed_exit_without_sync;
+/* set on a daemon that has been named as a target of an in-progress DVM shrink:
+ * it converts the daemon's response to lifeline loss / broadcast completion from
+ * "recover" to "depart".  Set only while processing PRTE_DAEMON_SHRINK_CMD when
+ * the daemon finds its own rank among the targets, so it can never fire on a
+ * genuine, unrelated fault. */
+PRTE_EXPORT extern bool prte_dvm_leaving;
 
 PRTE_EXPORT extern int prte_timeout_usec_per_proc;
 PRTE_EXPORT extern float prte_max_timeout;

@@ -40,6 +40,26 @@
 
 #define XCAST prte_mca_grpcomm_direct_component.xcast_ops
 
+/* The initiating op created in xcast_nb() is consumed by begin_xcast() (it is
+ * packed and relayed to the master, then discarded); the op the master actually
+ * tracks and completes is a fresh one built on receipt.  A completion callback
+ * therefore cannot simply ride on the initiating op.  Instead, because the
+ * master assigns op-ids for and relays every xcast — including its own — through
+ * itself, we queue one entry per master-originated broadcast here, in initiation
+ * order, and pop it (FIFO) when the master receives that broadcast back to build
+ * its tracked op.  One entry is enqueued for every master-originated xcast (NULL
+ * callback included) so the FIFO stays aligned with the stream of the master's
+ * own broadcasts.  cbfunc is a local function pointer, so it is only meaningful
+ * for broadcasts the master itself originates.  The queue lives in XCAST
+ * (XCAST.pending_completions), constructed with the xcast-ops object, so it is a
+ * properly initialized list rather than a static one that append would corrupt. */
+typedef struct {
+    pmix_list_item_t super;
+    prte_grpcomm_xcast_complete_fn_t cbfunc;
+    void *cbdata;
+} pending_completion_t;
+PMIX_CLASS_INSTANCE(pending_completion_t, pmix_list_item_t, NULL, NULL);
+
 /* internal signature used to uniquely track a particular xcast */
 typedef struct {
     size_t op_id;    // HNP's assigned collective ID, globally unique
@@ -68,6 +88,10 @@ typedef struct {
     bool msg_compressed;
     // tag for the underlying user message
     prte_rml_tag_t msg_tag;
+    // optional completion callback, fired on the master when the whole DVM has
+    // received this op (see prte_grpcomm_direct_xcast_nb).  NULL when unused.
+    prte_grpcomm_xcast_complete_fn_t cbfunc;
+    void *cbdata;
 } op_t;
 PMIX_CLASS_DECLARATION(op_t);
 
@@ -104,10 +128,28 @@ static int pack_bool    (pmix_data_buffer_t* buffer, bool* boolean);
 static int unpack_bool  (pmix_data_buffer_t* buffer, bool* boolean);
 
 int prte_grpcomm_direct_xcast(prte_rml_tag_t tag, pmix_data_buffer_t *msg){
+    return prte_grpcomm_direct_xcast_nb(tag, msg, NULL, NULL);
+}
+
+int prte_grpcomm_direct_xcast_nb(prte_rml_tag_t tag, pmix_data_buffer_t *msg,
+                                 prte_grpcomm_xcast_complete_fn_t cbfunc,
+                                 void *cbdata){
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct:xcast: with %d bytes",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (int) msg->bytes_used));
+
+    /* record the completion callback so the master can attach it to the op it
+     * builds when this broadcast is relayed back to it.  Enqueue one entry for
+     * every master-originated broadcast (even with a NULL callback) to keep the
+     * FIFO aligned; non-master callers get no completion (a remote function
+     * pointer is meaningless to the master). */
+    if (PRTE_PROC_IS_MASTER) {
+        pending_completion_t *pc = PMIX_NEW(pending_completion_t);
+        pc->cbfunc = cbfunc;
+        pc->cbdata = cbdata;
+        pmix_list_append(&XCAST.pending_completions, &pc->super);
+    }
 
     op_t* op = PMIX_NEW(op_t);
     op->msg_tag = tag;
@@ -204,6 +246,18 @@ void prte_grpcomm_direct_xcast_recv(
             pmix_list_remove_item(&XCAST.ops, &op->super);
             PMIX_RELEASE(op);
             return;
+        }
+        /* If we are the master and this is one of our own broadcasts, attach the
+         * completion callback queued for it in xcast_nb (FIFO).  Remote-origin
+         * broadcasts queue nothing, so they never consume an entry. */
+        if(PRTE_PROC_IS_MASTER && NULL != sender &&
+           sender->rank == PRTE_PROC_MY_NAME->rank &&
+           !pmix_list_is_empty(&XCAST.pending_completions)){
+            pending_completion_t* pc =
+                (pending_completion_t*) pmix_list_remove_first(&XCAST.pending_completions);
+            op->cbfunc = pc->cbfunc;
+            op->cbdata = pc->cbdata;
+            PMIX_RELEASE(pc);
         }
     }
 
@@ -427,6 +481,15 @@ static void finish_op(op_t* op) {
         }
     }
     process_msg(op); // If not already processed, process before releasing
+    /* on the master, a completed op means every daemon in the DVM has received
+     * this broadcast; fire the caller's completion callback if one was
+     * registered.  This is the hook the collective DVM-shrink path uses to run
+     * its single routing-tree repair and emit its completion event.  It fires
+     * only here (PRTE_PROC_IS_MASTER): a non-master's finish_op means only its
+     * own subtree completed, not the whole DVM. */
+    if (PRTE_PROC_IS_MASTER && NULL != op->cbfunc) {
+        op->cbfunc(op->cbdata);
+    }
     PMIX_RELEASE(op);
 }
 
@@ -678,6 +741,9 @@ static void op_con(op_t* p)
     PMIx_Byte_object_construct(&p->msg);
     p->msg_compressed = false;
     p->msg_tag = PRTE_RML_TAG_INVALID;
+
+    p->cbfunc = NULL;
+    p->cbdata = NULL;
 }
 static void op_des(op_t* p)
 {
@@ -689,6 +755,7 @@ PMIX_CLASS_INSTANCE(op_t, pmix_list_item_t, op_con, op_des);
 static void xcast_con(prte_grpcomm_xcast_t* p)
 {
     PMIX_CONSTRUCT(&p->ops, pmix_list_t);
+    PMIX_CONSTRUCT(&p->pending_completions, pmix_list_t);
     p->op_id_completed = 0;
     p->op_id_completed_at_promotion = 0;
     p->op_id_inited = 0;
@@ -696,6 +763,7 @@ static void xcast_con(prte_grpcomm_xcast_t* p)
 static void xcast_des(prte_grpcomm_xcast_t* p)
 {
     PMIX_LIST_DESTRUCT(&p->ops);
+    PMIX_LIST_DESTRUCT(&p->pending_completions);
 }
 PMIX_CLASS_INSTANCE(prte_grpcomm_xcast_t, pmix_object_t, xcast_con, xcast_des);
 
