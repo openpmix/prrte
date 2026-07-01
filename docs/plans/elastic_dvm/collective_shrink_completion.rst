@@ -1,7 +1,7 @@
 .. _dvm-collective-shrink-completion-label:
 
 Collective Shrink Completion — Repair the Routing Tree Once per Campaign
-=======================================================================
+========================================================================
 
 This document plans the **optimization** tracked in
 `openpmix/prrte#2492 <https://github.com/openpmix/prrte/issues/2492>`_: draining
