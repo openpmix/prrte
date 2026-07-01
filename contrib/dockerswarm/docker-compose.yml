@@ -1,7 +1,11 @@
-# A 4-"node" PRRTE DVM on a private docker network for elastic grow/shrink
+# A 10-"node" PRRTE DVM on a private docker network for elastic grow/shrink
 # testing.  node1 is the head node (where you start `prte` and run the tests);
-# node2..node4 are spare nodes the DVM can grow onto and shrink back out of.
+# node2..node10 are spare nodes the DVM can grow onto and shrink back out of.
 # Each container just runs sshd; we `docker exec` into node1 to drive the DVM.
+#
+# The larger node count (was four) lets a shrink campaign target several daemons
+# sitting on one branch of the radix routing tree at once, which is the scenario
+# the collective-shrink-completion work (openpmix/prrte#2492) needs to exercise.
 services:
   node1:
     image: prte-elastic:latest
@@ -25,6 +29,42 @@ services:
     image: prte-elastic:latest
     hostname: node4
     container_name: prte-node4
+    networks: [dvm]
+    tty: true
+  node5:
+    image: prte-elastic:latest
+    hostname: node5
+    container_name: prte-node5
+    networks: [dvm]
+    tty: true
+  node6:
+    image: prte-elastic:latest
+    hostname: node6
+    container_name: prte-node6
+    networks: [dvm]
+    tty: true
+  node7:
+    image: prte-elastic:latest
+    hostname: node7
+    container_name: prte-node7
+    networks: [dvm]
+    tty: true
+  node8:
+    image: prte-elastic:latest
+    hostname: node8
+    container_name: prte-node8
+    networks: [dvm]
+    tty: true
+  node9:
+    image: prte-elastic:latest
+    hostname: node9
+    container_name: prte-node9
+    networks: [dvm]
+    tty: true
+  node10:
+    image: prte-elastic:latest
+    hostname: node10
+    container_name: prte-node10
     networks: [dvm]
     tty: true
 
