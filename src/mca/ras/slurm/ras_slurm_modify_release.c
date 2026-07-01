@@ -16,10 +16,75 @@
 #include "ras_slurm.h"
 #include "src/mca/ras/base/base.h"
 
+typedef enum {
+    PRTE_RAS_SLURM_RELEASE_FULL_JOB,
+    PRTE_RAS_SLURM_RELEASE_PARTIAL_JOB
+} prte_ras_slurm_release_action_type_t;
+
+typedef struct {
+    pmix_list_item_t super;
+    char *job_id;
+    prte_ras_slurm_release_action_type_t action;
+    char **survivor_nodes;
+} prte_ras_slurm_release_action_t;
+PMIX_CLASS_DECLARATION(prte_ras_slurm_release_action_t);
+
+typedef struct {
+    pmix_list_item_t super;
+    prte_shrink_campaign_t *campaign;
+    pmix_list_t actions;
+} prte_ras_slurm_shrink_tracker_t;
+PMIX_CLASS_DECLARATION(prte_ras_slurm_shrink_tracker_t);
+
 /* Local functions */
+static void release_action_con(prte_ras_slurm_release_action_t *p);
+static void release_action_des(prte_ras_slurm_release_action_t *p);
+static void shrink_tracker_con(prte_ras_slurm_shrink_tracker_t *p);
+static void shrink_tracker_des(prte_ras_slurm_shrink_tracker_t *p);
 static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count);
 static int prte_ras_slurm_shrink_job(const char *slurm_jobid, const char *exclude_hostname, int new_node_count, char *err_msg, size_t err_msg_size);
 static int prte_ras_slurm_build_req_nodelist(const char *slurm_jobid, const char *protected_hostname, int new_node_count, char **req_nodes_arg);
+
+PMIX_CLASS_INSTANCE(prte_ras_slurm_release_action_t,
+                    pmix_list_item_t,
+                    release_action_con,
+                    release_action_des);
+PMIX_CLASS_INSTANCE(prte_ras_slurm_shrink_tracker_t,
+                    pmix_list_item_t,
+                    shrink_tracker_con,
+                    shrink_tracker_des);
+
+static void release_action_con(prte_ras_slurm_release_action_t *p)
+{
+    p->job_id = NULL;
+    p->action = PRTE_RAS_SLURM_RELEASE_FULL_JOB;
+    p->survivor_nodes = NULL;
+}
+
+static void release_action_des(prte_ras_slurm_release_action_t *p)
+{
+    free(p->job_id);
+    if (NULL != p->survivor_nodes) {
+        PMIx_Argv_free(p->survivor_nodes);
+    }
+}
+
+static void shrink_tracker_con(prte_ras_slurm_shrink_tracker_t *p)
+{
+    p->campaign = NULL;
+    PMIX_CONSTRUCT(&p->actions, pmix_list_t);
+}
+
+static void shrink_tracker_des(prte_ras_slurm_shrink_tracker_t *p)
+{
+    prte_ras_slurm_release_action_t *action;
+
+    while (NULL != (action = (prte_ras_slurm_release_action_t *)
+                               pmix_list_remove_first(&p->actions))) {
+        PMIX_RELEASE(action);
+    }
+    PMIX_DESTRUCT(&p->actions);
+}
 
 /**
  * @brief Process a PMIx resource release request.
