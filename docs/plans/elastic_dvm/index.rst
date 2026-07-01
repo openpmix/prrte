@@ -10,3 +10,4 @@ Implementation plans for dynamic DVM grow/shrink support.
    elastic_dvm_plan.rst
    grow_campaign.rst
    shrink_campaign.rst
+   collective_shrink_completion.rst
