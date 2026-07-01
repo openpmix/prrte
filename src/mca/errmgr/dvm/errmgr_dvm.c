@@ -276,8 +276,11 @@ static void proc_errors(int fd, short args, void *cbdata)
              * arrives here already handled.  The state test keeps this from
              * swallowing a FAILED_TO_START daemon (never alive, but its recorded
              * state is still below TERMINATED at this point) so that genuine
-             * start failures are still handled below. */
-            if (!PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_ALIVE) &&
+             * start failures are still handled below.  Gated on elastic mode so
+             * the default fault-handling path is unchanged when no collective
+             * shrink can be in flight. */
+            if (prte_elastic_mode &&
+                !PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_ALIVE) &&
                 PRTE_PROC_STATE_TERMINATED <= pptr->state) {
                 PMIX_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                      "%s Comm failure for already-departed daemon %s - ignoring it",

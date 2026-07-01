@@ -512,15 +512,6 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
         // see if we are one of them
         for (i=0; i < num_procs; i++) {
             if (ranks[i] == PRTE_PROC_MY_NAME->rank) {
-                /* We have been named as a shrink target.  Record that we are
-                 * leaving — this is what allows the lifeline-loss path to treat a
-                 * dropped connection as a cue to depart rather than recover — but
-                 * do NOT exit yet: exiting now, before our subtree's ACK of this
-                 * broadcast reaches the master, would prevent the master's
-                 * collective shrink-completion handler from ever firing.  Because
-                 * the shrink command reached us through our own lifeline, setting
-                 * this here can never race ahead of a genuine, unrelated fault. */
-                prte_dvm_leaving = true;
                 /* any tools attached to us will have done so via PMIx, so
                  * let's provide them with a friendly "job end" notification */
                 PMIX_INFO_LOAD(&info[0], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
@@ -534,14 +525,28 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
                 PRTE_PMIX_DESTRUCT_LOCK(&lk);
                 // mark abnormal exit status
                 PRTE_UPDATE_EXIT_STATUS(-1);
-                /* arm the bounded departure timer; we exit when it fires or, if
-                 * sooner, when our lifeline to the DVM drops (prte_rml_route_lost
-                 * departs early once prte_dvm_leaving is set).  The master
-                 * completes the campaign from the broadcast's completion, not
-                 * from our departure, so a slightly delayed exit is harmless. */
-                prte_event_evtimer_set(prte_event_base, &prte_shrink_depart_ev,
-                                       prte_shrink_depart, NULL);
-                prte_event_evtimer_add(&prte_shrink_depart_ev, &prte_shrink_depart_tv);
+                if (prte_elastic_mode) {
+                    /* Elastic shrink: the master completes the campaign from the
+                     * broadcast's completion, so we must NOT exit until our
+                     * subtree's ACK of this broadcast has reached it.  Record that
+                     * we are leaving — which also lets the lifeline-loss path treat
+                     * a dropped connection as a cue to depart rather than recover —
+                     * and arm a bounded departure timer; we exit when it fires or,
+                     * if sooner, when our lifeline drops (prte_rml_route_lost
+                     * departs early once prte_dvm_leaving is set).  Because the
+                     * shrink command reached us through our own lifeline, setting
+                     * this here can never race ahead of a genuine fault. */
+                    prte_dvm_leaving = true;
+                    prte_event_evtimer_set(prte_event_base, &prte_shrink_depart_ev,
+                                           prte_shrink_depart, NULL);
+                    prte_event_evtimer_add(&prte_shrink_depart_ev, &prte_shrink_depart_tv);
+                } else {
+                    /* legacy fire-and-forget shrink (no completion tracking): do a
+                     * clean immediate exit, exactly as before.  The HNP detects our
+                     * departure via the normal daemon-loss (comm-failure) path. */
+                    prte_abnormal_term_ordered = true;
+                    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
+                }
                 break;
             }
         }

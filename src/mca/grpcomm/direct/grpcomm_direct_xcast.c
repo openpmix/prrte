@@ -143,8 +143,10 @@ int prte_grpcomm_direct_xcast_nb(prte_rml_tag_t tag, pmix_data_buffer_t *msg,
      * builds when this broadcast is relayed back to it.  Enqueue one entry for
      * every master-originated broadcast (even with a NULL callback) to keep the
      * FIFO aligned; non-master callers get no completion (a remote function
-     * pointer is meaningless to the master). */
-    if (PRTE_PROC_IS_MASTER) {
+     * pointer is meaningless to the master).  Gated on elastic mode: only the
+     * DVM-shrink path (elastic only) ever registers a completion, so outside
+     * elastic mode the FIFO stays untouched and xcast behaves exactly as before. */
+    if (PRTE_PROC_IS_MASTER && prte_elastic_mode) {
         pending_completion_t *pc = PMIX_NEW(pending_completion_t);
         pc->cbfunc = cbfunc;
         pc->cbdata = cbdata;
@@ -250,7 +252,7 @@ void prte_grpcomm_direct_xcast_recv(
         /* If we are the master and this is one of our own broadcasts, attach the
          * completion callback queued for it in xcast_nb (FIFO).  Remote-origin
          * broadcasts queue nothing, so they never consume an entry. */
-        if(PRTE_PROC_IS_MASTER && NULL != sender &&
+        if(PRTE_PROC_IS_MASTER && prte_elastic_mode && NULL != sender &&
            sender->rank == PRTE_PROC_MY_NAME->rank &&
            !pmix_list_is_empty(&XCAST.pending_completions)){
             pending_completion_t* pc =
