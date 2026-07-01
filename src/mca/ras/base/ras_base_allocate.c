@@ -699,6 +699,10 @@ static void shrink_campaign_complete(int sd, short args, void *cbdata)
                     node->daemon = NULL;
                     PMIX_RELEASE(dproc);
                 }
+                /* return the node to a pristine, never-launched state so a later
+                 * grow can relaunch a daemon on it (clears the launch flags and
+                 * drops it from the daemon-job map) */
+                prte_plm_base_reset_dvm_node(node);
             }
         }
     }

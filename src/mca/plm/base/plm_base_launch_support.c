@@ -2621,6 +2621,46 @@ void prte_plm_base_grow_drain(bool success)
     }
 }
 
+/* Return a node that has been torn out of the DVM (by a completed shrink or a
+ * rolled-back grow) to a pristine, never-launched state so a later grow can
+ * relaunch a daemon on it.  Clearing the daemon backpointer alone is not enough:
+ * the launch machinery keys off per-node flags and the persistent daemon-job
+ * map, and stale values there make a re-grow silently misbehave.  Specifically,
+ * PRTE_NODE_FLAG_DAEMON_LAUNCHED left set makes every plm launcher skip the node
+ * ("daemon already exists"), so the new prted is never spawned; and leaving the
+ * node in the daemon map lets setup_vm add it a second time, duplicating it in
+ * the VM.  Reset both here. */
+void prte_plm_base_reset_dvm_node(prte_node_t *node)
+{
+    prte_job_t *daemons;
+    prte_node_t *nptr;
+    int i;
+
+    if (NULL == node) {
+        return;
+    }
+
+    PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED);
+    PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_LOC_VERIFIED);
+
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    if (NULL == daemons || NULL == daemons->map) {
+        return;
+    }
+    for (i = 0; i < daemons->map->nodes->size; i++) {
+        nptr = (prte_node_t *) pmix_pointer_array_get_item(daemons->map->nodes, i);
+        if (nptr != node) {
+            continue;
+        }
+        pmix_pointer_array_set_item(daemons->map->nodes, i, NULL);
+        if (0 < daemons->map->num_nodes) {
+            --daemons->map->num_nodes;
+        }
+        PMIX_RELEASE(node); /* the map held a retain */
+        break;
+    }
+}
+
 /* Roll a failed grow campaign back out of the DVM so a failed grow leaves the
  * DVM at its exact pre-grow membership rather than half-extended (spec
  * conformance #5).  `trigger` is the rank whose death triggered the failure;
@@ -2635,12 +2675,11 @@ void prte_plm_base_grow_drain(bool success)
  *     daemon-count bump is reverted here (no comm-failure event will arrive for
  *     it).
  *
- * In all cases the node's daemon backpointer is cleared so the mapper can no
- * longer place a later job on it.  The new nodes carry no application procs —
- * the jobs that would have used them were held at the fence, never launched —
- * so clearing ``node->daemon`` is sufficient to remove the node from the DVM's
- * usable set.  The teardown is strictly campaign-scoped: it touches only the
- * ranks in this campaign's ``targets`` array. */
+ * In all cases the node is reset out of the DVM's usable set (see
+ * prte_plm_base_reset_dvm_node).  The new nodes carry no application procs — the
+ * jobs that would have used them were held at the fence, never launched.  The
+ * teardown is strictly campaign-scoped: it touches only the ranks in this
+ * campaign's ``targets`` array. */
 static void grow_rollback(prte_grow_campaign_t *camp, pmix_rank_t trigger)
 {
     prte_job_t *daemons;
@@ -2695,6 +2734,10 @@ static void grow_rollback(prte_grow_campaign_t *camp, pmix_rank_t trigger)
                 node->daemon = NULL;
                 PMIX_RELEASE(dproc);
             }
+            /* return the node to a pristine, never-launched state so a later
+             * grow can relaunch a daemon on it (clears the launch flags and
+             * drops it from the daemon-job map) */
+            prte_plm_base_reset_dvm_node(node);
         }
     }
 
