@@ -315,6 +315,16 @@ collective completion handler), ``prted/prted_comm.c`` and ``rml/routed_radix.c`
 guard), and ``runtime/prte_globals.{h,c}``.  It builds warning-free under
 ``--enable-devel-check`` (``-Werror`` plus the full picky set).
 
+The entire machinery is gated behind ``prte_elastic_mode``.  The master only
+enqueues an ``xcast_nb`` completion (and pops it on the relay-to-self) when
+elastic mode is active; the daemon only enters leaving mode — the bounded
+departure timer and the lifeline-loss fast path — when ``prte_dvm_leaving`` is
+set, which happens exclusively on an elastic shrink; and the already-departed
+guard in ``errmgr/dvm`` is skipped entirely otherwise.  A default (non-elastic)
+``prterun`` and a persistent DVM plus ``prun`` were both re-validated after the
+gating went in: the launch and fault-handling paths are byte-for-byte the prior
+behavior when elastic mode is off.
+
 Two implementation choices settled the open questions the plan had flagged:
 
 * The completion hook is the **general** ``xcast_nb`` facility (open question #2's
