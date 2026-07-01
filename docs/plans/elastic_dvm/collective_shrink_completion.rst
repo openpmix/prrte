@@ -325,6 +325,19 @@ guard in ``errmgr/dvm`` is skipped entirely otherwise.  A default (non-elastic)
 gating went in: the launch and fault-handling paths are byte-for-byte the prior
 behavior when elastic mode is off.
 
+Threading the completion callback through ``xcast_nb`` takes one piece of care.
+The op the master initiates is discarded once it has been relayed; the op the
+master actually tracks and completes is a fresh one it builds when the broadcast
+loops back to itself.  The callback therefore rides a small FIFO of pending
+completions rather than the initiating op: one entry is queued per
+master-originated broadcast and popped, in order, as the master builds each
+tracked op on receipt.  The entry is enqueued in ``begin_xcast`` immediately
+before the reliable send that emits the broadcast, and unwound if that send
+fails, so the FIFO tracks exactly the broadcasts that reached the wire — a
+dropped send cannot shift the alignment onto the wrong op.  Both the enqueue and
+the receive-side op-id stamping run on the single progress thread with in-order
+delivery to self, so the ordering the FIFO relies on holds.
+
 Two implementation choices settled the open questions the plan had flagged:
 
 * The completion hook is the **general** ``xcast_nb`` facility (open question #2's
