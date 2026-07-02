@@ -41,6 +41,11 @@ static void release_action_con(prte_ras_slurm_release_action_t *p);
 static void release_action_des(prte_ras_slurm_release_action_t *p);
 static void shrink_tracker_con(prte_ras_slurm_shrink_tracker_t *p);
 static void shrink_tracker_des(prte_ras_slurm_shrink_tracker_t *p);
+static bool prte_ras_slurm_tracker_has_jobid(prte_ras_slurm_shrink_tracker_t *tracker,
+                                             const char *jobid);
+static bool prte_ras_slurm_jobid_has_active_shrink(const char *jobid);
+static prte_session_stack_item_t *prte_ras_slurm_find_releasable_session(void);
+static int prte_ras_slurm_validate_count_release(int nodes_to_remove);
 static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count);
 static int prte_ras_slurm_shrink_job(const char *slurm_jobid, const char *exclude_hostname, int new_node_count, char *err_msg, size_t err_msg_size);
 static int prte_ras_slurm_build_req_nodelist(const char *slurm_jobid, const char *protected_hostname, int new_node_count, char **req_nodes_arg);
@@ -111,6 +116,139 @@ int prte_ras_slurm_modify_release_finalize(void)
     }
     PMIX_RELEASE(prte_slurm_shrink_trackers);
     prte_slurm_shrink_trackers = NULL;
+
+    return PRTE_SUCCESS;
+}
+
+/**
+ * @brief Check whether a shrink tracker includes a Slurm job ID.
+ *
+ * @param[in] tracker Shrink tracker to inspect.
+ * @param[in] jobid Slurm job ID to find.
+ */
+static bool prte_ras_slurm_tracker_has_jobid(prte_ras_slurm_shrink_tracker_t *tracker,
+                                             const char *jobid)
+{
+    prte_ras_slurm_release_action_t *action;
+
+    if (NULL == tracker || NULL == jobid) {
+        return false;
+    }
+
+    PMIX_LIST_FOREACH(action, &tracker->actions, prte_ras_slurm_release_action_t) {
+        if (NULL != action->job_id && 0 == strcmp(action->job_id, jobid)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @brief Check whether a Slurm job already has an active shrink.
+ *
+ * @param[in] jobid Slurm job ID to find.
+ */
+static bool prte_ras_slurm_jobid_has_active_shrink(const char *jobid)
+{
+    prte_ras_slurm_shrink_tracker_t *tracker;
+
+    if (NULL == prte_slurm_shrink_trackers || NULL == jobid) {
+        return false;
+    }
+
+    PMIX_LIST_FOREACH(tracker, prte_slurm_shrink_trackers,
+                      prte_ras_slurm_shrink_tracker_t) {
+        if (prte_ras_slurm_tracker_has_jobid(tracker, jobid)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @brief Find the newest Slurm session without an active shrink.
+ */
+static prte_session_stack_item_t *prte_ras_slurm_find_releasable_session(void)
+{
+    pmix_list_item_t *item;
+
+    if (NULL == prte_slurm_session_stack ||
+        0 == pmix_list_get_size(prte_slurm_session_stack)) {
+        return NULL;
+    }
+
+    for (item = pmix_list_get_last(prte_slurm_session_stack);
+         item != pmix_list_get_end(prte_slurm_session_stack);
+         item = pmix_list_get_prev(item)) {
+        prte_session_stack_item_t *session_item = (prte_session_stack_item_t *) item;
+        prte_session_t *session;
+
+        if (NULL == session_item || NULL == session_item->session) {
+            return NULL;
+        }
+
+        session = session_item->session;
+        if (NULL == session->alloc_refid) {
+            return NULL;
+        }
+
+        if (prte_ras_slurm_jobid_has_active_shrink(session->alloc_refid)) {
+            continue;
+        }
+
+        return session_item;
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief Validate that a count release can avoid active shrinks.
+ *
+ * @param[in] nodes_to_remove Number of nodes requested for release.
+ */
+static int prte_ras_slurm_validate_count_release(int nodes_to_remove)
+{
+    pmix_list_item_t *item;
+    int nodes_remaining = nodes_to_remove;
+    bool skipped_conflict = false;
+
+    if (NULL == prte_slurm_session_stack ||
+        0 == pmix_list_get_size(prte_slurm_session_stack)) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    for (item = pmix_list_get_last(prte_slurm_session_stack);
+         item != pmix_list_get_end(prte_slurm_session_stack) && 0 < nodes_remaining;
+         item = pmix_list_get_prev(item)) {
+        prte_session_stack_item_t *session_item = (prte_session_stack_item_t *) item;
+        prte_session_t *session;
+
+        if (NULL == session_item || NULL == session_item->session) {
+            return PRTE_ERR_NOT_FOUND;
+        }
+
+        session = session_item->session;
+        if (NULL == session->alloc_refid) {
+            return PRTE_ERR_NOT_FOUND;
+        }
+
+        if (prte_ras_slurm_jobid_has_active_shrink(session->alloc_refid)) {
+            skipped_conflict = true;
+            continue;
+        }
+
+        nodes_remaining -= session_item->nodes_in_session;
+    }
+
+    if (0 < nodes_remaining) {
+        if (skipped_conflict) {
+            return PRTE_ERR_RESOURCE_BUSY;
+        }
+        return PRTE_ERR_NOT_FOUND;
+    }
 
     return PRTE_SUCCESS;
 }
@@ -196,6 +334,16 @@ static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count) {
         return PRTE_ERR_NOT_FOUND;
     }
 
+    err = prte_ras_slurm_validate_count_release(nodes_to_remove);
+    if (PRTE_SUCCESS != err) {
+        if (PRTE_ERR_RESOURCE_BUSY == err) {
+            pmix_output(0, "ras:slurm:remove_nodes_by_count: insufficient non-conflicting "
+                           "Slurm resources available for release");
+        }
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+
     int nodes_removed = 0;
 
     do {
@@ -205,8 +353,7 @@ static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count) {
             goto cleanup;
         }
 
-        /* get the most recently added allocation to remove from */
-        prte_session_stack_item_t *session_item = (prte_session_stack_item_t *) pmix_list_get_last(prte_slurm_session_stack);
+        prte_session_stack_item_t *session_item = prte_ras_slurm_find_releasable_session();
 
         if(NULL == session_item || NULL == session_item->session) {
             err = PRTE_ERR_NOT_FOUND;
@@ -251,7 +398,7 @@ static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count) {
                 goto cleanup;
             }
 
-            pmix_list_remove_last(prte_slurm_session_stack);
+            pmix_list_remove_item(prte_slurm_session_stack, &session_item->super);
             
             /* TODO: nodes in session need to be detached
              * from PRRTE. */
