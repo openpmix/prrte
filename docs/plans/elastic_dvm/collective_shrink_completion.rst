@@ -439,14 +439,49 @@ loop between runs.
 Re-grow of a just-shrunk node (#2491) is **partially** addressed here.  The
 ``prte_plm_base_reset_dvm_node()`` step above fixes the launcher-agnostic half —
 a shrunk node is no longer skipped ("daemon already exists") or duplicated on a
-later grow, verified on the testbed.  The remaining half is the daemon vpid
-space: a shrink leaves a dead vpid that the positional radix routing tree
-(``prte_rml_compute_routing_tree``) treats as a live daemon on the next grow, so
-the re-grown daemon fails wireup.  Reusing the vacated vpid would fix it for the
-ssh launcher but breaks the non-ssh launchers (slurm/pals/lsf), which launch
-daemons as a **sequential** vpid range; a launcher-agnostic fix therefore has to
-route the tree around the dead rank instead.  That routing-side fix is tracked
-separately and is not part of this change.
+later grow, verified on the testbed — and the prerequisite that landed in #2497
+also routes ``PRTE_PROC_STATE_FAILED_TO_CONNECT`` into the grow-failure rollback
+instead of the fatal "unsupported daemon error state" abort.  The remaining half
+is the daemon vpid space.  A shrink leaves a dead vpid in the daemon job array
+(the proc is marked terminated and ``prte_process_info.num_daemons`` is
+decremented, but it is *not* removed from ``daemons->procs`` and
+``daemons->num_procs`` is not decremented), and a later grow always **appends**
+(``proc->name.rank = daemons->num_procs``), so the hole becomes permanent.  The
+positional radix routing tree is pure vpid arithmetic over ``[0, num_daemons)``:
+the shrink's ``prte_rml_repair_routing_tree()`` correctly marks the dead rank as
+failed, but the next grow's ``prte_rml_compute_routing_tree()`` re-inits its
+failed-daemon bitmaps and **wipes those marks**, so it re-treats the dead rank
+as live and the re-grown daemon fails wireup.  Reusing the vacated vpid would
+fix it for the ssh launcher but breaks the non-ssh launchers (slurm/pals/lsf),
+which launch daemons as a **sequential** vpid range; the launcher-agnostic fix
+is therefore to route the tree *around* the dead rank rather than reuse the vpid.
+
+**This routing-side fix is now implemented.**  ``prte_rml_base`` carries a
+persistent ``dead_dmns`` bitmap that ``prte_rml_repair_routing_tree()`` sets
+whenever a rank departs and that ``prte_rml_compute_routing_tree()`` — unlike the
+per-event ``failed_dmns`` set — never re-initializes.  On every recompute the
+departed ranks are restored into ``failed_dmns`` and the freshly-built base tree
+is repaired around them (``prte_rml_update_ancestors`` / ``handle_promotion`` /
+``update_descendants``), so ``radix_is_living`` keeps the hole out of every
+survivor's ancestors, lifeline, and children.  One of the two supporting bugs is
+fixed alongside: the grow path into ``setup_vm`` now resets
+``map->num_new_daemons`` and ``map->daemon_vpid_start`` on entry rather than
+accumulating them across successive grows.  The other — the VM-ready gate
+(``num_reported == num_procs``) after a hole — is expected to be moot with
+append-only vpids plus the routing fix and is left tracked in #2491.
+
+A brand-new daemon starts with an empty ``dead_dmns`` set, so it could not learn
+the holes from the shrink events it never saw.  That gap is closed in the nidmap.
+``prte_util_nidmap_create`` now packs the true daemon vpid-space size
+(``prte_process_info.num_daemons``) in addition to the live daemon list, and
+``prte_util_decode_nidmap`` sets ``num_daemons`` from it and marks every vpid in
+``[0, num_daemons)`` that has no live daemon entry into ``dead_dmns`` before
+(re)computing the routing tree.  A shrunk-out rank is exactly such a gap, so
+every daemon — freshly grown or long-standing — converges on the same vpid span
+and the same dead set as the HNP, and the tree is routed around the hole even in
+a deep (multi-level) tree where a new daemon's own computed ancestor is a
+departed rank.  On an unshrunk DVM the packed span equals the live count, nothing
+is marked dead, and behavior is unchanged.
 
 Open questions
 --------------
