@@ -86,7 +86,10 @@ static void _query(int sd, short args, void *cbdata)
     uint32_t key, nodeid, sessionid = UINT32_MAX;
     char **nspaces, *hostname, *uri;
     char *cmdline;
-    const char *allocid, *allocprop;
+    const char *allocid;
+#ifdef PMIX_ALLOC_PROPERTY
+        const char *allocprop;
+#endif
     char **ans, *tmp;
     char *psetname;
     prte_app_context_t *app;
@@ -97,7 +100,6 @@ static void _query(int sd, short args, void *cbdata)
     prte_proc_t *proct;
     pmix_proc_t *proc;
     size_t sz;
-    bool releasable;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
@@ -115,7 +117,9 @@ static void _query(int sd, short args, void *cbdata)
         nodeid = UINT32_MAX;
         psetname = NULL;
         allocid = NULL;
+#ifdef PMIX_ALLOC_PROPERTY
         allocprop = NULL;
+#endif
         /* default to the requestor's jobid */
         PMIX_LOAD_NSPACE(jobid, cd->proct.nspace);
         /* see if they provided any qualifiers */
@@ -210,8 +214,10 @@ static void _query(int sd, short args, void *cbdata)
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_ALLOC_ID)) {
                     allocid = q->qualifiers[n].value.data.string;
 
+#ifdef PMIX_ALLOC_PROPERTY
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_ALLOC_PROPERTY)) {
                     allocprop = q->qualifiers[n].value.data.string;
+#endif
                 }
 
             }
@@ -794,6 +800,7 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 
+#ifdef PMIX_QUERY_ALLOC_IDS
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_ALLOC_IDS)) {
                 void *alloclist;
 
@@ -826,9 +833,12 @@ static void _query(int sd, short args, void *cbdata)
                     PMIX_ERROR_LOG(rc);
                     goto done;
                 }
+#endif
 
+#ifdef PMIX_QUERY_ALLOC_PROPERTIES
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_ALLOC_PROPERTIES)) {
                 void *proplist;
+                bool releasable;
 
                 if (NULL == allocid) {
                     ret = PMIX_ERR_BAD_PARAM;
@@ -864,6 +874,7 @@ static void _query(int sd, short args, void *cbdata)
                     PMIX_ERROR_LOG(rc);
                     goto done;
                 }
+#endif
 
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_AVAILABLE_SLOTS)) {
                 /* compute the slots currently available for assignment. Note that
