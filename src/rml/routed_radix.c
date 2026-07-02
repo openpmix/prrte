@@ -355,14 +355,20 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global){
 }
 
 int prte_rml_route_lost(pmix_rank_t route){
-    /* If we have been named as a shrink target and it is our lifeline to the
-     * DVM that has dropped, depart now rather than trying to recover: the DVM
-     * has removed us on purpose.  This fires only when prte_dvm_leaving is set,
-     * i.e., only after we processed a shrink command naming our own rank, so a
-     * genuine (unrelated) lifeline fault still takes the normal recovery path
-     * below.  It is a fast path only — a bounded timer (prted_comm.c) guarantees
-     * departure even if the connection never actually drops. */
-    if(prte_dvm_leaving && route == prte_rml_base.lifeline){
+    /* If we have been named as a shrink target, depart now on the first lost
+     * connection rather than trying to recover: the DVM has removed us on
+     * purpose.  This fires only when prte_dvm_leaving is set, i.e., only after
+     * we processed a shrink command naming our own rank, so a genuine
+     * (unrelated) route loss still takes the normal recovery path below.  We
+     * exit on *any* lost route, not just the lifeline: a child connection can
+     * be detected as dropping before the lifeline does, and if we treated that
+     * as a child failure we would emit an "adoption" notice for the promoted
+     * rank, which — arriving before news of our own departure — could be
+     * misread as a real failure and propagated up the tree.  Exiting
+     * unconditionally keeps a leaving daemon's disconnects from ever being
+     * mistaken for faults.  It is a fast path only — a bounded timer
+     * (prted_comm.c) guarantees departure even if no connection ever drops. */
+    if(prte_dvm_leaving){
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
         return PRTE_SUCCESS;
     }
