@@ -175,6 +175,11 @@ typedef struct {
     pmix_bitmap_t failed_dmns;
     // All daemons globally confirmed to have failed
     pmix_bitmap_t global_failed_dmns;
+    // Ranks that have permanently departed the DVM (shrunk out, or lost to a
+    // fault). Unlike failed_dmns, this set is NOT re-initialized by
+    // prte_rml_compute_routing_tree, so it survives the recompute that a grow
+    // triggers and lets the rebuilt tree keep routing around the hole (#2491).
+    pmix_bitmap_t dead_dmns;
 
     // Track all ancestors up to HNP, to simplify fault handling
     pmix_data_array_t ancestors;

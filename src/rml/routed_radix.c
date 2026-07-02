@@ -249,6 +249,13 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global){
                 continue;
             }
             pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, r);
+            // Record the departure permanently. compute_routing_tree re-inits
+            // failed_dmns on every DVM grow; dead_dmns is not re-initialized, so
+            // restoring it there keeps the rebuilt tree routing around this rank
+            // rather than treating the stale vpid hole as a live daemon (#2491).
+            // The DVM never reuses a daemon vpid, so a departed rank stays a
+            // permanent hole in [0, num_daemons).
+            pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, r);
         }
         ((pmix_rank_t*)status.failed_ranks.array)[j++] = r;
     }
@@ -408,6 +415,21 @@ void prte_rml_compute_routing_tree(void){
     pmix_bitmap_init(&prte_rml_base.failed_dmns, prte_rml_base.n_dmns);
     pmix_bitmap_init(&prte_rml_base.global_failed_dmns, prte_rml_base.n_dmns);
 
+    // Restore any permanently-departed daemons into the freshly-initialized
+    // failed set. This routine runs again whenever the DVM grows, and the
+    // pmix_bitmap_init above wipes the failed marks; without restoring them the
+    // rebuilt tree would treat a shrunk-out (or previously failed) rank as a
+    // live daemon and route to that dead vpid, breaking wireup on the grow
+    // (#2491). dead_dmns is maintained in prte_rml_repair_routing_tree and is
+    // never re-initialized, so it carries the holes across the recompute.
+    bool have_dead = false;
+    for(pmix_rank_t r = 0; r < prte_rml_base.n_dmns; r++){
+        if(pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, r)){
+            pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, r);
+            have_dead = true;
+        }
+    }
+
     prte_rml_base.cur_node = radix_node(PRTE_PROC_MY_NAME->rank);
 
     // Build array of ancestors
@@ -431,6 +453,18 @@ void prte_rml_compute_routing_tree(void){
     }
     shrink_ranks(&prte_rml_base.children);
     prte_rml_base.n_children = prte_rml_base.children.size;
+
+    // If any daemon has permanently departed, route the freshly-built base
+    // tree around it - the same ancestry/child repair a fault would perform,
+    // minus the fault-handler notifications (this is a recompute, not a new
+    // fault). With the dead ranks restored into failed_dmns above, these
+    // helpers (which consult failed_dmns via radix_is_living) drop the holes
+    // from our ancestors, lifeline, and children.
+    if(have_dead){
+        prte_rml_update_ancestors(&prte_rml_base.ancestors);
+        handle_promotion();
+        update_descendants();
+    }
 
     // Print verbose output
     if (1 > pmix_output_get_verbosity(prte_rml_base.routed_output)) return;
