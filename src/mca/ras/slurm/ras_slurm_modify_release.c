@@ -44,8 +44,13 @@ static void shrink_tracker_des(prte_ras_slurm_shrink_tracker_t *p);
 static bool prte_ras_slurm_tracker_has_jobid(prte_ras_slurm_shrink_tracker_t *tracker,
                                              const char *jobid);
 static bool prte_ras_slurm_jobid_has_active_shrink(const char *jobid);
-static prte_session_stack_item_t *prte_ras_slurm_find_releasable_session(void);
-static int prte_ras_slurm_validate_count_release(int nodes_to_remove);
+static bool prte_ras_slurm_session_contains_invoker(prte_session_t *session,
+                                                    const char *launching_jobid);
+static int prte_ras_slurm_session_removable_count(prte_session_stack_item_t *session_item,
+                                                  const char *launching_jobid);
+static prte_session_stack_item_t *prte_ras_slurm_find_releasable_session(const char *launching_jobid);
+static int prte_ras_slurm_validate_count_release(int nodes_to_remove,
+                                                 const char *launching_jobid);
 static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count);
 static int prte_ras_slurm_shrink_job(const char *slurm_jobid, const char *exclude_hostname, int new_node_count, char *err_msg, size_t err_msg_size);
 static int prte_ras_slurm_build_req_nodelist(const char *slurm_jobid, const char *protected_hostname, int new_node_count, char **req_nodes_arg);
@@ -168,9 +173,48 @@ static bool prte_ras_slurm_jobid_has_active_shrink(const char *jobid)
 }
 
 /**
- * @brief Find the newest Slurm session without an active shrink.
+ * @brief Check whether a session contains the requesting Slurm job.
+ *
+ * @param[in] session Slurm-backed session to inspect.
+ * @param[in] launching_jobid Slurm job ID of the requester.
  */
-static prte_session_stack_item_t *prte_ras_slurm_find_releasable_session(void)
+static bool prte_ras_slurm_session_contains_invoker(prte_session_t *session,
+                                                    const char *launching_jobid)
+{
+    return NULL != session && NULL != session->alloc_refid &&
+           NULL != launching_jobid &&
+           0 == strcmp(session->alloc_refid, launching_jobid);
+}
+
+/**
+ * @brief Return how many nodes may be removed from a session.
+ *
+ * @param[in] session_item Slurm session stack item.
+ * @param[in] launching_jobid Slurm job ID whose current node must survive.
+ */
+static int prte_ras_slurm_session_removable_count(prte_session_stack_item_t *session_item,
+                                                  const char *launching_jobid)
+{
+    if (NULL == session_item || NULL == session_item->session) {
+        return 0;
+    }
+
+    if (prte_ras_slurm_session_contains_invoker(session_item->session, launching_jobid)) {
+        if (1 >= session_item->nodes_in_session) {
+            return 0;
+        }
+        return session_item->nodes_in_session - 1;
+    }
+
+    return session_item->nodes_in_session;
+}
+
+/**
+ * @brief Find the newest Slurm session with removable nodes.
+ *
+ * @param[in] launching_jobid Slurm job ID whose current node must survive.
+ */
+static prte_session_stack_item_t *prte_ras_slurm_find_releasable_session(const char *launching_jobid)
 {
     pmix_list_item_t *item;
 
@@ -198,6 +242,10 @@ static prte_session_stack_item_t *prte_ras_slurm_find_releasable_session(void)
             continue;
         }
 
+        if (0 >= prte_ras_slurm_session_removable_count(session_item, launching_jobid)) {
+            continue;
+        }
+
         return session_item;
     }
 
@@ -208,8 +256,10 @@ static prte_session_stack_item_t *prte_ras_slurm_find_releasable_session(void)
  * @brief Validate that a count release can avoid active shrinks.
  *
  * @param[in] nodes_to_remove Number of nodes requested for release.
+ * @param[in] launching_jobid Slurm job ID whose current node must survive.
  */
-static int prte_ras_slurm_validate_count_release(int nodes_to_remove)
+static int prte_ras_slurm_validate_count_release(int nodes_to_remove,
+                                                 const char *launching_jobid)
 {
     pmix_list_item_t *item;
     int nodes_remaining = nodes_to_remove;
@@ -240,7 +290,8 @@ static int prte_ras_slurm_validate_count_release(int nodes_to_remove)
             continue;
         }
 
-        nodes_remaining -= session_item->nodes_in_session;
+        nodes_remaining -= prte_ras_slurm_session_removable_count(session_item,
+                                                                  launching_jobid);
     }
 
     if (0 < nodes_remaining) {
@@ -334,7 +385,7 @@ static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count) {
         return PRTE_ERR_NOT_FOUND;
     }
 
-    err = prte_ras_slurm_validate_count_release(nodes_to_remove);
+    err = prte_ras_slurm_validate_count_release(nodes_to_remove, launching_jobid);
     if (PRTE_SUCCESS != err) {
         if (PRTE_ERR_RESOURCE_BUSY == err) {
             pmix_output(0, "ras:slurm:remove_nodes_by_count: insufficient non-conflicting "
@@ -353,7 +404,8 @@ static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count) {
             goto cleanup;
         }
 
-        prte_session_stack_item_t *session_item = prte_ras_slurm_find_releasable_session();
+        prte_session_stack_item_t *session_item =
+            prte_ras_slurm_find_releasable_session(launching_jobid);
 
         if(NULL == session_item || NULL == session_item->session) {
             err = PRTE_ERR_NOT_FOUND;
@@ -365,25 +417,14 @@ static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count) {
 
         int nodes_left_to_rem = nodes_to_remove-nodes_removed;
 
-        bool contains_invoker = false;
-        
-        if(0 == strcmp(session->alloc_refid, launching_jobid)) {
-            contains_invoker = true;
-        }
+        bool contains_invoker = prte_ras_slurm_session_contains_invoker(session,
+                                                                        launching_jobid);
+        int removable_count = prte_ras_slurm_session_removable_count(session_item,
+                                                                     launching_jobid);
 
         char err_msg[PRTE_SLURM_ERR_STR_MAX_LEN+1] = {0};
 
-        if(nodes_left_to_rem >= session_item->nodes_in_session) {
-
-            /* we'd be trying cancel ourselves. probably a bad idea */
-            if(contains_invoker) {
-                pmix_output(0, "ras:slurm:remove_nodes_by_count: refusing to kill job %s "
-                               "because it contains the invoking process", session->alloc_refid);
-                err = PRTE_ERR_BAD_PARAM;
-                PRTE_ERROR_LOG(err);
-                goto cleanup;
-            }
-
+        if(!contains_invoker && nodes_left_to_rem >= session_item->nodes_in_session) {
             err = prte_ras_slurm_kill_job(session->alloc_refid, err_msg, PRTE_SLURM_ERR_STR_MAX_LEN+1);
 
             if (PRTE_SUCCESS != err) {
@@ -410,7 +451,13 @@ static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count) {
             PMIX_RELEASE(session_item);
         } else {
 
-            int new_node_count = session_item->nodes_in_session-nodes_left_to_rem;
+            int nodes_to_rem_from_session = nodes_left_to_rem;
+
+            if (nodes_to_rem_from_session > removable_count) {
+                nodes_to_rem_from_session = removable_count;
+            }
+
+            int new_node_count = session_item->nodes_in_session-nodes_to_rem_from_session;
 
             char *whitelist_node = NULL;
 
@@ -460,7 +507,7 @@ static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count) {
             PMIX_DESTRUCT(&nodes_in_removal);
 
             session_item->nodes_in_session = new_node_count;
-            nodes_removed += nodes_left_to_rem;
+            nodes_removed += nodes_to_rem_from_session;
         }
     } while (nodes_to_remove > nodes_removed);
 
