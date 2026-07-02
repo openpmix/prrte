@@ -1854,6 +1854,13 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_EXTEND_DVM, NULL, PMIX_BOOL)) {
         // nodes have been added, so extend the DVM
         prte_remove_attribute(&jdata->attributes, PRTE_JOB_EXTEND_DVM);
+        /* Reset the per-launch daemon accounting. The initial-VM path zeroes
+         * these further below, but the grow path jumps straight to construct:
+         * and would otherwise accumulate num_new_daemons across successive
+         * grows and reuse a stale daemon_vpid_start - corrupting the grow
+         * campaign's target list and suppressing its completion event (#2491). */
+        map->num_new_daemons = 0;
+        map->daemon_vpid_start = PMIX_RANK_INVALID;
         goto construct;
     }
 
