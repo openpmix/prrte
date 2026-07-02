@@ -920,6 +920,7 @@ void prte_ras_base_teardown_reservation(prte_session_t *session,
     }
 }
 
+#if defined(PMIX_ALLOC_INHERIT_CHILD)
 /* True if nspace is the root job's namespace or any transitive spawn
  * descendant of it (a recursive walk of prte_job_t::children). */
 static bool job_subtree_contains(prte_job_t *root, const pmix_nspace_t nspace)
@@ -1003,6 +1004,7 @@ static bool reservation_has_running_descendant(prte_session_t *s)
     }
     return false;
 }
+#endif
 
 void prte_ras_base_check_reservations_on_term(prte_job_t *jdata)
 {
