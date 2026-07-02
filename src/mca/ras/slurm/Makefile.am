@@ -34,7 +34,9 @@ sources = \
         ras_slurm_modify_common.c \
         ras_slurm_modify_cancel.c \
         ras_slurm_modify_extend.c \
-        ras_slurm_modify_release.c 
+        ras_slurm_modify_release.c \
+        ras_slurm_modify_release_tracker.c \
+        ras_slurm_modify_release_tracker.h
 
 if PRTE_HAVE_JANSSON
 sources += \
