@@ -249,7 +249,7 @@ void prte_grpcomm_direct_xcast_recv(
         /* If we are the master and this is one of our own broadcasts, attach the
          * completion callback queued for it in begin_xcast (FIFO).  Remote-origin
          * broadcasts queue nothing, so they never consume an entry. */
-        if(PRTE_PROC_IS_MASTER && prte_elastic_mode && NULL != sender &&
+        if(PRTE_PROC_IS_MASTER && NULL != sender &&
            sender->rank == PRTE_PROC_MY_NAME->rank &&
            !pmix_list_is_empty(&XCAST.pending_completions)){
             pending_completion_t* pc =
@@ -433,12 +433,12 @@ static void begin_xcast(int sd, short args, void* cbdata){
      * to it and it builds the op it tracks (see prte_grpcomm_direct_xcast_recv).
      * Enqueuing here — immediately before the send, and unwinding on failure —
      * rather than in xcast_nb keeps the FIFO aligned with exactly the broadcasts
-     * that were actually emitted, even if a send is abandoned.  Gated on elastic
-     * mode: only the DVM-shrink path (elastic only) ever registers a completion,
-     * so outside elastic mode the FIFO stays untouched and xcast behaves exactly
-     * as before. */
+     * that were actually emitted, even if a send is abandoned.  This is a general
+     * facility: any master-originated broadcast enqueues an entry (NULL callback
+     * included) so the FIFO stays aligned, and finish_op fires the callback only
+     * when one was actually registered. */
     pending_completion_t *pc = NULL;
-    if (PRTE_PROC_IS_MASTER && prte_elastic_mode) {
+    if (PRTE_PROC_IS_MASTER) {
         pc = PMIX_NEW(pending_completion_t);
         pc->cbfunc = op->cbfunc;
         pc->cbdata = op->cbdata;
