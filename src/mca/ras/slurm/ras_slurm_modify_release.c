@@ -14,6 +14,7 @@
 #include "types.h"
 
 #include "ras_slurm.h"
+#include "src/mca/preg/preg.h"
 #include "src/mca/ras/base/base.h"
 
 typedef enum {
@@ -51,9 +52,21 @@ static int prte_ras_slurm_session_removable_count(prte_session_stack_item_t *ses
 static prte_session_stack_item_t *prte_ras_slurm_find_releasable_session(const char *launching_jobid);
 static int prte_ras_slurm_validate_count_release(int nodes_to_remove,
                                                  const char *launching_jobid);
+static int prte_ras_slurm_remove_nodes_by_name(char **nodes);
+static int prte_ras_slurm_remove_allocation_by_id(const char *alloc_id);
 static int prte_ras_slurm_remove_nodes_by_count(uint64_t node_count);
+static int prte_ras_slurm_parse_release_node_list(pmix_info_t *info, char ***nodes);
+static prte_session_stack_item_t *prte_ras_slurm_find_session_item_by_alloc_id(const char *alloc_id);
+static prte_session_stack_item_t *prte_ras_slurm_find_session_item_by_node(const char *node_name);
+static bool prte_ras_slurm_node_in_argv(char **nodes, const char *node_name);
+static int prte_ras_slurm_count_matching_session_nodes(prte_session_t *session, char **nodes);
+static int prte_ras_slurm_build_survivor_list(prte_session_t *session, char **nodes_to_remove,
+                                              char ***survivors);
 static int prte_ras_slurm_shrink_job(const char *slurm_jobid, const char *exclude_hostname, int new_node_count, char *err_msg, size_t err_msg_size);
+static int prte_ras_slurm_shrink_job_to_survivors(const char *slurm_jobid, char **survivor_nodes,
+                                                  char *err_msg, size_t err_msg_size);
 static int prte_ras_slurm_build_req_nodelist(const char *slurm_jobid, const char *protected_hostname, int new_node_count, char **req_nodes_arg);
+static void prte_ras_slurm_cleanup_resize_scripts(const char *slurm_jobid);
 
 PMIX_CLASS_INSTANCE(prte_ras_slurm_release_action_t,
                     pmix_list_item_t,
@@ -318,31 +331,59 @@ int prte_ras_slurm_serve_release_req(prte_pmix_server_req_t *req)
     int err = PRTE_SUCCESS;
 
     uint64_t num_nodes = 0;
-    bool found = false;
+    const char *alloc_id = NULL;
+    char **nodes = NULL;
+    bool found_num_nodes = false;
+    bool found_alloc_id = false;
+    bool found_node_list = false;
 
     for (size_t i = 0; i < req->ninfo; i++) {
-        if (0 != strcmp(req->info[i].key, PMIX_ALLOC_NUM_NODES)) {
+        if (0 == strcmp(req->info[i].key, PMIX_ALLOC_NUM_NODES)) {
+
+            if (PMIX_UINT64 != req->info[i].value.type) {
+                err = PRTE_ERR_BAD_PARAM;
+                goto cleanup;
+            }
+
+            num_nodes = req->info[i].value.data.uint64;
+            found_num_nodes = true;
+        } else if (0 == strcmp(req->info[i].key, PMIX_ALLOC_ID)) {
+
+            if (PMIX_STRING != req->info[i].value.type) {
+                err = PRTE_ERR_BAD_PARAM;
+                goto cleanup;
+            }
+
+            alloc_id = req->info[i].value.data.string;
+            found_alloc_id = true;
+        } else if (0 == strcmp(req->info[i].key, PMIX_ALLOC_NODE_LIST)) {
+
+            err = prte_ras_slurm_parse_release_node_list(&req->info[i], &nodes);
+            if (PRTE_SUCCESS != err) {
+                goto cleanup;
+            }
+
+            found_node_list = true;
+        } else if (0 == strcmp(req->info[i].key, PMIX_ALLOC_REQ_ID)) {
             continue;
         }
-
-        if (PMIX_UINT64 != req->info[i].value.type) {
-            err = PRTE_ERR_BAD_PARAM;
-            goto cleanup;
-        }
-    
-        num_nodes = req->info[i].value.data.uint64;
-        found = true;
-        break;
     }
 
-    if(!found) {
+    if (1 != (int) found_num_nodes + (int) found_alloc_id + (int) found_node_list) {
         pmix_output(0, "ras:slurm:modify: modify request invalid or unsupported.\n"
-                       "Supported options: PMIX_ALLOC_NUM_NODES");
+                       "Supported options: exactly one of PMIX_ALLOC_NODE_LIST, "
+                       "PMIX_ALLOC_ID, or PMIX_ALLOC_NUM_NODES");
         err = PRTE_ERR_REQUEST;
         goto cleanup;
     }
 
-    err = prte_ras_slurm_remove_nodes_by_count(num_nodes);
+    if (found_node_list) {
+        err = prte_ras_slurm_remove_nodes_by_name(nodes);
+    } else if (found_alloc_id) {
+        err = prte_ras_slurm_remove_allocation_by_id(alloc_id);
+    } else {
+        err = prte_ras_slurm_remove_nodes_by_count(num_nodes);
+    }
 
     if(err != PRTE_SUCCESS) {
         goto cleanup;
@@ -350,7 +391,442 @@ int prte_ras_slurm_serve_release_req(prte_pmix_server_req_t *req)
 
 cleanup:
 
+    if (NULL != nodes) {
+        PMIx_Argv_free(nodes);
+    }
+
     return err;
+}
+
+/**
+ * @brief Parse a PMIX_ALLOC_NODE_LIST release selector.
+ *
+ * @param[in] info PMIx info carrying the node-list value.
+ * @param[out] nodes Parsed node names.
+ */
+static int prte_ras_slurm_parse_release_node_list(pmix_info_t *info, char ***nodes)
+{
+    char **parsed_nodes = NULL;
+    char *ndstring = NULL;
+    int rc;
+
+    if (NULL == info || NULL == nodes) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    *nodes = NULL;
+
+    if (PMIX_STRING == info->value.type ||
+        PMIX_REGEX == info->value.type) {
+        rc = pmix_preg.parse_nodes(info->value.data.string, &parsed_nodes);
+        if (PMIX_SUCCESS != rc) {
+            return prte_pmix_convert_status(rc);
+        }
+        ndstring = PMIx_Argv_join(parsed_nodes, ',');
+        PMIx_Argv_free(parsed_nodes);
+        parsed_nodes = NULL;
+
+#if PRTE_PMIX_HAVE_REGEX2
+    } else if (PMIX_REGEX2 == info->value.type) {
+        rc = PMIx_parse_regex2(info->value.data.regex2, NULL, 0, &ndstring);
+        if (PMIX_SUCCESS != rc) {
+            return prte_pmix_convert_status(rc);
+        }
+#endif
+
+    } else {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    if (NULL == ndstring || '\0' == ndstring[0]) {
+        free(ndstring);
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    *nodes = PMIx_Argv_split(ndstring, ',');
+    free(ndstring);
+
+    if (NULL == *nodes || 0 == PMIx_Argv_count(*nodes)) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    return PRTE_SUCCESS;
+}
+
+/**
+ * @brief Find the Slurm session stack item for an allocation ID.
+ *
+ * @param[in] alloc_id Slurm allocation/job ID.
+ */
+static prte_session_stack_item_t *prte_ras_slurm_find_session_item_by_alloc_id(const char *alloc_id)
+{
+    prte_session_stack_item_t *item;
+
+    if (NULL == prte_slurm_session_stack || NULL == alloc_id) {
+        return NULL;
+    }
+
+    PMIX_LIST_FOREACH(item, prte_slurm_session_stack, prte_session_stack_item_t) {
+        if (NULL != item->session && NULL != item->session->alloc_refid &&
+            0 == strcmp(item->session->alloc_refid, alloc_id)) {
+            return item;
+        }
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief Find the Slurm session stack item containing a node.
+ *
+ * @param[in] node_name Node name to find.
+ */
+static prte_session_stack_item_t *prte_ras_slurm_find_session_item_by_node(const char *node_name)
+{
+    prte_session_stack_item_t *item;
+
+    if (NULL == prte_slurm_session_stack || NULL == node_name) {
+        return NULL;
+    }
+
+    PMIX_LIST_FOREACH(item, prte_slurm_session_stack, prte_session_stack_item_t) {
+        prte_session_t *session = item->session;
+
+        if (NULL == session || NULL == session->nodes) {
+            continue;
+        }
+
+        for (int i = 0; i < session->nodes->size; i++) {
+            prte_node_t *node = (prte_node_t *) pmix_pointer_array_get_item(session->nodes, i);
+
+            if (NULL != node && NULL != node->name &&
+                0 == strcmp(node->name, node_name)) {
+                return item;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief Check whether a node name appears in an argv.
+ *
+ * @param[in] nodes NULL-terminated node-name array.
+ * @param[in] node_name Node name to find.
+ */
+static bool prte_ras_slurm_node_in_argv(char **nodes, const char *node_name)
+{
+    if (NULL == nodes || NULL == node_name) {
+        return false;
+    }
+
+    for (int i = 0; NULL != nodes[i]; i++) {
+        if (0 == strcmp(nodes[i], node_name)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @brief Count requested nodes that belong to a Slurm session.
+ *
+ * @param[in] session Session to inspect.
+ * @param[in] nodes Requested node names.
+ */
+static int prte_ras_slurm_count_matching_session_nodes(prte_session_t *session, char **nodes)
+{
+    int matches = 0;
+
+    if (NULL == session || NULL == session->nodes || NULL == nodes) {
+        return 0;
+    }
+
+    for (int i = 0; i < session->nodes->size; i++) {
+        prte_node_t *node = (prte_node_t *) pmix_pointer_array_get_item(session->nodes, i);
+
+        if (NULL != node && NULL != node->name &&
+            prte_ras_slurm_node_in_argv(nodes, node->name)) {
+            matches++;
+        }
+    }
+
+    return matches;
+}
+
+/**
+ * @brief Build survivor node names for an exact node removal.
+ *
+ * @param[in] session Slurm session to inspect.
+ * @param[in] nodes_to_remove Node names selected for release.
+ * @param[out] survivors Nodes that should remain in the Slurm allocation.
+ */
+static int prte_ras_slurm_build_survivor_list(prte_session_t *session, char **nodes_to_remove,
+                                              char ***survivors)
+{
+    pmix_status_t pmix_err;
+
+    if (NULL == session || NULL == session->nodes || NULL == survivors) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    *survivors = NULL;
+
+    for (int i = 0; i < session->nodes->size; i++) {
+        prte_node_t *node = (prte_node_t *) pmix_pointer_array_get_item(session->nodes, i);
+
+        if (NULL == node || NULL == node->name ||
+            prte_ras_slurm_node_in_argv(nodes_to_remove, node->name)) {
+            continue;
+        }
+
+        pmix_err = PMIx_Argv_append_nosize(survivors, node->name);
+        if (PMIX_SUCCESS != pmix_err) {
+            PMIx_Argv_free(*survivors);
+            *survivors = NULL;
+            return prte_pmix_convert_status(pmix_err);
+        }
+    }
+
+    if (NULL == *survivors || 0 == PMIx_Argv_count(*survivors)) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    return PRTE_SUCCESS;
+}
+
+/**
+ * @brief Remove nodes from Slurm allocations by exact node name.
+ *
+ * @param[in] nodes Node names to remove.
+ */
+static int prte_ras_slurm_remove_nodes_by_name(char **nodes)
+{
+    int err = PRTE_SUCCESS;
+    int nodes_removed = 0;
+    int node_count;
+    char *launching_jobid;
+    char *protected_node = NULL;
+    char err_msg[PRTE_SLURM_ERR_STR_MAX_LEN+1] = {0};
+
+    if (NULL == nodes || 0 == (node_count = PMIx_Argv_count(nodes))) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    if (node_count >= prte_num_allocated_nodes) {
+        pmix_output(0, "ras:slurm:remove_nodes_by_name: cannot remove all allocated nodes or more.");
+        return PRTE_ERR_REQUEST;
+    }
+
+    if (NULL == (launching_jobid = getenv("SLURM_JOBID"))) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    for (int i = 0; NULL != nodes[i]; i++) {
+        prte_session_stack_item_t *session_item;
+
+        err = prte_ras_slurm_validate_hostname(nodes[i]);
+        if (PRTE_SUCCESS != err) {
+            return err;
+        }
+
+        for (int j = i + 1; NULL != nodes[j]; j++) {
+            if (0 == strcmp(nodes[i], nodes[j])) {
+                return PRTE_ERR_BAD_PARAM;
+            }
+        }
+
+        session_item = prte_ras_slurm_find_session_item_by_node(nodes[i]);
+        if (NULL == session_item || NULL == session_item->session ||
+            NULL == session_item->session->alloc_refid) {
+            return PRTE_ERR_NOT_FOUND;
+        }
+
+        if (prte_ras_slurm_jobid_has_active_shrink(session_item->session->alloc_refid)) {
+            return PRTE_ERR_RESOURCE_BUSY;
+        }
+
+        if (prte_ras_slurm_session_contains_invoker(session_item->session, launching_jobid)) {
+            if (NULL == protected_node) {
+                protected_node = getenv("SLURMD_NODENAME");
+                if (NULL == protected_node) {
+                    return PRTE_ERR_BAD_PARAM;
+                }
+            }
+
+            if (0 == strcmp(nodes[i], protected_node)) {
+                pmix_output(0, "ras:slurm:remove_nodes_by_name: refusing to remove current node %s",
+                            protected_node);
+                return PRTE_ERR_BAD_PARAM;
+            }
+        }
+    }
+
+    char **processed_jobs = NULL;
+
+    for (int i = 0; NULL != nodes[i]; i++) {
+        prte_session_stack_item_t *session_item;
+        prte_session_t *session;
+        int selected;
+        pmix_status_t pmix_err;
+
+        session_item = prte_ras_slurm_find_session_item_by_node(nodes[i]);
+        if (NULL == session_item || NULL == session_item->session ||
+            NULL == session_item->session->alloc_refid) {
+            err = PRTE_ERR_NOT_FOUND;
+            goto cleanup;
+        }
+
+        session = session_item->session;
+        if (prte_ras_slurm_node_in_argv(processed_jobs, session->alloc_refid)) {
+            continue;
+        }
+
+        pmix_err = PMIx_Argv_append_nosize(&processed_jobs, session->alloc_refid);
+        if (PMIX_SUCCESS != pmix_err) {
+            err = prte_pmix_convert_status(pmix_err);
+            goto cleanup;
+        }
+
+        selected = prte_ras_slurm_count_matching_session_nodes(session, nodes);
+        if (0 == selected) {
+            continue;
+        }
+
+        if (selected == session_item->nodes_in_session) {
+            if (prte_ras_slurm_session_contains_invoker(session, launching_jobid)) {
+                pmix_output(0, "ras:slurm:remove_nodes_by_name: refusing to kill job %s "
+                               "because it contains the invoking process",
+                            session->alloc_refid);
+                err = PRTE_ERR_BAD_PARAM;
+                goto cleanup;
+            }
+
+            err = prte_ras_slurm_kill_job(session->alloc_refid, err_msg,
+                                          PRTE_SLURM_ERR_STR_MAX_LEN+1);
+            if (PRTE_SUCCESS != err) {
+                if(PRTE_ERR_SLURM_CANCEL_FAILURE == err) {
+                    pmix_output(0, "ras:slurm:remove_nodes_by_name: failed to kill job %s: %s.",
+                                session->alloc_refid, err_msg);
+                } else {
+                    PRTE_ERROR_LOG(err);
+                }
+                goto cleanup;
+            }
+
+            pmix_list_remove_item(prte_slurm_session_stack, &session_item->super);
+            nodes_removed += session_item->nodes_in_session;
+            PMIX_RELEASE(session);
+            PMIX_RELEASE(session_item);
+        } else {
+            pmix_pointer_array_t nodes_in_removal;
+            char **survivors = NULL;
+
+            err = prte_ras_slurm_build_survivor_list(session, nodes, &survivors);
+            if (PRTE_SUCCESS != err) {
+                goto cleanup;
+            }
+
+            err = prte_ras_slurm_shrink_job_to_survivors(session->alloc_refid, survivors,
+                                                         err_msg,
+                                                         PRTE_SLURM_ERR_STR_MAX_LEN+1);
+            PMIx_Argv_free(survivors);
+            if (PRTE_SUCCESS != err) {
+                if(PRTE_ERR_SLURM_SHRINK_FAILURE == err) {
+                    pmix_output(0, "ras:slurm:remove_nodes_by_name: failed to shrink job %s"
+                                   ": %s.", session->alloc_refid, err_msg);
+                } else {
+                    PRTE_ERROR_LOG(err);
+                }
+                goto cleanup;
+            }
+
+            PMIX_CONSTRUCT(&nodes_in_removal, pmix_pointer_array_t);
+            err = prte_ras_slurm_detach_nodes(session->alloc_refid, session, &nodes_in_removal);
+            PMIX_DESTRUCT(&nodes_in_removal);
+            if (PRTE_SUCCESS != err) {
+                goto cleanup;
+            }
+
+            session_item->nodes_in_session -= selected;
+            nodes_removed += selected;
+        }
+    }
+
+cleanup:
+    if (NULL != processed_jobs) {
+        PMIx_Argv_free(processed_jobs);
+    }
+    prte_num_allocated_nodes -= nodes_removed;
+    if (PRTE_SUCCESS != err && nodes_removed > 0) {
+        err = PRTE_ERR_PARTIAL_SUCCESS;
+    }
+    return err;
+}
+
+/**
+ * @brief Remove a whole Slurm allocation by allocation ID.
+ *
+ * @param[in] alloc_id Slurm allocation/job ID.
+ */
+static int prte_ras_slurm_remove_allocation_by_id(const char *alloc_id)
+{
+    prte_session_stack_item_t *session_item;
+    char *launching_jobid;
+    char err_msg[PRTE_SLURM_ERR_STR_MAX_LEN+1] = {0};
+    int err;
+
+    if (NULL == alloc_id || '\0' == alloc_id[0]) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    session_item = prte_ras_slurm_find_session_item_by_alloc_id(alloc_id);
+    if (NULL == session_item || NULL == session_item->session) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    if (session_item->nodes_in_session >= prte_num_allocated_nodes) {
+        pmix_output(0, "ras:slurm:remove_allocation_by_id: cannot remove all allocated nodes.");
+        return PRTE_ERR_REQUEST;
+    }
+
+    if (prte_ras_slurm_jobid_has_active_shrink(alloc_id)) {
+        return PRTE_ERR_RESOURCE_BUSY;
+    }
+
+    if (NULL == (launching_jobid = getenv("SLURM_JOBID"))) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    if (prte_ras_slurm_session_contains_invoker(session_item->session, launching_jobid)) {
+        pmix_output(0, "ras:slurm:remove_allocation_by_id: refusing to kill job %s "
+                       "because it contains the invoking process", alloc_id);
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    err = prte_ras_slurm_kill_job(alloc_id, err_msg, PRTE_SLURM_ERR_STR_MAX_LEN+1);
+    if (PRTE_SUCCESS != err) {
+        if(PRTE_ERR_SLURM_CANCEL_FAILURE == err) {
+            pmix_output(0, "ras:slurm:remove_allocation_by_id: failed to kill job %s: %s.",
+                        alloc_id, err_msg);
+        } else {
+            PRTE_ERROR_LOG(err);
+        }
+        return err;
+    }
+
+    pmix_list_remove_item(prte_slurm_session_stack, &session_item->super);
+    prte_num_allocated_nodes -= session_item->nodes_in_session;
+
+    /* This also removes from prte_sessions */
+    PMIX_RELEASE(session_item->session);
+    PMIX_RELEASE(session_item);
+
+    return PRTE_SUCCESS;
 }
 
 /**
@@ -518,6 +994,145 @@ cleanup:
     if(PRTE_SUCCESS != err && nodes_removed > 0) {
         err = PRTE_ERR_PARTIAL_SUCCESS;
     }
+
+    return err;
+}
+
+static void prte_ras_slurm_cleanup_resize_scripts(const char *slurm_jobid)
+{
+    char *resize_script_sh = NULL;
+    char *resize_script_csh = NULL;
+    static const char *resize_script_format = "slurm_job_%s_resize.%s";
+
+    if (NULL == slurm_jobid) {
+        return;
+    }
+
+    if (0 <= asprintf(&resize_script_sh, resize_script_format, slurm_jobid, "sh")) {
+        if (0 != remove(resize_script_sh)) {
+            int saved_errno = errno;
+            if (ENOENT != saved_errno) {
+                pmix_output(0,
+                            "ras:slurm:shrink_job: failed to remove helper script %s: %s.",
+                            resize_script_sh, strerror(saved_errno));
+            }
+        }
+    }
+
+    if (0 <= asprintf(&resize_script_csh, resize_script_format, slurm_jobid, "csh")) {
+        if (0 != remove(resize_script_csh)) {
+            int saved_errno = errno;
+            if (ENOENT != saved_errno) {
+                pmix_output(0,
+                            "ras:slurm:shrink_job: failed to remove helper script %s: %s.",
+                            resize_script_csh, strerror(saved_errno));
+            }
+        }
+    }
+
+    free(resize_script_sh);
+    free(resize_script_csh);
+}
+
+/**
+ * @brief Shrink a Slurm job to an exact survivor node list.
+ *
+ * @param[in] slurm_jobid Slurm job ID to resize.
+ * @param[in] survivor_nodes Nodes that must remain in the job.
+ * @param[out] err_msg Optional buffer for Slurm error output.
+ * @param[in] err_msg_size Size of err_msg buffer, if applicable.
+ */
+static int prte_ras_slurm_shrink_job_to_survivors(const char *slurm_jobid, char **survivor_nodes,
+                                                  char *err_msg, size_t err_msg_size)
+{
+    int err = PRTE_SUCCESS;
+    char *survivor_string = NULL;
+    char *req_nodes_arg = NULL;
+    char *cmd = NULL;
+    FILE *fp = NULL;
+    static const char *cmd_format = "scontrol update job %s %s 2>&1";
+
+    if (NULL == slurm_jobid || NULL == survivor_nodes ||
+        0 == PMIx_Argv_count(survivor_nodes)) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    if (NULL != err_msg) {
+        err_msg[0] = '\0';
+    }
+
+    err = prte_ras_slurm_validate_jobid(slurm_jobid);
+    if (PRTE_SUCCESS != err) {
+        return err;
+    }
+
+    for (int i = 0; NULL != survivor_nodes[i]; i++) {
+        err = prte_ras_slurm_validate_hostname(survivor_nodes[i]);
+        if (PRTE_SUCCESS != err) {
+            return err;
+        }
+    }
+
+    survivor_string = PMIx_Argv_join(survivor_nodes, ',');
+    if (NULL == survivor_string) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    if (0 > asprintf(&req_nodes_arg, "ReqNodeList=%s", survivor_string)) {
+        req_nodes_arg = NULL;
+        err = PRTE_ERR_OUT_OF_RESOURCE;
+        goto cleanup;
+    }
+
+    if (0 > asprintf(&cmd, cmd_format, slurm_jobid, req_nodes_arg)) {
+        cmd = NULL;
+        err = PRTE_ERR_OUT_OF_RESOURCE;
+        goto cleanup;
+    }
+
+    PMIX_OUTPUT_VERBOSE((20, prte_ras_base_framework.framework_output,
+                        "%s ras:slurm:shrink_job: shrink command is:\n%s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cmd));
+
+    fp = popen(cmd, "r");
+    if (NULL == fp) {
+        err = PRTE_ERR_FILE_OPEN_FAILURE;
+        goto cleanup;
+    }
+
+    err = prte_ras_slurm_drain_cmd_output(fp, err_msg, err_msg_size);
+    if (PRTE_SUCCESS != err) {
+        goto cleanup;
+    }
+
+    int status = pclose(fp);
+    fp = NULL;
+
+    if (-1 == status) {
+        pmix_output(0, "ras:slurm:shrink_job: pclose failed: %s.", strerror(errno));
+        err = PRTE_ERR_IN_ERRNO;
+        goto cleanup;
+    }
+
+    if (!WIFEXITED(status) || 0 != WEXITSTATUS(status)) {
+        err = PRTE_ERR_SLURM_SHRINK_FAILURE;
+        goto cleanup;
+    }
+
+    prte_ras_slurm_cleanup_resize_scripts(slurm_jobid);
+
+cleanup:
+    if (NULL != err_msg && PRTE_ERR_SLURM_SHRINK_FAILURE != err) {
+        err_msg[0] = '\0';
+    }
+
+    if (NULL != fp) {
+        pclose(fp);
+    }
+
+    free(survivor_string);
+    free(req_nodes_arg);
+    free(cmd);
 
     return err;
 }
