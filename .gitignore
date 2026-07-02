@@ -8,6 +8,10 @@
 .gdb*
 cov-int
 
+# Out-of-tree (VPATH) build dirs used by contrib/dockerswarm/build.sh
+/vpath-linux/
+/vpath-macos/
+
 .hgrc
 .hgignore
 .hg

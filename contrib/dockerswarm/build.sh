@@ -7,56 +7,151 @@
 #
 # $HEADER$
 #
-# Build the prte-elastic:latest image used by the DVM test swarm (README.md).
+# Build PRRTE for the DVM test swarm (README.md) from your *live* working tree
+# -- no commit required, never stale.
 #
-# It exports this repo's committed PRRTE tree (default: HEAD) into a clean build
-# context via `git archive` -- so the image contains exactly your committed code,
-# with no host build artifacts and no architecture mismatch -- then builds the
-# Dockerfile, which clones PMIx and compiles both into /usr/local.
+# The tree is built OUT OF TREE (VPATH) so the source stays pristine and can be
+# shared by two independent builds:
 #
-# Test a different committed state with PRRTE_REF, or a specific PMIx with
-# PMIX_REF / PMIX_REPO.  Examples:
-#   ./build.sh
-#   PRRTE_REF=topic/lnch ./build.sh
-#   PMIX_REF=v6.1.0 ./build.sh
+#   ./build.sh          # or 'linux': build in a container into the shared
+#                       #   /opt/prte volume that the swarm nodes mount
+#   ./build.sh macos    # build natively on this host into <repo>/vpath-macos
+#   ./build.sh image    # (re)build just the base container image
 #
-# Requires: docker, git, and network access during the build (for PMIx + apt).
+# Because a VPATH configure refuses to run while the source tree still has an
+# in-tree build, this script runs `make distclean` (once) at the repo root and
+# then `./autogen.pl`.  After that, ALL builds are out-of-tree and your
+# top-level source dir stays clean.
+#
+# Optional: point PMIX_SRC at a local openpmix checkout to build PMIx from
+# source too (covering both code bases); otherwise the baked-in PMIx (Linux) or
+# an installed PMIx (macOS, override with PMIX_HOME) is used.
+#
+# Requires: docker (for linux/image), git, and a working autotools toolchain.
 
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(git -C "$here" rev-parse --show-toplevel)"
 
-IMAGE="${IMAGE:-prte-elastic:latest}"
-PRRTE_REF="${PRRTE_REF:-HEAD}"
+IMAGE="${IMAGE:-prte-swarm:latest}"
+VOLUME="${VOLUME:-prte-build}"
+PMIX_REF="${PMIX_REF:-master}"          # baked-image PMIx branch
 PMIX_REPO="${PMIX_REPO:-https://github.com/openpmix/openpmix.git}"
-PMIX_REF="${PMIX_REF:-master}"
+PMIX_SRC="${PMIX_SRC:-}"                # optional openpmix checkout to build
+PMIX_HOME="${PMIX_HOME:-}"              # optional installed PMIx prefix (macOS)
 
-ctx="$here/_work/context"
-rm -rf "$ctx"
-mkdir -p "$ctx"
+mode="${1:-linux}"
 
-echo ">>> exporting PRRTE source ($PRRTE_REF) from $root"
-git -C "$root" archive --prefix=prrte/ "$PRRTE_REF" | tar -x -C "$ctx"
+# --- make the source tree VPATH-ready (idempotent) --------------------------
+prep_srcdir() {
+    if [ -f "$root/config.status" ] || [ -f "$root/Makefile" ]; then
+        echo ">>> make distclean (source tree had an in-tree build)"
+        make -C "$root" distclean >/dev/null 2>&1 || true
+    fi
+    if [ ! -x "$root/configure" ] || [ "$root/configure.ac" -nt "$root/configure" ]; then
+        echo ">>> autogen.pl"
+        ( cd "$root" && ./autogen.pl )
+    fi
+}
 
-# git archive omits submodule contents, so add config/oac (needed by autogen's
-# m4) separately.  Make sure it is checked out on the host first.
-echo ">>> adding config/oac submodule contents"
-git -C "$root" submodule update --init -- config/oac >/dev/null 2>&1 || true
-git -C "$root/config/oac" archive --prefix=prrte/config/oac/ HEAD | tar -x -C "$ctx"
+# --- (re)build the base image if needed -------------------------------------
+build_image() {
+    if [ "${1:-}" = force ] || ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+        echo ">>> docker build $IMAGE (baked PMIx $PMIX_REF)"
+        docker build -t "$IMAGE" \
+            --build-arg PMIX_REPO="$PMIX_REPO" \
+            --build-arg PMIX_REF="$PMIX_REF" \
+            "$here"
+    else
+        echo ">>> using existing image $IMAGE (./build.sh image to rebuild)"
+    fi
+}
 
-# Drop .gitmodules so the in-container autogen.pl skips its submodule check,
-# which would otherwise run `git submodule status` and fail (no .git here).
-rm -f "$ctx/prrte/.gitmodules"
+# --- Linux build (in a builder container, into the shared volume) -----------
+build_linux() {
+    prep_srcdir
+    build_image
+    docker volume create "$VOLUME" >/dev/null
 
-cp "$here/Dockerfile" "$here/elastic.c" "$ctx/"
+    local pmix_mount=()
+    [ -n "$PMIX_SRC" ] && pmix_mount=(-v "$(cd "$PMIX_SRC" && pwd)":/pmix-src:ro)
 
-echo ">>> docker build $IMAGE (PMIx $PMIX_REF)"
-docker build -t "$IMAGE" \
-    --build-arg PMIX_REPO="$PMIX_REPO" \
-    --build-arg PMIX_REF="$PMIX_REF" \
-    "$ctx"
+    echo ">>> building PRRTE (and PMIx if PMIX_SRC set) into volume $VOLUME"
+    docker run --rm \
+        -v "$root":/prrte-src:ro \
+        -v "$VOLUME":/opt/prte \
+        ${pmix_mount[@]+"${pmix_mount[@]}"} \
+        "$IMAGE" bash -euo pipefail -c '
+            jobs=$(nproc)
+            if [ -d /pmix-src ]; then
+                PMIX_PREFIX=/opt/prte/pmix
+                echo ">>>> PMIx from bind-mounted /pmix-src -> $PMIX_PREFIX"
+                mkdir -p /opt/prte/vpath-linux-pmix && cd /opt/prte/vpath-linux-pmix
+                [ -f config.status ] || /pmix-src/configure --prefix="$PMIX_PREFIX"
+                make -j"$jobs" && make install
+            else
+                PMIX_PREFIX=/usr/local
+                echo ">>>> PMIx: using baked $PMIX_PREFIX"
+            fi
 
-rm -rf "$here/_work"
-echo ">>> done: built $IMAGE"
-echo ">>> next: docker compose up -d   (then see README.md)"
+            echo ">>>> PRRTE VPATH build -> /opt/prte/prte"
+            mkdir -p /opt/prte/vpath-linux && cd /opt/prte/vpath-linux
+            [ -f config.status ] || /prrte-src/configure \
+                --prefix=/opt/prte/prte --with-pmix="$PMIX_PREFIX" --enable-debug
+            make -j"$jobs" && make install
+
+            echo ">>>> elastic test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/elastic \
+                /prrte-src/contrib/dockerswarm/elastic.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -lpmix
+
+            # runtime env for login shells (node-entrypoint handles ld.so)
+            printf "export PATH=/opt/prte/prte/bin:\$PATH\nexport LD_LIBRARY_PATH=/opt/prte/prte/lib:%s/lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}\n" \
+                "$PMIX_PREFIX" > /opt/prte/env.sh
+            echo ">>>> done: install in /opt/prte/prte"
+        '
+    echo ">>> Linux build complete."
+    echo ">>> next: docker compose up -d && ./run-tests.sh linux"
+}
+
+# --- macOS build (native, on this host) -------------------------------------
+build_macos() {
+    prep_srcdir
+    local pmix_arg=""
+    if [ -n "$PMIX_SRC" ]; then
+        local psrc pfx
+        psrc="$(cd "$PMIX_SRC" && pwd)"
+        pfx="$root/vpath-macos-pmix/install"
+        echo ">>> PMIx native VPATH build from $psrc -> $pfx"
+        ( cd "$psrc" && { [ -x configure ] || ./autogen.pl; } )
+        mkdir -p "$root/vpath-macos-pmix" && cd "$root/vpath-macos-pmix"
+        [ -f config.status ] || "$psrc/configure" --prefix="$pfx"
+        make -j"$(sysctl -n hw.ncpu)" && make install
+        pmix_arg="--with-pmix=$pfx"
+    elif [ -n "$PMIX_HOME" ]; then
+        pmix_arg="--with-pmix=$PMIX_HOME"
+    else
+        echo ">>> PMIX_SRC/PMIX_HOME unset; letting configure autodetect PMIx"
+    fi
+
+    echo ">>> PRRTE native VPATH build -> $root/vpath-macos/install"
+    mkdir -p "$root/vpath-macos" && cd "$root/vpath-macos"
+    # EXTRA_CONFIGURE_ARGS lets you pass host-specific dep paths, e.g.
+    #   EXTRA_CONFIGURE_ARGS="--with-libevent=... --with-hwloc=..."
+    # (values with spaces, like an -isysroot in CFLAGS, should be exported as
+    # CFLAGS/CPPFLAGS in the environment instead -- configure inherits them.)
+    # shellcheck disable=SC2086
+    [ -f config.status ] || "$root/configure" \
+        --prefix="$root/vpath-macos/install" $pmix_arg --enable-debug ${EXTRA_CONFIGURE_ARGS:-}
+    make -j"$(sysctl -n hw.ncpu)" && make install
+    echo ">>> macOS build complete: $root/vpath-macos/install"
+    echo ">>> next: ./run-tests.sh macos"
+}
+
+case "$mode" in
+    linux) build_linux ;;
+    macos) build_macos ;;
+    image) prep_srcdir; build_image force ;;
+    *) echo "usage: $0 [linux|macos|image]" >&2; exit 2 ;;
+esac
