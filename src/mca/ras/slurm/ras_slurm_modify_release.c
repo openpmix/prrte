@@ -54,6 +54,8 @@ PMIX_CLASS_INSTANCE(prte_ras_slurm_shrink_tracker_t,
                     shrink_tracker_con,
                     shrink_tracker_des);
 
+static pmix_list_t *prte_slurm_shrink_trackers = NULL;
+
 static void release_action_con(prte_ras_slurm_release_action_t *p)
 {
     p->job_id = NULL;
@@ -84,6 +86,33 @@ static void shrink_tracker_des(prte_ras_slurm_shrink_tracker_t *p)
         PMIX_RELEASE(action);
     }
     PMIX_DESTRUCT(&p->actions);
+}
+
+int prte_ras_slurm_modify_release_init(void)
+{
+    prte_slurm_shrink_trackers = PMIX_NEW(pmix_list_t);
+    if (NULL == prte_slurm_shrink_trackers) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    return PRTE_SUCCESS;
+}
+
+int prte_ras_slurm_modify_release_finalize(void)
+{
+    prte_ras_slurm_shrink_tracker_t *tracker;
+
+    if (NULL == prte_slurm_shrink_trackers) {
+        return PRTE_SUCCESS;
+    }
+
+    while (NULL != (tracker = (prte_ras_slurm_shrink_tracker_t *)
+                                  pmix_list_remove_first(prte_slurm_shrink_trackers))) {
+        PMIX_RELEASE(tracker);
+    }
+    PMIX_RELEASE(prte_slurm_shrink_trackers);
+    prte_slurm_shrink_trackers = NULL;
+
+    return PRTE_SUCCESS;
 }
 
 /**
