@@ -68,6 +68,8 @@ int prte_ras_slurm_serve_cancel_req(prte_pmix_server_req_t *req);
 int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req);
 
 /* Features to serve release requests */
+int prte_ras_slurm_modify_release_init(void);
+int prte_ras_slurm_modify_release_finalize(void);
 int prte_ras_slurm_serve_release_req(prte_pmix_server_req_t *req);
 
 /* Common modify extend/release features */

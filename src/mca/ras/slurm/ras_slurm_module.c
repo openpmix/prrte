@@ -121,6 +121,11 @@ static int init(void)
         goto cleanup;
     }
 
+    err = prte_ras_slurm_modify_release_init();
+    if (PRTE_SUCCESS != err) {
+        goto cleanup;
+    }
+
     err = prte_ras_slurm_modify_cancel_init();
     if (PRTE_SUCCESS != err) {
         goto cleanup;
@@ -129,6 +134,7 @@ static int init(void)
 cleanup:
 
     if (PRTE_SUCCESS != err) {
+        prte_ras_slurm_modify_release_finalize();
         PMIX_RELEASE(prte_slurm_session_stack);
         prte_slurm_session_stack = NULL;
     }
@@ -308,6 +314,7 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
 static int prte_ras_slurm_finalize(void)
 {
     prte_ras_slurm_modify_cancel_finalize();
+    prte_ras_slurm_modify_release_finalize();
     PMIX_RELEASE(prte_slurm_session_stack);
     return PRTE_SUCCESS;
 }
