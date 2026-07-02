@@ -35,15 +35,6 @@
         child = radix_right_sibling(&child) \
     )
 
-#define RADIX_NODE_STATIC_INIT         \
-    {                                  \
-        .rank = PMIX_RANK_INVALID,     \
-        .depth = 0,                    \
-        .width = 1,                    \
-        .count = 1,                    \
-        .base_rank = PMIX_RANK_INVALID \
-    }
-
 typedef prte_rml_routed_tree_node_t radix_node_t;
 
 /* Obtain a radix node configured for this rank */

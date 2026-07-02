@@ -115,52 +115,6 @@ void prte_mca_oob_tcp_component_lost_connection(int fd, short args, void *cbdata
     PMIX_RELEASE(pop);
 }
 
-void prte_mca_oob_tcp_component_no_route(int fd, short args, void *cbdata)
-{
-    prte_oob_tcp_msg_error_t *mop = (prte_oob_tcp_msg_error_t *) cbdata;
-    PRTE_HIDE_UNUSED_PARAMS(fd, args);
-
-    PMIX_ACQUIRE_OBJECT(mop);
-
-    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
-                        "%s tcp:no route called for peer %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        PRTE_NAME_PRINT(&mop->hop));
-
-    if (prte_prteds_term_ordered || prte_finalizing || prte_abnormal_term_ordered) {
-        /* just ignore the problem */
-        PMIX_RELEASE(mop);
-        return;
-    }
-
-    /* report the error */
-    PRTE_ACTIVATE_PROC_STATE(&mop->hop, PRTE_PROC_STATE_UNABLE_TO_SEND_MSG);
-
-    PMIX_RELEASE(mop);
-}
-
-void prte_mca_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
-{
-    prte_oob_tcp_msg_error_t *mop = (prte_oob_tcp_msg_error_t *) cbdata;
-    PRTE_HIDE_UNUSED_PARAMS(fd, args);
-
-    PMIX_ACQUIRE_OBJECT(mop);
-
-    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
-                        "%s tcp:unknown hop called for peer %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        PRTE_NAME_PRINT(&mop->hop));
-
-    if (prte_prteds_term_ordered || prte_finalizing || prte_abnormal_term_ordered) {
-        /* just ignore the problem */
-        PMIX_RELEASE(mop);
-        return;
-    }
-
-    /* post the error */
-    PRTE_ACTIVATE_PROC_STATE(&mop->hop, PRTE_PROC_STATE_UNABLE_TO_SEND_MSG);
-
-    PMIX_RELEASE(mop);
-}
-
 void prte_mca_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata)
 {
     prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t *) cbdata;
@@ -253,8 +207,6 @@ static void pop_des(prte_oob_tcp_peer_op_t *pop)
     }
 }
 PMIX_CLASS_INSTANCE(prte_oob_tcp_peer_op_t, pmix_object_t, pop_cons, pop_des);
-
-PMIX_CLASS_INSTANCE(prte_oob_tcp_msg_op_t, pmix_object_t, NULL, NULL);
 
 PMIX_CLASS_INSTANCE(prte_oob_tcp_conn_op_t, pmix_object_t, NULL, NULL);
 

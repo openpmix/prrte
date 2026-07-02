@@ -508,7 +508,6 @@ static int tcp_peer_send_connect_ack(prte_oob_tcp_peer_t *peer)
     hdr.type = MCA_OOB_TCP_IDENT;
     hdr.tag = 0;
     hdr.seq_num = 0;
-    memset(hdr.routed, 0, PRTE_MAX_RTD_SIZE + 1);
 
     /* payload size */
     sdsize = sizeof(ack_flag) + strlen(prte_version_string) + 1;
@@ -563,7 +562,6 @@ static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name)
     hdr.type = MCA_OOB_TCP_IDENT;
     hdr.tag = 0;
     hdr.seq_num = 0;
-    memset(hdr.routed, 0, PRTE_MAX_RTD_SIZE + 1);
 
     /* payload size */
     sdsize = sizeof(ack_flag);

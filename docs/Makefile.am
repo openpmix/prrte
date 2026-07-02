@@ -45,6 +45,7 @@ RST_SOURCE_FILES = \
         $(srcdir)/launching-apps/*.rst \
         $(srcdir)/how-things-work/*.rst \
         $(srcdir)/how-things-work/schedulers/*.rst \
+        $(srcdir)/how-things-work/rml/*.rst \
         $(srcdir)/developers/*.rst \
         $(srcdir)/man/*.rst \
         $(srcdir)/man/man1/*.rst \
