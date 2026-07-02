@@ -192,9 +192,12 @@ a daemon that finds its own rank in the target list, fires the
 * **Every** daemon (target or survivor) uses the target list carried in the
   broadcast to repair its *own* routing tree locally —
   ``prte_rml_repair_routing_tree(targets, /*global=*/false)`` — so survivors
-  drop the departing ranks from their children/parent sets.  Because the list
-  travels in the broadcast, no global failure propagation is needed; this is why
-  Step 2 uses ``global=false``.
+  drop the departing ranks from their children/parent sets.  Here ``global``
+  describes the *source* of the failure information rather than the intended
+  response: ``false`` marks the departures as learned locally (from the
+  broadcast list), so each daemon repairs its own tree without re-raising a
+  redundant global failure notice for ranks the whole DVM already knows are
+  leaving.
 * A daemon that finds **its own** rank among the targets records that it is
   leaving by entering **leaving mode** — a flag set as it *processes the
   ``PRTE_DAEMON_SHRINK_CMD`` itself*, not in response to any separate order (see
@@ -377,13 +380,19 @@ Two implementation choices settled the open questions the plan had flagged:
   plan's endorsed fallback); the "survivor actively closes the connection" half
   of open question #1 was *not* built — the timer covers it.
 
-One scope reduction is worth recording: **survivors are not batched.**  A survivor
-that loses several targets still repairs once per departure, exactly as before.
-Batching the survivors would require them to repair from the broadcast target
-list *mid-broadcast*, which races the reliable xcast's own ACK bookkeeping on the
-same tree — the interaction the plan flags as needing validation.  The HNP-side
-repair — the cost issue #2492 actually names — is collapsed to one pass; the
-survivor-side batching is left as a follow-up.
+One point on scope is worth recording.  This PR explicitly collapses the
+**HNP-side** repair — the cost issue #2492 actually names — into a single pass.
+The survivors were *not* separately reworked, but per the reliable xcast's
+author the batching effectively falls out of the existing mechanism rather than
+needing new work: batching the repair at the root drives a batched repair on the
+rest as well.  The reliable xcast's ACK bookkeeping is designed to absorb repairs
+that happen *mid-broadcast*, so a survivor repairing from the broadcast target
+list does not race it.  The scheme stays two-phased — a lifeline first reports
+adoption status plus any failures within its new subtree, then the global
+broadcast conveys the full list to keep every daemon's view of the tree
+consistent — but the first phase already covers every failure that could require
+a repair, and the second is a follow-up that only informs about unrelated
+failures.
 
 Validation results
 ------------------
@@ -488,9 +497,14 @@ Open questions
 
 #. **Terminate-on-lifeline mode — resolved (with a fallback).**  Implemented: a
    target sets ``prte_dvm_leaving`` as it processes the shrink command naming its
-   own rank, and departs on a bounded timer or, sooner, when its lifeline drops
-   (``prte_rml_route_lost`` exits early only while ``prte_dvm_leaving`` is set, so
-   a genuine unrelated fault still recovers).  The race is closed by construction
+   own rank, and departs on a bounded timer or, sooner, on the **first** lost
+   connection (``prte_rml_route_lost`` exits early on any route loss while
+   ``prte_dvm_leaving`` is set, so a genuine unrelated fault still recovers).  It
+   exits on any lost route, not just the lifeline: a leaving daemon can see a
+   child connection drop before its lifeline, and treating that as a child
+   failure would emit an adoption notice that could be misread as a real fault
+   and propagated up the tree, so a leaving daemon never lets a disconnect be
+   mistaken for a fault.  The race is closed by construction
    as the design decision argues.  The half that was **not** built is the
    survivor *actively closing* the connection to each departing child; the timer
    makes that unnecessary for correctness, at the cost of the doomed daemons
@@ -503,10 +517,11 @@ Open questions
    ``PRTE_PROC_STATE_TERMINATED`` (the state the completion handler stamps).  The
    state test is what keeps the guard from swallowing a ``FAILED_TO_START`` daemon
    (never alive, but its state is still below ``TERMINATED`` at that point).
-#. **Survivor-side batching — open follow-up.**  See *Implementation status*:
-   survivors still repair once per departure.  Batching them means repairing from
-   the broadcast list mid-broadcast, which must be reconciled with the reliable
-   xcast's ACK bookkeeping on the same tree.
+#. **Survivor-side batching — resolved by the existing mechanism.**  Batching the
+   repair at the root drives a batched repair on the survivors as well, and the
+   reliable xcast's ACK bookkeeping is designed to absorb the mid-broadcast repair
+   rather than race it, so no separate survivor-side work is required.  See
+   *Implementation status* for the two-phase description.
 #. **Profiling.**  The original concern was unprofiled.  Worth measuring the
    per-daemon vs. batch repair cost on a large single-branch shrink to confirm
    the optimization earns its complexity — especially since only the HNP side is
