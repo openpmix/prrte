@@ -53,6 +53,7 @@ prte_rml_base_t prte_rml_base = {
     .n_dmns = 0,
     .failed_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
     .global_failed_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
+    .dead_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
 };
 
 static int verbosity = 0;
@@ -117,6 +118,7 @@ void prte_rml_close(void)
     PMIX_LIST_DESTRUCT(&prte_rml_base.unmatched_msgs);
     PMIX_DESTRUCT(&prte_rml_base.failed_dmns);
     PMIX_DESTRUCT(&prte_rml_base.global_failed_dmns);
+    PMIX_DESTRUCT(&prte_rml_base.dead_dmns);
     PMIx_Data_array_destruct(&prte_rml_base.ancestors);
     PMIx_Data_array_destruct(&prte_rml_base.children);
     if (0 <= prte_rml_base.rml_output) {
@@ -137,6 +139,11 @@ int prte_rml_open(void)
     /* construct objects for holding failure information */
     PMIX_CONSTRUCT(&prte_rml_base.failed_dmns, pmix_bitmap_t);
     PMIX_CONSTRUCT(&prte_rml_base.global_failed_dmns, pmix_bitmap_t);
+    /* the permanent departed-daemon set is initialized once here and never
+     * re-initialized: the bitmap auto-expands as ranks are marked, and it must
+     * persist across the recomputes that DVM grows trigger (#2491) */
+    PMIX_CONSTRUCT(&prte_rml_base.dead_dmns, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.dead_dmns, prte_process_info.num_daemons);
 
     /* set up failure notification receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON_DIED, true,
