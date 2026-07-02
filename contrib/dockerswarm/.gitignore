@@ -1,2 +1,8 @@
-# build.sh staging area (clean git-archive context + PMIx clone)
+# Out-of-tree (VPATH) build directories created by build.sh at the repo root
+# (see README.md).  These live at the top of the PRRTE tree, not here, but are
+# listed for good measure in case anyone runs a build from this directory.
+vpath-linux/
+vpath-macos/
+
+# Legacy build.sh staging area (no longer used by the bind-mount workflow)
 _work/

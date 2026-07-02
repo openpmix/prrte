@@ -1,73 +1,72 @@
-# A 10-"node" PRRTE DVM on a private docker network for elastic grow/shrink
+# A 10-"node" PRRTE DVM on a private docker network for grow/shrink/relay
 # testing.  node1 is the head node (where you start `prte` and run the tests);
 # node2..node10 are spare nodes the DVM can grow onto and shrink back out of.
-# Each container just runs sshd; we `docker exec` into node1 to drive the DVM.
+#
+# PRRTE is NOT baked into the image: build.sh compiles your live working tree
+# out-of-tree into the shared `prte-build` volume, which every node mounts
+# read-only at /opt/prte.  So `docker compose up -d` must be preceded by a
+# `./build.sh` (which populates the volume).  See README.md.
 #
 # The larger node count (was four) lets a shrink campaign target several daemons
 # sitting on one branch of the radix routing tree at once, which is the scenario
 # the collective-shrink-completion work (openpmix/prrte#2492) needs to exercise.
+
+x-node: &node
+  image: prte-swarm:latest
+  networks: [dvm]
+  tty: true
+  volumes:
+    - prte-build:/opt/prte:ro
+
 services:
   node1:
-    image: prte-elastic:latest
+    <<: *node
     hostname: node1
     container_name: prte-node1
-    networks: [dvm]
-    tty: true
   node2:
-    image: prte-elastic:latest
+    <<: *node
     hostname: node2
     container_name: prte-node2
-    networks: [dvm]
-    tty: true
   node3:
-    image: prte-elastic:latest
+    <<: *node
     hostname: node3
     container_name: prte-node3
-    networks: [dvm]
-    tty: true
   node4:
-    image: prte-elastic:latest
+    <<: *node
     hostname: node4
     container_name: prte-node4
-    networks: [dvm]
-    tty: true
   node5:
-    image: prte-elastic:latest
+    <<: *node
     hostname: node5
     container_name: prte-node5
-    networks: [dvm]
-    tty: true
   node6:
-    image: prte-elastic:latest
+    <<: *node
     hostname: node6
     container_name: prte-node6
-    networks: [dvm]
-    tty: true
   node7:
-    image: prte-elastic:latest
+    <<: *node
     hostname: node7
     container_name: prte-node7
-    networks: [dvm]
-    tty: true
   node8:
-    image: prte-elastic:latest
+    <<: *node
     hostname: node8
     container_name: prte-node8
-    networks: [dvm]
-    tty: true
   node9:
-    image: prte-elastic:latest
+    <<: *node
     hostname: node9
     container_name: prte-node9
-    networks: [dvm]
-    tty: true
   node10:
-    image: prte-elastic:latest
+    <<: *node
     hostname: node10
     container_name: prte-node10
-    networks: [dvm]
-    tty: true
 
 networks:
   dvm:
     driver: bridge
+
+# Populated by build.sh (docker volume create prte-build) and shared,
+# read-only, by every node.  Declared external so the builder container and
+# these services reference the exact same volume name (no compose prefix).
+volumes:
+  prte-build:
+    external: true

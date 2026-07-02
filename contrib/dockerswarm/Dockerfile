@@ -1,10 +1,18 @@
-# Image for the PRRTE elastic-DVM test "swarm" (see README.md).
+# Base image for the PRRTE DVM test "swarm" (see README.md).
 #
-# Builds PMIx (cloned from git) and PRRTE (supplied in the build context by
-# build.sh as a clean git-archive of the local committed tree) into /usr/local,
-# plus the `elastic` test client and passwordless SSH between the container
-# "nodes".  Build this with ./build.sh, not a bare `docker build` -- build.sh
-# prepares the PRRTE source the COPY below expects.
+# Unlike the old harness, this image does NOT contain PRRTE.  PRRTE (and,
+# optionally, PMIx) is built at run time from your *live* working tree, which
+# build.sh bind-mounts into a builder container and compiles out-of-tree
+# (VPATH) into a shared volume mounted at /opt/prte.  This image only provides:
+#
+#   * the build toolchain (so the builder container can compile PRRTE/PMIx),
+#   * a baked PMIx in /usr/local as the default (overridden when you bind-mount
+#     an openpmix checkout via PMIX_SRC),
+#   * passwordless SSH between the "nodes", and
+#   * an entrypoint that makes the shared-volume libraries loadable.
+#
+# Build it with ./build.sh (which also drives the PRRTE build); a bare
+# `docker build` just produces this base.
 
 FROM ubuntu:24.04
 
@@ -19,13 +27,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         iproute2 iputils-ping procps less vim ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# ---- build PMIx ----
-# Cloned with its submodules so autogen.pl runs normally.  PMIx master is the
+# ---- baked PMIx (default) ----
+# Cloned with submodules so autogen.pl runs normally.  PMIx master is the
 # default because the DVM size-change event codes (PMIX_DVM_IS_READY /
 # PMIX_ERR_DVM_MOD) the elastic client registers for may not be in a release
-# yet; override with --build-arg if you need a specific PMIx.
+# yet; override with --build-arg, or bind-mount your own via PMIX_SRC at run
+# time (see build.sh), in which case this baked copy is ignored.
 # Do NOT pass --with-libevent=/usr: it forces /usr/lib and misses the multiarch
-# dir (/usr/lib/<triplet>); let configure find the system libevent-dev/hwloc-dev.
+# dir; let configure find the system libevent-dev/hwloc-dev.
 ARG PMIX_REPO=https://github.com/openpmix/openpmix.git
 ARG PMIX_REF=master
 RUN git clone --recursive --depth=1 -b "$PMIX_REF" "$PMIX_REPO" /src/pmix \
@@ -34,26 +43,6 @@ RUN git clone --recursive --depth=1 -b "$PMIX_REF" "$PMIX_REPO" /src/pmix \
     && ./configure --prefix=/usr/local \
     && make -j"$(nproc)" \
     && make install \
-    && ldconfig
-
-# ---- build PRRTE (this repo's committed tree, from the build context) ----
-# build.sh git-archives the local tree into ./prrte with config/oac populated
-# and .gitmodules removed, so autogen.pl skips its git-only submodule check and
-# runs from the VERSION file.  The archived tree has no .git, so configure does
-# NOT imply --enable-devel-check (warnings-as-errors); --enable-debug still
-# gives us debug symbols and assertions.
-COPY prrte /src/prrte
-RUN cd /src/prrte \
-    && ./autogen.pl \
-    && ./configure --prefix=/usr/local --with-pmix=/usr/local --enable-debug \
-    && make -j"$(nproc)" \
-    && make install \
-    && ldconfig
-
-# ---- elastic test client ----
-COPY elastic.c /src/elastic.c
-RUN gcc -O0 -g -o /usr/local/bin/elastic /src/elastic.c \
-        -I/usr/local/include -L/usr/local/lib -lpmix \
     && ldconfig
 
 # ---- passwordless SSH between the container "nodes" ----
@@ -66,8 +55,29 @@ RUN mkdir -p /var/run/sshd /root/.ssh \
     && sed -i 's/#\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config \
     && printf '\nAcceptEnv *\n' >> /etc/ssh/sshd_config
 
-# make the install discoverable for any login shell too
-RUN echo 'export PATH=/usr/local/bin:$PATH' > /etc/profile.d/prte.sh
+# make the run-time install discoverable for any login shell (build.sh writes
+# /opt/prte/env.sh with PATH/LD_LIBRARY_PATH once it knows the PMIx layout)
+RUN echo '[ -f /opt/prte/env.sh ] && . /opt/prte/env.sh' > /etc/profile.d/prte.sh
+
+# ---- node entrypoint ----
+# The PRRTE/PMIx install lives in the shared /opt/prte volume, which is not on
+# the image's default PATH or ld.so search path.  Before starting sshd:
+#   * register the install's lib dirs with ldconfig so libprrte/libpmix load,
+#     and
+#   * symlink the install's binaries onto the default PATH (/usr/local/bin) so
+#     that `prted` resolves in the non-login shell that plm/ssh uses to launch
+#     daemons on the other nodes -- without this, a multi-node launch fails with
+#     "prted: command not found".
+RUN printf '#!/bin/sh\n\
+for d in /opt/prte/prte/lib /opt/prte/pmix/lib; do\n\
+    [ -d "$d" ] && echo "$d" >> /etc/ld.so.conf.d/prte.conf\n\
+done\n\
+ldconfig\n\
+for b in /opt/prte/prte/bin/*; do\n\
+    [ -e "$b" ] && ln -sf "$b" /usr/local/bin/\n\
+done 2>/dev/null\n\
+exec /usr/sbin/sshd -D -e\n' > /usr/local/bin/node-entrypoint.sh \
+    && chmod +x /usr/local/bin/node-entrypoint.sh
 
 EXPOSE 22
-CMD ["/usr/sbin/sshd", "-D", "-e"]
+CMD ["/usr/local/bin/node-entrypoint.sh"]

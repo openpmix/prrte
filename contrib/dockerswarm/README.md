@@ -1,21 +1,26 @@
-# PRRTE elastic-DVM test "swarm"
+# PRRTE DVM test "swarm"
 
-A small, self-contained Docker harness for exercising PRRTE's **elastic DVM**
-(grow/shrink) behavior — without a real PMIx scheduler — across several
-container "nodes". It is the quickest way to bring up a multi-node DVM, drive a
-grow and a shrink, and watch the two-phase completion events.
+A small, self-contained harness for exercising PRRTE across several container
+"nodes" — a persistent DVM, one-shot `prterun`, and the **elastic DVM**
+(grow/shrink) plus multi-hop routing/relay — plus a native single-host build on
+the host OS. It is the quickest way to bring up a multi-node DVM, drive a grow
+and a shrink, and watch the two-phase completion events.
 
 It is **not** a Docker Swarm in the orchestration sense — just ten plain
 `ubuntu:24.04` containers on one bridge network, each acting as a DVM node.
-"Swarm" is only the nickname. (It was four nodes originally; it was grown to
-ten so a shrink can target several daemons on one branch of the radix routing
-tree at once — the scenario the collective-shrink-completion work,
-[openpmix/prrte#2492](https://github.com/openpmix/prrte/issues/2492), needs.)
+"Swarm" is only the nickname.
 
-> Orientation for an AI agent or new contributor: this directory contains
-> everything needed. Read this file top to bottom, then run the Quick start.
-> The one thing that will silently waste your time is forgetting
-> `--prtemca prte_elastic_mode 1` when starting the DVM — see §3.
+> **What changed:** this harness now builds your **live working tree** — no
+> commit required and never stale. `build.sh` bind-mounts the source into a
+> builder container and compiles it **out-of-tree (VPATH)** into a shared
+> volume the nodes mount, and also builds natively on the host for macOS
+> coverage. The old "git-archive the committed tree into the image" flow (and
+> the copy-files-into-ten-containers workaround) is gone.
+
+> Orientation for an AI agent or new contributor: read this file top to bottom,
+> then run the Quick start. The one thing that will silently waste your time is
+> forgetting `--prtemca prte_elastic_mode 1` when starting the DVM by hand — see
+> §5. (`run-tests.sh` already passes it.)
 
 ---
 
@@ -23,132 +28,143 @@ tree at once — the scenario the collective-shrink-completion work,
 
 | File | Purpose |
 |------|---------|
-| `build.sh` | Builds the `prte-elastic:latest` image from **this repo's committed tree** plus a cloned PMIx. Start here. |
-| `Dockerfile` | Image recipe: builds PMIx + PRRTE + the `elastic` client into `/usr/local`, sets up passwordless SSH. Driven by `build.sh`. |
-| `docker-compose.yml` | Defines the ten nodes `prte-node1`..`prte-node10` on bridge network `dvm`. |
-| `elastic.c` | The test client (`/usr/local/bin/elastic` in the image): issues a PMIx allocation request and waits for the phase-two completion event. |
+| `build.sh` | Builds PRRTE (and optionally PMIx) from your **live** tree via VPATH: into a shared volume for the Linux swarm, or natively for macOS. Start here. |
+| `run-tests.sh` | Runs the test suite and reports PASS/FAIL: the full multi-node suite on Linux, a single-host subset on macOS. |
+| `Dockerfile` | Base image: toolchain, a baked PMIx, SSH wiring, and a node entrypoint. It does **not** contain PRRTE. |
+| `docker-compose.yml` | The ten nodes `prte-node1`..`prte-node10`, each mounting the shared `prte-build` volume. |
+| `elastic.c` | The elastic test client (`elastic` in the install): issues a PMIx allocation request and waits for the phase-two completion event. |
 
-## 2. Prerequisites
+## 2. How it works
 
-- Docker (with `docker compose`) and `git`.
-- **Network access during the build** — the Dockerfile clones PMIx and installs
-  apt packages.
-- Builds and runs as `aarch64` or `x86_64`; the image is arch-neutral.
+```
+              your live PRRTE tree  (bind-mounted read-only)
+                        │
+        ┌───────────────┴───────────────┐
+        │ build.sh linux                │ build.sh macos
+        ▼                               ▼
+  builder container                native on host
+  VPATH -> /opt/prte/vpath-linux   VPATH -> <repo>/vpath-macos
+  install -> /opt/prte  (volume)   install -> <repo>/vpath-macos/install
+        │                               │
+        ▼                               ▼
+  10 nodes mount /opt/prte:ro      run-tests.sh macos
+  run-tests.sh linux              (single-host smoke)
+```
 
-PMIx is cloned from **master** by default, because the DVM size-change event
-codes the client registers for (`PMIX_DVM_IS_READY` / `PMIX_ERR_DVM_MOD`) may
-not be in a tagged PMIx release yet. If you build against an older PMIx that
-lacks them, PRRTE compiles those completion events out (and `elastic.c` will not
-compile) — so stick with master unless you know your PMIx has the codes.
+- **One source, two builds.** The source tree is compiled *out of tree*, so a
+  Linux build (`vpath-linux`, inside the container) and a macOS build
+  (`vpath-macos`, on the host) coexist from the same pristine sources.
+- **Never stale, no commit.** Change a file, rerun `build.sh`, and the swarm
+  runs your change (the build is incremental).
+- **Both code bases (optional).** Set `PMIX_SRC=/path/to/openpmix` and `build.sh`
+  builds PMIx from source too; otherwise PMIx is the copy baked into the image
+  (Linux) or an installed PMIx (macOS).
 
-## 3. Quick start
+> **One-time cost:** a VPATH build refuses to run while the source tree still
+> has an in-tree build, so `build.sh` runs `make distclean` + `./autogen.pl` at
+> the repo root the first time. After that your top-level source dir stays
+> clean and all builds live in `vpath-linux`/`vpath-macos`. If you were building
+> PRRTE in-tree before, your builds now live in `vpath-macos/` instead.
+
+## 3. Prerequisites
+
+- Docker (with `docker compose`) and `git` for the Linux swarm.
+- A working autotools toolchain (`autoconf`/`automake`/`libtool`/`perl`) on the
+  host for `autogen.pl` and the macOS build.
+- **Network access during the first image build** (clones PMIx, installs apt
+  packages). PMIx is cloned from **master** by default, because the DVM
+  size-change event codes the client registers for (`PMIX_DVM_IS_READY` /
+  `PMIX_ERR_DVM_MOD`) may not be in a tagged release yet.
+
+## 4. Quick start
 
 ```sh
 # from this directory (contrib/dockerswarm/)
-./build.sh                 # build prte-elastic:latest (PMIx master + this repo's HEAD)
+
+# ---- Linux swarm ----
+./build.sh                 # distclean+autogen (once), build image, build PRRTE
+                           #   into the shared volume from your live tree
 docker compose up -d       # start prte-node1 .. prte-node10
+./run-tests.sh linux       # full suite: prterun, elastic grow/shrink, relay
 
-# convenience: run everything on the head node as root, elastic mode ON
-RUN='docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 prte-node1 sh -c'
+# ---- native macOS (single host) ----
+./build.sh macos           # native VPATH build into <repo>/vpath-macos
+./run-tests.sh macos       # build + single-host launch smoke
+```
 
-# 1. start the DVM on node1 -- prte_elastic_mode is REQUIRED (see below)
-$RUN 'cd /root && nohup prte --daemonize --prtemca prte_elastic_mode 1 \
+Rebuild after editing PRRTE: just rerun `./build.sh` (incremental). No image
+rebuild, no `docker compose` restart needed — the nodes read the shared volume.
+To also test an openpmix change, add `PMIX_SRC=/path/to/openpmix`.
+
+## 5. Driving the DVM by hand
+
+`run-tests.sh` automates all of this, but to poke at it yourself:
+
+```sh
+RUN='docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 prte-node1 bash -lc'
+
+# start the DVM on node1 -- prte_elastic_mode is REQUIRED for grow/shrink
+$RUN '. /opt/prte/env.sh; nohup prte --daemonize --prtemca prte_elastic_mode 1 \
         >/tmp/prte.out 2>&1 & sleep 6'
 
-# 2. baseline sanity (only node1 in the DVM so far)
-$RUN 'prun --np 1 hostname'
-
-# 3. grow onto node2 + node3, then shrink node3 back out
-$RUN 'elastic grow node2:2,node3:2'
-$RUN 'elastic shrink node3'
-
-# 4. tear the test DVM down (leaves the containers running)
-$RUN 'pterm'
+$RUN '. /opt/prte/env.sh; prun --np 1 hostname'        # baseline
+$RUN '. /opt/prte/env.sh; elastic grow node2:2,node3:2'
+$RUN '. /opt/prte/env.sh; elastic shrink node3'
+$RUN '. /opt/prte/env.sh; pterm'
 ```
+
+`. /opt/prte/env.sh` puts the shared-volume install on `PATH`/`LD_LIBRARY_PATH`
+in a non-login `docker exec` shell (login shells get it automatically).
 
 Both `grow` and `shrink` should print
 `PHASE 2 (completion): received event PMIX_DVM_IS_READY` followed by `SUCCESS`.
 
 > **The flag that bites you.** PRRTE gates *all* of the grow/shrink launch-fence
-> and completion-event machinery behind the `prte_elastic_mode` MCA parameter
-> (default off). If you start the DVM **without** `--prtemca prte_elastic_mode 1`,
-> a grow returns phase-1 SUCCESS and even launches the daemons, but it **never
-> completes** — no `PMIX_DVM_IS_READY`, the client times out after 60s, and the
-> nodes never wire into the DVM. Always start with the flag.
-
-> **The image is frozen at build-time HEAD.** `build.sh` bakes in *exactly* the
-> commit that was `HEAD` when it ran (it uses `git archive`). If your working
-> tree has moved on — or you pulled elastic-DVM fixes that postdate the last
-> build — the running image is stale and you are testing old code. The classic
-> symptom is a grow failing phase-1 with
-> `PHASE 1 (acceptance): allocation request returned PMIX_ERR_UNREACH`, with
-> **no** `ras`/`plm` verbose output for the request: an image built before the
-> no-scheduler grow/shrink support went in still tries to reach a scheduler that
-> isn't there. Confirm with `docker inspect --format '{{.Created}}'
-> prte-elastic:latest` versus `git log -1 --format=%ci`, and rebuild (§7) if the
-> image predates the code you mean to test.
-
-## 4. The `elastic` client
-
-```
-elastic grow   <node[:slots],...>   # PMIX_ALLOC_NEW, naming nodes to ADD
-elastic shrink <node,...>           # PMIX_ALLOC_RELEASE, naming nodes to REMOVE
-```
-
-(`extend` / `release` are accepted aliases.) It registers for both completion
-codes, prints the phase-1 allocation response, then waits up to 60s for the
-phase-2 event.
-
-A grow uses **`PMIX_ALLOC_NEW`** carrying `PMIX_ALLOC_NODE_LIST` (a new
-reservation naming the nodes to add) — **not** `PMIX_ALLOC_EXTEND`, which only
-enlarges an existing reservation. With no scheduler attached, PRRTE's `ras/hosts`
-component satisfies these requests locally using the real node names, and
-`plm/ssh` SSHes to the named nodes to launch their daemons (passwordless SSH is
-baked into the image).
-
-## 5. What "success" looks like
-
-**Grow** (`elastic grow node2:2,node3:2`): phase-1 `PMIX_SUCCESS` with a
-`pmix.alloc.id`, then phase-2 `PMIX_DVM_IS_READY`, and `prted` now running on
-node2 and node3.
-
-> The grown nodes join the **reservation** created by the request, so a plain
-> `prun -n 3 --map-by node hostname` still lands only on node1 — its default job
-> allocation is node1's base pool, not the reservation. That is the elastic
-> pooling model, not a failure. Confirm a grow by `prted` presence on the target
-> nodes and the `PMIX_DVM_IS_READY` event, not by plain-prun placement:
->
-> ```sh
-> for n in 2 3; do docker exec prte-node$n pgrep -ax prted; done
-> ```
-
-**Shrink** (`elastic shrink node3`): phase-1 `PMIX_SUCCESS`, then phase-2
-`PMIX_DVM_IS_READY`, plus a **"PRRTE has lost communication with a remote
-daemon"** notice naming the shrunk node. **That notice is expected** — shrink
-completion is driven by the targeted daemon's actual *death* (the comm-failure
-path), not by an acknowledgement. The HNP must survive it. Afterward: HNP alive,
-node3's `prted` gone, node2's `prted` still alive, `prun -n 1 hostname` still
-works.
+> and completion-event machinery behind `prte_elastic_mode` (default off).
+> Without `--prtemca prte_elastic_mode 1`, a grow returns phase-1 SUCCESS and
+> even launches daemons, but **never completes** — the client times out after
+> 60s. Always start with the flag.
 
 > **Capturing HNP verbose output.** `prte --daemonize` detaches from stdio, so
-> the `>/tmp/prte.out` redirect in the Quick start captures **nothing** — that
-> file stays empty no matter how much `--prtemca ..._base_verbose` you add. To
-> trace the HNP itself (e.g. `state_base_verbose`, `plm_base_verbose`,
-> `ras_base_verbose`), run `prte` in the **foreground** and let Docker background
-> it instead of `--daemonize`:
+> a `>/tmp/prte.out` redirect captures nothing. To trace the HNP, run it in the
+> foreground under `docker exec -d`:
 >
 > ```sh
 > docker exec -d -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
->   prte-node1 sh -c 'cd /root && prte --prtemca prte_elastic_mode 1 \
+>   prte-node1 bash -lc '. /opt/prte/env.sh; cd /root && prte --prtemca prte_elastic_mode 1 \
 >     --prtemca plm_base_verbose 5 --prtemca ras_base_verbose 5 >/tmp/prte.out 2>&1'
 > ```
->
-> Then `docker exec prte-node1 cat /tmp/prte.out` after driving a grow/shrink.
-> (`docker exec -d` returns immediately; the process keeps running.)
 
-## 6. Cleanup hygiene (prevents "multiple possible servers")
+## 6. What "success" looks like
 
-Between DVM runs, clean stale state on **every** node:
+**`prterun`** (`prterun --host node1:2,node2:2,node3:2,node4:2 -np 8 --map-by
+node hostname`): stands up a transient DVM, runs the job, and exits cleanly with
+no daemons left behind — the non-elastic launch path.
+
+**Grow** (`elastic grow node2:2,node3:2`): phase-1 `PMIX_SUCCESS`, then phase-2
+`PMIX_DVM_IS_READY`, and `prted` now running on node2 and node3.
+
+> The grown nodes join the **reservation** created by the request, so a plain
+> `prun -n 3 --map-by node hostname` still lands only on node1 — its default job
+> allocation is node1's base pool, not the reservation. Confirm a grow by
+> `prted` presence on the targets and the `PMIX_DVM_IS_READY` event, not by
+> plain-`prun` placement.
+
+**Shrink** (`elastic shrink node3`): phase-1 `PMIX_SUCCESS`, then phase-2
+`PMIX_DVM_IS_READY`, plus a **"PRRTE has lost communication with a remote
+daemon"** notice naming the shrunk node — **that notice is expected** (shrink
+completion is driven by the targeted daemon's death). The HNP must survive it.
+
+**Relay** (radix-2 deep grow, `run-tests.sh` does this): grown across node2–node9
+with `--prtemca prte_rml_radix 2`, the daemon tree is 3–4 deep, so the
+`PMIX_DVM_IS_READY` completion fence must relay through intermediate daemons. If
+routing/relay is broken the fence hangs to the 60s timeout instead of
+completing.
+
+## 7. Cleanup hygiene
+
+`run-tests.sh` cleans up between phases; if you drive things by hand, clear
+stale state on **every** node between DVM runs:
 
 ```sh
 for n in $(seq 1 10); do
@@ -157,62 +173,38 @@ for n in $(seq 1 10); do
 done
 ```
 
-A detached `prted --daemonize` **survives an HNP kill** — if you only kill
-node1's `prte`, orphan `prted`s linger on the other nodes and the next DVM trips
-over stale rendezvous files reporting *"multiple possible servers"*. The `pkill`
-loop across all ten nodes is mandatory, not optional. `pterm` is the clean way
-to bring a healthy DVM down; still run the loop afterward to be safe.
+A detached `prted --daemonize` **survives an HNP kill**; orphans on other nodes
+make the next DVM trip over stale rendezvous files ("multiple possible
+servers"). `pterm` is the clean shutdown; still run the loop afterward to be
+safe.
 
-## 7. Rebuilding after a code change
+## 8. Rebuilding / resetting
 
-`build.sh` always rebuilds from your **committed** tree (it uses `git archive`).
-After committing a change:
+| Want to… | Do |
+|----------|----|
+| pick up a PRRTE source edit | `./build.sh` (incremental into the volume) |
+| pick up an openpmix edit | `PMIX_SRC=/path/to/openpmix ./build.sh` |
+| force a clean PRRTE rebuild | `docker volume rm prte-build && ./build.sh` |
+| rebuild the base image (new baked PMIx) | `./build.sh image` (or `PMIX_REF=v6.1.0 ./build.sh image`) |
+| tear down the swarm | `docker compose down` (the `prte-build` volume persists) |
 
-```sh
-./build.sh && docker compose up -d --force-recreate
-```
-
-For a fast edit/test loop on **uncommitted** PRRTE changes without a full image
-rebuild, each running container already has the build tree at `/src/prrte`. Copy
-the changed files in and run an incremental build **on all ten nodes** (every
-node runs a `prted` that loads the libraries, so an ABI/header change must be
-consistent across the DVM):
-
-```sh
-ROOT=$(git rev-parse --show-toplevel)
-FILES="src/mca/ras/ras.h src/mca/ras/base/base.h \
-       src/mca/ras/base/ras_base_allocate.c src/mca/errmgr/dvm/errmgr_dvm.c"
-for n in $(seq 1 10); do
-  for f in $FILES; do docker cp "$ROOT/$f" "prte-node$n:/src/prrte/$f"; done
-  docker exec prte-node$n sh -c \
-    'cd /src/prrte && make -j"$(nproc)" && make install && ldconfig'
-done
-```
-
-PMIx is untouched by PRRTE-only edits, so you never rebuild PMIx for a PRRTE
-change.
-
-## 8. Known issue
+## 9. Known issue
 
 Re-growing a node **immediately after** shrinking it can fail its TCP
 connect-back (`prted` exits 255) — the just-killed daemon/session may not have
-fully torn down — and the HNP does not always survive that cleanly. Tracked as
+fully torn down. Tracked as
 [openpmix/prrte#2491](https://github.com/openpmix/prrte/issues/2491). Start a
-fresh DVM between grow/shrink cycles to avoid it. A single grow→shrink cycle on
-a fresh DVM is the reliable smoke test.
+fresh DVM between grow/shrink cycles; a single grow→shrink cycle on a fresh DVM
+is the reliable smoke test.
 
-## 9. Topology reference
+## 10. Topology reference
 
 | Container | hostname | role |
 |-----------|----------|------|
 | `prte-node1` | node1 | head node (HNP) — start `prte` here, run all tools here |
-| `prte-node2` | node2 | DVM node (grow target) |
-| `prte-node3` | node3 | DVM node (grow/shrink target) |
-| `prte-node4`..`prte-node10` | node4..node10 | DVM nodes (grow/shrink targets, spares) |
+| `prte-node2`..`prte-node10` | node2..node10 | DVM nodes (grow/shrink targets) |
 
-Network: bridge `dvm`. To add or remove nodes, copy or delete a service block in
-`docker-compose.yml` (and adjust the `seq 1 10` loops above to match).
-
-A single `elastic grow node2:2,node3:2,node4:2,node5:2,node6:2,node7:2,node8:2,node9:2`
-on a fresh DVM builds a nine-daemon radix tree with real depth — the shape you
-want for exercising a single-branch, multi-daemon shrink (#2492).
+Network: bridge `dvm`. All nodes mount the shared `prte-build` volume read-only
+at `/opt/prte`, where `build.sh` installs PRRTE (`/opt/prte/prte`) and writes
+`/opt/prte/env.sh`. To add or remove nodes, copy or delete a service block in
+`docker-compose.yml` (and adjust the `seq 1 10` loops to match).
