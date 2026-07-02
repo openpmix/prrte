@@ -70,6 +70,19 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
         return rc;
     }
 
+    /* pack the size of the daemon vpid space, [0, num_daemons). This can be
+     * larger than the number of live daemons packed below: a DVM shrink leaves
+     * a permanent hole in the vpid space (the DVM never reuses a daemon vpid),
+     * so the departed daemon has no entry in the name/vpid lists. Receivers
+     * need this exact span - not the live count - so their routing tree covers
+     * the same rank space the HNP uses, and so they can identify the holes as
+     * permanently-dead ranks to route around (#2491). */
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buffer, &prte_process_info.num_daemons, 1, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return rc;
+    }
+
     /* daemon vpids start from 0 and increase linearly by one
      * up to the number of nodes in the system. The vpid is
      * a 32-bit value. We don't know how many of the nodes
@@ -221,6 +234,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
 {
     uint8_t u8;
     pmix_rank_t *vpid = NULL;
+    pmix_rank_t ndmns = 0;
     int cnt, n;
     bool compressed;
     size_t sz;
@@ -256,6 +270,15 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         prte_managed_allocation = true;
     } else {
         prte_managed_allocation = false;
+    }
+
+    /* unpack the size of the daemon vpid space (may exceed the live daemon
+     * count when the DVM carries shrunk-out vpid holes - see nidmap_create) */
+    cnt = 1;
+    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buf, &ndmns, &cnt, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto cleanup;
     }
 
     /* unpack compression flag for node names */
@@ -420,10 +443,27 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         nd->daemon = proc;
     }
 
-    /* update num procs */
-    if (prte_process_info.num_daemons != daemons->num_procs) {
-        prte_process_info.num_daemons = daemons->num_procs;
-        /* update the routing tree */
+    /* Record any vpid holes as permanently-dead ranks. The DVM spans [0, ndmns)
+     * daemon vpids, but a shrunk-out daemon leaves a hole with no entry above,
+     * so daemons->procs has a gap at that rank. Marking the gap in the
+     * persistent dead set makes this daemon's routing tree route around the
+     * hole exactly as the HNP and the surviving daemons do - closing the gap
+     * that a brand-new daemon (empty dead set) would otherwise have (#2491).
+     * On an unshrunk DVM ndmns equals the live count, so nothing is marked and
+     * behavior is unchanged. */
+    bool newdead = false;
+    for (pmix_rank_t r = 0; r < ndmns; r++) {
+        if (NULL == pmix_pointer_array_get_item(daemons->procs, r) &&
+            !pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, r)) {
+            pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, r);
+            newdead = true;
+        }
+    }
+
+    /* update num daemons and (re)build the routing tree if the vpid span grew
+     * or a new hole appeared */
+    if (prte_process_info.num_daemons != ndmns || newdead) {
+        prte_process_info.num_daemons = ndmns;
         prte_rml_compute_routing_tree();
     }
 
