@@ -60,8 +60,6 @@ BEGIN_C_DECLS
  */
 typedef struct {
     int output;
-    uint32_t addr_count;             /**< total number of addresses */
-    int num_links;                   /**< number of logical links per physical device */
     int max_retries;                 /**< max number of retries before declaring peer gone */
     int max_uri_length;
     pmix_list_t events;              /**< events for monitoring connections */
@@ -129,18 +127,13 @@ typedef struct {
 } prte_oob_send_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_oob_send_t);
 
-/* All OOB sends are based on iovec's and are async as the RML
- * acts as the initial interface to prepare all communications.
- * The send_nb function will enter the message into the OOB
- * base, which will then check to see if a transport for the
- * intended target has already been assigned. If so, the message
- * is immediately placed into that module's event base for
- * transmission. If not, the function will loop across all available
- * components until one identifies that it has a module capable
- * of reaching the target.
+/* All OOB sends are async: the RML prepares the message and hands it to
+ * the OOB base via PRTE_OOB_SEND, which thread-shifts onto the event base
+ * and calls prte_oob_base_send_nb. That routine resolves the next hop
+ * toward the target (see prte_rml_get_route), looks up or creates the TCP
+ * peer for that hop, and queues the message on it - opening the connection
+ * first if one does not already exist.
  */
-typedef void (*mca_oob_send_callback_fn_t)(int status, struct iovec *iov, int count, void *cbdata);
-
 PRTE_EXPORT void prte_oob_base_send_nb(int fd, short args, void *cbdata);
 #define PRTE_OOB_SEND(m)                                                                          \
     do {                                                                                          \
@@ -152,21 +145,19 @@ PRTE_EXPORT void prte_oob_base_send_nb(int fd, short args, void *cbdata);
         PRTE_PMIX_THREADSHIFT(prte_oob_send_cd, prte_event_base, prte_oob_base_send_nb);          \
     } while (0)
 
-/* During initial wireup, we can only transfer contact info on the daemon
- * command line. This limits what we can send to a string representation of
- * the actual contact info, which gets sent in a uri-like form. Not every
- * oob module can support this transaction, so this function will loop
- * across all oob components/modules, letting each add to the uri string if
- * it supports bootstrap operations. An error will be returned in the cbfunc
- * if NO component can successfully provide a contact.
+/* Build this process's contact URI: our name followed by the TCP
+ * address(es) we are listening on, in a semicolon-separated string. During
+ * initial wireup this can only be transferred on the daemon command line,
+ * so the result is a compact string representation of our listening
+ * endpoints.
  *
  * Note: since there is a limit to what an OS will allow on a cmd line, we
  * impose a limit on the length of the resulting uri via an MCA param. The
  * default value of -1 implies unlimited - however, users with large numbers
  * of interfaces on their nodes may wish to restrict the size.
  *
- * Since all components define their address info at component start,
- * it is unchanged and does not require acess via event
+ * Our address info is fixed once the listeners start, so this needs no
+ * event-base synchronization.
  */
 PRTE_EXPORT void prte_oob_base_get_addr(char **uri);
 

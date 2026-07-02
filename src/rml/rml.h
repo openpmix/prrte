@@ -162,7 +162,6 @@ PRTE_EXPORT void prte_rml_simulate_node_failure(void);
 typedef struct {
     int rml_output;
     int routed_output;
-    int oob_output;
     int max_retries;
     pmix_list_t posted_recvs;
     pmix_list_t unmatched_msgs;

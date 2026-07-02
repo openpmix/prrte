@@ -512,11 +512,13 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                                           peer->recv_msg->hdr.nbytes);
                     PMIX_RELEASE(peer->recv_msg);
                 } else {
-                    /* promote this to the OOB as some other transport might
-                     * be the next best hop */
+                    /* not for us - we are an intermediate hop. Re-enter the
+                     * OOB send path, which will route the message on toward
+                     * its final destination via the next hop in the tree.
+                     */
                     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT,
                                         prte_oob_base.output,
-                                        "%s TCP PROMOTING ROUTED MESSAGE FOR %s TO OOB",
+                                        "%s TCP RELAYING ROUTED MESSAGE FOR %s",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                         PRTE_NAME_PRINT(&peer->recv_msg->hdr.dst));
                     snd = PMIX_NEW(prte_rml_send_t);
@@ -592,10 +594,3 @@ static void rcv_cons(prte_oob_tcp_recv_t *ptr)
     ptr->rdbytes = 0;
 }
 PMIX_CLASS_INSTANCE(prte_oob_tcp_recv_t, pmix_list_item_t, rcv_cons, NULL);
-
-static void err_cons(prte_oob_tcp_msg_error_t *ptr)
-{
-    ptr->rmsg = NULL;
-    ptr->snd = NULL;
-}
-PMIX_CLASS_INSTANCE(prte_oob_tcp_msg_error_t, pmix_object_t, err_cons, NULL);

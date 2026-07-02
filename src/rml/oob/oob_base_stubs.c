@@ -159,12 +159,9 @@ send:
  * Obtain a uri for initial connection purposes
  *
  * During initial wireup, we can only transfer contact info on the daemon
- * command line. This limits what we can send to a string representation of
- * the actual contact info, which gets sent in a uri-like form. Not every
- * oob module can support this transaction, so this function will loop
- * across all oob components/modules, letting each add to the uri string if
- * it supports bootstrap operations. An error will be returned in the cbfunc
- * if NO component can successfully provide a contact.
+ * command line, so we render it as a compact, uri-like string: our process
+ * name followed by the TCP endpoints (IPv4 and, if enabled, IPv6) we are
+ * listening on. Returns *uri == NULL if we have no usable connection.
  *
  * Note: since there is a limit to what an OS will allow on a cmd line, we
  * impose a limit on the length of the resulting uri via an MCA param. The

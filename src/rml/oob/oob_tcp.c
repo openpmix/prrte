@@ -76,8 +76,6 @@
 
 prte_oob_base_t prte_oob_base = {
     .output = -1,
-    .addr_count = 0,
-    .num_links = 0,
     .max_retries = 0,
     .max_uri_length = -1,
     .events = PMIX_LIST_STATIC_INIT,
@@ -137,7 +135,6 @@ int prte_oob_open(void)
         prte_oob_base.listen_thread_tv.tv_sec = 3600;
         prte_oob_base.listen_thread_tv.tv_usec = 0;
     }
-    prte_oob_base.addr_count = 0;
     prte_oob_base.ipv4conns = NULL;
     prte_oob_base.ipv4ports = NULL;
     prte_oob_base.ipv6conns = NULL;
@@ -548,7 +545,7 @@ int prte_oob_register(void)
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "max_msg_size",
                                         "Max size of an OOB message in Megabytes(default = 100)",
                                         PMIX_MCA_BASE_VAR_TYPE_INT,
-                                        &prte_oob_base.max_recon_attempts);
+                                        &prte_oob_base.max_msg_size);
 
     return PRTE_SUCCESS;
 }
@@ -605,52 +602,6 @@ void prte_oob_accept_connection(const int accepted_fd, const struct sockaddr *ad
      *  process ident message to complete this connection
      */
     PRTE_ACTIVATE_TCP_ACCEPT_STATE(accepted_fd, addr, recv_handler);
-}
-
-/* API functions */
-void prte_oob_ping(const pmix_proc_t *proc)
-{
-    prte_oob_tcp_peer_t *peer;
-
-    pmix_output_verbose(2, prte_oob_base.output,
-                        "%s:[%s:%d] processing ping to peer %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        __FILE__, __LINE__, PRTE_NAME_PRINT(proc));
-
-    /* do we know this peer? */
-    if (NULL == (peer = prte_oob_tcp_peer_lookup(proc))) {
-        /* push this back to the component so it can try
-         * another module within this transport. If no
-         * module can be found, the component can push back
-         * to the framework so another component can try
-         */
-        pmix_output_verbose(2, prte_oob_base.output,
-                            "%s:[%s:%d] hop %s unknown", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            __FILE__, __LINE__, PRTE_NAME_PRINT(proc));
-        PRTE_ACTIVATE_TCP_MSG_ERROR(NULL, NULL, proc, prte_mca_oob_tcp_component_hop_unknown);
-        return;
-    }
-
-    /* if we are already connected, there is nothing to do */
-    if (MCA_OOB_TCP_CONNECTED == peer->state) {
-        pmix_output_verbose(2, prte_oob_base.output,
-                            "%s:[%s:%d] already connected to peer %s",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__,
-                            PRTE_NAME_PRINT(proc));
-        return;
-    }
-
-    /* if we are already connecting, there is nothing to do */
-    if (MCA_OOB_TCP_CONNECTING == peer->state || MCA_OOB_TCP_CONNECT_ACK == peer->state) {
-        pmix_output_verbose(2, prte_oob_base.output,
-                            "%s:[%s:%d] already connecting to peer %s",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__,
-                            PRTE_NAME_PRINT(proc));
-        return;
-    }
-
-    /* attempt the connection */
-    peer->state = MCA_OOB_TCP_CONNECTING;
-    PRTE_ACTIVATE_TCP_CONN_STATE(peer, prte_oob_tcp_peer_try_connect);
 }
 
 /*

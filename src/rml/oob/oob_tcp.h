@@ -70,9 +70,6 @@ PRTE_EXPORT void prte_oob_tcp_queue_msg(int sd, short args, void *cbdata);
 PRTE_EXPORT void prte_oob_accept_connection(const int accepted_fd, const struct sockaddr *addr);
 PRTE_EXPORT void prte_mca_oob_tcp_component_lost_connection(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_mca_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata);
-PRTE_EXPORT void prte_mca_oob_tcp_component_no_route(int fd, short args, void *cbdata);
-PRTE_EXPORT void prte_mca_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata);
-PRTE_EXPORT void prte_oob_ping(const pmix_proc_t *proc);
 END_C_DECLS
 
 #endif /* MCA_OOB_TCP_H_ */
