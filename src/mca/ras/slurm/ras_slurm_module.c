@@ -78,6 +78,8 @@ prte_ras_base_module_t prte_ras_slurm_module = {
     .init = init,
     .allocate = prte_ras_slurm_allocate,
     .modify = modify,
+    .shrink_complete = prte_ras_slurm_shrink_complete,
+    .release_allocation = prte_ras_slurm_release_allocation,
     .finalize = prte_ras_slurm_finalize
 };
 
