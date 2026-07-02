@@ -11,7 +11,7 @@ this tag*, asynchronously and in order per connection.
 
 This page explains how the RML is put together and how a message flows through
 it.  The code lives entirely in ``src/rml/``; a shorter, editing-oriented map
-is in ``src/rml/README.md``.
+is in ``src/rml/AGENTS.md``.
 
 Historical note: one directory, once three frameworks
 -----------------------------------------------------
@@ -185,4 +185,4 @@ Where to look
 * Routing math: ``routed_radix.c`` and ``radix.h``.
 * Fault handling: ``routed_radix.c`` (``repair_routing_tree``),
   ``rml_fault_handler.c``, and ``relm/``.
-* Editing map and gotchas: ``src/rml/README.md``.
+* Editing map and gotchas: ``src/rml/AGENTS.md``.

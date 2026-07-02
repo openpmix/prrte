@@ -5,7 +5,7 @@ This directory implements all daemon-to-daemon messaging in PRRTE: how a
 routed across the DVM, and how it is delivered to the code that posted a
 receive for it.
 
-This README is an orientation map for anyone (human or agent) about to modify
+This document is an orientation map for anyone (human or agent) about to modify
 the code. For a narrative walkthrough of *how it works*, see
 [`docs/how-things-work/rml/index.rst`](../../docs/how-things-work/rml/index.rst).
 
