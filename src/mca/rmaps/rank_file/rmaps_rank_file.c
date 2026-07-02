@@ -67,9 +67,6 @@ prte_rmaps_base_module_t prte_rmaps_rank_file_module = {
 static int prte_rmaps_rank_file_parse(const char *);
 static char *prte_rmaps_rank_file_parse_string_or_int(void);
 
-static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, char **aff_rankfile);
-static int prte_rmaps_rf_process_lsf_affinity_hostfile(prte_job_t *jdata, prte_rmaps_options_t *options, char *affinity_file);
-
 /*
  * Local variable
  */
