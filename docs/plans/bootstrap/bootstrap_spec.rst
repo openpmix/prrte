@@ -141,6 +141,16 @@ The keys that govern DVM formation are:
        are then interpreted as IPv6 values.  Selecting ``6`` requires a PRRTE
        built with IPv6 enabled, else the DVM fails to start with a clear
        diagnostic.
+   * - ``DVMRetryMaxDelay``
+     - no (default ``5``)
+     - The maximum delay, in seconds, between a daemon's attempts to connect
+       to the controller.  Because daemons boot independently and a controller
+       may arrive arbitrarily late, a bootstrap daemon retries the connection
+       **forever**, but with an exponential backoff: it retries frequently at
+       first and then after progressively longer delays, up to this maximum,
+       after which it keeps retrying at that steady rate until the controller
+       answers.  Setting it larger reduces the polling load of a long-absent
+       controller at the cost of a slower reconnect once it appears.
 
 Precedence with MCA parameters
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -252,12 +262,14 @@ to reach it:
   exchange.
 
 Because the daemons boot asynchronously and independently, a non-controller
-daemon may become ready before the controller is listening.  A daemon that
-cannot yet reach the controller must therefore **retry** rather than fail
-its bootstrap; it keeps attempting the connection until the controller
-answers.  The retry cadence is governed by the existing RML/OOB
-connection-retry MCA parameters and is left to the site's default MCA
-parameter file — the bootstrap configuration introduces no new key for it.
+daemon may become ready before the controller is listening — and the
+controller may arrive arbitrarily late.  A daemon that cannot yet reach the
+controller must therefore **retry indefinitely** rather than fail its
+bootstrap; it never gives up.  To avoid busy-spinning against a down
+controller, the retry uses an **exponential backoff**: frequent attempts at
+first, then progressively longer delays, up to a maximum of ``DVMRetryMaxDelay``
+seconds (default 5), after which it keeps retrying at that steady rate until
+the controller answers.
 
 The DVM is fully formed once every daemon has reported in to the controller
 and the controller has confirmed the expected daemon count — ``N + 1`` when
@@ -382,10 +394,13 @@ above; they are collected here for reference.
   existing ``prte_keep_fqdn_hostnames`` MCA variable so the choice can live
   in ``prte.conf`` rather than a separate MCA parameter file.
 * **Startup race and retry.**  A non-controller daemon that finds the
-  controller not yet listening retries the connection until it succeeds
-  rather than failing its bootstrap.  The retry cadence uses the existing
-  RML/OOB connection-retry MCA parameters and is left to the site's default
-  MCA parameter file; no new bootstrap key is introduced for it.
+  controller not yet listening retries the connection **indefinitely** (never
+  gives up) rather than failing its bootstrap, using an exponential backoff
+  capped at ``DVMRetryMaxDelay`` seconds (default 5).  This supersedes an
+  earlier notion of leaving the retry cadence entirely to the default MCA
+  parameter file: the cap is a first-class configuration key, while the
+  never-give-up and initial-delay defaults are seeded by bootstrap (an
+  operator MCA setting still overrides them).
 * **Controller entry point.**  The controller is a **self-promoted
   ``prted``**.  A system administrator boots the identical
   ``prted --bootstrap`` on every node, and the daemon on
