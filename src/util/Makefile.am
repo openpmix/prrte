@@ -57,6 +57,7 @@ headers = \
         name_fns.h \
         nidmap.h \
         numtostr.h \
+        prte_bootstrap.h \
         proc_info.h \
         session_dir.h \
         stacktrace.h \
@@ -75,6 +76,7 @@ sources = \
         name_fns.c \
         nidmap.c \
         numtostr.c \
+        prte_bootstrap.c \
         proc_info.c \
         session_dir.c \
         stacktrace.c \

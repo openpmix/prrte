@@ -100,6 +100,8 @@ typedef struct {
     int retry_delay;        /**< time to wait before retrying connection */
     int max_recon_attempts; /**< maximum number of times to attempt connect before giving up (-1 for
                                never) */
+    int retry_max_delay;    /**< cap (sec) on the connection-retry delay; when > retry_delay the
+                               delay backs off exponentially up to this value (0 => fixed delay) */
 } prte_oob_base_t;
 PRTE_EXPORT extern prte_oob_base_t prte_oob_base;
 

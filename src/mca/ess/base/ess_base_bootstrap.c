@@ -9,17 +9,9 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2009      Institut National de Recherche en Informatique
- *                         et Automatique. All rights reserved.
  * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
- *                         reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2017      IBM Corporation. All rights reserved.
- * Copyright (c) 2019      Research Organization for Information Science
- *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
- * Copyright (c) 2023      Triad National Security, LLC. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,547 +23,208 @@
 #include "constants.h"
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
-#ifdef HAVE_FCNTL_H
-#    include <fcntl.h>
-#endif
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 #ifdef HAVE_UNISTD_H
 #    include <unistd.h>
 #endif
 
 #include "src/util/proc_info.h"
 
-#include "src/event/event-internal.h"
-#include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/pmix_os_path.h"
 #include "src/util/pmix_environ.h"
-#include "src/util/pmix_string_copy.h"
-
-#include "src/mca/prteinstalldirs/base/base.h"
-#include "src/rml/rml.h"
-#include "src/rml/rml_contact.h"
+#include "src/util/pmix_printf.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
-#include "src/util/session_dir.h"
-#include "src/util/pmix_show_help.h"
+#include "src/util/prte_bootstrap.h"
 
 #include "src/mca/ess/base/base.h"
 
-static pmix_status_t regex_extract_nodes(char *regexp, char ***names);
-static pmix_status_t regex_parse_value_ranges(char *base, char *ranges,
-                                              int num_digits, char *suffix,
-                                              char ***names);
-static pmix_status_t regex_parse_value_range(char *base, char *range,
-                                             int num_digits, char *suffix,
-                                             char ***names);
-static pmix_status_t read_file(char *regexp, char ***names);
-
-int prte_ess_base_bootstrap(void)
+/* Synthesize the controller's RML contact URI entirely from the
+ * configuration, so a compute daemon can phone home before any nidmap has
+ * been distributed.  The result has the same shape the OOB itself produces:
+ *
+ *    <process-name>;tcp://<ipv4>:<port>:<mask>       (IPv4)
+ *    <process-name>;tcp6://[<ipv6>]:<port>:<mask>    (IPv6)
+ */
+static int synth_controller_uri(prte_bootstrap_config_t *cfg, const char *dvm_nspace,
+                                int family, char **uri)
 {
-    char *path, *line, *ptr;
-    FILE *fp;
-    int n;
-    char *cluster = NULL;
-    char *ctrlhost = NULL;
-    uint32_t ctrlport = UINT32_MAX;
-    uint32_t prtedport = UINT32_MAX;
-    char *dvmnodes = NULL;
-    char *dvmtmpdir = NULL;
-    char *sessiontmpdir = NULL;
-    char *ctrllogpath = NULL;
-    char *prtedlogpath = NULL;
-    char **nodes = NULL;
-    int rc = PRTE_ERR_SILENT;
+    pmix_proc_t ctrl;
+    char *namestr = NULL;
+    char ipstr[INET6_ADDRSTRLEN];
+    const char *mask;
+    struct addrinfo hints, *res = NULL;
+    int rc;
 
-    /* see if we can open a configuration file */
-    path = pmix_os_path(false, prte_install_dirs.sysconfdir, "prte.conf", NULL);
-    fp = fopen(path, "r");
-    if (NULL == fp) {
-        pmix_show_help("help-prte-runtime.txt", "bootstrap-not-found", true,
-                       prte_process_info.nodename, path);
-        free(path);
-        return PRTE_ERR_SILENT;
+    *uri = NULL;
+
+    /* the controller is always rank 0 in the DVM namespace */
+    PMIX_LOAD_PROCID(&ctrl, dvm_nspace, 0);
+    rc = prte_util_convert_process_name_to_string(&namestr, &ctrl);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
     }
 
-    while (NULL != (line = pmix_getline(fp))) {
-        /* ignore if line is empty or comment */
-        if (0 == strlen(line) || '#' == line[0]) {
-            free(line);
-            continue;
-        }
-        /* split on the '=' sign */
-        if (NULL == (ptr = strchr(line, '='))) {
-            /* bad file */
-            pmix_show_help("help-prte-runtime.txt", "bootstrap-bad-entry", true,
-                           prte_process_info.nodename, path, line);
-            free(path);
-            fclose(fp);
-            rc = PRTE_ERR_SILENT;
-            goto cleanup;
-        }
-        *ptr = '\0';
-        if (0 == strlen(line)) {   // missing the field name
-            /* restore the '=' sign */
-            *ptr = '=';
-            pmix_show_help("help-prte-runtime.txt", "bootstrap-missing-field-name", true,
-                           prte_process_info.nodename, path, ptr);
-            free(path);
-            fclose(fp);
-            rc = PRTE_ERR_SILENT;
-            goto cleanup;
-        }
-        ++ptr;
-        if ('\0' == *ptr) {    // missing the value
-            pmix_show_help("help-prte-runtime.txt", "bootstrap-missing-value", true,
-                           prte_process_info.nodename, path, line);
-            free(path);
-            fclose(fp);
-            rc = PRTE_ERR_SILENT;
-            goto cleanup;
-        }
-
-        /* identify and cache the option */
-        if (0 == strcmp(line, "ClusterName")) {
-            if (NULL != cluster) {
-                free(cluster);
-            }
-            cluster = strdup(ptr);
-
-        } else if (0 == strcmp(line, "DVMControllerHost")) {
-            if (NULL != ctrlhost) {
-                free(ctrlhost);
-            }
-            ctrlhost = strdup(ptr);
-
-        } else if (0 == strcmp(line, "DVMControllerPort")) {
-            ctrlport = strtoul(ptr, NULL, 10);
-
-        } else if (0 == strcmp(line, "PRTEDPort")) {
-            prtedport = strtoul(ptr, NULL, 10);
-
-        } else if (0 == strcmp(line, "DVMNodes")) {
-            if (NULL != dvmnodes) {
-                free(dvmnodes);
-            }
-            dvmnodes = strdup(ptr);
-
-        } else if (0 == strcmp(line, "DVMTempDir")) {
-            if (NULL != dvmtmpdir) {
-                free(dvmtmpdir);
-            }
-            dvmtmpdir = strdup(ptr);
-
-        } else if (0 == strcmp(line, "SessionTmpDir")) {
-            if (NULL != sessiontmpdir) {
-                free(sessiontmpdir);
-            }
-            sessiontmpdir = strdup(ptr);
-
-        } else if (0 == strcmp(line, "ControllerLogPath")) {
-            if (NULL != ctrllogpath) {
-                free(ctrllogpath);
-            }
-            ctrllogpath = strdup(ptr);
-
-        } else if (0 == strcmp(line, "PRTEDLogPath")) {
-            if (NULL != prtedlogpath) {
-                free(prtedlogpath);
-            }
-            prtedlogpath = strdup(ptr);
-        }
-        free(line);
-    }
-    fclose(fp);
-
-    /* we require the node list */
-    if (NULL == dvmnodes) {
-        pmix_show_help("help-prte-runtime.txt", "bootstrap-missing-entry", true,
-                       prte_process_info.nodename, path, "DVMNodes");
-        goto cleanup;
-    }
-    /* we must be able to parse that list */
-    rc = regex_extract_nodes(dvmnodes, &nodes);
-    if (PMIX_SUCCESS != rc) {
-        pmix_show_help("help-prte-runtime.txt", "bootstrap-bad-nodelist", true,
-                       prte_process_info.nodename, path, dvmnodes,
-                       PMIx_Error_string(rc));
-        goto cleanup;
-    }
-    /* we must have the controller host so we can find it */
-    if (NULL == ctrlhost) {
-        pmix_show_help("help-prte-runtime.txt", "bootstrap-missing-entry", true,
-                       prte_process_info.nodename, path, "DVMControllerHost");
-        goto cleanup;
-    }
-    /* we must have a prted port so we can contact our parent */
-    if (UINT32_MAX == prtedport) {
-        pmix_show_help("help-prte-runtime.txt", "bootstrap-missing-entry", true,
-                       prte_process_info.nodename, path, "DVMControllerPort");
-        goto cleanup;
-    }
-    /* if we aren't given a controller port, default to the prted port */
-    if (UINT32_MAX == ctrlport) {
-        ctrlport = prtedport;
+    /* resolve the controller host to an address of the selected family */
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = family;
+    hints.ai_socktype = SOCK_STREAM;
+    if (0 != getaddrinfo(cfg->ctrlhost, NULL, &hints, &res) || NULL == res) {
+        free(namestr);
+        return PRTE_ERR_NOT_FOUND;
     }
 
-    /* report the nodes */
-    for (n=0; NULL != nodes[n]; n++) {
-        pmix_output(0, "NODE[%d]: %s", n, nodes[n]);
+    if (AF_INET6 == family) {
+        struct sockaddr_in6 *s6 = (struct sockaddr_in6 *) res->ai_addr;
+        inet_ntop(AF_INET6, &s6->sin6_addr, ipstr, sizeof(ipstr));
+    } else {
+        struct sockaddr_in *s4 = (struct sockaddr_in *) res->ai_addr;
+        inet_ntop(AF_INET, &s4->sin_addr, ipstr, sizeof(ipstr));
     }
+    freeaddrinfo(res);
 
-    rc = PRTE_SUCCESS;
+    /* an administrator-supplied netmask when present, else empty (the OOB
+     * treats an empty mask as universally reachable) */
+    mask = (NULL != cfg->dvm_netmask) ? cfg->dvm_netmask : "";
 
-cleanup:
-    if (NULL != cluster) {
-        free(cluster);
+    if (AF_INET6 == family) {
+        pmix_asprintf(uri, "%s;tcp6://[%s]:%u:%s", namestr, ipstr,
+                      (unsigned) cfg->port, mask);
+    } else {
+        pmix_asprintf(uri, "%s;tcp://%s:%u:%s", namestr, ipstr,
+                      (unsigned) cfg->port, mask);
     }
-    if (NULL != ctrlhost) {
-        free(ctrlhost);
-    }
-    if (NULL != dvmnodes) {
-        free(dvmnodes);
-    }
-    if (NULL != nodes) {
-        PMIx_Argv_free(nodes);
-    }
-    if (NULL != dvmtmpdir) {
-        free(dvmtmpdir);
-    }
-    if (NULL != sessiontmpdir) {
-        free(sessiontmpdir);
-    }
-    if (NULL != ctrllogpath) {
-        free(ctrllogpath);
-    }
-    if (NULL != prtedlogpath) {
-        free(prtedlogpath);
-    }
-    return rc;
-}
-
-static pmix_status_t regex_extract_nodes(char *regexp, char ***names)
-{
-    int i, j, k, len;
-    pmix_status_t ret;
-    char *base;
-    char *orig, *suffix;
-    bool found_range = false;
-    bool more_to_come = false;
-    int num_digits;
-
-    /* set the default */
-    *names = NULL;
-
-    if (NULL == regexp) {
-        return PMIX_ERR_BAD_PARAM;
-    }
-
-    /* see what regex we were given. Supported options:
-     *
-     * file:<path> - file of names, one per line
-     * <regex> - PMIx native regex, which is a comma-delimited
-     *                list of ranges or names
-     */
-    if (0 == strncasecmp(regexp, "file:", 5)) {
-        /* skip over the "file:" portion */
-        ret = read_file(&regexp[5], names);
-        return ret;
-    }
-
-    orig = base = strdup(regexp);
-    if (NULL == base) {
-        PMIX_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
-        return PMIX_ERR_OUT_OF_RESOURCE;
-    }
-
-    pmix_output_verbose(1, prte_ess_base_framework.framework_output,
-                         "bootstrap:extract:nodes: checking list: %s",
-                         regexp);
-
-    do {
-        /* Find the base */
-        len = strlen(base);
-        for (i = 0; i <= len; ++i) {
-            if (base[i] == '[') {
-                /* we found a range. this gets dealt with below */
-                base[i] = '\0';
-                found_range = true;
-                break;
-            }
-            if (base[i] == ',') {
-                /* we found a singleton value, and there are more to come */
-                base[i] = '\0';
-                found_range = false;
-                more_to_come = true;
-                break;
-            }
-            if (base[i] == '\0') {
-                /* we found a singleton value */
-                found_range = false;
-                more_to_come = false;
-                break;
-            }
-        }
-        if (i == 0 && !found_range) {
-            /* we found a special character at the beginning of the string */
-            free(orig);
-            return PMIX_ERR_BAD_PARAM;
-        }
-
-        if (found_range) {
-            /* If we found a range, get the number of digits in the numbers */
-            i++; /* step over the [ */
-            for (j = i; j < len; j++) {
-                if (base[j] == ':') {
-                    base[j] = '\0';
-                    break;
-                }
-            }
-            if (j >= len) {
-                /* we didn't find the number of digits */
-                free(orig);
-                return PMIX_ERR_BAD_PARAM;
-            }
-            num_digits = strtol(&base[i], NULL, 10);
-            i = j + 1; /* step over the : */
-            /* now find the end of the range */
-            for (j = i; j < len; ++j) {
-                if (base[j] == ']') {
-                    base[j] = '\0';
-                    break;
-                }
-            }
-            if (j >= len) {
-                /* we didn't find the end of the range */
-                free(orig);
-                return PMIX_ERR_BAD_PARAM;
-            }
-            /* check for a suffix */
-            if (j + 1 < len && base[j + 1] != ',') {
-                /* find the next comma, if present */
-                for (k = j + 1; k < len && base[k] != ','; k++)
-                    ;
-                if (k < len) {
-                    base[k] = '\0';
-                }
-                suffix = strdup(&base[j + 1]);
-                if (k < len) {
-                    base[k] = ',';
-                }
-                j = k - 1;
-            } else {
-                suffix = NULL;
-            }
-            pmix_output_verbose(1, prte_ess_base_framework.framework_output,
-                                 "bootstrap:extract:nodes: parsing range %s %s %s",
-                                 base, base + i, suffix);
-
-            ret = regex_parse_value_ranges(base, base + i, num_digits, suffix, names);
-            if (NULL != suffix) {
-                free(suffix);
-            }
-            if (PMIX_SUCCESS != ret) {
-                free(orig);
-                return ret;
-            }
-            if (j + 1 < len && base[j + 1] == ',') {
-                more_to_come = true;
-                base = &base[j + 2];
-            } else {
-                more_to_come = false;
-            }
-        } else {
-            /* If we didn't find a range, just add the value */
-            PMIx_Argv_append_nosize(names, base);
-            /* step over the comma */
-            i++;
-            /* set base equal to the (possible) next base to look at */
-            base = &base[i];
-        }
-    } while (more_to_come);
-
-    free(orig);
-
-    /* All done */
+    free(namestr);
     return PRTE_SUCCESS;
 }
 
-/*
- * Parse one or more ranges in a set
- *
- * @param base     The base text of the value name
- * @param *ranges  A pointer to a range. This can contain multiple ranges
- *                 (i.e. "1-3,10" or "5" or "9,0100-0130,250")
- * @param ***names An argv array to add the newly discovered values to
- */
-static pmix_status_t regex_parse_value_ranges(char *base, char *ranges, int num_digits,
-                                              char *suffix, char ***names)
+int prte_ess_base_bootstrap(bool *is_controller)
 {
-    int i, len;
-    pmix_status_t ret;
-    char *start, *orig;
+    prte_bootstrap_config_t cfg;
+    char *dvm_nspace = NULL;
+    char *ctrl_uri = NULL;
+    const char *port_param;
+    char valstr[64];
+    bool ctrl = false;
+    pmix_rank_t rank = PMIX_RANK_INVALID;
+    pmix_rank_t ndaemons;
+    int family = AF_INET;
+    int rc;
 
-    /* Look for commas, the separator between ranges */
+    *is_controller = false;
 
-    len = strlen(ranges);
-    for (orig = start = ranges, i = 0; i < len; ++i) {
-        if (',' == ranges[i]) {
-            ranges[i] = '\0';
-            ret = regex_parse_value_range(base, start, num_digits, suffix, names);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                return ret;
-            }
-            start = ranges + i + 1;
-        }
+    /* read and validate the configuration file */
+    rc = prte_bootstrap_parse(&cfg);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
     }
 
-    /* Pick up the last range, if it exists */
-
-    if (start < orig + len) {
-
-        pmix_output_verbose(1, prte_ess_base_framework.framework_output,
-                             "bootstrap:parse:ranges: parse range %s (2)",
-                             start);
-
-        ret = regex_parse_value_range(base, start, num_digits, suffix, names);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            return ret;
-        }
+    /* determine our role and rank from the configuration */
+    rc = prte_bootstrap_my_identity(&cfg, &ctrl, &rank);
+    if (PRTE_SUCCESS != rc) {
+        pmix_show_help("help-prte-runtime.txt", "bootstrap-node-not-member", true,
+                       prte_process_info.nodename, cfg.ctrlhost);
+        rc = PRTE_ERR_SILENT;
+        goto cleanup;
     }
+    ndaemons = prte_bootstrap_num_daemons(&cfg);
 
-    /* All done */
-    return PMIX_SUCCESS;
-}
+    /* the DVM namespace is shared by every daemon */
+    pmix_asprintf(&dvm_nspace, "%s-prte-dvm", cfg.cluster);
 
-/*
- * Parse a single range in a set and add the full names of the values
- * found to the names argv
- *
- * @param base     The base text of the value name
- * @param *ranges  A pointer to a single range. (i.e. "1-3" or "5")
- * @param ***names An argv array to add the newly discovered values to
- */
-static pmix_status_t regex_parse_value_range(char *base, char *range, int num_digits, char *suffix,
-                                             char ***names)
-{
-    char *str, tmp[132];
-    size_t i, k, start, end;
-    size_t base_len, len;
-    bool found;
-
-    if (NULL == base || NULL == range) {
-        return PMIX_ERROR;
-    }
-
-    len = strlen(range);
-    base_len = strlen(base);
-    /* Silence compiler warnings; start and end are always assigned
-     properly, below */
-    start = end = 0;
-
-    /* Look for the beginning of the first number */
-
-    for (found = false, i = 0; i < len; ++i) {
-        if (isdigit((int) range[i])) {
-            if (!found) {
-                start = strtol(range + i, NULL, 10);
-                found = true;
-                break;
-            }
-        }
-    }
-    if (!found) {
-        PMIX_ERROR_LOG(PMIX_ERR_NOT_FOUND);
-        return PMIX_ERR_NOT_FOUND;
-    }
-
-    /* Look for the end of the first number */
-
-    for (found = false; i < len; ++i) {
-        if (!isdigit(range[i])) {
-            break;
-        }
-    }
-
-    /* Was there no range, just a single number? */
-
-    if (i >= len) {
-        end = start;
-        found = true;
+    /* resolve the address family (DVMIPVersion) into the static-port
+     * parameter, the family enable/disable flags, and the URI form */
+    if (6 == cfg.ip_version) {
+#if PRTE_ENABLE_IPV6
+        port_param = "PRTE_MCA_prte_static_ipv6_ports";
+        PMIx_Setenv("PRTE_MCA_prte_disable_ipv6_family", "0", true, &environ);
+        PMIx_Setenv("PRTE_MCA_prte_disable_ipv4_family", "1", true, &environ);
+        family = AF_INET6;
+#else
+        pmix_show_help("help-prte-runtime.txt", "bootstrap-ipv6-unavailable", true,
+                       prte_process_info.nodename);
+        rc = PRTE_ERR_SILENT;
+        goto cleanup;
+#endif
     } else {
-        /* Nope, there was a range.  Look for the beginning of the second
-         * number
-         */
-        for (; i < len; ++i) {
-            if (isdigit(range[i])) {
-                end = strtol(range + i, NULL, 10);
-                found = true;
-                break;
-            }
-        }
-    }
-    if (!found) {
-        PMIX_ERROR_LOG(PMIX_ERR_NOT_FOUND);
-        return PMIX_ERR_NOT_FOUND;
+        port_param = "PRTE_MCA_prte_static_ipv4_ports";
+        family = AF_INET;
     }
 
-    /* Make strings for all values in the range */
+    /* apply the inter-node network selection, if given */
+    if (NULL != cfg.dvm_networks) {
+        PMIx_Setenv("PRTE_MCA_prte_if_include", cfg.dvm_networks, true, &environ);
+    }
 
-    len = base_len + num_digits + 32;
-    if (NULL != suffix) {
-        len += strlen(suffix);
-    }
-    str = (char *) malloc(len);
-    if (NULL == str) {
-        PMIX_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
-        return PMIX_ERR_OUT_OF_RESOURCE;
-    }
-    for (i = start; i <= end; ++i) {
-        memset(str, 0, len);
-        strcpy(str, base);
-        /* we need to zero-pad the digits */
-        for (k = 0; k < (size_t) num_digits; k++) {
-            str[k + base_len] = '0';
-        }
-        memset(tmp, 0, 132);
-        pmix_snprintf(tmp, 132, "%lu", (unsigned long) i);
-        for (k = 0; k < strlen(tmp); k++) {
-            str[base_len + num_digits - k - 1] = tmp[strlen(tmp) - k - 1];
-        }
-        /* if there is a suffix, add it */
-        if (NULL != suffix) {
-            strcat(str, suffix);
-        }
-        PMIx_Argv_append_nosize(names, str);
-    }
-    free(str);
+    /* apply the FQDN matching choice */
+    PMIx_Setenv("PRTE_MCA_prte_keep_fqdn_hostnames", cfg.keep_fqdn ? "1" : "0", true, &environ);
 
-    /* All done */
-    return PMIX_SUCCESS;
-}
+    /* every process listens on the shared well-known DVM port */
+    pmix_snprintf(valstr, sizeof(valstr), "%u", (unsigned) cfg.port);
+    PMIx_Setenv(port_param, valstr, true, &environ);
 
-static pmix_status_t read_file(char *regexp, char ***names)
-{
-    char *line;
-    FILE *fp;
+    /* seed the connection-retry backoff.  retry_delay defaults to 0 (no
+     * retry), so we must positively enable it; these are bootstrap's own
+     * defaults, set only if the operator has not (overwrite=false), while the
+     * cap comes from the configuration file (overwrite=true, config trumps). */
+    PMIx_Setenv("PRTE_MCA_prte_retry_delay", "1", false, &environ);
+    PMIx_Setenv("PRTE_MCA_prte_max_recon_attempts", "-1", false, &environ);
+    pmix_snprintf(valstr, sizeof(valstr), "%u", (unsigned) cfg.retry_max_delay);
+    PMIx_Setenv("PRTE_MCA_prte_retry_max_delay", valstr, true, &environ);
 
-    fp = fopen(regexp, "r");
-    if (NULL == fp) {
-        return PMIX_ERR_BAD_PARAM;
+    /* apply the DVM temporary-directory base */
+    if (NULL != cfg.dvmtmpdir) {
+        PMIx_Setenv("PRTE_MCA_prte_tmpdir_base", cfg.dvmtmpdir, true, &environ);
     }
-    while (NULL != (line = pmix_getline(fp))) {
-        /* ignore if line is empty or comment */
-        if (0 == strlen(line) || '#' == line[0]) {
-            free(line);
-            continue;
+    /* NOTE: SessionTmpDir and the *Log* options are parsed and carried in the
+     * configuration, but their runtime plumbing (a dedicated session-dir
+     * override and the DVM state-logging facility) is not yet implemented, so
+     * they are intentionally not published here.  Wiring them is deferred to
+     * when those facilities exist, per the bootstrap implementation plan. */
+
+    if (ctrl) {
+        /* we are the DVM controller: adopt the deterministic namespace and
+         * rank 0, and let prte_plm_base_set_hnp_name() pick them up verbatim */
+        PMIx_Setenv("PMIX_SERVER_NSPACE", dvm_nspace, true, &environ);
+        PMIx_Setenv("PMIX_SERVER_RANK", "0", true, &environ);
+    } else {
+        /* we are an ordinary daemon: publish our identity and the count of
+         * daemons in the DVM through the ess/env plumbing */
+        PMIx_Setenv("PRTE_MCA_ess_base_nspace", dvm_nspace, true, &environ);
+        pmix_snprintf(valstr, sizeof(valstr), "%u", (unsigned) rank);
+        PMIx_Setenv("PRTE_MCA_ess_base_vpid", valstr, true, &environ);
+        pmix_snprintf(valstr, sizeof(valstr), "%u", (unsigned) ndaemons);
+        PMIx_Setenv("PRTE_MCA_ess_base_num_procs", valstr, true, &environ);
+
+        /* synthesize the controller's contact URI so we can phone home */
+        rc = synth_controller_uri(&cfg, dvm_nspace, family, &ctrl_uri);
+        if (PRTE_SUCCESS != rc) {
+            pmix_show_help("help-prte-runtime.txt", "bootstrap-bad-controller", true,
+                           prte_process_info.nodename, cfg.ctrlhost);
+            rc = PRTE_ERR_SILENT;
+            goto cleanup;
         }
-        PMIx_Argv_append_nosize(names, line);
-        free(line);
+        PMIx_Setenv("PRTE_MCA_prte_hnp_uri", ctrl_uri, true, &environ);
     }
-    fclose(fp);
-    return PMIX_SUCCESS;
+
+    *is_controller = ctrl;
+    rc = PRTE_SUCCESS;
+
+cleanup:
+    if (NULL != dvm_nspace) {
+        free(dvm_nspace);
+    }
+    if (NULL != ctrl_uri) {
+        free(ctrl_uri);
+    }
+    prte_bootstrap_config_free(&cfg);
+    return rc;
 }

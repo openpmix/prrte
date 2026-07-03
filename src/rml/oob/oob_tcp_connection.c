@@ -390,8 +390,28 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
                     addr->state = MCA_OOB_TCP_UNCONNECTED;
                     addr->retries = 0;
                 }
-                /* give it awhile and try again */
+                /* give it awhile and try again.  The base case is a fixed
+                 * delay of retry_delay seconds (unchanged behavior).  When
+                 * retry_max_delay is larger, the delay backs off
+                 * exponentially - retry_delay, 2x, 4x, ... - capped at
+                 * retry_max_delay, so a daemon waiting on a not-yet-present
+                 * peer polls frequently at first and then settles onto a
+                 * steady rate rather than busy-spinning. */
                 tv.tv_sec = prte_oob_base.retry_delay;
+                if (prte_oob_base.retry_max_delay > prte_oob_base.retry_delay) {
+                    uint64_t d;
+                    /* guard the shift: num_retries grows without bound when we
+                     * never give up, so clamp the exponent before shifting */
+                    if (peer->num_retries >= 32) {
+                        d = (uint64_t) prte_oob_base.retry_max_delay;
+                    } else {
+                        d = (uint64_t) prte_oob_base.retry_delay << peer->num_retries;
+                        if (d > (uint64_t) prte_oob_base.retry_max_delay) {
+                            d = (uint64_t) prte_oob_base.retry_max_delay;
+                        }
+                    }
+                    tv.tv_sec = (time_t) d;
+                }
                 tv.tv_usec = 0;
                 ++peer->num_retries;
                 PRTE_RETRY_TCP_CONN_STATE(peer, prte_oob_tcp_peer_try_connect, &tv);

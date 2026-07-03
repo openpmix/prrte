@@ -99,6 +99,49 @@ of participating nodes on at least one node:
 
 Please fix the error and try again.
 #
+[bootstrap-bad-entry]
+
+Bootstrap startup was requested, but a line in the configuration file
+on at least one node could not be parsed as a "Key=Value" entry:
+
+   node:   %s
+   file:   %s
+   line:   %s
+
+Please correct the configuration file and try again.
+#
+[bootstrap-node-not-member]
+
+Bootstrap startup was requested, but this node is neither the configured
+DVM controller host nor a member of the configured list of DVM nodes, so
+it cannot determine its identity within the DVM:
+
+   node:        %s
+   controller:  %s
+
+Please ensure this node is included in the DVMNodes list (or is the
+DVMControllerHost) in the configuration file.
+#
+[bootstrap-ipv6-unavailable]
+
+Bootstrap startup was requested with DVMIPVersion=6, but this PRRTE was
+built without IPv6 support:
+
+   node:  %s
+
+Please rebuild PRRTE with IPv6 enabled, or configure the DVM to use IPv4.
+#
+[bootstrap-bad-controller]
+
+Bootstrap startup was requested, but this node was unable to resolve the
+DVM controller host to a usable address of the requested family:
+
+   node:        %s
+   controller:  %s
+
+Please verify the DVMControllerHost and DVMIPVersion settings and that
+name resolution is available on this node.
+#
 [prte:session:dir:shared]
 
 PRTE has detected that the head of the session directory tree (where
