@@ -91,6 +91,16 @@ start with a clear diagnostic. The remaining address-bearing options
 values of the selected family, so IPv6 literal addresses and IPv6 CIDR
 subnets may be used when ``DVMIPVersion=6``.
 
+``DVMRetryMaxDelay=<seconds> (default: 5)`` bounds the delay between a
+daemon's attempts to connect to the DVM controller during bootstrap. Because
+the daemons start independently and the controller may come up arbitrarily
+late, a bootstrapping daemon retries the connection indefinitely rather than
+giving up. To avoid hammering an absent controller, the delay between attempts
+grows from an initial short interval and doubles on each attempt, up to this
+maximum, after which retries continue at that steady rate until the controller
+answers. A larger value lowers the polling load of a long-absent controller;
+a smaller value reconnects faster once it appears.
+
 .. note::
    Several bootstrap options duplicate values that can also be set as MCA
    parameters. They are provided here so that all DVM behavior can be managed

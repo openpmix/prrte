@@ -135,6 +135,7 @@ Create ``src/util/prte_bootstrap.c`` / ``src/util/prte_bootstrap.h`` holding:
        bool      keep_fqdn;        /* KeepFQDNHostnames (default false) */
        char     *dvm_networks;     /* DVMNetworks (default NULL -> all) */
        char     *dvm_netmask;      /* DVMNetmask (default NULL -> empty) */
+       uint32_t  retry_max_delay;  /* DVMRetryMaxDelay seconds (default 5) */
        char     *dvmtmpdir;
        char     *sessiontmpdir;
        char     *ctrllogpath;
@@ -152,10 +153,10 @@ Move the file reader, ``regex_extract_nodes``, ``regex_parse_value_ranges``,
 ``regex_parse_value_range``, and ``read_file`` (all currently duplicated) into
 this file as the single implementation.  The keys the draft does not yet
 parse — ``KeepFQDNHostnames``, ``DVMNetworks``, ``DVMNetmask``,
-``DVMIPVersion``, and the log-state booleans — are added to the parser here,
-and the split ``DVMControllerPort``/``PRTEDPort`` keys are collapsed to the
-single ``DVMPort``.  ``ess_base_bootstrap.c`` and ``ras_boot.c`` are reduced
-to callers of ``prte_bootstrap_parse()``.
+``DVMIPVersion``, ``DVMRetryMaxDelay``, and the log-state booleans — are added
+to the parser here, and the split ``DVMControllerPort``/``PRTEDPort`` keys are
+collapsed to the single ``DVMPort``.  ``ess_base_bootstrap.c`` and
+``ras_boot.c`` are reduced to callers of ``prte_bootstrap_parse()``.
 
 Register the new object files in ``src/util/Makefile.am``.
 
@@ -355,27 +356,76 @@ Bootstrap must also apply the same short-vs-FQDN normalization to its **own**
 node-matching in Step 2 (controller election and rank assignment), so its
 matching agrees with the runtime's later behavior.
 
-Step 7 — Startup retry against boot-order skew
-----------------------------------------------
+Step 7 — Startup retry with capped exponential backoff
+------------------------------------------------------
 
 Daemons boot independently; a compute daemon may try to reach the controller
-before the controller's listener is up.  Per the spec this is handled by
-**retry**, using the existing OOB reconnection parameters
-(``prte_max_recon_attempts``, default 10; ``prte_retry_delay``, default 0 s)
-and left to the site's default MCA parameter file — bootstrap introduces no
-new key.
+long before the controller's listener is up, and there is no upper bound on
+how late the controller may arrive (a node in the boot order, a controller
+host that reboots).  A bootstrap daemon must therefore **never give up** — it
+keeps trying to connect to the controller forever — but it must not busy-spin
+against a down controller either.  The behavior is a **capped exponential
+backoff**: retry frequently at first, then after progressively longer delays,
+until the delay reaches a configured maximum, and then keep retrying at that
+maximum rate indefinitely.
+
+The existing OOB reconnect path in ``oob_tcp_connection.c`` already reschedules
+a failed connect and already treats ``prte_max_recon_attempts < 0`` as
+"infinite", but its delay is **fixed** at ``prte_retry_delay`` seconds — there
+is no backoff and no cap.  Two changes give us the desired curve:
+
+#. **Add a maximum-delay MCA parameter.**  Register ``prte_retry_max_delay``
+   (seconds) alongside ``prte_retry_delay`` and ``prte_max_recon_attempts`` in
+   ``oob_tcp.c``.  It defaults to ``0``, which means "no backoff — use the
+   fixed ``retry_delay``", so the launched path is unchanged.
+
+#. **Compute the delay as a function of the attempt count.**  In the reconnect
+   block of ``oob_tcp_connection.c`` (the ``!connected`` path that today sets
+   ``tv.tv_sec = prte_oob_base.retry_delay``), when ``retry_max_delay`` exceeds
+   ``retry_delay`` derive the delay from the existing ``peer->num_retries``
+   counter and cap it:
+
+   .. code-block:: c
+
+      /* base case (retry_max_delay == 0): fixed delay, unchanged behavior */
+      unsigned secs = prte_oob_base.retry_delay;
+      if (prte_oob_base.retry_max_delay > prte_oob_base.retry_delay) {
+          /* exponential backoff: retry_delay, 2x, 4x, ... capped */
+          uint64_t d = (uint64_t) prte_oob_base.retry_delay << peer->num_retries;
+          if (d > (uint64_t) prte_oob_base.retry_max_delay) {
+              d = prte_oob_base.retry_max_delay;
+          }
+          secs = (unsigned) d;
+      }
+      tv.tv_sec = secs;
+
+   The ``<< num_retries`` shift is guarded by the cap, so the large-shift
+   overflow is harmless (any value past the cap is clamped to
+   ``retry_max_delay``).  ``num_retries`` is already incremented on each retry
+   and reset to ``0`` on a successful connect, so no new state is needed.
+
+**Bootstrap seeds the curve.**  ``prte_retry_delay`` defaults to ``0``, which
+disables retry entirely, so bootstrap must positively enable it.  It sets three
+parameters before ``prte_init``:
+
+* ``prte_retry_delay`` → a short initial delay (e.g. ``1`` s) — bootstrap's own
+  default, set with ``overwrite=false`` so an operator MCA setting wins.
+* ``prte_max_recon_attempts`` → ``-1`` (never give up) — likewise
+  ``overwrite=false``.
+* ``prte_retry_max_delay`` → the value of the ``DVMRetryMaxDelay`` config key
+  (default ``5`` s).  This one comes from ``prte.conf``, so it is set with
+  ``overwrite=true`` per the precedence rule (config file trumps the MCA param
+  file).
+
+With ``retry_delay=1`` and ``retry_max_delay=5`` the delay sequence is
+``1, 2, 4, 5, 5, 5, …`` seconds — frequent early attempts that settle onto a
+steady 5-second poll and continue until the controller answers.
 
 .. note::
-   The stock defaults (10 attempts, no delay) are tuned for a launched DVM
-   where the HNP is already listening; they can exhaust in milliseconds and
-   are unlikely to survive real boot-order skew.  The plan should therefore
-   have bootstrap **seed boot-friendly defaults only when the operator has
-   not set them** — e.g. default ``prte_max_recon_attempts`` to ``-1``
-   (never give up) and ``prte_retry_delay`` to a small non-zero value for the
-   bootstrap case — using ``PMIx_Setenv(..., overwrite=false)`` so an explicit
-   site setting still wins.  This keeps the "left to the default MCA file"
-   contract (the operator can override) while not shipping a configuration
-   that fails on the first slow controller.
+   The backoff is a general OOB improvement, not a bootstrap-only code path:
+   it is gated on ``retry_max_delay > retry_delay``, and with the default
+   ``retry_max_delay = 0`` the launched path keeps its exact current
+   fixed-delay behavior.  Only bootstrap turns it on, via ``DVMRetryMaxDelay``.
 
 Step 8 — ``prted.c`` branch and ``prte`` bootstrap removal
 ----------------------------------------------------------
@@ -461,8 +511,8 @@ but commented out.  Update it to:
 * collapse ``DVMControllerPort`` and ``PRTEDPort`` into the single
   ``#DVMPort=7817``;
 * add the new keys in the Bootstrap Options block —
-  ``#DVMNetworks=``, ``#DVMNetmask=``, ``#DVMIPVersion=4``, and
-  ``#KeepFQDNHostnames=false``.
+  ``#DVMNetworks=``, ``#DVMNetmask=``, ``#DVMIPVersion=4``,
+  ``#KeepFQDNHostnames=false``, and ``#DVMRetryMaxDelay=5``.
 
 **Configurator tool** — ``docs/_templates/configurator.html`` is the Sphinx
 template (editable source, *not* a generated artifact) rendered as the
@@ -476,9 +526,10 @@ a self-contained HTML form whose ``displayfile()`` JavaScript assembles a
   and the corresponding two ``get_field()`` lines in ``displayfile()`` with
   one.
 * Add inputs and ``displayfile()`` emission for ``DVMNetworks``,
-  ``DVMNetmask``, and ``DVMIPVersion`` (a ``4``/``6`` selector), plus a
-  ``KeepFQDNHostnames`` on/off switch (reusing the existing
-  ``onoffswitch`` pattern and ``get_checkbox_value()``).
+  ``DVMNetmask``, ``DVMIPVersion`` (a ``4``/``6`` selector), and
+  ``DVMRetryMaxDelay`` (default ``5``), plus a ``KeepFQDNHostnames`` on/off
+  switch (reusing the existing ``onoffswitch`` pattern and
+  ``get_checkbox_value()``).
 * Reconcile the standing note that reads *"Hostname values should not be
   specified as fully qualified domain names"* with the new
   ``KeepFQDNHostnames`` option: the note holds only when
@@ -530,6 +581,11 @@ Summary of files changed
      - Make ``set_addr()`` tolerate a missing/empty interface-mask field so a
        synthesized controller URI parses (Step 4) — pending the prototype in
        `Open risks`_.
+   * - ``src/rml/oob/oob_tcp.c``
+     - Register the new ``prte_retry_max_delay`` MCA parameter (Step 7).
+   * - ``src/rml/oob/oob_tcp_connection.c``
+     - Compute the reconnect delay as a capped exponential backoff when
+       ``retry_max_delay > retry_delay`` (Step 7).
    * - ``src/util/proc_info.c`` (or the tmpdir path)
      - Apply ``DVMTempDir`` / ``SessionTmpDir`` (Step 10).
    * - ``src/mca/schizo/prte/help-*.txt`` / ``help-prte-runtime.txt``
@@ -538,13 +594,15 @@ Summary of files changed
        without IPv6 (``bootstrap-ipv6-unavailable``).
    * - ``src/etc/prte.conf``
      - Collapse the two port keys to ``DVMPort``; add ``DVMNetworks``,
-       ``DVMNetmask``, ``DVMIPVersion``, ``KeepFQDNHostnames`` (Step 11).
+       ``DVMNetmask``, ``DVMIPVersion``, ``KeepFQDNHostnames``,
+       ``DVMRetryMaxDelay`` (Step 11).
    * - ``docs/_templates/configurator.html``
      - Same key changes in the form + ``displayfile()`` JS; reconcile the
        FQDN note with ``KeepFQDNHostnames`` (Step 11).
    * - ``docs/configuration.rst``
      - Documented the consolidated ``DVMPort`` and the new ``DVMNetworks`` /
-       ``DVMNetmask`` / ``DVMIPVersion`` keys (already updated).
+       ``DVMNetmask`` / ``DVMIPVersion`` / ``DVMRetryMaxDelay`` keys (already
+       updated).
 
 Open risks
 ----------
@@ -556,9 +614,12 @@ Open risks
   empty mask" change first and confirm it does not alter reachability
   filtering on the normal launched path.  This is the highest-risk item;
   everything else reuses proven wiring.
-* **Retry defaults (Step 7).**  Confirm that seeding never-give-up retry with
-  ``overwrite=false`` honors an operator override and does not perturb the
-  launched path (which sets these params via its own environment).
+* **Retry backoff (Step 7).**  Confirm the capped-backoff change is inert on
+  the launched path when ``retry_max_delay == 0`` (its default), that seeding
+  the bootstrap defaults with ``overwrite=false`` honors an operator override,
+  and that an infinite (``max_recon_attempts = -1``) retry against a
+  never-arriving controller backs off to the cap rather than busy-spinning or
+  overflowing the shift.
 * **Host matching consistency.**  Bootstrap's Step 2 matching and the
   runtime's later ``prte_check_host_is_local`` / ``prte_keep_fqdn_hostnames``
   matching must agree; a mismatch would let a daemon elect itself correctly
