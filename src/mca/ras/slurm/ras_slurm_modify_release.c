@@ -337,10 +337,6 @@ static int prte_ras_slurm_start_shrink(prte_pmix_server_req_t *req,
         return PRTE_ERR_BAD_PARAM;
     }
 
-    if (!prte_elastic_mode) {
-        return PRTE_ERR_NOT_SUPPORTED;
-    }
-
     ranks = (pmix_rank_t *) malloc(nranks * sizeof(pmix_rank_t));
     if (NULL == ranks) {
         return PRTE_ERR_OUT_OF_RESOURCE;
@@ -570,6 +566,12 @@ int prte_ras_slurm_serve_release_req(prte_pmix_server_req_t *req)
         pmix_output(0, "ras:slurm:modify: "
             "Jansson support is required but not enabled in this build");
         return PRTE_ERR_NOT_AVAILABLE;
+    }
+
+    if (!prte_elastic_mode) {
+        pmix_output(0, "ras:slurm:modify: release requests require elastic DVM mode. "
+                       "Set the prte_elastic_mode MCA parameter to 1.");
+        return PRTE_ERR_NOT_SUPPORTED;
     }
 
     int err = PRTE_SUCCESS;
