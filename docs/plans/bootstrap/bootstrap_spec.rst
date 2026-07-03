@@ -141,6 +141,24 @@ The keys that govern DVM formation are:
        are then interpreted as IPv6 values.  Selecting ``6`` requires a PRRTE
        built with IPv6 enabled, else the DVM fails to start with a clear
        diagnostic.
+   * - ``DVMRadix``
+     - no (default ``64``)
+     - The radix of the routing tree that connects the daemons.  Rather than
+       every daemon connecting directly to the controller, each daemon
+       connects to its parent in a radix tree of this width, spreading the
+       connection and relay load across the DVM.  The value ties to the
+       ``rml_base_radix`` MCA parameter and must be identical on every node,
+       so it is set once here.
+   * - ``DVMConnectMaxTime``
+     - no (default ``30``)
+     - The maximum time, in seconds, a daemon keeps trying to reach its
+       assigned parent in the routing tree before it heals up to the next
+       ancestor.  Because daemons boot independently, a daemon's parent may
+       not yet be running; after this interval the daemon promotes its
+       connection target to the parent's parent, and so on up the tree, until
+       it reaches the controller — which is retried indefinitely (see
+       ``DVMRetryMaxDelay``).  Setting it to ``0`` disables healing and retries
+       every parent forever.
    * - ``DVMRetryMaxDelay``
      - no (default ``5``)
      - The maximum delay, in seconds, between a daemon's attempts to connect
@@ -246,30 +264,43 @@ Wireup
 
 Because every daemon derives the full membership and ordering of the DVM
 from ``DVMNodes``, no daemon needs the nidmap distributed to it — each
-computes the same map locally.  From that shared map a daemon determines
-its parent in the DVM's routing tree and the contact information it needs
-to reach it:
+computes the same map locally.  From that shared map, and from the shared
+``DVMRadix``, every daemon computes the same routing tree and therefore knows
+which peer is its parent.  A daemon phones home to its **parent** in that
+tree — not directly to the controller — so the controller (and every interior
+daemon) serves at most ``DVMRadix`` children rather than the whole DVM:
 
-* The **controller's contact URI** is synthesized from the known facts:
-  the DVM namespace, rank 0, ``DVMControllerHost``, ``DVMPort``, and the
-  address family selected by ``DVMIPVersion`` (which fixes both the resolved
-  address and the URI's transport form — IPv4 or IPv6).  A non-controller
-  daemon builds this URI and uses it to phone home, exactly as a launched
-  daemon uses the ``PRTE_PROC_MY_HNP`` URI its launcher provided.
 * Each daemon's **own listening endpoint** is ``DVMPort``, the single
-  well-known port shared across the DVM so that any daemon can construct any
-  peer's contact URI from the peer's rank and node name without a discovery
-  exchange.
+  well-known port shared across the DVM.  Because the port is uniform and the
+  membership/ordering is derived locally, any daemon can synthesize any peer's
+  contact URI from the peer's rank and node name without a discovery exchange.
+* A daemon's **parent URI** is synthesized exactly this way from the known
+  facts: the DVM namespace, the parent's rank, the parent's host and
+  ``DVMPort``, and the address family selected by ``DVMIPVersion`` (which fixes
+  both the resolved address and the URI's transport form — IPv4 or IPv6).  The
+  daemon uses it to phone home, exactly as a launched daemon uses the parent
+  URI its launcher provided.  The controller's own URI is the same
+  synthesis at rank 0.
 
-Because the daemons boot asynchronously and independently, a non-controller
-daemon may become ready before the controller is listening — and the
-controller may arrive arbitrarily late.  A daemon that cannot yet reach the
-controller must therefore **retry indefinitely** rather than fail its
-bootstrap; it never gives up.  To avoid busy-spinning against a down
-controller, the retry uses an **exponential backoff**: frequent attempts at
-first, then progressively longer delays, up to a maximum of ``DVMRetryMaxDelay``
-seconds (default 5), after which it keeps retrying at that steady rate until
-the controller answers.
+Because the daemons boot asynchronously and independently, a daemon may become
+ready before its parent — or the controller — is listening, and any of them
+may arrive arbitrarily late.  Two mechanisms keep the tree assembling under
+these races:
+
+* **Retry the controller forever.**  A daemon that cannot yet reach the
+  controller never gives up.  To avoid busy-spinning, the retry uses an
+  **exponential backoff**: frequent attempts at first, then progressively
+  longer delays, up to a maximum of ``DVMRetryMaxDelay`` seconds (default 5),
+  after which it keeps retrying at that steady rate until the controller
+  answers.
+* **Heal past a missing parent.**  An interior parent may never appear (its
+  node failed to boot).  A daemon therefore bounds how long it will wait for a
+  given parent: after ``DVMConnectMaxTime`` seconds (default 30) it treats the
+  parent as unreachable and heals up to the next ancestor, reusing the same
+  ancestor-climb logic the DVM uses when a live parent is lost.  The climb
+  continues up the tree until it reaches the controller, which is always
+  retried forever, so a daemon eventually joins the DVM as long as the
+  controller is up.
 
 The DVM is fully formed once every daemon has reported in to the controller
 and the controller has confirmed the expected daemon count — ``N + 1`` when

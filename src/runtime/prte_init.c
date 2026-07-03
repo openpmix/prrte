@@ -277,6 +277,22 @@ int prte_init_minimum(void)
         return ret;
     }
 
+    /* A bootstrapping daemon must publish the DVM-wide MCA parameters it reads
+     * from prte.conf before those parameters are first registered below (an
+     * MCA variable evaluates its environment only on first registration).  The
+     * install directories - and thus the config-file path - are known by now,
+     * so this is the earliest correct point.  prte_bootstrap_setup is set from
+     * the argument vector in prted before prte_init_util was called. */
+    if (prte_bootstrap_setup) {
+        if (PRTE_SUCCESS != (ret = prte_ess_base_bootstrap_params())) {
+            if (PRTE_ERR_SILENT != ret) {
+                pmix_show_help("help-prte-runtime", "prte_init:startup:internal-failure", true,
+                               "prte bootstrap params", PRTE_ERROR_NAME(ret), ret);
+            }
+            return 1;
+        }
+    }
+
     /* Register all global MCA Params */
     if (PRTE_SUCCESS != (ret = prte_register_params())) {
         if (PRTE_ERR_SILENT != ret) {

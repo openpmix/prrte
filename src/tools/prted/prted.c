@@ -221,6 +221,22 @@ int main(int argc, char *argv[])
         return ret;
     }
 
+    /* A bootstrapping daemon must publish the DVM-wide MCA parameters (ports,
+     * address family, networks, radix, retry/heal timers, ...) BEFORE they are
+     * first registered - an MCA variable reads its environment only at that
+     * first registration, which happens inside prte_init_util.  We detect
+     * --bootstrap directly from the argument vector here, ahead of the CLI
+     * parse, and record it; prte_init_util runs the parameter-publishing phase
+     * itself once the install directories (and thus the config-file path) are
+     * known.  Identity resolution needs the hostname and is deferred to
+     * prte_ess_base_bootstrap() below. */
+    for (i = 0; NULL != pargv[i]; i++) {
+        if (0 == strcmp(pargv[i], "--" PRTE_CLI_BOOTSTRAP)) {
+            prte_bootstrap_setup = true;
+            break;
+        }
+    }
+
     /* init the tiny part of PRTE we initially use */
     prte_init_util(PRTE_PROC_DAEMON);
 
@@ -267,14 +283,11 @@ int main(int argc, char *argv[])
         return ret;
     }
 
-    /* check for bootstrap operation.  This must run before we register the
-     * global MCA params (below) and before prte_init, because it publishes
-     * its identity, ports, address family, networks, and retry settings into
-     * the environment for those registrations to pick up. */
-    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_BOOTSTRAP)) {
-        /* fill in our procID and other information from the configuration
-         * file, and learn whether we are the DVM controller */
-        prte_bootstrap_setup = true;
+    /* second bootstrap phase: now that init_util has established our hostname,
+     * resolve our identity within the DVM and learn whether we are the
+     * controller.  The parameter-publishing phase already ran ahead of
+     * prte_init_util (see above); prte_bootstrap_setup records that. */
+    if (prte_bootstrap_setup) {
         ret = prte_ess_base_bootstrap(&bootstrap_controller);
         if (PRTE_SUCCESS != ret) {
             return ret;
@@ -351,8 +364,14 @@ int main(int argc, char *argv[])
     PMIx_Setenv("PMIX_MCA_compress_base_silence_warning", "1", true, &environ);
 
     /* A bootstrapped daemon that discovered it is running on the controller
-     * host promotes itself to the HNP; every other daemon initializes as an
-     * ordinary daemon. */
+     * host promotes itself to the HNP.  prte_init_util() already ran (from the
+     * early parameter phase) and stamped our proc_type as DAEMON; because
+     * prte_init() will find prte_init_util already initialized and skip the
+     * proc_type assignment, we must upgrade proc_type to MASTER here so the ess
+     * framework selects the HNP module rather than the daemon module. */
+    if (bootstrap_controller) {
+        prte_process_info.proc_type = PRTE_PROC_MASTER;
+    }
     if (PRTE_SUCCESS != (ret = prte_init(&argc, &argv,
                                          bootstrap_controller ? PRTE_PROC_MASTER
                                                               : PRTE_PROC_DAEMON))) {

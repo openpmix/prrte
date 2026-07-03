@@ -127,6 +127,8 @@ int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
     cfg->cluster = strdup("cluster");
     cfg->port = 7817;
     cfg->ip_version = 4;
+    cfg->radix = 64;
+    cfg->connect_max_time = 30;
     cfg->retry_max_delay = 5;
 
     /* see if we can open a configuration file */
@@ -187,6 +189,12 @@ int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
 
         } else if (0 == strcmp(line, "DVMIPVersion")) {
             cfg->ip_version = (int) strtol(ptr, NULL, 10);
+
+        } else if (0 == strcmp(line, "DVMRadix")) {
+            cfg->radix = (int) strtol(ptr, NULL, 10);
+
+        } else if (0 == strcmp(line, "DVMConnectMaxTime")) {
+            cfg->connect_max_time = strtoul(ptr, NULL, 10);
 
         } else if (0 == strcmp(line, "DVMNodes")) {
             if (NULL != dvmnodes) {

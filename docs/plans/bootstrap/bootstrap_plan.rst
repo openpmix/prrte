@@ -131,6 +131,8 @@ Create ``src/util/prte_bootstrap.c`` / ``src/util/prte_bootstrap.h`` holding:
        char     *ctrlhost;         /* DVMControllerHost (required) */
        uint32_t  port;             /* DVMPort (default 7817) */
        int       ip_version;       /* DVMIPVersion: 4 (default) or 6 */
+       int       radix;            /* DVMRadix (default 64) */
+       uint32_t  connect_max_time; /* DVMConnectMaxTime seconds (default 30) */
        char    **nodes;            /* expanded DVMNodes (required) */
        bool      keep_fqdn;        /* KeepFQDNHostnames (default false) */
        char     *dvm_networks;     /* DVMNetworks (default NULL -> all) */
@@ -153,7 +155,8 @@ Move the file reader, ``regex_extract_nodes``, ``regex_parse_value_ranges``,
 ``regex_parse_value_range``, and ``read_file`` (all currently duplicated) into
 this file as the single implementation.  The keys the draft does not yet
 parse — ``KeepFQDNHostnames``, ``DVMNetworks``, ``DVMNetmask``,
-``DVMIPVersion``, ``DVMRetryMaxDelay``, and the log-state booleans — are added
+``DVMIPVersion``, ``DVMRadix``, ``DVMConnectMaxTime``, ``DVMRetryMaxDelay``,
+and the log-state booleans — are added
 to the parser here, and the split ``DVMControllerPort``/``PRTEDPort`` keys are
 collapsed to the single ``DVMPort``.  ``ess_base_bootstrap.c`` and
 ``ras_boot.c`` are reduced to callers of ``prte_bootstrap_parse()``.
@@ -427,6 +430,52 @@ steady 5-second poll and continue until the controller answers.
    ``retry_max_delay = 0`` the launched path keeps its exact current
    fixed-delay behavior.  Only bootstrap turns it on, via ``DVMRetryMaxDelay``.
 
+Step 7b — Radix wireup and ancestor healing
+-------------------------------------------
+
+Left to the retry loop alone, every daemon would phone home directly to the
+controller, and the controller would have to service one connection per node.
+Bootstrap instead wires each daemon into the **radix routing tree** at boot so
+a daemon connects to its parent and the controller serves at most
+``DVMRadix`` children.  Two knobs, both set from ``prte.conf`` before
+``prte_init``:
+
+* **Radix.**  ``ess_base_bootstrap.c`` publishes ``PRTE_MCA_rml_base_radix``
+  from ``cfg.radix`` (``overwrite=true`` — config trumps).  Because the radix
+  and the ``DVMNodes`` ordering are identical on every node, each daemon's
+  ``prte_rml_compute_routing_tree()`` derives the same tree and therefore the
+  same parent (lifeline).  The synthesized phone-home URI targets that parent's
+  rank/host/``DVMPort`` rather than always rank 0.
+* **Connect-max-time.**  A new ``prte_connect_max_time`` OOB parameter
+  (registered in ``oob_tcp.c``, default ``0`` = forever) is published from
+  ``cfg.connect_max_time``.  It bounds how long the connection state machine
+  will retry a **non-lifeline** peer before giving up.
+
+**Healing reuses the lost-connection climb.**  The DVM already climbs the
+ancestor tree when a *live* parent is lost: ``lost_connection`` (in
+``oob_tcp_component.c``) calls ``prte_rml_route_lost(rank)``, which for a
+non-HNP parent runs ``prte_rml_repair_routing_tree()`` — promoting the daemon
+to its grandparent and returning ``PRTE_SUCCESS`` (→ ``COMM_FAILED``), or
+returning ``PRTE_ERR_FATAL`` for the HNP (→ ``LIFELINE_LOST``, die).  The
+bootstrap startup race — a parent that never comes *up* — is the same problem
+one step earlier, so it reuses the same logic:
+
+* When a connection attempt to a non-lifeline peer exceeds
+  ``connect_max_time``, ``oob_tcp_connection.c`` gives up and activates
+  ``PRTE_PROC_STATE_FAILED_TO_CONNECT`` (it already does this on hard failure;
+  the change is the time bound).
+* ``failed_to_connect`` (in ``oob_tcp_component.c``) is made to mirror
+  ``lost_connection``: route the peer through ``prte_rml_route_lost(rank)`` so
+  a missing parent triggers the same grandparent promotion and the climb walks
+  up the tree.  Reaching the controller (rank 0) yields the HNP path, which is
+  retried forever rather than fatal — the daemon simply keeps trying the
+  controller per Step 7.
+
+The net effect: a daemon waits ``DVMConnectMaxTime`` for each successive
+ancestor and, in the worst case (only the controller ever boots), climbs to
+rank 0 and retries it forever.  RELM re-drives the rollup over the repaired
+tree, so no reported-in state is lost across a heal.
+
 Step 8 — ``prted.c`` branch and ``prte`` bootstrap removal
 ----------------------------------------------------------
 
@@ -511,8 +560,9 @@ but commented out.  Update it to:
 * collapse ``DVMControllerPort`` and ``PRTEDPort`` into the single
   ``#DVMPort=7817``;
 * add the new keys in the Bootstrap Options block —
-  ``#DVMNetworks=``, ``#DVMNetmask=``, ``#DVMIPVersion=4``,
-  ``#KeepFQDNHostnames=false``, and ``#DVMRetryMaxDelay=5``.
+  ``#DVMNetworks=``, ``#DVMNetmask=``, ``#DVMIPVersion=4``, ``#DVMRadix=64``,
+  ``#KeepFQDNHostnames=false``, ``#DVMRetryMaxDelay=5``, and
+  ``#DVMConnectMaxTime=30``.
 
 **Configurator tool** — ``docs/_templates/configurator.html`` is the Sphinx
 template (editable source, *not* a generated artifact) rendered as the
@@ -526,8 +576,9 @@ a self-contained HTML form whose ``displayfile()`` JavaScript assembles a
   and the corresponding two ``get_field()`` lines in ``displayfile()`` with
   one.
 * Add inputs and ``displayfile()`` emission for ``DVMNetworks``,
-  ``DVMNetmask``, ``DVMIPVersion`` (a ``4``/``6`` selector), and
-  ``DVMRetryMaxDelay`` (default ``5``), plus a ``KeepFQDNHostnames`` on/off
+  ``DVMNetmask``, ``DVMIPVersion`` (a ``4``/``6`` selector), ``DVMRadix``
+  (default ``64``), ``DVMRetryMaxDelay`` (default ``5``), and
+  ``DVMConnectMaxTime`` (default ``30``), plus a ``KeepFQDNHostnames`` on/off
   switch (reusing the existing ``onoffswitch`` pattern and
   ``get_checkbox_value()``).
 * Reconcile the standing note that reads *"Hostname values should not be

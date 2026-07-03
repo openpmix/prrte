@@ -104,8 +104,10 @@ function displayfile()
    get_field("DVMNetworks",document.config.dvm_networks) + "<br>" +
    get_field("DVMNetmask",document.config.dvm_netmask) + "<br>" +
    get_field("DVMIPVersion",document.config.dvm_ipversion) + "<br>" +
+   get_field("DVMRadix",document.config.dvm_radix) + "<br>" +
    "KeepFQDNHostnames=" + get_checkbox_value(document.config.keep_fqdn) + "<br>" +
    get_field("DVMRetryMaxDelay",document.config.dvm_retrymaxdelay) + "<br>" +
+   get_field("DVMConnectMaxTime",document.config.dvm_connectmaxtime) + "<br>" +
    "# <br>" +
    "# Operational Options<br>" +
    get_field("DVMTempDir",document.config.dvm_tmpdir) + "<br>" +
@@ -226,11 +228,28 @@ The IP address family for inter-node communication: 4 (IPv4, the default) or 6
 <BR>
 <BR>
 
+<b>DVMRadix</b>: <input type="text" name="dvm_radix" value="64">
+<BR>
+The radix of the routing tree that connects the daemons (default 64). Each
+daemon connects to its parent in this tree rather than directly to the
+controller, spreading the connection load across the DVM.
+<BR>
+<BR>
+
 <b>DVMRetryMaxDelay</b>: <input type="text" name="dvm_retrymaxdelay" value="5">
 <BR>
 The maximum delay, in seconds, between a daemon's attempts to connect to the
 controller during bootstrap. Retries back off exponentially up to this cap and
 then continue at that steady rate until the controller answers.
+<BR>
+<BR>
+
+<b>DVMConnectMaxTime</b>: <input type="text" name="dvm_connectmaxtime" value="30">
+<BR>
+The maximum time, in seconds, a daemon will keep trying to reach its parent in
+the routing tree before healing up to the next ancestor. The controller itself
+is retried indefinitely. Set to 0 to disable healing and retry every parent
+forever.
 <BR>
 <BR>
 

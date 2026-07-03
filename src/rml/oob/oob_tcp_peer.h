@@ -58,6 +58,10 @@ typedef struct {
     prte_oob_tcp_addr_t *active_addr;
     prte_oob_tcp_state_t state;
     int num_retries;
+    time_t first_attempt; /**< wall-clock time of the first connection attempt in the current
+                               retry sequence; 0 until the first retry is scheduled.  Used to
+                               bound how long we chase a non-lifeline peer before healing to an
+                               ancestor (see prte_oob_base.connect_max_time). */
     prte_event_t send_event; /**< registration with event thread for send events */
     bool send_ev_active;
     prte_event_t recv_event; /**< registration with event thread for recv events */
