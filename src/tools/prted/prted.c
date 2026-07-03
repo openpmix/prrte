@@ -173,6 +173,7 @@ int main(int argc, char *argv[])
     pmix_data_buffer_t data;
     pmix_topology_t ptopo;
     bool compressed;
+    bool bootstrap_controller = false;
 
     char *umask_str = getenv("PRTE_DAEMON_UMASK_VALUE");
     if (NULL != umask_str) {
@@ -266,6 +267,20 @@ int main(int argc, char *argv[])
         return ret;
     }
 
+    /* check for bootstrap operation.  This must run before we register the
+     * global MCA params (below) and before prte_init, because it publishes
+     * its identity, ports, address family, networks, and retry settings into
+     * the environment for those registrations to pick up. */
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_BOOTSTRAP)) {
+        /* fill in our procID and other information from the configuration
+         * file, and learn whether we are the DVM controller */
+        prte_bootstrap_setup = true;
+        ret = prte_ess_base_bootstrap(&bootstrap_controller);
+        if (PRTE_SUCCESS != ret) {
+            return ret;
+        }
+    }
+
     /* Register all global MCA Params */
     if (PRTE_SUCCESS != (ret = prte_register_params())) {
         if (PRTE_ERR_SILENT != ret) {
@@ -335,18 +350,12 @@ int main(int argc, char *argv[])
     /* ensure we silence any compression warnings */
     PMIx_Setenv("PMIX_MCA_compress_base_silence_warning", "1", true, &environ);
 
-    /* check for bootstrap operation */
-    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_BOOTSTRAP)) {
-        /* fill in our procID and other information
-         * from the configuration file */
-        prte_bootstrap_setup = true;
-        ret = prte_ess_base_bootstrap();
-        if (PRTE_SUCCESS != ret) {
-            return ret;
-        }
-    }
-
-    if (PRTE_SUCCESS != (ret = prte_init(&argc, &argv, PRTE_PROC_DAEMON))) {
+    /* A bootstrapped daemon that discovered it is running on the controller
+     * host promotes itself to the HNP; every other daemon initializes as an
+     * ordinary daemon. */
+    if (PRTE_SUCCESS != (ret = prte_init(&argc, &argv,
+                                         bootstrap_controller ? PRTE_PROC_MASTER
+                                                              : PRTE_PROC_DAEMON))) {
         PRTE_ERROR_LOG(ret);
         return ret;
     }

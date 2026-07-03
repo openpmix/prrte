@@ -541,6 +541,13 @@ int prte_oob_register(void)
                                         "Max number of times to attempt connection before giving up (-1 -> never give up)",
                                         PMIX_MCA_BASE_VAR_TYPE_INT,
                                         &prte_oob_base.max_recon_attempts);
+
+    prte_oob_base.retry_max_delay = 0;
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "retry_max_delay",
+                                        "Maximum delay (in sec) between connection retries. When larger than retry_delay, the delay backs off exponentially up to this cap; 0 keeps the delay fixed at retry_delay",
+                                        PMIX_MCA_BASE_VAR_TYPE_INT,
+                                        &prte_oob_base.retry_max_delay);
+
     prte_oob_base.max_msg_size = 100;
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "max_msg_size",
                                         "Max size of an OOB message in Megabytes(default = 100)",

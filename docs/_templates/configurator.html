@@ -99,9 +99,13 @@ function displayfile()
    "# Bootstrap Options<br>" +
    get_field("ClusterName",document.config.cluster_name) + "<br>" +
    get_field("DVMControllerHost",document.config.controller_host) + "<br>" +
-   get_field("DVMControllerPort",document.config.controller_port) + "<br>" +
-   get_field("PRTEDPort",document.config.prted_port) + "<br>" +
+   get_field("DVMPort",document.config.dvm_port) + "<br>" +
    get_field("DVMNodes",document.config.dvm_nodes) + "<br>" +
+   get_field("DVMNetworks",document.config.dvm_networks) + "<br>" +
+   get_field("DVMNetmask",document.config.dvm_netmask) + "<br>" +
+   get_field("DVMIPVersion",document.config.dvm_ipversion) + "<br>" +
+   "KeepFQDNHostnames=" + get_checkbox_value(document.config.keep_fqdn) + "<br>" +
+   get_field("DVMRetryMaxDelay",document.config.dvm_retrymaxdelay) + "<br>" +
    "# <br>" +
    "# Operational Options<br>" +
    get_field("DVMTempDir",document.config.dvm_tmpdir) + "<br>" +
@@ -147,8 +151,9 @@ systems are not mounted.</P>
 <I>prte.conf</I> file. It will appear on your web browser. Save the file
 in text format as <I>prte.conf</I> for use by the DVM.
 
-<P><B>NOTE:</B> Hostname values should not be specified as fully qualified domain
-names (e.g. use <I>foo</I> rather than <I>foo.bar.com</I>).
+<P><B>NOTE:</B> Unless <I>KeepFQDNHostnames</I> is enabled, hostname values should
+be specified in short form (e.g. use <I>foo</I> rather than <I>foo.bar.com</I>).
+If <I>KeepFQDNHostnames</I> is enabled, specify fully qualified names consistently.
 </P>
 
 <P><B>NOTE:</B> This configuration file must be installed as <I>prte.conf</I> in the
@@ -179,19 +184,11 @@ and will initialize itself accordingly.
 <BR>
 <BR>
 
-<b>DVMControllerPort</b>: <input type="text" name="controller_port" value="7817">
+<b>DVMPort</b>: <input type="text" name="dvm_port" value="7817">
 <BR>
-The TCP port upon which the
-DVM controller will be listening for connections from its <I>prted</I> daemons
-on the remaining system nodes.
-<BR>
-<BR>
-
-<b>PRTEDPort</b>: <input type="text" name="prted_port" value="7818">
-<BR>
-The TCP port upon which each
-<I>prted</I> daemon will be listening for connections from its peer daemons
-on the other system nodes.
+The single well-known TCP port upon which every DVM process listens for its
+peers - the controller for connections from its <I>prted</I> daemons, and each
+<I>prted</I> for connections from its peer daemons.
 <BR>
 <BR>
 
@@ -202,6 +199,53 @@ identifying the nodes that upon which user applications can run. IP addresses ca
 be provided in place of hostnames if desired.The regular expression can consist of
 a simple comma-delimited list of hostnames, or a comma-delimited list of hostname
 ranges (e.g., "linux0,linux[2-10]"), or a PMIx "native" regular expression.
+<BR>
+<BR>
+
+<b>DVMNetworks</b>: <input type="text" name="dvm_networks" value="">
+<BR>
+An optional comma-delimited list of networks or interfaces the runtime should
+use for inter-node (daemon-to-daemon) communication. Entries may be interface
+names or CIDR subnets (e.g., "eth0,10.0.0.0/8"). When empty, all available
+interfaces are considered.
+<BR>
+<BR>
+
+<b>DVMNetmask</b>: <input type="text" name="dvm_netmask" value="">
+<BR>
+The optional interface netmask associated with the inter-node network, used
+when constructing the contact information the DVM daemons exchange. The value
+follows the selected address family.
+<BR>
+<BR>
+
+<b>DVMIPVersion</b>: <input type="text" name="dvm_ipversion" value="4">
+<BR>
+The IP address family for inter-node communication: 4 (IPv4, the default) or 6
+(IPv6-only). IPv6 requires that PRRTE was built with IPv6 support.
+<BR>
+<BR>
+
+<b>DVMRetryMaxDelay</b>: <input type="text" name="dvm_retrymaxdelay" value="5">
+<BR>
+The maximum delay, in seconds, between a daemon's attempts to connect to the
+controller during bootstrap. Retries back off exponentially up to this cap and
+then continue at that steady rate until the controller answers.
+<BR>
+<BR>
+
+<b>KeepFQDNHostnames</b>:
+<div class="onoffswitch">
+<input type="checkbox" name="keep_fqdn" class="onoffswitch-checkbox" id="KeepFQDNHostnames">
+<label class="onoffswitch-label" for="KeepFQDNHostnames">
+    <span class="onoffswitch-inner"></span>
+    <span class="onoffswitch-switch"></span>
+</label>
+</div>
+Whether host names are matched and stored fully qualified. When OFF (the
+default), names are compared in short form; when ON, fully qualified names are
+compared as-is. This must agree with how the DVMControllerHost and DVMNodes
+entries are written.
 <BR>
 <BR>
 

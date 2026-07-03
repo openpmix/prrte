@@ -80,8 +80,10 @@ PRTE_EXPORT int prte_ess_base_proc_binding(void);
  */
 PRTE_EXPORT int prte_ess_env_put(int32_t num_procs, int32_t num_local_procs, char ***env);
 
-/* read a bootstrap configuration file */
-PRTE_EXPORT int prte_ess_base_bootstrap(void);
+/* read a bootstrap configuration file and publish the local daemon's
+ * identity/role into the environment; sets *is_controller true iff this node
+ * is the DVM controller */
+PRTE_EXPORT int prte_ess_base_bootstrap(bool *is_controller);
 
 typedef struct {
     pmix_list_item_t super;

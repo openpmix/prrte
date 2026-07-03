@@ -377,12 +377,15 @@ static void set_addr(pmix_proc_t *peer, char **uris)
 
         /* cycle across the provided addrs */
         for (j = 0; NULL != addrs[j]; j++) {
-            if (NULL == masks[j]) {
-                /* Missing mask information */
-                pmix_output_verbose(2, prte_oob_base.output,
-                                    "%s oob:tcp: uri missing mask information.",
-                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-                return;
+            int if_mask;
+            /* A mask may be absent - e.g., from a contact URI synthesized by
+             * the bootstrap path, which cannot know the peer's interface mask.
+             * Treat a missing/empty mask as a /0, i.e. universally reachable,
+             * rather than rejecting the address. */
+            if (NULL == masks || NULL == masks[j] || '\0' == masks[j][0]) {
+                if_mask = 0;
+            } else {
+                if_mask = atoi(masks[j]);
             }
             /* if they gave us "localhost", then just take the first conn on our list */
             if (0 == strcasecmp(addrs[j], "localhost")) {
@@ -427,7 +430,7 @@ static void set_addr(pmix_proc_t *peer, char **uris)
                 PMIX_RELEASE(pr);
                 return;
             }
-            maddr->if_mask = atoi(masks[j]);
+            maddr->if_mask = if_mask;
 
             pmix_output_verbose(20, prte_oob_base.output,
                                 "%s set_peer: peer %s is listening on net %s port %s",
