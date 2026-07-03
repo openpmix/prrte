@@ -1062,21 +1062,48 @@ void prte_ras_base_check_reservations_on_term(prte_job_t *jdata)
     }
 }
 
-void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
+static pmix_status_t ras_base_parse_node_list(pmix_info_t *info, char **ndstring)
 {
-    prte_job_t *daemons;
     pmix_status_t rc;
-    pmix_data_buffer_t msg;
-    prte_daemon_cmd_flag_t cmd = PRTE_DAEMON_SHRINK_CMD;
+    char **nodes = NULL;
+
+    *ndstring = NULL;
+    if (PMIX_STRING == info->value.type ||
+        PMIX_REGEX == info->value.type) {
+        rc = pmix_preg.parse_nodes(info->value.data.string, &nodes);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return rc;
+        }
+        *ndstring = PMIx_Argv_join(nodes, ',');
+        PMIx_Argv_free(nodes);
+        if (NULL == *ndstring) {
+            return PMIX_ERR_NOMEM;
+        }
+        return PMIX_SUCCESS;
+    }
+
+#if PRTE_PMIX_HAVE_REGEX2
+    if (PMIX_REGEX2 == info->value.type) {
+        /* this is a regex value identifying the nodes that were allocated by
+         * the scheduler (may match what we requested) */
+        rc = PMIx_parse_regex2(info->value.data.regex2, NULL, 0, ndstring);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
+        return rc;
+    }
+#endif
+
+    /* we only support those options */
+    PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+    return PMIX_ERR_BAD_PARAM;
+}
+
+static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
+                                           prte_session_t **dest_out)
+{
     size_t n;
-    char **nodes, *ndstring;
-    char **rsv_names = NULL;
-    int32_t cnt=0, m;
-    int ret;
-    prte_node_t *node;
-    pmix_rank_t *ranks;
-    pmix_list_t ndlist;
-    bool found;
     char *target = NULL;        /* PMIX_ALLOC_TARGET namespace, if any */
     bool share = false;         /* default: reserve (do not share) */
     bool have_share = false;
@@ -1089,380 +1116,522 @@ void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
     prte_job_t *reqjob;
     bool is_tool;
 
-    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-    if (PMIX_ALLOC_EXTEND == req->allocdir ||
-        PMIX_ALLOC_NEW == req->allocdir) {
-        /* scan the request for the reservation-routing directives so we can
-         * resolve which session the new nodes will join before inserting
-         * them. The PMIX_ALLOC_NODE_LIST entries are handled in the loop
-         * below; PMIX_ALLOC_WARN_TIMEOUT is intentionally left in req->info
-         * to be forwarded verbatim to the scheduler. */
-        for (n=0; n < req->ninfo; n++) {
+    /* scan the request for the reservation-routing directives so we can
+     * resolve which session the new nodes will join before inserting
+     * them. The PMIX_ALLOC_NODE_LIST entries are handled in the loop
+     * below; PMIX_ALLOC_WARN_TIMEOUT is intentionally left in req->info
+     * to be forwarded verbatim to the scheduler. */
+    for (n = 0; n < req->ninfo; n++) {
 #if defined(PMIX_ALLOC_TARGET)
-            if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_TARGET)) {
-                target = req->info[n].value.data.string;
-                continue;
-            }
+        if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_TARGET)) {
+            target = req->info[n].value.data.string;
+            continue;
+        }
 #endif
 #if defined(PMIX_ALLOC_SHARE)
-            if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_SHARE)) {
-                share = PMIX_INFO_TRUE(&req->info[n]);
-                have_share = true;
-                continue;
-            }
+        if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_SHARE)) {
+            share = PMIX_INFO_TRUE(&req->info[n]);
+            have_share = true;
+            continue;
+        }
 #endif
 #if defined(PMIX_ALLOC_INHERITANCE)
-            if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_INHERITANCE)) {
-                inherit = req->info[n].value.data.uint8;
-                have_inherit = true;
-                continue;
-            }
-#endif
-            if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
-                alloc_id = req->info[n].value.data.string;
-                continue;
-            }
-            if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_REQ_ID)) {
-                req_id = req->info[n].value.data.string;
-                continue;
-            }
+        if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_INHERITANCE)) {
+            inherit = req->info[n].value.data.uint8;
+            have_inherit = true;
+            continue;
         }
-        (void) have_share;
+#endif
+        if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
+            alloc_id = req->info[n].value.data.string;
+            continue;
+        }
+        if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_REQ_ID)) {
+            req_id = req->info[n].value.data.string;
+        }
+    }
+    (void) have_share;
 
-        /* an inheritance value this build cannot honor is rejected rather than
-         * silently dropped (it may have arrived over the wire from a newer
-         * peer) */
 #if !defined(PMIX_ALLOC_INHERITANCE)
-        if (have_inherit && PRTE_INHERIT_DEFAULT_VALUE != inherit) {
-            req->pstatus = PMIX_ERR_NOT_SUPPORTED;
-            return;
-        }
+    /* an inheritance value this build cannot honor is rejected rather than
+     * silently dropped (it may have arrived over the wire from a newer
+     * peer) */
+    if (have_inherit && PRTE_INHERIT_DEFAULT_VALUE != inherit) {
+        return PMIX_ERR_NOT_SUPPORTED;
+    }
 #endif
 
-        reqjob = prte_get_job_data_object(req->tproc.nspace);
-        is_tool = (NULL == reqjob) || PRTE_FLAG_TEST(reqjob, PRTE_JOB_FLAG_TOOL);
-        /* the namespace the reservation is created for / must be owned by */
-        owner_nspace = (NULL != target) ? target : req->tproc.nspace;
+    reqjob = prte_get_job_data_object(req->tproc.nspace);
+    is_tool = (NULL == reqjob) || PRTE_FLAG_TEST(reqjob, PRTE_JOB_FLAG_TOOL);
+    /* the namespace the reservation is created for / must be owned by */
+    owner_nspace = (NULL != target) ? target : req->tproc.nspace;
 
-        if (have_share && share) {
-            dest = prte_default_session;            /* general use */
-        } else if (NULL != target && !is_tool) {
-            req->pstatus = PMIX_ERR_NO_PERMISSIONS; /* app may not retarget */
-            return;
-        } else if (PMIX_ALLOC_EXTEND == req->allocdir) {
-            /* extend an existing reservation named by either identifier */
-            if (NULL == alloc_id && NULL == req_id) {
-                req->pstatus = PMIX_ERR_BAD_PARAM;  /* nothing names the target */
-                return;
-            }
-            dest = (NULL != alloc_id) ? prte_get_session_object_from_id(alloc_id)
-                                      : NULL;
-            if (NULL == dest && NULL != req_id) {
-                dest = prte_get_session_object_from_refid(req_id);
-            }
-            if (NULL == dest ||
-                !prte_session_is_owned_by(dest, req->tproc.nspace)) {
-                req->pstatus = (NULL == dest) ? PMIX_ERR_NOT_FOUND
-                                              : PMIX_ERR_NO_PERMISSIONS;
-                return;
-            }
-            /* a new inheritance value on EXTEND updates the disposition */
-            if (have_inherit) {
-                dest->inheritance = inherit;
-            }
-            /* refresh the requestor so a timeout warning follows the most
-             * recent requester */
-            PMIX_XFER_PROCID(&dest->requestor, &req->tproc);
-        } else {                                    /* PMIX_ALLOC_NEW */
-            dest = create_reservation(owner_nspace, inherit, &req->tproc,
-                                      alloc_id, req_id);
-            if (NULL == dest) {
-                req->pstatus = PMIX_ERR_OUT_OF_RESOURCE;
-                return;
-            }
+    if (have_share && share) {
+        dest = prte_default_session;            /* general use */
+    } else if (NULL != target && !is_tool) {
+        return PMIX_ERR_NO_PERMISSIONS;         /* app may not retarget */
+    } else if (PMIX_ALLOC_EXTEND == req->allocdir) {
+        /* extend an existing reservation named by either identifier */
+        if (NULL == alloc_id && NULL == req_id) {
+            return PMIX_ERR_BAD_PARAM;          /* nothing names the target */
         }
-
-        found = false;
-        for (n=0; n < req->ninfo; n++) {
-            if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_NODE_LIST)) {
-                if (PMIX_STRING == req->info[n].value.type ||
-                    PMIX_REGEX == req->info[n].value.type) {
-                    rc = pmix_preg.parse_nodes(req->info[n].value.data.string, &nodes);
-                    if (PMIX_SUCCESS != rc) {
-                        PMIX_ERROR_LOG(rc);
-                        req->pstatus = rc;
-                        return;
-                    }
-                    ndstring = PMIx_Argv_join(nodes, ',');
-                    PMIx_Argv_free(nodes);
-
-#if PRTE_PMIX_HAVE_REGEX2
-                } else if (PMIX_REGEX2 == req->info[n].value.type) {
-                    // this is a regex value identifying the nodes that were
-                    // allocated by the scheduler (may match what we requested)
-                    rc = PMIx_parse_regex2(req->info[n].value.data.regex2, NULL, 0, &ndstring);
-                    if (PMIX_SUCCESS != rc) {
-                        PMIX_ERROR_LOG(rc);
-                        req->pstatus = rc;
-                        return;
-                    }
-#endif
-
-                } else {
-                    // we only support those options
-                    PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
-                    req->pstatus = PMIX_ERR_BAD_PARAM;
-                    return;
-                }
-                // add these nodes to our node pool
-                PMIX_CONSTRUCT(&ndlist, pmix_list_t);
-                ret = prte_util_add_dash_host_nodes(&ndlist, ndstring, true);
-                if (PRTE_SUCCESS != ret) {
-                    PRTE_ERROR_LOG(ret);
-                    req->pstatus = prte_pmix_convert_rc(ret);
-                    free(ndstring);
-                    PMIX_LIST_DESTRUCT(&ndlist);
-                    return;
-                }
-                free(ndstring);
-                /* prte_ras_base_node_insert() drains ndlist into the global
-                 * pool, so snapshot the node names first: add_nodes_to_session()
-                 * below needs them to re-find the pool objects and set their
-                 * session backpointer (which carries the requestor for the
-                 * phase-two completion event). */
-                {
-                    prte_node_t *snap;
-                    PMIX_LIST_FOREACH(snap, &ndlist, prte_node_t) {
-                        PMIx_Argv_append_nosize(&rsv_names, snap->name);
-                    }
-                }
-                ret = prte_ras_base_node_insert(&ndlist, NULL);
-                if (PRTE_SUCCESS != ret) {
-                    PRTE_ERROR_LOG(ret);
-                    PMIX_LIST_DESTRUCT(&ndlist);
-                    PMIx_Argv_free(rsv_names);
-                    req->pstatus = prte_pmix_convert_rc(ret);
-                    return;
-                }
-                /* when reserving, withhold these nodes from the default pool by
-                 * registering them with the destination session */
-                add_nodes_to_session(rsv_names, dest);
-                PMIx_Argv_free(rsv_names);
-                rsv_names = NULL;
-                PMIX_LIST_DESTRUCT(&ndlist);
-                found = true;
-            }
+        dest = (NULL != alloc_id) ? prte_get_session_object_from_id(alloc_id)
+                                  : NULL;
+        if (NULL == dest && NULL != req_id) {
+            dest = prte_get_session_object_from_refid(req_id);
         }
-        if (found) {
-            // mark that we need to extend the DVM
-            prte_set_attribute(&daemons->attributes, PRTE_JOB_EXTEND_DVM, PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
-            /* mark that an updated nidmap must be communicated to existing daemons */
-            prte_nidmap_communicated = false;
-            PRTE_ACTIVATE_JOB_STATE(daemons, PRTE_JOB_STATE_LAUNCH_DAEMONS);
+        if (NULL == dest ||
+            !prte_session_is_owned_by(dest, req->tproc.nspace)) {
+            return (NULL == dest) ? PMIX_ERR_NOT_FOUND : PMIX_ERR_NO_PERMISSIONS;
         }
-
-        /* report the destination allocation id back to the requester so it can
-         * later target, extend, or release the reservation. The default
-         * (shared) session carries no allocation id, so nothing is reported. */
-        if (NULL != dest && dest != prte_default_session &&
-            NULL != dest->alloc_refid) {
-            pmix_info_t *rinfo;
-            size_t rn = (NULL != dest->user_refid) ? 2 : 1;
-
-            PMIX_INFO_CREATE(rinfo, rn);
-            PMIX_INFO_LOAD(&rinfo[0], PMIX_ALLOC_ID, dest->alloc_refid, PMIX_STRING);
-            if (2 == rn) {
-                PMIX_INFO_LOAD(&rinfo[1], PMIX_ALLOC_REQ_ID, dest->user_refid, PMIX_STRING);
-            }
-            /* the original req->info is borrowed from the PMIx caller; repoint
-             * to our response array and let the req destructor free it */
-            req->info = rinfo;
-            req->ninfo = rn;
-            req->copy = true;
+        /* a new inheritance value on EXTEND updates the disposition */
+        if (have_inherit) {
+            dest->inheritance = inherit;
         }
-
-    } else if (PMIX_ALLOC_RELEASE == req->allocdir) {
-
-        /* a release naming an allocation id tears down that whole reservation:
-         * any owner may release it, the scheduler may release any. The nodes
-         * are returned to the scheduler (the legacy disposition for an explicit
-         * release). */
-        char *rel_alloc_id = NULL;
-        for (n=0; n < req->ninfo; n++) {
-            if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
-                rel_alloc_id = req->info[n].value.data.string;
-                break;
-            }
+        /* refresh the requestor so a timeout warning follows the most
+         * recent requester */
+        PMIX_XFER_PROCID(&dest->requestor, &req->tproc);
+    } else {                                    /* PMIX_ALLOC_NEW */
+        dest = create_reservation(owner_nspace, inherit, &req->tproc,
+                                  alloc_id, req_id);
+        if (NULL == dest) {
+            return PMIX_ERR_OUT_OF_RESOURCE;
         }
-        if (NULL != rel_alloc_id) {
-            prte_session_t *rsession = prte_get_session_object_from_id(rel_alloc_id);
-            if (NULL == rsession || rsession == prte_default_session) {
-                req->pstatus = PMIX_ERR_NOT_FOUND;
-                return;
-            }
-            if (!prte_session_is_owned_by(rsession, req->tproc.nspace)) {
-                req->pstatus = PMIX_ERR_NO_PERMISSIONS;
-                return;
-            }
-            prte_ras_base_teardown_reservation(rsession, true);
-            req->pstatus = PMIX_SUCCESS;
-            return;
-        }
-
-        // create the request
-        PMIX_DATA_BUFFER_CONSTRUCT(&msg);
-        /* pack the command */
-        rc = PMIx_Data_pack(NULL, &msg, &cmd, 1, PMIX_UINT8);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_DESTRUCT(&msg);
-            req->pstatus = rc;
-            return;
-        }
-        // pack the daemon ranks to be removed from DVM
-        for (n=0; n < req->ninfo; n++) {
-            if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_NODE_LIST)) {
-                if (PMIX_STRING == req->info[n].value.type ||
-                    PMIX_REGEX == req->info[n].value.type) {
-                    rc = pmix_preg.parse_nodes(req->info[n].value.data.string, &nodes);
-                    if (PMIX_SUCCESS != rc) {
-                        PMIX_ERROR_LOG(rc);
-                        req->pstatus = rc;
-                        return;
-                    }
-                    ndstring = PMIx_Argv_join(nodes, ',');
-                    PMIx_Argv_free(nodes);
-
-#if PRTE_PMIX_HAVE_REGEX2
-                } else if (PMIX_REGEX2 == req->info[n].value.type) {
-                    // this is a regex value identifying the nodes that were
-                    // allocated by the scheduler (may match what we requested)
-                    rc = PMIx_parse_regex2(req->info[n].value.data.regex2, NULL, 0, &ndstring);
-                    if (PMIX_SUCCESS != rc) {
-                        PMIX_ERROR_LOG(rc);
-                        req->pstatus = prte_pmix_convert_rc(rc);
-                        return;
-                    }
-#endif
-
-                } else {
-                    // we only support those two options
-                    PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
-                    req->pstatus = PMIX_ERR_BAD_PARAM;
-                    return;
-                }
-                nodes = PMIx_Argv_split(ndstring, ',');
-                free(ndstring);
-                cnt = PMIx_Argv_count(nodes);
-                break;
-            }
-        }
-        if (0 == cnt) {
-            PMIX_ERROR_LOG(PMIX_ERR_NOT_FOUND);
-            PMIX_DATA_BUFFER_DESTRUCT(&msg);
-            req->pstatus = PMIX_ERR_NOT_FOUND;
-            return;
-        }
-        // setup the array of ranks
-        ranks = (pmix_rank_t*)malloc(cnt * sizeof(pmix_rank_t));
-        m = 0;
-        for (n=0; NULL != nodes[n]; n++) {
-            // find this node in our global resource pool
-            node = prte_node_match(NULL, nodes[n]);
-            if (NULL == node) {
-                PMIX_ERROR_LOG(PMIX_ERR_NOT_FOUND);
-                PMIX_DATA_BUFFER_DESTRUCT(&msg);
-                PMIx_Argv_free(nodes);
-                free(ranks);
-                req->pstatus = PMIX_ERR_NOT_FOUND;
-                return;
-            }
-            if (NULL == node->daemon) {
-                // node doesn't have a daemon yet
-                continue;
-            }
-            ranks[m] = node->daemon->name.rank;
-            ++m;
-        }
-        PMIx_Argv_free(nodes);
-        rc = PMIx_Data_pack(NULL, &msg, &m, 1, PMIX_INT32);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_DESTRUCT(&msg);
-            free(ranks);
-            req->pstatus = rc;
-            return;
-        }
-        rc = PMIx_Data_pack(NULL, &msg, ranks, m, PMIX_PROC_RANK);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_DESTRUCT(&msg);
-            free(ranks);
-            req->pstatus = rc;
-            return;
-        }
-        /* Record the shrink campaign before freeing the ranks array.  Only in
-         * elastic mode: outside it the DVM is fixed-size, so the release still
-         * xcasts the shrink command below but no campaign is recorded and the
-         * fence is never raised — the legacy fire-and-forget behavior.  Also
-         * skip when the release removes no daemons (m == 0): an empty campaign
-         * would never drain (no target ever departs on the comm-failure path),
-         * so prte_shrink_campaigns would stay non-empty forever and stall every
-         * later job at the LAUNCH_APPS hold, and no completion event would fire.
-         * This mirrors the grow path's num_new_daemons > 0 guard and the spec's
-         * "no event when nothing changes" clause. */
-        prte_shrink_campaign_t *camp = NULL;
-        if (prte_elastic_mode && 0 < m) {
-            camp = PMIX_NEW(prte_shrink_campaign_t);
-            camp->targets = (pmix_rank_t *) malloc(m * sizeof(pmix_rank_t));
-            memcpy(camp->targets, ranks, m * sizeof(pmix_rank_t));
-            camp->ntargets = m;
-            camp->pending  = m;
-            /* record the requester so the phase-two completion event can be
-             * directed at the process that issued this PMIX_ALLOC_RELEASE */
-            PMIX_XFER_PROCID(&camp->requester, &req->tproc);
-            for (n = 0; n < req->ninfo; n++) {
-                if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
-                    camp->alloc_id = strdup(req->info[n].value.data.string);
-                } else if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_REQ_ID)) {
-                    camp->req_id = strdup(req->info[n].value.data.string);
-                }
-            }
-            camp->have_requester = true;
-            pmix_list_append(&prte_shrink_campaigns, &camp->super);
-            prte_dvm_launch_fence += m;
-        }
-        free(ranks);
-
-        /* goes to all daemons.  When a campaign was recorded, request a
-         * completion callback so the collective shrink-completion handler runs
-         * exactly once — when the whole DVM has received the command — driving a
-         * single routing-tree repair and one completion event, rather than
-         * discovering the departures one daemon at a time. */
-        if (NULL != camp) {
-            rc = prte_grpcomm.xcast_nb(PRTE_RML_TAG_DAEMON, &msg,
-                                       shrink_xcast_complete, camp);
-        } else {
-            rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &msg);
-        }
-        if (PRTE_SUCCESS != rc) {
-            PRTE_ERROR_LOG(rc);
-            /* undo the campaign we just added (only if one was created), and
-             * tell the requester the DVM modification failed */
-            if (NULL != camp) {
-                pmix_list_remove_item(&prte_shrink_campaigns, &camp->super);
-                prte_dvm_launch_fence -= camp->pending;
-                if (camp->have_requester) {
-                    prte_plm_base_dvm_mod_notify(&camp->requester, camp->alloc_id,
-                                                 camp->req_id, false,
-                                                 prte_pmix_convert_rc(rc));
-                }
-                PMIX_RELEASE(camp);
-            }
-        }
-        PMIX_DATA_BUFFER_DESTRUCT(&msg);
     }
 
+    *dest_out = dest;
+    return PMIX_SUCCESS;
+}
+
+static int ras_base_insert_node_string(char *ndstring, prte_session_t *dest)
+{
+    pmix_list_t ndlist;
+    prte_node_t *snap;
+    char **rsv_names = NULL;
+    int ret;
+
+    /* add these nodes to our node pool */
+    PMIX_CONSTRUCT(&ndlist, pmix_list_t);
+    ret = prte_util_add_dash_host_nodes(&ndlist, ndstring, true);
+    if (PRTE_SUCCESS != ret) {
+        PRTE_ERROR_LOG(ret);
+        PMIX_LIST_DESTRUCT(&ndlist);
+        return ret;
+    }
+
+    /* prte_ras_base_node_insert() drains ndlist into the global
+     * pool, so snapshot the node names first: add_nodes_to_session()
+     * below needs them to re-find the pool objects and set their
+     * session backpointer (which carries the requestor for the
+     * phase-two completion event). */
+    PMIX_LIST_FOREACH(snap, &ndlist, prte_node_t) {
+        PMIx_Argv_append_nosize(&rsv_names, snap->name);
+    }
+
+    ret = prte_ras_base_node_insert(&ndlist, NULL);
+    if (PRTE_SUCCESS != ret) {
+        PRTE_ERROR_LOG(ret);
+        PMIX_LIST_DESTRUCT(&ndlist);
+        PMIx_Argv_free(rsv_names);
+        return ret;
+    }
+
+    /* when reserving, withhold these nodes from the default pool by
+     * registering them with the destination session */
+    add_nodes_to_session(rsv_names, dest);
+    PMIx_Argv_free(rsv_names);
+    PMIX_LIST_DESTRUCT(&ndlist);
+    return PRTE_SUCCESS;
+}
+
+void prte_ras_base_activate_dvm_grow(void)
+{
+    prte_job_t *daemons;
+
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    /* mark that we need to extend the DVM */
+    prte_set_attribute(&daemons->attributes, PRTE_JOB_EXTEND_DVM,
+                       PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+    /* mark that an updated nidmap must be communicated to existing daemons */
+    prte_nidmap_communicated = false;
+    PRTE_ACTIVATE_JOB_STATE(daemons, PRTE_JOB_STATE_LAUNCH_DAEMONS);
+}
+
+static void ras_base_set_alloc_response(prte_pmix_server_req_t *req,
+                                        prte_session_t *dest)
+{
+    pmix_info_t *rinfo;
+    size_t rn;
+
+    if (NULL == dest || dest == prte_default_session ||
+        NULL == dest->alloc_refid) {
+        return;
+    }
+
+    /* report the destination allocation id back to the requester so it can
+     * later target, extend, or release the reservation. The default
+     * (shared) session carries no allocation id, so nothing is reported. */
+    rn = (NULL != dest->user_refid) ? 2 : 1;
+    PMIX_INFO_CREATE(rinfo, rn);
+    PMIX_INFO_LOAD(&rinfo[0], PMIX_ALLOC_ID, dest->alloc_refid, PMIX_STRING);
+    if (2 == rn) {
+        PMIX_INFO_LOAD(&rinfo[1], PMIX_ALLOC_REQ_ID, dest->user_refid,
+                       PMIX_STRING);
+    }
+    /* the original req->info is borrowed from the PMIx caller; repoint
+     * to our response array and let the req destructor free it */
+    req->info = rinfo;
+    req->ninfo = rn;
+    req->copy = true;
+}
+
+static void ras_base_complete_grow_request(prte_pmix_server_req_t *req)
+{
+    prte_session_t *dest = NULL;
+    pmix_status_t rc;
+    size_t n;
+    bool found = false;
+
+    rc = ras_base_prepare_grow(req, &dest);
+    if (PMIX_SUCCESS != rc) {
+        req->pstatus = rc;
+        return;
+    }
+
+    for (n = 0; n < req->ninfo; n++) {
+        char *ndstring = NULL;
+        int ret;
+
+        if (!PMIx_Check_key(req->info[n].key, PMIX_ALLOC_NODE_LIST)) {
+            continue;
+        }
+
+        rc = ras_base_parse_node_list(&req->info[n], &ndstring);
+        if (PMIX_SUCCESS != rc) {
+            req->pstatus = rc;
+            return;
+        }
+
+        ret = ras_base_insert_node_string(ndstring, dest);
+        free(ndstring);
+        if (PRTE_SUCCESS != ret) {
+            req->pstatus = prte_pmix_convert_rc(ret);
+            return;
+        }
+        found = true;
+    }
+
+    if (found) {
+        prte_ras_base_activate_dvm_grow();
+    }
+    ras_base_set_alloc_response(req, dest);
+}
+
+static int ras_base_find_shrink_targets(char **nodes, pmix_rank_t **ranks_out,
+                                        int32_t *nranks_out)
+{
+    pmix_rank_t *ranks;
+    int32_t cnt, m;
+    prte_node_t *node;
+
+    cnt = PMIx_Argv_count(nodes);
+    if (0 == cnt) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    ranks = (pmix_rank_t *) malloc(cnt * sizeof(pmix_rank_t));
+    if (NULL == ranks) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    m = 0;
+    for (int32_t n = 0; NULL != nodes[n]; n++) {
+        /* find this node in our global resource pool */
+        node = prte_node_match(NULL, nodes[n]);
+        if (NULL == node) {
+            free(ranks);
+            return PRTE_ERR_NOT_FOUND;
+        }
+        if (NULL == node->daemon) {
+            /* node doesn't have a daemon yet */
+            continue;
+        }
+        ranks[m++] = node->daemon->name.rank;
+    }
+
+    *ranks_out = ranks;
+    *nranks_out = m;
+    return PRTE_SUCCESS;
+}
+
+static int ras_base_create_shrink_campaign(prte_pmix_server_req_t *req,
+                                           pmix_rank_t *ranks, int32_t nranks,
+                                           prte_shrink_campaign_t **campaign)
+{
+    prte_shrink_campaign_t *camp;
+
+    *campaign = NULL;
+    if (!prte_elastic_mode || 0 >= nranks) {
+        return PRTE_SUCCESS;
+    }
+
+    /* Record the shrink campaign before freeing the ranks array.  Only in
+     * elastic mode: outside it the DVM is fixed-size, so the release still
+     * xcasts the shrink command below but no campaign is recorded and the
+     * fence is never raised — the legacy fire-and-forget behavior.  Also
+     * skip when the release removes no daemons (nranks == 0): an empty
+     * campaign would never drain (no target ever departs on the comm-failure
+     * path), so prte_shrink_campaigns would stay non-empty forever and stall
+     * every later job at the LAUNCH_APPS hold, and no completion event would
+     * fire. This mirrors the grow path's num_new_daemons > 0 guard and the
+     * spec's "no event when nothing changes" clause. */
+    camp = PMIX_NEW(prte_shrink_campaign_t);
+    if (NULL == camp) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    camp->targets = (pmix_rank_t *) malloc(nranks * sizeof(pmix_rank_t));
+    if (NULL == camp->targets) {
+        PMIX_RELEASE(camp);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    memcpy(camp->targets, ranks, nranks * sizeof(pmix_rank_t));
+    camp->ntargets = nranks;
+    camp->pending = nranks;
+    /* record the requester so the phase-two completion event can be
+     * directed at the process that issued this PMIX_ALLOC_RELEASE */
+    PMIX_XFER_PROCID(&camp->requester, &req->tproc);
+    for (size_t n = 0; n < req->ninfo; n++) {
+        if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
+            camp->alloc_id = strdup(req->info[n].value.data.string);
+        } else if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_REQ_ID)) {
+            camp->req_id = strdup(req->info[n].value.data.string);
+        }
+    }
+    camp->have_requester = true;
+    pmix_list_append(&prte_shrink_campaigns, &camp->super);
+    prte_dvm_launch_fence += nranks;
+
+    *campaign = camp;
+    return PRTE_SUCCESS;
+}
+
+static void ras_base_abort_dvm_shrink(prte_shrink_campaign_t *camp,
+                                      bool notify, pmix_status_t status)
+{
+    if (NULL == camp) {
+        return;
+    }
+
+    pmix_list_remove_item(&prte_shrink_campaigns, &camp->super);
+    prte_dvm_launch_fence -= camp->pending;
+    if (notify && camp->have_requester) {
+        prte_plm_base_dvm_mod_notify(&camp->requester, camp->alloc_id,
+                                     camp->req_id, false, status);
+    }
+    PMIX_RELEASE(camp);
+}
+
+static int ras_base_send_dvm_shrink(prte_shrink_campaign_t *camp,
+                                    pmix_rank_t *ranks, int32_t nranks,
+                                    bool report_xcast_failure)
+{
+    pmix_data_buffer_t msg;
+    prte_daemon_cmd_flag_t cmd = PRTE_DAEMON_SHRINK_CMD;
+    pmix_status_t rc;
+
+    /* create the request */
+    PMIX_DATA_BUFFER_CONSTRUCT(&msg);
+    /* pack the command */
+    rc = PMIx_Data_pack(NULL, &msg, &cmd, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS == rc) {
+        /* pack the daemon ranks to be removed from DVM */
+        rc = PMIx_Data_pack(NULL, &msg, &nranks, 1, PMIX_INT32);
+    }
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, &msg, ranks, nranks, PMIX_PROC_RANK);
+    }
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&msg);
+        if (NULL != camp) {
+            ras_base_abort_dvm_shrink(camp, false, PMIX_SUCCESS);
+        }
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* goes to all daemons.  When a campaign was recorded, request a
+     * completion callback so the collective shrink-completion handler runs
+     * exactly once — when the whole DVM has received the command — driving a
+     * single routing-tree repair and one completion event, rather than
+     * discovering the departures one daemon at a time. */
+    if (NULL != camp) {
+        rc = prte_grpcomm.xcast_nb(PRTE_RML_TAG_DAEMON, &msg,
+                                   shrink_xcast_complete, camp);
+    } else {
+        rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &msg);
+    }
+    PMIX_DATA_BUFFER_DESTRUCT(&msg);
+
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        /* undo the campaign we just added (only if one was created), and
+         * tell the requester the DVM modification failed */
+        if (NULL != camp) {
+            ras_base_abort_dvm_shrink(camp, true, prte_pmix_convert_rc(rc));
+        }
+        return report_xcast_failure ? rc : PRTE_SUCCESS;
+    }
+
+    return PRTE_SUCCESS;
+}
+
+int prte_ras_base_prepare_dvm_shrink(prte_pmix_server_req_t *req,
+                                     pmix_rank_t *ranks, int32_t nranks,
+                                     prte_shrink_campaign_t **campaign)
+{
+    if (NULL == campaign) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    return ras_base_create_shrink_campaign(req, ranks, nranks, campaign);
+}
+
+int prte_ras_base_commit_dvm_shrink(prte_shrink_campaign_t *campaign)
+{
+    if (NULL == campaign) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    return ras_base_send_dvm_shrink(campaign, campaign->targets,
+                                   campaign->ntargets, true);
+}
+
+void prte_ras_base_abort_dvm_shrink(prte_shrink_campaign_t *campaign)
+{
+    ras_base_abort_dvm_shrink(campaign, false, PMIX_SUCCESS);
+}
+
+static int ras_base_start_dvm_shrink(prte_pmix_server_req_t *req,
+                                     pmix_rank_t *ranks, int32_t nranks,
+                                     prte_shrink_campaign_t **campaign,
+                                     bool report_xcast_failure)
+{
+    prte_shrink_campaign_t *camp = NULL;
+    int ret;
+
+    if (NULL != campaign) {
+        *campaign = NULL;
+    }
+
+    ret = ras_base_create_shrink_campaign(req, ranks, nranks, &camp);
+    if (PRTE_SUCCESS != ret) {
+        return ret;
+    }
+
+    ret = ras_base_send_dvm_shrink(camp, ranks, nranks, report_xcast_failure);
+    if (PRTE_SUCCESS != ret) {
+        return ret;
+    }
+
+    if (NULL != campaign) {
+        *campaign = camp;
+    }
+
+    return PRTE_SUCCESS;
+}
+
+static bool ras_base_teardown_by_alloc_id(prte_pmix_server_req_t *req)
+{
+    char *rel_alloc_id = NULL;
+    prte_session_t *rsession;
+
+    for (size_t n = 0; n < req->ninfo; n++) {
+        if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
+            rel_alloc_id = req->info[n].value.data.string;
+            break;
+        }
+    }
+    if (NULL == rel_alloc_id) {
+        return false;
+    }
+
+    /* a release naming an allocation id tears down that whole reservation:
+     * any owner may release it, the scheduler may release any. The nodes
+     * are returned to the scheduler (the legacy disposition for an explicit
+     * release). */
+    rsession = prte_get_session_object_from_id(rel_alloc_id);
+    if (NULL == rsession || rsession == prte_default_session) {
+        req->pstatus = PMIX_ERR_NOT_FOUND;
+        return true;
+    }
+    if (!prte_session_is_owned_by(rsession, req->tproc.nspace)) {
+        req->pstatus = PMIX_ERR_NO_PERMISSIONS;
+        return true;
+    }
+    prte_ras_base_teardown_reservation(rsession, true);
+    req->pstatus = PMIX_SUCCESS;
+    return true;
+}
+
+static void ras_base_complete_release_request(prte_pmix_server_req_t *req)
+{
+    char *ndstring = NULL;
+    char **nodes = NULL;
+    pmix_rank_t *ranks = NULL;
+    int32_t nranks = 0;
+    pmix_status_t rc;
+    int ret;
+
+    if (ras_base_teardown_by_alloc_id(req)) {
+        return;
+    }
+
+    for (size_t n = 0; n < req->ninfo; n++) {
+        if (!PMIx_Check_key(req->info[n].key, PMIX_ALLOC_NODE_LIST)) {
+            continue;
+        }
+
+        rc = ras_base_parse_node_list(&req->info[n], &ndstring);
+        if (PMIX_SUCCESS != rc) {
+            req->pstatus = rc;
+            return;
+        }
+        nodes = PMIx_Argv_split(ndstring, ',');
+        free(ndstring);
+        break;
+    }
+
+    if (NULL == nodes) {
+        PMIX_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        req->pstatus = PMIX_ERR_NOT_FOUND;
+        return;
+    }
+
+    ret = ras_base_find_shrink_targets(nodes, &ranks, &nranks);
+    PMIx_Argv_free(nodes);
+    if (PRTE_SUCCESS != ret) {
+        PRTE_ERROR_LOG(ret);
+        req->pstatus = prte_pmix_convert_rc(ret);
+        return;
+    }
+
+    ret = ras_base_start_dvm_shrink(req, ranks, nranks, NULL, false);
+    free(ranks);
+    if (PRTE_SUCCESS != ret) {
+        req->pstatus = prte_pmix_convert_rc(ret);
+    }
+}
+
+void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
+{
+    if (PMIX_ALLOC_EXTEND == req->allocdir ||
+        PMIX_ALLOC_NEW == req->allocdir) {
+        ras_base_complete_grow_request(req);
+    } else if (PMIX_ALLOC_RELEASE == req->allocdir) {
+        ras_base_complete_release_request(req);
+    }
 }
 
 int prte_ras_base_add_hosts(prte_job_t *jdata)

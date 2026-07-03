@@ -116,6 +116,17 @@ PRTE_EXPORT int prte_ras_base_add_hosts(prte_job_t *jdata);
 
 PRTE_EXPORT char *prte_ras_base_flag_string(prte_node_t *node);
 
+PRTE_EXPORT void prte_ras_base_activate_dvm_grow(void);
+
+PRTE_EXPORT int prte_ras_base_prepare_dvm_shrink(prte_pmix_server_req_t *req,
+                                                 pmix_rank_t *ranks,
+                                                 int32_t nranks,
+                                                 prte_shrink_campaign_t **campaign);
+
+PRTE_EXPORT int prte_ras_base_commit_dvm_shrink(prte_shrink_campaign_t *campaign);
+
+PRTE_EXPORT void prte_ras_base_abort_dvm_shrink(prte_shrink_campaign_t *campaign);
+
 PRTE_EXPORT void prte_ras_base_complete_request(prte_pmix_server_req_t *req);
 
 END_C_DECLS
