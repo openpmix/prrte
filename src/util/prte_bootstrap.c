@@ -383,6 +383,36 @@ int prte_bootstrap_rank_of(prte_bootstrap_config_t *cfg, const char *name, pmix_
     return PRTE_ERR_NOT_FOUND;
 }
 
+int prte_bootstrap_host_of_rank(prte_bootstrap_config_t *cfg, pmix_rank_t rank,
+                                const char **host)
+{
+    pmix_rank_t r = 1;
+    int i;
+
+    if (0 == rank) {
+        if (NULL == cfg->ctrlhost) {
+            return PRTE_ERR_NOT_FOUND;
+        }
+        *host = cfg->ctrlhost;
+        return PRTE_SUCCESS;
+    }
+    if (NULL == cfg->nodes) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+    for (i = 0; NULL != cfg->nodes[i]; i++) {
+        if (NULL != cfg->ctrlhost && host_match(cfg->nodes[i], cfg->ctrlhost, cfg->keep_fqdn)) {
+            /* the controller is rank 0, not a numbered position */
+            continue;
+        }
+        if (r == rank) {
+            *host = cfg->nodes[i];
+            return PRTE_SUCCESS;
+        }
+        r++;
+    }
+    return PRTE_ERR_NOT_FOUND;
+}
+
 int prte_bootstrap_my_identity(prte_bootstrap_config_t *cfg, bool *is_controller,
                                pmix_rank_t *rank)
 {

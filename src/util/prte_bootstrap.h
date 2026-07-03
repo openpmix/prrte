@@ -93,6 +93,21 @@ PRTE_EXPORT int prte_bootstrap_rank_of(prte_bootstrap_config_t *cfg,
                                        const char *name, pmix_rank_t *rank);
 
 /**
+ * The inverse of prte_bootstrap_rank_of: return the configured host name of the
+ * daemon holding rank @c rank.  Rank 0 is always the controller host; ranks
+ * 1..N-1 map to the DVMNodes entries in listed order, skipping the controller's
+ * entry if it appears in the list.  The returned pointer aliases storage owned
+ * by @c cfg and must not be freed by the caller.
+ *
+ * @param cfg   parsed configuration
+ * @param rank  the rank to resolve
+ * @param host  set to the host name owning @c rank on success (not a copy)
+ * @return PRTE_SUCCESS, or PRTE_ERR_NOT_FOUND if no such rank exists
+ */
+PRTE_EXPORT int prte_bootstrap_host_of_rank(prte_bootstrap_config_t *cfg,
+                                            pmix_rank_t rank, const char **host);
+
+/**
  * Determine the local node's role in the DVM by matching this host (its
  * nodename and aliases) against the controller host and the DVMNodes entries.
  *

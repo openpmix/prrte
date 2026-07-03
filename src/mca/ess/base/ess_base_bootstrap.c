@@ -37,7 +37,9 @@
 #include "src/util/proc_info.h"
 
 #include "src/pmix/pmix-internal.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/pmix_environ.h"
+#include "src/util/pmix_net.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_show_help.h"
 
@@ -47,53 +49,212 @@
 
 #include "src/mca/ess/base/base.h"
 
-/* Synthesize the controller's RML contact URI entirely from the
- * configuration, so a compute daemon can phone home before any nidmap has
- * been distributed.  The result has the same shape the OOB itself produces:
+/* Two addresses are the same host address (family-specific comparison). */
+static bool same_inaddr(const struct sockaddr_storage *a,
+                        const struct sockaddr_storage *b, int family)
+{
+    if (AF_INET6 == family) {
+        return 0 == memcmp(&((const struct sockaddr_in6 *) a)->sin6_addr,
+                           &((const struct sockaddr_in6 *) b)->sin6_addr,
+                           sizeof(struct in6_addr));
+    }
+    return ((const struct sockaddr_in *) a)->sin_addr.s_addr
+           == ((const struct sockaddr_in *) b)->sin_addr.s_addr;
+}
+
+/* Parse a single DVMNetworks token "addr/prefix" of the given family into a
+ * network address and prefix length.  Returns PRTE_SUCCESS only for a CIDR of
+ * the requested family; an interface name (no '/') or the wrong family fails,
+ * so such tokens are simply ignored for address disambiguation. */
+static int parse_cidr(const char *token, int family, struct sockaddr_storage *net,
+                      uint32_t *prefix)
+{
+    char *copy, *slash;
+    int rc = PRTE_ERR_BAD_PARAM;
+
+    if (NULL == strchr(token, '/')) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    copy = strdup(token);
+    if (NULL == copy) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    slash = strchr(copy, '/');
+    *slash = '\0';
+    *prefix = (uint32_t) strtoul(slash + 1, NULL, 10);
+    memset(net, 0, sizeof(*net));
+    net->ss_family = family;
+    if (AF_INET6 == family) {
+        struct sockaddr_in6 *s6 = (struct sockaddr_in6 *) net;
+        if (1 == inet_pton(AF_INET6, copy, &s6->sin6_addr)) {
+            rc = PRTE_SUCCESS;
+        }
+    } else {
+        struct sockaddr_in *s4 = (struct sockaddr_in *) net;
+        if (1 == inet_pton(AF_INET, copy, &s4->sin_addr)) {
+            rc = PRTE_SUCCESS;
+        }
+    }
+    free(copy);
+    return rc;
+}
+
+/* Resolve @c host to a single address of @c family, disambiguating a multi-homed
+ * host by the DVMNetworks CIDR(s) when present.  On success @c *chosen holds the
+ * selected address and @c *chosen_prefix the CIDR prefix that selected it, or -1
+ * when no CIDR applied (a single-homed host).  When the choice is ambiguous - a
+ * host with several addresses and no CIDR to pick among them, or a CIDR that
+ * still matches more than one - a help message is shown and the call fails, so a
+ * silently-wrong interface is never baked into a synthesized URI. */
+static int pick_host_address(prte_bootstrap_config_t *cfg, const char *host,
+                             int family, struct sockaddr_storage *chosen,
+                             int *chosen_prefix)
+{
+    struct addrinfo hints, *res = NULL, *ai;
+    struct sockaddr_storage addrs[16];
+    struct sockaddr_storage cidrs[16];
+    uint32_t prefixes[16];
+    int naddr = 0, ncidr = 0;
+    int nmatch = 0, i, j;
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = family;
+    hints.ai_socktype = SOCK_STREAM;
+    if (0 != getaddrinfo(host, NULL, &hints, &res) || NULL == res) {
+        pmix_show_help("help-prte-runtime.txt", "bootstrap-unresolved-host", true,
+                       prte_process_info.nodename, host);
+        return PRTE_ERR_NOT_FOUND;
+    }
+    /* collect the unique resolved addresses of the requested family */
+    for (ai = res; NULL != ai && naddr < (int) (sizeof(addrs) / sizeof(addrs[0]));
+         ai = ai->ai_next) {
+        struct sockaddr_storage cand;
+        bool dup = false;
+        if (ai->ai_family != family) {
+            continue;
+        }
+        memset(&cand, 0, sizeof(cand));
+        memcpy(&cand, ai->ai_addr, ai->ai_addrlen);
+        for (i = 0; i < naddr; i++) {
+            if (same_inaddr(&addrs[i], &cand, family)) {
+                dup = true;
+                break;
+            }
+        }
+        if (!dup) {
+            addrs[naddr++] = cand;
+        }
+    }
+    freeaddrinfo(res);
+    if (0 == naddr) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    /* gather the DVMNetworks CIDR tokens of this family, if any */
+    if (NULL != cfg->dvm_networks) {
+        char **toks = PMIx_Argv_split(cfg->dvm_networks, ',');
+        for (i = 0; NULL != toks && NULL != toks[i]
+                    && ncidr < (int) (sizeof(cidrs) / sizeof(cidrs[0]));
+             i++) {
+            if (PRTE_SUCCESS == parse_cidr(toks[i], family, &cidrs[ncidr], &prefixes[ncidr])) {
+                ncidr++;
+            }
+        }
+        if (NULL != toks) {
+            PMIx_Argv_free(toks);
+        }
+    }
+
+    if (0 < ncidr) {
+        /* keep only addresses that fall within one of the configured networks */
+        for (i = 0; i < naddr; i++) {
+            for (j = 0; j < ncidr; j++) {
+                if (pmix_net_samenetwork(&addrs[i], &cidrs[j], prefixes[j])) {
+                    if (0 == nmatch) {
+                        *chosen = addrs[i];
+                        *chosen_prefix = (int) prefixes[j];
+                    }
+                    nmatch++;
+                    break;
+                }
+            }
+        }
+        if (0 == nmatch) {
+            pmix_show_help("help-prte-runtime.txt", "bootstrap-no-matching-address", true,
+                           prte_process_info.nodename, host, cfg->dvm_networks);
+            return PRTE_ERR_NOT_FOUND;
+        }
+        if (1 < nmatch) {
+            pmix_show_help("help-prte-runtime.txt", "bootstrap-ambiguous-address", true,
+                           prte_process_info.nodename, host, cfg->dvm_networks);
+            return PRTE_ERR_BAD_PARAM;
+        }
+        return PRTE_SUCCESS;
+    }
+
+    /* no usable CIDR: a single-homed host is unambiguous; anything more is not */
+    if (1 == naddr) {
+        *chosen = addrs[0];
+        *chosen_prefix = -1;
+        return PRTE_SUCCESS;
+    }
+    pmix_show_help("help-prte-runtime.txt", "bootstrap-ambiguous-address", true,
+                   prte_process_info.nodename, host,
+                   (NULL != cfg->dvm_networks) ? cfg->dvm_networks : "(none)");
+    return PRTE_ERR_BAD_PARAM;
+}
+
+/* Synthesize the RML contact URI of the daemon at @c rank on @c host entirely
+ * from the configuration, so a daemon can phone home to it before any nidmap has
+ * been distributed.  Every daemon listens on the same DVMPort, so only the host
+ * and rank vary.  The result has the same shape the OOB itself produces:
  *
  *    <process-name>;tcp://<ipv4>:<port>:<mask>       (IPv4)
  *    <process-name>;tcp6://[<ipv6>]:<port>:<mask>    (IPv6)
- */
-static int synth_controller_uri(prte_bootstrap_config_t *cfg, const char *dvm_nspace,
-                                int family, char **uri)
+ *
+ * The mask field is a prefix length; an explicit DVMNetmask wins, otherwise the
+ * prefix of the DVMNetworks CIDR that selected the address is used, otherwise it
+ * is left empty (which the OOB treats as universally reachable). */
+static int synth_uri(prte_bootstrap_config_t *cfg, const char *dvm_nspace, int family,
+                     pmix_rank_t rank, const char *host, char **uri)
 {
-    pmix_proc_t ctrl;
+    pmix_proc_t proc;
     char *namestr = NULL;
     char ipstr[INET6_ADDRSTRLEN];
+    char maskbuf[16];
     const char *mask;
-    struct addrinfo hints, *res = NULL;
+    struct sockaddr_storage ss;
+    int prefix = -1;
     int rc;
 
     *uri = NULL;
 
-    /* the controller is always rank 0 in the DVM namespace */
-    PMIX_LOAD_PROCID(&ctrl, dvm_nspace, 0);
-    rc = prte_util_convert_process_name_to_string(&namestr, &ctrl);
+    PMIX_LOAD_PROCID(&proc, dvm_nspace, rank);
+    rc = prte_util_convert_process_name_to_string(&namestr, &proc);
     if (PRTE_SUCCESS != rc) {
         return rc;
     }
 
-    /* resolve the controller host to an address of the selected family */
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = family;
-    hints.ai_socktype = SOCK_STREAM;
-    if (0 != getaddrinfo(cfg->ctrlhost, NULL, &hints, &res) || NULL == res) {
+    rc = pick_host_address(cfg, host, family, &ss, &prefix);
+    if (PRTE_SUCCESS != rc) {
         free(namestr);
-        return PRTE_ERR_NOT_FOUND;
+        return rc;
     }
 
     if (AF_INET6 == family) {
-        struct sockaddr_in6 *s6 = (struct sockaddr_in6 *) res->ai_addr;
-        inet_ntop(AF_INET6, &s6->sin6_addr, ipstr, sizeof(ipstr));
+        inet_ntop(AF_INET6, &((struct sockaddr_in6 *) &ss)->sin6_addr, ipstr, sizeof(ipstr));
     } else {
-        struct sockaddr_in *s4 = (struct sockaddr_in *) res->ai_addr;
-        inet_ntop(AF_INET, &s4->sin_addr, ipstr, sizeof(ipstr));
+        inet_ntop(AF_INET, &((struct sockaddr_in *) &ss)->sin_addr, ipstr, sizeof(ipstr));
     }
-    freeaddrinfo(res);
 
-    /* an administrator-supplied netmask when present, else empty (the OOB
-     * treats an empty mask as universally reachable) */
-    mask = (NULL != cfg->dvm_netmask) ? cfg->dvm_netmask : "";
+    if (NULL != cfg->dvm_netmask) {
+        mask = cfg->dvm_netmask;
+    } else if (0 <= prefix) {
+        pmix_snprintf(maskbuf, sizeof(maskbuf), "%d", prefix);
+        mask = maskbuf;
+    } else {
+        mask = "";
+    }
 
     if (AF_INET6 == family) {
         pmix_asprintf(uri, "%s;tcp6://[%s]:%u:%s", namestr, ipstr,
@@ -257,11 +418,11 @@ int prte_ess_base_bootstrap(bool *is_controller)
         pmix_snprintf(valstr, sizeof(valstr), "%u", (unsigned) ndaemons);
         PMIx_Setenv("PRTE_MCA_ess_base_num_procs", valstr, true, &environ);
 
-        /* synthesize the controller's contact URI so we can phone home */
-        rc = synth_controller_uri(&bootstrap_cfg, dvm_nspace, family, &ctrl_uri);
+        /* synthesize the controller's contact URI so we can phone home
+         * (synth_uri/pick_host_address show their own specific diagnostic on
+         * an unresolved, ambiguous, or non-matching address) */
+        rc = synth_uri(&bootstrap_cfg, dvm_nspace, family, 0, bootstrap_cfg.ctrlhost, &ctrl_uri);
         if (PRTE_SUCCESS != rc) {
-            pmix_show_help("help-prte-runtime.txt", "bootstrap-bad-controller", true,
-                           prte_process_info.nodename, bootstrap_cfg.ctrlhost);
             rc = PRTE_ERR_SILENT;
             goto cleanup;
         }
@@ -278,7 +439,42 @@ cleanup:
     if (NULL != ctrl_uri) {
         free(ctrl_uri);
     }
-    prte_bootstrap_config_free(&bootstrap_cfg);
-    bootstrap_cfg_valid = false;
+    /* Deliberately retain bootstrap_cfg (do not free / invalidate it here): a
+     * daemon in a deep radix tree synthesizes its parent's URI later, from
+     * prted, once prte_init has established the parent's rank - see
+     * prte_ess_base_bootstrap_parent_uri.  The parsed config is small and the
+     * daemon is persistent, so holding it for the process lifetime is cheap and
+     * avoids re-reading and re-validating the file. */
+    return rc;
+}
+
+int prte_ess_base_bootstrap_parent_uri(pmix_rank_t parent_rank, char **uri)
+{
+    const char *host = NULL;
+    char *dvm_nspace = NULL;
+    int family, rc;
+
+    *uri = NULL;
+
+    /* reuse the config parsed during the bootstrap phases; parse defensively if
+     * it is somehow not available */
+    if (!bootstrap_cfg_valid) {
+        rc = prte_ess_base_bootstrap_params();
+        if (PRTE_SUCCESS != rc) {
+            return rc;
+        }
+    }
+
+    rc = prte_bootstrap_host_of_rank(&bootstrap_cfg, parent_rank, &host);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+
+    family = (6 == bootstrap_cfg.ip_version) ? AF_INET6 : AF_INET;
+    pmix_asprintf(&dvm_nspace, "%s-prte-dvm", bootstrap_cfg.cluster);
+
+    rc = synth_uri(&bootstrap_cfg, dvm_nspace, family, parent_rank, host, uri);
+
+    free(dvm_nspace);
     return rc;
 }

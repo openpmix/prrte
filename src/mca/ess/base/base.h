@@ -86,6 +86,13 @@ PRTE_EXPORT int prte_ess_env_put(int32_t num_procs, int32_t num_local_procs, cha
 PRTE_EXPORT int prte_ess_base_bootstrap_params(void);
 PRTE_EXPORT int prte_ess_base_bootstrap(bool *is_controller);
 
+/* Synthesize the RML contact URI of the daemon holding @c parent_rank, entirely
+ * from the bootstrap configuration, so a daemon whose parent is another daemon
+ * (a deep radix tree) can phone home before any nidmap has been distributed.
+ * Used by prted's bootstrap path once the routing tree has established the
+ * parent's rank.  On success @c *uri is a malloc'd string the caller frees. */
+PRTE_EXPORT int prte_ess_base_bootstrap_parent_uri(pmix_rank_t parent_rank, char **uri);
+
 typedef struct {
     pmix_list_item_t super;
     char *signame;

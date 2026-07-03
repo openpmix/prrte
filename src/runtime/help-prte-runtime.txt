@@ -131,16 +131,41 @@ built without IPv6 support:
 
 Please rebuild PRRTE with IPv6 enabled, or configure the DVM to use IPv4.
 #
-[bootstrap-bad-controller]
+[bootstrap-unresolved-host]
 
-Bootstrap startup was requested, but this node was unable to resolve the
-DVM controller host to a usable address of the requested family:
+Bootstrap startup was unable to resolve a DVM member host to an address
+of the configured family:
 
-   node:        %s
-   controller:  %s
+   node:  %s
+   host:  %s
 
-Please verify the DVMControllerHost and DVMIPVersion settings and that
-name resolution is available on this node.
+Please verify the DVMControllerHost/DVMNodes and DVMIPVersion settings
+and that name resolution is available on this node.
+#
+[bootstrap-ambiguous-address]
+
+Bootstrap startup could not unambiguously determine which address to use
+to reach a DVM member: the host resolves to multiple addresses and the
+configured networks did not narrow the choice to exactly one.
+
+   node:      %s
+   host:      %s
+   networks:  %s
+
+Set DVMNetworks to the CIDR (e.g. 10.0.0.0/16) of the interconnect the
+DVM should use, so a single address on that network can be selected.
+#
+[bootstrap-no-matching-address]
+
+Bootstrap startup resolved a DVM member host, but none of its addresses
+fall within the configured DVMNetworks:
+
+   node:      %s
+   host:      %s
+   networks:  %s
+
+Please verify that DVMNetworks names the CIDR of the interconnect these
+hosts are reachable on.
 #
 [prte:session:dir:shared]
 
