@@ -102,6 +102,8 @@ typedef struct {
                                never) */
     int retry_max_delay;    /**< cap (sec) on the connection-retry delay; when > retry_delay the
                                delay backs off exponentially up to this value (0 => fixed delay) */
+    int connect_max_time;   /**< max seconds to keep retrying a non-lifeline peer before giving up
+                               and letting the routing tree heal to an ancestor (0 => forever) */
 } prte_oob_base_t;
 PRTE_EXPORT extern prte_oob_base_t prte_oob_base;
 

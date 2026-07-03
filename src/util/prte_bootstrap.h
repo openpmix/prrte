@@ -38,6 +38,8 @@ typedef struct {
     char *ctrlhost;        /* DVMControllerHost (required) */
     uint32_t port;         /* DVMPort (default 7817) */
     int ip_version;        /* DVMIPVersion: 4 (default) or 6 */
+    int radix;             /* DVMRadix (default 64) */
+    uint32_t connect_max_time; /* DVMConnectMaxTime seconds (default 30) */
     char **nodes;          /* expanded DVMNodes (required) */
     bool keep_fqdn;        /* KeepFQDNHostnames (default false) */
     char *dvm_networks;    /* DVMNetworks (default NULL -> all) */

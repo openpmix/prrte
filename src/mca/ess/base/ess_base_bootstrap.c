@@ -106,69 +106,65 @@ static int synth_controller_uri(prte_bootstrap_config_t *cfg, const char *dvm_ns
     return PRTE_SUCCESS;
 }
 
-int prte_ess_base_bootstrap(bool *is_controller)
+/* The parsed configuration is shared between the two bootstrap phases below.
+ * Phase 1 (prte_ess_base_bootstrap_params) parses the file and publishes the
+ * global MCA parameters; phase 2 (prte_ess_base_bootstrap) reuses the same
+ * parsed data to resolve identity once the local hostname is known. */
+static prte_bootstrap_config_t bootstrap_cfg;
+static bool bootstrap_cfg_valid = false;
+
+/* Phase 1: parse the configuration and publish the DVM-wide MCA parameters.
+ *
+ * This MUST run before prte_register_params() (i.e., before prte_init_util),
+ * because that is where the RML/OOB and other global parameters are first
+ * registered - and an MCA variable reads its environment only on that first
+ * registration.  None of the work here needs the local hostname, so it can run
+ * this early; identity resolution (which does need the hostname) is deferred to
+ * phase 2. */
+int prte_ess_base_bootstrap_params(void)
 {
-    prte_bootstrap_config_t cfg;
-    char *dvm_nspace = NULL;
-    char *ctrl_uri = NULL;
     const char *port_param;
     char valstr[64];
-    bool ctrl = false;
-    pmix_rank_t rank = PMIX_RANK_INVALID;
-    pmix_rank_t ndaemons;
-    int family = AF_INET;
     int rc;
 
-    *is_controller = false;
+    if (bootstrap_cfg_valid) {
+        return PRTE_SUCCESS;
+    }
 
     /* read and validate the configuration file */
-    rc = prte_bootstrap_parse(&cfg);
+    rc = prte_bootstrap_parse(&bootstrap_cfg);
     if (PRTE_SUCCESS != rc) {
         return rc;
     }
-
-    /* determine our role and rank from the configuration */
-    rc = prte_bootstrap_my_identity(&cfg, &ctrl, &rank);
-    if (PRTE_SUCCESS != rc) {
-        pmix_show_help("help-prte-runtime.txt", "bootstrap-node-not-member", true,
-                       prte_process_info.nodename, cfg.ctrlhost);
-        rc = PRTE_ERR_SILENT;
-        goto cleanup;
-    }
-    ndaemons = prte_bootstrap_num_daemons(&cfg);
-
-    /* the DVM namespace is shared by every daemon */
-    pmix_asprintf(&dvm_nspace, "%s-prte-dvm", cfg.cluster);
+    bootstrap_cfg_valid = true;
 
     /* resolve the address family (DVMIPVersion) into the static-port
-     * parameter, the family enable/disable flags, and the URI form */
-    if (6 == cfg.ip_version) {
+     * parameter and the family enable/disable flags */
+    if (6 == bootstrap_cfg.ip_version) {
 #if PRTE_ENABLE_IPV6
         port_param = "PRTE_MCA_prte_static_ipv6_ports";
         PMIx_Setenv("PRTE_MCA_prte_disable_ipv6_family", "0", true, &environ);
         PMIx_Setenv("PRTE_MCA_prte_disable_ipv4_family", "1", true, &environ);
-        family = AF_INET6;
 #else
         pmix_show_help("help-prte-runtime.txt", "bootstrap-ipv6-unavailable", true,
                        prte_process_info.nodename);
-        rc = PRTE_ERR_SILENT;
-        goto cleanup;
+        return PRTE_ERR_SILENT;
 #endif
     } else {
         port_param = "PRTE_MCA_prte_static_ipv4_ports";
-        family = AF_INET;
     }
 
     /* apply the inter-node network selection, if given */
-    if (NULL != cfg.dvm_networks) {
-        PMIx_Setenv("PRTE_MCA_prte_if_include", cfg.dvm_networks, true, &environ);
+    if (NULL != bootstrap_cfg.dvm_networks) {
+        PMIx_Setenv("PRTE_MCA_prte_if_include", bootstrap_cfg.dvm_networks, true, &environ);
     }
 
     /* apply the FQDN matching choice */
-    PMIx_Setenv("PRTE_MCA_prte_keep_fqdn_hostnames", cfg.keep_fqdn ? "1" : "0", true, &environ);
+    PMIx_Setenv("PRTE_MCA_prte_keep_fqdn_hostnames", bootstrap_cfg.keep_fqdn ? "1" : "0", true,
+                &environ);
 
     /* every process listens on the shared well-known DVM port */
-    pmix_snprintf(valstr, sizeof(valstr), "%u", (unsigned) cfg.port);
+    pmix_snprintf(valstr, sizeof(valstr), "%u", (unsigned) bootstrap_cfg.port);
     PMIx_Setenv(port_param, valstr, true, &environ);
 
     /* seed the connection-retry backoff.  retry_delay defaults to 0 (no
@@ -177,18 +173,75 @@ int prte_ess_base_bootstrap(bool *is_controller)
      * cap comes from the configuration file (overwrite=true, config trumps). */
     PMIx_Setenv("PRTE_MCA_prte_retry_delay", "1", false, &environ);
     PMIx_Setenv("PRTE_MCA_prte_max_recon_attempts", "-1", false, &environ);
-    pmix_snprintf(valstr, sizeof(valstr), "%u", (unsigned) cfg.retry_max_delay);
+    pmix_snprintf(valstr, sizeof(valstr), "%u", (unsigned) bootstrap_cfg.retry_max_delay);
     PMIx_Setenv("PRTE_MCA_prte_retry_max_delay", valstr, true, &environ);
 
+    /* wire ourselves into the radix routing tree at boot so that every daemon
+     * phones home to its parent rather than piling directly onto the
+     * controller; the radix must match across the DVM */
+    pmix_snprintf(valstr, sizeof(valstr), "%d", bootstrap_cfg.radix);
+    PMIx_Setenv("PRTE_MCA_rml_base_radix", valstr, true, &environ);
+
+    /* bound the time a daemon will wait for a given parent to appear before it
+     * heals up to the next ancestor (the controller is retried forever) */
+    pmix_snprintf(valstr, sizeof(valstr), "%u", (unsigned) bootstrap_cfg.connect_max_time);
+    PMIx_Setenv("PRTE_MCA_prte_connect_max_time", valstr, true, &environ);
+
     /* apply the DVM temporary-directory base */
-    if (NULL != cfg.dvmtmpdir) {
-        PMIx_Setenv("PRTE_MCA_prte_tmpdir_base", cfg.dvmtmpdir, true, &environ);
+    if (NULL != bootstrap_cfg.dvmtmpdir) {
+        PMIx_Setenv("PRTE_MCA_prte_tmpdir_base", bootstrap_cfg.dvmtmpdir, true, &environ);
     }
     /* NOTE: SessionTmpDir and the *Log* options are parsed and carried in the
      * configuration, but their runtime plumbing (a dedicated session-dir
      * override and the DVM state-logging facility) is not yet implemented, so
      * they are intentionally not published here.  Wiring them is deferred to
      * when those facilities exist, per the bootstrap implementation plan. */
+
+    return PRTE_SUCCESS;
+}
+
+/* Phase 2: resolve this node's identity and publish it.
+ *
+ * By now the local hostname has been established (prte_setup_hostname ran
+ * inside prte_init_util), so we can match ourselves against the controller
+ * host and the DVMNodes list.  The ess_base_* and hnp_uri parameters published
+ * here are consumed later, during prte_init's framework selection, so setting
+ * them at this point is correctly timed. */
+int prte_ess_base_bootstrap(bool *is_controller)
+{
+    char *dvm_nspace = NULL;
+    char *ctrl_uri = NULL;
+    char valstr[64];
+    bool ctrl = false;
+    pmix_rank_t rank = PMIX_RANK_INVALID;
+    pmix_rank_t ndaemons;
+    int family;
+    int rc;
+
+    *is_controller = false;
+
+    /* phase 1 should already have parsed the file; parse defensively if not */
+    if (!bootstrap_cfg_valid) {
+        rc = prte_ess_base_bootstrap_params();
+        if (PRTE_SUCCESS != rc) {
+            return rc;
+        }
+    }
+
+    family = (6 == bootstrap_cfg.ip_version) ? AF_INET6 : AF_INET;
+
+    /* determine our role and rank from the configuration */
+    rc = prte_bootstrap_my_identity(&bootstrap_cfg, &ctrl, &rank);
+    if (PRTE_SUCCESS != rc) {
+        pmix_show_help("help-prte-runtime.txt", "bootstrap-node-not-member", true,
+                       prte_process_info.nodename, bootstrap_cfg.ctrlhost);
+        rc = PRTE_ERR_SILENT;
+        goto cleanup;
+    }
+    ndaemons = prte_bootstrap_num_daemons(&bootstrap_cfg);
+
+    /* the DVM namespace is shared by every daemon */
+    pmix_asprintf(&dvm_nspace, "%s-prte-dvm", bootstrap_cfg.cluster);
 
     if (ctrl) {
         /* we are the DVM controller: adopt the deterministic namespace and
@@ -205,10 +258,10 @@ int prte_ess_base_bootstrap(bool *is_controller)
         PMIx_Setenv("PRTE_MCA_ess_base_num_procs", valstr, true, &environ);
 
         /* synthesize the controller's contact URI so we can phone home */
-        rc = synth_controller_uri(&cfg, dvm_nspace, family, &ctrl_uri);
+        rc = synth_controller_uri(&bootstrap_cfg, dvm_nspace, family, &ctrl_uri);
         if (PRTE_SUCCESS != rc) {
             pmix_show_help("help-prte-runtime.txt", "bootstrap-bad-controller", true,
-                           prte_process_info.nodename, cfg.ctrlhost);
+                           prte_process_info.nodename, bootstrap_cfg.ctrlhost);
             rc = PRTE_ERR_SILENT;
             goto cleanup;
         }
@@ -225,6 +278,7 @@ cleanup:
     if (NULL != ctrl_uri) {
         free(ctrl_uri);
     }
-    prte_bootstrap_config_free(&cfg);
+    prte_bootstrap_config_free(&bootstrap_cfg);
+    bootstrap_cfg_valid = false;
     return rc;
 }

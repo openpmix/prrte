@@ -548,6 +548,12 @@ int prte_oob_register(void)
                                         PMIX_MCA_BASE_VAR_TYPE_INT,
                                         &prte_oob_base.retry_max_delay);
 
+    prte_oob_base.connect_max_time = 0;
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "connect_max_time",
+                                        "Maximum time (in sec) to keep retrying a connection to a non-lifeline peer before giving up so the routing tree can heal to an ancestor; 0 means retry forever",
+                                        PMIX_MCA_BASE_VAR_TYPE_INT,
+                                        &prte_oob_base.connect_max_time);
+
     prte_oob_base.max_msg_size = 100;
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "max_msg_size",
                                         "Max size of an OOB message in Megabytes(default = 100)",

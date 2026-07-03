@@ -369,6 +369,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
             addr->retries = 0;
             connected = true;
             peer->num_retries = 0;
+            peer->first_attempt = 0;
             break;
         }
     } // End of looping over reachable bitmap entries
@@ -379,8 +380,26 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
          * started yet. if requested, wait awhile and try again
          * unless/until we hit the maximum number of retries */
         if (0 < prte_oob_base.retry_delay) {
-            if (prte_oob_base.max_recon_attempts < 0
-                || peer->num_retries < prte_oob_base.max_recon_attempts) {
+            /* Bound how long we chase a peer that is not our lifeline (the
+             * HNP/controller).  During a bootstrap race an interior parent may
+             * never come up; rather than retry it forever we give up after
+             * connect_max_time seconds and fall through to failed_to_connect,
+             * which heals the routing tree up to the next ancestor.  The HNP
+             * itself is always retried forever (per max_recon_attempts). */
+            bool give_up_on_time = false;
+            if (0 < prte_oob_base.connect_max_time
+                && !PMIX_CHECK_PROCID(&peer->name, PRTE_PROC_MY_HNP)) {
+                time_t now = time(NULL);
+                if (0 == peer->first_attempt) {
+                    peer->first_attempt = now;
+                }
+                if ((now - peer->first_attempt) >= (time_t) prte_oob_base.connect_max_time) {
+                    give_up_on_time = true;
+                }
+            }
+            if (!give_up_on_time
+                && (prte_oob_base.max_recon_attempts < 0
+                    || peer->num_retries < prte_oob_base.max_recon_attempts)) {
                 struct timeval tv;
                 /* close the current socket */
                 CLOSE_THE_SOCKET(peer->sd);

@@ -91,6 +91,25 @@ start with a clear diagnostic. The remaining address-bearing options
 values of the selected family, so IPv6 literal addresses and IPv6 CIDR
 subnets may be used when ``DVMIPVersion=6``.
 
+``DVMRadix=<number> (default: 64)`` sets the radix of the routing tree that
+connects the daemons. Rather than every daemon opening a connection directly
+to the controller, each daemon connects to its parent in a radix tree of the
+given width, which spreads the connection and message-relay load across the
+DVM. The value ties directly to the ``rml_base_radix`` MCA parameter and must
+be identical on every node, so it is set once in the configuration file. The
+default of 64 keeps the tree shallow for typical clusters while capping the
+number of children any single daemon (including the controller) must serve.
+
+``DVMConnectMaxTime=<seconds> (default: 30)`` bounds how long a daemon will
+keep trying to reach its assigned parent in the routing tree before it heals
+up to the next ancestor. Because the daemons start independently, a daemon's
+parent may not yet be running; after this interval the daemon promotes its
+connection target to the parent's parent, and so on up the tree, until it
+reaches the controller. The controller itself is retried indefinitely (see
+``DVMRetryMaxDelay``), so a daemon always eventually joins the DVM even if only
+the controller is up. Setting this to 0 disables healing and retries every
+parent forever.
+
 ``DVMRetryMaxDelay=<seconds> (default: 5)`` bounds the delay between a
 daemon's attempts to connect to the DVM controller during bootstrap. Because
 the daemons start independently and the controller may come up arbitrarily
