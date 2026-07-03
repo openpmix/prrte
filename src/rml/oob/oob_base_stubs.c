@@ -22,6 +22,7 @@
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
 #include "src/mca/errmgr/errmgr.h"
+#include "src/mca/ess/base/base.h"
 #include "src/rml/rml.h"
 #include "src/mca/state/state.h"
 #include "src/threads/pmix_threads.h"
@@ -106,7 +107,20 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
                 PMIX_RELEASE(msg);
                 return;
             }
-        } else {
+        } else if (prte_bootstrap_setup) {
+            /* In a bootstrapped DVM no nidmap has distributed peer URIs during
+             * formation, and after a lifeline heals our new parent (a former
+             * grandparent) was never pre-synthesized.  Derive the next hop's
+             * contact URI from the configuration - the same synthesis prted
+             * used for our original parent - and connect to it. */
+            char *synth = NULL;
+            if (PRTE_SUCCESS == prte_ess_base_bootstrap_peer_uri(hop.rank, &synth)
+                && NULL != synth) {
+                peer = process_uri(synth);
+                free(synth);
+            }
+        }
+        if (NULL == peer) {
             // unable to send it
              if (prte_prteds_term_ordered || prte_finalizing || prte_abnormal_term_ordered) {
                 /* just ignore the problem */
