@@ -51,6 +51,13 @@ static int allocate(prte_job_t *jdata, pmix_list_t *ndlist)
         return rc;
     }
 
+    /* The DVMNodes list is a fixed, externally-defined set of nodes - exactly
+     * like a resource-manager allocation.  Mark the allocation managed so the
+     * virtual-machine setup treats the node pool as the authoritative node set
+     * (the construct path) rather than filtering it through a hostfile or
+     * dash-host list, and so the per-node slot counts are honored as given. */
+    prte_managed_allocation = true;
+
     /* add each DVMNodes entry to the pool at its canonical rank.  The
      * controller (rank 0) is already represented in the node pool by the HNP
      * itself, so skip that entry if it appears in the list. */
@@ -66,6 +73,9 @@ static int allocate(prte_job_t *jdata, pmix_list_t *ndlist)
         ndptr = PMIX_NEW(prte_node_t);
         ndptr->name = strdup(cfg.nodes[n]);
         ndptr->index = (int) rank;
+        ndptr->state = PRTE_NODE_STATE_UP;
+        ndptr->slots = 1;
+        PRTE_FLAG_SET(ndptr, PRTE_NODE_FLAG_SLOTS_GIVEN);
         pmix_list_append(ndlist, &ndptr->super);
     }
 
