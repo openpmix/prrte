@@ -42,7 +42,7 @@ TCP. If you find such comments, they are cruft — fix them.
 
 | File | Responsibility |
 |------|----------------|
-| `routed_radix.c` | `prte_rml_get_route` (next hop toward a target), subtree indexing, and the tree (re)computation used on startup and after faults: `compute_routing_tree`, `repair_routing_tree`, `update_ancestors`, promotion/descendant fixups, `route_lost`. |
+| `routed_radix.c` | `prte_rml_get_route` (next hop toward a target), subtree indexing, and the tree (re)computation used on startup and after faults: `compute_routing_tree`, `repair_routing_tree`, `update_ancestors`, promotion/descendant fixups, `route_lost`. Also maintains `prte_rml_base.dead_dmns` — the *permanent* departed-daemon set that survives the recomputes an elastic grow triggers. |
 | `radix.h` | Header-only radix-tree math over daemon ranks: parent/child/sibling navigation, `subtree_contains`/`subtree_index`, depth motion, and "next living" traversal that skips failed ranks. Pure functions on rank numbers, no I/O. |
 
 **Fault tolerance / reliability (newer; not collapse cruft):**
@@ -50,7 +50,9 @@ TCP. If you find such comments, they are cruft — fix them.
 | File | Responsibility |
 |------|----------------|
 | `rml_fault_handler.c` | The RML's own reaction to a recomputed tree: sets process states and drives death/adoption notices. |
-| `relm/` | RELM — reliable messaging that survives daemon failures by re-driving messages over the repaired tree. Has its own small state machine (`relm/state_machine.c`, `relm/base/`). |
+| `relm/` | RELM — reliable messaging that survives daemon failures by re-driving messages over the repaired tree. Has its own small state machine (`relm/state_machine.c`, `relm/base/`). See [`relm/AGENTS.md`](relm/AGENTS.md). |
+
+The transport lives in [`oob/`](oob/AGENTS.md), which has its own editing map.
 
 **Transport (TCP — the `oob/` subdirectory):**
 
@@ -97,6 +99,62 @@ possible self-promotion, packages the delta into a
 `prte_rml_recovery_status_t`, and notifies the RML, grpcomm, filem, and relm
 fault handlers.
 
+## Elastic DVM and launcher-less bootstrap
+
+The tree is no longer fixed for the life of the DVM. In elastic mode it can
+**grow** and **shrink**, and in a **bootstrapped** DVM the daemons come up
+independently rather than being fanned out by a launcher. Both push new
+behavior into the RML/OOB; keep these in mind when touching routing or the
+connection path.
+
+- **`dead_dmns` — a departure set that outlives a recompute.** `prte_rml_base`
+  now carries three failure bitmaps, not two: `failed_dmns` and
+  `global_failed_dmns` (both re-initialized on every `compute_routing_tree`)
+  plus `dead_dmns`, which is constructed **once** in `prte_rml_open` and never
+  re-initialized. `repair_routing_tree` records every departed rank in it, and
+  `compute_routing_tree` restores those marks into the freshly-wiped
+  `failed_dmns` before rebuilding ancestors/children. Without it, a grow would
+  wipe the failure marks and route to the dead vpid of a shrunk-out daemon
+  (#2491). The DVM never reuses a daemon vpid, so a hole in `[0, num_daemons)`
+  is permanent.
+
+- **A leaving daemon exits on the first lost route.** `prte_rml_route_lost`
+  checks `prte_dvm_leaving` first: if this daemon has been named as a shrink
+  target, it activates `PRTE_JOB_STATE_DAEMONS_TERMINATED` on *any* dropped
+  connection rather than trying to recover. This prevents a departing daemon's
+  normal disconnects from being misread as faults and propagated as adoption
+  notices. It is only a fast path — a bounded timer in `prted_comm.c`
+  guarantees departure even if no connection ever drops.
+
+- **Bootstrap synthesizes peer URIs on demand.** Normally a peer's contact URI
+  comes from the nidmap or the PMIx store. In a bootstrapped DVM no nidmap
+  distributed URIs during formation, and a healed lifeline's new parent (a
+  former grandparent) was never pre-synthesized. When `prte_bootstrap_setup` is
+  set and no peer object exists, `prte_oob_base_send_nb` derives the next hop's
+  URI from configuration via `prte_ess_base_bootstrap_peer_uri` and connects to
+  it. A synthesized URI cannot know the peer's interface mask, so `set_addr`
+  treats a missing/empty mask as `/0` (universally reachable) rather than
+  rejecting the address.
+
+- **Bootstrap tolerates a not-yet-present parent.** Because daemons boot
+  independently, a parent may simply not be up when a child times out on it.
+  In bootstrap mode, `prte_mca_oob_tcp_component_failed_to_connect` heals the
+  tree the same way a lost live parent would — `prte_rml_route_lost` promotes
+  to the next ancestor (a `COMM_FAILED` recovery) — instead of raising a fatal
+  `FAILED_TO_CONNECT`. The HNP is the exception: it is retried forever and
+  never allowed to time out.
+
+- **Two new connection-retry knobs.** `prte_oob_base` gained `retry_max_delay`
+  and `connect_max_time` (MCA params `prte_retry_max_delay`,
+  `prte_connect_max_time`), and each peer gained a `first_attempt` timestamp.
+  When `retry_max_delay > retry_delay`, the retry delay backs off exponentially
+  (retry_delay, 2×, 4×, …) capped at `retry_max_delay`, so a daemon waiting on
+  an absent peer polls fast at first and then settles onto a steady rate.
+  `connect_max_time` bounds how long a **non-lifeline** peer is chased before
+  giving up so the tree can heal to an ancestor; `0` (the default) means retry
+  forever, preserving the original behavior. The HNP is never subject to
+  `connect_max_time`.
+
 ## Gotchas before you edit
 
 - **Single progress thread.** All RML/OOB state is owned by the progress
@@ -109,5 +167,9 @@ fault handlers.
 - **One transport, one router.** Do not reintroduce component/module
   abstraction to "make it pluggable" unless there is a real second
   implementation; that abstraction is exactly what was removed.
+- **Do not re-initialize `dead_dmns`.** It is deliberately the one failure
+  bitmap that is *not* reset by `compute_routing_tree`; resetting it reopens the
+  #2491 grow bug. `pmix_bitmap` auto-expands as ranks are set, so it needs no
+  resizing when the DVM grows.
 - **Warnings are errors.** Debug builds enable `--enable-devel-check`; keep the
   tree warning-free.

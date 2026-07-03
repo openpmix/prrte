@@ -11,7 +11,18 @@ this tag*, asynchronously and in order per connection.
 
 This page explains how the RML is put together and how a message flows through
 it.  The code lives entirely in ``src/rml/``; a shorter, editing-oriented map
-is in ``src/rml/AGENTS.md``.
+is in ``src/rml/AGENTS.md``.  Two subsystems are large enough to have their own
+pages:
+
+.. toctree::
+   :maxdepth: 1
+
+   oob
+   relm
+
+This page covers the RML core (the send/receive API, message matching, and the
+radix routing tree).  :ref:`rml-oob-label` covers the TCP transport in detail,
+and :ref:`rml-relm-label` covers reliable messaging.
 
 Historical note: one directory, once three frameworks
 -----------------------------------------------------
@@ -174,7 +185,39 @@ death/adoption notices), followed by grpcomm, filem, and relm.
 ``prte_rml_send_buffer_reliable_nb`` routes through it; it drives a small state
 machine that re-sends messages over the repaired tree so that a message in
 flight when a daemon dies is not simply lost.  It is newer than the collapsed
-core and is intentionally kept as its own module.
+core and is intentionally kept as its own module.  Its protocol — message
+states, acknowledgements, replay, and the link-update recovery dance — is
+described on its own page: :ref:`rml-relm-label`.
+
+Elastic growth and launcher-less bootstrap
+------------------------------------------
+
+The tree is not fixed for the life of the DVM.  In *elastic* mode it can grow
+and shrink, and in a *bootstrapped* DVM the daemons come up independently rather
+than being fanned out by a launcher.  Both add behavior to the routing and
+transport layers:
+
+* **A permanent departure set.**  ``prte_rml_base`` carries a third failure
+  bitmap, ``dead_dmns``, alongside ``failed_dmns`` and ``global_failed_dmns``.
+  The first two are re-initialized on every ``prte_rml_compute_routing_tree``;
+  ``dead_dmns`` is constructed once and never reset, so a daemon that shrank out
+  (or failed) stays a permanent hole across the recompute a subsequent grow
+  triggers.  ``compute_routing_tree`` restores the dead marks into the
+  freshly-wiped ``failed_dmns`` before rebuilding the tree, so the rebuilt tree
+  routes around the hole instead of addressing a reused-looking but dead vpid.
+  (The DVM never reuses a daemon vpid.)
+
+* **A leaving daemon departs on the first lost route.**  When
+  ``prte_dvm_leaving`` is set — this daemon was named as a shrink target —
+  ``prte_rml_route_lost`` terminates immediately on *any* dropped connection
+  rather than trying to recover, so a departing daemon's normal disconnects are
+  never mistaken for faults.
+
+* **Bootstrap synthesizes contact information on demand.**  With no nidmap to
+  distribute URIs, the OOB derives a peer's contact URI from configuration when
+  it first needs to reach it, tolerates a synthesized URI that lacks an
+  interface mask, and treats a parent that is not yet up as a heal-to-ancestor
+  event rather than a fatal failure.  The details live in :ref:`rml-oob-label`.
 
 Where to look
 -------------
