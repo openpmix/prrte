@@ -209,7 +209,12 @@ ranges (e.g., "linux0,linux[2-10]"), or a PMIx "native" regular expression.
 An optional comma-delimited list of networks or interfaces the runtime should
 use for inter-node (daemon-to-daemon) communication. Entries may be interface
 names or CIDR subnets (e.g., "eth0,10.0.0.0/8"). When empty, all available
-interfaces are considered.
+interfaces are considered. The CIDR entries also disambiguate which address a
+daemon uses to reach its tree parent or the controller: when a configured host
+resolves to several addresses, the CIDR selects the one on the DVM
+interconnect. A multi-homed host with no CIDR to choose among its addresses
+causes a startup error rather than an arbitrary guess; a single-homed host
+needs no entry here.
 <BR>
 <BR>
 
@@ -217,7 +222,8 @@ interfaces are considered.
 <BR>
 The optional interface netmask associated with the inter-node network, used
 when constructing the contact information the DVM daemons exchange. The value
-follows the selected address family.
+follows the selected address family. When empty, the prefix of the matching
+DVMNetworks CIDR is used; absent that, reachability is left unrestricted.
 <BR>
 <BR>
 

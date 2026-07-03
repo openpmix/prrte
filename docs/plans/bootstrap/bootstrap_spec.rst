@@ -304,9 +304,11 @@ these races:
   node failed to boot).  A daemon therefore bounds how long it will wait for a
   given parent: after ``DVMConnectMaxTime`` seconds (default 30) it treats the
   parent as unreachable and heals up to the next ancestor, reusing the same
-  ancestor-climb logic the DVM uses when a live parent is lost.  The climb
-  continues up the tree until it reaches the controller, which is always
-  retried forever, so a daemon eventually joins the DVM as long as the
+  ancestor-climb logic the DVM uses when a live parent is lost.  It reaches the
+  adopted ancestor by synthesizing that ancestor's contact URI the same way —
+  its rank and host are known — so no distributed state is needed to re-home.
+  The climb continues up the tree until it reaches the controller, which is
+  always retried forever, so a daemon eventually joins the DVM as long as the
   controller is up.
 
 The DVM is fully formed once every daemon has reported in to the controller
