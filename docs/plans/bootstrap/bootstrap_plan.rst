@@ -268,19 +268,31 @@ interface mask.  Bootstrap:
 #. Resolves ``cfg.ctrlhost`` to an address of the **selected family**
    (``getaddrinfo`` with ``ai_family`` = ``AF_INET`` or ``AF_INET6`` per
    ``cfg.ip_version``).
+#. **Disambiguates a multi-homed host.**  When the name resolves to several
+   addresses, the ``DVMNetworks`` CIDR entries select the one on the DVM
+   interconnect (``pmix_net_samenetwork``).  A host that resolves to more than
+   one address with no CIDR to narrow it to exactly one is a hard error with a
+   diagnostic naming the host (``bootstrap-ambiguous-address`` /
+   ``bootstrap-no-matching-address``), rather than a silently-wrong interface.
+   A single-homed host is unambiguous and needs no ``DVMNetworks`` entry.
 #. Builds the process-name string for ``(dvm_nspace, 0)``.
-#. Fills the mask field from ``cfg.dvm_netmask`` when the administrator
-   supplied ``DVMNetmask``; otherwise leaves it **empty** and relies on the
-   parser tolerating an empty mask (below).
+#. Fills the mask field from ``cfg.dvm_netmask`` when the administrator supplied
+   ``DVMNetmask``; otherwise from the prefix of the ``DVMNetworks`` CIDR that
+   selected the address; otherwise leaves it **empty** and relies on the parser
+   tolerating an empty mask (below).
 #. Assembles the URI in the form matching ``cfg.ip_version`` — ``tcp://`` for
    IPv4, or ``tcp6://[...]`` (bracketed address, per RFC 3986) for IPv6 — and
    sets it as ``PRTE_MCA_prte_hnp_uri``.
 
-The ``DVMNetmask`` key exists precisely to give the mask field a correct,
-administrator-controlled value: a compute daemon synthesizing the controller
-URI cannot otherwise know the controller's real interface mask.  When it is
-provided, the mask field of the transport tuple (of whichever family) carries
-``cfg.dvm_netmask`` and the URI needs no special parser handling.
+This synthesis is a pure function of ``(rank, host)`` — the port is the shared
+``DVMPort`` and the name follows from the rank — so the **same routine builds
+any peer's URI**, not just the controller's.  ``prte_ess_base_bootstrap_peer_uri``
+exposes it: the controller URI is the rank-0 case, and a daemon in a deep radix
+tree uses it to reach a non-HNP parent (Step 7b).
+
+The ``DVMNetmask`` key gives the mask field an explicit, administrator-controlled
+value when the ``DVMNetworks`` prefix is not the desired reachability mask.  When
+neither is present the empty-mask fallback (below) applies.
 
 .. note::
    **Empty-mask tolerance is still required as the fallback** for when
@@ -335,12 +347,13 @@ launcher-less URI synthesis in Step 4 possible.
 networks/interfaces the runtime should use for inter-node communication — is
 applied by setting ``PRTE_MCA_prte_if_include`` from ``cfg.dvm_networks``.
 ``prte_if_include`` already accepts a comma-delimited list of interface names
-or CIDR subnets of either family (``split_and_resolve`` in ``oob/tcp``), so no
-code change is needed; the key simply lets the administrator pin the runtime's
+or CIDR subnets of either family (``split_and_resolve`` in ``oob/tcp``), so
+binding needs no code change; the key lets the administrator pin the runtime's
 transport to specific networks from the same ``prte.conf`` (per the precedence
-rule, overriding any
-``if_include`` in the MCA param file).  When ``DVMNetworks`` is omitted the
-runtime's default interface selection is unchanged.
+rule, overriding any ``if_include`` in the MCA param file).  When ``DVMNetworks``
+is omitted the runtime's default interface selection is unchanged.  Its CIDR
+entries serve a second purpose in Step 4: disambiguating which resolved address
+a synthesized peer URI should target on a multi-homed host.
 
 Step 6 — Wire the ``KeepFQDNHostnames`` key
 -------------------------------------------
@@ -470,6 +483,14 @@ one step earlier, so it reuses the same logic:
   up the tree.  Reaching the controller (rank 0) yields the HNP path, which is
   retried forever rather than fatal — the daemon simply keeps trying the
   controller per Step 7.
+* **The adopted parent's URI is synthesized on demand.**  Promotion changes the
+  lifeline to the grandparent, but only the *original* parent's URI was
+  synthesized at boot, so the send that re-establishes the lifeline routes to a
+  peer whose contact info is unknown.  ``oob_base_stubs.c``, at the point where
+  it would otherwise declare the message undeliverable, calls
+  ``prte_ess_base_bootstrap_peer_uri(hop)`` in a bootstrapped DVM to synthesize
+  that peer's URI (Step 4) and connect.  This is the general case of the
+  boot-time parent synthesis and covers every ancestor the climb may reach.
 
 The net effect: a daemon waits ``DVMConnectMaxTime`` for each successive
 ancestor and, in the worst case (only the controller ever boots), climbs to
