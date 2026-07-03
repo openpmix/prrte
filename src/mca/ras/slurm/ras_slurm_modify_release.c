@@ -22,40 +22,27 @@
 #include "src/mca/ras/base/base.h"
 
 /* Local functions */
-static bool prte_ras_slurm_session_contains_invoker(prte_session_t *session,
-                                                    const char *launching_jobid);
-static int prte_ras_slurm_session_removable_count(prte_session_stack_item_t *session_item,
-                                                  const char *launching_jobid);
-static prte_session_stack_item_t *prte_ras_slurm_find_releasable_session(const char *launching_jobid,
-                                                                         char **excluded_jobids);
-static int prte_ras_slurm_validate_count_release(int nodes_to_remove,
-                                                 const char *launching_jobid);
+static bool prte_ras_slurm_session_contains_invoker(prte_session_t *session, const char *launching_jobid);
+static int prte_ras_slurm_session_removable_count(prte_session_stack_item_t *session_item, const char *launching_jobid);
+static prte_session_stack_item_t *prte_ras_slurm_find_releasable_session(const char *launching_jobid, char **excluded_jobids);
+static int prte_ras_slurm_validate_count_release(int nodes_to_remove, const char *launching_jobid);
 static void localrelease(void *cbdata);
 static bool prte_ras_slurm_session_is_dynamic(prte_session_t *session);
 static int prte_ras_slurm_remove_nodes_by_name(prte_pmix_server_req_t *req, char **nodes);
 static int prte_ras_slurm_remove_allocation_by_id(prte_pmix_server_req_t *req, const char *alloc_id);
 static int prte_ras_slurm_remove_nodes_by_count(prte_pmix_server_req_t *req, uint64_t node_count);
 static int prte_ras_slurm_append_session_targets(prte_session_t *session, char ***target_nodes);
-static int prte_ras_slurm_append_release_targets(prte_session_t *session,
-                                                 char **requested_nodes,
-                                                 char ***target_nodes);
-static int prte_ras_slurm_append_count_session_targets(prte_session_t *session,
-                                                       const char *protected_node,
-                                                       int nodes_to_remove,
-                                                       char ***target_nodes);
-static int prte_ras_slurm_start_shrink(prte_pmix_server_req_t *req,
-                                       prte_ras_slurm_shrink_tracker_t *tracker,
-                                       char **target_nodes);
+static int prte_ras_slurm_append_release_targets(prte_session_t *session, char **requested_nodes, char ***target_nodes);
+static int prte_ras_slurm_append_count_session_targets(prte_session_t *session, const char *protected_node, int nodes_to_remove, char ***target_nodes);
+static int prte_ras_slurm_start_shrink(prte_pmix_server_req_t *req, prte_ras_slurm_shrink_tracker_t *tracker, char **target_nodes);
 static int prte_ras_slurm_complete_release_request(prte_pmix_server_req_t *req);
 static int prte_ras_slurm_parse_release_node_list(pmix_info_t *info, char ***nodes);
 static prte_session_stack_item_t *prte_ras_slurm_find_session_item_by_alloc_id(const char *alloc_id);
 static prte_session_stack_item_t *prte_ras_slurm_find_session_item_by_node(const char *node_name);
 static bool prte_ras_slurm_node_in_argv(char **nodes, const char *node_name);
 static int prte_ras_slurm_count_matching_session_nodes(prte_session_t *session, char **nodes);
-static int prte_ras_slurm_build_survivor_list(prte_session_t *session, char **nodes_to_remove,
-                                              char ***survivors);
-static int prte_ras_slurm_shrink_job_to_survivors(const char *slurm_jobid, char **survivor_nodes,
-                                                  char *err_msg, size_t err_msg_size);
+static int prte_ras_slurm_build_survivor_list(prte_session_t *session, char **nodes_to_remove, char ***survivors);
+static int prte_ras_slurm_shrink_job_to_survivors(const char *slurm_jobid, char **survivor_nodes, char *err_msg, size_t err_msg_size);
 static void prte_ras_slurm_cleanup_resize_scripts(const char *slurm_jobid);
 
 static void localrelease(void *cbdata)
