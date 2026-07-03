@@ -503,6 +503,20 @@ int main(int argc, char *argv[])
                                       "URI for the parent if tree launch is enabled.",
                                       PMIX_MCA_BASE_VAR_TYPE_STRING,
                                       &prte_parent_uri);
+    /* In a bootstrapped DVM there is no launcher to hand us a parent URI, and in
+     * a deep radix tree our parent is another daemon whose contact info no
+     * nidmap has yet delivered.  prte_init has by now built the routing tree and
+     * set PRTE_PROC_MY_PARENT->rank, so synthesize the parent's URI from the
+     * configuration exactly as we did the controller's.  For a flat tree the
+     * parent is the HNP (already stored above), so this is skipped. */
+    if (prte_bootstrap_setup && NULL == prte_parent_uri &&
+        PRTE_PROC_MY_PARENT->rank != PRTE_PROC_MY_HNP->rank) {
+        ret = prte_ess_base_bootstrap_parent_uri(PRTE_PROC_MY_PARENT->rank, &prte_parent_uri);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
+            goto DONE;
+        }
+    }
     if (NULL != prte_parent_uri) {
         /* set the contact info into our local database */
         ret = prte_rml_parse_uris(prte_parent_uri, PRTE_PROC_MY_PARENT, NULL);

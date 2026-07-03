@@ -75,11 +75,22 @@ runtime selects among all available interfaces. This duplicates the
 ``prte_if_include`` MCA parameter and is provided here so the transport can be
 managed from the single configuration file.
 
-``DVMNetmask=<netmask> (default: none)`` is the interface netmask associated
+The CIDR entries additionally disambiguate the address a daemon uses to reach
+its tree parent (or the controller). A daemon synthesizes those contact
+addresses from the configured host names before any topology has been
+distributed; when a host resolves to several addresses, the CIDR selects the
+one on the DVM interconnect. If such a host is multi-homed and no CIDR is given
+to choose among its addresses, the daemon fails to start with a clear
+diagnostic rather than guessing an interface. A single-homed host needs no
+``DVMNetworks`` entry.
+
+``DVMNetmask=<netmask> (default: derived)`` is the interface netmask associated
 with the inter-node network. It is used when constructing the contact
 information the DVM daemons exchange, allowing them to agree on reachability
 without dynamic discovery. The value follows the selected address family: a
-dotted netmask or prefix length for IPv4, or a prefix length for IPv6.
+dotted netmask or prefix length for IPv4, or a prefix length for IPv6. When
+omitted, the prefix of the ``DVMNetworks`` CIDR that selected the address is
+used; absent that, reachability is left unrestricted.
 
 ``DVMIPVersion=<4|6> (default: 4)`` selects the IP address family the DVM uses
 for inter-node communication. The default, ``4``, uses IPv4. Setting it to

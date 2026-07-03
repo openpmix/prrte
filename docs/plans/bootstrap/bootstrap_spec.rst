@@ -281,6 +281,13 @@ daemon) serves at most ``DVMRadix`` children rather than the whole DVM:
   daemon uses it to phone home, exactly as a launched daemon uses the parent
   URI its launcher provided.  The controller's own URI is the same
   synthesis at rank 0.
+* Resolving the parent's host name may yield **several addresses** on a
+  multi-homed node.  When it does, the ``DVMNetworks`` CIDR selects the address
+  on the DVM interconnect, and its prefix supplies the URI's reachability mask
+  (unless ``DVMNetmask`` overrides it).  A daemon never guesses among ambiguous
+  addresses: if a host resolves to more than one address and no CIDR narrows
+  the choice to exactly one, the daemon fails to start with a diagnostic naming
+  the host.  A single-homed host is unambiguous and needs no ``DVMNetworks``.
 
 Because the daemons boot asynchronously and independently, a daemon may become
 ready before its parent — or the controller — is listening, and any of them
