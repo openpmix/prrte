@@ -266,7 +266,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
     /* assign the nodes to a new session, allowing us to identify
      * all members of the group later */
-    ret = prte_ras_slurm_assign_new_session(slurm_jobid, NULL, nodes);
+    ret = prte_ras_slurm_assign_new_session(slurm_jobid, NULL, nodes, false);
     
     if(PRTE_SUCCESS != ret) {
         PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
@@ -792,8 +792,10 @@ int prte_ras_slurm_convert_jobid(const char *slurm_jobid, uint32_t *slurm_jobid_
  * @param[in] slurm_jobid  Slurm job ID string (must be convertible to uint32_t)
  * @param[in] user_refid   Optional user-provided allocation reference ID (may be NULL)
  * @param[in] node_list    List of prte_node_t to attach to the session
+ * @param[in] dynamic      Whether the session was created by a modify request
  */
-int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_refid, pmix_list_t *node_list)
+int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_refid,
+                                      pmix_list_t *node_list, bool dynamic)
 {
     if(NULL == slurm_jobid || NULL == node_list) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
@@ -859,6 +861,10 @@ int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_
 
     session->alloc_refid = slurm_jobid_dup;
     slurm_jobid_dup = NULL;
+
+    if (dynamic) {
+        PRTE_FLAG_SET(session, PRTE_SESSION_FLAG_DYNAMIC);
+    }
 
     prte_node_t *node = NULL;
 

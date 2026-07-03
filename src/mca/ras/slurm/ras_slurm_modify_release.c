@@ -31,6 +31,7 @@ static prte_session_stack_item_t *prte_ras_slurm_find_releasable_session(const c
 static int prte_ras_slurm_validate_count_release(int nodes_to_remove,
                                                  const char *launching_jobid);
 static void localrelease(void *cbdata);
+static bool prte_ras_slurm_session_is_dynamic(prte_session_t *session);
 static int prte_ras_slurm_remove_nodes_by_name(prte_pmix_server_req_t *req, char **nodes);
 static int prte_ras_slurm_remove_allocation_by_id(prte_pmix_server_req_t *req, const char *alloc_id);
 static int prte_ras_slurm_remove_nodes_by_count(prte_pmix_server_req_t *req, uint64_t node_count);
@@ -66,6 +67,17 @@ static void localrelease(void *cbdata)
 }
 
 /**
+ * @brief Check whether a Slurm session was created by a modify request.
+ *
+ * @param[in] session Slurm-backed session to inspect.
+ */
+static bool prte_ras_slurm_session_is_dynamic(prte_session_t *session)
+{
+    return NULL != session &&
+           PRTE_FLAG_TEST(session, PRTE_SESSION_FLAG_DYNAMIC);
+}
+
+/**
  * @brief Check whether a session contains the requesting Slurm job.
  *
  * @param[in] session Slurm-backed session to inspect.
@@ -92,7 +104,8 @@ static int prte_ras_slurm_session_removable_count(prte_session_stack_item_t *ses
         return 0;
     }
 
-    if (prte_ras_slurm_session_contains_invoker(session_item->session, launching_jobid)) {
+    if (!prte_ras_slurm_session_is_dynamic(session_item->session) ||
+        prte_ras_slurm_session_contains_invoker(session_item->session, launching_jobid)) {
         if (1 >= session_item->nodes_in_session) {
             return 0;
         }
@@ -469,6 +482,11 @@ int prte_ras_slurm_release_allocation(prte_session_t *session)
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
+    if (!prte_ras_slurm_session_is_dynamic(session)) {
+        /* This allocation was not added by PRRTE, so we do not manage its lifetime. */
+        return PRTE_SUCCESS;
+    }
+
     err = prte_ras_slurm_kill_job(session->alloc_refid, err_msg,
                                   sizeof(err_msg));
     if (PRTE_ERR_SLURM_CANCEL_FAILURE == err) {
@@ -512,6 +530,13 @@ void prte_ras_slurm_shrink_complete(prte_shrink_campaign_t *campaign)
 
         if (PRTE_RAS_SLURM_RELEASE_FULL_JOB == action->action) {
             int node_count = session_item->nodes_in_session;
+
+            if (!prte_ras_slurm_session_is_dynamic(session_item->session)) {
+                pmix_output(0, "ras:slurm:shrink_complete: refusing to terminate job %s "
+                               "because it was not dynamically added by PRRTE.",
+                            action->job_id);
+                continue;
+            }
 
             PMIX_RELEASE(session_item->session);
             pmix_list_remove_item(prte_slurm_session_stack, &session_item->super);
@@ -947,17 +972,25 @@ static int prte_ras_slurm_remove_nodes_by_name(prte_pmix_server_req_t *req, char
             continue;
         }
 
-        err = prte_ras_slurm_append_release_targets(session, nodes, &target_nodes);
-        if (PRTE_SUCCESS != err) {
-            goto cleanup;
-        }
-
         if (selected == session_item->nodes_in_session) {
+            if (!prte_ras_slurm_session_is_dynamic(session)) {
+                pmix_output(0, "ras:slurm:remove_nodes_by_name: refusing to terminate job %s "
+                               "because it was not dynamically added by PRRTE",
+                            session->alloc_refid);
+                err = PRTE_ERR_NOT_SUPPORTED;
+                goto cleanup;
+            }
+
             if (prte_ras_slurm_session_contains_invoker(session, launching_jobid)) {
                 pmix_output(0, "ras:slurm:remove_nodes_by_name: refusing to kill job %s "
                                "because it contains the invoking process",
                             session->alloc_refid);
                 err = PRTE_ERR_BAD_PARAM;
+                goto cleanup;
+            }
+
+            err = prte_ras_slurm_append_release_targets(session, nodes, &target_nodes);
+            if (PRTE_SUCCESS != err) {
                 goto cleanup;
             }
 
@@ -969,6 +1002,11 @@ static int prte_ras_slurm_remove_nodes_by_name(prte_pmix_server_req_t *req, char
             }
         } else {
             char **survivors = NULL;
+
+            err = prte_ras_slurm_append_release_targets(session, nodes, &target_nodes);
+            if (PRTE_SUCCESS != err) {
+                goto cleanup;
+            }
 
             err = prte_ras_slurm_build_survivor_list(session, nodes, &survivors);
             if (PRTE_SUCCESS != err) {
@@ -1026,6 +1064,13 @@ static int prte_ras_slurm_remove_allocation_by_id(prte_pmix_server_req_t *req, c
     session_item = prte_ras_slurm_find_session_item_by_alloc_id(alloc_id);
     if (NULL == session_item || NULL == session_item->session) {
         return PRTE_ERR_NOT_FOUND;
+    }
+
+    if (!prte_ras_slurm_session_is_dynamic(session_item->session)) {
+        pmix_output(0, "ras:slurm:remove_allocation_by_id: refusing to terminate job %s "
+                       "because it was not dynamically added by PRRTE",
+                    alloc_id);
+        return PRTE_ERR_NOT_SUPPORTED;
     }
 
     if (session_item->nodes_in_session >= prte_num_allocated_nodes) {
@@ -1160,9 +1205,11 @@ static int prte_ras_slurm_remove_nodes_by_count(prte_pmix_server_req_t *req, uin
         int removable_count = prte_ras_slurm_session_removable_count(session_item,
                                                                      launching_jobid);
 
-        if(!contains_invoker && nodes_left_to_rem >= session_item->nodes_in_session) {
+        if(prte_ras_slurm_session_is_dynamic(session) && !contains_invoker &&
+           nodes_left_to_rem >= session_item->nodes_in_session) {
             pmix_status_t pmix_err;
 
+            /* Case 1: remove the whole Slurm job after the DVM shrink. */
             err = prte_ras_slurm_add_release_action(tracker, session->alloc_refid,
                                                     PRTE_RAS_SLURM_RELEASE_FULL_JOB,
                                                     NULL);
@@ -1192,6 +1239,7 @@ static int prte_ras_slurm_remove_nodes_by_count(prte_pmix_server_req_t *req, uin
                 nodes_to_rem_from_session = removable_count;
             }
 
+            /* Case 2: keep the Slurm job alive and shrink it to its survivors. */
             char *protected_node = NULL;
 
             if(contains_invoker) {

@@ -678,7 +678,7 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
     /* Create a session  */
     err = prte_ras_slurm_assign_new_session(job_id,
                                             trk->user_request_id_provided ? request_id : NULL,
-                                            &added_nodes);
+                                            &added_nodes, true);
 
     if(PRTE_SUCCESS != err) {
         goto complete;
