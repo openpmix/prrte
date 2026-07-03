@@ -511,7 +511,7 @@ int main(int argc, char *argv[])
      * parent is the HNP (already stored above), so this is skipped. */
     if (prte_bootstrap_setup && NULL == prte_parent_uri &&
         PRTE_PROC_MY_PARENT->rank != PRTE_PROC_MY_HNP->rank) {
-        ret = prte_ess_base_bootstrap_parent_uri(PRTE_PROC_MY_PARENT->rank, &prte_parent_uri);
+        ret = prte_ess_base_bootstrap_peer_uri(PRTE_PROC_MY_PARENT->rank, &prte_parent_uri);
         if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             goto DONE;

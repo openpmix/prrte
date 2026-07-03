@@ -440,15 +440,15 @@ cleanup:
         free(ctrl_uri);
     }
     /* Deliberately retain bootstrap_cfg (do not free / invalidate it here): a
-     * daemon in a deep radix tree synthesizes its parent's URI later, from
-     * prted, once prte_init has established the parent's rank - see
-     * prte_ess_base_bootstrap_parent_uri.  The parsed config is small and the
-     * daemon is persistent, so holding it for the process lifetime is cheap and
-     * avoids re-reading and re-validating the file. */
+     * daemon in a deep radix tree synthesizes a peer's URI later - from prted
+     * for its initial parent, and from the OOB for a new parent adopted when a
+     * lifeline heals - see prte_ess_base_bootstrap_peer_uri.  The parsed config
+     * is small and the daemon is persistent, so holding it for the process
+     * lifetime is cheap and avoids re-reading and re-validating the file. */
     return rc;
 }
 
-int prte_ess_base_bootstrap_parent_uri(pmix_rank_t parent_rank, char **uri)
+int prte_ess_base_bootstrap_peer_uri(pmix_rank_t rank, char **uri)
 {
     const char *host = NULL;
     char *dvm_nspace = NULL;
@@ -465,7 +465,7 @@ int prte_ess_base_bootstrap_parent_uri(pmix_rank_t parent_rank, char **uri)
         }
     }
 
-    rc = prte_bootstrap_host_of_rank(&bootstrap_cfg, parent_rank, &host);
+    rc = prte_bootstrap_host_of_rank(&bootstrap_cfg, rank, &host);
     if (PRTE_SUCCESS != rc) {
         return rc;
     }
@@ -473,7 +473,7 @@ int prte_ess_base_bootstrap_parent_uri(pmix_rank_t parent_rank, char **uri)
     family = (6 == bootstrap_cfg.ip_version) ? AF_INET6 : AF_INET;
     pmix_asprintf(&dvm_nspace, "%s-prte-dvm", bootstrap_cfg.cluster);
 
-    rc = synth_uri(&bootstrap_cfg, dvm_nspace, family, parent_rank, host, uri);
+    rc = synth_uri(&bootstrap_cfg, dvm_nspace, family, rank, host, uri);
 
     free(dvm_nspace);
     return rc;
