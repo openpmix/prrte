@@ -83,7 +83,8 @@ int prte_ras_slurm_drain_cmd_output(FILE *fp, char *output, size_t output_size);
 int prte_ras_slurm_validate_jobid(const char *slurm_jobid);
 int prte_ras_slurm_validate_hostname(const char *hostname);
 int prte_ras_slurm_convert_jobid(const char *slurm_jobid, uint32_t *slurm_jobid_numeric);
-int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_refid, pmix_list_t *node_list);
+int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_refid,
+                                      pmix_list_t *node_list, bool dynamic);
 int prte_ras_slurm_tag_node_allocation(const char *slurm_jobid, pmix_list_t *node_list);
 
 typedef struct {
