@@ -470,6 +470,18 @@ int main(int argc, char *argv[])
                 prte_process_info.nodename);
     }
 
+    if (bootstrap_controller) {
+        /* We are the self-promoted DVM controller (HNP).  The daemons were
+         * started independently on every node and are already phoning home, so
+         * we do NOT perform the daemon report-back sequence below.  Instead we
+         * drive the HNP state machine: ALLOCATE loads the configured node list
+         * into the pool (ras/bootstrap), and prte_plm_base_allocation_complete
+         * then builds the virtual machine and waits for the running daemons to
+         * report in.  Once all have reported, the DVM reaches VM_READY. */
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOCATE);
+        goto bootstrap_wait;
+    }
+
     /* add the DVM master's URI to our info */
     PMIX_VALUE_LOAD(&val, prte_process_info.my_hnp_uri, PMIX_STRING);
     PMIX_LOAD_NSPACE(proc.nspace, prte_process_info.myproc.nspace);
@@ -718,6 +730,7 @@ int main(int argc, char *argv[])
         }
     }
 
+bootstrap_wait:
     if (prte_debug_flag) {
         pmix_output(0, "%s prted: up and running - waiting for commands!",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
@@ -871,8 +884,13 @@ static void node_regex_report(int status, pmix_proc_t *sender, pmix_data_buffer_
 
     *active = false;
 
-    /* now launch any child daemons of ours */
-    prte_plm.remote_spawn();
+    /* now launch any child daemons of ours - but only if the active launcher
+     * spawns the tree recursively (e.g. ssh). In a bootstrapped DVM every
+     * daemon is started externally and wires itself in, so no plm is selected
+     * and remote_spawn is NULL; there is nothing for us to launch. */
+    if (NULL != prte_plm.remote_spawn) {
+        prte_plm.remote_spawn();
+    }
 
     report_prted();
 }

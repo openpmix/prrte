@@ -187,9 +187,39 @@ void prte_plm_base_allocation_complete(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_node_t *node;
+    int rc;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(caddy);
+
+    /* In a bootstrapped DVM the daemons were started independently on every
+     * node and are already phoning home - there is nothing for us to launch.
+     * We therefore establish the virtual machine directly from the allocated
+     * node pool (assigning vpids, building the routing tree, and setting the
+     * expected daemon count) and then simply wait: as each running daemon
+     * reports in, prte_plm_base_daemon_callback advances the state machine to
+     * DAEMONS_REPORTED and on to VM_READY.
+     *
+     * This special handling applies ONLY to the daemon job (the one-time DVM
+     * formation). Application jobs launched later into the running DVM must
+     * follow the normal path: their LAUNCH_DAEMONS step calls setup_vm, finds
+     * every daemon already present ("no new daemons required"), and advances
+     * itself to DAEMONS_REPORTED. Taking the bootstrap branch for an app job
+     * would strand it in DAEMONS_LAUNCHED with nothing left to report in. */
+    if (prte_bootstrap_setup &&
+        caddy->jdata == prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace)) {
+        caddy->jdata->state = PRTE_JOB_STATE_ALLOCATION_COMPLETE;
+        rc = prte_plm_base_setup_virtual_machine(caddy->jdata);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+            PMIX_RELEASE(caddy);
+            return;
+        }
+        caddy->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
+        PMIX_RELEASE(caddy);
+        return;
+    }
 
     /* if we don't want to launch, then we at least want
      * to map so we can see where the procs would have
