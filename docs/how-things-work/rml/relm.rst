@@ -32,7 +32,7 @@ copying ``prte_relm_base_module`` into the global ``prte_relm`` and wiring every
 state-machine callback to a ``prte_relm_base_*`` function.
 
 Identifying a message
---------------------
+---------------------
 
 Every reliable message has a stable, globally-unique identity that all daemons
 on its path agree on:
@@ -68,7 +68,7 @@ whose predecessor has not yet arrived is parked in the ``PENDING`` state and
 released to ``SENDING`` when the predecessor is posted.
 
 The message lifecycle
---------------------
+---------------------
 
 Each ``prte_relm_msg_t`` moves through a small set of *lasting* states
 (``types.h``).  Because the same message object exists on every daemon along the
@@ -108,7 +108,7 @@ ACK-of-ACK, which walks back downstream so every daemon on the path releases its
 copy.
 
 State updates on the wire
-------------------------
+-------------------------
 
 State changes propagate as small RELM control messages carrying the message's
 signature, its ``prev_uid``, its state, and (for ``SENDING``) the data.  They
@@ -136,7 +136,7 @@ or downstream neighbor are simply ignored — a natural consequence of the tree
 having changed.
 
 Caching and replay
------------------
+------------------
 
 An intermediate daemon holds a message's data after forwarding it (state
 ``SENT``) so it can replay the data if a downstream daemon lost it during a
@@ -152,7 +152,7 @@ When data is needed but no longer cached anywhere reachable, a daemon issues a
 origin, which always can) replays it as a fresh ``SENDING``.
 
 Surviving a fault: link updates
-------------------------------
+-------------------------------
 
 The steady-state protocol assumes the path is stable.  When a daemon fails, the
 routing layer repairs the tree and notifies the registered fault handlers (RML,
