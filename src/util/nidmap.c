@@ -38,6 +38,7 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
     pmix_rank_t *vpids = NULL;
     uint8_t u8;
     int n, m, ndaemons, nbytes;
+    pmix_rank_t span;
     bool compressed;
     char **names = NULL;
     char **aliases = NULL, **als;
@@ -70,14 +71,34 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
         return rc;
     }
 
-    /* pack the size of the daemon vpid space, [0, num_daemons). This can be
-     * larger than the number of live daemons packed below: a DVM shrink leaves
-     * a permanent hole in the vpid space (the DVM never reuses a daemon vpid),
+    /* Pack the size of the daemon vpid space, [0, span). This can be larger
+     * than the number of live daemons packed below: a DVM shrink leaves a
+     * permanent hole in the vpid space (the DVM never reuses a daemon vpid),
      * so the departed daemon has no entry in the name/vpid lists. Receivers
      * need this exact span - not the live count - so their routing tree covers
      * the same rank space the HNP uses, and so they can identify the holes as
-     * permanently-dead ranks to route around (#2491). */
-    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buffer, &prte_process_info.num_daemons, 1, PMIX_PROC_RANK);
+     * permanently-dead ranks to route around (#2491).
+     *
+     * The span must cover every vpid we actually pack below. num_daemons is
+     * normally that span, but it can transiently lag the pool: a bootstrap
+     * daemon that departed and rebooted still has its node->daemon entry (so it
+     * is packed), yet num_daemons is not restored until the daemon formally
+     * reports its (re)launch. Encoding num_daemons as the span in that window
+     * would exclude the top vpid, corrupting the receiver's routing tree. So
+     * pre-scan the pool for the highest daemon vpid and use span =
+     * max(num_daemons, highest_vpid + 1) - large enough to cover every packed
+     * daemon while still preserving a top-of-range shrink hole. */
+    span = prte_process_info.num_daemons;
+    for (n = 0; n < pool->size; n++) {
+        nptr = (prte_node_t *) pmix_pointer_array_get_item(pool, n);
+        if (NULL == nptr || NULL == nptr->daemon) {
+            continue;
+        }
+        if (nptr->daemon->name.rank + 1 > span) {
+            span = nptr->daemon->name.rank + 1;
+        }
+    }
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buffer, &span, 1, PMIX_PROC_RANK);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return rc;
@@ -90,8 +111,9 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
      * all just yet. However, even the largest systems won't
      * have more than a million nodes for quite some time,
      * so for now we'll just allocate enough space to hold
-     * them all. Someone can optimize this further later */
-    nbytes = prte_process_info.num_daemons * sizeof(pmix_rank_t);
+     * them all. Someone can optimize this further later. Size
+     * the buffer to the span so it holds every packed vpid. */
+    nbytes = span * sizeof(pmix_rank_t);
     vpids = (pmix_rank_t *) malloc(nbytes);
 
     ndaemons = 0;
@@ -443,18 +465,30 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         nd->daemon = proc;
     }
 
-    /* Record any vpid holes as permanently-dead ranks. The DVM spans [0, ndmns)
-     * daemon vpids, but a shrunk-out daemon leaves a hole with no entry above,
-     * so daemons->procs has a gap at that rank. Marking the gap in the
-     * persistent dead set makes this daemon's routing tree route around the
-     * hole exactly as the HNP and the surviving daemons do - closing the gap
-     * that a brand-new daemon (empty dead set) would otherwise have (#2491).
-     * On an unshrunk DVM ndmns equals the live count, so nothing is marked and
-     * behavior is unchanged. */
+    /* Record any vpid holes as departed ranks. The DVM spans [0, ndmns) daemon
+     * vpids, but a shrunk-out (or not-yet-present bootstrap) daemon leaves a
+     * hole with no entry above, so daemons->procs has a gap at that rank.
+     * Marking the gap makes this daemon's routing tree route around the hole
+     * exactly as the HNP and the surviving daemons do - closing the gap that a
+     * brand-new daemon (empty failure set) would otherwise have (#2491). On an
+     * unshrunk, fully-present DVM ndmns equals the live count, so nothing is
+     * marked and behavior is unchanged. */
     bool newdead = false;
     for (pmix_rank_t r = 0; r < ndmns; r++) {
-        if (NULL == pmix_pointer_array_get_item(daemons->procs, r) &&
-            !pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, r)) {
+        if (NULL != pmix_pointer_array_get_item(daemons->procs, r)) {
+            continue;
+        }
+        // In a bootstrapped DVM a vpid hole is not necessarily permanent: the
+        // node can reboot and its daemon return with the same rank. Record it
+        // as absent (clearable by the unheal path) rather than dead. In a
+        // launched/elastic DVM the hole is permanent (#2491) and goes to
+        // dead_dmns exactly as before.
+        if (prte_bootstrap_setup) {
+            if (!pmix_bitmap_is_set_bit(&prte_rml_base.absent_dmns, r)) {
+                pmix_bitmap_set_bit(&prte_rml_base.absent_dmns, r);
+                newdead = true;
+            }
+        } else if (!pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, r)) {
             pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, r);
             newdead = true;
         }
