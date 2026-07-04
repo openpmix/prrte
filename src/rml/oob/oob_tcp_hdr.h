@@ -29,6 +29,8 @@
 
 #include "prte_config.h"
 
+#include "types.h"
+
 /* Message types carried in the TCP header. IDENT and PROBE are used
  * during the connection handshake; USER marks a normal RML message,
  * whether it is destined for us or is being relayed on to the next hop.
@@ -55,6 +57,10 @@ typedef struct {
     uint32_t seq_num;
     /* number of bytes in message */
     uint32_t nbytes;
+    /* boot epoch (incarnation) of the origin. A daemon that departs and reboots
+     * into the same rank comes back with a strictly-greater epoch, so a hop can
+     * drop late traffic stamped with the stale incarnation's epoch. */
+    uint64_t epoch;
     /* type of message */
     prte_oob_tcp_msg_type_t type;
 } prte_oob_tcp_hdr_t;
@@ -65,7 +71,8 @@ typedef struct {
     (h)->origin.rank = ntohl((h)->origin.rank); \
     (h)->dst.rank = ntohl((h)->dst.rank);       \
     (h)->tag = PRTE_RML_TAG_NTOH((h)->tag);     \
-    (h)->nbytes = ntohl((h)->nbytes);
+    (h)->nbytes = ntohl((h)->nbytes);           \
+    (h)->epoch = prte_ntoh64((h)->epoch);
 
 /**
  * Convert the message header to network byte order
@@ -74,6 +81,7 @@ typedef struct {
     (h)->origin.rank = htonl((h)->origin.rank); \
     (h)->dst.rank = htonl((h)->dst.rank);       \
     (h)->tag = PRTE_RML_TAG_HTON((h)->tag);     \
-    (h)->nbytes = htonl((h)->nbytes);
+    (h)->nbytes = htonl((h)->nbytes);           \
+    (h)->epoch = prte_hton64((h)->epoch);
 
 #endif /* _MCA_OOB_TCP_HDR_H_ */

@@ -499,6 +499,29 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                     PRTE_NAME_PRINT(&peer->recv_msg->hdr.origin), (int) peer->recv_msg->hdr.nbytes,
                     PRTE_NAME_PRINT(&peer->recv_msg->hdr.dst), peer->recv_msg->hdr.tag);
 
+                /* Incarnation guard (bootstrap only): a departed daemon can
+                 * reboot into the same rank and return with a strictly-greater
+                 * boot epoch. Drop traffic stamped with a stale (older) epoch
+                 * for a daemon rank so the old incarnation's late messages are
+                 * not confused with the new one. Only daemon-namespace traffic
+                 * is checked -- tool namespaces reuse rank numbers. The full
+                 * message has already been read off the socket, so dropping
+                 * here leaves the byte stream correctly framed. */
+                if (prte_bootstrap_setup &&
+                    PMIX_CHECK_NSPACE(peer->recv_msg->hdr.origin.nspace,
+                                      PRTE_PROC_MY_NAME->nspace) &&
+                    !prte_rml_epoch_ok(peer->recv_msg->hdr.origin.rank,
+                                       peer->recv_msg->hdr.epoch)) {
+                    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
+                                        "%s DROPPING STALE-INCARNATION MSG FROM %s epoch %lu",
+                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                        PRTE_NAME_PRINT(&peer->recv_msg->hdr.origin),
+                                        (unsigned long) peer->recv_msg->hdr.epoch);
+                    PMIX_RELEASE(peer->recv_msg);
+                    peer->recv_msg = NULL;
+                    return;
+                }
+
                 /* am I the intended recipient (header was already converted back to host order)? */
                 if (PMIX_CHECK_PROCID(&peer->recv_msg->hdr.dst, PRTE_PROC_MY_NAME)) {
                     /* yes - post it to the RML for delivery */
@@ -524,6 +547,9 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                     snd = PMIX_NEW(prte_rml_send_t);
                     snd->dst = peer->recv_msg->hdr.dst;
                     PMIX_XFER_PROCID(&snd->origin, &peer->recv_msg->hdr.origin);
+                    /* preserve the origin's epoch across the relay (the
+                     * constructor defaulted it to our own epoch) */
+                    snd->epoch = peer->recv_msg->hdr.epoch;
                     snd->tag = peer->recv_msg->hdr.tag;
                     bo.bytes = peer->recv_msg->data;
                     bo.size = peer->recv_msg->hdr.nbytes;
