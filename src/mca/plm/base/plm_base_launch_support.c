@@ -1322,6 +1322,20 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             prted_failed_launch = true;
             goto CLEANUP;
         }
+        /* A returning daemon (the bootstrap unheal path): its node rebooted and
+         * it is reporting in again after we recorded it COMM_FAILED and
+         * decremented num_daemons on its death. Restore the count so the nidmap
+         * span [0, num_daemons) and every daemon-count-derived computation are
+         * correct again -- otherwise the launch nidmap encodes a shorter span
+         * than the live daemon set and re-poisons the returned daemon (it decodes
+         * its own rank, or a peer beyond the truncated span, as a dead hole).
+         * Only a daemon that had actually failed reaches this: a first launch or
+         * a grow target is not COMM_FAILED here, so formation and grow are
+         * unaffected, and once set RUNNING below a duplicate report cannot
+         * double-count. Gated on bootstrap, the only mode a daemon can return in. */
+        if (prte_bootstrap_setup && PRTE_PROC_STATE_COMM_FAILED == daemon->state) {
+            ++prte_process_info.num_daemons;
+        }
         daemon->state = PRTE_PROC_STATE_RUNNING;
         /* record that this daemon is alive */
         PRTE_FLAG_SET(daemon, PRTE_PROC_FLAG_ALIVE);
