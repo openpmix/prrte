@@ -181,6 +181,12 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 #define PRTE_RML_TAG_RELM_STATE           78
 #define PRTE_RML_TAG_RELM_LINK            79
 
+/* daemon return / revival (the bootstrap "unheal" path): a rebooted daemon
+ * announces itself to the HNP with DAEMON_RETURNED; the HNP broadcasts
+ * DAEMON_REVIVED so every daemon re-inserts the returned rank into its tree */
+#define PRTE_RML_TAG_DAEMON_RETURNED      80
+#define PRTE_RML_TAG_DAEMON_REVIVED       81
+
 #define PRTE_RML_TAG_MAX                 100
 
 #define PRTE_RML_TAG_NTOH(t) ntohl(t)

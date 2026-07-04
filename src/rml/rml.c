@@ -158,6 +158,12 @@ int prte_rml_open(void)
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON_ADOPTED, true,
                   prte_rml_recv_adoption_notice, NULL);
 
+    /* set up return/revival receives for the bootstrap unheal path */
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON_RETURNED, true,
+                  prte_rml_recv_return_request, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON_REVIVED, true,
+                  prte_rml_recv_revival_notice, NULL);
+
     /* compute the routing tree - only thing we need to know is the
      * number of daemons in the DVM */
     prte_rml_compute_routing_tree();

@@ -353,3 +353,95 @@ void prte_rml_fault_handler(const prte_rml_recovery_status_t* status){
     send_adoption_notices(status);
     send_failures_notice(status);
 }
+
+/* Bootstrap trigger: a daemon that has just come up announces itself to the
+ * HNP. If this is a genuine return (the HNP still has our rank marked absent)
+ * the HNP will broadcast a revival; if it is a first boot the HNP finds the
+ * rank live and ignores it, so the send is always safe to make. */
+void prte_rml_send_return_notice(void){
+    pmix_data_buffer_t* msg = PMIx_Data_buffer_create();
+    pmix_rank_t rank = PRTE_PROC_MY_NAME->rank;
+    int ret = PMIx_Data_pack(NULL, msg, &rank, 1, PMIX_PROC_RANK);
+    if(PMIX_SUCCESS != ret){
+        PMIX_ERROR_LOG(ret);
+        PMIX_DATA_BUFFER_RELEASE(msg);
+        return;
+    }
+    PRTE_RML_SEND(ret, PRTE_PROC_MY_HNP->rank, msg, PRTE_RML_TAG_DAEMON_RETURNED);
+    if(PRTE_SUCCESS != ret){
+        PRTE_ERROR_LOG(ret);
+        PMIX_DATA_BUFFER_RELEASE(msg);
+    }
+}
+
+/* HNP side: validate a daemon's return and, if it really was absent, broadcast
+ * the revival so every daemon re-inserts the rank into its routing tree. */
+void prte_rml_recv_return_request(
+    int status, pmix_proc_t* sender, pmix_data_buffer_t* buf,
+    prte_rml_tag_t tag, void* cbdata
+) {
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
+
+    /* Only the DVM master arbitrates returns. */
+    if(!PRTE_PROC_IS_MASTER){
+        return;
+    }
+
+    int cnt = 1;
+    pmix_rank_t rank;
+    int ret = PMIx_Data_unpack(NULL, buf, &rank, &cnt, PMIX_PROC_RANK);
+    if(PMIX_SUCCESS != ret){
+        PMIX_ERROR_LOG(ret);
+        return;
+    }
+
+    /* Idempotent: a rank that is not currently absent (a first boot, a
+     * duplicate notice, or one we already revived) needs no action. */
+    if(!pmix_bitmap_is_set_bit(&prte_rml_base.absent_dmns, rank)){
+        return;
+    }
+
+    PMIX_OUTPUT_VERBOSE((1, prte_rml_base.routed_output,
+                         "%s routed:radix: daemon %s returned; broadcasting"
+                         " revival", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         PRTE_VPID_PRINT(rank)));
+
+    /* Broadcast the revival. We do NOT revive our own tree here: the master
+     * relays its own xcast back through the normal receive path, so we converge
+     * via prte_rml_recv_revival_notice like everyone else -- and, crucially, on
+     * the xcast's forward-first path. If we are the returned rank's parent we
+     * are currently holding its orphaned children; reviving early would drop
+     * them from our tree before the xcast forwards to them, stranding them.
+     * Forward-first delivery reshapes our tree only after those children have
+     * been handed the notice. The xcast travels the current tree, which routes
+     * around the absent rank, so it need not (and will not) reach the returned
+     * daemon itself -- that daemon already computed a healthy tree. */
+    pmix_data_buffer_t* msg = PMIx_Data_buffer_create();
+    ret = PMIx_Data_pack(NULL, msg, &rank, 1, PMIX_PROC_RANK);
+    if(PMIX_SUCCESS != ret){
+        PMIX_ERROR_LOG(ret);
+        PMIX_DATA_BUFFER_RELEASE(msg);
+        return;
+    }
+    prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON_REVIVED, msg);
+    PMIX_DATA_BUFFER_RELEASE(msg);
+}
+
+/* All daemons: converge on a broadcast revival by re-inserting the returned
+ * rank into the local routing tree. Idempotent via prte_rml_revive_routing_tree
+ * (a no-op if the rank is not marked absent here). */
+void prte_rml_recv_revival_notice(
+    int status, pmix_proc_t* sender, pmix_data_buffer_t* buf,
+    prte_rml_tag_t tag, void* cbdata
+) {
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
+
+    int cnt = 1;
+    pmix_rank_t rank;
+    int ret = PMIx_Data_unpack(NULL, buf, &rank, &cnt, PMIX_PROC_RANK);
+    if(PMIX_SUCCESS != ret){
+        PMIX_ERROR_LOG(ret);
+        return;
+    }
+    prte_rml_revive_routing_tree(rank);
+}

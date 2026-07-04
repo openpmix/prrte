@@ -230,6 +230,17 @@ PRTE_EXPORT void prte_rml_recv_adoption_notice(int status, pmix_proc_t *sender,
                                                pmix_data_buffer_t* buf,
                                                prte_rml_tag_t tag,
                                                void *cbdata);
+/* A bootstrap daemon announces its (re)appearance to the HNP; the HNP
+ * validates the rank is currently absent and broadcasts a revival. */
+PRTE_EXPORT void prte_rml_send_return_notice(void);
+PRTE_EXPORT void prte_rml_recv_return_request(int status, pmix_proc_t *sender,
+                                              pmix_data_buffer_t* buf,
+                                              prte_rml_tag_t tag,
+                                              void *cbdata);
+PRTE_EXPORT void prte_rml_recv_revival_notice(int status, pmix_proc_t *sender,
+                                              pmix_data_buffer_t* buf,
+                                              prte_rml_tag_t tag,
+                                              void *cbdata);
 PRTE_EXPORT int prte_rml_route_lost(pmix_rank_t route);
 PRTE_EXPORT pmix_rank_t prte_rml_get_route(pmix_rank_t target);
 PRTE_EXPORT int prte_rml_get_subtree_index(pmix_rank_t target);
