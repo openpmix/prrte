@@ -542,9 +542,10 @@ int main(int argc, char *argv[])
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_PRTED_CALLBACK,
                   PRTE_RML_PERSISTENT, rollup, NULL);
 
-    /* In a bootstrapped DVM, announce our appearance to the HNP. On a first
-     * boot the HNP finds our rank live and ignores this; if our node had left
-     * and rebooted, the HNP still has us marked absent and will broadcast a
+    /* In a bootstrapped DVM, announce our appearance one hop up to our parent.
+     * On a first boot the parent finds our rank live and drops the notice, so
+     * the root is never involved; if our node had left and rebooted, the parent
+     * (which had us marked absent) escalates to the HNP, which broadcasts a
      * revival so the DVM re-inserts us into the routing tree (the unheal path).
      * Only bootstrap daemons do this -- launched daemons cannot return with
      * their original vpid, so nothing revives them. The controller took the

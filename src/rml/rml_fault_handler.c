@@ -354,10 +354,15 @@ void prte_rml_fault_handler(const prte_rml_recovery_status_t* status){
     send_failures_notice(status);
 }
 
-/* Bootstrap trigger: a daemon that has just come up announces itself to the
- * HNP. If this is a genuine return (the HNP still has our rank marked absent)
- * the HNP will broadcast a revival; if it is a first boot the HNP finds the
- * rank live and ignores it, so the send is always safe to make. */
+/* Bootstrap trigger: a daemon that has just come up announces itself to its
+ * parent (one hop up its lifeline), NOT to the HNP. Its parent is precisely the
+ * daemon that knows whether this rank was absent -- the global death broadcast
+ * marked it everywhere -- so the parent can tell a genuine return from a first
+ * boot and only escalate the former. Announcing to the parent instead of the
+ * root keeps a returning daemon off the root's back: on a first boot every
+ * parent simply drops the notice, so the root sees nothing (beyond its own few
+ * direct children) and no daemon opens a socket to the root. The notice rides
+ * the existing lifeline link, so it costs no new connection. */
 void prte_rml_send_return_notice(void){
     pmix_data_buffer_t* msg = PMIx_Data_buffer_create();
     pmix_rank_t rank = PRTE_PROC_MY_NAME->rank;
@@ -367,25 +372,25 @@ void prte_rml_send_return_notice(void){
         PMIX_DATA_BUFFER_RELEASE(msg);
         return;
     }
-    PRTE_RML_SEND(ret, PRTE_PROC_MY_HNP->rank, msg, PRTE_RML_TAG_DAEMON_RETURNED);
+    PRTE_RML_SEND(ret, PRTE_PROC_MY_PARENT->rank, msg,
+                  PRTE_RML_TAG_DAEMON_RETURNED);
     if(PRTE_SUCCESS != ret){
         PRTE_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_RELEASE(msg);
     }
 }
 
-/* HNP side: validate a daemon's return and, if it really was absent, broadcast
- * the revival so every daemon re-inserts the rank into its routing tree. */
+/* Handle a return announcement. A daemon sends this one hop to its parent; the
+ * parent that finds the rank absent escalates one relayed message to the HNP,
+ * and the HNP -- the single arbiter -- broadcasts the revival. A daemon that
+ * does not have the rank marked absent (a first boot, a duplicate, or one it
+ * already revived) drops the notice, so the whole exchange is idempotent and,
+ * on the common first-boot path, never reaches the root at all. */
 void prte_rml_recv_return_request(
     int status, pmix_proc_t* sender, pmix_data_buffer_t* buf,
     prte_rml_tag_t tag, void* cbdata
 ) {
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
-
-    /* Only the DVM master arbitrates returns. */
-    if(!PRTE_PROC_IS_MASTER){
-        return;
-    }
 
     int cnt = 1;
     pmix_rank_t rank;
@@ -395,9 +400,29 @@ void prte_rml_recv_return_request(
         return;
     }
 
-    /* Idempotent: a rank that is not currently absent (a first boot, a
-     * duplicate notice, or one we already revived) needs no action. */
+    /* Idempotent filter: if this rank is not absent in our view, there is
+     * nothing to revive -- drop it here rather than burden anyone upstream. */
     if(!pmix_bitmap_is_set_bit(&prte_rml_base.absent_dmns, rank)){
+        return;
+    }
+
+    /* Not the arbiter: pass the notice one step toward the HNP. The message is
+     * addressed to the HNP, so intermediate hops relay it without processing;
+     * only the master's handler runs. This is O(1) per real return. */
+    if(!PRTE_PROC_IS_MASTER){
+        pmix_data_buffer_t* up = PMIx_Data_buffer_create();
+        ret = PMIx_Data_pack(NULL, up, &rank, 1, PMIX_PROC_RANK);
+        if(PMIX_SUCCESS != ret){
+            PMIX_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_RELEASE(up);
+            return;
+        }
+        PRTE_RML_SEND(ret, PRTE_PROC_MY_HNP->rank, up,
+                      PRTE_RML_TAG_DAEMON_RETURNED);
+        if(PRTE_SUCCESS != ret){
+            PRTE_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_RELEASE(up);
+        }
         return;
     }
 
