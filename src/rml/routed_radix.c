@@ -249,13 +249,23 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global){
                 continue;
             }
             pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, r);
-            // Record the departure permanently. compute_routing_tree re-inits
-            // failed_dmns on every DVM grow; dead_dmns is not re-initialized, so
-            // restoring it there keeps the rebuilt tree routing around this rank
-            // rather than treating the stale vpid hole as a live daemon (#2491).
-            // The DVM never reuses a daemon vpid, so a departed rank stays a
-            // permanent hole in [0, num_daemons).
-            pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, r);
+            // Record the departure so it survives the recompute a DVM grow
+            // triggers (compute_routing_tree re-inits failed_dmns; the
+            // persistent set is restored there so the rebuilt tree keeps routing
+            // around this rank rather than treating the stale vpid hole as a
+            // live daemon -- #2491).
+            //
+            // In a bootstrapped DVM the departure may be temporary: the node can
+            // reboot and its daemon return with the same rank. Record it as
+            // absent (clearable by the unheal path) rather than dead. In a
+            // launched/elastic DVM a departed vpid is permanent -- no launcher
+            // can re-place a daemon at a specific existing vpid -- so it goes to
+            // dead_dmns exactly as before.
+            if(prte_bootstrap_setup){
+                pmix_bitmap_set_bit(&prte_rml_base.absent_dmns, r);
+            } else {
+                pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, r);
+            }
         }
         ((pmix_rank_t*)status.failed_ranks.array)[j++] = r;
     }
@@ -428,9 +438,14 @@ void prte_rml_compute_routing_tree(void){
     // live daemon and route to that dead vpid, breaking wireup on the grow
     // (#2491). dead_dmns is maintained in prte_rml_repair_routing_tree and is
     // never re-initialized, so it carries the holes across the recompute.
+    // absent_dmns (bootstrap daemons whose node is gone but may return) is
+    // restored the same way: while the daemon is absent the tree must route
+    // around its hole, so it counts as failed for this recompute. It differs
+    // from dead_dmns only in that the unheal path can later clear it.
     bool have_dead = false;
     for(pmix_rank_t r = 0; r < prte_rml_base.n_dmns; r++){
-        if(pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, r)){
+        if(pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, r) ||
+           pmix_bitmap_is_set_bit(&prte_rml_base.absent_dmns, r)){
             pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, r);
             have_dead = true;
         }

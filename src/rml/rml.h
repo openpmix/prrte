@@ -175,10 +175,19 @@ typedef struct {
     // All daemons globally confirmed to have failed
     pmix_bitmap_t global_failed_dmns;
     // Ranks that have permanently departed the DVM (shrunk out, or lost to a
-    // fault). Unlike failed_dmns, this set is NOT re-initialized by
-    // prte_rml_compute_routing_tree, so it survives the recompute that a grow
-    // triggers and lets the rebuilt tree keep routing around the hole (#2491).
+    // fault in a launched/elastic DVM). Unlike failed_dmns, this set is NOT
+    // re-initialized by prte_rml_compute_routing_tree, so it survives the
+    // recompute that a grow triggers and lets the rebuilt tree keep routing
+    // around the hole (#2491).
     pmix_bitmap_t dead_dmns;
+    // Ranks currently absent from a bootstrapped DVM because their node was
+    // lost (e.g. powered off) but which may return with the same rank when the
+    // node reboots. Like dead_dmns this persists across compute_routing_tree
+    // recomputes and is restored into failed_dmns, so the tree routes around
+    // the hole while the daemon is gone; unlike dead_dmns it is cleared when
+    // the daemon returns (the "unheal" path). Only bootstrap faults populate
+    // it -- a launched/elastic departure remains permanent in dead_dmns.
+    pmix_bitmap_t absent_dmns;
 
     // Track all ancestors up to HNP, to simplify fault handling
     pmix_data_array_t ancestors;
