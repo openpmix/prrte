@@ -245,6 +245,30 @@ be warning-free before submitting.
 
 Do not modify files produced by autotools (`configure`, `Makefile.in`, etc.), pre-rendered documentation, or third-party vendored code. Edit the source code instead.
 
+### GOLDEN RULE: regenerate `show_help` content after touching any help file
+
+The `show_help` messages are embedded into the binary from a generated
+source file, `src/util/prte_show_help_content.c` (and its `src/include/`
+companion), produced by `src/util/prte-convert-help.py` from the
+`help-*.txt` files scattered across the tree.  The Make rule that builds
+this generated file depends only on the converter script — **not** on the
+individual `help-*.txt` files — so an ordinary `make` will **not** pick up
+changes to help content.
+
+Therefore, after **any** add, delete, or modification of `show_help`
+content — including adding a brand-new `help-*.txt` file — you **must**
+force the generated source to be rebuilt:
+
+```sh
+rm src/util/prte_show_help_content.*
+make
+```
+
+Removing the stale generated file forces `make` to re-run the converter
+and pick up your help-text changes.  Skipping this step leaves the binary
+serving the old (or missing) messages even though the `.txt` source looks
+correct.
+
 
 ### Error handling
 
