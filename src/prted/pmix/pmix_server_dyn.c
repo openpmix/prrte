@@ -1066,24 +1066,35 @@ complete:
         pmix_nspace_t nspace;
         PMIX_LOAD_NSPACE(nspace, NULL);
         prc = prte_pmix_convert_rc(rc);
+        /* the requestor learns of the failure directly through this callback */
         cd->spcbfunc(prc, nspace, cd->cbdata);
         /* record the failure on the job itself for any consumer of its state */
         if (0 == jdata->exit_code) {
             jdata->exit_code = rc;
         }
-        /* A spawn-setup failure (e.g. an unrecognized map-by directive) must
-         * be reflected in our process exit status. The spawn-completion
-         * notification above carries the error to the requestor, but when we
-         * are the requestor (prterun) that notification races the DVM teardown
-         * triggered by NEVER_LAUNCHED below - if teardown wins, the status is
-         * lost and we would exit 0. So, exactly as check_complete() does on
-         * normal termination, record it directly here for a one-shot launch.
-         * A persistent DVM survives the failed spawn, so its status is left
-         * untouched (the requestor still learns of the error via the cbfunc). */
-        if (!prte_persistent) {
-            PRTE_UPDATE_EXIT_STATUS(rc);
+        if (prte_persistent) {
+            /* A persistent DVM must survive a failed spawn - a user's typo in,
+             * say, a map-by directive cannot be allowed to take down the DVM.
+             * The requestor has already been notified of the error through the
+             * callback above, and this job was never registered: it has no
+             * nspace, is absent from the job pool, and owns no procs or
+             * daemons. Pushing such a phantom job into the job-termination
+             * state machine (via NEVER_LAUNCHED) drives it through server,
+             * IOF, and session cleanup that assume a real registered job,
+             * tearing down live state and crashing the HNP. So simply discard
+             * the phantom job here and leave the DVM running. */
+            PMIX_RELEASE(jdata);
+            PMIX_RELEASE(cd);
+            return;
         }
-        /* this isn't going to launch, so indicate that */
+        /* We are a one-shot launch (prterun is itself the requestor). The
+         * spawn-completion notification above races the DVM teardown triggered
+         * by NEVER_LAUNCHED below - if teardown wins, the status is lost and we
+         * would exit 0. So, exactly as check_complete() does on normal
+         * termination, record the failure directly in our exit status now to
+         * guarantee a non-zero exit regardless of the race. */
+        PRTE_UPDATE_EXIT_STATUS(rc);
+        /* this isn't going to launch, so tear down the one-shot DVM */
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
     }
     PMIX_RELEASE(cd);
