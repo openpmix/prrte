@@ -219,6 +219,7 @@ PRTE_EXPORT void prte_rml_compute_routing_tree(void);
 PRTE_EXPORT void prte_rml_update_ancestors(pmix_data_array_t* ancestors);
 PRTE_EXPORT void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks,
                                               bool global);
+PRTE_EXPORT void prte_rml_revive_routing_tree(pmix_rank_t rank);
 PRTE_EXPORT void prte_rml_fault_handler(const prte_rml_recovery_status_t* s);
 PRTE_EXPORT int prte_rml_get_num_contributors(pmix_rank_t *dmns, size_t ndmns);
 PRTE_EXPORT void prte_rml_recv_failures_notice(int status, pmix_proc_t *sender,

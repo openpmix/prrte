@@ -322,6 +322,7 @@ static void rscon(prte_rml_recovery_status_t* p){
     p->scope = PRTE_RML_FAULT_SCOPE_LOCAL;
     p->failed_ranks = (pmix_data_array_t) PMIX_DATA_ARRAY_STATIC_INIT;
     p->promoted = false;
+    p->demoted = false;
 
     p->ancestors_changed = false;
     p->prev_ancestors = (pmix_data_array_t) PMIX_DATA_ARRAY_STATIC_INIT;
