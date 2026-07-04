@@ -125,14 +125,19 @@ not belong in the OOB accept path), make it explicit and route it through the
 arbiter of global tree state, the **HNP**, mirroring how death is globally
 xcast:
 
-#. **Rejoin request (up).**  On bootstrap startup, when
+#. **Rejoin request (one hop up, then filtered).**  On bootstrap startup, when
    ``prte_bootstrap_setup`` is set, the daemon sends
-   ``PRTE_RML_TAG_DAEMON_RETURNED{rank=self}`` toward the HNP along its
-   computed lifeline.  Intermediate hops relay it by destination as usual; a
-   relaying hop does not need the source to be "live" in its own tree, so the
-   message reaches the HNP even though the sender is still marked absent
-   upstream.  (First-boot daemons send this too; the HNP simply finds the rank
-   not marked absent and does nothing — see idempotence below.)
+   ``PRTE_RML_TAG_DAEMON_RETURNED{rank=self}`` **to its parent** (one hop up its
+   lifeline), not to the HNP.  The parent is exactly the daemon that knows
+   whether the rank was absent -- the global death broadcast marked it
+   everywhere -- so the parent filters: if the rank is not in *its*
+   ``absent_dmns`` (a first boot, a duplicate) it drops the notice, and only if
+   the rank really was absent does it escalate one relayed message to the HNP.
+   This deliberately avoids an N-to-root pattern: on the common first-boot path
+   the root is never involved (it sees announcements only from its own few
+   direct children, all dropped), and the notice rides the existing lifeline
+   link so no daemon opens a socket to the root.  A real return costs one
+   escalated message to the root, ``O(1)``.
 
 #. **HNP validates and broadcasts (global).**  The HNP checks the rank against
    ``absent_dmns``.  If absent, it clears the rank locally and xcasts
@@ -358,13 +363,20 @@ Resolved decisions
    ``prte_rml_revive_routing_tree``, the revival protocol, re-home notices, the
    boot-epoch guard) is not itself launcher-specific, so this could be revisited
    if a launcher ever gains per-vpid placement — but it is out of scope now.
+#. **Trigger source — announce to the parent, escalate to the HNP.**  A
+   returning daemon announces one hop up to its *parent*, which filters on its
+   own ``absent_dmns`` and escalates only a genuine return to the HNP; the HNP
+   remains the sole arbiter that broadcasts the revival.  This is chosen over
+   the daemon announcing straight to the HNP specifically to avoid an N-to-root
+   pattern: funnelling every daemon's boot-time announcement onto the root makes
+   the root aggregate ``N`` messages and, at the transport, sustain the fan-in
+   that burdens the OS and hurts responsiveness at scale.  Parent-filtered
+   escalation keeps the root out of the common (first-boot) path entirely while
+   preserving single-arbiter global consistency.
 
 Open questions
 --------------
 
-#. **Trigger source.**  Route the rejoin through the HNP (this proposal) or let
-   the returned daemon's *parent* arbitrate locally and forward up?  HNP-central
-   is simpler and race-safe but adds one hop of latency to the rejoin.
 #. **Partial returns.**  If several daemons in one subtree are absent and only
    some return, the recompute must handle a partially-repopulated path; confirm
    ``update_ancestors`` walks correctly when the returned rank is itself below
