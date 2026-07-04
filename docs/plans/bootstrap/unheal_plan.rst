@@ -378,12 +378,28 @@ the returned daemon now decodes the full span, its routing stays consistent, and
 a job launched after the unheal runs across the returned daemon and its child
 with every daemon surviving; the elastic suite (16/16) is unaffected.
 
-**Stage 6 — Incarnation guard.**  Add the boot-epoch field to the wire header
-(``prte_oob_tcp_hdr_t``), stamp outgoing messages with the sender's epoch,
-carry the returned daemon's epoch through the ``DAEMON_RETURNED`` /
-``DAEMON_REVIVED`` exchange, and drop inbound traffic stamped with a stale
-epoch for a rank.  This closes the stale-message window that the return of a
-same-rank/new-process daemon opens.
+**Stage 6 — Incarnation guard (done).**  Each process captures a boot epoch -- a
+millisecond wall-clock timestamp taken once at RML startup -- and stamps it into
+the OOB wire header (``prte_oob_tcp_hdr_t``) as the origin's epoch: a message
+built locally carries this process's epoch, and a relayed message preserves the
+original sender's epoch from the received header.  Every daemon records the
+highest epoch it has learned per rank; in a bootstrapped DVM it drops
+daemon-namespace traffic stamped with a strictly *older* epoch for a rank (the
+check runs after the whole message is read, so the byte stream stays framed, and
+only for the daemon namespace, since tool namespaces reuse rank numbers).  A
+newer epoch passes but does not advance the table -- the arbitrated revival does
+that.  The returning daemon announces its epoch in ``DAEMON_RETURNED``; the HNP
+accepts the return only if that epoch is strictly greater than the one last
+recorded for the rank (rejecting a stale or degenerate same-timestamp reboot and
+forcing a retry), then carries it in the ``DAEMON_REVIVED`` broadcast so every
+daemon records the new incarnation and drops any lingering traffic from the old
+one.  The wire header is exchanged only among daemons of one DVM, all on the same
+build, so the added field is no ABI concern.  The drop path is bootstrap-gated,
+so launched and elastic DVMs are unaffected; harness-verified -- the elastic
+suite (16/16) and the bootstrap unheal end-to-end (revival, ``get_route``
+stability, a post-unheal job across the returned daemon) both pass with the guard
+in place, and no legitimate traffic is dropped.  This closes the stale-message
+window that the return of a same-rank/new-process daemon opens.
 
 Testing
 -------
