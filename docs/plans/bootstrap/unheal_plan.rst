@@ -356,15 +356,27 @@ The harness confirms the ``OUT_OF_ORDER`` exit is gone, and the elastic suite
 (16/16) confirms the normal xcast path is unaffected.  This also removes a
 latent grow hazard.
 
-*The nidmap/job-data half remains.*  With ordering fixed, the returned daemon
-now reaches the launch itself and fails one layer deeper: lacking the current
-nidmap and job data, it recomputes an inconsistent tree mid-launch (its child
-leaves its subtree) and then sends to a node it wrongly believes is down,
-force-exiting (``rml_send.c`` "Node has gone down").  Wiring the returned daemon
-through the grow-style state handoff -- current nidmap (with holes) and active
-job/proc data, reconciled with the ``nidmap.c`` hole scan so the returning rank
-is not re-marked dead -- is the remaining Stage 5 work, and this is its concrete
-failure signature to build against.
+*The nidmap/job-data half is now done and verified.*  The "Node has gone down"
+force-exit turned out not to be missing job data but a nidmap **span** bug in
+the handoff itself.  When the returned daemon's connection warms up, the HNP
+builds the handoff nidmap (``prte_util_nidmap_create``) while
+``prte_process_info.num_daemons`` still holds the *departed* count -- the error
+manager decremented it on the death and the daemon's formal relaunch report,
+which restores it, has not run yet.  The departed node's ``node->daemon`` entry
+persists, though, so every vpid is still packed.  Encoding ``num_daemons`` as
+the span therefore declared a span one short of the highest packed vpid.  The
+returned daemon decoded the short span, reset its own ``num_daemons`` to it, and
+recomputed a routing tree over a rank space that excluded the top daemon --
+so its live child dropped out of its subtree and traffic bound for that child
+was misrouted to the parent.  (The short span also under-sized the encode-side
+vpid buffer by one entry.)  The fix derives the span from the pool instead:
+``max(num_daemons, highest_packed_vpid + 1)``, which covers every packed daemon
+while still preserving a legitimate top-of-range shrink hole, and sizes the
+buffer to match.  The decode-side hole scan additionally records a bootstrap
+hole as *absent* (clearable) rather than permanently *dead*.  Harness-verified:
+the returned daemon now decodes the full span, its routing stays consistent, and
+a job launched after the unheal runs across the returned daemon and its child
+with every daemon surviving; the elastic suite (16/16) is unaffected.
 
 **Stage 6 — Incarnation guard.**  Add the boot-epoch field to the wire header
 (``prte_oob_tcp_hdr_t``), stamp outgoing messages with the sender's epoch,
