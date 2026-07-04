@@ -202,6 +202,21 @@ void prte_grpcomm_direct_xcast_recv(
     signature_t sig;
     if(PMIX_SUCCESS != unpack_sig(buffer, &sig)) return;
 
+    // A daemon that has never seen any xcast (op_id_inited == 0) yet is being
+    // handed an op is a *late joiner*: a daemon grown into a running DVM, or one
+    // whose node rebooted and returned (the bootstrap unheal path), or simply a
+    // bootstrap daemon that booted after the first broadcast. It cannot have the
+    // ops that preceded this one, so it must adopt them as already complete
+    // rather than enforce ordering it can never satisfy -- finish_op would
+    // otherwise raise PRTE_ERR_OUT_OF_ORDER_MSG on the first op above 1 and the
+    // daemon would force-exit. Setting op_id_completed_at_promotion below the
+    // completed mark makes those prior ops assume-complete exactly as a
+    // promotion does. The master assigns op-ids and is never a late joiner, so
+    // it is excluded. This is safe because a daemon that has *ever* participated
+    // has op_id_inited > 0, so a genuine ordering violation mid-stream is still
+    // caught.
+    bool late_joiner = !PRTE_PROC_IS_MASTER && (0 == XCAST.op_id_inited);
+
     if(PRTE_PROC_IS_MASTER){
         if(sig.op_id){
             // If I'm HNP, I expect sender has not assigned a global ID
@@ -216,6 +231,12 @@ void prte_grpcomm_direct_xcast_recv(
     }
     if(sig.op_id > XCAST.op_id_inited){
         XCAST.op_id_inited = sig.op_id;
+    }
+    if(late_joiner && sig.op_id > 1){
+        // Catch up to just below this op: ops 1..op_id-1 are taken as complete,
+        // and this op is processed in order as our first.
+        XCAST.op_id_completed = sig.op_id - 1;
+        XCAST.op_id_completed_at_promotion = sig.op_id - 1;
     }
 
     // If we marked our subtree as completed, but then were promoted, our
