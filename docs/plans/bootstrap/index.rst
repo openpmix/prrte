@@ -9,3 +9,4 @@ instantiating a persistent DVM.
 
    bootstrap_spec.rst
    bootstrap_plan.rst
+   unheal_plan.rst
