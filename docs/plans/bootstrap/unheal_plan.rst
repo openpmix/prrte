@@ -338,7 +338,18 @@ the DVM and check nothing was lost).
 
 **Stage 5 — State resync.**  Wire the returned daemon through the grow-style
 state handoff so it comes back with the current nidmap and job data; reconcile
-with the ``nidmap.c`` hole scan.
+with the ``nidmap.c`` hole scan.  **Harness evidence (2026-07-04):** the topology
+unheal was verified end-to-end on the Docker swarm (a radix-2 bootstrap DVM;
+killing the interior daemon healed its child up to the grandparent, restarting
+it drove the return/revival broadcast and the child re-homed back).  But once
+the returned daemon was asked to participate in a reliable xcast, it died with
+``PRTE_ERR_OUT_OF_ORDER_MSG`` (``grpcomm_direct_xcast.c``, the
+``op_id != op_id_completed + 1`` check): it rejoined with a fresh xcast op-id
+counter while the DVM's broadcast stream was already at a higher op-id, so the
+first op forwarded to it was out of order and it force-exited.  Bringing the
+returned daemon up to the **current xcast op-id** is therefore part of this
+stage, alongside the nidmap and job data -- it is the concrete form the
+"already holds current state" precondition of Stages 3-4 takes.
 
 **Stage 6 — Incarnation guard.**  Add the boot-epoch field to the wire header
 (``prte_oob_tcp_hdr_t``), stamp outgoing messages with the sender's epoch,
