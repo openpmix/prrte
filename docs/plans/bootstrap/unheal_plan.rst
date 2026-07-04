@@ -346,10 +346,25 @@ the returned daemon was asked to participate in a reliable xcast, it died with
 ``PRTE_ERR_OUT_OF_ORDER_MSG`` (``grpcomm_direct_xcast.c``, the
 ``op_id != op_id_completed + 1`` check): it rejoined with a fresh xcast op-id
 counter while the DVM's broadcast stream was already at a higher op-id, so the
-first op forwarded to it was out of order and it force-exited.  Bringing the
-returned daemon up to the **current xcast op-id** is therefore part of this
-stage, alongside the nidmap and job data -- it is the concrete form the
-"already holds current state" precondition of Stages 3-4 takes.
+first op forwarded to it was out of order and it force-exited.
+
+*The op-id half is now done and verified.*  ``xcast_recv`` recognizes a late
+joiner (a daemon with ``op_id_inited == 0`` handed an op above one -- grown,
+returned, or simply booted after the first broadcast) and adopts the
+intervening ops as complete, so ordering holds for that op and every one after.
+The harness confirms the ``OUT_OF_ORDER`` exit is gone, and the elastic suite
+(16/16) confirms the normal xcast path is unaffected.  This also removes a
+latent grow hazard.
+
+*The nidmap/job-data half remains.*  With ordering fixed, the returned daemon
+now reaches the launch itself and fails one layer deeper: lacking the current
+nidmap and job data, it recomputes an inconsistent tree mid-launch (its child
+leaves its subtree) and then sends to a node it wrongly believes is down,
+force-exiting (``rml_send.c`` "Node has gone down").  Wiring the returned daemon
+through the grow-style state handoff -- current nidmap (with holes) and active
+job/proc data, reconciled with the ``nidmap.c`` hole scan so the returning rank
+is not re-marked dead -- is the remaining Stage 5 work, and this is its concrete
+failure signature to build against.
 
 **Stage 6 — Incarnation guard.**  Add the boot-epoch field to the wire header
 (``prte_oob_tcp_hdr_t``), stamp outgoing messages with the sender's epoch,
