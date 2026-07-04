@@ -108,6 +108,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_recv_t);
         _s->hdr.type = MCA_OOB_TCP_USER;                                                       \
         _s->hdr.tag = (m)->tag;                                                                \
         _s->hdr.seq_num = (m)->seq_num;                                                        \
+        _s->hdr.epoch = (m)->epoch;                                                            \
         /* point to the actual message */                                                      \
         _s->msg = (m);                                                                         \
         /* set the total number of bytes to be sent */                                         \
@@ -140,6 +141,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_recv_t);
         _s->hdr.type = MCA_OOB_TCP_USER;                                                          \
         _s->hdr.tag = (m)->tag;                                                                   \
         _s->hdr.seq_num = (m)->seq_num;                                                           \
+        _s->hdr.epoch = (m)->epoch;                                                               \
         /* point to the actual message */                                                         \
         _s->msg = (m);                                                                            \
         /* set the total number of bytes to be sent */                                            \

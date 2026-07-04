@@ -189,6 +189,14 @@ typedef struct {
     // it -- a launched/elastic departure remains permanent in dead_dmns.
     pmix_bitmap_t absent_dmns;
 
+    // Highest boot epoch (incarnation) known for each daemon rank, indexed by
+    // rank; 0 means "not yet learned". A rebooted bootstrap daemon returns with
+    // a strictly-greater epoch, so traffic stamped with an older epoch for a
+    // rank is a stale incarnation and is dropped. Grown on demand as ranks
+    // appear; see prte_rml_epoch_ok / prte_rml_record_epoch.
+    uint64_t *peer_epochs;
+    size_t peer_epochs_size;
+
     // Track all ancestors up to HNP, to simplify fault handling
     pmix_data_array_t ancestors;
     // My immediate ancestor
@@ -205,6 +213,23 @@ typedef struct {
 } prte_rml_base_t;
 
 PRTE_EXPORT extern prte_rml_base_t prte_rml_base;
+
+/* This process's boot epoch (incarnation) - a millisecond wall-clock timestamp
+ * captured once at startup. A daemon that departs and reboots into the same
+ * rank comes back with a strictly-greater epoch. Stamped into every outgoing
+ * message's wire header as the origin's epoch. */
+PRTE_EXPORT extern uint64_t prte_rml_boot_epoch;
+
+/* Incarnation guard. prte_rml_epoch_ok records rank's epoch on first sight and
+ * returns false only for traffic stamped with an epoch strictly older than the
+ * one already known for that rank (a stale incarnation to be dropped); a newer
+ * epoch passes but does not advance the table (the arbitrated revival does
+ * that). prte_rml_record_epoch force-sets the authoritative epoch for a rank
+ * (used by the revival path and the HNP's return validation);
+ * prte_rml_get_epoch reads it (0 if unknown). */
+PRTE_EXPORT bool prte_rml_epoch_ok(pmix_rank_t rank, uint64_t epoch);
+PRTE_EXPORT void prte_rml_record_epoch(pmix_rank_t rank, uint64_t epoch);
+PRTE_EXPORT uint64_t prte_rml_get_epoch(pmix_rank_t rank);
 
 PRTE_EXPORT void prte_rml_register(void);
 PRTE_EXPORT void prte_rml_close(void);

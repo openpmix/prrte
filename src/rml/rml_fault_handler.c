@@ -372,6 +372,14 @@ void prte_rml_send_return_notice(void){
         PMIX_DATA_BUFFER_RELEASE(msg);
         return;
     }
+    /* announce our boot epoch so the HNP can confirm this is a strictly-newer
+     * incarnation and propagate it in the revival for the stale-message guard */
+    ret = PMIx_Data_pack(NULL, msg, &prte_rml_boot_epoch, 1, PMIX_UINT64);
+    if(PMIX_SUCCESS != ret){
+        PMIX_ERROR_LOG(ret);
+        PMIX_DATA_BUFFER_RELEASE(msg);
+        return;
+    }
     PRTE_RML_SEND(ret, PRTE_PROC_MY_PARENT->rank, msg,
                   PRTE_RML_TAG_DAEMON_RETURNED);
     if(PRTE_SUCCESS != ret){
@@ -399,6 +407,13 @@ void prte_rml_recv_return_request(
         PMIX_ERROR_LOG(ret);
         return;
     }
+    cnt = 1;
+    uint64_t epoch = 0;
+    ret = PMIx_Data_unpack(NULL, buf, &epoch, &cnt, PMIX_UINT64);
+    if(PMIX_SUCCESS != ret){
+        PMIX_ERROR_LOG(ret);
+        return;
+    }
 
     /* Idempotent filter: if this rank is not absent in our view, there is
      * nothing to revive -- drop it here rather than burden anyone upstream. */
@@ -417,6 +432,12 @@ void prte_rml_recv_return_request(
             PMIX_DATA_BUFFER_RELEASE(up);
             return;
         }
+        ret = PMIx_Data_pack(NULL, up, &epoch, 1, PMIX_UINT64);
+        if(PMIX_SUCCESS != ret){
+            PMIX_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_RELEASE(up);
+            return;
+        }
         PRTE_RML_SEND(ret, PRTE_PROC_MY_HNP->rank, up,
                       PRTE_RML_TAG_DAEMON_RETURNED);
         if(PRTE_SUCCESS != ret){
@@ -425,6 +446,16 @@ void prte_rml_recv_return_request(
         }
         return;
     }
+
+    /* Arbiter: accept the return only if it announces a strictly-newer
+     * incarnation than the one we last recorded for this rank. A stale or
+     * duplicate epoch (including the degenerate same-timestamp reboot) is
+     * dropped, forcing the daemon to retry with a later epoch. Record the new
+     * epoch as authoritative before broadcasting so the guard is armed. */
+    if(0 != epoch && epoch <= prte_rml_get_epoch(rank)){
+        return;
+    }
+    prte_rml_record_epoch(rank, epoch);
 
     PMIX_OUTPUT_VERBOSE((1, prte_rml_base.routed_output,
                          "%s routed:radix: daemon %s returned; broadcasting"
@@ -443,6 +474,12 @@ void prte_rml_recv_return_request(
      * daemon itself -- that daemon already computed a healthy tree. */
     pmix_data_buffer_t* msg = PMIx_Data_buffer_create();
     ret = PMIx_Data_pack(NULL, msg, &rank, 1, PMIX_PROC_RANK);
+    if(PMIX_SUCCESS != ret){
+        PMIX_ERROR_LOG(ret);
+        PMIX_DATA_BUFFER_RELEASE(msg);
+        return;
+    }
+    ret = PMIx_Data_pack(NULL, msg, &epoch, 1, PMIX_UINT64);
     if(PMIX_SUCCESS != ret){
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_RELEASE(msg);
@@ -468,5 +505,15 @@ void prte_rml_recv_revival_notice(
         PMIX_ERROR_LOG(ret);
         return;
     }
+    cnt = 1;
+    uint64_t epoch = 0;
+    ret = PMIx_Data_unpack(NULL, buf, &epoch, &cnt, PMIX_UINT64);
+    if(PMIX_SUCCESS != ret){
+        PMIX_ERROR_LOG(ret);
+        return;
+    }
+    /* Record the returned incarnation's epoch as authoritative before rewiring,
+     * so any late traffic from the old incarnation is dropped from here on. */
+    prte_rml_record_epoch(rank, epoch);
     prte_rml_revive_routing_tree(rank);
 }

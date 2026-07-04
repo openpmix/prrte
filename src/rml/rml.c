@@ -21,6 +21,7 @@
 
 #include <string.h>
 #include <signal.h>
+#include <sys/time.h>
 #include <pmix.h>
 
 #include "src/mca/base/pmix_mca_base_component_repository.h"
@@ -55,9 +56,78 @@ prte_rml_base_t prte_rml_base = {
     .global_failed_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
     .dead_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
     .absent_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
+    .peer_epochs = NULL,
+    .peer_epochs_size = 0,
 };
 
+uint64_t prte_rml_boot_epoch = 0;
+
 static int verbosity = 0;
+
+/* Grow the per-rank epoch table so index rank is valid, zero-filling new slots
+ * (0 = unknown). Ranks are dense and small, so a flat array indexed by rank is
+ * ample. Runs only on the progress thread, like all RML state. */
+static void ensure_epoch_slot(pmix_rank_t rank)
+{
+    if ((size_t) rank < prte_rml_base.peer_epochs_size) {
+        return;
+    }
+    size_t newsize = (size_t) rank + 8;
+    uint64_t *tmp = (uint64_t *) realloc(prte_rml_base.peer_epochs,
+                                         newsize * sizeof(uint64_t));
+    if (NULL == tmp) {
+        return;
+    }
+    for (size_t i = prte_rml_base.peer_epochs_size; i < newsize; i++) {
+        tmp[i] = 0;
+    }
+    prte_rml_base.peer_epochs = tmp;
+    prte_rml_base.peer_epochs_size = newsize;
+}
+
+bool prte_rml_epoch_ok(pmix_rank_t rank, uint64_t epoch)
+{
+    /* an unstamped message (epoch 0) carries no incarnation claim - accept */
+    if (0 == epoch) {
+        return true;
+    }
+    ensure_epoch_slot(rank);
+    if ((size_t) rank >= prte_rml_base.peer_epochs_size) {
+        /* allocation failed - fail open rather than drop live traffic */
+        return true;
+    }
+    uint64_t known = prte_rml_base.peer_epochs[rank];
+    if (0 == known) {
+        /* first time we have seen this rank - learn its epoch */
+        prte_rml_base.peer_epochs[rank] = epoch;
+        return true;
+    }
+    if (epoch < known) {
+        /* stale incarnation - drop. A newer epoch passes but does not advance
+         * the table here; the arbitrated revival advances it authoritatively. */
+        return false;
+    }
+    return true;
+}
+
+void prte_rml_record_epoch(pmix_rank_t rank, uint64_t epoch)
+{
+    if (0 == epoch) {
+        return;
+    }
+    ensure_epoch_slot(rank);
+    if ((size_t) rank < prte_rml_base.peer_epochs_size) {
+        prte_rml_base.peer_epochs[rank] = epoch;
+    }
+}
+
+uint64_t prte_rml_get_epoch(pmix_rank_t rank)
+{
+    if ((size_t) rank < prte_rml_base.peer_epochs_size) {
+        return prte_rml_base.peer_epochs[rank];
+    }
+    return 0;
+}
 
 void prte_rml_register(void)
 {
@@ -121,6 +191,11 @@ void prte_rml_close(void)
     PMIX_DESTRUCT(&prte_rml_base.global_failed_dmns);
     PMIX_DESTRUCT(&prte_rml_base.dead_dmns);
     PMIX_DESTRUCT(&prte_rml_base.absent_dmns);
+    if (NULL != prte_rml_base.peer_epochs) {
+        free(prte_rml_base.peer_epochs);
+        prte_rml_base.peer_epochs = NULL;
+        prte_rml_base.peer_epochs_size = 0;
+    }
     PMIx_Data_array_destruct(&prte_rml_base.ancestors);
     PMIx_Data_array_destruct(&prte_rml_base.children);
     if (0 <= prte_rml_base.rml_output) {
@@ -151,6 +226,16 @@ int prte_rml_open(void)
      * comes back (the unheal path). Initialized once here for the same reason. */
     PMIX_CONSTRUCT(&prte_rml_base.absent_dmns, pmix_bitmap_t);
     pmix_bitmap_init(&prte_rml_base.absent_dmns, prte_process_info.num_daemons);
+
+    /* Capture this process's boot epoch (incarnation): a millisecond wall-clock
+     * timestamp taken once here. A departed daemon that reboots into the same
+     * rank returns with a strictly-greater epoch, letting peers drop late
+     * traffic from the stale incarnation. Millisecond granularity keeps the
+     * degenerate same-timestamp reboot vanishingly unlikely; the HNP's return
+     * validation (strictly-greater epoch) catches it if it ever happens. */
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    prte_rml_boot_epoch = (uint64_t) tv.tv_sec * 1000 + (uint64_t) tv.tv_usec / 1000;
 
     /* set up failure notification receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON_DIED, true,
@@ -264,6 +349,10 @@ static void send_cons(prte_rml_send_t *ptr)
     ptr->cbdata = NULL;
     ptr->dbuf = NULL;
     ptr->seq_num = 0xFFFFFFFF;
+    /* Default to this process's own epoch: a message built here originates
+     * here. The relay path overrides this with the origin's epoch carried in
+     * the received wire header so a relayed message keeps its original stamp. */
+    ptr->epoch = prte_rml_boot_epoch;
 }
 static void send_des(prte_rml_send_t *ptr)
 {

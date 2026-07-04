@@ -231,6 +231,11 @@ typedef struct {
     pmix_data_buffer_t *dbuf;
     /* msg seq number */
     uint32_t seq_num;
+    /* boot epoch (incarnation) of the origin. Defaults to this process's own
+     * epoch when a message originates here; a relayed message carries the
+     * original sender's epoch, copied from the received wire header. Lets a
+     * hop drop traffic from a stale incarnation of a rebooted bootstrap rank. */
+    uint64_t epoch;
 } prte_rml_send_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rml_send_t);
 
