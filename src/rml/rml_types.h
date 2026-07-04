@@ -315,6 +315,13 @@ typedef struct {
     // Similar reasoning applies to our parent.
     bool promoted;
 
+    // The mirror of promoted, set by the unheal path: a daemon that had
+    // departed returned, re-inserting itself above us, so our ancestor list
+    // grew and our subtree shrank. As with promotion, handlers should treat
+    // the re-homing children as new, because a child that briefly routed
+    // through the grandparent must discard that lineage.
+    bool demoted;
+
     bool ancestors_changed;
     pmix_data_array_t prev_ancestors; // pmix_rank_t
 
