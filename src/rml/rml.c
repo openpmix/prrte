@@ -54,6 +54,7 @@ prte_rml_base_t prte_rml_base = {
     .failed_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
     .global_failed_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
     .dead_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
+    .absent_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
 };
 
 static int verbosity = 0;
@@ -119,6 +120,7 @@ void prte_rml_close(void)
     PMIX_DESTRUCT(&prte_rml_base.failed_dmns);
     PMIX_DESTRUCT(&prte_rml_base.global_failed_dmns);
     PMIX_DESTRUCT(&prte_rml_base.dead_dmns);
+    PMIX_DESTRUCT(&prte_rml_base.absent_dmns);
     PMIx_Data_array_destruct(&prte_rml_base.ancestors);
     PMIx_Data_array_destruct(&prte_rml_base.children);
     if (0 <= prte_rml_base.rml_output) {
@@ -144,6 +146,11 @@ int prte_rml_open(void)
      * persist across the recomputes that DVM grows trigger (#2491) */
     PMIX_CONSTRUCT(&prte_rml_base.dead_dmns, pmix_bitmap_t);
     pmix_bitmap_init(&prte_rml_base.dead_dmns, prte_process_info.num_daemons);
+    /* absent_dmns holds bootstrap daemons that are gone but may return; like
+     * dead_dmns it persists across recomputes, but it is cleared when a daemon
+     * comes back (the unheal path). Initialized once here for the same reason. */
+    PMIX_CONSTRUCT(&prte_rml_base.absent_dmns, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.absent_dmns, prte_process_info.num_daemons);
 
     /* set up failure notification receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON_DIED, true,
