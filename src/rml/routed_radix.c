@@ -393,6 +393,17 @@ void prte_rml_revive_routing_tree(pmix_rank_t rank){
     // re-takes its slot above us if it was our ancestor (demoting us), or
     // re-takes its subtree if it was our descendant (shrinking our children).
     // The repair helpers inside route around any daemons still failed.
+    //
+    // Partial returns are handled here for free. After the bit clear above, the
+    // failed set is exactly what compute_routing_tree would hold for the same
+    // set of still-absent ranks, and build_tree_from_base is the very helper
+    // both routines share -- so a revival produces the identical tree a fresh
+    // compute would, for any failed set. If the returned rank is itself below
+    // another still-absent ancestor, or if several daemons in one subtree are
+    // absent and only some return, update_ancestors simply starts from the
+    // full-depth base list and drops whatever is still failed: the returned
+    // rank reappears at its slot while the still-absent ones stay skipped. No
+    // partial-return case needs special handling.
     build_tree_from_base();
 
     // Compute the delta. A revival can only *lengthen* our ancestor list -- the
@@ -449,13 +460,40 @@ void prte_rml_revive_routing_tree(pmix_rank_t rank){
                              prte_rml_base.ancestors.size));
     }
 
-    // TODO(unheal Stage 3/4): notify the components of the revival. The fault
-    // handlers cannot be reused as-is -- they read the status as a *fault* and
-    // would purge the returned rank and emit death/adoption notices. The
-    // parallel revival path (re-home notice down, rejoin/rollup up) and the
-    // RELM re-drive are added in the following stages; for now the local
-    // recompute stands on its own and is behavior-safe because nothing calls
-    // this routine yet.
+    // Notify the components so their in-flight state re-drives over the
+    // reshaped tree. We do NOT call prte_rml_fault_handler here: that is the
+    // death path (it purges the "failed" ranks and emits adoption/failure
+    // notices), all wrong for a return. The remaining handlers, however, key on
+    // the structural delta -- parent_changed, children_changed -- and a revival
+    // is pure shrinkage from every reshaping daemon's view: the returned rank's
+    // former parent swaps orphans for the rank in its child list, the orphans
+    // point their lifeline back at the rank, and daemons deeper down only gain
+    // an ancestor. None of that trips the promotion-only paths (replay-pending,
+    // op-id-at-promotion), which exist for the growth direction, so the existing
+    // handlers do the right thing without a revival-specific branch.
+    //
+    // The topological re-home needs no separate RML notice: unlike a fault,
+    // which is detected locally and raced against the global broadcast, a
+    // revival is driven entirely by the one DAEMON_REVIVED xcast, so every
+    // daemon recomputes from the same signal and the adoption-style ancestry
+    // reconciliation is unnecessary.
+    //
+    // WATCH ITEM (needs Docker-harness validation, see unheal_plan.rst): RELM
+    // link updates carry a depth stamp and update_link drops any whose depth is
+    // not exactly parent/child +/- 1, and revival changes depths. Static
+    // analysis says this is safe: each daemon recomputes synchronously in
+    // process_msg right after forwarding the xcast to its children, and a
+    // neighbor's link update is a separate message that only arrives a later
+    // event-loop turn, by which point both ends have settled on their new
+    // depths -- the sender because fault_handler runs after the rebuild here,
+    // the receiver because it recomputed the moment it forwarded. The multi-hop
+    // gating (the upstream/downstream "links updated" bitmaps) is subtle enough
+    // that this ordering argument must still be confirmed on the harness, but no
+    // change is expected.
+    const prte_rml_recovery_status_t* s = &status;
+    prte_grpcomm.fault_handler(s);
+    prte_filem  .fault_handler(s);
+    prte_relm   .fault_handler(s);
 
     PMIX_DESTRUCT(&status);
 }

@@ -306,9 +306,35 @@ synthetic tree.
 ``prte_rml_recv_revival_notice``.  At this point a returned daemon that already
 holds current state rejoins the tree and children re-home.
 
-**Stage 4 — Re-home and RELM.**  Add the re-home (inverse-adoption) notice and
-its receiver that accepts a grown ancestor list, and extend the RELM fault
-handler to re-drive across a revival.
+**Stage 4 — Component re-drive (done).**  ``prte_rml_revive_routing_tree`` now
+notifies ``grpcomm``, ``filem``, and ``relm`` of the reshape (but *not* the
+death-only ``prte_rml_fault_handler``).  Two simplifications fell out of the
+xcast-driven design and are worth recording:
+
+* **No separate re-home notice is needed.**  The inverse-adoption notice was
+  meant to tell promoted children that a rank returned above them.  But a
+  revival is driven entirely by the single ``DAEMON_REVIVED`` xcast, so every
+  daemon recomputes from the same signal and re-homes locally; there is no
+  local-detection-versus-broadcast race for an adoption-style notice to close,
+  unlike a fault.
+
+* **No revival-specific handler branch is needed.**  A revival is pure
+  *shrinkage* from every reshaping daemon's view (the returned rank's former
+  parent swaps orphans for the rank; the orphans re-home; deeper daemons only
+  gain an ancestor).  That trips only the existing ``parent_changed`` /
+  ``children_changed`` paths in the ``grpcomm`` and ``relm`` handlers; the
+  ``promoted``-only paths (replay-pending, op-id-at-promotion) are for the
+  growth direction and correctly stay dormant.  So the tested handlers are
+  reused rather than forked.
+
+One **watch item** remains for harness validation: RELM link updates are depth
+stamped and ``update_link`` drops a mismatched one, while revival changes
+depths and rides the xcast forward-first.  Static analysis argues it is safe --
+each daemon recomputes synchronously right after forwarding, so both ends have
+settled on their new depths before any link update (a later, separate message)
+is processed -- but the multi-hop update gating is subtle enough to confirm on
+the Docker harness (kill an interior node, restart it, then launch a job across
+the DVM and check nothing was lost).
 
 **Stage 5 — State resync.**  Wire the returned daemon through the grow-style
 state handoff so it comes back with the current nidmap and job data; reconcile
@@ -373,11 +399,19 @@ Resolved decisions
    that burdens the OS and hurts responsiveness at scale.  Parent-filtered
    escalation keeps the root out of the common (first-boot) path entirely while
    preserving single-arbiter global consistency.
+#. **Partial returns — handled by the base-rebuild reduction.**  If several
+   daemons in one subtree are absent and only some return, or a returned rank is
+   itself below a still-absent ancestor, no special handling is needed.  After
+   ``prte_rml_revive_routing_tree`` clears the returned rank's bit, the failed
+   set is exactly what ``compute_routing_tree`` would hold for the same
+   still-absent ranks, and both routines derive the tree through the same
+   ``build_tree_from_base`` helper -- which starts from the full-depth base
+   ancestor list and drops whatever is still failed.  A revival therefore
+   produces the identical tree a fresh compute would for that failed set, so
+   ``update_ancestors`` walks partial-return cases correctly by construction.
 
 Open questions
 --------------
 
-#. **Partial returns.**  If several daemons in one subtree are absent and only
-   some return, the recompute must handle a partially-repopulated path; confirm
-   ``update_ancestors`` walks correctly when the returned rank is itself below
-   another still-absent ancestor.
+*(none currently open — remaining work is the Stage 4 RELM watch item and
+Stages 5–6, all tracked in the staged plan above.)*
