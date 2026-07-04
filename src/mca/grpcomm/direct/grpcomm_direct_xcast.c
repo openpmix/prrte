@@ -281,7 +281,14 @@ void prte_grpcomm_direct_xcast_recv(
     // We need to process (invoke the user msg's callback, generally) and
     // forward to our children.
     // For most xcasts, it's best to forward first to maintain message ordering,
-    // but xcasts that modify how we send messages should be processed first
+    // but xcasts that modify how we send messages should be processed first.
+    // DAEMON_DIED is processed first because a death *grows* our child set
+    // (orphans promote to us), and we must repair before forwarding so the
+    // promoted grandchildren receive it. DAEMON_REVIVED is the opposite: a
+    // return *shrinks* our child set (the returned rank reclaims its orphans),
+    // so it must stay on the forward-first path -- forwarding to our current
+    // children before the reshape is what delivers the notice to the very
+    // children that are about to re-home. Do not move it into this set.
     bool process_first = PRTE_RML_TAG_WIREUP == op->msg_tag ||
                          PRTE_RML_TAG_DAEMON_DIED == op->msg_tag;
     if(process_first){
