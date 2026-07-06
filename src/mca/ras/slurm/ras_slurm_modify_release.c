@@ -15,9 +15,6 @@
 
 #include "ras_slurm.h"
 #include "ras_slurm_modify_release_tracker.h"
-#include "src/mca/grpcomm/grpcomm.h"
-#include "src/mca/odls/odls_types.h"
-#include "src/mca/plm/base/plm_private.h"
 #include "src/mca/preg/preg.h"
 #include "src/mca/ras/base/base.h"
 
@@ -34,6 +31,7 @@ static int prte_ras_slurm_remove_nodes_by_count(prte_pmix_server_req_t *req, uin
 static int prte_ras_slurm_append_session_targets(prte_session_t *session, char ***target_nodes);
 static int prte_ras_slurm_append_release_targets(prte_session_t *session, char **requested_nodes, char ***target_nodes);
 static int prte_ras_slurm_append_count_session_targets(prte_session_t *session, const char *protected_node, int nodes_to_remove, char ***target_nodes);
+static int prte_ras_slurm_attach_shrink_tracker(prte_shrink_campaign_t *campaign, prte_ras_slurm_shrink_tracker_t *tracker);
 static int prte_ras_slurm_start_shrink(prte_pmix_server_req_t *req, prte_ras_slurm_shrink_tracker_t *tracker, char **target_nodes);
 static int prte_ras_slurm_complete_release_request(prte_pmix_server_req_t *req);
 static int prte_ras_slurm_parse_release_node_list(pmix_info_t *info, char ***nodes);
@@ -314,6 +312,34 @@ static int prte_ras_slurm_append_count_session_targets(prte_session_t *session,
 }
 
 /**
+ * @brief Attach Slurm release work to a prepared DVM shrink campaign.
+ *
+ * @param[in] campaign DVM shrink campaign created by RAS base.
+ * @param[in] tracker Tracker describing RM-side completion work.
+ */
+static int prte_ras_slurm_attach_shrink_tracker(prte_shrink_campaign_t *campaign,
+                                                prte_ras_slurm_shrink_tracker_t *tracker)
+{
+    if (NULL == campaign || NULL == tracker) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    if (NULL == campaign->alloc_id) {
+        const char *jobid = prte_ras_slurm_tracker_first_jobid(tracker);
+
+        if (NULL != jobid) {
+            campaign->alloc_id = strdup(jobid);
+            if (NULL == campaign->alloc_id) {
+                return PRTE_ERR_OUT_OF_RESOURCE;
+            }
+        }
+    }
+
+    prte_ras_slurm_track_shrink_campaign(tracker, campaign);
+    return PRTE_SUCCESS;
+}
+
+/**
  * @brief Start a DVM shrink campaign for planned Slurm release actions.
  *
  * @param[in] req PMIx release request.
@@ -324,13 +350,11 @@ static int prte_ras_slurm_start_shrink(prte_pmix_server_req_t *req,
                                        prte_ras_slurm_shrink_tracker_t *tracker,
                                        char **target_nodes)
 {
-    pmix_data_buffer_t msg;
-    prte_daemon_cmd_flag_t cmd = PRTE_DAEMON_SHRINK_CMD;
-    pmix_rank_t *ranks = NULL;
     prte_shrink_campaign_t *campaign = NULL;
+    pmix_rank_t *ranks = NULL;
     int32_t nranks;
+    bool tracked = false;
     int err = PRTE_SUCCESS;
-    pmix_status_t rc;
 
     if (NULL == req || NULL == tracker || NULL == target_nodes ||
         0 == (nranks = PMIx_Argv_count(target_nodes))) {
@@ -353,81 +377,28 @@ static int prte_ras_slurm_start_shrink(prte_pmix_server_req_t *req,
         ranks[i] = node->daemon->name.rank;
     }
 
-    campaign = PMIX_NEW(prte_shrink_campaign_t);
-    if (NULL == campaign) {
-        err = PRTE_ERR_OUT_OF_RESOURCE;
-        goto cleanup;
-    }
-
-    campaign->targets = (pmix_rank_t *) malloc(nranks * sizeof(pmix_rank_t));
-    if (NULL == campaign->targets) {
-        err = PRTE_ERR_OUT_OF_RESOURCE;
-        goto cleanup;
-    }
-
-    memcpy(campaign->targets, ranks, nranks * sizeof(pmix_rank_t));
-    campaign->ntargets = nranks;
-    campaign->pending = nranks;
-    PMIX_XFER_PROCID(&campaign->requester, &req->tproc);
-    for (size_t n = 0; n < req->ninfo; n++) {
-        if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID) &&
-            PMIX_STRING == req->info[n].value.type) {
-            campaign->alloc_id = strdup(req->info[n].value.data.string);
-        } else if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_REQ_ID) &&
-                   PMIX_STRING == req->info[n].value.type) {
-            campaign->req_id = strdup(req->info[n].value.data.string);
-        }
-    }
-    campaign->have_requester = true;
-    if (NULL == campaign->alloc_id) {
-        const char *jobid = prte_ras_slurm_tracker_first_jobid(tracker);
-
-        if (NULL != jobid) {
-            campaign->alloc_id = strdup(jobid);
-            if (NULL == campaign->alloc_id) {
-                err = PRTE_ERR_OUT_OF_RESOURCE;
-                goto cleanup;
-            }
-        }
-    }
-
-    PMIX_DATA_BUFFER_CONSTRUCT(&msg);
-    rc = PMIx_Data_pack(NULL, &msg, &cmd, 1, PMIX_UINT8);
-    if (PMIX_SUCCESS == rc) {
-        rc = PMIx_Data_pack(NULL, &msg, &nranks, 1, PMIX_INT32);
-    }
-    if (PMIX_SUCCESS == rc) {
-        rc = PMIx_Data_pack(NULL, &msg, ranks, nranks, PMIX_PROC_RANK);
-    }
-    if (PMIX_SUCCESS != rc) {
-        PMIX_DATA_BUFFER_DESTRUCT(&msg);
-        err = prte_pmix_convert_status(rc);
-        goto cleanup;
-    }
-
-    pmix_list_append(&prte_shrink_campaigns, &campaign->super);
-    prte_dvm_launch_fence += nranks;
-    prte_ras_slurm_track_shrink_campaign(tracker, campaign);
-
-    err = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &msg);
-    PMIX_DATA_BUFFER_DESTRUCT(&msg);
+    err = prte_ras_base_prepare_dvm_shrink(req, ranks, nranks, &campaign);
     if (PRTE_SUCCESS != err) {
-        prte_ras_slurm_untrack_shrink_campaign(tracker);
-        pmix_list_remove_item(&prte_shrink_campaigns, &campaign->super);
-        prte_dvm_launch_fence -= campaign->pending;
-        prte_plm_base_dvm_mod_notify(&campaign->requester, campaign->alloc_id,
-                                     campaign->req_id, false,
-                                     prte_pmix_convert_rc(err));
-        PMIX_RELEASE(campaign);
+        goto cleanup;
+    }
+    if (NULL == campaign) {
+        err = PRTE_ERR_BAD_PARAM;
         goto cleanup;
     }
 
-    campaign = NULL;
+    err = prte_ras_slurm_attach_shrink_tracker(campaign, tracker);
+    if (PRTE_SUCCESS != err) {
+        prte_ras_base_abort_dvm_shrink(campaign);
+        goto cleanup;
+    }
+    tracked = true;
+
+    err = prte_ras_base_commit_dvm_shrink(campaign);
+    if (PRTE_SUCCESS != err && tracked) {
+        prte_ras_slurm_untrack_shrink_campaign(tracker);
+    }
 
 cleanup:
-    if (NULL != campaign) {
-        PMIX_RELEASE(campaign);
-    }
     free(ranks);
 
     return err;
