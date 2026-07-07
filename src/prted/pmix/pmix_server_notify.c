@@ -145,6 +145,60 @@ static void _notify_release(int status, void *cbdata)
 
 /* someone has sent us an event that we need to distribute
  * to our local clients */
+/* A member has voluntarily left a group (PMIx_Group_leave generates a
+ * PMIX_GROUP_LEFT event). Update our stored membership for that group so that
+ * PMIX_QUERY_GROUP_MEMBERSHIP and any future group operation reflect the
+ * departure. The event is broadcast to every daemon, so every daemon runs this
+ * against its own copy of prte_pmix_server_globals.groups - keeping the
+ * registry consistent across the DVM. This must run on the PRRTE event base
+ * (the same context that creates/queries the registry); it is called from the
+ * broadcast receiver below. */
+static void group_member_left(pmix_status_t code, const pmix_proc_t *source,
+                              pmix_info_t *info, size_t ninfo)
+{
+    char *grpid = NULL;
+    pmix_proc_t *affected = NULL;
+    size_t n, m, k;
+    prte_pmix_server_pset_t *ps, *grp = NULL;
+
+    if (PMIX_GROUP_LEFT != code) {
+        return;
+    }
+    for (n = 0; n < ninfo; n++) {
+        if (PMIX_CHECK_KEY(&info[n], PMIX_GROUP_ID)) {
+            grpid = info[n].value.data.string;
+        } else if (PMIX_CHECK_KEY(&info[n], PMIX_EVENT_AFFECTED_PROC)) {
+            affected = info[n].value.data.proc;
+        }
+    }
+    /* the event source is the departing proc if it wasn't called out explicitly */
+    if (NULL == affected) {
+        affected = (pmix_proc_t *) source;
+    }
+    if (NULL == grpid || NULL == affected) {
+        return;
+    }
+    PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.groups, prte_pmix_server_pset_t) {
+        if (NULL != ps->name && 0 == strcmp(ps->name, grpid)) {
+            grp = ps;
+            break;
+        }
+    }
+    if (NULL == grp) {
+        return;
+    }
+    /* remove the departed proc from the membership array, preserving order */
+    for (m = 0; m < grp->num_members; m++) {
+        if (PMIX_CHECK_PROCID(&grp->members[m], affected)) {
+            for (k = m + 1; k < grp->num_members; k++) {
+                PMIX_XFER_PROCID(&grp->members[k - 1], &grp->members[k]);
+            }
+            --grp->num_members;
+            break;
+        }
+    }
+}
+
 void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                         prte_rml_tag_t tg, void *cbdata)
 {
@@ -153,8 +207,9 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
     pmix_proc_t source;
     pmix_data_range_t range = PMIX_RANGE_SESSION;
     pmix_status_t code, ret;
-    size_t ninfo;
+    size_t ninfo, realninfo;
     pmix_rank_t vpid;
+    bool from_me;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
 
     /* unpack the daemon who broadcast the event */
@@ -170,10 +225,13 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PMIX_RANK_PRINT(vpid));
 
-    /* if I am the one who sent it, then discard it */
-    if (vpid == PRTE_PROC_MY_NAME->rank) {
-        return;
-    }
+    /* Note whether this is the copy echoed back to the originating daemon. We
+     * still process it far enough to keep our group registry consistent (see
+     * group_member_left below) - every daemon, including the originator,
+     * receives the broadcast and must update its own copy - but the originator
+     * must NOT re-notify its local clients, as its PMIx server already
+     * delivered the event to them directly. */
+    from_me = (vpid == PRTE_PROC_MY_NAME->rank);
 
     /* unpack the status code */
     cnt = 1;
@@ -208,6 +266,7 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         return;
     }
     /* reserve a spot for an additional flag */
+    realninfo = cd->ninfo;
     ninfo = cd->ninfo + 1;
     /* create the space */
     PMIX_INFO_CREATE(cd->info, ninfo);
@@ -223,6 +282,18 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         }
     }
     cd->ninfo = ninfo;
+
+    /* keep our group membership registry consistent with any voluntary
+     * departure - every daemon does this, including the originator */
+    group_member_left(code, &cd->proc, cd->info, realninfo);
+
+    /* if I am the one who broadcast it, my local clients have already been
+     * notified - just release and return now that the registry is updated */
+    if (from_me) {
+        PMIX_INFO_FREE(cd->info, cd->ninfo);
+        PMIX_RELEASE(cd);
+        return;
+    }
 
     /* protect against infinite loops by marking that this notification was
      * passed down to the server by me */
