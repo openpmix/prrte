@@ -113,6 +113,7 @@ static void abort_group_op(prte_grpcomm_group_t *coll, pmix_status_t st)
     (void) prte_grpcomm.xcast(PRTE_RML_TAG_GROUP_RELEASE, reply);
 }
 
+#if PRTE_PMIX_HAVE_GROUP_FT
 /* Locate the in-flight construct tracker for a group by name. Used when a
  * cancel arrives: the cancel carries op == PMIX_GROUP_CANCEL, which by design
  * does not match the construct tracker's op, so we look it up by groupID. */
@@ -170,6 +171,7 @@ ack:
         cd->cbfunc(rc, NULL, 0, cd->cbdata, NULL, NULL);
     }
 }
+#endif /* PRTE_PMIX_HAVE_GROUP_FT */
 
 void prte_grpcomm_direct_group_fault_handler(const prte_rml_recovery_status_t* status)
 {
@@ -252,6 +254,7 @@ static void group(int sd, short args, void *cbdata)
     size_t ninfo;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
+#if PRTE_PMIX_HAVE_GROUP_FT
     /* a cancel is not a rollup collective - route it to the HNP to abort the
      * in-flight construct, then we are done */
     if (PMIX_GROUP_CANCEL == cd->op) {
@@ -259,6 +262,7 @@ static void group(int sd, short args, void *cbdata)
         PMIX_RELEASE(cd);
         return;
     }
+#endif
 
     /* compute the signature of this collective */
     PMIX_CONSTRUCT(&sig, prte_grpcomm_direct_group_signature_t);
@@ -496,6 +500,7 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
         PRTE_ERROR_LOG(rc);
     }
 
+#if PRTE_PMIX_HAVE_GROUP_FT
     /* a cancel request carries only the signature. Only the HNP acts - it is
      * the sole xcast source. Find the in-flight construct for this group and
      * abort it; the resulting release completes every participant's
@@ -513,6 +518,7 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
         PMIX_RELEASE(sig);
         return;
     }
+#endif
 
     /* check for the tracker and create it if not found */
     if (NULL == (coll = get_tracker(sig, true))) {

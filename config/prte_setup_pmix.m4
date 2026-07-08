@@ -232,6 +232,16 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                        [$prte_pmix_have_regex2],
                        [Whether or not PMIx supports the PMIx_generate_regex2 API])
 
+    AC_MSG_CHECKING([for PMIx group fault-tolerance support])
+    PRTE_CHECK_PMIX_CAP([GROUP_FT],
+                        [AC_MSG_RESULT([yes])
+                         prte_pmix_have_group_ft=1],
+                        [AC_MSG_RESULT([no])
+                         prte_pmix_have_group_ft=0])
+    AC_DEFINE_UNQUOTED([PRTE_PMIX_HAVE_GROUP_FT],
+                       [$prte_pmix_have_group_ft],
+                       [Whether PMIx supports the group fault-tolerance feature set, including the PMIX_GROUP_CANCEL host operation])
+
     AC_MSG_CHECKING([for LTO compatibility])
     PRTE_CHECK_PMIX_CAP([LTO],
                         [PRTE_PMIX_LTO_CAPABILITY=1
