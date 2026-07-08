@@ -113,6 +113,64 @@ static void abort_group_op(prte_grpcomm_group_t *coll, pmix_status_t st)
     (void) prte_grpcomm.xcast(PRTE_RML_TAG_GROUP_RELEASE, reply);
 }
 
+/* Locate the in-flight construct tracker for a group by name. Used when a
+ * cancel arrives: the cancel carries op == PMIX_GROUP_CANCEL, which by design
+ * does not match the construct tracker's op, so we look it up by groupID. */
+static prte_grpcomm_group_t* find_construct_op(const char *groupID)
+{
+    prte_grpcomm_group_t *coll;
+
+    PMIX_LIST_FOREACH(coll, &prte_mca_grpcomm_direct_component.group_ops, prte_grpcomm_group_t) {
+        if (PMIX_GROUP_CONSTRUCT == coll->sig->op &&
+            0 == strcmp(groupID, coll->sig->groupID)) {
+            return coll;
+        }
+    }
+    return NULL;
+}
+
+/* Route a group-cancel request to the HNP. Called on the daemon whose PMIx
+ * server requested the cancel (e.g. its client hit the construct timeout). We
+ * carry just a signature (op == PMIX_GROUP_CANCEL + groupID) up to the HNP,
+ * which locates the in-flight construct and aborts it (see the CANCEL branch in
+ * prte_grpcomm_direct_grp_recv). That abort completes every participant's
+ * PMIx_Group_construct with PMIX_GROUP_CONSTRUCT_ABORT via the normal release
+ * path, so the cancel itself is simply acknowledged once dispatched. */
+static void request_group_cancel(prte_pmix_grp_caddy_t *cd)
+{
+    prte_grpcomm_direct_group_signature_t sig;
+    pmix_data_buffer_t *relay;
+    pmix_status_t rc;
+
+    PMIX_CONSTRUCT(&sig, prte_grpcomm_direct_group_signature_t);
+    sig.op = PMIX_GROUP_CANCEL;
+    sig.groupID = strdup(cd->grpid);
+
+    PMIX_DATA_BUFFER_CREATE(relay);
+    rc = pack_signature(relay, &sig);
+    PMIX_DESTRUCT(&sig);
+    if (PMIX_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(relay);
+        goto ack;
+    }
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, relay, PRTE_RML_TAG_GROUP);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(relay);
+        rc = prte_pmix_convert_rc(rc);
+        goto ack;
+    }
+    /* the cancel has been dispatched - acknowledge success. The construct abort
+     * is delivered separately through the construct's own release. */
+    rc = PMIX_SUCCESS;
+
+ack:
+    if (NULL != cd->cbfunc) {
+        cd->cbfunc(rc, NULL, 0, cd->cbdata, NULL, NULL);
+    }
+}
+
 void prte_grpcomm_direct_group_fault_handler(const prte_rml_recovery_status_t* status)
 {
     prte_grpcomm_group_t *coll, *nxt;
@@ -193,6 +251,14 @@ static void group(int sd, short args, void *cbdata)
     pmix_info_t *info;
     size_t ninfo;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    /* a cancel is not a rollup collective - route it to the HNP to abort the
+     * in-flight construct, then we are done */
+    if (PMIX_GROUP_CANCEL == cd->op) {
+        request_group_cancel(cd);
+        PMIX_RELEASE(cd);
+        return;
+    }
 
     /* compute the signature of this collective */
     PMIX_CONSTRUCT(&sig, prte_grpcomm_direct_group_signature_t);
@@ -428,6 +494,24 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
     rc = unpack_signature(buffer, &sig);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
+    }
+
+    /* a cancel request carries only the signature. Only the HNP acts - it is
+     * the sole xcast source. Find the in-flight construct for this group and
+     * abort it; the resulting release completes every participant's
+     * PMIx_Group_construct with PMIX_GROUP_CONSTRUCT_ABORT. A missing tracker
+     * means the construct already resolved, so there is nothing to cancel.
+     * Note we must handle this before get_tracker, which would otherwise create
+     * a spurious cancel tracker. */
+    if (PMIX_GROUP_CANCEL == sig->op) {
+        if (PRTE_PROC_IS_MASTER) {
+            coll = find_construct_op(sig->groupID);
+            if (NULL != coll) {
+                abort_group_op(coll, PMIX_GROUP_CONSTRUCT_ABORT);
+            }
+        }
+        PMIX_RELEASE(sig);
+        return;
     }
 
     /* check for the tracker and create it if not found */
