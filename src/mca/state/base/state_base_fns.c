@@ -974,6 +974,30 @@ void prte_state_base_recover_resources(prte_job_t *jdata, prte_proc_t *pptr)
     node = pptr->node;
     map = jdata->map;
 
+    /* Find this proc in the node's proc array.  This routine can be entered
+     * more than once for the same proc - e.g. a daemon loss marks the proc
+     * PRTE_PROC_STATE_TERM_WO_SYNC and a subsequent job abort delivers a
+     * second terminal state - so it must be idempotent.  If the proc is no
+     * longer in the node array, its resources were already recovered on an
+     * earlier pass; recovering again would double-decrement the node counters
+     * and, worse, release the proc a second time (see the release below),
+     * freeing an object still held in jdata->procs and corrupting the eventual
+     * job teardown.  So treat an already-recovered proc as a no-op. */
+    proc_idx = INT_MAX;
+    for (n=0; n < node->procs->size; n++) {
+        p = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, n);
+        if (NULL == p) {
+            continue;
+        }
+        if (p == pptr) {
+            proc_idx = n;
+            break;
+        }
+    }
+    if (INT_MAX == proc_idx) {
+        return;
+    }
+
     // recover node resources
     node->slots_inuse--;
     node->num_procs--;
@@ -988,18 +1012,6 @@ void prte_state_base_recover_resources(prte_job_t *jdata, prte_proc_t *pptr)
         }
         if (nptr == node) {
             node_idx = n;
-        }
-    }
-
-    // find the proc in the node array
-    proc_idx = INT_MAX;
-    for (n=0; n < node->procs->size; n++) {
-        p = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, n);
-        if (NULL == p) {
-            continue;
-        }
-        if (p == pptr) {
-            proc_idx = n;
         }
     }
 
