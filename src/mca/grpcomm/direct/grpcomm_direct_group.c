@@ -81,17 +81,100 @@ int prte_grpcomm_direct_group(pmix_group_operation_t op, char *grpid,
     return PRTE_SUCCESS;
 }
 
+/* Abort an in-flight group collective cleanly instead of tearing down the DVM.
+ * Only the HNP calls this - it is the master of every group op (rollups
+ * converge there) and the sole xcast source. It broadcasts a GROUP_RELEASE
+ * carrying just the signature and a completion status; that drives each
+ * daemon's prte_grpcomm_direct_grp_release to complete its local participants
+ * with that status and delete the tracker (see the PMIX_SUCCESS != st path
+ * there). No membership/grpinfo/endpts payload is needed: the release reader
+ * skips all of that for a non-success construct, and a destruct never reads it. */
+static void abort_group_op(prte_grpcomm_group_t *coll, pmix_status_t st)
+{
+    pmix_data_buffer_t *reply;
+    pmix_status_t rc;
+
+    PMIX_DATA_BUFFER_CREATE(reply);
+    /* pack the signature */
+    rc = pack_signature(reply, coll->sig);
+    if (PMIX_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
+        return;
+    }
+    /* pack the completion status */
+    rc = PMIx_Data_pack(NULL, reply, &st, 1, PMIX_STATUS);
+    if (PMIX_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
+        return;
+    }
+    /* send the release via xcast to all daemons (ourselves included) */
+    (void) prte_grpcomm.xcast(PRTE_RML_TAG_GROUP_RELEASE, reply);
+}
+
 void prte_grpcomm_direct_group_fault_handler(const prte_rml_recovery_status_t* status)
 {
-    PRTE_HIDE_UNUSED_PARAMS(status);
-    /* TODO: make this actually resilient
-     * For now, we'll just kill the job if any ops are active */
-    if(0 < pmix_list_get_size(&prte_mca_grpcomm_direct_component.group_ops)){
+    prte_grpcomm_group_t *coll, *nxt;
+    const pmix_rank_t *failed;
+    size_t i, j;
+    bool affected;
+    pmix_status_t st;
+
+    /* Drive group-collective recovery exactly once, from the HNP, during the
+     * global-scope pass. The HNP is the master of every group op and the sole
+     * xcast source, and the global pass reports the same failed_ranks on every
+     * rank in a consistent order; other daemons complete their local
+     * participants when the HNP's abort release arrives. (The tree-topology
+     * fields are cleared in the global pass, but failed_ranks - the identity of
+     * the failure - is exactly what the global notification carries.) */
+    if (PRTE_RML_FAULT_SCOPE_GLOBAL != status->scope) {
+        return;
+    }
+    if (!PRTE_PROC_IS_MASTER) {
+        return;
+    }
+    if (0 == pmix_list_get_size(&prte_mca_grpcomm_direct_component.group_ops)) {
+        return;
+    }
+
+    failed = (const pmix_rank_t *) status->failed_ranks.array;
+
+    /* Abort every in-flight group op that a failed daemon participated in. This
+     * is the resilient replacement for tearing down the whole DVM. Completing a
+     * construct on the survivors (degraded, reduced membership) when
+     * PMIX_GROUP_FT_COLLECTIVE was requested is a larger distributed-recovery
+     * effort tracked separately; for now the loss of a participating daemon
+     * aborts the affected construct regardless of that flag. A destruct is
+     * tearing the group down anyway, so it is simply completed. */
+    PMIX_LIST_FOREACH_SAFE(coll, nxt, &prte_mca_grpcomm_direct_component.group_ops, prte_grpcomm_group_t) {
+        affected = false;
+        if (NULL == coll->dmns || 0 == coll->ndmns) {
+            /* the daemon set was never resolved (e.g. a bootstrap op), so we
+             * cannot prove this op is unaffected - abort it to be safe rather
+             * than risk leaving its participants blocked forever */
+            affected = true;
+        } else {
+            for (i = 0; i < status->failed_ranks.size && !affected; i++) {
+                for (j = 0; j < coll->ndmns; j++) {
+                    if (coll->dmns[j] == failed[i]) {
+                        affected = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!affected) {
+            continue;
+        }
+        st = (PMIX_GROUP_CONSTRUCT == coll->sig->op) ? PMIX_GROUP_CONSTRUCT_ABORT
+                                                     : PMIX_SUCCESS;
         PMIX_OUTPUT_VERBOSE((0, prte_grpcomm_base_framework.framework_output,
-                             "%s grpcomm:direct:group daemon failed during"
-                             " active group operation(s)",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
+                             "%s grpcomm:direct:group aborting op \"%s\" - a "
+                             "participating daemon failed",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             coll->sig->groupID));
+        abort_group_op(coll, st);
     }
 }
 
