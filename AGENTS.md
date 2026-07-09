@@ -202,7 +202,6 @@ Do not use `PMIX_` or `pmix_` prefixes for new PRRTE symbols.
 
 ### New files need the standard copyright/license header.
 
-Copy the multi-institution BSD header block — including the `Copyright (c) 2026      Nanook Consulting  All rights reserved.
 Copy the multi-institution BSD header block — including the `$COPYRIGHT$` and
 `$HEADER$` tokens — from a neighboring file. If you substantially
 change an existing file, add your copyright line to its block.
@@ -231,6 +230,17 @@ Use `{ }` around every conditional or loop body, even single-line ones.
 
 4 spaces, never tab characters.
 
+### Spacing on conditional statements
+
+Use a space to separate the condition from the surrounding keywords —
+write `if (condition) {`, not `if(condition){`.  When a condition spans
+multiple lines, put the combining operator at the end of the preceding
+line:
+
+```c
+if (condition1 ||
+    condition2) {
+```
 
 ### Stay compiler-warning-free
 
@@ -244,6 +254,18 @@ be warning-free before submitting.
 ### No hand-editing of generated files
 
 Do not modify files produced by autotools (`configure`, `Makefile.in`, etc.), pre-rendered documentation, or third-party vendored code. Edit the source code instead.
+
+### Update `.gitignore` for build products you introduce
+
+If your change adds a new source file, component, or generated artifact
+that the build produces something new from — a new executable or test
+binary, a newly generated source/header, an object or library in a
+directory that did not have one before — add the resulting build product
+to the appropriate `.gitignore` so it does not show up as an untracked
+file.  Never commit the build product itself; ignore it.  Check
+`git status` after a clean build to confirm no generated file you created
+is left untracked, and match the nearest existing `.gitignore` pattern
+style (many component directories carry their own `.gitignore`).
 
 ### GOLDEN RULE: regenerate `show_help` content after touching any help file
 
@@ -315,7 +337,8 @@ buffers unless interfacing with PMIx routines that require it.
 ### C standard
 
 PRRTE targets C11.  Do not add `-Wno-*` flags to suppress warnings —
-fix the underlying issue.
+fix the underlying issue.  C++-style `//` comments are allowed and
+preferred.
 
 ### Use the `__prte_attribute_*__` macros for compiler attributes.**
   [`src/include/prte_config_bottom.h`](src/include/prte_config_bottom.h),
@@ -338,8 +361,11 @@ the git repository; it is produced by running:
 ./autogen.pl
 ```
 
-This must be re-run whenever `configure.ac`, any `Makefile.am`, or any
-`*.m4` file under `config/` is modified.  After `autogen.pl`:
+This must be re-run whenever `configure.ac` or any `*.m4` file under
+`config/` is modified.  Editing a `Makefile.am` does **not** require the
+full `autogen.pl` + `./configure` cycle — PRRTE builds in maintainer
+mode, so a plain `make` regenerates the affected `Makefile[.in]` files and
+completes the build.  After `autogen.pl`:
 
 ```sh
 ./configure [options]
@@ -362,6 +388,31 @@ Common configure options:
 | `--enable-devel-check` | Enable strict compiler warnings (treat warnings as errors); on by default when `--enable-debug` is used in a git repo build |
 
 Version requirements: PMIx ≥ 6.1.0, hwloc ≥ 2.1.0, libevent ≥ 2.0.21.
+
+### Modifying the configure / build system
+
+Editing the build system means regenerating it — `make` alone can't, and
+trying will wedge the tree.  If you change `configure.ac` or any
+`config/*.m4` file (including the embedded oac/Autotools macros), the
+change does not take effect until the build system is regenerated.  Do
+not rely on a plain `make`: PRRTE builds in maintainer mode, so `make`
+auto-triggers a partial in-tree Autotools regeneration that frequently
+fails (e.g., unexpanded `OAC_*` macros, `config.status` errors) and can
+leave the tree half-regenerated and unbuildable.  Instead, regenerate and
+reconfigure explicitly:
+
+```sh
+./autogen.pl
+./configure <same options as the original configure>
+make -j
+```
+
+Recover the original configure invocation options from the existing tree
+with `./config.status --config` (or read the header of `config.log`).
+This process is slow but mandatory after any build-system source change —
+there is no safe shortcut.  As noted above, editing a `Makefile.am` alone
+is the exception: a plain `make` regenerates the relevant `Makefile[.in]`
+files and completes the build without the full cycle.
 
 ---
 
@@ -386,6 +437,23 @@ Key job states in order: `PRTE_JOB_STATE_INIT` →
 
 ---
 
+## Working in a shared repository
+
+Don't assume you're the only agent (or person) using this clone.  In
+particular, if you're working in a **git worktree**, other worktrees may
+be active against the same underlying repository at the same time.  Avoid
+repo-wide git commands that reach outside your own working area and can
+disrupt others — for example, `git worktree prune`, or `git stash`
+(which writes to the repository-wide stash ref shared by all worktrees).
+Keep your git operations scoped to your own branch and worktree.
+
+As a narrow exception, creating a **new branch** when you need to park
+work in progress (for example, instead of `git stash`) is fine.  Just be
+careful not to collide with branches that other agents or people may be
+using in the same clone — pick a clearly-scoped, unlikely-to-clash name.
+
+---
+
 ## Contributing
 
 ### Commit messages
@@ -393,7 +461,14 @@ Key job states in order: `PRTE_JOB_STATE_INIT` →
 Write prose commit messages, not bullet lists.  The subject line should
 complete the sentence "If applied, this commit will …".  The body must
 explain **why** the change is needed, not just what it does.  Keep the
-subject line under 72 characters.
+subject line under 72 characters, and wrap body lines at around 75
+characters.  Don't add AI tooling attribution to commit messages.
+
+Keep incidental fixes as their own commits.  Small "drive-by" bug fixes
+you notice while working on something else are welcome, but it is usually
+best to land them as standalone commits, separate from your main change,
+so each can be evaluated and reviewed on its own.  One logical change per
+commit keeps history reviewable and easy to bisect.
 
 All commits require a `Signed-off-by:` line (DCO):
 
@@ -430,6 +505,13 @@ pterm                               # shut down DVM
 
 For resource manager integration (SLURM, PBS, LSF), test within an actual
 allocation on the relevant system.
+
+**Never bend a test to accommodate a bug.** Do not weaken, skip, or
+rewrite an existing test — and do not craft a new one — merely to make
+buggy behavior pass.  Tests encode intended behavior: when one fails, the
+default assumption is that the code is wrong, not the test.  If you find a
+genuine bug in the code base, identify it, report it, and where
+appropriate fix it — don't paper over it in the test suite.
 
 ### Reporting bugs
 
