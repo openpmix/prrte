@@ -42,7 +42,6 @@ EXTRA_DIST = \
         prte_get_version.sh \
         ltmain_nag_pthread.diff \
         ltmain_pgi_tp.diff \
-        prte_mca_priority_sort.pl \
         find_common_syms \
         getdate.sh \
         from-savannah/upstream-config.guess \
