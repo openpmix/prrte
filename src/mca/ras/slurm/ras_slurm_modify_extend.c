@@ -27,7 +27,6 @@
 
 #include "ras_slurm.h"
 #include "src/mca/ras/base/base.h"
-#include "src/mca/state/state.h"
 
 #define PRTE_SLURM_MAX_SBATCH_ARGS 32
 #define PRTE_SLURM_WAIT_MIN_USEC 1000        /* 1 ms */
@@ -751,9 +750,7 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
 
     /* Launch daemons on the newly secured resources */
     if (PMIX_SUCCESS == req->pstatus) {
-        prte_job_t *daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-        PRTE_ACTIVATE_JOB_STATE(daemons, PRTE_JOB_STATE_LAUNCH_DAEMONS);
-        prte_set_attribute(&daemons->attributes, PRTE_JOB_EXTEND_DVM, PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+        prte_ras_base_activate_dvm_grow();
     }
 
     /* Execute callback if necessary */
