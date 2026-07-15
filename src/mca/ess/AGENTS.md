@@ -297,13 +297,14 @@ process (see the comment at the end of `prte_ess_base_bootstrap`)
 because peer-URI synthesis can happen much later. See the repo memory on
 the bootstrap DVM work.
 
-### Stale declarations — do not trust `base.h` blindly
+### `base.h` describes only live symbols
 
-`base.h` still declares `prte_ess_env_get`, `prte_ess_env_put`,
-`prte_ess_base_proc_binding`, and the `prte_ess_base_std_buffering`
-variable, but **none of these are defined anywhere in the tree**. They
-are vestigial. Do not wire new code to them expecting them to work, and
-consider removing the declarations if you are cleaning up.
+`base.h` once carried vestigial declarations — `prte_ess_env_get`,
+`prte_ess_env_put`, `prte_ess_base_proc_binding`, and the
+`prte_ess_base_std_buffering` variable — that were never defined anywhere
+in the tree. They have been removed. If you reintroduce a helper here,
+make sure it actually has a definition; a declaration without one is a
+trap for the next reader.
 
 ---
 
