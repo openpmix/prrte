@@ -127,7 +127,7 @@ above it and grab the jobs that match their niche.
 
 ## `prte_rmaps_base_map_job()` — the orchestrator
 
-This ~950-line function in `rmaps_base_map_job.c` is the heart of the
+This ~1050-line function in `rmaps_base_map_job.c` is the heart of the
 framework. Understand its phases before touching anything:
 
 1. **Setup & special cases.** Init `options`, validate the job has a
@@ -239,8 +239,9 @@ traversal order (ASCII diagrams are in the source):
 
 `fill` and `span` require mapping by an actual hwloc object (numa…hwthread);
 the base rejects them otherwise. `by-user` mappers (rankfile, seq, lsf)
-set the rank themselves and pass `userranked`, so `compute_vpids` only
-back-fills local/app ranks.
+set the rank themselves; because their `SEQ`/`BYUSER` mapping policy makes
+the base set `options.userranked`, `compute_vpids` only back-fills
+local/app ranks.
 
 ---
 
