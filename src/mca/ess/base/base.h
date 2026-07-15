@@ -48,11 +48,6 @@ PRTE_EXPORT extern pmix_mca_base_framework_t prte_ess_base_framework;
  */
 PRTE_EXPORT int prte_ess_base_select(void);
 
-/*
- * stdout/stderr buffering control parameter
- */
-PRTE_EXPORT extern int prte_ess_base_std_buffering;
-
 PRTE_EXPORT extern int prte_ess_base_num_procs;
 PRTE_EXPORT extern char *prte_ess_base_nspace;
 PRTE_EXPORT extern char *prte_ess_base_vpid;
@@ -61,24 +56,12 @@ PRTE_EXPORT extern pmix_list_t prte_ess_base_signals;
 /*
  * Internal helper functions used by components
  */
-PRTE_EXPORT int prte_ess_env_get(void);
-
 PRTE_EXPORT int prte_ess_base_std_prolog(void);
 
 PRTE_EXPORT int prte_ess_base_prted_setup(void);
 PRTE_EXPORT int prte_ess_base_prted_finalize(void);
 
 PRTE_EXPORT pmix_status_t prte_ess_base_setup_signals(char *signals);
-
-/* Detect whether or not this proc is bound - if not,
- * see if it should bind itself
- */
-PRTE_EXPORT int prte_ess_base_proc_binding(void);
-
-/*
- * Put functions
- */
-PRTE_EXPORT int prte_ess_env_put(int32_t num_procs, int32_t num_local_procs, char ***env);
 
 /* read a bootstrap configuration file and publish the local daemon's
  * identity/role into the environment; sets *is_controller true iff this node
