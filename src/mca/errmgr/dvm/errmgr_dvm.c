@@ -135,6 +135,7 @@ static void job_errors(int fd, short args, void *cbdata)
      * if prte is trying to shutdown, just let it
      */
     if (prte_finalizing) {
+        PMIX_RELEASE(caddy);
         return;
     }
 
@@ -539,7 +540,7 @@ keep_going:
                              "%s errmgr:dvm: proc %s %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_NAME_PRINT(proc), prte_proc_state_to_str(state));
         if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
-            if (PRTE_PROC_STATE_FAILED_TO_START) {
+            if (PRTE_PROC_STATE_FAILED_TO_START == state) {
                 jdata->state = PRTE_JOB_STATE_FAILED_TO_START;
             } else {
                 jdata->state = PRTE_JOB_STATE_FAILED_TO_LAUNCH;

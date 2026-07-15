@@ -208,8 +208,12 @@ application uses to learn a peer died without the whole job being killed.
   still needs.
 - **Every path must `PMIX_RELEASE(caddy)`.** The handlers are littered
   with `goto cleanup`; a new early return that skips it leaks the caddy.
-- **`FAILED_TO_START` self-check bug smell.** In `proc_errors` the line
-  `if (PRTE_PROC_STATE_FAILED_TO_START)` tests a constant (always true)
-  rather than `state == …`; it happens to be harmless because both arms
-  are reached only for the two FAILED states, but do not copy that
-  pattern — if you extend this branch, compare `state` explicitly.
+  (The `prte_finalizing` early return in `job_errors` was one such
+  leak — it now releases the caddy before returning.)
+- **Compare the state, don't test the constant.** The
+  `FAILED_TO_START`/`FAILED_TO_LAUNCH` arm of `proc_errors` compares
+  `PRTE_PROC_STATE_FAILED_TO_START == state`. An earlier version wrote
+  `if (PRTE_PROC_STATE_FAILED_TO_START)` — a constant that is always
+  true — which silently forced the `FAILED_TO_LAUNCH` case down the
+  `FAILED_TO_START` branch. When you extend a state switch, always
+  compare `state` explicitly.
