@@ -125,7 +125,6 @@ utility stubs) and one or more component subdirectories.
 | `filem` | `src/mca/filem/` | File Management — pre-positions files across nodes before launch. |
 | `prtereachable` | `src/mca/prtereachable/` | Reachability — determines which network interfaces can reach each node. |
 | `prtebacktrace` | `src/mca/prtebacktrace/` | Backtrace support for crash diagnostics. |
-| `prtedl` | `src/mca/prtedl/` | Dynamic linker abstraction (dlopen/dlclose). |
 | `prteinstalldirs` | `src/mca/prteinstalldirs/` | Installation directory queries. |
 
 ### MCA component structure
