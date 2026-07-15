@@ -62,7 +62,6 @@ ras/
     ras_base_select.c      # priority-ordered component selection (keeps ALL, like rmaps)
     ras_base_allocate.c    # THE driver + node-pool display + modify/reservation machinery
     ras_base_node.c        # prte_ras_base_node_insert: dedup nodes into the global pool
-    ras_base_close.c       # STALE/uncompiled — not in base/Makefile.am; ignore it
     help-ras-base.txt      # user-facing error text
   slurm/                   # SLURM (SLURM_NODELIST) — pri 50; full elastic modify support
   pbs/                     # PBS/Torque/Cobalt (PBS_NODEFILE) — pri 100 (param)
@@ -325,9 +324,11 @@ documented in each component's guide.
   it is what lets `hosts` (and the local-node fallback) run.
 - **The reuse guard is load-bearing** for spawn/child jobs in unmanaged
   allocations — don't bypass it.
-- **`ras_base_close.c` is dead** (references `active_module`/`ras_opened`
-  that no longer exist and is not in `base/Makefile.am`). Don't wire it
-  back in or copy its shape.
+- **The framework's `close` hook lives in `ras_base_frame.c`.**
+  `prte_ras_base_close` is defined there and wired into the framework
+  DECLARE; there is no separate close file. (An orphaned
+  `ras_base_close.c` — never in `base/Makefile.am`, referencing
+  long-gone `active_module`/`ras_opened` fields — was removed.)
 - Standard PRRTE rules apply: `prte_config.h` first, braces on every
   block, `NULL ==`/constant-on-left, no new warnings,
   `PRTE_ERROR_LOG`/`PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED)`
