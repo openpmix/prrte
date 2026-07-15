@@ -56,7 +56,6 @@ grpcomm/
     base.h                     # framework-global struct (context_id) + select() proto
     grpcomm_base_frame.c       # open/close/register; prte_pmix_grp_caddy_t class
     grpcomm_base_select.c      # single-winner component selection
-    grpcomm_base_stubs.c       # STALE / NOT COMPILED — see warning below
     static-components.h        # generated: the built-in component list
   direct/                      # the only component (pri 5): RML-tree collectives
 ```
@@ -64,16 +63,6 @@ grpcomm/
 Read `grpcomm.h` first — the entire framework contract is the one vtable
 struct it defines. Then read the `direct` component, which is where all the
 real work lives.
-
-> **Warning — `grpcomm_base_stubs.c` is dead code.** It is **not** listed
-> in `base/Makefile.am` and is never compiled. It references an older
-> collective-tracking API (`prte_grpcomm_signature_t`,
-> `prte_grpcomm_base.actives`, `prte_grpcomm_base.sig_table`,
-> `prte_grpcomm_base_get_tracker()`, a `grp_construct` vtable entry, and
-> `prte_pmix_grp_caddy_t` fields `sig`/`grpcbfunc` that do not exist in the
-> current `grpcomm.h`). Do not treat anything in it as the live design; the
-> current tracking model lives entirely inside the `direct` component. If
-> you are cleaning up, this file is a candidate for deletion.
 
 ---
 
@@ -163,9 +152,9 @@ The `direct` component allocates and posts these caddies.
 `prte_grpcomm_base_select()` as described above.
 
 That's the whole base API. There is **no** base-level collective tracking,
-signature packing, or xcast plumbing in the live build — the dead
-`grpcomm_base_stubs.c` notwithstanding. If you are looking for the
-signature/tracker model, it is component-private (see the `direct` guide).
+signature packing, or xcast plumbing in the live build. If you are looking
+for the signature/tracker model, it is component-private (see the `direct`
+guide).
 
 ---
 
