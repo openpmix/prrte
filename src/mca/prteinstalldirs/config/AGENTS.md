@@ -1,0 +1,130 @@
+# AGENTS.md — `prteinstalldirs/config` (compile-time install paths)
+
+Component guide for `src/mca/prteinstalldirs/config/`. Read the
+[framework guide](../AGENTS.md) first for the component contract, the
+`prte_install_dirs_t` field set, the keep-all-and-merge model, and the
+`${field}`/`@{field}` expansion engine referenced throughout.
+
+---
+
+## Role and priority
+
+`config` is the **fallback source of every install directory**: the
+values `configure` computed and baked into the binary at build time. Its
+configure-time priority is **0** — the lowest — so in the merge it is
+visited *last* and only fills fields that no higher-priority component
+(i.e. `env`) already supplied. In a normal install with no `PRTE_*`
+environment overrides set, `config` provides *all* of
+`prte_install_dirs`.
+
+It contributes its data purely as static initializers — there is no open
+function, no runtime work. Once `configure` runs, these paths are frozen
+into the object file.
+
+---
+
+## Files
+
+| File | Contents |
+|------|----------|
+| `prte_installdirs_config.c` | The component definition: an MCA header plus a fully-populated `install_dirs_data` built from the `PRTE_*` compile defines. |
+| `install_dirs.h.in` | Template mapping each `PRTE_*` macro to an Autotools `@dir@` substitution variable. Checked in; **edit this**. |
+| `install_dirs.h` | Generated from `install_dirs.h.in` by `configure` (`AC_CONFIG_FILES`). **Generated — do not edit.** |
+| `configure.m4` | Sets this component's priority to **0**, forces static compile mode, and registers `install_dirs.h` + `Makefile` for generation. |
+| `Makefile.am` | Builds `libprtemca_prteinstalldirs_config.la`; lists `install_dirs.h` as a `nodist` (generated) source. |
+
+---
+
+## How it participates in the merge
+
+The component struct in `prte_installdirs_config.c` is
+`const` and its `install_dirs_data` is initialized **positionally** from
+seventeen compile-time macros:
+
+```c
+.install_dirs_data = {
+    PRTE_PREFIX,        PRTE_EXEC_PREFIX,   PRTE_BINDIR,
+    PRTE_SBINDIR,       PRTE_LIBEXECDIR,    PRTE_DATAROOTDIR,
+    PRTE_DATADIR,       PRTE_SYSCONFDIR,    PRTE_SHAREDSTATEDIR,
+    PRTE_LOCALSTATEDIR, PRTE_LIBDIR,        PRTE_INCLUDEDIR,
+    PRTE_INFODIR,       PRTE_MANDIR,        PRTE_PKGDATADIR,
+    PRTE_PKGLIBDIR,     PRTE_PKGINCLUDEDIR
+};
+```
+
+Because these are `#define`d string literals (never `NULL`), `config`
+has an opinion about every field. The framework's `CONDITIONAL_COPY`
+merge therefore takes a `config` value only where `env` left the slot
+`NULL`. There is no `.pmix_mca_open_component` — nothing to run; the data
+is ready at link time. The component closes with
+`PMIX_MCA_BASE_COMPONENT_INIT(prte, prteinstalldirs, config)`.
+
+---
+
+## The field → macro → Autotools mapping
+
+`install_dirs.h.in` is where the compile-time values come from. Each
+`PRTE_*` macro expands to an Autotools substitution variable, which
+`configure` fills in when it generates `install_dirs.h`:
+
+| Struct field (positional) | Macro | `@…@` substitution |
+|---------------------------|-------|--------------------|
+| `prefix` | `PRTE_PREFIX` | `@prefix@` |
+| `exec_prefix` | `PRTE_EXEC_PREFIX` | `@exec_prefix@` |
+| `bindir` | `PRTE_BINDIR` | `@bindir@` |
+| `sbindir` | `PRTE_SBINDIR` | `@sbindir@` |
+| `libexecdir` | `PRTE_LIBEXECDIR` | `@libexecdir@` |
+| `datarootdir` | `PRTE_DATAROOTDIR` | `@datarootdir@` |
+| `datadir` | `PRTE_DATADIR` | `@datadir@` |
+| `sysconfdir` | `PRTE_SYSCONFDIR` | `@sysconfdir@` |
+| `sharedstatedir` | `PRTE_SHAREDSTATEDIR` | `@sharedstatedir@` |
+| `localstatedir` | `PRTE_LOCALSTATEDIR` | `@localstatedir@` |
+| `libdir` | `PRTE_LIBDIR` | `@libdir@` |
+| `includedir` | `PRTE_INCLUDEDIR` | `@includedir@` |
+| `infodir` | `PRTE_INFODIR` | `@infodir@` |
+| `mandir` | `PRTE_MANDIR` | `@mandir@` |
+| `pmixdatadir` | `PRTE_PKGDATADIR` | `@prtedatadir@` |
+| `pmixlibdir` | `PRTE_PKGLIBDIR` | `@prtelibdir@` |
+| `pmixincludedir` | `PRTE_PKGINCLUDEDIR` | `@prteincludedir@` |
+
+The values `configure` substitutes are **not** fully resolved — they
+carry Autotools' own back-references, e.g. `@bindir@` is typically
+`${exec_prefix}/bin` and `@exec_prefix@` is `${prefix}`. Those `${…}`
+references are what the framework's expansion pass (`base/prteinstalldirs_base_expand.c`)
+resolves at open time. So `config` deliberately ships *unexpanded*
+templates; the base does the fixed-point substitution.
+
+> **Positional init + the naming trap.** The initializer is positional,
+> so the *order* must match the struct exactly. Note the last three
+> entries: `PRTE_PKGDATADIR`/`PRTE_PKGLIBDIR`/`PRTE_PKGINCLUDEDIR` land
+> in the struct fields named `pmixdatadir`/`pmixlibdir`/`pmixincludedir`
+> (see the framework guide's naming trap). This is correct — those
+> PMIx-named fields hold PRRTE's package directories. Do not reorder.
+
+---
+
+## Gotchas when editing
+
+- **Edit `install_dirs.h.in`, never `install_dirs.h`.** The `.h` is
+  regenerated by `configure` from the `.in`; hand edits are clobbered
+  and violate the "no hand-editing of generated files" rule. Adding or
+  changing a directory means changing the `.in` template *and* the
+  positional initializer in `prte_installdirs_config.c` — and, if it is
+  a brand-new field, the PMIx struct and every field-list site listed in
+  the framework guide.
+- **Positional order is fragile.** Because `prte_installdirs_config.c`
+  uses positional (not designated) initializers, an inserted field
+  silently shifts every value after it. If you touch the list, prefer
+  keeping order identical to the struct, and cross-check against `env`'s
+  designated-initializer list.
+- **Values are compile-time frozen.** Moving an installed tree after
+  build breaks `config`'s paths — that is exactly the case the `env`
+  component (and `PRTE_PREFIX` et al.) exist to rescue. Don't try to make
+  `config` relocatable; that is not its job.
+- **The `datarootdir=foo` line in `install_dirs.h.in` is intentional.**
+  It silences an Autoconf 2.60 warning about `datarootdir`; the header's
+  comment says so. Leave it.
+- Regenerating requires the build system: a change to `install_dirs.h.in`
+  is picked up by re-running `configure` (or a maintainer-mode `make`
+  that reruns `config.status`). A change to `configure.m4` requires the
+  full `./autogen.pl && ./configure` cycle per the top-level guide.
