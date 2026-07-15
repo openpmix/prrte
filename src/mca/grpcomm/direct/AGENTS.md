@@ -282,10 +282,11 @@ deletes the tracker — so a cancel/abort tears down the collective cleanly
 
 ## Things to watch when editing
 
-- **`grp_construct`/`begin_xcast`/`prte_grpcomm_API_*` in the base are
-  dead.** `grpcomm_base_stubs.c` is not compiled (see the framework
-  guide). Do not model new work on it. The live tracking model is entirely
-  in this component.
+- **The live tracking model is entirely in this component.** The base
+  contributes no collective tracking, signature packing, or xcast
+  plumbing — do not look there for an API to build on, and do not model
+  new work on the old `prte_grpcomm_API_*`/`grp_construct` shape (that
+  retired-API stub file, `grpcomm_base_stubs.c`, has been removed).
 - **Never touch trackers off the progress thread.** Every entry point
   thread-shifts through `prte_event_set`/`prte_event_active` for exactly
   this reason. The tracker lists, `context_id`, and xcast counters are
