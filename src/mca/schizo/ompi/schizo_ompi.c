@@ -1759,14 +1759,7 @@ static bool check_prte_overlap(char *var, char *value)
 {
     char *tmp;
 
-    if (0 == strncmp(var, "dl_", 3)) {
-        pmix_asprintf(&tmp, "PRTE_MCA_prtedl_%s", &var[3]);
-        // set it, but don't overwrite if they already
-        // have a value in our environment
-        setenv(tmp, value, false);
-        free(tmp);
-        return true;
-    } else if (0 == strncmp(var, "oob_", 4)) {
+    if (0 == strncmp(var, "oob_", 4)) {
         pmix_asprintf(&tmp, "PRTE_MCA_%s", var);
         // set it, but don't overwrite if they already
         // have a value in our environment

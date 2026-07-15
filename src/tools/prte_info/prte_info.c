@@ -372,7 +372,7 @@ int main(int argc, char *argv[])
                             PRTE_CONFIGURE_CLI, PRTE_BUILD_USER, PRTE_BUILD_DATE, PRTE_BUILD_HOST,
                             PRTE_CC, PRTE_CC_ABSOLUTE, PLATFORM_STRINGIFY(PLATFORM_COMPILER_FAMILYNAME),
                             PLATFORM_STRINGIFY(PLATFORM_COMPILER_VERSION_STR), PRTE_BUILD_CFLAGS, PRTE_BUILD_LDFLAGS,
-                            PRTE_BUILD_LIBS, PRTE_ENABLE_DEBUG, PRTE_HAVE_DL_SUPPORT,
+                            PRTE_BUILD_LIBS, PRTE_ENABLE_DEBUG, PMIX_HAVE_PDL_SUPPORT,
                             PRTE_C_HAVE_VISIBILITY);
         acted = true;
     }
@@ -402,7 +402,7 @@ int main(int argc, char *argv[])
                             PRTE_CONFIGURE_CLI, PRTE_BUILD_USER, PRTE_BUILD_DATE, PRTE_BUILD_HOST,
                             PRTE_CC, PRTE_CC_ABSOLUTE, PLATFORM_STRINGIFY(PLATFORM_COMPILER_FAMILYNAME),
                             PLATFORM_STRINGIFY(PLATFORM_COMPILER_VERSION_STR), PRTE_BUILD_CFLAGS, PRTE_BUILD_LDFLAGS,
-                            PRTE_BUILD_LIBS, PRTE_ENABLE_DEBUG, PRTE_HAVE_DL_SUPPORT,
+                            PRTE_BUILD_LIBS, PRTE_ENABLE_DEBUG, PMIX_HAVE_PDL_SUPPORT,
                             PRTE_C_HAVE_VISIBILITY);
         pmix_info_show_component_version("PRRTE", &mca_types, &prte_component_map, pmix_info_type_all,
                                          pmix_info_component_all, pmix_info_ver_full,

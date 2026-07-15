@@ -216,8 +216,8 @@ table.
   triples out of an argv, map generic `--mca fw ...` to the right
   project (`pmix_pmdl_base_check_prte_param` / `_check_pmix_param`),
   handle framework renames (`if`→`prteif`/`pif`, `reachable`→
-  `prtereachable`/`preachable`, `dl`→`prtedl`/`pdl`,
-  `plm_rsh`→`plm_ssh`), and either push them into the environment
+  `prtereachable`/`preachable`, `plm_rsh`→`plm_ssh`, and — on the PMIx
+  side only — `dl`→`pdl`), and either push them into the environment
   (`target == NULL`) or append them to a target argv.
 - **`prte_schizo_base_add_directive` / `_add_qualifier`** — the
   option→attribute plumbing used by deprecated-option conversion. They
