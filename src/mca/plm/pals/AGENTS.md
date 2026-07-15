@@ -106,11 +106,11 @@ exit command; `plm_pals_signal_job` signals `palsrun` directly via
 - **The `-L` nodelist path is `#if 0`'d out.** aprun currently uses the
   full allocation; if you re-enable explicit host lists, re-test the
   daemon-count/layout math (`-n`/`-N`).
-- **`plm_pals_init` contains a stray `fprintf(stderr, "OOPS ...")`** on
-  the `prte_plm_base_comm_start` error path — a leftover debug artifact,
-  not a real diagnostic. Worth cleaning up (it violates the project's
-  "no stray stderr" hygiene) but it is on an error path, so behavior is
-  otherwise unaffected.
+- **Error paths report through `PRTE_ERROR_LOG`, not `stderr`.**
+  `plm_pals_init` used to carry a stray `fprintf(stderr, "OOPS ...")`
+  debug artifact on the `prte_plm_base_comm_start` error path; it has
+  been removed. Don't reintroduce raw `stderr` diagnostics — use
+  `PRTE_ERROR_LOG` / `pmix_show_help`.
 - **RM-driven placement** → `daemon_nodes_assigned_at_launch = false`; the
   node↔daemon binding is resolved at the daemon callback.
 - **Environment already stripped.** `prte_launch_environ` is the pristine,
