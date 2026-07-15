@@ -88,7 +88,7 @@ static int prte_iof_hnp_close(void)
 static int prte_iof_hnp_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* if we are not the HNP, then don't use this module */
-    if (!PRTE_PROC_IS_MASTER && !PRTE_PROC_IS_MASTER) {
+    if (!PRTE_PROC_IS_MASTER) {
         *priority = -1;
         *module = NULL;
         return PRTE_ERROR;

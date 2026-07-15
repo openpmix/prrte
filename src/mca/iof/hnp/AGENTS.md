@@ -157,10 +157,10 @@ the sink once the last queued byte is written.
   only flips the `activated` flags once `revstdout && revstderr` exist,
   so an immediate EOF on one stream can't declare the proc IOF-complete
   before the other is wired.
-- **The `query` has a copy-paste quirk:** it tests `!PRTE_PROC_IS_MASTER &&
-  !PRTE_PROC_IS_MASTER` (the same predicate twice). It is functionally
-  correct (only the master runs here) but if you touch it, fix it to a
-  single clean condition rather than propagating the duplication.
+- **The `query` gate is a single `!PRTE_PROC_IS_MASTER` test.** It once
+  carried a copy-paste duplication (`!PRTE_PROC_IS_MASTER &&
+  !PRTE_PROC_IS_MASTER`), which was harmless but has been collapsed to
+  the one clean condition.
 - **Zero-byte stdin means close.** `push_stdin` deliberately forwards
   zero-length payloads so a preceding buffer is flushed and the proc's
   stdin fd is then closed. Preserve that.
