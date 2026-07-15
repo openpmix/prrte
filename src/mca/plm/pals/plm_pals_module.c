@@ -123,7 +123,6 @@ static int plm_pals_init(void)
 
     if (PRTE_SUCCESS != (rc = prte_plm_base_comm_start())) {
         PRTE_ERROR_LOG(rc);
-	fprintf(stderr, "OOPS prte_plm_base_comm_start returned error\n");
         return rc;
     }
 
