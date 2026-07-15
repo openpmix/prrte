@@ -16,6 +16,13 @@ portable code — not plausible-looking code that solves one problem in
 one environment or use-case at the expense of others. Hold yourself to
 the same bar as a thoughtful human contributor.
 
+> **Note on layout:** PRRTE and PMIx are developed together, and many
+> contributors work in both trees.  This guide deliberately follows the
+> same section order as the companion
+> [PMIx `AGENTS.md`](https://github.com/openpmix/openpmix/blob/master/AGENTS.md)
+> so that a rule you learned in one project sits in the same place in the
+> other.
+
 ---
 
 ## What is PRRTE?
@@ -200,6 +207,11 @@ Nothing comes before it — not system headers, not other PRRTE headers.
 
 Do not use `PMIX_` or `pmix_` prefixes for new PRRTE symbols.
 
+Use `PRTE_EXPORT` to annotate symbols that must be visible outside the
+compilation unit that defines them (for example, functions a tool or
+another framework calls).  Leave purely internal symbols unannotated —
+do not mark them `PRTE_EXPORT`.
+
 ### New files need the standard copyright/license header.
 
 Copy the multi-institution BSD header block — including the `$COPYRIGHT$` and
@@ -291,6 +303,24 @@ and pick up your help-text changes.  Skipping this step leaves the binary
 serving the old (or missing) messages even though the `.txt` source looks
 correct.
 
+### Unique numeric values for status and state codes
+
+Error constants, job states, and process states are hand-assigned
+numeric values, and every value must be **unique** within its family — a
+duplicate silently makes two distinct codes compare equal and is a
+miserable bug to track down.
+
+- Error/return codes live in [`src/include/constants.h`](src/include/constants.h),
+  numbered as offsets from `PRTE_ERR_BASE` and `PRTE_ERR_SPLIT`.
+- Job and process states live in
+  [`src/mca/plm/plm_types.h`](src/mca/plm/plm_types.h), numbered as
+  offsets from `PRTE_JOB_STATE_ERROR` and `PRTE_PROC_STATE_ERROR` (note
+  the sequences already skip some offsets — do not reuse a skipped one
+  assuming it is free).
+
+When adding a code, append it at the end of its list with the next
+unused offset, and grep the relevant header to confirm no existing entry
+already claims that value.
 
 ### Error handling
 
@@ -298,34 +328,6 @@ Functions that can fail return `int`.  Check every return value.  Use
 `PRTE_ERROR_LOG(rc)` to record unexpected errors.  Use
 `PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_*)` to trigger state
 transitions rather than handling errors inline in launch paths.
-
-### Thread model
-
-PRRTE is event-driven and single-threaded on the progress thread.  Use
-the PRRTE event loop (`prte_event_base`) for deferred work.  Do not block on
-the progress thread.
-
-### Thread-shifting with caddies
-
-A **caddy** is a short-lived heap object whose sole job is to carry a request's parameters across states within the progress thread.  Every caddy struct must contain at minimum:
-
-| Field | Type | Purpose |
-|-------|------|---------|
-| ev | `pmix_event_t` | Required by Libevent to queue the caddy; **must be named `ev`** |
-| lock | `pmix_lock_t` | Thread synchronization (blocking operations wait on this; handlers wake it) |
-| cbdata | `void *` | Opaque pointer passed through to the callback |
-| callback pointer(s) | function pointer(s) | Cache the caller-supplied callback function(s) |
-
-The pattern:
-
-1. Allocate a caddy with `PMIX_NEW(caddy_type_t)`.
-2. Assign the caddy's fields to point at the caller's parameters — **do not copy the data**.
-3. Call `PRTE_PMIX_THREADSHIFT(cd, evbase, handler_fn)` to post the caddy to the progress thread's event queue.
-4. The progress thread fires `handler_fn(cd)`, which performs the actual work.
-
-Never read or write shared library state outside of the progress thread; do it only inside the handler that runs on the progress thread.
-Do not allocate a caddy on the stack — it must outlive the function that creates it.
-
 
 ### Memory management
 
@@ -340,19 +342,20 @@ PRRTE targets C11.  Do not add `-Wno-*` flags to suppress warnings —
 fix the underlying issue.  C++-style `//` comments are allowed and
 preferred.
 
-### Use the `__prte_attribute_*__` macros for compiler attributes.**
-  [`src/include/prte_config_bottom.h`](src/include/prte_config_bottom.h),
-  pulled in transitively by `prte_config.h`, defines portable wrappers —
-  `__prte_attribute_unused__`, `__prte_attribute_noreturn__`,
-  `__prte_attribute_format__`, `__prte_attribute_deprecated__`, and many
-  more — that expand to the appropriate `__attribute__((...))` on
-  compilers that support it and to nothing elsewhere. Reach for these
-  (for example, to mark an unused function parameter) rather than writing
-  a bare `__attribute__` or leaving a warning unaddressed.
+### Use the `__prte_attribute_*__` macros for compiler attributes.
+
+[`src/include/prte_config_bottom.h`](src/include/prte_config_bottom.h),
+pulled in transitively by `prte_config.h`, defines portable wrappers —
+`__prte_attribute_unused__`, `__prte_attribute_noreturn__`,
+`__prte_attribute_format__`, `__prte_attribute_deprecated__`, and many
+more — that expand to the appropriate `__attribute__((...))` on
+compilers that support it and to nothing elsewhere. Reach for these
+(for example, to mark an unused function parameter) rather than writing
+a bare `__attribute__` or leaving a warning unaddressed.
 
 ---
 
-## Build System
+## Build & Test Procedures
 
 PRRTE uses GNU Autotools.  The generated `configure` script is **not** in
 the git repository; it is produced by running:
@@ -362,7 +365,7 @@ the git repository; it is produced by running:
 ```
 
 This must be re-run whenever `configure.ac` or any `*.m4` file under
-`config/` is modified.  Editing a `Makefile.am` does **not** require the
+`config/` is modified or added.  Editing a `Makefile.am` does **not** require the
 full `autogen.pl` + `./configure` cycle — PRRTE builds in maintainer
 mode, so a plain `make` regenerates the affected `Makefile[.in]` files and
 completes the build.  After `autogen.pl`:
@@ -389,6 +392,20 @@ Common configure options:
 
 Version requirements: PMIx ≥ 6.1.0, hwloc ≥ 2.1.0, libevent ≥ 2.0.21.
 
+### Test-building your changes
+
+Build from the repository root with `make -j$(nproc)`.  Running `make`
+from the root is what respects the generated headers and the per-target
+compiler flags; building from deep inside a subdirectory can miss a
+regenerated header and give you a misleading result.
+
+If you configured with `--enable-mca-dso` (components built as separate
+DSOs rather than statically linked into the tools), you can rebuild a
+single component after editing it by running `make install` in that
+component's build directory — you do not have to relink every tool.  In
+the default static build, a component change requires a normal
+root-level `make` so the tools are relinked.
+
 ### Modifying the configure / build system
 
 Editing the build system means regenerating it — `make` alone can't, and
@@ -413,6 +430,165 @@ This process is slow but mandatory after any build-system source change —
 there is no safe shortcut.  As noted above, editing a `Makefile.am` alone
 is the exception: a plain `make` regenerates the relevant `Makefile[.in]`
 files and completes the build without the full cycle.
+
+### Testing
+
+PRRTE now ships real automated tests in addition to integration-level
+launch testing.  Use the right layer for what you touched.
+
+**Unit tests (`make check`).**  Self-contained unit tests live under
+[`test/unit/`](test/unit/) and are wired into `make check` (for example,
+`test/unit/rmaps/test_rmaps` exercises the mapper's policy parsing,
+option resolution, and each mapping component — `round_robin`, `ppr`,
+`seq`, `rank_file` — with no live DVM).  Run them from the build tree:
+
+```sh
+make check
+```
+
+Add new unit tests here, under the framework they cover, and wire them
+into the appropriate `Makefile.am` `TESTS =` list so `make check` picks
+them up.
+
+**Offline mapper harness (`make check-offline`).**  Mapping, ranking, and
+binding behavior can be exercised without launching anything.
+[`test/offline/run_offline_maps.py`](test/offline/) drives
+`prterun --rtos donotlaunch --display map` over a matrix of `--map-by`,
+`--rank-by`, and `--bind-to` directives crossed with the synthetic hwloc
+topologies in [`test/topologies/`](test/topologies/), then checks each
+printed map against invariants derived from the topology.  It is **not**
+part of `make check` (it needs a freshly built `prterun` and runs well
+over a thousand cases); run it on demand from a build tree:
+
+```sh
+make -C test/offline check-offline
+```
+
+Whenever you change the mapper, run this harness — it is the cheapest way
+to catch a mapping regression.
+
+**Integration testing.**  For launch, I/O forwarding, and lifecycle
+changes, run an actual DVM:
+
+```sh
+prte --daemonize                    # start DVM
+prun -n 4 hostname                  # basic launch smoke test
+pterm                               # shut down DVM
+```
+
+For resource-manager integration (SLURM, PBS, LSF), test within an actual
+allocation on the relevant system.
+
+**Never bend a test to accommodate a bug.** Do not weaken, skip, or
+rewrite an existing test — and do not craft a new one — merely to make
+buggy behavior pass.  Tests encode intended behavior: when one fails, the
+default assumption is that the code is wrong, not the test.  If you find a
+genuine bug in the code base, identify it, report it, and where
+appropriate fix it — don't paper over it in the test suite.
+
+### Did I break it? — verification checklist
+
+Before you consider a change finished, work down this list; do the steps
+that apply to what you touched:
+
+1. **Clean, warning-free build.**  Configure with `--enable-debug` (which
+   turns warnings into errors) and confirm the tree builds clean — pay
+   special attention to conditionally-compiled paths (code behind a
+   capability flag or an RM `--with-*` option) that your local build may
+   not even be exercising.
+2. **`make check`.**  The unit tests must pass.
+3. **Offline mapper harness** (`make -C test/offline check-offline`) for
+   any change to mapping, ranking, or binding.
+4. **Live smoke test.**  Start a DVM, launch a small job, and shut it down
+   (`prte --daemonize` → `prun -n 4 hostname` → `pterm`) for any change to
+   launch, I/O forwarding, or the state machine.
+5. **Docs build.**  For user-visible changes, update the RST under
+   [`docs/`](docs/) and build the docs (`make` in `docs/` produces the
+   Sphinx HTML) to confirm they render warning-free.
+6. **Broaden when feasible.**  Where you can, repeat across environments
+   and resource managers — PRRTE's whole reason for existing is
+   portability across systems you may not have in front of you.
+
+---
+
+## Thread Safety & the Progress Thread
+
+### Thread model
+
+PRRTE is event-driven and single-threaded on the progress thread.  Use
+the PRRTE event loop (`prte_event_base`) for deferred work.  Do not block on
+the progress thread.
+
+### Thread-shifting with caddies
+
+A **caddy** is a short-lived heap object whose sole job is to carry a request's parameters across states within the progress thread.  Every caddy struct must contain at minimum:
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| ev | `pmix_event_t` | Required by Libevent to queue the caddy; **must be named `ev`** |
+| lock | `prte_pmix_lock_t` | Thread synchronization (blocking operations wait on this; handlers wake it) |
+| cbdata | `void *` | Opaque pointer passed through to the callback |
+| callback pointer(s) | function pointer(s) | Cache the caller-supplied callback function(s) |
+
+The pattern:
+
+1. Allocate a caddy with `PMIX_NEW(caddy_type_t)`.
+2. Assign the caddy's fields to point at the caller's parameters — **do not copy the data**.
+3. Call `PRTE_PMIX_THREADSHIFT(cd, evbase, handler_fn)` to post the caddy to the progress thread's event queue.
+4. The progress thread fires `handler_fn(cd)`, which performs the actual work.
+
+Never read or write shared library state outside of the progress thread; do it only inside the handler that runs on the progress thread.
+Do not allocate a caddy on the stack — it must outlive the function that creates it.
+
+#### Blocking operations
+
+When the caller must wait for the work to finish, embed a
+`prte_pmix_lock_t` and block on it after the thread-shift.  The handler
+wakes the caller by calling `PRTE_PMIX_WAKEUP_THREAD` on the same lock
+before it returns:
+
+```c
+prte_pmix_lock_t lock;
+PRTE_PMIX_CONSTRUCT_LOCK(&lock);
+cd->lock = &lock;                                  /* caddy carries the lock */
+PRTE_PMIX_THREADSHIFT(cd, prte_event_base, _do_the_work);
+PRTE_PMIX_WAIT_THREAD(&lock);                      /* block until woken */
+rc = lock.status;
+PRTE_PMIX_DESTRUCT_LOCK(&lock);
+```
+
+The handler running on the progress thread does its work, records the
+result in `lock->status`, and finishes with `PRTE_PMIX_WAKEUP_THREAD(cd->lock)`.
+
+#### Non-blocking operations
+
+When the caller supplies a callback and must not block, thread-shift and
+return immediately:
+
+```c
+PRTE_PMIX_THREADSHIFT(cd, prte_event_base, _do_the_work);
+return PRTE_SUCCESS;
+```
+
+Here the handler performs the work, invokes the caller's callback, and
+releases the caddy with `PMIX_RELEASE(cd)` — there is **no**
+`PRTE_PMIX_WAKEUP_THREAD` because no one is waiting on a lock.
+
+---
+
+## Performance Considerations
+
+PRRTE launches and manages jobs at extreme scale, so the daemon startup,
+mapping, and collective paths are performance-sensitive.
+
+- Do not add allocations, locks, or branches to hot paths (launch,
+  mapping, RML message handling, collectives) without a measured
+  justification.
+- Guard verbose debug output and expensive assertions behind
+  `#if PRTE_ENABLE_DEBUG` (or a framework verbosity check) so they cost
+  nothing in a production build.
+- Prefer an MCA parameter over a hard-coded constant for any value that
+  might need tuning across different systems or scales.
 
 ---
 
@@ -491,29 +667,25 @@ instead, and open the pull request from the fork against the upstream
 `master` (or the appropriate release branch).  If you are unsure which remote
 is the fork, run `git remote -v` and ask rather than guessing.
 
-### Testing
-
-PRRTE does not have a standalone unit test suite.  Integration-level
-testing is done by running actual parallel jobs through the DVM.  When
-modifying launch, mapping, or I/O forwarding paths, test with:
-
-```sh
-prte --daemonize                    # start DVM
-prun -n 4 hostname                  # basic launch smoke test
-pterm                               # shut down DVM
-```
-
-For resource manager integration (SLURM, PBS, LSF), test within an actual
-allocation on the relevant system.
-
-**Never bend a test to accommodate a bug.** Do not weaken, skip, or
-rewrite an existing test — and do not craft a new one — merely to make
-buggy behavior pass.  Tests encode intended behavior: when one fails, the
-default assumption is that the code is wrong, not the test.  If you find a
-genuine bug in the code base, identify it, report it, and where
-appropriate fix it — don't paper over it in the test suite.
-
 ### Reporting bugs
 
 File issues at https://github.com/openpmix/prrte/issues.  Include the
 output of `prte_info --all` and a minimal reproduction case.
+
+---
+
+## General Guidance
+
+When in doubt:
+
+- Match the style and conventions of the surrounding code.
+- Read the relevant pages under [`docs/developers/`](docs/developers/)
+  before inventing a new pattern — the mechanism you need often already
+  exists.
+- For significant work, raise a GitHub issue to discuss the approach
+  before implementing it.
+
+PRRTE runs on the world's largest supercomputers across a wide range of
+operating systems and hardware.  The project values careful, portable
+code — not plausible-looking solutions that work in one environment or
+use-case at the expense of others.

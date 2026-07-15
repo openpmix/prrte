@@ -21,8 +21,8 @@ test_rmaps_SOURCES = \
 
 test_rmaps_LDADD = $(top_builddir)/src/libprrte.la
 
-# The synthetic hwloc topology used to exercise map/rank/bind patterns
-# without a live DVM now lives in the shared test/topologies directory
-# (see the "Testing the mapper without launching" section in AGENTS.md).
+# The synthetic hwloc topologies used to exercise map/rank/bind patterns
+# without a live DVM now live in the shared test/topologies directory
+# (see the "Testing" section, "Offline mapper harness", in AGENTS.md).
 
 TESTS = test_rmaps
