@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2022-2026 Nanook Consulting  All rights reserved.
    Copyright (c) 2023 Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -11,6 +11,10 @@
 
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
+
+.. note:: PRRTE accepts both the new "--mapby" and the older
+          deprecated "--map-by" cmd line options. For simplicity, the
+          following description will refer to the new "--mapby" form.
 
 Processes are mapped based on one of the following directives as
 applied at the job level:
@@ -76,7 +80,7 @@ applied at the job level:
 
 Any directive can include qualifiers by adding a colon (``:``) and any
 combination of one or more of the following (delimited by colons) to
-the ``--map-by`` option (except where noted):
+the ``--mapby`` option (except where noted):
 
 * ``PE=n`` bind n CPUs to each process (can not be used in combination
   with rankfile or pe-list directives)
@@ -119,7 +123,7 @@ The type of CPU (core vs hwthread) used in the mapping algorithm
 is determined as follows:
 
 * by user directive on the command line via the HWTCPUS qualifier to
-  the ``--map-by`` directive
+  the ``--mapby`` directive
 
 * by setting the ``rmaps_default_mapping_policy`` MCA parameter to
   include the ``HWTCPUS`` qualifier. This parameter sets the default
@@ -133,7 +137,7 @@ If your application uses threads, then you probably want to ensure that
 you are either not bound at all (by specifying ``--bind-to none``), or
 bound to multiple cores using an appropriate binding level or specific
 number of processing elements per application process via the ``PE=#``
-qualifier to the ``--map-by`` command line directive.
+qualifier to the ``--mapby`` command line directive.
 
 A more detailed description of the mapping, ranking, and binding
 procedure can be obtained via the ``--help placement`` option.

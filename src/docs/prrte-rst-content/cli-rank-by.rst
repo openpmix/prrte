@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2022-2026 Nanook Consulting  All rights reserved.
    Copyright (c) 2023 Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -11,6 +11,10 @@
 
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
+
+.. note:: PRRTE accepts both the new "--rankby" and the older
+          deprecated "--rank-by" cmd line options. For simplicity, the
+          following description will refer to the new "--rankby" form.
 
 PRRTE automatically ranks processes for each job starting from zero.
 Regardless of the algorithm used, rank assignments span applications
@@ -27,7 +31,7 @@ By default, process ranks are assigned in accordance with the mapping
 directive |mdash| e.g., jobs that are mapped by-node will have the process
 ranks assigned round-robin on a per-node basis. However, users can override
 the default by specifying any of the following directives using the
-``--rank-by`` command line option:
+``--rankby`` command line option:
 
 * ``SLOT`` assigns ranks to each process on a node in the order in
   which the mapper assigned them. This is the default behavior,
@@ -57,7 +61,7 @@ the default by specifying any of the following directives using the
   on all ``L1cache`` used by the job before circling around to rank
   the second proc on each object.
 
-The ``rank-by`` command line option has no qualifiers.
+The ``rankby`` command line option has no qualifiers.
 
 .. note:: Directives are case-insensitive.  ``SPAN`` is the same as
           ``span``.

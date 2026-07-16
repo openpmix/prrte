@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
+   Copyright (c) 2022-2026 Nanook Consulting  All rights reserved.
    Copyright (c) 2023 Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -11,6 +11,10 @@
 
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
+
+.. note:: PRRTE accepts both the new "--bindto" and the older
+          deprecated "--bind-to" cmd line options. For simplicity, the
+          following description will refer to the new "--bindto" form.
 
 By default, processes are bound to individual CPUs (either COREs or
 HWTHREADs, as defined by default or by user specification for the
@@ -31,7 +35,7 @@ An object is considered completely consumed when the number of
 processes bound to it equals the number of CPUs within it. Unbound
 processes are not considered in this computation. Additional
 processes cannot be mapped to consumed objects unless the
-``OVERLOAD`` qualifier is provided via the ``--bind-to`` command
+``OVERLOAD`` qualifier is provided via the ``--bindto`` command
 line option.
 
 Note that directives and qualifiers are case-insensitive
@@ -46,7 +50,7 @@ Supported binding directives include:
 * ``HWTHREAD`` binds each process to a single hardware
   thread/ This requires that hwthreads be treated
   as independent CPUs (i.e., that either the ``HWTCPUS``
-  qualifier be provided to the ``map-by`` option or
+  qualifier be provided to the ``mapby`` option or
   that ``hwthreads`` be designated as CPUs by default).
 
 * ``CORE`` binds each process to a single core. This
@@ -69,7 +73,7 @@ Supported binding directives include:
 * ``PACKAGE`` binds each process to all the CPUs in a ``PACKAGE``
 
 Any directive can include qualifiers by adding a colon (:) and any
-combination of one or more of the following to the ``--bind-to``
+combination of one or more of the following to the ``--bindto``
 option:
 
 * ``OVERLOAD`` indicates that objects can have more
@@ -81,7 +85,7 @@ option:
 
 * ``LIMIT=n`` limits the number of processes bound to each eligible
   representative of the specified type to the given number. For
-  example, speifying "--bind-to l3:limit=2" would direct PRRTE
+  example, speifying "--bindto l3:limit=2" would direct PRRTE
   to bind ranks to the L3caches, limiting the number of processes
   bound to each l3cache to two - i.e., bind 2 processes to a
   given l3cache, and then move on to the next.

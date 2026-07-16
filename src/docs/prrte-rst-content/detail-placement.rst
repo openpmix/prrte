@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2022-2026 Nanook Consulting  All rights reserved.
    Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -14,6 +14,11 @@
 
 Overview
 ========
+
+.. note:: PRRTE accepts both the new "--mapby", "--rankby", and "--bindto"
+          cmd line options, and the older deprecated "--map-by", "--rank-by", and
+          "--bind-to" versions. For simplicity, the following description will
+          refer to the new forms.
 
 PRRTE provides a set of three controls for assigning process
 locations and ranks:
@@ -86,9 +91,9 @@ type of CPU used (core vs hwthread) is determined by (in priority
 order):
 
 * user directive on the command line via the HWTCPUS qualifier to
-  the ``--map-by`` directive
+  the ``--mapby`` directive
 
-* setting the ``rmaps_default_mapping_policy`` MCA parameter to
+* setting the ``mapby`` MCA parameter to
   include the ``HWTCPUS`` qualifier. This parameter sets the default
   value for a PRRTE DVM |mdash| qualifiers are carried across to DVM
   jobs started via ``prun`` unless overridden by the user's command
