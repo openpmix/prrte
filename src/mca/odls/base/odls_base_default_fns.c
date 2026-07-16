@@ -1085,6 +1085,10 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         free(output);
     }
 
+    /* compute this child's binding in the parent, before the fork, so the
+       async-signal-safe child only has to issue the bind syscalls */
+    prte_odls_base_prepare_binding(cd);
+
     if (PRTE_SUCCESS != (rc = cd->fork_local(cd))) {
         /* error message already output */
         state = PRTE_PROC_STATE_FAILED_TO_START;

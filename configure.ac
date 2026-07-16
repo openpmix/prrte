@@ -867,6 +867,12 @@ prte_show_title "Ptrace stop-on-exec support"
 
 PRTE_CHECK_PTRACE
 
+# Check for async-signal-safe CPU affinity support (sched_setaffinity)
+
+prte_show_title "CPU affinity (sched_setaffinity) support"
+
+PRTE_CHECK_SETAFFINITY
+
 ############################################################################
 # Final top-level PRTE configuration
 ############################################################################

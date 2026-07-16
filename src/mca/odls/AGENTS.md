@@ -277,27 +277,44 @@ component's raw fork:
 - On success stores the pid (on the master) and activates
   `PRTE_PROC_STATE_RUNNING`; on failure activates a failure state.
 
-### 6. Applying binding in the child — `prte_odls_base_set()` (`odls_base_bind.c`)
+### 6. Applying binding — `prte_odls_base_prepare_binding()` + `prte_odls_base_set()` (`odls_base_bind.c`)
 
-Called from *inside the forked child* (by the component's `do_child`)
-before `execve`. It reads the proc's computed `child->cpuset` (the hwloc
-bitmap string the mapper produced) and calls `hwloc_set_cpubind` /
-`prte_hwloc_base_set_process_membind_policy`. Because the child is not a
-real PRTE process — and, more importantly, runs in the async-signal-safe
-window between `fork()` and `execve()` — **it cannot use normal error
-reporting or even render a `show_help` message** (that allocates, reads
-the help file, and scans directories, any of which can deadlock in a
-forked child). Instead it reports a fixed-size code-plus-errno record up
-the pipe via `prte_odls_base_child_fail` (fatal, `_exit`s) /
-`prte_odls_base_child_warn` (non-fatal, returns) — the
-`prte_odls_pipe_err_msg_t` / `prte_odls_child_err_t` types in
-`odls_types.h` — and the *parent* renders the human-readable diagnostic.
-Whether a binding failure is fatal or a warning depends on
-`PRTE_BINDING_REQUIRED` and
-`PRTE_BINDING_POLICY_IS_SET` (a *required, explicitly-requested* binding
-that fails kills the child; a defaulted one degrades to a warning). If the
-proc has no cpuset but the daemon itself is bound, the child is "freed" to
-all allowed cpus.
+Binding is split across the fork so the child stays async-signal-safe:
+
+- **`prte_odls_base_prepare_binding(cd)`** runs in the **parent**, in
+  `spawn_proc` just before `fork_local`. It does everything that
+  allocates, parses, or prints: it parses the proc's computed
+  `child->cpuset` (the hwloc bitmap string the mapper produced) into a
+  stored `hwloc_cpuset_t`, classifies the binding, precomputes the
+  memory-binding policy, emits `--report-bindings` output and the
+  "incorrectly bound" warning, and — where the platform has
+  `sched_setaffinity` (`PRTE_HAVE_SCHED_SETAFFINITY`) — precomputes a raw
+  `cpu_set_t` affinity mask. All of this is stashed on the caddy.
+- **`prte_odls_base_set(cd, write_fd)`** runs in the forked **child**, in
+  the async-signal-safe window before `execve`. It only *issues the bind
+  syscalls*: a bare `sched_setaffinity` with the precomputed mask on Linux,
+  or `hwloc_set_cpubind` as the `#else` fallback (macOS and other platforms
+  without `sched_setaffinity`), plus `hwloc_set_membind`. It allocates
+  nothing and renders nothing.
+
+Because the child is not a real PRTE process — and runs in that
+async-signal-safe window — **it cannot use normal error reporting or
+render a `show_help` message** (that allocates, reads the help file, and
+scans directories, any of which can deadlock in a forked child). It
+reports a fixed-size code-plus-errno record up the pipe via
+`prte_odls_base_child_fail` (fatal, `_exit`s) / `prte_odls_base_child_warn`
+(non-fatal, returns) — the `prte_odls_pipe_err_msg_t` /
+`prte_odls_child_err_t` types in `odls_types.h` — and the *parent* renders
+the human-readable diagnostic. Whether a binding failure is fatal or a
+warning depends on `PRTE_BINDING_REQUIRED` and `PRTE_BINDING_POLICY_IS_SET`
+(a *required, explicitly-requested* binding that fails kills the child; a
+defaulted one degrades to a warning). If the proc has no cpuset but the
+daemon itself is bound, the proc is "freed" to all allowed cpus.
+
+The one remaining hwloc call in the child is `hwloc_set_membind` (memory
+binding), which still allocates internally; converting it to a bare
+`set_mempolicy`/`mbind` syscall would mean reproducing hwloc's NUMA
+nodeset handling and is left for later.
 
 ### 7. Reaping children — `prte_odls_base_default_wait_local_proc()`
 
