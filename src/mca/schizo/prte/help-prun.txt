@@ -116,11 +116,14 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | Option               | Description                                   |
 |======================|===============================================|
-| "--map-by <type>"    | Mapping Policy for job                        |
+| "--mapby <type>" |   | Mapping Policy for job or for individual app  |
+| "--map-by <type>"    |                                               |
 +----------------------+-----------------------------------------------+
-| "--rank-by <type>"   | Ranking Policy for job                        |
+| "--rankby <type>" |  | Ranking Policy for job or for individual app  |
+| "--rank-by <type>"   |                                               |
 +----------------------+-----------------------------------------------+
-| "--bind-to <type>"   | Binding policy for job                        |
+| "--bindto <type>" |  | Binding policy for job or for individual app  |
+| "--bind-to <type>"   |                                               |
 +----------------------+-----------------------------------------------+
 
 +----------------------+-----------------------------------------------+
@@ -400,18 +403,34 @@ Printout URI on stdout [-], stderr [+], or a file [anything else]
 #include#help-mapby.txt#map-by
 
 #
+[mapby]
+#include#help-mapby.txt#mapby
+
+#
 [rank-by]
 
 #include#help-rankby.txt#rank-by
+
+#
+[rankby]
+
+#include#help-rankby.txt#rankby
 
 #
 [bind-to]
 
 #include#help-bindto.txt#bind-to
 
+#
+[bindto]
+
+#include#help-bindto.txt#bindto
+
+#
 [runtime-options]
 
 #include#help-schizo-rtos.txt#rtos
+
 #
 [rtos]
 
@@ -441,6 +460,11 @@ Printout URI on stdout [-], stderr [+], or a file [anything else]
 [placement-all]
 
 #include#help-placement.txt#placement-all
+
+#
+[placement-fundamentals]
+
+#include#help-placement.txt#placement-fundamentals
 
 #
 [placement-limits]

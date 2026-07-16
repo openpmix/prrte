@@ -25,6 +25,10 @@
 #
 [bind-to]
 
+NOTE: PRRTE accepts both the new "--bindto" and the older
+deprecated "--bind-to" cmd line options. For simplicity, the
+following description will refer to the new "--bindto" form.
+
 By default, processes are bound to individual CPUs (either COREs or
 HWTHREADs, as defined by default or by user specification for the
 job). On nodes that are OVERSUBSCRIBEd (i.e., where the number of
@@ -46,7 +50,7 @@ An object is considered completely consumed when the number of
 processes bound to it equals the number of CPUs within it. Unbound
 processes are not considered in this computation. Additional processes
 cannot be mapped to consumed objects unless the "OVERLOAD" qualifier
-is provided via the "--bind-to" command line option.
+is provided via the "--bindto" command line option.
 
 Note that directives and qualifiers are case-insensitive and can be
 shortened to the minimum number of characters to uniquely identify
@@ -76,7 +80,7 @@ Supported binding directives include:
 * "PACKAGE" binds each process to all the CPUs in a "PACKAGE"
 
 Any directive can include qualifiers by adding a colon (:) and any
-combination of one or more of the following to the "--bind-to" option:
+combination of one or more of the following to the "--bindto" option:
 
 * "OVERLOAD" indicates that objects can have more processes bound to
   them than CPUs within them
@@ -86,7 +90,7 @@ combination of one or more of the following to the "--bind-to" option:
 
 * "LIMIT=n" limits the number of processes bound to each eligible
   representative of the specified type to the given number. For
-  example, speifying "--bind-to l3:limit=2" would direct PRRTE
+  example, speifying "--bindto l3:limit=2" would direct PRRTE
   to bind ranks to the L3caches, limiting the number of processes
   bound to each l3cache to two - i.e., bind 2 processes to a
   given l3cache, and then move on to the next.
@@ -101,13 +105,13 @@ Per-App-Context Binding (MPMD Jobs)
 -------------------------------------
 
 In a multi-program multiple-data (MPMD) job, each application context
-may carry its own "--bind-to" directive that overrides the job-level
+may carry its own "--bindto" directive that overrides the job-level
 binding policy for that app only. Apps that carry no per-app directive
 inherit the job-level binding policy unchanged.
 
 Example:
 
-  prun -n 4 app1 --bind-to core : -n 2 app2 --bind-to none
+  prun -n 4 app1 --bindto core : -n 2 app2 --bindto none
 
 Here "app1" processes are bound to individual cores while "app2"
 processes are left unbound, all within the same job.
@@ -119,3 +123,7 @@ resource located beneath it.
 
 A more detailed description of the mapping, ranking, and binding
 procedure can be obtained via the "--help placement" option.
+#
+[bindto]
+
+#include#help-bindto.txt#bind-to

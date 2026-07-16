@@ -25,6 +25,10 @@
 #
 [map-by]
 
+NOTE: PRRTE accepts both the new "--mapby" and the older
+deprecated "--map-by" cmd line options. For simplicity, the
+following description will refer to the new "--mapby" form.
+
 Processes are mapped based on one of the following directives as
 applied at the job level:
 
@@ -91,7 +95,7 @@ applied at the job level:
 
 Any directive can include qualifiers by adding a colon (":") and any
 combination of one or more of the following (delimited by colons) to
-the "--map-by" option (except where noted):
+the "--mapby" option (except where noted):
 
 * "PE=n" bind n CPUs to each process (can not be used in combination
   with rankfile or pe-list directives)
@@ -103,7 +107,7 @@ the "--map-by" option (except where noted):
 
 * "OVERSUBSCRIBE" allow more processes on a node than processing
   elements. NOTE: this is a job-level-only qualifier and may not be
-  used in a per-app-context "--map-by" string (see "Per-App-Context
+  used in a per-app-context "--mapby" string (see "Per-App-Context
   Mapping" below).
 
 * "NOOVERSUBSCRIBE" means "!OVERSUBSCRIBE". NOTE: job-level only (see
@@ -120,7 +124,7 @@ the "--map-by" option (except where noted):
 * "INHERIT" indicates that a child job (i.e., one spawned from within
   an application) shall inherit the placement policies of the parent
   job that spawned it. NOTE: job-level only — may not be used in a
-  per-app-context "--map-by" string.
+  per-app-context "--mapby" string.
 
 * "NOINHERIT" means "!INHERIT". NOTE: job-level only (see above).
 
@@ -143,7 +147,7 @@ The type of CPU (core vs hwthread) used in the mapping algorithm is
 determined as follows:
 
 * by user directive on the command line via the HWTCPUS qualifier to
-  the "--map-by" directive
+  the "--mapby" directive
 
 * by setting the "rmaps_default_mapping_policy" MCA parameter to
   include the "HWTCPUS" qualifier. This parameter sets the default
@@ -157,25 +161,25 @@ If your application uses threads, then you probably want to ensure
 that you are either not bound at all (by specifying "--bind-to none"),
 or bound to multiple cores using an appropriate binding level or
 specific number of processing elements per application process via the
-"PE=#" qualifier to the "--map-by" command line directive.
+"PE=#" qualifier to the "--mapby" command line directive.
 
 Per-App-Context Mapping (MPMD Jobs)
 ------------------------------------
 
 In a multi-program multiple-data (MPMD) job, each application context
 separated by ":" on the "prun" command line may carry its own
-"--map-by", "--rank-by", and "--bind-to" directives that override the
+"--mapby", "--rankby", and "--bindto" directives that override the
 job-level policy for that app only. Apps that carry no per-app
 directive inherit the job-level policy unchanged.
 
 Example:
 
-  prun -n 4 app1 --map-by core : -n 2 app2 --map-by node --rank-by fill
+  prun -n 4 app1 --mapby core : -n 2 app2 --mapby node --rank-by fill
 
 Here "app1" is mapped by core and "app2" is mapped by node with fill
 ranking. The binding policy defaults to the job-level value for both.
 
-  prun -n 8 app1 --map-by slot:nolocal : -n 1 app2 --map-by slot
+  prun -n 8 app1 --mapby slot:nolocal : -n 1 app2 --mapby slot
 
 Here "app1" is excluded from the head node while "app2" may run
 anywhere, including the head node.
@@ -183,10 +187,10 @@ anywhere, including the head node.
 Per-app restrictions:
 
 * "OVERSUBSCRIBE" and "NOOVERSUBSCRIBE" may NOT appear in a per-app
-  "--map-by" string. Oversubscription is a job-wide property.
+  "--mapby" string. Oversubscription is a job-wide property.
   Specifying either will abort the job with an error.
 
-* "INHERIT" and "NOINHERIT" may NOT appear in a per-app "--map-by"
+* "INHERIT" and "NOINHERIT" may NOT appear in a per-app "--mapby"
   string. Inheritance is a job-wide property. Specifying either will
   abort the job with an error.
 
@@ -199,3 +203,7 @@ per-app "info[]" array on the corresponding "pmix_app_t".
 
 A more detailed description of the mapping, ranking, and binding
 procedure can be obtained via the "--help placement" option.
+#
+[mapby]
+
+#include#help-mapby.txt#map-by
