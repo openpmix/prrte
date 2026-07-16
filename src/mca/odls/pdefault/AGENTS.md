@@ -87,8 +87,8 @@ base picked. The design, spelled out in the long header comment, is a
 The pipe is the child→parent error channel: the child sets it
 close-on-exec, so if `execve` succeeds the pipe simply **closes with no
 data** and the parent reads EOF ⇒ success. If anything fails before exec,
-the child writes a rendered `show_help` message up the pipe and the parent
-prints it.
+the child writes a fixed-size code-plus-errno record up the pipe and the
+parent renders and prints the diagnostic.
 
 `pipe()` or `fork()` failure sets `child->state =
 PRTE_PROC_STATE_FAILED_TO_START` and returns `PMIX_ERR_SYS_LIMITS_PIPES` /
@@ -105,8 +105,10 @@ Runs in the forked child; `__prte_attribute_noreturn__`. In order:
    the base binding routine (cpu + memory affinity from `child->cpuset`),
    which proxies any binding error up the pipe. (If there is no child and
    no output forwarding, stdio is tied to `/dev/null`.)
-4. `pmix_close_open_file_descriptors()` — close everything except
-   stdio and the pipe.
+4. A plain `close()` loop over `[3, sysconf(_SC_OPEN_MAX))` — closes
+   everything except stdio and the pipe. (It deliberately does **not** call
+   `pmix_close_open_file_descriptors()`, which scans `/proc/self/fd` with
+   `opendir`/`readdir` and so allocates — unsafe in the post-fork child.)
 5. Restore default signal handlers (`SIGTERM/INT/HUP/PIPE/CHLD`) and
    unblock all signals — the event library may have left them altered, and
    an app must not inherit a blocked SIGTERM.
@@ -114,26 +116,32 @@ Runs in the forked child; `__prte_attribute_noreturn__`. In order:
 7. If `PRTE_JOB_STOP_ON_EXEC`: `ptrace(PRTE_TRACEME, …)` so the app stops at
    `execve` for a debugger to attach.
 8. **`execve(cd->cmd, cd->argv, cd->env)`.** On return (always an error) it
-   distinguishes a bad interpreter (`ENOENT` but the file exists) from other
-   errno values and sends the `"execve error"` help up the pipe, then
-   `_exit`s.
+   simply reports `PRTE_ODLS_CHILD_ERR_EXEC` plus `errno`; the *parent*
+   inspects `errno` and `stat`s the app to distinguish a bad interpreter
+   (`ENOENT` but the file exists) from a missing/failed executable and
+   renders `"execve error"`. (`cd->argv` is defaulted in the *parent*
+   before the fork, so the child never allocates it.)
 
-Errors here go through `send_error_show_help()` (fatal, exits) or
-`send_warn_show_help()` (non-fatal, returns), which serialize a
-`prte_odls_pipe_err_msg_t` header + file/topic/message strings via
-`write_help_msg` — the format `do_parent` expects.
+Every fatal failure calls `prte_odls_base_child_fail()` (writes the fixed
+record, `_exit`s); binding warnings call `prte_odls_base_child_warn()`
+(writes the record, returns). Both live in the base (`odls_base_bind.c`)
+so the component and the binding code share one implementation. The record
+is a fixed-size `prte_odls_pipe_err_msg_t` — no strings, no allocation, no
+`show_help` — carrying a `prte_odls_child_err_t` code and `errno`; the
+parent does all rendering.
 
 ### `do_parent()` — block until the child reports
 
 Runs on the event base. Closes the child ends of the IOF pipes, then loops
-reading `prte_odls_pipe_err_msg_t` records:
+reading fixed-size `prte_odls_pipe_err_msg_t` records:
 
 - **Pipe closed / read timeout** (`PMIX_ERR_TIMEOUT`) ⇒ child exec'd
   successfully: set `child->state = RUNNING`, flag `ALIVE`, return
   `PRTE_SUCCESS`.
-- **A message arrives** ⇒ read the file/topic/msg strings, render with
-  `pmix_show_help_norender`. If `msg.fatal`, set `child->state =
-  FAILED_TO_START`, unset `ALIVE`, and return `PRTE_ERR_SILENT` (the string
+- **A record arrives** ⇒ `render_child_msg()` maps the code + `errno` to the
+  right `pmix_show_help` topic and renders it (allocation and `show_help`
+  are safe here in the parent). If `msg.fatal`, set `child->state =
+  FAILED_TO_START`, unset `ALIVE`, and return `PRTE_ERR_SILENT` (the message
   was already shown). If it was only a warning, keep looping.
 - **Read error** ⇒ set `child->state = UNDEF` and return a converted error.
 
@@ -162,14 +170,17 @@ the *mechanism* (the actual `kill`).
 ## Things to watch when editing
 
 - **`do_child` is post-fork: async-signal-safety rules apply.** It runs in
-  a forked child that has not yet exec'd. Keep it to the existing minimal
-  syscall/`show_help`-over-pipe idiom; do not add malloc-heavy or
-  lock-taking PRRTE calls, and never log through the normal channels — the
-  pipe is the only safe way to report.
-- **Preserve the pipe protocol on both ends.** `write_help_msg` (child) and
-  the read loop in `do_parent` must agree on the `prte_odls_pipe_err_msg_t`
-  layout and the file/topic/msg ordering; the base's `odls_base_bind.c` also
-  writes this same format, so the three must stay in lockstep.
+  a forked child that has not yet exec'd. Keep it to async-signal-safe
+  syscalls and the fixed-record `child_fail`/`child_warn` idiom; do not add
+  malloc-heavy or lock-taking PRRTE calls, do not scan `/proc/self/fd`, and
+  never render `show_help` or log through the normal channels — writing the
+  fixed code-plus-errno record up the pipe is the only safe way to report.
+- **Preserve the pipe protocol on both ends.** The child writers
+  (`prte_odls_base_child_fail`/`_warn` in `odls_base_bind.c`, used by both
+  `do_child` and the binding code) and the read loop in `do_parent` must
+  agree on the fixed `prte_odls_pipe_err_msg_t` layout and the
+  `prte_odls_child_err_t` code set. Adding a new failure point means adding
+  a code to the enum **and** a case to `render_child_msg` in the parent.
 - **`execve` is the point of no return.** Everything the app needs — cwd,
   env (`cd->env`), argv, binding, closed fds, restored handlers — must be
   in place *before* it. The base assembles env/argv/cmd in `spawn_proc`; the
@@ -182,6 +193,6 @@ the *mechanism* (the actual `kill`).
   launch/kill/signal, retries, IOF wiring, waitpid interpretation, or state
   transitions belongs in `base/odls_base_default_fns.c`, shared by any
   future component. Keep `pdefault` to the OS primitives.
-- **`_exit`, not `exit`, in the child.** The child uses `_exit`/
-  `send_error_show_help` (which `_exit`s) so it never runs the parent's
+- **`_exit`, not `exit`, in the child.** The child terminates via
+  `prte_odls_base_child_fail` (which `_exit`s) so it never runs the parent's
   atexit handlers or flushes shared buffers.

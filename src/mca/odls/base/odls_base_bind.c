@@ -85,94 +85,55 @@ static void report_binding(prte_job_t *jobdat, int rank)
     hwloc_bitmap_free(mycpus);
 }
 
-static int write_help_msg(int fd, prte_odls_pipe_err_msg_t *msg, const char *file,
-                          const char *topic, va_list ap)
+/* Report a fatal failure from inside the forked child and terminate it.
+ *
+ * This runs in the async-signal-safe window between fork() and execve(),
+ * so it must not allocate, use stdio, or render a show_help message -
+ * fork() leaves any lock another thread held frozen in the child, and
+ * touching malloc/stdio/opendir can deadlock. We therefore write only a
+ * fixed-size record carrying the failure code and errno; the parent
+ * renders the human-readable diagnostic. We _exit() rather than exit() so
+ * no atexit handlers run and no stdio buffers are flushed in the child. */
+void prte_odls_base_child_fail(int write_fd, int exit_status, prte_odls_child_err_t which,
+                               int errnum)
 {
-    int ret;
-    char *str;
-
-    if (NULL == file || NULL == topic) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    str = pmix_show_help_vstring(file, topic, true, ap);
-
-    msg->file_str_len = (int) strlen(file);
-    if (msg->file_str_len > PRTE_ODLS_MAX_FILE_LEN) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
-    }
-    msg->topic_str_len = (int) strlen(topic);
-    if (msg->topic_str_len > PRTE_ODLS_MAX_TOPIC_LEN) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
-    }
-    msg->msg_str_len = (int) strlen(str);
-
-    /* Only keep writing if each write() succeeds */
-    if (PRTE_SUCCESS != (ret = pmix_fd_write(fd, sizeof(*msg), msg))) {
-        goto out;
-    }
-    if (msg->file_str_len > 0
-        && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->file_str_len, file))) {
-        goto out;
-    }
-    if (msg->topic_str_len > 0
-        && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->topic_str_len, topic))) {
-        goto out;
-    }
-    if (msg->msg_str_len > 0 && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->msg_str_len, str))) {
-        goto out;
-    }
-
-out:
-    free(str);
-    return ret;
-}
-
-static int send_warn_show_help(int fd, const char *file, const char *topic, ...)
-{
-    int ret;
-    va_list ap;
-    prte_odls_pipe_err_msg_t msg;
-
-    msg.fatal = false;
-    msg.exit_status = 0; /* ignored */
-
-    /* Send it */
-    va_start(ap, topic);
-    ret = write_help_msg(fd, &msg, file, topic, ap);
-    va_end(ap);
-
-    return ret;
-}
-
-static void send_error_show_help(int fd, int exit_status, const char *file,
-                                 const char *topic, ...)
-{
-    va_list ap;
     prte_odls_pipe_err_msg_t msg;
 
     msg.fatal = true;
     msg.exit_status = exit_status;
+    msg.which = (int) which;
+    msg.errnum = errnum;
 
-    /* Send it */
-    va_start(ap, topic);
-    write_help_msg(fd, &msg, file, topic, ap);
-    va_end(ap);
+    /* best effort - if the write fails there is nothing safe we can do
+     * here, and the parent will still see the pipe close */
+    (void) pmix_fd_write(write_fd, sizeof(msg), &msg);
 
-    exit(exit_status);
+    _exit(exit_status);
+}
+
+/* Report a non-fatal condition from inside the forked child and return so
+ * the child can continue on toward execve(). Same async-signal-safety
+ * constraints as prte_odls_base_child_fail. */
+void prte_odls_base_child_warn(int write_fd, prte_odls_child_err_t which, int errnum)
+{
+    prte_odls_pipe_err_msg_t msg;
+
+    msg.fatal = false;
+    msg.exit_status = 0; /* ignored */
+    msg.which = (int) which;
+    msg.errnum = errnum;
+
+    /* best effort */
+    (void) pmix_fd_write(write_fd, sizeof(msg), &msg);
 }
 
 void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd)
 {
     prte_job_t *jobdat = cd->jdata;
     prte_proc_t *child = cd->child;
-    prte_app_context_t *context = cd->app;
     hwloc_cpuset_t cpuset;
     hwloc_obj_t root;
     int rc = PRTE_ERROR;
-    char *msg;
 
     pmix_output_verbose(2, prte_odls_base_framework.framework_output,
                         "%s hwloc:set on child %s cpuset %s",
@@ -196,37 +157,21 @@ void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd)
         if (NULL != prte_daemon_cores) {
             root = hwloc_get_root_obj(prte_hwloc_topology);
             if (NULL == root->userdata) {
-                send_warn_show_help(write_fd, "help-prte-odls-default.txt",
-                                    "incorrectly bound", prte_process_info.nodename,
-                                    context->app, __FILE__, __LINE__);
+                prte_odls_base_child_warn(write_fd, PRTE_ODLS_CHILD_WARN_INCORRECT, 0);
             }
             /* bind this proc to all available processors */
             cpuset = (hwloc_cpuset_t)hwloc_topology_get_allowed_cpuset(prte_hwloc_topology);
             rc = hwloc_set_cpubind(prte_hwloc_topology, cpuset, 0);
-            /* if we got an error and this wasn't a default binding policy, then report it */
+            /* if we got an error and this wasn't a default binding policy, then report it.
+             * We are between fork() and execve() here, so we cannot render the message -
+             * we send the errno up the pipe and let the parent do the rendering. */
             if (rc < 0 && PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding)) {
-                if (errno == ENOSYS) {
-                    msg = "hwloc indicates cpu binding not supported";
-                } else if (errno == EXDEV) {
-                    msg = "hwloc indicates cpu binding cannot be enforced";
-                } else {
-                    char *tmp;
-                    (void) hwloc_bitmap_list_asprintf(&tmp, cpuset);
-                    pmix_asprintf(&msg, "hwloc_set_cpubind returned \"%s\" for bitmap \"%s\"",
-                                  prte_strerror(rc), tmp);
-                    free(tmp);
-                }
                 if (PRTE_BINDING_REQUIRED(jobdat->map->binding)) {
                     /* If binding is required, send an error up the pipe (which exits
                        -- it doesn't return). */
-                    send_error_show_help(write_fd, 1, "help-prte-odls-default.txt",
-                                         "binding generic error",
-                                         prte_process_info.nodename, context->app,
-                                         msg, __FILE__, __LINE__);
+                    prte_odls_base_child_fail(write_fd, 1, PRTE_ODLS_CHILD_ERR_BIND, errno);
                 } else {
-                    send_warn_show_help(write_fd, "help-prte-odls-default.txt",
-                                        "not bound", prte_process_info.nodename,
-                                        context->app, msg, __FILE__, __LINE__);
+                    prte_odls_base_child_warn(write_fd, PRTE_ODLS_CHILD_WARN_NOT_BOUND, errno);
                     return;
                 }
             }
@@ -249,26 +194,17 @@ void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd)
         /* convert the list to a cpuset */
         cpuset = hwloc_bitmap_alloc();
         if (0 != (rc = hwloc_bitmap_list_sscanf(cpuset, child->cpuset))) {
-            /* See comment above about "This may be a small memory leak" */
-            pmix_asprintf(&msg, "hwloc_bitmap_sscanf returned \"%s\" for the string \"%s\"",
-                          prte_strerror(rc), child->cpuset);
-            if (NULL == msg) {
-                msg = "failed to convert bitmap list to hwloc bitmap";
-            }
             if (PRTE_BINDING_REQUIRED(jobdat->map->binding) &&
                 PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding)) {
                 /* If binding is required and a binding directive was explicitly
                  * given (i.e., we are not binding due to a default policy),
                  * send an error up the pipe (which exits -- it doesn't return).
-                 */
-                send_error_show_help(write_fd, 1, "help-prte-odls-default.txt",
-                                     "binding generic error",
-                                     prte_process_info.nodename, context->app, msg,
-                                     __FILE__, __LINE__);
+                 * This is a parse failure, not a syscall failure, so there is
+                 * no meaningful errno to report. */
+                hwloc_bitmap_free(cpuset);
+                prte_odls_base_child_fail(write_fd, 1, PRTE_ODLS_CHILD_ERR_BIND, 0);
             } else {
-                send_warn_show_help(write_fd, "help-prte-odls-default.txt",
-                                    "not bound", prte_process_info.nodename,
-                                    context->app, msg, __FILE__, __LINE__);
+                prte_odls_base_child_warn(write_fd, PRTE_ODLS_CHILD_WARN_NOT_BOUND, 0);
                 hwloc_bitmap_free(cpuset);
                 return;
             }
@@ -278,27 +214,12 @@ void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd)
         hwloc_bitmap_free(cpuset);
         /* if we got an error and this wasn't a default binding policy, then report it */
         if (rc < 0 && PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding)) {
-            if (errno == ENOSYS) {
-                msg = strdup("hwloc indicates cpu binding not supported");
-            } else if (errno == EXDEV) {
-                msg = strdup("hwloc indicates cpu binding cannot be enforced");
-            } else {
-                pmix_asprintf(&msg, "hwloc_set_cpubind returned \"%s\" for bitmap \"%s\"",
-                              prte_strerror(rc), child->cpuset);
-            }
             if (PRTE_BINDING_REQUIRED(jobdat->map->binding)) {
                 /* If binding is required, send an error up the pipe (which exits
                    -- it doesn't return). */
-                send_error_show_help(write_fd, 1, "help-prte-odls-default.txt",
-                                     "binding generic error",
-                                     prte_process_info.nodename, context->app, msg,
-                                     __FILE__, __LINE__);
-                free(msg);  // silence static analyzer warning
+                prte_odls_base_child_fail(write_fd, 1, PRTE_ODLS_CHILD_ERR_BIND, errno);
             } else {
-                send_warn_show_help(write_fd, "help-prte-odls-default.txt",
-                                    "not bound", prte_process_info.nodename,
-                                    context->app, msg, __FILE__, __LINE__);
-                free(msg);
+                prte_odls_base_child_warn(write_fd, PRTE_ODLS_CHILD_WARN_NOT_BOUND, errno);
                 return;
             }
         }
@@ -313,24 +234,12 @@ void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd)
          */
         rc = prte_hwloc_base_set_process_membind_policy();
         if (PRTE_SUCCESS != rc && PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding)) {
-            if (errno == ENOSYS) {
-                msg = "hwloc indicates memory binding not supported";
-            } else if (errno == EXDEV) {
-                msg = "hwloc indicates memory binding cannot be enforced";
-            } else {
-                msg = "failed to bind memory";
-            }
             if (PRTE_HWLOC_BASE_MBFA_ERROR == prte_hwloc_base_mbfa) {
                 /* If binding is required, send an error up the pipe (which exits
                    -- it doesn't return). */
-                send_error_show_help(write_fd, 1, "help-prte-odls-default.txt",
-                                     "memory binding error",
-                                     prte_process_info.nodename, context->app, msg,
-                                     __FILE__, __LINE__);
+                prte_odls_base_child_fail(write_fd, 1, PRTE_ODLS_CHILD_ERR_BIND_MEM, errno);
             } else {
-                send_warn_show_help(write_fd, "help-prte-odls-default.txt",
-                                    "memory not bound", prte_process_info.nodename,
-                                    context->app, msg, __FILE__, __LINE__);
+                prte_odls_base_child_warn(write_fd, PRTE_ODLS_CHILD_WARN_MEM_NOT_BOUND, errno);
                 return;
             }
         }

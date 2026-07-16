@@ -283,11 +283,17 @@ Called from *inside the forked child* (by the component's `do_child`)
 before `execve`. It reads the proc's computed `child->cpuset` (the hwloc
 bitmap string the mapper produced) and calls `hwloc_set_cpubind` /
 `prte_hwloc_base_set_process_membind_policy`. Because the child is not a
-real PRTE process, **it cannot use normal error reporting** — instead it
-writes rendered `show_help` messages back up the pipe to the parent
-(`send_warn_show_help` / `send_error_show_help`, using the
-`prte_odls_pipe_err_msg_t` struct from `odls_types.h`). Whether a binding
-failure is fatal or a warning depends on `PRTE_BINDING_REQUIRED` and
+real PRTE process — and, more importantly, runs in the async-signal-safe
+window between `fork()` and `execve()` — **it cannot use normal error
+reporting or even render a `show_help` message** (that allocates, reads
+the help file, and scans directories, any of which can deadlock in a
+forked child). Instead it reports a fixed-size code-plus-errno record up
+the pipe via `prte_odls_base_child_fail` (fatal, `_exit`s) /
+`prte_odls_base_child_warn` (non-fatal, returns) — the
+`prte_odls_pipe_err_msg_t` / `prte_odls_child_err_t` types in
+`odls_types.h` — and the *parent* renders the human-readable diagnostic.
+Whether a binding failure is fatal or a warning depends on
+`PRTE_BINDING_REQUIRED` and
 `PRTE_BINDING_POLICY_IS_SET` (a *required, explicitly-requested* binding
 that fails kills the child; a defaulted one degrades to a warning). If the
 proc has no cpuset but the daemon itself is bound, the child is "freed" to
@@ -344,7 +350,7 @@ computed proc state.
 | `prte_local_children` | `src/runtime/prte_globals` (a `pmix_pointer_array_t`) | The daemon's authoritative list of the procs it launched — every base fn iterates it. Allocated at framework open, released at close. |
 | `prte_odls_spawn_caddy_t` | `base.h` | Per-child fork caddy: `cmd`, `wdir`, `argv`, `env`, `jdata`, `app`, `child`, IOF `opts`, and the `fork_local` fn ptr. Carries `ev` for thread-shifting. Heap-allocated, released after spawn. |
 | `prte_odls_launch_local_t` | `base.h` | Per-node "start launching job J" caddy carried by `PRTE_ACTIVATE_LOCAL_LAUNCH`; holds `job`, `fork_local`, and a `retries` counter for the sys-limit backoff. |
-| `prte_odls_pipe_err_msg_t` | `odls_types.h` | Fixed struct written up the child→parent pipe to proxy a `show_help` error (fatal flag + exit status + three string lengths). |
+| `prte_odls_pipe_err_msg_t` / `prte_odls_child_err_t` | `odls_types.h` | Fixed-size record written up the child→parent pipe (fatal flag + exit status + failure code + errno). Carries no strings and needs no allocation, so it is safe to emit from the async-signal-safe window before `execve`; the parent renders the `show_help` diagnostic from the code and errno. |
 | `PRTE_DAEMON_*` command flags | `odls_types.h` | The daemon command byte that leads every RML control message to a prted (ADD_LOCAL_PROCS, KILL, SIGNAL, EXIT, …). |
 
 ---
@@ -388,9 +394,13 @@ computed proc state.
   `PRTE_ACTIVATE_PROC_STATE(FAILED_TO_LAUNCH/FAILED_TO_START)` or
   `PRTE_ACTIVATE_JOB_STATE(NEVER_LAUNCHED)` so the HNP can react — don't
   just bubble an `rc` up into the event loop.
-- **The child cannot log normally.** Between `fork` and `execve`, error
-  reporting goes up the pipe as a rendered `show_help` string; never call
-  ordinary PRRTE logging there.
+- **The child cannot log normally — or render `show_help`.** Between
+  `fork` and `execve` only async-signal-safe calls are permitted, so the
+  child must not allocate, use stdio, scan `/proc/self/fd`, or call
+  `show_help` (all of which can deadlock in a forked child). It reports a
+  fixed-size code-plus-errno record up the pipe
+  (`prte_odls_base_child_fail` / `prte_odls_base_child_warn`) and the
+  parent renders the message; never call ordinary PRRTE logging there.
 - **STOP_ON_EXEC pins the tracer thread.** Both the fork (in
   `launch_local`/`restart_proc`) and the ptrace detach (in
   `wait_local_proc`) must happen on `prte_event_base`; do not "optimize"

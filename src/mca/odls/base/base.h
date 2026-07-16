@@ -159,6 +159,22 @@ PRTE_EXPORT void prte_odls_base_harvest_threads(void);
 /* Binding support */
 PRTE_EXPORT void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd);
 
+/*
+ * Async-signal-safe child->parent error reporting. These are called from
+ * inside the forked child, in the window between fork() and execve(),
+ * where only async-signal-safe operations are permitted. They write a
+ * fixed-size record (no strings, no allocation, no show_help) up the pipe
+ * to the waiting parent, which renders the human-readable diagnostic from
+ * the code and errno. child_fail is fatal - it reports the failure and
+ * terminates the child with _exit(); child_warn reports a non-fatal
+ * condition and returns so the child can continue toward execve().
+ */
+PRTE_EXPORT void prte_odls_base_child_fail(int write_fd, int exit_status,
+                                           prte_odls_child_err_t which,
+                                           int errnum) __prte_attribute_noreturn__;
+PRTE_EXPORT void prte_odls_base_child_warn(int write_fd, prte_odls_child_err_t which,
+                                           int errnum);
+
 
 #define PRTE_ODLS_SET_ERROR(ns, s, j)                                                   \
 do {                                                                                    \

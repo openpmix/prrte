@@ -150,9 +150,6 @@ static int restart_proc(prte_proc_t *child);
  * Explicitly declared functions so that we can get the noreturn
  * attribute registered with the compiler.
  */
-static void send_error_show_help(int fd, int exit_status, const char *file, const char *topic,
-                                 ...) __prte_attribute_noreturn__;
-
 static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd) __prte_attribute_noreturn__;
 
 /*
@@ -221,78 +218,11 @@ static void set_handler_default(int sig)
     sigaction(sig, &act, (struct sigaction *) 0);
 }
 
-/*
- * Internal function to write a rendered show_help message back up the
- * pipe to the waiting parent.
- */
-static int write_help_msg(int fd, prte_odls_pipe_err_msg_t *msg, const char *file,
-                          const char *topic, va_list ap)
-{
-    int ret;
-    char *str;
-
-    if (NULL == file || NULL == topic) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    str = pmix_show_help_vstring(file, topic, true, ap);
-
-    msg->file_str_len = (int) strlen(file);
-    if (msg->file_str_len > PRTE_ODLS_MAX_FILE_LEN) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
-    }
-    msg->topic_str_len = (int) strlen(topic);
-    if (msg->topic_str_len > PRTE_ODLS_MAX_TOPIC_LEN) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
-    }
-    msg->msg_str_len = (int) strlen(str);
-
-    /* Only keep writing if each write() succeeds */
-    if (PRTE_SUCCESS != (ret = pmix_fd_write(fd, sizeof(*msg), msg))) {
-        goto out;
-    }
-    if (msg->file_str_len > 0
-        && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->file_str_len, file))) {
-        goto out;
-    }
-    if (msg->topic_str_len > 0
-        && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->topic_str_len, topic))) {
-        goto out;
-    }
-    if (msg->msg_str_len > 0 && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->msg_str_len, str))) {
-        goto out;
-    }
-
-out:
-    free(str);
-    return ret;
-}
-
-/* Called from the child to send an error message up the pipe to the
-   waiting parent. */
-static void send_error_show_help(int fd, int exit_status, const char *file, const char *topic, ...)
-{
-    va_list ap;
-    prte_odls_pipe_err_msg_t msg;
-
-    msg.fatal = true;
-    msg.exit_status = exit_status;
-
-    /* Send it */
-    va_start(ap, topic);
-    write_help_msg(fd, &msg, file, topic, ap);
-    va_end(ap);
-
-    _exit(exit_status);
-}
-
 static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
 {
     int i;
+    long fd, fdmax = sysconf(_SC_OPEN_MAX);
     sigset_t sigs;
-    char dir[PRTE_PATH_MAX];
 
 #if HAVE_SETPGID
     /* Set a new process group for this child, so that any
@@ -300,12 +230,19 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     setpgid(0, 0);
 #endif
 
+    /* Everything from here to execve() runs in the async-signal-safe
+       window after fork(): fork() copied only the calling thread and
+       left any lock another thread held frozen in this child, so calling
+       malloc/stdio/opendir/show_help can deadlock intermittently under
+       load.  We therefore restrict ourselves to async-signal-safe calls
+       and report any failure by writing a fixed-size record up the pipe
+       (prte_odls_base_child_fail / _warn); the parent renders the
+       human-readable diagnostic. */
+
     /* Setup the pipe to be close-on-exec */
     i = pmix_fd_set_cloexec(write_fd);
     if (0 != i) {
-        PRTE_ERROR_LOG(i);
-        send_error_show_help(write_fd, 1, "help-prte-odls-default.txt", "iof setup failed",
-                             prte_process_info.nodename, cd->app->app);
+        prte_odls_base_child_fail(write_fd, 1, PRTE_ODLS_CHILD_ERR_IOF_SETUP, errno);
         /* Does not return */
     }
 
@@ -324,10 +261,8 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
            happened
         */
         if (PRTE_FLAG_TEST(cd->jdata, PRTE_JOB_FLAG_FORWARD_OUTPUT)) {
-            if (PRTE_SUCCESS != (i = prte_iof_base_setup_child(&cd->opts, &cd->env))) {
-                PRTE_ERROR_LOG(i);
-                send_error_show_help(write_fd, 1, "help-prte-odls-default.txt", "iof setup failed",
-                                     prte_process_info.nodename, cd->app->app);
+            if (PRTE_SUCCESS != prte_iof_base_setup_child(&cd->opts, &cd->env)) {
+                prte_odls_base_child_fail(write_fd, 1, PRTE_ODLS_CHILD_ERR_IOF_SETUP, errno);
                 /* Does not return */
             }
         }
@@ -341,10 +276,9 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
         for (i = 0; i < 3; i++) {
             fdnull = open("/dev/null", O_RDONLY, 0);
             if (0 > fdnull) {
-               send_error_show_help(write_fd, 1, "help-prte-odls-default.txt", "neg-fd",
-                                     prte_process_info.nodename, "/dev/null");
+                prte_odls_base_child_fail(write_fd, 1, PRTE_ODLS_CHILD_ERR_NEG_FD, errno);
                 /* Does not return */
-             }
+            }
             if (fdnull > i && i != write_fd) {
                 dup2(fdnull, i);
             }
@@ -352,15 +286,15 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
         }
     }
 
-    /* close all open file descriptors w/ exception of stdin/stdout/stderr,
-       the pipe used for the IOF INTERNAL messages, and the pipe up to
-       the parent. */
-    pmix_close_open_file_descriptors(write_fd);
-
-    if (cd->argv == NULL) {
-        cd->argv = malloc(sizeof(char *) * 2);
-        cd->argv[0] = strdup(cd->app->app);
-        cd->argv[1] = NULL;
+    /* Close all open file descriptors except stdin/stdout/stderr and the
+       pipe up to the parent.  We use a plain close() loop rather than
+       scanning /proc/self/fd with opendir/readdir (as
+       pmix_close_open_file_descriptors does): those allocate, and we are
+       in the async-signal-safe window between fork() and execve(). */
+    for (fd = 3; fd < fdmax; fd++) {
+        if (fd != write_fd) {
+            close((int) fd);
+        }
     }
 
     /* Set signal handlers back to the default.  Do this close to
@@ -386,9 +320,7 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     /* take us to the correct wdir */
     if (NULL != cd->wdir) {
         if (0 != chdir(cd->wdir)) {
-            send_error_show_help(write_fd, 1, "help-prun.txt", "prun:wdir-not-found", "prted",
-                                 cd->wdir, prte_process_info.nodename,
-                                 (NULL == cd->child) ? 0 : cd->child->app_rank);
+            prte_odls_base_child_fail(write_fd, 1, PRTE_ODLS_CHILD_ERR_WDIR, errno);
             /* Does not return */
         }
     }
@@ -399,9 +331,8 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
             errno = 0;
             i = ptrace(PRTE_TRACEME, 0, 0, 0);
             if (0 != errno) {
-                send_error_show_help(write_fd, 1, "help-prun.txt", "prun:stop-on-exec", "prted",
-                                     strerror(errno), prte_process_info.nodename,
-                                     (NULL == cd->child) ? 0 : cd->child->app_rank);
+                prte_odls_base_child_fail(write_fd, 1, PRTE_ODLS_CHILD_ERR_STOP_ON_EXEC, errno);
+                /* Does not return */
             }
         }
     }
@@ -409,27 +340,110 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
 
     /* Exec the new executable */
     execve(cd->cmd, cd->argv, cd->env);
-    /* If we get here, an error has occurred. */
-    pmix_getcwd(dir, sizeof(dir));
-    struct stat stats;
-    char *msg;
-    /* If errno is ENOENT, that indicates either cd->cmd does not exist, or
-     * cd->cmd is a script, but has a bad interpreter specified. */
-    if (ENOENT == errno && 0 == stat(cd->app->app, &stats)) {
-        pmix_asprintf(&msg, "%s has a bad interpreter on the first line.", cd->app->app);
-    } else {
-        msg = strdup(strerror(errno));
+    /* If we get here, an error has occurred.  We cannot render the
+       diagnostic here (it would require stat/getcwd/strerror/allocation);
+       the parent inspects errno and the app to distinguish, e.g., a
+       missing executable from a bad interpreter line. */
+    prte_odls_base_child_fail(write_fd, 1, PRTE_ODLS_CHILD_ERR_EXEC, errno);
+    /* Does not return */
+}
+
+/* Map a captured errno onto a human-readable binding failure string. The
+   child cannot format this itself (it is between fork() and execve()), so
+   it sends only the errno and we render here in the parent. */
+static const char *bind_errmsg(int errnum)
+{
+    switch (errnum) {
+    case 0:
+        return "unable to apply the requested binding";
+    case ENOSYS:
+        return "hwloc indicates binding is not supported on this system";
+    case EXDEV:
+        return "hwloc indicates binding cannot be enforced on this system";
+    default:
+        return strerror(errnum);
     }
-    send_error_show_help(write_fd, 1, "help-prte-odls-default.txt", "execve error",
-                         prte_process_info.nodename, dir, cd->app->app, msg);
-    // does not return
+}
+
+/* Render, in the parent, the diagnostic for a failure the child reported
+   as a fixed-size code + errno record.  All allocation, stat(), getcwd(),
+   and show_help happen here where they are safe. */
+static void render_child_msg(prte_odls_spawn_caddy_t *cd, prte_odls_pipe_err_msg_t *msg)
+{
+    unsigned long rank = (NULL == cd->child) ? 0UL : (unsigned long) cd->child->app_rank;
+
+    switch (msg->which) {
+    case PRTE_ODLS_CHILD_ERR_IOF_SETUP:
+        pmix_show_help("help-prte-odls-default.txt", "iof setup failed", true,
+                       prte_process_info.nodename, cd->app->app);
+        break;
+    case PRTE_ODLS_CHILD_ERR_NEG_FD:
+        pmix_show_help("help-prte-odls-default.txt", "neg-fd", true,
+                       prte_process_info.nodename, "/dev/null");
+        break;
+    case PRTE_ODLS_CHILD_ERR_WDIR:
+        pmix_show_help("help-prun.txt", "prun:wdir-not-found", true, "prted",
+                       (NULL == cd->wdir) ? "<none>" : cd->wdir,
+                       prte_process_info.nodename, rank);
+        break;
+    case PRTE_ODLS_CHILD_ERR_STOP_ON_EXEC:
+        pmix_show_help("help-prun.txt", "prun:stop-on-exec", true, "prted",
+                       strerror(msg->errnum), prte_process_info.nodename, rank);
+        break;
+    case PRTE_ODLS_CHILD_ERR_BIND:
+        pmix_show_help("help-prte-odls-default.txt", "binding generic error", true,
+                       prte_process_info.nodename, cd->app->app, bind_errmsg(msg->errnum));
+        break;
+    case PRTE_ODLS_CHILD_ERR_BIND_MEM:
+        pmix_show_help("help-prte-odls-default.txt", "memory binding error", true,
+                       prte_process_info.nodename, cd->app->app, bind_errmsg(msg->errnum));
+        break;
+    case PRTE_ODLS_CHILD_WARN_NOT_BOUND:
+        pmix_show_help("help-prte-odls-default.txt", "not bound", true,
+                       prte_process_info.nodename, cd->app->app, bind_errmsg(msg->errnum));
+        break;
+    case PRTE_ODLS_CHILD_WARN_MEM_NOT_BOUND:
+        pmix_show_help("help-prte-odls-default.txt", "memory not bound", true,
+                       prte_process_info.nodename, cd->app->app, bind_errmsg(msg->errnum));
+        break;
+    case PRTE_ODLS_CHILD_WARN_INCORRECT:
+        pmix_show_help("help-prte-odls-default.txt", "incorrectly bound", true,
+                       prte_process_info.nodename, cd->app->app);
+        break;
+    case PRTE_ODLS_CHILD_ERR_EXEC:
+    default: {
+        char dir[PRTE_PATH_MAX];
+        const char *wdir;
+        const char *errmsg;
+        struct stat statbuf;
+
+        /* the child's working dir at exec time is the app's wdir if one
+           was given, otherwise the daemon's cwd (it never chdir'd) */
+        if (NULL != cd->wdir) {
+            wdir = cd->wdir;
+        } else if (NULL != getcwd(dir, sizeof(dir))) {
+            wdir = dir;
+        } else {
+            wdir = "<unknown>";
+        }
+        /* ENOENT with an existing file means cd->cmd is a script with a
+           bad interpreter on its first line, not a missing executable */
+        if (ENOENT == msg->errnum && 0 == stat(cd->app->app, &statbuf)) {
+            errmsg = "the executable has a bad interpreter on its first line";
+        } else {
+            errmsg = strerror(msg->errnum);
+        }
+        pmix_show_help("help-prte-odls-default.txt", "execve error", true,
+                       prte_process_info.nodename, wdir, cd->app->app, errmsg);
+        break;
+    }
+    }
 }
 
 static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
 {
     int rc;
     prte_odls_pipe_err_msg_t msg;
-    char file[PRTE_ODLS_MAX_FILE_LEN + 1], topic[PRTE_ODLS_MAX_TOPIC_LEN + 1], *str = NULL;
 
     if (cd->opts.connect_stdin) {
         close(cd->opts.p_stdin[0]);
@@ -437,7 +451,9 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
     close(cd->opts.p_stdout[1]);
     close(cd->opts.p_stderr[1]);
 
-    /* Block reading a message from the pipe */
+    /* Block reading fixed-size records from the pipe.  The child may send
+       zero or more non-fatal warnings before either exec'ing successfully
+       (the pipe closes with no further data) or reporting a fatal error. */
     while (1) {
         rc = pmix_fd_read(read_fd, sizeof(msg), &msg);
 
@@ -467,67 +483,9 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
             }
         }
 
-        /* Read in the strings; ensure to terminate them with \0 */
-        if (msg.file_str_len > 0) {
-            rc = pmix_fd_read(read_fd, msg.file_str_len, file);
-            if (PMIX_SUCCESS != rc) {
-                pmix_show_help("help-prte-odls-default.txt", "syscall fail", true,
-                               prte_process_info.nodename, cd->app->app, "pmix_fd_read",
-                               __FILE__, __LINE__);
-                if (NULL != cd->child) {
-                    cd->child->state = PRTE_PROC_STATE_UNDEF;
-                }
-                rc = prte_pmix_convert_status(rc);
-                return rc;
-            }
-            file[msg.file_str_len] = '\0';
-        }
-        if (msg.topic_str_len > 0) {
-            rc = pmix_fd_read(read_fd, msg.topic_str_len, topic);
-            if (PMIX_SUCCESS != rc) {
-                pmix_show_help("help-prte-odls-default.txt", "syscall fail", true,
-                               prte_process_info.nodename, cd->app->app, "pmix_fd_read",
-                               __FILE__, __LINE__);
-                if (NULL != cd->child) {
-                    cd->child->state = PRTE_PROC_STATE_UNDEF;
-                }
-                rc = prte_pmix_convert_status(rc);
-                return rc;
-            }
-            topic[msg.topic_str_len] = '\0';
-        }
-        if (msg.msg_str_len > 0) {
-            str = calloc(1, msg.msg_str_len + 1);
-            if (NULL == str) {
-                pmix_show_help("help-prte-odls-default.txt", "syscall fail", true,
-                               prte_process_info.nodename, cd->app->app, "calloc",
-                               __FILE__, __LINE__);
-                if (NULL != cd->child) {
-                    cd->child->state = PRTE_PROC_STATE_UNDEF;
-                }
-                rc = prte_pmix_convert_status(rc);
-                return rc;
-            }
-            rc = pmix_fd_read(read_fd, msg.msg_str_len, str);
-            if (PMIX_SUCCESS != rc) {
-                pmix_show_help("help-prte-odls-default.txt", "syscall fail", true,
-                               prte_process_info.nodename, cd->app->app, "pmix_fd_read",
-                               __FILE__, __LINE__);
-                if (NULL != cd->child) {
-                    cd->child->state = PRTE_PROC_STATE_UNDEF;
-                }
-                rc = prte_pmix_convert_status(rc);
-                return rc;
-            }
-         }
-
-        /* Print out what we got.  We already have a rendered string,
-           so use pmix_show_help_norender(). */
-        if (msg.msg_str_len > 0) {
-            pmix_show_help_norender(file, topic, str);
-            free(str);
-            str = NULL;
-        }
+        /* Render the human-readable diagnostic here in the parent, where
+           allocation and show_help are safe. */
+        render_child_msg(cd, &msg);
 
         /* If msg.fatal is true, then the child exited with an error.
            Otherwise, whatever we just printed was a warning, so loop
@@ -565,6 +523,24 @@ static int fork_local_proc(void *cdptr)
     int p[2];
     pid_t pid;
     prte_proc_t *child = cd->child;
+
+    /* Default the argv if the app didn't provide one.  Do this here in
+       the parent, before the fork, so the child - which runs in the
+       async-signal-safe window before execve() - does not have to
+       allocate. */
+    if (NULL == cd->argv) {
+        cd->argv = malloc(sizeof(char *) * 2);
+        if (NULL == cd->argv) {
+            PRTE_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+            if (NULL != child) {
+                child->state = PRTE_PROC_STATE_FAILED_TO_START;
+                child->exit_code = PMIX_ERR_OUT_OF_RESOURCE;
+            }
+            return PMIX_ERR_OUT_OF_RESOURCE;
+        }
+        cd->argv[0] = strdup(cd->app->app);
+        cd->argv[1] = NULL;
+    }
 
     /* A pipe is used to communicate between the parent and child to
        indicate whether the exec ultimately succeeded or failed.  The
