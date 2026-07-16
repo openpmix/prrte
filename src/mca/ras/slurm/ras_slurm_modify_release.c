@@ -415,14 +415,14 @@ static int prte_ras_slurm_complete_release_request(prte_pmix_server_req_t *req)
     if (NULL != req->infocbfunc) {
         req->infocbfunc(req->pstatus, req->info, req->ninfo, req->cbdata,
                         localrelease, req);
-        return PRTE_SUCCESS;
+        return PRTE_ERR_OP_IN_PROGRESS;
     }
 
     pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index,
                                 NULL);
     PMIX_RELEASE(req);
 
-    return PRTE_SUCCESS;
+    return PRTE_ERR_OP_IN_PROGRESS;
 }
 
 /**

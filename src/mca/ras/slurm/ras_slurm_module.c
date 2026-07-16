@@ -294,6 +294,11 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
         req->pstatus = prte_pmix_convert_rc(err);
     } else if(PMIX_ALLOC_RELEASE == req->allocdir) {
         err = prte_ras_slurm_serve_release_req(req);
+        if (PRTE_ERR_OP_IN_PROGRESS == err) {
+            /* We don't want to touch req->pstatus at this stage
+             * as it may be freed by the callback */
+            return PMIX_SUCCESS;
+        }
         req->pstatus = prte_pmix_convert_rc(err);
     } else if(PMIX_ALLOC_REQ_CANCEL == req->allocdir) {
         err = prte_ras_slurm_serve_cancel_req(req);
