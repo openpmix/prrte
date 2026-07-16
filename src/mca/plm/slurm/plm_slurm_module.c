@@ -74,6 +74,7 @@
 #include "src/runtime/prte_wait.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
+#include "src/util/proc_info.h"
 #include "src/util/pmix_show_help.h"
 #include "types.h"
 
@@ -94,7 +95,8 @@ static int plm_slurm_signal_job(pmix_nspace_t jobid, int32_t signal);
 static int plm_slurm_finalize(void);
 
 static int plm_slurm_start_proc(int argc, char **argv,
-                                char *prefix, char *pmix_prefix);
+                                char *prefix, char *pmix_prefix,
+                                uint32_t job_id);
 
 /*
  * Global variable
@@ -116,6 +118,58 @@ prte_plm_base_module_1_0_0_t prte_plm_slurm_module = {
 static pid_t primary_srun_pid = 0;
 static bool primary_pid_set = false;
 static void launch_daemons(int fd, short args, void *cbdata);
+
+/*
+ * An elastic shrink can make an srun launcher exit non-zero without indicating
+ * an unexpected daemon failure. If the Slurm session is gone, PRRTE has already
+ * destroyed the session for that job ID, so the launcher termination is
+ * expected. If the session remains but only the HNP node survives, the shrink
+ * removed every daemon task launched by this srun step while leaving the
+ * controlling node alive.
+ */
+static bool srun_exit_expected(uint32_t job_id)
+{
+    prte_session_t *session;
+    prte_node_t *node, *remaining = NULL;
+    int count = 0;
+
+    if (!prte_elastic_mode) {
+        return false;
+    }
+
+    session = prte_get_session_object(job_id);
+    if (NULL == session) {
+        return true;
+    }
+
+    if (!PRTE_PROC_IS_MASTER || NULL == session->nodes) {
+        return false;
+    }
+
+    for (int i = 0; i < session->nodes->size; i++) {
+        node = (prte_node_t *) pmix_pointer_array_get_item(session->nodes, i);
+        if (NULL == node) {
+            continue;
+        }
+        remaining = node;
+        count++;
+        if (1 < count) {
+            return false;
+        }
+    }
+
+    if (1 != count || NULL == remaining) {
+        return false;
+    }
+
+    if (NULL != remaining->daemon &&
+        remaining->daemon->name.rank == PRTE_PROC_MY_NAME->rank) {
+        return true;
+    }
+
+    return NULL != remaining->name && NULL != prte_process_info.nodename &&
+           0 == strcmp(remaining->name, prte_process_info.nodename);
+}
 
 /**
  * Init the module
@@ -443,7 +497,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* exec the daemon(s) */
-    if (PRTE_SUCCESS != (rc = plm_slurm_start_proc(argc, argv, cur_prefix, pmix_prefix))) {
+    if (PRTE_SUCCESS != (rc = plm_slurm_start_proc(argc, argv, cur_prefix,
+                                                   pmix_prefix, job_id))) {
         PRTE_ERROR_LOG(rc);
         goto cleanup;
     }
@@ -535,6 +590,7 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
 {
     prte_wait_tracker_t *t2 = (prte_wait_tracker_t *) cbdata;
     prte_proc_t *proc = t2->child;
+    uint32_t *job_id = (uint32_t *) t2->cbdata;
     prte_job_t *jdata;
     PRTE_HIDE_UNUSED_PARAMS(sd, fd);
 
@@ -546,6 +602,7 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
                        prte_mca_plm_slurm_component.major,
                        prte_mca_plm_slurm_component.minor);
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
+        free(job_id);
         PMIX_RELEASE(t2);
         return;
     }
@@ -575,6 +632,17 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
      * the orteds exited with an error
      */
     if (0 != proc->exit_code) {
+        if (NULL != job_id && srun_exit_expected(*job_id)) {
+            PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+                                 "%s plm:slurm: srun for elastic job %" PRIu32
+                                 " exited with status %d",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 *job_id, proc->exit_code));
+            free(job_id);
+            PMIX_RELEASE(t2);
+            return;
+        }
+
         /* an orted must have died unexpectedly - report
          * that the daemon has failed so we exit
          */
@@ -597,11 +665,13 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
     }
 
     /* done with this dummy */
+    free(job_id);
     PMIX_RELEASE(t2);
 }
 
 static int plm_slurm_start_proc(int argc, char **argv,
-                                char *prefix, char *pmix_prefix)
+                                char *prefix, char *pmix_prefix,
+                                uint32_t job_id)
 {
     int fd;
     int srun_pid;
@@ -610,6 +680,7 @@ static int plm_slurm_start_proc(int argc, char **argv,
     char *exec_argv = pmix_path_findv(argv[0], 0, environ, NULL);
     prte_proc_t *dummy;
     char *oldenv, *newenv;
+    uint32_t *tracked_job_id;
     PRTE_HIDE_UNUSED_PARAMS(argc);
 
     if (NULL == exec_argv) {
@@ -631,13 +702,28 @@ static int plm_slurm_start_proc(int argc, char **argv,
         primary_pid_set = true;
     }
 
-    /* setup a dummy proc object to track the srun */
-    dummy = PMIX_NEW(prte_proc_t);
-    dummy->pid = srun_pid;
-    /* be sure to mark it as alive so we don't instantly fire */
-    PRTE_FLAG_SET(dummy, PRTE_PROC_FLAG_ALIVE);
-    /* setup the waitpid so we can find out if srun succeeds! */
-    prte_wait_cb(dummy, srun_wait_cb, NULL);
+    if (0 < srun_pid) {
+        /* setup a dummy proc object to track the srun */
+        dummy = PMIX_NEW(prte_proc_t);
+        if (NULL == dummy) {
+            kill(srun_pid, SIGTERM);
+            free(exec_argv);
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        tracked_job_id = malloc(sizeof(*tracked_job_id));
+        if (NULL == tracked_job_id) {
+            kill(srun_pid, SIGTERM);
+            PMIX_RELEASE(dummy);
+            free(exec_argv);
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        *tracked_job_id = job_id;
+        dummy->pid = srun_pid;
+        /* be sure to mark it as alive so we don't instantly fire */
+        PRTE_FLAG_SET(dummy, PRTE_PROC_FLAG_ALIVE);
+        /* setup the waitpid so we can find out if srun succeeds! */
+        prte_wait_cb(dummy, srun_wait_cb, tracked_job_id);
+    }
 
     if (0 == srun_pid) { /* child */
         char *bin_base = NULL, *lib_base = NULL;
