@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2022-2026 Nanook Consulting  All rights reserved.
    Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -20,10 +20,10 @@ and "oversubscribing". Users are often confused by the difference
 between these two scenarios. As such, this section provides a number
 of scenarios to help illustrate the differences.
 
-* ``--map-by :OVERSUBSCRIBE`` allow more processes on a node than
+* ``--mapby :OVERSUBSCRIBE`` allow more processes on a node than
   allocated
 
-* ``--bind-to <object>:overload-allowed`` allows for binding more than
+* ``--bindto <object>:overload-allowed`` allows for binding more than
   one process in relation to a CPU
 
 The important thing to remember with *oversubscribing* is that it can
@@ -38,7 +38,7 @@ The important thing to remember with *overloading* is that it is
 defined as binding more processes than CPUs. By default, PRRTE uses
 cores as a means of counting the number of CPUs. However, the user can
 adjust this. For example when using the ``:HWTCPUS`` qualifier to the
-``--map-by`` option PRRTE will use hardware threads as a means of
+``--mapby`` option PRRTE will use hardware threads as a means of
 counting the number of CPUs.
 
 For the following examples consider a node with:
@@ -62,7 +62,7 @@ If we run the following:
 
 .. code::
 
-   prun --np 34 --hostfile myhostfile --map-by core --bind-to core hostname
+   prun --np 34 --hostfile myhostfile --mapby core --bindto core hostname
 
 It will return an error at the binding time indicating an
 *overloading* scenario.
@@ -73,14 +73,14 @@ the first 20 processes to unique cores leaving it with 12 processes
 that it cannot bind without overloading one of the cores (putting more
 than one process on the core).
 
-Using the ``overload-allowed`` qualifier to the ``--bind-to core``
+Using the ``overload-allowed`` qualifier to the ``--bindto core``
 option tells PRRTE that it may assign more than one process to a core.
 
 If we run the following:
 
 .. code::
 
-   prun --np 34 --hostfile myhostfile --map-by core --bind-to core:overload-allowed hostname
+   prun --np 34 --hostfile myhostfile --mapby core --bindto core:overload-allowed hostname
 
 This will run correctly placing 32 processes on ``node01``, and 2
 processes on ``node02``. On ``node01`` two processes are bound to
@@ -93,7 +93,7 @@ If we run the following:
 
 .. code::
 
-   prun --np 34 --hostfile myhostfile --map-by core:HWTCPUS --bind-to hwthread hostname
+   prun --np 34 --hostfile myhostfile --mapby core:HWTCPUS --bindto hwthread hostname
 
 This will run correctly placing 32 processes on ``node01``, and 2
 processes on ``node02``. On ``node01`` two processes are mapped to
@@ -110,7 +110,7 @@ Consider next if we ran the following:
 
 .. code::
 
-   prun --np 66 --hostfile myhostfile --map-by core:HWTCPUS --bind-to hwthread hostname
+   prun --np 66 --hostfile myhostfile --mapby core:HWTCPUS --bindto hwthread hostname
 
 This will return an error at mapping time indicating an
 oversubscription scenario. The mapping mechanism will assign all of
@@ -119,13 +119,13 @@ map. The only way to map those processes is to exceed the number of
 available slots putting the job into an oversubscription scenario.
 
 You can force PRRTE to oversubscribe the nodes by using the
-``:OVERSUBSCRIBE`` qualifier to the ``--map-by`` option as seen in the
+``:OVERSUBSCRIBE`` qualifier to the ``--mapby`` option as seen in the
 example below:
 
 .. code::
 
    prun --np 66 --hostfile myhostfile \
-       --map-by core:HWTCPUS:OVERSUBSCRIBE --bind-to hwthread hostname
+       --mapby core:HWTCPUS:OVERSUBSCRIBE --bindto hwthread hostname
 
 This will run correctly placing 34 processes on ``node01`` and 32 on
 ``node02``.  Each process is bound to a unique hardware thread.
@@ -149,8 +149,8 @@ If we run:
 
 .. code::
 
-   prun --np 20 --hostfile myhostfile --map-by package \
-       --bind-to package:REPORT hostname
+   prun --np 20 --hostfile myhostfile --mapby package \
+       --bindto package:REPORT hostname
 
 Then 10 processes are mapped to each package, and bound at the package
 level.  This is not overloading since we have 10 CPUs (cores)
@@ -160,8 +160,8 @@ However, if we run:
 
 .. code::
 
-   prun --np 21 --hostfile myhostfile --map-by package \
-       --bind-to package:REPORT hostname
+   prun --np 21 --hostfile myhostfile --mapby package \
+       --bindto package:REPORT hostname
 
 Then 11 processes are mapped to the first package and 10 to the second
 package.  At binding time we have an overloading scenario because
@@ -189,8 +189,8 @@ qualifier:
 
 .. code::
 
-   prun --np 21 --hostfile myhostfile --map-by package:HWTCPUS \
-       --bind-to package:REPORT hostname
+   prun --np 21 --hostfile myhostfile --mapby package:HWTCPUS \
+       --bindto package:REPORT hostname
 
 Without the ``:HWTCPUS`` qualifier this would be overloading (as we
 saw previously). The mapper places 11 processes on the first package
@@ -203,8 +203,8 @@ Alternatively, if we run:
 
 .. code::
 
-   prun --np 161 --hostfile myhostfile --map-by package:HWTCPUS \
-       --bind-to package:REPORT hostname
+   prun --np 161 --hostfile myhostfile --mapby package:HWTCPUS \
+       --bindto package:REPORT hostname
 
 Then 81 processes are mapped to the first package and 80 to the second
 package.  At binding time we have an overloading scenario because

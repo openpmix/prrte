@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2022-2026 Nanook Consulting  All rights reserved.
    Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -141,8 +141,8 @@ Process Mapping / Ranking / Binding Options
 
   There are no qualifiers for the ``--rank-by`` directive.
 
-* ``--bind-to <object>``: This binds processes to the specified
-  object. See defaults in Quick Summary.  Supported bind-to objects
+* ``--bindto <object>``: This binds processes to the specified
+  object. See defaults in Quick Summary.  Supported bindto objects
   include:
 
   * ``none``
@@ -156,7 +156,7 @@ Process Mapping / Ranking / Binding Options
 
   Any object can include qualifiers by adding a colon (``:``) and any
   colon-delimited combination of one or more of the following to the
-  ``--bind-to`` options:
+  ``--bindto`` options:
 
   * ``overload-allowed`` allows for binding more than one process in
     relation to a CPU
@@ -264,7 +264,7 @@ For example:
 
 This launches processes 0-3 on node ``aa`` and process 4-7 on node
 ``bb``, where ``aa`` and ``bb`` are both dual-package nodes. The
-``--map-by ppr:2:package`` option also turns on the ``--bind-to
+``--map-by ppr:2:package`` option also turns on the ``--bindto
 package`` option, which is discussed in a later section.
 
 .. code::

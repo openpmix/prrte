@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2022-2026 Nanook Consulting  All rights reserved.
    Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -18,7 +18,7 @@ Diagnostics
 PRRTE provides various diagnostic reports that aid the user in
 verifying and tuning the mapping/ranking/binding for a specific job.
 
-The ``:REPORT`` qualifier to the ``--bind-to`` command line option can
+The ``:REPORT`` qualifier to the ``--bindto`` command line option can
 be used to report process bindings.
 
 As an example, consider a node with:
@@ -32,7 +32,7 @@ format.
 
 .. code::
 
-   $ prun --np 4 --map-by core --bind-to core:REPORT ./a.out
+   $ prun --np 4 --mapby core --bindto core:REPORT ./a.out
    [node01:103137] MCW rank 0 bound to package[0][core:0]
    [node01:103137] MCW rank 1 bound to package[0][core:1]
    [node01:103137] MCW rank 2 bound to package[0][core:2]
@@ -43,7 +43,7 @@ first package.
 
 .. code::
 
-   $ prun --np 4 --map-by package --bind-to package:REPORT ./a.out
+   $ prun --np 4 --mapby package --bindto package:REPORT ./a.out
    [node01:103115] MCW rank 0 bound to package[0][core:0-9]
    [node01:103115] MCW rank 1 bound to package[1][core:10-19]
    [node01:103115] MCW rank 2 bound to package[0][core:0-9]
@@ -54,7 +54,7 @@ packages in a round-robin fashion.
 
 .. code::
 
-   $ prun --np 4 --map-by package:PE=2 --bind-to core:REPORT ./a.out
+   $ prun --np 4 --mapby package:PE=2 --bindto core:REPORT ./a.out
    [node01:103328] MCW rank 0 bound to package[0][core:0-1]
    [node01:103328] MCW rank 1 bound to package[1][core:10-11]
    [node01:103328] MCW rank 2 bound to package[0][core:2-3]
@@ -66,7 +66,7 @@ The ``:PE=2`` qualifier states that 2 CPUs underneath the package
 
 .. code::
 
-   $ prun --np 4 --map-by core:PE=2:HWTCPUS --bind-to :REPORT  hostname
+   $ prun --np 4 --mapby core:PE=2:HWTCPUS --bindto :REPORT  hostname
    [node01:103506] MCW rank 0 bound to package[0][hwt:0-1]
    [node01:103506] MCW rank 1 bound to package[0][hwt:8-9]
    [node01:103506] MCW rank 2 bound to package[0][hwt:16-17]
@@ -82,7 +82,7 @@ would be hardware threads in this case) are mapped to each process.
 
 .. code::
 
-   $ prun --np 4 --bind-to none:REPORT  hostname
+   $ prun --np 4 --bindto none:REPORT  hostname
    [node01:107126] MCW rank 0 is not bound (or bound to all available processors)
    [node01:107126] MCW rank 1 is not bound (or bound to all available processors)
    [node01:107126] MCW rank 2 is not bound (or bound to all available processors)

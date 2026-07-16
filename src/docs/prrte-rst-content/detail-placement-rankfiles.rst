@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2022-2026 Nanook Consulting  All rights reserved.
    Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -36,7 +36,7 @@ For example:
    rank 0=aa slot=10-12
    rank 1=bb slot=0,1,4
    rank 2=cc slot=1-2
-   $ prun --host aa,bb,cc,dd --map-by rankfile:FILE=myrankfile ./a.out
+   $ prun --host aa,bb,cc,dd --mapby rankfile:FILE=myrankfile ./a.out
 
 Means that:
 
@@ -52,7 +52,7 @@ Similarly:
    rank 0=aa slot=1:0-2
    rank 1=bb slot=0:0,1,4
    rank 2=cc slot=1-2
-   $ prun --host aa,bb,cc,dd --map-by rankfile:FILE=myrankfile ./a.out
+   $ prun --host aa,bb,cc,dd --mapby rankfile:FILE=myrankfile ./a.out
 
 Means that:
 
@@ -78,7 +78,7 @@ hostnames, indexed from 0. For example:
    rank 0=+n0 slot=10-12
    rank 1=+n1 slot=0,1,4
    rank 2=+n2 slot=1-2
-   $ prun --host aa,bb,cc,dd --map-by rankfile:FILE=myrankfile ./a.out
+   $ prun --host aa,bb,cc,dd --mapby rankfile:FILE=myrankfile ./a.out
 
 All package/core slot locations are be specified as *logical*
 indexes. You can use tools such as HWLOC's ``lstopo`` to find the
