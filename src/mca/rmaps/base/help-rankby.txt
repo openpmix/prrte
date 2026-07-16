@@ -25,6 +25,10 @@
 #
 [rank-by]
 
+NOTE: PRRTE accepts both the new "--rankby" and the older
+deprecated "--rank-by" cmd line options. For simplicity, the
+following description will refer to the new "--rankby" form.
+
 PRRTE automatically ranks processes for each job starting from zero.
 Regardless of the algorithm used, rank assignments span applications
 in the same job — i.e., a command line of
@@ -38,7 +42,7 @@ By default, process ranks are assigned in accordance with the mapping
 directive — e.g., jobs that are mapped by-node will have the process
 ranks assigned round-robin on a per-node basis. However, users can
 override the default by specifying any of the following directives
-using the "--rank-by" command line option:
+using the "--rankby" command line option:
 
 * "SLOT" assigns ranks to each process on a node in the order in which
   the mapper assigned them. This is the default behavior, but is
@@ -68,7 +72,7 @@ using the "--rank-by" command line option:
   all "L1cache" used by the job before circling around to rank the
   second proc on each object.
 
-The "rank-by" command line option has no qualifiers.
+The "rankby" command line option has no qualifiers.
 
 Note:
 
@@ -79,12 +83,12 @@ Per-App-Context Ranking (MPMD Jobs)
 -------------------------------------
 
 In a multi-program multiple-data (MPMD) job, each application context
-may carry its own "--rank-by" directive that overrides the job-level
+may carry its own "--rankby" directive that overrides the job-level
 ranking policy for that app only.
 
 Example:
 
-  prun -n 4 app1 --rank-by fill : -n 2 app2 --rank-by node
+  prun -n 4 app1 --rankby fill : -n 2 app2 --rankby node
 
 Rank assignments always span all application contexts in the job and
 remain globally contiguous: the first app in the command line receives
@@ -95,7 +99,7 @@ that app are assigned their ranks relative to one another.
 
 For example, a command line of
 
-   -n 3 app1 --rank-by fill : -n 2 app2 --rank-by node
+   -n 3 app1 --rankby fill : -n 2 app2 --rankby node
 
 will result in "app1" having three processes ranked 0-2 (assigned fill-
 style) and "app2" having two processes ranked 3-4 (assigned node-
@@ -103,3 +107,7 @@ style).
 
 A more detailed description of the mapping, ranking, and binding
 procedure can be obtained via the "--help placement" option.
+#
+[rankby]
+
+#include#help-rankby.txt#rank-by

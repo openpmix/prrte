@@ -122,11 +122,14 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | Option               | Description                                   |
 |======================|===============================================|
-| "--map-by <type>"    | Mapping Policy for job                        |
+| "--mapby <type>" |   | Mapping Policy for job                        |
+| "--map-by <type>"    |                                               |
 +----------------------+-----------------------------------------------+
-| "--rank-by <type>"   | Ranking Policy for job                        |
+| "--rankby <type>" |  | Ranking Policy for job                        |
+| "--rank-by <type>"   |                                               |
 +----------------------+-----------------------------------------------+
-| "--bind-to <type>"   | Binding policy for job.                       |
+| "--bindto <type>" |  | Binding policy for job.                       |
+| "--bind-to <type>"   |                                               |
 +----------------------+-----------------------------------------------+
 
 +----------------------+-----------------------------------------------+
@@ -802,14 +805,28 @@ Specify procs to receive stdin [integer ranks, "all", "none"]
 #include#help-mapby.txt#map-by
 
 #
+[mapby]
+#include#help-mapby.txt#mapby
+
+#
 [rank-by]
 
 #include#help-rankby.txt#rank-by
 
 #
+[rankby]
+
+#include#help-rankby.txt#rankby
+
+#
 [bind-to]
 
 #include#help-bindto.txt#bind-to
+
+#
+[bindto]
+
+#include#help-bindto.txt#bindto
 
 #
 [runtime-options]
@@ -848,6 +865,11 @@ and try again.
 [placement-all]
 
 #include#help-placement.txt#placement-all
+
+#
+[placement-fundamentals]
+
+#include#help-placement.txt#placement-fundamentals
 
 #
 [placement-limits]
