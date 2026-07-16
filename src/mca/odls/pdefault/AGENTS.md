@@ -102,9 +102,11 @@ Runs in the forked child; `__prte_attribute_noreturn__`. In order:
 2. Make the pipe write-fd close-on-exec.
 3. If this is a real child with output forwarding: `prte_iof_base_setup_child`
    to hook up stdout/stderr, then **`prte_odls_base_set(cd, write_fd)`** —
-   the base binding routine (cpu + memory affinity from `child->cpuset`),
-   which proxies any binding error up the pipe. (If there is no child and
-   no output forwarding, stdio is tied to `/dev/null`.)
+   the child half of the base binding routine, which only *issues* the
+   cpu/memory bind syscalls the parent already prepared
+   (`prte_odls_base_prepare_binding`, run pre-fork in `spawn_proc`) and
+   proxies any binding error up the pipe. (If there is no child and no
+   output forwarding, stdio is tied to `/dev/null`.)
 4. A plain `close()` loop over `[3, sysconf(_SC_OPEN_MAX))` — closes
    everything except stdio and the pipe. (It deliberately does **not** call
    `pmix_close_open_file_descriptors()`, which scans `/proc/self/fd` with

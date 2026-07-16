@@ -337,6 +337,13 @@ static void sccon(prte_odls_spawn_caddy_t *p)
     p->wdir = NULL;
     p->argv = NULL;
     p->env = NULL;
+    p->bind_cpuset = NULL;
+    p->bind_fatal = false;
+    p->do_membind = false;
+#if PRTE_HAVE_SCHED_SETAFFINITY
+    p->bind_mask = NULL;
+    p->bind_masksize = 0;
+#endif
 }
 static void scdes(prte_odls_spawn_caddy_t *p)
 {
@@ -352,6 +359,14 @@ static void scdes(prte_odls_spawn_caddy_t *p)
     if (NULL != p->env) {
         PMIx_Argv_free(p->env);
     }
+    if (NULL != p->bind_cpuset) {
+        hwloc_bitmap_free(p->bind_cpuset);
+    }
+#if PRTE_HAVE_SCHED_SETAFFINITY
+    if (NULL != p->bind_mask) {
+        CPU_FREE(p->bind_mask);
+    }
+#endif
 }
 PMIX_CLASS_INSTANCE(prte_odls_spawn_caddy_t,
                     pmix_object_t,
