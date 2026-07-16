@@ -91,7 +91,36 @@ typedef uint8_t prte_daemon_cmd_flag_t;
 #define PRTE_DAEMON_SHRINK_CMD (prte_daemon_cmd_flag_t) 35
 
 /*
- * Struct written up the pipe from the child to the parent.
+ * Identifies which point in the child's setup/exec sequence failed. The
+ * child code that runs between fork() and execve() must be
+ * async-signal-safe, so it cannot format a message or call show_help
+ * (which allocates, reads the help file, and scans directories); instead
+ * it reports one of these codes plus errno up the pipe, and the parent
+ * renders the human-readable diagnostic. The WARN_* codes describe a
+ * non-fatal condition (e.g., a degraded binding) after which the child
+ * continues on toward execve().
+ */
+typedef enum {
+    PRTE_ODLS_CHILD_ERR_NONE = 0,
+    /* fatal errors - the child exits after reporting */
+    PRTE_ODLS_CHILD_ERR_IOF_SETUP,      /* stdio/IOF child setup failed */
+    PRTE_ODLS_CHILD_ERR_NEG_FD,         /* open("/dev/null") returned < 0 */
+    PRTE_ODLS_CHILD_ERR_BIND,           /* required cpu binding failed */
+    PRTE_ODLS_CHILD_ERR_BIND_MEM,       /* required memory binding failed */
+    PRTE_ODLS_CHILD_ERR_WDIR,           /* chdir to the working dir failed */
+    PRTE_ODLS_CHILD_ERR_STOP_ON_EXEC,   /* ptrace(TRACEME) failed */
+    PRTE_ODLS_CHILD_ERR_EXEC,           /* execve failed */
+    /* non-fatal warnings - the child continues on toward execve */
+    PRTE_ODLS_CHILD_WARN_NOT_BOUND,     /* could not apply cpu binding */
+    PRTE_ODLS_CHILD_WARN_MEM_NOT_BOUND, /* could not apply memory binding */
+    PRTE_ODLS_CHILD_WARN_INCORRECT      /* daemon bound but proc left unbound */
+} prte_odls_child_err_t;
+
+/*
+ * Fixed-size record written up the pipe from the child to the parent. It
+ * carries no strings and needs no allocation, so it is safe to emit from
+ * the async-signal-safe window between fork() and execve(). The parent
+ * renders the message from "which" and "errnum".
  */
 typedef struct {
     /* True if the child has died; false if this is just a warning to
@@ -99,19 +128,11 @@ typedef struct {
     bool fatal;
     /* Relevant only if fatal==true */
     int exit_status;
-
-    /* Length of the strings that are written up the pipe after this
-       struct */
-    int file_str_len;
-    int topic_str_len;
-    int msg_str_len;
+    /* which failure occurred (prte_odls_child_err_t) */
+    int which;
+    /* errno captured at the point of failure (0 if not applicable) */
+    int errnum;
 } prte_odls_pipe_err_msg_t;
-
-/*
- * Max length of strings from the prte_odls_pipe_err_msg_t
- */
-#define PRTE_ODLS_MAX_FILE_LEN  511
-#define PRTE_ODLS_MAX_TOPIC_LEN PRTE_ODLS_MAX_FILE_LEN
 
 END_C_DECLS
 

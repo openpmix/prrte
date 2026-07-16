@@ -43,7 +43,23 @@ will now abort.
   Local host:        %s
   Application name:  %s
   Error message:     %s
-  Location:          %s:%d
+#
+[not bound]
+PRTE tried to bind a new process, but something went wrong and the
+process was left unbound.  The job will continue, but performance may
+be degraded.
+
+  Local host:        %s
+  Application name:  %s
+  Error message:     %s
+#
+[incorrectly bound]
+PRTE detected that the daemon is bound, but was unable to determine the
+binding of a new process.  The process was left bound to all available
+processors.  The job will continue, but performance may be degraded.
+
+  Local host:        %s
+  Application name:  %s
 #
 [iof setup failed]
 PRTE tried to launch a child process but the "IOF child setup"
@@ -52,16 +68,6 @@ failed.  This should not happen.  Your job will now abort.
   Local host:        %s
   Application name:  %s
 #
-[syscall fail]
-A system call failed that should not have.  In this particular case,
-a warning or error message was not displayed that should have been.
-Your job may behave unpredictably after this, or abort.
-
-  Local host:        %s
-  Application name:  %s
-  Function:          %s
-  Location:          %s:%d
-#
 [memory binding error]
 PRTE tried to bind memory for a new process but something went
 wrong. The process was killed without launching the target
@@ -69,8 +75,16 @@ application. Your job will now abort.
 
   Local host:        %s
   Application name:  %s
-  Error message: %s
-  Location:  %s:%d
+  Error message:     %s
+#
+[memory not bound]
+PRTE tried to bind memory for a new process, but something went wrong
+and the memory was left unbound.  The job will continue, but
+performance may be degraded.
+
+  Local host:        %s
+  Application name:  %s
+  Error message:     %s
 #
 [set limit]
 Error message received from:
