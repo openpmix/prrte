@@ -56,6 +56,8 @@ test/unit/errmgr/Makefile
 test/unit/errmgr/test_errmgr
 test/unit/ess/Makefile
 test/unit/ess/test_ess
+test/unit/filem/Makefile
+test/unit/filem/test_filem
 static-components.h
 static-components.h.new.extern
 static-components.h.new.struct
