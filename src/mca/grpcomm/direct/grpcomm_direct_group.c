@@ -424,6 +424,10 @@ static void group(int sd, short args, void *cbdata)
     }
     PMIx_Info_list_release(grpinfo);
     PMIx_Info_list_release(endpts);
+    /* consumed - NULL them so the error label below does not double-release
+     * if a send fails past this point */
+    grpinfo = NULL;
+    endpts = NULL;
 
     /* if this is a bootstrap operation, send it directly to the HNP */
     if (coll->bootstrap) {
@@ -440,6 +444,7 @@ static void group(int sd, short args, void *cbdata)
             goto error;
         }
         PMIX_DESTRUCT(&sig);
+        PMIX_RELEASE(cd);
         return;
     }
     PMIX_DESTRUCT(&sig);
@@ -456,9 +461,20 @@ static void group(int sd, short args, void *cbdata)
         rc = prte_pmix_convert_rc(rc);
         goto error;
     }
+    PMIX_RELEASE(cd);
     return;
 
 error:
+    /* the grpinfo/endpts trackers are released (and NULLed) on the success
+     * path above; on any error jump to here before that point they are still
+     * open, so release them now.  The NULL guard makes this safe for the
+     * post-release send-failure jumps too. */
+    if (NULL != grpinfo) {
+        PMIx_Info_list_release(grpinfo);
+    }
+    if (NULL != endpts) {
+        PMIx_Info_list_release(endpts);
+    }
     if (NULL != cd->cbfunc) {
         cd->cbfunc(rc, NULL, 0, cd->cbdata, NULL, NULL);
     }
