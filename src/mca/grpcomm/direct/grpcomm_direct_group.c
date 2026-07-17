@@ -515,6 +515,8 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
     rc = unpack_signature(buffer, &sig);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
+        /* sig is NULL on failure - bail rather than deref it below */
+        return;
     }
 
 #if PRTE_PMIX_HAVE_GROUP_FT
