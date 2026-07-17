@@ -230,7 +230,12 @@ after setting their name. In order, it:
    `signal_forward_callback` handler per entry on
    `prte_ess_base_signals` (each forwards the signal to local procs by
    sending a `PRTE_DAEMON_SIGNAL_LOCAL_PROCS` command to itself over the
-   RML).
+   RML). That command's payload is `(jobid=wildcard, signal-number)`,
+   and the packed **signal number must be the actual caught signal**
+   (`PRTE_EVENT_SIGNAL(...)`), matching what `prted_comm.c` unpacks — a
+   subtle 2021 regression packed the wildcard nspace here instead,
+   silently turning every forwarded signal into signal `0` (a no-op).
+   Keep the pack type/value in lock-step with the unpack side.
 2. Discovers the local hwloc topology if not already set.
 3. Defines the HNP name (`PRTE_PROC_MY_HNP` = my nspace, rank 0).
 4. Opens and selects `state`, opens `errmgr`.

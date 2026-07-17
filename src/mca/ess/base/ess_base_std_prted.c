@@ -530,7 +530,7 @@ static void signal_forward_callback(int fd, short event, void *arg)
     }
 
     /* pack the signal */
-    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, cmd, &PRTE_JOBID_WILDCARD, 1, PMIX_INT32);
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, cmd, &signum, 1, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(cmd);
