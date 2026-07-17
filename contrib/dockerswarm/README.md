@@ -141,6 +141,18 @@ Both `grow` and `shrink` should print
 node hostname`): stands up a transient DVM, runs the job, and exits cleanly with
 no daemons left behind — the non-elastic launch path.
 
+**Preload (`filem`)** (`--preload-binary`): the harness compiles a marker binary
+on **node1 only**, then runs it under `--preload-binary` on node2+node3. Because
+the executable does not exist on the target nodes, a successful run proves
+`filem` actually staged the bytes across daemons (xcast → `recv_files` →
+`write_handler`) and linked them into the job session dir that
+`--preload-binary`'s session-cwd points at. This is the one path a single-host
+build can't validate — locally the source file is already present, so the app
+would run even if staging did nothing. (Data-file preload, `--preload-files`,
+is **not** asserted here: staged data files land in the per-proc session dir but
+the default cwd is elsewhere, so they are not reachable by a bare relative path —
+a separate, pre-existing gap.)
+
 **Grow** (`elastic grow node2:2,node3:2`): phase-1 `PMIX_SUCCESS`, then phase-2
 `PMIX_DVM_IS_READY`, and `prted` now running on node2 and node3.
 
