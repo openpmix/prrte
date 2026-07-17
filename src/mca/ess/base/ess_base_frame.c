@@ -246,6 +246,15 @@ pmix_status_t prte_ess_base_setup_signals(char *input)
             sname = NULL;
             for (int j = 0; NULL != known_signals[j].signame; ++j) {
                 if (sval == known_signals[j].signal) {
+                    /* enforce the same forwardability gate as the name
+                     * branch - a non-forwardable signal must be rejected
+                     * whether it was given by name or by number */
+                    if (!known_signals[j].can_forward) {
+                        pmix_show_help("help-ess-base.txt", "ess-base:cannot-forward", true,
+                                       known_signals[j].signame, mysignals);
+                        PMIx_Argv_free(signals);
+                        return PMIX_ERR_SILENT;
+                    }
                     sname = known_signals[j].signame;
                     break;
                 }
