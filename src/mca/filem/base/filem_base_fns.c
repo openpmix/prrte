@@ -159,6 +159,11 @@ int prte_filem_base_module_finalize(void)
     return PRTE_SUCCESS;
 }
 
+void prte_filem_base_none_fault_handler(const prte_rml_recovery_status_t *status)
+{
+    PRTE_HIDE_UNUSED_PARAMS(status);
+}
+
 int prte_filem_base_none_put(prte_filem_base_request_t *request)
 {
     PRTE_HIDE_UNUSED_PARAMS(request);

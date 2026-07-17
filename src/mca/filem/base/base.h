@@ -65,6 +65,7 @@ PRTE_EXPORT extern bool prte_filem_base_is_active;
 int prte_filem_base_module_init(void);
 int prte_filem_base_module_finalize(void);
 
+void prte_filem_base_none_fault_handler(const prte_rml_recovery_status_t *status);
 PRTE_EXPORT int prte_filem_base_none_put(prte_filem_base_request_t *request);
 PRTE_EXPORT int prte_filem_base_none_put_nb(prte_filem_base_request_t *request);
 PRTE_EXPORT int prte_filem_base_none_get(prte_filem_base_request_t *request);
