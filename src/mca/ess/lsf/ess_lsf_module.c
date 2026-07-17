@@ -72,7 +72,10 @@ static int rte_init(int argc, char **argv)
     }
 
     /* Start by getting a unique name */
-    lsf_set_name();
+    if (PRTE_SUCCESS != (ret = lsf_set_name())) {
+        error = "lsf_set_name";
+        goto error;
+    }
 
     if (PRTE_SUCCESS != (ret = prte_ess_base_prted_setup())) {
         PRTE_ERROR_LOG(ret);
@@ -99,13 +102,13 @@ static int rte_finalize(void)
     }
 
     return ret;
-    ;
 }
 
 static int lsf_set_name(void)
 {
     int lsf_nodeid;
     pmix_rank_t vpid;
+    char *tmp;
 
     if (NULL == prte_ess_base_nspace) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -120,7 +123,11 @@ static int lsf_set_name(void)
     }
     vpid = strtoul(prte_ess_base_vpid, NULL, 10);
 
-    lsf_nodeid = atoi(getenv("LSF_PM_TASKID"));
+    if (NULL == (tmp = getenv("LSF_PM_TASKID"))) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
+    }
+    lsf_nodeid = atoi(tmp);
     pmix_output_verbose(1, prte_ess_base_framework.framework_output,
                         "ess:lsf found LSF_PM_TASKID set to %d", lsf_nodeid);
     PRTE_PROC_MY_NAME->rank = vpid + lsf_nodeid - 1;

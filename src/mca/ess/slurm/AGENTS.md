@@ -87,6 +87,12 @@ unique rank, and by correcting the nodename from SLURM's own value:
   dropping it) collides daemon ranks — a silent, miserable failure. The
   base vpid is the same for every daemon; the node id is what
   disambiguates.
+- **`SLURM_NODEID` is `NULL`-guarded before `atoi`.** `slurm_set_name`
+  checks `getenv("SLURM_NODEID")` for `NULL` and returns
+  `PRTE_ERR_NOT_FOUND` if it is absent, rather than calling `atoi(NULL)`
+  (undefined behavior — a segfault on glibc). `srun` always sets the
+  variable, so this only triggers in a misconfigured launch, but the
+  guard keeps that case a clean error instead of a crash. Don't drop it.
 - **`SLURMD_NODENAME` correction matters for node matching.** The HNP's
   allocation (from `ras/slurm`) uses SLURM's node names; if the daemon
   reports a different hostname (e.g. an FQDN vs short name), node

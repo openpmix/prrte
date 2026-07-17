@@ -68,8 +68,9 @@ The standard three-step daemon shape:
 3. **`PRTE_PROC_MY_NAME->rank = vpid + atoi(getenv("PALS_NODEID"))`**,
    but only if `PALS_NODEID` is present — if it is **not** set,
    `pals_set_name` returns `PRTE_ERR_NOT_FOUND` rather than defaulting
-   the offset to 0. (Contrast `slurm`, which calls `atoi` on
-   `SLURM_NODEID` unconditionally.)
+   the offset to 0. (`slurm` and `lsf` now `NULL`-guard their node-id
+   env vars the same way, so all three RM modules fail cleanly on a
+   missing offset instead of calling `atoi(NULL)`.)
 4. Set `prte_process_info.num_daemons = prte_ess_base_num_procs`.
 
 Unlike `slurm`, `pals` does **not** rewrite `prte_process_info.nodename`

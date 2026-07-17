@@ -73,7 +73,10 @@ static int rte_init(int argc, char **argv)
     }
 
     /* Start by getting a unique name */
-    pals_set_name();
+    if (PRTE_SUCCESS != (ret = pals_set_name())) {
+        error = "pals_set_name";
+        goto error;
+    }
 
     if (PRTE_SUCCESS != (ret = prte_ess_base_prted_setup())) {
         PRTE_ERROR_LOG(ret);
