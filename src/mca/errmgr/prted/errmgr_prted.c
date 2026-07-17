@@ -249,6 +249,7 @@ static void job_errors(int fd, short args, void *cbdata)
      * if prte is trying to shutdown, just let it
      */
     if (prte_finalizing) {
+        PMIX_RELEASE(caddy);
         return;
     }
 
@@ -264,7 +265,7 @@ static void job_errors(int fd, short args, void *cbdata)
     jdata->state = jobstate;
 
     PMIX_OUTPUT_VERBOSE((1, prte_errmgr_base_framework.framework_output,
-                         "%s errmgr:prted: job %s repprted error state %s",
+                         "%s errmgr:prted: job %s reported error state %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace),
                          prte_job_state_to_str(jobstate)));
 
@@ -741,7 +742,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(alert);
         }
-        return;
+        goto cleanup;
     }
 
 cleanup:
