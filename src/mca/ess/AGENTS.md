@@ -383,6 +383,30 @@ the failing step (e.g. `prte_ess_base_prted_setup`,
 
 ---
 
+## Testing
+
+Almost all of `ess` — `prted_setup`, the HNP module, every `set_name` —
+needs a live DVM (it opens the whole downstream framework stack, starts
+the PMIx server, creates the session directory), so those paths are
+exercised by the integration/dockerswarm harnesses, not by a standalone
+unit test.
+
+The one piece that is pure, DVM-free input parsing —
+`prte_ess_base_setup_signals()` — has a unit test at
+[`test/unit/ess/test_ess.c`](../../../test/unit/ess/), wired into
+`make check`. It drives the `"none"` no-op and a mixed
+name/duplicate parse, and asserts each accepted entry carries a real,
+**non-zero** signal number (the value the forwarding callback packs —
+the exact field the 2021 regression got wrong). Because
+`setup_signals` latches after its first non-`"none"` call (see above), a
+single process can drive only one substantive parse; the test is
+structured around that.
+
+Run it from a build tree with `make check` (whole suite) or
+`make -C test/unit/ess check` (just this one).
+
+---
+
 ## Where to go next
 
 Each component directory has its own `AGENTS.md`:
