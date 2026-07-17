@@ -97,6 +97,7 @@ static int plm_slurm_finalize(void);
 static int plm_slurm_start_proc(int argc, char **argv,
                                 char *prefix, char *pmix_prefix,
                                 uint32_t job_id);
+static void clear_parent_slurm_allocation_env(void);
 
 /*
  * Global variable
@@ -118,6 +119,28 @@ prte_plm_base_module_1_0_0_t prte_plm_slurm_module = {
 static pid_t primary_srun_pid = 0;
 static bool primary_pid_set = false;
 static void launch_daemons(int fd, short args, void *cbdata);
+
+/* Remove allocation-shape values inherited from the Slurm job containing the
+ * DVM master.  A later elastic grow can launch srun against a different job ID
+ * whose node count and node list differ from that parent allocation.  Leaving
+ * these values set makes srun validate the explicit --nodes/--nodelist request
+ * against the old allocation.  Slurm regenerates the corresponding values for
+ * the remote tasks in the newly-created step. */
+static void clear_parent_slurm_allocation_env(void)
+{
+    static const char *const vars[] = {
+        "SLURM_JOB_NUM_NODES",
+        "SLURM_NNODES",
+        "SLURM_JOB_NODELIST",
+        "SLURM_NODELIST",
+        "SLURM_TASKS_PER_NODE",
+        NULL
+    };
+
+    for (int i = 0; NULL != vars[i]; i++) {
+        unsetenv(vars[i]);
+    }
+}
 
 /*
  * An elastic shrink can make an srun launcher exit non-zero without indicating
@@ -727,6 +750,8 @@ static int plm_slurm_start_proc(int argc, char **argv,
 
     if (0 == srun_pid) { /* child */
         char *bin_base = NULL, *lib_base = NULL;
+
+        clear_parent_slurm_allocation_env();
 
         /* Slurm forwards the entire environment, which we
          * REALLY don't want them to do as it might contain
