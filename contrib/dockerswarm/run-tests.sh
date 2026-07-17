@@ -86,6 +86,37 @@ test_linux() {
     c=$(prted_count 1 2 3 4 5 6 7 8 9 10)
     [ "$c" = 0 ] && ok "no daemons linger after prterun" || bad "$c stray prted after prterun"
 
+    banner "filem: --preload-binary cross-node staging (binary only on node1)"
+    # Compile a marker binary on node1 ONLY. If it runs on node2/node3 -- where
+    # the file does not exist -- then filem actually staged the bytes there and
+    # linked them into the job session dir that --preload-binary's session cwd
+    # points at. This exercises the real cross-daemon delivery path (xcast ->
+    # recv_files -> write_handler -> link_local_files), which a single-host run
+    # cannot prove because the source file is already present locally.
+    docker exec prte-node1 bash -lc '. /opt/prte/env.sh 2>/dev/null; cat > /root/staged_marker.c <<"CEOF"
+#include <unistd.h>
+#include <stdio.h>
+int main(void){ char h[64]; gethostname(h, sizeof(h)); printf("STAGED-BIN-OK %s\n", h); return 0; }
+CEOF
+gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
+    if RUN 'test -x /root/staged_marker'; then
+        leaked=0
+        for n in 2 3; do ON "$n" 'test -e /root/staged_marker' && leaked=1; done
+        [ "$leaked" = 0 ] && ok "marker binary exists only on node1 (staging test is valid)" \
+                          || bad "marker binary leaked onto a target node -- test would be meaningless"
+        out=$(RUN 'cd /root && prterun --host node2:1,node3:1 -np 2 --map-by node --preload-binary -- ./staged_marker' 2>&1); rc=$?
+        n2=$(echo "$out" | grep -c 'STAGED-BIN-OK node2')
+        n3=$(echo "$out" | grep -c 'STAGED-BIN-OK node3')
+        [ "$rc" = 0 ] && [ "$n2" = 1 ] && [ "$n3" = 1 ] \
+            && ok "preload-binary staged from node1 and ran on node2+node3" \
+            || bad "preload-binary cross-node failed (rc=$rc, n2=$n2, n3=$n3): $(echo "$out" | tr '\n' ' ')"
+        c=$(prted_count 1 2 3 4 5 6 7 8 9 10)
+        [ "$c" = 0 ] && ok "no daemons linger after preload-binary run" || bad "$c stray prted after preload run"
+    else
+        bad "could not compile the marker binary on node1 (need gcc in the image)"
+    fi
+    docker exec prte-node1 sh -c 'rm -f /root/staged_marker /root/staged_marker.c' 2>/dev/null
+
     banner "elastic DVM: grow + shrink (radix 64, flat tree)"
     cleanup_swarm
     RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
