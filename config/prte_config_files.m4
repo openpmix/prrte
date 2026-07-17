@@ -32,5 +32,6 @@ AC_DEFUN([PRTE_CONFIG_FILES],[
         test/offline/Makefile
         test/unit/Makefile
         test/unit/rmaps/Makefile
+        test/unit/errmgr/Makefile
     ])
 ])

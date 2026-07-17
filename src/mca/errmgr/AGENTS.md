@@ -269,6 +269,38 @@ new events, rather than calling termination logic inline.
 
 ---
 
+## Testing
+
+Most of this framework is only reachable with a live DVM: the handlers
+mutate global runtime state and drive termination through `prte_plm` /
+`prte_grpcomm`, so their real behavior is exercised by the integration
+and dockerswarm grow/shrink harnesses (see the repo memory on elastic-DVM
+testing), not by an in-process unit test.
+
+What *is* unit-testable is the framework's structural contract, and
+[`test/unit/errmgr/test_errmgr.c`](../../../test/unit/errmgr/) covers it
+(wired into `make check`):
+
+- **Module invariants.** Every module struct — `prte_errmgr_default_fns`,
+  the live `prte_errmgr`, and the two role modules
+  (`prte_errmgr_dvm_module`, `prte_errmgr_prted_module`) — must carry a
+  non-NULL `logfn` (the load-bearing early-failure invariant described in
+  "The `logfn` gotcha" above). The default module must leave
+  `init`/`finalize` NULL; each real component must wire both. A
+  regression that zero-initializes one of these structs — the exact
+  "clean-up" the gotcha warns against — is caught here.
+- **`prte_errmgr_base_log` robustness.** The default `logfn` is driven
+  with a normal code, `PRTE_SUCCESS`, and an out-of-range code so the
+  "silent error" (`prte_strerror` returns NULL) guard is exercised
+  without dereferencing NULL.
+
+Run it from a built tree with `make check` (or
+`make -C test/unit/errmgr check`). When you add a new component or change
+the module contract, extend this test rather than relying solely on a
+live-DVM smoke test.
+
+---
+
 ## Debugging
 
 ```sh

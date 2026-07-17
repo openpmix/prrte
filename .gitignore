@@ -52,6 +52,8 @@ test/Makefile
 test/unit/Makefile
 test/unit/rmaps/Makefile
 test/unit/rmaps/test_rmaps
+test/unit/errmgr/Makefile
+test/unit/errmgr/test_errmgr
 static-components.h
 static-components.h.new.extern
 static-components.h.new.struct
