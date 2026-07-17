@@ -234,6 +234,10 @@ static void recv_ack(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer
             }
         }
     }
+    /* no matching xfer found (e.g. the file was already fully positioned
+     * and removed) - avoid leaking the unpacked filename
+     */
+    free(file);
 }
 
 static int raw_preposition_files(prte_job_t *jdata,
@@ -1027,6 +1031,10 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
             send_complete(file, PRTE_ERR_FILE_WRITE_FAILURE);
             free(file);
             free(tmp);
+            /* drop this file from the incoming list before releasing it,
+             * else a later chunk would walk a dangling pointer
+             */
+            pmix_list_remove_item(&incoming_files, &incoming->super);
             PMIX_RELEASE(incoming);
             return;
         }
@@ -1039,6 +1047,8 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
                 send_complete(file, PRTE_ERR_FILE_WRITE_FAILURE);
                 free(file);
                 free(tmp);
+                pmix_list_remove_item(&incoming_files, &incoming->super);
+                PMIX_RELEASE(incoming);
                 return;
             }
         } else {
@@ -1049,6 +1059,8 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
                 send_complete(file, PRTE_ERR_FILE_WRITE_FAILURE);
                 free(file);
                 free(tmp);
+                pmix_list_remove_item(&incoming_files, &incoming->super);
+                PMIX_RELEASE(incoming);
                 return;
             }
         }
@@ -1110,6 +1122,10 @@ static void write_handler(int fd, short event, void *cbdata)
             /* close the file descriptor */
             close(sink->fd);
             sink->fd = -1;
+            /* we are done with this EOF marker - release it so it isn't
+             * leaked on the finalize paths below
+             */
+            PMIX_RELEASE(output);
             if (PRTE_FILEM_TYPE_FILE == sink->type || PRTE_FILEM_TYPE_EXE == sink->type) {
                 /* just link to the top as this will be the
                  * name we will want in each proc's session dir
@@ -1132,12 +1148,15 @@ static void write_handler(int fd, short event, void *cbdata)
                 if (NULL == getcwd(homedir, sizeof(homedir))) {
                     PRTE_ERROR_LOG(PRTE_ERROR);
                     send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
+                    free(cmd);
                     return;
                 }
                 dirname = pmix_dirname(sink->fullpath);
                 if (0 != chdir(dirname)) {
                     PRTE_ERROR_LOG(PRTE_ERROR);
                     send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
+                    free(cmd);
+                    free(dirname);
                     return;
                 }
                 PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
@@ -1146,11 +1165,21 @@ static void write_handler(int fd, short event, void *cbdata)
                 if (0 != system(cmd)) {
                     PRTE_ERROR_LOG(PRTE_ERROR);
                     send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
+                    /* best-effort restore of our working directory before
+                     * bailing; log but don't mask the original failure
+                     */
+                    if (0 != chdir(homedir)) {
+                        PRTE_ERROR_LOG(PRTE_ERROR);
+                    }
+                    free(cmd);
+                    free(dirname);
                     return;
                 }
                 if (0 != chdir(homedir)) {
                     PRTE_ERROR_LOG(PRTE_ERROR);
                     send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
+                    free(cmd);
+                    free(dirname);
                     return;
                 }
                 free(dirname);
