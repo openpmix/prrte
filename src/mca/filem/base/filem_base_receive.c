@@ -95,7 +95,7 @@ int prte_filem_base_comm_stop(void)
     if (!PRTE_PROC_IS_MASTER && !PRTE_PROC_IS_DAEMON) {
         return PRTE_SUCCESS;
     }
-    if (recv_issued) {
+    if (!recv_issued) {
         return PRTE_SUCCESS;
     }
 
@@ -243,7 +243,7 @@ static void filem_base_process_get_remote_path_cmd(pmix_proc_t *sender, pmix_dat
      */
     if (filename[0] != '/') { /* if it is not an absolute path already */
         if (NULL == getcwd(cwd, sizeof(cwd))) {
-            return;
+            goto CLEANUP;
         }
         pmix_asprintf(&tmp_name, "%s/%s", cwd, filename);
     } else {
