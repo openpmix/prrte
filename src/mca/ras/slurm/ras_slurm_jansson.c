@@ -55,7 +55,8 @@ typedef struct {
 /*
  * Parse a numeric-object field from JSON and store it as a string in a hash table.
  *
- * Expects the the JSON object at key in job to have
+ * If the field is absent or null, returns PRTE_ERR_NOT_FOUND so optional job
+ * attributes can be omitted. Otherwise, expects the JSON object at key to have
  * "set", "infinite", and "number" fields. Stores the result
  * in values_table:
  * - unset -> string determined by PRTE_SLURM_UNSET_NUM_MARKER
@@ -75,7 +76,10 @@ static int prte_ras_slurm_get_json_numobj_field(json_t *job, const char *key, pm
     int pmix_err = PMIX_SUCCESS;
 
     json_t *field = json_object_get(job, key);
-    if (NULL == field || !json_is_object(field)) {
+    if (NULL == field || json_is_null(field)) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+    if (!json_is_object(field)) {
         return PRTE_ERR_JSON_PARSE_FAILURE;
     }
 
@@ -345,7 +349,8 @@ bool prte_ras_slurm_have_jansson(void)
  * parses the returned JSON using Jansson, and inserts selected numeric and
  * string fields into the provided hash table.
  *
- * String fields are validated to ensure they do not contain control characters.
+ * Missing, null, and empty optional fields are skipped. String fields that are
+ * present are validated to ensure they do not contain control characters.
  *
  * @param[in,out] values_table Pointer to a PMIx hash table to populate with extracted values.
 
@@ -379,8 +384,12 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table)
 
     /* We've extracted a valid "jobs" section. now extract the complex numeric
     * fields that have "set", "infinite", and "number" subfields */
-    for(size_t i = 0; i < NUM_OBJ_SUBFIELD_COUNT; i++) {
+    for(size_t i = 0; i < NUM_OBJ_FIELD_COUNT; i++) {
         err = prte_ras_slurm_get_json_numobj_field(job, num_obj_fields[i], values_table);
+        if (PRTE_ERR_NOT_FOUND == err) {
+            err = PRTE_SUCCESS;
+            continue;
+        }
         if (PRTE_SUCCESS != err) {
             PRTE_ERROR_LOG(err);
             goto cleanup;
@@ -393,7 +402,10 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table)
 
         json_t *str_field = json_object_get(job, str_fields[i]);
 
-        if(NULL == str_field || !json_is_string(str_field)) {
+        if(NULL == str_field || json_is_null(str_field)) {
+            continue;
+        }
+        if(!json_is_string(str_field)) {
             err = PRTE_ERR_JSON_PARSE_FAILURE;
             PRTE_ERROR_LOG(err);
             goto cleanup;
@@ -402,6 +414,10 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table)
         const char *str = json_string_value(str_field);
         size_t str_len = json_string_length(str_field);
         bool has_control_chars;
+
+        if (0 == str_len) {
+            continue;
+        }
 
         /* Do not accept string if contains control characters */
         err = prte_ras_slurm_token_has_control_chars(str, str_len, &has_control_chars);
