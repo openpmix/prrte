@@ -214,9 +214,42 @@ the framework makes sense:
   which succeeds when the installed PMIx advertises `PMIX_CAP_GROUP_FT`.
   Any new group-FT code must live behind that guard, and you must build
   against a new-enough PMIx (and re-run `autogen.pl`) to exercise it.
+- **Every entry-point handler owns its caddy/op — release it on *all*
+  paths.** `fence`/`group`/`xcast_nb` each allocate a heap object
+  (`prte_pmix_fence_caddy_t`, `prte_pmix_grp_caddy_t`, or the xcast `op_t`),
+  thread-shift it to the handler, and cache only the *callback pointers*
+  (`cbfunc`/`cbdata`) into the long-lived tracker. The caddy/op itself is
+  therefore consumed by the handler and must be `PMIX_RELEASE`d before it
+  returns — on the success path just as much as the error paths. It is not
+  parked on any list and the tracker does not own it, so a missing release
+  is a per-collective leak in a hot path (this exact bug existed in
+  `begin_xcast`, the non-cancel `group()` returns, and `fence_recv`'s
+  `info` array). When you add a return to one of these handlers, ask "what
+  did I allocate that nothing else owns yet?" and free it.
+- **Unpack failures must bail, not fall through.** The recv handlers start
+  by unpacking a signature into a NULL-initialized pointer; on failure the
+  unpack helper leaves that pointer NULL. Every such failure must `return`
+  immediately — the very next step dereferences the signature, so a logged
+  error without a return is a NULL-deref crash on a truncated/corrupt RML
+  message.
 - **Standard PRRTE rules apply:** `prte_config.h` first, constant-on-left
   comparisons, braces on every block, `PRTE_ERROR_LOG`/`PMIX_ERROR_LOG`
   for unexpected errors, no new compiler warnings.
+
+---
+
+## Testing
+
+A structural unit test lives at
+[`test/unit/grpcomm/test_grpcomm.c`](../../../test/unit/grpcomm/) and is
+wired into `make check`. It cannot drive a real collective (that needs a
+live DVM — use the integration/dockerswarm harnesses), but it guards the
+invariants that hold with no DVM: the direct module's vtable is fully
+wired, the component is named `direct`, `prte_grpcomm_base.context_id`
+starts at `UINT32_MAX`, and every signature/tracker/caddy class
+constructs with the documented defaults (all rollup counters zero, the
+group tracker's info-lists opened) and destructs without leaking or
+crashing. Extend it when you add a class or change a constructor default.
 
 ---
 
