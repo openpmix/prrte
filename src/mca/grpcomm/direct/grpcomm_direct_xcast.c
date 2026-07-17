@@ -168,6 +168,7 @@ int prte_grpcomm_direct_xcast_nb(prte_rml_tag_t tag, pmix_data_buffer_t *msg,
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIx_Data_buffer_destruct(&msg_copy);
+            PMIX_RELEASE(op);
             return rc;
         }
 
@@ -452,6 +453,7 @@ static void begin_xcast(int sd, short args, void* cbdata){
     if (PMIX_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(xcast_msg);
+        PMIX_RELEASE(op);
         return;
     }
 
@@ -484,8 +486,14 @@ static void begin_xcast(int sd, short args, void* cbdata){
             PMIX_RELEASE(pc);
         }
         PMIX_DATA_BUFFER_RELEASE(xcast_msg);
+        PMIX_RELEASE(op);
         return;
     }
+
+    /* the initiating op has now been packed and relayed to the master; it is
+     * not the op we track and complete (that one is built fresh on receipt),
+     * so discard it here */
+    PMIX_RELEASE(op);
 }
 
 static void send_ack_msg(
