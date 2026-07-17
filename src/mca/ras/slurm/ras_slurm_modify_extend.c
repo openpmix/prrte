@@ -155,7 +155,8 @@ static void localrelease(void *cbdata)
  *
  * Looks up a value in the provided hash table and, if present and usable,
  * formats it according to the given format string and appends it to the
- * sbatch argv array.
+ * sbatch argv array. Missing and empty values return PRTE_ERR_NOT_FOUND so
+ * callers can omit optional Slurm attributes.
  *
  * @param[in] fields
  *     Hash table containing job configuration data.
@@ -199,7 +200,7 @@ static int prte_ras_slurm_make_sbatch_arg(pmix_hash_table_t *fields,
     }
 
     if(NULL == stored_val || '\0' == stored_val[0]) {
-        return PRTE_ERR_DATA_VALUE_NOT_FOUND;
+        return PRTE_ERR_NOT_FOUND;
     }
 
     if(obj_num) {
