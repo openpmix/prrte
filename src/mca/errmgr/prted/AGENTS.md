@@ -195,17 +195,19 @@ daemon must die but a bare `exit()` would give the user no message. It:
   The 5-second `wakeup` timer is the only guarantee of exit when
   messaging is itself broken; a refactor that skips it on some path can
   wedge a daemon forever.
-- **Watch the send-failure error paths.** Several branches inside the
+- **Every `proc_errors` exit now routes through `cleanup`; keep it that
+  way.** The handler acquires the caddy up front and every exit must
+  release it. All exits — including the *pack*-error branches inside the
   per-proc report blocks (`CALLED_ABORT`, `TERM_NON_ZERO`, the
   `keep_going:` abnormal-termination report, and the all-terminated
-  block) still `return` directly on a *pack* error without releasing the
-  caddy — they predate the `goto cleanup` convention and leak the caddy
-  on those rare error paths. If you touch those blocks, route them
-  through `cleanup` instead. Two leaks that were *not* on error paths
-  have already been repaired and should stay that way: the
-  `prte_finalizing` early return in `job_errors` now releases the caddy
-  (it mirrors the same fix made in the `dvm` component), and the normal
-  "all procs terminated" completion path in `proc_errors` now
-  `goto cleanup`s rather than bare-`return`ing after releasing `jdata`.
+  block), which formerly bare-`return`ed and leaked the caddy — now
+  `goto cleanup`. So do the `prte_finalizing` early return in
+  `job_errors` (which releases the caddy inline, mirroring the same fix
+  in the `dvm` component) and the normal "all procs terminated"
+  completion path (which `goto cleanup`s *after* releasing `jdata`).
   When adding a new exit, prefer `goto cleanup` unless you have already
-  released or transferred ownership of the caddy on that path.
+  released or transferred ownership of the caddy on that path. The
+  send-failure paths (`PMIX_RELEASE(alert)` after a failed
+  `PRTE_RML_RELIABLE_SEND`) deliberately fall through rather than jump —
+  they still reach `cleanup`. Note `prted_abort` is a different function
+  with no caddy; its bare `return`s are correct.
