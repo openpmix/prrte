@@ -71,7 +71,10 @@ static int rte_init(int argc, char **argv)
     }
 
     /* Start by getting a unique name */
-    slurm_set_name();
+    if (PRTE_SUCCESS != (ret = slurm_set_name())) {
+        error = "slurm_set_name";
+        goto error;
+    }
 
     if (PRTE_SUCCESS != (ret = prte_ess_base_prted_setup())) {
         PRTE_ERROR_LOG(ret);
@@ -122,7 +125,11 @@ static int slurm_set_name(void)
     vpid = strtoul(prte_ess_base_vpid, NULL, 10);
 
     /* fix up the vpid and make it the "real" vpid */
-    slurm_nodeid = atoi(getenv("SLURM_NODEID"));
+    if (NULL == (tmp = getenv("SLURM_NODEID"))) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
+    }
+    slurm_nodeid = atoi(tmp);
     PRTE_PROC_MY_NAME->rank = vpid + slurm_nodeid;
 
     PMIX_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:slurm set name to %s",

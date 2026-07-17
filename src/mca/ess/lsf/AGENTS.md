@@ -81,12 +81,15 @@ Like `pals` (and unlike `slurm`), `lsf` does **not** rewrite
 - **The `- 1` is not a typo.** `LSF_PM_TASKID` counts from 1; dropping
   the decrement shifts every daemon's rank by one and collides ranks.
   This is the classic bug to avoid here.
+- **`LSF_PM_TASKID` is `NULL`-guarded before `atoi`.** `lsf_set_name`
+  checks `getenv("LSF_PM_TASKID")` for `NULL` and returns
+  `PRTE_ERR_NOT_FOUND` if it is missing, rather than calling
+  `atoi(NULL)` (undefined behavior). The LSF process manager sets the
+  variable when it launches the daemon, so this only fires in a
+  misconfigured launch — keeping it a clean error instead of a crash.
 - **Build gating.** Any new LSF symbol must be covered by
   `PRTE_CHECK_LSF` in `configure.m4`, or the build breaks on non-LSF
   systems. The wrapper flags (`ess_lsf_CPPFLAGS`/`LDFLAGS`/`LIBS`) are
   substituted from there.
-- **Minor quirk:** `rte_finalize` has a stray trailing empty statement
-  (`;` after `return`); harmless dead code, but if you touch the file it
-  is worth cleaning up.
 - Daemon-only. LSF allocation/launch integration lives in the `ras`/`plm`
   frameworks; this component is only the daemon's own RTE bring-up.

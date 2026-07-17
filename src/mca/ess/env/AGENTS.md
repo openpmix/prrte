@@ -91,10 +91,11 @@ bootstrapped ordinary daemon also comes up through `env`.
 - **No vpid offset here — that is deliberate.** If you find yourself
   wanting to add `+ nodeid`, you are writing an RM module, not editing
   `env`. Keep `env` the verbatim-identity default.
-- **Return codes from `set_name` are swallowed.** `rte_init` calls
-  `env_set_name()` without checking its return (like the other daemon
-  modules). A missing nspace/vpid still logs via `PRTE_ERROR_LOG`, but
-  the subsequent `prted_setup` is what will actually fail loudly. If you
-  tighten this, tighten it consistently across all daemon modules.
+- **`set_name`'s return code is checked.** `rte_init` now aborts to its
+  `error:` label if `env_set_name()` fails (a missing `nspace`/`vpid`
+  yields `PRTE_ERR_NOT_FOUND`), rather than falling through into
+  `prted_setup` with a half-built identity. All four daemon modules
+  (`env`/`slurm`/`pals`/`lsf`) do this consistently — keep it that way if
+  you add another.
 - **This is the model to copy.** A new generic-daemon variant should
   follow this exact shape: `std_prolog` → `set_name` → `prted_setup`.

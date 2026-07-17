@@ -91,7 +91,10 @@ static int rte_init(int argc, char **argv)
     }
 
     /* Start by getting a unique name from the enviro */
-    env_set_name();
+    if (PRTE_SUCCESS != (ret = env_set_name())) {
+        error = "env_set_name";
+        goto error;
+    }
 
     /* if I am a daemon, complete my setup using the
      * default procedure
