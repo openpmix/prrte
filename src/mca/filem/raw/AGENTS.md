@@ -260,3 +260,76 @@ already resilient for the not-in-flight case.
   `raw_init` rather than using the base `filem_base_receive.c` service;
   don't start the base comm service alongside it or the two will collide
   on the tag.
+- **On an error, unlink an object from its list *before* releasing it.**
+  Several receive-side error paths add an `incoming` (or `xfer`) to a
+  file-scoped list and, on a later failure, must both
+  `pmix_list_remove_item` it and `PMIX_RELEASE` it — releasing without
+  removing leaves a dangling pointer that the next chunk walks. The
+  chunk-0 `recv_files` failure paths (dirpath-create and fd-open) now do
+  this consistently; keep new bailouts consistent too. Likewise
+  `recv_ack` must `free()` the unpacked filename on the no-match fall-off,
+  and the `write_handler` EOF marker output must be `PMIX_RELEASE`d before
+  finalize — both were leaks.
+
+- **On open failure, `raw_preposition_files` records the error and lets
+  the async path report it — it must NOT free the `outbound`.** Files are
+  threadshifted to `send_chunk` as the loop walks them, so an already-
+  queued `xfer` has a live `send_chunk` event on the progress thread and
+  an open fd. If a *later* file fails to `open()`, the fix sets
+  `outbound->status = PRTE_ERR_FILE_OPEN_FAILURE` and `break`s; the queued
+  xfers finish and the completion callback delivers that status (or, if no
+  xfer was queued, the empty-`xfers` tail fires the callback with it).
+  **Do not restore the old behavior of `PMIX_RELEASE`-ing the outbound and
+  returning `PRTE_ERROR` mid-loop** — its destructor drains the queued
+  xfers, so the pending events fire against freed memory (use-after-free,
+  reproducible with `--preload-files good.dat,/nonexistent`), the xfers'
+  fds leak, and the synchronous error return *plus* the eventual callback
+  both drive `PRTE_JOB_STATE_FILES_POSN_FAILED`.
+
+## `create_link` returns SUCCESS only when it means it
+
+`raw_link_local_files` aborts the whole launch if `create_link` returns
+non-success, so two things there are load-bearing:
+
+- **Reset `rc` after tolerating `PMIX_ERR_EXISTS`.** `pmix_os_dirpath_create`
+  returns `PMIX_ERR_EXISTS` (== `-11`) whenever the proc session dir
+  already exists — the normal case. The code tolerates that in the guard,
+  but must then set `rc = PRTE_SUCCESS` before the `symlink()`; otherwise a
+  perfectly good link returns the stale `-11` (which surfaces as
+  `PRTE_ERR_IN_ERRNO`) and every preload launch fails.
+- **The symlink *source* is `top_session_dir`, not `jdata->session_dir`.**
+  `recv_files` writes staged bytes under `prte_process_info.top_session_dir`
+  (per-node, shared across jobs), so `raw_link_local_files` passes that as
+  `create_link`'s `my_dir`. Passing the job dir as the source builds a
+  dangling link one level too deep.
+
+Both were live bugs that made `--preload-files`/`--preload-binary` fail
+outright.
+
+### Link *target*: proc dir for data, **job dir for the binary**
+
+The link *target* (`create_link`'s `path` arg) is normally the per-proc
+session dir `jdata->session_dir/<rank>`, so each proc finds a staged file
+in its own directory. The **EXE is the exception**: `--preload-binary`
+sets `PRTE_APP_SSNDIR_CWD`, and `setup_path` (in `odls`) resolves that to
+the **job** session dir as the cwd shared by every one of the app's procs.
+So a staged binary must be linked into `jdata->session_dir` (not the proc
+dir) for `./<binary>` to resolve. `raw_link_local_files` selects the
+target by `inbnd->type == PRTE_FILEM_TYPE_EXE`; the link is job-wide, and
+`create_link`'s existence check makes the per-proc repeat a no-op.
+
+If you ever change the cwd model (e.g. make `SSNDIR_CWD` per-proc), this
+EXE-target choice has to move in lockstep — the binary must live wherever
+the proc's cwd ends up.
+
+### Verifying true delivery
+
+A single-host run **cannot** prove staging works: the source file is
+already present locally, so the app runs even if `filem` did nothing. The
+real cross-daemon path is covered by the dockerswarm harness
+(`contrib/dockerswarm/run-tests.sh`, the "`--preload-binary` cross-node
+staging" case): it compiles a marker binary on node1 only and runs it on
+node2+node3, where it can only work if the bytes were actually staged and
+linked. Run that (or an equivalent multi-node test) after touching the
+send/receive/link paths — the `test/unit/filem` unit test only exercises
+the base classes and the "none" module, not delivery.
