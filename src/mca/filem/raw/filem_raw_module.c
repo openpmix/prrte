@@ -605,6 +605,11 @@ static int create_link(char *my_dir, char *path, char *link_pt)
             return rc;
         }
         free(basedir);
+        /* the directory now exists (freshly created or already present) -
+         * clear the PMIX_ERR_EXISTS that dirpath_create may have left in
+         * rc, else a successful link is reported to the caller as a failure
+         */
+        rc = PRTE_SUCCESS;
         /* do the symlink */
         if (0 != symlink(mypath, fullname)) {
             pmix_output(0, "%s Failed to symlink %s to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -708,12 +713,26 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
                         PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                                              "%s filem:raw: creating links for file %s",
                                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), inbnd->file));
-                        /* cycle thru the link points and create symlinks to them */
+                        /* Decide where the link lives. The staged bytes were
+                         * written under the node's top_session_dir (see
+                         * recv_files), so that - not the job session_dir - is
+                         * always the symlink *source*. The link *target* is
+                         * normally the per-proc session dir, so each proc finds
+                         * the file in its own cwd. A preloaded binary (EXE) is
+                         * the exception: --preload-binary sets
+                         * PRTE_APP_SSNDIR_CWD, which makes every proc's cwd the
+                         * *job* session dir (see setup_path in odls), so the
+                         * executable must be linked there for "./<binary>" to
+                         * resolve. That link is job-wide, so create_link's
+                         * existence check makes the repeat across procs a no-op.
+                         */
+                        char *linkdir = (PRTE_FILEM_TYPE_EXE == inbnd->type) ? session_dir : path;
                         for (j = 0; NULL != inbnd->link_pts[j]; j++) {
                             if (PRTE_SUCCESS
-                                != (rc = create_link(session_dir, path, inbnd->link_pts[j]))) {
+                                != (rc = create_link(prte_process_info.top_session_dir, linkdir,
+                                                     inbnd->link_pts[j]))) {
                                 PRTE_ERROR_LOG(rc);
-                                free(files);
+                                PMIx_Argv_free(files);
                                 free(path);
                                 return rc;
                             }
