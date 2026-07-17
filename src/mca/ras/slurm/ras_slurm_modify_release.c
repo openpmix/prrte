@@ -42,6 +42,7 @@ static int prte_ras_slurm_count_matching_session_nodes(prte_session_t *session, 
 static int prte_ras_slurm_build_survivor_list(prte_session_t *session, char **nodes_to_remove, char ***survivors);
 static int prte_ras_slurm_shrink_job_to_survivors(const char *slurm_jobid, char **survivor_nodes, char *err_msg, size_t err_msg_size);
 static void prte_ras_slurm_cleanup_resize_scripts(const char *slurm_jobid);
+static void prte_ras_slurm_exclude_shrunk_nodes(prte_shrink_campaign_t *campaign);
 
 static void localrelease(void *cbdata)
 {
@@ -60,6 +61,39 @@ static bool prte_ras_slurm_session_is_dynamic(prte_session_t *session)
 {
     return NULL != session &&
            PRTE_FLAG_TEST(session, PRTE_SESSION_FLAG_DYNAMIC);
+}
+
+/**
+ * @brief Withhold scheduler-released nodes from later DVM grows.
+ *
+ * Generic DVM shrink leaves detached nodes in the global node pool because a
+ * RAS implementation may retain the underlying allocation. Slurm release
+ * campaigns relinquish those resources, so keep their persistent node objects
+ * out of the usable pool until a later allocation explicitly adds them again.
+ *
+ * @param[in] campaign Completed Slurm-backed shrink campaign.
+ */
+static void prte_ras_slurm_exclude_shrunk_nodes(prte_shrink_campaign_t *campaign)
+{
+    prte_job_t *daemons;
+    prte_proc_t *dproc;
+
+    if (NULL == campaign) {
+        return;
+    }
+
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    if (NULL == daemons) {
+        return;
+    }
+
+    for (int i = 0; i < campaign->ntargets; i++) {
+        dproc = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs,
+                                                            campaign->targets[i]);
+        if (NULL != dproc && NULL != dproc->node) {
+            dproc->node->state = PRTE_NODE_STATE_NOT_INCLUDED;
+        }
+    }
 }
 
 /**
@@ -479,6 +513,8 @@ void prte_ras_slurm_shrink_complete(prte_shrink_campaign_t *campaign)
     if (NULL == found) {
         return;
     }
+
+    prte_ras_slurm_exclude_shrunk_nodes(campaign);
 
     PMIX_LIST_FOREACH(action, &found->actions, prte_ras_slurm_release_action_t) {
         prte_session_stack_item_t *session_item;
