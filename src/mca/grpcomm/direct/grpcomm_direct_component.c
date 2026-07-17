@@ -70,7 +70,7 @@ PMIX_CLASS_INSTANCE(prte_grpcomm_direct_fence_signature_t,
                     pmix_object_t,
                     scon, sdes);
 
-static void sgcon(prte_grpcomm_direct_group_signature_t *p)\
+static void sgcon(prte_grpcomm_direct_group_signature_t *p)
 {
     p->op = PMIX_GROUP_NONE;
     p->groupID = NULL;
