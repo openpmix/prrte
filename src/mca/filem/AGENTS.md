@@ -175,6 +175,15 @@ module made entirely of the `prte_filem_base_none_*` functions from
 when file staging is disabled or unselected — pre-positioning simply
 does nothing and the job proceeds.
 
+**Every slot must be wired, including `fault_handler`.** The none module
+carries a `prte_filem_base_none_fault_handler` no-op, because
+`routed_radix.c` calls `prte_filem.fault_handler(status)`
+**unconditionally** on every daemon-fault recovery — with no NULL guard.
+A none module that left the slot NULL (as it historically did) crashed
+the DVM the first time a daemon failed while filem was unselected. If you
+add a field to the module vtable, give the none module a no-op for it and
+confirm no unconditional caller dereferences a NULL slot.
+
 ### The dormant base RML service (`filem_base_receive.c`)
 
 `base.h` declares a small RML service — `prte_filem_base_comm_start()`,
@@ -198,6 +207,15 @@ effectively dead today — accurate to note, and a place to be careful:
 if the base service were ever started. The global
 `prte_filem_base_is_active` bool is likewise defined but currently
 unused.
+
+Because it is dead code it accumulated latent bugs; two were recently
+corrected and are worth knowing if you ever revive it. `comm_stop`'s
+"already stopped?" guard was inverted (`if (recv_issued)` instead of
+`if (!recv_issued)`), so it early-returned without ever cancelling the
+recv. And `filem_base_process_get_remote_path_cmd` leaked the unpacked
+`filename` on the `getcwd`-failure path (it `return`ed instead of
+`goto CLEANUP`). If you start posting this service for real, audit its
+error paths first.
 
 ---
 
@@ -256,6 +274,30 @@ positioning and every chunk sent/received; ≥10 traces per-proc symlink
 creation and archive path enumeration. A stuck job at `VM_READY` almost
 always means a preposition callback that never fired or an ack that never
 arrived from a daemon.
+
+---
+
+## Testing
+
+The staging machinery (`raw_preposition_files`, the daemon receive/write
+path, `raw_link_local_files`) is asynchronous, progress-thread,
+multi-node I/O and needs a live DVM — exercise it with the
+`--preload-binary`/`--preload-files` smoke tests above and the
+integration harnesses.
+
+What *is* unit-testable with no DVM lives in
+[`test/unit/filem/test_filem.c`](../../../test/unit/filem/) (wired into
+`make check`):
+
+- the three request classes (`process_set`/`file_set`/`request`) —
+  construct-to-defaults and clean destruct/drain;
+- the default **"none" module** — every slot is a success-returning
+  no-op, `preposition_files` fires its completion callback, and
+  `fault_handler` is non-NULL and callable (the regression pin for the
+  `routed_radix.c` crash described above).
+
+The test opens the framework but deliberately does **not** run
+`prte_filem_base_select()`, so `prte_filem` stays the none module.
 
 ---
 

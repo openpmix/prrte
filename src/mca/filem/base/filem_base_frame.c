@@ -39,6 +39,7 @@
 PRTE_EXPORT prte_filem_base_module_t prte_filem
     = {.filem_init = prte_filem_base_module_init,
        .filem_finalize = prte_filem_base_module_finalize,
+       .fault_handler = prte_filem_base_none_fault_handler,
        .put = prte_filem_base_none_put,
        .put_nb = prte_filem_base_none_put_nb,
        .get = prte_filem_base_none_get,
