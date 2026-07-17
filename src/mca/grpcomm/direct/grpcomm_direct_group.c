@@ -292,6 +292,7 @@ static void group(int sd, short args, void *cbdata)
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DESTRUCT(&sig);
+                goto error;
             }
 
         } else if (PMIX_CHECK_KEY(&cd->directives[i], PMIX_LOCAL_COLLECTIVE_STATUS)) {
