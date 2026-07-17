@@ -825,17 +825,22 @@ REPORT_ERROR:
     return rc;
 }
 
-static int setup_path(prte_app_context_t *app, char **wdir)
+static int setup_path(prte_job_t *job, prte_app_context_t *app, char **wdir)
 {
     int rc = PRTE_SUCCESS;
     char dir[PRTE_PATH_MAX];
     char *session_dir;
     bool usercwd = false;
-    prte_job_t *job;
 
     if (prte_get_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD, NULL, PMIX_BOOL)) {
-        /* move us to that location */
-        job = (prte_job_t*)app->job;
+        /* move us to that location. Use the job handed in by our caller: the
+         * app->job back-pointer is a raw pointer that is never serialized into
+         * the launch message, so it is NULL on any daemon that unpacked this
+         * job - dereferencing it segfaults (it is only set on the HNP).
+         */
+        if (NULL == job) {
+            return PRTE_ERROR;
+        }
         session_dir = job->session_dir;
         if (NULL == session_dir) {
             // cannot do it
@@ -1389,7 +1394,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         /* setup the working directory for this app - will jump us
          * to that directory
          */
-        if (PRTE_SUCCESS != (rc = setup_path(app, &app->cwd))) {
+        if (PRTE_SUCCESS != (rc = setup_path(jobdat, app, &app->cwd))) {
             PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                  "%s odls:launch:setup_path failed with error %s(%d)",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc), rc));
@@ -2234,7 +2239,7 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
     }
 
     /* setup the path */
-    if (PRTE_SUCCESS != (rc = setup_path(app, &wdir))) {
+    if (PRTE_SUCCESS != (rc = setup_path(jobdat, app, &wdir))) {
         PRTE_ERROR_LOG(rc);
         if (NULL != wdir) {
             free(wdir);

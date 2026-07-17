@@ -401,6 +401,14 @@ computed proc state.
 - **Locality is `parent == my vpid`.** A proc is "local" iff its `parent`
   daemon vpid equals this daemon's rank. Getting the wireup wrong silently
   launches procs on the wrong node or not at all.
+- **Raw back-pointers on unpacked objects are NULL on the daemon.** Fields
+  like `prte_app_context_t.job` are only set on the HNP (in `ess/hnp` and
+  the dynamic-spawn path); they are not serialized into the launch message,
+  so on any daemon that rebuilt the job via `construct_child_list` they are
+  NULL. Never dereference `app->job` (or similar back-pointers) in a
+  daemon-side path — `setup_path` did, and `--preload-binary` (which sets
+  `PRTE_APP_SSNDIR_CWD`) segfaulted on it. Get the job from the caller,
+  which already holds `jobdat`, or via `prte_get_job_data_object(nspace)`.
 - **`prte_local_children` is the single source of truth** on a daemon.
   Adding/removing a child there, and its `PRTE_PROC_FLAG_*` flags
   (`LOCAL`, `ALIVE`, `WAITPID`, `IOF_COMPLETE`, `REG`), gate the whole
