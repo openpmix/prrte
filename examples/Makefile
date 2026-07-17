@@ -65,7 +65,8 @@ EXAMPLES = \
 	client-threaded \
 	dynamic-dep \
 	abort \
-	elastic
+	elastic \
+	slurm/elastic-coordination
 
 all: $(EXAMPLES)
 
