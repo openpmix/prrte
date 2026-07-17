@@ -1253,7 +1253,11 @@ int prte(int argc, char *argv[])
         papps[n].cmd = strdup(app->app.cmd);
         papps[n].argv = PMIx_Argv_copy(app->app.argv);
         papps[n].env = PMIx_Argv_copy(app->app.env);
-        papps[n].cwd = strdup(app->app.cwd);
+        /* cwd is deliberately left NULL when --set-cwd-to-session-dir was
+         * given (the session dir becomes the cwd on the backend via the
+         * PMIX_SET_SESSION_CWD directive), so guard against strdup(NULL)
+         */
+        papps[n].cwd = (NULL == app->app.cwd) ? NULL : strdup(app->app.cwd);
         papps[n].maxprocs = app->app.maxprocs;
         PMIX_INFO_LIST_CONVERT(ret, app->info, &darray);
         if (PMIX_SUCCESS != ret) {
