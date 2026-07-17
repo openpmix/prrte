@@ -58,6 +58,8 @@ test/unit/ess/Makefile
 test/unit/ess/test_ess
 test/unit/filem/Makefile
 test/unit/filem/test_filem
+test/unit/grpcomm/Makefile
+test/unit/grpcomm/test_grpcomm
 static-components.h
 static-components.h.new.extern
 static-components.h.new.struct
