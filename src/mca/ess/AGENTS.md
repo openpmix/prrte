@@ -197,7 +197,13 @@ plus a call to the base's `prted_setup`.
     unknown or non-forwardable signals via `help-ess-base.txt`, and
     appends `prte_ess_base_signal_t` items onto the global
     `prte_ess_base_signals` list. Guarded by a `signals_added` latch so
-    it only runs once.
+    it only runs once. The forwardability (`can_forward`) gate is
+    enforced on **both** input forms — a non-forwardable signal is
+    rejected whether given by name (`SIGTERM`) or by number (`15`); keep
+    the two parse branches in sync. Note the latch is set *before*
+    parsing, so a call that fails partway still latches — the tool
+    callers (`prte.c`, `prun_common.c`) abort on error, so this is
+    benign in practice but worth knowing when testing.
   - `prte_ess_base_signal_t` — a `pmix_list_item_t` subclass
     (`signame`/`signal`/`can_forward`), instantiated here with
     constructor/destructor. The actual libevent signal handlers that
