@@ -312,5 +312,19 @@ deletes the tracker — so a cancel/abort tears down the collective cleanly
   in-flight fence when a daemon fails (TODO to make it resilient). If you
   are adding fence resilience, that is the place — do not weaken it into a
   silent no-op.
+- **Free every allocation the handler still owns before it returns.** The
+  entry-point handlers (`begin_xcast`, `fence`, `group`) own the caddy/op
+  they were thread-shifted; the recv handlers own the info arrays / darrays
+  they unpack. The tracker caches only `cbfunc`/`cbdata`, never the caddy,
+  so the handler is the last owner. Historic leaks here — `begin_xcast`
+  never releasing the initiating `op_t`, the `group()` success returns
+  never releasing `cd`, and `fence_recv` never freeing its unpacked `info`
+  on the HNP-complete and intermediate paths — were all "return added, free
+  forgotten" mistakes. Trace each new `return` back to what it strands.
+- **`fence_recv`/`grp_recv` must `return` on a signature unpack failure.**
+  The signature pointer is NULL-initialized and left NULL on failure, and
+  the code immediately below dereferences it (`get_tracker(sig, …)`,
+  `sig->op`). Logging without returning turns a corrupt RML message into a
+  daemon crash.
 - Standard PRRTE rules: `prte_config.h` first, constant-on-left, braces
   everywhere, `PMIX_ERROR_LOG`/`PRTE_ERROR_LOG`, no new warnings.
