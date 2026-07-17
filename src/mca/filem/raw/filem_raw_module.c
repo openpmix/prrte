@@ -478,9 +478,20 @@ static int raw_preposition_files(prte_job_t *jdata,
             pmix_output(0, "%s CANNOT ACCESS FILE %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         fs->local_target);
             PMIX_RELEASE(item);
-            pmix_list_remove_item(&outbound_files, &outbound->super);
-            PMIX_RELEASE(outbound);
-            return PRTE_ERROR;
+            /* record the failure and stop queueing further files, but do NOT
+             * tear down the outbound here: files already handed to send_chunk
+             * still have live events queued on the progress thread, and their
+             * xfers hold open fds. Freeing the outbound now would drain those
+             * xfers (use-after-free on the queued events, leaked fds) and
+             * would also double-drive FILES_POSN_FAILED, since the caller
+             * treats our error return as a failure *and* the completion
+             * callback would fire again. Instead let the async path report
+             * the error: the callback delivers outbound->status once every
+             * queued xfer has acked (or immediately below if none were
+             * queued).
+             */
+            outbound->status = PRTE_ERR_FILE_OPEN_FAILURE;
+            break;
         }
         /* set the flags to non-blocking */
         if ((flags = fcntl(fd, F_GETFL, 0)) < 0) {
@@ -545,19 +556,26 @@ static int raw_preposition_files(prte_job_t *jdata,
         PRTE_PMIX_THREADSHIFT(xfer, prte_event_base, send_chunk);
         PMIX_RELEASE(item);
     }
-    PMIX_DESTRUCT(&fsets);
+    /* a mid-loop break (open failure) can leave entries on fsets, so use
+     * PMIX_LIST_DESTRUCT to release any that remain
+     */
+    PMIX_LIST_DESTRUCT(&fsets);
 
-    /* check to see if anything remains to be sent - if everything
-     * is a duplicate, then the list will be empty
+    /* check to see if anything remains to be sent - the list is empty if
+     * every file was a duplicate, or if the very first file failed to open
      */
     if (0 == pmix_list_get_size(&outbound->xfers)) {
+        /* capture the status before releasing the outbound: it is a failure
+         * only if an open() failed above, success if all were duplicates
+         */
+        int st = outbound->status;
         PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
-                             "%s filem:raw: all duplicate files - no positioning reqd",
+                             "%s filem:raw: nothing to position (all duplicates or open failed)",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         pmix_list_remove_item(&outbound_files, &outbound->super);
         PMIX_RELEASE(outbound);
         if (NULL != cbfunc) {
-            cbfunc(PRTE_SUCCESS, cbdata);
+            cbfunc(st, cbdata);
         }
         return PRTE_SUCCESS;
     }
