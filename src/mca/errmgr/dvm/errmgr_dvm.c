@@ -325,7 +325,7 @@ static void proc_errors(int fd, short args, void *cbdata)
                     for (i = 0; i < prte_local_children->size; i++) {
                         proct = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
                         if (NULL != proct &&
-                            PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_ALIVE) &&
+                            PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE) &&
                             proct->state < PRTE_PROC_STATE_UNTERMINATED) {
                             /* at least one is still alive */
                             PMIX_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
@@ -360,23 +360,34 @@ static void proc_errors(int fd, short args, void *cbdata)
                                    PRTE_NAME_PRINT(proc), pptr->node->name);
                 }
 
-                if(PRTE_SUCCESS == prte_rml_route_lost(proc->rank)){
-                    if(0 != PRTE_PROC_MY_NAME->rank) goto cleanup;
+                if (PRTE_SUCCESS == prte_rml_route_lost(proc->rank)) {
+                    if (0 != PRTE_PROC_MY_NAME->rank) {
+                        goto cleanup;
+                    }
                     /* HNP marks all procs on the lost daemon's node as gone */
-                    for(int ji = 0; ji < prte_job_data->size; ji++){
-                        prte_job_t* j = (prte_job_t*)
+                    for (int ji = 0; ji < prte_job_data->size; ji++) {
+                        prte_job_t *j = (prte_job_t *)
                             pmix_pointer_array_get_item(prte_job_data, ji);
-                        if(NULL == j || NULL == j->procs) continue;
-                        if(PMIX_CHECK_NSPACE(j->nspace, proc->nspace)) continue;
-                        for(int pi = 0; pi < j->procs->size; pi++){
-                            prte_proc_t* p = (prte_proc_t*)
+                        if (NULL == j || NULL == j->procs) {
+                            continue;
+                        }
+                        if (PMIX_CHECK_NSPACE(j->nspace, proc->nspace)) {
+                            continue;
+                        }
+                        for (int pi = 0; pi < j->procs->size; pi++) {
+                            prte_proc_t *p = (prte_proc_t *)
                                 pmix_pointer_array_get_item(j->procs, pi);
-                            if(NULL == p || NULL == p->node) continue;
-                            if(NULL == p->node->daemon) continue;
-                            if(p->node->daemon->name.rank != proc->rank) continue;
-                            PRTE_ACTIVATE_PROC_STATE(
-                                &p->name, PRTE_PROC_STATE_TERM_WO_SYNC
-                            );
+                            if (NULL == p || NULL == p->node) {
+                                continue;
+                            }
+                            if (NULL == p->node->daemon) {
+                                continue;
+                            }
+                            if (p->node->daemon->name.rank != proc->rank) {
+                                continue;
+                            }
+                            PRTE_ACTIVATE_PROC_STATE(&p->name,
+                                                     PRTE_PROC_STATE_TERM_WO_SYNC);
                         }
                     }
                     goto cleanup;
@@ -658,7 +669,7 @@ static void check_send_notification(prte_job_t *jdata,
     pmix_data_buffer_t pbkt;
     pmix_data_range_t range = PMIX_RANGE_CUSTOM;
 
-    pmix_output_verbose(5, prte_state_base_framework.framework_output,
+    pmix_output_verbose(5, prte_errmgr_base_framework.framework_output,
                         "%s errmgr:dvm:sending notification %s affected proc %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PMIx_Error_string(event),

@@ -217,3 +217,14 @@ application uses to learn a peer died without the whole job being killed.
   true — which silently forced the `FAILED_TO_LAUNCH` case down the
   `FAILED_TO_START` branch. When you extend a state switch, always
   compare `state` explicitly.
+- **In a liveness loop, test the iterated child, not the failed peer.**
+  The daemon ordered-termination arm of `proc_errors` walks
+  `prte_local_children` looking for one still `PRTE_PROC_FLAG_ALIVE`
+  before it decides the node is empty and activates
+  `DAEMONS_TERMINATED`. That test must read the loop variable
+  (`proct`) — an earlier version tested the *failed daemon* `pptr`,
+  whose `ALIVE` flag had just been cleared a few lines above, so the
+  guard was always false and the DVM could declare itself done while a
+  local child was still alive. The two sibling loops (the application
+  arm here, and the daemon `proc_errors` loop in the `prted` component)
+  both correctly test the iterated child; keep all three consistent.
