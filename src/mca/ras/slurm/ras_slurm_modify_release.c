@@ -435,8 +435,16 @@ int prte_ras_slurm_release_allocation(prte_session_t *session)
     char err_msg[PRTE_SLURM_ERR_STR_MAX_LEN + 1] = {0};
     int err;
 
-    if (NULL == session || NULL == session->alloc_refid ||
-        NULL == prte_ras_slurm_find_session_item_by_alloc_id(session->alloc_refid)) {
+    if (NULL == session || NULL == session->alloc_refid) {
+        return PRTE_ERR_TAKE_NEXT_OPTION;
+    }
+
+    /* The session stack is the authoritative record of allocations whose
+     * lifetime is still managed by this component.  A normal full release
+     * removes the entry before destroying the session and cancels the copied
+     * Slurm job ID explicitly afterward.  Do not cancel it a second time from
+     * the session destructor. */
+    if (NULL == prte_ras_slurm_find_session_item_by_alloc_id(session->alloc_refid)) {
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
@@ -487,19 +495,44 @@ void prte_ras_slurm_shrink_complete(prte_shrink_campaign_t *campaign)
         }
 
         if (PRTE_RAS_SLURM_RELEASE_FULL_JOB == action->action) {
+            prte_session_t *session = session_item->session;
+            char *job_id;
             int node_count = session_item->nodes_in_session;
 
-            if (!prte_ras_slurm_session_is_dynamic(session_item->session)) {
+            if (!prte_ras_slurm_session_is_dynamic(session)) {
                 pmix_output(0, "ras:slurm:shrink_complete: refusing to terminate job %s "
                                "because it was not dynamically added by PRRTE.",
                             action->job_id);
                 continue;
             }
 
-            PMIX_RELEASE(session_item->session);
+            job_id = strdup(action->job_id);
+            if (NULL == job_id) {
+                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                continue;
+            }
+
+            /* Stop managing the allocation before releasing the session.  Its
+             * destructor calls prte_ras_slurm_release_allocation(), which uses
+             * this stack as the authority for whether it should issue scancel.
+             * Removing the item first therefore lets the session be completely
+             * torn down before the external Slurm job is killed. */
             pmix_list_remove_item(prte_slurm_session_stack, &session_item->super);
+            session_item->session = NULL;
             prte_num_allocated_nodes -= node_count;
+            PMIX_RELEASE(session);
             PMIX_RELEASE(session_item);
+
+            /* Killing the Slurm job is deliberately the final operation: a
+             * resulting daemon departure cannot race with session teardown. */
+            err = prte_ras_slurm_kill_job(job_id, err_msg, sizeof(err_msg));
+            if (PRTE_ERR_SLURM_CANCEL_FAILURE == err) {
+                pmix_output(0, "ras:slurm:shrink_complete: failed to kill job %s: %s.",
+                            job_id, err_msg);
+            } else if (PRTE_SUCCESS != err) {
+                PRTE_ERROR_LOG(err);
+            }
+            free(job_id);
         } else if (PRTE_RAS_SLURM_RELEASE_PARTIAL_JOB == action->action) {
             pmix_pointer_array_t nodes_in_removal;
             int old_count = session_item->nodes_in_session;
