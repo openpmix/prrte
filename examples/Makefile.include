@@ -73,4 +73,6 @@ EXTRA_DIST += \
         examples/client-threaded.c \
         examples/dynamic-dep.c \
         examples/abort.c \
-        examples/elastic.c
+        examples/elastic.c \
+        examples/slurm/README \
+        examples/slurm/elastic-coordination.c

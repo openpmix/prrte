@@ -1,0 +1,52 @@
+# Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+#                         All rights reserved.
+# $COPYRIGHT$
+
+The files in this directory demonstrate PRRTE elastic DVM coordination in a
+Slurm allocation. They require a PRRTE build with the Slurm RAS component,
+Jansson support, and elastic mode enabled.
+
+elastic-coordination.c:
+A Slurm-specific PMIx client for exercising dynamic allocation changes. It
+accepts interactive requests to extend by node count and to shrink by node
+count, allocation ID, or node list. After every request it queries PRRTE's
+allocation state, displays the corresponding Slurm jobs, and uses prun to
+verify reachability across the active DVM.
+
+The client treats the PMIx allocation callback as request acceptance and uses
+allocation queries to observe the resulting state. It does not require the
+application to wait for a PMIX_DVM_IS_READY event because PRRTE coordinates
+launches internally with the DVM launch fence.
+
+Build from the examples directory with:
+
+    make slurm/elastic-coordination
+
+Place the executable on a filesystem shared with the Slurm compute nodes. For
+example:
+
+    cp slurm/elastic-coordination $HOME/slurm-elastic-coordination
+
+Then run inside a Slurm allocation with one initial node:
+
+    export PRTE_MCA_prte_elastic_mode=1
+    salloc -N1
+    srun -N1 -n1 \
+        prterun -np 1 $HOME/slurm-elastic-coordination
+
+At the coord prompt, available commands are:
+
+    extend count N
+    shrink count N
+    shrink alloc SLURM_JOB_ID
+    shrink list NODE1,NODE2
+    prun [ARGS...]
+    refresh
+    quit
+
+The program invokes squeue and prun for diagnostics, so both commands must be
+available in PATH.
+
+The program may not tolerate delays while acquiring additional resources. It
+is therefore best run in a containerized Slurm environment where requested
+resources are available immediately.
