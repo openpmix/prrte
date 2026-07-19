@@ -432,6 +432,44 @@ computed proc state.
   them onto a worker thread.
 - **`chdir` bookkeeping.** `launch_local`/`restart_proc` bounce the daemon's
   cwd per app and must always `chdir` back to `basedir` before returning.
+  `launch_local` establishes `basedir` with `getcwd` at entry; if that fails
+  it must **not** fall through to the shared `chdir(basedir)` cleanup (the
+  buffer is uninitialized) — bail directly.
+- **Every fatal launch error aborts the whole job.** All fatal paths in
+  `launch_local` — `setup_path`, `setup_fork`, `filem`, `check_context_app`,
+  `init_sys_limits`, the `chdir(basedir)`-back failure, the sys-limit
+  giveups, **and** the per-child IOF-setup failures — use the same idiom:
+  flag the directly-affected procs with `PRTE_ODLS_SET_ERROR(job, rc, j)`
+  (or activate the single failing child) **and then**
+  `PRTE_ACTIVATE_JOB_STATE(jobdat, PRTE_JOB_STATE_FAILED_TO_LAUNCH)` before
+  `goto GETOUT`. Failing only *this app's* procs is **not** enough: `goto
+  GETOUT` skips every later app, whose procs stay in `INIT` forever, and on
+  a real daemon the errmgr only reports `FAILED_TO_LAUNCH` once
+  `num_terminated == num_local_procs` — so the job hangs. The job-state
+  activation is what drives the prompt, uniform teardown. Keep new fatal
+  paths on this idiom.
+- **The `child` loop variable is only valid inside the per-child loop.** In
+  `launch_local`, `child` is `NULL` at function entry and, in the per-*app*
+  loop (before the inner per-child loop runs), is either `NULL` (first app)
+  or a **stale** proc left over from the previous app. Error paths in the
+  per-app section (e.g. the `chdir(basedir)`-back failure) must **not**
+  dereference `child` — use the job-abort idiom above.
+- **Every exit from `spawn_proc` must `PMIX_RELEASE(cd)`.** The spawn caddy
+  is `PMIX_NEW`'d in `launch_local` and owned by `spawn_proc`; the success
+  tail, the `errorout:` path, **and** the early `PRTE_JOB_DO_NOT_SPAWN`
+  return all have to release it, or every donotlaunch/mapping-only proc
+  leaks a caddy (plus its `wdir` string).
+- **`setup_path` writes through to `app->cwd`.** `launch_local` calls it as
+  `setup_path(jobdat, app, &app->cwd)`, so it overwrites (and must first
+  free) the app's existing `cwd`; `restart_proc` instead passes a local
+  temp. Don't assume `*wdir` starts NULL.
+- **Blocking base fns own their lock.** `get_add_procs_data` and
+  `construct_child_list` construct a `prte_pmix_lock_t` up front; **every**
+  exit must destruct it (and free any `pmix_info_t`/`PMIX_INFO_LIST` it
+  built). Prefer a single `goto REPORT_ERROR`/cleanup label over a bare
+  `return` in the middle — a stray `return` there both leaks the lock and,
+  on the daemon side, skips the `NEVER_LAUNCHED` activation that keeps the
+  HNP from hanging.
 - Standard PRRTE rules apply: `prte_config.h` first, braces on every block,
   `NULL ==`/constant-on-left comparisons, `PRTE_ERROR_LOG` for unexpected
   errors, no new compiler warnings.
@@ -454,6 +492,30 @@ Useful tuning params: `--prtemca odls_base_num_threads N` /
 `--prtemca odls_base_exec_agent CMD` (wrap every exec),
 `--prtemca odls_base_signal_direct_children_only 1` (don't signal the
 child's whole process group).
+
+---
+
+## Testing
+
+The fork/exec/waitpid/kill lifecycle runs only against real child
+processes inside a live DVM, so most of odls is covered by the
+integration harness — e.g. `prterun -n 4 hostname` (basic launch),
+MPMD (`prterun -n 2 echo a : -n 2 hostname`, which walks the per-app
+`setup_path` loop), and a non-zero exit (`prterun -n 2 sh -c 'exit 3'`,
+which exercises `wait_local_proc`'s status decode).
+
+What runs without a DVM is the **structural** contract, in
+[`test/unit/odls/test_odls.c`](../../../test/unit/odls/) (wired into
+`make check`): the pdefault module vtable is fully wired and reuses the
+base `get_add_procs_data`; the component names itself `"pdefault"`; the
+`PRTE_DAEMON_*` command bytes are pairwise unique; the
+`prte_odls_child_err_t` fatal/warn split holds (NONE == 0, every warn
+code sorts after every fatal code); and the two caddy classes
+(`prte_odls_spawn_caddy_t`, `prte_odls_launch_local_t`) construct with
+the documented NULL/zero defaults and destruct cleanly (both the
+all-NULL and the fully-populated paths). Add structural regression
+guards here; anything that needs a running launch belongs in the
+integration harness.
 
 ---
 
