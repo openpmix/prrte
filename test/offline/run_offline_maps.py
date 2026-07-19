@@ -298,6 +298,14 @@ def parse_map(raw):
         if pm and cur is not None:
             cur.procs.append(Proc(int(pm.group(1)), int(pm.group(2)),
                                   _parse_bound(pm.group(3))))
+    if not nodes:
+        # a JOB MAP block was present (checked above) but not a single node
+        # line matched NODE_RE - the output format is not the simple
+        # user-facing map we parse (e.g. the verbose --display-devel-map
+        # form). Treat that as a parse failure so the caller reports a clean
+        # FAIL rather than handing an empty map to the checkers (which would
+        # divide by zero on the node count).
+        raise ParseError("JOB MAP block present but no node lines parsed")
     return ParsedMap(map_base, map_mods, hm.group(2), hm.group(3), cpu_type,
                      nodes)
 
@@ -655,6 +663,11 @@ def _expected_rank_by_node(node_order, counts_by_name, n):
     rem = dict(counts_by_name)
     sets = {name: set() for name in node_order}
     order = list(node_order)
+    if not order:
+        # no nodes to place onto - nothing to expect (a malformed parse
+        # should already have been caught upstream; guard so we FAIL the
+        # single case cleanly rather than dividing by zero)
+        return sets
     r = 0
     idx = 0
     placed = 0
@@ -1013,7 +1026,14 @@ def main(argv=None):
             n_fail += 1
             continue
 
-        violations = check_case(c, pmap)
+        try:
+            violations = check_case(c, pmap)
+        except Exception as e:  # noqa - one broken case must not abort the run
+            print("FAIL %s checker-error: %s: %s"
+                  % (c.id, type(e).__name__, e))
+            _dump(res)
+            n_fail += 1
+            continue
 
         if (args.update_golden or args.golden) and is_curated_golden(c):
             gp = golden_path(golden_dir, c)
