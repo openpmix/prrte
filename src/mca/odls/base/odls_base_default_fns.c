@@ -1289,7 +1289,6 @@ static void process_envars(prte_job_t *jdata,
     }
 }
 
-
 void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
 {
     prte_app_context_t *app;
@@ -1434,7 +1433,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
              * to flag all the other procs from the app_context as having "not failed"
              * so we can report things out correctly
              */
-            PRTE_ODLS_SET_ERROR(job, PMIX_ERR_SYS_LIMITS_FILES, j);
+            PRTE_ODLS_SET_ERROR(job, rc, j);
             PRTE_ACTIVATE_JOB_STATE(jobdat, PRTE_JOB_STATE_FAILED_TO_LAUNCH);
             goto GETOUT;
         }
@@ -1458,57 +1457,33 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                                  "%s odls:launch:setup_fork failed with error %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));
 
-            /* do not ERROR_LOG this failure - it will be reported
-             * elsewhere. The launch is going to fail. Since we could have
-             * multiple app_contexts, we need to ensure that we flag only
-             * the correct one that caused this operation to fail. We then have
-             * to flag all the other procs from the app_context as having "not failed"
-             * so we can report things out correctly
-             */
-            /* cycle through children to find those for this jobid */
-            for (idx = 0; idx < prte_local_children->size; idx++) {
-                child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, idx);
-                if (NULL == child) {
-                    continue;
-                }
-                if (PMIX_CHECK_NSPACE(job, child->name.nspace) && j == (int) child->app_idx) {
-                    child->exit_code = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
-                    PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);
-                }
-            }
+            /* do not ERROR_LOG this failure - it will be reported elsewhere.
+             * Flag this app's procs as failed (with the correct error code),
+             * then drive the whole job down. Aborting the job as a whole -
+             * rather than just failing this app's procs - is what keeps a
+             * multi-app launch from hanging: any procs belonging to apps we
+             * have not reached yet would otherwise be left in INIT forever,
+             * and on a real daemon the errmgr only reports FAILED_TO_LAUNCH
+             * once every local proc has been accounted for. */
+            PRTE_ODLS_SET_ERROR(job, rc, j);
+            PRTE_ACTIVATE_JOB_STATE(jobdat, PRTE_JOB_STATE_FAILED_TO_LAUNCH);
             goto GETOUT;
         }
 
         /* setup any local files that were prepositioned for us */
         if (PRTE_SUCCESS != (rc = prte_filem.link_local_files(jobdat, app))) {
-            /* cycle through children to find those for this jobid */
-            for (idx = 0; idx < prte_local_children->size; idx++) {
-                child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, idx);
-                if (NULL == child) {
-                    continue;
-                }
-                if (PMIX_CHECK_NSPACE(job, child->name.nspace) && j == (int) child->app_idx) {
-                    child->exit_code = rc;
-                    PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);
-                }
-            }
+            /* flag this app's procs and abort the whole job (see setup_fork) */
+            PRTE_ODLS_SET_ERROR(job, rc, j);
+            PRTE_ACTIVATE_JOB_STATE(jobdat, PRTE_JOB_STATE_FAILED_TO_LAUNCH);
             goto GETOUT;
         }
 
         rc = pmix_util_check_context_app(&app->app, app->cwd, app->env);
         /* do not ERROR_LOG - it will be reported elsewhere */
         if (PMIX_SUCCESS != rc) {
-            /* cycle through children to find those for this jobid */
-            for (idx = 0; idx < prte_local_children->size; idx++) {
-                child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, idx);
-                if (NULL == child) {
-                    continue;
-                }
-                if (PMIX_CHECK_NSPACE(job, child->name.nspace) && j == (int) child->app_idx) {
-                    child->exit_code = rc;
-                    PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);
-                }
-            }
+            /* flag this app's procs and abort the whole job (see setup_fork) */
+            PRTE_ODLS_SET_ERROR(job, rc, j);
+            PRTE_ACTIVATE_JOB_STATE(jobdat, PRTE_JOB_STATE_FAILED_TO_LAUNCH);
             goto GETOUT;
         }
 
@@ -1516,17 +1491,9 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         if (PRTE_SUCCESS != (rc = prte_util_init_sys_limits(&msg))) {
             pmix_show_help("help-prte-odls-default.txt", "set limit", true,
                            prte_process_info.nodename, app, __FILE__, __LINE__, msg);
-            /* cycle through children to find those for this jobid */
-            for (idx = 0; idx < prte_local_children->size; idx++) {
-                child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, idx);
-                if (NULL == child) {
-                    continue;
-                }
-                if (PMIX_CHECK_NSPACE(job, child->name.nspace) && j == (int) child->app_idx) {
-                    child->exit_code = rc;
-                    PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);
-                }
-            }
+            /* flag this app's procs and abort the whole job (see setup_fork) */
+            PRTE_ODLS_SET_ERROR(job, rc, j);
+            PRTE_ACTIVATE_JOB_STATE(jobdat, PRTE_JOB_STATE_FAILED_TO_LAUNCH);
             goto GETOUT;
         }
 
@@ -1538,7 +1505,12 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
          * to their current location
          */
         if (0 != chdir(basedir)) {
-            PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);
+            /* NOTE: we are still in the per-app loop, before the per-child
+             * loop that assigns "child", so "child" may be NULL (first app)
+             * or a stale proc from a prior app - do not dereference it. Fail
+             * the job as a whole. */
+            PRTE_ODLS_SET_ERROR(job, PRTE_ERR_NOT_FOUND, j);
+            PRTE_ACTIVATE_JOB_STATE(jobdat, PRTE_JOB_STATE_FAILED_TO_LAUNCH);
             goto GETOUT;
         }
 
@@ -1644,6 +1616,10 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                 child->exit_code = rc;
                 PMIX_RELEASE(cd);
                 PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);
+                /* abort the whole job (see setup_fork): other children of
+                 * this app - and later apps - that we will now never launch
+                 * must not be left to strand it */
+                PRTE_ACTIVATE_JOB_STATE(jobdat, PRTE_JOB_STATE_FAILED_TO_LAUNCH);
                 goto GETOUT;
             }
             if (PRTE_FLAG_TEST(jobdat, PRTE_JOB_FLAG_FORWARD_OUTPUT)) {
@@ -1651,8 +1627,11 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                 rc = prte_iof_base_setup_parent(&child->name, &cd->opts);
                 if (PRTE_SUCCESS != rc) {
                     PRTE_ERROR_LOG(rc);
+                    child->exit_code = rc;
                     PMIX_RELEASE(cd);
                     PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);
+                    /* abort the whole job (see setup_fork) */
+                    PRTE_ACTIVATE_JOB_STATE(jobdat, PRTE_JOB_STATE_FAILED_TO_LAUNCH);
                     goto GETOUT;
                 }
             }
