@@ -311,7 +311,10 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
         if (PMIX_SUCCESS != (ret = PMIx_generate_regex(tmp, &regex))) {
             PMIX_ERROR_LOG(ret);
             free(tmp);
-            PMIX_INFO_FREE(cd.info, cd.ninfo);
+            if (NULL != procs) {
+                PMIx_Argv_free(procs);
+            }
+            PMIX_INFO_LIST_RELEASE(ilist);
             return prte_pmix_convert_status(ret);
         }
         free(tmp);
@@ -327,7 +330,8 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
         if (PMIX_SUCCESS != (ret = PMIx_generate_ppn(tmp, &regex))) {
             PMIX_ERROR_LOG(ret);
             free(tmp);
-            PMIX_INFO_FREE(cd.info, cd.ninfo);
+            /* list and procs were already freed above */
+            PMIX_INFO_LIST_RELEASE(ilist);
             return prte_pmix_convert_status(ret);
         }
         free(tmp);
@@ -382,6 +386,10 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
     if (PMIX_SUCCESS != ret) {
         pmix_output(0, "[%s:%d] PMIx_server_setup_application failed: %s", __FILE__, __LINE__,
                     PMIx_Error_string(ret));
+        /* the callback that would have freed cd.info will never fire */
+        if (NULL != cd.info) {
+            PMIX_INFO_FREE(cd.info, cd.ninfo);
+        }
         rc = PRTE_ERROR;
     } else {
         PRTE_PMIX_WAIT_THREAD(&cd.lock);
@@ -467,6 +475,8 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 rc = prte_pmix_convert_status(rc);
+                PMIX_DATA_BUFFER_DESTRUCT(&jdbuf);
+                PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
                 goto REPORT_ERROR;
             }
             /* unpack each job and add it to the local prte_job_data array */
@@ -593,7 +603,8 @@ next:
         if (NULL == jdata->schizo) {
             pmix_show_help("help-schizo-base.txt", "no-proxy", true,
                            prte_tool_basename, "NULL");
-            return 1;
+            rc = PRTE_ERR_NOT_FOUND;
+            goto REPORT_ERROR;
         }
     } else {
         prte_set_job_data_object(jdata);
@@ -615,7 +626,8 @@ next:
             if (NULL != tmp) {
                 free(tmp);
             }
-            return 1;
+            rc = PRTE_ERR_NOT_FOUND;
+            goto REPORT_ERROR;
         }
         if (NULL != tmp) {
             free(tmp);
@@ -856,6 +868,11 @@ static int setup_path(prte_job_t *job, prte_app_context_t *app, char **wdir)
         if (NULL == getcwd(dir, sizeof(dir))) {
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
+        /* free any prior value before overwriting - our caller may pass
+         * &app->cwd, which already holds an owned string */
+        if (NULL != *wdir) {
+            free(*wdir);
+        }
         *wdir = strdup(dir);
         PMIx_Setenv("PWD", dir, true, &app->env);
     } else {
@@ -887,6 +904,10 @@ static int setup_path(prte_job_t *job, prte_app_context_t *app, char **wdir)
          */
         if (NULL == getcwd(dir, sizeof(dir))) {
             return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        /* free any prior value before overwriting (see note above) */
+        if (NULL != *wdir) {
+            free(*wdir);
         }
         *wdir = strdup(dir);
         PMIx_Setenv("PWD", dir, true, &app->env);
@@ -965,6 +986,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         // if we aren't spawning the apps, then just mark them as
         // terminated and return
         PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_TERMINATED);
+        PMIX_RELEASE(cd);
         return;
     }
 
@@ -1300,8 +1322,15 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
      * to this place as our default directory
      */
     if (NULL == getcwd(basedir, sizeof(basedir))) {
-        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FAILED_TO_LAUNCH);
-        goto ERROR_OUT;
+        /* basedir is unusable, so do NOT fall through to ERROR_OUT (which
+         * would chdir() to an uninitialized buffer). Fail the job we were
+         * asked to launch and release the caddy directly. */
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        if (NULL != (jobdat = prte_get_job_data_object(job))) {
+            PRTE_ACTIVATE_JOB_STATE(jobdat, PRTE_JOB_STATE_FAILED_TO_LAUNCH);
+        }
+        PMIX_RELEASE(caddy);
+        return;
     }
     /* find the jobdat for this job */
     if (NULL == (jobdat = prte_get_job_data_object(job))) {
