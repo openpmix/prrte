@@ -101,6 +101,13 @@ static int init(void)
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_IOF_HNP,
                   PRTE_RML_PERSISTENT, prte_iof_hnp_recv, NULL);
 
+    /* we xcast wildcard stdin to every daemon, and the xcast delivers a
+     * copy back to us - so we must also listen on the proxy tag to service
+     * the procs we host ourselves
+     */
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_IOF_PROXY,
+                  PRTE_RML_PERSISTENT, prte_iof_hnp_stdin_recv, NULL);
+
     PMIX_CONSTRUCT(&prte_mca_iof_hnp_component.procs, pmix_list_t);
 
     return PRTE_SUCCESS;
@@ -203,7 +210,11 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(dst_name), sz));
 
     /* if I am the DVM master and this is a wildcard name, then we have to
-     * broadcast this to all daemons */
+     * broadcast this to all daemons. The xcast delivers a copy to us as
+     * well, and our own receive (prte_iof_hnp_stdin_recv) services the
+     * procs we host - so we are done here. Falling through would look up
+     * the daemon hosting a wildcard rank, which cannot resolve
+     */
     if (PMIX_RANK_WILDCARD == dst_name->rank) {
         PMIX_LOAD_PROCID(&p, PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
         rc = prte_iof_hnp_send_data_to_endpoint(&p, dst_name,
@@ -211,8 +222,8 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
                                                 data, sz);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
-            return rc;
         }
+        return rc;
     }
 
     /* lookup the daemon hosting the target proc */
@@ -400,6 +411,8 @@ static void hnp_complete(const prte_job_t *jdata)
 static int finalize(void)
 {
     PMIX_DESTRUCT(&prte_mca_iof_hnp_component.procs);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_IOF_HNP);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_IOF_PROXY);
     return PRTE_SUCCESS;
 }
 
