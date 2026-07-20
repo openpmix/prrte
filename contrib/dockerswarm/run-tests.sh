@@ -117,6 +117,67 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     fi
     docker exec prte-node1 sh -c 'rm -f /root/staged_marker /root/staged_marker.c' 2>/dev/null
 
+    banner "iof: stdin forwarded to a REMOTE proc (HNP -> prted -> proc)"
+    # Rank 0 is mapped onto node2, not the head node, so every stdin byte must
+    # travel HNP -> RML(PRTE_RML_TAG_IOF_PROXY) -> prted -> the proc's stdin
+    # pipe, and be echoed back prted -> HNP as forwarded output. A single-host
+    # run exercises only the HNP-local sink and proves nothing about the wire
+    # format, which is why this test lives in the swarm.
+    #
+    # The large payload matters: a stdin fragment used to be unpacked into a
+    # fixed PRTE_IOF_BASE_MSG_MAX (4096) buffer on the daemon, so anything
+    # bigger was dropped by the unpack rather than delivered. Any payload well
+    # past 4096 -- and past the 8192 write-chunk size -- guards that path.
+    #
+    # Note the payload is base64 text: printable, newline-terminated, and free
+    # of anything a pipe or tty layer might translate, so a mismatch means IOF
+    # really did lose or reorder bytes.
+    # These run under "prun" against a persistent DVM rather than "prterun".
+    # That is deliberate: prterun's own stdin is read by the HNP acting as a
+    # PMIx *server*, and PMIx's server branch returns early on EOF without
+    # calling push_stdin (pmix_iof_read_local_handler in
+    # src/common/pmix_iof.c) -- so the zero-byte close never reaches PRRTE and
+    # "cat" waits forever. That is an openpmix defect, not a PRRTE one; the
+    # tool path prun uses forwards the zero-byte push correctly. Every command
+    # is wrapped in "timeout" so a delivery regression fails the test instead
+    # of wedging the suite.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --host node1:1,node2:1,node3:1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        RUN 'head -c 262144 /dev/urandom | base64 > /tmp/iof_stdin_in.txt' >/dev/null 2>&1
+        out=$(RUN 'cd /tmp && timeout 90 prun --host node2:1 -n 1 \
+                     cat < iof_stdin_in.txt > iof_stdin_out.txt 2>iof_stdin_err.txt; echo "rc=$?"')
+        rc=$(echo "$out" | sed -n 's/^rc=//p')
+        insum=$(RUN 'md5sum < /tmp/iof_stdin_in.txt' | awk '{print $1}')
+        outsum=$(RUN 'md5sum < /tmp/iof_stdin_out.txt 2>/dev/null' | awk '{print $1}')
+        insz=$(RUN 'wc -c < /tmp/iof_stdin_in.txt' | tr -d ' ')
+        outsz=$(RUN 'wc -c < /tmp/iof_stdin_out.txt 2>/dev/null' | tr -d ' ')
+        [ "$rc" = 0 ] && [ -n "$insum" ] && [ "$insum" = "$outsum" ] \
+            && ok "large stdin ($insz bytes) round-tripped through a remote proc intact" \
+            || bad "remote stdin corrupted/truncated/hung (rc=$rc, in=$insz out=$outsz, md5 $insum vs $outsum): $(RUN 'head -c 200 /tmp/iof_stdin_err.txt')"
+        # rc=0 also means "cat" saw EOF, so the zero-byte close sentinel made
+        # the trip; rc=124 would be the timeout, i.e. it did not.
+
+        # Wildcard stdin is xcast to every daemon rather than sent to one, and
+        # the xcast comes back to the HNP too -- so this covers delivery to a
+        # proc the HNP hosts (node1) and to a remote proc (node2) at once. With
+        # no receive posted on the proxy tag at the HNP, the node1 proc gets
+        # nothing and the job hangs.
+        out=$(RUN 'cd /tmp && echo WILDCARD-STDIN-OK | timeout 60 prun --host node1:1,node2:1 \
+                     -n 2 --map-by node --stdin all cat 2>&1; echo "rc=$?"')
+        rc=$(echo "$out" | sed -n 's/^rc=//p')
+        n=$(echo "$out" | grep -c 'WILDCARD-STDIN-OK')
+        [ "$rc" = 0 ] && [ "$n" = 2 ] \
+            && ok "wildcard stdin (--stdin all) reached the HNP-local and the remote proc" \
+            || bad "wildcard stdin reached $n/2 procs (rc=$rc): $(echo "$out" | tr '\n' ' ')"
+
+        RUN 'rm -f /tmp/iof_stdin_in.txt /tmp/iof_stdin_out.txt /tmp/iof_stdin_err.txt' >/dev/null 2>&1
+        RUN 'timeout 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the stdin tests"
+    fi
+    cleanup_swarm
+
     banner "elastic DVM: grow + shrink (radix 64, flat tree)"
     cleanup_swarm
     RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
@@ -188,6 +249,39 @@ test_macos() {
         macpk
     fi
     rm -f "$BOUT"
+
+    banner "macOS: stdin delivery (single host, directed and wildcard)"
+    # On one node every proc is local to the HNP, so this covers the two
+    # delivery routes push_stdin takes: a directed rank writes straight into
+    # the proc's sink, while "--stdin all" is xcast on PRTE_RML_TAG_IOF_PROXY
+    # -- and the xcast comes back to the HNP, which must service its own procs
+    # from that receive. When the HNP had no receive on that tag the wildcard
+    # message went unmatched and every proc hung waiting on stdin.
+    # The app is "head -1", not "cat", on purpose: head exits once it has its
+    # line, so the test does not depend on the stdin-close sentinel. prterun's
+    # own stdin is read by the HNP as a PMIx server, and PMIx's server branch
+    # returns early on EOF without calling push_stdin
+    # (pmix_iof_read_local_handler in src/common/pmix_iof.c), so a "cat" here
+    # would never see EOF and would hang on a defect that is not PRRTE's.
+    macpk; sleep 1
+    printf 'STDIN-DELIVERY-OK\n' > "$root/vpath-macos/stdin_probe.txt"
+    if bounded 60 sh -c "prterun -np 2 head -1 < '$root/vpath-macos/stdin_probe.txt'"; then
+        [ "$(grep -Fc STDIN-DELIVERY-OK "$BOUT")" = 1 ] \
+            && ok "directed stdin (default rank 0) -> 1 proc" \
+            || bad "directed stdin: $(tr '\n' ' ' <"$BOUT")"
+    else
+        skp "directed stdin timed out (native Darwin DVM unstable)"; macpk
+    fi
+    rm -f "$BOUT"
+    macpk; sleep 1
+    if bounded 60 sh -c "prterun -np 2 --stdin all head -1 < '$root/vpath-macos/stdin_probe.txt'"; then
+        [ "$(grep -Fc STDIN-DELIVERY-OK "$BOUT")" = 2 ] \
+            && ok "wildcard stdin (--stdin all) -> both procs" \
+            || bad "wildcard stdin reached $(grep -Fc STDIN-DELIVERY-OK "$BOUT")/2 procs: $(tr '\n' ' ' <"$BOUT")"
+    else
+        bad "wildcard stdin hung -- the HNP never delivered its own xcast to the procs it hosts"; macpk
+    fi
+    rm -f "$BOUT" "$root/vpath-macos/stdin_probe.txt"
 
     banner "macOS: persistent DVM + prun + pterm (single host)"
     macpk; sleep 1

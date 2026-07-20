@@ -2,4 +2,4 @@
 # Additional copyrights may follow
 # $HEADER$
 
-SUBDIRS = rmaps errmgr ess filem grpcomm odls
+SUBDIRS = rmaps errmgr ess filem grpcomm odls iof
