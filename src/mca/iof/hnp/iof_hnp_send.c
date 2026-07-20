@@ -48,6 +48,7 @@ int prte_iof_hnp_send_data_to_endpoint(const pmix_proc_t *host,
                                        unsigned char *data, int numbytes)
 {
     pmix_data_buffer_t *buf;
+    int32_t nbytes;
     int rc;
 
     /* if the host is a daemon and we are in the process of aborting,
@@ -83,12 +84,26 @@ int prte_iof_hnp_send_data_to_endpoint(const pmix_proc_t *host,
         return rc;
     }
 
-    /* pack the data - if numbytes is zero, we will pack zero bytes */
-    rc = PMIx_Data_pack(NULL, buf, data, numbytes, PMIX_BYTE);
+    /* pack the number of bytes being sent so the receiver can
+     * allocate storage of the correct size for them - a count
+     * of zero tells the receiver to close the target's stdin
+     */
+    nbytes = (0 < numbytes) ? numbytes : 0;
+    rc = PMIx_Data_pack(NULL, buf, &nbytes, 1, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
         return rc;
+    }
+
+    /* pack the data itself */
+    if (0 < nbytes) {
+        rc = PMIx_Data_pack(NULL, buf, data, nbytes, PMIX_BYTE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            return rc;
+        }
     }
 
     /* if the target is wildcard, then this needs to go to everyone - xcast it */
