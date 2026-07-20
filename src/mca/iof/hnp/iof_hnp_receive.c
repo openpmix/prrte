@@ -163,3 +163,115 @@ NSTEP:
 CLEAN_RETURN:
     return;
 }
+
+/*
+ * Stdin arriving on PRTE_RML_TAG_IOF_PROXY.
+ *
+ * The HNP normally writes stdin directly into a local proc's sink from
+ * push_stdin. The exception is a wildcard target: that is xcast to every
+ * daemon, and the xcast machinery delivers a copy to the sender as well -
+ * so the HNP receives its own broadcast here and must service the procs it
+ * hosts, exactly as a prted does for the procs it hosts. Without this
+ * receive the message goes unmatched and every proc local to the HNP is
+ * silently skipped.
+ */
+void prte_iof_hnp_stdin_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                             prte_rml_tag_t tag, void *cbdata)
+{
+    unsigned char *data = NULL;
+    prte_iof_tag_t stream;
+    int32_t count, numbytes;
+    pmix_proc_t target;
+    prte_iof_proc_t *proct;
+    int rc;
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
+
+    /* see what stream generated this data */
+    count = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &stream, &count, PMIX_UINT16);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+
+    /* only stdin travels on this tag */
+    if (PRTE_IOF_STDIN != stream) {
+        PRTE_ERROR_LOG(PRTE_ERR_COMM_FAILURE);
+        return;
+    }
+
+    /* unpack the intended target */
+    count = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &target, &count, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+
+    /* unpack the byte count, then storage sized to match it */
+    count = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &numbytes, &count, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    if (0 > numbytes) {
+        /* corrupted message */
+        PRTE_ERROR_LOG(PRTE_ERR_COMM_FAILURE);
+        return;
+    }
+    if (0 < numbytes) {
+        data = (unsigned char *) malloc(numbytes);
+        if (NULL == data) {
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            return;
+        }
+        count = numbytes;
+        rc = PMIx_Data_unpack(NULL, buffer, data, &count, PMIX_BYTE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            free(data);
+            return;
+        }
+        numbytes = count;
+    }
+
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                         "%s unpacked %d bytes of stdin for local proc %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes, PRTE_NAME_PRINT(&target)));
+
+    /* deliver to every proc we host that matches the target - PMIX_CHECK_RANK
+     * honors the wildcard, which is the case that brought us here
+     */
+    PMIX_LIST_FOREACH(proct, &prte_mca_iof_hnp_component.procs, prte_iof_proc_t)
+    {
+        if (!PMIX_CHECK_NSPACE(target.nspace, proct->name.nspace) ||
+            !PMIX_CHECK_RANK(target.rank, proct->name.rank)) {
+            continue;
+        }
+        /* a proc that never pulled stdin has no sink - the list also holds
+         * entries created for remote procs whose output we forward
+         */
+        if (NULL == proct->stdinev || NULL == proct->stdinev->wev) {
+            continue;
+        }
+        /* a zero-byte write is forwarded too - it flushes what precedes it
+         * and then closes the proc's stdin
+         */
+        if (PRTE_IOF_MAX_INPUT_BUFFERS < prte_iof_base_write_output(&proct->name, stream, data,
+                                                                    numbytes,
+                                                                    proct->stdinev->wev)) {
+            /* we are the source of this stdin, so there is no upstream to
+             * throttle - just note it
+             */
+            PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                                 "%s stdin buffer backed up for %s",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 PRTE_NAME_PRINT(&proct->name)));
+        }
+    }
+
+    if (NULL != data) {
+        free(data);
+    }
+}

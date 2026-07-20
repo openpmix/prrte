@@ -74,6 +74,9 @@ extern prte_iof_base_module_t prte_iof_hnp_module;
 void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                        prte_rml_tag_t tag, void *cbdata);
 
+void prte_iof_hnp_stdin_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                             prte_rml_tag_t tag, void *cbdata);
+
 void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata);
 void prte_iof_hnp_stdin_cb(int fd, short event, void *cbdata);
 bool prte_iof_hnp_stdin_check(int fd);
