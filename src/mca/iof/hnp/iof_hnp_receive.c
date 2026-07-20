@@ -109,13 +109,20 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
         PMIX_ERROR_LOG(rc);
         goto CLEAN_RETURN;
     }
-    if (0 == numbytes) {
-        /* nothing to do - shouldn't have been sent */
+    if (0 >= numbytes) {
+        /* nothing to do - shouldn't have been sent. A negative
+         * count indicates a corrupted message
+         */
         goto CLEAN_RETURN;
     }
     p = PMIX_NEW(prte_iof_deliver_t);
     PMIX_XFER_PROCID(&p->source, &origin);
     p->bo.bytes = (char*)malloc(numbytes);
+    if (NULL == p->bo.bytes) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PMIX_RELEASE(p);
+        goto CLEAN_RETURN;
+    }
     rc = PMIx_Data_unpack(NULL, buffer, p->bo.bytes, &numbytes, PMIX_BYTE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);

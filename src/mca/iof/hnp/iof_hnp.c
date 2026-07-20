@@ -395,14 +395,7 @@ static void hnp_complete(const prte_job_t *jdata)
     {
         if (PMIX_CHECK_NSPACE(jdata->nspace, proct->name.nspace)) {
             pmix_list_remove_item(&prte_mca_iof_hnp_component.procs, &proct->super);
-            if (NULL != proct->revstdout) {
-                PMIX_RELEASE(proct->revstdout);
-            }
-            proct->revstdout = NULL;
-            if (NULL != proct->revstderr) {
-                PMIX_RELEASE(proct->revstderr);
-            }
-            proct->revstderr = NULL;
+            /* the proc destructor releases all three stream slots */
             PMIX_RELEASE(proct);
         }
     }
