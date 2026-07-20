@@ -30,6 +30,7 @@
 #ifdef HAVE_UNISTD_H
 #    include <unistd.h>
 #endif /* HAVE_UNISTD_H */
+#include <stdlib.h>
 #include <string.h>
 
 #include "src/pmix/pmix-internal.h"
@@ -84,7 +85,7 @@ void prte_iof_prted_send_xonxoff(prte_iof_tag_t tag)
 void prte_iof_prted_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                          prte_rml_tag_t tag, void *cbdata)
 {
-    unsigned char data[PRTE_IOF_BASE_MSG_MAX];
+    unsigned char *data = NULL;
     prte_iof_tag_t stream;
     int32_t count, numbytes;
     pmix_proc_t target;
@@ -114,14 +115,41 @@ void prte_iof_prted_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *bu
         return;
     }
 
-    /* unpack the data */
-    numbytes = PRTE_IOF_BASE_MSG_MAX;
-    rc = PMIx_Data_unpack(NULL, buffer, data, &numbytes, PMIX_BYTE);
+    /* unpack the number of bytes that follow - the HNP sends this ahead
+     * of the data itself as a stdin fragment can be of any size, and we
+     * must not silently truncate it
+     */
+    count = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &numbytes, &count, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return;
     }
-    /* numbytes will contain the actual #bytes that were sent */
+    if (0 > numbytes) {
+        /* corrupted message */
+        PRTE_ERROR_LOG(PRTE_ERR_COMM_FAILURE);
+        return;
+    }
+
+    /* unpack the data itself - a zero count means we are to close
+     * the target's stdin, so there is nothing to unpack
+     */
+    if (0 < numbytes) {
+        data = (unsigned char *) malloc(numbytes);
+        if (NULL == data) {
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            return;
+        }
+        count = numbytes;
+        rc = PMIx_Data_unpack(NULL, buffer, data, &count, PMIX_BYTE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            free(data);
+            return;
+        }
+        /* count contains the actual #bytes that were sent */
+        numbytes = count;
+    }
 
     PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s unpacked %d bytes for local proc %s",
@@ -158,5 +186,9 @@ void prte_iof_prted_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *bu
                 }
             }
         }
+    }
+
+    if (NULL != data) {
+        free(data);
     }
 }
