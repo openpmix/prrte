@@ -65,20 +65,34 @@ int prte_iof_base_write_output(const pmix_proc_t *name, prte_iof_tag_t stream,
         return 0;
     }
 
-    /* setup output object */
-    output = PMIX_NEW(prte_iof_write_output_t);
+    if (0 < numbytes && NULL != data) {
+        int remaining = numbytes;
 
-    /* copy over the data to be written */
-    if (0 < numbytes) {
+        /* the chunk buffer is a fixed size, so break the caller's data
+         * across as many chunks as it takes - we cannot assume the
+         * caller respected our limit
+         */
+        while (0 < remaining) {
+            int nbytes = (PRTE_IOF_BASE_TAGGED_OUT_MAX < remaining)
+                             ? PRTE_IOF_BASE_TAGGED_OUT_MAX : remaining;
+            output = PMIX_NEW(prte_iof_write_output_t);
+            memcpy(output->data, data, nbytes);
+            output->numbytes = nbytes;
+            pmix_list_append(&channel->outputs, &output->super);
+            data += nbytes;
+            remaining -= nbytes;
+        }
+    } else {
         /* don't copy 0 bytes - we just need to pass
          * the zero bytes so the fd can be closed
-         * after it writes everything out
+         * after it writes everything out. A negative
+         * count is treated the same way as there is
+         * nothing we could write
          */
-        memcpy(output->data, data, numbytes);
+        output = PMIX_NEW(prte_iof_write_output_t);
+        output->numbytes = 0;
+        pmix_list_append(&channel->outputs, &output->super);
     }
-    output->numbytes = numbytes;
-    /* add this data to the write list for this fd */
-    pmix_list_append(&channel->outputs, &output->super);
 
     /* record how big the buffer is */
     num_buffered = pmix_list_get_size(&channel->outputs);
