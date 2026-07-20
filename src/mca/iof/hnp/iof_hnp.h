@@ -64,7 +64,6 @@ BEGIN_C_DECLS
 struct prte_mca_iof_hnp_component_t {
     prte_iof_base_component_t super;
     pmix_list_t procs;
-    prte_event_t stdinsig;
 };
 typedef struct prte_mca_iof_hnp_component_t prte_mca_iof_hnp_component_t;
 
@@ -78,8 +77,6 @@ void prte_iof_hnp_stdin_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t
                              prte_rml_tag_t tag, void *cbdata);
 
 void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata);
-void prte_iof_hnp_stdin_cb(int fd, short event, void *cbdata);
-bool prte_iof_hnp_stdin_check(int fd);
 
 int prte_iof_hnp_send_data_to_endpoint(const pmix_proc_t *host,
                                        const pmix_proc_t *target,

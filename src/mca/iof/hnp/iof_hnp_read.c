@@ -77,6 +77,12 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(rev);
 
+    if (NULL == proct) {
+        /* this is an error - nothing we can do */
+        PRTE_ERROR_LOG(PRTE_ERR_ADDRESSEE_UNKNOWN);
+        return;
+    }
+
     /* As we may use timer events, fd can be bogus (-1)
      * use the right one here
      */
@@ -92,12 +98,6 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
                          (PRTE_IOF_STDOUT & rev->tag) ? "stdout"
                          : ((PRTE_IOF_STDERR & rev->tag) ? "stderr" : "stddiag"),
                          PRTE_NAME_PRINT(&proct->name)));
-
-    if (NULL == proct) {
-        /* this is an error - nothing we can do */
-        PRTE_ERROR_LOG(PRTE_ERR_ADDRESSEE_UNKNOWN);
-        return;
-    }
 
     if (numbytes <= 0) {
         if (0 > numbytes) {
@@ -128,6 +128,13 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
     p = PMIX_NEW(prte_iof_deliver_t);
     PMIX_XFER_PROCID(&p->source, &proct->name);
     p->bo.bytes = (char*)malloc(numbytes);
+    if (NULL == p->bo.bytes) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PMIX_RELEASE(p);
+        /* nothing we can do with this data, but keep reading */
+        PRTE_IOF_READ_ACTIVATE(rev);
+        return;
+    }
     memcpy(p->bo.bytes, data, numbytes);
     p->bo.size = numbytes;
     prc = PMIx_server_IOF_deliver(&p->source, pchan, &p->bo, NULL, 0, lkcbfunc, (void*)p);
