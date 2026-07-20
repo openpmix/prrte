@@ -22,10 +22,9 @@ the module **only when `PRTE_PROC_IS_MASTER`**; otherwise it returns
 `-1`/`PRTE_ERROR` and declines. Since a process is either master or
 daemon, this module and `prted` never compete for real.
 
-The component keeps two pieces of state (in
+The component keeps one piece of state (in
 [`iof_hnp.h`](iof_hnp.h)'s `prte_mca_iof_hnp_component_t`): a
-`pmix_list_t procs` of `prte_iof_proc_t` endpoint bundles, and an
-(unused, vestigial) `stdinsig` event.
+`pmix_list_t procs` of `prte_iof_proc_t` endpoint bundles.
 
 ---
 
@@ -157,14 +156,23 @@ the sink once the last queued byte is written.
   only flips the `activated` flags once `revstdout && revstderr` exist,
   so an immediate EOF on one stream can't declare the proc IOF-complete
   before the other is wired.
-- **The `query` gate is a single `!PRTE_PROC_IS_MASTER` test.** It once
-  carried a copy-paste duplication (`!PRTE_PROC_IS_MASTER &&
-  !PRTE_PROC_IS_MASTER`), which was harmless but has been collapsed to
-  the one clean condition.
+- **The `query` gate is a single `!PRTE_PROC_IS_MASTER` test.** Keep it
+  that way: `PRTE_PROC_MASTER` is its own bit in `proc_type` (it does not
+  include `PRTE_PROC_DAEMON`), so this one predicate is exactly the
+  "am I the HNP" question and needs no companion test.
 - **Zero-byte stdin means close.** `push_stdin` deliberately forwards
   zero-length payloads so a preceding buffer is flushed and the proc's
   stdin fd is then closed. Preserve that.
-- **`stdinsig`, `prte_iof_hnp_stdin_cb`, `prte_iof_hnp_stdin_check` are
-  dead.** Declared in `iof_hnp.h` but unimplemented/unused — remnants of
-  direct terminal-stdin reading. Ignore them; stdin now enters via
-  `push_stdin`.
+- **`push_stdin` to a *local* proc hands `bo->size` straight to
+  `prte_iof_base_write_output`**, whatever size the PMIx server produced.
+  That is safe because `write_output` splits an oversized push across
+  chunks (see the framework guide's sink-engine note) — don't "optimize"
+  by copying into a fixed buffer here instead.
+- **`prte_iof_hnp_recv` must not trust the wire `numbytes`.** It screens
+  `<= 0` before `malloc(numbytes)` and checks the allocation; keep both
+  guards if you touch the unpack sequence. It's internal RML traffic
+  today, but don't widen the trust.
+- **Let the `prte_iof_proc_t` destructor free the stream slots.**
+  `hnp_complete` just removes the proc from `procs` and
+  `PMIX_RELEASE`s it — the destructor releases `stdinev`, `revstdout`, and
+  `revstderr`. Don't reintroduce hand-releases of individual slots.

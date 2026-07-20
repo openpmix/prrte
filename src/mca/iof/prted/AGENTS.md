@@ -99,12 +99,15 @@ Only `PRTE_IOF_STDIN` is supported; anything else returns
 
 `prte_iof_prted_recv` is the persistent `PRTE_RML_TAG_IOF_PROXY` receive
 posted by `init()`. Incoming buffers carry `{ stream (uint16), target
-proc, bytes }`:
+proc, numbytes (int32), bytes }` — the same shape the daemon uses when
+forwarding output HNP-ward:
 
 1. Unpack the stream; if it isn't `PRTE_IOF_STDIN` it's a protocol error
    (`PRTE_ERR_COMM_FAILURE`). (Flow-control tags are handled by the HNP,
    not here.)
-2. Unpack the target proc and the data.
+2. Unpack the target proc, then the byte count, then `malloc` storage of
+   exactly that size and unpack the data into it. A count of zero means
+   "close this proc's stdin" and carries no payload.
 3. Walk `procs`, matching the target by nspace and by rank
    (`PMIX_CHECK_RANK` honors wildcard, so a broadcast reaches every local
    proc that pulled stdin). For each match with a live `stdinev`, call
@@ -177,3 +180,15 @@ tag used for forwarded output, distinguished by the leading tag value.
   matching rules — they're what make wildcard-stdin fan-out work.
 - **Zero-byte stdin means close.** Preserve the zero-length forward path
   through `write_output`.
+- **A stdin fragment is sized by the wire, not by a constant.**
+  `prte_iof_prted_recv` allocates from the packed `numbytes` and frees the
+  buffer on every exit path. It used to unpack into a fixed
+  `data[PRTE_IOF_BASE_MSG_MAX]` (4096), which dropped any larger fragment
+  outright (an over-long unpack fails with
+  `PMIX_ERR_UNPACK_INADEQUATE_SPACE`). Don't reintroduce a fixed-size
+  stdin buffer — the sender is bounded only by what the PMIx server hands
+  the HNP.
+- **The `proct` NULL check comes before the first dereference.** Both read
+  handlers test `rev->proc` immediately after `PMIX_ACQUIRE_OBJECT`, ahead
+  of the verbose trace that prints `proct->name`. Keep that order; the
+  guard was previously placed after the deref and could never fire.

@@ -214,8 +214,20 @@ This is the heart of the **stdin / output-to-fd** path:
   write event's `outputs` list, and if the write event isn't already
   armed, arm it with `PRTE_IOF_SINK_ACTIVATE`. Returns the current
   backlog size (list length). A `numbytes == 0` call still enqueues a
-  sentinel so the fd is flushed and closed. Callers compare the return
-  against `PRTE_IOF_MAX_INPUT_BUFFERS` (50) to detect back-pressure.
+  sentinel so the fd is flushed and closed. A `NULL` channel is a no-op
+  returning `0`. Callers compare the return against
+  `PRTE_IOF_MAX_INPUT_BUFFERS` (50) to detect back-pressure.
+
+  **Fixed copy buffer — the function splits, callers need not.** The chunk
+  it copies into is a fixed `data[PRTE_IOF_BASE_TAGGED_OUT_MAX]` (8192)
+  array, so an input larger than that is broken across as many chunks as it
+  takes rather than overrunning the buffer (a caller like the HNP's
+  `push_stdin` hands over whatever the PMIx server produced and cannot be
+  assumed to respect our limit). A negative `numbytes` is treated the same
+  as zero — the close sentinel — since there is nothing that could be
+  copied. Note the size constants still differ by role: 4096 per read
+  (`PRTE_IOF_BASE_MSG_MAX`) and 8192 per queued write chunk; the daemon's
+  stdin `recv` allocates to fit the message and imposes no cap of its own.
 
 - **`prte_iof_base_write_handler(fd, event, cbdata)`** — the generic
   libevent write callback. It drains `wev->outputs`, `write()`-ing each
@@ -256,6 +268,16 @@ proc — e.g. `--display-map` / allocation dumps. It wraps the string in a
 `prte_iof_deliver_t` and calls `PMIx_server_IOF_deliver` so the output
 threads through the same PMIx output path as real proc output. It does
 not touch the sink engine.
+
+**Ownership: it frees your string.** `prte_iof_base_output` stores the
+passed `char *string` directly into `deliver->bo.bytes` and the
+`prte_iof_deliver_t` destructor `free()`s it (on both the success path, via
+the delivery completion callback, and the error path). So `string`
+**must be a heap allocation you are handing off** — every current caller
+passes an `pmix_asprintf`/`strdup`/`PMIx_Argv_join`/`prte_map_print`
+result and does *not* free it afterward. Passing a string literal or a
+stack buffer would `free()` non-heap memory. The prototype does not spell
+this out; do not "fix" a caller by adding a `free`.
 
 ### Fork-time setup helpers (`iof_base_setup.[ch]`)
 
@@ -373,12 +395,12 @@ no other thread touching this state. Consequences:
   `PRTE_PROC_STATE_IOF_COMPLETE` — the state machine waits on this before
   fully reaping a proc. Don't null a read-event slot without going through
   that check.
-- **Vestigial declarations.** `prte_iof_base_flush()` (declared in
-  `base.h`), and `prte_iof_hnp_stdin_cb` / `prte_iof_hnp_stdin_check` /
-  the `stdinsig` field (declared in `hnp/iof_hnp.h`) have **no live
-  definitions/uses** — leftovers from when `mpirun` read its own terminal
-  stdin directly. Today stdin arrives via the PMIx server calling
-  `prte_iof.push_stdin`. Don't wire new code to these ghosts.
+- **Stdin does not come from a terminal read here.** Older trees carried
+  declarations (`prte_iof_base_flush`, `prte_iof_hnp_stdin_cb`,
+  `prte_iof_hnp_stdin_check`, the `stdinsig` event) from when `mpirun` read
+  its own terminal stdin directly; they were never defined and have been
+  removed. Stdin arrives via the PMIx server calling
+  `prte_iof.push_stdin` — don't reintroduce a direct-read path.
 - **The version macro is `PRTE_IOF_BASE_VERSION_2_0_0`.** Match it in any
   new component's struct.
 - Standard PRRTE rules still apply: `prte_config.h` first, braces on every
@@ -386,6 +408,33 @@ no other thread touching this state. Consequences:
   `PRTE_ERROR_LOG` for unexpected errors.
 
 ---
+
+## Testing
+
+Self-contained unit coverage lives in
+[`test/unit/iof/test_iof.c`](../../../test/unit/iof/) and is wired into
+`make check`. Because the read/forward/write paths need a live DVM, real
+fds, and a running progress thread, the unit test deliberately stops at
+what *is* exercisable without them:
+
+- the tag-bitmask invariants (`STDMERGE`/`STDOUTALL`/`STDALL` equal the OR
+  of their parts; control flags don't collide with stream bits);
+- the module vtable contract (HNP wires all seven slots; `prted` leaves
+  `push_stdin` `NULL`);
+- the component name strings (`"hnp"`, `"prted"`);
+- constructor defaults / destructor safety for the five core classes;
+- the **producer side** of the sink engine —
+  `prte_iof_base_write_output`'s backlog accounting, byte copy, zero-byte
+  sentinel, and `NULL`-channel no-op — driven with the write event
+  pre-marked `pending` so no event base is needed;
+- the chunk-splitting of an oversized write (every chunk within
+  `PRTE_IOF_BASE_TAGGED_OUT_MAX`, the pieces reassembling to the original
+  bytes) and the negative-count degradation to the close sentinel;
+- the `prte_iof_base_fd_always_ready` predicate (pipe vs. regular file vs.
+  `/dev/null`).
+
+The end-to-end capture/relay/inject behavior is covered by the integration
+harness (`prte --daemonize` → `prun` → `pterm`), not by `make check`.
 
 ## Debugging
 
