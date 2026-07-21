@@ -2251,7 +2251,12 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
         req->ninfo = ninfo;
         PMIX_PROC_LOAD(&req->proxy, sender->nspace, sender->rank);
         PMIX_PROC_LOAD(&req->tproc, source.nspace, source.rank);
-        /* add this request to our local request tracker array */
+        /* add this request to our local request tracker array. The
+         * extra retain balances the TWO releases that fire when the
+         * RAS completes this relayed request: it invokes
+         * send_alloc_resp as the callback, whose cleanup tail
+         * releases the req, AND hands it prte_pmix_server_req_release
+         * as the release callback, which releases it again */
         PMIX_RETAIN(req);
         req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
         // point to the proper callback function
@@ -2285,8 +2290,11 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
     req->ninfo = ninfo;
     PMIX_PROC_LOAD(&req->proxy, sender->nspace, sender->rank);
     PMIX_PROC_LOAD(&req->tproc, source.nspace, source.rank);
-    /* add this request to our local request tracker array */
-    PMIX_RETAIN(req);
+    /* add this request to our local request tracker array. Unlike
+     * the allocation branch above, do NOT retain here - only the
+     * cleanup tail of send_alloc_resp releases this req (the
+     * release callback on this path belongs to the PMIx library),
+     * so an extra retain would leak it */
     req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
 
     rc = PMIx_Session_control(sessionID, req->info, req->ninfo,
