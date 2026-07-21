@@ -2306,13 +2306,16 @@ construct:
 
     if (one_filter) {
         /* at least one filtering option was executed, so
-         * remove all nodes that were not mapped
-         */
+         * remove all nodes that were not mapped. Retain nodes that
+         * were dynamically added after the DVM started - they were
+         * granted by an explicit grow request, so the static specs
+         * (which predate them) cannot speak to their inclusion */
         item = pmix_list_get_first(&nodes);
         while (item != pmix_list_get_end(&nodes)) {
             next = pmix_list_get_next(item);
             node = (prte_node_t *) item;
-            if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
+            if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED) &&
+                PRTE_NODE_STATE_ADDED != node->state) {
                 pmix_list_remove_item(&nodes, item);
                 PMIX_RELEASE(item);
             } else {
@@ -2370,6 +2373,11 @@ process:
             break;
         }
         node = (prte_node_t *) item;
+        /* if this node was dynamically added, reset its state now
+         * that it is being absorbed into the DVM */
+        if (PRTE_NODE_STATE_ADDED == node->state) {
+            node->state = PRTE_NODE_STATE_UP;
+        }
         /* if this node is already in the map, skip it */
         if (NULL != node->daemon) {
             num_nodes++;

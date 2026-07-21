@@ -365,14 +365,28 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
             handled = true;
         }
         if (PMIx_Check_key(req->info[n].key, PMIX_ADD_HOST)) {
+            pmix_list_t dhnodes;
+            prte_node_t *nd;
+
             // comma-delimited list of hosts to add or delete
-            rc = prte_util_add_dash_host_nodes(&nodes, req->info[n].value.data.string, true);
+            PMIX_CONSTRUCT(&dhnodes, pmix_list_t);
+            rc = prte_util_add_dash_host_nodes(&dhnodes, req->info[n].value.data.string, true);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
+                PMIX_LIST_DESTRUCT(&dhnodes);
                 PMIX_LIST_DESTRUCT(&nodes);
                 req->pstatus = prte_pmix_convert_rc(rc);
                 return req->pstatus;
             }
+            /* mark these as newly added so the DVM extension will
+             * include them despite any static -host filter given
+             * when the DVM was started - the hostfile parser above
+             * already does this for its new nodes */
+            while (NULL != (nd = (prte_node_t *) pmix_list_remove_first(&dhnodes))) {
+                nd->state = PRTE_NODE_STATE_ADDED;
+                pmix_list_append(&nodes, &nd->super);
+            }
+            PMIX_DESTRUCT(&dhnodes);
             handled = true;
         }
     }

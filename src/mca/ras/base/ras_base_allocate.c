@@ -1219,6 +1219,10 @@ static int ras_base_insert_node_string(char *ndstring, prte_session_t *dest)
      * phase-two completion event). */
     PMIX_LIST_FOREACH(snap, &ndlist, prte_node_t) {
         PMIx_Argv_append_nosize(&rsv_names, snap->name);
+        /* mark as newly added so the DVM extension will include it
+         * despite any static -host filter given when the DVM was
+         * started */
+        snap->state = PRTE_NODE_STATE_ADDED;
     }
 
     ret = prte_ras_base_node_insert(&ndlist, NULL);
