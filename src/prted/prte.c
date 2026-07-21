@@ -135,25 +135,27 @@ static void epipe_signal_callback(int fd, short args, void *cbdata);
 static int prep_singleton(const char *name);
 static bool keepalive = false;
 
+/* NOTE: these callbacks execute on the PMIx progress thread. They
+ * therefore capture their arguments and shift the wakeup onto our
+ * event base - the waiters below drive prte_event_base while
+ * polling the lock, so a wakeup signaled directly from the PMIx
+ * thread could be missed while the loop is parked in the backend */
 static void opcbfunc(pmix_status_t status, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
-    PRTE_HIDE_UNUSED_PARAMS(status);
 
-    PMIX_ACQUIRE_OBJECT(lock);
-    PRTE_PMIX_WAKEUP_THREAD(lock);
+    prte_pmix_shifted_wakeup(lock, status, NULL);
 }
 
 static void spcbfunc(pmix_status_t status, char nspace[], void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
+    char *msg = NULL;
 
-    PMIX_ACQUIRE_OBJECT(lock);
-    lock->status = status;
     if (PMIX_SUCCESS == status) {
-        lock->msg = strdup(nspace);
+        msg = strdup(nspace);
     }
-    PRTE_PMIX_WAKEUP_THREAD(lock);
+    prte_pmix_shifted_wakeup(lock, status, msg);
 }
 
 static void parent_died_fn(size_t evhdlr_registration_id, pmix_status_t status,
@@ -178,8 +180,9 @@ static void evhandler_reg_callbk(pmix_status_t status, size_t evhandler_ref, voi
     mylock_t *lock = (mylock_t *) cbdata;
     PRTE_HIDE_UNUSED_PARAMS(evhandler_ref);
 
-    lock->status = status;
-    PRTE_PMIX_WAKEUP_THREAD(&lock->lock);
+    /* executes on the PMIx progress thread - record the status in
+     * the embedded lock and shift the wakeup onto our event base */
+    prte_pmix_shifted_wakeup(&lock->lock, status, NULL);
 }
 
 
@@ -755,7 +758,14 @@ int prte(int argc, char *argv[])
     PMIX_INFO_LOAD(&info, PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
     PMIx_Register_event_handler(&code, 1, &info, 1, parent_died_fn, evhandler_reg_callbk,
                                 (void *) &mylock);
-    PRTE_PMIX_WAIT_THREAD(&mylock.lock);
+    /* the registration callback shifts its wakeup onto our event
+     * base, so we must cycle the event library while we wait. Do
+     * not add an escape from this loop - the callback references
+     * the stack-based lock, so we cannot leave until it has fired */
+    while (mylock.lock.active) {
+        prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
+    }
+    PMIX_ACQUIRE_OBJECT(&mylock.lock);
     PMIX_INFO_DESTRUCT(&info);
     PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
 
@@ -1328,7 +1338,15 @@ int prte(int argc, char *argv[])
         if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
             pmix_output(0, "IOF push of stdin failed: %s", PMIx_Error_string(ret));
         } else if (PMIX_SUCCESS == ret) {
-            PRTE_PMIX_WAIT_THREAD(&lock);
+            /* the callback shifts its wakeup onto our event base,
+             * so we must cycle the event library while we wait. Do
+             * not add an escape from this loop - the callback
+             * references the stack-based lock, so we cannot leave
+             * until it has fired */
+            while (lock.active) {
+                prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
+            }
+            PMIX_ACQUIRE_OBJECT(&lock);
         }
         PRTE_PMIX_DESTRUCT_LOCK(&lock);
         PMIX_INFO_FREE(iptr2, 1);
@@ -1349,7 +1367,15 @@ proceed:
     if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
         pmix_output(0, "IOF close of stdin failed: %s", PMIx_Error_string(ret));
     } else if (PMIX_SUCCESS == ret) {
-        PRTE_PMIX_WAIT_THREAD(&lock);
+        /* the callback shifts its wakeup onto our event base. The
+         * main event loop above has already exited, so we must
+         * cycle the event library ourselves until the wakeup
+         * arrives - the callback references the stack-based lock,
+         * so we cannot leave until it has fired */
+        while (lock.active) {
+            prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
+        }
+        PMIX_ACQUIRE_OBJECT(&lock);
     }
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_DESTRUCT(&info);
