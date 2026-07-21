@@ -197,9 +197,45 @@ pmix_status_t prte_server_send_request(uint8_t cmd, prte_pmix_server_req_t *req)
     return PMIX_SUCCESS;
 }
 
+static void _alloc_request(int sd, short args, void *cbdata)
+{
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
+    pmix_status_t rc;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_ACQUIRE_OBJECT(req);
+
+    /* add this request to our local request tracker array */
+    req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+
+    if (!PRTE_PROC_IS_MASTER) {
+        /* if we are not the DVM master, then we have to send
+         * this request to the master for processing */
+        rc = prte_server_send_request(PRTE_PMIX_ALLOC_REQ, req);
+        if (PRTE_SUCCESS != rc) {
+            goto callback;
+        }
+        return;
+    }
+
+    /* pass this to the RAS framework for handling - we are
+     * already on the progress thread */
+    prte_ras_base_modify(0, 0, req);
+    return;
+
+callback:
+    /* only executed on error - let the requestor know */
+    if (NULL != req->infocbfunc) {
+        req->infocbfunc(rc, NULL, 0, req->cbdata, prte_pmix_server_req_release, req);
+        return;
+    }
+    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
+    PMIX_RELEASE(req);
+}
+
 /* this is the upcall from the PMIx server for the allocation
  * request support. Since we are going to touch global structures
- * (e.g., the session tracker pointer array), we have to threadshift
+ * (e.g., the local request tracker array), we have to threadshift
  * this request into our own internal progress thread. Note that the
  * allocation request could have come to this host from the
  * scheduler, or a tool, or even an application process. */
@@ -209,7 +245,6 @@ pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client,
                                    pmix_info_cbfunc_t cbfunc, void *cbdata)
 {
     prte_pmix_server_req_t *req;
-    pmix_status_t rc;
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s allocate upcalled on behalf of proc %s:%u with %" PRIsize_t " infos",
@@ -225,23 +260,7 @@ pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client,
     req->infocbfunc = cbfunc;
     req->cbdata = cbdata;
 
-    /* add this request to our local request tracker array */
-    req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
-
-    if (!PRTE_PROC_IS_MASTER) {
-        /* if we are not the DVM master, then we have to send
-         * this request to the master for processing */
-        rc = prte_server_send_request(PRTE_PMIX_ALLOC_REQ, req);
-        if (PRTE_SUCCESS != rc) {
-            pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
-            PMIX_RELEASE(req);
-            return rc;
-        }
-        return rc;
-    }
-
-    // pass this to the RAS framework for handling
-    prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, prte_ras_base_modify, req);
+    prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, _alloc_request, req);
     PMIX_POST_OBJECT(req);
     prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
     return PMIX_SUCCESS;
