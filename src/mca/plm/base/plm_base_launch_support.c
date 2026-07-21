@@ -907,6 +907,25 @@ void prte_plm_base_launch_apps(int fd, short args, void *cbdata)
     return;
 }
 
+/* completion of the nspace registration for a do-not-launch job -
+ * executes on the PRRTE progress thread */
+static void donotlaunch_reg_complete(pmix_status_t status, void *cbdata)
+{
+    prte_job_t *jdata = (prte_job_t *) cbdata;
+
+    if (PMIX_SUCCESS != status) {
+        PRTE_ERROR_LOG(prte_pmix_convert_status(status));
+    }
+    /* if we are persistent, then we remain alive - otherwise, declare
+     * all jobs complete and terminate */
+    if (prte_persistent) {
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
+    } else {
+        prte_never_launched = true;
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALL_JOBS_COMPLETE);
+    }
+}
+
 void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
@@ -923,18 +942,14 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
 
     /* if we don't want to launch the apps, now is the time to leave */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
-        /* go ahead and register the job */
-        rc = prte_pmix_server_register_nspace(jdata);
+        /* go ahead and register the job - the completion callback
+         * advances the job state once the registration is done */
+        rc = prte_pmix_server_register_nspace(jdata, donotlaunch_reg_complete, jdata);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
-        }
-        /* if we are persistent, then we remain alive - otherwise, declare
-         * all jobs complete and terminate */
-        if (prte_persistent) {
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
-        } else {
-            prte_never_launched = true;
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALL_JOBS_COMPLETE);
+            /* the callback will never fire - advance the state
+             * ourselves */
+            donotlaunch_reg_complete(PMIX_SUCCESS, jdata);
         }
         PMIX_RELEASE(caddy);
         return;

@@ -1516,6 +1516,7 @@ static int prep_singleton(const char *name)
     pmix_rank_t rank;
     prte_app_context_t *app;
     char cwd[PRTE_PATH_MAX];
+    prte_pmix_lock_t lock;
 
     ptr = strdup(name);
     p1 = strrchr(ptr, '.');
@@ -1582,8 +1583,22 @@ static int prep_singleton(const char *name)
     node->num_procs = 1;
     node->slots_inuse = 1;
 
-    // register the info with our PMIx server
-    rc = prte_pmix_server_register_nspace(jdata);
+    // register the info with our PMIx server - the registration
+    // completes asynchronously, with the callback firing on our
+    // own progress thread, so we must cycle the event library
+    // while we wait for it
+    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
+    rc = prte_pmix_server_register_nspace(jdata, opcbfunc, &lock);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_PMIX_DESTRUCT_LOCK(&lock);
+        return rc;
+    }
+    while (lock.active) {
+        prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
+    }
+    PMIX_ACQUIRE_OBJECT(&lock);
+    rc = prte_pmix_convert_status(lock.status);
+    PRTE_PMIX_DESTRUCT_LOCK(&lock);
 
     return rc;
 }
