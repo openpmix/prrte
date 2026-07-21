@@ -535,6 +535,37 @@ or upcall must therefore thread-shift into the PRRTE progress thread
 performing any operations — the function body that PMIx calls should do
 nothing beyond capturing its arguments and posting the event.
 
+This applies even to a callback that does nothing but complete a
+blocking request: a `prte_pmix_lock_t` is a PRRTE object, so do **not**
+call `PRTE_PMIX_WAKEUP_THREAD` (or touch the lock in any other way)
+directly from the PMIx thread.  Capture the arguments, thread-shift,
+and perform the wakeup in the handler running on the PRRTE progress
+thread.  The bare-wakeup shortcut loses races: a waiter on the thread
+that drives `prte_event_base` waits by re-checking `lock.active`
+between `prte_event_loop(PRTE_EVLOOP_ONCE)` iterations rather than
+blocking in the lock's condition variable, so a direct cross-thread
+signal delivered while the loop is parked inside the event backend is
+never observed and the process hangs (this was the cause of an
+intermittent `prterun` spawn hang).  Posting the wakeup as an event
+both wakes the event loop and serializes the flag update.  The
+`prte_pmix_shifted_wakeup()` helper (declared in
+[`src/pmix/pmix-internal.h`](src/pmix/pmix-internal.h)) packages this
+pattern for completion callbacks whose only job is to record a status
+(and optionally a message string) and wake a waiter.
+
+The corollary on the waiting side: code that must block on the thread
+that drives `prte_event_base` (for example, `prte()` itself while
+waiting for a spawn to complete) must wait with the loop-driving idiom —
+
+```c
+while (prte_event_base_active && lock.active) {
+    prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
+}
+```
+
+— never with `PRTE_PMIX_WAIT_THREAD`, which would park the only thread
+able to run the thread-shifted wakeup handler.
+
 ### Thread-shifting with caddies
 
 A **caddy** is a short-lived heap object whose sole job is to carry a request's parameters across states within the progress thread.  Every caddy struct must contain at minimum:

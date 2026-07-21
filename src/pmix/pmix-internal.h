@@ -187,6 +187,33 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
         pmix_mutex_unlock(&(lck)->mutex);     \
     } while (0)
 
+/* Caddy for shifting a lock wakeup from the PMIx progress thread
+ * onto the PRRTE progress thread. A prte_pmix_lock_t is a PRRTE
+ * object, so a callback executing on the PMIx progress thread must
+ * not wake it directly - a waiter that drives prte_event_base while
+ * polling the lock's active flag would never observe a wakeup
+ * signaled while the event loop is parked in the backend. Posting
+ * the wakeup as an event both wakes the loop and serializes the
+ * flag update. */
+typedef struct {
+    pmix_object_t super;
+    pmix_event_t ev;
+    prte_pmix_lock_t *lock;
+    pmix_status_t status;
+    char *msg;
+} prte_pmix_wakeup_caddy_t;
+PMIX_CLASS_DECLARATION(prte_pmix_wakeup_caddy_t);
+
+/* Post a wakeup of the given lock to prte_event_base. The handler
+ * running on the PRRTE progress thread stores status in
+ * lock->status, transfers ownership of msg (which must be NULL or
+ * heap-allocated) to lock->msg, and then wakes the waiter. Call
+ * this - never PRTE_PMIX_WAKEUP_THREAD - from any callback that
+ * PMIx invokes in a process hosting a PRRTE event base. */
+PRTE_EXPORT void prte_pmix_shifted_wakeup(prte_pmix_lock_t *lock,
+                                          pmix_status_t status,
+                                          char *msg);
+
 /*
  * Count the hash for the the external RM
  */
