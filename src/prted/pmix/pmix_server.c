@@ -635,11 +635,9 @@ static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
  * requested the allocation. PRRTE is a pure relay here: it neither sets the
  * timeout nor generates the warning, only re-emits it as a directed event to
  * the recorded requestor. */
-static void alloc_timeout_warning_hdlr(size_t evhdlr_registration_id, pmix_status_t status,
-                                       const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
-                                       pmix_info_t *results, size_t nresults,
-                                       pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
+static void _alloc_timeout_warning(int sd, short args, void *cbdata)
 {
+    prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
     size_t n, idx, nrinfo;
     char *alloc_id = NULL;
     uint32_t time_remaining = 0;
@@ -649,13 +647,15 @@ static void alloc_timeout_warning_hdlr(size_t evhdlr_registration_id, pmix_statu
     pmix_data_array_t parray;
     pmix_proc_t ptarg;
     pmix_status_t rc;
-    PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, status, source, results, nresults);
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
-    for (n = 0; n < ninfo; n++) {
-        if (PMIx_Check_key(info[n].key, PMIX_ALLOC_ID)) {
-            alloc_id = info[n].value.data.string;
-        } else if (PMIx_Check_key(info[n].key, PMIX_TIME_REMAINING)) {
-            time_remaining = info[n].value.data.uint32;
+    PMIX_ACQUIRE_OBJECT(cd);
+
+    for (n = 0; n < cd->ninfo; n++) {
+        if (PMIx_Check_key(cd->info[n].key, PMIX_ALLOC_ID)) {
+            alloc_id = cd->info[n].value.data.string;
+        } else if (PMIx_Check_key(cd->info[n].key, PMIX_TIME_REMAINING)) {
+            time_remaining = cd->info[n].value.data.uint32;
             have_time = true;
         }
     }
@@ -698,9 +698,32 @@ static void alloc_timeout_warning_hdlr(size_t evhdlr_registration_id, pmix_statu
     PMIX_INFO_FREE(rinfo, nrinfo);
 
 done:
-    if (NULL != cbfunc) {
-        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    if (NULL != cd->evcbfunc) {
+        cd->evcbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cd->cbdata);
     }
+    PMIX_RELEASE(cd);
+}
+
+static void alloc_timeout_warning_hdlr(size_t evhdlr_registration_id, pmix_status_t status,
+                                       const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
+                                       pmix_info_t *results, size_t nresults,
+                                       pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
+{
+    prte_pmix_server_op_caddy_t *cd;
+    PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, status, source, results, nresults);
+
+    /* this executes on the PMIx progress thread, and we must access
+     * the session tracker - shift to our event base. The info array
+     * remains valid until we invoke the notification callback, so
+     * carry the pointers across */
+    cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
+    cd->info = info;
+    cd->ninfo = ninfo;
+    cd->evcbfunc = cbfunc;
+    cd->cbdata = cbdata;
+    prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _alloc_timeout_warning, cd);
+    PMIX_POST_OBJECT(cd);
+    prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
 }
 #endif
 
