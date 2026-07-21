@@ -621,6 +621,14 @@ int prte(int argc, char *argv[])
         prte_state_base.parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);
         close(wait_pipe[0]);
+        /* the event base was opened before we forked, and some
+         * backends (e.g., kqueue on macOS) do not survive a fork.
+         * Reinitialize the base so the child gets a functional
+         * backend - otherwise the event loop spins on a dead
+         * kernel queue and the DVM never reports ready */
+        if (0 != prte_event_reinit(prte_event_base)) {
+            return PRTE_ERROR;
+        }
     } else {
 #if defined(HAVE_SETSID)
         /* see if we were directed to separate from current session */
