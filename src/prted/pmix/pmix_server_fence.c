@@ -70,6 +70,19 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
 }
 
 
+/* completion of the nspace registration for a wildcard dmodex
+ * request - executes on the PRRTE progress thread */
+static void wildcard_reg_complete(pmix_status_t status, void *cbdata)
+{
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
+
+    /* let the server know that the data is now available */
+    if (NULL != req->mdxcbfunc) {
+        req->mdxcbfunc(status, NULL, 0, req->cbdata, NULL, NULL);
+    }
+    PMIX_RELEASE(req);
+}
+
 static void dmodex_req(int sd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
@@ -155,18 +168,14 @@ static void dmodex_req(int sd, short args, void *cbdata)
     /* if this is a request for rank=WILDCARD, then they want the job-level data
      * for this job. It was probably not stored locally because we aren't hosting
      * any local procs. There is no need to request the data as we already have
-     * it - so just register the nspace so the local PMIx server gets it */
+     * it - so just register the nspace so the local PMIx server gets it. The
+     * registration completes asynchronously */
     if (PMIX_RANK_WILDCARD == req->tproc.rank) {
-        rc = prte_pmix_server_register_nspace(jdata);
+        rc = prte_pmix_server_register_nspace(jdata, wildcard_reg_complete, req);
         if (PRTE_SUCCESS != rc) {
             prc = prte_pmix_convert_rc(rc);
             goto callback;
         }
-        /* let the server know that the data is now available */
-        if (NULL != req->mdxcbfunc) {
-            req->mdxcbfunc(rc, NULL, 0, req->cbdata, NULL, NULL);
-        }
-        PMIX_RELEASE(req);
         return;
     }
 

@@ -344,6 +344,22 @@ pmix_status_t pmix_server_abort_fn(const pmix_proc_t *proc, void *server_object,
     return PRTE_SUCCESS;
 }
 
+/* completion of a tool registration - executes on the PRRTE
+ * progress thread */
+static void tconn_reg_complete(pmix_status_t status, void *cbdata)
+{
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
+
+    if (PMIX_SUCCESS != status) {
+        PMIX_ERROR_LOG(status);
+        // we can live without it
+    }
+    req->toolcbfunc(req->pstatus, &req->target, req->cbdata);
+
+    /* cleanup */
+    PMIX_RELEASE(req);
+}
+
 void pmix_server_tconn_return(int status, pmix_proc_t *sender,
                               pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
                               void *cbdata)
@@ -391,18 +407,34 @@ void pmix_server_tconn_return(int status, pmix_proc_t *sender,
             return;
         }
         PMIX_LOAD_NSPACE(req->target.nspace, jobid);
-        /* the tool is not a client of ours, but we can provide at least some information */
-        rc = prte_pmix_server_register_tool(req);
-        if (PRTE_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            // we can live without it
+        /* the tool is not a client of ours, but we can provide at
+         * least some information - the registration completes
+         * asynchronously */
+        req->pstatus = ret;
+        rc = prte_pmix_server_register_tool(req, tconn_reg_complete, req);
+        if (PRTE_SUCCESS == rc) {
+            return;
         }
+        PMIX_ERROR_LOG(rc);
+        // we can live without it
     }
 
     req->toolcbfunc(ret, &req->target, req->cbdata);
 
     /* cleanup */
     PMIX_RELEASE(req);
+}
+
+/* completion of the local tool registration - executes on the
+ * PRRTE progress thread */
+static void toolconn_reg_complete(pmix_status_t status, void *cbdata)
+{
+    prte_pmix_server_req_t *cd = (prte_pmix_server_req_t *) cbdata;
+
+    if (NULL != cd->toolcbfunc) {
+        cd->toolcbfunc(status, &cd->target, cd->cbdata);
+    }
+    PMIX_RELEASE(cd);
 }
 
 static void _toolconn(int sd, short args, void *cbdata)
@@ -548,11 +580,13 @@ static void _toolconn(int sd, short args, void *cbdata)
             free(tmp);
             prte_plm_globals.next_jobid++;
         }
-        // register this job - will add to our array of jobs
-        rc = prte_pmix_server_register_tool(cd);
-        if (PMIX_SUCCESS != rc) {
-            rc = prte_pmix_convert_rc(rc);
+        // register this job - will add to our array of jobs. The
+        // registration completes asynchronously
+        rc = prte_pmix_server_register_tool(cd, toolconn_reg_complete, cd);
+        if (PRTE_SUCCESS == rc) {
+            return;
         }
+        rc = prte_pmix_convert_rc(rc);
         goto complete;
     }
 

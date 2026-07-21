@@ -36,7 +36,8 @@ PRTE_EXPORT void pmix_server_start(void);
 PRTE_EXPORT void pmix_server_finalize(void);
 PRTE_EXPORT void pmix_server_register_params(void);
 
-PRTE_EXPORT int prte_pmix_server_register_nspace(prte_job_t *jdata);
+PRTE_EXPORT int prte_pmix_server_register_nspace(prte_job_t *jdata,
+                                                 pmix_op_cbfunc_t cbfunc, void *cbdata);
 
 PRTE_EXPORT void prte_pmix_server_clear(pmix_proc_t *pname);
 
