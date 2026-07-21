@@ -133,6 +133,8 @@ typedef struct {
     size_t napps;
     pmix_query_t *queries;
     size_t nqueries;
+    pmix_iof_channel_t channels;
+    bool flag;
     pmix_op_cbfunc_t cbfunc;
     pmix_info_cbfunc_t infocbfunc;
     pmix_tool_connection_cbfunc_t toolcbfunc;
