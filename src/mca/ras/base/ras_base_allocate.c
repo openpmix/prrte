@@ -1292,6 +1292,25 @@ static void ras_base_complete_grow_request(prte_pmix_server_req_t *req)
     size_t n;
     bool found = false;
 
+    /* an add-host/add-hostfile request (from the --add-host and
+     * --add-hostfile cmd line options) grows the DVM's general pool.
+     * The nodes were already inserted by the module that claimed the
+     * request, and there is no reservation to route them to - so all
+     * that remains is to extend the DVM across the new nodes. The
+     * grow must be activated even if the request only adjusted slots
+     * on existing nodes: initiating the request marked the DVM as
+     * not-ready and parked the requesting job in the job cache, and
+     * it is the VM_READY re-entry at the end of the (possibly empty)
+     * daemon launch that marks the DVM ready again and releases the
+     * cached jobs */
+    for (n = 0; n < req->ninfo; n++) {
+        if (PMIx_Check_key(req->info[n].key, PMIX_ADD_HOST) ||
+            PMIx_Check_key(req->info[n].key, PMIX_ADD_HOSTFILE)) {
+            prte_ras_base_activate_dvm_grow();
+            return;
+        }
+    }
+
     rc = ras_base_prepare_grow(req, &dest);
     if (PMIX_SUCCESS != rc) {
         req->pstatus = rc;
