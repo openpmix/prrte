@@ -2023,19 +2023,18 @@ respond:
 }
 
 /* alloc callback to send the results to the requesting daemon */
-static void send_alloc_resp(pmix_status_t status,
-                            pmix_info_t info[], size_t ninfo,
-                            void *cbdata,
-                            pmix_release_cbfunc_t release_fn,
-                            void *release_cbdata)
+static void _send_alloc_resp(int sd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
     pmix_data_buffer_t *buf;
     pmix_status_t rc;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_ACQUIRE_OBJECT(req);
 
     /* pack the status */
     PMIX_DATA_BUFFER_CREATE(buf);
-    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, buf, &status, 1, PMIX_STATUS))) {
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, buf, &req->pstatus, 1, PMIX_STATUS))) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
         return;
@@ -2049,14 +2048,14 @@ static void send_alloc_resp(pmix_status_t status,
     }
 
     /* pack any provided info */
-    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, buf, &ninfo, 1, PMIX_SIZE))) {
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, buf, &req->ninfo, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
         return;
     }
 
-    if (0 < ninfo) {
-        if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, buf, info, ninfo, PMIX_INFO))) {
+    if (0 < req->ninfo) {
+        if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, buf, req->info, req->ninfo, PMIX_INFO))) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(buf);
             return;
@@ -2071,13 +2070,42 @@ static void send_alloc_resp(pmix_status_t status,
     }
 
     /* Call the provided callback function */
-    if (NULL != release_fn) {
-        release_fn(release_cbdata);
+    if (NULL != req->rlcbfunc) {
+        req->rlcbfunc(req->rlcbdata);
     }
 
     /* Release the server op request data */
     pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
     PMIX_RELEASE(req);
+}
+
+static void send_alloc_resp(pmix_status_t status,
+                            pmix_info_t info[], size_t ninfo,
+                            void *cbdata,
+                            pmix_release_cbfunc_t release_fn,
+                            void *release_cbdata)
+{
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
+
+    /* this can be invoked on the PMIx progress thread (e.g., as the
+     * callback from PMIx_Session_control), so record the results in
+     * the request and shift the pack/send onto our event base. The
+     * results remain valid until we invoke the release callback,
+     * which now happens at the end of the shifted handler. Beware
+     * that some callers pass the request's own info array back as
+     * the results - do not free it in that case */
+    req->pstatus = status;
+    if (req->copy && NULL != req->info && info != req->info) {
+        PMIX_INFO_FREE(req->info, req->ninfo);
+        req->copy = false;
+    }
+    req->info = info;
+    req->ninfo = ninfo;
+    req->rlcbfunc = release_fn;
+    req->rlcbdata = release_cbdata;
+    prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, _send_alloc_resp, req);
+    PMIX_POST_OBJECT(req);
+    prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
 }
 
 static void pmix_server_sched(int status, pmix_proc_t *sender,
