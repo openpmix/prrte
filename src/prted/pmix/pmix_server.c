@@ -2346,6 +2346,8 @@ static void opcon(prte_pmix_server_op_caddy_t *p)
     memset(&p->proct, 0, sizeof(pmix_proc_t));
     p->procs = NULL;
     p->nprocs = 0;
+    p->channels = 0;
+    p->flag = false;
     p->eprocs = NULL;
     p->neprocs = 0;
     p->info = NULL;
