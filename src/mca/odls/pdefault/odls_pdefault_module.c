@@ -593,17 +593,16 @@ static int launch_local_procs(pmix_data_buffer_t *data)
     int rc;
     pmix_nspace_t job;
 
-    /* construct the list of children we are to launch */
-    rc = prte_odls_base_default_construct_child_list(data, &job);
+    /* construct the list of children we are to launch - the base
+     * function activates the local launch once any required local
+     * support setup has asynchronously completed */
+    rc = prte_odls_base_default_construct_child_list(data, &job, fork_local_proc);
     if (PRTE_SUCCESS != rc) {
         PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                              "%s odls:pdefault:launch:local failed to construct child list on error %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));
         return rc;
     }
-
-    /* launch the local procs */
-    PRTE_ACTIVATE_LOCAL_LAUNCH(job, fork_local_proc);
 
     return PRTE_SUCCESS;
 }

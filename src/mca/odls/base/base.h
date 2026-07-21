@@ -78,6 +78,9 @@ PRTE_EXPORT extern pmix_mca_base_framework_t prte_odls_base_framework;
  */
 PRTE_EXPORT int prte_odls_base_select(void);
 
+/* define a function that will fork a local proc */
+typedef int (*prte_odls_base_fork_local_proc_fn_t)(void *cd);
+
 /*
  * Default functions that are common to most environments - can
  * be overridden by specific environments if they need something
@@ -87,12 +90,10 @@ PRTE_EXPORT int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *da
                                                           pmix_nspace_t job);
 
 PRTE_EXPORT int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *data,
-                                                            pmix_nspace_t *job);
+                                                            pmix_nspace_t *job,
+                                                            prte_odls_base_fork_local_proc_fn_t fork_local);
 
 PRTE_EXPORT void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata);
-
-/* define a function that will fork a local proc */
-typedef int (*prte_odls_base_fork_local_proc_fn_t)(void *cd);
 
 /* define an object for fork/exec the local proc */
 typedef struct {
