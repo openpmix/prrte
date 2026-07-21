@@ -494,6 +494,40 @@ int prte_pmix_register_cleanup(char *path, bool directory, bool ignore, bool job
     return ret;
 }
 
+/* handler side of prte_pmix_shifted_wakeup - executes on the
+ * PRRTE progress thread */
+static void shifted_wakeup(int fd, short args, void *cbdata)
+{
+    prte_pmix_wakeup_caddy_t *cd = (prte_pmix_wakeup_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
+
+    PMIX_ACQUIRE_OBJECT(cd);
+    cd->lock->status = cd->status;
+    if (NULL != cd->msg) {
+        /* transfer ownership to the lock - the caddy destructor
+         * must not free it */
+        cd->lock->msg = cd->msg;
+        cd->msg = NULL;
+    }
+    PRTE_PMIX_WAKEUP_THREAD(cd->lock);
+    PMIX_RELEASE(cd);
+}
+
+void prte_pmix_shifted_wakeup(prte_pmix_lock_t *lock,
+                              pmix_status_t status,
+                              char *msg)
+{
+    prte_pmix_wakeup_caddy_t *cd;
+
+    cd = PMIX_NEW(prte_pmix_wakeup_caddy_t);
+    cd->lock = lock;
+    cd->status = status;
+    cd->msg = msg;
+    prte_event_set(prte_event_base, &cd->ev, -1, PRTE_EV_WRITE, shifted_wakeup, cd);
+    PMIX_POST_OBJECT(cd);
+    prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
+}
+
 /* CLASS INSTANTIATIONS */
 static void acon(prte_pmix_app_t *p)
 {
@@ -536,3 +570,17 @@ static void pvdes(prte_value_t *p)
     PMIX_VALUE_DESTRUCT(&p->value);
 }
 PRTE_EXPORT PMIX_CLASS_INSTANCE(prte_value_t, pmix_list_item_t, pvcon, pvdes);
+
+static void wkcon(prte_pmix_wakeup_caddy_t *p)
+{
+    p->lock = NULL;
+    p->status = PMIX_SUCCESS;
+    p->msg = NULL;
+}
+static void wkdes(prte_pmix_wakeup_caddy_t *p)
+{
+    if (NULL != p->msg) {
+        free(p->msg);
+    }
+}
+PRTE_EXPORT PMIX_CLASS_INSTANCE(prte_pmix_wakeup_caddy_t, pmix_object_t, wkcon, wkdes);
