@@ -313,6 +313,8 @@ int prun(int argc, char *argv[])
 
 
     rc = prun_common(&results, schizo, pargc, pargv);
+    /* reflect the job's outcome in our exit status */
+    PRTE_UPDATE_EXIT_STATUS(rc);
 
 DONE:
     // cleanup and leave
