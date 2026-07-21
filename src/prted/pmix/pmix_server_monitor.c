@@ -75,6 +75,10 @@ static void mfn(int sd, short args, void *cbdata)
     int ret;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
+    // record the number of daemons that must respond - the DVM can
+    // grow or shrink, so this must be read on the progress thread
+    req->ndaemons = prte_process_info.num_daemons - 1;
+
     // cache the request
     req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
 
@@ -180,7 +184,6 @@ pmix_status_t pmix_server_monitor_fn(const pmix_proc_t *requestor,
     req->ndirs = ndirs;
     req->infocbfunc = cbfunc;
     req->cbdata = cbdata;
-    req->ndaemons = prte_process_info.num_daemons - 1;
 
     // need to threadshift this to our event base
     prte_event_set(prte_event_base, &(req->ev), -1, PRTE_EV_WRITE, mfn, req);
