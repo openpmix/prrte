@@ -59,9 +59,11 @@
 #include "src/prted/pmix/pmix_server_internal.h"
 
 
-pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_proc_t targets[],
-                                      size_t ntargets, const pmix_info_t directives[], size_t ndirs,
-                                      pmix_info_cbfunc_t cbfunc, void *cbdata)
+/* process a job control request - runs on the PRRTE progress
+ * thread, since it accesses proc objects and drives the PLM
+ * and daemon-command xcasts */
+static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_proc_t targets[],
+                                      size_t ntargets, const pmix_info_t directives[], size_t ndirs)
 {
     int rc, j;
     int32_t signum;
@@ -72,12 +74,7 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
     pmix_data_buffer_t *cmd;
     prte_daemon_cmd_flag_t cmmnd;
     pmix_proc_t *proct;
-    PRTE_HIDE_UNUSED_PARAMS(cbfunc, cbdata);
-
-    pmix_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s job control request from %s:%d",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        requestor->nspace, requestor->rank);
+    PRTE_HIDE_UNUSED_PARAMS(requestor);
 
     for (m = 0; m < ndirs; m++) {
         if (PMIX_CHECK_KEY(&directives[m], PMIX_JOB_CTRL_KILL)) {
@@ -233,4 +230,53 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
     }
 
     return PMIX_ERR_NOT_SUPPORTED;
+}
+
+static void _job_ctrl(int sd, short args, void *cbdata)
+{
+    prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
+    pmix_status_t rc;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_ACQUIRE_OBJECT(cd);
+
+    rc = process_job_ctrl(&cd->proc, cd->procs, cd->nprocs, cd->directives, cd->ndirs);
+    if (PMIX_OPERATION_SUCCEEDED == rc) {
+        rc = PMIX_SUCCESS;
+    }
+    if (NULL != cd->infocbfunc) {
+        cd->infocbfunc(rc, NULL, 0, cd->cbdata, NULL, NULL);
+    }
+    PMIX_RELEASE(cd);
+}
+
+pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_proc_t targets[],
+                                      size_t ntargets, const pmix_info_t directives[], size_t ndirs,
+                                      pmix_info_cbfunc_t cbfunc, void *cbdata)
+{
+    prte_pmix_server_op_caddy_t *cd;
+
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s job control request from %s:%d",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        requestor->nspace, requestor->rank);
+
+    /* this upcall arrives on the PMIx progress thread - the request
+     * requires access to proc objects, the PLM, and the daemon
+     * command channel, so shift it to our progress thread. The
+     * targets and directives arrays remain valid until we invoke
+     * the callback, which happens at the end of the shifted
+     * handler */
+    cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
+    memcpy(&cd->proc, requestor, sizeof(pmix_proc_t));
+    cd->procs = (pmix_proc_t *) targets;
+    cd->nprocs = ntargets;
+    cd->directives = (pmix_info_t *) directives;
+    cd->ndirs = ndirs;
+    cd->infocbfunc = cbfunc;
+    cd->cbdata = cbdata;
+    prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _job_ctrl, cd);
+    PMIX_POST_OBJECT(cd);
+    prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
+    return PMIX_SUCCESS;
 }
