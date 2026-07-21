@@ -49,7 +49,6 @@ typedef struct {
  */
 static void swt_con(prte_slurm_wait_tracker_t *p);
 static void swt_des(prte_slurm_wait_tracker_t *p);
-static void localrelease(void *cbdata);
 static int prte_ras_slurm_make_sbatch_arg(pmix_hash_table_t *fields, const char *field_name, const char *field_format, bool obj_num, int *argc, char **argv);
 static int prte_ras_slurm_exec_sbatch(char * const *argv, char *job_id);
 static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields);
@@ -136,18 +135,6 @@ static void swt_des(prte_slurm_wait_tracker_t *p)
     if (NULL != p->req) {
         PMIX_RELEASE(p->req);
     }
-}
-
-/*
- * Cleanup function if user provides callback function
- * after new resources are secured
- */
-static void localrelease(void *cbdata)
-{
-    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
-
-    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
-    PMIX_RELEASE(req);
 }
 
 /*
@@ -926,7 +913,7 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
     /* Execute callback if necessary */
     if (NULL != req->infocbfunc) {
         req->infocbfunc(req->pstatus, req->info, req->ninfo,
-                        req->cbdata, localrelease, req);
+                        req->cbdata, prte_pmix_server_req_release, req);
         PMIX_RELEASE(trk);
         return;
     }

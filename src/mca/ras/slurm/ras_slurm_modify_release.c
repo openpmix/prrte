@@ -23,7 +23,6 @@ static bool prte_ras_slurm_session_contains_invoker(prte_session_t *session, con
 static int prte_ras_slurm_session_removable_count(prte_session_stack_item_t *session_item, const char *launching_jobid);
 static prte_session_stack_item_t *prte_ras_slurm_find_releasable_session(const char *launching_jobid, char **excluded_jobids);
 static int prte_ras_slurm_validate_count_release(int nodes_to_remove, const char *launching_jobid);
-static void localrelease(void *cbdata);
 static bool prte_ras_slurm_session_is_dynamic(prte_session_t *session);
 static int prte_ras_slurm_remove_nodes_by_name(prte_pmix_server_req_t *req, char **nodes);
 static int prte_ras_slurm_remove_allocation_by_id(prte_pmix_server_req_t *req, const char *alloc_id);
@@ -44,13 +43,6 @@ static int prte_ras_slurm_shrink_job_to_survivors(const char *slurm_jobid, char 
 static void prte_ras_slurm_cleanup_resize_scripts(const char *slurm_jobid);
 static void prte_ras_slurm_exclude_shrunk_nodes(prte_shrink_campaign_t *campaign);
 
-static void localrelease(void *cbdata)
-{
-    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
-
-    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
-    PMIX_RELEASE(req);
-}
 
 /**
  * @brief Check whether a Slurm session was created by a modify request.
@@ -448,7 +440,7 @@ static int prte_ras_slurm_complete_release_request(prte_pmix_server_req_t *req)
     req->pstatus = PMIX_OPERATION_IN_PROGRESS;
     if (NULL != req->infocbfunc) {
         req->infocbfunc(req->pstatus, req->info, req->ninfo, req->cbdata,
-                        localrelease, req);
+                        prte_pmix_server_req_release, req);
         return PRTE_ERR_OP_IN_PROGRESS;
     }
 

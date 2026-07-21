@@ -216,6 +216,13 @@ PMIX_CLASS_DECLARATION(prte_pmix_server_op_caddy_t);
         prte_event_active(&(_cd->ev), PRTE_EV_WRITE, 1);                           \
     } while (0);
 
+/* Release callback to hand to the PMIx server when relaying the
+ * results of a request tracked in the local request array. The PMIx
+ * library invokes it on the PMIx progress thread once it is done
+ * with the results, so it thread-shifts before clearing the request
+ * from prte_pmix_server_globals.local_reqs and releasing it */
+PRTE_EXPORT void prte_pmix_server_req_release(void *cbdata);
+
 /* define the server module functions */
 PRTE_EXPORT extern pmix_status_t pmix_server_client_connected2_fn(const pmix_proc_t *proc,
                                                                   void *server_object,
