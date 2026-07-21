@@ -2245,6 +2245,28 @@ PMIX_CLASS_INSTANCE(prte_pmix_server_op_caddy_t,
                     pmix_object_t,
                     opcon, NULL);
 
+static void _req_release(int sd, short args, void *cbdata)
+{
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_ACQUIRE_OBJECT(req);
+    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
+    PMIX_RELEASE(req);
+}
+
+void prte_pmix_server_req_release(void *cbdata)
+{
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
+
+    /* this is invoked on the PMIx progress thread, so we must
+     * shift to our event base before touching the global
+     * request array */
+    prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, _req_release, req);
+    PMIX_POST_OBJECT(req);
+    prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
+}
+
 static void rqcon(prte_pmix_server_req_t *p)
 {
     p->event_active = false;

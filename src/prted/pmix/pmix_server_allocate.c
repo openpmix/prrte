@@ -15,14 +15,6 @@
 #include "src/util/dash_host/dash_host.h"
 #include "src/mca/ras/base/base.h"
 
-static void localrelease(void *cbdata)
-{
-    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
-
-    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
-    PMIX_RELEASE(req);
-}
-
 void pmix_server_alloc_request_resp(int status, pmix_proc_t *sender,
                                     pmix_data_buffer_t *buffer,
                                     prte_rml_tag_t tg,
@@ -90,7 +82,7 @@ void pmix_server_alloc_request_resp(int status, pmix_proc_t *sender,
 ANSWER:
     if (NULL != req->infocbfunc) {
         // pass the response back to the requestor
-        req->infocbfunc(ret, req->info, req->ninfo, req, localrelease, req);
+        req->infocbfunc(ret, req->info, req->ninfo, req, prte_pmix_server_req_release, req);
     } else {
         PMIX_RELEASE(req);
     }

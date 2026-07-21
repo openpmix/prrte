@@ -553,13 +553,6 @@ void prte_ras_base_release_allocation(prte_session_t *session)
     }
 }
 
-static void localrelease(void *cbdata)
-{
-    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
-
-    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
-    PMIX_RELEASE(req);
-}
 
 void prte_ras_base_modify(int fd, short args, void *cbdata)
 {
@@ -609,7 +602,7 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
 
     // execute the callback
     if (NULL != req->infocbfunc) {
-        req->infocbfunc(req->pstatus, req->info, req->ninfo, req->cbdata, localrelease, req);
+        req->infocbfunc(req->pstatus, req->info, req->ninfo, req->cbdata, prte_pmix_server_req_release, req);
         return;
     }
 

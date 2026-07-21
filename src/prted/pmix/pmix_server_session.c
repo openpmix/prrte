@@ -17,14 +17,6 @@
 #include "src/mca/rmaps/rmaps.h"
 #include "src/mca/schizo/base/base.h"
 
-static void localrelease(void *cbdata)
-{
-    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
-
-    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
-    PMIX_RELEASE(req);
-}
-
 /* Process the session control directive from the scheduler */
 static int process_directive(prte_pmix_server_req_t *req)
 {
@@ -267,7 +259,7 @@ static int process_directive(prte_pmix_server_req_t *req)
 // only come here upon error
 ANSWER:
     if (NULL != req->infocbfunc) {
-        req->infocbfunc(rc, req->info, req->ninfo, req->cbdata, localrelease, req);
+        req->infocbfunc(rc, req->info, req->ninfo, req->cbdata, prte_pmix_server_req_release, req);
     } else {
         PMIX_RELEASE(req);
     }
@@ -376,7 +368,7 @@ callback:
     /* this section gets executed solely upon an error or if this was a
      * directive to us from the scheduler */
     if (NULL != req->infocbfunc) {
-        req->infocbfunc(rc, req->info, req->ninfo, req->cbdata, localrelease, req);
+        req->infocbfunc(rc, req->info, req->ninfo, req->cbdata, prte_pmix_server_req_release, req);
         return;
     }
     pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);

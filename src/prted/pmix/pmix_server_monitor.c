@@ -66,13 +66,6 @@
  * down to the requestor.
  */
 
-static void rlfn(void *cbdata)
-{
-    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
-
-    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
-    PMIX_RELEASE(req);
-}
 
 static void mfn(int sd, short args, void *cbdata)
 {
@@ -158,7 +151,7 @@ static void mfn(int sd, short args, void *cbdata)
 errorout:
     // need to alert the PMIx server so nothing hangs
     if (NULL != req->infocbfunc) {
-        req->infocbfunc(rc, NULL, 0, req->cbdata, rlfn, req);
+        req->infocbfunc(rc, NULL, 0, req->cbdata, prte_pmix_server_req_release, req);
     } else {
         pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
         PMIX_RELEASE(req);
@@ -540,7 +533,7 @@ void pmix_server_monitor_resp(int status, pmix_proc_t *sender,
     if (req->ndaemons == req->nreported) {
         if (NULL != req->infocbfunc) {
             req->infocbfunc(req->pstatus, req->info, req->ninfo, req->cbdata,
-                            rlfn, req);
+                            prte_pmix_server_req_release, req);
         } else {
             // nothing we can do!
             pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
