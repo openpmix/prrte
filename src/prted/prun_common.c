@@ -130,6 +130,11 @@ static void opcbfunc(pmix_status_t status, void *cbdata)
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 
+/* the release lock the main thread parks on while the job runs -
+ * the default handler must be able to wake it even if an event
+ * fails to carry the registered return object */
+static prte_pmix_lock_t *release_lock = NULL;
+
 static void defhandler(size_t evhdlr_registration_id, pmix_status_t status,
                        const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
                        pmix_info_t *results, size_t nresults,
@@ -144,6 +149,19 @@ static void defhandler(size_t evhdlr_registration_id, pmix_status_t status,
         pmix_output(0, "PRUN: DEFHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
     }
 
+    /* find the lock we are to release - if the event did not carry
+     * it, fall back to the release lock we registered */
+    if (NULL != info) {
+        for (n = 0; n < ninfo; n++) {
+            if (PMIX_CHECK_KEY(&info[n], PMIX_EVENT_RETURN_OBJECT)) {
+                lock = (prte_pmix_lock_t *) info[n].value.data.ptr;
+            }
+        }
+    }
+    if (NULL == lock) {
+        lock = release_lock;
+    }
+
     if (PMIX_ERR_IOF_FAILURE == status) {
         pmix_proc_t target;
         pmix_info_t directive;
@@ -153,31 +171,28 @@ static void defhandler(size_t evhdlr_registration_id, pmix_status_t status,
         PMIX_INFO_LOAD(&directive, PMIX_JOB_CTRL_KILL, NULL, PMIX_BOOL);
         rc = PMIx_Job_control_nb(&target, 1, &directive, 1, NULL, NULL);
         if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
-            PMIx_tool_finalize();
-            /* exit with a non-zero status */
-            exit(1);
+            /* we cannot terminate the job. This handler executes on
+             * the PMIx progress thread, so we must not finalize the
+             * library or exit from here - record the error and wake
+             * the main thread, which owns the shutdown path */
+            if (NULL != lock) {
+                lock->status = rc;
+                if (NULL == lock->msg) {
+                    lock->msg = strdup("failed to terminate job after IOF failure");
+                }
+                PRTE_PMIX_WAKEUP_THREAD(lock);
+            }
         }
         goto progress;
     }
 
     if (PMIX_ERR_UNREACH == status || PMIX_ERR_LOST_CONNECTION == status) {
-        /* we should always have info returned to us - if not, there is
-         * nothing we can do */
-        if (NULL != info) {
-            for (n = 0; n < ninfo; n++) {
-                if (PMIX_CHECK_KEY(&info[n], PMIX_EVENT_RETURN_OBJECT)) {
-                    lock = (prte_pmix_lock_t *) info[n].value.data.ptr;
-                }
-            }
+        if (NULL != lock) {
+            /* save the status */
+            lock->status = status;
+            /* release the lock */
+            PRTE_PMIX_WAKEUP_THREAD(lock);
         }
-
-        if (NULL == lock) {
-            exit(1);
-        }
-        /* save the status */
-        lock->status = status;
-        /* release the lock */
-        PRTE_PMIX_WAKEUP_THREAD(lock);
     }
 progress:
     /* we _always_ have to execute the evhandler callback or
@@ -513,6 +528,7 @@ int prun_common(pmix_cli_result_t *results,
     /* register a default event handler and pass it our release lock
      * so we can cleanly exit if the server goes away */
     PRTE_PMIX_CONSTRUCT_LOCK(&rellock);
+    release_lock = &rellock;
     PMIX_INFO_CREATE(iptr, 2);
     PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_RETURN_OBJECT, &rellock, PMIX_POINTER);
     PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_HDLR_NAME, "DEFAULT", PMIX_STRING);
@@ -740,6 +756,8 @@ int prun_common(pmix_cli_result_t *results,
     PMIX_INFO_DESTRUCT(&info);
 
 DONE:
+    /* the release lock is about to leave scope */
+    release_lock = NULL;
     PMIX_LIST_FOREACH(evitm, &forwarded_signals, prte_event_list_item_t)
     {
         prte_event_signal_del(&evitm->ev);
