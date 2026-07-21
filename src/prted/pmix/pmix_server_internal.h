@@ -134,6 +134,7 @@ typedef struct {
     pmix_query_t *queries;
     size_t nqueries;
     pmix_iof_channel_t channels;
+    pmix_data_range_t range;
     bool flag;
     pmix_op_cbfunc_t cbfunc;
     pmix_info_cbfunc_t infocbfunc;

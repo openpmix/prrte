@@ -2347,6 +2347,7 @@ static void opcon(prte_pmix_server_op_caddy_t *p)
     p->procs = NULL;
     p->nprocs = 0;
     p->channels = 0;
+    p->range = PMIX_RANGE_UNDEF;
     p->flag = false;
     p->eprocs = NULL;
     p->neprocs = 0;

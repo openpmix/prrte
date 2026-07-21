@@ -316,42 +316,20 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
     }
 }
 
-pmix_status_t pmix_server_notify_event(pmix_status_t code, const pmix_proc_t *source,
-                                       pmix_data_range_t range, pmix_info_t info[], size_t ninfo,
-                                       pmix_op_cbfunc_t cbfunc, void *cbdata)
+static void _notify_event(int sd, short args, void *cbdata)
 {
-    int rc;
+    prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
     pmix_data_buffer_t pbkt;
-    pmix_status_t ret;
-    size_t n;
-    PRTE_HIDE_UNUSED_PARAMS(cbfunc, cbdata);
+    pmix_status_t ret = PMIX_SUCCESS;
+    int rc;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
-    pmix_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s local process %s generated event code %s range %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(source),
-                        PMIx_Error_string(code), PMIx_Data_range_string(range));
-
-    /* we can get events prior to completing prte_init as we have
-     * to init PMIx early so that PRRTE components can use it */
-    PMIX_ACQUIRE_THREAD(&prte_init_lock);
-    if (!prte_initialized) {
-        PMIX_RELEASE_THREAD(&prte_init_lock);
-        goto done;
-    }
-    PMIX_RELEASE_THREAD(&prte_init_lock);
-
-    /* check to see if this is one we sent down */
-    for (n = 0; n < ninfo; n++) {
-        if (0 == strcmp(info[n].key, "prte.notify.donotloop")) {
-            /* yep - do not process */
-            goto done;
-        }
-    }
+    PMIX_ACQUIRE_OBJECT(cd);
 
     /* if this is notification of procs being ready for debug, then
      * we treat this as a state change */
-    if (PMIX_READY_FOR_DEBUG == code) {
-        PRTE_ACTIVATE_PROC_STATE((pmix_proc_t*)source, PRTE_PROC_STATE_READY_FOR_DEBUG);
+    if (PMIX_READY_FOR_DEBUG == cd->status) {
+        PRTE_ACTIVATE_PROC_STATE(&cd->proc, PRTE_PROC_STATE_READY_FOR_DEBUG);
         goto done;
     }
 
@@ -363,52 +341,101 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code, const pmix_proc_t *so
     /* we need to add a flag indicating this came from us as we are going to get it echoed
      * back to us by the broadcast */
     if (PMIX_SUCCESS
-        != (rc = PMIx_Data_pack(NULL, &pbkt, &PRTE_PROC_MY_NAME->rank, 1, PMIX_PROC_RANK))) {
-        PMIX_ERROR_LOG(rc);
+        != (ret = PMIx_Data_pack(NULL, &pbkt, &PRTE_PROC_MY_NAME->rank, 1, PMIX_PROC_RANK))) {
+        PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-        return rc;
+        goto done;
     }
 
     /* pack the status code */
-    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &code, 1, PMIX_STATUS))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &cd->status, 1, PMIX_STATUS))) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-        return ret;
+        goto done;
     }
     /* pack the source */
-    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, (pmix_proc_t *) source, 1, PMIX_PROC))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &cd->proc, 1, PMIX_PROC))) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-        return ret;
+        goto done;
     }
     /* pack the range */
-    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &range, 1, PMIX_DATA_RANGE))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &cd->range, 1, PMIX_DATA_RANGE))) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-        return ret;
+        goto done;
     }
     /* pack the number of infos */
-    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &ninfo, 1, PMIX_SIZE))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &cd->ninfo, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-        return ret;
+        goto done;
     }
-    if (0 < ninfo) {
-        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, info, ninfo, PMIX_INFO))) {
+    if (0 < cd->ninfo) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, cd->info, cd->ninfo, PMIX_INFO))) {
             PMIX_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-            return ret;
+            goto done;
         }
     }
 
     if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_NOTIFICATION, &pbkt))) {
         PRTE_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-        return PMIX_ERROR;
+        ret = PMIX_ERROR;
     }
     PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
 
 done:
-    /* we do not need to execute a callback as we did this atomically */
-    return PMIX_OPERATION_SUCCEEDED;
+    if (NULL != cd->cbfunc) {
+        cd->cbfunc(ret, cd->cbdata);
+    }
+    PMIX_RELEASE(cd);
+}
+
+pmix_status_t pmix_server_notify_event(pmix_status_t code, const pmix_proc_t *source,
+                                       pmix_data_range_t range, pmix_info_t info[], size_t ninfo,
+                                       pmix_op_cbfunc_t cbfunc, void *cbdata)
+{
+    prte_pmix_server_op_caddy_t *cd;
+    size_t n;
+
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s local process %s generated event code %s range %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(source),
+                        PMIx_Error_string(code), PMIx_Data_range_string(range));
+
+    /* we can get events prior to completing prte_init as we have
+     * to init PMIx early so that PRRTE components can use it */
+    PMIX_ACQUIRE_THREAD(&prte_init_lock);
+    if (!prte_initialized) {
+        PMIX_RELEASE_THREAD(&prte_init_lock);
+        return PMIX_OPERATION_SUCCEEDED;
+    }
+    PMIX_RELEASE_THREAD(&prte_init_lock);
+
+    /* check to see if this is one we sent down */
+    for (n = 0; n < ninfo; n++) {
+        if (0 == strcmp(info[n].key, "prte.notify.donotloop")) {
+            /* yep - do not process */
+            return PMIX_OPERATION_SUCCEEDED;
+        }
+    }
+
+    /* this upcall arrives on the PMIx progress thread - activating
+     * a state change or driving the xcast must happen on our own
+     * progress thread, so shift it. The info array remains valid
+     * until we invoke the callback, which happens at the end of
+     * the shifted handler */
+    cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
+    cd->status = code;
+    memcpy(&cd->proc, source, sizeof(pmix_proc_t));
+    cd->range = range;
+    cd->info = info;
+    cd->ninfo = ninfo;
+    cd->cbfunc = cbfunc;
+    cd->cbdata = cbdata;
+    prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _notify_event, cd);
+    PMIX_POST_OBJECT(cd);
+    prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
+    return PMIX_SUCCESS;
 }
