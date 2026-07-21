@@ -1821,23 +1821,14 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender,
 }
 
 
-static void log_cbfunc(pmix_status_t status, void *cbdata)
+static void _log_resp(int sd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
     pmix_data_buffer_t *buf;
-    pmix_status_t rc, lstat;
+    pmix_status_t rc;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
-    pmix_output_verbose(2, prte_pmix_server_globals.output,
-                        "Logging callback called");
-
-    if (PMIX_SUCCESS != status && PMIX_OPERATION_SUCCEEDED != status) {
-        pmix_output(prte_pmix_server_globals.output, "LOG FAILED");
-    }
-    if (PMIX_OPERATION_SUCCEEDED == status) {
-        lstat = PMIX_SUCCESS;
-    } else {
-        lstat = status;
-    }
+    PMIX_ACQUIRE_OBJECT(req);
 
     PMIX_DATA_BUFFER_CREATE(buf);
 
@@ -1850,7 +1841,7 @@ static void log_cbfunc(pmix_status_t status, void *cbdata)
     }
 
     // pack the operation's status
-    rc = PMIx_Data_pack(NULL, buf, &lstat, 1, PMIX_STATUS);
+    rc = PMIx_Data_pack(NULL, buf, &req->pstatus, 1, PMIX_STATUS);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
@@ -1860,7 +1851,7 @@ static void log_cbfunc(pmix_status_t status, void *cbdata)
     /* send the result to the requestor */
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "Logging response %s sent to daemon %u",
-                        PMIx_Error_string(lstat), req->proxy.rank);
+                        PMIx_Error_string(req->pstatus), req->proxy.rank);
 
     PRTE_RML_SEND(rc, req->proxy.rank, buf,
                   PRTE_RML_TAG_LOGGING_RESP);
@@ -1871,6 +1862,29 @@ static void log_cbfunc(pmix_status_t status, void *cbdata)
 
 done:
     PMIX_RELEASE(req);
+}
+
+static void log_cbfunc(pmix_status_t status, void *cbdata)
+{
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
+
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "Logging callback called");
+
+    if (PMIX_SUCCESS != status && PMIX_OPERATION_SUCCEEDED != status) {
+        pmix_output(prte_pmix_server_globals.output, "LOG FAILED");
+    }
+    if (PMIX_OPERATION_SUCCEEDED == status) {
+        req->pstatus = PMIX_SUCCESS;
+    } else {
+        req->pstatus = status;
+    }
+
+    /* the PMIx library invokes this on its progress thread, so we
+     * must shift to our event base before responding over the RML */
+    prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, _log_resp, req);
+    PMIX_POST_OBJECT(req);
+    prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
 }
 
 
