@@ -90,28 +90,63 @@
 #include "src/mca/odls/base/base.h"
 
 typedef struct {
+    pmix_object_t super;
+    pmix_event_t ev;
     prte_job_t *jdata;
     pmix_info_t *info;
     size_t ninfo;
-    prte_pmix_lock_t lock;
+    pmix_byte_object_t pbo;
 } prte_odls_jcaddy_t;
+static void jccon(prte_odls_jcaddy_t *p)
+{
+    p->jdata = NULL;
+    p->info = NULL;
+    p->ninfo = 0;
+    PMIX_BYTE_OBJECT_CONSTRUCT(&p->pbo);
+}
+static void jcdes(prte_odls_jcaddy_t *p)
+{
+    if (NULL != p->info) {
+        PMIX_INFO_FREE(p->info, p->ninfo);
+    }
+    PMIX_BYTE_OBJECT_DESTRUCT(&p->pbo);
+}
+static PMIX_CLASS_INSTANCE(prte_odls_jcaddy_t, pmix_object_t, jccon, jcdes);
+
+static void _setup_complete(int sd, short args, void *cbdata)
+{
+    prte_odls_jcaddy_t *cd = (prte_odls_jcaddy_t *) cbdata;
+    int rc;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_ACQUIRE_OBJECT(cd);
+
+    /* add the results to the launch msg */
+    rc = PMIx_Data_pack(NULL, &cd->jdata->launch_msg, &cd->pbo, 1, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+    }
+
+    /* move to next stage */
+    PRTE_ACTIVATE_JOB_STATE(cd->jdata, PRTE_JOB_STATE_SEND_LAUNCH_MSG);
+
+    /* releasing the caddy also releases the app-setup info
+     * we passed to the PMIx server */
+    PMIX_RELEASE(cd);
+}
 
 static void setup_cbfunc(pmix_status_t status, pmix_info_t info[], size_t ninfo,
                          void *provided_cbdata, pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
     prte_odls_jcaddy_t *cd = (prte_odls_jcaddy_t *) provided_cbdata;
-    prte_job_t *jdata = cd->jdata;
     pmix_data_buffer_t pbuf;
-    pmix_byte_object_t pbo;
     int rc = PRTE_SUCCESS;
     PRTE_HIDE_UNUSED_PARAMS(status);
 
-    /* release any info */
-    if (NULL != cd->info) {
-        PMIX_INFO_FREE(cd->info, cd->ninfo);
-    }
-
-    PMIX_BYTE_OBJECT_CONSTRUCT(&pbo);
+    /* this callback executes on the PMIx progress thread, so we
+     * cannot touch the job object here - capture the returned
+     * info by serializing it into a byte object, then shift to
+     * our progress thread */
     if (NULL != info) {
         PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
         /* pack the provided info */
@@ -126,29 +161,21 @@ static void setup_cbfunc(pmix_status_t status, pmix_info_t info[], size_t ninfo,
             goto done;
         }
         /* unload it */
-        rc = PMIx_Data_unload(&pbuf, &pbo);
+        rc = PMIx_Data_unload(&pbuf, &cd->pbo);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
         }
     }
-    /* add the results */
-    rc = PMIx_Data_pack(NULL, &jdata->launch_msg, &pbo, 1, PMIX_BYTE_OBJECT);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-    }
 
 done:
-    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-    /* release our caller */
+    /* release our caller - we are done with the provided info */
     if (NULL != cbfunc) {
         cbfunc(rc, cbdata);
     }
 
-    /* move to next stage */
-    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_SEND_LAUNCH_MSG);
-
-    /* release the original thread */
-    PRTE_PMIX_WAKEUP_THREAD(&cd->lock);
+    prte_event_set(prte_event_base, &cd->ev, -1, PRTE_EV_WRITE, _setup_complete, cd);
+    PMIX_POST_OBJECT(cd);
+    prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
 }
 
 /* IT IS CRITICAL THAT ANY CHANGE IN THE ORDER OF THE INFO PACKED IN
@@ -166,7 +193,7 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
     prte_node_t *node;
     int i, k;
     char **list, **procs, **micro, *tmp, *regex;
-    prte_odls_jcaddy_t cd = {0};
+    prte_odls_jcaddy_t *cd;
     prte_proc_t *pptr;
     uint32_t uid;
     uint32_t gid;
@@ -372,30 +399,27 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
     }
     /* convert the job info into an array */
     PMIX_INFO_LIST_CONVERT(ret, ilist, &darray);
-    cd.info = (pmix_info_t *) darray.array;
-    cd.ninfo = darray.size;
     PMIX_INFO_LIST_RELEASE(ilist);
 
-    /* we don't want to block here because it could
-     * take some indeterminate time to get the info */
-    rc = PRTE_SUCCESS;
-    cd.jdata = jdata;
-    PRTE_PMIX_CONSTRUCT_LOCK(&cd.lock);
-    ret = PMIx_server_setup_application(jdata->nspace, cd.info, cd.ninfo,
-                                        setup_cbfunc, &cd);
+    /* do not block waiting for the answer as it could take some
+     * indeterminate time to get the info - the callback will
+     * thread-shift, complete the launch message, and activate
+     * the next state */
+    cd = PMIX_NEW(prte_odls_jcaddy_t);
+    cd->jdata = jdata;
+    cd->info = (pmix_info_t *) darray.array;
+    cd->ninfo = darray.size;
+    ret = PMIx_server_setup_application(jdata->nspace, cd->info, cd->ninfo,
+                                        setup_cbfunc, cd);
     if (PMIX_SUCCESS != ret) {
         pmix_output(0, "[%s:%d] PMIx_server_setup_application failed: %s", __FILE__, __LINE__,
                     PMIx_Error_string(ret));
-        /* the callback that would have freed cd.info will never fire */
-        if (NULL != cd.info) {
-            PMIX_INFO_FREE(cd.info, cd.ninfo);
-        }
-        rc = PRTE_ERROR;
-    } else {
-        PRTE_PMIX_WAIT_THREAD(&cd.lock);
+        /* the callback will never fire - releasing the caddy
+         * also releases the info array */
+        PMIX_RELEASE(cd);
+        return PRTE_ERROR;
     }
-    PRTE_PMIX_DESTRUCT_LOCK(&cd.lock);
-    return rc;
+    return PRTE_SUCCESS;
 }
 
 static void ls_cbunc(pmix_status_t status, void *cbdata)
