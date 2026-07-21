@@ -1331,14 +1331,38 @@ error:
     return;
 }
 
-/* the modex_resp function takes place in the local PMIx server's
- * progress thread - we must therefore thread-shift it so we can
- * access our global data */
-static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata)
+/* caddy for shifting a dmodex response - the req's own events may
+ * be armed as timers, so the shift must use its own event */
+typedef struct {
+    pmix_object_t super;
+    pmix_event_t ev;
+    pmix_status_t status;
+    char *data;
+    size_t sz;
+    prte_pmix_server_req_t *req;
+} prte_dmdx_resp_caddy_t;
+static void dmrcon(prte_dmdx_resp_caddy_t *p)
 {
-    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
+    p->status = PMIX_SUCCESS;
+    p->data = NULL;
+    p->sz = 0;
+    p->req = NULL;
+}
+static void dmrdes(prte_dmdx_resp_caddy_t *p)
+{
+    if (NULL != p->data) {
+        free(p->data);
+    }
+}
+static PMIX_CLASS_INSTANCE(prte_dmdx_resp_caddy_t, pmix_object_t, dmrcon, dmrdes);
 
-    PMIX_ACQUIRE_OBJECT(req);
+static void _modex_resp(int sd, short args, void *cbdata)
+{
+    prte_dmdx_resp_caddy_t *cd = (prte_dmdx_resp_caddy_t *) cbdata;
+    prte_pmix_server_req_t *req = cd->req;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_ACQUIRE_OBJECT(cd);
 
     /* clear any timeout event */
     if (req->event_active) {
@@ -1351,23 +1375,47 @@ static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata
     }
 
     req->inprogress = false; // we are done processing this request
-    req->pstatus = status;
-    if (PMIX_SUCCESS == status && NULL != data) {
+    req->pstatus = cd->status;
+    /* transfer ownership of the data to the req - the caddy
+     * destructor must not free it */
+    req->data = cd->data;
+    cd->data = NULL;
+    req->sz = cd->sz;
+
+    /* we are already on the progress thread, so just execute
+     * the response directly */
+    _mdxresp(0, 0, req);
+    PMIX_RELEASE(cd);
+}
+
+/* the modex_resp function takes place in the local PMIx server's
+ * progress thread - we must therefore thread-shift it so we can
+ * access our global data. Note that we cannot touch the req at
+ * all here: its fields and its timer events belong to the PRRTE
+ * progress thread, and its own event structures may be armed as
+ * timers, so the shift is carried by a separate caddy */
+static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata)
+{
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
+    prte_dmdx_resp_caddy_t *cd;
+
+    cd = PMIX_NEW(prte_dmdx_resp_caddy_t);
+    cd->status = status;
+    cd->req = req;
+    if (PMIX_SUCCESS == status && NULL != data && 0 < sz) {
         /* we need to preserve the data as the caller
          * will free it upon our return */
-        req->data = (char *) malloc(sz);
-        if (NULL == req->data) {
+        cd->data = (char *) malloc(sz);
+        if (NULL == cd->data) {
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-            req->data = NULL;
-            req->sz = 0;
         } else {
-             memcpy(req->data, data, sz);
-             req->sz = sz;
+            memcpy(cd->data, data, sz);
+            cd->sz = sz;
         }
     }
-    prte_event_set(prte_event_base, &(req->ev), -1, PRTE_EV_WRITE, _mdxresp, req);
-    PMIX_POST_OBJECT(req);
-    prte_event_active(&(req->ev), PRTE_EV_WRITE, 1);
+    prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _modex_resp, cd);
+    PMIX_POST_OBJECT(cd);
+    prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
 }
 
 static void dmdx_check(int sd, short args, void *cbdata)
