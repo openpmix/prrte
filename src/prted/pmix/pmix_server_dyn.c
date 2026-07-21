@@ -1247,6 +1247,10 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
     rc = prte_grpcomm.fence(procs, nprocs, info, ninfo,
                             cd->msg.unpack_ptr, cd->msg.bytes_used,
                             connect_release, cd);
+    if (PMIX_SUCCESS != rc) {
+        /* the release callback will never fire */
+        PMIX_RELEASE(cd);
+    }
     return rc;
 }
 
