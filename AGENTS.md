@@ -391,7 +391,14 @@ Common configure options:
 
 Version requirements: PMIx ≥ 6.1.0, hwloc ≥ 2.1.0, libevent ≥ 2.0.21.
 
-### Test-building your changes
+### GOLDEN RULE: build with `make` from the repository root — never try to short-circuit the build
+
+Do not waste effort trying to compile a single `.c` file by hand or
+otherwise short-circuit the build system (invoking the compiler
+directly, replaying a compile command, building one object in
+isolation).  Just go to the repository root and run `make` — it is
+quick, it only rebuilds what changed, and it always builds what you
+need.
 
 Build from the repository root with `make -j$(nproc)`.  Running `make`
 from the root is what respects the generated headers and the per-target
@@ -517,6 +524,16 @@ that apply to what you touched:
 PRRTE is event-driven and single-threaded on the progress thread.  Use
 the PRRTE event loop (`prte_event_base`) for deferred work.  Do not block on
 the progress thread.
+
+### GOLDEN RULE: thread-shift every PMIx callback and server-module upcall
+
+All callback functions invoked by PMIx, and all PMIx server module
+function upcalls, execute on the **PMIx** progress thread.  PRRTE
+objects must never be accessed from that thread.  Every such callback
+or upcall must therefore thread-shift into the PRRTE progress thread
+(via the caddy pattern below, posting to `prte_event_base`) **before**
+performing any operations — the function body that PMIx calls should do
+nothing beyond capturing its arguments and posting the event.
 
 ### Thread-shifting with caddies
 
