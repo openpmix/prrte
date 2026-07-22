@@ -294,10 +294,11 @@ int main(int argc, char *argv[])
         }
         if (PRTE_ERR_SILENT != rc) {
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
-        } else {
-            rc = PRTE_SUCCESS;
         }
-        return rc;
+        /* the error has been reported - exit with a failed status
+         * so callers do not mistake a rejected command line for a
+         * successful termination request */
+        return 1;
     }
 
     // we do NOT accept arguments other than our own
