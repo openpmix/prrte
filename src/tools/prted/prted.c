@@ -763,6 +763,15 @@ bootstrap_wait:
     }
     ret = PRTE_SUCCESS;
 
+    /* if we daemonized, then the parent from the fork is blocked
+     * waiting to hear that we are up and running - release it */
+    if (0 <= prte_state_base.parent_fd) {
+        char ok = 'K';
+        pmix_fd_write(prte_state_base.parent_fd, 1, &ok);
+        close(prte_state_base.parent_fd);
+        prte_state_base.parent_fd = -1;
+    }
+
     /* loop the event lib until an exit event is detected */
     while (prte_event_base_active) {
         prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
