@@ -63,6 +63,10 @@ Terminate an instance of the PMIx Reference RTE (PRRTE) DVM
 | "--wait-to-connect   | Delay specified number of seconds before      |
 | <seconds>"           | trying to connect                             |
 +----------------------+-----------------------------------------------+
+| "--allow-run-as-     | Accepted for symmetry with the other PRRTE    |
+| root"                | tools - pterm launches nothing, so no         |
+|                      | root-execution guard applies                  |
++----------------------+-----------------------------------------------+
 
 Report bugs to %s
 #
@@ -71,6 +75,11 @@ Report bugs to %s
 %s (%s) %s
 
 Report bugs to %s
+#
+[allow-run-as-root]
+
+Accepted for symmetry with the other PRRTE tools - pterm launches
+nothing, so no root-execution guard applies
 #
 [dvm-uri]
 
