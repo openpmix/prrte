@@ -1,4 +1,12 @@
-# PRRTE DVM test "swarm"
+# AGENTS.md — the dockerswarm multi-node test harness
+
+Orientation for AI agents and human contributors who need to run PRRTE
+across multiple nodes without a cluster. **This directory is the
+canonical multi-node harness** — if you are about to hand-craft
+containers, tar a source tree into a volume, or patch files inside a
+running node, stop: `build.sh` below already does the right thing
+(bind-mounts your live working tree into a builder and compiles it
+out-of-tree into the shared volume the nodes read).
 
 A small, self-contained harness for exercising PRRTE across several container
 "nodes" — a persistent DVM, one-shot `prterun`, and the **elastic DVM**

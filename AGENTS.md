@@ -482,6 +482,16 @@ prun -n 4 hostname                  # basic launch smoke test
 pterm                               # shut down DVM
 ```
 
+**Multi-node testing without a cluster.**  Use the container harness in
+[`contrib/dockerswarm/`](contrib/dockerswarm/) — its
+[`AGENTS.md`](contrib/dockerswarm/AGENTS.md) is the authoritative guide.
+Its `build.sh` bind-mounts your live working tree into a builder
+container and compiles it out-of-tree into a shared volume the ten
+"node" containers read, so the swarm always runs your uncommitted
+changes; `run-tests.sh` drives the multi-node suite (launch, IOF,
+preload, elastic grow/shrink, relay).  Do not invent an ad-hoc
+container flow — use the harness.
+
 For resource-manager integration (SLURM, PBS, LSF), test within an actual
 allocation on the relevant system.
 
