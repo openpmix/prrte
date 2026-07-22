@@ -1855,6 +1855,20 @@ static int translate_params(void)
     pmix_mca_base_var_file_value_t *fv;
     uid_t uid;
     int n, len;
+    static bool translated = false;
+
+    /* we only need to harvest the OMPI params once per process -
+     * nothing below overwrites a value already in our environment,
+     * so repeating the scan can never change the result. It can,
+     * however, crash us: detect_proxy is invoked on the PRRTE
+     * progress thread for every incoming spawn request, while the
+     * PMIx library's pmdl/ompi component parses these same files on
+     * the PMIx progress thread, and pmix_mca_base_parse_paramfile
+     * passes its target list through unprotected static storage */
+    if (translated) {
+        return 100;
+    }
+    translated = true;
 
     /* since we are the proxy, we need to check the OMPI default
      * MCA params to see if there is something relating to PRRTE
