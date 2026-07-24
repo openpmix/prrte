@@ -2542,8 +2542,15 @@ void prte_plm_base_dvm_mod_notify(const pmix_proc_t *requester,
      * mirroring the PMIX_ALLOC_TIMEOUT_WARNING delivery: custom range plus the
      * allocation id, the requester's own request id when one was supplied, and
      * — on failure — the underlying cause so the requester can distinguish
-     * what went wrong rather than only that something did. */
-    nrinfo = 2;
+     * what went wrong rather than only that something did.  The event also
+     * carries "prte.notify.donotloop" so our own notify_event server upcall
+     * short-circuits instead of thread-shifting and re-xcasting it: the
+     * requester is a tool local to this HNP, so PMIx delivers the event
+     * locally and no broadcast is needed.  Without the marker the upcall
+     * would defer its work onto this progress thread while the blocking
+     * PMIx_Notify_event below is parked here waiting for it -- a self-deadlock
+     * (see the AGENTS.md rule on locally-originated event notifications). */
+    nrinfo = 3;  /* custom range + alloc id + donotloop marker */
     if (NULL != req_id) {
         nrinfo++;
     }
@@ -2559,6 +2566,8 @@ void prte_plm_base_dvm_mod_notify(const pmix_proc_t *requester,
     /* PMIX_INFO_LOAD deep-copies the data, so the stack copies are fine */
     PMIX_INFO_LOAD(&rinfo[idx++], PMIX_EVENT_CUSTOM_RANGE, &parray, PMIX_DATA_ARRAY);
     PMIX_INFO_LOAD(&rinfo[idx++], PMIX_ALLOC_ID, (void *) alloc_id, PMIX_STRING);
+    /* keep delivery local: do not loop back through our own server upcall */
+    PMIX_INFO_LOAD(&rinfo[idx++], "prte.notify.donotloop", NULL, PMIX_BOOL);
     if (NULL != req_id) {
         PMIX_INFO_LOAD(&rinfo[idx++], PMIX_ALLOC_REQ_ID, (void *) req_id, PMIX_STRING);
     }

@@ -631,6 +631,45 @@ Here the handler performs the work, invokes the caller's callback, and
 releases the caddy with `PMIX_RELEASE(cd)` — there is **no**
 `PRTE_PMIX_WAKEUP_THREAD` because no one is waiting on a lock.
 
+### GOLDEN RULE: mark locally-originated event notifications `prte.notify.donotloop`
+
+When PRRTE itself originates an event notification with
+`PMIx_Notify_event` — a grow/shrink completion, a job-start or
+ready-for-debug event, an allocation-timeout relay, a job-end, etc. —
+add a `"prte.notify.donotloop"` boolean to the event's info array:
+
+```c
+PMIX_INFO_LOAD(&info[idx++], "prte.notify.donotloop", NULL, PMIX_BOOL);
+```
+
+PMIx loops any event it is handed back through this daemon's **own**
+`notify_event` server upcall (`pmix_server_notify_event`) so the daemon
+can propagate it to its peers. That upcall thread-shifts its work
+(state activation, pack, xcast) onto `prte_event_base` and returns
+`PMIX_SUCCESS`. So if you originate the event with the **blocking** form
+of `PMIx_Notify_event` (a `NULL` completion callback, which waits on an
+internal condition) **from the progress thread**, you deadlock the
+process: the progress thread parks inside `PMIx_Notify_event` waiting for
+a completion that can only be produced by the thread-shifted upcall
+handler — which cannot run until the progress thread is free. The
+`notify_event` upcall checks for the `prte.notify.donotloop` marker
+**first** and, when present, returns `PMIX_OPERATION_SUCCEEDED`
+synchronously without thread-shifting; the blocking call then completes
+at once and PMIx still delivers the event to any locally-registered tool
+or process. The marker also serves its original purpose of breaking the
+xcast echo loop (an event broadcast to every daemon must not be
+re-injected and re-broadcast when it arrives).
+
+The requesters/targets of these notifications are tools connected to
+**this** HNP, so local delivery is sufficient and the marker is always
+correct. Omit it only when the event genuinely must reach processes on
+**other** daemons — and in that case never originate it with a blocking
+`PMIx_Notify_event` on the progress thread (use the non-blocking form
+with a real completion callback instead). Getting this wrong produces an
+intermittent, hard-to-trace hang: the symptom is a wedged progress
+thread (`futex_wait_queue`, event base idle) that stops servicing
+everything, including new `PMIx_tool_init` connections.
+
 ---
 
 ## Performance Considerations
