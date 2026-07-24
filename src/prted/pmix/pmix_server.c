@@ -667,8 +667,14 @@ static void _alloc_timeout_warning(int sd, short args, void *cbdata)
         goto done;
     }
 
-    /* assemble a directed (custom-range) notification to the requestor only */
-    nrinfo = 2;  /* custom range + alloc id */
+    /* assemble a directed (custom-range) notification to the requestor only.
+     * The event carries "prte.notify.donotloop" so our own notify_event
+     * server upcall short-circuits instead of thread-shifting and re-xcasting
+     * it -- the requestor is a tool local to this HNP, so PMIx delivers the
+     * event locally.  Without the marker the blocking PMIx_Notify_event below
+     * (on the progress thread) would deadlock against the deferred upcall
+     * handler (see the AGENTS.md rule on locally-originated notifications). */
+    nrinfo = 3;  /* custom range + alloc id + donotloop marker */
     if (NULL != session->user_refid) {
         nrinfo++;
     }
@@ -684,6 +690,8 @@ static void _alloc_timeout_warning(int sd, short args, void *cbdata)
     /* PMIX_INFO_LOAD deep-copies the data array, so the stack copy is fine */
     PMIX_INFO_LOAD(&rinfo[idx++], PMIX_EVENT_CUSTOM_RANGE, &parray, PMIX_DATA_ARRAY);
     PMIX_INFO_LOAD(&rinfo[idx++], PMIX_ALLOC_ID, session->alloc_refid, PMIX_STRING);
+    /* keep delivery local: do not loop back through our own server upcall */
+    PMIX_INFO_LOAD(&rinfo[idx++], "prte.notify.donotloop", NULL, PMIX_BOOL);
     if (NULL != session->user_refid) {
         PMIX_INFO_LOAD(&rinfo[idx++], PMIX_ALLOC_REQ_ID, session->user_refid, PMIX_STRING);
     }
