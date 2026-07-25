@@ -64,6 +64,8 @@ test/unit/odls/Makefile
 test/unit/odls/test_odls
 test/unit/iof/Makefile
 test/unit/iof/test_iof
+test/unit/plm/Makefile
+test/unit/plm/test_plm
 static-components.h
 static-components.h.new.extern
 static-components.h.new.struct

@@ -101,3 +101,7 @@ All the base defaults: `terminate_orteds` → `prte_plm_base_prted_exit`,
 - **Test builds.** Code must keep compiling under
   `PRTE_TESTBUILD_LAUNCHERS` against `testbuild_lsf.h`; don't reach for
   LSF symbols not stubbed there.
+- **`nodelist_argv` is ours to free.** `lsb_launch` does not take
+  ownership of the host list, so it is freed on the `cleanup:` path along
+  with `argv`/`env`. An empty host list is an error
+  (`no-hosts-in-list`), not something to hand to `lsb_launch`.

@@ -53,9 +53,6 @@ PRTE_EXPORT int prte_plm_base_select(void);
  * Specifically, the ODLS needs to access some of these
  * to avoid recursive callbacks
  */
-PRTE_EXPORT void prte_plm_base_app_report_launch(int fd, short event, void *data);
-PRTE_EXPORT void prte_plm_base_receive_process_msg(int fd, short event, void *data);
-
 PRTE_EXPORT void prte_plm_base_set_slots(prte_node_t *node);
 PRTE_EXPORT void prte_plm_base_setup_job(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_plm_base_setup_job_complete(int fd, short args, void *cbdata);

@@ -251,6 +251,12 @@ static int ssh_init(void)
     /* we assign daemon nodes at launch */
     prte_plm_globals.daemon_nodes_assigned_at_launch = true;
 
+    /* tell the base whether or not to replicate the MCA params found in our
+     * environment onto the prted command line - dropping them is the
+     * documented remedy for the "cmd-line-too-long" error */
+    prte_plm_globals.pass_environ_mca_params
+        = prte_mca_plm_ssh_component.pass_environ_mca_params;
+
     return rc;
 }
 
@@ -355,7 +361,12 @@ static void ssh_wait_daemon(int sd, short flags, void *cbdata)
         /* trigger continuation of the launch */
         prte_event_active(&launch_event, EV_WRITE, 1);
     }
-    /* cleanup */
+    /* cleanup - the caddy was handed to us by process_launch_list and
+     * nobody else owns it (the wait tracker only releases its child), so
+     * releasing it here is what frees the launch argv and the retained
+     * daemon proc. Missing this leaks one copy of the full remote command
+     * line for every daemon we start */
+    PMIX_RELEASE(caddy);
     PMIX_RELEASE(t2);
 }
 
@@ -423,6 +434,7 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
     /* setup the correct shell info */
     if (PRTE_SUCCESS != (rc = setup_shell(&remote_shell, &local_shell, nodename, &argc, &argv))) {
         PRTE_ERROR_LOG(rc);
+        PMIx_Argv_free(argv);
         return rc;
     }
 
@@ -735,6 +747,7 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
         pmix_show_help("help-plm-ssh.txt", "cmd-line-too-long", true, strlen(value),
                        sysconf(_SC_ARG_MAX));
         free(value);
+        PMIx_Argv_free(argv);
         return PRTE_ERR_SILENT;
     }
     free(value);
@@ -997,8 +1010,6 @@ static void process_launch_list(int fd, short args, void *cbdata)
     prte_plm_ssh_caddy_t *caddy;
     PRTE_HIDE_UNUSED_PARAMS(fd, args, cbdata);
 
-    PMIX_ACQUIRE_OBJECT(caddy);
-
     while (num_in_progress < prte_mca_plm_ssh_component.num_concurrent) {
         item = pmix_list_remove_first(&launch_list);
         if (NULL == item) {
@@ -1015,6 +1026,9 @@ static void process_launch_list(int fd, short args, void *cbdata)
         if (pid < 0) {
             PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_CHILDREN);
             prte_wait_cb_cancel(caddy->daemon);
+            /* the callback that would have released this caddy will now
+             * never fire */
+            PMIX_RELEASE(caddy);
             continue;
         }
 
@@ -1215,6 +1229,18 @@ static void launch_daemons(int fd, short args, void *cbdata)
             continue;
         }
 
+        /* if the node's daemon has not been defined, then we
+         * have an error! Check this FIRST - the tree-spawn filter
+         * below reads node->daemon->name.rank
+         */
+        if (NULL == node->daemon) {
+            PRTE_ERROR_LOG(PRTE_ERR_FATAL);
+            PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+                                 "%s plm:ssh:launch daemon failed to be defined on node %s",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
+            continue;
+        }
+
         /* if we are tree launching, only launch our own children */
         if (!prte_mca_plm_ssh_component.no_tree_spawn) {
             pmix_rank_t *children = (pmix_rank_t*) prte_rml_base.children.array;
@@ -1236,17 +1262,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
         if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED)) {
             PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                  "%s plm:ssh:launch daemon already exists on node %s",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
-            continue;
-        }
-
-        /* if the node's daemon has not been defined, then we
-         * have an error!
-         */
-        if (NULL == node->daemon) {
-            PRTE_ERROR_LOG(PRTE_ERR_FATAL);
-            PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                                 "%s plm:ssh:launch daemon failed to be defined on node %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
             continue;
         }
@@ -1318,9 +1333,14 @@ static void launch_daemons(int fd, short args, void *cbdata)
      */
     PMIX_RELEASE(state);
     PMIx_Argv_free(argv);
+    free(prefix_dir);
+    free(pmix_prefix);
     return;
 
 cleanup:
+    PMIx_Argv_free(argv);
+    free(prefix_dir);
+    free(pmix_prefix);
     PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
     PMIX_RELEASE(state);
 }
@@ -1514,6 +1534,8 @@ static int ssh_probe(char *nodename, prte_plm_ssh_shell_t *shell)
         PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:ssh: fork failed with errno=%d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), errno));
+        close(fd[0]);
+        close(fd[1]);
         return PRTE_ERR_IN_ERRNO;
     } else if (pid == 0) { /* child */
         if (dup2(fd[1], 1) < 0) {
@@ -1535,6 +1557,7 @@ static int ssh_probe(char *nodename, prte_plm_ssh_shell_t *shell)
         PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:ssh: close failed with errno=%d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), errno));
+        close(fd[0]);
         return PRTE_ERR_IN_ERRNO;
     }
 
@@ -1562,6 +1585,11 @@ static int ssh_probe(char *nodename, prte_plm_ssh_shell_t *shell)
         *ptr = '\0';
     }
     close(fd[0]);
+    /* reap the probe so it does not linger as a zombie - our SIGCHLD
+     * handler knows nothing about this child */
+    while (0 > waitpid(pid, NULL, 0) && EINTR == errno) {
+        continue;
+    }
 
     if (outbuf[0] != '\0') {
         char *sh_name = rindex(outbuf, '/');
@@ -1592,7 +1620,7 @@ static int setup_shell(prte_plm_ssh_shell_t *sshell, prte_plm_ssh_shell_t *lshel
                        int *argc, char ***argv)
 {
     prte_plm_ssh_shell_t remote_shell, local_shell;
-    char *param;
+    char *param = NULL;
     int rc;
 
     /* What is our local shell? */

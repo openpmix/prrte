@@ -116,3 +116,14 @@ exit command; `plm_pals_signal_job` signals `palsrun` directly via
 - **Environment already stripped.** `prte_launch_environ` is the pristine,
   `PRTE_`/`PMIX_`-free copy — keep the daemon settings on the command
   line, not in the forwarded env.
+- **`failed_launch` is a file-static, and must be re-armed.** Unlike the
+  other components (where it is a local initialized to `true`), pals
+  keeps it at file scope because `pals_wait_cb` reads it to tell "aprun
+  never started the daemons" (`FAILED_TO_START`) from "a daemon died
+  after launch" (`ABORTED`). `launch_daemons` therefore sets it `true` on
+  entry — without that the `cleanup:` path can never report a failure and
+  a broken launch just hangs.
+- **Register the waitpid callback in the parent only.** `palsrun` and its
+  `prte_wait_cb` belong to the forking process; doing it before the
+  parent/child branch means the child registers a callback on a proc with
+  pid 0 moments before `execve` replaces it.

@@ -404,6 +404,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     nodelist_flat = PMIx_Argv_join(nodelist_argv, ',');
     PMIx_Argv_free(nodelist_argv);
+    nodelist_argv = NULL;
 
     /* find job ID of first node to launch; we make the assumption here that
      * all other nodes in the launch share that job ID */
@@ -429,6 +430,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     if(UINT32_MAX == job_id) {
         rc = PRTE_ERR_NOT_FOUND;
         PRTE_ERROR_LOG(rc);
+        free(nodelist_flat);
         goto cleanup;
     }
 
@@ -437,6 +439,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     if(NULL == session) {
         rc = PRTE_ERR_NOT_FOUND;
         PRTE_ERROR_LOG(rc);
+        free(nodelist_flat);
         goto cleanup;
     }
 
@@ -767,6 +770,10 @@ static int plm_slurm_start_proc(int argc, char **argv,
         if (NULL != tmp) {
             for (n=0; NULL != tmp[n]; n++) {
                 p = strchr(tmp[n], '=');
+                if (NULL == p) {
+                    /* not an assignment - nothing to unset */
+                    continue;
+                }
                 *p = '\0';
                 unsetenv(tmp[n]);
             }

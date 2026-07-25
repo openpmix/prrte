@@ -63,17 +63,16 @@ typedef struct {
     pmix_data_buffer_t tree_spawn_cmd;
     /* daemon nodes assigned at launch */
     bool daemon_nodes_assigned_at_launch;
+    /* include MCA params found in our environment on the prted cmd line.
+     * Set false by a component (e.g., ssh, via plm_ssh_pass_environ_mca_params)
+     * when the resulting command line would be too long for the launcher */
+    bool pass_environ_mca_params;
     size_t node_regex_threshold;
 } prte_plm_globals_t;
 /**
  * Global instance of PLM framework data
  */
 PRTE_EXPORT extern prte_plm_globals_t prte_plm_globals;
-
-/**
- * Utility routine to set progress engine schedule
- */
-PRTE_EXPORT int prte_plm_base_set_progress_sched(int sched);
 
 /*
  * Launch support
@@ -90,9 +89,7 @@ PRTE_EXPORT void prte_plm_base_stack_trace_recv(int status, pmix_proc_t *sender,
 
 PRTE_EXPORT int prte_plm_base_create_jobid(prte_job_t *jdata);
 PRTE_EXPORT int prte_plm_base_set_hnp_name(void);
-PRTE_EXPORT void prte_plm_base_reset_job(prte_job_t *jdata);
 PRTE_EXPORT int prte_plm_base_setup_prted_cmd(int *argc, char ***argv);
-PRTE_EXPORT void prte_plm_base_check_all_complete(int fd, short args, void *cbdata);
 PRTE_EXPORT int prte_plm_base_setup_virtual_machine(prte_job_t *jdata);
 PRTE_EXPORT void prte_plm_base_fence_release(void);
 PRTE_EXPORT void prte_plm_base_abort_premap_held(void);
@@ -131,14 +128,6 @@ PRTE_EXPORT void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_b
  */
 PRTE_EXPORT int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess_module,
                                                       int *proc_vpid_index);
-
-/*
- * Proxy functions for use by daemons and application procs
- * needing dynamic operations
- */
-PRTE_EXPORT int prte_plm_proxy_init(void);
-PRTE_EXPORT int prte_plm_proxy_spawn(prte_job_t *jdata);
-PRTE_EXPORT int prte_plm_proxy_finalize(void);
 
 END_C_DECLS
 
