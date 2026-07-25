@@ -336,6 +336,47 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     [ "$out" = node1 ] && ok "prun works post-shrink" || bad "prun broken post-shrink"
     RUN 'pterm' >/dev/null 2>&1; cleanup_swarm
 
+    banner "elastic DVM: grow AFTER a shrink completes (phase-two event)"
+    # A grow launches a daemon onto every node that lacks one -- which after a
+    # shrink includes the shrunk node, since releasing the reservation reverts
+    # it to the default pool with its ->session cleared. That node takes the
+    # LOWEST new vpid, so it lands in the daemon_vpid_start slot; a grow
+    # campaign that read its requester from only that first target found no
+    # session, recorded no requester, and emitted no phase-two completion
+    # event at all -- the grow succeeded but the requester waited forever and
+    # the DVM was left wedged. Both variants are covered: growing a DIFFERENT
+    # node after a shrink, and re-growing the SAME one (openpmix/prrte#2491).
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        out=$(RUN 'timeout 90 elastic grow node2:2,node3:2' 2>&1)
+        echo "$out" | grep -q PMIX_DVM_IS_READY && ok "baseline grow node2,node3 completed" \
+                                               || bad "baseline grow did not complete"
+        out=$(RUN 'timeout 90 elastic shrink node3' 2>&1); sleep 3
+        echo "$out" | grep -q PMIX_DVM_IS_READY && ok "shrink node3 completed" \
+                                               || bad "shrink node3 did not complete"
+        # re-grow the SAME node that was just shrunk
+        out=$(RUN 'timeout 90 elastic grow node3:2' 2>&1)
+        echo "$out" | grep -q PMIX_DVM_IS_READY \
+            && ok "re-grow of the shrunk node completed (phase-two event delivered)" \
+            || bad "re-grow of the shrunk node never completed"
+        # and grow a DIFFERENT node afterwards
+        out=$(RUN 'timeout 90 elastic grow node5:2' 2>&1)
+        echo "$out" | grep -q PMIX_DVM_IS_READY \
+            && ok "subsequent grow of a different node completed" \
+            || bad "subsequent grow never completed"
+        [ "$(prted_count 2 3 5)" = 3 ] && ok "daemons present on node2, node3, node5" \
+                                       || bad "expected daemons missing after re-grow"
+        # a wedged DVM would not answer this
+        out=$(RUN 'timeout 30 prun -n 1 hostname' 2>&1 | tail -1)
+        [ "$(echo "$out" | tr -d '\r')" = node1 ] && ok "DVM still responsive after the re-grow" \
+                                                  || bad "DVM wedged after re-grow: $out"
+        RUN 'timeout 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start an elastic DVM for the re-grow test"
+    fi
+    cleanup_swarm
+
     banner "elastic DVM: radix-2 deep tree grow + shrink (multi-hop relay)"
     RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 --prtemca prte_rml_radix 2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
     out=$(RUN 'elastic grow node2:2,node3:2,node4:2,node5:2,node6:2,node7:2,node8:2,node9:2' 2>&1)

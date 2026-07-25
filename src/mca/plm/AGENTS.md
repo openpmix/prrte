@@ -323,6 +323,15 @@ and for each node needing a daemon it:
 - once daemons are added, recomputes the RML routing tree
   (`prte_rml_compute_routing_tree`) so the HNP can tree-spawn/xcast.
 
+A grow starts a daemon on **every** node that lacks one — which after a
+shrink includes the shrunk node, since releasing its reservation reverts it
+to the default pool. That re-absorbed node takes the *lowest* new vpid, so
+it, not one of the newly reserved nodes, occupies `map->daemon_vpid_start`;
+this is why the grow campaign scans **all** its targets for the requestor
+rather than reading the first one (a session-less first target used to leave
+the campaign with no requester, so a successful grow emitted no phase-two
+completion event and the requester hung).
+
 `map->num_new_daemons` is the key output: `== 0` means every node
 already has a daemon, so the component fast-forwards to
 `DAEMONS_REPORTED`. It also records elastic **grow campaigns** and the

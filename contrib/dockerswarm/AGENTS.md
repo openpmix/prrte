@@ -219,24 +219,35 @@ safe.
 | rebuild the base image (new baked PMIx) | `./build.sh image` (or `PMIX_REF=v6.1.0 ./build.sh image`) |
 | tear down the swarm | `docker compose down` (the `prte-build` volume persists) |
 
-## 9. Known issue
+## 9. Grow after a shrink
 
-Re-growing a node **immediately after** shrinking it can fail its TCP
-connect-back (`prted` exits 255) — the just-killed daemon/session may not have
-fully torn down. Tracked as
-[openpmix/prrte#2491](https://github.com/openpmix/prrte/issues/2491). Start a
-fresh DVM between grow/shrink cycles; a single grow→shrink cycle on a fresh DVM
-is the reliable smoke test.
+Historically this was the harness's standing known issue: re-growing a node
+immediately after shrinking it was reported to fail its TCP connect-back
+(`prted` exits 255) — [openpmix/prrte#2491](https://github.com/openpmix/prrte/issues/2491) —
+and the advice was to start a fresh DVM between grow/shrink cycles.
 
-**Any** grow after a shrink on the same DVM appears to be affected, not just a
-re-grow of the same node, and the second symptom is a **hang** rather than a
-failed connect-back: `grow node2,node3` → `shrink node2` → `grow node4` leaves
-a healthy `prted` running on node4 but never delivers the phase-two completion
-event, so the client times out after 60s and the DVM is left wedged (a
-subsequent `prun` does not return either). Reproduced on master, with and
-without `--uniform-nodes`, so it is not specific to the homogeneous-topology
-path. Until this is fixed, any test that grows after a shrink must bound every
-command with `timeout` or it will wedge the whole suite.
+What was actually reproducible here was a **hang**, and it applied to growing
+*any* node after a shrink, not just re-growing the same one: `grow
+node2,node3` → `shrink node2` → `grow node4` left a healthy `prted` on node4,
+but no phase-two completion event ever arrived, so the client timed out after
+60s and the DVM was wedged (a later `prun` never returned either).
+
+The cause was in the grow campaign, not in the launch: a grow starts a daemon
+on **every** node that lacks one, and a shrunk node reverts to the default
+pool with its `->session` cleared, so the re-absorbed node takes the lowest
+new vpid and lands in the `daemon_vpid_start` slot. The campaign read its
+requester from only that first target, found no session, recorded no
+requester — and so emitted no completion event even though the grow had
+succeeded. `prte_plm_base_setup_virtual_machine` now scans all of a
+campaign's targets for the first one carrying a requestor.
+
+`run-tests.sh` covers both variants (re-grow the same node, grow a different
+one afterwards). Note that a grow after a shrink will also silently re-absorb
+the previously shrunk node — that is pre-existing behavior of "launch a
+daemon wherever one is missing", and worth knowing when you count `prted`s.
+
+Still bound elastic commands with `timeout` in any new test: a grow that does
+not complete otherwise wedges the whole suite rather than failing one case.
 
 ## 10. Topology reference
 
