@@ -203,7 +203,10 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
     int32_t count;
     pmix_nspace_t job;
     prte_session_t *session;
-    prte_job_t *jdata, *parent;
+    /* jdata MUST start NULL: the ANSWER_LAUNCH error path reads it, and we
+     * can reach that path before (or without) it ever being assigned - e.g.,
+     * when the job object fails to unpack */
+    prte_job_t *jdata = NULL, *parent;
     pmix_data_buffer_t *answer;
     pmix_rank_t vpid;
     prte_proc_t *proc;
@@ -213,7 +216,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
     int32_t rc = PRTE_SUCCESS, ret;
     uint32_t ui32, *ui32_ptr;
     prte_app_context_t *app, *child_app;
-    pmix_proc_t name, *nptr;
+    pmix_proc_t name, *nptr = NULL;
     pid_t pid;
     bool debugging, found;
     int i, room, *rmptr = &room;
@@ -548,6 +551,7 @@ moveon:
             }
         }
         PMIX_PROC_RELEASE(nptr);
+        nptr = NULL;
 
         PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                              "%s plm:base:receive adding hosts",
@@ -598,6 +602,12 @@ moveon:
                              "%s plm:base:receive - error on launch: %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), rc));
 
+        /* release the launch proxy procID if we retrieved one */
+        if (NULL != nptr) {
+            PMIX_PROC_RELEASE(nptr);
+            nptr = NULL;
+        }
+
         /* setup the response */
         PMIX_DATA_BUFFER_CREATE(answer);
 
@@ -614,8 +624,10 @@ moveon:
             PMIX_ERROR_LOG(rc);
         }
 
-        /* pack the room number of the request */
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ROOM_NUM, (void **) &rmptr, PMIX_INT)) {
+        /* pack the room number of the request - note that we may not have a
+         * job object at all here (e.g., if it failed to unpack) */
+        if (NULL != jdata &&
+            prte_get_attribute(&jdata->attributes, PRTE_JOB_ROOM_NUM, (void **) &rmptr, PMIX_INT)) {
             rc = PMIx_Data_pack(NULL, answer, &room, 1, PMIX_INT);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
@@ -722,12 +734,15 @@ moveon:
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(job)));
 
             PMIX_LOAD_NSPACE(name.nspace, job);
-            /* get the job object */
+            /* get the job object - the job may already have completed, so
+             * this is not necessarily an error, but we cannot process the
+             * report without it */
             jdata = prte_get_job_data_object(job);
             debugging = false;
-            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL) ||
-                prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, NULL, PMIX_BOOL) ||
-                prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, NULL, PMIX_BOOL)) {
+            if (NULL != jdata &&
+                (prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL) ||
+                 prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, NULL, PMIX_BOOL) ||
+                 prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, NULL, PMIX_BOOL))) {
                 debugging = true;
             }
             count = 1;
@@ -750,19 +765,24 @@ moveon:
                      "%s plm:base:receive got ready for debug for vpid %u",
                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), vpid));
 
-                /* get the proc data object */
-                proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, vpid);
-                if (NULL == proc) {
-                    PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FORCED_EXIT);
-                    goto CLEANUP;
-                }
-                /* NEVER update the proc state before activating the state machine - let
-                 * the state cbfunc update it as it may need to compare this
-                 * state against the prior proc state */
-                proc->pid = pid;
-                if (debugging) {
-                    jdata->num_ready_for_debug++;
+                /* get the proc data object - if the job itself is gone (it
+                 * may have completed before this report arrived), there is
+                 * nothing to record, but we must keep unpacking so the rest
+                 * of the buffer stays parseable */
+                if (NULL != jdata) {
+                    proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, vpid);
+                    if (NULL == proc) {
+                        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FORCED_EXIT);
+                        goto CLEANUP;
+                    }
+                    /* NEVER update the proc state before activating the state machine - let
+                     * the state cbfunc update it as it may need to compare this
+                     * state against the prior proc state */
+                    proc->pid = pid;
+                    if (debugging) {
+                        jdata->num_ready_for_debug++;
+                    }
                 }
                 /* get entry from next rank */
                 rc = PMIx_Data_unpack(NULL, buffer, &vpid, &count, PMIX_PROC_RANK);
@@ -928,9 +948,3 @@ CLEANUP:
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 }
 
-/* where HNP messages come */
-void prte_plm_base_receive_process_msg(int fd, short event, void *data)
-{
-    PRTE_HIDE_UNUSED_PARAMS(fd, event, data);
-    assert(0);
-}

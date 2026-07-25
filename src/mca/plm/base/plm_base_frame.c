@@ -58,6 +58,7 @@ prte_plm_globals_t prte_plm_globals = {
     .daemonlaunchstart = {0, 0},
     .tree_spawn_cmd = PMIX_DATA_BUFFER_STATIC_INIT,
     .daemon_nodes_assigned_at_launch = true,
+    .pass_environ_mca_params = true,
     .node_regex_threshold = 0
 };
 

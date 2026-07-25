@@ -220,6 +220,7 @@ static int ssh_component_open(void)
     /* initialize globals */
     prte_mca_plm_ssh_component.using_qrsh = false;
     prte_mca_plm_ssh_component.using_llspawn = false;
+    prte_mca_plm_ssh_component.using_tmrsh = false;
     prte_mca_plm_ssh_component.agent_argv = NULL;
 
     /* lookup parameters */
@@ -375,10 +376,10 @@ char **prte_plm_ssh_search(const char *agent_list, const char *path)
         line = lines[i];
 
         /* Trim whitespace at the beginning and end of the line */
-        for (j = 0; '\0' != line[j] && isspace(line[j]); ++line) {
-            continue;
+        while ('\0' != *line && isspace((int) *line)) {
+            ++line;
         }
-        for (j = strlen(line) - 2; j > 0 && isspace(line[j]); ++j) {
+        for (j = (int) strlen(line) - 1; j >= 0 && isspace((int) line[j]); --j) {
             line[j] = '\0';
         }
         if (strlen(line) <= 0) {

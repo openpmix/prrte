@@ -212,7 +212,8 @@ their MCA vars (`plm_ssh_*`):
 
 `prte_plm_ssh_caddy_t` — the per-daemon launch item on `launch_list`:
 carries `argc`/`argv` (the fully-substituted command) and the `daemon`
-proc (retained; released when it starts).
+proc (retained). It is released by `ssh_wait_daemon` when the agent
+process exits — see the ownership note below.
 
 ---
 
@@ -235,3 +236,23 @@ proc (retained; released when it starts).
   touching prefix/library-path emission.
 - **Command-length limit.** Long environments blow past `_SC_ARG_MAX`;
   the fix the help text suggests is `plm_ssh_pass_environ_mca_params 0`.
+  That knob is a *component* var but the code it controls lives in the
+  base, so `ssh_init` copies it into
+  `prte_plm_globals.pass_environ_mca_params`; keep that assignment or the
+  documented remedy silently does nothing.
+- **The caddy belongs to `ssh_wait_daemon`.** `process_launch_list` hands
+  each `prte_plm_ssh_caddy_t` to `prte_wait_cb` as `cbdata`, and the wait
+  tracker frees only its `child` — so the callback must `PMIX_RELEASE`
+  the caddy on every exit path, not just the early ones. Each caddy holds
+  a full copy of the remote command line and a retained daemon proc.
+- **Check `node->daemon` before the tree-spawn filter.** The
+  "is this daemon one of my routing children?" loop in `launch_daemons`
+  reads `node->daemon->name.rank`, so it must come *after* the NULL
+  check, not before it.
+- **`ssh_probe` forks.** If you touch it, keep the pipe fds closed on the
+  error paths and keep reaping the probe child — PRRTE's SIGCHLD handler
+  knows nothing about it.
+- **`plm_ssh_delay` is parsed but never applied.** The value lands in
+  `component.delay` and nothing reads it; either wire it into
+  `process_launch_list` or retire the parameter — don't assume it
+  throttles anything today.

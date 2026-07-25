@@ -228,6 +228,16 @@ fully torn down. Tracked as
 fresh DVM between grow/shrink cycles; a single grow→shrink cycle on a fresh DVM
 is the reliable smoke test.
 
+**Any** grow after a shrink on the same DVM appears to be affected, not just a
+re-grow of the same node, and the second symptom is a **hang** rather than a
+failed connect-back: `grow node2,node3` → `shrink node2` → `grow node4` leaves
+a healthy `prted` running on node4 but never delivers the phase-two completion
+event, so the client times out after 60s and the DVM is left wedged (a
+subsequent `prun` does not return either). Reproduced on master, with and
+without `--uniform-nodes`, so it is not specific to the homogeneous-topology
+path. Until this is fixed, any test that grows after a shrink must bound every
+command with `timeout` or it will wedge the whole suite.
+
 ## 10. Topology reference
 
 | Container | hostname | role |

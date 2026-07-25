@@ -179,13 +179,20 @@ static void launch_daemons(int fd, short args, void *cbdata)
     char *vpid_string;
     char **custom_strings;
     int num_args, i;
-    char *cur_prefix, *pmix_prefix;
+    char *cur_prefix = NULL, *pmix_prefix = NULL;
     int proc_vpid_index;
     prte_job_t *daemons;
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(state);
+
+    /* arm the failure flag for THIS launch. It is a file-static (rather than
+     * a local, as in the other components) because pals_wait_cb consults it
+     * to tell "aprun never started the daemons" from "a daemon died after
+     * launch" - but that means it must be re-armed on every launch, else the
+     * cleanup path below can never report a failure */
+    failed_launch = true;
 
     /* start by setting up the virtual machine */
     daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
@@ -393,6 +400,8 @@ cleanup:
     if (NULL != env) {
         PMIx_Argv_free(env);
     }
+    free(cur_prefix);
+    free(pmix_prefix);
 
     /* check for failed launch - if so, force terminate */
     if (failed_launch) {
@@ -521,12 +530,17 @@ static int plm_pals_start_proc(int argc, char **argv, char **env,
         return PRTE_ERR_SYS_LIMITS_CHILDREN;
     }
 
-    palsrun = PMIX_NEW(prte_proc_t);
-    palsrun->pid = pals_pid;
-    /* be sure to mark it as alive so we don't instantly fire */
-    PRTE_FLAG_SET(palsrun, PRTE_PROC_FLAG_ALIVE);
-    /* setup the waitpid so we can find out if pals succeeds! */
-    prte_wait_cb(palsrun, pals_wait_cb, NULL);
+    if (0 < pals_pid) { /* parent */
+        /* track the launcher process - do this ONLY in the parent: in the
+         * child pals_pid is 0, so we would register a waitpid callback on
+         * a bogus proc moments before execve replaces us anyway */
+        palsrun = PMIX_NEW(prte_proc_t);
+        palsrun->pid = pals_pid;
+        /* be sure to mark it as alive so we don't instantly fire */
+        PRTE_FLAG_SET(palsrun, PRTE_PROC_FLAG_ALIVE);
+        /* setup the waitpid so we can find out if pals succeeds! */
+        prte_wait_cb(palsrun, pals_wait_cb, NULL);
+    }
 
     if (0 == pals_pid) { /* child */
         char *bin_base = NULL, *lib_base = NULL;

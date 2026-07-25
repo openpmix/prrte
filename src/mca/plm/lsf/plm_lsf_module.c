@@ -188,6 +188,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     char *newenv;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
+    nodelist_argv = NULL;
+
     PMIX_ACQUIRE_OBJECT(state);
     jdata = state->jdata;
 
@@ -257,6 +259,14 @@ static void launch_daemons(int fd, short args, void *cbdata)
          * we need to launch a daemon
          */
         pmix_argv_append(&nodelist_argc, &nodelist_argv, node->name);
+    }
+    if (0 == PMIx_Argv_count(nodelist_argv)) {
+        /* every node in the map already has a daemon - there is nothing
+         * for lsb_launch to do, and handing it an empty host list is not
+         * something we should ask of it */
+        pmix_show_help("help-plm-lsf.txt", "no-hosts-in-list", true);
+        rc = PRTE_ERR_FAILED_TO_START;
+        goto cleanup;
     }
 
     /*
@@ -412,6 +422,9 @@ cleanup:
     }
     if (NULL != env) {
         PMIx_Argv_free(env);
+    }
+    if (NULL != nodelist_argv) {
+        PMIx_Argv_free(nodelist_argv);
     }
 
     /* check for failed launch - if so, force terminate */

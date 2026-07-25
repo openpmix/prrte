@@ -53,9 +53,14 @@ ON()  { docker exec "prte-node$1" bash -lc ". /opt/prte/env.sh 2>/dev/null; ${*:
 
 cleanup_swarm() {
     for n in $(seq 1 10); do
+        # NOTE: prterun's session dir is /tmp/prtrn.<pid>, NOT /tmp/prte.<pid>.
+        # Leaving those behind is what makes a later prun report "multiple
+        # possible servers ... connection handles have been read from files
+        # named pmix.*" and fail to find the DVM, so clear both patterns.
         docker exec "prte-node$n" sh -c \
             'pkill -9 -x prted 2>/dev/null; pkill -9 -x prte 2>/dev/null;
-             rm -rf /tmp/prte.* /tmp/prun.session.* 2>/dev/null; true'
+             pkill -9 -x prterun 2>/dev/null;
+             rm -rf /tmp/prte.* /tmp/prtrn.* /tmp/prun.session.* 2>/dev/null; true'
     done
 }
 prted_count() { local c=0 n; for n in "$@"; do ON "$n" 'pgrep -x prted' >/dev/null 2>&1 && c=$((c+1)); done; echo "$c"; }
@@ -175,6 +180,136 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         RUN 'timeout 30 pterm' >/dev/null 2>&1
     else
         bad "could not start a DVM for the stdin tests"
+    fi
+    cleanup_swarm
+
+    banner "plm/ssh: tree-spawn fan-out (radix 2, multi-level)"
+    # With tree-spawn (the default) the HNP does NOT ssh to every node: it
+    # launches only its own routing children, each of which calls the ssh
+    # module's remote_spawn() to launch ITS children, and so on. Forcing
+    # radix 2 makes the tree several levels deep, so daemons on the deeper
+    # nodes exist only if the fan-out actually recursed -- something a
+    # single-host or flat launch can never prove. Every daemon still reports
+    # directly to the HNP, so a wrong routing/child list shows up as a launch
+    # that hangs at DAEMONS_LAUNCHED rather than a wrong answer.
+    cleanup_swarm
+    out=$(RUN 'prterun --prtemca prte_rml_radix 2 \
+                 --host node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1,node8:1 \
+                 -np 8 --map-by node hostname' 2>&1); rc=$?
+    n=$(echo "$out" | grep -cE '^node[1-8]$')
+    [ "$rc" = 0 ] && [ "$n" = 8 ] \
+        && ok "radix-2 tree-spawn launched 8 daemons (fan-out recursed)" \
+        || bad "radix-2 tree-spawn failed (rc=$rc, procs=$n): $(echo "$out" | tr '\n' ' ')"
+    c=$(prted_count 1 2 3 4 5 6 7 8 9 10)
+    [ "$c" = 0 ] && ok "no daemons linger after tree-spawn launch" || bad "$c stray prted after tree-spawn"
+
+    banner "plm/ssh: flat launch (no_tree_spawn) and throttled launch"
+    # The same job with the fan-out disabled: now the HNP ssh's to all seven
+    # remote nodes itself. num_concurrent=1 additionally forces the launch
+    # list to drain one fork at a time, so the metering path
+    # (process_launch_list <-> ssh_wait_daemon, and the per-daemon caddy
+    # lifecycle) is exercised serially rather than all at once.
+    out=$(RUN 'prterun --prtemca plm_ssh_no_tree_spawn 1 \
+                 --host node1:1,node2:1,node3:1,node4:1 \
+                 -np 4 --map-by node hostname' 2>&1); rc=$?
+    n=$(echo "$out" | grep -cE '^node[1-4]$')
+    [ "$rc" = 0 ] && [ "$n" = 4 ] \
+        && ok "flat (no_tree_spawn) launch reached all 4 nodes" \
+        || bad "flat launch failed (rc=$rc, procs=$n): $(echo "$out" | tr '\n' ' ')"
+
+    out=$(RUN 'prterun --prtemca plm_ssh_no_tree_spawn 1 --prtemca plm_ssh_num_concurrent 1 \
+                 --host node1:1,node2:1,node3:1,node4:1,node5:1 \
+                 -np 5 --map-by node hostname' 2>&1); rc=$?
+    n=$(echo "$out" | grep -cE '^node[1-5]$')
+    [ "$rc" = 0 ] && [ "$n" = 5 ] \
+        && ok "throttled launch (num_concurrent=1) completed all 5 daemons" \
+        || bad "throttled launch failed (rc=$rc, procs=$n): $(echo "$out" | tr '\n' ' ')"
+    c=$(prted_count 1 2 3 4 5 6 7 8 9 10)
+    [ "$c" = 0 ] && ok "no daemons linger after flat/throttled launches" || bad "$c stray prted"
+
+    banner "plm/ssh: prted cmd line survives an mca value containing '='"
+    # prte_plm_base_prted_append_basic_args replicates PRTE_MCA_*/PMIX_MCA_*
+    # env vars onto the prted command line. Splitting those on every '='
+    # (rather than the first) silently truncates any value that contains one,
+    # so the daemon would be started with a DIFFERENT value than the HNP has.
+    # Ask for a value with an embedded '=' and require the daemons to come up
+    # and run; a truncated/garbled value makes the prted reject its cmd line.
+    out=$(RUN 'PRTE_MCA_prte_base_env_list="FOO=bar=baz" prterun \
+                 --host node1:1,node2:1 -np 2 --map-by node hostname' 2>&1); rc=$?
+    n=$(echo "$out" | grep -cE '^node[12]$')
+    [ "$rc" = 0 ] && [ "$n" = 2 ] \
+        && ok "daemons launched with an '='-bearing mca value" \
+        || bad "launch broke on an '='-bearing mca value (rc=$rc, procs=$n): $(echo "$out" | tr '\n' ' ')"
+
+    banner "plm/ssh: environ mca params can be dropped from the prted cmd line"
+    # plm_ssh_pass_environ_mca_params=0 is what the "cmd-line-too-long" help
+    # text tells users to set. It must actually take effect AND still leave a
+    # working command line (the required daemon options do not come from the
+    # environment).
+    out=$(RUN 'PRTE_MCA_plm_base_verbose=0 prterun --prtemca plm_ssh_pass_environ_mca_params 0 \
+                 --host node1:1,node2:1,node3:1 -np 3 --map-by node hostname' 2>&1); rc=$?
+    n=$(echo "$out" | grep -cE '^node[1-3]$')
+    [ "$rc" = 0 ] && [ "$n" = 3 ] \
+        && ok "launch works with pass_environ_mca_params=0" \
+        || bad "pass_environ_mca_params=0 broke the launch (rc=$rc, procs=$n): $(echo "$out" | tr '\n' ' ')"
+    cleanup_swarm
+
+    banner "plm: --uniform-nodes topology inheritance"
+    # Under prte_homo_nodes (--uniform-nodes) ONLY daemon rank 1 reports a
+    # topology; every other daemon's node inherits it in progress_daemons()
+    # before mapping runs. A node whose topology stayed NULL cannot be mapped
+    # onto (the mapper fails the job), so a job that must place a proc on the
+    # third and fourth nodes -- whose daemons are ranks 2 and 3, and reported
+    # no topology of their own -- is the test. Contrast with the same launch
+    # without the flag, where every daemon reports its own.
+    cleanup_swarm
+    out=$(RUN 'prterun --uniform-nodes --host node1:1,node2:1,node3:1,node4:1 \
+                 -np 4 --map-by node hostname' 2>&1); rc=$?
+    n=$(echo "$out" | grep -cE '^node[1-4]$')
+    [ "$rc" = 0 ] && [ "$n" = 4 ] \
+        && ok "uniform-nodes launch mapped onto the nodes that report no topology" \
+        || bad "uniform-nodes launch failed (rc=$rc, procs=$n): $(echo "$out" | tr '\n' ' ')"
+    c=$(prted_count 1 2 3 4 5 6 7 8 9 10)
+    [ "$c" = 0 ] && ok "no daemons linger after uniform-nodes launch" || bad "$c stray prted"
+    # NOTE: the variant where the inheritance has to come from a SURVIVOR --
+    # shrink the rank-1 node on an elastic DVM, then grow -- cannot be
+    # asserted yet: growing after a shrink on the same DVM hangs (no
+    # phase-two completion event), on master as well as here. See the "Known
+    # issue" section of AGENTS.md and openpmix/prrte#2491.
+
+    banner "plm: node names reconciled with what the daemons report"
+    # Allocate by IP address. Each daemon reports its gethostname() result
+    # ("nodeN") plus its own aliases, and the HNP replaces the allocation's
+    # name with the reported one -- keeping the ORIGINAL name as an alias.
+    # If that alias set is overwritten rather than merged, the address the
+    # user allocated with no longer matches any node in the DVM, and a
+    # subsequent --host by that same address fails with "not in allocation".
+    ip2=$(RUN 'getent hosts node2 | awk "{print \$1}" | head -1' | tr -d '\r')
+    ip3=$(RUN 'getent hosts node3 | awk "{print \$1}" | head -1' | tr -d '\r')
+    if [ -n "$ip2" ] && [ -n "$ip3" ]; then
+        RUN "nohup prte --daemonize --host node1:1,$ip2:1,$ip3:1 >/tmp/prte.out 2>&1 & sleep 8" >/dev/null
+        if RUN 'pgrep -x prte >/dev/null'; then
+            out=$(RUN 'prun -n 3 --map-by node hostname' 2>&1)
+            n=$(echo "$out" | grep -cE '^node[1-3]$')
+            [ "$n" = 3 ] && ok "daemons allocated by IP report their real hostnames" \
+                         || bad "IP-allocated DVM did not report node names: $(echo "$out" | tr '\n' ' ')"
+            # by the daemon-reported name...
+            out=$(RUN 'prun --host node2:1 -n 1 hostname' 2>&1)
+            [ "$(echo "$out" | tr -d '\r')" = node2 ] \
+                && ok "--host by reported name resolves to the IP-allocated node" \
+                || bad "--host node2 failed on an IP-allocated DVM: $(echo "$out" | tr '\n' ' ')"
+            # ...and by the address it was allocated with, which must survive
+            # as an alias
+            out=$(RUN "prun --host $ip3:1 -n 1 hostname" 2>&1)
+            [ "$(echo "$out" | tr -d '\r')" = node3 ] \
+                && ok "--host by original address still matches (alias retained)" \
+                || bad "--host $ip3 no longer matches its node (alias lost): $(echo "$out" | tr '\n' ' ')"
+            RUN 'timeout 30 pterm' >/dev/null 2>&1
+        else
+            bad "could not start a DVM allocated by IP address"
+        fi
+    else
+        skp "could not resolve node2/node3 addresses -- skipping alias test"
     fi
     cleanup_swarm
 

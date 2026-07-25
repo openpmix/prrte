@@ -30,3 +30,10 @@ This may mean that one or more of the nodes in the LSF allocation is
 not setup properly. Below is a list of the %d nodes that were passed
 to lsb_launch:
 %s
+#
+[no-hosts-in-list]
+The LSF process starter for PRTE didn't find any hosts in
+the map for this application. This can be caused by a lack of
+an allocation, or by an error in the PRTE code. Please check
+to ensure you have an LSF allocation. If you do, then please pass
+the error to the PRTE user's mailing list for assistance.
