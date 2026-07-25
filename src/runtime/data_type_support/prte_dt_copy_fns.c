@@ -59,6 +59,10 @@ int prte_node_copy(prte_node_t **dest, prte_node_t *src)
     node->slots = src->slots;
     node->slots_inuse = src->slots_inuse;
     node->slots_max = src->slots_max;
+    if (NULL != src->topology) {
+        /* the copy holds its own counted reference to the topology */
+        PMIX_RETAIN(src->topology);
+    }
     node->topology = src->topology;
     node->flags = src->flags;
     (*dest) = node;

@@ -361,6 +361,8 @@ static int rte_init(int argc, char **argv)
     t = PMIX_NEW(prte_topology_t);
     t->topo = prte_hwloc_topology;
     t->index = pmix_pointer_array_add(prte_node_topologies, t);
+    /* the node holds a counted reference to the topology */
+    PMIX_RETAIN(t);
     node->topology = t;
     node->available = prte_hwloc_base_filter_cpus(prte_hwloc_topology);
     if (15 < pmix_output_get_verbosity(prte_ess_base_framework.framework_output)) {

@@ -877,7 +877,13 @@ static void prte_node_destruct(prte_node_t *node)
     }
     PMIX_RELEASE(node->procs);
 
-    /* do NOT destroy the topology */
+    /* release our reference to the topology - the topology object itself
+     * lives until the last node pointing at it (and the entry in
+     * prte_node_topologies) has been released */
+    if (NULL != node->topology) {
+        PMIX_RELEASE(node->topology);
+        node->topology = NULL;
+    }
 
     // release any diffs
     if (NULL != node->topodiff) {

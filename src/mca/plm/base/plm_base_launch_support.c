@@ -144,6 +144,8 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
                 continue;
             }
             if (NULL == node->topology) {
+                /* the node holds a counted reference to the topology */
+                PMIX_RETAIN(t);
                 node->topology = t;
                 node->available = prte_hwloc_base_filter_cpus(node->topology->topo);
             }
@@ -1336,6 +1338,12 @@ static void progress_daemons(prte_job_t *daemons,
                     // the same topology would just yield the same bitmap
                     continue;
                 }
+                /* the node holds a counted reference to its topology, so
+                 * drop the old one and take a reference on the new */
+                if (NULL != daemon->node->topology) {
+                    PMIX_RELEASE(daemon->node->topology);
+                }
+                PMIX_RETAIN(t);
                 daemon->node->topology = t;
                 /* update the node's available processors */
                 if (NULL != daemon->node->available) {
@@ -1591,6 +1599,13 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                                         "%s TOPOLOGY ALREADY RECORDED IN POSN %d - %s DIFFS FOUND",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), i,
                                         (NULL == diff) ? "NO" : "SOME");
+                    /* the node holds a counted reference to its topology -
+                     * a daemon can report in more than once (bootstrap
+                     * unheal), so release any prior reference first */
+                    if (NULL != daemon->node->topology) {
+                        PMIX_RELEASE(daemon->node->topology);
+                    }
+                    PMIX_RETAIN(t);
                     daemon->node->topology = t;
                     found = true;
                     /* update the node's available processors */
@@ -1616,6 +1631,12 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                 pmix_output_verbose(5, prte_plm_base_framework.framework_output,
                                     "%s ADDING NEW TOPOLOGY AT POSN %d",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), t->index);
+                /* the array above holds the creation reference; the node
+                 * takes a counted reference of its own */
+                if (NULL != daemon->node->topology) {
+                    PMIX_RELEASE(daemon->node->topology);
+                }
+                PMIX_RETAIN(t);
                 daemon->node->topology = t;
                 daemon->node->available = prte_hwloc_base_filter_cpus(t->topo);
                 prte_hwloc_base_setup_summary(t->topo);
