@@ -2632,21 +2632,35 @@ process:
         /* Record the requester for the spec's phase-two completion event.  The
          * RAS reservation machinery sets each reserved node's ->session
          * backpointer (add_nodes_to_session), and that session carries the
-         * requestor and the allocation ids; take them from the first new
-         * daemon's node.  The initial DVM bring-up and a scheduler-driven push
-         * have no such requestor (the default session, or an invalid requestor
+         * requestor and the allocation ids.
+         *
+         * Scan ALL the targets for the first one carrying a requestor rather
+         * than trusting the first: a grow launches a daemon onto every node
+         * that lacks one, which is not necessarily limited to the nodes this
+         * request reserved.  In particular a node that was shrunk out of the
+         * DVM reverts to the default pool with its ->session cleared, and the
+         * next grow re-absorbs it - taking the lowest new vpid, and hence the
+         * daemon_vpid_start slot.  Reading only that node left the campaign
+         * with no requester, so a perfectly successful grow emitted no
+         * completion event at all and the requester waited forever.
+         *
+         * The initial DVM bring-up and a scheduler-driven push have no
+         * requestor on any node (the default session, or an invalid requestor
          * rank), so have_requester stays false and grow_drain() emits no event
-         * for them. */
+         * for them - which is correct, as nobody asked for those. */
         {
-            prte_proc_t *dproc = (prte_proc_t *)
-                pmix_pointer_array_get_item(daemons->procs, map->daemon_vpid_start);
-            prte_session_t *sess =
-                (NULL != dproc && NULL != dproc->node) ? dproc->node->session : NULL;
-            if (NULL != sess && PMIX_RANK_INVALID != sess->requestor.rank) {
-                PMIX_XFER_PROCID(&gcamp->requester, &sess->requestor);
-                gcamp->alloc_id = (NULL != sess->alloc_refid) ? strdup(sess->alloc_refid) : NULL;
-                gcamp->req_id = (NULL != sess->user_refid) ? strdup(sess->user_refid) : NULL;
-                gcamp->have_requester = true;
+            int gt;
+            for (gt = 0; gt < gcamp->ntargets && !gcamp->have_requester; gt++) {
+                prte_proc_t *dproc = (prte_proc_t *)
+                    pmix_pointer_array_get_item(daemons->procs, gcamp->targets[gt]);
+                prte_session_t *sess =
+                    (NULL != dproc && NULL != dproc->node) ? dproc->node->session : NULL;
+                if (NULL != sess && PMIX_RANK_INVALID != sess->requestor.rank) {
+                    PMIX_XFER_PROCID(&gcamp->requester, &sess->requestor);
+                    gcamp->alloc_id = (NULL != sess->alloc_refid) ? strdup(sess->alloc_refid) : NULL;
+                    gcamp->req_id = (NULL != sess->user_refid) ? strdup(sess->user_refid) : NULL;
+                    gcamp->have_requester = true;
+                }
             }
         }
         pmix_list_append(&prte_grow_campaigns, &gcamp->super);
