@@ -447,7 +447,9 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
             nd->aliases = PMIx_Argv_split(aliases[n], ',');
         }
         /* set the topology - always default to homogeneous
-         * as that is the most common scenario */
+         * as that is the most common scenario. Retain it: the node holds a
+         * counted reference so the topology cannot go away underneath it */
+        PMIX_RETAIN(t);
         nd->topology = t;
         /* record the daemon on it */
         proc = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs, vpid[n]);

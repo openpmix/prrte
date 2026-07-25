@@ -1189,6 +1189,8 @@ ranking:
                 continue;
             }
             if (NULL == node->topology) {
+                /* the node holds a counted reference to the topology */
+                PMIX_RETAIN(t0);
                 node->topology = t0;
             }
         }

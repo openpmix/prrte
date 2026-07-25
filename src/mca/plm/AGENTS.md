@@ -221,14 +221,22 @@ This is the crux of the whole framework. After a component starts a
    matches an existing one. Under `prte_homo_nodes` only daemon rank 1
    sends a topology and everyone else inherits it — `progress_daemons()`
    points every other daemon's node at that same `prte_topology_t`
-   (nothing is duplicated). It must come from a **daemon**, never from
-   our own node
+   (nothing is duplicated; each node takes a **counted reference**, see
+   below). It must come from a **daemon**, never from our own node
    (`prterun` may be on a login node with a different topology), and rank
    1 may no longer exist (an elastic shrink can remove it), so the source
    is the first daemon that *has* a topology — the survivors already
    inherited rank 1's, so a daemon added by a later grow (which reports
    none of its own, not being rank 1) still inherits the right one.
 
+   **Topology ownership:** `node->topology` is a reference-counted
+   pointer into the shared `prte_node_topologies` array, never a copy.
+   Assigning one means `PMIX_RETAIN(t)` (and releasing whatever the node
+   held before); `prte_node_destruct` drops the node's reference. That is
+   what lets the topology outlive any individual node — it goes away only
+   when the last node using it, and the array entry, are gone — and it is
+   what makes a node safe to destroy at any point in an elastic
+   shrink/grow.
 5. Bumps `jdatorted->num_reported`. When the count reaches
    `num_procs`, `progress_daemons()` sets the daemon job to
    `DAEMONS_REPORTED` and activates that state for every application job
