@@ -38,8 +38,10 @@ static void rank_cons(prte_relm_rank_t* rank){
 static void rank_des(prte_relm_rank_t* rank){
     prte_relm_guid_t guid;
     prte_relm_msg_t* msg;
+    /* likewise, the cached messages came from PMIX_NEW and must be released
+     * rather than merely destructed */
     PMIX_HASH_TABLE_FOREACH(guid, uint64, msg, &rank->msgs){
-        PMIX_DESTRUCT(msg);
+        PMIX_RELEASE(msg);
     }
     PMIX_DESTRUCT(&rank->msgs);
 }
