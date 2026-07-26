@@ -461,8 +461,10 @@ static void sm_cons(prte_relm_state_machine_t* sm){
 static void sm_dest(prte_relm_state_machine_t* sm){
     pmix_rank_t key;
     prte_relm_rank_t* val;
+    /* the ranks were allocated with PMIX_NEW, so they have to be released -
+     * destructing them runs the destructor but leaves the object itself */
     PMIX_HASH_TABLE_FOREACH(key, uint32, val, &sm->ranks){
-        PMIX_DESTRUCT(val);
+        PMIX_RELEASE(val);
     }
     PMIX_DESTRUCT(&sm->ranks);
     PMIX_DESTRUCT(&sm->cached_messages);
