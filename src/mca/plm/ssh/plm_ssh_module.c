@@ -270,6 +270,7 @@ static void ssh_wait_daemon(int sd, short flags, void *cbdata)
     prte_plm_ssh_caddy_t *caddy = (prte_plm_ssh_caddy_t *) t2->cbdata;
     prte_proc_t *daemon = caddy->daemon;
     pmix_status_t rc;
+    int32_t xstat;
     PRTE_HIDE_UNUSED_PARAMS(sd, flags);
 
     if (prte_prteds_term_ordered || prte_abnormal_term_ordered) {
@@ -301,7 +302,14 @@ static void ssh_wait_daemon(int sd, short flags, void *cbdata)
                 PMIX_RELEASE(t2);
                 return;
             }
-            rc = PMIx_Data_pack(NULL, buf, &daemon->exit_code, 1, PMIX_INT32);
+            /* send a plain exit status - the HNP records what it is given.
+             * daemon->exit_code is a raw waitpid() status here, so decode it
+             * rather than putting a wait status on the wire (remote_spawn's
+             * failure report on this same tag sends a PRTE error code, so the
+             * receiver cannot know which it was handed) */
+            xstat = WIFEXITED(daemon->exit_code) ? WEXITSTATUS(daemon->exit_code)
+                                                 : PRTE_ERROR_DEFAULT_EXIT_CODE;
+            rc = PMIx_Data_pack(NULL, buf, &xstat, 1, PMIX_INT32);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(buf);
