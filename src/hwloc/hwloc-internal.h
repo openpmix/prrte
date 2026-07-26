@@ -280,6 +280,14 @@ PRTE_EXPORT hwloc_obj_t prte_hwloc_base_get_obj_by_type(hwloc_topology_t topo,
 PRTE_EXPORT void prte_hwloc_base_reset_counters(void);
 
 /**
+ * Release the cached data objects PRRTE attaches to the userdata of a
+ * topology's objects, and to the topology's root. Must be called before
+ * the topology itself is destroyed - hwloc does not know these pointers
+ * are ours to free.
+ */
+PRTE_EXPORT void prte_hwloc_base_release_userdata(hwloc_topology_t topo);
+
+/**
  * Get the number of pu's under a given hwloc object.
  */
 PRTE_EXPORT unsigned int prte_hwloc_base_get_npus(hwloc_topology_t topo, bool use_hwthread_cpus,

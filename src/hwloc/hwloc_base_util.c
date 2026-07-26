@@ -2217,3 +2217,41 @@ void prte_hwloc_base_reset_counters(void)
         }
     }
 }
+
+/* release the userdata hanging off every object at one level of a topology */
+static void release_level_userdata(hwloc_topology_t topo, int depth)
+{
+    hwloc_obj_t obj;
+    unsigned width, w;
+
+    width = hwloc_get_nbobjs_by_depth(topo, depth);
+    for (w = 0; w < width; w++) {
+        obj = hwloc_get_obj_by_depth(topo, depth, w);
+        if (NULL != obj && NULL != obj->userdata) {
+            /* both of the things we attach - the topology summary on the
+             * root and the per-object placement counters - are PMIx
+             * objects, so a release is correct either way */
+            PMIX_RELEASE(obj->userdata);
+            obj->userdata = NULL;
+        }
+    }
+}
+
+void prte_hwloc_base_release_userdata(hwloc_topology_t topo)
+{
+    int depth, d;
+
+    if (NULL == topo) {
+        return;
+    }
+
+    /* the normal levels, root (depth 0) included */
+    depth = hwloc_topology_get_depth(topo);
+    for (d = 0; d < depth; d++) {
+        release_level_userdata(topo, d);
+    }
+    /* NUMA nodes are not part of the normal depth hierarchy in hwloc 2.x,
+     * so they have to be swept separately - binding can attach counters to
+     * them just as it does to packages and cores */
+    release_level_userdata(topo, HWLOC_TYPE_DEPTH_NUMANODE);
+}
