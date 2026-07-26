@@ -53,14 +53,17 @@ ON()  { docker exec "prte-node$1" bash -lc ". /opt/prte/env.sh 2>/dev/null; ${*:
 
 cleanup_swarm() {
     for n in $(seq 1 10); do
-        # NOTE: prterun's session dir is /tmp/prtrn.<pid>, NOT /tmp/prte.<pid>.
-        # Leaving those behind is what makes a later prun report "multiple
-        # possible servers ... connection handles have been read from files
-        # named pmix.*" and fail to find the DVM, so clear both patterns.
+        # NOTE: each tool has its OWN session-dir prefix -- prte.<pid> for the
+        # HNP, prtrn.<pid> for prterun, and prted.<pid> for a bootstrapped
+        # daemon standing on its own. Every one of them holds a pmix.* server
+        # rendezvous file, and leaving any behind is what makes a later prun
+        # report "multiple possible servers ... connection handles have been
+        # read from files named pmix.*" and fail to find the DVM. Clear them all.
         docker exec "prte-node$n" sh -c \
             'pkill -9 -x prted 2>/dev/null; pkill -9 -x prte 2>/dev/null;
              pkill -9 -x prterun 2>/dev/null;
-             rm -rf /tmp/prte.* /tmp/prtrn.* /tmp/prun.session.* 2>/dev/null; true'
+             rm -rf /tmp/prte.* /tmp/prted.* /tmp/prtrn.* /tmp/pmix.* \
+                    /tmp/prun.session.* 2>/dev/null; true'
     done
 }
 prted_count() { local c=0 n; for n in "$@"; do ON "$n" 'pgrep -x prted' >/dev/null 2>&1 && c=$((c+1)); done; echo "$c"; }
