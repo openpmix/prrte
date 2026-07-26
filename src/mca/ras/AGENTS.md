@@ -221,6 +221,11 @@ input list.** Walk it carefully before touching allocation code:
   daemon but leaves the pool entry, so the regrant always arrives as a
   duplicate. Only `PRTE_NODE_STATE_ADDED` is carried across, because the
   DVM extension keys off it to decide where to launch.
+- **Pre-assigned pool slots.** A component may choose a node's pool slot
+  by setting `node->index` before handing it over; `node_insert` places
+  it there rather than appending to the lowest free slot (falling back
+  to an append if the slot is occupied). `ras/bootstrap` is the only
+  component that does this, and it needs it — see its guide.
 - **Managed = sacred slots.** Under `prte_managed_allocation` (or when a
   node arrives with `PRTE_NODE_FLAG_SLOTS_GIVEN`), the base sets
   `SLOTS_GIVEN` so downstream code treats the slot count as fixed and
@@ -367,7 +372,7 @@ documented in each component's guide.
 
 | Layer | What it covers |
 |-------|----------------|
-| [`test/unit/ras/test_ras.c`](../../../test/unit/ras/) (`make check`) | `prte_ras_base_node_insert` (dedup, drain, slot accounting, `ADD_SLOTS` clamping, FQDN normalization, HNP dedup), the module vtable contract for every static component, `prte_ras_base_select` priority ordering, `prte_ras_base_flag_string`, and the SLURM taint validators + bounded output drain. |
+| [`test/unit/ras/test_ras.c`](../../../test/unit/ras/) (`make check`) | `prte_ras_base_node_insert` (dedup, drain, slot accounting, `ADD_SLOTS` clamping, FQDN normalization, HNP dedup, pre-assigned pool slots), the module vtable contract for every static component, `prte_ras_base_select` priority ordering, `prte_ras_base_flag_string`, and the SLURM taint validators + bounded output drain. |
 | [`contrib/dockerswarm/run-tests.sh`](../../../contrib/dockerswarm/) (`linux`) | The multi-node paths: grow/shrink/re-grow leaving exactly one daemon per node (a duplicated pool entry launches two), and `--add-hostfile` growing a live DVM through `add_hosts → ras/pmix defer → ras/hosts` including the `slots=+N` in-place adjust. |
 | Live RM | SLURM/PBS/LSF/Flux discovery and the SLURM elastic modify surface still need a real scheduler; there is no substitute. |
 

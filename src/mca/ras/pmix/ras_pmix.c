@@ -55,13 +55,81 @@ static int finalize(void)
     return PRTE_SUCCESS;
 }
 
-/* Callbacks to process an allocate request answer from the scheduler
- * and pass on any results to the requesting client
- */
+/* Caddy carrying a scheduler's answer from the PMIx progress thread over to
+ * the PRRTE progress thread.
+ *
+ * PMIx invokes our completion callback on ITS progress thread, and the
+ * top-level AGENTS.md golden rule is that such a callback must do nothing
+ * beyond capturing its arguments and posting an event: a prte_pmix_server_req_t
+ * is a PRRTE object, so recording the answer directly on it - let alone
+ * freeing the array it was carrying - is a cross-thread write to state the
+ * PRRTE progress thread owns. This caddy is the capture buffer that lets the
+ * callback stay trivial; every mutation of the request happens in the
+ * thread-shifted handler below.
+ *
+ * The caddy holds a reference on the request so the request cannot be
+ * reclaimed out from under the shift. The answer's info array remains owned by
+ * PMIx and stays valid until we invoke rel(relcbdata), which is why that pair
+ * is carried across too. */
+typedef struct {
+    pmix_object_t super;
+    prte_event_t ev;
+    prte_pmix_server_req_t *req;
+    pmix_status_t status;
+    pmix_info_t *info;
+    size_t ninfo;
+    pmix_release_cbfunc_t rel;
+    void *relcbdata;
+} prte_ras_pmix_caddy_t;
+
+static void rpcon(prte_ras_pmix_caddy_t *p)
+{
+    p->req = NULL;
+    p->status = PMIX_SUCCESS;
+    p->info = NULL;
+    p->ninfo = 0;
+    p->rel = NULL;
+    p->relcbdata = NULL;
+}
+static void rpdes(prte_ras_pmix_caddy_t *p)
+{
+    if (NULL != p->req) {
+        PMIX_RELEASE(p->req);
+    }
+}
+static PMIX_CLASS_INSTANCE(prte_ras_pmix_caddy_t, pmix_object_t, rpcon, rpdes);
+
+/* Runs on the PRRTE progress thread: record the scheduler's answer on the
+ * request, apply it, and relay it to whoever asked. */
 static void passthru(int sd, short args, void *cbdata)
 {
-    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
+    prte_ras_pmix_caddy_t *cd = (prte_ras_pmix_caddy_t*)cbdata;
+    prte_pmix_server_req_t *req = cd->req;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_ACQUIRE_OBJECT(cd);
+
+    /* The scheduler's verdict is the request's outcome. Record it in pstatus,
+     * not just status: pstatus is what drives the completion below and what
+     * the requester is told. (Recording only status left pstatus holding the
+     * PMIX_ERR_NOT_SUPPORTED default that prte_ras_base_modify seeds, so a
+     * granted allocation was never applied and the requester was told the
+     * operation was unsupported.) */
+    req->status = cd->status;
+    req->pstatus = cd->status;
+
+    /* the answer replaces whatever the request was carrying; drop our own
+     * copy first if we made one in modify() below. The replacement belongs to
+     * PMIx until we call rel(), so the request must not be marked as owning
+     * it. */
+    if (req->copy && NULL != req->info) {
+        PMIX_INFO_FREE(req->info, req->ninfo);
+    }
+    req->copy = false;
+    req->info = cd->info;
+    req->ninfo = cd->ninfo;
+    req->rlcbfunc = cd->rel;
+    req->rlcbdata = cd->relcbdata;
 
     // if we met the request, then we need to process it
     if (PMIX_SUCCESS == req->pstatus) {
@@ -69,17 +137,30 @@ static void passthru(int sd, short args, void *cbdata)
     }
 
     if (NULL != req->infocbfunc) {
-        // call the requestor's callback with the returned info
-        req->infocbfunc(req->pstatus, req->info, req->ninfo, req->cbdata, req->rlcbfunc, req->rlcbdata);
-    } else if (NULL != req->rlcbfunc) {
-        // let them cleanup
+        /* Call the requestor's callback with the returned info, handing it
+         * prte_pmix_server_req_release as the release function and returning
+         * without releasing the request ourselves - this mirrors
+         * prte_ras_base_modify's tail. The info the requester is looking at
+         * is owned by the request (or by PMIx, released through it), so
+         * dropping the request here would pull it out from under a callback
+         * that has not finished with it. */
+        req->infocbfunc(req->pstatus, req->info, req->ninfo, req->cbdata,
+                        prte_pmix_server_req_release, req);
+        PMIX_RELEASE(cd);
+        return;
+    }
+
+    if (NULL != req->rlcbfunc) {
+        // nobody to relay to - let PMIx cleanup
         req->rlcbfunc(req->rlcbdata);
+        req->rlcbfunc = NULL;
+        req->info = NULL;
+        req->ninfo = 0;
     }
     // cleanup our request
     pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
-
-
     PMIX_RELEASE(req);
+    PMIX_RELEASE(cd);
 }
 
 static void infocbfunc(pmix_status_t status,
@@ -88,22 +169,27 @@ static void infocbfunc(pmix_status_t status,
                        pmix_release_cbfunc_t rel, void *relcbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
+    prte_ras_pmix_caddy_t *cd;
 
-    // need to pass this into our progress thread for processing
-    // since we touch the global request array
-    req->status = status;
-    if (req->copy && NULL != req->info) {
-        PMIX_INFO_FREE(req->info, req->ninfo);
-        req->copy = false;
+    /* GOLDEN RULE: we are on the PMIx progress thread. Capture the answer and
+     * post it - touch no PRRTE state here. */
+    cd = PMIX_NEW(prte_ras_pmix_caddy_t);
+    if (NULL == cd) {
+        /* nothing we can do but hand the answer back so PMIx can reclaim it */
+        if (NULL != rel) {
+            rel(relcbdata);
+        }
+        return;
     }
-    req->info = info;
-    req->ninfo = ninfo;
-    req->rlcbfunc = rel;
-    req->rlcbdata = relcbdata;
+    PMIX_RETAIN(req);
+    cd->req = req;
+    cd->status = status;
+    cd->info = info;
+    cd->ninfo = ninfo;
+    cd->rel = rel;
+    cd->relcbdata = relcbdata;
 
-    prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, passthru, req);
-    PMIX_POST_OBJECT(req);
-    prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
+    PRTE_PMIX_THREADSHIFT(cd, prte_event_base, passthru);
 }
 
 static pmix_status_t modify(prte_pmix_server_req_t *req)
@@ -131,7 +217,14 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
         PMIX_INFO_XFER(&xfer[n], &req->info[n]);
     }
     PMIX_INFO_LOAD(&xfer[req->ninfo], PMIX_REQUESTOR, &req->tproc, PMIX_PROC);
-    // the current req object points to the caller's info array, so leave it alone
+    /* Repoint the request at our augmented copy. If it merely borrowed the
+     * caller's array we leave that alone, but if it already OWNED one we have
+     * to release it here or repointing strands it - which is exactly what
+     * happens to an allocation request relayed from a remote peer, since
+     * pmix_server.c builds those with copy = true. */
+    if (req->copy && NULL != req->info) {
+        PMIX_INFO_FREE(req->info, req->ninfo);
+    }
     req->copy = true;
     req->info = xfer;
     req->ninfo++;

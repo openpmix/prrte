@@ -72,6 +72,13 @@ static int allocate(prte_job_t *jdata, pmix_list_t *ndlist)
         }
         ndptr = PMIX_NEW(prte_node_t);
         ndptr->name = strdup(cfg.nodes[n]);
+        /* Pre-assign the pool slot to the node's canonical DVM rank.  This is
+         * not cosmetic: a bootstrapped daemon computes its OWN vpid from this
+         * same config file (prte_bootstrap_my_identity), so the HNP does not
+         * get to choose one - it has to arrive at the same answer
+         * independently.  prte_ras_base_node_insert() honors a pre-assigned
+         * index precisely so that correspondence is established by the config
+         * rather than by the order nodes happen to be appended in. */
         ndptr->index = (int) rank;
         ndptr->state = PRTE_NODE_STATE_UP;
         ndptr->slots = 1;

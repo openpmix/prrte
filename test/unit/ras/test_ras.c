@@ -247,6 +247,67 @@ static int test_node_insert(void)
 }
 
 /*
+ * A component may pre-assign a node's pool slot by setting node->index
+ * before handing it over. ras/bootstrap depends on this: a bootstrapped
+ * daemon computes its own vpid from the config file, so the HNP has to
+ * land the node at the slot matching that canonical rank rather than at
+ * whatever slot the append order happens to produce.
+ */
+static int test_preassigned_index(void)
+{
+    int failures = 0;
+    pmix_list_t nodes;
+    prte_node_t *nd, *found;
+    int rc, slot;
+
+    /* pick a slot well clear of anything already in the pool */
+    slot = prte_node_pool->size + 16;
+
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    nd = mknode(&nodes, "unittest-boot01", 1);
+    nd->index = slot;
+    rc = prte_ras_base_node_insert(&nodes, NULL);
+    PMIX_DESTRUCT(&nodes);
+    CHECK("preindex: rc", PRTE_SUCCESS == rc);
+
+    found = prte_node_match(NULL, "unittest-boot01");
+    CHECK("preindex: findable", NULL != found);
+    if (NULL != found) {
+        /* the whole point: the assignment survives the insert */
+        CHECK("preindex: landed at the requested slot", slot == found->index);
+        CHECK("preindex: pool agrees",
+              found == (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, slot));
+    }
+
+    /* a slot that is already occupied is a malformed request: fall back to
+     * an append rather than clobbering the node that is already there */
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    nd = mknode(&nodes, "unittest-boot02", 1);
+    nd->index = slot;                       /* same slot as boot01 */
+    rc = prte_ras_base_node_insert(&nodes, NULL);
+    PMIX_DESTRUCT(&nodes);
+    CHECK("preindex: collision rc", PRTE_SUCCESS == rc);
+    CHECK("preindex: occupant untouched",
+          found == (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, slot));
+    nd = prte_node_match(NULL, "unittest-boot02");
+    CHECK("preindex: collider still inserted", NULL != nd);
+    if (NULL != nd) {
+        CHECK("preindex: collider moved elsewhere", slot != nd->index);
+    }
+
+    /* the default (-1) still means "append to the lowest free slot" */
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    mknode(&nodes, "unittest-boot03", 1);
+    rc = prte_ras_base_node_insert(&nodes, NULL);
+    PMIX_DESTRUCT(&nodes);
+    CHECK("preindex: default rc", PRTE_SUCCESS == rc);
+    nd = prte_node_match(NULL, "unittest-boot03");
+    CHECK("preindex: appended node indexed", NULL != nd && 0 < nd->index);
+
+    return failures;
+}
+
+/*
  * The HNP's node is pre-entered at pool index 0 before any component runs,
  * so an incoming entry for the local host must update that entry in place
  * rather than adding a second one -- otherwise the DVM would try to launch
@@ -545,6 +606,7 @@ int main(void)
     failures += test_module_contract();
     failures += test_select();
     failures += test_node_insert();
+    failures += test_preassigned_index();
     failures += test_hnp_dedup();
     failures += test_flag_string();
     failures += test_slurm_validators();
