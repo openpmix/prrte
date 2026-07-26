@@ -1995,6 +1995,10 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
     char *hosts = NULL;
     bool singleton = false;
     bool multi_sim = false;
+    bool grow_request = false;
+    bool have_grow_requester = false;
+    pmix_proc_t grow_requester;
+    char *grow_alloc_id = NULL, *grow_req_id = NULL;
 
     PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:setup_vm",
@@ -2065,6 +2069,24 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
             PMIX_RETAIN(node);
             pmix_list_append(&nodes, &node->super);
+        }
+        /* Remember who asked, before the process: loop drains the list. A
+         * grow that turns out to need no new daemon at all - every node it
+         * was granted already has one - still has to tell its requester that
+         * the DVM now reflects the request. Nothing will be launched, so no
+         * campaign is recorded and the launch fence never rises, which means
+         * grow_drain() would never run and the requester would wait out its
+         * timeout on an operation that had in fact already succeeded. */
+        grow_request = true;
+        PMIX_LIST_FOREACH(nptr, &nodes, prte_node_t) {
+            if (NULL != nptr->session &&
+                PMIX_RANK_INVALID != nptr->session->requestor.rank) {
+                PMIX_XFER_PROCID(&grow_requester, &nptr->session->requestor);
+                grow_alloc_id = nptr->session->alloc_refid;
+                grow_req_id = nptr->session->user_refid;
+                have_grow_requester = true;
+                break;
+            }
         }
         if (0 == pmix_list_get_size(&nodes)) {
             /* the grow brought in no node needing a daemon */
@@ -2651,6 +2673,20 @@ process:
             PRTE_ERROR_LOG(rc);
             return rc;
         }
+    }
+
+    if (prte_elastic_mode && grow_request && 0 == map->num_new_daemons) {
+        /* the grow needed no daemon - the DVM already reflects the request,
+         * so report completion now rather than leaving the requester to time
+         * out waiting for a fence that will never be raised */
+        PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                             "%s plm:base:setup_vm grow required no new daemons",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        if (have_grow_requester) {
+            prte_plm_base_dvm_mod_notify(&grow_requester, grow_alloc_id,
+                                         grow_req_id, true, PMIX_SUCCESS);
+        }
+        return PRTE_SUCCESS;
     }
 
     /* The launch fence only operates when the DVM is permitted to grow/shrink.
