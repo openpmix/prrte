@@ -77,9 +77,10 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
     int rc, i;
     prte_node_t *node, *hnp_node, *nptr;
     bool skiphnp = false, found;
-    prte_attribute_t *kv;
+    prte_attribute_t *kv, *kv2;
     prte_proc_t *daemon;
     prte_job_t *djob;
+    pmix_status_t prc;
 
     /* get the number of nodes */
     num_nodes = (int32_t) pmix_list_get_size(nodes);
@@ -165,12 +166,22 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
             } else {
                 hnp_node->slots = node->slots;
             }
-            /* copy across any attributes */
+            /* copy across any attributes. Note that prte_set_attribute()
+             * expects a raw C value pointer, NOT a pmix_value_t, so the
+             * attribute is duplicated and spliced in directly rather than
+             * being round-tripped through set_attribute. */
             PMIX_LIST_FOREACH(kv, &node->attributes, prte_attribute_t)
             {
-                prte_set_attribute(&node->attributes, kv->key,
-                                   PRTE_ATTR_LOCAL,
-                                   &kv->data, kv->data.type);
+                prte_remove_attribute(&hnp_node->attributes, kv->key);
+                kv2 = PMIX_NEW(prte_attribute_t);
+                kv2->key = kv->key;
+                kv2->local = kv->local;
+                prc = PMIx_Value_xfer(&kv2->data, &kv->data);
+                if (PMIX_SUCCESS != prc) {
+                    PMIX_RELEASE(kv2);
+                    continue;
+                }
+                pmix_list_append(&hnp_node->attributes, &kv2->super);
             }
             if (prte_managed_allocation || PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
                 /* the slots are always treated as sacred
@@ -245,26 +256,36 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                     break;
                 }
             }
-            if (!found) {
-                if (prte_managed_allocation) {
-                    /* the slots are always treated as sacred
-                     * in managed allocations
-                     */
-                    PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
-                }
-                /* detect FQDN before normalizing, then normalize to short name */
-                if (!pmix_net_isaddr(node->name) && NULL != strchr(node->name, '.')) {
-                    prte_have_fqdn_allocation = true;
-                }
-                normalize_node(node);
-                /* insert it into the array */
-                node->index = pmix_pointer_array_add(prte_node_pool, (void *) node);
-                if (PRTE_SUCCESS > (rc = node->index)) {
-                    PRTE_ERROR_LOG(rc);
-                    return rc;
-                }
+            if (found) {
+                /* the pool entry is authoritative - drop the duplicate the
+                 * caller handed us. Its slots must NOT be added to the
+                 * running total: that node is already counted, and adding
+                 * it again inflates total_slots_alloc on every re-grow of a
+                 * node the pool already knows about. The multiplier copies
+                 * likewise belong to the original insertion, not to this
+                 * rediscovery of it. */
+                PMIX_RELEASE(node);
+                continue;
             }
-            if (prte_get_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) &&
+            if (prte_managed_allocation) {
+                /* the slots are always treated as sacred
+                 * in managed allocations
+                 */
+                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
+            }
+            /* detect FQDN before normalizing, then normalize to short name */
+            if (!pmix_net_isaddr(node->name) && NULL != strchr(node->name, '.')) {
+                prte_have_fqdn_allocation = true;
+            }
+            normalize_node(node);
+            /* insert it into the array */
+            node->index = pmix_pointer_array_add(prte_node_pool, (void *) node);
+            if (PRTE_SUCCESS > (rc = node->index)) {
+                PRTE_ERROR_LOG(rc);
+                return rc;
+            }
+            if (NULL != djob &&
+                prte_get_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) &&
                 NULL == node->daemon) {
                 /* create a daemon for this node since we won't be launching
                  * and the mapper needs to see a daemon - this is used solely

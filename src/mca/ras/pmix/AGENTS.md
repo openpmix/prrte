@@ -57,4 +57,22 @@ MCA params (`ras_pmix_*`) configure the scheduler connection: `uri`,
   memory on `PMIX_ERR_UNREACH` regressions.
 - The async result must be processed on the progress thread — don't
   short-circuit the `infocbfunc` → `passthru` thread-shift.
+- **KNOWN GAP: `infocbfunc` does real work before it thread-shifts.**
+  It runs on the *PMIx* progress thread, and the top-level
+  [`AGENTS.md`](../../../../AGENTS.md) golden rule says such a callback
+  must do nothing beyond capturing its arguments and posting the event.
+  Today it writes `req->status`, calls `PMIX_INFO_FREE` on `req->info`,
+  and rewrites `req->info`/`ninfo`/`rlcbfunc`/`rlcbdata` — all PRRTE
+  object state, mutated off the PRRTE progress thread. It has not been
+  observed to bite (nothing else touches the `req` between the forward
+  and the answer), but the correct shape is a caddy that carries
+  `status`/`info`/`ninfo`/`rel`/`relcbdata` across the shift, with every
+  mutation of `req` moved into `passthru`. Fix this before adding any
+  other writer of the request array.
+- `modify()` sets `req->copy = true` after pointing `req->info` at its
+  own `xfer` array. If a caller ever hands in a request that *already*
+  owns its info (`copy == true` on entry — `prte_ras_base_add_hosts`
+  builds one), the previous array leaks. It is unreachable today only
+  because that request carries `req->key = "hosts"`, which the base's
+  component filter uses to skip this module.
 </content>

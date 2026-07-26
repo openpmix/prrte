@@ -44,6 +44,9 @@ framework `ras_base_verbose`.
 
 - The parser tokenizes on `" \n"` and reads exactly four fields; only
   `hostname` and `slots` are used (queue/arch are logged, not stored).
+  **`strtok_r` returns NULL for a blank or short line** — a missing
+  hostname or slot count must be skipped, not dereferenced. This runs on
+  the HNP, so a NULL deref here takes the whole DVM down.
 - `query` is strict about **all four** env vars — SGE sets them
   together; loosening the gate risks selecting on a non-SGE machine.
 - `get_slot_count` is `#if 0`-guarded dead code; ignore it.

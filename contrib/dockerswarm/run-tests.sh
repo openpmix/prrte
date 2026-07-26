@@ -64,6 +64,10 @@ cleanup_swarm() {
     done
 }
 prted_count() { local c=0 n; for n in "$@"; do ON "$n" 'pgrep -x prted' >/dev/null 2>&1 && c=$((c+1)); done; echo "$c"; }
+# how many prted PROCESSES are running on one node (not how many nodes have
+# one) -- two daemons on a single machine is what a duplicated node-pool
+# entry produces
+prted_procs() { docker exec "prte-node$1" sh -c 'pgrep -x prted 2>/dev/null | wc -l' | tr -d ' \r'; }
 
 test_linux() {
     if ! docker ps --format '{{.Names}}' | grep -qx prte-node1; then
@@ -465,6 +469,88 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         RUN 'timeout 30 pterm' >/dev/null 2>&1
     else
         bad "could not start an elastic DVM for the grow-scope test"
+    fi
+    cleanup_swarm
+
+    banner "ras: node_insert dedup survives grow/shrink/re-grow (no duplicate daemons)"
+    # prte_ras_base_node_insert() is where every allocation -- initial or
+    # dynamic -- lands in the global node pool, and it decides add-vs-update
+    # against what is already there. A shrink leaves the pool entry for the
+    # departed node in place (only its daemon goes away), so a later grow of
+    # that same node arrives as a duplicate; likewise a redundant grow of a
+    # node already in the DVM.
+    #
+    # If the dedup scan misses, the pool ends up holding two prte_node_t
+    # objects for one machine. Both are marked PRTE_NODE_STATE_ADDED with no
+    # daemon, so the next DVM extension launches a prted onto that machine
+    # TWICE -- which is the directly observable symptom. (The other symptom,
+    # the node's slots being counted twice into
+    # prte_ras_base.total_slots_alloc, is what a managed allocation reports
+    # as PMIX_UNIV_SIZE / PMIX_MAX_PROCS; it is checked in the unit test,
+    # since an unmanaged DVM recomputes the total from the pool at launch.)
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        RUN 'timeout 90 elastic grow node2:2,node3:2' >/dev/null 2>&1
+        RUN 'timeout 90 elastic shrink node3' >/dev/null 2>&1; sleep 3
+        RUN 'timeout 90 elastic grow node3:2' >/dev/null 2>&1; sleep 3
+        # a redundant grow of a node that is already in the DVM is the other
+        # way a duplicate entry can be introduced
+        RUN 'timeout 90 elastic grow node2:2' >/dev/null 2>&1; sleep 3
+
+        dup=0
+        for n in 2 3; do
+            c=$(prted_procs "$n")
+            [ "$c" = 1 ] || { dup=1; printf '    node%s is running %s prted\n' "$n" "$c"; }
+        done
+        [ "$dup" = 0 ] \
+            && ok "exactly one prted per node after grow/shrink/re-grow/redundant-grow" \
+            || bad "duplicate pool entry launched a second daemon on a node"
+
+        # a wedged or double-daemoned DVM would not answer this
+        out=$(RUN 'timeout 30 prun -n 1 hostname' 2>&1 | tail -1)
+        [ "$(echo "$out" | tr -d '\r')" = node1 ] \
+            && ok "DVM still responsive after the grow/shrink/re-grow cycle" \
+            || bad "DVM wedged after the grow/shrink/re-grow cycle: $out"
+        RUN 'timeout 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start an elastic DVM for the pool-dedup test"
+    fi
+    cleanup_swarm
+
+    banner "ras/hosts: --add-hostfile brings a remote node into a running DVM"
+    # The ras/hosts component is the DVM's local resource authority when no
+    # scheduler is present: prte_ras_base_add_hosts() turns --add-host /
+    # --add-hostfile into a PMIX_ALLOC_EXTEND request, ras/pmix defers it
+    # (no scheduler), and hosts' own hand-written hostfile parser adds the
+    # nodes before the DVM extension launches daemons on them. That whole
+    # chain only runs multi-node, and its parser is separate from the flex
+    # hostfile parser precisely so it can accept the slots=+N adjust syntax.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --host node1:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        RUN 'printf "node2 slots=2\nnode3 slots=2\n" > /tmp/addhosts.txt'
+        out=$(RUN 'timeout 90 prun --add-hostfile /tmp/addhosts.txt --host node2:2,node3:2 -n 4 --map-by node hostname' 2>&1)
+        c=$(echo "$out" | grep -cE '^node[23]$')
+        [ "$c" = 4 ] && ok "--add-hostfile grew the DVM onto node2+node3 (4 procs)" \
+                     || bad "--add-hostfile launch produced $c/4 procs: $(echo "$out" | tr '\n' ' ')"
+        [ "$(prted_count 2 3)" = 2 ] && ok "daemons started on the added nodes" \
+                                     || bad "added nodes have no daemon"
+
+        # slots=+N adjusts an EXISTING pool entry rather than adding a node;
+        # the pool must not gain a second entry for it
+        RUN 'printf "node2 slots=+2\n" > /tmp/addslots.txt'
+        RUN 'timeout 90 prun --add-hostfile /tmp/addslots.txt -n 1 hostname' >/dev/null 2>&1
+        alloc=$(RUN 'timeout 30 prun --display allocation -n 1 hostname' 2>&1)
+        c=$(echo "$alloc" | grep -cE '^[[:space:]]*node2:[[:space:]]+slots=')
+        [ "$c" = 1 ] && ok "slots=+N adjusted node2 in place (no duplicate entry)" \
+                     || bad "slots=+N produced $c pool entries for node2"
+        echo "$alloc" | grep -qE '^[[:space:]]*node2:[[:space:]]+slots=4' \
+            && ok "node2 slots adjusted 2 -> 4" \
+            || bad "node2 slot adjustment not applied: $(echo "$alloc" | grep node2 | tr '\n' ' ')"
+        RUN 'timeout 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the add-hostfile test"
     fi
     cleanup_swarm
 

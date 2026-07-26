@@ -213,11 +213,26 @@ input list.** Walk it carefully before touching allocation code:
 - **General dedup.** For every other node, an exhaustive `prte_nptr_match`
   scan of the pool decides add-vs-update. `PRTE_NODE_ADD_SLOTS` means
   "adjust the existing slot count" (clamped to `[0, slots_max]`) rather
-  than replace it.
+  than replace it. **On a match the incoming object is released and the
+  loop moves on**: the pool entry is authoritative, so the duplicate must
+  not be added, must not have its slots counted into
+  `total_slots_alloc` a second time, and must not be multiplied. This is
+  the hot path on every elastic **re-grow** — a shrink removes the
+  daemon but leaves the pool entry, so the regrant always arrives as a
+  duplicate. Only `PRTE_NODE_STATE_ADDED` is carried across, because the
+  DVM extension keys off it to decide where to launch.
 - **Managed = sacred slots.** Under `prte_managed_allocation` (or when a
   node arrives with `PRTE_NODE_FLAG_SLOTS_GIVEN`), the base sets
   `SLOTS_GIVEN` so downstream code treats the slot count as fixed and
-  never recomputes it from core count.
+  never recomputes it from core count. This is also what makes
+  `total_slots_alloc` load-bearing: in a **managed** allocation
+  `plm_base_launch_support` copies `prte_ras_base.total_slots_alloc`
+  straight into `jdata->total_slots_alloc`, which the PMIx server hands
+  out as `PMIX_UNIV_SIZE` and `PMIX_MAX_PROCS`. A miscount here is
+  visible to applications. (In an *unmanaged* allocation the total is
+  recomputed from the pool at launch, which masks the error — so test
+  accounting changes against the managed path or a unit test, not a
+  local `prterun`.)
 - **FQDN normalization.** `normalize_node()` truncates an FQDN to the
   short name, keeping the full name as `rawname` and an alias (unless
   `prte_keep_fqdn_hostnames` or the name is an IP). Sets
@@ -329,6 +344,18 @@ documented in each component's guide.
   DECLARE; there is no separate close file. (An orphaned
   `ras_base_close.c` — never in `base/Makefile.am`, referencing
   long-gone `active_module`/`ras_opened` fields — was removed.)
+- **A `prte_node_t` only acquires a `topology` when its daemon reports
+  in.** Any pool walk that dereferences `node->topology` must NULL-check
+  first — the pool routinely holds allocated-but-not-yet-launched nodes
+  (a node just added by a grow, or the whole allocation before
+  `LAUNCH_DAEMONS`). Both `--display-topo` and `--display-cpus` are pool
+  walks.
+- **A parser reading an RM's file or env must tolerate malformed input.**
+  These run on the HNP, so a NULL deref on a blank line takes the whole
+  DVM down. `strtok_r` returns NULL for a short line; `fgets` does not
+  guarantee a trailing newline; and every `ctype.h` call needs its
+  argument cast to `unsigned char` (a plain `char` is UB for any byte
+  with the high bit set).
 - Standard PRRTE rules apply: `prte_config.h` first, braces on every
   block, `NULL ==`/constant-on-left, no new warnings,
   `PRTE_ERROR_LOG`/`PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED)`
@@ -336,17 +363,38 @@ documented in each component's guide.
 
 ---
 
+## Testing
+
+| Layer | What it covers |
+|-------|----------------|
+| [`test/unit/ras/test_ras.c`](../../../test/unit/ras/) (`make check`) | `prte_ras_base_node_insert` (dedup, drain, slot accounting, `ADD_SLOTS` clamping, FQDN normalization, HNP dedup), the module vtable contract for every static component, `prte_ras_base_select` priority ordering, `prte_ras_base_flag_string`, and the SLURM taint validators + bounded output drain. |
+| [`contrib/dockerswarm/run-tests.sh`](../../../contrib/dockerswarm/) (`linux`) | The multi-node paths: grow/shrink/re-grow leaving exactly one daemon per node (a duplicated pool entry launches two), and `--add-hostfile` growing a live DVM through `add_hosts → ras/pmix defer → ras/hosts` including the `slots=+N` in-place adjust. |
+| Live RM | SLURM/PBS/LSF/Flux discovery and the SLURM elastic modify surface still need a real scheduler; there is no substitute. |
+
+The unit test builds the global job/node/session arrays by hand (the
+real ones come from `prte_init()`, which wants a live ESS) — follow that
+pattern rather than trying to bring up a DVM in `make check`.
+
+---
+
 ## Debugging
 
 ```sh
 prte --prtemca ras_base_verbose 5 ...     # trace selection + allocation + node_insert
-prun --display-allocation ...              # print the resulting node pool
+prun --display allocation ...             # print the job's node list
 prte --prtemca ras_base_multiplier 8 ...   # fake an 8x-larger cluster
 ```
 
 Verbosity ≥5 prints the final component priority list, each module's
 allocate attempt, and every node inserted with its slot count — start
 there.
+
+Note that `prun --display allocation` renders the **job's** node list
+(`rmaps_base_support_fns.c`), not the global pool: nodes held in a
+reservation created by an elastic grow are withheld from a general job
+and will not appear. The pool dump proper
+(`prte_ras_base_display_alloc`) only fires on the daemon job under
+`ras_base_verbose > 4`.
 
 ---
 

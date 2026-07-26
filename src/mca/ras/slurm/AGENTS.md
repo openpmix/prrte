@@ -113,4 +113,34 @@ degrade gracefully.
   validators; `check_taint` also bounds `SLURM_NODELIST` length.
 - **Guard JSON features behind `prte_ras_slurm_have_jansson()`** so the
   no-Jansson build path stays correct.
+
+### Reference ownership across the session/tracker web
+
+This component holds nodes and sessions in three places at once; the
+rules are easy to get wrong and the failures are silent leaks.
+
+- **`session->nodes` holds a retained reference per node**
+  (`assign_new_session` does `PMIX_RETAIN` before
+  `pmix_pointer_array_add`). Anything that removes a node from that array
+  must release it.
+- **`prte_ras_slurm_detach_nodes` hands the dropped nodes back through
+  its `removed_nodes` out-parameter and does NOT release them.** That
+  parameter exists precisely so the caller can. `PMIX_DESTRUCT` on a
+  `pmix_pointer_array_t` frees the array, never its items — destructing
+  it without releasing first leaks one reference per detached node on
+  every partial shrink.
+- **`prte_slurm_session_stack` items hold a *borrowed* `prte_session_t
+  *`** (no retain). The stack is the authority for "is this allocation
+  still ours to manage": `release_allocation` consults it from the
+  session destructor to decide whether to `scancel`, which is why the
+  full-release path removes the stack item *before* releasing the
+  session. Keep those two operations in that order, and never leave a
+  stack item pointing at a session someone else may release.
+- `prte_ras_slurm_rollback_session` relies on `session_des` clearing
+  `prte_sessions[index]`, so the released session leaves no dangling
+  global entry. It deliberately does not `scancel` — the `complete:`
+  block in the extend path does that via `cancel_pending_req`.
+- `pmix_pointer_array_add` returns an **index**, not a status. The
+  `0 > rc` tests are correct as failure checks, but feeding that value to
+  `prte_pmix_convert_status()` yields a meaningless error code.
 </content>

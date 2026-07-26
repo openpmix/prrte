@@ -291,6 +291,10 @@ void prte_ras_base_display_cpus(prte_job_t *jdata, char *nodelist)
     }
 
     nodes = PMIx_Argv_split(nodelist, ';');
+    if (NULL == nodes) {
+        /* the nodelist held nothing we can resolve */
+        return;
+    }
     for (j=0; NULL != nodes[j]; j++) {
         moveon = false;
         for (i=0; i < prte_node_pool->size && !moveon; i++) {
@@ -299,7 +303,11 @@ void prte_ras_base_display_cpus(prte_job_t *jdata, char *nodelist)
                 continue;
             }
             if (0 == strcmp(nptr->name, nodes[j])) {
-                display_cpus(nptr->topology, jdata, nodes[j]);
+                /* a node that has not yet been launched upon carries no
+                 * topology - there is nothing to display for it */
+                if (NULL != nptr->topology) {
+                    display_cpus(nptr->topology, jdata, nodes[j]);
+                }
                 break;
             }
             if (NULL == nptr->aliases) {
@@ -309,7 +317,9 @@ void prte_ras_base_display_cpus(prte_job_t *jdata, char *nodelist)
             for (m = 0; NULL != nptr->aliases[m]; m++) {
                 if (0 == strcmp(nodes[j], nptr->aliases[m])) {
                     /* this is the node! */
-                    display_cpus(nptr->topology, jdata, nodes[j]);
+                    if (NULL != nptr->topology) {
+                        display_cpus(nptr->topology, jdata, nodes[j]);
+                    }
                     moveon = true;
                     break;
                 }
@@ -477,12 +487,13 @@ DISPLAY:
 
         ret = PMIx_Notify_event(PMIX_NOTIFY_ALLOC_COMPLETE, NULL, PMIX_GLOBAL,
                                 &info, 1, NULL, NULL);
+        PMIX_INFO_DESTRUCT(&info);
         if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
             PMIX_ERROR_LOG(ret);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PMIX_RELEASE(caddy);
+            return;
         }
-        PMIX_INFO_DESTRUCT(&info);
     }
 
     /* set total slots alloc */
@@ -495,7 +506,10 @@ DISPLAY:
             free(hosts);
             for (j=0; NULL != hostlist[j]; j++) {
                 node = prte_node_match(NULL, hostlist[j]);
-                if (NULL == node) {
+                /* a node only acquires a topology once its daemon has
+                 * reported in - a node that is allocated but not yet
+                 * launched upon (e.g. one just added by a grow) has none */
+                if (NULL == node || NULL == node->topology) {
                     continue;
                 }
                 pmix_output(prte_clean_output,
@@ -511,7 +525,7 @@ DISPLAY:
         } else {
             for (j=0; j < prte_node_pool->size; j++) {
                 node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, j);
-                if (NULL == node) {
+                if (NULL == node || NULL == node->topology) {
                     continue;
                 }
                 pmix_output(prte_clean_output,

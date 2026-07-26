@@ -56,6 +56,18 @@ with `slots = nslots`. Errors map to `PRTE_ERR_NOT_AVAILABLE`.
   `configure.m4` gate so non-Flux builds still compile the tree.
 - Only R **version 1** is parsed; a different version is a clean
   `PRTE_ERR_NOT_AVAILABLE`, not a crash — preserve that.
-- The parser carefully frees `hostinfo`/`hostlist` on every exit path;
-  mind the `err:` cleanup when adding branches.
+- The parser frees `hostinfo`/`hostlist` on every exit path; mind the
+  `err:` cleanup when adding branches. **Declare anything the cleanup
+  block touches at the top of the function**: `root` was originally
+  declared mid-body, so every early `goto err` jumped over its
+  initializer and the cleanup decref'd an indeterminate pointer.
+- **Use `s?o`, not `s?O`, in `json_unpack_ex`** unless you decref the
+  result — the capital form takes a reference. `scheduling` is unpacked
+  purely to satisfy the format string and is never used.
+- `hostinfo_append_ranks` reports into a caller-supplied buffer rather
+  than allocating, because the caller's `error_str` also holds string
+  literals; a mixed-ownership error pointer can be neither freed nor
+  safely leaked. It returns a **count**, so a caller treating `<= 0` as
+  failure must also set `ret` — falling through to `err:` with `ret`
+  still `PRTE_SUCCESS` returns a partially-built node list as success.
 </content>
