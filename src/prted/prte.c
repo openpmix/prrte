@@ -1578,8 +1578,7 @@ static int prep_singleton(const char *name)
     PMIX_RETAIN(proc);
     pmix_pointer_array_set_item(&app->procs, rank, proc);
     app->first_rank = rank;
-    /* link it to the node */
-    PMIX_RETAIN(node);
+    /* link it to the node - the backpointer is borrowed, not retained */
     proc->node = node;
     /* add it to the job */
     pmix_pointer_array_set_item(jdata->procs, rank, proc);

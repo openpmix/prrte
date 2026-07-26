@@ -2599,9 +2599,8 @@ process:
         /* point the node to the daemon */
         node->daemon = proc;
         PMIX_RETAIN(proc); /* maintain accounting */
-        /* point the proc to the node and maintain accounting */
+        /* point the proc at the node - borrowed, not retained */
         proc->node = node;
-        PMIX_RETAIN(node);
         if (prte_plm_globals.daemon_nodes_assigned_at_launch) {
             PRTE_FLAG_SET(node, PRTE_NODE_FLAG_LOC_VERIFIED);
         } else {

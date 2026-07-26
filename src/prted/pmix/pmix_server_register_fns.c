@@ -885,7 +885,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
-    PMIX_RETAIN(node);
+    /* the node backpointer is borrowed, not retained */
     proc->node = node;
     jdata->num_procs = 1;
 

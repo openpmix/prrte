@@ -461,7 +461,8 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
             daemons->num_procs++;
             pmix_pointer_array_set_item(daemons->procs, proc->name.rank, proc);
         }
-        PMIX_RETAIN(nd);
+        /* the node backpointer is borrowed, not retained (see
+         * prte_proc_destruct) */
         proc->node = nd;
         PMIX_RETAIN(proc);
         nd->daemon = proc;
