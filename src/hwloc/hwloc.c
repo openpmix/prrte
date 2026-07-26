@@ -279,6 +279,7 @@ void prte_hwloc_base_close(void)
 
     /* destroy the topology */
     if (NULL != prte_hwloc_topology) {
+        prte_hwloc_base_release_userdata(prte_hwloc_topology);
         hwloc_topology_destroy(prte_hwloc_topology);
         prte_hwloc_topology = NULL;
     }
