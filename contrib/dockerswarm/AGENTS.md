@@ -68,11 +68,49 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
   builds PMIx from source too; otherwise PMIx is the copy baked into the image
   (Linux) or an installed PMIx (macOS).
 
-> **One-time cost:** a VPATH build refuses to run while the source tree still
-> has an in-tree build, so `build.sh` runs `make distclean` + `./autogen.pl` at
-> the repo root the first time. After that your top-level source dir stays
-> clean and all builds live in `vpath-linux`/`vpath-macos`. If you were building
-> PRRTE in-tree before, your builds now live in `vpath-macos/` instead.
+### When a distclean is actually needed
+
+**The rule: an out-of-tree build cannot share a source tree with an
+in-tree build. If the source tree holds one when `build.sh` runs, it has
+to go — every time, not just the first.**
+
+There are two distinct reasons, and the second is the one that actually
+bites:
+
+1. **A VPATH `configure` refuses to run** while the source tree holds a
+   `config.status`/`Makefile`. This is the obvious one, and it only
+   applies on the first run — afterwards `build.sh` does
+   `[ -f config.status ] || configure` and skips it.
+2. **`VPATH = srcdir` makes an incremental out-of-tree `make` reach into
+   the source tree.** Automake sets `VPATH` to the source directory, so
+   make can satisfy an object target from a stale `src/**/*.lo` +
+   `.libs/*.o` left there by an in-tree build. Between a macOS host tree
+   and the Linux container those objects are not even the same
+   architecture, and the build dies with:
+
+   ```
+   libtool:   error: 'prte_bootstrap.lo' is not a valid libtool object
+   ```
+
+   Reason 2 has no "first run only" escape — it applies to every
+   incremental rebuild.
+
+So `build.sh` distcleans whenever it finds in-tree artifacts, and says
+so. `--no-distclean` skips it (only safe if the tree really is clean);
+`--distclean` forces it.
+
+**The cost, and how to avoid paying it repeatedly.** A distclean destroys
+*your* in-tree build, so the next `make check`, `make -C test/offline
+check-offline`, or `make install` has to reconfigure and rebuild the
+whole tree first. That failure is easy to misread, because a distcleaned
+tree does not announce itself — `make check` just says *"No rule to make
+target `check'"* and `make` at the root exits 0 having done nothing.
+
+If you run the host-side suites often, **stop keeping an in-tree build**:
+build the host side out of tree too (`./build.sh macos`, which installs
+into `vpath-macos/install`) and run `make check` from `vpath-macos`. Then
+the source tree stays pristine, both builds coexist exactly as this
+harness intends, and there is never anything to clean.
 
 ## 3. Prerequisites
 
@@ -90,8 +128,9 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 # from this directory (contrib/dockerswarm/)
 
 # ---- Linux swarm ----
-./build.sh                 # distclean+autogen (once), build image, build PRRTE
-                           #   into the shared volume from your live tree
+./build.sh                 # autogen (+ distclean only if a VPATH configure
+                           #   must run), build image, build PRRTE into the
+                           #   shared volume from your live tree
 docker compose up -d       # start prte-node1 .. prte-node10
 ./run-tests.sh linux       # full suite: prterun, elastic grow/shrink, relay
 
