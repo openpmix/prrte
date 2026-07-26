@@ -45,7 +45,10 @@ static int allocate(prte_job_t *jdata, pmix_list_t *ndlist)
     int n, rc;
     PRTE_HIDE_UNUSED_PARAMS(jdata);
 
-    /* read the same configuration file the daemons read */
+    /* Read the same configuration file the daemons read.  prte_bootstrap_parse
+     * validates it - including that no host is listed twice, which would leave
+     * a rank no daemon ever claims - so the node/rank mapping used below is a
+     * bijection by the time we get here. */
     rc = prte_bootstrap_parse(&cfg);
     if (PRTE_SUCCESS != rc) {
         return rc;

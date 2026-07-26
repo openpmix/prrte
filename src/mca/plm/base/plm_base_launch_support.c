@@ -2012,6 +2012,7 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
     bool multi_sim = false;
     bool grow_request = false;
     bool have_grow_requester = false;
+    pmix_rank_t vpid;
     pmix_proc_t grow_requester;
     char *grow_alloc_id = NULL, *grow_req_id = NULL;
 
@@ -2609,14 +2610,32 @@ process:
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
         PMIX_LOAD_NSPACE(proc->name.nspace, PRTE_PROC_MY_NAME->nspace);
-        if (PMIX_RANK_VALID - 1 <= daemons->num_procs) {
+        /* Choose this daemon's vpid.
+         *
+         * Normally we hand out the next unused one. In a BOOTSTRAPPED DVM we
+         * do not get to choose: every daemon computed its own vpid from the
+         * configuration file (prte_bootstrap_my_identity) before it ever
+         * contacted us, and prted_report_launch looks a reporting daemon up in
+         * daemons->procs by the rank it claims for itself. So the HNP has to
+         * arrive at the same answer independently, from the same authority -
+         * ras/bootstrap recorded that canonical rank as the node's pool index.
+         * Handing out a sequential vpid instead only agrees with what the
+         * daemons call themselves by accident of the order the configuration
+         * happens to list nodes in; where it disagrees, the HNP either
+         * attaches a daemon to the wrong node or fails to find it at all. */
+        if (prte_bootstrap_setup && 0 < node->index) {
+            vpid = (pmix_rank_t) node->index;
+        } else {
+            vpid = daemons->num_procs;
+        }
+        if (PMIX_RANK_VALID - 1 <= vpid) {
             /* no more daemons available */
             pmix_show_help("help-prte-rmaps-base.txt", "out-of-vpids", true);
             PMIX_RELEASE(proc);
             PMIX_LIST_DESTRUCT(&nodes);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
-        proc->name.rank = daemons->num_procs; /* take the next available vpid */
+        proc->name.rank = vpid;
         PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                              "%s plm:base:setup_vm add new daemon %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
@@ -2628,7 +2647,16 @@ process:
             PMIX_LIST_DESTRUCT(&nodes);
             return rc;
         }
-        ++daemons->num_procs;
+        /* num_procs is the vpid SPAN - the count only because vpids are
+         * normally handed out consecutively. Grow it to cover the vpid we just
+         * used rather than blindly incrementing, so a canonical rank cannot
+         * leave num_procs short of the highest daemon in the job (which would
+         * truncate the nidmap span and every daemon-count-derived
+         * computation). For a sequentially assigned vpid this is exactly the
+         * increment it replaces. */
+        if (daemons->num_procs <= proc->name.rank) {
+            daemons->num_procs = proc->name.rank + 1;
+        }
         PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                              "%s plm:base:setup_vm assigning new daemon %s to node %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name),
