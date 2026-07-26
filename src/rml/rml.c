@@ -377,7 +377,10 @@ static void recv_cons(prte_rml_recv_t *ptr)
 }
 static void recv_des(prte_rml_recv_t *ptr)
 {
-    if (ptr->dbuf != NULL && 0 < ptr->dbuf->bytes_allocated) {
+    /* the buffer object is ours even when the recv callback unloaded its
+     * payload - releasing only when payload remains left the (now empty)
+     * buffer itself behind on every message whose handler took the data */
+    if (NULL != ptr->dbuf) {
         PMIX_DATA_BUFFER_RELEASE(ptr->dbuf);
     }
 }
