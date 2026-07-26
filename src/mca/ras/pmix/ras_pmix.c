@@ -105,6 +105,7 @@ static void passthru(int sd, short args, void *cbdata)
 {
     prte_ras_pmix_caddy_t *cd = (prte_ras_pmix_caddy_t*)cbdata;
     prte_pmix_server_req_t *req = cd->req;
+    size_t n;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
@@ -118,18 +119,41 @@ static void passthru(int sd, short args, void *cbdata)
     req->status = cd->status;
     req->pstatus = cd->status;
 
-    /* the answer replaces whatever the request was carrying; drop our own
-     * copy first if we made one in modify() below. The replacement belongs to
-     * PMIx until we call rel(), so the request must not be marked as owning
-     * it. */
+    /* The answer replaces whatever the request was carrying, so drop our own
+     * copy first if we made one in modify() below.
+     *
+     * Take a COPY of the scheduler's array rather than pointing at it. The
+     * array belongs to PMIx until cd->rel() is invoked, and there is no good
+     * moment to invoke it if we keep it: the requester below is handed
+     * prte_pmix_server_req_release (so it never calls cd->rel), and
+     * prte_ras_base_complete_request may repoint req->info at a response of
+     * its own (so we cannot simply forward it either). Copying makes the
+     * request the sole owner of everything downstream - its destructor frees
+     * whatever req->info ends up being - and lets us hand PMIx's array back
+     * immediately, right here, where the lifetime is obvious. */
     if (req->copy && NULL != req->info) {
         PMIX_INFO_FREE(req->info, req->ninfo);
     }
+    req->info = NULL;
+    req->ninfo = 0;
     req->copy = false;
-    req->info = cd->info;
-    req->ninfo = cd->ninfo;
-    req->rlcbfunc = cd->rel;
-    req->rlcbdata = cd->relcbdata;
+    if (0 < cd->ninfo && NULL != cd->info) {
+        PMIX_INFO_CREATE(req->info, cd->ninfo);
+        if (NULL != req->info) {
+            for (n = 0; n < cd->ninfo; n++) {
+                PMIX_INFO_XFER(&req->info[n], &cd->info[n]);
+            }
+            req->ninfo = cd->ninfo;
+            req->copy = true;
+        }
+    }
+    if (NULL != cd->rel) {
+        cd->rel(cd->relcbdata);
+        cd->rel = NULL;
+    }
+    /* nothing of PMIx's is left for anyone to release */
+    req->rlcbfunc = NULL;
+    req->rlcbdata = NULL;
 
     // if we met the request, then we need to process it
     if (PMIX_SUCCESS == req->pstatus) {
@@ -140,24 +164,16 @@ static void passthru(int sd, short args, void *cbdata)
         /* Call the requestor's callback with the returned info, handing it
          * prte_pmix_server_req_release as the release function and returning
          * without releasing the request ourselves - this mirrors
-         * prte_ras_base_modify's tail. The info the requester is looking at
-         * is owned by the request (or by PMIx, released through it), so
-         * dropping the request here would pull it out from under a callback
-         * that has not finished with it. */
+         * prte_ras_base_modify's tail. The info the requester is looking at is
+         * owned by the request, so dropping the request here would pull it out
+         * from under a callback that has not finished with it. */
         req->infocbfunc(req->pstatus, req->info, req->ninfo, req->cbdata,
                         prte_pmix_server_req_release, req);
         PMIX_RELEASE(cd);
         return;
     }
 
-    if (NULL != req->rlcbfunc) {
-        // nobody to relay to - let PMIx cleanup
-        req->rlcbfunc(req->rlcbdata);
-        req->rlcbfunc = NULL;
-        req->info = NULL;
-        req->ninfo = 0;
-    }
-    // cleanup our request
+    // nobody to relay to - cleanup our request
     pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
     PMIX_RELEASE(req);
     PMIX_RELEASE(cd);
