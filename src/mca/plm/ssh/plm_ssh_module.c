@@ -704,6 +704,7 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
         tmp = strdup(full_orted_cmd);
     }
     PMIx_Argv_append_nosize(&final_argv, tmp);
+    free(tmp); /* the append copied it */
     free(full_orted_cmd);
 
     /* now add the final cmd to the argv array */
