@@ -363,7 +363,7 @@ static void ssh_wait_daemon(int sd, short flags, void *cbdata)
         }
     }
 
-    /* release any delay */
+    /* one fewer ssh in flight - admit the next from the launch list */
     --num_in_progress;
     if (num_in_progress < prte_mca_plm_ssh_component.num_concurrent) {
         /* trigger continuation of the launch */

@@ -73,7 +73,6 @@ static int ssh_component_close(void);
 static int ssh_launch_agent_lookup(const char *agent_list, char *path);
 
 /* Local variables */
-static char *prte_plm_ssh_delay_string = NULL;
 static int agent_var_id = -1;
 
 /*
@@ -153,12 +152,6 @@ static int ssh_component_register(void)
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
                                                 &prte_mca_plm_ssh_component.priority);
 
-    prte_plm_ssh_delay_string = NULL;
-    (void) pmix_mca_base_component_var_register(c, "delay",
-                                                "Delay between invocations of the remote agent (sec[:usec])",
-                                                PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                                &prte_plm_ssh_delay_string);
-
     prte_mca_plm_ssh_component.no_tree_spawn = false;
     (void) pmix_mca_base_component_var_register(c, "no_tree_spawn",
                                                 "If set to true, do not launch via a tree-based topology",
@@ -215,8 +208,6 @@ static int ssh_component_register(void)
 
 static int ssh_component_open(void)
 {
-    char *ctmp;
-
     /* initialize globals */
     prte_mca_plm_ssh_component.using_qrsh = false;
     prte_mca_plm_ssh_component.using_llspawn = false;
@@ -228,16 +219,6 @@ static int ssh_component_open(void)
         pmix_show_help("help-plm-ssh.txt", "concurrency-less-than-zero", true,
                        prte_mca_plm_ssh_component.num_concurrent);
         prte_mca_plm_ssh_component.num_concurrent = 1;
-    }
-
-    if (NULL != prte_plm_ssh_delay_string) {
-        prte_mca_plm_ssh_component.delay.tv_sec = strtol(prte_plm_ssh_delay_string, &ctmp, 10);
-        if (ctmp == prte_plm_ssh_delay_string) {
-            prte_mca_plm_ssh_component.delay.tv_sec = 0;
-        }
-        if (':' == ctmp[0]) {
-            prte_mca_plm_ssh_component.delay.tv_nsec = 1000 * strtol(ctmp + 1, NULL, 10);
-        }
     }
 
     return PRTE_SUCCESS;

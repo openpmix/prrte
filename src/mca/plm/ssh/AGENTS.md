@@ -252,7 +252,8 @@ process exits — see the ownership note below.
 - **`ssh_probe` forks.** If you touch it, keep the pipe fds closed on the
   error paths and keep reaping the probe child — PRRTE's SIGCHLD handler
   knows nothing about it.
-- **`plm_ssh_delay` is parsed but never applied.** The value lands in
-  `component.delay` and nothing reads it; either wire it into
-  `process_launch_list` or retire the parameter — don't assume it
-  throttles anything today.
+- **Launch pacing is `num_concurrent`, nothing else.** There used to be a
+  `plm_ssh_delay` parameter that was parsed into `component.delay` and
+  never read by anything; it was retired rather than left advertising a
+  throttle that did not exist. If inter-launch pacing is ever wanted, it
+  belongs in `process_launch_list`.
