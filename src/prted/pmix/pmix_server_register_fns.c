@@ -310,10 +310,15 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, (void **) &cache, PMIX_POINTER)
         && NULL != cache) {
         while (NULL != (kv = (prte_info_item_t *) pmix_list_remove_first(cache))) {
+            /* the xfer copies the value, so we are done with the item
+             * regardless of whether it succeeded */
             PMIX_INFO_LIST_XFER(ret, info, &kv->info);
+            PMIX_RELEASE(kv);
             if (PMIX_SUCCESS != ret) {
                 PMIX_ERROR_LOG(ret);
                 PMIX_INFO_LIST_RELEASE(info);
+                prte_remove_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE);
+                PMIX_RELEASE(cache);
                 rc = prte_pmix_convert_status(ret);
                 return rc;
             }
