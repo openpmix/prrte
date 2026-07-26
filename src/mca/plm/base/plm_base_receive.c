@@ -340,7 +340,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
                 rc = PRTE_ERR_NOT_FOUND;
                 goto CLEANUP;
             }
-            PMIX_RETAIN(node);
+            /* the node backpointer is borrowed, not retained */
             proc->node = node;
             jdata->num_procs = 1;
         }

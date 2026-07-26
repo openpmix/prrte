@@ -650,8 +650,7 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
                         PMIX_DATA_BUFFER_DESTRUCT(&jdbuf);
                         goto REPORT_ERROR;
                     }
-                    /* connect the two */
-                    PMIX_RETAIN(dmn->node);
+                    /* connect the two - the node backpointer is borrowed */
                     pptr->node = dmn->node;
 
                     /* add the node to the job map, if needed */
@@ -856,7 +855,7 @@ next:
                 rc = PRTE_ERR_NOT_FOUND;
                 goto REPORT_ERROR;
             }
-            PMIX_RETAIN(dmn->node);
+            /* the node backpointer is borrowed, not retained */
             pptr->node = dmn->node;
             /* add the node to the job map, if needed */
             if (!PRTE_FLAG_TEST(pptr->node, PRTE_NODE_FLAG_MAPPED)) {

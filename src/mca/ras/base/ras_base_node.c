@@ -272,7 +272,7 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                 daemon = PMIX_NEW(prte_proc_t);
                 PMIX_LOAD_PROCID(&daemon->name, PRTE_PROC_MY_NAME->nspace, node->index);
                 daemon->state = PRTE_PROC_STATE_RUNNING;
-                PMIX_RETAIN(node);
+                /* the node backpointer is borrowed, not retained */
                 daemon->node = node;
                 pmix_pointer_array_set_item(djob->procs, daemon->name.rank, daemon);
                 djob->num_procs++;

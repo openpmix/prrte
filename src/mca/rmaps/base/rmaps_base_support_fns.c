@@ -651,9 +651,8 @@ prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata,
         proc->parent = node->daemon->name.rank;
     }
 
-    // point the proc at its node
+    // point the proc at its node - borrowed, not retained
     proc->node = node;
-    PMIX_RETAIN(node); /* maintain accounting on object */
 
     /* point the proc to its locale */
     proc->obj = obj;

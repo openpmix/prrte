@@ -872,6 +872,12 @@ static void prte_node_destruct(prte_node_t *node)
     for (i = 0; i < node->procs->size; i++) {
         if (NULL != (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, i))) {
             pmix_pointer_array_set_item(node->procs, i, NULL);
+            /* the proc borrows its backpointer to us, so clear it before we
+             * go away - a proc can outlive its node (its job holds a
+             * reference too) */
+            if (proc->node == node) {
+                proc->node = NULL;
+            }
             PMIX_RELEASE(proc);
         }
     }
@@ -923,10 +929,14 @@ static void prte_proc_construct(prte_proc_t *proc)
 
 static void prte_proc_destruct(prte_proc_t *proc)
 {
-    if (NULL != proc->node) {
-        PMIX_RELEASE(proc->node);
-        proc->node = NULL;
-    }
+    /* proc->node is a BORROWED backpointer - the node is owned by
+     * prte_node_pool (and by any job map that retained it), and it is
+     * cleared by prte_node_destruct on the procs it knows about. Retaining
+     * it here would form a reference cycle with node->daemon /
+     * node->procs, which both hold real references: neither object could
+     * then ever reach a zero count, so neither destructor would run and
+     * every node and proc would leak. */
+    proc->node = NULL;
     if (NULL != proc->cpuset) {
         free(proc->cpuset);
         proc->cpuset = NULL;
