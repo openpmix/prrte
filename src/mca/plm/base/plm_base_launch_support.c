@@ -1701,16 +1701,17 @@ void prte_plm_base_daemon_failed(int st, pmix_proc_t *sender, pmix_data_buffer_t
         goto finish;
     }
 
-    /* unpack the exit status */
+    /* unpack the exit status. This is already a plain status - the senders
+     * on this tag report either a decoded exit status (ssh_wait_daemon) or a
+     * PRTE error code (remote_spawn), never a raw waitpid() status, so it
+     * must NOT be run through WEXITSTATUS */
     n = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &status, &n, PMIX_STATUS);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         status = PRTE_ERROR_DEFAULT_EXIT_CODE;
-        PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
-    } else {
-        PRTE_UPDATE_EXIT_STATUS(WEXITSTATUS(status));
     }
+    PRTE_UPDATE_EXIT_STATUS(status);
 
     /* find the daemon and update its state/status */
     if (NULL == (daemon = (prte_proc_t *) pmix_pointer_array_get_item(jdatorted->procs, vpid))) {
