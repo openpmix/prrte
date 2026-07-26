@@ -87,6 +87,21 @@ on at least one node is missing a required entry:
 
 Please provide the missing information.
 #
+[bootstrap-duplicate-node]
+
+Bootstrap startup was requested, but the configuration file lists the
+same host more than once in DVMNodes:
+
+   file:   %s
+   host:   %s
+
+A host's position in DVMNodes determines its rank in the DVM, and every
+daemon computes its own rank from this same file. A repeated entry
+therefore leaves a rank that no daemon will ever claim, and the DVM can
+never finish forming.
+
+Please list each host exactly once and try again.
+#
 [bootstrap-bad-nodelist]
 
 Bootstrap startup was requested, but we were unable to parse the regex

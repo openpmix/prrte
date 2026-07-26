@@ -120,6 +120,7 @@ int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
     FILE *fp;
     char *dvmnodes = NULL;
     int rc = PRTE_ERR_SILENT;
+    int i, j;
     pmix_status_t ret;
 
     /* set the defaults */
@@ -285,6 +286,28 @@ int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
         pmix_show_help("help-prte-runtime.txt", "bootstrap-bad-entry", true,
                        prte_process_info.nodename, path, "DVMIPVersion");
         goto cleanup;
+    }
+    /* Every host may appear in DVMNodes only once.  A node's position in the
+     * list IS its DVM rank (see prte_bootstrap_rank_of), and both the
+     * controller and each daemon derive ranks from this same file - so the
+     * listing has to be a bijection.  A repeated name resolves to the position
+     * of its FIRST occurrence, which leaves the position it would otherwise
+     * have held unclaimed by anybody while prte_bootstrap_num_daemons() still
+     * counts it: the DVM would then wait forever to form, expecting a daemon
+     * that no node will ever identify itself as.  Checking here means every
+     * daemon rejects the bad file identically and immediately, rather than the
+     * controller alone noticing later. */
+    for (i = 0; NULL != cfg->nodes[i]; i++) {
+        for (j = i + 1; NULL != cfg->nodes[j]; j++) {
+            if (host_match(cfg->nodes[i], cfg->nodes[j], cfg->keep_fqdn)) {
+                /* no nodename here: this runs before the hostname is
+                 * established, which is why the sibling messages in this
+                 * function report it as "(null)" */
+                pmix_show_help("help-prte-runtime.txt", "bootstrap-duplicate-node", true,
+                               path, cfg->nodes[i]);
+                goto cleanup;
+            }
+        }
     }
 
     free(path);

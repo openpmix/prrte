@@ -57,6 +57,7 @@
 #include "src/runtime/runtime.h"
 #include "src/util/attr.h"
 #include "src/util/pmix_argv.h"
+#include "src/util/prte_bootstrap.h"
 #include "src/util/proc_info.h"
 
 #include "src/mca/ras/base/base.h"
@@ -242,6 +243,117 @@ static int test_node_insert(void)
     PMIX_DESTRUCT(&nodes);
     CHECK("empty: rc", PRTE_SUCCESS == rc);
     CHECK("empty: pool untouched", pool_count() == before);
+
+    return failures;
+}
+
+/*
+ * The bootstrap rank contract, on which both ras/bootstrap's pool layout
+ * and plm's daemon-vpid assignment depend.
+ *
+ * A bootstrapped daemon computes its OWN vpid from prte.conf, via
+ * prte_bootstrap_my_identity(), before it ever contacts the HNP - and
+ * prted_report_launch() then looks it up in daemons->procs by the rank it
+ * claims. So the HNP has to reach the same number independently, from the
+ * same authority. ras/bootstrap records it as the node's pool index and
+ * plm reads it back out as the vpid; what makes that round trip safe is
+ * that ranks over a well-formed DVMNodes list are exactly 1..N with no
+ * gaps, so the pool slots are contiguous and rank_of/host_of_rank are
+ * inverses.
+ *
+ * A host listed twice breaks precisely that property, which is why
+ * ras/bootstrap rejects it rather than letting a permanently unclaimable
+ * rank stall DVM formation.
+ */
+static int test_bootstrap_ranks(void)
+{
+    int failures = 0;
+    prte_bootstrap_config_t cfg;
+    pmix_rank_t rank;
+    const char *host;
+    int rc;
+
+    /* --- controller separate from the node list --- */
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.cluster = strdup("test");
+    cfg.ctrlhost = strdup("ctrl");
+    cfg.keep_fqdn = false;
+    PMIx_Argv_append_nosize(&cfg.nodes, "bn01");
+    PMIx_Argv_append_nosize(&cfg.nodes, "bn02");
+    PMIx_Argv_append_nosize(&cfg.nodes, "bn03");
+
+    CHECK("bootranks: controller is rank 0",
+          PRTE_SUCCESS == prte_bootstrap_rank_of(&cfg, "ctrl", &rank) && 0 == rank);
+    /* contiguous 1..N is what lets the pool slot double as the rank */
+    rc = prte_bootstrap_rank_of(&cfg, "bn01", &rank);
+    CHECK("bootranks: first entry is rank 1", PRTE_SUCCESS == rc && 1 == rank);
+    rc = prte_bootstrap_rank_of(&cfg, "bn02", &rank);
+    CHECK("bootranks: second entry is rank 2", PRTE_SUCCESS == rc && 2 == rank);
+    rc = prte_bootstrap_rank_of(&cfg, "bn03", &rank);
+    CHECK("bootranks: third entry is rank 3", PRTE_SUCCESS == rc && 3 == rank);
+    CHECK("bootranks: a stranger is not a member",
+          PRTE_SUCCESS != prte_bootstrap_rank_of(&cfg, "bn99", &rank));
+    /* controller not in the list => N+1 daemons */
+    CHECK("bootranks: daemon count", 4 == prte_bootstrap_num_daemons(&cfg));
+
+    /* rank_of and host_of_rank must be inverses, or the HNP and the daemons
+     * disagree about who holds which vpid */
+    for (rank = 1; rank <= 3; rank++) {
+        pmix_rank_t back;
+
+        host = NULL;
+        rc = prte_bootstrap_host_of_rank(&cfg, rank, &host);
+        CHECK("bootranks: rank resolves to a host", PRTE_SUCCESS == rc && NULL != host);
+        if (PRTE_SUCCESS != rc || NULL == host) {
+            continue;
+        }
+        rc = prte_bootstrap_rank_of(&cfg, host, &back);
+        CHECK("bootranks: round trip", PRTE_SUCCESS == rc && back == rank);
+    }
+    prte_bootstrap_config_free(&cfg);
+
+    /* --- controller listed among the nodes: its entry consumes no rank --- */
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.cluster = strdup("test");
+    cfg.ctrlhost = strdup("bn02");
+    PMIx_Argv_append_nosize(&cfg.nodes, "bn01");
+    PMIx_Argv_append_nosize(&cfg.nodes, "bn02");   /* the controller, mid-list */
+    PMIx_Argv_append_nosize(&cfg.nodes, "bn03");
+
+    rc = prte_bootstrap_rank_of(&cfg, "bn02", &rank);
+    CHECK("bootranks(ctrl-in-list): controller still rank 0",
+          PRTE_SUCCESS == rc && 0 == rank);
+    rc = prte_bootstrap_rank_of(&cfg, "bn01", &rank);
+    CHECK("bootranks(ctrl-in-list): rank 1", PRTE_SUCCESS == rc && 1 == rank);
+    /* the skipped controller entry must NOT leave a gap */
+    rc = prte_bootstrap_rank_of(&cfg, "bn03", &rank);
+    CHECK("bootranks(ctrl-in-list): still contiguous", PRTE_SUCCESS == rc && 2 == rank);
+    CHECK("bootranks(ctrl-in-list): daemon count", 3 == prte_bootstrap_num_daemons(&cfg));
+    prte_bootstrap_config_free(&cfg);
+
+    /* --- a duplicated host is what ras/bootstrap must reject --- */
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.cluster = strdup("test");
+    cfg.ctrlhost = strdup("ctrl");
+    PMIx_Argv_append_nosize(&cfg.nodes, "bn01");
+    PMIx_Argv_append_nosize(&cfg.nodes, "bn02");
+    PMIx_Argv_append_nosize(&cfg.nodes, "bn01");   /* duplicate */
+    PMIx_Argv_append_nosize(&cfg.nodes, "bn03");
+
+    /* both occurrences resolve to the FIRST one's rank... */
+    rc = prte_bootstrap_rank_of(&cfg, "bn01", &rank);
+    CHECK("bootranks(dup): duplicate collapses to one rank",
+          PRTE_SUCCESS == rc && 1 == rank);
+    /* ...so the position it would have held is never handed to anybody, and
+     * the last entry's rank runs past the number of distinct hosts */
+    rc = prte_bootstrap_rank_of(&cfg, "bn03", &rank);
+    CHECK("bootranks(dup): later ranks are pushed out", PRTE_SUCCESS == rc && 4 == rank);
+    host = NULL;
+    rc = prte_bootstrap_host_of_rank(&cfg, 3, &host);
+    CHECK("bootranks(dup): rank 3 maps back to a host that is not rank 3",
+          PRTE_SUCCESS == rc && NULL != host &&
+          PRTE_SUCCESS == prte_bootstrap_rank_of(&cfg, host, &rank) && 3 != rank);
+    prte_bootstrap_config_free(&cfg);
 
     return failures;
 }
@@ -606,6 +718,7 @@ int main(void)
     failures += test_module_contract();
     failures += test_select();
     failures += test_node_insert();
+    failures += test_bootstrap_ranks();
     failures += test_preassigned_index();
     failures += test_hnp_dedup();
     failures += test_flag_string();

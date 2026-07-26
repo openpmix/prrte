@@ -315,9 +315,21 @@ DVM, dynamic spawn (only "added" nodes), unmanaged allocation
 (`-host`/hostfile union), managed allocation (filter the node pool) —
 and for each node needing a daemon it:
 
-- creates a `prte_proc_t`, assigns it the **next available vpid**
-  (`daemons->num_procs`), records the first as `map->daemon_vpid_start`,
-  and bumps `map->num_new_daemons`;
+- creates a `prte_proc_t` and assigns it a vpid — normally the **next
+  available one** (`daemons->num_procs`), but in a **bootstrapped DVM**
+  the node's canonical rank (`node->index`, recorded by `ras/bootstrap`
+  from `prte.conf`). That is not a preference: a bootstrapped daemon
+  computed its own vpid from the same file before it ever contacted the
+  HNP, and `prted_report_launch` looks a reporting daemon up in
+  `daemons->procs` **by the rank it claims for itself**. Assign it a
+  different one and the HNP either attaches the daemon to the wrong node
+  or cannot find it at all. Records the first as
+  `map->daemon_vpid_start` and bumps `map->num_new_daemons`;
+- maintains `daemons->num_procs` as the vpid **span** (grown to cover the
+  vpid just used, which for a sequential assignment is exactly the
+  increment it replaces) — `num_procs` is the count only because vpids
+  are normally consecutive, and it is read tree-wide as the upper bound
+  of the daemon vpid range;
 - links node↔daemon, sets `PRTE_NODE_FLAG_LOC_VERIFIED` iff
   `prte_plm_globals.daemon_nodes_assigned_at_launch` (see below);
 - once daemons are added, recomputes the RML routing tree
