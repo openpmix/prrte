@@ -40,6 +40,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/pmix_string_copy.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
@@ -60,7 +61,8 @@ static struct R_hostinfo *hostinfo_array_create (struct hostlist *hl);
 static void hostinfo_array_destroy (struct R_hostinfo *hostinfo, int n);
 static int hostinfo_append_ranks (struct R_hostinfo *hostinfo, int nnodes,
                                   int start, const char *rankstr,
-                                  const char *corestr, char **error_str);
+                                  const char *corestr, char *error_buf,
+                                  size_t error_buf_size);
 static int parse_json_payload(json_t *root,  pmix_list_t *prte_nodelist);
 
 /*
@@ -139,12 +141,17 @@ static void hostinfo_array_destroy (struct R_hostinfo *hostinfo, int n)
     }
 }
 
+/* Reports failures through the caller-supplied buffer rather than by
+ * allocating: the caller's error_str also carries string literals from its
+ * own checks, so a mixed-ownership pointer there could neither be freed nor
+ * safely leaked. */
 static int hostinfo_append_ranks (struct R_hostinfo *hostinfo,
                                   int nnodes,
                                   int start,
                                   const char *rankstr,
                                   const char *corestr,
-                                  char **error_str)
+                                  char *error_buf,
+                                  size_t error_buf_size)
 {
     unsigned int i;
     struct idset *ranks = NULL;
@@ -154,20 +161,20 @@ static int hostinfo_append_ranks (struct R_hostinfo *hostinfo,
 
     if (!(ranks = idset_decode (rankstr))
         || !(cores = idset_decode (corestr))) {
-        *error_str = strdup("failed to decode ranks/core idset");
+        pmix_string_copy(error_buf, "failed to decode ranks/core idset", error_buf_size);
         goto out;
     }
 
     if (idset_count (ranks) <= 0
         || (ncores = idset_count (cores)) <= 0) {
-        *error_str = strdup("invalid rank or core count in Rv1");
+        pmix_string_copy(error_buf, "invalid rank or core count in Rv1", error_buf_size);
         goto out;
     }
 
     i = idset_first (ranks);
     while (i != IDSET_INVALID_ID) {
         if (start + count > nnodes - 1) {
-            *error_str = strdup("Rlite ranks exceeds nodelist entries");
+            pmix_string_copy(error_buf, "Rlite ranks exceeds nodelist entries", error_buf_size);
             goto out;
         }
         hostinfo[start + count].broker_rank = i;
@@ -184,7 +191,11 @@ out:
 static int parse_json_payload(json_t *root,  pmix_list_t *prte_nodelist)
 {
     int i, version, start, nnodes, ret = PRTE_SUCCESS;
-    char *error_str = NULL;
+    /* every assignment to error_str is a string literal - the idset decode
+     * helper below reports through a separate buffer so this stays
+     * non-owning and needs no free */
+    const char *error_str = NULL;
+    char idset_err[128];
     json_t *entry = NULL;
     json_t *R_lite = NULL;
     json_t *nodelist = NULL;
@@ -197,8 +208,11 @@ static int parse_json_payload(json_t *root,  pmix_list_t *prte_nodelist)
     /*
      * unpack the json
     */
+    /* NOTE: "s?o" (borrowed reference), NOT "s?O" - the capital form
+     * increments the refcount and nothing here ever decrefs it, which
+     * leaks the whole "scheduling" subtree on every allocation */
     if (json_unpack_ex (root, &error, 0,
-                        "{s:i s?O s:{s:o s:o s?o}}",
+                        "{s:i s?o s:{s:o s:o s?o}}",
                         "version", &version,
                         "scheduling", &scheduling,
                         "execution",
@@ -262,13 +276,18 @@ static int parse_json_payload(json_t *root,  pmix_list_t *prte_nodelist)
             ret = PRTE_ERR_NOT_AVAILABLE;
             goto err;
         }
+        idset_err[0] = '\0';
         if ((rc = hostinfo_append_ranks (hostinfo,
                                          nnodes,
                                          start,
                                          ranks,
                                          cores,
-                                         &error_str)) <= 0)
+                                         idset_err,
+                                         sizeof(idset_err))) <= 0) {
+            error_str = ('\0' == idset_err[0]) ? NULL : idset_err;
+            ret = PRTE_ERR_NOT_AVAILABLE;
             goto err;
+        }
         start += rc;
     }
 
@@ -334,6 +353,10 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     json_error_t json_err;
     char *return_str=NULL;
     const char *flux_job_id=NULL;
+    /* MUST be declared (and NULLed) before the first "goto err": the cleanup
+     * block decrefs it, and every early error path jumps over the point where
+     * json_loads() would otherwise have initialized it */
+    json_t *root = NULL;
 
     if ((jdata == NULL) || (nodes == NULL)) {
         return PRTE_ERR_BAD_PARAM;
@@ -381,7 +404,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     if(flux_kvs_lookup_get (f, (const char **)&return_str) < 0){
         int errno_l = errno;
         pmix_show_help("help-ras-flux.txt", "flux-kvs-lookup-get-failure", 1, strerror(errno_l));
-        return PRTE_ERR_NOT_FOUND;
+        ret = PRTE_ERR_NOT_FOUND;
         goto err;
     }
 
@@ -391,7 +414,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     /*
      *  Parse the returned JSON payload
      */
-    json_t *root = json_loads(return_str, JSON_DECODE_ANY, &json_err);
+    root = json_loads(return_str, JSON_DECODE_ANY, &json_err);
     if (NULL == root) {
         pmix_show_help("help-ras-flux.txt", "flux-json-parse-failure", 1, json_err.text);
         ret = PRTE_ERR_UNPACK_FAILURE;

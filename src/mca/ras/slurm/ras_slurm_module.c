@@ -450,6 +450,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
     slots = malloc(sizeof(int) * num_nodes);
     if (NULL == slots) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PMIx_Argv_free(names);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
     memset(slots, 0, sizeof(int) * num_nodes);
@@ -458,6 +459,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
     if (NULL == begptr) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         free(slots);
+        PMIx_Argv_free(names);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
@@ -499,6 +501,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
             free(slots);
             free(orig);
+            PMIx_Argv_free(names);
             return PRTE_ERR_BAD_PARAM;
         }
     }
@@ -519,6 +522,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
         if (NULL == node) {
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
             free(slots);
+            PMIx_Argv_free(names);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
         node->name = strdup(names[i]);

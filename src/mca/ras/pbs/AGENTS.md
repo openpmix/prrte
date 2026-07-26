@@ -48,7 +48,11 @@ On success it records `prte_num_allocated_nodes` and returns
 ## Things to watch when editing
 
 - The nodefile parser (`pbs_getline`) caps lines at
-  `PBS_FILE_MAX_LINE_LENGTH` (512) and strips the trailing newline.
+  `PBS_FILE_MAX_LINE_LENGTH` (512), strips a trailing `\n`/`\r` **only if
+  one is present** (the last line of a file need not be terminated), and
+  **skips blank lines** rather than returning `""` — an empty hostname
+  would otherwise become an unusable, unresolvable node in the
+  allocation.
 - `discover` ignores any user hostfile/dash-host — PBS is authoritative.
 - The Cobalt variant is a first-class alias throughout; keep both env
   names handled in `query`, `allocate`, and `discover`.

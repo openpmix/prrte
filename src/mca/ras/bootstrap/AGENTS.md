@@ -44,8 +44,15 @@ node is already represented by the HNP at pool index 0. Each node is a
 
 ## Things to watch when editing
 
-- **Node `index` is the canonical bootstrap rank**, not a pool-insertion
-  ordinal — the launch/routing path depends on this correspondence.
+- **`allocate` sets node `index` to the canonical bootstrap rank**, but
+  be aware that `prte_ras_base_node_insert` **overwrites it** with the
+  pool-insertion ordinal (`pmix_pointer_array_add`). The two agree only
+  because the HNP occupies pool slot 0 and `DVMNodes` is listed in rank
+  order, so ranks 1..N land in slots 1..N. Nothing enforces that: a
+  config listing nodes out of rank order, or a pool that already has
+  holes, breaks the correspondence silently. If the launch/routing path
+  ever needs the bootstrap rank after insertion, store it explicitly
+  rather than relying on `index`.
 - Skipping rank 0 avoids double-entering the controller (HNP) node;
   don't remove that guard.
 - Setting `prte_managed_allocation` is intentional and load-bearing for

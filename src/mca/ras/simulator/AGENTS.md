@@ -52,7 +52,15 @@ Often paired with `ras_base_multiplier` to inflate node counts further.
 ## Things to watch when editing
 
 - `num_nodes` doubles as the availability gate — clearing it disables the
-  component entirely.
+  component entirely. Note it gates on the string being *set*, not on it
+  splitting to anything: `allocate` re-checks and defers with
+  `TAKE_NEXT_OPTION` if the value is empty.
+- **The back-fill reads `slot_cnt[nslots - 1]`** — guard `nslots > 0`
+  first, or an empty `ras_simulator_slots` value indexes off the front of
+  the array.
+- **Group prefixes are assigned, not accumulated** (`prefix[4] = 'A' + n`).
+  The compound form carried its previous value forward, so groups came
+  out named `nodeA`, `nodeB`, `nodeD`, `nodeG`…
 - The topology is *shared* (`PMIX_RETAIN`) across all synthetic nodes;
   don't free it per node.
 - This path is a primary consumer of the base's `DO_NOT_LAUNCH` daemon

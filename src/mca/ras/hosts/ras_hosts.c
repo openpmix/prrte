@@ -16,6 +16,8 @@
 #include "constants.h"
 #include "types.h"
 
+#include <ctype.h>
+
 #include "src/class/pmix_list.h"
 #include "src/util/pmix_show_help.h"
 #include "src/util/pmix_string_copy.h"
@@ -216,9 +218,12 @@ static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
             free(line);
             continue;
         }
-        // remove leading whitespace
+        // remove leading whitespace. NOTE: isspace() takes an int whose
+        // value must be representable as unsigned char (or EOF); passing a
+        // plain char is undefined for any byte with the high bit set, so
+        // every ctype call here casts.
         cptr = line;
-        while (isspace(*cptr)) {
+        while (isspace((unsigned char) *cptr)) {
             ++cptr;
         }
         if ('#' == *cptr) {
@@ -229,7 +234,7 @@ static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
         // because there can be arbitrary whitespace around keywords,
         // we manually parse the line to get the directives
         ptr = cptr;
-        while ('\0' != *ptr && !isspace(*ptr)) {
+        while ('\0' != *ptr && !isspace((unsigned char) *ptr)) {
             ++ptr;
         }
         if ('\0' == *ptr) {
@@ -240,7 +245,7 @@ static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
         *ptr = '\0'; // terminate the name
         // find the '=' sign
         ++ptr;
-        while ('\0' != *ptr && ('=' != *ptr || isspace(*ptr))) {
+        while ('\0' != *ptr && '=' != *ptr) {
             ++ptr;
         }
         if ('\0' == *ptr) {
@@ -250,7 +255,7 @@ static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
         }
         // find the value
         ++ptr;
-        while ('\0' != *ptr && isspace(*ptr)) {
+        while ('\0' != *ptr && isspace((unsigned char) *ptr)) {
             ++ptr;
         }
         if ('\0' == *ptr) {
@@ -350,8 +355,19 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
     // look for applicable directives
     for (n=0; n < req->ninfo; n++) {
         if (PMIx_Check_key(req->info[n].key, PMIX_ADD_HOSTFILE)) {
+            /* the value has to be a string we can split - a request that
+             * arrived over the wire may carry anything */
+            if (PMIX_STRING != req->info[n].value.type ||
+                NULL == req->info[n].value.data.string) {
+                PMIX_LIST_DESTRUCT(&nodes);
+                req->pstatus = PMIX_ERR_BAD_PARAM;
+                return req->pstatus;
+            }
             // comma-delimited list of hostfiles to add or delete
             hostfiles = PMIx_Argv_split(req->info[n].value.data.string, ',');
+            if (NULL == hostfiles) {
+                continue;
+            }
             for (k=0; NULL != hostfiles[k]; k++) {
                 rc = process_hostfile(hostfiles[k], &nodes);
                 if (PMIX_SUCCESS != rc) {
@@ -368,6 +384,12 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
             pmix_list_t dhnodes;
             prte_node_t *nd;
 
+            if (PMIX_STRING != req->info[n].value.type ||
+                NULL == req->info[n].value.data.string) {
+                PMIX_LIST_DESTRUCT(&nodes);
+                req->pstatus = PMIX_ERR_BAD_PARAM;
+                return req->pstatus;
+            }
             // comma-delimited list of hosts to add or delete
             PMIX_CONSTRUCT(&dhnodes, pmix_list_t);
             rc = prte_util_add_dash_host_nodes(&dhnodes, req->info[n].value.data.string, true);
@@ -397,6 +419,9 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
         rc = prte_ras_base_node_insert(&nodes, req->jdata);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
+            /* node_insert drains what it consumed; destruct so whatever it
+             * did not reach is not leaked along with the list itself */
+            PMIX_LIST_DESTRUCT(&nodes);
             req->pstatus = prte_pmix_convert_rc(rc);
             return req->pstatus;
         }

@@ -110,6 +110,13 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
         queue = strtok_r(NULL, " \n", &tok);
         arch = strtok_r(NULL, " \n", &tok);
 
+        /* a blank line yields no hostname, and a line missing the slot
+         * count yields no num - either way there is nothing to add, and
+         * dereferencing them would take down the HNP */
+        if (NULL == ptr || NULL == num) {
+            continue;
+        }
+
         /* see if we already have this node */
         found = false;
         PMIX_LIST_FOREACH(node, nodelist, prte_node_t) {

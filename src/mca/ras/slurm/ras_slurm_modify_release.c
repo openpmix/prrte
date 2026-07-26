@@ -586,6 +586,19 @@ void prte_ras_slurm_shrink_complete(prte_shrink_campaign_t *campaign)
             PMIX_CONSTRUCT(&nodes_in_removal, pmix_pointer_array_t);
             err = prte_ras_slurm_detach_nodes(action->job_id, session_item->session,
                                               &nodes_in_removal);
+            /* detach_nodes hands back the nodes it dropped from
+             * session->nodes, each still carrying the reference the session
+             * took in assign_new_session. Destructing the array does not
+             * release them, so drop those references here or the node
+             * objects are never reclaimed. */
+            for (int k = 0; k < nodes_in_removal.size; k++) {
+                prte_node_t *gone = (prte_node_t *)
+                    pmix_pointer_array_get_item(&nodes_in_removal, k);
+                if (NULL != gone) {
+                    pmix_pointer_array_set_item(&nodes_in_removal, k, NULL);
+                    PMIX_RELEASE(gone);
+                }
+            }
             PMIX_DESTRUCT(&nodes_in_removal);
             if (PRTE_SUCCESS != err) {
                 PRTE_ERROR_LOG(err);

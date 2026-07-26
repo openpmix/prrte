@@ -61,13 +61,20 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
     node_cnt = PMIx_Argv_split(prte_mca_ras_simulator_component.num_nodes, ',');
     num_nodes = PMIx_Argv_count(node_cnt);
+    if (0 == num_nodes) {
+        /* the gating param was set but held nothing usable */
+        PMIx_Argv_free(node_cnt);
+        return PRTE_ERR_TAKE_NEXT_OPTION;
+    }
 
     if (NULL != prte_mca_ras_simulator_component.slots) {
         slot_cnt = PMIx_Argv_split(prte_mca_ras_simulator_component.slots, ',');
         /* if they didn't provide a slot count for each node, then
-         * backfill the slot_cnt so every node has a cnt */
+         * backfill the slot_cnt so every node has a cnt.  An empty param
+         * value splits to nothing, so guard the "last one given" read -
+         * slot_cnt[-1] is an out-of-bounds access. */
         nslots = PMIx_Argv_count(slot_cnt);
-        if (nslots < num_nodes) {
+        if (0 < nslots && nslots < num_nodes) {
             // take the last one given and extend it to cover remaining nodes
             tmp = slot_cnt[nslots - 1];
             for (n = nslots; n < num_nodes; n++) {
@@ -80,7 +87,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
         /* if they didn't provide a max slot count for each node, then
          * backfill the slot_cnt so every node has a cnt */
         nslots = PMIx_Argv_count(max_slot_cnt);
-         if (nslots < num_nodes) {
+        if (0 < nslots && nslots < num_nodes) {
             // take the last one given and extend it to cover remaining nodes
             tmp = max_slot_cnt[nslots - 1];
             for (n = nslots; n < num_nodes; n++) {
@@ -108,6 +115,16 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     /* use our topology */
     t = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, 0);
     if (NULL == t) {
+        if (NULL != max_slot_cnt) {
+            PMIx_Argv_free(max_slot_cnt);
+        }
+        if (NULL != slot_cnt) {
+            PMIx_Argv_free(slot_cnt);
+        }
+        PMIx_Argv_free(node_cnt);
+        if (NULL != job_cpuset) {
+            free(job_cpuset);
+        }
         return PRTE_ERR_NOT_FOUND;
     }
     topo = t->topo;
@@ -127,8 +144,10 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
             val /= 10;
         }
 
-        /* set the prefix for this group of nodes */
-        prefix[4] += n;
+        /* set the prefix for this group of nodes. Assign (not +=): the
+         * compound form accumulates across iterations, so groups came out
+         * as A, B, D, G, K... instead of A, B, C, D. */
+        prefix[4] = 'A' + n;
 
         for (i = 0; i < num_nodes; i++) {
             node = PMIX_NEW(prte_node_t);

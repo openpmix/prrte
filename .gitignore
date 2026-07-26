@@ -68,6 +68,8 @@ test/unit/plm/Makefile
 test/unit/plm/test_plm
 test/unit/rml/Makefile
 test/unit/rml/test_rml
+test/unit/ras/Makefile
+test/unit/ras/test_ras
 static-components.h
 static-components.h.new.extern
 static-components.h.new.struct

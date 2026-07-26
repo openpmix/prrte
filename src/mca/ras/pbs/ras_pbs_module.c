@@ -242,16 +242,27 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
     return PRTE_SUCCESS;
 }
 
+/* Return the next non-empty line of the nodefile with its trailing newline
+ * stripped, or NULL at end of file.  Blank lines are skipped rather than
+ * turned into a node named "": a nodefile with a stray blank line would
+ * otherwise inject an unusable, unresolvable node into the allocation.
+ * Note also that the final line of a file need not be newline-terminated,
+ * so the newline is removed only if it is actually there. */
 static char *pbs_getline(FILE *fp)
 {
-    char *ret, *buff;
+    char *ret;
+    size_t len;
     char input[PBS_FILE_MAX_LINE_LENGTH];
 
-    ret = fgets(input, PBS_FILE_MAX_LINE_LENGTH, fp);
-    if (NULL != ret) {
-        input[strlen(input) - 1] = '\0'; /* remove newline */
-        buff = strdup(input);
-        return buff;
+    while (NULL != (ret = fgets(input, PBS_FILE_MAX_LINE_LENGTH, fp))) {
+        len = strlen(input);
+        while (0 < len && ('\n' == input[len - 1] || '\r' == input[len - 1])) {
+            input[--len] = '\0';
+        }
+        if (0 == len) {
+            continue;
+        }
+        return strdup(input);
     }
 
     return NULL;
