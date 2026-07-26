@@ -752,6 +752,17 @@ int prte_rmaps_base_get_ncpus(prte_node_t *node,
     return ncpus;
 }
 
+/* the target cpuset is recomputed for every node we consider, so the one
+ * left over from the previous node has to go back before we build a new
+ * one - the mappers free only the final target when they are done */
+static void free_target(prte_rmaps_options_t *options)
+{
+    if (NULL != options->target) {
+        hwloc_bitmap_free(options->target);
+        options->target = NULL;
+    }
+}
+
 bool prte_rmaps_base_check_avail(prte_job_t *jdata,
                                  prte_app_context_t *app,
                                  prte_node_t *node,
@@ -788,10 +799,9 @@ bool prte_rmaps_base_check_avail(prte_job_t *jdata,
     }
 
     if (PRTE_BIND_TO_NONE == options->bind) {
+        free_target(options);
         if (NULL != options->job_cpuset) {
             options->target = hwloc_bitmap_dup(options->job_cpuset);
-        } else {
-            options->target = NULL;
         }
         avail = true;
         goto done;
@@ -799,6 +809,7 @@ bool prte_rmaps_base_check_avail(prte_job_t *jdata,
 
     options->ncpus = prte_rmaps_base_get_ncpus(node, obj, options);
     /* the available cpus are in the scratch location */
+    free_target(options);
     options->target = hwloc_bitmap_dup(prte_rmaps_base.available);
 
     // compute how many procs we can support on this object
@@ -840,6 +851,13 @@ void prte_rmaps_base_get_cpuset(prte_job_t *jdata,
                                 prte_rmaps_options_t *options)
 {
     PRTE_HIDE_UNUSED_PARAMS(jdata);
+
+    /* mappers call this once per candidate node, so drop the cpuset computed
+     * for the previous node before computing this one's */
+    if (NULL != options->job_cpuset) {
+        hwloc_bitmap_free(options->job_cpuset);
+        options->job_cpuset = NULL;
+    }
 
     if (NULL != options->cpuset) {
         options->job_cpuset = prte_hwloc_base_generate_cpuset(node->topology->topo,
