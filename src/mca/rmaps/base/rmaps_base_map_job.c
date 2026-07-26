@@ -314,6 +314,26 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
  * reflects any reset to BIND_TO_NONE the mapper made for a genuinely
  * oversubscribed node. These are stored as job-local attributes and are never
  * packed or sent off-node. */
+/* return the per-node scratch cpusets a mapper computed into an options
+ * struct. The mappers recycle these as they walk the node list, so the
+ * final node's pair is still held when the map returns. */
+static void free_target(prte_rmaps_options_t *opts)
+{
+    if (NULL != opts->target) {
+        hwloc_bitmap_free(opts->target);
+        opts->target = NULL;
+    }
+}
+
+static void free_cpusets(prte_rmaps_options_t *opts)
+{
+    if (NULL != opts->job_cpuset) {
+        hwloc_bitmap_free(opts->job_cpuset);
+        opts->job_cpuset = NULL;
+    }
+    free_target(opts);
+}
+
 static void record_resolved_app_policy(prte_app_context_t *app,
                                        prte_mapping_policy_t jobmap,
                                        prte_ranking_policy_t jobrank,
@@ -375,6 +395,9 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     bool colocate = false;
     prte_schizo_base_module_t *schizo;
     prte_rmaps_options_t options;
+    /* per-app scratch for the MPMD dispatch path - at function scope so the
+     * cleanup label can reclaim the cpusets a mapper left in it */
+    prte_rmaps_options_t app_options;
     pmix_data_array_t *darray = NULL;
     pmix_list_t nodes;
     int slots, len;
@@ -386,6 +409,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     PMIX_ACQUIRE_OBJECT(caddy);
     // init options
     memset(&options, 0, sizeof(prte_rmaps_options_t));
+    memset(&app_options, 0, sizeof(prte_rmaps_options_t));
     options.app_idx = -1;   /* -1 = map all apps (default) */
     options.stream = prte_rmaps_base_framework.framework_output;
     options.verbosity = 5;  // usual value for base-level functions
@@ -1270,7 +1294,14 @@ ranking:
                 continue;
             }
 
-            prte_rmaps_options_t app_options = options;   /* shallow copy of job defaults */
+            /* hand back whatever the previous app's map left behind before
+             * this app overwrites it */
+            free_cpusets(&app_options);
+            app_options = options;   /* shallow copy of job defaults */
+            /* the copy must not inherit ownership of the job-level cpusets -
+             * the mappers compute their own per node */
+            app_options.job_cpuset = NULL;
+            app_options.target = NULL;
             app_options.app_idx = n;
             /* the default-binding nprocs rule keys off this app's own proc
              * count, not the job-wide total inherited from options.nprocs.
@@ -1397,14 +1428,8 @@ cleanup:
             PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
         }
     }
-    if (NULL != options.job_cpuset) {
-        hwloc_bitmap_free(options.job_cpuset);
-        options.job_cpuset = NULL;
-    }
-    if (NULL != options.target) {
-        hwloc_bitmap_free(options.target);
-        options.target = NULL;
-    }
+    free_cpusets(&options);
+    free_cpusets(&app_options);
     /* cleanup */
     PMIX_RELEASE(caddy);
 }
@@ -1567,6 +1592,7 @@ static int map_colocate(prte_job_t *jdata,
             // setup the mapping options
             options->ncpus = prte_rmaps_base_get_ncpus(nptr, NULL, options);
             /* the available cpus are in the scratch location */
+            free_target(options);
             options->target = hwloc_bitmap_dup(prte_rmaps_base.available);
             options->nprocs = procs_per_target;
            // Assign N procs per node for each app_context
@@ -1631,6 +1657,7 @@ static int map_colocate(prte_job_t *jdata,
         // setup the mapping options
         options->ncpus = prte_rmaps_base_get_ncpus(nptr, NULL, options);
         /* the available cpus are in the scratch location */
+        free_target(options);
         options->target = hwloc_bitmap_dup(prte_rmaps_base.available);
         // count the number of target procs on this node
         cnt = 0;
