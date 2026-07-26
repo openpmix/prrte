@@ -1304,15 +1304,26 @@ static void progress_daemons(prte_job_t *daemons,
             // login node). Normally that is daemon rank=1, the only daemon
             // that reports a topology under homo_nodes. However, rank 1 need
             // not still exist - an elastic shrink can remove it - so take the
-            // topology from the first daemon that has one. The survivors
-            // inherited rank 1's topology when they reported in, so a daemon
-            // launched by a later grow (which reports no topology of its own,
-            // as it is not rank 1) still inherits the correct one.
+            // topology from the first daemon that is still ALIVE and has one.
+            // The survivors inherited rank 1's topology when they reported in,
+            // so a daemon launched by a later grow (which reports no topology
+            // of its own, as it is not rank 1) still inherits the correct one.
+            //
+            // The aliveness test is what makes that fallback mean anything. A
+            // shrink deliberately keeps the departed daemon's proc object in
+            // the array - daemon vpids are never reused, so its rank stays
+            // reserved - and only unsets ALIVE and marks it TERMINATED. It
+            // leaves the proc's ->node back-pointer, and that node keeps the
+            // topology it was given. Scanning without checking ALIVE would
+            // therefore keep sourcing the topology from a daemon that left the
+            // DVM, which is both wrong in principle and indistinguishable from
+            // the hardcoded rank-1 behavior this replaced.
             t = NULL;
             src = PMIX_RANK_INVALID;
             for (j = 1; j < daemons->num_procs; j++) {
                 daemon = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs, j);
-                if (NULL == daemon || NULL == daemon->node || NULL == daemon->node->topology) {
+                if (NULL == daemon || !PRTE_FLAG_TEST(daemon, PRTE_PROC_FLAG_ALIVE) ||
+                    NULL == daemon->node || NULL == daemon->node->topology) {
                     continue;
                 }
                 t = daemon->node->topology;
@@ -1330,7 +1341,10 @@ static void progress_daemons(prte_job_t *daemons,
                     continue;
                 }
                 daemon = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs, j);
-                if (NULL == daemon || NULL == daemon->node) {
+                if (NULL == daemon || !PRTE_FLAG_TEST(daemon, PRTE_PROC_FLAG_ALIVE) ||
+                    NULL == daemon->node) {
+                    /* a departed daemon's node is no longer part of the DVM -
+                     * do not hand it a topology reference to hold */
                     continue;
                 }
                 if (daemon->node->topology == t) {
