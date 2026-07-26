@@ -20,6 +20,13 @@
  *
  * (extend/release are accepted as aliases for grow/shrink.)
  *
+ * A grow may be followed by "-- <cmd> [args...]", in which case the tool
+ * spawns that command INTO THE RESERVATION the grow just created, using the
+ * PMIX_ALLOC_ID the request handed back and PMIX_SPAWN_TARGET to name it.
+ * That is the only way to place a job on a freshly grown node: grown nodes
+ * join the new reservation rather than the default pool, so a plain
+ * "prun --host <grown-node>" has no allocation to map onto and fails.
+ *
  * Build: gcc -o elastic elastic.c -lpmix
  */
 
@@ -64,7 +71,11 @@ static void lock_wake(lock_t *l, pmix_status_t st) {
 }
 
 static lock_t complete_lock;     /* fired by the DVM_IS_READY / ERR_DVM_MOD handler */
+static lock_t jobend_lock;       /* fired by the PMIX_EVENT_JOB_END handler */
 static pmix_proc_t myproc;
+/* PMIX_ALLOC_ID of the reservation the grow created - the handle a later
+ * spawn needs in order to target those nodes */
+static char alloc_id[PMIX_MAX_KEYLEN + 1];
 
 /* handler registration callback */
 static void reg_cb(pmix_status_t status, size_t evref, void *cbdata) {
@@ -84,6 +95,12 @@ static void alloc_cb(pmix_status_t status, pmix_info_t *info, size_t ninfo,
         if (PMIX_STRING == info[n].value.type) {
             fprintf(stderr, "      info[%zu] %s = %s\n", n, info[n].key,
                     info[n].value.data.string);
+            /* remember the reservation handle so we can spawn into it */
+            if (PMIX_CHECK_KEY(&info[n], PMIX_ALLOC_ID) &&
+                NULL != info[n].value.data.string) {
+                snprintf(alloc_id, sizeof(alloc_id), "%s",
+                         info[n].value.data.string);
+            }
         } else {
             fprintf(stderr, "      info[%zu] key=%s\n", n, info[n].key);
         }
@@ -118,6 +135,82 @@ static void completion_evh(size_t evhdlr_id, pmix_status_t status,
     lock_wake(&complete_lock, status);
 }
 
+/* the spawned job finished */
+static void jobend_evh(size_t evhdlr_id, pmix_status_t status,
+                       const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
+                       pmix_info_t results[], size_t nresults,
+                       pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata) {
+    (void) evhdlr_id; (void) source; (void) info; (void) ninfo;
+    (void) results; (void) nresults;
+    fprintf(stderr, ">>> spawned job ended: %s\n", PMIx_Error_string(status));
+    if (NULL != cbfunc) {
+        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    }
+    lock_wake(&jobend_lock, status);
+}
+
+/* Spawn a job onto the nodes of the reservation this tool just created.
+ * Returns 0 on success. The reservation is named by PMIX_SPAWN_TARGET; the
+ * HNP validates that we own it, resolves it to the session, and maps only
+ * onto its nodes - so a proc landing at all proves those nodes are usable
+ * (in particular, that they have a topology). */
+static int spawn_into_reservation(char **cmd) {
+    pmix_app_t app;
+    pmix_info_t jinfo[2];
+    pmix_nspace_t nspace;
+    pmix_status_t rc, code = PMIX_EVENT_JOB_END;
+    lock_t reglock;
+    bool flag = true;
+    int n;
+
+    if ('\0' == alloc_id[0]) {
+        fprintf(stderr, ">>> FAILURE: the grow returned no PMIX_ALLOC_ID to spawn into\n");
+        return 1;
+    }
+
+    lock_init(&jobend_lock);
+    lock_init(&reglock);
+    PMIx_Register_event_handler(&code, 1, NULL, 0, jobend_evh, reg_cb, &reglock);
+    lock_wait(&reglock);
+
+    PMIX_APP_CONSTRUCT(&app);
+    app.cmd = strdup(cmd[0]);
+    for (n = 0; NULL != cmd[n]; n++) {
+        PMIx_Argv_append_nosize(&app.argv, cmd[n]);
+    }
+    app.maxprocs = 1;
+
+    PMIX_INFO_LOAD(&jinfo[0], PMIX_SPAWN_TARGET, alloc_id, PMIX_STRING);
+    PMIX_INFO_LOAD(&jinfo[1], PMIX_NOTIFY_COMPLETION, &flag, PMIX_BOOL);
+
+    fprintf(stderr, "spawning [%s] into reservation %s ...\n", cmd[0], alloc_id);
+    rc = PMIx_Spawn(jinfo, 2, &app, 1, nspace);
+    PMIX_APP_DESTRUCT(&app);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, ">>> FAILURE: spawn into %s returned %s\n",
+                alloc_id, PMIx_Error_string(rc));
+        return 1;
+    }
+    fprintf(stderr, ">>> SPAWNED %s into reservation %s\n", nspace, alloc_id);
+
+    /* bounded wait for the job to finish so a caller can inspect its work */
+    {
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_sec += 60;
+        pthread_mutex_lock(&jobend_lock.mtx);
+        while (jobend_lock.active) {
+            if (ETIMEDOUT == pthread_cond_timedwait(&jobend_lock.cond,
+                                                    &jobend_lock.mtx, &ts)) {
+                fprintf(stderr, ">>> TIMEOUT: spawned job did not end within 60s\n");
+                break;
+            }
+        }
+        pthread_mutex_unlock(&jobend_lock.mtx);
+    }
+    return 0;
+}
+
 int main(int argc, char **argv) {
     pmix_status_t rc;
     pmix_info_t *info;
@@ -126,13 +219,26 @@ int main(int argc, char **argv) {
     lock_t reglock;
     lock_t alloclock;
     const char *op, *nodelist;
+    char **spawn_cmd = NULL;
+    int rcexit = 0, i;
 
     if (argc < 3) {
-        fprintf(stderr, "usage: %s <grow|shrink> <node1,node2,...>\n", argv[0]);
+        fprintf(stderr,
+                "usage: %s <grow|shrink> <node1,node2,...> [-- <cmd> [args...]]\n",
+                argv[0]);
         return 1;
     }
     op = argv[1];
     nodelist = argv[2];
+    /* anything after "--" is a command to run on the grown nodes */
+    for (i = 3; i < argc; i++) {
+        if (0 == strcmp(argv[i], "--")) {
+            if (i + 1 < argc) {
+                spawn_cmd = &argv[i + 1];
+            }
+            break;
+        }
+    }
     /* A grow is a NEW reservation that names the nodes to add: PRRTE adds them
      * to the pool and extends the DVM.  PMIX_ALLOC_EXTEND only adds to an
      * already-existing reservation, so it is not the right trigger here. */
@@ -192,7 +298,17 @@ int main(int argc, char **argv) {
         pthread_mutex_unlock(&complete_lock.mtx);
     }
 
+    /* only meaningful once the DVM actually reflects the new nodes */
+    if (NULL != spawn_cmd) {
+        if (PMIX_DVM_IS_READY == complete_lock.status) {
+            rcexit = spawn_into_reservation(spawn_cmd);
+        } else {
+            fprintf(stderr, ">>> skipping spawn: the grow did not complete\n");
+            rcexit = 1;
+        }
+    }
+
 done:
     PMIx_tool_finalize();
-    return 0;
+    return rcexit;
 }

@@ -271,11 +271,62 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         || bad "uniform-nodes launch failed (rc=$rc, procs=$n): $(echo "$out" | tr '\n' ' ')"
     c=$(prted_count 1 2 3 4 5 6 7 8 9 10)
     [ "$c" = 0 ] && ok "no daemons linger after uniform-nodes launch" || bad "$c stray prted"
-    # NOTE: the variant where the inheritance has to come from a SURVIVOR --
-    # shrink the rank-1 node on an elastic DVM, then grow -- cannot be
-    # asserted yet: growing after a shrink on the same DVM hangs (no
-    # phase-two completion event), on master as well as here. See the "Known
-    # issue" section of AGENTS.md and openpmix/prrte#2491.
+
+    banner "plm: a grown node inherits its topology from a survivor"
+    # Under --uniform-nodes only daemon rank 1 reports a topology; every other
+    # daemon inherits it in progress_daemons() before mapping runs, and a node
+    # whose topology stayed NULL cannot be mapped onto. Shrink the rank-1 node
+    # out of an elastic DVM and then grow a new one: the added daemon is not
+    # rank 1, so it reports no topology of its own and has to inherit from a
+    # daemon that is still alive.
+    #
+    # A shrink keeps the departed daemon's proc object (its vpid is never
+    # reused) and leaves that proc pointing at a node that still holds a
+    # topology, so this only discriminates because progress_daemons() skips
+    # daemons that are no longer ALIVE. Take that aliveness test out - or go
+    # back to sourcing the topology from rank 1 unconditionally - and the
+    # spawn below fails with "All nodes which are allocated for this job are
+    # already filled", which is what a NULL topology on the grown node looks
+    # like from the outside.
+    #
+    # Proving the node is usable means running something on it, and a grown
+    # node joins the reservation the grow created rather than the default
+    # pool -- so "prun --host node4" has no allocation to map onto no matter
+    # what its topology says. The elastic client therefore spawns INTO that
+    # reservation, naming it with the PMIX_ALLOC_ID the grow handed back
+    # (PMIX_SPAWN_TARGET). The grow and the spawn have to happen in one tool
+    # session: the HNP only lets a namespace target a reservation it owns.
+    cleanup_swarm
+    ON 4 'rm -f /tmp/survivor.out' >/dev/null 2>&1
+    RUN 'nohup prte --daemonize --uniform-nodes --prtemca prte_elastic_mode 1 \
+             >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        out=$(RUN 'timeout 90 elastic grow node2:2,node3:2' 2>&1)
+        echo "$out" | grep -q PMIX_DVM_IS_READY \
+            && ok "uniform DVM grown onto the topology reporter (rank 1) and a peer" \
+            || bad "baseline grow of node2,node3 did not complete"
+        out=$(RUN 'timeout 90 elastic shrink node2' 2>&1); sleep 3
+        echo "$out" | grep -q PMIX_DVM_IS_READY \
+            && ok "the topology-reporting daemon was shrunk out of the DVM" \
+            || bad "shrink of the rank-1 node did not complete"
+        [ "$(prted_count 2)" = 0 ] && ok "no daemon left on the shrunk node" \
+                                   || bad "daemon still running on the shrunk node"
+        out=$(RUN "timeout 120 elastic grow node4:2 -- /bin/sh -c 'hostname > /tmp/survivor.out'" 2>&1)
+        echo "$out" | grep -q PMIX_DVM_IS_READY \
+            && ok "grow completed with the original topology reporter gone" \
+            || bad "grow after shrinking rank 1 did not complete"
+        echo "$out" | grep -q '>>> SPAWNED' \
+            && ok "job spawned into the grown node's reservation" \
+            || bad "spawn into the reservation failed: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        marker=$(ON 4 'cat /tmp/survivor.out 2>/dev/null' | tr -d '\r')
+        [ "$marker" = node4 ] \
+            && ok "the grown node ran the job - it inherited from a survivor" \
+            || bad "grown node never ran the job (marker='$marker')"
+        RUN 'timeout 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start an elastic DVM for the survivor-topology test"
+    fi
+    cleanup_swarm
 
     banner "plm: node names reconciled with what the daemons report"
     # Allocate by IP address. Each daemon reports its gethostname() result
