@@ -540,12 +540,18 @@ int prte_register_params(void)
     pmix_sprintf(&prte_param_files, "%s" PMIX_PATH_SEP "prte-mca-params.conf",
                   prte_install_dirs.sysconfdir);
 #endif
+    /* the var system takes the current value as the default and then hands
+     * back a string of its own, so keep a handle on ours to release - the
+     * same pattern used for every other computed string param here */
+    string = prte_param_files;
 
    (void) pmix_mca_base_var_register("prte", "prte", NULL, "param_files",
                                       "Path for MCA configuration files containing "
                                       "variable values",
                                       PMIX_MCA_BASE_VAR_TYPE_STRING,
                                       &prte_param_files);
+    free(string);
+    string = NULL;
 
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "override_param_file",
                                       "Variables set in this file will override any value "
