@@ -68,6 +68,7 @@ static void buffer_cleanup(void *value)
         for (i = 0; i < PRTE_RMAPS_PRINT_NUM_BUFS; i++) {
             free(ptr->buffers[i]);
         }
+        free(ptr);
     }
 }
 
