@@ -241,10 +241,16 @@ requester — and so emitted no completion event even though the grow had
 succeeded. `prte_plm_base_setup_virtual_machine` now scans all of a
 campaign's targets for the first one carrying a requestor.
 
-`run-tests.sh` covers both variants (re-grow the same node, grow a different
-one afterwards). Note that a grow after a shrink will also silently re-absorb
-the previously shrunk node — that is pre-existing behavior of "launch a
-daemon wherever one is missing", and worth knowing when you count `prted`s.
+Chasing that turned up the related defect that a grow was **not scoped to
+the nodes it was given**: the extend path built its candidate list from the
+whole node pool, so any node lacking a daemon joined — which after a shrink
+meant `grow node4` also relaunched a daemon on the node you had just shrunk
+away. A grow now selects only nodes its own request marked
+`PRTE_NODE_STATE_ADDED`, and RAS carries that mark onto a pool entry that
+already exists (re-growing a shrunk node relies on it).
+
+`run-tests.sh` covers re-growing the same node, growing a different one
+afterwards, and that a grow leaves every node it was not given alone.
 
 Still bound elastic commands with `timeout` in any new test: a grow that does
 not complete otherwise wedges the whole suite rather than failing one case.

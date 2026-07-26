@@ -222,6 +222,18 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                 }
                 if (prte_nptr_match(nptr, node)) {
                     found = true;
+                    /* The incoming entry is discarded in favor of the one
+                     * already in the pool, so anything the caller marked on
+                     * it has to be carried across. A dynamic addition marks
+                     * its nodes PRTE_NODE_STATE_ADDED precisely so the DVM
+                     * extension will launch a daemon on them; dropping that
+                     * for a node the pool already knows about makes the grow
+                     * a no-op. That is the normal case when re-growing a node
+                     * that was previously shrunk out of the DVM: the shrink
+                     * removes its daemon, but the pool entry survives. */
+                    if (PRTE_NODE_STATE_ADDED == node->state) {
+                        nptr->state = PRTE_NODE_STATE_ADDED;
+                    }
                     if (prte_get_attribute(&node->attributes, PRTE_NODE_ADD_SLOTS, NULL, PMIX_BOOL)) {
                         nptr->slots += node->slots;
                         if (0 > nptr->slots) {

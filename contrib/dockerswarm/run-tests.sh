@@ -355,11 +355,15 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         out=$(RUN 'timeout 90 elastic shrink node3' 2>&1); sleep 3
         echo "$out" | grep -q PMIX_DVM_IS_READY && ok "shrink node3 completed" \
                                                || bad "shrink node3 did not complete"
-        # re-grow the SAME node that was just shrunk
+        # re-grow the SAME node that was just shrunk. The pool entry for that
+        # node survived the shrink, so this only works if the ADDED mark the
+        # request puts on it is carried onto the existing pool object.
         out=$(RUN 'timeout 90 elastic grow node3:2' 2>&1)
         echo "$out" | grep -q PMIX_DVM_IS_READY \
             && ok "re-grow of the shrunk node completed (phase-two event delivered)" \
             || bad "re-grow of the shrunk node never completed"
+        [ "$(prted_count 3)" = 1 ] && ok "daemon relaunched on the re-grown node" \
+                                   || bad "re-grown node has no daemon"
         # and grow a DIFFERENT node afterwards
         out=$(RUN 'timeout 90 elastic grow node5:2' 2>&1)
         echo "$out" | grep -q PMIX_DVM_IS_READY \
@@ -374,6 +378,33 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         RUN 'timeout 30 pterm' >/dev/null 2>&1
     else
         bad "could not start an elastic DVM for the re-grow test"
+    fi
+    cleanup_swarm
+
+    banner "elastic DVM: a grow launches ONLY on the nodes it was given"
+    # An allocation request naming node4 must start a daemon on node4 and
+    # nowhere else. Shrink node2 first so the DVM holds a node that is in the
+    # pool, has no daemon, and is NOT part of the next request: selecting on
+    # "any node missing a daemon" rather than on the nodes the request added
+    # silently relaunches a daemon on the node the user just shrank away.
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        RUN 'timeout 90 elastic grow node2:2,node3:2' >/dev/null 2>&1
+        RUN 'timeout 90 elastic shrink node2' >/dev/null 2>&1; sleep 3
+        [ "$(prted_count 2)" = 0 ] && ok "node2 shrunk out of the DVM" || bad "node2 still has a daemon"
+        out=$(RUN 'timeout 90 elastic grow node4:2' 2>&1)
+        echo "$out" | grep -q PMIX_DVM_IS_READY && ok "grow node4 completed" \
+                                               || bad "grow node4 did not complete"
+        [ "$(prted_count 4)" = 1 ] && ok "daemon started on the requested node (node4)" \
+                                   || bad "no daemon on the requested node"
+        [ "$(prted_count 2)" = 0 ] \
+            && ok "the shrunk node was NOT dragged back into the grow" \
+            || bad "grow node4 also relaunched a daemon on the shrunk node2"
+        [ "$(prted_count 5 6 7)" = 0 ] && ok "no unrelated node was grown" \
+                                      || bad "grow touched a node it was not given"
+        RUN 'timeout 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start an elastic DVM for the grow-scope test"
     fi
     cleanup_swarm
 

@@ -2024,13 +2024,60 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
         // nodes have been added, so extend the DVM
         prte_remove_attribute(&jdata->attributes, PRTE_JOB_EXTEND_DVM);
         /* Reset the per-launch daemon accounting. The initial-VM path zeroes
-         * these further below, but the grow path jumps straight to construct:
-         * and would otherwise accumulate num_new_daemons across successive
-         * grows and reuse a stale daemon_vpid_start - corrupting the grow
-         * campaign's target list and suppressing its completion event (#2491). */
+         * these further below, but the grow path skips that code and would
+         * otherwise accumulate num_new_daemons across successive grows and
+         * reuse a stale daemon_vpid_start - corrupting the grow campaign's
+         * target list and suppressing its completion event (#2491). */
         map->num_new_daemons = 0;
         map->daemon_vpid_start = PMIX_RANK_INVALID;
-        goto construct;
+        /* A grow launches daemons on the nodes THIS request added, and only
+         * those: an allocation request naming node4 must start a daemon on
+         * node4 alone. Every producer of a grow (the no-scheduler
+         * ras_base_insert_node_string, ras/slurm's extend, and the
+         * add-host/add-hostfile path in ras/hosts) marks its new nodes
+         * PRTE_NODE_STATE_ADDED for exactly this purpose, so select on that
+         * - the same rule the dynamic-spawn branch below applies.
+         *
+         * Scanning the whole node pool instead (as this used to, by falling
+         * into the construct: label) silently absorbed any other daemon-less
+         * node into the grow. A shrink is the way that happens: releasing a
+         * reservation reverts its nodes to the default pool as UP with no
+         * daemon, so the next grow - of some entirely unrelated node -
+         * relaunched a daemon on the node the user had just shrunk away.
+         *
+         * Note this deliberately does NOT apply the app-context filtering
+         * done under construct:. A grown node is granted by an explicit
+         * request and must join regardless of any static -host/hostfile
+         * spec given when the DVM was started. */
+        for (i = 1; i < prte_node_pool->size; i++) {
+            node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i);
+            if (NULL == node) {
+                continue;
+            }
+            if (PRTE_NODE_STATE_ADDED != node->state) {
+                PMIX_OUTPUT_VERBOSE((10, prte_plm_base_framework.framework_output,
+                                     "%s plm_base:setup_vm NODE %s NOT PART OF THIS GROW",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
+                continue;
+            }
+            PMIX_OUTPUT_VERBOSE((10, prte_plm_base_framework.framework_output,
+                                 "%s plm_base:setup_vm GROW ADDING NODE %s",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
+            PMIX_RETAIN(node);
+            pmix_list_append(&nodes, &node->super);
+        }
+        if (0 == pmix_list_get_size(&nodes)) {
+            /* the grow brought in no node needing a daemon */
+            PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                                 "%s plm:base:setup_vm no new daemons required",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+            PMIX_DESTRUCT(&nodes);
+            /* mark that the daemons have reported so we can proceed */
+            daemons->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
+            PRTE_FLAG_UNSET(daemons, PRTE_JOB_FLAG_UPDATED);
+            return PRTE_SUCCESS;
+        }
+        goto process;
     }
 
     /* if this is a dynamic spawn, then we don't make any changes to
@@ -2345,8 +2392,9 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
         goto process;
     }
 
-construct:
-    /* construct a list of available nodes */
+    /* construct a list of available nodes - the managed-allocation path
+     * falls into this; the grow and dynamic-spawn paths do not, as they
+     * select only the nodes their request brought in */
     for (i = 1; i < prte_node_pool->size; i++) {
         if (NULL != (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i))) {
             /* ignore nodes that are marked as do-not-use for this mapping */
