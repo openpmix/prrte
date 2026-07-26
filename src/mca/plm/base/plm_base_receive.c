@@ -207,6 +207,9 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
      * can reach that path before (or without) it ever being assigned - e.g.,
      * when the job object fails to unpack */
     prte_job_t *jdata = NULL, *parent;
+    /* true while the freshly unpacked job object belongs to nobody but us -
+     * cleared once it has been handed to a session/parent/the job pool */
+    bool own_jdata = false;
     pmix_data_buffer_t *answer;
     pmix_rank_t vpid;
     prte_proc_t *proc;
@@ -389,6 +392,9 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             goto ANSWER_LAUNCH;
         }
 
+        /* we own it until it is handed to a container below */
+        own_jdata = true;
+
         /* record the sender so we know who to respond to */
         PMIX_LOAD_PROCID(&jdata->originator, sender->nspace, sender->rank);
 
@@ -503,6 +509,10 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
         }
 
 moveon:
+        /* from here on the job is referenced by the session (and shortly by
+         * the parent's child list and the global job pool), so the error
+         * paths below must NOT free it out from under them */
+        own_jdata = false;
         jdata->session = session;
         pmix_pointer_array_add(jdata->session->jobs, jdata);
 
@@ -606,6 +616,15 @@ moveon:
         if (NULL != nptr) {
             PMIX_PROC_RELEASE(nptr);
             nptr = NULL;
+        }
+
+        /* if we unpacked a job object and never handed it to anyone - a
+         * malformed request, an unknown session, a rejected ownership check -
+         * then we are the only holder and it would otherwise leak */
+        if (own_jdata && NULL != jdata) {
+            PMIX_RELEASE(jdata);
+            jdata = NULL;
+            own_jdata = false;
         }
 
         /* setup the response */
