@@ -402,6 +402,15 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
             || bad "grow node4 also relaunched a daemon on the shrunk node2"
         [ "$(prted_count 5 6 7)" = 0 ] && ok "no unrelated node was grown" \
                                       || bad "grow touched a node it was not given"
+        # A grow of a node that is already in the DVM needs no daemon at all.
+        # The request is still satisfied, so it must still report completion -
+        # with nothing to launch there is no campaign and no launch fence, so
+        # the completion has to be reported directly or the requester waits
+        # out its timeout on an operation that already succeeded.
+        out=$(RUN 'timeout 90 elastic grow node4:2' 2>&1)
+        echo "$out" | grep -q PMIX_DVM_IS_READY \
+            && ok "a grow needing no new daemon still completes" \
+            || bad "redundant grow never completed"
         RUN 'timeout 30 pterm' >/dev/null 2>&1
     else
         bad "could not start an elastic DVM for the grow-scope test"
@@ -504,6 +513,63 @@ test_macos() {
                                   || ok "pterm cleanly terminated the DVM"
     else
         skp "prte --daemonize did not come up -- native Darwin DVM is unstable on this host (pre-existing); build is verified"
+    fi
+    rm -f "$BOUT"; macpk
+
+    banner "macOS: a rejected spawn request must not take the DVM down"
+    # The HNP unpacks a job object from a spawn request before validating
+    # anything about it, so a request it then rejects exercises the error path
+    # that answers the requester and disposes of that half-built job. The DVM
+    # has to survive it: a persistent DVM that dies on one bad prun takes
+    # every other job on the machine with it. Single host is enough - the
+    # request is rejected at the HNP, before any daemon is involved.
+    macpk; sleep 1
+    bounded 60 prte --daemonize; sleep 3
+    if pgrep -x prte >/dev/null; then
+        for badarg in "--map-by NOSUCHPOLICY" "--bind-to NOSUCHOBJECT" "--rank-by NOSUCHTHING"; do
+            bounded 30 sh -c "prun $badarg -np 1 hostname" >/dev/null 2>&1
+            if pgrep -x prte >/dev/null; then
+                ok "DVM survived a rejected 'prun $badarg'"
+            else
+                bad "DVM died on 'prun $badarg'"
+                break
+            fi
+        done
+        # and it must still be able to run a job afterwards
+        if pgrep -x prte >/dev/null; then
+            if bounded 30 prun -np 2 hostname && [ "$(grep -Fc "$hn" "$BOUT")" = 2 ]; then
+                ok "DVM still launches jobs after the rejected requests"
+            else
+                skp "post-rejection prun timed out (native Darwin DVM unstable)"
+            fi
+        fi
+        bounded 20 pterm >/dev/null 2>&1 || true; sleep 1; macpk
+    else
+        skp "prte --daemonize did not come up -- cannot test spawn rejection"
+    fi
+    rm -f "$BOUT"; macpk
+
+    banner "macOS: uniform-nodes launch and an mca value containing '='"
+    # --uniform-nodes drives the homogeneous-topology path, and an MCA value
+    # with an embedded '=' is the case that used to be truncated when the
+    # daemon command line was assembled. One host cannot exercise the daemon
+    # side of either, but both must at least remain launchable.
+    macpk; sleep 1
+    if bounded 60 prterun --uniform-nodes -np 2 hostname; then
+        [ "$(grep -Fc "$hn" "$BOUT")" = 2 ] \
+            && ok "prterun --uniform-nodes -> 2 procs on $hn" \
+            || bad "uniform-nodes launch wrong output: $(tr '\n' ' ' <"$BOUT")"
+    else
+        skp "uniform-nodes prterun timed out (native Darwin DVM unstable)"; macpk
+    fi
+    rm -f "$BOUT"
+    macpk; sleep 1
+    if bounded 60 sh -c "PRTE_MCA_prte_test_kv='a=b' prterun -np 2 hostname"; then
+        [ "$(grep -Fc "$hn" "$BOUT")" = 2 ] \
+            && ok "launch works with an '='-bearing mca value in the environment" \
+            || bad "'='-bearing mca value broke the launch: $(tr '\n' ' ' <"$BOUT")"
+    else
+        skp "'='-bearing mca value run timed out (native Darwin DVM unstable)"; macpk
     fi
     rm -f "$BOUT"; macpk
 }

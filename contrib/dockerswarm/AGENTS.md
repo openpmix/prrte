@@ -143,6 +143,27 @@ Both `grow` and `shrink` should print
 >     --prtemca plm_base_verbose 5 --prtemca ras_base_verbose 5 >/tmp/prte.out 2>&1'
 > ```
 
+### Leak checking under Linux
+
+The image carries `valgrind`, so the Linux swarm is the place to look for
+leaks on the paths a single host cannot reach — anything involving real
+daemons, xcast, or the RML wire. Run the HNP under it:
+
+```sh
+docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+  prte-node1 bash -lc '. /opt/prte/env.sh; cd /tmp && \
+    valgrind --leak-check=full --show-leak-kinds=definite,indirect \
+             --num-callers=25 --log-file=/tmp/vg-hnp.txt \
+      prterun --host node1:1,node2:1,node3:1,node4:1 -np 4 --map-by node hostname'
+docker cp prte-node1:/tmp/vg-hnp.txt .
+```
+
+A daemon can be traced the same way by pointing `prte_launch_agent` at a
+wrapper script that execs `valgrind prted`. Note this is deliberately **not**
+part of `run-tests.sh`: a valgrind run is many times slower than the suite it
+would be embedded in. Compare totals before and after a change rather than
+chasing an absolute number — PMIx and hwloc contribute their own.
+
 ## 6. What "success" looks like
 
 **`prterun`** (`prterun --host node1:2,node2:2,node3:2,node4:2 -np 8 --map-by
