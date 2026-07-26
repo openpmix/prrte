@@ -220,6 +220,12 @@ line with `--stdin all` to check the wildcard/xcast delivery.
 > allocation is node1's base pool, not the reservation. Confirm a grow by
 > `prted` presence on the targets and the `PMIX_DVM_IS_READY` event, not by
 > plain-`prun` placement.
+>
+> To actually **run something on a grown node**, spawn into the reservation:
+> `elastic grow node4:2 -- <cmd>` takes the `PMIX_ALLOC_ID` the request handed
+> back and spawns `<cmd>` with `PMIX_SPAWN_TARGET` naming it. The grow and the
+> spawn must happen in one `elastic` invocation — the HNP only lets a namespace
+> target a reservation it owns, and the owner is the tool that created it.
 
 **Shrink** (`elastic shrink node3`): phase-1 `PMIX_SUCCESS`, then phase-2
 `PMIX_DVM_IS_READY`, plus a **"PRRTE has lost communication with a remote
