@@ -323,14 +323,23 @@ and for each node needing a daemon it:
 - once daemons are added, recomputes the RML routing tree
   (`prte_rml_compute_routing_tree`) so the HNP can tree-spawn/xcast.
 
-A grow starts a daemon on **every** node that lacks one — which after a
-shrink includes the shrunk node, since releasing its reservation reverts it
-to the default pool. That re-absorbed node takes the *lowest* new vpid, so
-it, not one of the newly reserved nodes, occupies `map->daemon_vpid_start`;
-this is why the grow campaign scans **all** its targets for the requestor
-rather than reading the first one (a session-less first target used to leave
-the campaign with no requester, so a successful grow emitted no phase-two
-completion event and the requester hung).
+A **grow** (`PRTE_JOB_EXTEND_DVM`) is scoped to the nodes that request
+brought in, and nothing else: an allocation request naming `node4` starts a
+daemon on `node4` alone. Every producer of a grow — the no-scheduler
+`ras_base_insert_node_string`, `ras/slurm`'s extend, and `ras/hosts` for
+`add-host`/`add-hostfile` — marks its nodes `PRTE_NODE_STATE_ADDED` for
+exactly this purpose, and the extend path selects on that mark (as the
+dynamic-spawn path does). Do **not** revert it to scanning the whole node
+pool for nodes lacking a daemon: after a shrink the pool holds exactly such
+a node — the one just removed — and it would be silently dragged back into
+an unrelated grow. `ras_base_node_insert` propagates the mark onto a pool
+entry that already exists, which is what makes re-growing a previously
+shrunk node work at all.
+
+Relatedly, the grow campaign scans **all** its targets for the requestor
+rather than reading `map->daemon_vpid_start`: a target whose session is gone
+would otherwise leave the campaign with no requester, and a successful grow
+would emit no phase-two completion event at all.
 
 `map->num_new_daemons` is the key output: `== 0` means every node
 already has a daemon, so the component fast-forwards to
