@@ -1010,13 +1010,11 @@ static void tcon(prte_topology_t *t)
 }
 static void tdes(prte_topology_t *t)
 {
-    hwloc_obj_t root;
-
     if (NULL != t->topo) {
-        root = hwloc_get_root_obj(t->topo);
-        if (NULL != root->userdata) {
-            PMIX_RELEASE(root->userdata);
-        }
+        /* the root carries a topology summary, but placement also attaches
+         * a counter object to every object it considers - all of them have
+         * to go back before hwloc frees the objects holding them */
+        prte_hwloc_base_release_userdata(t->topo);
         hwloc_topology_destroy(t->topo);
     }
 }
@@ -1079,10 +1077,14 @@ static void session_des(prte_session_t *s)
     }
     PMIX_RELEASE(s->nodes);
 
+    /* Unlike the node array, s->jobs holds BORROWED references: a job is
+     * added to it without a retain and removed from it without a release
+     * when the job terminates. A job's lifetime is governed by the global
+     * job pool, not by the session it ran in, so releasing here would drop
+     * a reference this session never took. */
     for (n=0; n < s->jobs->size; n++) {
         job = (prte_job_t*)pmix_pointer_array_get_item(s->jobs, n);
         if (NULL != job) {
-            PMIX_RELEASE(job);
             pmix_pointer_array_set_item(s->jobs, n, NULL);
         }
     }
