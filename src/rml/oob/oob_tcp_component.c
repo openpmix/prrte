@@ -196,6 +196,12 @@ static void peer_des(prte_oob_tcp_peer_t *peer)
         CLOSE_THE_SOCKET(peer->sd);
     }
     PMIX_LIST_DESTRUCT(&peer->addrs);
+    /* the on-deck message is not in the send queue, so it has to be
+     * disposed of separately - along with anything still queued behind
+     * it, each of which still owns its RML message */
+    if (NULL != peer->send_msg) {
+        PMIX_RELEASE(peer->send_msg);
+    }
     PMIX_LIST_DESTRUCT(&peer->send_queue);
 }
 PMIX_CLASS_INSTANCE(prte_oob_tcp_peer_t, pmix_list_item_t, peer_cons, peer_des);

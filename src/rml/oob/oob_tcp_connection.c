@@ -1161,6 +1161,7 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
     PMIX_LIST_FOREACH_SAFE(send, next, &peer->send_queue, prte_oob_tcp_send_t){
         send->msg->status = err;
         PRTE_RML_SEND_COMPLETE(send->msg);
+        send->msg = NULL; // completion released it
         pmix_list_remove_item(&peer->send_queue, &send->super);
         PMIX_RELEASE(send);
     }

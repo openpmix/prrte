@@ -254,6 +254,7 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
                                         (int) ntohl(msg->hdr.nbytes), peer->sd);
                     msg->msg->status = PRTE_SUCCESS;
                     PRTE_RML_SEND_COMPLETE(msg->msg);
+                    msg->msg = NULL; // completion released it
                     PMIX_RELEASE(msg);
                     peer->send_msg = NULL;
                 }
@@ -598,14 +599,17 @@ static void snd_cons(prte_oob_tcp_send_t *ptr)
     ptr->sdptr = NULL;
     ptr->sdbytes = 0;
 }
-/* we don't destruct any RML msg that is
- * attached to our send as the RML owns
- * that memory. However, if we relay a
- * msg, the data in the relay belongs to
- * us and must be free'd
+/* an OOB send owns the RML message attached to it until that message is
+ * completed - completion clears the pointer, so anything still attached
+ * here (a send abandoned when its peer was torn down) is ours to release.
+ * If we relay a msg, the data in the relay belongs to us as well and must
+ * be free'd
  */
 static void snd_des(prte_oob_tcp_send_t *ptr)
 {
+    if (NULL != ptr->msg) {
+        PMIX_RELEASE(ptr->msg);
+    }
     if (NULL != ptr->data) {
         free(ptr->data);
     }

@@ -301,15 +301,26 @@ PRTE_EXPORT bool prte_rml_is_node_up(pmix_rank_t node);
         PRTE_RML_ACTIVATE_MESSAGE(_msg);                                                    \
     } while (0);
 
+/* Complete a send: hand the message to its callback and dispose of the
+ * send object. The callback owns the data buffer, so the send's reference
+ * to it is dropped before release - otherwise the destructor would free a
+ * buffer the callback has already released. Nobody else holds a reference
+ * to the send object at this point, so the caller must not touch it after
+ * completing it.
+ */
 #define PRTE_RML_SEND_COMPLETE(m)                                                             \
     do {                                                                                      \
+        prte_rml_send_t *_snd = (m);                                                          \
+        pmix_data_buffer_t *_dbuf = _snd->dbuf;                                               \
         pmix_output_verbose(5, prte_rml_base.rml_output,                                      \
                             "%s-%s Send message complete at %s:%d",                           \
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&((m)->dst)), \
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(_snd->dst)),\
                             __FILE__, __LINE__);                                              \
+        _snd->dbuf = NULL;                                                                    \
             /* non-blocking buffer send */                                                    \
-        (m)->cbfunc((m)->status, &((m)->dst),                                                 \
-                    (m)->dbuf, (m)->tag, (m)->cbdata);                                        \
+        _snd->cbfunc(_snd->status, &(_snd->dst),                                              \
+                     _dbuf, _snd->tag, _snd->cbdata);                                         \
+        PMIX_RELEASE(_snd);                                                                   \
     } while (0);
 
 
