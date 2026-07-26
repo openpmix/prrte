@@ -100,6 +100,25 @@ docker compose up -d       # start prte-node1 .. prte-node10
 ./run-tests.sh macos       # build + single-host launch smoke
 ```
 
+**On macOS, say which dependencies to build against.** Unlike the container,
+this host is whatever you have installed, and the two knobs are:
+
+```sh
+PMIX_HOME=/path/to/pmix \
+EXTRA_CONFIGURE_ARGS="--with-libevent=/path/to/libevent --with-hwloc=/path/to/hwloc" \
+  ./build.sh macos
+```
+
+Leaving `PMIX_HOME`/`PMIX_SRC` unset lets configure autodetect PMIx, and if
+the host has more than one installed it may not pick the one you meant.
+PRRTE uses PMIx *internals*, so a mismatch is not a link error — it builds,
+installs, and then segfaults the instant a tool starts. That failure reaches
+`run-tests.sh macos` as a wall of "native Darwin DVM is unstable" skips,
+which is why the build now prints the libraries `prted` actually resolved
+against; check those first when the macOS suite goes quiet. (Most of the
+"Darwin instability" this suite used to report on at least one host was
+exactly this — a build against a stale second PMIx.)
+
 Rebuild after editing PRRTE: just rerun `./build.sh` (incremental). No image
 rebuild, no `docker compose` restart needed — the nodes read the shared volume.
 To also test an openpmix change, add `PMIX_SRC=/path/to/openpmix`.
