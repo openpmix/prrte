@@ -68,6 +68,8 @@ static void job_info(pmix_cli_result_t *results,
 static int set_default_rto(prte_job_t *jdata,
                            prte_rmaps_options_t *options);
 
+char *prte_schizo_prte_version = NULL;
+
 prte_schizo_base_module_t prte_schizo_prte_module = {
     .name = "prte",
     .parse_cli = parse_cli,
@@ -538,8 +540,16 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
     }
     pmix_tool_msg = "Report bugs to: https://github.com/openpmix/prrte";
     pmix_tool_org = "PRRTE";
-    pmix_tool_version = prte_util_make_version_string("all", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                                      PRTE_RELEASE_VERSION, PRTE_GREEK_VERSION, NULL);
+    /* PMIx only borrows this string, and a tool can parse more than one
+     * command line (prte parses its own, then each app's), so build it
+     * once and hand out the same copy - the component close releases it */
+    if (NULL == prte_schizo_prte_version) {
+        prte_schizo_prte_version = prte_util_make_version_string("all", PRTE_MAJOR_VERSION,
+                                                                 PRTE_MINOR_VERSION,
+                                                                 PRTE_RELEASE_VERSION,
+                                                                 PRTE_GREEK_VERSION, NULL);
+    }
+    pmix_tool_version = prte_schizo_prte_version;
     if (NULL == prte_process_info.sessdir_prefix) {
         prte_process_info.sessdir_prefix = strdup(sdprefix);
     }

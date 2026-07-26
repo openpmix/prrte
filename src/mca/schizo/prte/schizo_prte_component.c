@@ -26,6 +26,7 @@
 
 static int component_query(pmix_mca_base_module_t **module, int *priority);
 static int component_register(void);
+static int component_close(void);
 
 /*
  * Struct of function pointers and all that to let us be initialized
@@ -40,6 +41,7 @@ prte_schizo_prte_component_t prte_mca_schizo_prte_component = {
                                    PMIX_RELEASE_VERSION),
         .pmix_mca_query_component = component_query,
         .pmix_mca_register_component_params = component_register,
+        .pmix_mca_close_component = component_close,
     },
     .priority = 5,
     .warn_deprecations = true,
@@ -57,6 +59,16 @@ static int component_register(void)
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_mca_schizo_prte_component.warn_deprecations);
 
+    return PRTE_SUCCESS;
+}
+
+static int component_close(void)
+{
+    /* the version string we handed PMIx is ours to reclaim */
+    if (NULL != prte_schizo_prte_version) {
+        free(prte_schizo_prte_version);
+        prte_schizo_prte_version = NULL;
+    }
     return PRTE_SUCCESS;
 }
 

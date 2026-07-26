@@ -33,6 +33,10 @@ typedef struct {
 PRTE_MODULE_EXPORT extern prte_schizo_prte_component_t prte_mca_schizo_prte_component;
 extern prte_schizo_base_module_t prte_schizo_prte_module;
 
+/* the version string handed to PMIx for command-line output - built on
+ * first use by the module, released when the component closes */
+extern char *prte_schizo_prte_version;
+
 END_C_DECLS
 
 #endif /* MCA_SCHIZO_PRTE_H_ */
