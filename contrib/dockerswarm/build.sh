@@ -141,11 +141,31 @@ build_macos() {
     #   EXTRA_CONFIGURE_ARGS="--with-libevent=... --with-hwloc=..."
     # (values with spaces, like an -isysroot in CFLAGS, should be exported as
     # CFLAGS/CPPFLAGS in the environment instead -- configure inherits them.)
+    #
+    # Reconfigure whenever those arguments change. An incremental build that
+    # silently keeps an older configuration is worse than a slow one: PRRTE
+    # uses PMIx internals, so a tree left pointing at a different PMIx than
+    # you asked for builds cleanly and then dies at startup, which reads as
+    # "this host is flaky" rather than "you built against the wrong PMIx".
+    local cfg_args="--prefix=$root/vpath-macos/install $pmix_arg --enable-debug ${EXTRA_CONFIGURE_ARGS:-}"
+    if [ -f config.status ] && [ "$(cat .prte-configure-args 2>/dev/null)" != "$cfg_args" ]; then
+        echo ">>> configure arguments changed - reconfiguring"
+        rm -f config.status
+    fi
     # shellcheck disable=SC2086
-    [ -f config.status ] || "$root/configure" \
-        --prefix="$root/vpath-macos/install" $pmix_arg --enable-debug ${EXTRA_CONFIGURE_ARGS:-}
+    if [ ! -f config.status ]; then
+        "$root/configure" $cfg_args
+        printf '%s' "$cfg_args" > .prte-configure-args
+    fi
     make -j"$(sysctl -n hw.ncpu)" && make install
     echo ">>> macOS build complete: $root/vpath-macos/install"
+    # Report what the tools actually resolved against. A mismatch here is the
+    # first thing to check when the macOS suite starts skipping everything.
+    if command -v otool >/dev/null 2>&1; then
+        echo ">>> linked dependencies:"
+        otool -L "$root/vpath-macos/install/bin/prted" 2>/dev/null \
+            | grep -iE "libpmix|libevent|libhwloc" | sed 's/^/>>>>   /'
+    fi
     echo ">>> next: ./run-tests.sh macos"
 }
 
