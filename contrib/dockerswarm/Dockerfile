@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libevent-dev libhwloc-dev zlib1g-dev \
         openssh-server openssh-client \
         iproute2 iputils-ping procps less vim ca-certificates \
+        valgrind \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- baked PMIx (default) ----
