@@ -89,7 +89,8 @@ build_linux() {
                 echo ">>>> PMIx from bind-mounted /pmix-src -> $PMIX_PREFIX"
                 mkdir -p /opt/prte/vpath-linux-pmix && cd /opt/prte/vpath-linux-pmix
                 [ -f config.status ] || /pmix-src/configure --prefix="$PMIX_PREFIX"
-                make -j"$jobs" && make install
+                make -j"$jobs"
+                make install
             else
                 PMIX_PREFIX=/usr/local
                 echo ">>>> PMIx: using baked $PMIX_PREFIX"
@@ -99,7 +100,8 @@ build_linux() {
             mkdir -p /opt/prte/vpath-linux && cd /opt/prte/vpath-linux
             [ -f config.status ] || /prrte-src/configure \
                 --prefix=/opt/prte/prte --with-pmix="$PMIX_PREFIX" --enable-debug
-            make -j"$jobs" && make install
+            make -j"$jobs"
+            make install
 
             echo ">>>> elastic test client"
             gcc -O0 -g -o /opt/prte/prte/bin/elastic \
@@ -127,7 +129,8 @@ build_macos() {
         ( cd "$psrc" && { [ -x configure ] || ./autogen.pl; } )
         mkdir -p "$root/vpath-macos-pmix" && cd "$root/vpath-macos-pmix"
         [ -f config.status ] || "$psrc/configure" --prefix="$pfx"
-        make -j"$(sysctl -n hw.ncpu)" && make install
+        make -j"$(sysctl -n hw.ncpu)"
+        make install
         pmix_arg="--with-pmix=$pfx"
     elif [ -n "$PMIX_HOME" ]; then
         pmix_arg="--with-pmix=$PMIX_HOME"
@@ -157,7 +160,8 @@ build_macos() {
         "$root/configure" $cfg_args
         printf '%s' "$cfg_args" > .prte-configure-args
     fi
-    make -j"$(sysctl -n hw.ncpu)" && make install
+    make -j"$(sysctl -n hw.ncpu)"
+    make install
     echo ">>> macOS build complete: $root/vpath-macos/install"
     # Report what the tools actually resolved against. A mismatch here is the
     # first thing to check when the macOS suite starts skipping everything.
