@@ -116,12 +116,16 @@ int prte_finalize(void)
         if (NULL == jdata) {
             continue;
         }
-        // Remove all children from the list
-        // We do not want to destruct this list here since that occurs in the
-        // prte_job_t destructor - which will happen in the next loop.
+        // Empty the children list before any job object is destroyed: a job
+        // released while still linked into another job's children list trips
+        // the list-item assert. Each entry carries the reference taken when
+        // it was appended, so removing it means releasing it - the job pool
+        // still holds the reference that keeps the child alive until this
+        // loop reaches it.
         PMIX_LIST_FOREACH_SAFE(child_jdata, next_jdata, &jdata->children, prte_job_t)
         {
             pmix_list_remove_item(&jdata->children, &child_jdata->super);
+            PMIX_RELEASE(child_jdata);
         }
         /* clean up any app contexts as they refcount the jdata object */
         for (i=0; i < jdata->apps->size; i++) {
