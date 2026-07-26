@@ -278,11 +278,32 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                 prte_have_fqdn_allocation = true;
             }
             normalize_node(node);
-            /* insert it into the array */
-            node->index = pmix_pointer_array_add(prte_node_pool, (void *) node);
-            if (PRTE_SUCCESS > (rc = node->index)) {
-                PRTE_ERROR_LOG(rc);
-                return rc;
+            /* Insert it into the array.
+             *
+             * A component may pre-assign the pool slot by setting node->index
+             * before handing us the node; ras/bootstrap does exactly that, so
+             * a node lands at the slot matching its canonical DVM rank (read
+             * from the same config file the daemons read to compute their own
+             * rank). Appending to the lowest free slot would reproduce that
+             * only by accident of the order the config happens to list nodes
+             * in - and would silently overwrite the pre-assignment, making the
+             * correspondence unenforced. A slot that is already taken means a
+             * malformed config; fall back to an append rather than clobber
+             * another node. */
+            if (0 <= node->index &&
+                NULL == pmix_pointer_array_get_item(prte_node_pool, node->index)) {
+                rc = pmix_pointer_array_set_item(prte_node_pool, node->index,
+                                                 (void *) node);
+                if (PRTE_SUCCESS != rc) {
+                    PRTE_ERROR_LOG(rc);
+                    return rc;
+                }
+            } else {
+                node->index = pmix_pointer_array_add(prte_node_pool, (void *) node);
+                if (PRTE_SUCCESS > (rc = node->index)) {
+                    PRTE_ERROR_LOG(rc);
+                    return rc;
+                }
             }
             if (NULL != djob &&
                 prte_get_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) &&

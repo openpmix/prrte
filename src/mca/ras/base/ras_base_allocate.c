@@ -1289,8 +1289,14 @@ static void ras_base_set_alloc_response(prte_pmix_server_req_t *req,
         PMIX_INFO_LOAD(&rinfo[1], PMIX_ALLOC_REQ_ID, dest->user_refid,
                        PMIX_STRING);
     }
-    /* the original req->info is borrowed from the PMIx caller; repoint
-     * to our response array and let the req destructor free it */
+    /* Repoint to our response array and let the req destructor free it.
+     * The original req->info is usually borrowed from the PMIx caller and
+     * needs no action, but a request that already owns its array (one
+     * relayed from a remote peer, or one an RM module replaced with a
+     * scheduler answer) would strand it here. */
+    if (req->copy && NULL != req->info) {
+        PMIX_INFO_FREE(req->info, req->ninfo);
+    }
     req->info = rinfo;
     req->ninfo = rn;
     req->copy = true;

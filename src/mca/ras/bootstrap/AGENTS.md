@@ -44,15 +44,25 @@ node is already represented by the HNP at pool index 0. Each node is a
 
 ## Things to watch when editing
 
-- **`allocate` sets node `index` to the canonical bootstrap rank**, but
-  be aware that `prte_ras_base_node_insert` **overwrites it** with the
-  pool-insertion ordinal (`pmix_pointer_array_add`). The two agree only
-  because the HNP occupies pool slot 0 and `DVMNodes` is listed in rank
-  order, so ranks 1..N land in slots 1..N. Nothing enforces that: a
-  config listing nodes out of rank order, or a pool that already has
-  holes, breaks the correspondence silently. If the launch/routing path
-  ever needs the bootstrap rank after insertion, store it explicitly
-  rather than relying on `index`.
+- **`allocate` pre-assigns node `index` to the canonical bootstrap rank,
+  and `prte_ras_base_node_insert` honors it.** This is load-bearing, not
+  cosmetic: a bootstrapped daemon computes its *own* vpid from this same
+  config file (`prte_bootstrap_my_identity`), so the HNP does not get to
+  choose one — it has to arrive at the same answer independently.
+  `node_insert` therefore places a node carrying a pre-assigned
+  `index >= 0` at exactly that pool slot (falling back to an append only
+  if the slot is already taken, which means a malformed config) instead
+  of appending to the lowest free slot. Before that, the assignment was
+  silently overwritten and the correspondence held only by accident of
+  `DVMNodes` being listed in rank order.
+- **The remaining coupling lives in plm, not here.**
+  `prte_plm_base_setup_virtual_machine` still hands out daemon vpids as
+  `daemons->num_procs` — sequentially over pool order — rather than
+  reading `node->index`. For a well-formed config the two coincide
+  (slots 1..N, ranks 1..N). They can diverge if `DVMNodes` names a host
+  more than once: `node_insert` dedups the repeat, so a later node keeps
+  its true rank in the pool while plm still numbers sequentially. If
+  that case ever needs to work, plm is where to fix it.
 - Skipping rank 0 avoids double-entering the controller (HNP) node;
   don't remove that guard.
 - Setting `prte_managed_allocation` is intentional and load-bearing for

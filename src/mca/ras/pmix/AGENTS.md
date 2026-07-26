@@ -55,24 +55,31 @@ MCA params (`ras_pmix_*`) configure the scheduler connection: `uri`,
   `PMIX_ERR_TAKE_NEXT_OPTION`-on-no-scheduler behavior is what lets the
   no-scheduler elastic-DVM path (handled by `ras/hosts`) work. See repo
   memory on `PMIX_ERR_UNREACH` regressions.
-- The async result must be processed on the progress thread — don't
-  short-circuit the `infocbfunc` → `passthru` thread-shift.
-- **KNOWN GAP: `infocbfunc` does real work before it thread-shifts.**
-  It runs on the *PMIx* progress thread, and the top-level
-  [`AGENTS.md`](../../../../AGENTS.md) golden rule says such a callback
-  must do nothing beyond capturing its arguments and posting the event.
-  Today it writes `req->status`, calls `PMIX_INFO_FREE` on `req->info`,
-  and rewrites `req->info`/`ninfo`/`rlcbfunc`/`rlcbdata` — all PRRTE
-  object state, mutated off the PRRTE progress thread. It has not been
-  observed to bite (nothing else touches the `req` between the forward
-  and the answer), but the correct shape is a caddy that carries
-  `status`/`info`/`ninfo`/`rel`/`relcbdata` across the shift, with every
-  mutation of `req` moved into `passthru`. Fix this before adding any
-  other writer of the request array.
-- `modify()` sets `req->copy = true` after pointing `req->info` at its
-  own `xfer` array. If a caller ever hands in a request that *already*
-  owns its info (`copy == true` on entry — `prte_ras_base_add_hosts`
-  builds one), the previous array leaks. It is unreachable today only
-  because that request carries `req->key = "hosts"`, which the base's
-  component filter uses to skip this module.
+- **`infocbfunc` must stay trivial.** It runs on the *PMIx* progress
+  thread, so per the top-level [`AGENTS.md`](../../../../AGENTS.md)
+  golden rule it does nothing but fill a `prte_ras_pmix_caddy_t` and
+  `PRTE_PMIX_THREADSHIFT` it; every mutation of the
+  `prte_pmix_server_req_t` happens in `passthru`, on the PRRTE progress
+  thread. Do not "simplify" by writing the answer straight onto the
+  request — that is a cross-thread write to state the PRRTE progress
+  thread owns.
+- **The caddy holds a reference on the request** (released by its
+  destructor) so the request cannot be reclaimed underneath the shift.
+- **`passthru` records the answer in `pstatus`, not just `status`.**
+  `pstatus` is what drives `prte_ras_base_complete_request` and what the
+  requester is told; `prte_ras_base_modify` seeds it with
+  `PMIX_ERR_NOT_SUPPORTED`, so writing only `status` meant a granted
+  allocation was never applied and the requester was told the operation
+  was unsupported.
+- **`passthru` hands the requester `prte_pmix_server_req_release` and
+  returns without releasing the request**, mirroring
+  `prte_ras_base_modify`'s tail. The info the requester is looking at is
+  owned by the request (or by PMIx, released through it), so dropping
+  the request there would pull it out from under a callback that has not
+  finished with it.
+- **Anything that repoints `req->info` must free a previously *owned*
+  array first.** Both `modify()` here and the base's
+  `ras_base_set_alloc_response` do. A request relayed from a remote peer
+  arrives with `copy == true` (see `pmix_server.c`), so this is a live
+  path, not a theoretical one.
 </content>
