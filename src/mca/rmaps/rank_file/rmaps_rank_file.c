@@ -177,7 +177,14 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
 
     /* start at the beginning... */
     vpid_start = 0;
-    jdata->num_procs = 0;
+    /* Zero the job-wide count only when we were handed the whole job. The
+     * per-app (MPMD) dispatch calls us once per app, and resetting here
+     * would leave jdata->num_procs holding just the last app's count while
+     * jdata->procs holds every app's procs - a mismatch the job packer and
+     * unpacker disagree about, corrupting the launch message. */
+    if (options->app_idx < 0) {
+        jdata->num_procs = 0;
+    }
     PMIX_CONSTRUCT(&rankmap, pmix_pointer_array_t);
     rc = pmix_pointer_array_init(&rankmap,
                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
