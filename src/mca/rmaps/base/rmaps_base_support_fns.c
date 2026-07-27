@@ -134,15 +134,13 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
                                      bool initial_map, bool silent, bool keepall)
 {
     pmix_list_item_t *item;
-    prte_node_t *node, *nd, *nptr, *next;
+    prte_node_t *node, *nd, *next;
     int32_t num_slots;
     int32_t i;
     int rc;
     prte_job_t *daemons;
     bool novm;
-    pmix_list_t nodes;
     char *hosts = NULL;
-    bool needhosts = false;
     prte_session_t **targets;
     size_t ntargets;
     prte_session_t *deftarget[1];
@@ -167,146 +165,21 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
     /* see if we have a vm or not */
     novm = prte_get_attribute(&daemons->attributes, PRTE_JOB_NO_VM, NULL, PMIX_BOOL);
 
-    /* if this is NOT a managed allocation, then we use the nodes
-     * that were specified for this app - there is no need to collect
-     * all available nodes and "filter" them.
+    /* Build the job's node set from the resources of the session(s) it may
+     * map onto, then narrow that set with whatever the app specified. The
+     * session resources are the allocation - a resource manager's, or one
+     * built from -host/-hostfile at allocation time - so they are the
+     * authoritative list, and -host/-hostfile can only select within it.
+     * prte_util_filter_dash_host_nodes rebuilds the list in the order the
+     * user named the hosts, so their ordering is preserved.
      *
-     * However, if it is a managed allocation AND the hostfile or the hostlist was
-     * provided, those take precedence, so process them and filter as we normally do.
+     * A second path used to run here for an unmanaged allocation, assembling
+     * the list from the app specs and looking each name up in the pool. It
+     * reached the same set by a longer route - nothing outside the pool could
+     * ever survive it either - but it bypassed the checks this one applies,
+     * notably that an unallocated head node is not usable just because
+     * someone named it.
      */
-    hosts = NULL;
-    if ((prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING) ||
-         prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts, PMIX_STRING)) &&
-         NULL != hosts) {
-        needhosts = true;
-        free(hosts);
-    }
-    if (!prte_managed_allocation ||
-        (prte_managed_allocation && needhosts)) {
-        PMIX_CONSTRUCT(&nodes, pmix_list_t);
-        /* if the app provided a dash-host, then use those nodes */
-        hosts = NULL;
-        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING) &&
-            NULL != hosts) {
-            PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
-                                 "%s using dash_host %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 hosts));
-            if (PRTE_SUCCESS != (rc = prte_util_add_dash_host_nodes(&nodes, hosts, false))) {
-                PRTE_ERROR_LOG(rc);
-                free(hosts);
-                return rc;
-            }
-            free(hosts);
-        } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts, PMIX_STRING) &&
-                   NULL != hosts) {
-            /* otherwise, if the app provided a hostfile, then use that */
-            PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
-                                 "%s using hostfile %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 hosts));
-            if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&nodes, hosts))) {
-                free(hosts);
-                PRTE_ERROR_LOG(rc);
-                return rc;
-            }
-            free(hosts);
-        } else {
-            /* if nothing else was specified by the app, then use all known nodes, which
-             * will include ourselves
-             */
-            PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
-                                 "%s using known nodes", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-            goto addknown;
-        }
-        /** if we still don't have anything */
-        if (0 == pmix_list_get_size(&nodes)) {
-            if (!silent) {
-                pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
-                               true);
-            }
-            PMIX_DESTRUCT(&nodes);
-            return PRTE_ERR_SILENT;
-        }
-        /* find the nodes in the session and assemble them
-         * in list order as that is what the user specified. Note
-         * that the prte_node_t objects on the nodes list are not
-         * fully filled in - they only contain the user-provided
-         * name of the node as a temp object. Thus, we cannot just
-         * check to see if the node pointer matches that of a node
-         * in the session.
-         */
-        PMIX_LIST_FOREACH_SAFE(nptr, next, &nodes, prte_node_t)
-        {
-            for (i = 0; i < prte_node_pool->size; i++) {
-                node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i);
-                if (NULL == node) {
-                    continue;
-                }
-                /* ignore nodes that are not in the job's targeted session set */
-                if (!node_in_targets(node, targets, ntargets)) {
-                    continue;
-                }
-                /* ignore nodes that are non-usable */
-                if (PRTE_FLAG_TEST(node, PRTE_NODE_NON_USABLE)) {
-                    continue;
-                }
-                /* ignore nodes that are marked as do-not-use for this mapping */
-                if (PRTE_NODE_STATE_DO_NOT_USE == node->state) {
-                    PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
-                                         "NODE %s IS MARKED NO_USE", node->name));
-                    /* reset the state so it can be used another time */
-                    node->state = PRTE_NODE_STATE_UP;
-                    continue;
-                }
-                if (PRTE_NODE_STATE_DOWN == node->state) {
-                    PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
-                                         "NODE %s IS DOWN", node->name));
-                    continue;
-                }
-                if (PRTE_NODE_STATE_NOT_INCLUDED == node->state) {
-                    PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
-                                         "NODE %s IS MARKED NO_INCLUDE", node->name));
-                    /* not to be used */
-                    continue;
-                }
-                /* if this node wasn't included in the vm (e.g., by -host), ignore it,
-                 * unless we are mapping prior to launching the vm
-                 */
-                if (NULL == node->daemon && !novm) {
-                    PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
-                                         "NODE %s HAS NO DAEMON", node->name));
-                    continue;
-                }
-                if (!prte_nptr_match(node, nptr)) {
-                    PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
-                                         "NODE %s DOESNT MATCH NODE %s", node->name, nptr->name));
-                    continue;
-                }
-                /* retain a copy for our use in case the item gets
-                 * destructed along the way
-                 */
-                PMIX_RETAIN(node);
-                if (initial_map) {
-                    /* if this is the first app_context we
-                     * are getting for an initial map of a job,
-                     * then mark all nodes as unmapped
-                     */
-                    PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
-                }
-                /* the list is ordered as per user direction using -host
-                 * or the listing in -hostfile - preserve that ordering */
-                pmix_list_append(allocated_nodes, &node->super);
-                break;
-            }
-            /* remove the item from the list as we have allocated it */
-            pmix_list_remove_item(&nodes, (pmix_list_item_t *) nptr);
-            PMIX_RELEASE(nptr);
-        }
-        PMIX_DESTRUCT(&nodes);
-        /* now prune for usage and compute total slots */
-        goto complete;
-    }
-
-addknown:
     /* add everything in the node pool that can be used - add them
      * in daemon order, which may be different than the order in the
      * node pool. Since an empty list is passed into us, the list at
@@ -428,7 +301,6 @@ addknown:
                          "%s Retained %d nodes in list", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (int) pmix_list_get_size(allocated_nodes)));
 
-complete:
     /* if we are mapping debuggers, then they don't count against
      * the allocation */
     if (PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
