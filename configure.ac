@@ -1026,6 +1026,25 @@ AC_SUBST(prteincludedir)
 
 prte_want_prd=0
 
+# Where "make check" can find components that have been built but not
+# installed.  Unit tests run from the build tree, and the only component
+# directory PRRTE knows about is the installed one, so a --enable-mca-dso
+# build otherwise finds no components at all and the tests can only skip.
+# config/mca_library_paths.txt is written by autogen.pl and lists every
+# component directory relative to the top of the tree.
+prte_comp_build_path=
+if test -f "$srcdir/config/mca_library_paths.txt"; then
+    for prte_cpath in `tr ':' ' ' < "$srcdir/config/mca_library_paths.txt"`; do
+        if test -z "$prte_comp_build_path"; then
+            prte_comp_build_path="$ac_pwd/$prte_cpath/.libs"
+        else
+            prte_comp_build_path="$prte_comp_build_path:$ac_pwd/$prte_cpath/.libs"
+        fi
+    done
+fi
+PRTE_COMPONENT_BUILD_PATH=$prte_comp_build_path
+AC_SUBST(PRTE_COMPONENT_BUILD_PATH)
+
 prte_show_subtitle "Final output"
 
 AC_CONFIG_FILES([

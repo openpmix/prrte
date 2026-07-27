@@ -32,3 +32,10 @@ test_grpcomm_CPPFLAGS = $(AM_CPPFLAGS) -DPRTE_TEST_GRPCOMM_DIRECT=0
 endif
 
 TESTS = test_grpcomm
+
+# Run against the components in this build tree, not just an installed
+# one: without this a --enable-mca-dso build has no components to find
+# and every component-dependent case skips.
+AM_TESTS_ENVIRONMENT = \
+    PRTE_MCA_mca_base_component_path=@PRTE_COMPONENT_BUILD_PATH@; \
+    export PRTE_MCA_mca_base_component_path;
