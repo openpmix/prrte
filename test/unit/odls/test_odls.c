@@ -52,6 +52,7 @@
 #include <stdint.h>
 
 #include "constants.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/runtime/runtime.h"
 #include "src/util/pmix_argv.h"
@@ -77,10 +78,63 @@
  * get_add_procs_data, however, is documented to be the base function used
  * verbatim, so we pin that.
  */
+/*
+ * Ask the framework for a component by name, and for the module that
+ * component hands *this* process.
+ *
+ * These are two different questions.  A component is present whenever the
+ * framework opened it; whether it yields a module is up to its query,
+ * which is free to decline - iof/prted, for one, answers only a daemon.
+ * Naming the component's module symbol instead would assume it was linked
+ * into libprrte, which is false with --enable-mca-dso: there the component
+ * is a separate DSO and the symbol is not there to link against.
+ */
+static bool odls_component_present(const char *name)
+{
+    pmix_mca_base_component_list_item_t *cli;
+
+    PMIX_LIST_FOREACH(cli, &prte_odls_base_framework.framework_components,
+                      pmix_mca_base_component_list_item_t)
+    {
+        if (0 == strcmp(name, cli->cli_component->pmix_mca_component_name)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static prte_odls_base_module_t *odls_module(const char *name)
+{
+    pmix_mca_base_component_list_item_t *cli;
+    pmix_mca_base_module_t *mod = NULL;
+    int pri = 0;
+
+    PMIX_LIST_FOREACH(cli, &prte_odls_base_framework.framework_components,
+                      pmix_mca_base_component_list_item_t)
+    {
+        if (0 != strcmp(name, cli->cli_component->pmix_mca_component_name)) {
+            continue;
+        }
+        if (NULL == cli->cli_component->pmix_mca_query_component) {
+            return NULL;
+        }
+        if (PRTE_SUCCESS != cli->cli_component->pmix_mca_query_component(&mod, &pri)) {
+            return NULL;
+        }
+        return (prte_odls_base_module_t *) mod;
+    }
+    return NULL;
+}
+
 static int test_module_contract(void)
 {
     int failures = 0;
-    prte_odls_base_module_t *m = &prte_odls_pdefault_module;
+    prte_odls_base_module_t *m = odls_module("pdefault");
+
+    if (NULL == m) {
+        fprintf(stdout, "SKIPPED test_module_contract (odls/pdefault absent)\n");
+        return 0;
+    }
 
     CHECK("get_add_procs_data set", NULL != m->get_add_procs_data);
     CHECK("launch_local_procs set", NULL != m->launch_local_procs);
@@ -106,9 +160,14 @@ static int test_module_contract(void)
 static int test_component_identity(void)
 {
     int failures = 0;
-    prte_odls_base_component_t *c = &prte_mca_odls_pdefault_component;
-
-    CHECK("component name", 0 == strcmp(c->pmix_mca_component_name, "pdefault"));
+    /* the framework must have opened a component by this name - asking it
+     * for one is the assertion */
+    if (!odls_component_present("pdefault")) {
+        fprintf(stdout, "SKIPPED test_component_identity"
+                        " (odls/pdefault not loadable from the build tree)\n");
+        return 0;
+    }
+    CHECK("component present", odls_component_present("pdefault"));
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_component_identity\n");
@@ -257,12 +316,22 @@ int main(void)
         return 1;
     }
 
+    /* the module tests ask the framework for their subject, so it has to
+     * be open before they run */
+    rc = pmix_mca_base_framework_open(&prte_odls_base_framework, PMIX_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != rc) {
+        fprintf(stderr, "odls framework open failed: %d\n", rc);
+        prte_finalize();
+        return 1;
+    }
+
     failures += test_module_contract();
     failures += test_component_identity();
     failures += test_daemon_cmd_uniqueness();
     failures += test_child_err_enum();
     failures += test_classes();
 
+    (void) pmix_mca_base_framework_close(&prte_odls_base_framework);
     prte_finalize();
 
     if (0 == failures) {

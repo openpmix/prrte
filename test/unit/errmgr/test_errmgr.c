@@ -28,6 +28,8 @@
 #include <stdio.h>
 
 #include "constants.h"
+#include "src/mca/base/pmix_base.h"
+#include "src/mca/errmgr/base/base.h"
 #include "src/runtime/runtime.h"
 #include "src/util/proc_info.h"
 
@@ -51,9 +53,46 @@
  *  - the default module leaves init/finalize NULL (it only logs);
  *  - each real role module wires up both init and finalize.
  */
+/*
+ * Ask the framework for the module a component hands *this* process.
+ *
+ * Naming the component's module symbol assumes it was linked into
+ * libprrte; with --enable-mca-dso the component is a separate DSO and the
+ * symbol is not there to link against.  Each errmgr component also gates
+ * its query on the process type, so the caller says which type it is
+ * asking as.
+ */
+static prte_errmgr_base_module_t *errmgr_module(const char *name, prte_proc_type_t as)
+{
+    pmix_mca_base_component_list_item_t *cli;
+    pmix_mca_base_module_t *mod = NULL;
+    prte_proc_type_t save;
+    int pri = 0;
+
+    PMIX_LIST_FOREACH(cli, &prte_errmgr_base_framework.framework_components,
+                      pmix_mca_base_component_list_item_t)
+    {
+        if (0 != strcmp(name, cli->cli_component->pmix_mca_component_name)) {
+            continue;
+        }
+        if (NULL == cli->cli_component->pmix_mca_query_component) {
+            return NULL;
+        }
+        save = prte_process_info.proc_type;
+        prte_process_info.proc_type = as;
+        if (PRTE_SUCCESS != cli->cli_component->pmix_mca_query_component(&mod, &pri)) {
+            mod = NULL;
+        }
+        prte_process_info.proc_type = save;
+        return (prte_errmgr_base_module_t *) mod;
+    }
+    return NULL;
+}
+
 static int test_errmgr_modules(void)
 {
     int failures = 0;
+    prte_errmgr_base_module_t *dvm, *prted;
 
     /* the log-only fallback: logfn set, no state-machine wiring */
     CHECK("default logfn", NULL != prte_errmgr_default_fns.logfn);
@@ -64,15 +103,25 @@ static int test_errmgr_modules(void)
      * whether a component has been selected yet */
     CHECK("live logfn", NULL != prte_errmgr.logfn);
 
-    /* the HNP component */
-    CHECK("dvm logfn", NULL != prte_errmgr_dvm_module.logfn);
-    CHECK("dvm init", NULL != prte_errmgr_dvm_module.init);
-    CHECK("dvm finalize", NULL != prte_errmgr_dvm_module.finalize);
+    /* the HNP component, asked as the master it serves */
+    dvm = errmgr_module("dvm", PRTE_PROC_MASTER);
+    if (NULL == dvm) {
+        fprintf(stdout, "  (skipping dvm module checks: component absent)\n");
+    } else {
+        CHECK("dvm logfn", NULL != dvm->logfn);
+        CHECK("dvm init", NULL != dvm->init);
+        CHECK("dvm finalize", NULL != dvm->finalize);
+    }
 
-    /* the daemon component */
-    CHECK("prted logfn", NULL != prte_errmgr_prted_module.logfn);
-    CHECK("prted init", NULL != prte_errmgr_prted_module.init);
-    CHECK("prted finalize", NULL != prte_errmgr_prted_module.finalize);
+    /* the daemon component, asked as the daemon it serves */
+    prted = errmgr_module("prted", PRTE_PROC_DAEMON);
+    if (NULL == prted) {
+        fprintf(stdout, "  (skipping prted module checks: component absent)\n");
+    } else {
+        CHECK("prted logfn", NULL != prted->logfn);
+        CHECK("prted init", NULL != prted->init);
+        CHECK("prted finalize", NULL != prted->finalize);
+    }
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_errmgr_modules\n");
@@ -114,6 +163,16 @@ int main(void)
     rc = prte_init_util(PRTE_PROC_MASTER);
     if (PRTE_SUCCESS != rc) {
         fprintf(stderr, "prte_init_util failed: %d\n", rc);
+        return 1;
+    }
+
+    /* the module checks ask the framework for their subject */
+    rc = pmix_mca_base_framework_open(&prte_errmgr_base_framework,
+                                      PMIX_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != rc) {
+        fprintf(stderr, "errmgr framework open failed: %d\n", rc);
+        (void) pmix_mca_base_framework_close(&prte_errmgr_base_framework);
+    prte_finalize();
         return 1;
     }
 

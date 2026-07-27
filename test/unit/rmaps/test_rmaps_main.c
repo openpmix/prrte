@@ -10,7 +10,9 @@
 #include "prte_config.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
+#include "src/mca/rmaps/base/base.h"
 #include "src/runtime/runtime.h"
 #include "src/util/proc_info.h"
 #include "constants.h"
@@ -23,6 +25,35 @@ extern int test_ppr(void);
 extern int test_seq(void);
 extern int test_rank_file(void);
 
+/* shared with the mapper tests in this directory */
+prte_rmaps_base_module_t *test_rmaps_module(const char *name);
+
+/*
+ * Hand a mapper test its subject.
+ *
+ * The tests used to name the component's module symbol directly, which
+ * asks two things of the build that are not actually true: that the
+ * symbol is visible outside libprrte (it is not, once the library is
+ * compiled with -fvisibility=hidden - it belongs to the component, not
+ * to the framework), and that the component was built at all.  Ask the
+ * framework instead, which is how the mapper is reached in production,
+ * and let a caller skip when its component is absent.
+ */
+prte_rmaps_base_module_t *test_rmaps_module(const char *name)
+{
+    prte_rmaps_base_selected_module_t *mod;
+
+    PMIX_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules,
+                      prte_rmaps_base_selected_module_t)
+    {
+        if (NULL != mod->component &&
+            0 == strcmp(name, mod->component->pmix_mca_component_name)) {
+            return mod->module;
+        }
+    }
+    return NULL;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -30,6 +61,22 @@ int main(void)
     rc = prte_init_util(PRTE_PROC_MASTER);
     if (PRTE_SUCCESS != rc) {
         fprintf(stderr, "prte_init_util failed: %d\n", rc);
+        return 1;
+    }
+
+    /* the mapper tests take their module from the framework, so it has to
+     * be open and selected before they run */
+    rc = pmix_mca_base_framework_open(&prte_rmaps_base_framework,
+                                      PMIX_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != rc) {
+        fprintf(stderr, "rmaps framework open failed: %d\n", rc);
+        prte_finalize();
+        return 1;
+    }
+    rc = prte_rmaps_base_select();
+    if (PRTE_SUCCESS != rc) {
+        fprintf(stderr, "rmaps select failed: %d\n", rc);
+        prte_finalize();
         return 1;
     }
 
@@ -41,6 +88,7 @@ int main(void)
     failures += test_seq();
     failures += test_rank_file();
 
+    (void) pmix_mca_base_framework_close(&prte_rmaps_base_framework);
     prte_finalize();
 
     if (0 == failures) {

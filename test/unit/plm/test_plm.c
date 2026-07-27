@@ -55,6 +55,7 @@
 #include <string.h>
 
 #include "constants.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/runtime.h"
 #include "src/util/pmix_argv.h"
@@ -243,6 +244,40 @@ static int test_state_code_uniqueness(void)
  * remote_spawn is genuinely optional (ssh alone implements the tree
  * fan-out) and finalize is optional for the default module.
  */
+/*
+ * Ask the framework for a component by name, and for the module that
+ * component hands *this* process.
+ *
+ * These are two different questions.  A component is present whenever the
+ * framework opened it; whether it yields a module is up to its query,
+ * which is free to decline - iof/prted, for one, answers only a daemon.
+ * Naming the component's module symbol instead would assume it was linked
+ * into libprrte, which is false with --enable-mca-dso: there the component
+ * is a separate DSO and the symbol is not there to link against.
+ */
+static prte_plm_base_module_t *plm_module(const char *name)
+{
+    pmix_mca_base_component_list_item_t *cli;
+    pmix_mca_base_module_t *mod = NULL;
+    int pri = 0;
+
+    PMIX_LIST_FOREACH(cli, &prte_plm_base_framework.framework_components,
+                      pmix_mca_base_component_list_item_t)
+    {
+        if (0 != strcmp(name, cli->cli_component->pmix_mca_component_name)) {
+            continue;
+        }
+        if (NULL == cli->cli_component->pmix_mca_query_component) {
+            return NULL;
+        }
+        if (PRTE_SUCCESS != cli->cli_component->pmix_mca_query_component(&mod, &pri)) {
+            return NULL;
+        }
+        return (prte_plm_base_module_t *) mod;
+    }
+    return NULL;
+}
+
 static int test_module_contract(void)
 {
     int failures = 0;
@@ -264,20 +299,26 @@ static int test_module_contract(void)
     CHECK("default signal_job identity",
           prte_plm_base_prted_signal_local_procs == prte_plm.signal_job);
 
-    /* ssh: the always-available fallback and the only tree-spawner */
-    CHECK("ssh init set", NULL != prte_plm_ssh_module.init);
-    CHECK("ssh set_hnp_name set", NULL != prte_plm_ssh_module.set_hnp_name);
-    CHECK("ssh spawn set", NULL != prte_plm_ssh_module.spawn);
-    CHECK("ssh remote_spawn set", NULL != prte_plm_ssh_module.remote_spawn);
-    CHECK("ssh terminate_job set", NULL != prte_plm_ssh_module.terminate_job);
-    CHECK("ssh terminate_orteds set", NULL != prte_plm_ssh_module.terminate_orteds);
-    CHECK("ssh terminate_procs set", NULL != prte_plm_ssh_module.terminate_procs);
-    CHECK("ssh signal_job set", NULL != prte_plm_ssh_module.signal_job);
-    CHECK("ssh finalize set", NULL != prte_plm_ssh_module.finalize);
+    /* ssh: the always-available fallback and the only tree-spawner.  Its
+     * query is environment-sensitive (it declines when an indicated launch
+     * agent is missing), so a NULL module here is an answer, not a fault. */
+    prte_plm_base_module_t *ssh = plm_module("ssh");
+    if (NULL == ssh) {
+        fprintf(stdout, "  (skipping ssh module checks: component declined)\n");
+        goto ssh_done;
+    }
+    CHECK("ssh init set", NULL != ssh->init);
+    CHECK("ssh set_hnp_name set", NULL != ssh->set_hnp_name);
+    CHECK("ssh spawn set", NULL != ssh->spawn);
+    CHECK("ssh remote_spawn set", NULL != ssh->remote_spawn);
+    CHECK("ssh terminate_job set", NULL != ssh->terminate_job);
+    CHECK("ssh terminate_orteds set", NULL != ssh->terminate_orteds);
+    CHECK("ssh terminate_procs set", NULL != ssh->terminate_procs);
+    CHECK("ssh signal_job set", NULL != ssh->signal_job);
+    CHECK("ssh finalize set", NULL != ssh->finalize);
     CHECK("ssh set_hnp_name identity",
-          prte_plm_base_set_hnp_name == prte_plm_ssh_module.set_hnp_name);
-    CHECK("ssh component name",
-          0 == strcmp(prte_mca_plm_ssh_component.super.pmix_mca_component_name, "ssh"));
+          prte_plm_base_set_hnp_name == ssh->set_hnp_name);
+ssh_done:
 
     /* the base defaults every component inherits */
     CHECK("nodes assigned at launch defaults true",
@@ -552,6 +593,15 @@ int main(void)
         return 1;
     }
 
+    /* the module tests ask the framework for their subject, so it has to
+     * be open before they run */
+    rc = pmix_mca_base_framework_open(&prte_plm_base_framework, PMIX_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != rc) {
+        fprintf(stderr, "plm framework open failed: %d\n", rc);
+        prte_finalize();
+        return 1;
+    }
+
     failures += test_state_code_uniqueness();
     failures += test_module_contract();
     failures += test_wrap_args();
@@ -559,6 +609,7 @@ int main(void)
     failures += test_append_basic_args();
     failures += test_naming();
 
+    (void) pmix_mca_base_framework_close(&prte_plm_base_framework);
     prte_finalize();
 
     if (0 == failures) {
