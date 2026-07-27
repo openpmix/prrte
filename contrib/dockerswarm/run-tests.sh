@@ -212,7 +212,7 @@ test_slurm_alloc() {
     [ "$(echo "$out" | tr -d '\r')" = node3 ] \
         && ok "--host 3 resolved to node3 by launch id" \
         || bad "launch-id shorthand did not resolve: $out"
-    SL 'timeout 30 pterm' >/dev/null 2>&1
+    SL 'timeout -k 5 30 pterm' >/dev/null 2>&1
     cleanup_swarm
 
     banner "ras/slurm: an allocation that excludes the head node"
@@ -234,7 +234,7 @@ test_slurm_alloc() {
         echo "$out" | grep -q 'Missing requested host: node1' \
             && ok "--host naming the unallocated head node is refused" \
             || bad "the unallocated head node was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
-        SL 'timeout 30 pterm' >/dev/null 2>&1
+        SL 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
         bad "no DVM came up on an allocation excluding the head node"
     fi
@@ -285,7 +285,7 @@ test_slurm() {
     if [ -z "$jid" ]; then
         bad "extend did not report an allocation id: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
         printf '    HNP: %s\n' "$(SL 'tail -3 /tmp/prte.out' | tr '\n' ' ')"
-        SL 'timeout 30 pterm' >/dev/null 2>&1; cleanup_swarm; return
+        SL 'timeout -k 5 30 pterm' >/dev/null 2>&1; cleanup_swarm; return
     fi
     ok "extend accepted and reported PMIX_ALLOC_ID=$jid (RM=slurm)"
     nodes=$(FS "nodes $jid" | tr -d '\r')
@@ -471,7 +471,7 @@ test_slurm() {
         bad "could not submit the job for the scancel-failure case"
     fi
     FS 'set scancel_fail 0' >/dev/null
-    SL 'timeout 30 pterm' >/dev/null 2>&1
+    SL 'timeout -k 5 30 pterm' >/dev/null 2>&1
     cleanup_swarm
 
     banner "ras/slurm: propagate_* MCA params gate what reaches sbatch"
@@ -498,7 +498,7 @@ test_slurm() {
         else
             bad "extend failed under the propagate_* overrides: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
         fi
-        SL 'timeout 30 pterm' >/dev/null 2>&1
+        SL 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
         bad "could not start a DVM with the propagate_* overrides"
     fi
@@ -617,7 +617,7 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
             || bad "wildcard stdin reached $n/2 procs (rc=$rc): $(echo "$out" | tr '\n' ' ')"
 
         RUN 'rm -f /tmp/iof_stdin_in.txt /tmp/iof_stdin_out.txt /tmp/iof_stdin_err.txt' >/dev/null 2>&1
-        RUN 'timeout 30 pterm' >/dev/null 2>&1
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
         bad "could not start a DVM for the stdin tests"
     fi
@@ -762,7 +762,7 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         [ "$marker" = node4 ] \
             && ok "the grown node ran the job - it inherited from a survivor" \
             || bad "grown node never ran the job (marker='$marker')"
-        RUN 'timeout 30 pterm' >/dev/null 2>&1
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
         bad "could not start an elastic DVM for the survivor-topology test"
     fi
@@ -795,7 +795,7 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
             [ "$(echo "$out" | tr -d '\r')" = node3 ] \
                 && ok "--host by original address still matches (alias retained)" \
                 || bad "--host $ip3 no longer matches its node (alias lost): $(echo "$out" | tr '\n' ' ')"
-            RUN 'timeout 30 pterm' >/dev/null 2>&1
+            RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
         else
             bad "could not start a DVM allocated by IP address"
         fi
@@ -866,7 +866,7 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         out=$(RUN 'timeout 30 prun -n 1 hostname' 2>&1 | tail -1)
         [ "$(echo "$out" | tr -d '\r')" = node1 ] && ok "DVM still responsive after the re-grow" \
                                                   || bad "DVM wedged after re-grow: $out"
-        RUN 'timeout 30 pterm' >/dev/null 2>&1
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
         bad "could not start an elastic DVM for the re-grow test"
     fi
@@ -902,7 +902,7 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         echo "$out" | grep -q PMIX_DVM_IS_READY \
             && ok "a grow needing no new daemon still completes" \
             || bad "redundant grow never completed"
-        RUN 'timeout 30 pterm' >/dev/null 2>&1
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
         bad "could not start an elastic DVM for the grow-scope test"
     fi
@@ -948,7 +948,7 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         [ "$(echo "$out" | tr -d '\r')" = node1 ] \
             && ok "DVM still responsive after the grow/shrink/re-grow cycle" \
             || bad "DVM wedged after the grow/shrink/re-grow cycle: $out"
-        RUN 'timeout 30 pterm' >/dev/null 2>&1
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
         bad "could not start an elastic DVM for the pool-dedup test"
     fi
@@ -984,9 +984,43 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         echo "$alloc" | grep -qE '^[[:space:]]*node2:[[:space:]]+slots=4' \
             && ok "node2 slots adjusted 2 -> 4" \
             || bad "node2 slot adjustment not applied: $(echo "$alloc" | grep node2 | tr '\n' ' ')"
-        RUN 'timeout 30 pterm' >/dev/null 2>&1
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
         bad "could not start a DVM for the add-hostfile test"
+    fi
+    cleanup_swarm
+
+    banner "dash-host: relative node syntax selects from the DVM"
+    # "+n<K>" names the K'th node of the allocation, "+e:N" names N nodes
+    # that are currently empty. Neither can say anything about how big a
+    # node is -- the colon in "+e:N" is a node count -- so a job that uses
+    # them gets the slots those nodes were discovered with.
+    #
+    # That is what makes these run at all. The available-slot computation
+    # matched the raw "+n1" text against each node name, matched nothing,
+    # and reported zero slots available, so the launch was refused for lack
+    # of resources even though the node list had been resolved correctly.
+    # It only ever "worked" with --map-by :OVERSUBSCRIBE, which skips the
+    # check.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --host node1:2,node2:2,node3:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        out=$(RUN 'timeout 30 prun --host +n1 -n 2 hostname' 2>&1)
+        n=$(echo "$out" | grep -c '^node2$')
+        [ "$n" = 2 ] && ok "+n1 resolved to the second node and used both its slots" \
+                     || bad "+n1 did not run 2 procs on node2: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        # ...and is still bounded by what that node actually has
+        out=$(RUN 'timeout 30 prun --host +n1 -n 3 hostname' 2>&1)
+        echo "$out" | grep -q 'not enough slots' \
+            && ok "+n1 is still held to the 2 slots the node was given" \
+            || bad "+n1 was not bounded by the node's slot count"
+        out=$(RUN 'timeout 30 prun --host +e:2 -n 2 --map-by node hostname' 2>&1)
+        n=$(echo "$out" | grep -E '^node[0-9]+$' | sort -u | wc -l | tr -d ' ')
+        [ "$n" = 2 ] && ok "+e:2 selected two empty nodes" \
+                     || bad "+e:2 did not spread over 2 empty nodes ($n): $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the relative-node-syntax test"
     fi
     cleanup_swarm
 

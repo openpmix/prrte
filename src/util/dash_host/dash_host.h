@@ -33,7 +33,7 @@
 
 BEGIN_C_DECLS
 
-PRTE_EXPORT int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocating);
+PRTE_EXPORT int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts);
 
 PRTE_EXPORT int prte_util_filter_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool remove);
 

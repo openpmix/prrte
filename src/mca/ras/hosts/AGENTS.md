@@ -38,7 +38,7 @@ one yields nodes; if all are empty it returns `PRTE_ERR_TAKE_NEXT_OPTION`
    (and `NO_OVERSUBSCRIBE` unless the user set a subscribe directive) —
    the rankfile *is* the allocation and the mapping.
 2. **Dash-host** (`PRTE_APP_DASH_HOST`), aggregated across all
-   app-contexts via `prte_util_add_dash_host_nodes(..., true)`.
+   app-contexts via `prte_util_add_dash_host_nodes()`.
 3. **Hostfile** (`PRTE_APP_HOSTFILE`), a comma-list per app parsed with
    `prte_util_add_hostfile_nodes`; the result is the UNION across apps.
 4. **Default hostfile** (`prte_default_hostfile`), if set.

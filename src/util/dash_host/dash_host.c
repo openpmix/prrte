@@ -84,6 +84,39 @@ static bool dash_host_match(prte_node_t *node, const char *token)
     return id == strtoul(&node->name[j], NULL, 10);
 }
 
+/*
+ * Does this node answer to one relative-node token ("+n<K>" or "+e[:N]")?
+ *
+ * This deliberately carries no diagnostics: by the time slots are being
+ * computed the token has already been resolved against the node pool by
+ * prte_util_filter_dash_host_nodes(), and anything wrong with it was
+ * reported there - once, rather than once per node.
+ */
+static bool relative_token_matches(const char *token, prte_node_t *node)
+{
+    prte_node_t *nd;
+    int nodeidx;
+
+    if ('e' == token[1] || 'E' == token[1]) {
+        /* an empty node - which of them were actually taken was settled
+         * when the node list was filtered */
+        return (0 == node->num_procs);
+    }
+    if ('n' == token[1] || 'N' == token[1]) {
+        nodeidx = strtol(&token[2], NULL, 10);
+        if (0 > nodeidx || nodeidx > (int) prte_node_pool->size) {
+            return false;
+        }
+        /* the pool is offset by one when the HNP is not in the allocation */
+        if (!prte_hnp_is_allocated) {
+            nodeidx++;
+        }
+        nd = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, nodeidx);
+        return (nd == node);
+    }
+    return false;
+}
+
 int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts)
 {
     char **specs, *cptr;
@@ -94,6 +127,21 @@ int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts)
 
     /* see if this node appears in the list */
     for (n = 0; NULL != specs[n]; n++) {
+        /* Relative syntax names nodes without saying anything about them,
+         * so it cannot carry a slot count of its own - the colon in
+         * "+e:N" is a node count, not a slot count. A node it designates
+         * therefore contributes the slots it was discovered to have, the
+         * same answer as for a job that named no hosts at all.
+         *
+         * Without this the token matched no node here, every node came out
+         * with zero available slots, and a "--host +n1" launch was refused
+         * for lack of resources even though the node list was correct. */
+        if ('+' == specs[n][0]) {
+            if (relative_token_matches(specs[n], node)) {
+                slots += node->slots - node->slots_inuse;
+            }
+            continue;
+        }
         /* check if the #slots was specified */
         if (NULL != (cptr = strchr(specs[n], ':'))) {
             *cptr = '\0';
@@ -117,15 +165,16 @@ int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts)
     return slots;
 }
 
-/* we can only enter this routine if no other allocation
- * was found, so we only need to know that finding any
- * relative node syntax should generate an immediate error
+/* Add the nodes named by a -host/--host specification to an allocation
+ * being built. Every caller is doing exactly that - selecting nodes for a
+ * job from an allocation that already exists goes through
+ * prte_util_filter_dash_host_nodes instead.
  */
-int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocating)
+int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts)
 {
     pmix_list_item_t *item;
     int32_t i, j, k;
-    int rc, nodeidx;
+    int rc;
     char **host_argv = NULL;
     char **mapped_nodes = NULL, **mini_map, *ndname;
     prte_node_t *node, *nd;
@@ -176,85 +225,16 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
     }
 
     for (i = 0; NULL != mapped_nodes[i]; ++i) {
-        /* if the specified node contains a relative node syntax,
-         * and we are allocating, then ignore it
+        /* A relative node specification selects from an allocation; it
+         * cannot contribute to one, since it says nothing about what any
+         * node is. This routine only ever runs while the allocation is
+         * being built, so ignore it here - prte_util_filter_dash_host_nodes
+         * resolves it when a job picks its nodes.
          */
         if ('+' == mapped_nodes[i][0]) {
-            if (!allocating) {
-                if ('e' == mapped_nodes[i][1] || 'E' == mapped_nodes[i][1]) {
-                    /* request for empty nodes - do they want
-                     * all of them?
-                     */
-                    if (NULL != (cptr = strchr(mapped_nodes[i], ':'))) {
-                        /* the colon indicates a specific # are requested */
-                        ++cptr;
-                        j = strtoul(cptr, NULL, 10);
-                    } else if ('\0' != mapped_nodes[0][2]) {
-                        j = strtoul(&mapped_nodes[0][2], NULL, 10);
-                    } else {
-                        /* add them all */
-                        j = prte_node_pool->size;
-                    }
-                    for (k = 0; 0 < j && k < prte_node_pool->size; k++) {
-                        if (NULL
-                            != (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, k))) {
-                            if (0 == node->num_procs) {
-                                PMIx_Argv_append_nosize(&mini_map, node->name);
-                                --j;
-                            }
-                        }
-                    }
-                } else if ('n' == mapped_nodes[i][1] || 'N' == mapped_nodes[i][1]) {
-                    /* they want a specific relative node #, so
-                     * look it up on global pool
-                     */
-                    if ('\0' == mapped_nodes[i][2]) {
-                        /* they forgot to tell us the # */
-                        pmix_show_help("help-dash-host.txt",
-                                       "dash-host:invalid-relative-node-syntax", true,
-                                       mapped_nodes[i]);
-                        rc = PRTE_ERR_SILENT;
-                        goto cleanup;
-                    }
-                    nodeidx = strtol(&mapped_nodes[i][2], NULL, 10);
-                    if (nodeidx < 0 || nodeidx > (int) prte_node_pool->size) {
-                        /* this is an error */
-                        pmix_show_help("help-dash-host.txt",
-                                       "dash-host:relative-node-out-of-bounds", true, nodeidx,
-                                       mapped_nodes[i]);
-                        rc = PRTE_ERR_SILENT;
-                        goto cleanup;
-                    }
-                    /* if the HNP is not allocated, then we need to
-                     * adjust the index as the node pool is offset
-                     * by one
-                     */
-                    if (!prte_hnp_is_allocated) {
-                        nodeidx++;
-                    }
-                    /* see if that location is filled */
-                    node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, nodeidx);
-                    if (NULL == node) {
-                        /* this is an error */
-                        pmix_show_help("help-dash-host.txt", "dash-host:relative-node-not-found",
-                                       true, nodeidx, mapped_nodes[i]);
-                        rc = PRTE_ERR_SILENT;
-                        goto cleanup;
-                    }
-                    /* add this node to the list */
-                    PMIx_Argv_append_nosize(&mini_map, node->name);
-                } else {
-                    /* invalid relative node syntax */
-                    pmix_show_help("help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
-                                   true, mapped_nodes[i]);
-                    rc = PRTE_ERR_SILENT;
-                    goto cleanup;
-                }
-            }
-        } else {
-            /* just one node was given */
-            PMIx_Argv_append_nosize(&mini_map, mapped_nodes[i]);
+            continue;
         }
+        PMIx_Argv_append_nosize(&mini_map, mapped_nodes[i]);
     }
     if (NULL == mini_map) {
         rc = PRTE_SUCCESS;
