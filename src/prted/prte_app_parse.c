@@ -513,20 +513,22 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PREFIX, NULL, PMIX_STRING);
     }
 
-    // check for a mapping directive - we don't allow you to change the base
-    // mapper (e.g., from ppr to map-by core), but you could change the pe=N
-    // value or the ppr number itself
+    // Hold the mapping/ranking/binding directives on the app object rather
+    // than adding them to its spec. Whether they are per-app at all is not
+    // known until every segment has been parsed - one directive applies to
+    // the whole job, however many apps there are - so prte_parse_locals()
+    // makes that call once it has seen them all.
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_MAPBY);
     if (NULL != opt) {
-        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_MAPBY, opt->values[0], PMIX_STRING);
+        app->mapby = strdup(opt->values[0]);
     }
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_RANKBY);
     if (NULL != opt) {
-        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_RANKBY, opt->values[0], PMIX_STRING);
+        app->rankby = strdup(opt->values[0]);
     }
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_BINDTO);
     if (NULL != opt) {
-        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_BINDTO, opt->values[0], PMIX_STRING);
+        app->bindto = strdup(opt->values[0]);
     }
 
     *app_ptr = app;
@@ -541,6 +543,83 @@ cleanup:
     }
     PMIX_DESTRUCT(&results);
     return rc;
+}
+
+/*
+ * Hand out one class of directive (mapping, ranking or binding) once the
+ * whole cmd line has been parsed.
+ *
+ * A directive given only once applies to the entire job - even when several
+ * apps were given - because that is the only reading under which the apps
+ * can differ at all: they differ when the user says so more than once. So a
+ * lone directive goes to the job and is left out of every app's spec, which
+ * is also what lets it carry a qualifier that spans the job (OVERSUBSCRIBE
+ * and friends) - those are refused in an app's spec, and used to be refused
+ * even when the user had given exactly one directive for one app.
+ *
+ * Two or more, and each app keeps its own.
+ */
+static int distribute_directive(pmix_list_t *apps, pmix_list_t *jobdata,
+                                size_t offset, const char *key)
+{
+    prte_pmix_app_t *app;
+    prte_info_item_t *item;
+    char **held;
+    int count = 0, rc;
+
+    PMIX_LIST_FOREACH(app, apps, prte_pmix_app_t) {
+        held = (char **) ((char *) app + offset);
+        if (NULL != *held) {
+            ++count;
+        }
+    }
+    if (0 == count) {
+        return PRTE_SUCCESS;
+    }
+
+    if (1 < count) {
+        /* the user distinguished the apps - give each its own */
+        PMIX_LIST_FOREACH(app, apps, prte_pmix_app_t) {
+            held = (char **) ((char *) app + offset);
+            if (NULL != *held) {
+                PMIX_INFO_LIST_ADD(rc, app->info, key, *held, PMIX_STRING);
+                if (PMIX_SUCCESS != rc) {
+                    return prte_pmix_convert_status(rc);
+                }
+            }
+        }
+        return PRTE_SUCCESS;
+    }
+
+    /* exactly one - it belongs to the job */
+    if (NULL == jobdata) {
+        /* nowhere to put it - leave it with the app that carried it so the
+         * directive is not simply lost */
+        PMIX_LIST_FOREACH(app, apps, prte_pmix_app_t) {
+            held = (char **) ((char *) app + offset);
+            if (NULL != *held) {
+                PMIX_INFO_LIST_ADD(rc, app->info, key, *held, PMIX_STRING);
+                if (PMIX_SUCCESS != rc) {
+                    return prte_pmix_convert_status(rc);
+                }
+            }
+        }
+        return PRTE_SUCCESS;
+    }
+    PMIX_LIST_FOREACH(app, apps, prte_pmix_app_t) {
+        held = (char **) ((char *) app + offset);
+        if (NULL == *held) {
+            continue;
+        }
+        item = PMIX_NEW(prte_info_item_t);
+        if (NULL == item) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        PMIX_INFO_LOAD(&item->info, key, *held, PMIX_STRING);
+        pmix_list_append(jobdata, &item->super);
+        break;
+    }
+    return PRTE_SUCCESS;
 }
 
 int prte_parse_locals(prte_schizo_base_module_t *schizo,
@@ -609,6 +688,24 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
         PMIx_Argv_free(env);
     }
     PMIx_Argv_free(temp_argv);
+
+    /* every segment has now been seen, so it can be decided whether the
+     * mapping/ranking/binding directives are per-app or belong to the job */
+    rc = distribute_directive(jdata, jobdata,
+                              offsetof(prte_pmix_app_t, mapby), PMIX_MAPBY);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+    rc = distribute_directive(jdata, jobdata,
+                              offsetof(prte_pmix_app_t, rankby), PMIX_RANKBY);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+    rc = distribute_directive(jdata, jobdata,
+                              offsetof(prte_pmix_app_t, bindto), PMIX_BINDTO);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
 
     /* All done */
 

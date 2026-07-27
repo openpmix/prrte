@@ -539,12 +539,25 @@ def negative_cases(topo):
         ("badmap", dict(map_by="bogus"), "Valid directives"),
         ("badrank", dict(rank_by="bogus"), "Valid directives"),
         ("rankcore", dict(rank_by="core"), "Valid directives"),
-        ("dfltmod", dict(map_by="core:nooversubscribe"), "not supported"),
     ]
     for name, kw, banner in bad:
         cid = "negative.%s.%s" % (topo.name, name)
         yield Case(cid, "negative", topo, "even", hostspec, pool, n=4,
                    expect="reject", expect_banner=banner, **kw)
+
+    # A qualifier whose effect spans the whole job cannot be attached to one
+    # app of several: one app cannot oversubscribe its nodes while its
+    # siblings do not.  It takes TWO directives to make this per-app at all -
+    # with only one on the cmd line the directive is the job's, however many
+    # apps there are, and "--map-by core:nooversubscribe" is then perfectly
+    # legal.  (It used to be refused, because a lone directive was copied
+    # into the app spec as well as the job's and then judged as if the user
+    # had attached it to that app.)
+    yield Case("negative.%s.perappmod" % topo.name, "negative", topo, "even",
+               hostspec, pool,
+               apps=[AppSpec(2, map_by="core"),
+                     AppSpec(2, map_by="node:nooversubscribe")],
+               expect="reject", expect_banner="not supported")
 
 
 def group_cases(topo):

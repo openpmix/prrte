@@ -48,6 +48,15 @@ typedef struct {
     pmix_list_item_t super;
     pmix_app_t app;
     void *info;
+    /* The mapping/ranking/binding directives this app segment carried, held
+     * aside until the whole cmd line has been parsed. Only then is it known
+     * whether they are per-app at all: a directive given just once applies
+     * to the entire job however many apps there are, so it belongs in the
+     * job's spec, not in any app's. prte_parse_locals() decides and
+     * distributes them. */
+    char *mapby;
+    char *rankby;
+    char *bindto;
 } prte_pmix_app_t;
 PMIX_CLASS_DECLARATION(prte_pmix_app_t);
 

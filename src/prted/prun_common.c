@@ -325,7 +325,8 @@ int prun_common(pmix_cli_result_t *results,
     int rc = 1;
     char *param, *ptr;
     prte_pmix_lock_t lock, rellock;
-    pmix_list_t apps;
+    pmix_list_t apps, jobdata;
+    prte_info_item_t *iprteinfo;
     prte_pmix_app_t *app;
     void *tinfo, *jinfo;
     pmix_info_t info, *iptr;
@@ -603,12 +604,19 @@ int prun_common(pmix_cli_result_t *results,
     /* they want to run an application, so let's parse
      * the cmd line to get it */
 
-    rc = prte_parse_locals(schizo, &apps, pargv, NULL, NULL, NULL);
+    PMIX_CONSTRUCT(&jobdata, pmix_list_t);
+    rc = prte_parse_locals(schizo, &apps, pargv, NULL, NULL, &jobdata);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
+        PMIX_LIST_DESTRUCT(&jobdata);
         PMIX_LIST_DESTRUCT(&apps);
         goto DONE;
     }
+    /* anything the parser determined to be job-level goes into the job spec */
+    PMIX_LIST_FOREACH(iprteinfo, &jobdata, prte_info_item_t) {
+        PMIX_INFO_LIST_XFER(ret, jinfo, &iprteinfo->info);
+    }
+    PMIX_LIST_DESTRUCT(&jobdata);
 
     /* bozo check */
     if (0 == pmix_list_get_size(&apps)) {
@@ -848,22 +856,12 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_STDIN_TGT, opt->values[0], PMIX_STRING);
     }
 
-    opt = pmix_cmd_line_get_param(results, PRTE_CLI_MAPBY);
-    if (NULL != opt) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, opt->values[0], PMIX_STRING);
-    }
-
-    /* if the user specified a ranking policy, then set it */
-    opt = pmix_cmd_line_get_param(results, PRTE_CLI_RANKBY);
-    if (NULL != opt) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RANKBY, opt->values[0], PMIX_STRING);
-    }
-
-    /* if the user specified a binding policy, then set it */
-    opt = pmix_cmd_line_get_param(results, PRTE_CLI_BINDTO);
-    if (NULL != opt) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, opt->values[0], PMIX_STRING);
-    }
+    /* The mapping, ranking and binding directives are NOT taken from the
+     * global parse: it stops at the first app, so it cannot see a directive
+     * the user attached to a later one, and it cannot tell how many were
+     * given. prte_parse_locals() sees every segment and decides - a lone
+     * directive is the job's, several are the apps' - handing the job's back
+     * on the jobdata list, which is transferred into jinfo above. */
 
     /* check for an exec agent */
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_EXEC_AGENT);

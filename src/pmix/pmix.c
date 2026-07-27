@@ -533,11 +533,17 @@ static void acon(prte_pmix_app_t *p)
 {
     PMIX_APP_CONSTRUCT(&p->app);
     PMIX_INFO_LIST_START(p->info);
+    p->mapby = NULL;
+    p->rankby = NULL;
+    p->bindto = NULL;
 }
 static void ades(prte_pmix_app_t *p)
 {
     PMIX_APP_DESTRUCT(&p->app);
     PMIX_INFO_LIST_RELEASE(p->info);
+    free(p->mapby);
+    free(p->rankby);
+    free(p->bindto);
 }
 PMIX_CLASS_INSTANCE(prte_pmix_app_t, pmix_list_item_t, acon, ades);
 
