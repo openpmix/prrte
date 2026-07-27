@@ -710,6 +710,17 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
                  * look it up on global pool
                  */
                 nodeidx = strtol(&node_from_file->name[2], NULL, 10);
+                /* "+n#" indexes the ALLOCATION from zero. The head node
+                 * always occupies pool slot 0, so when it is not part of
+                 * the allocation the pool is offset by one and the index
+                 * has to be adjusted - otherwise "+n0" in a hostfile names
+                 * a node the job was never given, and every index is one
+                 * node adrift of the same index given to --host.
+                 * prte_util_get_ordered_host_list() and dash-host's
+                 * parse_dash_host() both make this adjustment. */
+                if (!prte_hnp_is_allocated) {
+                    nodeidx++;
+                }
                 node_from_pool = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, nodeidx);
                 if (NULL == node_from_pool) {
                     /* this is an error */
