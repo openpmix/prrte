@@ -142,6 +142,105 @@ bootstrap_start() {
 # --daemonize because several cases assert on what the HNP printed (a
 # scheduler error PRRTE captured and reported), and a daemonized HNP detaches
 # from stdio.
+# Allocation semantics: what a scheduler allocation means to the DVM once
+# ras/slurm has read it. Distinct from test_slurm() below, which drives the
+# elastic modify surface -- these cases never grow or shrink anything, they
+# just ask whether an allocation PRRTE was handed is the allocation PRRTE
+# uses. A real scheduler is the only other way to ask, which is why none of
+# this was ever covered.
+#
+# start a DVM on node1 inside the current fake allocation.  $1 = extra args
+slurm_dvm_start() {
+    SL 'rm -f /tmp/prte.out' >/dev/null 2>&1
+    docker exec -d -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+        prte-node1 bash -lc ". /opt/prte/env.sh; export PATH=$FS_BIN:\$PATH;
+            eval \"\$(fake-slurm env)\"; cd /root &&
+            prte --prtemca ras_base_verbose 5 $* >/tmp/prte.out 2>&1"
+    sleep 8
+    SL 'pgrep -x prte >/dev/null'
+}
+
+test_slurm_alloc() {
+    local out n
+
+    banner "ras/slurm: a multi-node allocation forms the whole DVM"
+    # Nobody passes --host under a scheduler: the allocation IS the node
+    # list. A DVM that launches only where the user named launches nowhere.
+    cleanup_swarm
+    if ! FS 'init --jobid 1000 --base node1,node2,node3 --tasks 2 \
+                  --pool node4,node5' >/dev/null 2>&1; then
+        skp "fake SLURM stubs missing from the shared volume -- rerun ./build.sh"
+        return
+    fi
+    if ! slurm_dvm_start; then
+        bad "no DVM came up on the 3-node allocation: $(SL 'tail -5 /tmp/prte.out' | tr '\n' ' ')"
+        cleanup_swarm; return
+    fi
+    [ "$(prted_count 2 3)" = 2 ] \
+        && ok "daemons launched on every allocated node, with no --host given" \
+        || bad "the allocation did not form the DVM ($(prted_count 2 3)/2 daemons)"
+    # count DISTINCT nodes: three procs that all landed on node1 is exactly
+    # the failure being tested for, and would pass a line count
+    out=$(SL 'timeout 60 prun -n 3 --map-by node hostname' 2>&1)
+    n=$(echo "$out" | grep -E '^node[0-9]+$' | sort -u | wc -l | tr -d ' ')
+    [ "$n" = 3 ] && ok "a job maps across the whole allocation" \
+                 || bad "job did not spread over the allocation ($n/3 distinct): $(echo "$out" | tr '\n' ' ')"
+
+    banner "ras/slurm: the slot count SLURM gave is the slot count PRRTE uses"
+    # SLURM_TASKS_PER_NODE says 2. A node whose count came from the scheduler
+    # must not be re-sized from its core count -- that is what turns a
+    # 2-slot node into an 8-slot one and hides oversubscription.
+    out=$(SL 'timeout 30 prun --display allocation -n 1 hostname' 2>&1)
+    n=$(echo "$out" | grep -cE '^[[:space:]]*node[123]:[[:space:]]+slots=2[[:space:]]')
+    [ "$n" = 3 ] && ok "all three nodes kept slots=2 from SLURM_TASKS_PER_NODE" \
+                 || bad "slot counts were recomputed ($n/3 kept): $(echo "$out" | grep -E 'node[0-9]+:' | tr '\n' ' ')"
+
+    banner "ras/slurm: --host selects within the allocation, and only within it"
+    out=$(SL 'timeout 30 prun --host node2 -n 1 hostname' 2>&1 | tail -1)
+    [ "$(echo "$out" | tr -d '\r')" = node2 ] \
+        && ok "--host picks an allocated node" \
+        || bad "--host node2 did not run there: $out"
+    # a node outside the allocation must be refused, not silently dropped:
+    # --add-host is the sanctioned way to bring one in
+    out=$(SL 'timeout 30 prun --host node9 -n 1 hostname 2>&1 | tr -d "\0"')
+    echo "$out" | grep -q 'Missing requested host: node9' \
+        && ok "--host outside the allocation is refused, naming the host" \
+        || bad "--host node9 was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    # a bare integer is never a hostname: it names the launch id, so "3"
+    # has to resolve to node3
+    out=$(SL 'timeout 30 prun --host 3 -n 1 hostname' 2>&1 | tail -1)
+    [ "$(echo "$out" | tr -d '\r')" = node3 ] \
+        && ok "--host 3 resolved to node3 by launch id" \
+        || bad "launch-id shorthand did not resolve: $out"
+    SL 'timeout 30 pterm' >/dev/null 2>&1
+    cleanup_swarm
+
+    banner "ras/slurm: an allocation that excludes the head node"
+    # prte runs on node1, but SLURM allocated node2 and node3 only. The head
+    # node is in the pool (it always is) yet is not usable, so a job must map
+    # only onto the allocation and naming node1 must be an error rather than
+    # a quiet fall-back onto an unallocated machine.
+    FS 'init --jobid 1000 --base node2,node3 --tasks 2 --pool node4,node5' >/dev/null
+    if slurm_dvm_start; then
+        [ "$(prted_count 2 3)" = 2 ] \
+            && ok "daemons launched on the allocation, not on the head node" \
+            || bad "head-node-excluded allocation did not form ($(prted_count 2 3)/2)"
+        out=$(SL 'timeout 60 prun -n 2 --map-by node hostname' 2>&1)
+        n=$(echo "$out" | grep -E '^node[23]$' | sort -u | wc -l | tr -d ' ')
+        { [ "$n" = 2 ] && ! echo "$out" | grep -qE '^node1$'; } \
+            && ok "the job ran only on allocated nodes" \
+            || bad "job leaked onto the unallocated head node: $(echo "$out" | tr '\n' ' ')"
+        out=$(SL 'timeout 30 prun --host node1 -n 1 hostname 2>&1 | tr -d "\0"')
+        echo "$out" | grep -q 'Missing requested host: node1' \
+            && ok "--host naming the unallocated head node is refused" \
+            || bad "the unallocated head node was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        SL 'timeout 30 pterm' >/dev/null 2>&1
+    else
+        bad "no DVM came up on an allocation excluding the head node"
+    fi
+    cleanup_swarm
+}
+
 test_slurm() {
     local jid nodes idx out n sargs seg
 
@@ -169,19 +268,10 @@ test_slurm() {
         || bad "SLURM allocation not discovered: $(echo "$out" | tr '\n' ' ')"
     # SLURM_NODELIST=node1 with SLURM_TASKS_PER_NODE="2(x1)": the compressed
     # form has to expand to one node carrying two slots.  Assert that against
-    # what the component itself reports (ras_base_verbose), not against the
-    # pool.
-    #
-    # Why not the pool: a slot count is only treated as authoritative under
-    # prte_managed_allocation (or PRTE_NODE_FLAG_SLOTS_GIVEN); otherwise it is
-    # recomputed from the node's core count before mapping. And
-    # prte_managed_allocation is currently never set for an RM allocation --
-    # the base used to set it whenever a module returned nodes, and that was
-    # dropped when ras became multi-component ("Update ras framework to
-    # support multi-component operations"), leaving only ras/bootstrap to set
-    # it. So node1 shows up here with its container core count, not the 2
-    # slots SLURM handed out. That is a framework-level defect, not one this
-    # component can fix, so it is not what these cases assert.
+    # what the component itself reports (ras_base_verbose) rather than the
+    # pool, so a parsing error here is not confused with anything the launch
+    # path does to the number afterwards -- test_slurm_alloc covers that end
+    # of it.
     SL 'grep -q "discover: adding node node1 (2 slots)" /tmp/prte.out' \
         && ok "SLURM_TASKS_PER_NODE '2(x1)' expanded to node1 with 2 slots" \
         || bad "nodelist/tasks-per-node expansion wrong: $(SL 'grep -m3 "adding node" /tmp/prte.out' | tr '\n' ' ')"
@@ -209,9 +299,9 @@ test_slurm() {
     # leaves node->session NULL), unlike a reservation-creating grow -- so a
     # plain prun must be able to map onto them.
     out=$(SL 'timeout 60 prun -n 3 --map-by node hostname' 2>&1)
-    n=$(echo "$out" | grep -cE '^node[0-9]+$')
+    n=$(echo "$out" | grep -E '^node[0-9]+$' | sort -u | wc -l | tr -d ' ')
     [ "$n" = 3 ] && ok "a plain prun maps onto the extended allocation (3 nodes)" \
-                 || bad "prun did not reach the extended nodes ($n/3): $(echo "$out" | tr '\n' ' ')"
+                 || bad "prun did not reach the extended nodes ($n/3 distinct): $(echo "$out" | tr '\n' ' ')"
     # Slots come from counting the cores whose status is ALLOCATED (2) times
     # threads_per_core, capped by cpus.count -- the fake job deliberately
     # reports an UNALLOCATED core as well and a much larger cpus.count, so
@@ -900,6 +990,7 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     fi
     cleanup_swarm
 
+    test_slurm_alloc
     test_slurm
 
     banner "bootstrap DVM: daemons come up on their own and agree on their ranks"
