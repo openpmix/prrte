@@ -129,28 +129,35 @@ int test_policy_parse(void)
     CHECK("mapby ppr:2:core: policy=PPR", PRTE_MAPPING_PPR == PRTE_GET_MAPPING_POLICY(u16));
     PMIX_RELEASE(app);
 
+    /* --- rejected: the qualifiers that span the whole job ---
+     * These are refused in a per-app spec: one app cannot oversubscribe its
+     * nodes while its siblings do not.  PRTE_ERR_SILENT, not BAD_PARAM,
+     * because the parser has already told the user why - BAD_PARAM is
+     * reserved for a qualifier it does not recognize, and the caller turns
+     * that into a "check for a typo" message these must not attract.
+     */
     /* --- rejected: OVERSUBSCRIBE --- */
     app = PMIX_NEW(prte_app_context_t);
     rc = prte_rmaps_base_set_app_mapping_policy(app, "core:oversubscribe");
-    CHECK("mapby OVERSUBSCRIBE: rejected", PRTE_ERR_BAD_PARAM == rc);
+    CHECK("mapby OVERSUBSCRIBE: rejected", PRTE_ERR_SILENT == rc);
     PMIX_RELEASE(app);
 
     /* --- rejected: NOOVERSUBSCRIBE --- */
     app = PMIX_NEW(prte_app_context_t);
     rc = prte_rmaps_base_set_app_mapping_policy(app, "core:nooversubscribe");
-    CHECK("mapby NOOVERSUBSCRIBE: rejected", PRTE_ERR_BAD_PARAM == rc);
+    CHECK("mapby NOOVERSUBSCRIBE: rejected", PRTE_ERR_SILENT == rc);
     PMIX_RELEASE(app);
 
     /* --- rejected: INHERIT --- */
     app = PMIX_NEW(prte_app_context_t);
     rc = prte_rmaps_base_set_app_mapping_policy(app, "core:inherit");
-    CHECK("mapby INHERIT: rejected", PRTE_ERR_BAD_PARAM == rc);
+    CHECK("mapby INHERIT: rejected", PRTE_ERR_SILENT == rc);
     PMIX_RELEASE(app);
 
     /* --- rejected: NOINHERIT --- */
     app = PMIX_NEW(prte_app_context_t);
     rc = prte_rmaps_base_set_app_mapping_policy(app, "core:noinherit");
-    CHECK("mapby NOINHERIT: rejected", PRTE_ERR_BAD_PARAM == rc);
+    CHECK("mapby NOINHERIT: rejected", PRTE_ERR_SILENT == rc);
     PMIX_RELEASE(app);
 
     /* --- NULL spec is a no-op --- */

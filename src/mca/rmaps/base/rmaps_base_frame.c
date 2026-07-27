@@ -177,11 +177,36 @@ PMIX_CLASS_INSTANCE(prte_rmaps_base_selected_module_t,
                     pmix_list_item_t,
                     NULL, NULL);
 
-static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *tmp)
+/*
+ * Parse the qualifiers of a mapping specification.
+ *
+ * One parser serves all three levels at which a mapping policy can be
+ * given, because the syntax is identical at each; only where the result
+ * is recorded differs, and whether a qualifier is allowed at all:
+ *
+ *   both NULL   the MCA default policy - recorded in prte_rmaps_base
+ *   jdata       a job-level policy     - recorded on the job
+ *   app         a per-app policy       - recorded on the app context
+ *
+ * A qualifier whose effect necessarily spans the whole job (OVERSUBSCRIBE,
+ * NOOVERSUBSCRIBE, INHERIT, NOINHERIT) cannot be attached to a single app,
+ * and is refused at that level: one app cannot oversubscribe its nodes
+ * while its siblings do not.
+ *
+ * Keeping this in one place is deliberate. It used to be written twice -
+ * once here and once inline in prte_rmaps_base_set_app_mapping_policy() -
+ * and the copies drifted, so "--map-by package:span" and ":ordered" were
+ * accepted for a job and silently rejected (a bare PRTE_ERR_BAD_PARAM, no
+ * message) for an app.
+ */
+static int check_modifiers(char *ck, prte_job_t *jdata,
+                           prte_app_context_t *app,
+                           prte_mapping_policy_t *tmp)
 {
     char **ck2, *ptr;
     int i;
     uint16_t u16;
+    pmix_list_t *attrs = NULL;
     bool inherit_given = false;
     bool noinherit_given = false;
     bool hwthread_cpus_given = false;
@@ -198,6 +223,13 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
         return PRTE_SUCCESS;
     }
 
+    /* where anything we record goes */
+    if (NULL != app) {
+        attrs = &app->attributes;
+    } else if (NULL != jdata) {
+        attrs = &jdata->attributes;
+    }
+
     ck2 = PMIx_Argv_split(ck, ':');
     for (i = 0; NULL != ck2[i]; i++) {
         if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_SPAN)) {
@@ -205,6 +237,16 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_GIVEN);
 
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_OVERSUB)) {
+            if (NULL != app) {
+                /* spans the whole job - cannot be attached to one app */
+                pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
+                               "per-app mapping policy", ck2[i]);
+                PMIx_Argv_free(ck2);
+                /* SILENT, not BAD_PARAM: the caller reserves BAD_PARAM for a
+                 * qualifier it does not recognize, and would report this one
+                 * a second time as a typo */
+                return PRTE_ERR_SILENT;
+            }
             if (nooversubscribe_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -217,6 +259,16 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             oversubscribe_given = true;
 
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOOVER)) {
+            if (NULL != app) {
+                /* spans the whole job - cannot be attached to one app */
+                pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
+                               "per-app mapping policy", ck2[i]);
+                PMIx_Argv_free(ck2);
+                /* SILENT, not BAD_PARAM: the caller reserves BAD_PARAM for a
+                 * qualifier it does not recognize, and would report this one
+                 * a second time as a typo */
+                return PRTE_ERR_SILENT;
+            }
             if (oversubscribe_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -232,9 +284,10 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_NO_USE_LOCAL);
 
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_ORDERED)) {
-            if (NULL == jdata) {
+            if (NULL == attrs) {
                 pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                "mapping policy", ck2[i]);
+                PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
             }
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_ORDERED);
@@ -249,14 +302,25 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
             }
-            if (NULL == jdata) {
+            if (NULL == attrs) {
                 prte_rmaps_base.default_pes = u16;
             } else {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL,
-                                   &u16, PMIX_UINT16);
+                prte_set_attribute(attrs,
+                                   (NULL != app) ? PRTE_APP_PES_PER_PROC : PRTE_JOB_PES_PER_PROC,
+                                   PRTE_ATTR_GLOBAL, &u16, PMIX_UINT16);
             }
 
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_INHERIT)) {
+            if (NULL != app) {
+                /* spans the whole job - cannot be attached to one app */
+                pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
+                               "per-app mapping policy", ck2[i]);
+                PMIx_Argv_free(ck2);
+                /* SILENT, not BAD_PARAM: the caller reserves BAD_PARAM for a
+                 * qualifier it does not recognize, and would report this one
+                 * a second time as a typo */
+                return PRTE_ERR_SILENT;
+            }
             if (noinherit_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -264,15 +328,25 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
             }
-            if (NULL == jdata) {
+            if (NULL == attrs) {
                 prte_rmaps_base.inherit = true;
             } else {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_INHERIT, PRTE_ATTR_GLOBAL,
+                prte_set_attribute(attrs, PRTE_JOB_INHERIT, PRTE_ATTR_GLOBAL,
                                    NULL, PMIX_BOOL);
             }
             inherit_given = true;
 
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOINHERIT)) {
+            if (NULL != app) {
+                /* spans the whole job - cannot be attached to one app */
+                pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
+                               "per-app mapping policy", ck2[i]);
+                PMIx_Argv_free(ck2);
+                /* SILENT, not BAD_PARAM: the caller reserves BAD_PARAM for a
+                 * qualifier it does not recognize, and would report this one
+                 * a second time as a typo */
+                return PRTE_ERR_SILENT;
+            }
             if (inherit_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -280,10 +354,10 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
             }
-            if (NULL == jdata) {
+            if (NULL == attrs) {
                 prte_rmaps_base.inherit = false;
             } else {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, PRTE_ATTR_GLOBAL,
+                prte_set_attribute(attrs, PRTE_JOB_NOINHERIT, PRTE_ATTR_GLOBAL,
                                    NULL, PMIX_BOOL);
             }
             noinherit_given = true;
@@ -295,11 +369,11 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
             }
-            if (NULL == jdata) {
+            if (NULL == attrs) {
                 prte_rmaps_base.hwthread_cpus = true;
             } else {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL,
-                                   NULL, PMIX_BOOL);
+                prte_set_attribute(attrs, (NULL != app) ? PRTE_APP_HWT_CPUS : PRTE_JOB_HWT_CPUS,
+                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
             }
             hwthread_cpus_given = true;
 
@@ -314,17 +388,19 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
              * all; a core that holds a single hwthread is still a usable core
              * (matches the per-app path, which records corecpus as given) */
             if (!prte_rmaps_base.have_cores) {
-                if (NULL == jdata) {
+                if (NULL == attrs) {
                     prte_rmaps_base.hwthread_cpus = true;
                 } else {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL,
-                                       NULL, PMIX_BOOL);
+                    prte_set_attribute(attrs,
+                                       (NULL != app) ? PRTE_APP_HWT_CPUS : PRTE_JOB_HWT_CPUS,
+                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
                 }
             } else {
-                if (NULL == jdata) {
+                if (NULL == attrs) {
                     prte_rmaps_base.hwthread_cpus = false;
                 } else {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS,
+                    prte_set_attribute(attrs,
+                                       (NULL != app) ? PRTE_APP_CORE_CPUS : PRTE_JOB_CORE_CPUS,
                                        PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
                 }
             }
@@ -338,7 +414,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                 PMIx_Argv_free(ck2);
                 return PRTE_ERR_SILENT;
             }
-            if (NULL == jdata) {
+            if (NULL == attrs) {
                 if (NULL != prte_rmaps_base.file) {
                     // cannot specify it twice
                     pmix_show_help("help-prte-rmaps-base.txt", "multiply-defined", true, "mapping policy",
@@ -348,8 +424,8 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                 }
                 prte_rmaps_base.file = strdup(&ck2[i][5]);
             } else {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_FILE, PRTE_ATTR_GLOBAL,
-                                   &ck2[i][5], PMIX_STRING);
+                prte_set_attribute(attrs, (NULL != app) ? PRTE_APP_MAP_FILE : PRTE_JOB_FILE,
+                                   PRTE_ATTR_GLOBAL, &ck2[i][5], PMIX_STRING);
             }
 
         } else {
@@ -523,7 +599,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                                 "%s rmaps:base policy %s modifiers %s provided",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ck[0], cptr);
         }
-        if (PRTE_SUCCESS != (rc = check_modifiers(cptr, jdata, &tmp)) &&
+        if (PRTE_SUCCESS != (rc = check_modifiers(cptr, jdata, NULL, &tmp)) &&
             PRTE_ERR_TAKE_NEXT_OPTION != rc) {
             if (PRTE_ERR_BAD_PARAM == rc) {
                 pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-modifier", true, inspec);
@@ -546,7 +622,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
      * mapping policy for us to set, but we still
      * have to process the modifier */
     if (':' == inspec[0]) {
-        if (PRTE_SUCCESS != (rc = check_modifiers(&inspec[1], jdata, &tmp)) &&
+        if (PRTE_SUCCESS != (rc = check_modifiers(&inspec[1], jdata, NULL, &tmp)) &&
             PRTE_ERR_TAKE_NEXT_OPTION != rc) {
             if (PRTE_ERR_BAD_PARAM == rc) {
                 pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-modifier", true, inspec);
@@ -840,13 +916,12 @@ int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)
  */
 int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec)
 {
-    char **ck, **range;
+    char **ck;
     char *ptr, *cptr, *val;
     prte_mapping_policy_t tmp;
-    int n;
+    int rc;
     bool ppr = false;
     uint16_t u16;
-    char *temp_token, *parm_delimiter;
 
     tmp = 0;
 
@@ -876,95 +951,21 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
         } else {
             PMIX_ARGV_JOIN(cptr, &ck[1], ':');
         }
-        /* process modifiers, rejecting job-level-only ones */
-        char **ck2 = PMIx_Argv_split(cptr, ':');
-        for (int i = 0; NULL != ck2[i]; i++) {
-            if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_OVERSUB) ||
-                PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOOVER)) {
-                pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
-                               "per-app mapping policy", ck2[i]);
-                PMIx_Argv_free(ck2);
-                PMIx_Argv_free(ck);
-                free(cptr);
-                return PRTE_ERR_BAD_PARAM;
-            } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_INHERIT) ||
-                       PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOINHERIT)) {
-                pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
-                               "per-app mapping policy", ck2[i]);
-                PMIx_Argv_free(ck2);
-                PMIx_Argv_free(ck);
-                free(cptr);
-                return PRTE_ERR_BAD_PARAM;
-            } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOLOCAL)) {
-                PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_NO_USE_LOCAL);
-            } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_PE)) {
-                u16 = (uint16_t)strtol(&ck2[i][3], &ptr, 10);
-                if ('\0' != *ptr) {
-                    pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
-                                   "mapping policy", "PE", ck2[i]);
-                    PMIx_Argv_free(ck2);
-                    PMIx_Argv_free(ck);
-                    free(cptr);
-                    return PRTE_ERR_SILENT;
-                }
-                prte_set_attribute(&app->attributes, PRTE_APP_PES_PER_PROC,
-                                   PRTE_ATTR_GLOBAL, &u16, PMIX_UINT16);
-            } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_HWTCPUS)) {
-                prte_set_attribute(&app->attributes, PRTE_APP_HWT_CPUS,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-            } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_CORECPUS)) {
-                prte_set_attribute(&app->attributes, PRTE_APP_CORE_CPUS,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-            } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_QFILE)) {
-                if ('\0' == ck2[i][5]) {
-                    pmix_show_help("help-prte-rmaps-base.txt", "missing-value", true,
-                                   "mapping policy", "FILE", ck2[i]);
-                    PMIx_Argv_free(ck2);
-                    PMIx_Argv_free(ck);
-                    free(cptr);
-                    return PRTE_ERR_SILENT;
-                }
-                prte_set_attribute(&app->attributes, PRTE_APP_MAP_FILE,
-                                   PRTE_ATTR_GLOBAL, &ck2[i][5], PMIX_STRING);
-            } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_PELIST)) {
-                /* validate comma-delimited ranges */
-                temp_token = strtok(&ck2[i][8], ",");
-                while (NULL != temp_token) {
-                    range = PMIx_Argv_split(temp_token, '-');
-                    if (2 < PMIx_Argv_count(range)) {
-                        pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
-                                       "mapping", "PE-LIST", ck2[i]);
-                        PMIx_Argv_free(range);
-                        PMIx_Argv_free(ck2);
-                        PMIx_Argv_free(ck);
-                        free(cptr);
-                        return PRTE_ERR_SILENT;
-                    }
-                    for (n = 0; NULL != range[n]; n++) {
-                        (void)strtol(range[n], &parm_delimiter, 10);
-                        if ('\0' != *parm_delimiter) {
-                            pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
-                                           "mapping", "PE-LIST", &ck2[i][8]);
-                            PMIx_Argv_free(range);
-                            PMIx_Argv_free(ck2);
-                            PMIx_Argv_free(ck);
-                            free(cptr);
-                            return PRTE_ERR_SILENT;
-                        }
-                    }
-                    PMIx_Argv_free(range);
-                    temp_token = strtok(NULL, ",");
-                }
-                prte_set_attribute(&app->attributes, PRTE_APP_CPUSET,
-                                   PRTE_ATTR_GLOBAL, &ck2[i][8], PMIX_STRING);
-            } else {
-                PMIx_Argv_free(ck2);
-                PMIx_Argv_free(ck);
-                free(cptr);
-                return PRTE_ERR_BAD_PARAM;
+        /* Parse the qualifiers with the same code every other level uses.
+         * check_modifiers() refuses the ones that necessarily span the whole
+         * job, so a per-app spec still cannot carry OVERSUBSCRIBE,
+         * NOOVERSUBSCRIBE, INHERIT or NOINHERIT. */
+        rc = check_modifiers(cptr, NULL, app, &tmp);
+        if (PRTE_SUCCESS != rc) {
+            if (PRTE_ERR_BAD_PARAM == rc) {
+                pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-modifier",
+                               true, cptr);
+                rc = PRTE_ERR_SILENT;
             }
+            PMIx_Argv_free(ck);
+            free(cptr);
+            return rc;
         }
-        PMIx_Argv_free(ck2);
         free(cptr);
         if (ppr) {
             PMIx_Argv_free(ck);
