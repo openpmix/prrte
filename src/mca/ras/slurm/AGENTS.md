@@ -158,10 +158,10 @@ a case. Two things that trip people up:
   Phase one carries the result. A release does go through a shrink campaign,
   so it does emit `PMIX_DVM_IS_READY`.
 
-Slot counts are asserted from `ras_base_verbose` output rather than from the
-node pool, because outside a managed allocation the count is recomputed from
-each node's core count before mapping — and `prte_managed_allocation` is
-currently never set for an RM allocation.
+Some slot counts are asserted from `ras_base_verbose` output rather than
+from the node pool: the verbose line is what *this component* computed,
+so it isolates a parser error from anything the launch path does with the
+number afterwards.
 
 ### Reference ownership across the session/tracker web
 

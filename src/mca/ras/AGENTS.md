@@ -166,15 +166,19 @@ pre-empt everything.
 This state callback in `ras_base_allocate.c` is the heart of the
 framework. Its phases:
 
-1. **Reuse guard.** In an *unmanaged* allocation, the DVM's initial
-   (daemon-job) discovery is the fixed base allocation for the whole
-   session. If `prte_ras_base.allocation_established` is set and this is
-   **not** the DVM's own daemon job, the base *reuses* the existing pool
-   and jumps to display — re-running discovery would re-read the default
-   hostfile, overwrite established per-node slot counts, and clear
+1. **Reuse guard.** The DVM's initial (daemon-job) discovery is the
+   fixed base allocation for the whole session, whoever provided it. If
+   `prte_ras_base.allocation_established` is set and this is **not** the
+   DVM's own daemon job, the base *reuses* the existing pool and jumps to
+   display. Re-running discovery would re-read a hostfile, overwrite
+   established per-node slot counts and clear
    `PRTE_NODE_FLAG_SLOTS_GIVEN`, hiding genuine oversubscription from the
-   mapper. (The sanctioned way to grow an unmanaged allocation is
-   add-host/add-hostfile → `prte_ras_base_modify`.)
+   mapper — and re-reading an RM is no better, since a component that has
+   already recorded its allocation must spend a return code saying so
+   (`ras/slurm` answers `PRTE_EXISTS`) and one that does not would insert
+   it twice. (The sanctioned way to grow an allocation is
+   add-host/add-hostfile or an allocation request →
+   `prte_ras_base_modify`.)
 2. **Cycle modules.** Walk `selected_modules` in priority order calling
    `mod->module->allocate(jdata, &nodes)`, honoring the return protocol
    above.
@@ -226,18 +230,19 @@ input list.** Walk it carefully before touching allocation code:
   it there rather than appending to the lowest free slot (falling back
   to an append if the slot is occupied). `ras/bootstrap` is the only
   component that does this, and it needs it — see its guide.
-- **Managed = sacred slots.** Under `prte_managed_allocation` (or when a
-  node arrives with `PRTE_NODE_FLAG_SLOTS_GIVEN`), the base sets
-  `SLOTS_GIVEN` so downstream code treats the slot count as fixed and
-  never recomputes it from core count. This is also what makes
-  `total_slots_alloc` load-bearing: in a **managed** allocation
-  `plm_base_launch_support` copies `prte_ras_base.total_slots_alloc`
-  straight into `jdata->total_slots_alloc`, which the PMIx server hands
-  out as `PMIX_UNIV_SIZE` and `PMIX_MAX_PROCS`. A miscount here is
-  visible to applications. (In an *unmanaged* allocation the total is
-  recomputed from the pool at launch, which masks the error — so test
-  accounting changes against the managed path or a unit test, not a
-  local `prterun`.)
+- **`PRTE_NODE_FLAG_SLOTS_GIVEN` is the slot authority, and it is
+  per node.** The component that supplies a node says whether its count
+  is a given — every RM component sets the flag, the hostfile/dash-host
+  parsers set it for an explicit `slots=`/`:N`, and nobody sets it on
+  the bare local-host fallback. `node_insert` carries the flag into the
+  pool untouched; at launch `plm_base_launch_support` re-sizes only the
+  nodes that lack it (from the topology, as `prte_set_slots` directs)
+  and sums the job's session nodes into `jdata->total_slots_alloc`,
+  which the PMIx server hands out as `PMIX_UNIV_SIZE` and
+  `PMIX_MAX_PROCS`. A component that forgets the flag silently hands the
+  job its nodes' core counts instead of its allocation.
+  `prte_set_slots_override` is the deliberate escape hatch: it re-sizes
+  even the given ones.
 - **FQDN normalization.** `normalize_node()` truncates an FQDN to the
   short name, keeping the full name as `rawname` and an alias (unless
   `prte_keep_fqdn_hostnames` or the name is an IP). Sets
@@ -342,8 +347,8 @@ documented in each component's guide.
   is authoritative. `slots_max = 0` means "no max".
 - **Return `TAKE_NEXT_OPTION`, not an error, when the env is absent** —
   it is what lets `hosts` (and the local-node fallback) run.
-- **The reuse guard is load-bearing** for spawn/child jobs in unmanaged
-  allocations — don't bypass it.
+- **The reuse guard is load-bearing** for spawn/child jobs — don't
+  bypass it.
 - **The framework's `close` hook lives in `ras_base_frame.c`.**
   `prte_ras_base_close` is defined there and wired into the framework
   DECLARE; there is no separate close file. (An orphaned

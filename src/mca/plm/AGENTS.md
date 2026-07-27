@@ -183,7 +183,7 @@ spine of launch:
 | `prte_plm_base_setup_job_complete` | `INIT_COMPLETE` → `ALLOCATE`. |
 | `prte_plm_base_allocation_complete` | `ALLOCATION_COMPLETE` → `LAUNCH_DAEMONS` (the component's handler). Has a bootstrap-DVM special case that stands up the VM directly. |
 | `prte_plm_base_daemons_launched` | `DAEMONS_LAUNCHED` → **deliberately a no-op**; we wait for daemons to phone home rather than advancing. |
-| `prte_plm_base_daemons_reported` | `DAEMONS_REPORTED` → set node slots (unmanaged allocations), compute `total_slots_alloc`, then `VM_READY`. |
+| `prte_plm_base_daemons_reported` | `DAEMONS_REPORTED` → size any node whose slot count was not given (`PRTE_NODE_FLAG_SLOTS_GIVEN`), sum the job's session nodes into `total_slots_alloc`, then `VM_READY`. |
 | `prte_plm_base_vm_ready` | `VM_READY` → check topology limits, preposition files (`filem`), then `MAP`. |
 | `prte_plm_base_mapping_complete` | `MAP_COMPLETE` → `SYSTEM_PREP`. |
 | `prte_plm_base_complete_setup` | `SYSTEM_PREP` → `LAUNCH_APPS`. |
