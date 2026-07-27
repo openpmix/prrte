@@ -56,6 +56,17 @@ AC_DEFUN([PRTE_MCA],[
         [AS_HELP_STRING([--enable-mca-no-build=LIST],
                         [Comma-separated list of <type>-<component> pairs
                          that will not be built.  Example: "--enable-mca-no-build=maffinity,btl-portals" will disable building all maffinity components and the "portals" btl components.])])
+    #
+    # The default DSO list is every component that can end up linked
+    # against a third-party library.  Keeping them out of libprrte keeps
+    # that dependency out of every PRRTE tool -- and it is what lets
+    # --enable-testbuild-launchers work at all: a run-time loadable
+    # plugin may carry the unresolved symbols left behind by a
+    # declaration-only stub header (it simply fails to dlopen), while a
+    # shared library linked into an executable may not.  ras-flux and
+    # ras-slurm are here for the latter reason: both compile JSON
+    # parsing against jansson.
+    #
     AC_ARG_ENABLE(mca-dso,
         AS_HELP_STRING([--enable-mca-dso=LIST],
                        [Comma-separated list of types and/or
@@ -63,7 +74,7 @@ AC_DEFUN([PRTE_MCA],[
                         run-time loadable components (as opposed to
                         statically linked in), if supported on this
                         platform.]),
-                        [], [enable_mca_dso=ess-alps,plm-alps,plm-lsf,plm-tm,ras-alps,ras-lsf])
+                        [], [enable_mca_dso=ess-alps,plm-alps,plm-lsf,plm-tm,ras-alps,ras-flux,ras-lsf,ras-slurm])
     AC_ARG_ENABLE(mca-static,
         AS_HELP_STRING([--enable-mca-static=LIST],
                        [Comma-separated list of types and/or

@@ -79,8 +79,12 @@
  * and flux are all gated on detecting their resource manager, and slurm is
  * gated on the platform (and removable with --without-slurm) - referencing
  * those unconditionally makes `make check` fail to link on an ordinary
- * machine. The gated components are covered structurally by test_select(),
- * which walks whatever the framework actually built. */
+ * machine. Being *built* is not enough either: a component in the default
+ * --enable-mca-dso list is a run-time loadable plugin and leaves nothing in
+ * libprrte to reference, which is why the slurm checks below are also gated
+ * on it being static (--enable-mca-static=ras-slurm). The gated components
+ * are covered structurally by test_select(), which walks whatever the
+ * framework actually built. */
 extern prte_ras_base_module_t prte_ras_hosts_module;
 extern prte_ras_base_module_t prte_ras_pmix_module;
 extern prte_ras_base_module_t prte_ras_sim_module;
