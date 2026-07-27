@@ -62,7 +62,9 @@
 
 #include "src/mca/ras/base/base.h"
 #include "src/mca/ras/ras.h"
-#include "src/mca/ras/slurm/ras_slurm.h"
+#if PRTE_TEST_HAVE_RAS_SLURM
+#    include "src/mca/ras/slurm/ras_slurm.h"
+#endif
 
 #define CHECK(label, cond)                                              \
     do {                                                                \
@@ -72,16 +74,20 @@
         }                                                               \
     } while (0)
 
-/* the statically-built components all export their module */
+/* Only the components with NO configure.m4 are guaranteed to be built, and
+ * therefore guaranteed to have symbols to link against. pbs, gridengine, lsf
+ * and flux are all gated on detecting their resource manager, and slurm is
+ * gated on the platform (and removable with --without-slurm) - referencing
+ * those unconditionally makes `make check` fail to link on an ordinary
+ * machine. The gated components are covered structurally by test_select(),
+ * which walks whatever the framework actually built. */
 extern prte_ras_base_module_t prte_ras_hosts_module;
 extern prte_ras_base_module_t prte_ras_pmix_module;
 extern prte_ras_base_module_t prte_ras_sim_module;
 extern prte_ras_base_module_t prte_ras_testrm_module;
 extern prte_ras_base_module_t prte_ras_bootstrap_module;
-extern prte_ras_base_module_t prte_ras_pbs_module;
-extern prte_ras_base_module_t prte_ras_gridengine_module;
-/* prte_ras_slurm_module, the validators and the bounded output drain all
- * come from ras_slurm.h above */
+/* prte_ras_slurm_module, the validators and the bounded output drain come
+ * from ras_slurm.h, only when that component is built */
 
 /*
  * prte_init_util() stops short of building the global job/node/session
@@ -470,9 +476,9 @@ static int test_module_contract(void)
         {"simulator",  &prte_ras_sim_module,        true},
         {"testrm",     &prte_ras_testrm_module,     true},
         {"bootstrap",  &prte_ras_bootstrap_module,  true},
-        {"pbs",        &prte_ras_pbs_module,        true},
-        {"gridengine", &prte_ras_gridengine_module, true},
+#if PRTE_TEST_HAVE_RAS_SLURM
         {"slurm",      &prte_ras_slurm_module,      true},
+#endif
         /* ras/pmix contributes nothing to initial discovery -- its
          * allocate is a deliberate TAKE_NEXT_OPTION stub -- but the slot
          * must still be filled so the driver has something to call */
@@ -486,17 +492,19 @@ static int test_module_contract(void)
         }
     }
 
+#if PRTE_TEST_HAVE_RAS_SLURM
     /* only slurm implements the elastic completion hooks today; if another
      * component grows them, the base cycles every module for both */
     CHECK("contract: slurm shrink_complete", NULL != prte_ras_slurm_module.shrink_complete);
     CHECK("contract: slurm release_allocation",
           NULL != prte_ras_slurm_module.release_allocation);
     CHECK("contract: slurm init", NULL != prte_ras_slurm_module.init);
+    CHECK("contract: slurm modify", NULL != prte_ras_slurm_module.modify);
+#endif
 
     /* the modify path is what serves PMIx_Allocation_request */
     CHECK("contract: hosts modify", NULL != prte_ras_hosts_module.modify);
     CHECK("contract: pmix modify", NULL != prte_ras_pmix_module.modify);
-    CHECK("contract: slurm modify", NULL != prte_ras_slurm_module.modify);
 
     return failures;
 }
@@ -597,6 +605,7 @@ static int test_flag_string(void)
     return failures;
 }
 
+#if PRTE_TEST_HAVE_RAS_SLURM
 /*
  * ras/slurm builds scancel/scontrol/sbatch command lines out of strings
  * that came from the scheduler or from a PMIx client, so these validators
@@ -698,6 +707,7 @@ static int test_slurm_drain_output(void)
 
     return failures;
 }
+#endif /* PRTE_TEST_HAVE_RAS_SLURM */
 
 int main(void)
 {
@@ -722,8 +732,10 @@ int main(void)
     failures += test_preassigned_index();
     failures += test_hnp_dedup();
     failures += test_flag_string();
+#if PRTE_TEST_HAVE_RAS_SLURM
     failures += test_slurm_validators();
     failures += test_slurm_drain_output();
+#endif
 
     prte_finalize();
 
