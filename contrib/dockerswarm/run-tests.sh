@@ -234,6 +234,18 @@ test_slurm_alloc() {
         echo "$out" | grep -q 'Missing requested host: node1' \
             && ok "--host naming the unallocated head node is refused" \
             || bad "the unallocated head node was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        # "+n#" counts the ALLOCATION from zero, so with the head node left
+        # out of it, +n0 is the first node the job was actually given. A
+        # hostfile has to agree with --host about that: the head node still
+        # occupies pool slot 0, and the hostfile filter was the one relative
+        # -index implementation that did not skip it, so every index it
+        # resolved was one node adrift of the same index on the command line.
+        out=$(SL 'timeout 30 prun --host +n0 -n 1 hostname 2>&1 | tr -d "\0"' | grep -E '^node[0-9]+$' | head -1)
+        SL 'printf "+n0\n" > /tmp/relhosts.txt'
+        n=$(SL 'timeout 30 prun --hostfile /tmp/relhosts.txt -n 1 hostname 2>&1 | tr -d "\0"' | grep -E '^node[0-9]+$' | head -1)
+        { [ "$out" = node2 ] && [ "$n" = node2 ]; } \
+            && ok "+n0 is the allocation's first node for both --host and a hostfile" \
+            || bad "relative index disagrees across entry points (--host=$out hostfile=$n, want node2 for both)"
         SL 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
         bad "no DVM came up on an allocation excluding the head node"
