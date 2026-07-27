@@ -75,6 +75,24 @@ prted_count() { local c=0 n; for n in "$@"; do ON "$n" 'pgrep -x prted' >/dev/nu
 # entry produces
 prted_procs() { docker exec "prte-node$1" sh -c 'pgrep -x prted 2>/dev/null | wc -l' | tr -d ' \r'; }
 
+# --- fake-SLURM helpers -----------------------------------------------------
+# ras/slurm reaches its scheduler by shelling out to sbatch/scontrol/scancel,
+# so the harness supplies them: build.sh installs fake-slurm.py into the shared
+# volume under its own prefix, and everything in that phase runs with that
+# prefix FIRST on PATH and the SLURM_* envars exported.  Nothing outside these
+# helpers sees either, which is what keeps the rest of the suite unaffected.
+FS_BIN=/opt/prte/fakeslurm/bin
+# run on the head node inside a faked SLURM allocation
+SL() { docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+           prte-node1 bash -lc ". /opt/prte/env.sh; export PATH=$FS_BIN:\$PATH;
+                                eval \"\$(fake-slurm env)\"; $*"; }
+# run a fake-slurm housekeeping command (no SLURM_* env needed)
+FS() { docker exec prte-node1 bash -lc "export PATH=$FS_BIN:\$PATH; fake-slurm $*"; }
+# "node2,node4" -> "2 4", for prted_count
+fs_idx() { echo "$1" | tr ',' '\n' | sed 's/^node//' | tr '\n' ' '; }
+# the sbatch argv that created a given fake job
+fs_args() { FS "args $1" 2>/dev/null; }
+
 # --- bootstrap-DVM helpers --------------------------------------------------
 # A bootstrapped DVM is configured by <sysconfdir>/prte.conf, which lives in the
 # install the swarm shares.  The node containers mount that volume READ-ONLY, so
@@ -105,6 +123,296 @@ bootstrap_start() {
             "prte-node$n" bash -lc '. /opt/prte/env.sh; prted --bootstrap > /tmp/boot.out 2>&1'
     done
     sleep 14
+}
+
+########################################################################
+# ras/slurm, against the fake scheduler (fake-slurm.py)
+########################################################################
+#
+# Everything ras/slurm does beyond reading SLURM_NODELIST is a shell-out --
+# sbatch to grow, "scontrol show job --json" to learn what it got, "scontrol
+# update job ReqNodeList=" to shrink one, scancel to give one back -- so none
+# of it can run on a developer machine and none of it had any coverage.  The
+# unit test covers the half that only reads the environment (query, allocate);
+# this covers the other half.  It is also the only place the ~1000-line JSON
+# parser is even COMPILED: jansson defaults to off, and this harness is the
+# one automated build that passes --with-jansson.
+#
+# The DVM runs in the foreground under "docker exec -d" rather than
+# --daemonize because several cases assert on what the HNP printed (a
+# scheduler error PRRTE captured and reported), and a daemonized HNP detaches
+# from stdio.
+test_slurm() {
+    local jid nodes idx out n sargs seg
+
+    banner "ras/slurm: faked SLURM allocation discovered at DVM startup"
+    cleanup_swarm
+    if ! FS 'init --jobid 1000 --base node1 --tasks 2 \
+                  --pool node2,node3,node4,node5,node6,node7,node8,node9' >/dev/null 2>&1; then
+        skp "fake SLURM stubs missing from the shared volume -- rerun ./build.sh"
+        return
+    fi
+    SL 'rm -f /tmp/prte.out /tmp/pwned' >/dev/null 2>&1
+    docker exec -d -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+        prte-node1 bash -lc ". /opt/prte/env.sh; export PATH=$FS_BIN:\$PATH;
+            eval \"\$(fake-slurm env)\"; cd /root &&
+            prte --prtemca prte_elastic_mode 1 --prtemca ras_base_verbose 5 \
+                 >/tmp/prte.out 2>&1"
+    sleep 8
+    if ! SL 'pgrep -x prte >/dev/null'; then
+        bad "no DVM came up under the faked SLURM allocation: $(SL 'tail -5 /tmp/prte.out' | tr '\n' ' ')"
+        cleanup_swarm; return
+    fi
+    out=$(SL 'timeout 30 prun --display allocation -n 1 hostname' 2>&1)
+    echo "$out" | grep -qE '^[[:space:]]*node1:[[:space:]]+slots=' \
+        && ok "the DVM allocation came from SLURM_NODELIST" \
+        || bad "SLURM allocation not discovered: $(echo "$out" | tr '\n' ' ')"
+    # SLURM_NODELIST=node1 with SLURM_TASKS_PER_NODE="2(x1)": the compressed
+    # form has to expand to one node carrying two slots.  Assert that against
+    # what the component itself reports (ras_base_verbose), not against the
+    # pool.
+    #
+    # Why not the pool: a slot count is only treated as authoritative under
+    # prte_managed_allocation (or PRTE_NODE_FLAG_SLOTS_GIVEN); otherwise it is
+    # recomputed from the node's core count before mapping. And
+    # prte_managed_allocation is currently never set for an RM allocation --
+    # the base used to set it whenever a module returned nodes, and that was
+    # dropped when ras became multi-component ("Update ras framework to
+    # support multi-component operations"), leaving only ras/bootstrap to set
+    # it. So node1 shows up here with its container core count, not the 2
+    # slots SLURM handed out. That is a framework-level defect, not one this
+    # component can fix, so it is not what these cases assert.
+    SL 'grep -q "discover: adding node node1 (2 slots)" /tmp/prte.out' \
+        && ok "SLURM_TASKS_PER_NODE '2(x1)' expanded to node1 with 2 slots" \
+        || bad "nodelist/tasks-per-node expansion wrong: $(SL 'grep -m3 "adding node" /tmp/prte.out' | tr '\n' ' ')"
+
+    banner "ras/slurm: PMIX_ALLOC_EXTEND runs sbatch and grows the DVM"
+    # PMIX_ALLOC_EXTEND + PMIX_ALLOC_NUM_NODES is the only extend shape this
+    # component accepts: which nodes it gets back is the scheduler's choice,
+    # so the request names a count and the answer comes from the job JSON.
+    out=$(SL 'timeout 120 elastic extend 2' 2>&1)
+    jid=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
+    if [ -z "$jid" ]; then
+        bad "extend did not report an allocation id: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        printf '    HNP: %s\n' "$(SL 'tail -3 /tmp/prte.out' | tr '\n' ' ')"
+        SL 'timeout 30 pterm' >/dev/null 2>&1; cleanup_swarm; return
+    fi
+    ok "extend accepted and reported PMIX_ALLOC_ID=$jid (RM=slurm)"
+    nodes=$(FS "nodes $jid" | tr -d '\r')
+    idx=$(fs_idx "$nodes")
+    sleep 10
+    # shellcheck disable=SC2086
+    [ "$(prted_count $idx)" = 2 ] \
+        && ok "daemons launched on the nodes SLURM granted ($nodes)" \
+        || bad "no daemons on the granted nodes ($nodes) -- the grow never reached them"
+    # The extend puts its nodes in the GENERAL pool (ras/slurm deliberately
+    # leaves node->session NULL), unlike a reservation-creating grow -- so a
+    # plain prun must be able to map onto them.
+    out=$(SL 'timeout 60 prun -n 3 --map-by node hostname' 2>&1)
+    n=$(echo "$out" | grep -cE '^node[0-9]+$')
+    [ "$n" = 3 ] && ok "a plain prun maps onto the extended allocation (3 nodes)" \
+                 || bad "prun did not reach the extended nodes ($n/3): $(echo "$out" | tr '\n' ' ')"
+    # Slots come from counting the cores whose status is ALLOCATED (2) times
+    # threads_per_core, capped by cpus.count -- the fake job deliberately
+    # reports an UNALLOCATED core as well and a much larger cpus.count, so
+    # only a parser that reads core statuses arrives at 2.
+    SL "grep -q 'add_modified_resources: discovered node ${nodes%%,*} with 2 slots' /tmp/prte.out" \
+        && ok "slots derived from ALLOCATED cores, capped by cpus.count" \
+        || bad "wrong slot count from the job JSON: $(SL 'grep -m3 discovered.node /tmp/prte.out' | tr '\n' ' ')"
+
+    banner "ras/slurm: the parent job's attributes are propagated onto sbatch"
+    sargs=$(fs_args "$jid")
+    for want in --parsable --exclusive --nodes=2 --account=prrte-test \
+                --partition=debug --qos=normal --chdir=/root --mem=1024 \
+                --time=60 --threads-per-core=1; do
+        echo "$sargs" | grep -qx -- "$want" \
+            && ok "sbatch carried $want" \
+            || bad "sbatch missing $want (got: $(echo "$sargs" | tr '\n' ' '))"
+    done
+    # memory_per_cpu is unset in the parent job, and an unset numeric object
+    # must be omitted rather than sent as a sentinel
+    echo "$sargs" | grep -q -- '--mem-per-cpu' \
+        && bad "sbatch sent --mem-per-cpu for an unset memory_per_cpu" \
+        || ok "an unset numeric field is omitted from the sbatch line"
+
+    banner "ras/slurm: releasing one node shrinks the SLURM job in place"
+    # Removing SOME of a job's nodes keeps the job and resizes it with
+    # "scontrol update job <id> ReqNodeList=<survivors>", then re-reads the
+    # JSON to detach the departed nodes from the session.
+    out=$(SL "timeout 120 elastic shrink ${nodes##*,}" 2>&1)
+    sleep 5
+    echo "$out" | grep -q PMIX_DVM_IS_READY \
+        && ok "partial release completed (PMIX_DVM_IS_READY)" \
+        || bad "partial release never completed: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # shellcheck disable=SC2086
+    [ "$(prted_count $(fs_idx "${nodes##*,}"))" = 0 ] \
+        && ok "daemon gone from the released node (${nodes##*,})" \
+        || bad "daemon still running on the released node"
+    FS audit | grep -q "scontrol update job $jid ReqNodeList=${nodes%%,*}" \
+        && ok "job $jid resized to its survivors via scontrol update" \
+        || bad "no scontrol resize was issued: $(FS audit | tr '\n' ' ' | tail -c 200)"
+    [ "$(FS "nodes $jid" | tr -d '\r')" = "${nodes%%,*}" ] \
+        && ok "the SLURM job kept exactly its surviving node" \
+        || bad "job $jid node list wrong after resize: $(FS "nodes $jid")"
+    [ -z "$(SL 'find / -maxdepth 2 -name "slurm_job_*_resize.*" 2>/dev/null')" ] \
+        && ok "the resize helper scripts SLURM left behind were cleaned up" \
+        || bad "slurm_job_*_resize.* left behind after a shrink"
+
+    banner "ras/slurm: releasing a whole allocation scancels its SLURM job"
+    out=$(SL "timeout 120 elastic release-id $jid" 2>&1)
+    sleep 5
+    echo "$out" | grep -q PMIX_DVM_IS_READY \
+        && ok "release by allocation id completed" \
+        || bad "release-id never completed: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # shellcheck disable=SC2086
+    [ "$(prted_count $idx)" = 0 ] && ok "both granted nodes left the DVM" \
+                                  || bad "a daemon survived the full release"
+    FS audit | grep -q "scancel $jid" && ok "scancel issued for job $jid" \
+                                      || bad "the SLURM job was never cancelled"
+    FS jobs | grep -qx "$jid" && bad "job $jid still exists after scancel" \
+                             || ok "job $jid is gone from the scheduler"
+    out=$(SL 'timeout 30 prun -n 1 hostname' 2>&1 | tail -1)
+    [ "$(echo "$out" | tr -d '\r')" = node1 ] \
+        && ok "DVM still responsive after the release" \
+        || bad "DVM wedged after the release: $out"
+
+    banner "ras/slurm: release by node COUNT picks the newest allocation"
+    # Re-extending reuses the pool entries the release left behind (daemon-less
+    # nodes PRRTE already knows), which is a different code path from the
+    # first-time grant above.
+    out=$(SL 'timeout 120 elastic extend 2' 2>&1)
+    jid=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
+    nodes=$(FS "nodes $jid" | tr -d '\r'); idx=$(fs_idx "$nodes")
+    sleep 10
+    # shellcheck disable=SC2086
+    [ -n "$jid" ] && [ "$(prted_count $idx)" = 2 ] \
+        && ok "re-extend reused the released node objects ($nodes)" \
+        || bad "re-extend did not bring the nodes back ($nodes)"
+    out=$(SL 'timeout 120 elastic release 2' 2>&1)
+    sleep 5
+    echo "$out" | grep -q PMIX_DVM_IS_READY \
+        && ok "release by count completed" \
+        || bad "release by count never completed: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # shellcheck disable=SC2086
+    [ "$(prted_count $idx)" = 0 ] && ok "the counted release emptied the newest allocation" \
+                                  || bad "a daemon survived the counted release"
+    FS audit | grep -q "scancel $jid" \
+        && ok "the whole SLURM job was cancelled rather than resized" \
+        || bad "count release did not scancel job $jid"
+    # the base allocation must survive: it holds the node PRRTE is running on
+    FS jobs | grep -qx 1000 && ok "the DVM's own SLURM job was left alone" \
+                            || bad "the release took out the base allocation"
+
+    banner "ras/slurm: a pending extend can be cancelled by request id"
+    # PMIX_ALLOC_REQ_CANCEL is served while the extend's poll loop is still
+    # waiting on a PENDING SLURM job: cancelling drops the pending record and
+    # scancels the job, and the next poll turns that into a failed request.
+    FS 'set pending_secs 45' >/dev/null
+    SL 'nohup timeout 120 elastic extend 1 --req-id slow-req \
+            >/tmp/extend.out 2>&1 & sleep 2' >/dev/null 2>&1
+    sleep 6
+    jid=$(FS jobs | grep -v '^1000$' | tail -1 | tr -d '\r')
+    if [ -n "$jid" ]; then
+        ok "extend submitted job $jid and is waiting for it to start"
+        SL 'timeout 60 elastic cancel slow-req' >/dev/null 2>&1
+        sleep 6
+        FS audit | grep -q "scancel $jid" \
+            && ok "the cancelled request scancelled its pending SLURM job" \
+            || bad "cancel did not reach the scheduler"
+        SL 'grep -q "REJECTED\|FAILURE" /tmp/extend.out' \
+            && ok "the waiting extend reported failure to its requester" \
+            || bad "the cancelled extend never answered: $(SL 'tr "\n" " " < /tmp/extend.out' | tail -c 200)"
+    else
+        bad "the pending extend never submitted a job"
+    fi
+    FS 'set pending_secs 0' >/dev/null
+    out=$(SL 'timeout 30 prun -n 1 hostname' 2>&1 | tail -1)
+    [ "$(echo "$out" | tr -d '\r')" = node1 ] \
+        && ok "DVM still responsive after the cancellation" \
+        || bad "DVM wedged after the cancellation: $out"
+
+    banner "ras/slurm: unparsable scheduler JSON fails the request, not the DVM"
+    # The HNP runs this parser, so a malformed scontrol response must come
+    # back as a refused request rather than a dead DVM.
+    FS 'set bad_json 1' >/dev/null
+    out=$(SL 'timeout 60 elastic extend 1' 2>&1)
+    FS 'set bad_json 0' >/dev/null
+    echo "$out" | grep -q 'REJECTED' \
+        && ok "an extend on unparsable JSON was refused" \
+        || bad "malformed scheduler JSON was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    SL 'pgrep -x prte >/dev/null' && ok "HNP survived the malformed JSON" \
+                                  || bad "HNP died parsing malformed JSON"
+
+    banner "ras/slurm: a node name that is not a hostname never reaches a shell"
+    # Every hostname bound for an scontrol/scancel command line goes through
+    # prte_ras_slurm_validate_hostname's allowlist first.  This one carries a
+    # command separator: it must be refused outright, and nothing may run.
+    out=$(SL "timeout 60 elastic shrink 'node9;touch /tmp/pwned'" 2>&1)
+    echo "$out" | grep -q 'REJECTED' \
+        && ok "a release naming a tainted hostname was refused" \
+        || bad "tainted hostname not refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    SL 'test -e /tmp/pwned' \
+        && bad "the injected command RAN -- hostname validation is not holding" \
+        || ok "the injected command never ran"
+    SL 'pgrep -x prte >/dev/null' && ok "HNP survived the tainted request" \
+                                  || bad "HNP died on a tainted hostname"
+
+    banner "ras/slurm: a failing scancel is reported, truncated, and survived"
+    # prte_ras_slurm_drain_cmd_output() captures the scheduler's complaint
+    # into a fixed buffer and marks it "..." when it does not fit.  The fake
+    # scancel fails with far more output than that buffer holds.
+    FS 'set scancel_fail 1' >/dev/null
+    out=$(SL 'timeout 120 elastic extend 1' 2>&1)
+    jid=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
+    sleep 8
+    if [ -n "$jid" ]; then
+        SL "timeout 120 elastic release-id $jid" >/dev/null 2>&1
+        sleep 5
+        seg=$(SL "awk '/failed to kill job/,0' /tmp/prte.out")
+        echo "$seg" | grep -q "failed to kill job $jid" \
+            && ok "the scancel failure was reported with the scheduler's text" \
+            || bad "a failing scancel went unreported"
+        { echo "$seg" | grep -q '\.\.\.' && ! echo "$seg" | grep -q '(line 11)'; } \
+            && ok "the oversized scheduler message was truncated with '...'" \
+            || bad "scheduler output was not truncated: $(echo "$seg" | tr '\n' ' ' | tail -c 200)"
+        SL 'pgrep -x prte >/dev/null' && ok "HNP survived a scancel failure" \
+                                      || bad "HNP died when scancel failed"
+    else
+        bad "could not submit the job for the scancel-failure case"
+    fi
+    FS 'set scancel_fail 0' >/dev/null
+    SL 'timeout 30 pterm' >/dev/null 2>&1
+    cleanup_swarm
+
+    banner "ras/slurm: propagate_* MCA params gate what reaches sbatch"
+    # Each propagated attribute has its own switch; turning two off must drop
+    # exactly those two arguments and leave the rest of the line intact.
+    FS 'init --jobid 1000 --base node1 --tasks 2 --pool node2,node3' >/dev/null
+    docker exec -d -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+        prte-node1 bash -lc ". /opt/prte/env.sh; export PATH=$FS_BIN:\$PATH;
+            eval \"\$(fake-slurm env)\"; cd /root &&
+            prte --prtemca prte_elastic_mode 1 --prtemca ras_slurm_propagate_qos 0 \
+                 --prtemca ras_slurm_propagate_time 0 >/tmp/prte.out 2>&1"
+    sleep 8
+    if SL 'pgrep -x prte >/dev/null'; then
+        out=$(SL 'timeout 120 elastic extend 1' 2>&1)
+        jid=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
+        sargs=$(fs_args "$jid")
+        if [ -n "$jid" ]; then
+            { ! echo "$sargs" | grep -q -- '--qos'; } && { ! echo "$sargs" | grep -q -- '--time'; } \
+                && ok "propagate_qos/propagate_time=0 dropped their sbatch args" \
+                || bad "a disabled attribute still reached sbatch: $(echo "$sargs" | tr '\n' ' ')"
+            echo "$sargs" | grep -qx -- '--account=prrte-test' \
+                && ok "the attributes still enabled were unaffected" \
+                || bad "disabling two attributes disturbed the rest of the line"
+        else
+            bad "extend failed under the propagate_* overrides: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        fi
+        SL 'timeout 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM with the propagate_* overrides"
+    fi
+    cleanup_swarm
 }
 
 test_linux() {
@@ -591,6 +899,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         bad "could not start a DVM for the add-hostfile test"
     fi
     cleanup_swarm
+
+    test_slurm
 
     banner "bootstrap DVM: daemons come up on their own and agree on their ranks"
     # A bootstrapped DVM has no launcher: prted is started independently on

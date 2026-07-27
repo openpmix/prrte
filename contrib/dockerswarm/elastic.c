@@ -15,10 +15,30 @@
  * (success) or PMIX_ERR_DVM_MOD (failure) event so the two-phase completion
  * contract can be observed end to end.
  *
- *   elastic grow   <node[:slots],...>   # grow the DVM onto these nodes
- *   elastic shrink <node,...>           # shrink the DVM by these nodes
+ *   elastic grow       <node[:slots],...>  # PMIX_ALLOC_NEW     + NODE_LIST
+ *   elastic shrink     <node,...>          # PMIX_ALLOC_RELEASE + NODE_LIST
+ *   elastic extend     <num-nodes>         # PMIX_ALLOC_EXTEND  + NUM_NODES
+ *   elastic release    <num-nodes>         # PMIX_ALLOC_RELEASE + NUM_NODES
+ *   elastic release-id <alloc-id>          # PMIX_ALLOC_RELEASE + ALLOC_ID
+ *   elastic cancel     <req-id>            # PMIX_ALLOC_REQ_CANCEL
  *
- * (extend/release are accepted as aliases for grow/shrink.)
+ *   --req-id <id>   request id to send (default "elastic-test"); "cancel"
+ *                   names the request to cancel this way too
+ *   --wait          wait for the phase-two completion event
+ *   --no-wait       do not
+ *
+ * The last four forms exist for the resource managers that serve a size
+ * change by talking to a scheduler rather than by naming nodes -- ras/slurm
+ * is the one in tree, and NUM_NODES/ALLOC_ID/REQ_CANCEL are the only request
+ * shapes its modify() accepts.  Which nodes such a request lands on is the
+ * scheduler's choice, not the caller's.
+ *
+ * Phase two is waited for by default, but not for "extend" or "cancel".  The
+ * directed completion event is emitted to the requestor recorded on the
+ * *reservation* a grow created; an RM extend puts its new nodes in the
+ * general pool instead (ras/slurm deliberately leaves node->session NULL),
+ * so no such event is coming and waiting for one only burns the timeout.
+ * Phase one carries that path's real result.
  *
  * A grow may be followed by "-- <cmd> [args...]", in which case the tool
  * spawns that command INTO THE RESERVATION the grow just created, using the
@@ -100,6 +120,10 @@ static void alloc_cb(pmix_status_t status, pmix_info_t *info, size_t ninfo,
                 NULL != info[n].value.data.string) {
                 snprintf(alloc_id, sizeof(alloc_id), "%s",
                          info[n].value.data.string);
+                /* the info keys print as their PMIx attribute strings
+                 * ("pmix.alloc.id"), so name it once in a stable form a
+                 * caller can grep for */
+                fprintf(stderr, ">>> ALLOC_ID %s\n", alloc_id);
             }
         } else {
             fprintf(stderr, "      info[%zu] key=%s\n", n, info[n].key);
@@ -211,44 +235,87 @@ static int spawn_into_reservation(char **cmd) {
     return 0;
 }
 
+static void usage(const char *me) {
+    fprintf(stderr,
+            "usage: %s <op> <arg> [--req-id <id>] [--wait|--no-wait] [-- <cmd> ...]\n"
+            "  grow       <node[:slots],...>   PMIX_ALLOC_NEW     + NODE_LIST\n"
+            "  shrink     <node,...>           PMIX_ALLOC_RELEASE + NODE_LIST\n"
+            "  extend     <num-nodes>          PMIX_ALLOC_EXTEND  + NUM_NODES\n"
+            "  release    <num-nodes>          PMIX_ALLOC_RELEASE + NUM_NODES\n"
+            "  release-id <alloc-id>           PMIX_ALLOC_RELEASE + ALLOC_ID\n"
+            "  cancel     <req-id>             PMIX_ALLOC_REQ_CANCEL\n", me);
+}
+
 int main(int argc, char **argv) {
     pmix_status_t rc;
     pmix_info_t *info;
+    size_t ninfo = 2;
     pmix_alloc_directive_t directive;
     pmix_status_t codes[2];
     lock_t reglock;
     lock_t alloclock;
-    const char *op, *nodelist;
+    const char *op, *arg, *req_id = "elastic-test";
     char **spawn_cmd = NULL;
+    uint64_t num_nodes = 0;
+    bool wait_phase2 = true;
+    int wait_opt = -1;          /* an explicit --wait/--no-wait, if given */
     int rcexit = 0, i;
 
     if (argc < 3) {
-        fprintf(stderr,
-                "usage: %s <grow|shrink> <node1,node2,...> [-- <cmd> [args...]]\n",
-                argv[0]);
+        usage(argv[0]);
         return 1;
     }
     op = argv[1];
-    nodelist = argv[2];
-    /* anything after "--" is a command to run on the grown nodes */
+    arg = argv[2];
     for (i = 3; i < argc; i++) {
+        /* anything after "--" is a command to run on the grown nodes */
         if (0 == strcmp(argv[i], "--")) {
             if (i + 1 < argc) {
                 spawn_cmd = &argv[i + 1];
             }
             break;
         }
+        if (0 == strcmp(argv[i], "--req-id") && i + 1 < argc) {
+            req_id = argv[++i];
+        } else if (0 == strcmp(argv[i], "--wait")) {
+            wait_opt = 1;
+        } else if (0 == strcmp(argv[i], "--no-wait")) {
+            wait_opt = 0;
+        } else {
+            fprintf(stderr, "unknown option '%s'\n", argv[i]);
+            usage(argv[0]);
+            return 1;
+        }
     }
+
     /* A grow is a NEW reservation that names the nodes to add: PRRTE adds them
-     * to the pool and extends the DVM.  PMIX_ALLOC_EXTEND only adds to an
-     * already-existing reservation, so it is not the right trigger here. */
-    if (0 == strcmp(op, "grow") || 0 == strcmp(op, "extend")) {
+     * to the pool and extends the DVM.  PMIX_ALLOC_EXTEND asks the resource
+     * manager for more nodes instead, and names a count rather than hosts. */
+    if (0 == strcmp(op, "grow")) {
         directive = PMIX_ALLOC_NEW;
-    } else if (0 == strcmp(op, "shrink") || 0 == strcmp(op, "release")) {
+    } else if (0 == strcmp(op, "shrink")) {
         directive = PMIX_ALLOC_RELEASE;
+    } else if (0 == strcmp(op, "extend")) {
+        directive = PMIX_ALLOC_EXTEND;
+        num_nodes = strtoull(arg, NULL, 10);
+        wait_phase2 = false;    /* see the note at the top of this file */
+    } else if (0 == strcmp(op, "release")) {
+        directive = PMIX_ALLOC_RELEASE;
+        num_nodes = strtoull(arg, NULL, 10);
+    } else if (0 == strcmp(op, "release-id")) {
+        directive = PMIX_ALLOC_RELEASE;
+    } else if (0 == strcmp(op, "cancel")) {
+        directive = PMIX_ALLOC_REQ_CANCEL;
+        req_id = arg;
+        wait_phase2 = false;
     } else {
-        fprintf(stderr, "unknown op '%s' (want grow|shrink)\n", op);
+        fprintf(stderr, "unknown op '%s'\n", op);
+        usage(argv[0]);
         return 1;
+    }
+    /* an explicit --wait/--no-wait wins over the per-op default */
+    if (0 <= wait_opt) {
+        wait_phase2 = (1 == wait_opt);
     }
 
     if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, NULL, 0))) {
@@ -266,24 +333,48 @@ int main(int argc, char **argv) {
     lock_wait(&reglock);
     fprintf(stderr, "registered for PMIX_DVM_IS_READY / PMIX_ERR_DVM_MOD\n");
 
-    /* issue the size-change request naming the node list */
+    /* issue the size-change request.  Exactly one selector goes with the
+     * request id: the node list, the node count, or the allocation id -- the
+     * RM modules reject a request that carries more than one. */
     lock_init(&alloclock);
-    PMIX_INFO_CREATE(info, 2);
-    PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NODE_LIST, nodelist, PMIX_STRING);
-    PMIX_INFO_LOAD(&info[1], PMIX_ALLOC_REQ_ID, "elastic-test", PMIX_STRING);
-    fprintf(stderr, "requesting %s of nodes [%s] ...\n", op, nodelist);
-    rc = PMIx_Allocation_request_nb(directive, info, 2, alloc_cb, &alloclock);
+    if (0 == strcmp(op, "cancel")) {
+        ninfo = 1;
+        PMIX_INFO_CREATE(info, ninfo);
+    } else {
+        PMIX_INFO_CREATE(info, ninfo);
+        if (PMIX_ALLOC_EXTEND == directive || 0 == strcmp(op, "release")) {
+            PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NUM_NODES, &num_nodes, PMIX_UINT64);
+        } else if (0 == strcmp(op, "release-id")) {
+            PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_ID, arg, PMIX_STRING);
+        } else {
+            PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NODE_LIST, arg, PMIX_STRING);
+        }
+    }
+    PMIX_INFO_LOAD(&info[ninfo - 1], PMIX_ALLOC_REQ_ID, req_id, PMIX_STRING);
+    fprintf(stderr, "requesting %s [%s] (req-id %s) ...\n", op, arg, req_id);
+    rc = PMIx_Allocation_request_nb(directive, info, ninfo, alloc_cb, &alloclock);
     if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
         fprintf(stderr, "PMIx_Allocation_request_nb failed immediately: %s\n",
                 PMIx_Error_string(rc));
+        rcexit = 1;
         goto done;
     }
     lock_wait(&alloclock);
-    PMIX_INFO_FREE(info, 2);
+    PMIX_INFO_FREE(info, ninfo);
 
-    fprintf(stderr, "waiting for phase-two completion event (60s) ...\n");
-    /* crude bounded wait so the tool can't hang forever in a test */
-    {
+    /* A phase one that failed is the end of it: nothing was started, so no
+     * completion event is coming and waiting would just burn the timeout. */
+    if (PMIX_SUCCESS != alloclock.status &&
+        PMIX_OPERATION_SUCCEEDED != alloclock.status &&
+        PMIX_OPERATION_IN_PROGRESS != alloclock.status) {
+        fprintf(stderr, ">>> REJECTED: %s\n", PMIx_Error_string(alloclock.status));
+        rcexit = 1;
+        wait_phase2 = false;
+    }
+
+    if (wait_phase2) {
+        fprintf(stderr, "waiting for phase-two completion event (60s) ...\n");
+        /* crude bounded wait so the tool can't hang forever in a test */
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
         ts.tv_sec += 60;
