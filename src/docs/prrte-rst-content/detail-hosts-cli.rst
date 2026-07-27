@@ -45,3 +45,18 @@ For example:
 .. code::
 
    prterun --host node1:10,node2,node3:5 ...
+
+``--host`` *selects* from the hosts already available to the DVM
+|mdash| those a resource manager allocated, or those the DVM was
+started with. It does not add any. Naming a host that is not among
+them is an error, reported as:
+
+.. code::
+
+   At least one of the requested hosts is not included in the current
+   allocation.
+
+      Missing requested host: node9
+
+To bring a new host into a DVM that is already running, use
+``--add-host`` or ``--add-hostfile`` instead.

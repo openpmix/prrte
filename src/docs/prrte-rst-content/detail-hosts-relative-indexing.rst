@@ -34,14 +34,19 @@ specify the desired layout. In this case, a command line containing:
 
 .. code::
 
-   --host +n1,+n2 ./app1 : --host +n3,+n4 ./app2
+   --host +n0,+n1 ./app1 : --host +n2,+n3 ./app2
 
 would provide the desired pattern. The ``+`` syntax indicates that the
 information is being provided as a relative index into the existing
 allocation. Two methods of relative indexing are supported:
 
-* ``+n#``: A relative index into the allocation referencing the ``#``
-  node. PRRTE will substitute the ``#`` node in the allocation
+* ``+n#``: A relative index into the allocation, counted from zero
+  |mdash| ``+n0`` is the first node of the allocation, ``+n1`` the
+  second, and so on. PRRTE will substitute that node of the allocation.
+  Note that the index counts nodes the job was actually given: if the
+  node you launched from is not part of the allocation, it does not
+  occupy an index. An index past the end of the allocation is an
+  error.
 
 * ``+e[:#]``: A request for ``#`` empty nodes |mdash| i.e., PRRTE is
   to substitute this reference with nodes that have not yet been used
@@ -73,9 +78,9 @@ where the user has a hostfile containing:
 This may, for example, be a hostfile that describes a set of
 commonly-used resources that the user wishes to execute applications
 against. For this particular application, the user plans to map
-byslot, and wants the first two ranks to be on the second node of any
+byslot, and wants the first two ranks to be on the third node of any
 allocation, the next ranks to land on an empty node, have one rank
-specifically on ``dummy4``, the next rank to be on the second node of the
+specifically on ``dummy4``, the next rank to be on the third node of the
 allocation again, and finally any remaining ranks to be on whatever
 empty nodes are left. To accomplish this, the user provides a hostfile
 of:
