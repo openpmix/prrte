@@ -29,9 +29,12 @@ Files:
 `allocate` reads the **same bootstrap config file the daemons read**
 (`prte_bootstrap_parse`, from `src/util/prte_bootstrap`). Because the
 `DVMNodes` list is a fixed, externally-defined node set — exactly like an
-RM allocation — it sets **`prte_managed_allocation = true`** so the VM
-setup treats the pool as authoritative (the construct path, not
-hostfile/dash-host filtering) and honors per-node slot counts as given.
+RM allocation — and it marks every node it supplies
+**`PRTE_NODE_FLAG_SLOTS_GIVEN`** so the per-node slot counts are honored
+as given rather than re-derived from each node's core count. (It used to
+also set a global `prte_managed_allocation` to keep VM setup from
+filtering the pool through hostfile/dash-host specs; that global is gone
+— the pool is now the authoritative node set for every allocation.)
 
 It then adds each `DVMNodes` entry to the caller's list at its canonical
 rank (`prte_bootstrap_rank_of`), **skipping rank 0** — the controller
@@ -70,6 +73,7 @@ node is already represented by the HNP at pool index 0. Each node is a
   is a bijection.
 - Skipping rank 0 avoids double-entering the controller (HNP) node;
   don't remove that guard.
-- Setting `prte_managed_allocation` is intentional and load-bearing for
-  the bootstrap construct path — see repo memory *Bootstrap DVM* entries.
+- Marking the nodes `PRTE_NODE_FLAG_SLOTS_GIVEN` is intentional: without
+  it the one slot per node this component assigns would be replaced by
+  the node's core count.
 </content>
