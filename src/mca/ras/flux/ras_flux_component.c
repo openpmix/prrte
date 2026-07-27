@@ -26,9 +26,16 @@
  * $HEADER$
  */
 
-#include <flux/core.h>
+/* prte_config.h MUST be first - see the top-level AGENTS.md. It also defines
+ * PRTE_TESTBUILD_LAUNCHERS, which selects the header below. */
 #include "prte_config.h"
 #include "constants.h"
+
+#if PRTE_TESTBUILD_LAUNCHERS
+#    include "testbuild_flux.h"
+#else
+#    include <flux/core.h>
+#endif
 
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/base/pmix_mca_base_var.h"

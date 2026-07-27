@@ -388,6 +388,7 @@ Common configure options:
 | `--with-flux=<dir>` | Enable Flux support |
 | `--enable-debug` | Build with debug symbols and extra assertions |
 | `--enable-devel-check` | Enable strict compiler warnings (treat warnings as errors); on by default when `--enable-debug` is used in a git repo build |
+| `--enable-testbuild-launchers` | **Compile-only.** Build the `plm`/`ras` components that need third-party headers (LSF, Flux, jansson) against declaration-only stubs, so they are syntax-checked on a machine that lacks those libraries. The resulting tree **crashes at startup** — the stubs are unimplemented, and `ras/flux`'s `query` runs during `prte_init`. Never `make check`, run, or install a tree configured this way; keep a second tree without it. See [`src/mca/ras/AGENTS.md`](src/mca/ras/AGENTS.md). |
 
 Version requirements: PMIx ≥ 6.1.0, hwloc ≥ 2.1.0, libevent ≥ 2.0.21.
 

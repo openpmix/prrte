@@ -34,8 +34,12 @@ AC_DEFUN([MCA_prte_ras_flux_CONFIG],[
     PRTE_CHECK_JANSSON([ras_flux_jansson], [ras_jansson_good=1], [ras_jansson_good=0])
 
     # if check worked, set wrapper flags if so.
-    # Evaluate succeed / fail
-    AS_IF([test "$ras_flux_good" = "1" -a "$ras_jansson_good" = "1"],
+    # Evaluate succeed / fail.  --enable-testbuild-launchers also builds this
+    # component, against the declarations in testbuild_flux.h, so that a
+    # machine with no Flux installation can still COMPILE it -- see that header
+    # and src/mca/ras/AGENTS.md.  Such a build must not be run.
+    AS_IF([test "$ras_flux_good" = "1" -a "$ras_jansson_good" = "1" || \
+           test "$prte_testbuild_launchers" = "1"],
           [$1],
           [$2])
  

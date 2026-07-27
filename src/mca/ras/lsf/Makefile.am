@@ -20,7 +20,10 @@
 # $HEADER$
 #
 
-EXTRA_DIST = help-ras-lsf.txt
+# testbuild_lsf.h is only #included when --enable-testbuild-launchers
+# is given, so it appears in no _SOURCES list and has to be listed here
+# or it is missing from a distribution tarball
+EXTRA_DIST = help-ras-lsf.txt testbuild_lsf.h
 
 # Make the output library in this directory, and name it either
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la

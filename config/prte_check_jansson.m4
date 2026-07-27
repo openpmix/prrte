@@ -83,6 +83,16 @@ AC_DEFUN([PRTE_CHECK_JANSSON],[
     AM_CONDITIONAL([PRTE_HAVE_JANSSON],
           [test "${prte_check_jansson_happy}" = "yes"])
 
+    # Whether to COMPILE the jansson-dependent sources.  Distinct from
+    # PRTE_HAVE_JANSSON, which says whether they can actually run:
+    # --enable-testbuild-launchers compiles them against stub declarations so
+    # they are syntax-checked on machines with no jansson (they are otherwise
+    # skipped by essentially every developer build, since jansson defaults to
+    # "no").  Such a build must not be run - see src/mca/ras/AGENTS.md.
+    AM_CONDITIONAL([PRTE_WANT_JANSSON_SOURCE],
+          [test "${prte_check_jansson_happy}" = "yes" || \
+           test "${prte_testbuild_launchers}" = "1"])
+
     # Did we find the right stuff?
     AS_IF([test "${prte_check_jansson_happy}" = "yes"],
           [$2],

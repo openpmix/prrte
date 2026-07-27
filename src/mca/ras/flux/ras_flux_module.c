@@ -30,10 +30,14 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
-#include <flux/core.h>
-#include <flux/hostlist.h>
-#include <flux/idset.h>
-#include <jansson.h>
+#if PRTE_TESTBUILD_LAUNCHERS
+#    include "testbuild_flux.h"
+#else
+#    include <flux/core.h>
+#    include <flux/hostlist.h>
+#    include <flux/idset.h>
+#    include <jansson.h>
+#endif
 #include <stdio.h>
 
 #include "src/util/pmix_net.h"
@@ -191,6 +195,9 @@ out:
 static int parse_json_payload(json_t *root,  pmix_list_t *prte_nodelist)
 {
     int i, version, start, nnodes, ret = PRTE_SUCCESS;
+    /* json_array_foreach compares its index against json_array_size(), which
+     * is a size_t - an int index is a signedness mismatch that -Werror rejects */
+    size_t idx;
     /* every assignment to error_str is a string literal - the idset decode
      * helper below reports through a separate buffer so this stays
      * non-owning and needs no free */
@@ -263,7 +270,7 @@ static int parse_json_payload(json_t *root,  pmix_list_t *prte_nodelist)
     }
 
     start = 0;
-    json_array_foreach (R_lite, i, entry) {
+    json_array_foreach (R_lite, idx, entry) {
         const char *ranks;
         const char *cores;
         int rc;
@@ -383,8 +390,12 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
                          "%s ras:flux:allocate: flux job id is %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), flux_job_id));
 
     /*
-     * not sure what good this does but here goes
+     * record the job id for error reporting, releasing any previous
+     * value - allocate() can run more than once in a session
      */
+    if (NULL != prte_job_ident) {
+        free(prte_job_ident);
+    }
     prte_job_ident = strdup(flux_job_id);
 
     /*
