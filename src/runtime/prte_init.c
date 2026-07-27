@@ -166,6 +166,7 @@ int prte_init_minimum(void)
 {
     int ret, n;
     char *path = NULL;
+    char *extra;
     char *evar, **prefixes;
     const char *rvers;
     char token[100];
@@ -258,9 +259,22 @@ int prte_init_minimum(void)
         return ret;
     }
 
-    /* initialize the MCA infrastructure */
+    /* initialize the MCA infrastructure.  PRTE_MCA_mca_base_component_path
+     * names additional directories to search, mirroring what PMIx offers
+     * for its own components: the installed location is the only one we
+     * would otherwise look in, which leaves no way to run against
+     * components that have been built but not installed - a build tree,
+     * for one, which is where "make check" runs. */
+    extra = getenv("PRTE_MCA_mca_base_component_path");
     if (check_exist(prte_install_dirs.pmixlibdir)) {
-        pmix_asprintf(&path, "prte@%s", prte_install_dirs.pmixlibdir);
+        if (NULL == extra) {
+            pmix_asprintf(&path, "prte@%s", prte_install_dirs.pmixlibdir);
+        } else {
+            pmix_asprintf(&path, "prte@%s%c%s", extra, PMIX_ENV_SEP,
+                          prte_install_dirs.pmixlibdir);
+        }
+    } else if (NULL != extra) {
+        pmix_asprintf(&path, "prte@%s", extra);
     }
     ret = pmix_init_util(NULL, 0, path);
     if (NULL != path) {

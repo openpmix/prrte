@@ -26,3 +26,10 @@ test_rmaps_LDADD = $(top_builddir)/src/libprrte.la
 # (see the "Testing" section, "Offline mapper harness", in AGENTS.md).
 
 TESTS = test_rmaps
+
+# Run against the components in this build tree, not just an installed
+# one: without this a --enable-mca-dso build has no components to find
+# and every component-dependent case skips.
+AM_TESTS_ENVIRONMENT = \
+    PRTE_MCA_mca_base_component_path=@PRTE_COMPONENT_BUILD_PATH@; \
+    export PRTE_MCA_mca_base_component_path;
