@@ -752,7 +752,17 @@ int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *
 
         prte_node_t *node = PMIX_NEW(prte_node_t);
 
-        node->state = PRTE_NODE_STATE_UP;
+        /* These nodes are being added to a DVM that is already running, so
+         * they must carry the mark the DVM extension selects on: a grow
+         * launches daemons on the nodes in PRTE_NODE_STATE_ADDED and only
+         * those (prte_plm_base_setup_virtual_machine). Handing them over as
+         * plain UP - the state an initial discovery uses - left every node
+         * Slurm granted us sitting in the pool with no daemon on it, so the
+         * extend added resources the DVM could never use. The other producers
+         * of a grow (ras/hosts, the no-scheduler insert path, and the
+         * reused-node branch of this component) all mark ADDED for exactly
+         * this reason. */
+        node->state = PRTE_NODE_STATE_ADDED;
         node->name = nodename_dyn;
         node->slots_inuse = 0;
         node->slots_max = 0;

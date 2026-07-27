@@ -113,6 +113,14 @@ degrade gracefully.
   validators; `check_taint` also bounds `SLURM_NODELIST` length.
 - **Guard JSON features behind `prte_ras_slurm_have_jansson()`** so the
   no-Jansson build path stays correct.
+- **Nodes an extend brings in must be `PRTE_NODE_STATE_ADDED`, not `UP`.**
+  A DVM grow launches daemons on the nodes in that state and only those
+  (`prte_plm_base_setup_virtual_machine`), so a node handed over as plain
+  `UP` — the state an *initial* discovery uses — lands in the pool with no
+  daemon and the extend adds resources the DVM cannot use. Both producers
+  here have to agree: `add_modified_resources` for newly granted nodes and
+  the reused-node branch of `extract_reused_nodes` for ones the pool
+  already knows.
 - **This component is a plugin** (`ras-slurm` is in the default
   `--enable-mca-dso` list), so nothing outside it — the ras unit test
   included — can name its symbols. `test/unit/ras` reaches it the way the
