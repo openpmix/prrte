@@ -48,6 +48,7 @@
 #include <stdint.h>
 
 #include "constants.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/runtime/runtime.h"
 #include "src/util/proc_info.h"
 
@@ -69,10 +70,63 @@
  * tree calls.  init/finalize/fault_handler are file-static in the
  * component, so we can only assert they are wired, not their identity.
  */
+/*
+ * Ask the framework for a component by name, and for the module that
+ * component hands *this* process.
+ *
+ * These are two different questions.  A component is present whenever the
+ * framework opened it; whether it yields a module is up to its query,
+ * which is free to decline - iof/prted, for one, answers only a daemon.
+ * Naming the component's module symbol instead would assume it was linked
+ * into libprrte, which is false with --enable-mca-dso: there the component
+ * is a separate DSO and the symbol is not there to link against.
+ */
+static bool grpcomm_component_present(const char *name)
+{
+    pmix_mca_base_component_list_item_t *cli;
+
+    PMIX_LIST_FOREACH(cli, &prte_grpcomm_base_framework.framework_components,
+                      pmix_mca_base_component_list_item_t)
+    {
+        if (0 == strcmp(name, cli->cli_component->pmix_mca_component_name)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static prte_grpcomm_base_module_t *grpcomm_module(const char *name)
+{
+    pmix_mca_base_component_list_item_t *cli;
+    pmix_mca_base_module_t *mod = NULL;
+    int pri = 0;
+
+    PMIX_LIST_FOREACH(cli, &prte_grpcomm_base_framework.framework_components,
+                      pmix_mca_base_component_list_item_t)
+    {
+        if (0 != strcmp(name, cli->cli_component->pmix_mca_component_name)) {
+            continue;
+        }
+        if (NULL == cli->cli_component->pmix_mca_query_component) {
+            return NULL;
+        }
+        if (PRTE_SUCCESS != cli->cli_component->pmix_mca_query_component(&mod, &pri)) {
+            return NULL;
+        }
+        return (prte_grpcomm_base_module_t *) mod;
+    }
+    return NULL;
+}
+
 static int test_module_contract(void)
 {
     int failures = 0;
-    prte_grpcomm_base_module_t *m = &prte_grpcomm_direct_module;
+    prte_grpcomm_base_module_t *m = grpcomm_module("direct");
+
+    if (NULL == m) {
+        fprintf(stdout, "SKIPPED test_module_contract (grpcomm/direct absent)\n");
+        return 0;
+    }
 
     CHECK("init set", NULL != m->init);
     CHECK("finalize set", NULL != m->finalize);
@@ -82,11 +136,15 @@ static int test_module_contract(void)
     CHECK("fence set", NULL != m->fence);
     CHECK("group set", NULL != m->group);
 
-    /* the public entry points must be exactly what the module advertises */
+    /* The identity of each entry point can only be checked where the
+     * component's own symbols are linkable - see PRTE_TEST_GRPCOMM_DIRECT
+     * in this directory's Makefile.am. */
+#if PRTE_TEST_GRPCOMM_DIRECT
     CHECK("xcast identity", m->xcast == prte_grpcomm_direct_xcast);
     CHECK("xcast_nb identity", m->xcast_nb == prte_grpcomm_direct_xcast_nb);
     CHECK("fence identity", m->fence == prte_grpcomm_direct_fence);
     CHECK("group identity", m->group == prte_grpcomm_direct_group);
+#endif
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_module_contract\n");
@@ -101,9 +159,14 @@ static int test_module_contract(void)
 static int test_component_identity(void)
 {
     int failures = 0;
-    prte_grpcomm_base_component_t *c = &prte_mca_grpcomm_direct_component.super;
-
-    CHECK("component name", 0 == strcmp(c->pmix_mca_component_name, "direct"));
+    /* the framework must have opened a component by this name - asking it
+     * for one is the assertion */
+    if (!grpcomm_component_present("direct")) {
+        fprintf(stdout, "SKIPPED test_component_identity"
+                        " (grpcomm/direct not loadable from the build tree)\n");
+        return 0;
+    }
+    CHECK("component present", grpcomm_component_present("direct"));
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_component_identity\n");
@@ -138,6 +201,12 @@ static int test_classes(void)
 {
     int failures = 0;
 
+    /* Everything from here to the group caddy constructs a class the
+     * component defines.  Those classes are reachable only where the
+     * component's symbols are linkable - not from a DSO build, and not
+     * once the library hides its internals - so they are compiled in
+     * only when this directory's Makefile.am says so. */
+#if PRTE_TEST_GRPCOMM_DIRECT
     /* fence signature: empty proc set */
     prte_grpcomm_direct_fence_signature_t *fsig =
         PMIX_NEW(prte_grpcomm_direct_fence_signature_t);
@@ -211,6 +280,8 @@ static int test_classes(void)
     CHECK("fence caddy cbfunc NULL", NULL == fcd->cbfunc);
     PMIX_RELEASE(fcd);
 
+#endif
+
     /* group caddy (lives in the framework header): NONE op, empty */
     prte_pmix_grp_caddy_t *gcd = PMIX_NEW(prte_pmix_grp_caddy_t);
     CHECK("grp caddy op NONE", PMIX_GROUP_NONE == gcd->op);
@@ -239,11 +310,22 @@ int main(void)
         return 1;
     }
 
+    /* the module and component tests ask the framework for their subject,
+     * so it has to be open before they run */
+    rc = pmix_mca_base_framework_open(&prte_grpcomm_base_framework,
+                                      PMIX_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != rc) {
+        fprintf(stderr, "grpcomm framework open failed: %d\n", rc);
+        prte_finalize();
+        return 1;
+    }
+
     failures += test_module_contract();
     failures += test_component_identity();
     failures += test_base_context_id();
     failures += test_classes();
 
+    (void) pmix_mca_base_framework_close(&prte_grpcomm_base_framework);
     prte_finalize();
 
     if (0 == failures) {

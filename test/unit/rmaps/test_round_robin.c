@@ -24,7 +24,7 @@
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
 
-extern prte_rmaps_base_module_t prte_rmaps_round_robin_module;
+extern prte_rmaps_base_module_t *test_rmaps_module(const char *name);
 
 int test_round_robin(void);
 
@@ -39,9 +39,16 @@ int test_round_robin(void);
 int test_round_robin(void)
 {
     int failures = 0;
+    prte_rmaps_base_module_t *mod;
     prte_job_t *jdata;
     prte_rmaps_options_t opts;
     int rc;
+
+    mod = test_rmaps_module("round_robin");
+    if (NULL == mod) {
+        fprintf(stdout, "  SKIP test_round_robin (component not built)\n");
+        return 0;
+    }
 
     /* a policy this component does not handle -> defer to the next mapper */
     jdata = PMIX_NEW(prte_job_t);
@@ -49,7 +56,7 @@ int test_round_robin(void)
     PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_SEQ);
     memset(&opts, 0, sizeof(opts));
     opts.app_idx = -1;
-    rc = prte_rmaps_round_robin_module.map_job(jdata, &opts);
+    rc = mod->map_job(jdata, &opts);
     CHECK("rr defers non-rr policy", PRTE_ERR_TAKE_NEXT_OPTION == rc);
     PMIX_RELEASE(jdata);
 
@@ -60,7 +67,7 @@ int test_round_robin(void)
     PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_RESTART);
     memset(&opts, 0, sizeof(opts));
     opts.app_idx = -1;
-    rc = prte_rmaps_round_robin_module.map_job(jdata, &opts);
+    rc = mod->map_job(jdata, &opts);
     CHECK("rr defers restart", PRTE_ERR_TAKE_NEXT_OPTION == rc);
     PMIX_RELEASE(jdata);
 

@@ -53,6 +53,7 @@
 
 #include "prte_config.h"
 #include "constants.h"
+#include "src/mca/base/pmix_base.h"
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -136,11 +137,73 @@ static int test_tag_model(void)
  * slot must be wired in both, since the base and its callers only NULL-check
  * the optional entry points.
  */
+/*
+ * Ask the framework for a component by name, and for the module that
+ * component hands *this* process.
+ *
+ * These are two different questions.  A component is present whenever the
+ * framework opened it; whether it yields a module is up to its query,
+ * which is free to decline - iof/prted, for one, answers only a daemon.
+ * Naming the component's module symbol instead would assume it was linked
+ * into libprrte, which is false with --enable-mca-dso: there the component
+ * is a separate DSO and the symbol is not there to link against.
+ */
+static bool iof_component_present(const char *name)
+{
+    pmix_mca_base_component_list_item_t *cli;
+
+    PMIX_LIST_FOREACH(cli, &prte_iof_base_framework.framework_components,
+                      pmix_mca_base_component_list_item_t)
+    {
+        if (0 == strcmp(name, cli->cli_component->pmix_mca_component_name)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static prte_iof_base_module_t *iof_module(const char *name)
+{
+    pmix_mca_base_component_list_item_t *cli;
+    pmix_mca_base_module_t *mod = NULL;
+    int pri = 0;
+
+    PMIX_LIST_FOREACH(cli, &prte_iof_base_framework.framework_components,
+                      pmix_mca_base_component_list_item_t)
+    {
+        if (0 != strcmp(name, cli->cli_component->pmix_mca_component_name)) {
+            continue;
+        }
+        if (NULL == cli->cli_component->pmix_mca_query_component) {
+            return NULL;
+        }
+        if (PRTE_SUCCESS != cli->cli_component->pmix_mca_query_component(&mod, &pri)) {
+            return NULL;
+        }
+        return (prte_iof_base_module_t *) mod;
+    }
+    return NULL;
+}
+
 static int test_module_contract(void)
 {
     int failures = 0;
-    prte_iof_base_module_t *hnp = &prte_iof_hnp_module;
-    prte_iof_base_module_t *prted = &prte_iof_prted_module;
+    prte_iof_base_module_t *hnp, *prted;
+    prte_proc_type_t save;
+
+    hnp = iof_module("hnp");
+    /* iof/prted hands its module only to a daemon, and this test is not
+     * one, so ask the question it answers rather than skipping its half of
+     * the contract */
+    save = prte_process_info.proc_type;
+    prte_process_info.proc_type = PRTE_PROC_DAEMON;
+    prted = iof_module("prted");
+    prte_process_info.proc_type = save;
+
+    if (NULL == hnp || NULL == prted) {
+        fprintf(stdout, "SKIPPED test_module_contract (iof/hnp or iof/prted absent)\n");
+        return 0;
+    }
 
     /* the HNP hub wires all seven slots */
     CHECK("hnp init set", NULL != hnp->init);
@@ -173,10 +236,15 @@ static int test_component_identity(void)
 {
     int failures = 0;
 
-    CHECK("hnp component name",
-          0 == strcmp(prte_mca_iof_hnp_component.super.pmix_mca_component_name, "hnp"));
-    CHECK("prted component name",
-          0 == strcmp(prte_mca_iof_prted_component.super.pmix_mca_component_name, "prted"));
+    /* the framework must have opened a component under each name -
+     * finding one is the assertion */
+    if (!iof_component_present("hnp") || !iof_component_present("prted")) {
+        fprintf(stdout, "SKIPPED test_component_identity"
+                        " (iof components not loadable from the build tree)\n");
+        return 0;
+    }
+    CHECK("hnp component present", iof_component_present("hnp"));
+    CHECK("prted component present", iof_component_present("prted"));
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_component_identity\n");
@@ -444,6 +512,15 @@ int main(void)
     }
 
     failures += test_tag_model();
+    /* the module tests ask the framework for their subject, so it has to
+     * be open before they run */
+    rc = pmix_mca_base_framework_open(&prte_iof_base_framework, PMIX_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != rc) {
+        fprintf(stderr, "iof framework open failed: %d\n", rc);
+        prte_finalize();
+        return 1;
+    }
+
     failures += test_module_contract();
     failures += test_component_identity();
     failures += test_classes();
@@ -451,6 +528,7 @@ int main(void)
     failures += test_write_output_chunking();
     failures += test_fd_always_ready();
 
+    (void) pmix_mca_base_framework_close(&prte_iof_base_framework);
     prte_finalize();
 
     if (0 == failures) {
