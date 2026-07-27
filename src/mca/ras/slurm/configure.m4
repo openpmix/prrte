@@ -36,6 +36,12 @@ AC_DEFUN([MCA_prte_ras_slurm_CONFIG],[
           [$1],
           [$2])
 
+    # Let the unit tests know whether this component's symbols will be
+    # available to link against: it is NOT built on every platform (see
+    # PRTE_CHECK_SLURM) and --without-slurm removes it entirely.
+    AM_CONDITIONAL([PRTE_HAVE_RAS_SLURM],
+          [test "$ras_slurm_good" = "1" || test "$prte_testbuild_launchers" = "1"])
+
     # set build flags to use in makefile
     AC_SUBST([ras_slurm_jansson_CPPFLAGS])
     AC_SUBST([ras_slurm_jansson_LDFLAGS])
