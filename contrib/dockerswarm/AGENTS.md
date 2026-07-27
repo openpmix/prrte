@@ -425,8 +425,9 @@ take the HNP down), and malformed JSON. It also asserts a release naming a
 hostname with a shell metacharacter is refused before it can reach a command
 line.
 
-**Slot counts are asserted from `ras_base_verbose` output, not from the
-pool.** Outside a *managed* allocation the slot count a node was given is
-recomputed from its core count before mapping, so the pool cannot tell you
-whether the component parsed the allocation correctly. (`prte_managed_allocation`
-is presently never set for an RM allocation — see the note in `run-tests.sh`.)
+**Some slot counts are asserted from `ras_base_verbose` output, not from
+the pool.** The verbose line is what the component itself computed, so it
+separates a parser error from whatever the launch path later does with the
+number. The pool is asserted too, separately — a node whose count came
+from the scheduler must still carry that count at mapping time
+(`PRTE_NODE_FLAG_SLOTS_GIVEN`).
