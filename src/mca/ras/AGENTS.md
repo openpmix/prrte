@@ -444,9 +444,23 @@ prototype here compiles and then mismatches the real library.
 
 | Layer | What it covers |
 |-------|----------------|
-| [`test/unit/ras/test_ras.c`](../../../test/unit/ras/) (`make check`) | `prte_ras_base_node_insert` (dedup, drain, slot accounting, `ADD_SLOTS` clamping, FQDN normalization, HNP dedup, pre-assigned pool slots), the module vtable contract for every static component, `prte_ras_base_select` priority ordering, `prte_ras_base_flag_string`, and the SLURM taint validators + bounded output drain. The SLURM half needs symbols in `libprrte` to link against, so it only compiles in when `ras/slurm` is *static* — `ras-slurm` is a DSO by default, so build with `--enable-mca-static=ras-slurm` when you touch those validators. |
+| [`test/unit/ras/test_ras.c`](../../../test/unit/ras/) (`make check`) | `prte_ras_base_node_insert` (dedup, drain, slot accounting, `ADD_SLOTS` clamping, FQDN normalization, HNP dedup, pre-assigned pool slots), the module vtable contract for every static component, `prte_ras_base_select` priority ordering, `prte_ras_base_flag_string`, and `ras/slurm`'s detect-and-report half — query gating on `SLURM_JOBID` at priority 50, then `allocate()` expanding a compressed `SLURM_NODELIST` and refusing a tainted jobid or an over-length nodelist. That last part is driven **through the framework** (find the component, query it, call the module it returns) rather than by naming its symbols, because `ras-slurm` is a plugin and has none in `libprrte`; keep it that way. It skips with a printed reason when the component is not there to be found. |
 | [`contrib/dockerswarm/run-tests.sh`](../../../contrib/dockerswarm/) (`linux`) | The multi-node paths: grow/shrink/re-grow leaving exactly one daemon per node (a duplicated pool entry launches two), and `--add-hostfile` growing a live DVM through `add_hosts → ras/pmix defer → ras/hosts` including the `slots=+N` in-place adjust. |
-| Live RM | SLURM/PBS/LSF/Flux discovery and the SLURM elastic modify surface still need a real scheduler; there is no substitute. |
+| Live RM | PBS/LSF/Flux discovery still needs a real scheduler; there is no substitute. |
+
+**`ras/slurm`'s `modify` surface has no automated coverage yet, and the
+unit test is not where it goes.** Extend, release and cancel shell out to
+`sbatch`/`scontrol` and only mean anything across several nodes, and each
+of them returns `PRTE_ERR_NOT_AVAILABLE` outright unless jansson was
+found — so a `make check` build, which by default has no jansson, cannot
+reach a line of it. `contrib/dockerswarm` is the right home: it is
+multi-node, and its `build.sh` passes `--with-jansson` deliberately, so
+it is the only automated build anywhere that even compiles
+`ras_slurm_jansson.c`. What it still needs is a faked scheduler — the
+`SLURM_*` environment plus stub `scontrol`/`sbatch`/`scancel` on `PATH`
+returning canned JSON. `validate_hostname` and
+`prte_ras_slurm_drain_cmd_output` live on that path only, so they come
+along with it.
 
 The unit test builds the global job/node/session arrays by hand (the
 real ones come from `prte_init()`, which wants a live ESS) — follow that

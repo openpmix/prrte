@@ -38,11 +38,13 @@
  *   4. prte_ras_base_flag_string, which renders the node flag bitmask for
  *      --display-allocation.
  *
- *   5. The SLURM taint validators. ras/slurm shells out to
- *      scancel/scontrol/sbatch, so validate_jobid / validate_hostname are
- *      the boundary between a scheduler-supplied string and a command
- *      line. Their bounds and allowlists are checked here, along with the
- *      bounded command-output reader they share.
+ *   5. ras/slurm's "detect and report an allocation" capability, driven
+ *      through the framework rather than by calling into the component.
+ *      That is everything the component can do when jansson is absent --
+ *      every modify entry point declines without it -- and it is the half
+ *      that needs no scheduler to exercise. The modify surface belongs to
+ *      the multi-node harness in contrib/dockerswarm, which builds
+ *      --with-jansson deliberately.
  */
 
 #include "prte_config.h"
@@ -62,9 +64,6 @@
 
 #include "src/mca/ras/base/base.h"
 #include "src/mca/ras/ras.h"
-#if PRTE_TEST_HAVE_RAS_SLURM
-#    include "src/mca/ras/slurm/ras_slurm.h"
-#endif
 
 #define CHECK(label, cond)                                              \
     do {                                                                \
@@ -80,18 +79,17 @@
  * gated on the platform (and removable with --without-slurm) - referencing
  * those unconditionally makes `make check` fail to link on an ordinary
  * machine. Being *built* is not enough either: a component in the default
- * --enable-mca-dso list is a run-time loadable plugin and leaves nothing in
- * libprrte to reference, which is why the slurm checks below are also gated
- * on it being static (--enable-mca-static=ras-slurm). The gated components
- * are covered structurally by test_select(), which walks whatever the
- * framework actually built. */
+ * --enable-mca-dso list is a run-time loadable plugin, which puts nothing in
+ * libprrte to reference at all. The gated components are covered
+ * structurally by test_select(), which walks whatever the framework
+ * actually built, and ras/slurm is driven through that same public
+ * interface by test_slurm_allocation() below - no component symbol is
+ * named anywhere in this file. */
 extern prte_ras_base_module_t prte_ras_hosts_module;
 extern prte_ras_base_module_t prte_ras_pmix_module;
 extern prte_ras_base_module_t prte_ras_sim_module;
 extern prte_ras_base_module_t prte_ras_testrm_module;
 extern prte_ras_base_module_t prte_ras_bootstrap_module;
-/* prte_ras_slurm_module, the validators and the bounded output drain come
- * from ras_slurm.h, only when that component is built */
 
 /*
  * prte_init_util() stops short of building the global job/node/session
@@ -480,9 +478,9 @@ static int test_module_contract(void)
         {"simulator",  &prte_ras_sim_module,        true},
         {"testrm",     &prte_ras_testrm_module,     true},
         {"bootstrap",  &prte_ras_bootstrap_module,  true},
-#if PRTE_TEST_HAVE_RAS_SLURM
-        {"slurm",      &prte_ras_slurm_module,      true},
-#endif
+        /* ras/slurm is a plugin, so its module is not a symbol we can name
+         * here; test_slurm_allocation() checks its vtable on the module the
+         * component hands back from query */
         /* ras/pmix contributes nothing to initial discovery -- its
          * allocate is a deliberate TAKE_NEXT_OPTION stub -- but the slot
          * must still be filled so the driver has something to call */
@@ -495,16 +493,6 @@ static int test_module_contract(void)
             failures++;
         }
     }
-
-#if PRTE_TEST_HAVE_RAS_SLURM
-    /* only slurm implements the elastic completion hooks today; if another
-     * component grows them, the base cycles every module for both */
-    CHECK("contract: slurm shrink_complete", NULL != prte_ras_slurm_module.shrink_complete);
-    CHECK("contract: slurm release_allocation",
-          NULL != prte_ras_slurm_module.release_allocation);
-    CHECK("contract: slurm init", NULL != prte_ras_slurm_module.init);
-    CHECK("contract: slurm modify", NULL != prte_ras_slurm_module.modify);
-#endif
 
     /* the modify path is what serves PMIx_Allocation_request */
     CHECK("contract: hosts modify", NULL != prte_ras_hosts_module.modify);
@@ -609,109 +597,198 @@ static int test_flag_string(void)
     return failures;
 }
 
-#if PRTE_TEST_HAVE_RAS_SLURM
-/*
- * ras/slurm builds scancel/scontrol/sbatch command lines out of strings
- * that came from the scheduler or from a PMIx client, so these validators
- * are a security boundary, not a convenience.
- */
-static int test_slurm_validators(void)
+/* locate a component by name in whatever the framework opened, static or
+ * dlopened -- the same list prte_ras_base_select() walks */
+static pmix_mca_base_component_t *find_ras_component(const char *name)
 {
-    int failures = 0;
-    char toolong[PRTE_SLURM_JOB_ID_MAX_LEN + 8];
-    char longhost[PRTE_SLURM_HOSTNAME_MAX_LEN + 8];
+    pmix_mca_base_component_list_item_t *cli;
 
-    CHECK("jobid: plain", PRTE_SUCCESS == prte_ras_slurm_validate_jobid("12345"));
-    CHECK("jobid: zero ok", PRTE_SUCCESS == prte_ras_slurm_validate_jobid("0"));
-    CHECK("jobid: NULL", PRTE_SUCCESS != prte_ras_slurm_validate_jobid(NULL));
-    CHECK("jobid: empty", PRTE_SUCCESS != prte_ras_slurm_validate_jobid(""));
-    CHECK("jobid: non-digit", PRTE_SUCCESS != prte_ras_slurm_validate_jobid("12a45"));
-    CHECK("jobid: negative", PRTE_SUCCESS != prte_ras_slurm_validate_jobid("-1"));
-    /* the whole point: nothing that could reach a shell */
-    CHECK("jobid: shell metachar",
-          PRTE_SUCCESS != prte_ras_slurm_validate_jobid("1;rm -rf /"));
-    CHECK("jobid: substitution",
-          PRTE_SUCCESS != prte_ras_slurm_validate_jobid("$(id)"));
-    CHECK("jobid: trailing space",
-          PRTE_SUCCESS != prte_ras_slurm_validate_jobid("123 "));
-
-    memset(toolong, '9', sizeof(toolong) - 1);
-    toolong[sizeof(toolong) - 1] = '\0';
-    CHECK("jobid: over length", PRTE_SUCCESS != prte_ras_slurm_validate_jobid(toolong));
-
-    CHECK("host: plain", PRTE_SUCCESS == prte_ras_slurm_validate_hostname("node01"));
-    CHECK("host: fqdn",
-          PRTE_SUCCESS == prte_ras_slurm_validate_hostname("node01.example.com"));
-    CHECK("host: dashes", PRTE_SUCCESS == prte_ras_slurm_validate_hostname("nid-00-01"));
-    CHECK("host: NULL", PRTE_SUCCESS != prte_ras_slurm_validate_hostname(NULL));
-    CHECK("host: empty", PRTE_SUCCESS != prte_ras_slurm_validate_hostname(""));
-    CHECK("host: space", PRTE_SUCCESS != prte_ras_slurm_validate_hostname("node 01"));
-    CHECK("host: semicolon",
-          PRTE_SUCCESS != prte_ras_slurm_validate_hostname("node01;reboot"));
-    CHECK("host: backtick",
-          PRTE_SUCCESS != prte_ras_slurm_validate_hostname("`whoami`"));
-    CHECK("host: comma rejected (lists must be split first)",
-          PRTE_SUCCESS != prte_ras_slurm_validate_hostname("n01,n02"));
-    CHECK("host: newline", PRTE_SUCCESS != prte_ras_slurm_validate_hostname("n01\n"));
-
-    memset(longhost, 'a', sizeof(longhost) - 1);
-    longhost[sizeof(longhost) - 1] = '\0';
-    CHECK("host: over length", PRTE_SUCCESS != prte_ras_slurm_validate_hostname(longhost));
-
-    return failures;
+    PMIX_LIST_FOREACH(cli, &prte_ras_base_framework.framework_components,
+                      pmix_mca_base_component_list_item_t) {
+        if (NULL != cli->cli_component &&
+            0 == strcmp(name, cli->cli_component->pmix_mca_component_name)) {
+            return (pmix_mca_base_component_t *) cli->cli_component;
+        }
+    }
+    return NULL;
 }
 
 /*
- * The command-output drain is shared by scancel and scontrol and copies
- * scheduler error text into a fixed buffer -- an off-by-one here writes
- * past a stack array on the HNP.
+ * ras/slurm, exercised the way the base exercises it: query the component
+ * for a module, then drive that module's allocate().
+ *
+ * This is the whole of what the component can do without jansson --
+ * serve_extend_req, serve_release_req and serve_cancel_req each return
+ * PRTE_ERR_NOT_AVAILABLE when prte_ras_slurm_have_jansson() is false -- and
+ * it is the half that needs no live scheduler. Going through the vtable
+ * rather than calling in directly is not a workaround: it is the only way
+ * the DVM ever reaches this code, and it keeps the test working whether the
+ * component was linked statically or loaded as a plugin.
+ *
+ * The elastic modify surface is deliberately not here. It shells out to
+ * sbatch/scontrol and only means anything across multiple nodes, so it
+ * belongs to contrib/dockerswarm -- which is also the only automated build
+ * that configures --with-jansson and therefore compiles the JSON parser.
+ *
+ * The rejection cases below make the component log the refusals it is
+ * supposed to log, so a passing run of this test still prints SLURM error
+ * text. That output is the point, not a symptom.
  */
-static int test_slurm_drain_output(void)
+static int test_slurm_allocation(void)
 {
     int failures = 0;
-    char buf[32];
-    char guard[64];
-    FILE *fp;
-    int rc;
+    pmix_mca_base_component_t *comp;
+    pmix_mca_base_module_t *module;
+    prte_ras_base_module_t *mod;
+    prte_job_t *jdata;
+    pmix_list_t nodes;
+    prte_node_t *nd;
+    char *toolong;
+    /* SLURM_NODELIST is a compressed regex; "node[01-04]" must come back as
+     * four zero-padded names, and "4(x4)" as four slots on each of them */
+    static const char *expect[] = {"node01", "node02", "node03", "node04"};
+    size_t i;
+    int rc, pri;
 
-    fp = popen("printf 'hello world\\n'", "r");
-    CHECK("drain: popen", NULL != fp);
-    if (NULL == fp) {
+    comp = find_ras_component("slurm");
+    if (NULL == comp) {
+#if PRTE_TEST_HAVE_RAS_SLURM
+        fprintf(stderr,
+                "SKIP [slurm]: component was built but the framework does not "
+                "have it. It is a plugin, so a tree that has not been installed "
+                "-- or one built with --enable-testbuild-launchers, where its "
+                "JSON parser resolves to nothing -- has nothing to load.\n");
+#else
+        fprintf(stderr, "SKIP [slurm]: component not built on this platform\n");
+#endif
+        return 0;
+    }
+    CHECK("slurm: has a query function", NULL != comp->pmix_mca_query_component);
+    if (NULL == comp->pmix_mca_query_component) {
         return failures;
     }
-    rc = prte_ras_slurm_drain_cmd_output(fp, buf, sizeof(buf));
-    pclose(fp);
-    CHECK("drain: rc", PRTE_SUCCESS == rc);
-    CHECK("drain: captured", 0 == strcmp(buf, "hello world\n"));
 
-    /* more output than the buffer holds must truncate, stay
-     * NUL-terminated, and be marked with the "..." suffix */
-    fp = popen("printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n'", "r");
-    CHECK("drain: popen 2", NULL != fp);
-    if (NULL != fp) {
-        memset(guard, 'X', sizeof(guard));
-        rc = prte_ras_slurm_drain_cmd_output(fp, guard, 16);
-        pclose(fp);
-        CHECK("drain: truncate rc", PRTE_SUCCESS == rc);
-        CHECK("drain: NUL terminated within bounds", 15 >= strlen(guard));
-        CHECK("drain: truncation marked", NULL != strstr(guard, "..."));
-        CHECK("drain: did not write past the buffer", 'X' == guard[16]);
+    /* "detect": no SLURM in the environment means the job is not ours */
+    unsetenv("SLURM_JOBID");
+    module = NULL;
+    pri = -1;
+    rc = comp->pmix_mca_query_component(&module, &pri);
+    CHECK("slurm query: no module without SLURM_JOBID", NULL == module);
+    CHECK("slurm query: declines without SLURM_JOBID", PRTE_SUCCESS != rc);
+
+    setenv("SLURM_JOBID", "12345", 1);
+    module = NULL;
+    pri = -1;
+    rc = comp->pmix_mca_query_component(&module, &pri);
+    CHECK("slurm query: rc", PRTE_SUCCESS == rc);
+    CHECK("slurm query: offers a module", NULL != module);
+    /* the framework guide documents this ordering: slurm sits below the
+     * nodefile-driven RMs and above the catch-all */
+    CHECK("slurm query: priority 50", 50 == pri);
+    if (NULL == module) {
+        return failures;
     }
 
-    /* a NULL output buffer means "drain and discard", not an error */
-    fp = popen("printf 'ignored\\n'", "r");
-    if (NULL != fp) {
-        rc = prte_ras_slurm_drain_cmd_output(fp, NULL, 0);
-        pclose(fp);
-        CHECK("drain: discard mode", PRTE_SUCCESS == rc);
+    mod = (prte_ras_base_module_t *) module;
+    /* the vtable contract, on the module the component actually hands out.
+     * slurm is the only component implementing the elastic completion hooks
+     * today; if another grows them, the base cycles every module for both. */
+    CHECK("slurm contract: allocate", NULL != mod->allocate);
+    CHECK("slurm contract: init", NULL != mod->init);
+    CHECK("slurm contract: modify", NULL != mod->modify);
+    CHECK("slurm contract: shrink_complete", NULL != mod->shrink_complete);
+    CHECK("slurm contract: release_allocation", NULL != mod->release_allocation);
+    if (NULL == mod->allocate) {
+        return failures;
+    }
+    /* init() builds the session stack that allocate() pushes onto. The
+     * framework does this at selection; nothing has selected slurm here
+     * because test_select() ran with SLURM_JOBID unset. */
+    if (NULL != mod->init) {
+        CHECK("slurm init: rc", PRTE_SUCCESS == mod->init());
     }
 
-    CHECK("drain: NULL stream rejected",
-          PRTE_SUCCESS != prte_ras_slurm_drain_cmd_output(NULL, buf, sizeof(buf)));
+    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+
+    /* "report": the compressed nodelist expands into real nodes */
+    setenv("SLURM_NODELIST", "node[01-04]", 1);
+    setenv("SLURM_TASKS_PER_NODE", "4(x4)", 1);
+    unsetenv("SLURM_CPUS_PER_TASK");
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    rc = mod->allocate(jdata, &nodes);
+    CHECK("slurm allocate: rc", PRTE_SUCCESS == rc);
+    CHECK("slurm allocate: node count", 4 == pmix_list_get_size(&nodes));
+    i = 0;
+    PMIX_LIST_FOREACH(nd, &nodes, prte_node_t) {
+        if (i < sizeof(expect) / sizeof(expect[0])) {
+            CHECK("slurm allocate: node name",
+                  NULL != nd->name && 0 == strcmp(expect[i], nd->name));
+            CHECK("slurm allocate: slots per node", 4 == nd->slots);
+            CHECK("slurm allocate: node is up", PRTE_NODE_STATE_UP == nd->state);
+        }
+        i++;
+    }
+    PMIX_LIST_DESTRUCT(&nodes);
+
+    /* SLURM_NODELIST is per-job, not per-step, so a second step re-reads the
+     * same list. Returning SUCCESS here would insert the whole allocation a
+     * second time; the contract is PRTE_EXISTS with nothing added. */
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    rc = mod->allocate(jdata, &nodes);
+    CHECK("slurm allocate: re-discovery reports EXISTS", PRTE_EXISTS == rc);
+    CHECK("slurm allocate: re-discovery adds nothing", 0 == pmix_list_get_size(&nodes));
+    PMIX_LIST_DESTRUCT(&nodes);
+
+    /* The jobid reaches scontrol/sbatch command lines, so it is a taint
+     * boundary: tag_node_allocation and assign_new_session both run it
+     * through validate_jobid, and allocate() must fail rather than carry a
+     * shell metacharacter forward. */
+    setenv("SLURM_JOBID", "1;rm -rf /", 1);
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    rc = mod->allocate(jdata, &nodes);
+    CHECK("slurm allocate: rejects a jobid with a shell metacharacter",
+          PRTE_SUCCESS != rc);
+    PMIX_LIST_DESTRUCT(&nodes);
+
+    setenv("SLURM_JOBID", "$(id)", 1);
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    rc = mod->allocate(jdata, &nodes);
+    CHECK("slurm allocate: rejects a jobid with a substitution", PRTE_SUCCESS != rc);
+    PMIX_LIST_DESTRUCT(&nodes);
+
+    setenv("SLURM_JOBID", "12a45", 1);
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    rc = mod->allocate(jdata, &nodes);
+    CHECK("slurm allocate: rejects a non-numeric jobid", PRTE_SUCCESS != rc);
+    PMIX_LIST_DESTRUCT(&nodes);
+
+    /* check_taint bounds SLURM_NODELIST by ras_slurm_max_envar_length
+     * (default 32000) before anything tries to parse it */
+    toolong = malloc(64 * 1024);
+    CHECK("slurm allocate: test allocation", NULL != toolong);
+    if (NULL != toolong) {
+        memset(toolong, 'a', 64 * 1024 - 1);
+        toolong[64 * 1024 - 1] = '\0';
+        setenv("SLURM_JOBID", "12346", 1);
+        setenv("SLURM_NODELIST", toolong, 1);
+        PMIX_CONSTRUCT(&nodes, pmix_list_t);
+        rc = mod->allocate(jdata, &nodes);
+        CHECK("slurm allocate: rejects an over-length nodelist",
+              PRTE_ERR_BAD_PARAM == rc);
+        PMIX_LIST_DESTRUCT(&nodes);
+        free(toolong);
+    }
+
+    if (NULL != mod->finalize) {
+        mod->finalize();
+    }
+    unsetenv("SLURM_JOBID");
+    unsetenv("SLURM_NODELIST");
+    unsetenv("SLURM_TASKS_PER_NODE");
 
     return failures;
 }
-#endif /* PRTE_TEST_HAVE_RAS_SLURM */
+
 
 int main(void)
 {
@@ -736,10 +813,10 @@ int main(void)
     failures += test_preassigned_index();
     failures += test_hnp_dedup();
     failures += test_flag_string();
-#if PRTE_TEST_HAVE_RAS_SLURM
-    failures += test_slurm_validators();
-    failures += test_slurm_drain_output();
-#endif
+    /* after test_select(), which opens the framework and latches a
+     * selection made with no SLURM allocation in the environment -- so
+     * nothing has called slurm's init() before this does */
+    failures += test_slurm_allocation();
 
     prte_finalize();
 

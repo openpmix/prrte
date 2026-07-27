@@ -113,6 +113,23 @@ degrade gracefully.
   validators; `check_taint` also bounds `SLURM_NODELIST` length.
 - **Guard JSON features behind `prte_ras_slurm_have_jansson()`** so the
   no-Jansson build path stays correct.
+- **This component is a plugin** (`ras-slurm` is in the default
+  `--enable-mca-dso` list), so nothing outside it — the ras unit test
+  included — can name its symbols. `test/unit/ras` reaches it the way the
+  DVM does: find the component in the framework's list, `query` it, call
+  the module it returns.
+
+### Where each half is tested
+
+Without jansson the component is **detect-and-report only**: `query` and
+`allocate` work, and `serve_extend_req`/`serve_release_req`/
+`serve_cancel_req` each return `PRTE_ERR_NOT_AVAILABLE` immediately. The
+coverage follows that seam.
+
+| Half | Covered by |
+|------|------------|
+| `query` + `allocate` (nodelist expansion, taint refusal, `PRTE_EXISTS` on re-discovery) | `test/unit/ras/test_ras.c` — no scheduler needed, since both read only the environment |
+| `modify` (extend/release/cancel, the JSON parser, `validate_hostname`, `drain_cmd_output`) | nothing yet. It shells out and is inherently multi-node, so it belongs in `contrib/dockerswarm` — the only automated build that configures `--with-jansson` — once that harness fakes a SLURM environment |
 
 ### Reference ownership across the session/tracker web
 
