@@ -70,6 +70,18 @@ PRTE_EXPORT void prte_oob_tcp_queue_msg(int sd, short args, void *cbdata);
 PRTE_EXPORT void prte_oob_accept_connection(const int accepted_fd, const struct sockaddr *addr);
 PRTE_EXPORT void prte_mca_oob_tcp_component_lost_connection(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_mca_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata);
+
+/* Resolve an if_include/if_exclude specification into a list of interface
+ * names.  Each comma-separated entry is either an interface name, which is
+ * taken as-is, or an IPv4 subnet in a.b.c.d/e notation, which is matched
+ * against the local interfaces and replaced by the names of those that fall
+ * in that subnet.  Unresolvable entries are reported and dropped.  Names are
+ * appended to *interfaces only if not already present, and orig_str is freed
+ * and replaced with the comma-joined result.  Exposed (rather than static)
+ * so the unit tests can exercise it directly.
+ */
+PRTE_EXPORT void prte_oob_split_and_resolve(char **orig_str, char *name,
+                                            char ***interfaces);
 END_C_DECLS
 
 #endif /* MCA_OOB_TCP_H_ */
