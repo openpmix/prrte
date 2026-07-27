@@ -101,7 +101,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
             PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:allocate adding dash_hosts",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-            rc = prte_util_add_dash_host_nodes(nodes, hosts, true);
+            rc = prte_util_add_dash_host_nodes(nodes, hosts);
             if (PRTE_SUCCESS != rc) {
                 free(hosts);
                 return rc;
@@ -414,7 +414,7 @@ static pmix_status_t modify(prte_pmix_server_req_t *req)
             }
             // comma-delimited list of hosts to add or delete
             PMIX_CONSTRUCT(&dhnodes, pmix_list_t);
-            rc = prte_util_add_dash_host_nodes(&dhnodes, req->info[n].value.data.string, true);
+            rc = prte_util_add_dash_host_nodes(&dhnodes, req->info[n].value.data.string);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_LIST_DESTRUCT(&dhnodes);

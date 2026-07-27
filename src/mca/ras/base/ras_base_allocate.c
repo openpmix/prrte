@@ -1224,7 +1224,7 @@ static int ras_base_insert_node_string(char *ndstring, prte_session_t *dest)
 
     /* add these nodes to our node pool */
     PMIX_CONSTRUCT(&ndlist, pmix_list_t);
-    ret = prte_util_add_dash_host_nodes(&ndlist, ndstring, true);
+    ret = prte_util_add_dash_host_nodes(&ndlist, ndstring);
     if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
         PMIX_LIST_DESTRUCT(&ndlist);
