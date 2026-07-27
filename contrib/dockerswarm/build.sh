@@ -157,8 +157,14 @@ build_linux() {
 
             echo ">>>> PRRTE VPATH build -> /opt/prte/prte"
             mkdir -p /opt/prte/vpath-linux && cd /opt/prte/vpath-linux
+            # --with-jansson is deliberate: it is off by default, and without
+            # it ras/slurm compiles ras_slurm_jansson_stub.c instead of the
+            # real ras_slurm_jansson.c -- so the ~1000 lines that parse
+            # "scontrol --json" (the whole elastic extend/release surface) are
+            # never even compiled.  libjansson-dev is baked into the image.
             [ -f config.status ] || /prrte-src/configure \
-                --prefix=/opt/prte/prte --with-pmix="$PMIX_PREFIX" --enable-debug
+                --prefix=/opt/prte/prte --with-pmix="$PMIX_PREFIX" \
+                --with-jansson --enable-debug
             # show_help GOLDEN RULE: prte_show_help_content.c embeds every
             # help-*.txt in the tree, but its make rule depends only on the
             # converter script -- so an edited help file is NOT picked up by an

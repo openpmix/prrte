@@ -23,6 +23,9 @@ set -uo pipefail
 
 mode="${1:-linux}"
 pass=0 fail=0 skip=0
+# must match build.sh -- the bootstrap tests reach into the shared install
+IMAGE="${IMAGE:-prte-swarm:latest}"
+VOLUME="${VOLUME:-prte-build}"
 ok()   { pass=$((pass+1)); printf '  \033[32mPASS\033[0m %s\n' "$1"; }
 bad()  { fail=$((fail+1)); printf '  \033[31mFAIL\033[0m %s\n' "$1"; }
 skp()  { skip=$((skip+1)); printf '  \033[33mSKIP\033[0m %s\n' "$1"; }
@@ -71,6 +74,38 @@ prted_count() { local c=0 n; for n in "$@"; do ON "$n" 'pgrep -x prted' >/dev/nu
 # one) -- two daemons on a single machine is what a duplicated node-pool
 # entry produces
 prted_procs() { docker exec "prte-node$1" sh -c 'pgrep -x prted 2>/dev/null | wc -l' | tr -d ' \r'; }
+
+# --- bootstrap-DVM helpers --------------------------------------------------
+# A bootstrapped DVM is configured by <sysconfdir>/prte.conf, which lives in the
+# install the swarm shares.  The node containers mount that volume READ-ONLY, so
+# writing it needs a throwaway container that mounts it read-write.  The file is
+# part of the install, so back it up on first touch and always put it back --
+# leaving a DVMNodes list behind would change how every later run behaves.
+BOOT_CONF=/opt/prte/prte/etc/prte.conf
+bootstrap_vol() { docker run --rm -v "$VOLUME":/opt/prte "$IMAGE" sh -c "$1" 2>/dev/null; }
+
+bootstrap_write_conf() {   # $1 = controller host, $2 = DVMNodes list
+    bootstrap_vol "[ -f $BOOT_CONF.testsave ] || cp $BOOT_CONF $BOOT_CONF.testsave;
+                   printf 'ClusterName=swarm\nDVMControllerHost=%s\nDVMPort=7817\nDVMNodes=%s\nDVMRadix=64\n' \
+                       '$1' '$2' > $BOOT_CONF" || return 1
+    return 0
+}
+bootstrap_restore_conf() {
+    bootstrap_vol "[ -f $BOOT_CONF.testsave ] && mv $BOOT_CONF.testsave $BOOT_CONF; true"
+}
+# start prted --bootstrap on the given nodes, controller first (it has to be
+# listening before the others try to reach it)
+bootstrap_start() {
+    local ctrl=$1; shift
+    docker exec -d -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+        "prte-node$ctrl" bash -lc '. /opt/prte/env.sh; prted --bootstrap > /tmp/boot.out 2>&1'
+    sleep 6
+    for n in "$@"; do
+        docker exec -d -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+            "prte-node$n" bash -lc '. /opt/prte/env.sh; prted --bootstrap > /tmp/boot.out 2>&1'
+    done
+    sleep 14
+}
 
 test_linux() {
     if ! docker ps --format '{{.Names}}' | grep -qx prte-node1; then
@@ -556,6 +591,67 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         bad "could not start a DVM for the add-hostfile test"
     fi
     cleanup_swarm
+
+    banner "bootstrap DVM: daemons come up on their own and agree on their ranks"
+    # A bootstrapped DVM has no launcher: prted is started independently on
+    # every node and each one derives its OWN vpid from prte.conf
+    # (prte_bootstrap_my_identity) before it ever contacts the controller.
+    # The controller has to arrive at the same numbers independently --
+    # ras/bootstrap records each node's canonical rank as its pool index and
+    # plm reads it back out as the daemon's vpid -- because
+    # prted_report_launch looks a reporting daemon up in daemons->procs BY THE
+    # RANK IT CLAIMS. Get that wrong and the HNP either attaches a daemon to
+    # the wrong node or cannot find it at all.
+    #
+    # DVMNodes order is rank order, so "node2,node3,node4" must produce
+    # vpids 1,2,3 in that order. --display map-devel prints the HNP's view.
+    cleanup_swarm
+    if bootstrap_write_conf "node1" "node2,node3,node4"; then
+        bootstrap_start 1 2 3 4
+        if [ "$(prted_count 1 2 3 4)" = 4 ]; then
+            ok "all 4 bootstrap daemons came up"
+            out=$(RUN 'timeout 60 prun --display map-devel -n 3 --map-by node hostname' 2>&1)
+            bad_rank=0
+            # node2 -> 1, node3 -> 2, node4 -> 3
+            for pair in "node2 1" "node3 2" "node4 3"; do
+                set -- $pair
+                # the "Data for node: X" line is followed by that node's "Daemon: [ns,V]"
+                v=$(echo "$out" | grep -A 2 "Data for node: $1[[:space:]]" \
+                        | grep -o 'Daemon: \[[^,]*,[0-9]*\]' | grep -o '[0-9]*\]' \
+                        | tr -d ']' | head -1)
+                [ "$v" = "$2" ] || { bad_rank=1; printf '    %s has vpid "%s", config says %s\n' "$1" "$v" "$2"; }
+            done
+            [ "$bad_rank" = 0 ] \
+                && ok "each daemon's vpid matches its DVMNodes position (1,2,3)" \
+                || bad "HNP vpid assignment disagrees with the config the daemons read"
+            n=$(echo "$out" | grep -cE '^node[234]$')
+            [ "$n" = 3 ] && ok "prun launched 3 procs across the bootstrap DVM" \
+                         || bad "prun over the bootstrap DVM produced $n/3 procs"
+        else
+            bad "bootstrap DVM did not form ($(prted_count 1 2 3 4)/4 daemons)"
+        fi
+        cleanup_swarm
+
+        # A host listed twice cannot work: a node's position in DVMNodes IS its
+        # rank, and rank_of() resolves every occurrence to the FIRST one -- so
+        # the position the repeat would have held is claimed by nobody while
+        # num_daemons still counts it, and the DVM can never finish forming.
+        # prte_bootstrap_parse must reject the file up front rather than let
+        # every daemon hang waiting for one that does not exist.
+        if bootstrap_write_conf "node1" "node2,node3,node2,node4"; then
+            out=$(RUN 'timeout 40 prted --bootstrap 2>&1' || true)
+            echo "$out" | grep -q "same host more than once" \
+                && ok "a duplicate host in DVMNodes is rejected with a diagnostic" \
+                || bad "duplicate DVMNodes entry not reported: $(echo "$out" | tr '\n' ' ' | head -c 200)"
+            [ "$(prted_count 1)" = 0 ] \
+                && ok "the controller refused to start on the bad config" \
+                || bad "controller started anyway on a config that cannot form a DVM"
+        fi
+        bootstrap_restore_conf
+        cleanup_swarm
+    else
+        skp "bootstrap DVM (could not write prte.conf into the shared volume)"
+    fi
 
     banner "elastic DVM: radix-2 deep tree grow + shrink (multi-hop relay)"
     RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 --prtemca prte_rml_radix 2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
