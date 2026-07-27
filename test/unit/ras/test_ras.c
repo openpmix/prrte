@@ -85,11 +85,64 @@
  * actually built, and ras/slurm is driven through that same public
  * interface by test_slurm_allocation() below - no component symbol is
  * named anywhere in this file. */
+
+/* A component built into libprrte can have its module named directly, and
+ * that is the only way to check the vtable of one that declines to answer
+ * a query in this environment -- ras/simulator, ras/testrm and
+ * ras/bootstrap all serve situations this test is not running in.  Built
+ * as a DSO the same component is a separate object with no symbol to link
+ * against, so those checks compile out and the framework lookup below is
+ * all that is left.  See this directory's Makefile.am. */
+#if PRTE_TEST_RAS_HOSTS
 extern prte_ras_base_module_t prte_ras_hosts_module;
-extern prte_ras_base_module_t prte_ras_pmix_module;
+#endif
+#if PRTE_TEST_RAS_SIMULATOR
 extern prte_ras_base_module_t prte_ras_sim_module;
+#endif
+#if PRTE_TEST_RAS_TESTRM
 extern prte_ras_base_module_t prte_ras_testrm_module;
+#endif
+#if PRTE_TEST_RAS_BOOTSTRAP
 extern prte_ras_base_module_t prte_ras_bootstrap_module;
+#endif
+#if PRTE_TEST_RAS_PMIX
+extern prte_ras_base_module_t prte_ras_pmix_module;
+#endif
+
+/* the module symbol for a component, where this build has one */
+static prte_ras_base_module_t *ras_module_symbol(const char *name)
+{
+#if PRTE_TEST_RAS_HOSTS
+    if (0 == strcmp("hosts", name)) {
+        return &prte_ras_hosts_module;
+    }
+#endif
+#if PRTE_TEST_RAS_SIMULATOR
+    if (0 == strcmp("simulator", name)) {
+        return &prte_ras_sim_module;
+    }
+#endif
+#if PRTE_TEST_RAS_TESTRM
+    if (0 == strcmp("testrm", name)) {
+        return &prte_ras_testrm_module;
+    }
+#endif
+#if PRTE_TEST_RAS_BOOTSTRAP
+    if (0 == strcmp("bootstrap", name)) {
+        return &prte_ras_bootstrap_module;
+    }
+#endif
+#if PRTE_TEST_RAS_PMIX
+    if (0 == strcmp("pmix", name)) {
+        return &prte_ras_pmix_module;
+    }
+#endif
+    (void) name;
+    return NULL;
+}
+
+/* defined below, next to the ras/slurm case that also uses it */
+static pmix_mca_base_component_t *find_ras_component(const char *name);
 
 /*
  * prte_init_util() stops short of building the global job/node/session
@@ -471,32 +524,78 @@ static int test_module_contract(void)
     size_t i;
     struct {
         const char *name;
-        prte_ras_base_module_t *mod;
         bool needs_allocate;
     } mods[] = {
-        {"hosts",      &prte_ras_hosts_module,      true},
-        {"simulator",  &prte_ras_sim_module,        true},
-        {"testrm",     &prte_ras_testrm_module,     true},
-        {"bootstrap",  &prte_ras_bootstrap_module,  true},
-        /* ras/slurm is a plugin, so its module is not a symbol we can name
-         * here; test_slurm_allocation() checks its vtable on the module the
-         * component hands back from query */
+        {"hosts",      true},
+        {"simulator",  true},
+        {"testrm",     true},
+        {"bootstrap",  true},
+        /* ras/slurm is covered the same way by test_slurm_allocation() */
         /* ras/pmix contributes nothing to initial discovery -- its
          * allocate is a deliberate TAKE_NEXT_OPTION stub -- but the slot
          * must still be filled so the driver has something to call */
-        {"pmix",       &prte_ras_pmix_module,       true},
+        {"pmix",       true},
     };
 
+    /* Ask each component for its module rather than naming the module
+     * symbol.  Those symbols live in libprrte only while the component is
+     * built into it; with --enable-mca-dso the component is a separate
+     * object and the symbol is not there to link against, which is what
+     * this file's own find_ras_component() was already written for. */
     for (i = 0; i < sizeof(mods) / sizeof(mods[0]); i++) {
-        if (mods[i].needs_allocate && NULL == mods[i].mod->allocate) {
+        pmix_mca_base_component_t *comp = find_ras_component(mods[i].name);
+        pmix_mca_base_module_t *module = NULL;
+        prte_ras_base_module_t *mod;
+        int pri = 0;
+
+        if (NULL != comp && NULL != comp->pmix_mca_query_component &&
+            PRTE_SUCCESS == comp->pmix_mca_query_component(&module, &pri) &&
+            NULL != module) {
+            mod = (prte_ras_base_module_t *) module;
+        } else {
+            /* the component is absent, or declines to serve this
+             * environment; its module is still worth checking if this
+             * build put it somewhere we can see */
+            mod = ras_module_symbol(mods[i].name);
+        }
+        if (NULL == mod) {
+            fprintf(stdout, "  SKIP module contract for %s (%s)\n", mods[i].name,
+                    NULL == comp ? "not built" : "component declined, module not linkable");
+            continue;
+        }
+        if (mods[i].needs_allocate && NULL == mod->allocate) {
             fprintf(stderr, "FAIL [module contract]: %s has no allocate\n", mods[i].name);
             failures++;
         }
     }
 
     /* the modify path is what serves PMIx_Allocation_request */
-    CHECK("contract: hosts modify", NULL != prte_ras_hosts_module.modify);
-    CHECK("contract: pmix modify", NULL != prte_ras_pmix_module.modify);
+    for (i = 0; i < sizeof(mods) / sizeof(mods[0]); i++) {
+        pmix_mca_base_component_t *comp;
+        pmix_mca_base_module_t *module = NULL;
+        int pri = 0;
+
+        if (0 != strcmp("hosts", mods[i].name) && 0 != strcmp("pmix", mods[i].name)) {
+            continue;
+        }
+        prte_ras_base_module_t *m;
+
+        comp = find_ras_component(mods[i].name);
+        if (NULL != comp && NULL != comp->pmix_mca_query_component &&
+            PRTE_SUCCESS == comp->pmix_mca_query_component(&module, &pri) &&
+            NULL != module) {
+            m = (prte_ras_base_module_t *) module;
+        } else {
+            m = ras_module_symbol(mods[i].name);
+        }
+        if (NULL == m) {
+            continue;
+        }
+        if (NULL == m->modify) {
+            fprintf(stderr, "FAIL [module contract]: %s has no modify\n", mods[i].name);
+            failures++;
+        }
+    }
 
     return failures;
 }
@@ -803,6 +902,17 @@ int main(void)
     rc = setup_globals();
     if (PRTE_SUCCESS != rc) {
         fprintf(stderr, "test globals setup failed: %d\n", rc);
+        return 1;
+    }
+
+    /* the module contract asks each component for its module, so the
+     * framework has to be open before it runs; test_select() opens it
+     * again, which the refcount makes a no-op */
+    rc = pmix_mca_base_framework_open(&prte_ras_base_framework,
+                                      PMIX_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != rc) {
+        fprintf(stderr, "ras framework open failed: %d\n", rc);
+        prte_finalize();
         return 1;
     }
 
