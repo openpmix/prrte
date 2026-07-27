@@ -735,7 +735,6 @@ static void split_and_resolve(char **orig_str, char *name,
             pmix_show_help("help-oob-tcp.txt", "invalid if_inexclude",
                            true, name, prte_process_info.nodename,
                            tmp, "Invalid specification (missing \"/\")");
-            free(argv[i]);
             free(tmp);
             continue;
         }
@@ -746,7 +745,6 @@ static void split_and_resolve(char **orig_str, char *name,
         ((struct sockaddr*) &argv_inaddr)->sa_family = AF_INET;
         ret = inet_pton(AF_INET, argv[i],
                         &((struct sockaddr_in*) &argv_inaddr)->sin_addr);
-        free(argv[i]);
 
         if (1 != ret) {
             pmix_show_help("help-oob-tcp.txt", "invalid if_inexclude",
@@ -808,7 +806,7 @@ static void split_and_resolve(char **orig_str, char *name,
     }
 
     // cleanup and construct output string
-    free(argv);
+    PMIx_Argv_free(argv);
     free(*orig_str);
     if (NULL != interfaces) {
         *orig_str = PMIx_Argv_join(*interfaces, ',');
