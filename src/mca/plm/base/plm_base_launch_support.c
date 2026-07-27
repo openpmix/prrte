@@ -2003,13 +2003,11 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
     prte_job_map_t *map = NULL;
     int rc, i;
     prte_job_t *daemons;
-    pmix_list_t nodes, tnodes;
+    pmix_list_t nodes;
     pmix_list_item_t *item, *next;
     prte_app_context_t *app;
     bool one_filter = false;
     int num_nodes;
-    bool default_hostfile_used;
-    char *hosts = NULL;
     bool singleton = false;
     bool multi_sim = false;
     bool grow_request = false;
@@ -2284,157 +2282,25 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
      */
     map->num_new_daemons = 0;
 
-    /* if this is an unmanaged allocation, then we use
-     * the nodes that were specified for the union of
-     * all apps - there is no need to collect all
-     * available nodes and "filter" them
+    /* Construct the list of nodes this launch may use: everything in the
+     * node pool, filtered through the union of the app specs.  The pool is
+     * the allocation - whether a resource manager handed it to us or it was
+     * built from -host/-hostfile/the default hostfile at allocation time -
+     * so it is the authoritative node set, and the specs only narrow it.
+     *
+     * There used to be a second path here for an unmanaged allocation which
+     * built the VM from the app specs alone rather than from the pool. It
+     * could only ever shrink to nothing when there were no specs to read,
+     * which is precisely the case under a resource manager: nobody passes
+     * -host inside a SLURM allocation, so the DVM formed with the head node
+     * alone and every other allocated node sat unused. Everything that path
+     * consulted - a rank/seq file, -host, -hostfile, the default hostfile -
+     * is already read into the pool by ras/hosts at allocation time, so
+     * filtering the pool reaches the same set for those cases too.
+     *
+     * The grow and dynamic-spawn paths do not come through here: they
+     * select only the nodes their own request brought in.
      */
-    if (!prte_managed_allocation) {
-        PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                             "%s setup:vm: working unmanaged allocation",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        default_hostfile_used = false;
-        PMIX_CONSTRUCT(&tnodes, pmix_list_t);
-        hosts = NULL;
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void **) &hosts, PMIX_STRING)) {
-            /* use the file, if provided */
-            PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                 "%s using rank/seqfile %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 hosts));
-            if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&tnodes, hosts))) {
-                PRTE_ERROR_LOG(rc);
-                free(hosts);
-                PMIX_LIST_DESTRUCT(&tnodes);
-                PMIX_LIST_DESTRUCT(&nodes);
-                return rc;
-            }
-            free(hosts);
-        } else {
-            for (i = 0; i < jdata->apps->size; i++) {
-                if (NULL
-                    == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
-                    continue;
-                }
-                /* if the app provided a dash-host, then use those nodes */
-                hosts = NULL;
-                if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts,
-                                       PMIX_STRING)) {
-                    PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                         "%s using dash_host", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-                    if (PRTE_SUCCESS
-                        != (rc = prte_util_add_dash_host_nodes(&tnodes, hosts, false))) {
-                        PRTE_ERROR_LOG(rc);
-                        free(hosts);
-                        PMIX_LIST_DESTRUCT(&tnodes);
-                        PMIX_LIST_DESTRUCT(&nodes);
-                        return rc;
-                    }
-                    free(hosts);
-                } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts,
-                                              PMIX_STRING)) {
-                    /* otherwise, if the app provided a hostfile, then use that */
-                    PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                         "%s using hostfile %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                         hosts));
-                    if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&tnodes, hosts))) {
-                        PRTE_ERROR_LOG(rc);
-                        free(hosts);
-                        PMIX_LIST_DESTRUCT(&tnodes);
-                        PMIX_LIST_DESTRUCT(&nodes);
-                        return rc;
-                    }
-                    free(hosts);
-                } else if (NULL != prte_default_hostfile) {
-                    if (!default_hostfile_used) {
-                        /* fall back to the default hostfile, if provided */
-                        PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                             "%s using default hostfile %s",
-                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                             prte_default_hostfile));
-                        if (PRTE_SUCCESS
-                            != (rc = prte_util_add_hostfile_nodes(&tnodes,
-                                                                  prte_default_hostfile))) {
-                            PRTE_ERROR_LOG(rc);
-                            PMIX_LIST_DESTRUCT(&tnodes);
-                            PMIX_LIST_DESTRUCT(&nodes);
-                            return rc;
-                        }
-                        /* only include it once */
-                        default_hostfile_used = true;
-                    }
-                }
-            }
-        }
-
-        /* cycle thru the resulting list, finding the nodes on
-         * the node pool array while removing ourselves
-         * and all nodes that are down or otherwise unusable
-         */
-        while (NULL != (item = pmix_list_remove_first(&tnodes))) {
-            nptr = (prte_node_t *) item;
-            PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output, "%s checking node %s",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nptr->name));
-            for (i = 0; i < prte_node_pool->size; i++) {
-                node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i);
-                if (NULL == node) {
-                    continue;
-                }
-                if (!prte_nptr_match(node, nptr)) {
-                    continue;
-                }
-                /* have a match - now see if we want this node */
-                /* ignore nodes that are marked as do-not-use for this mapping */
-                if (PRTE_NODE_STATE_DO_NOT_USE == node->state) {
-                    PMIX_OUTPUT_VERBOSE((10, prte_plm_base_framework.framework_output,
-                                         "NODE %s IS MARKED NO_USE", node->name));
-                    /* reset the state so it can be used another time */
-                    node->state = PRTE_NODE_STATE_UP;
-                    break;
-                }
-                if (PRTE_NODE_STATE_DOWN == node->state) {
-                    PMIX_OUTPUT_VERBOSE((10, prte_plm_base_framework.framework_output,
-                                         "NODE %s IS MARKED DOWN", node->name));
-                    break;
-                }
-                if (PRTE_NODE_STATE_NOT_INCLUDED == node->state) {
-                    PMIX_OUTPUT_VERBOSE((10, prte_plm_base_framework.framework_output,
-                                         "NODE %s IS MARKED NO_INCLUDE", node->name));
-                    break;
-                }
-                /* if this node is us, ignore it */
-                if (0 == node->index) {
-                    PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                         "%s ignoring myself", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-                    break;
-                }
-                /* we want it - add it to list */
-                PMIX_RETAIN(node);
-                pmix_list_append(&nodes, &node->super);
-            }
-            PMIX_RELEASE(nptr);
-        }
-        PMIX_LIST_DESTRUCT(&tnodes);
-        /* if we didn't get anything, then we are the only node in the
-         * allocation - so there is nothing else to do as no other
-         * daemons are to be launched
-         */
-        if (0 == pmix_list_get_size(&nodes)) {
-            PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                 "%s plm:base:setup_vm only HNP in allocation",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-            PMIX_DESTRUCT(&nodes);
-            /* mark that the daemons have reported so we can proceed */
-            daemons->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
-            PRTE_FLAG_UNSET(daemons, PRTE_JOB_FLAG_UPDATED);
-            return PRTE_SUCCESS;
-        }
-        /* continue processing */
-        goto process;
-    }
-
-    /* construct a list of available nodes - the managed-allocation path
-     * falls into this; the grow and dynamic-spawn paths do not, as they
-     * select only the nodes their request brought in */
     for (i = 1; i < prte_node_pool->size; i++) {
         if (NULL != (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i))) {
             /* ignore nodes that are marked as do-not-use for this mapping */
