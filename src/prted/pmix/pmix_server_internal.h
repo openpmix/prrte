@@ -410,7 +410,7 @@ typedef struct {
     pmix_proc_t *members;
     size_t num_members;
 } prte_pmix_server_pset_t;
-PMIX_CLASS_DECLARATION(prte_pmix_server_pset_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_pmix_server_pset_t);
 
 typedef struct {
     bool initialized;
@@ -441,7 +441,7 @@ typedef struct {
     pmix_list_t groups;
 } prte_pmix_server_globals_t;
 
-extern prte_pmix_server_globals_t prte_pmix_server_globals;
+PRTE_EXPORT extern prte_pmix_server_globals_t prte_pmix_server_globals;
 
 END_C_DECLS
 

@@ -28,14 +28,20 @@ AC_DEFUN([PRTE_CHECK_VISIBILITY],[
 
     # Check if the compiler has support for visibility, like some
     # versions of gcc, icc Sun Studio cc.
+    # Default off.  PRRTE installs no linkable library, so hiding its
+    # internals buys little, while the tools, the component DSOs and the
+    # unit tests all reach across the libprrte boundary and would have to
+    # be audited for it.  The option is here so that someone who wants
+    # that audit -- or a smaller export table -- can have it, and so that
+    # asking for it does something.
     AC_ARG_ENABLE(visibility,
         AS_HELP_STRING([--enable-visibility],
-            [enable visibility feature of certain compilers/linkers (default: enabled)]))
+            [enable visibility feature of certain compilers/linkers (default: disabled)]))
 
     prte_visibility_define=0
     prte_msg="whether to enable symbol visibility"
 
-    if test "$enable_visibility" = "no"; then
+    if test "$enable_visibility" != "yes"; then
         AC_MSG_CHECKING([$prte_msg])
         AC_MSG_RESULT([no (disabled)])
     else
@@ -76,6 +82,7 @@ AC_DEFUN([PRTE_CHECK_VISIBILITY],[
 
         if test "$prte_add" != "" ; then
             prte_visibility_define=1
+            CFLAGS="$CFLAGS $PRTE_VISIBILITY_CFLAGS"
             AC_MSG_CHECKING([$prte_msg])
             AC_MSG_RESULT([yes (via $prte_add)])
         elif test "$enable_visibility" = "yes"; then
@@ -89,4 +96,9 @@ AC_DEFUN([PRTE_CHECK_VISIBILITY],[
 
     AC_DEFINE_UNQUOTED([PRTE_C_HAVE_VISIBILITY], [$prte_visibility_define],
             [Whether C compiler supports symbol visibility or not])
+
+    # The unit tests need to know whether libprrte still lets them see its
+    # internals; where it does not, the cases that reach inside a component
+    # cannot be compiled at all.
+    AM_CONDITIONAL([PRTE_HIDE_INTERNALS], [test "$prte_visibility_define" = "1"])
 ])

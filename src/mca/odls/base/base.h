@@ -123,7 +123,7 @@ typedef struct {
     size_t bind_masksize;               /* CPU_ALLOC_SIZE of bind_mask */
 #endif
 } prte_odls_spawn_caddy_t;
-PMIX_CLASS_DECLARATION(prte_odls_spawn_caddy_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_odls_spawn_caddy_t);
 
 /* define an object for starting local launch */
 typedef struct {
