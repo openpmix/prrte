@@ -43,6 +43,47 @@
 
 #include "dash_host.h"
 
+/*
+ * Does this node answer to one -host token?
+ *
+ * A literal name match always wins. Failing that, a token made only of
+ * digits is a launch id rather than a hostname - no real host is called
+ * "15" - so it is compared against the number the node name ends in,
+ * which is what lets "--host 15" select "nid0015". Deciding this from the
+ * shape of the token rather than from the kind of allocation makes the
+ * shorthand available wherever such names are used, and costs nothing
+ * where they are not: a name ending in no digits simply does not match.
+ */
+static bool dash_host_match(prte_node_t *node, const char *token)
+{
+    size_t j, len;
+    char *end = NULL;
+    unsigned long id;
+
+    if (prte_quickmatch(node, (char *) token)) {
+        return true;
+    }
+    if (NULL == token || '\0' == token[0] || NULL == node->name) {
+        return false;
+    }
+    /* only a token that is entirely digits can be a launch id */
+    id = strtoul(token, &end, 10);
+    if (NULL == end || '\0' != *end) {
+        return false;
+    }
+    /* find where the node name's trailing run of digits begins */
+    len = strlen(node->name);
+    j = len;
+    while (0 < j && isdigit((unsigned char) node->name[j - 1])) {
+        --j;
+    }
+    if (j == len) {
+        /* the name does not end in a digit */
+        return false;
+    }
+    return id == strtoul(&node->name[j], NULL, 10);
+}
+
 int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts)
 {
     char **specs, *cptr;
@@ -60,7 +101,7 @@ int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts)
         } else {
             cptr = NULL;
         }
-        if (prte_quickmatch(node, specs[n])) {
+        if (dash_host_match(node, specs[n])) {
             if (NULL != cptr) {
                 if ('*' == *cptr || 0 == strcmp(cptr, "auto")) {
                     slots += node->slots - node->slots_inuse;
@@ -341,32 +382,13 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
         }
     }
 
-    if (prte_managed_allocation && !allocating) {
-        prte_node_t *node_from_pool = NULL;
-        PMIX_LIST_FOREACH(node, nodes, prte_node_t) {
-            needcheck = true;
-            for (i = 0; i < prte_node_pool->size; i++) {
-                node_from_pool = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i);
-                if (NULL == node_from_pool) {
-                    continue;
-                }
-                if (prte_nptr_match(node_from_pool, node)) {
-                    needcheck = false;
-                    if (node->slots < node_from_pool->slots) {
-                        node_from_pool->slots = node->slots;
-                    }
-                    break;
-                }
-            }
-            if (needcheck) {
-                // node in -host was not in allocation - this is not allowed
-                pmix_show_help("help-dash-host.txt", "not-all-mapped-alloc",
-                               true, node->name);
-                rc = PRTE_ERR_SILENT;
-                goto cleanup;
-            }
-        }
-    }
+    /* NOTE: there is deliberately no "is this host in the allocation?" check
+     * here. This routine only ever runs while the allocation is being BUILT
+     * (every caller passes allocating=true), so there is nothing yet to check
+     * against. Selecting nodes for a job goes through
+     * prte_util_filter_dash_host_nodes() instead, and that is where a name
+     * the allocation does not contain is reported and refused. */
+
     rc = PRTE_SUCCESS;
 
 cleanup:
@@ -514,14 +536,14 @@ int prte_util_filter_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool remov
     pmix_list_item_t *item;
     pmix_list_item_t *next;
     int32_t i, j, len_mapped_node = 0;
-    int rc, test;
+    int rc;
     char **mapped_nodes = NULL;
     prte_node_t *node;
     int num_empty = 0;
     pmix_list_t keep;
     bool want_all_empty = false;
+    bool found_node;
     char *cptr;
-    size_t lst, lmn;
 
     /* if the incoming node list is empty, then there
      * is nothing to filter!
@@ -602,35 +624,21 @@ int prte_util_filter_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool remov
             if (NULL != (cptr = strchr(mapped_nodes[i], ':'))) {
                 *cptr = '\0';
             }
+            found_node = false;
             /* we are looking for a specific node on the list. */
-            cptr = NULL;
-            lmn = strtoul(mapped_nodes[i], &cptr, 10);
             item = pmix_list_get_first(nodes);
             while (item != pmix_list_get_end(nodes)) {
                 next = pmix_list_get_next(item); /* save this position */
                 node = (prte_node_t *) item;
                 /* search -host list to see if this one is found */
-                if (prte_managed_allocation && (NULL == cptr || 0 == strlen(cptr))) {
-                    /* if we are only given a number, then we test the
-                     * value against the number in the node name. This allows support for
-                     * launch_id-based environments. For example, a hostname
-                     * of "nid0015" can be referenced by "--host 15" */
-                    for (j = strlen(node->name) - 1; 0 < j; j--) {
-                        if (!isdigit(node->name[j])) {
-                            j++;
-                            break;
-                        }
-                    }
-                    if (j >= (int) (strlen(node->name) - 1)) {
-                        test = 0;
-                    } else {
-                        lst = strtoul(&node->name[j], NULL, 10);
-                        test = (lmn == lst) ? 0 : 1;
-                    }
-                } else {
-                    test = (prte_quickmatch(node, mapped_nodes[i])) ? 0 : 1;
-                }
-                if (0 == test) {
+                /* dash_host_match() also accepts a bare launch id, so
+                 * "--host 15" selects "nid0015".  This used to be gated on
+                 * the allocation being a managed one, and to compare the
+                 * scan result against strlen-1 rather than strlen - which
+                 * declared a match for any node whose name ended in a
+                 * single digit, or in no digit at all, so "--host 15"
+                 * matched "node1" and even "node". */
+                if (dash_host_match(node, mapped_nodes[i])) {
                     if (remove) {
                         /* remove item from list */
                         pmix_list_remove_item(nodes, item);
@@ -640,9 +648,19 @@ int prte_util_filter_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool remov
                         /* mark the node as found */
                         PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
                     }
+                    found_node = true;
                     break;
                 }
                 item = next;
+            }
+            if (!found_node) {
+                /* Leave the entry in place: the loop below reports it by
+                 * name. Freeing every entry here regardless of whether it
+                 * matched left that report unreachable, so a -host naming
+                 * a node the job cannot have was silently dropped and the
+                 * user got a generic "no resources" complaint instead of
+                 * being told which host was the problem. */
+                continue;
             }
         }
         /* done with the mapped entry */
