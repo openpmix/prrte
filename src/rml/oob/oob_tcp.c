@@ -766,14 +766,21 @@ void prte_oob_split_and_resolve(char **orig_str, char *name,
                             pmix_net_get_hostname((struct sockaddr*) &argv_inaddr),
                             argv_prefix);
 
-        /* Go through all interfaces and see if we can find a match */
+        /* Go through all interfaces and see if we can find a match.
+         *
+         * Compare against each entry's own address, not the one
+         * pmix_ifkindextoaddr() returns for its kernel index: an interface
+         * carrying both an IPv4 and an IPv6 address appears in the list
+         * once per address, and both entries share a kernel index, so that
+         * lookup answers with whichever entry the kernel reported first.
+         * On Linux that is routinely the IPv6 one (loopback always), and
+         * an IPv4 subnet then fails to match the very interface it names.
+         */
         match_count = 0;
         PMIX_LIST_FOREACH(selected_interface, &pmix_if_list, pmix_pif_t) {
-            ret = pmix_ifkindextoaddr(selected_interface->if_kernel_index,
-                                     (struct sockaddr*) &if_inaddr,
-                                     sizeof(if_inaddr));
-            if (PMIX_SUCCESS == ret &&
-                pmix_net_samenetwork((struct sockaddr_storage*) &argv_inaddr,
+            memcpy(&if_inaddr, &selected_interface->if_addr,
+                   MIN(sizeof(if_inaddr), sizeof(selected_interface->if_addr)));
+            if (pmix_net_samenetwork((struct sockaddr_storage*) &argv_inaddr,
                                      (struct sockaddr_storage*) &if_inaddr,
                                      argv_prefix)) {
                 /* We found a match. If it's not already in the interfaces array,
