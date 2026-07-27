@@ -322,7 +322,18 @@ static int prte_ras_slurm_exec_sbatch(char * const *argv, char *job_id)
                 pipe_draining = true;
             }
         }
-        
+
+        /* Already past the job ID: the rest of the output is of no interest,
+         * but it still has to be consumed so the child is not left writing
+         * into a full pipe. Reading it is NOT an error - falling through to
+         * the error branch here rejected every sbatch whose output carried
+         * more than one character after the job ID, which is exactly what
+         * "--parsable" produces on a cluster that reports one
+         * ("<jobid>;<cluster>"). */
+        else if(1 == r) {
+            continue;
+        }
+
         /* Nothing more to read */
         else if(0 == r) {
             pipe_drained = true;
