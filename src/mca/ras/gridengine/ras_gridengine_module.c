@@ -94,7 +94,9 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
                        strerror(errno));
         rc = PRTE_ERROR;
         PRTE_ERROR_LOG(rc);
-        goto cleanup;
+        /* return the open failure: falling through to the shared cleanup
+         * would report "no nodes found" and hide why */
+        return rc;
     }
 
     /* parse the pe_hostfile for hostname, slots, etc, then compare the
@@ -146,10 +148,7 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
         }
     } /* finished reading the $PE_HOSTFILE */
 
-cleanup:
-    if (NULL != fp) {
-        fclose(fp);
-    }
+    fclose(fp);
 
     /* in gridengine, if we didn't find anything, then something
      * is wrong. The user may not have indicated this was a parallel

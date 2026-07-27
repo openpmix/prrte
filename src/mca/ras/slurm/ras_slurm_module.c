@@ -137,8 +137,11 @@ cleanup:
 
     if (PRTE_SUCCESS != err) {
         prte_ras_slurm_modify_release_finalize();
-        PMIX_RELEASE(prte_slurm_session_stack);
-        prte_slurm_session_stack = NULL;
+        prte_ras_slurm_modify_cancel_finalize();
+        if (NULL != prte_slurm_session_stack) {
+            PMIX_RELEASE(prte_slurm_session_stack);
+            prte_slurm_session_stack = NULL;
+        }
     }
 
     return err;
@@ -322,7 +325,10 @@ static int prte_ras_slurm_finalize(void)
 {
     prte_ras_slurm_modify_cancel_finalize();
     prte_ras_slurm_modify_release_finalize();
-    PMIX_RELEASE(prte_slurm_session_stack);
+    if (NULL != prte_slurm_session_stack) {
+        PMIX_RELEASE(prte_slurm_session_stack);
+        prte_slurm_session_stack = NULL;
+    }
     return PRTE_SUCCESS;
 }
 
@@ -812,7 +818,6 @@ int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_
     }
 
     int err = PRTE_SUCCESS;
-    int pmix_err = PMIX_SUCCESS;
 
     err = prte_ras_slurm_validate_jobid(slurm_jobid);
 
@@ -892,9 +897,10 @@ int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_
          * a per-Slurm-jobid tracking handle used to identify and release the
          * group later; it is not a reservation. */
         PMIX_RETAIN(node);
-        pmix_err = pmix_pointer_array_add(session->nodes, node);
-        if (0 > pmix_err) {
-            err = prte_pmix_convert_status(pmix_err);
+        /* NOTE: pmix_pointer_array_add returns the assigned INDEX, not a
+         * status - a negative value just means the array could not grow */
+        if (0 > pmix_pointer_array_add(session->nodes, node)) {
+            err = PRTE_ERR_OUT_OF_RESOURCE;
             PMIX_RELEASE(node);
             PRTE_ERROR_LOG(err);
             goto cleanup;

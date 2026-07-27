@@ -195,6 +195,29 @@ static int finalize(void)
     return PRTE_SUCCESS;
 }
 
+/* Apply a "slots=+N" / "slots=-N" adjustment to a node that is already in the
+ * global pool.
+ *
+ * Two things the open-coded version got wrong. It clamped at zero but not at
+ * slots_max, so an adjustment could push a node above the ceiling the
+ * allocation gave it - unlike every other slot adjustment in the framework
+ * (prte_ras_base_node_insert clamps both ends for PRTE_NODE_ADD_SLOTS). And it
+ * never told prte_ras_base.total_slots_alloc, which is what a managed
+ * allocation reports to applications as PMIX_UNIV_SIZE / PMIX_MAX_PROCS, so
+ * the DVM's idea of its own size drifted from the pool it was describing. */
+static void adjust_slots(prte_node_t *nptr, int slots)
+{
+    int before = nptr->slots;
+
+    nptr->slots += slots;
+    if (0 > nptr->slots) {
+        nptr->slots = 0;
+    } else if (0 < nptr->slots_max && nptr->slots > nptr->slots_max) {
+        nptr->slots = nptr->slots_max;
+    }
+    prte_ras_base.total_slots_alloc += (nptr->slots - before);
+}
+
 static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
 {
     FILE *fp;
@@ -290,22 +313,19 @@ process:
             if (0 == strcmp(nm, nptr->name)) {
                 // we have the node
                 if (addslots) {
-                    nptr->slots += slots;
-                    if (0 > nptr->slots) {
-                        nptr->slots = 0;
-                    }
+                    adjust_slots(nptr, slots);
                 }
                 found = true;
                 break;
             } else if (NULL != nptr->aliases) {
                 /* no choice but an exhaustive search - fortunately, these lists are short! */
                 for (m = 0; NULL != nptr->aliases[m]; m++) {
-                    if (0 == strcmp(cptr, nptr->aliases[m])) {
+                    /* match on nm, not cptr: if the name given refers to this
+                     * host it was resolved to our canonical nodename above, and
+                     * that is the spelling the pool's aliases carry */
+                    if (0 == strcmp(nm, nptr->aliases[m])) {
                         if (addslots) {
-                            nptr->slots += slots;
-                            if (0 > nptr->slots) {
-                                nptr->slots = 0;
-                            }
+                            adjust_slots(nptr, slots);
                         }
                         found = true;
                         break;
@@ -318,10 +338,12 @@ process:
             node = PMIX_NEW(prte_node_t);
             node->name = strdup(cptr);
             node->state = PRTE_NODE_STATE_ADDED;
-            if (0 < slots) {
-                // if they gave us the number of slots, then just
-                // set it - otherwise, we'll compute them once
-                // the daemon reports back the topology
+            if (0 <= slots) {
+                /* they gave us the number of slots, so set it - including an
+                 * explicit "slots=0", which means this node contributes none
+                 * and must NOT be silently re-sized from its core count.
+                 * Only the -1 marker (no slots clause at all) leaves the
+                 * count to be computed when the daemon reports its topology. */
                 node->slots = slots;
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             } else if (0 > slots && -1 != slots) {
