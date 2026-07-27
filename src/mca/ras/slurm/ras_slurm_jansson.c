@@ -767,6 +767,8 @@ int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *
         node->slots_inuse = 0;
         node->slots_max = 0;
         node->slots = slots;
+        /* derived from the allocation Slurm just granted - authoritative */
+        PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
 
         pmix_list_append(node_list, &node->super);
 

@@ -96,6 +96,9 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
         node->slots_inuse = 0;
         node->slots_max = 0;
         node->slots = 1;
+        /* lsb_getalloc returns one entry per allocated slot, so the count
+         * this loop arrives at is what LSF gave us - authoritative */
+        PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
         node->state = PRTE_NODE_STATE_UP;
         pmix_list_append(nodes, &node->super);
 

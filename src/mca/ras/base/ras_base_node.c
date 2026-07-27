@@ -183,10 +183,11 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                 }
                 pmix_list_append(&hnp_node->attributes, &kv2->super);
             }
-            if (prte_managed_allocation || PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
-                /* the slots are always treated as sacred
-                 * in managed allocations
-                 */
+            /* the incoming node carries the authority for its own slot count:
+             * whoever supplied it says whether the number is a given (an RM
+             * allocation, an explicit "slots=" in a hostfile) or a placeholder
+             * to be computed from the node's topology later */
+            if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
                 PRTE_FLAG_SET(hnp_node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             } else {
                 PRTE_FLAG_UNSET(hnp_node, PRTE_NODE_FLAG_SLOTS_GIVEN);
@@ -267,12 +268,8 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                 PMIX_RELEASE(node);
                 continue;
             }
-            if (prte_managed_allocation) {
-                /* the slots are always treated as sacred
-                 * in managed allocations
-                 */
-                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
-            }
+            /* PRTE_NODE_FLAG_SLOTS_GIVEN arrives already set by whoever
+             * supplied the node and is carried into the pool untouched */
             /* detect FQDN before normalizing, then normalize to short name */
             if (!pmix_net_isaddr(node->name) && NULL != strchr(node->name, '.')) {
                 prte_have_fqdn_allocation = true;

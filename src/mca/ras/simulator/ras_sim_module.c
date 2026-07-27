@@ -160,6 +160,10 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
             } else {
                 node->slots = strtol(slot_cnt[n], NULL, 10);
             }
+            /* a simulated allocation is still an allocation: the sizes it
+             * fabricates are the ones the test wants mapped against, so they
+             * must not be re-derived from the topology later */
+            PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             if (NULL == max_slot_cnt || NULL == max_slot_cnt[n]) {
                 obj = hwloc_get_root_obj(t->topo);
                 node->slots_max = prte_hwloc_base_get_npus(t->topo, use_hwthread_cpus, available, obj);
