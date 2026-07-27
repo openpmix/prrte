@@ -709,9 +709,9 @@ static void split_and_resolve(char **orig_str, char *name,
         if (isalpha(argv[i][0])) {
             /* This is an interface name. If not already in the interfaces array, add it */
             found = false;
-            if (NULL != interfaces) {
-                for (n = 0; NULL != interfaces[n]; n++) {
-                    if (0 == strcmp(argv[i], *interfaces[n])) {
+            if (NULL != interfaces && NULL != *interfaces) {
+                for (n = 0; NULL != (*interfaces)[n]; n++) {
+                    if (0 == strcmp(argv[i], (*interfaces)[n])) {
                         found = true;
                         break;
                     }
@@ -777,9 +777,9 @@ static void split_and_resolve(char **orig_str, char *name,
                 match_count = match_count + 1;
                 pmix_ifkindextoname(selected_interface->if_kernel_index, if_name, sizeof(if_name));
                 found = false;
-                if (NULL != interfaces) {
-                    for (n = 0; NULL != interfaces[n]; n++) {
-                        if (0 == strcmp(if_name, *interfaces[n])) {
+                if (NULL != interfaces && NULL != *interfaces) {
+                    for (n = 0; NULL != (*interfaces)[n]; n++) {
+                        if (0 == strcmp(if_name, (*interfaces)[n])) {
                             found = true;
                             break;
                         }
