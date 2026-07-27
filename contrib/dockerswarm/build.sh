@@ -180,6 +180,20 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/elastic.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -lpmix
 
+            # The fake SLURM control plane, installed under its own prefix --
+            # NOT into the install bin/, which the node entrypoint symlinks
+            # onto the default PATH of every node. ras/slurm gates on SLURM_JOBID,
+            # so a stray scontrol on PATH is harmless, but a test that has to
+            # opt in by prepending this directory is the one that cannot
+            # perturb any other test in the suite.
+            echo ">>>> fake SLURM stubs -> /opt/prte/fakeslurm/bin"
+            mkdir -p /opt/prte/fakeslurm/bin
+            install -m 0755 /prrte-src/contrib/dockerswarm/fake-slurm.py \
+                /opt/prte/fakeslurm/bin/fake-slurm
+            for t in sbatch scontrol scancel; do
+                ln -sf fake-slurm /opt/prte/fakeslurm/bin/$t
+            done
+
             # runtime env for login shells (node-entrypoint handles ld.so)
             printf "export PATH=/opt/prte/prte/bin:\$PATH\nexport LD_LIBRARY_PATH=/opt/prte/prte/lib:%s/lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}\n" \
                 "$PMIX_PREFIX" > /opt/prte/env.sh

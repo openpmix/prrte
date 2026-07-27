@@ -445,22 +445,26 @@ prototype here compiles and then mismatches the real library.
 | Layer | What it covers |
 |-------|----------------|
 | [`test/unit/ras/test_ras.c`](../../../test/unit/ras/) (`make check`) | `prte_ras_base_node_insert` (dedup, drain, slot accounting, `ADD_SLOTS` clamping, FQDN normalization, HNP dedup, pre-assigned pool slots), the module vtable contract for every static component, `prte_ras_base_select` priority ordering, `prte_ras_base_flag_string`, and `ras/slurm`'s detect-and-report half — query gating on `SLURM_JOBID` at priority 50, then `allocate()` expanding a compressed `SLURM_NODELIST` and refusing a tainted jobid or an over-length nodelist. That last part is driven **through the framework** (find the component, query it, call the module it returns) rather than by naming its symbols, because `ras-slurm` is a plugin and has none in `libprrte`; keep it that way. It skips with a printed reason when the component is not there to be found. |
-| [`contrib/dockerswarm/run-tests.sh`](../../../contrib/dockerswarm/) (`linux`) | The multi-node paths: grow/shrink/re-grow leaving exactly one daemon per node (a duplicated pool entry launches two), and `--add-hostfile` growing a live DVM through `add_hosts → ras/pmix defer → ras/hosts` including the `slots=+N` in-place adjust. |
+| [`contrib/dockerswarm/run-tests.sh`](../../../contrib/dockerswarm/) (`linux`) | The multi-node paths: grow/shrink/re-grow leaving exactly one daemon per node (a duplicated pool entry launches two), `--add-hostfile` growing a live DVM through `add_hosts → ras/pmix defer → ras/hosts` including the `slots=+N` in-place adjust, and **`ras/slurm`'s whole modify surface** against a faked scheduler (below). |
 | Live RM | PBS/LSF/Flux discovery still needs a real scheduler; there is no substitute. |
 
-**`ras/slurm`'s `modify` surface has no automated coverage yet, and the
-unit test is not where it goes.** Extend, release and cancel shell out to
+**`ras/slurm`'s `modify` surface is covered in `contrib/dockerswarm`, not
+in the unit test.** Extend, release and cancel shell out to
 `sbatch`/`scontrol` and only mean anything across several nodes, and each
 of them returns `PRTE_ERR_NOT_AVAILABLE` outright unless jansson was
 found — so a `make check` build, which by default has no jansson, cannot
-reach a line of it. `contrib/dockerswarm` is the right home: it is
-multi-node, and its `build.sh` passes `--with-jansson` deliberately, so
-it is the only automated build anywhere that even compiles
-`ras_slurm_jansson.c`. What it still needs is a faked scheduler — the
-`SLURM_*` environment plus stub `scontrol`/`sbatch`/`scancel` on `PATH`
-returning canned JSON. `validate_hostname` and
-`prte_ras_slurm_drain_cmd_output` live on that path only, so they come
-along with it.
+reach a line of it. The harness is multi-node, and its `build.sh` passes
+`--with-jansson` deliberately, so it is the only automated build anywhere
+that even compiles `ras_slurm_jansson.c`. It supplies the scheduler with
+[`fake-slurm.py`](../../../contrib/dockerswarm/fake-slurm.py) — the
+`SLURM_*` environment plus `sbatch`/`scontrol`/`scancel` stubs on `PATH`
+that hand out real container hostnames, so an extend genuinely launches
+daemons and a release genuinely removes them. `validate_hostname`,
+`prte_ras_slurm_drain_cmd_output` and the JSON parser live on that path
+only and come along with it, as do the paths that exist purely to survive
+a misbehaving scheduler (a failing `scancel`, unparsable JSON, a request
+cancelled while its job is still `PENDING`). See
+[dockerswarm AGENTS.md §11](../../../contrib/dockerswarm/AGENTS.md).
 
 The unit test builds the global job/node/session arrays by hand (the
 real ones come from `prte_init()`, which wants a live ESS) — follow that

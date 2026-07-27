@@ -41,6 +41,7 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | `Dockerfile` | Base image: toolchain, a baked PMIx, SSH wiring, and a node entrypoint. It does **not** contain PRRTE. |
 | `docker-compose.yml` | The ten nodes `prte-node1`..`prte-node10`, each mounting the shared `prte-build` volume. |
 | `elastic.c` | The elastic test client (`elastic` in the install): issues a PMIx allocation request and waits for the phase-two completion event. |
+| `fake-slurm.py` | A stand-in SLURM control plane (`sbatch`/`scontrol`/`scancel`) so `ras/slurm`'s elastic modify surface can be exercised. See §11. |
 
 ## 2. How it works
 
@@ -351,3 +352,81 @@ Network: bridge `dvm`. All nodes mount the shared `prte-build` volume read-only
 at `/opt/prte`, where `build.sh` installs PRRTE (`/opt/prte/prte`) and writes
 `/opt/prte/env.sh`. To add or remove nodes, copy or delete a service block in
 `docker-compose.yml` (and adjust the `seq 1 10` loops to match).
+
+## 11. Faking a SLURM environment (`ras/slurm`)
+
+`ras/slurm` is the only ras component with a full elastic **modify** surface,
+and everything past initial discovery is a shell-out: `sbatch` to grow,
+`scontrol show job <id> --json` to learn what SLURM granted, `scontrol update
+job <id> ReqNodeList=…` to shrink one in place, `scancel` to give one back.
+None of that runs on a developer machine, so it had no automated coverage at
+all — including the ~1000-line JSON parser, which this harness is also the
+**only** automated build that even compiles (jansson defaults to off; see
+`--with-jansson` in `build.sh`).
+
+[`fake-slurm.py`](fake-slurm.py) supplies the missing scheduler. `build.sh`
+installs it into the shared volume as
+`/opt/prte/fakeslurm/bin/{sbatch,scontrol,scancel}` (it dispatches on
+`argv[0]`), deliberately **not** into the install `bin/` that the node
+entrypoint puts on every node's default PATH — a test has to opt in by
+prepending that directory, so this cannot perturb anything else in the suite.
+
+It is not a SLURM emulator. It implements exactly the four command forms
+PRRTE issues, keeps its state under `/tmp/fake-slurm`, and hands out **real
+container hostnames** — so a grow driven through it launches real daemons on
+real nodes and a release really removes them.
+
+Driving it by hand:
+
+```sh
+RUN='docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 prte-node1 bash -lc'
+
+$RUN 'export PATH=/opt/prte/fakeslurm/bin:$PATH
+      fake-slurm init --jobid 1000 --base node1 --tasks 2 --pool node2,node3,node4
+      eval "$(fake-slurm env)"     # SLURM_JOBID, SLURM_NODELIST, SLURMD_NODENAME, ...
+      . /opt/prte/env.sh
+      nohup prte --prtemca prte_elastic_mode 1 --prtemca ras_base_verbose 5 \
+            >/tmp/prte.out 2>&1 &
+      sleep 8
+      elastic extend 2             # PMIX_ALLOC_EXTEND: sbatch, poll, absorb
+      fake-slurm audit             # every command PRRTE issued
+      fake-slurm args 2001         # the sbatch argv it built
+      elastic shrink node3         # partial: scontrol update ReqNodeList=
+      elastic release-id 2001'     # whole job: scancel
+```
+
+Two things to know:
+
+- **The request shapes differ from a plain grow.** `elastic grow <nodes>` is
+  `PMIX_ALLOC_NEW` naming hosts, which the *base* serves. `ras/slurm`'s
+  `modify()` accepts only `PMIX_ALLOC_EXTEND`+`NUM_NODES`,
+  `PMIX_ALLOC_RELEASE`+(`NODE_LIST`|`NUM_NODES`|`ALLOC_ID`), and
+  `PMIX_ALLOC_REQ_CANCEL` — which nodes an extend lands on is the
+  scheduler's choice. Hence `elastic extend|release|release-id|cancel`.
+- **An extend emits no phase-two event.** Its nodes join the general pool
+  (the component deliberately leaves `node->session` NULL), and the directed
+  completion event is addressed to the requestor recorded on a *reservation*.
+  Phase one carries the real result, which is why `elastic extend` does not
+  wait for phase two. A **release** does go through a shrink campaign and
+  does emit `PMIX_DVM_IS_READY`.
+
+Fault injection, for the paths that only exist to handle a scheduler
+misbehaving (`fake-slurm set <key> <value>`):
+
+| key | effect |
+|-----|--------|
+| `pending_secs` | a new job sits in `PENDING` this long — lets a request be cancelled mid-poll |
+| `scancel_fail` | `scancel` exits non-zero with far more output than the 256-byte capture buffer holds |
+| `bad_json` | `scontrol show job --json` returns unparsable output with exit status 0 |
+
+The suite uses all three: a cancelled pending extend, a failing `scancel`
+(whose message must come back truncated and `...`-terminated, and must not
+take the HNP down), and malformed JSON. It also asserts a release naming a
+hostname with a shell metacharacter is refused before it can reach a command
+line.
+
+**Slot counts are asserted from `ras_base_verbose` output, not from the
+pool.** Outside a *managed* allocation the slot count a node was given is
+recomputed from its core count before mapping, so the pool cannot tell you
+whether the component parsed the allocation correctly. (`prte_managed_allocation`
+is presently never set for an RM allocation — see the note in `run-tests.sh`.)

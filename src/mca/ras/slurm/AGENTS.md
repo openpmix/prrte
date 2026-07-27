@@ -137,7 +137,31 @@ coverage follows that seam.
 | Half | Covered by |
 |------|------------|
 | `query` + `allocate` (nodelist expansion, taint refusal, `PRTE_EXISTS` on re-discovery) | `test/unit/ras/test_ras.c` — no scheduler needed, since both read only the environment |
-| `modify` (extend/release/cancel, the JSON parser, `validate_hostname`, `drain_cmd_output`) | nothing yet. It shells out and is inherently multi-node, so it belongs in `contrib/dockerswarm` — the only automated build that configures `--with-jansson` — once that harness fakes a SLURM environment |
+| `modify` (extend/release/cancel, the JSON parser, `validate_hostname`, `drain_cmd_output`) | [`contrib/dockerswarm`](../../../../contrib/dockerswarm/) — it shells out and is inherently multi-node, and it is the only automated build that configures `--with-jansson`, so it is the only place `ras_slurm_jansson.c` is even compiled |
+
+The harness fakes the scheduler with
+[`fake-slurm.py`](../../../../contrib/dockerswarm/fake-slurm.py), installed
+into the swarm as `sbatch`/`scontrol`/`scancel` and handing out real
+container hostnames — so an extend really launches daemons and a release
+really removes them. Read
+[its AGENTS.md §11](../../../../contrib/dockerswarm/AGENTS.md) before adding
+a case. Two things that trip people up:
+
+- **The request shapes are not a plain grow.** `modify()` accepts only
+  `PMIX_ALLOC_EXTEND`+`NUM_NODES`, `PMIX_ALLOC_RELEASE` with one of
+  `NODE_LIST`/`NUM_NODES`/`ALLOC_ID`, and `PMIX_ALLOC_REQ_CANCEL`. A
+  node-naming `PMIX_ALLOC_NEW` never reaches this component — the base
+  serves it.
+- **An extend emits no phase-two completion event.** Its nodes go into the
+  general pool (`node->session` stays NULL, by design — see above), and the
+  directed event is addressed to the requestor recorded on a *reservation*.
+  Phase one carries the result. A release does go through a shrink campaign,
+  so it does emit `PMIX_DVM_IS_READY`.
+
+Slot counts are asserted from `ras_base_verbose` output rather than from the
+node pool, because outside a managed allocation the count is recomputed from
+each node's core count before mapping — and `prte_managed_allocation` is
+currently never set for an RM allocation.
 
 ### Reference ownership across the session/tracker web
 
