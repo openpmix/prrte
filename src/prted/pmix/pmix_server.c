@@ -2078,43 +2078,98 @@ respond:
     }
 }
 
-/* alloc callback to send the results to the requesting daemon */
+/* Caddy carrying an allocation result from the PMIx progress thread over to
+ * the PRRTE progress thread.
+ *
+ * send_alloc_resp below can be invoked on the PMIx progress thread (e.g. as
+ * the callback from PMIx_Session_control), and the golden rule for such a
+ * callback is that it captures its arguments and posts an event, nothing more:
+ * a prte_pmix_server_req_t is a PRRTE object owned by the PRRTE progress
+ * thread, so recording the result on it there - let alone freeing the array it
+ * was carrying - is a cross-thread write. This caddy is the capture buffer;
+ * every mutation of the request happens in the shifted handler.
+ *
+ * It holds a reference on the request so it cannot be reclaimed underneath the
+ * shift, and carries PMIx's release callback because the result array stays
+ * valid only until that is invoked. */
+typedef struct {
+    pmix_object_t super;
+    prte_event_t ev;
+    prte_pmix_server_req_t *req;
+    pmix_status_t status;
+    pmix_info_t *info;
+    size_t ninfo;
+    pmix_release_cbfunc_t rel;
+    void *relcbdata;
+} prte_alloc_resp_caddy_t;
+
+static void arcon(prte_alloc_resp_caddy_t *p)
+{
+    p->req = NULL;
+    p->status = PMIX_SUCCESS;
+    p->info = NULL;
+    p->ninfo = 0;
+    p->rel = NULL;
+    p->relcbdata = NULL;
+}
+static void ardes(prte_alloc_resp_caddy_t *p)
+{
+    if (NULL != p->req) {
+        PMIX_RELEASE(p->req);
+    }
+}
+static PMIX_CLASS_INSTANCE(prte_alloc_resp_caddy_t, pmix_object_t, arcon, ardes);
+
+/* alloc callback to send the results to the requesting daemon.
+ * Runs on the PRRTE progress thread. */
 static void _send_alloc_resp(int sd, short args, void *cbdata)
 {
-    prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
+    prte_alloc_resp_caddy_t *cd = (prte_alloc_resp_caddy_t*)cbdata;
+    prte_pmix_server_req_t *req = cd->req;
     pmix_data_buffer_t *buf;
     pmix_status_t rc;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
-    PMIX_ACQUIRE_OBJECT(req);
+    PMIX_ACQUIRE_OBJECT(cd);
+
+    /* now safe to touch the request: record the result on it. Beware that some
+     * callers pass the request's OWN info array back as the result (the RAS
+     * base does) - do not free it in that case */
+    req->pstatus = cd->status;
+    if (req->copy && NULL != req->info && cd->info != req->info) {
+        PMIX_INFO_FREE(req->info, req->ninfo);
+        req->copy = false;
+    }
+    req->info = cd->info;
+    req->ninfo = cd->ninfo;
 
     /* pack the status */
     PMIX_DATA_BUFFER_CREATE(buf);
     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, buf, &req->pstatus, 1, PMIX_STATUS))) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
-        return;
+        goto cleanup;
     }
 
     /* pack the remote daemon's request index */
     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, buf, &req->remote_index, 1, PMIX_INT))) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
-        return;
+        goto cleanup;
     }
 
     /* pack any provided info */
     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, buf, &req->ninfo, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
-        return;
+        goto cleanup;
     }
 
     if (0 < req->ninfo) {
         if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, buf, req->info, req->ninfo, PMIX_INFO))) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(buf);
-            return;
+            goto cleanup;
         }
     }
 
@@ -2125,14 +2180,20 @@ static void _send_alloc_resp(int sd, short args, void *cbdata)
         PMIX_DATA_BUFFER_RELEASE(buf);
     }
 
-    /* Call the provided callback function */
-    if (NULL != req->rlcbfunc) {
-        req->rlcbfunc(req->rlcbdata);
+cleanup:
+    /* Call the provided callback function. Every exit path comes through here:
+     * a pack failure used to return early, leaking the request and never
+     * releasing the results back to PMIx. */
+    if (NULL != cd->rel) {
+        cd->rel(cd->relcbdata);
     }
+    req->info = NULL;
+    req->ninfo = 0;
 
     /* Release the server op request data */
     pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
     PMIX_RELEASE(req);
+    PMIX_RELEASE(cd);
 }
 
 static void send_alloc_resp(pmix_status_t status,
@@ -2142,26 +2203,27 @@ static void send_alloc_resp(pmix_status_t status,
                             void *release_cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
+    prte_alloc_resp_caddy_t *cd;
 
-    /* this can be invoked on the PMIx progress thread (e.g., as the
-     * callback from PMIx_Session_control), so record the results in
-     * the request and shift the pack/send onto our event base. The
-     * results remain valid until we invoke the release callback,
-     * which now happens at the end of the shifted handler. Beware
-     * that some callers pass the request's own info array back as
-     * the results - do not free it in that case */
-    req->pstatus = status;
-    if (req->copy && NULL != req->info && info != req->info) {
-        PMIX_INFO_FREE(req->info, req->ninfo);
-        req->copy = false;
+    /* GOLDEN RULE: this can be invoked on the PMIx progress thread, so capture
+     * the result and post it - touch no PRRTE state here. */
+    cd = PMIX_NEW(prte_alloc_resp_caddy_t);
+    if (NULL == cd) {
+        /* nothing we can do but hand the results back */
+        if (NULL != release_fn) {
+            release_fn(release_cbdata);
+        }
+        return;
     }
-    req->info = info;
-    req->ninfo = ninfo;
-    req->rlcbfunc = release_fn;
-    req->rlcbdata = release_cbdata;
-    prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, _send_alloc_resp, req);
-    PMIX_POST_OBJECT(req);
-    prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
+    PMIX_RETAIN(req);
+    cd->req = req;
+    cd->status = status;
+    cd->info = info;
+    cd->ninfo = ninfo;
+    cd->rel = release_fn;
+    cd->relcbdata = release_cbdata;
+
+    PRTE_PMIX_THREADSHIFT(cd, prte_event_base, _send_alloc_resp);
 }
 
 static void pmix_server_sched(int status, pmix_proc_t *sender,
