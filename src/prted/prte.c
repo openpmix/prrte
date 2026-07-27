@@ -244,7 +244,7 @@ static void shutdown_callback(int fd, short flags, void *arg)
     exit(PRTE_ERROR_DEFAULT_EXIT_CODE);
 }
 
-int prte(int argc, char *argv[])
+PRTE_EXPORT int prte(int argc, char *argv[])
 {
     int rc = 1, i;
     char *param, *tpath, *cptr;

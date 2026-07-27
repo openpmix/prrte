@@ -69,7 +69,7 @@ typedef struct {
     pmix_info_cbfunc_t cbfunc;
     void *cbdata;
 } prte_pmix_grp_caddy_t;
-PMIX_CLASS_DECLARATION(prte_pmix_grp_caddy_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_pmix_grp_caddy_t);
 
 /* define a callback function to be invoked upon
  * collective completion */
