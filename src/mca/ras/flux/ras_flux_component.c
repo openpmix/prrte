@@ -31,6 +31,8 @@
 #include "prte_config.h"
 #include "constants.h"
 
+#include <stdlib.h>
+
 #if PRTE_TESTBUILD_LAUNCHERS
 #    include "testbuild_flux.h"
 #else
@@ -107,6 +109,20 @@ static int prte_mca_ras_flux_component_query(pmix_mca_base_module_t **module, in
 {
     flux_t *h = NULL;
     flux_error_t error;
+
+    /* Like every other ras component, decide first whether the job is even
+     * ours before doing any work.  Opening a handle is not free, and outside
+     * a Flux instance it cannot succeed anyway: flux_open_ex takes its
+     * default URI from FLUX_URI, which a Flux instance always sets for the
+     * jobs it runs.  So unless the user pointed us at a broker explicitly,
+     * no FLUX_URI means no Flux, and we should not touch the library at
+     * all -- which is also what keeps an --enable-testbuild-launchers tree
+     * (where the library is a set of stubs) from calling into it. */
+    if (NULL == prte_mca_ras_flux_component.flux_broker_uri &&
+        NULL == getenv("FLUX_URI")) {
+        *module = NULL;
+        return PRTE_ERROR;
+    }
 
     /* See if we can contact a Flux broker */
     h = flux_open_ex(prte_mca_ras_flux_component.flux_broker_uri, 

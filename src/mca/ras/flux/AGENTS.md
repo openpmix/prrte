@@ -11,9 +11,20 @@ Component guide for `src/mca/ras/flux/`. Read the
 and fetching the job's resource set. It is an **optional build**: its
 `configure.m4` requires both Flux (`PRTE_CHECK_FLUX`) and Jansson
 (`PRTE_CHECK_JANSSON`); if either is missing the component is not built.
-Its `query` actually opens a Flux handle (`flux_open_ex`) to test
-availability, selecting at the configurable priority `ras_flux_priority`
-(default **100**) when a broker answers.
+It is also a **run-time loadable plugin** — it is in the default
+`--enable-mca-dso` list in
+[`config/prte_mca.m4`](../../../../config/prte_mca.m4), which keeps
+`libflux-core` and `libjansson` out of `libprrte` and hence out of every
+PRRTE tool. Do not take it off that list: it is what makes
+`--enable-testbuild-launchers` viable (see the framework guide).
+
+`query` gates on `FLUX_URI` (or an explicitly-set `ras_flux_broker_uri`)
+and only then opens a handle (`flux_open_ex`) to confirm a broker is
+really there, selecting at the configurable priority `ras_flux_priority`
+(default **100**) when one answers. The env check is not just an
+optimization — it is what stops the component from calling into a stub
+library in a testbuild tree, and outside a Flux instance the open could
+not have succeeded anyway.
 
 Files:
 

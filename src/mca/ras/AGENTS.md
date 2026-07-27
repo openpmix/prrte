@@ -368,7 +368,7 @@ documented in each component's guide.
 
 ---
 
-## `--enable-testbuild-launchers` — COMPILE ONLY, never run it
+## `--enable-testbuild-launchers` — compile-only, and it requires a DSO
 
 Several ras components are gated on third-party headers that most
 machines do not have, so they are silently skipped by nearly every
@@ -387,25 +387,52 @@ declaration-only stand-ins:
 | [`flux/testbuild_flux.h`](flux/testbuild_flux.h) | `<flux/core.h>`, `<flux/hostlist.h>`, `<flux/idset.h>` | `ras/flux` |
 | [`lsf/testbuild_lsf.h`](lsf/testbuild_lsf.h) | `<lsf/lsbatch.h>` | `ras/lsf` |
 
-> **A tree configured this way MUST NOT BE RUN.** Nothing in those headers
-> is implemented, so the symbols resolve to nothing and the first call
-> into one is a jump to address 0. It is not a graceful failure and not
-> confined to the component: `ras/flux` builds *statically*, and its
-> `query` calls `flux_open_ex` unconditionally, so **every PRRTE tool
-> segfaults during `prte_init`**:
->
-> ```
-> [Mac:73844] Signal: Segmentation fault: 11
-> [Mac:73844] [ 1] libprrte.4.dylib  prte_mca_ras_flux_component_query + 72
-> [Mac:73844] [ 2] libprrte.4.dylib  prte_ras_base_select + 552
-> [Mac:73844] [ 3] libprrte.4.dylib  rte_init + 2868
-> ```
->
-> Use it to answer "does this still compile?" and nothing else. Configure
-> a **second** tree without it for `make check`, the offline harness, and
-> any live run — and re-check the compile-only tree after touching
-> `ras/flux`, `ras/lsf`, or `ras_slurm_jansson.c`, because a normal build
-> will not tell you that you broke them.
+### A stubbed component MUST be a DSO
+
+Nothing behind those declarations is implemented, so the object files
+come out with unresolved `lsb_*`/`flux_*`/`json_*`/`hostlist_*`/`idset_*`
+references. Where they land decides whether the tree even builds:
+
+- **As a run-time loadable plugin** the unresolved references are fine.
+  Creating a shared object does not require them to resolve; the loader
+  refuses the `dlopen` later and the framework simply never sees the
+  component.
+- **Linked statically into `libprrte`** they are fatal. Every PRRTE tool
+  links that library, and the link fails on the first one:
+
+  ```
+  /usr/bin/ld: ../../../src/.libs/libprrte.so: undefined reference to `flux_open_ex'
+  ```
+
+So **every component with a testbuild stub must be in the default
+`--enable-mca-dso` list** in [`config/prte_mca.m4`](../../../config/prte_mca.m4)
+— today `plm-lsf`, `plm-tm`, `ras-lsf`, `ras-flux` and `ras-slurm`
+(`ras/slurm` is on the list because it compiles the jansson parser). That
+is also the right layout regardless of the stubs: it keeps a third-party
+dependency out of `libprrte` and therefore out of every PRRTE tool.
+Adding a stub without adding the component to that list breaks the build
+for everyone.
+
+### It must also not *call* a stub
+
+`dlopen` failing is a Linux-and-friends guarantee, not a universal one.
+On macOS a plugin is a bundle built with a flat namespace: it loads
+happily and the unresolved call becomes a jump to address 0 the moment
+someone makes it. So a stubbed component's `query` must decide whether
+this machine is even its environment **before** it touches the library —
+`getenv("LSB_JOBID")` for `ras/lsf`, `getenv("FLUX_URI")` for `ras/flux`.
+That is the framework convention anyway (see the `allocate()` return
+protocol above); with a stub it is also what keeps `prte_init` from
+segfaulting.
+
+Given both, a tree configured this way builds, links and runs — CI
+depends on that, since every build job configures
+`--enable-testbuild-launchers` and then runs `make check`, `make install`
+and a live `prterun`. What it cannot do is any actual work: nothing is
+parsed and no broker is contacted, so re-check such a tree after touching
+`ras/flux`, `ras/lsf` or `ras_slurm_jansson.c` (a normal build will not
+tell you that you broke them), and do not install one over a good
+installation.
 
 Adding a stub is deliberate work, not boilerplate: declare only what the
 component actually calls, and keep the signatures faithful. A wrong
@@ -417,7 +444,7 @@ prototype here compiles and then mismatches the real library.
 
 | Layer | What it covers |
 |-------|----------------|
-| [`test/unit/ras/test_ras.c`](../../../test/unit/ras/) (`make check`) | `prte_ras_base_node_insert` (dedup, drain, slot accounting, `ADD_SLOTS` clamping, FQDN normalization, HNP dedup, pre-assigned pool slots), the module vtable contract for every static component, `prte_ras_base_select` priority ordering, `prte_ras_base_flag_string`, and the SLURM taint validators + bounded output drain. |
+| [`test/unit/ras/test_ras.c`](../../../test/unit/ras/) (`make check`) | `prte_ras_base_node_insert` (dedup, drain, slot accounting, `ADD_SLOTS` clamping, FQDN normalization, HNP dedup, pre-assigned pool slots), the module vtable contract for every static component, `prte_ras_base_select` priority ordering, `prte_ras_base_flag_string`, and the SLURM taint validators + bounded output drain. The SLURM half needs symbols in `libprrte` to link against, so it only compiles in when `ras/slurm` is *static* — `ras-slurm` is a DSO by default, so build with `--enable-mca-static=ras-slurm` when you touch those validators. |
 | [`contrib/dockerswarm/run-tests.sh`](../../../contrib/dockerswarm/) (`linux`) | The multi-node paths: grow/shrink/re-grow leaving exactly one daemon per node (a duplicated pool entry launches two), and `--add-hostfile` growing a live DVM through `add_hosts → ras/pmix defer → ras/hosts` including the `slots=+N` in-place adjust. |
 | Live RM | SLURM/PBS/LSF/Flux discovery and the SLURM elastic modify surface still need a real scheduler; there is no substitute. |
 
