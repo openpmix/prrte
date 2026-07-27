@@ -360,26 +360,31 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     /* construct a list to hold the results */
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
 
-    /* In an unmanaged allocation, the nodes discovered for the DVM's
-     * initial (daemon-job) allocation constitute the fixed base allocation
-     * for the entire session - exactly as if a scheduler had provided them.
-     * Once that base has been established, a subsequent job (for example,
-     * the child of a PMIx_Spawn) must not re-run discovery: doing so re-reads
-     * the default hostfile and overwrites the established per-node slot counts
-     * while clearing PRTE_NODE_FLAG_SLOTS_GIVEN. That in turn lets the node be
-     * re-sized to its core count, which hides genuine oversubscription from
-     * the mapper and causes spawned processes to be bound on a node that is
-     * actually oversubscribed. The only sanctioned way to change an unmanaged
-     * allocation is an explicit add-host/add-hostfile request, which is
-     * handled separately (prte_ras_base_add_hosts -> prte_ras_base_modify)
-     * before we ever reach this point. So if the base allocation already
-     * exists and this is not the DVM's own daemon job, simply reuse it.
+    /* The nodes discovered for the DVM's initial (daemon-job) allocation
+     * constitute the fixed base allocation for the entire session, whoever
+     * provided them - a scheduler, a hostfile, or -host. Once that base has
+     * been established, a subsequent job (for example, the child of a
+     * PMIx_Spawn) must not re-run discovery. Re-reading a hostfile overwrites
+     * the established per-node slot counts while clearing
+     * PRTE_NODE_FLAG_SLOTS_GIVEN, which lets the node be re-sized to its core
+     * count - hiding genuine oversubscription from the mapper and binding
+     * spawned processes on a node that is actually oversubscribed. Re-reading
+     * a resource manager is no better: an RM component that has already
+     * recorded this allocation has to spend a return code saying so
+     * (ras/slurm answers PRTE_EXISTS to avoid double-inserting the whole
+     * node set), and one that does not would insert it twice.
+     *
+     * The only sanctioned way to change an established allocation is an
+     * explicit add-host/add-hostfile or allocation request, which is handled
+     * separately (prte_ras_base_add_hosts / prte_ras_base_modify) before we
+     * ever reach this point. So if the base allocation already exists and
+     * this is not the DVM's own daemon job, simply reuse it.
      *
      * The "established" test is deliberately independent of whether the HNP
      * node is part of the allocation (prte_ras_base.allocation_established is
      * set when the first allocation completes), so the protection holds even
      * for allocations that exclude the head node. */
-    if (!prte_managed_allocation && prte_ras_base.allocation_established &&
+    if (prte_ras_base.allocation_established &&
         0 != strcmp(jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
         PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                              "%s ras:base:allocate reusing established base allocation for job %s",
