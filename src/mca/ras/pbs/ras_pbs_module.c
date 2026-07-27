@@ -229,6 +229,8 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
             node->slots_inuse = 0;
             node->slots_max = 0;
             node->slots = ppn;
+            /* the count came from PBS_NODEFILE - authoritative */
+            PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             node->state = PRTE_NODE_STATE_UP;
             pmix_list_append(nodelist, &node->super);
         } else {

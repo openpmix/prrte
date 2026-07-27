@@ -141,6 +141,8 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
             node->slots_inuse = 0;
             node->slots_max = 0;
             node->slots = (int) strtol(num, (char **) NULL, 10);
+            /* the count came from PE_HOSTFILE - authoritative */
+            PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             pmix_output(prte_mca_ras_gridengine_component.verbose,
                         "ras:gridengine: %s: PE_HOSTFILE shows slots=%d queue=%s arch=%s",
                         node->name, node->slots, queue, arch);

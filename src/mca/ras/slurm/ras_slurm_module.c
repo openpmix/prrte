@@ -536,6 +536,11 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
         node->slots_inuse = 0;
         node->slots_max = 0;
         node->slots = slots[i];
+        /* This count came from the scheduler, so it is authoritative: mark it
+         * given or the launch path will discard it and re-derive the node's
+         * size from its core count, silently handing the job more slots than
+         * SLURM allocated and hiding real oversubscription from the mapper. */
+        PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
         pmix_list_append(nodelist, &node->super);
     }
     free(slots);

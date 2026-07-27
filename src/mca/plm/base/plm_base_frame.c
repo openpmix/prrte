@@ -258,14 +258,18 @@ static void launch_daemons(int fd, short args, void *cbdata)
             PMIX_RELEASE(state);
             return;
         }
-        if (!prte_managed_allocation || prte_set_slots_override) {
+        /* This is the local-only module: there is no launcher, so the head
+         * node is the entire virtual machine and its slots are the whole of
+         * what this job can be given. Size it only if nobody gave us a count
+         * for it - and never report the size of an allocation whose other
+         * nodes we have no way to reach, which is what copying
+         * prte_ras_base.total_slots_alloc here used to do.
+         */
+        if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN) || prte_set_slots_override) {
             // set the number of slots on our node
             prte_plm_base_set_slots(node);
-            state->jdata->total_slots_alloc = node->slots;
-        } else {
-            /* for managed allocations, the total slots allocated is fixed at time of allocation */
-            state->jdata->total_slots_alloc = prte_ras_base.total_slots_alloc;
         }
+        state->jdata->total_slots_alloc = node->slots;
 
         // check for topology limitations
         prte_rmaps_base.require_hwtcpus = !prte_hwloc_base_core_cpus(node->topology->topo);

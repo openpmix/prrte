@@ -312,6 +312,8 @@ static int parse_json_payload(json_t *root,  pmix_list_t *prte_nodelist)
         node->slots_inuse = 0;
         node->slots_max = 0;
         node->slots = hostinfo[i].nslots;
+        /* the count came from the Flux resource set - authoritative */
+        PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
         PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                              "%s ras:flux:allocate:discover: adding node %s (%d slots)",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, hostinfo[i].nslots));
