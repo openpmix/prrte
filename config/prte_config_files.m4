@@ -39,5 +39,6 @@ AC_DEFUN([PRTE_CONFIG_FILES],[
         test/unit/odls/Makefile
         test/unit/iof/Makefile
         test/unit/plm/Makefile
+        test/unit/rml/Makefile
     ])
 ])

@@ -111,9 +111,6 @@ prte_oob_base_t prte_oob_base = {
     .max_recon_attempts = 0
 };
 
-static void split_and_resolve(char **orig_str, char *name,
-                              char ***interfaces);
-
 int prte_oob_open(void)
 {
     pmix_pif_t *copied_interface, *selected_interface;
@@ -150,12 +147,12 @@ int prte_oob_open(void)
      * subnet+mask
      */
     if (NULL != prte_if_include) {
-        split_and_resolve(&prte_if_include,
-                          "include", &interfaces);
+        prte_oob_split_and_resolve(&prte_if_include,
+                                   "include", &interfaces);
         including = true;
     } else if (NULL != prte_if_exclude) {
-        split_and_resolve(&prte_if_exclude,
-                          "exclude", &interfaces);
+        prte_oob_split_and_resolve(&prte_if_exclude,
+                                   "exclude", &interfaces);
     }
 
     /* if we are the master, then check the interfaces for loopbacks
@@ -685,8 +682,8 @@ cleanup:
  * (a.b.c.d/e), resolve them to an interface name (Currently only
  * supporting IPv4).  If unresolvable, warn and remove.
  */
-static void split_and_resolve(char **orig_str, char *name,
-                              char ***interfaces)
+void prte_oob_split_and_resolve(char **orig_str, char *name,
+                                char ***interfaces)
 {
     pmix_pif_t *selected_interface;
     int i, n, ret, match_count;
@@ -701,6 +698,15 @@ static void split_and_resolve(char **orig_str, char *name,
         return;
     }
 
+    /* If there is no list to collect into, then there is nothing to
+     * resolve against and nothing for the caller to consult afterwards -
+     * just discard the specification */
+    if (NULL == interfaces) {
+        free(*orig_str);
+        *orig_str = NULL;
+        return;
+    }
+
     argv = PMIx_Argv_split(*orig_str, ',');
     if (NULL == argv) {
         return;
@@ -709,7 +715,7 @@ static void split_and_resolve(char **orig_str, char *name,
         if (isalpha(argv[i][0])) {
             /* This is an interface name. If not already in the interfaces array, add it */
             found = false;
-            if (NULL != interfaces && NULL != *interfaces) {
+            if (NULL != *interfaces) {
                 for (n = 0; NULL != (*interfaces)[n]; n++) {
                     if (0 == strcmp(argv[i], (*interfaces)[n])) {
                         found = true;
@@ -775,7 +781,7 @@ static void split_and_resolve(char **orig_str, char *name,
                 match_count = match_count + 1;
                 pmix_ifkindextoname(selected_interface->if_kernel_index, if_name, sizeof(if_name));
                 found = false;
-                if (NULL != interfaces && NULL != *interfaces) {
+                if (NULL != *interfaces) {
                     for (n = 0; NULL != (*interfaces)[n]; n++) {
                         if (0 == strcmp(if_name, (*interfaces)[n])) {
                             found = true;
@@ -808,11 +814,7 @@ static void split_and_resolve(char **orig_str, char *name,
     // cleanup and construct output string
     PMIx_Argv_free(argv);
     free(*orig_str);
-    if (NULL != interfaces) {
-        *orig_str = PMIx_Argv_join(*interfaces, ',');
-    } else {
-        *orig_str = NULL;
-    }
+    *orig_str = PMIx_Argv_join(*interfaces, ',');
     return;
 }
 
