@@ -82,8 +82,11 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     }
 
     /* save that value in the global job ident string for
-     * later use in any error reporting
-     */
+     * later use in any error reporting. Release any previous value:
+     * allocate() can run more than once in a session. */
+    if (NULL != prte_job_ident) {
+        free(prte_job_ident);
+    }
     prte_job_ident = strdup(pbs_jobid);
 
     if (PRTE_SUCCESS != (ret = discover(nodes, pbs_jobid))) {
