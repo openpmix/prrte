@@ -368,6 +368,51 @@ documented in each component's guide.
 
 ---
 
+## `--enable-testbuild-launchers` — COMPILE ONLY, never run it
+
+Several ras components are gated on third-party headers that most
+machines do not have, so they are silently skipped by nearly every
+developer build and every CI job — which is exactly where an edit can sit
+broken indefinitely. `ras/flux` needs Flux *and* jansson; `ras/slurm`
+compiles a ~1000-line `scontrol --json` parser only when jansson is
+found, and **jansson defaults to `--with-jansson=no`**, so the stub is
+what almost everyone builds.
+
+`--enable-testbuild-launchers` builds them anyway, against
+declaration-only stand-ins:
+
+| Header | Stands in for | Used by |
+|--------|---------------|---------|
+| [`base/testbuild_jansson.h`](base/testbuild_jansson.h) | `<jansson.h>` | `ras/slurm` (`ras_slurm_jansson.c`), `ras/flux` |
+| [`flux/testbuild_flux.h`](flux/testbuild_flux.h) | `<flux/core.h>`, `<flux/hostlist.h>`, `<flux/idset.h>` | `ras/flux` |
+| [`lsf/testbuild_lsf.h`](lsf/testbuild_lsf.h) | `<lsf/lsbatch.h>` | `ras/lsf` |
+
+> **A tree configured this way MUST NOT BE RUN.** Nothing in those headers
+> is implemented, so the symbols resolve to nothing and the first call
+> into one is a jump to address 0. It is not a graceful failure and not
+> confined to the component: `ras/flux` builds *statically*, and its
+> `query` calls `flux_open_ex` unconditionally, so **every PRRTE tool
+> segfaults during `prte_init`**:
+>
+> ```
+> [Mac:73844] Signal: Segmentation fault: 11
+> [Mac:73844] [ 1] libprrte.4.dylib  prte_mca_ras_flux_component_query + 72
+> [Mac:73844] [ 2] libprrte.4.dylib  prte_ras_base_select + 552
+> [Mac:73844] [ 3] libprrte.4.dylib  rte_init + 2868
+> ```
+>
+> Use it to answer "does this still compile?" and nothing else. Configure
+> a **second** tree without it for `make check`, the offline harness, and
+> any live run — and re-check the compile-only tree after touching
+> `ras/flux`, `ras/lsf`, or `ras_slurm_jansson.c`, because a normal build
+> will not tell you that you broke them.
+
+Adding a stub is deliberate work, not boilerplate: declare only what the
+component actually calls, and keep the signatures faithful. A wrong
+prototype here compiles and then mismatches the real library.
+
+---
+
 ## Testing
 
 | Layer | What it covers |

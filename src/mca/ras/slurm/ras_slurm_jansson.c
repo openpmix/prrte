@@ -24,7 +24,11 @@
 #include <limits.h>
 #include <sys/wait.h>
 
-#include <jansson.h>
+#if PRTE_TESTBUILD_LAUNCHERS
+#    include "src/mca/ras/base/testbuild_jansson.h"
+#else
+#    include <jansson.h>
+#endif
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/util/pmix_output.h"

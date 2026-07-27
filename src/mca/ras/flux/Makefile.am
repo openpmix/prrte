@@ -31,7 +31,9 @@ sources = \
         ras_flux_component.c \
         ras_flux_module.c
 
-EXTRA_DIST = help-ras-flux.txt
+# testbuild_flux.h is only #included when --enable-testbuild-launchers
+# is given, so it appears in no _SOURCES list and has to be listed here
+EXTRA_DIST = help-ras-flux.txt testbuild_flux.h
 
 # Make the output library in this directory, and name it either
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la

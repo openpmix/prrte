@@ -20,7 +20,8 @@
 #
 
 EXTRA_DIST += \
-        base/help-ras-base.txt
+        base/help-ras-base.txt \
+        base/testbuild_jansson.h
 
 headers += \
         base/base.h
