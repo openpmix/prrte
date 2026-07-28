@@ -575,6 +575,9 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
         case PRTE_JOB_SPAWN_TARGET:
             return "SPAWN_TARGET";
 
+        case PRTE_JOB_OUTPUT_FILE_PATTERN:
+            return "JOB-OUTPUT-FILE-PATTERN";
+
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";
         case PRTE_PROC_PRIOR_NODE:

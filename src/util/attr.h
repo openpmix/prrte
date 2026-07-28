@@ -264,6 +264,8 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_DO_NOT_SPAWN               (PRTE_JOB_START_KEY + 123) // bool - do not spawn app procs
 #define PRTE_JOB_SPAWN_TARGET               (PRTE_JOB_START_KEY + 124) // char* - comma-delimited list of PMIX_ALLOC_ID strings naming the
                                                                        // allocations (sessions) this job may map onto; empty token = default session
+#define PRTE_JOB_OUTPUT_FILE_PATTERN        (PRTE_JOB_START_KEY + 125) // bool - treat PRTE_JOB_OUTPUT_TO_FILE as a name pattern the user
+                                                                       // controls instead of annotating it with nspace and rank
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 

@@ -596,6 +596,14 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
             prte_set_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_NOCOPY, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
 
+        } else if (PMIX_CHECK_KEY(info, PMIX_IOF_FILE_PATTERN)) {
+            /* the output filename is the requestor's to compose - carry the
+             * flag through to the nspace registration, which is what puts it
+             * in front of the PMIx IOF that opens the file */
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_FILE_PATTERN, PRTE_ATTR_GLOBAL,
+                               &flag, PMIX_BOOL);
+
             /***   MERGE STDERR TO STDOUT   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_IOF_MERGE_STDERR_STDOUT) ||
                    PMIX_CHECK_KEY(info, PMIX_MERGE_STDERR_STDOUT)) {

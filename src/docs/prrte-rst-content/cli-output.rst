@@ -50,6 +50,38 @@ Supported values include:
   ``filename.rank.`` The provided name will be converted to an absolute
   path
 
-Supported qualifiers include ``NOCOPY`` (do not copy the output to the
-stdout/err streams), and ``RAW`` (do not buffer the output into complete
-lines, but instead output it as it is received).
+Supported qualifiers include ``COPY`` (also send a copy of the output to
+the stdout/err streams), ``NOCOPY`` (do not copy the output to the
+stdout/err streams |mdash| the default), ``RAW`` (do not buffer the output
+into complete lines, but instead output it as it is received), and
+``PATTERN``.
+
+``PATTERN`` is used with the ``FILE`` directive. It says that the name you
+gave is a pattern you compose yourself, rather than a stem to be annotated
+with the namespace and rank. These conversions are expanded in it:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Conversion
+     - Expands to
+   * - ``%n``
+     - the job's namespace
+   * - ``%r``
+     - the process's rank
+   * - ``%R``
+     - the rank, zero-padded to the width of the job's largest rank
+   * - ``%h``
+     - the hostname of the node the process ran on
+   * - ``%%``
+     - a literal ``%`` character
+
+The stream suffix (``.out`` or ``.err``) is still appended, so stdout and
+stderr can never land on the same file. A pattern containing no ``%`` at
+all is therefore simply a fixed name shared by every process in the job.
+
+For example, ``--output file=run/%h/rank-%R:pattern`` writes each
+process's stdout to ``run/<hostname>/rank-<rank>.out``.
+
+Any conversion other than those listed above is an error, reported when
+the command line is parsed.

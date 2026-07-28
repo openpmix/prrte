@@ -17,6 +17,7 @@
 
 #include "test_schizo.h"
 
+#include "src/common/pmix_iof.h"
 #include "src/pmix/pmix-internal.h"
 
 /* Run a parser over an option value set and hand back the info array it
@@ -220,6 +221,73 @@ int test_output(void)
     rc = run_parser(prte_schizo_base_parse_display, PRTE_CLI_DISPLAY, dvals5,
                     &iptr, &ninfo);
     CHECK("display:bad-qual", PRTE_SUCCESS != rc);
+
+#if PRTE_PMIX_IOF_FILE_PATTERN
+    /*** the "pattern" qualifier hands the naming of the output files to the
+     *** user.  It only means anything alongside a "file=" directive, and the
+     *** conversions in it are checked here - while the user is still looking
+     *** at the command line they typed - rather than at the moment a daemon
+     *** fails to open a file. ***/
+    {
+        char *pvals1[] = {"file=/tmp/prte-schizo-test-%h/rank-%R:pattern", NULL};
+        char *pvals2[] = {"file=/tmp/prte-schizo-test-%q:pattern", NULL};
+        char *pvals3[] = {"tag:pattern", NULL};
+        char *pvals4[] = {"file=/tmp/prte-schizo-test:pattern:copy", NULL};
+
+        rc = run_parser(prte_schizo_base_parse_output, PRTE_CLI_OUTPUT, pvals1,
+                        &iptr, &ninfo);
+        CHECK("output:pattern-rc", PRTE_SUCCESS == rc);
+        CHECK("output:pattern-file", has_key(iptr, ninfo, PMIX_IOF_OUTPUT_TO_FILE));
+        CHECK("output:pattern-key", has_key(iptr, ninfo, PMIX_IOF_FILE_PATTERN));
+        PMIX_INFO_FREE(iptr, ninfo);
+
+        /* an unrecognized conversion is refused up front */
+        fprintf(stderr, "--- expected error output follows (bad pattern) ---\n");
+        rc = run_parser(prte_schizo_base_parse_output, PRTE_CLI_OUTPUT, pvals2,
+                        &iptr, &ninfo);
+        CHECK("output:pattern-bad-conversion", PRTE_SUCCESS != rc);
+
+        /* ...and so is a pattern with nothing to name */
+        fprintf(stderr, "--- expected error output follows (pattern, no file) ---\n");
+        rc = run_parser(prte_schizo_base_parse_output, PRTE_CLI_OUTPUT, pvals3,
+                        &iptr, &ninfo);
+        CHECK("output:pattern-needs-file", PRTE_SUCCESS != rc);
+
+        /* pattern composes with the other qualifiers */
+        rc = run_parser(prte_schizo_base_parse_output, PRTE_CLI_OUTPUT, pvals4,
+                        &iptr, &ninfo);
+        CHECK("output:pattern-with-copy-rc", PRTE_SUCCESS == rc);
+        CHECK("output:pattern-with-copy-key", has_key(iptr, ninfo, PMIX_IOF_FILE_PATTERN));
+        val = key_is_true(iptr, ninfo, PMIX_IOF_FILE_ONLY, &found);
+        CHECK("output:pattern-with-copy-present", found);
+        CHECK("output:pattern-with-copy-false", !val);
+        PMIX_INFO_FREE(iptr, ninfo);
+    }
+
+    /*** the conversions PMIx accepts are the conversions we advertise ***/
+    {
+        char *bad = NULL;
+        CHECK("pattern:all-conversions",
+              PMIX_SUCCESS == pmix_iof_check_pattern("%n/%r/%R/%h/%%", &bad));
+        CHECK("pattern:no-conversions",
+              PMIX_SUCCESS == pmix_iof_check_pattern("plain-name", &bad));
+        CHECK("pattern:unknown-conversion",
+              PMIX_SUCCESS != pmix_iof_check_pattern("out-%q", &bad));
+        CHECK("pattern:names-the-offender",
+              NULL != bad && 0 == strcmp(bad, "%q"));
+        if (NULL != bad) {
+            free(bad);
+            bad = NULL;
+        }
+        /* a trailing '%' has no conversion character at all - report it
+         * rather than read past the end of the string */
+        CHECK("pattern:trailing-percent",
+              PMIX_SUCCESS != pmix_iof_check_pattern("out-%", &bad));
+        if (NULL != bad) {
+            free(bad);
+        }
+    }
+#endif
 
     return failures;
 }
