@@ -14,7 +14,7 @@
 # Copyright (c) 2011      Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -280,6 +280,33 @@ requested ones:
 
 Please specify a mapping level that has more cpus, or else let us
 define a default mapping that will allow multiple cpus-per-proc.
+#
+[conflicting-directives]
+Two qualifiers that contradict each other were given in the same
+directive:
+
+  Qualifier:  %s
+  Qualifier:  %s
+
+Please give only one of them.
+#
+[conflicting-job-qualifiers]
+A qualifier that applies to the entire job was given more than once,
+with conflicting values:
+
+  Qualifier:       %s
+  Given by:        %s
+  Conflicts with:  %s
+
+Qualifiers such as OVERSUBSCRIBE and INHERIT describe the whole job -
+whether a node may hold more processes than it has slots, or whether
+this job takes on its parent's launch directives. Every application in
+the job therefore has to agree about them: it is fine to give such a
+qualifier on one application of several, and it will be applied to the
+job as a whole, but two applications cannot ask for opposite things.
+
+Please give the qualifier only once, or give it the same value
+everywhere.
 #
 [unrecognized-modifier]
 The mapping request contains an unrecognized qualifier:

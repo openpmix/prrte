@@ -51,29 +51,45 @@ continue to apply at the job level.
    prun -n 3 app1 --map-by rankfile:file=/path/to/rfile : -n 2 app2
 
 Any ``--map-by`` qualifier that is valid at the job level is also valid per
-app, with the following exceptions (described in the next section).
+app.  A few of them describe the job rather than the app, and are handled as
+described in the next section.
 
 
-Job-Level-Only Directives
--------------------------
+Job-Level Directives Written On An App
+--------------------------------------
 
-Some directives are properties of the job as a whole and cannot be applied
-per app context:
+Some qualifiers are properties of the job as a whole.  They may still be
+written in a per-app ``--map-by`` string — indeed on a multi-app command line
+there is nowhere else to write them, since it takes two mapping directives to
+make the mapping per-app at all, and a lone directive belongs to the job.  So
+PRRTE takes such a qualifier off the app that carried it and applies it to the
+job.
+
+What cannot be honored is app contexts that answer the same question in
+opposite ways; that is refused, and the job aborts with
+``PRTE_JOB_STATE_MAP_FAILED``.  Apps that say nothing are silent, not
+dissenting: it is enough that the apps which do give the qualifier agree with
+each other, and with any job-level directive.
 
 ``OVERSUBSCRIBE`` / ``NOOVERSUBSCRIBE``
     Oversubscription governs whether the job as a whole may exceed node slot
     counts.  Because multiple app contexts share the same nodes, this decision
-    must be consistent across all apps.  Specifying ``OVERSUBSCRIBE`` or
-    ``NOOVERSUBSCRIBE`` in a per-app ``--map-by`` string is an error and will
-    cause the job to abort with ``PRTE_JOB_STATE_MAP_FAILED``.
+    has to be the same for all of them.
+
+    .. code-block:: sh
+
+       # legal: the qualifier is written once and applies to the whole job
+       prun -n 14 app1 --map-by slot:oversubscribe : -n 14 app2 --map-by node
+
+       # refused: the two apps ask for opposite things
+       prun -n 4 app1 --map-by core:oversubscribe : \
+            -n 4 app2 --map-by node:nooversubscribe
 
 ``INHERIT`` / ``NOINHERIT``
     These modifiers control whether a spawned child job copies its parent's
-    placement policies.  This is a job-level property.  If the PMIx spawn path
-    supplies ``INHERIT`` or ``NOINHERIT`` in per-app ``info[]`` arrays, PRRTE
-    will attempt to promote the directive to the job level.  If different app
-    contexts carry conflicting directives (one ``INHERIT`` and another
-    ``NOINHERIT``), the job will abort with ``PRTE_JOB_STATE_MAP_FAILED``.
+    placement policies.  This is a job-level property, promoted to the job in
+    the same way, whether it arrives on the command line or in a per-app
+    ``info[]`` array on the PMIx spawn path.
 
 ``--display-map`` / ``--display-devel-map``
     The job map is displayed once after all app contexts have been placed.

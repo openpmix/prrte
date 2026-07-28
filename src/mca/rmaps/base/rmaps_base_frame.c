@@ -189,9 +189,17 @@ PMIX_CLASS_INSTANCE(prte_rmaps_base_selected_module_t,
  *   app         a per-app policy       - recorded on the app context
  *
  * A qualifier whose effect necessarily spans the whole job (OVERSUBSCRIBE,
- * NOOVERSUBSCRIBE, INHERIT, NOINHERIT) cannot be attached to a single app,
- * and is refused at that level: one app cannot oversubscribe its nodes
- * while its siblings do not.
+ * NOOVERSUBSCRIBE, INHERIT, NOINHERIT) describes the job no matter which
+ * app's spec it was written in - one app cannot oversubscribe its nodes
+ * while its siblings do not. That is a reason to hoist it to the job, not a
+ * reason to refuse it, and refusing it left a multi-app command line with no
+ * way to ask for oversubscription at all: it takes two mapping directives to
+ * make the mapping per-app, and by then there is no job-level directive left
+ * to hang the qualifier on. So record it here wherever it was given and let
+ * prte_rmaps_base_hoist_job_directives() move the app-held copies onto the
+ * job once every app has been parsed. Only the case with no meaning - two
+ * apps asking for opposite things - is refused, and it is refused there,
+ * where the whole job is in view.
  *
  * Keeping this in one place is deliberate. It used to be written twice -
  * once here and once inline in prte_rmaps_base_set_app_mapping_policy() -
@@ -237,16 +245,6 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_GIVEN);
 
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_OVERSUB)) {
-            if (NULL != app) {
-                /* spans the whole job - cannot be attached to one app */
-                pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
-                               "per-app mapping policy", ck2[i]);
-                PMIx_Argv_free(ck2);
-                /* SILENT, not BAD_PARAM: the caller reserves BAD_PARAM for a
-                 * qualifier it does not recognize, and would report this one
-                 * a second time as a typo */
-                return PRTE_ERR_SILENT;
-            }
             if (nooversubscribe_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -259,16 +257,6 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
             oversubscribe_given = true;
 
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOOVER)) {
-            if (NULL != app) {
-                /* spans the whole job - cannot be attached to one app */
-                pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
-                               "per-app mapping policy", ck2[i]);
-                PMIx_Argv_free(ck2);
-                /* SILENT, not BAD_PARAM: the caller reserves BAD_PARAM for a
-                 * qualifier it does not recognize, and would report this one
-                 * a second time as a typo */
-                return PRTE_ERR_SILENT;
-            }
             if (oversubscribe_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -311,16 +299,6 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
             }
 
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_INHERIT)) {
-            if (NULL != app) {
-                /* spans the whole job - cannot be attached to one app */
-                pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
-                               "per-app mapping policy", ck2[i]);
-                PMIx_Argv_free(ck2);
-                /* SILENT, not BAD_PARAM: the caller reserves BAD_PARAM for a
-                 * qualifier it does not recognize, and would report this one
-                 * a second time as a typo */
-                return PRTE_ERR_SILENT;
-            }
             if (noinherit_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -331,22 +309,17 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
             if (NULL == attrs) {
                 prte_rmaps_base.inherit = true;
             } else {
+                /* GLOBAL even on an app, where this is only held until the
+                 * hoist moves it to the job: a spawn request is packed and
+                 * sent to the HNP - possibly itself - so the job that gets
+                 * mapped is always an unpacked copy, and a LOCAL attribute
+                 * would not survive the trip to be hoisted at all */
                 prte_set_attribute(attrs, PRTE_JOB_INHERIT, PRTE_ATTR_GLOBAL,
                                    NULL, PMIX_BOOL);
             }
             inherit_given = true;
 
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOINHERIT)) {
-            if (NULL != app) {
-                /* spans the whole job - cannot be attached to one app */
-                pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
-                               "per-app mapping policy", ck2[i]);
-                PMIx_Argv_free(ck2);
-                /* SILENT, not BAD_PARAM: the caller reserves BAD_PARAM for a
-                 * qualifier it does not recognize, and would report this one
-                 * a second time as a typo */
-                return PRTE_ERR_SILENT;
-            }
             if (inherit_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -435,6 +408,115 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
         }
     }
     PMIx_Argv_free(ck2);
+    return PRTE_SUCCESS;
+}
+
+/*
+ * Collect the job-level qualifiers that the apps' mapping specs carry, and
+ * move them onto the job.
+ *
+ * OVERSUBSCRIBE/NOOVERSUBSCRIBE and INHERIT/NOINHERIT answer a question about
+ * the job: whether a node may hold more processes than it has slots, and
+ * whether this job takes its parent's launch directives. One app of a job
+ * cannot answer either differently from its siblings, so wherever the user
+ * wrote the qualifier it is the job's. The one thing that cannot be honored
+ * is apps that answer it in opposite ways, and that is what is refused here -
+ * where every app is in view. Agreement is enough: apps that say nothing are
+ * silent, not dissenting, and a job-level directive is simply the first
+ * answer the apps have to agree with.
+ *
+ * An app's copy is removed once it has been hoisted, so an app whose spec
+ * held nothing else no longer drags the job onto the per-app dispatch path.
+ *
+ * The agreed oversubscription answer is returned rather than written to the
+ * job, because resolving the job's mapping policy assigns the whole policy
+ * word from a default or a parent and would overwrite it; the caller applies
+ * it once that has happened. INHERIT lives in the job's attributes, which
+ * nothing overwrites, so it is applied here.
+ */
+int prte_rmaps_base_hoist_job_directives(prte_job_t *jdata,
+                                         prte_mapping_policy_t *oversubscribe)
+{
+    prte_app_context_t *app;
+    prte_mapping_policy_t apppol, agreed = 0;
+    uint16_t u16;
+    uint16_t *u16ptr = &u16;
+    bool given = false, over = false, appover;
+    int i;
+
+    *oversubscribe = 0;
+
+    /* a job-level mapping directive, if one was given, is the first answer -
+     * read it now, before the mapping policy is resolved against a default */
+    if (NULL != jdata->map &&
+        (PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
+        given = true;
+        over = !(PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping));
+        agreed = PRTE_MAPPING_SUBSCRIBE_GIVEN;
+        if (!over) {
+            agreed |= PRTE_MAPPING_NO_OVERSUBSCRIBE;
+        }
+    }
+
+    for (i = 0; i < jdata->apps->size; i++) {
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i);
+        if (NULL == app) {
+            continue;
+        }
+
+        /***   OVERSUBSCRIBE / NOOVERSUBSCRIBE   ***/
+        if (prte_get_attribute(&app->attributes, PRTE_APP_MAPBY, (void **) &u16ptr, PMIX_UINT16)) {
+            apppol = u16;
+            if (PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(apppol)) {
+                appover = !(PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(apppol));
+                if (given && over != appover) {
+                    pmix_show_help("help-prte-rmaps-base.txt", "conflicting-job-qualifiers",
+                                   true, appover ? "OVERSUBSCRIBE" : "NOOVERSUBSCRIBE",
+                                   app->app, over ? "OVERSUBSCRIBE" : "NOOVERSUBSCRIBE");
+                    return PRTE_ERR_SILENT;
+                }
+                given = true;
+                over = appover;
+                agreed = PRTE_MAPPING_SUBSCRIBE_GIVEN;
+                if (!over) {
+                    agreed |= PRTE_MAPPING_NO_OVERSUBSCRIBE;
+                }
+                /* the app no longer carries it */
+                PRTE_UNSET_MAPPING_DIRECTIVE(apppol, PRTE_MAPPING_SUBSCRIBE_GIVEN);
+                PRTE_UNSET_MAPPING_DIRECTIVE(apppol, PRTE_MAPPING_NO_OVERSUBSCRIBE);
+                if (0 == apppol) {
+                    prte_remove_attribute(&app->attributes, PRTE_APP_MAPBY);
+                } else {
+                    prte_set_attribute(&app->attributes, PRTE_APP_MAPBY, PRTE_ATTR_GLOBAL,
+                                       &apppol, PMIX_UINT16);
+                }
+            }
+        }
+
+        /***   INHERIT / NOINHERIT   ***/
+        if (prte_get_attribute(&app->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL)) {
+            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, NULL, PMIX_BOOL)) {
+                pmix_show_help("help-prte-rmaps-base.txt", "conflicting-job-qualifiers",
+                               true, "INHERIT", app->app, "NOINHERIT");
+                return PRTE_ERR_SILENT;
+            }
+            prte_remove_attribute(&app->attributes, PRTE_JOB_INHERIT);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_INHERIT, PRTE_ATTR_GLOBAL,
+                               NULL, PMIX_BOOL);
+        }
+        if (prte_get_attribute(&app->attributes, PRTE_JOB_NOINHERIT, NULL, PMIX_BOOL)) {
+            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL)) {
+                pmix_show_help("help-prte-rmaps-base.txt", "conflicting-job-qualifiers",
+                               true, "NOINHERIT", app->app, "INHERIT");
+                return PRTE_ERR_SILENT;
+            }
+            prte_remove_attribute(&app->attributes, PRTE_JOB_NOINHERIT);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, PRTE_ATTR_GLOBAL,
+                               NULL, PMIX_BOOL);
+        }
+    }
+
+    *oversubscribe = agreed;
     return PRTE_SUCCESS;
 }
 
@@ -911,8 +993,10 @@ int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)
 }
 
 /* Per-app-context mapping policy parser.
- * Stores results in app->attributes rather than jdata->map.
- * Rejects job-level-only directives (OVERSUBSCRIBE, NOOVERSUBSCRIBE, INHERIT, NOINHERIT).
+ * Stores results in app->attributes rather than jdata->map. A qualifier that
+ * spans the whole job (OVERSUBSCRIBE, NOOVERSUBSCRIBE, INHERIT, NOINHERIT) is
+ * held on the app until prte_rmaps_base_hoist_job_directives() moves it onto
+ * the job, which is also where apps are held to agreeing about it.
  */
 int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec)
 {
@@ -952,9 +1036,9 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
             PMIX_ARGV_JOIN(cptr, &ck[1], ':');
         }
         /* Parse the qualifiers with the same code every other level uses.
-         * check_modifiers() refuses the ones that necessarily span the whole
-         * job, so a per-app spec still cannot carry OVERSUBSCRIBE,
-         * NOOVERSUBSCRIBE, INHERIT or NOINHERIT. */
+         * A qualifier that spans the whole job is recorded here and hoisted
+         * onto the job by prte_rmaps_base_hoist_job_directives() once every
+         * app has been seen. */
         rc = check_modifiers(cptr, NULL, app, &tmp);
         if (PRTE_SUCCESS != rc) {
             if (PRTE_ERR_BAD_PARAM == rc) {
@@ -973,7 +1057,20 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
         }
     }
 
+    /* a spec that opens with ':' names no policy - it is qualifiers only,
+     * which still have to be parsed. This mirrors the job-level parser; a
+     * per-app "--map-by :OVERSUBSCRIBE" used to be discarded in silence. */
     if (':' == inspec[0]) {
+        rc = check_modifiers(&inspec[1], NULL, app, &tmp);
+        if (PRTE_SUCCESS != rc) {
+            if (PRTE_ERR_BAD_PARAM == rc) {
+                pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-modifier",
+                               true, inspec);
+                rc = PRTE_ERR_SILENT;
+            }
+            PMIx_Argv_free(ck);
+            return rc;
+        }
         PMIx_Argv_free(ck);
         goto setpolicy;
     }

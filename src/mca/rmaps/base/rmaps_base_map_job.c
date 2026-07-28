@@ -403,6 +403,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     int slots, len;
     bool flag, *fptr;
     bool map_succeeded = false;
+    prte_mapping_policy_t job_oversub = 0;
 
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
@@ -441,6 +442,20 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         options.limit = u16;
         // reset any prior counters
         prte_hwloc_base_reset_counters();
+    }
+
+    /* an app's mapping spec may carry a qualifier that describes the whole
+     * job - take those off the apps now, while the job's own directives are
+     * still as the user gave them, and hold the apps to agreeing about them.
+     * The oversubscription answer is applied further down, once the job's
+     * mapping policy has been resolved (that resolution assigns the whole
+     * policy word and would otherwise overwrite it) */
+    rc = prte_rmaps_base_hoist_job_directives(jdata, &job_oversub);
+    if (PRTE_SUCCESS != rc) {
+        // the error message has been printed
+        jdata->exit_code = rc;
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+        goto cleanup;
     }
 
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
@@ -733,6 +748,18 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     }
     if (NULL != nptr) {
         PMIX_PROC_RELEASE(nptr);
+    }
+
+    /* apply the oversubscription answer hoisted off the apps. It goes on
+     * before the parent's flag is considered below: the user saying so on
+     * this command line outranks whatever the parent job was given */
+    if (0 != job_oversub) {
+        if (PRTE_MAPPING_NO_OVERSUBSCRIBE & job_oversub) {
+            PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_NO_OVERSUBSCRIBE);
+        } else {
+            PRTE_UNSET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_NO_OVERSUBSCRIBE);
+        }
+        PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_SUBSCRIBE_GIVEN);
     }
 
     /* we always inherit a parent's oversubscribe flag unless the job assigned it */
