@@ -27,6 +27,12 @@ This "always bids at least 5, never 0 by default" behavior is what makes
 `prte` the default. `ompi` bids 0 unless explicitly selected, so an
 un-hinted `prun`/`prte`/`prterun` is a prte-personality invocation.
 
+A bid of 0 means "not me", and the base requires a strictly positive bid
+to select anything — so when a `--personality` list names neither
+personality, both bid 0, `detect_proxy` returns NULL, and the tool reports
+`no-proxy`. Keep that property when editing this component's bids: a
+personality nobody claims must be an error, not a silent fallback.
+
 ---
 
 ## Files
@@ -106,6 +112,11 @@ instance with `PMIX_CLI_REMOVE_DEPRECATED`. Examples:
 
 - `--n` → `--np` (silent, no warning).
 - `--nolocal` → `--map-by :NOLOCAL` (qualifier).
+- `--merge-stderr-to-stdout` → `--output merge-stderr-to-stdout`.
+- `--display-devel-allocation` → `--display allocation` (there is no
+  separate developer-detail allocation display; `allocation` is the only
+  allocation directive `parse_display` knows, so the docs' old advice to
+  use `--display alloc-devel` named a directive that does not exist).
 - and the rest of the classic ORTE-era options mapped onto the current
   `--map-by`/`--rank-by`/`--bind-to`/`--output`/`--display` directive
   vocabulary.
@@ -113,11 +124,30 @@ instance with `PMIX_CLI_REMOVE_DEPRECATED`. Examples:
 Because prte defaults `warn_deprecations = true`, native-tool users get a
 warning for each converted option — the opposite of `ompi` (see below).
 
+Two of the rewrites are narrower than they look, and both were once
+wider by mistake:
+
+- **`--rank-by` only renames `socket`→`package`.** It used to rewrite
+  every object spelling (`numa`, `core`, `l1/l2/l3cache`, `hwthread`) to
+  `package` as well. That is not a rename — those are distinct objects,
+  and none of them is a ranking directive PRRTE supports either way (the
+  rankers are `slot`, `node`, `fill`, `span`). The rewrite never made
+  them work; it only made the sanity checker's error name `package`, an
+  option the user never typed. Leave a value alone unless you are
+  genuinely renaming it.
+- **The `ppr` resource is the THIRD `:`-delimited field.** The pattern
+  is `ppr:N:resource[:qualifier…]`, so the socket→package rewrite splits
+  the value and inspects field `[2]`. Reaching for it with `strrchr()`
+  finds the *last* `:` instead, which is the resource only when no
+  qualifier follows — and returns NULL for a bare `--map-by ppr`, where
+  advancing past it dereferences address `0x1`.
+
 ## Other hooks
 
 - **`parse_env`** — effectively a no-op (logs and returns
-  `PRTE_SUCCESS`). The native personality forwards no special envars; app
-  environment handling happens through attributes in `setup_fork`.
+  `PRTE_SUCCESS`). The native personality forwards no special envars; the
+  user's envar directives become job/app attributes and are applied on the
+  daemon by `odls`' `process_envars()`.
 - **`allow_run_as_root`** — honors `--allow-run-as-root`, or the pair
   `PRTE_ALLOW_RUN_AS_ROOT` + `PRTE_ALLOW_RUN_AS_ROOT_CONFIRM` both set to
   `1`; otherwise calls `prte_schizo_base_root_error_msg()` (which
@@ -156,6 +186,21 @@ warning for each converted option — the opposite of `ompi` (see below).
 - **Use canonical un-hyphenated `PRTE_CLI_*` keys**, and if you add a
   deprecated spelling, wire its conversion in `convert_deprecated_cli`
   rather than adding a second table entry.
+- **A table entry with no conversion is a silently-ignored option.** It
+  parses, it is never read by anyone, and the user gets no error — which
+  is exactly how `--merge-stderr-to-stdout` and
+  `--display-devel-allocation` sat dead in `prterunoptions`/
+  `prunoptions`. Cross-check the two lists when you touch either:
+
+  ```sh
+  cd src/mca/schizo/prte
+  grep -o 'PMIX_OPTION_DEFINE("[^"]*"' schizo_prte.c | sed 's/.*"\(.*\)"/\1/' | sort -u
+  grep -o 'strcmp(option, "[^"]*")' schizo_prte.c | sed 's/.*"\(.*\)"/\1/' | sort -u
+  ```
+
+  A table entry missing from the second list is a live bug; a converter
+  branch missing from the first is merely dead code (prte carries a few:
+  `amca`, `am`, `bind-to-socket`).
 - **Mirror in `ompi` when it's a shared concept.** Placement, output,
   and runtime-option changes usually need the ompi table/handler updated
   too, or the two personalities drift.

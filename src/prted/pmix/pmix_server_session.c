@@ -16,6 +16,7 @@
 #include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/rmaps.h"
 #include "src/mca/schizo/base/base.h"
+#include "src/util/pmix_show_help.h"
 
 /* Process the session control directive from the scheduler */
 static int process_directive(prte_pmix_server_req_t *req)
@@ -226,10 +227,22 @@ static int process_directive(prte_pmix_server_req_t *req)
         if (NULL == personality) {
             /* use the default */
             jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(NULL);
-        } else {
+        } else if (NULL == jdata->personality) {
+            /* only resolve it once - the info scan above may already have
+             * done so, and repeating the split leaks the first argv and
+             * caches the same job info twice */
             jdata->personality = PMIx_Argv_split(personality->value.data.string, ',');
             jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(personality->value.data.string);
             pmix_server_cache_job_info(jdata, personality);
+        }
+        if (NULL == jdata->schizo) {
+            /* no component claims the requested personality - refuse the
+             * request instead of leaving the job with a NULL personality
+             * for someone downstream to dereference */
+            pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename,
+                           (NULL == personality) ? "NULL" : personality->value.data.string);
+            rc = PMIX_ERR_NOT_FOUND;
+            goto ANSWER;
         }
     }
 

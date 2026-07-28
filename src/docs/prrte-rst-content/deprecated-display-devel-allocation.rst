@@ -18,4 +18,6 @@ allocation being used by this job.
 .. admonition:: Deprecated
    :class: warning
 
-   This option is deprecated.  Please use ``--display alloc-devel``.
+   This option is deprecated.  Please use ``--display allocation``.
+   There is no longer a separate developer-detail allocation display;
+   ``allocation`` is the only allocation directive ``--display`` accepts.

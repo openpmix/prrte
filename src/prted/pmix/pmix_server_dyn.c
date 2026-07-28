@@ -1008,6 +1008,21 @@ static void interim(int sd, short args, void *cbdata)
         /* use the default */
         jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(NULL);
     }
+    if (NULL == jdata->schizo) {
+        /* the requestor named a personality no component claims. Every later
+         * use of jdata->schizo (starting with set_default_rto just below) is
+         * an unchecked dereference, so reject the request here - a bad
+         * personality string in a spawn request must not take down the DVM */
+        char *prsn = (NULL == jdata->personality)
+                     ? NULL : PMIx_Argv_join(jdata->personality, ',');
+        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename,
+                       (NULL == prsn) ? "NULL" : prsn);
+        if (NULL != prsn) {
+            free(prsn);
+        }
+        rc = PRTE_ERR_NOT_FOUND;
+        goto complete;
+    }
 
     /* transfer the apps across */
     for (n = 0; n < cd->napps; n++) {

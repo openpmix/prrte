@@ -36,8 +36,16 @@ prte_schizo_base_module_t *prte_schizo_base_detect_proxy(char *cmdpath)
 {
     prte_schizo_base_active_module_t *mod;
     prte_schizo_base_module_t *md = NULL;
-    int pri = -1, p;
+    int pri = 0, p;
 
+    /* A confidence of zero means "this is not me" - every component returns
+     * it for a personality list that does not name it.  So the bar for being
+     * selected is a STRICTLY POSITIVE bid, not merely the highest one.  Seeded
+     * at -1, the first component queried won a field of all-zero bids, which
+     * made a personality nobody claims select whichever component happens to
+     * carry the highest static priority - so a typo in "--personality" ran the
+     * command line in the ompi dialect, complete with its own option table and
+     * MCA translation, rather than the native one. */
     PMIX_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t)
     {
         if (NULL != mod->module->detect_proxy) {
@@ -48,13 +56,41 @@ prte_schizo_base_module_t *prte_schizo_base_detect_proxy(char *cmdpath)
             }
         }
     }
+
+    /* Nobody claimed it.  Fall back to the DEFAULT personality - which is
+     * what a component tells us it would be when asked with no hint at all -
+     * rather than refusing outright.  A name we do not recognize is not
+     * necessarily a mistake: Open MPI starts a singleton's DVM with
+     * "--prtemca schizo prte", so only the native component is even loaded,
+     * and then spawns with PMIX_PERSONALITY="ompi5".  Refusing that fails
+     * every MPI_Comm_spawn from a singleton.  The catch-all is the right
+     * answer there, and remains the right answer for a typo - what was wrong
+     * before was landing on some *other* personality's dialect, not the
+     * falling back itself. */
+    if (NULL == md && NULL != cmdpath) {
+        md = prte_schizo_base_detect_proxy(NULL);
+    }
     return md;
 }
 
+/* the deprecated hyphenated spelling of each option whose canonical key is
+ * un-hyphenated, paired with the key the option tables actually carry */
+static struct {
+    const char *deprecated;
+    const char *canonical;
+} normalized_opts[] = {
+    {.deprecated = "--map-by",          .canonical = "--mapby"},
+    {.deprecated = "--rank-by",         .canonical = "--rankby"},
+    {.deprecated = "--bind-to",         .canonical = "--bindto"},
+    {.deprecated = "--runtime-options", .canonical = "--rtos"},
+    {.deprecated = NULL,                .canonical = NULL}
+};
+
 char *prte_schizo_base_normalize_argv(char **argv)
 {
-    char *personality = NULL;
-    int i;
+    char *personality = NULL, *value, *tmp;
+    size_t len;
+    int i, n;
 
     /* Normalize the deprecated hyphenated option spellings to their canonical
      * forms and capture any personality specification.  --rank-by and --bind-to
@@ -63,22 +99,37 @@ char *prte_schizo_base_normalize_argv(char **argv)
      * renamed unconditionally on every occurrence.  Detecting an erroneous
      * duplicate (e.g. two job-level --rank-by with no intervening MPMD
      * separator) is the schizo MPMD parser's responsibility, since it has the
-     * app-context boundaries that this flat argv scan lacks. */
+     * app-context boundaries that this flat argv scan lacks.
+     *
+     * Both spellings getopt_long accepts have to be handled here - "--opt value"
+     * AND "--opt=value".  Only recognizing the space-separated form leaves the
+     * "=" form to be rejected later as an unrecognized option (for the renamed
+     * options) or, worse, silently ignored (for --personality, which would then
+     * drop the invocation onto the default personality). */
     for (i = 0; NULL != argv[i]; i++) {
         if (0 == strcmp(argv[i], "--personality")) {
             personality = argv[i + 1];
-        } else if (0 == strcmp(argv[i], "--map-by")) {
-            free(argv[i]);
-            argv[i] = strdup("--mapby");
-        } else if (0 == strcmp(argv[i], "--rank-by")) {
-            free(argv[i]);
-            argv[i] = strdup("--rankby");
-        } else if (0 == strcmp(argv[i], "--bind-to")) {
-            free(argv[i]);
-            argv[i] = strdup("--bindto");
-        } else if (0 == strcmp(argv[i], "--runtime-options")) {
-            free(argv[i]);
-            argv[i] = strdup("--rtos");
+            continue;
+        }
+        if (0 == strncmp(argv[i], "--personality=", strlen("--personality="))) {
+            value = argv[i] + strlen("--personality=");
+            personality = ('\0' == value[0]) ? NULL : value;
+            continue;
+        }
+        for (n = 0; NULL != normalized_opts[n].deprecated; n++) {
+            len = strlen(normalized_opts[n].deprecated);
+            if (0 == strcmp(argv[i], normalized_opts[n].deprecated)) {
+                free(argv[i]);
+                argv[i] = strdup(normalized_opts[n].canonical);
+                break;
+            }
+            if (0 == strncmp(argv[i], normalized_opts[n].deprecated, len) &&
+                '=' == argv[i][len]) {
+                pmix_asprintf(&tmp, "%s%s", normalized_opts[n].canonical, &argv[i][len]);
+                free(argv[i]);
+                argv[i] = tmp;
+                break;
+            }
         }
     }
     return personality;
@@ -140,6 +191,7 @@ int prte_schizo_base_add_directive(pmix_cli_result_t *results,
             ptr = pmix_show_help_string("help-schizo-base.txt", "too-many-values",
                                         true, target);
             fprintf(stderr, "%s\n", ptr);
+            free(ptr);
             return PRTE_ERR_SILENT;
         } else {
             // does this contain only a qualifier?
@@ -157,6 +209,7 @@ int prte_schizo_base_add_directive(pmix_cli_result_t *results,
                                                 true, target, tmp, deprecated, directive);
                     free(tmp);
                     fprintf(stderr, "%s\n", ptr);
+                    free(ptr);
                     return PRTE_ERR_SILENT;
                 }
                 // does the value contain a qualifier?
@@ -218,6 +271,7 @@ int prte_schizo_base_add_qualifier(pmix_cli_result_t *results,
             ptr = pmix_show_help_string("help-schizo-base.txt", "too-many-values",
                                         true, target);
             fprintf(stderr, "%s\n", ptr);
+            free(ptr);
             return PRTE_ERR_SILENT;
         } else {
             // append with a colon delimiter
@@ -250,12 +304,21 @@ int prte_schizo_base_add_qualifier(pmix_cli_result_t *results,
 char *prte_schizo_base_getline(FILE *fp)
 {
     char *ret, *buff;
+    size_t len;
     char input[2048];
 
     memset(input, 0, 2048);
     ret = fgets(input, 2048, fp);
     if (NULL != ret) {
-        input[strlen(input) - 1] = '\0'; /* remove newline */
+        /* strip the newline - but only if there IS one.  The last line of a
+         * file that does not end in a newline has none, and blindly chopping
+         * its final character silently corrupts that line (an MCA param file
+         * saved without a trailing newline would lose a character off its
+         * last parameter) */
+        len = strlen(input);
+        if (0 < len && '\n' == input[len - 1]) {
+            input[len - 1] = '\0';
+        }
         buff = strdup(input);
         return buff;
     }
@@ -266,6 +329,7 @@ char *prte_schizo_base_getline(FILE *fp)
 char *prte_schizo_base_strip_quotes(char *p)
 {
     char *pout;
+    size_t len;
 
     /* strip any quotes around the args */
     if ('\"' == p[0]) {
@@ -273,8 +337,11 @@ char *prte_schizo_base_strip_quotes(char *p)
     } else {
         pout = strdup(p);
     }
-    if ('\"' == pout[strlen(pout) - 1]) {
-        pout[strlen(pout) - 1] = '\0';
+    /* an empty string has no trailing character to inspect - reading (and
+     * writing) pout[-1] here walks off the front of the allocation */
+    len = strlen(pout);
+    if (0 < len && '\"' == pout[len - 1]) {
+        pout[len - 1] = '\0';
     }
     return pout;
 }

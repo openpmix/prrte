@@ -227,6 +227,7 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE("output-filename", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("merge-stderr-to-stdout", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("display-devel-map", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("display-devel-allocation", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("display-topo", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("report-bindings", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("display-map", PMIX_ARG_NONE),
@@ -392,11 +393,15 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
         char *corrected_args = NULL;
         int tail_pos = 0;
 
-        // Find the position of the tail.
-        for(n = 0; NULL != pargv[n]; n++) {
-            if(0 == strcmp(results->tail[0], pargv[n])) break;
+        /* The tail is the trailing run of pargv, so its position is fixed by
+         * the counts.  Searching for the first token equal to tail[0] finds
+         * an OPTION'S VALUE instead whenever the executable's name was also
+         * given as one (--wdir /tmp/app ... /tmp/app), which would count
+         * corrected options as being "after" the executable. */
+        tail_pos = PMIx_Argv_count(pargv) - PMIx_Argv_count(results->tail);
+        if (0 > tail_pos) {
+            tail_pos = 0;
         }
-        tail_pos = n;
 
         for(n = 0; n < cur_caught_pos; n++) {
             // Add all offending arguments before the user executable (tail).
@@ -469,15 +474,20 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
     // check for the --stream-buffering option
 
     if (NULL != results->tail) {
-        /* search for the leader of the tail */
-        for (n=0; NULL != argv[n]; n++) {
-            if (0 == strcmp(results->tail[0], argv[n])) {
-                /* this starts the tail - replace the rest of the
-                 * tail with the original argv */
-                PMIx_Argv_free(results->tail);
-                results->tail = PMIx_Argv_copy(&argv[n]);
-                break;
-            }
+        /* Restore the tail from the ORIGINAL argv, so the app's own
+         * arguments are handed on exactly as the user wrote them rather
+         * than as the single-dash correction rewrote them.
+         *
+         * The tail is the trailing run of the command line and argv has the
+         * same length as the pargv it was parsed from, so its start is
+         * argc - tailc.  Searching for the first token equal to tail[0]
+         * instead lands on an option's VALUE whenever that value happens to
+         * equal the executable name ("--wdir /tmp/app ... /tmp/app"), which
+         * would splice the options back into the app's argv. */
+        n = PMIx_Argv_count(argv) - PMIx_Argv_count(results->tail);
+        if (0 < n && NULL != argv[n] && 0 == strcmp(results->tail[0], argv[n])) {
+            PMIx_Argv_free(results->tail);
+            results->tail = PMIx_Argv_copy(&argv[n]);
         }
     }
 
@@ -488,6 +498,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                                   bool silent)
 {
     char *option, *p1, *p2, *tmp, *tmp2, *output;
+    char **ppr;
     int rc = PRTE_SUCCESS;
     pmix_cli_item_t *opt, *nxt, *opt2;
     bool warn;
@@ -662,7 +673,11 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
         /* --rankfile X -> map-by rankfile:file=X */
         else if (0 == strcmp(option, "rankfile")) {
             pmix_asprintf(&p2, "%s:%s%s", PRTE_CLI_RANKFILE, PRTE_CLI_QFILE, opt->values[0]);
-            rc = prte_schizo_base_add_directive(results, option, PRTE_CLI_MAPBY, p2, true);
+            /* pass "warn", not an unconditional "true" - this personality
+             * defaults warn_deprecations to false, and hard-coding the report
+             * made --rankfile the one legacy option that scolded Open MPI
+             * users no matter how they had configured the warning */
+            rc = prte_schizo_base_add_directive(results, option, PRTE_CLI_MAPBY, p2, warn);
             free(p2);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
@@ -712,10 +727,19 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                                                 warn);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
-        /* --display-devel-map  -> --display allocation-devel */
+        /* --display-devel-map  -> --display map-devel */
         else if (0 == strcmp(option, "display-devel-map")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_DISPLAY, PRTE_CLI_MAPDEV,
+                                                warn);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+        }
+        /* --display-devel-allocation  ->  --display allocation.  There is no
+         * separate developer allocation display any more, so it folds onto
+         * the one allocation directive parse_display knows. */
+        else if (0 == strcmp(option, "display-devel-allocation")) {
+            rc = prte_schizo_base_add_directive(results, option,
+                                                PRTE_CLI_DISPLAY, PRTE_CLI_ALLOC,
                                                 warn);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
@@ -830,15 +854,21 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                 free(p1);
                 free(opt->values[0]);
                 opt->values[0] = tmp;
-            } else if (0 == strncasecmp(opt->values[0], "ppr", strlen("ppr"))) {
+            } else if (0 == strncasecmp(opt->values[0], PRTE_CLI_PPR, strlen(PRTE_CLI_PPR))) {
                 // see if they specified "socket" as the resource
-                p1 = strdup(opt->values[0]);
-                p2 = strrchr(p1, ':');
-                ++p2;
-                if (0 == strncasecmp(p2, "socket", strlen("socket")) ||
-                    0 == strncasecmp(p2, "skt", strlen("skt"))) {
-                    *p2 = '\0';
-                    pmix_asprintf(&p2, "%spackage", p1);
+                /* the pattern is "ppr:N:resource[:qualifier...]", so the
+                 * resource is the THIRD field.  Reaching for it with strrchr()
+                 * finds the last ':' instead, which is the resource only when
+                 * no qualifiers follow it - and returns NULL for a bare
+                 * "--map-by ppr", where advancing past it dereferenced address
+                 * 0x1 and killed the tool outright */
+                ppr = PMIx_Argv_split(opt->values[0], ':');
+                if (3 <= PMIx_Argv_count(ppr) &&
+                    (0 == strncasecmp(ppr[2], "socket", strlen("socket")) ||
+                     0 == strncasecmp(ppr[2], "skt", strlen("skt")))) {
+                    free(ppr[2]);
+                    ppr[2] = strdup(PRTE_CLI_PACKAGE);
+                    p2 = PMIx_Argv_join(ppr, ':');
                     if (warn) {
                         pmix_asprintf(&tmp, "%s %s", option, opt->values[0]);
                         pmix_asprintf(&tmp2, "%s %s", option, p2);
@@ -854,7 +884,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                     free(opt->values[0]);
                     opt->values[0] = p2;
                 }
-                free(p1);
+                PMIx_Argv_free(ppr);
             }
         }
         /* --rank-by socket ->  --rank-by package */
@@ -1894,7 +1924,17 @@ static int translate_params(void)
     for (n=0; NULL != environ[n]; n++) {
         if (0 == strncmp(environ[n], "OMPI_MCA_", len)) {
             e2 = strdup(environ[n]);
-            evar = strrchr(e2, '=');
+            /* split at the FIRST '=' - that is the one separating the
+             * variable's name from its value.  strrchr() splits at the last
+             * one instead, so any OMPI_MCA_ value that itself contains an
+             * '=' (mca_base_env_list="FOO=1;BAR=2" is the common one) is
+             * translated under a mangled name with a truncated value */
+            evar = strchr(e2, '=');
+            if (NULL == evar) {
+                /* environ entries always carry one, but do not trust it */
+                free(e2);
+                continue;
+            }
             *evar = '\0';
             ++evar;
             if (check_prte_overlap(&e2[len], evar)) {

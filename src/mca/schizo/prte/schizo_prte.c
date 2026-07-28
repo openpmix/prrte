@@ -537,6 +537,14 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
         shorts = pinfoshorts;
         helpfile = "help-prte-info.txt";
         sdprefix = "prte";
+    } else {
+        /* every PRRTE tool sets prte_tool_actual to one of the six names
+         * above, so this is unreachable today - but handing
+         * pmix_cmd_line_parse a NULL option table is a crash, not a
+         * diagnosable error, so refuse rather than continue */
+        pmix_show_help("help-schizo-base.txt", "no-proxy", true,
+                       prte_tool_basename, prte_tool_actual);
+        return PRTE_ERR_NOT_FOUND;
     }
     pmix_tool_msg = "Report bugs to: https://github.com/openpmix/prrte";
     pmix_tool_org = "PRRTE";
@@ -592,6 +600,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                                   bool silent)
 {
     char *option, *p1, *p2, *tmp, *tmp2, *output;
+    char **ppr;
     int rc = PRTE_SUCCESS;
     pmix_cli_item_t *opt, *nxt;
     bool warn;
@@ -822,10 +831,37 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
 
-        /* --display-devel-map  -> --display allocation-devel */
+        /* --display-devel-map  -> --display map-devel */
         else if (0 == strcmp(option, "display-devel-map")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_DISPLAY, PRTE_CLI_MAPDEV,
+                                                warn);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+        }
+
+        /* --display-devel-allocation  ->  --display allocation
+         *
+         * There is no separate "developer" allocation display any more -
+         * PRTE_CLI_ALLOC is the only allocation directive parse_display
+         * knows - so the deprecated option folds onto it.  Without this
+         * branch the option is accepted by the tables and then silently
+         * discarded, which asks for a display and gets none. */
+        else if (0 == strcmp(option, "display-devel-allocation")) {
+            rc = prte_schizo_base_add_directive(results, option,
+                                                PRTE_CLI_DISPLAY, PRTE_CLI_ALLOC,
+                                                warn);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+        }
+
+        /* --merge-stderr-to-stdout  ->  --output merge-stderr-to-stdout
+         *
+         * The option is in the prterun/prun tables; with no conversion here
+         * it parsed cleanly and then did nothing at all, so stderr stayed
+         * separate no matter what the user asked for.  The ompi personality
+         * has always converted it - this is the missing mirror. */
+        else if (0 == strcmp(option, "merge-stderr-to-stdout")) {
+            rc = prte_schizo_base_add_directive(results, option,
+                                                PRTE_CLI_OUTPUT, PRTE_CLI_MERGE_ERROUT,
                                                 warn);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
@@ -955,21 +991,20 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                 free(p1);
                 free(opt->values[0]);
                 opt->values[0] = tmp;
-            } else if (0 == strncasecmp(opt->values[0], "ppr", strlen("ppr"))) {
+            } else if (0 == strncasecmp(opt->values[0], PRTE_CLI_PPR, strlen(PRTE_CLI_PPR))) {
                 // see if they specified "socket" as the resource
-                p1 = strdup(opt->values[0]);
-                p2 = strrchr(p1, ':');
-                /* a bare "ppr" with no ":resource" qualifier has nothing to
-                 * inspect - strrchr returns NULL, so guard against advancing
-                 * past it (which would dereference address 0x1 and crash) */
-                if (NULL != p2) {
-                    ++p2;
-                }
-                if (NULL != p2 &&
-                    (0 == strncasecmp(p2, "socket", strlen("socket")) ||
-                     0 == strncasecmp(p2, "skt", strlen("skt")))) {
-                    *p2 = '\0';
-                    pmix_asprintf(&p2, "%spackage", p1);
+                /* the pattern is "ppr:N:resource[:qualifier...]", so the
+                 * resource is the THIRD field.  Reaching for it with strrchr()
+                 * finds the last ':' instead, which is the resource only when
+                 * no qualifiers follow it - and returns NULL for a bare "ppr",
+                 * where advancing past it dereferences address 0x1 */
+                ppr = PMIx_Argv_split(opt->values[0], ':');
+                if (3 <= PMIx_Argv_count(ppr) &&
+                    (0 == strncasecmp(ppr[2], "socket", strlen("socket")) ||
+                     0 == strncasecmp(ppr[2], "skt", strlen("skt")))) {
+                    free(ppr[2]);
+                    ppr[2] = strdup(PRTE_CLI_PACKAGE);
+                    p2 = PMIx_Argv_join(ppr, ':');
                     if (warn) {
                         pmix_asprintf(&tmp, "%s %s", option, opt->values[0]);
                         pmix_asprintf(&tmp2, "%s %s", option, p2);
@@ -985,21 +1020,23 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                     free(opt->values[0]);
                     opt->values[0] = p2;
                 }
-                free(p1);
+                PMIx_Argv_free(ppr);
             }
         }
 
-        /* --rank-by */
+        /* --rank-by socket  ->  --rank-by package
+         *
+         * ONLY "socket" is renamed here.  This used to rewrite every
+         * object-level spelling (numa, core, l1/l2/l3cache, hwthread) to
+         * "package" as well, which is not a rename - those are distinct
+         * objects, and none of them is a ranking directive PRRTE supports
+         * (the rankers are slot, node, fill and span).  The rewrite did not
+         * make them work; it only made the error message name "package", an
+         * option the user never typed.  Leaving them alone lets the sanity
+         * checker report what was actually given. */
         else if (0 == strcmp(option, PRTE_CLI_RANKBY)) {
-            /* check the value of the option for object-level directives - show help
-             * for ranking if given */
-            if (0 == strncasecmp(opt->values[0], "socket", strlen("socket")) ||
-                0 == strncasecmp(opt->values[0], "l1cache", strlen("l1cache"))  ||
-                0 == strncasecmp(opt->values[0], "l2cache", strlen("l2cache")) ||
-                0 == strncasecmp(opt->values[0], "l3cache", strlen("l3cache")) ||
-                0 == strncasecmp(opt->values[0], "numa", strlen("numa")) ||
-                0 == strncasecmp(opt->values[0], "hwthread", strlen("hwthread")) ||
-                0 == strncasecmp(opt->values[0], "core", strlen("core"))) {
+            /* check the value of the option for "socket" */
+            if (0 == strncasecmp(opt->values[0], "socket", strlen("socket"))) {
                 p1 = strdup(opt->values[0]); // save the original option
                 /* replace "socket" with "package" */
                 if (NULL == (p2 = strchr(opt->values[0], ':'))) {

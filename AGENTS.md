@@ -456,7 +456,12 @@ make check
 
 Add new unit tests here, under the framework they cover, and wire them
 into the appropriate `Makefile.am` `TESTS =` list so `make check` picks
-them up.
+them up.  A new directory also needs a line in
+[`config/prte_config_files.m4`](config/prte_config_files.m4) (which
+means re-running `./autogen.pl` — see "Modifying the configure / build
+system" above), a `SUBDIRS` entry in
+[`test/unit/Makefile.am`](test/unit/Makefile.am), and the resulting test
+binary added to `.gitignore`.
 
 **Offline mapper harness (`make check-offline`).**  Mapping, ranking, and
 binding behavior can be exercised without launching anything.
