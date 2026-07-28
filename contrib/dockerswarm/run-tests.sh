@@ -828,6 +828,14 @@ test_linux() {
     if ! docker ps --format '{{.Names}}' | grep -qx prte-node1; then
         echo "swarm not up -- run: docker compose up -d" >&2; exit 2
     fi
+    # Start from a clean slate rather than trusting the last run to have
+    # tidied up. The nodes are long-lived containers while the install they
+    # read is replaced under them, so a daemon or a pmix.* rendezvous file
+    # left from a previous run may be holding a library that no longer
+    # exists. That does not fail one case - it fails twenty, starting with
+    # the first launch, and none of the messages point at the cause.
+    cleanup_swarm
+
     banner "preflight: install present in shared volume"
     if RUN 'command -v prterun prte prun pterm elastic >/dev/null'; then
         ok "prterun/prte/prun/pterm/elastic on PATH"

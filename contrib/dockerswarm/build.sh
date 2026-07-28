@@ -143,11 +143,31 @@ build_linux() {
         ${pmix_mount[@]+"${pmix_mount[@]}"} \
         "$IMAGE" bash -euo pipefail -c '
             jobs=$(nproc)
+
+            # These VPATH build dirs live in the volume and persist across
+            # runs, so "configure only if there is no config.status" quietly
+            # reuses the arguments of whatever run created them.  Point
+            # PMIX_SRC at a checkout after a plain build and PRRTE keeps the
+            # baked PMIx, with nothing in the output to say so -- a build
+            # that looks like it tested your change and did not.  Stamp the
+            # arguments and reconfigure when they differ.
+            reconfigure_needed() {   # $1 = build dir, $2 = argument string
+                [ -f "$1/config.status" ] || return 0
+                [ -f "$1/.configure-args" ] || return 0
+                [ "$(cat "$1/.configure-args")" = "$2" ] || return 0
+                return 1
+            }
+
             if [ -d /pmix-src ]; then
                 PMIX_PREFIX=/opt/prte/pmix
                 echo ">>>> PMIx from bind-mounted /pmix-src -> $PMIX_PREFIX"
                 mkdir -p /opt/prte/vpath-linux-pmix && cd /opt/prte/vpath-linux-pmix
-                [ -f config.status ] || /pmix-src/configure --prefix="$PMIX_PREFIX"
+                pmix_args="--prefix=$PMIX_PREFIX"
+                if reconfigure_needed . "$pmix_args"; then
+                    echo ">>>> (re)configuring PMIx: $pmix_args"
+                    /pmix-src/configure $pmix_args
+                    echo "$pmix_args" > .configure-args
+                fi
                 make -j"$jobs"
                 make install
             else
@@ -162,9 +182,12 @@ build_linux() {
             # real ras_slurm_jansson.c -- so the ~1000 lines that parse
             # "scontrol --json" (the whole elastic extend/release surface) are
             # never even compiled.  libjansson-dev is baked into the image.
-            [ -f config.status ] || /prrte-src/configure \
-                --prefix=/opt/prte/prte --with-pmix="$PMIX_PREFIX" \
-                --with-jansson --enable-debug
+            prte_args="--prefix=/opt/prte/prte --with-pmix=$PMIX_PREFIX --with-jansson --enable-debug"
+            if reconfigure_needed . "$prte_args"; then
+                echo ">>>> (re)configuring PRRTE: $prte_args"
+                /prrte-src/configure $prte_args
+                echo "$prte_args" > .configure-args
+            fi
             # show_help GOLDEN RULE: prte_show_help_content.c embeds every
             # help-*.txt in the tree, but its make rule depends only on the
             # converter script -- so an edited help file is NOT picked up by an
