@@ -664,9 +664,18 @@ bool prte_rmaps_base_check_avail(prte_job_t *jdata,
     }
     if (0 != node->slots_max &&
         node->slots_max <= node->slots_inuse) {
-        /* cannot use this node - already at max_slots */
-        pmix_list_remove_item(node_list, &node->super);
-        PMIX_RELEASE(node);
+        /* cannot use this node - already at max_slots. Drop it from the
+         * caller's node list so no later pass considers it again; a caller
+         * that has no such list (its list holds something other than the
+         * nodes it is walking) passes NULL and simply gets "false" back.
+         * Note that a caller which does pass a list must treat a false
+         * return as "done with this node" - handing us the same node twice
+         * would remove an item that is no longer on the list and release a
+         * reference we no longer hold. */
+        if (NULL != node_list) {
+            pmix_list_remove_item(node_list, &node->super);
+            PMIX_RELEASE(node);
+        }
         goto done;
     }
 

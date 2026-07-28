@@ -372,6 +372,11 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
                         PRTE_NAME_PRINT(&proc->name),
                         options->cpus_per_rank);
 
+    /* the caller's per-node scratch cpuset is what we carve the envelope
+     * out of - bind_generic makes the same check */
+    if (NULL == options->target) {
+        return PRTE_ERROR;
+    }
     /* initialize */
     result = hwloc_bitmap_alloc();
     hwloc_bitmap_zero(result);
