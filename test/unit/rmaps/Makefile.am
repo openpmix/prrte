@@ -12,8 +12,11 @@ check_PROGRAMS = test_rmaps
 test_rmaps_SOURCES = \
     test_rmaps_main.c      \
     test_policy_parse.c    \
+    test_job_policy.c      \
     test_job_qualifiers.c  \
     test_resolve_options.c \
+    test_ranking.c         \
+    test_check_avail.c     \
     test_dispatch.c        \
     test_round_robin.c     \
     test_ppr.c             \

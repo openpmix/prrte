@@ -18,8 +18,11 @@
 #include "constants.h"
 
 extern int test_policy_parse(void);
+extern int test_job_policy(void);
 extern int test_job_qualifiers(void);
 extern int test_resolve_options(void);
+extern int test_ranking(void);
+extern int test_check_avail(void);
 extern int test_dispatch(void);
 extern int test_round_robin(void);
 extern int test_ppr(void);
@@ -82,8 +85,11 @@ int main(void)
     }
 
     failures += test_policy_parse();
+    failures += test_job_policy();
     failures += test_job_qualifiers();
     failures += test_resolve_options();
+    failures += test_ranking();
+    failures += test_check_avail();
     failures += test_dispatch();
     failures += test_round_robin();
     failures += test_ppr();

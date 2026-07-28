@@ -629,6 +629,16 @@ def perapp_cases(topo):
                      AppSpec(2, map_by="core")],
                expect="map")
 
+    # per-app pe-list: which cpus an app may use is as much its own business
+    # as which object it maps by.  The two apps name disjoint cpu lists, so
+    # each app's procs must be bound within its own list and nowhere else -
+    # a per-app pe-list used to be rejected as an unrecognized policy.
+    yield Case("perapp.%s.map.pelist" % topo.name, "perapp", topo, "even",
+               hostspec, pool,
+               apps=[AppSpec(2, map_by="pe-list=0-1"),
+                     AppSpec(2, map_by="pe-list=4-5")],
+               expect="map")
+
 
 def generate_cases(topos, layouts, ns, full):
     cases = []
