@@ -310,7 +310,7 @@ static int ppr_mapper(prte_job_t *jdata,
                     } else if (PRTE_SUCCESS != rc) {
                         /* got an error */
                         PMIX_RELEASE(proc);
-                        return rc;
+                        goto error;
                     }
                     PMIX_RELEASE(proc);
                 }
@@ -367,7 +367,7 @@ static int ppr_mapper(prte_job_t *jdata,
                         } else if (PRTE_SUCCESS != rc) {
                             /* got an error */
                             PMIX_RELEASE(proc);
-                            return rc;
+                            goto error;
                         }
                         PMIX_RELEASE(proc);
                     }
