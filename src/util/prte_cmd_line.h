@@ -258,17 +258,17 @@ BEGIN_C_DECLS
 
 /*
  * The value of a qualifier declared above with a trailing '=' - PE=2,
- * FILE=path, LIMIT=4 - or NULL when it carries none.
+ * FILE=path, LIMIT=4 - is read with pmix_cli_qualifier_value(), which comes
+ * from PMIx alongside PMIX_CHECK_CLI_OPTION: the two belong together,
+ * because the matcher accepts any unambiguous prefix of a qualifier's name
+ * and the caller therefore cannot know how long the name it matched was.
+ * Never index past the qualifier's full spelling to reach its value.
  *
- * Use this rather than indexing past the qualifier's name.
- * PMIX_CHECK_CLI_OPTION matches any unambiguous prefix, so the user may
- * write "P=2" for PE=2 or "F=path" for FILE=path, and an offset fixed to
- * the full spelling then reads the wrong thing: "--map-by core:P=2" set
- * pes-per-proc to zero, "--map-by seq:F=/path" opened the path five
- * characters in, and a qualifier written with no value at all read past
- * the end of its own string.
+ * Older PMIx installations do not have it.  PRRTE still supports building
+ * against those, so supply it here when the installed PMIx does not.
  */
-static inline char *prte_cli_qualifier_value(char *qual)
+#if !PRTE_PMIX_HAVE_CLI_QUAL_VALUE
+static inline char *prte_cli_qualifier_value_compat(char *qual)
 {
     char *ptr;
 
@@ -281,6 +281,8 @@ static inline char *prte_cli_qualifier_value(char *qual)
     }
     return ptr + 1;
 }
+#    define pmix_cli_qualifier_value(q) prte_cli_qualifier_value_compat(q)
+#endif
 
 END_C_DECLS
 

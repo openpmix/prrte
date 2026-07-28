@@ -614,7 +614,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                 /* Numeric value follows the '=' (LIMIT=2). Do not index past
                  * the qualifier's full spelling - the name may be abbreviated
                  * to any unambiguous prefix, so "L=2" is this same option */
-                p2 = prte_cli_qualifier_value(quals[i]);
+                p2 = pmix_cli_qualifier_value(quals[i]);
                 if (NULL == p2) {
                     /* missing the value */
                     pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,

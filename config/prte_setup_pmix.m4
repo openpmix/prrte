@@ -242,6 +242,16 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                        [$prte_pmix_have_group_ft],
                        [Whether PMIx supports the group fault-tolerance feature set, including the PMIX_GROUP_CANCEL host operation])
 
+    AC_MSG_CHECKING([for PMIx command-line qualifier value support])
+    PRTE_CHECK_PMIX_CAP([CLI_QUAL_VALUE],
+                        [AC_MSG_RESULT([yes])
+                         prte_pmix_have_cli_qual_value=1],
+                        [AC_MSG_RESULT([no])
+                         prte_pmix_have_cli_qual_value=0])
+    AC_DEFINE_UNQUOTED([PRTE_PMIX_HAVE_CLI_QUAL_VALUE],
+                       [$prte_pmix_have_cli_qual_value],
+                       [Whether PMIx provides pmix_cli_qualifier_value()])
+
     AC_MSG_CHECKING([for LTO compatibility])
     PRTE_CHECK_PMIX_CAP([LTO],
                         [PRTE_PMIX_LTO_CAPABILITY=1

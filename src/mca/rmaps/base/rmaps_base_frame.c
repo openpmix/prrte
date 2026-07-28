@@ -328,7 +328,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
 
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_PE)) {
             /* Numeric value must immediately follow '=' (PE=2) */
-            val = prte_cli_qualifier_value(ck2[i]);
+            val = pmix_cli_qualifier_value(ck2[i]);
             if (NULL == val) {
                 pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true, "mapping policy",
                                "PE", ck2[i]);
@@ -433,7 +433,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
             core_cpus_given = true;
 
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_QFILE)) {
-            val = prte_cli_qualifier_value(ck2[i]);
+            val = pmix_cli_qualifier_value(ck2[i]);
             if (NULL == val) {
                 /* missing the value */
                 pmix_show_help("help-prte-rmaps-base.txt", "missing-value", true, "mapping policy",
@@ -1251,7 +1251,7 @@ int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app, char *spec)
                 tmp = (tmp & ~PRTE_BIND_ALLOW_OVERLOAD);
                 tmp |= PRTE_BIND_OVERLOAD_GIVEN;
             } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_LIMIT)) {
-                p2 = prte_cli_qualifier_value(quals[i]);
+                p2 = pmix_cli_qualifier_value(quals[i]);
                 if (NULL == p2) {
                     pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
                                    "binding limit", "LIMIT", quals[i]);
