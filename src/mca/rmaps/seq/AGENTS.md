@@ -45,7 +45,8 @@ mapper builds the ordered list from the first of these that is present:
 `process_file()` reads a hostfile where each line is `hostname [cpuset
 [numa mempolicy]]`; it keeps hostname and cpuset and drops the trailing
 NUMA/mempolicy fields (the LSB affinity-file format is accepted so the
-same parser serves both).
+same parser serves both). A line that names a cpuset says where the rank
+goes *and* which cpus it gets there — see "Things to watch" below.
 
 ---
 
@@ -71,7 +72,11 @@ Per app (honoring `options->app_idx`):
    - Find the named host in the global `prte_node_pool` (`prte_quickmatch`)
      — the hostfile objects are temporaries, so the mapping must be
      recorded against the real node object.
-   - `get_cpuset` + `check_avail`; `setup_proc` on that node.
+   - `get_cpuset` + `check_avail`; `setup_proc` on that node. **`check_avail`
+     is given a NULL node list here.** `seq_list` holds `seq_node_t`
+     entries, not the `prte_node_t` being placed on, so letting the helper
+     try to drop the node from it removed an item of the wrong type from a
+     list it was never on. NULL says "just tell me yes or no."
    - **Assign the rank sequentially** (`proc->name.rank = vpid++`) and
      set `app_rank` directly, then insert into `jdata->procs`.
    - `check_oversubscribed`, advance to the next list entry.
@@ -86,13 +91,25 @@ Per app (honoring `options->app_idx`):
   span ranking schemes; ranks follow file order. Keep `proc->name.rank =
   vpid` and the `jdata->procs` insertion consistent, and don't route seq
   through the object-based `compute_vpids` paths.
-- **The default list is shared across apps.** `save` carries the cursor
-  so successive apps continue through the default hostfile rather than
-  restarting at line 0. Per-app lists (`sq_list`) are freed each app; the
-  default list is not (it's destructed once at the end / on error).
-- **cpuset comes from the file, not from `bind_generic`.** A per-line
-  cpuset ends up binding the proc to those specific CPUs; there is no
-  object-based binding pass for seq.
+- **The default list is shared across apps, and the cursor can run out.**
+  `save` carries the position so successive apps continue through the
+  default hostfile rather than restarting at line 0. That also means the
+  "enough entries for `num_procs`" check against the *whole* list is not
+  enough for the second app onwards: entering at the cursor there may be
+  fewer entries left than the count promises, and stepping past the end
+  reads the list's sentinel as if it were an entry. The loop checks for the
+  sentinel and errors out. Per-app lists (`sq_list`) are freed each app; the
+  default list is destructed once, on both the success and the error path.
+- **A per-line cpuset IS the binding for that rank.** `process_file()`
+  understands `hostname [cpuset [numa mempolicy]]`, and when an entry carries
+  a cpuset `bind_to_entry_cpuset()` applies it the way rank_file applies a
+  slot list: parse it against that node's topology, write `proc->cpuset`, and
+  take those cpus out of `node->available` so a later entry naming the same
+  node cannot claim them too (unless `--bind-to <x>:overload-allowed` says it
+  may). The ordinary object-based binder is held off for that proc —
+  `options->bind` is set to `BIND_TO_NONE` across the `setup_proc` call —
+  because a proc bound twice keeps only the second answer and leaks the
+  first. Entries with no cpuset are unaffected and bind by policy as before.
 - **Host lookup must go through `prte_node_pool`.** Mapping onto the
   temporary hostfile node object instead of the pooled one loses the
   placement — this is a subtle, recurring class of bug.

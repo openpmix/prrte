@@ -446,8 +446,9 @@ launch testing.  Use the right layer for what you touched.
 **Unit tests (`make check`).**  Self-contained unit tests live under
 [`test/unit/`](test/unit/) and are wired into `make check` (for example,
 `test/unit/rmaps/test_rmaps` exercises the mapper's policy parsing,
-option resolution, and each mapping component — `round_robin`, `ppr`,
-`seq`, `rank_file` — with no live DVM).  Run them from the build tree:
+option resolution, rank assignment, node-availability accounting, and each
+mapping component — `round_robin`, `ppr`, `seq`, `rank_file` — with no live
+DVM).  Run them from the build tree:
 
 ```sh
 make check
@@ -490,8 +491,8 @@ Its `build.sh` bind-mounts your live working tree into a builder
 container and compiles it out-of-tree into a shared volume the ten
 "node" containers read, so the swarm always runs your uncommitted
 changes; `run-tests.sh` drives the multi-node suite (launch, IOF,
-preload, elastic grow/shrink, relay).  Do not invent an ad-hoc
-container flow — use the harness.
+preload, mapping/ranking across nodes, elastic grow/shrink, relay).  Do
+not invent an ad-hoc container flow — use the harness.
 
 For resource-manager integration (SLURM, PBS, LSF), test within an actual
 allocation on the relevant system.

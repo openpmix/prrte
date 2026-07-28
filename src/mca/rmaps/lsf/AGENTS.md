@@ -80,6 +80,13 @@ For each line the parser:
 5. Stores a `prte_rmaps_lsf_map_t {node_name, slot_list}` at index
    `num_ranks++` in the module-static `rankmap`.
 
+Two traps in that loop. The `sep` pointer starts out pointing *into*
+`hstname` (which the map then takes ownership of) and is replaced by the
+joined logical-id string, so the joined string needs a variable of its own
+or it is both leaked and mistaken for part of the host name. And both have
+to be cleared at the top of each iteration: a line with no CPU list would
+otherwise inherit the previous line's.
+
 An empty file (stat size 0) means "no affinity" and returns success with
 `num_ranks == 0`, which the gate turns into a defer.
 
@@ -95,8 +102,11 @@ Per app (honoring `options->app_idx`), for each rank `k`:
    - **Absent:** fall back to `options->cpuset` / `prte_hwloc_default_cpu_list`
      and take the next non-oversubscribed (or least-loaded) node; a rank
      with no entry and no default slot list is a `missing-rank` error.
-2. `check_support`, `get_cpuset`, `check_avail`, `check_oversubscribed`,
-   `setup_proc`.
+2. `check_support`, `get_cpuset`, `check_avail`, `setup_proc`, then
+   `check_oversubscribed` — in that order. The oversubscription check reads
+   the node's proc count, so it belongs *after* the proc is placed, as it
+   does in every other mapper; `PRTE_ERR_TAKE_NEXT_OPTION` from it means
+   "that filled the node", which for a pinned rank is not an error.
 3. Set `proc->name.rank = rank` explicitly (userranked).
 4. **Bind from the slot list:** parse it with
    `prte_hwloc_base_cpu_list_parse()` (hwthread semantics), set
@@ -125,7 +135,18 @@ When not in per-app dispatch, `compute_vpids` back-fills local/app ranks.
   `prte_node_pool`.
 - **hwthread semantics are forced on** for LSF jobs — don't reintroduce
   core-based counting in the slot-list path.
+- **`rfmap` is NULL for a rank the affinity file did not list**, so any
+  error message on the fallback path must not dereference it.
+- **Do not reuse the loop counter as scratch.** `k` carries the rank being
+  placed; borrowing it for the "least loaded node" minimum rewrote both the
+  loop's position and the ranks it went on to assign.
+- **Never `return` from inside the placement loop** — the `goto error` path
+  is what reclaims the node list and the rankmap.
 - Shares slot-list/`+nK` logic and the fixed `char[64]` bound with
-  rank_file; keep the two consistent when touching shared behavior.
+  rank_file; keep the two consistent when touching shared behavior. Most
+  defects found in one are present in the other.
+- **This component is not built without `--with-lsf`.** Configure with
+  `--enable-testbuild-launchers` to at least compile it on a machine that
+  lacks LSF; otherwise a change here reaches CI unbuilt.
 - Honor `options->app_idx`, the `initial_map = (0 == num_nodes)`
   convention, and the defer-don't-error gate.

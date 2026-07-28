@@ -278,6 +278,23 @@ with `--prtemca prte_rml_radix 2`, the daemon tree is 3–4 deep, so the
 routing/relay is broken the fence hangs to the 60s timeout instead of
 completing.
 
+### Writing a case that asserts on an error message
+
+**`show_help` emits a given message once per HNP.** A test that probes with
+some command and then re-runs it to assert on the output gets nothing the
+second time — the first, discarded run already spent the message. Capture
+the output of the run that produced the condition and assert on that. (The
+`rmaps` "map by an object the node does not have" case is written this way,
+and was written the other way first.)
+
+The corollary for a **persistent** DVM: the diagnostic is produced on the
+HNP, and `prte --daemonize` has detached from stdio, so `>/tmp/prte.out`
+captures nothing. PRRTE relays the message back to the submitting tool, so
+assert on `prun`'s own output; if you need the HNP's stdio, start it in the
+foreground under `docker exec -d` (see §5).
+
+---
+
 ## 7. Cleanup hygiene
 
 `run-tests.sh` cleans up between phases; if you drive things by hand, clear
