@@ -553,6 +553,11 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_NOCOPY, (void**)&fptr, PMIX_BOOL)) {
         PMIX_INFO_LIST_ADD(ret, info, PMIX_OUTPUT_NOCOPY, &flag, PMIX_BOOL);
     }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_FILE_PATTERN, (void**)&fptr, PMIX_BOOL)) {
+        /* PMIx expands the pattern when it opens the sink, so the flag has to
+         * reach the nspace it will read the filename from */
+        PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_FILE_PATTERN, &flag, PMIX_BOOL);
+    }
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, (void**)&fptr, PMIX_BOOL)) {
         PMIX_INFO_LIST_ADD(ret, info, PMIX_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
     }

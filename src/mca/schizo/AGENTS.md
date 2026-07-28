@@ -249,11 +249,30 @@ table.
      `nocopy`, while `file=X:nocopy:raw` did the reverse. Order must not
      matter.
 
-  Known gap: the `pattern` qualifier is inert end to end - it is absent
-  from `prte_schizo_base_sanity`'s `outquals[]`, so the CLI rejects it
-  before `parse_output` runs, and nothing in PRRTE consumes
-  `PMIX_IOF_FILE_PATTERN` either.
+  The `pattern` qualifier is the one directive whose *meaning* lives
+  outside PRRTE. `--output file=NAME:pattern` says NAME is the user's own
+  name rather than a stem PMIx annotates with the namespace and rank, and
+  PMIx is what expands it — it owns the IOF sinks and is the only place
+  that knows the rank at the moment a file is opened. So the chain has
+  four links, and all four have to be present or the qualifier is silently
+  inert:
 
+  1. `prte_schizo_base_sanity`'s `outquals[]` must list `pattern`, or the
+     CLI rejects it before `parse_output` sees it;
+  2. `parse_output` emits `PMIX_IOF_FILE_PATTERN` **alongside the
+     filename** (it means nothing without one, so a `pattern` with no
+     `file=` is refused), having first checked the pattern's conversions
+     with `pmix_iof_check_pattern()` — asking PMIx keeps the CLI's idea of
+     a valid pattern and the expander's identical;
+  3. `pmix_server_dyn.c` turns the key into `PRTE_JOB_OUTPUT_FILE_PATTERN`
+     on the job;
+  4. `pmix_server_register_fns.c` puts it back on the wire in the nspace
+     registration, which is what `pmix_iof_check_flags` reads into the
+     namespace's `iof_flags`.
+
+  The whole thing is gated on `PRTE_PMIX_IOF_FILE_PATTERN`
+  (`PMIX_CAP_IOF_FILE_PATTERN`); built against a PMIx without it, the
+  qualifier is refused with a diagnostic rather than accepted and ignored.
 - **`prte_schizo_base_expose(param, prefix)`** — split a `key=value`
   string and `setenv` it as `<prefix>key=value` (used by `parse_cli` to
   push `--prtemca`/`--pmixmca` values into the environment).

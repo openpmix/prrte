@@ -29,6 +29,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
 
+#include "src/common/pmix_iof.h"
 #include "src/mca/schizo/base/base.h"
 /*
  * The following file was created by configure.  It contains extern
@@ -473,6 +474,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         PRTE_CLI_COPY,
         PRTE_CLI_NOCOPY,
         PRTE_CLI_RAW,
+        PRTE_CLI_PATTERN,
         NULL
     };
 
@@ -776,6 +778,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
     pmix_status_t ret = PRTE_SUCCESS;
     bool fileonly = true;
     bool copyqualgiven = false;
+    bool patternqualgiven = false;
 
     for (n=0; NULL != opt->values[n]; n++) {
         /* every value on this option is a directive list of its own - the
@@ -819,11 +822,19 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                         copyqualgiven = true;
 
                     } else if (PMIX_CHECK_CLI_OPTION(options[m], PRTE_CLI_PATTERN)) {
-                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
-                        if (PMIX_SUCCESS != ret) {
-                            PMIX_ERROR_LOG(ret);
-                            goto cleanup;
-                        }
+#if PRTE_PMIX_IOF_FILE_PATTERN
+                        /* only record it here - the key is emitted with the
+                         * filename it qualifies, since it means nothing
+                         * without one */
+                        patternqualgiven = true;
+#else
+                        /* expanding the pattern is PMIx's job, and this one
+                         * cannot do it - say so rather than accept a
+                         * qualifier that would be silently ignored */
+                        pmix_show_help("help-schizo-output.txt", "pattern-unsupported", true);
+                        ret = PRTE_ERR_SILENT;
+                        goto cleanup;
+#endif
 
                     } else if (PMIX_CHECK_CLI_OPTION(options[m], PRTE_CLI_RAW)) {
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_RAW, NULL, PMIX_BOOL);
@@ -954,10 +965,37 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 } else {
                     outfile = strdup(ptr);
                 }
+#if PRTE_PMIX_IOF_FILE_PATTERN
+                if (patternqualgiven) {
+                    /* the name is a pattern the user composed, so check its
+                     * conversions now - while they are still looking at the
+                     * command line they typed.  PMIx owns the expansion, so
+                     * it owns the definition of what is valid; asking it
+                     * here is what keeps the two answers the same. */
+                    char *badconv = NULL;
+                    ret = pmix_iof_check_pattern(outfile, &badconv);
+                    if (PMIX_SUCCESS != ret) {
+                        pmix_show_help("help-schizo-output.txt", "bad-pattern", true,
+                                       ptr, (NULL == badconv) ? "(none)" : badconv);
+                        if (NULL != badconv) {
+                            free(badconv);
+                        }
+                        ret = PRTE_ERR_SILENT;
+                        goto cleanup;
+                    }
+                }
+#endif
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_FILE, outfile, PMIX_STRING);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
                     goto cleanup;
+                }
+                if (patternqualgiven) {
+                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
+                    if (PMIX_SUCCESS != ret) {
+                        PMIX_ERROR_LOG(ret);
+                        goto cleanup;
+                    }
                 }
                 if (copyqualgiven) {
                     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, &fileonly, PMIX_BOOL);
@@ -970,6 +1008,14 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
         }
         PMIx_Argv_free(targv);
         targv = NULL;
+    }
+    if (patternqualgiven && NULL == outfile) {
+        /* "pattern" says how to name an output FILE.  Given without one it
+         * has nothing to qualify, and silently ignoring it would leave the
+         * user believing they had asked for something */
+        pmix_show_help("help-schizo-output.txt", "pattern-needs-file", true);
+        ret = PRTE_ERR_SILENT;
+        goto cleanup;
     }
     ret = PRTE_SUCCESS;
 

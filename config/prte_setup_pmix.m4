@@ -253,6 +253,22 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                          AC_MSG_WARN([accepts any unambiguous prefix of a qualifier's name.])
                          AC_MSG_ERROR([Please update PMIx and configure again])])
 
+    dnl The "pattern" qualifier on "--output file=NAME" hands the naming of
+    dnl the output files to the user.  Expanding the pattern is PMIx's job -
+    dnl PMIx owns the IOF sinks and is the only place that knows the rank and
+    dnl namespace at the moment a file is opened - so without those helpers
+    dnl PRRTE has nothing to hand the request to, and says so rather than
+    dnl accepting a qualifier it cannot honor.
+    AC_MSG_CHECKING([for PMIx output-file pattern support])
+    PRTE_CHECK_PMIX_CAP([IOF_FILE_PATTERN],
+                        [AC_MSG_RESULT([yes])
+                         prte_pmix_iof_file_pattern=1],
+                        [AC_MSG_RESULT([no])
+                         prte_pmix_iof_file_pattern=0])
+    AC_DEFINE_UNQUOTED([PRTE_PMIX_IOF_FILE_PATTERN],
+                       [$prte_pmix_iof_file_pattern],
+                       [Whether PMIx can expand an output-file name pattern])
+
     AC_MSG_CHECKING([for LTO compatibility])
     PRTE_CHECK_PMIX_CAP([LTO],
                         [PRTE_PMIX_LTO_CAPABILITY=1
