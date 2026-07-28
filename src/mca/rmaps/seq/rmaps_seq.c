@@ -104,7 +104,10 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
     int32_t num_nodes;
     int rc;
     pmix_list_t default_seq_list;
-    pmix_list_t node_list, *seq_list, sq_list;
+    /* seq_list points at either the shared default list or this app's own
+     * sq_list; NULL until one has been built, so the error path knows
+     * whether there is a per-app list to hand back */
+    pmix_list_t node_list, *seq_list = NULL, sq_list;
     prte_proc_t *proc;
     pmix_mca_base_component_t *c = &prte_mca_rmaps_seq_component;
     char *hosts = NULL;
@@ -223,6 +226,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
             hosts = NULL;
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
+                PMIX_LIST_DESTRUCT(&node_list);
                 goto error;
             }
             /* transfer the list to a seq_node_t list */
@@ -324,6 +328,19 @@ process:
             sq = (seq_node_t *) pmix_list_get_first(seq_list);
         }
         for (n = 0; n < app->num_procs; n++) {
+            /* the sequence has to be long enough to hold every rank. It is
+             * checked against num_nodes above, but the shared default list is
+             * entered at the cursor a previous app left behind, so there may
+             * be fewer entries left than that count promises - and walking off
+             * the end would read the list's sentinel as if it were an entry */
+            if (NULL == sq || pmix_list_get_end(seq_list) == &sq->super) {
+                /* "n" entries were consumed getting this far, so that is how
+                 * many the sequence turned out to be worth to this app */
+                pmix_show_help("help-prte-rmaps-seq.txt", "seq:not-enough-resources", true,
+                               (int) app->num_procs, n);
+                rc = PRTE_ERR_SILENT;
+                goto error;
+            }
             /* find this node on the global array - this is necessary so
              * that our mapping gets saved on that array as the objects
              * returned by the hostfile function are -not- on the array
@@ -353,7 +370,19 @@ process:
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }
-            if (!prte_rmaps_base_check_avail(jdata, app, node, seq_list, NULL, options)) {
+            /* NULL node list: seq_list holds seq_node_t entries, not the
+             * prte_node_t we are placing on, so check_avail must not try to
+             * drop the node from it */
+            if (!prte_rmaps_base_check_avail(jdata, app, node, NULL, NULL, options)) {
+                /* This entry's node cannot take a proc. Step to the next
+                 * entry and try the same rank there rather than dropping it:
+                 * re-offering the same entry to every remaining rank got
+                 * nowhere, and giving up on the rank left the job claiming
+                 * more procs than the map holds - a count the launch message
+                 * packer and unpacker then disagree about. The sentinel check
+                 * at the top of the loop bounds the retry. */
+                sq = (seq_node_t *) pmix_list_get_next(&sq->super);
+                --n;
                 continue;
             }
 
@@ -396,10 +425,14 @@ process:
         /* cleanup the node list if it came from this app_context */
         if (seq_list != &default_seq_list) {
             PMIX_LIST_DESTRUCT(seq_list);
+            seq_list = NULL;
         } else {
             save = sq;
         }
     }
+    /* the default list was built from the default hostfile for this map and
+     * is of no use to anyone afterwards */
+    PMIX_LIST_DESTRUCT(&default_seq_list);
     /* compute local/app ranks - in per-app dispatch mode (app_idx >= 0)
      * the base computes the ranks with the correct cross-app numbering,
      * so skip it here */
@@ -409,6 +442,9 @@ process:
     return rc;
 
 error:
+    if (NULL != seq_list && seq_list != &default_seq_list) {
+        PMIX_LIST_DESTRUCT(seq_list);
+    }
     PMIX_LIST_DESTRUCT(&default_seq_list);
     if (NULL != hosts) {
         free(hosts);
