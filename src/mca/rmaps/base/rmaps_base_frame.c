@@ -207,11 +207,29 @@ PMIX_CLASS_INSTANCE(prte_rmaps_base_selected_module_t,
  * accepted for a job and silently rejected (a bare PRTE_ERR_BAD_PARAM, no
  * message) for an app.
  */
+/* The value of a "KEY=value" qualifier.
+ *
+ * PMIX_CHECK_CLI_OPTION matches an abbreviated key - "P=2" is PE=2, "F=path"
+ * is FILE=path - so the value cannot be read at an offset fixed to the full
+ * spelling. Doing that turned "--map-by core:P=2" into pes-per-proc 0 (which
+ * then failed the map with an unrelated "out of resource") and "seq:F=path"
+ * into an attempt to open the path five characters in. Returns NULL when the
+ * qualifier carries no value at all. */
+static char *qualifier_value(char *qual)
+{
+    char *ptr = strchr(qual, '=');
+
+    if (NULL == ptr || '\0' == *(ptr + 1)) {
+        return NULL;
+    }
+    return ptr + 1;
+}
+
 static int check_modifiers(char *ck, prte_job_t *jdata,
                            prte_app_context_t *app,
                            prte_mapping_policy_t *tmp)
 {
-    char **ck2, *ptr;
+    char **ck2, *ptr, *val;
     int i;
     uint16_t u16;
     pmix_list_t *attrs = NULL;
@@ -282,9 +300,16 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
 
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_PE)) {
             /* Numeric value must immediately follow '=' (PE=2) */
-            u16 = strtol(&ck2[i][3], &ptr, 10);
+            val = qualifier_value(ck2[i]);
+            if (NULL == val) {
+                pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true, "mapping policy",
+                               "PE", ck2[i]);
+                PMIx_Argv_free(ck2);
+                return PRTE_ERR_SILENT;
+            }
+            u16 = strtol(val, &ptr, 10);
             if ('\0' != *ptr) {
-                /* missing the value or value is invalid */
+                /* value is invalid */
                 pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true, "mapping policy",
                                "PE", ck2[i]);
                 PMIx_Argv_free(ck2);
@@ -380,7 +405,8 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
             core_cpus_given = true;
 
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_QFILE)) {
-            if ('\0' == ck2[i][5]) {
+            val = qualifier_value(ck2[i]);
+            if (NULL == val) {
                 /* missing the value */
                 pmix_show_help("help-prte-rmaps-base.txt", "missing-value", true, "mapping policy",
                                "FILE", ck2[i]);
@@ -395,10 +421,10 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                     PMIx_Argv_free(ck2);
                     return PRTE_ERR_SILENT;
                 }
-                prte_rmaps_base.file = strdup(&ck2[i][5]);
+                prte_rmaps_base.file = strdup(val);
             } else {
                 prte_set_attribute(attrs, (NULL != app) ? PRTE_APP_MAP_FILE : PRTE_JOB_FILE,
-                                   PRTE_ATTR_GLOBAL, &ck2[i][5], PMIX_STRING);
+                                   PRTE_ATTR_GLOBAL, val, PMIX_STRING);
             }
 
         } else {
@@ -691,6 +717,10 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
             free(cptr);
             return rc;
         }
+        /* the joined modifier string has served its purpose. Below, cptr is
+         * re-taken from ck[0] for the policy word, so anything still held
+         * here is simply lost */
+        free(cptr);
         if (ppr) {
             /* we are done */
             PMIx_Argv_free(ck);
@@ -1198,7 +1228,15 @@ int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app, char *spec)
                 tmp = (tmp & ~PRTE_BIND_ALLOW_OVERLOAD);
                 tmp |= PRTE_BIND_OVERLOAD_GIVEN;
             } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_LIMIT)) {
-                u16 = (uint16_t)strtol(&quals[i][6], &p2, 10);
+                p2 = qualifier_value(quals[i]);
+                if (NULL == p2) {
+                    pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                                   "binding limit", "LIMIT", quals[i]);
+                    PMIx_Argv_free(quals);
+                    free(myspec);
+                    return PRTE_ERR_SILENT;
+                }
+                u16 = (uint16_t)strtol(p2, &p2, 10);
                 if ('\0' != *p2) {
                     pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
                                    "binding limit", "LIMIT", quals[i]);
