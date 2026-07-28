@@ -354,7 +354,14 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                 continue;
             }
             cnt = 0;
-            while (cnt < app->num_procs) {
+            one_found = true;
+            /* the "one_found" guard matters as much here as it does in the
+             * by-node loop above: if a pass over every node and object ranks
+             * nothing - a proc whose locale is not an object of the mapping
+             * type, or an app whose num_procs outruns what was actually
+             * placed - then cnt never advances and this loop never ends */
+            while (cnt < app->num_procs && one_found) {
+                one_found = false;
                 // scan across the nodes
                 for (n=0; n < jdata->map->nodes->size; n++) {
                     node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, n);
@@ -406,6 +413,7 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                             }
                             ++rank;
                             ++cnt;
+                            one_found = true;
                             break;
                         }
                     }
