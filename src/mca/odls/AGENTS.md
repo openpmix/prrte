@@ -250,6 +250,38 @@ to `prte_event_base`.
   attributes trumping job attributes), calls the schizo's `setup_fork`,
   links prepositioned files (`prte_filem`), checks the executable, and
   applies resource limits.
+
+  **`process_envars` owns the envar directives — all of them.** It runs
+  for every personality whatever that personality's `setup_fork` does,
+  which is why the schizo hook deliberately does not repeat them: applying
+  `PREPEND`/`APPEND` twice is not a no-op (it duplicates every entry a
+  user prepends onto `PATH`), and `prte_schizo_base_setup_fork` used to do
+  exactly that. The schizo hook is left with the PMIx prefix only.
+
+  **Order is the contract.** The list is walked front to back, and that
+  order is the order the user's directives take effect in: `SET` replaces
+  a value outright while `PREPEND`/`APPEND` edit the one already there, so
+  `--prepend-env FOO[:] x --set-env FOO=1` leaves `FOO=1` and the reverse
+  order leaves `FOO=x:1`. Neither is a merge policy we get to choose — the
+  user said what to do and in what sequence. What builds the list in that
+  sequence is `prte_append_attribute()` in `pmix_server_dyn.c`; the
+  `prte_prepend_attribute()` calls in `construct_child_list` are the
+  deliberate exception, putting the values `PMIx_server_setup_application`
+  returned in FRONT so the user's own directives, which arrive on the job
+  already, are applied afterwards and win. That block is walked in reverse
+  for the same reason: prepending a block one entry at a time reverses it.
+
+  Two shapes to keep in mind when editing it:
+  - **`UNSET` is a `PMIX_STRING`, not a `pmix_envar_t`** — it names a
+    variable and carries no value. It has to be handled *before* the
+    `PMIX_ENVAR != attr->data.type` filter that guards the rest of the
+    loop, or `--unset-env` silently does nothing. A trailing `*` makes the
+    name a prefix.
+  - **Match an environment entry's name up to and including the `=`.** A
+    bare `strncmp` of the name's length matches any variable that merely
+    starts with it, so prepending onto `PATH` would edit `PATHEXT`
+    instead — whichever the environment happens to list first. That is
+    what `envar_value()` is for.
 - For each **local child of that app** in `INIT`/`RESTART` state: registers
   the `waitpid` callback (`prte_wait_cb` → `prte_odls_base_default_wait_local_proc`),
   sets `PRTE_PROC_FLAG_ALIVE`, allocates a **`prte_odls_spawn_caddy_t`**,

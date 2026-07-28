@@ -793,33 +793,43 @@ next:
             goto REPORT_ERROR;
         }
         PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-        /* add any cache'd values to the front of the job attributes  */
-        for (m = 0; m < ninfo; m++) {
-            if (0 == strcmp(info[m].key, PMIX_SET_ENVAR)) {
-                envt.envar = info[m].value.data.envar.envar;
-                envt.value = info[m].value.data.envar.value;
-                envt.separator = info[m].value.data.envar.separator;
+        /* Add any cache'd values to the FRONT of the job attributes: these
+         * come from PMIx_server_setup_application, and the user's own
+         * directives - which arrive on the job already - have to be applied
+         * after them so the user's wins.
+         *
+         * Walk the array in REVERSE to do it. Prepending a block one entry
+         * at a time reverses that block, and these are envar directives:
+         * PREPEND/APPEND edit an existing value, so the order they are
+         * applied in is the value the process ends up with. */
+        for (m = ninfo; m > 0; m--) {
+            size_t idx = m - 1;
+            pmix_info_t *iptr = &info[idx];
+            if (0 == strcmp(iptr->key, PMIX_SET_ENVAR)) {
+                envt.envar = iptr->value.data.envar.envar;
+                envt.value = iptr->value.data.envar.value;
+                envt.separator = iptr->value.data.envar.separator;
                 prte_prepend_attribute(&jdata->attributes, PRTE_JOB_SET_ENVAR, PRTE_ATTR_GLOBAL,
                                        &envt, PMIX_ENVAR);
-            } else if (0 == strcmp(info[m].key, PMIX_ADD_ENVAR)) {
-                envt.envar = info[m].value.data.envar.envar;
-                envt.value = info[m].value.data.envar.value;
-                envt.separator = info[m].value.data.envar.separator;
+            } else if (0 == strcmp(iptr->key, PMIX_ADD_ENVAR)) {
+                envt.envar = iptr->value.data.envar.envar;
+                envt.value = iptr->value.data.envar.value;
+                envt.separator = iptr->value.data.envar.separator;
                 prte_prepend_attribute(&jdata->attributes, PRTE_JOB_ADD_ENVAR, PRTE_ATTR_GLOBAL,
                                        &envt, PMIX_ENVAR);
-            } else if (0 == strcmp(info[m].key, PMIX_UNSET_ENVAR)) {
+            } else if (0 == strcmp(iptr->key, PMIX_UNSET_ENVAR)) {
                 prte_prepend_attribute(&jdata->attributes, PRTE_JOB_UNSET_ENVAR, PRTE_ATTR_GLOBAL,
-                                       info[m].value.data.string, PMIX_STRING);
-            } else if (0 == strcmp(info[m].key, PMIX_PREPEND_ENVAR)) {
-                envt.envar = info[m].value.data.envar.envar;
-                envt.value = info[m].value.data.envar.value;
-                envt.separator = info[m].value.data.envar.separator;
+                                       iptr->value.data.string, PMIX_STRING);
+            } else if (0 == strcmp(iptr->key, PMIX_PREPEND_ENVAR)) {
+                envt.envar = iptr->value.data.envar.envar;
+                envt.value = iptr->value.data.envar.value;
+                envt.separator = iptr->value.data.envar.separator;
                 prte_prepend_attribute(&jdata->attributes, PRTE_JOB_PREPEND_ENVAR, PRTE_ATTR_GLOBAL,
                                        &envt, PMIX_ENVAR);
-            } else if (0 == strcmp(info[m].key, PMIX_APPEND_ENVAR)) {
-                envt.envar = info[m].value.data.envar.envar;
-                envt.value = info[m].value.data.envar.value;
-                envt.separator = info[m].value.data.envar.separator;
+            } else if (0 == strcmp(iptr->key, PMIX_APPEND_ENVAR)) {
+                envt.envar = iptr->value.data.envar.envar;
+                envt.value = iptr->value.data.envar.value;
+                envt.separator = iptr->value.data.envar.separator;
                 prte_prepend_attribute(&jdata->attributes, PRTE_JOB_APPEND_ENVAR, PRTE_ATTR_GLOBAL,
                                        &envt, PMIX_ENVAR);
             }
@@ -1273,17 +1283,81 @@ errorout:
     PMIX_RELEASE(cd);
 }
 
+/*
+ * If this "NAME=value" environment entry is for exactly this variable,
+ * return its value; otherwise NULL.
+ *
+ * The name has to be matched up to - and including - the '='.  A bare
+ * strncmp() of the name's length matches any variable that merely STARTS
+ * with it, so "--prepend-env PATH[:] /foo" would edit PATHEXT (or
+ * PATH_SEPARATOR, or the user's own PATHOLOGY) instead of, or as well as,
+ * PATH - whichever the environment happened to list first.
+ */
+static char *envar_value(char *entry, const char *name)
+{
+    size_t len = strlen(name);
+
+    if (0 != strncmp(entry, name, len) || '=' != entry[len]) {
+        return NULL;
+    }
+    return entry + len + 1;
+}
+
+/*
+ * Remove a variable from the app's environment.  A trailing '*' makes the
+ * name a prefix: every variable that starts with it goes.
+ */
+static void unset_envar(const char *name, prte_app_context_t *app)
+{
+    char *ptr, *tmp, *p2;
+    size_t n;
+
+    if (NULL == name) {
+        return;
+    }
+    if (NULL == strchr(name, '*')) {
+        pmix_unsetenv((char *) name, &app->env);
+        return;
+    }
+    ptr = strdup(name);
+    ptr[strlen(ptr) - 1] = '\0'; // trim off the '*'
+    for (n = 0; NULL != app->env[n]; n++) {
+        if (0 == strncmp(app->env[n], ptr, strlen(ptr))) {
+            // find the '=' sign
+            tmp = strdup(app->env[n]);
+            p2 = strchr(tmp, '=');
+            if (NULL != p2) {
+                *p2 = '\0';
+                pmix_unsetenv(tmp, &app->env);
+            }
+            free(tmp);
+            /* the entry we just removed shifted the array down, so re-check
+             * this index rather than stepping past the new occupant */
+            --n;
+        }
+    }
+    free(ptr);
+}
+
 static void process_envars(prte_job_t *jdata,
                            prte_app_context_t *app)
 {
     prte_attribute_t *attr;
     pmix_value_t *val;
     pmix_envar_t *envar;
-    char *ptr, *tmp, *p2;
+    char *ptr, *tmp;
     size_t n;
     bool found;
 
     PMIX_LIST_FOREACH(attr, &jdata->attributes, prte_attribute_t) {
+        /* UNSET names a variable, so it is carried as a STRING, not as a
+         * pmix_envar_t - it has to be handled BEFORE the PMIX_ENVAR type
+         * filter below, and read out of data.string.  Filtered out first
+         * (and read as an envar), --unset-env quietly did nothing. */
+        if (attr->key == PRTE_JOB_UNSET_ENVAR) {
+            unset_envar(attr->data.data.string, app);
+            continue;
+        }
         if (PMIX_ENVAR != attr->data.type) {
             continue;
         }
@@ -1295,35 +1369,14 @@ static void process_envars(prte_job_t *jdata,
         } else if (attr->key == PRTE_JOB_ADD_ENVAR) {
             PMIx_Setenv(envar->envar, envar->value, true, &app->env);
 
-        } else if (attr->key == PRTE_JOB_UNSET_ENVAR) {
-            // need to support the wildcard here
-            if (NULL != strchr(envar->envar, '*')) {
-                ptr = strdup(envar->envar);
-                ptr[strlen(ptr)-1] = '\0';  // trim off the '*'
-                for (n=0; NULL != app->env[n]; n++) {
-                    if (0 == strncmp(app->env[n], ptr, strlen(ptr))) {
-                        // find the '=' sign
-                        tmp = strdup(app->env[n]);
-                        p2 = strchr(tmp, '=');
-                        *p2 = '\0';
-                        pmix_unsetenv(tmp, &app->env);
-                        free(tmp);
-                    }
-                }
-                free(ptr);
-            } else {
-                pmix_unsetenv(envar->envar, &app->env);
-            }
-
         } else if (attr->key == PRTE_JOB_PREPEND_ENVAR) {
             // see if this envar exists
             ptr = NULL;
             found = false;
             for (n=0; NULL != app->env[n]; n++) {
-                if (0 == strncmp(app->env[n], envar->envar, strlen(envar->envar))) {
-                    // find the value - this is a copied env, so we can modify
-                    ptr = strchr(app->env[n], '=');
-                    ++ptr; // step over the '='
+                ptr = envar_value(app->env[n], envar->envar);
+                if (NULL != ptr) {
+                    // this is a copied env, so we can modify it
                     pmix_asprintf(&tmp, "%s=%s%c%s", envar->envar, envar->value, envar->separator, ptr);
                     free(app->env[n]);
                     app->env[n] = tmp;
@@ -1341,10 +1394,9 @@ static void process_envars(prte_job_t *jdata,
             ptr = NULL;
             found = false;
             for (n=0; NULL != app->env[n]; n++) {
-                if (0 == strncmp(app->env[n], envar->envar, strlen(envar->envar))) {
-                    // find the value - this is a copied env, so we can modify
-                    ptr = strchr(app->env[n], '=');
-                    ++ptr; // step over the '='
+                ptr = envar_value(app->env[n], envar->envar);
+                if (NULL != ptr) {
+                    // this is a copied env, so we can modify it
                     pmix_asprintf(&tmp, "%s=%s%c%s", envar->envar, ptr, envar->separator, envar->value);
                     free(app->env[n]);
                     app->env[n] = tmp;
@@ -1361,6 +1413,11 @@ static void process_envars(prte_job_t *jdata,
 
     // app trumps job, so do it after the job
     PMIX_LIST_FOREACH(attr, &app->attributes, prte_attribute_t) {
+        /* see the note on UNSET in the job loop above */
+        if (attr->key == PRTE_APP_UNSET_ENVAR) {
+            unset_envar(attr->data.data.string, app);
+            continue;
+        }
         if (PMIX_ENVAR != attr->data.type) {
             continue;
         }
@@ -1372,18 +1429,14 @@ static void process_envars(prte_job_t *jdata,
         } else if (attr->key == PRTE_APP_ADD_ENVAR) {
             PMIx_Setenv(envar->envar, envar->value, true, &app->env);
 
-        } else if (attr->key == PRTE_APP_UNSET_ENVAR) {
-            pmix_unsetenv(envar->envar, &app->env);
-
         } else if (attr->key == PRTE_APP_PREPEND_ENVAR) {
             // see if this envar exists
             ptr = NULL;
             found = false;
             for (n=0; NULL != app->env[n]; n++) {
-                if (0 == strncmp(app->env[n], envar->envar, strlen(envar->envar))) {
-                    // find the value - this is a copied env, so we can modify
-                    ptr = strchr(app->env[n], '=');
-                    ++ptr; // step over the '='
+                ptr = envar_value(app->env[n], envar->envar);
+                if (NULL != ptr) {
+                    // this is a copied env, so we can modify it
                     pmix_asprintf(&tmp, "%s=%s%c%s", envar->envar, envar->value, envar->separator, ptr);
                     free(app->env[n]);
                     app->env[n] = tmp;
@@ -1401,10 +1454,9 @@ static void process_envars(prte_job_t *jdata,
             ptr = NULL;
             found = false;
             for (n=0; NULL != app->env[n]; n++) {
-                if (0 == strncmp(app->env[n], envar->envar, strlen(envar->envar))) {
-                    // find the value - this is a copied env, so we can modify
-                    ptr = strchr(app->env[n], '=');
-                    ++ptr; // step over the '='
+                ptr = envar_value(app->env[n], envar->envar);
+                if (NULL != ptr) {
+                    // this is a copied env, so we can modify it
                     pmix_asprintf(&tmp, "%s=%s%c%s", envar->envar, ptr, envar->separator, envar->value);
                     free(app->env[n]);
                     app->env[n] = tmp;
