@@ -70,6 +70,8 @@ test/unit/rml/Makefile
 test/unit/rml/test_rml
 test/unit/ras/Makefile
 test/unit/ras/test_ras
+test/unit/schizo/Makefile
+test/unit/schizo/test_schizo
 static-components.h
 static-components.h.new.extern
 static-components.h.new.struct

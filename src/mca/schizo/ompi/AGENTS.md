@@ -78,11 +78,31 @@ keys as prte.
    identity.
 3. Then runs `pmix_cmd_line_parse` against `ompioptions`/
    `help-schizo-ompi.txt` and `convert_deprecated_cli`.
+4. **Restores the tail from the original argv**, so the app's own
+   arguments are passed on as the user wrote them rather than as the
+   dash correction rewrote them. The tail is the trailing run of the
+   command line, so its start is `argc - tailc` — not "the first token
+   equal to `tail[0]`", which lands on an option's *value* whenever that
+   value happens to equal the executable's name
+   (`mpirun --wdir /tmp/app … /tmp/app`) and splices the options back
+   into the app's argv.
 
 `convert_deprecated_cli` is the ompi analogue of prte's — the same
 `add_directive`/`add_qualifier` machinery — but gated by ompi's
 `warn_deprecations`, which defaults to **false** (Open MPI users are not
-warned about the legacy spellings they've always used).
+warned about the legacy spellings they've always used). Pass that
+`warn` variable as each conversion's `report` argument; hard-coding
+`true` (as `--rankfile` used to) makes one option scold users who have
+warnings switched off, which here is everybody by default.
+
+The `--map-by` socket→package rewrite has the same shape rule as prte's,
+and this is where it bit: the `ppr` resource is the **third**
+`:`-delimited field of `ppr:N:resource[:qualifier…]`, so the value must
+be split and field `[2]` inspected. Using `strrchr()` finds the last
+`:` — the resource only when nothing follows it — and returns NULL for a
+bare `--map-by ppr`, where `++p2` then dereferenced address `0x1` and
+killed the tool outright. prte was fixed for this and ompi was not; it
+is the canonical example of why the parity rule below matters.
 
 ---
 
@@ -104,6 +124,12 @@ counterpart in prte.
   the user's explicit PRRTE/PMIx envars keep precedence). It returns
   `100` — hence detecting the ompi personality also carries a definitive
   confidence.
+
+  Splitting an `OMPI_MCA_name=value` environment entry uses **`strchr`,
+  the first `=`** — that is the one separating name from value. Using
+  `strrchr` splits at the last one instead, so any value that itself
+  contains an `=` (`mca_base_env_list="FOO=1;BAR=2"` is the everyday
+  case) gets translated under a mangled name with a truncated value.
 - **`check_prte_overlap` / `check_pmix_overlap`** encode the specific
   OMPI-name → PRRTE/PMIx-name equivalences (framework renames like OMPI
   `oob`/`if`/`dl`/`reachable`/`hwloc` mapping onto their PRRTE/PMIx
@@ -156,7 +182,25 @@ counterpart in prte.
 
 - **Keep parity with `prte`.** A new placement/output/runtime option
   usually must land in *both* personalities. The two tables drifting is a
-  classic "works with `prun`, not `mpirun`" bug.
+  classic "works with `prun`, not `mpirun`" bug — and a **fix** to a
+  shared conversion has to be mirrored just as carefully as a feature:
+  the bare-`ppr` NULL dereference above was repaired in prte and left
+  live in ompi for exactly that reason. When you touch
+  `convert_deprecated_cli` in either component, diff the two:
+
+  ```sh
+  cd src/mca/schizo
+  for f in prte/schizo_prte.c ompi/schizo_ompi.c; do
+      grep -o 'strcmp(option, "[^"]*")' $f | sed 's/.*"\(.*\)"/\1/' | sort -u > /tmp/$(basename $f).conv
+  done
+  diff /tmp/schizo_prte.c.conv /tmp/schizo_ompi.c.conv
+  ```
+
+  Differences are allowed (`with-ft` and `stream-buffering` are
+  ompi-only, by design) but each one should be a decision, not a drift.
+  Also check the option **tables** the same way: an entry with no
+  conversion behind it is an option that parses and is then silently
+  discarded.
 - **The framework-prefix list is load-bearing.** `ompi_frameworks[]`
   decides what counts as an "Open MPI MCA param" and thus what gets
   forwarded to the app env vs. translated for PRRTE/PMIx. Adding an OMPI
