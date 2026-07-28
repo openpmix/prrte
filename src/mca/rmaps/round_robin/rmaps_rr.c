@@ -146,20 +146,14 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
                                      num_slots, app->num_procs,
                                      options);
         } else {
+            /* an object mapping. There is deliberately no fallback here:
+             * we map by an object only because the user asked for it, so
+             * being unable to is an error rather than a licence to place
+             * the job by some other rule. byobj says so itself and returns
+             * PRTE_ERR_SILENT. */
             rc = prte_rmaps_rr_byobj(jdata, app, &node_list,
                                      num_slots, app->num_procs,
                                      options);
-            if (PRTE_ERR_NOT_FOUND == rc) {
-                /* if the mapper couldn't map by this object because
-                 * it isn't available, but the error allows us to try
-                 * byslot, then do so
-                 */
-                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
-                options->map = PRTE_MAPPING_BYSLOT;
-                rc = prte_rmaps_rr_byslot(jdata, app, &node_list,
-                                          num_slots, app->num_procs,
-                                          options);
-            }
         }
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);

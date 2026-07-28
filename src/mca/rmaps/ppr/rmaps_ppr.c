@@ -319,7 +319,17 @@ static int ppr_mapper(prte_job_t *jdata,
                 nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                  options->maptype);
                 if (0 == nobjs) {
-                    continue;
+                    /* The pattern names the resource to place procs on, and
+                     * a node that has none of it cannot answer the request.
+                     * Skipping the node instead quietly shrank the
+                     * allocation the user gave us and, worse, changed what
+                     * the pattern means: "2 per L3cache" over nodes that
+                     * have no L3cache placed nothing there while reporting
+                     * success. Same rule as round_robin's object mapper. */
+                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:mapping-target-not-found",
+                                   true, hwloc_obj_type_string(options->maptype), node->name);
+                    rc = PRTE_ERR_SILENT;
+                    goto error;
                 }
                 options->nprocs = options->pprn * nobjs;
                 /* if there are not enough slots to support the required

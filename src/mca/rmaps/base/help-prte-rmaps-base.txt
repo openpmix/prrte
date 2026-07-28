@@ -141,6 +141,18 @@ one.
 A request was made to bind to %s, but an appropriate target could not
 be found on node %s.
 #
+[rmaps:mapping-target-not-found]
+A request was made to map by a hardware object, but a node in the
+allocation has no object of that type:
+
+  Object type:  %s
+  Node:         %s
+
+Mapping by an object is only done when it has been asked for, so
+there is no other placement that would answer the request. Please
+either map by an object this node provides, or restrict the job to
+nodes that provide the one you asked for.
+#
 [allocation-overload]
 A request was made to bind that would require binding
 processes to more cpus than are available in your allocation:
