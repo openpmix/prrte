@@ -290,9 +290,13 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
      * reset to BIND_TO_NONE only if this app genuinely oversubscribes a node.
      * When the app changed neither, the job-level binding stands. */
     have_bind = prte_get_attribute(&app->attributes, PRTE_APP_BINDTO, (void **)&u16ptr, PMIX_UINT16);
+    opts->appbind = 0;
     if (have_bind) {
         opts->bind = PRTE_GET_BINDING_POLICY(u16);
         opts->overload = (0 != PRTE_BIND_OVERLOAD_ALLOWED(u16));
+        /* keep the whole word: the app asked for this binding, so its own
+         * directives - IF-SUPPORTED above all - describe it, not the job's */
+        opts->appbind = u16;
     } else if (have_map) {
         opts->bind = prte_rmaps_base_derive_binding(opts);
     }
@@ -305,15 +309,6 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
     return PRTE_SUCCESS;
 }
 
-/* Record the effective map/rank/bind policies for one app of a per-app
- * (MPMD) job so the map display can show a policy line per app. The bare
- * resolved policies in opts are overlaid onto snapshots of the job-level
- * policy values (captured before the per-app loop so a prior app's mapper
- * adjustments cannot bleed through), preserving the job-wide directive bits
- * - oversubscribe, if-supported, span, and so on. The binding policy in opts
- * reflects any reset to BIND_TO_NONE the mapper made for a genuinely
- * oversubscribed node. These are stored as job-local attributes and are never
- * packed or sent off-node. */
 /* return the per-node scratch cpusets a mapper computed into an options
  * struct. The mappers recycle these as they walk the node list, so the
  * final node's pair is still held when the map returns. */
@@ -334,6 +329,23 @@ static void free_cpusets(prte_rmaps_options_t *opts)
     free_target(opts);
 }
 
+/* Record the effective map/rank/bind policies for one app of a per-app
+ * (MPMD) job so the map display can show a policy line per app. The bare
+ * resolved policies in opts are overlaid onto snapshots of the job-level
+ * policy values (captured before the per-app loop so a prior app's mapper
+ * adjustments cannot bleed through), preserving the job-wide directive bits
+ * - oversubscribe, span, and so on. The binding policy in opts reflects any
+ * reset to BIND_TO_NONE the mapper made for a genuinely oversubscribed node.
+ *
+ * Binding is the exception to taking the job's directives: an app that gave
+ * its own --bind-to described that binding itself, so its own word supplies
+ * the directives. Otherwise an explicit "--bind-to numa" was reported as
+ * NUMA:IF-SUPPORTED - the job's binding is a derived default whenever the
+ * apps each gave their own, and a derived default is best-effort - telling
+ * the user their requirement was merely a preference.
+ *
+ * These are stored as job-local attributes and are never packed or sent
+ * off-node. */
 static void record_resolved_app_policy(prte_app_context_t *app,
                                        prte_mapping_policy_t jobmap,
                                        prte_ranking_policy_t jobrank,
@@ -342,7 +354,7 @@ static void record_resolved_app_policy(prte_app_context_t *app,
 {
     prte_mapping_policy_t emap = jobmap;
     prte_ranking_policy_t erank = jobrank;
-    prte_binding_policy_t ebind = jobbind;
+    prte_binding_policy_t ebind = (0 == opts->appbind) ? jobbind : opts->appbind;
 
     PRTE_SET_MAPPING_POLICY(emap, opts->map);
     if (opts->mapspan) {

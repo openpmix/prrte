@@ -144,6 +144,21 @@ int test_resolve_options(void)
     CHECK("bindovl: rc", PRTE_SUCCESS == prte_rmaps_base_resolve_app_options(NULL, app, &opts));
     CHECK("bindovl: bind masked", PRTE_BIND_TO_PACKAGE == opts.bind);  /* no overload bit in bind */
     CHECK("bindovl: overload flag", opts.overload);
+    /* the whole word is kept for the map display: an app that asked to bind
+     * describes that binding itself, so the display must not fall back on the
+     * job's binding directives and report the request as IF-SUPPORTED */
+    CHECK("bindovl: appbind kept", 0 != opts.appbind);
+    CHECK("bindovl: appbind not if-supported", !(PRTE_BIND_IF_SUPPORTED & opts.appbind));
+    CHECK("bindovl: appbind overload", 0 != PRTE_BIND_OVERLOAD_ALLOWED(opts.appbind));
+    PMIX_RELEASE(app);
+
+    /* === resolve: an app that gave only a map-by gets a *derived* binding,
+     *     which is best-effort - it must not claim the app asked for it === */
+    app = PMIX_NEW(prte_app_context_t);
+    prte_rmaps_base_set_app_mapping_policy(app, "package");
+    baseline(&opts);
+    CHECK("derivedbind: rc", PRTE_SUCCESS == prte_rmaps_base_resolve_app_options(NULL, app, &opts));
+    CHECK("derivedbind: no appbind", 0 == opts.appbind);
     PMIX_RELEASE(app);
 
     /* === resolve: pe=N and hwtcpus modifiers feed the cpu fields === */
