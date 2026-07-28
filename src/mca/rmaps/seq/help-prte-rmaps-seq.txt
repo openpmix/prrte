@@ -53,3 +53,30 @@ A process could not be mapped:
   App: %s
 
 Could not continue.
+#
+[seq:bad-cpuset]
+A sequence file entry named a set of CPUs for its rank, but that set
+could not be resolved against the node's topology:
+
+  CPU set:  %s
+  Node:     %s
+
+The CPUs available on that node are:
+
+  %s
+
+Please check the entry and try again.
+#
+[seq:cpuset-not-available]
+A sequence file entry named a set of CPUs for its rank, but some of
+them are already in use on that node:
+
+  Process:        %s
+  Node:           %s
+  Requested CPUs: %s
+  Available CPUs: %s
+  Already in use: %s
+
+Two entries naming the same node must not name the same CPUs. If you
+did intend to place more than one process on a CPU, ask for it with
+the "overload-allowed" qualifier on --bind-to.
