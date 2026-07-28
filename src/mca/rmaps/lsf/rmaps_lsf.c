@@ -256,12 +256,17 @@ static int lsf_map(prte_job_t *jdata,
                     break;
                 }
                 if (NULL == node) {
-                    /* all would be oversubscribed, so take the least loaded one */
-                    k = (int32_t) UINT32_MAX;
+                    /* all would be oversubscribed, so take the least loaded
+                     * one. Track the running minimum in its own variable: this
+                     * used to borrow k, the loop counter carrying the rank we
+                     * are placing, so a single unlisted rank on a full
+                     * allocation rewrote the loop's position and the ranks it
+                     * went on to assign */
+                    pmix_rank_t least = UINT32_MAX;
                     PMIX_LIST_FOREACH(nd, &node_list, prte_node_t)
                     {
-                        if (nd->num_procs < (pmix_rank_t) k) {
-                            k = nd->num_procs;
+                        if (nd->num_procs < least) {
+                            least = nd->num_procs;
                             node = nd;
                         }
                     }
@@ -296,7 +301,8 @@ static int lsf_map(prte_job_t *jdata,
                             pmix_show_help("help-rmaps_lsf.txt", "bad-index", true,
                                            rfmap->node_name);
                             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-                            return PRTE_ERR_BAD_PARAM;
+                            rc = PRTE_ERR_BAD_PARAM;
+                            goto error;
                         }
                         root_node = (prte_node_t *) pmix_list_get_first(&node_list);
                         for (tmp_cnt = 0; tmp_cnt < relative_index; tmp_cnt++) {
@@ -308,14 +314,17 @@ static int lsf_map(prte_job_t *jdata,
                 }
             }
             if (NULL == node) {
-                pmix_show_help("help-rmaps_lsf.txt", "resource-not-found", true, rfmap->node_name);
+                /* rfmap is NULL for a rank the file did not list, which the
+                 * fallback above placed on a node of its own choosing */
+                pmix_show_help("help-rmaps_lsf.txt", "resource-not-found", true,
+                               (NULL == rfmap) ? "N/A" : rfmap->node_name);
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }
             if (!options->donotlaunch) {
                 rc = prte_rmaps_base_check_support(jdata, node, options);
                 if (PRTE_SUCCESS != rc) {
-                    return rc;
+                    goto error;
                 }
             }
             prte_rmaps_base_get_cpuset(jdata, node, options);
@@ -325,19 +334,25 @@ static int lsf_map(prte_job_t *jdata,
                 goto error;
             }
             if (!prte_rmaps_base_check_avail(jdata, app, node, &node_list, NULL, options)) {
-                pmix_show_help("help-rmaps_lsf.txt", "bad-host", true, rfmap->node_name);
+                pmix_show_help("help-rmaps_lsf.txt", "bad-host", true,
+                               (NULL == rfmap) ? "N/A" : rfmap->node_name);
                 rc = PRTE_ERR_SILENT;
-                goto error;
-            }
-            /* check if we are oversubscribed */
-            rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
-            if (PRTE_SUCCESS != rc) {
                 goto error;
             }
             proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, NULL, options);
             if (NULL == proc) {
                 PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                 rc = PRTE_ERR_OUT_OF_RESOURCE;
+                goto error;
+            }
+            /* check if we are oversubscribed. This runs after the proc has
+             * been placed, as it does in every other mapper: it reads the
+             * node's proc count, so asking before placement judged the node
+             * one proc behind */
+            rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
+            if (PRTE_SUCCESS != rc &&
+                PRTE_ERR_TAKE_NEXT_OPTION != rc) {
+                PMIX_RELEASE(proc);
                 goto error;
             }
             /* set the vpid */
@@ -476,6 +491,7 @@ static int file_parse(const char *affinity_file)
     FILE *fp;
     char *hstname, *membind_opt;
     char *sep = NULL, *eptr, **cpus, *ptr;
+    char *logical_cpus = NULL;
     prte_node_t *nptr, *node;
     hwloc_obj_t obj;
 
@@ -498,6 +514,14 @@ static int file_parse(const char *affinity_file)
     }
 
     while (NULL != (hstname = pmix_getline(fp))) {
+        /* start each line with no cpu list of its own: a line that carries
+         * none must not inherit the previous line's, which by this point is
+         * also a string this loop allocated and would otherwise leak */
+        if (NULL != logical_cpus) {
+            free(logical_cpus);
+            logical_cpus = NULL;
+        }
+        sep = NULL;
         if (0 == strlen(hstname)) {
             free(hstname);
             /* blank line - ignore */
@@ -586,16 +610,19 @@ static int file_parse(const char *affinity_file)
                 cpus[i] = (char*)malloc(sizeof(char) * 10);
                 snprintf(cpus[i], 10, "%d", obj->logical_index);
             }
-            sep = PMIx_Argv_join(cpus, ',');
+            /* keep the joined logical list in its own variable - "sep" points
+             * into hstname, which the map takes ownership of below */
+            logical_cpus = PMIx_Argv_join(cpus, ',');
             PMIx_Argv_free(cpus);
             pmix_output_verbose(20, prte_rmaps_base_framework.framework_output,
-                                "mca:rmaps:lsf: (lsf) Convert Physical CPUSET to   <%s>", sep);
+                                "mca:rmaps:lsf: (lsf) Convert Physical CPUSET to   <%s>",
+                                logical_cpus);
         }
 
         rfmap = PMIX_NEW(prte_rmaps_lsf_map_t);
         rfmap->node_name = hstname;
-        if (NULL != sep) {
-            snprintf(rfmap->slot_list, RMAPS_LSF_MAX_SLOTS, "%s", sep);
+        if (NULL != logical_cpus) {
+            snprintf(rfmap->slot_list, RMAPS_LSF_MAX_SLOTS, "%s", logical_cpus);
         }
         pmix_pointer_array_set_item(&rankmap, num_ranks, rfmap);
         num_ranks++; // keep track of number of provided ranks
@@ -603,6 +630,9 @@ static int file_parse(const char *affinity_file)
                             "mca:rmaps:lsf: Adding node %s cpus %s",
                             rfmap->node_name, rfmap->slot_list);
 
+    }
+    if (NULL != logical_cpus) {
+        free(logical_cpus);
     }
     fclose(fp);
 
