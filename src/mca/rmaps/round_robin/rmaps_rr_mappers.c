@@ -655,11 +655,16 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
             nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                              options->maptype);
             if (0 == nobjs) {
-                /* this node doesn't have any objects of this type, so
-                 * we might as well drop it from consideration */
-                pmix_list_remove_item(node_list, &node->super);
-                PMIX_RELEASE(node);
-                continue;
+                /* We only ever map by an object because the user asked us
+                 * to, so a node that has no such object is a request we
+                 * cannot answer - say so. Quietly dropping the node instead
+                 * shrank the allocation the user gave us without telling
+                 * them, and quietly falling back to by-slot (which the
+                 * caller used to do) placed the job by a rule they never
+                 * asked for. */
+                pmix_show_help("help-prte-rmaps-base.txt", "rmaps:mapping-target-not-found",
+                               true, hwloc_obj_type_string(options->maptype), node->name);
+                return PRTE_ERR_SILENT;
             }
             pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:rr: found %u %s objects on node %s",
