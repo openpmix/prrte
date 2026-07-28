@@ -264,25 +264,10 @@ BEGIN_C_DECLS
  * and the caller therefore cannot know how long the name it matched was.
  * Never index past the qualifier's full spelling to reach its value.
  *
- * Older PMIx installations do not have it.  PRRTE still supports building
- * against those, so supply it here when the installed PMIx does not.
+ * There is deliberately no local fallback for a PMIx that lacks it.  A
+ * second implementation of a rule this easy to get wrong is a second thing
+ * to keep right; configure refuses such a PMIx instead.
  */
-#if !PRTE_PMIX_HAVE_CLI_QUAL_VALUE
-static inline char *prte_cli_qualifier_value_compat(char *qual)
-{
-    char *ptr;
-
-    if (NULL == qual) {
-        return NULL;
-    }
-    ptr = strchr(qual, '=');
-    if (NULL == ptr || '\0' == *(ptr + 1)) {
-        return NULL;
-    }
-    return ptr + 1;
-}
-#    define pmix_cli_qualifier_value(q) prte_cli_qualifier_value_compat(q)
-#endif
 
 END_C_DECLS
 

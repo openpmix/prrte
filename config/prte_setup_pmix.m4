@@ -244,13 +244,14 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
 
     AC_MSG_CHECKING([for PMIx command-line qualifier value support])
     PRTE_CHECK_PMIX_CAP([CLI_QUAL_VALUE],
-                        [AC_MSG_RESULT([yes])
-                         prte_pmix_have_cli_qual_value=1],
+                        [AC_MSG_RESULT([yes])],
                         [AC_MSG_RESULT([no])
-                         prte_pmix_have_cli_qual_value=0])
-    AC_DEFINE_UNQUOTED([PRTE_PMIX_HAVE_CLI_QUAL_VALUE],
-                       [$prte_pmix_have_cli_qual_value],
-                       [Whether PMIx provides pmix_cli_qualifier_value()])
+                         AC_MSG_WARN([PRRTE requires pmix_cli_qualifier_value(), which this])
+                         AC_MSG_WARN([PMIx does not provide. It reads the value of a command])
+                         AC_MSG_WARN([line qualifier - the text after its '=' - which cannot])
+                         AC_MSG_WARN([be done correctly outside PMIx, as the option matcher])
+                         AC_MSG_WARN([accepts any unambiguous prefix of a qualifier's name.])
+                         AC_MSG_ERROR([Please update PMIx and configure again])])
 
     AC_MSG_CHECKING([for LTO compatibility])
     PRTE_CHECK_PMIX_CAP([LTO],
