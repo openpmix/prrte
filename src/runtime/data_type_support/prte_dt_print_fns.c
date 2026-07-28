@@ -526,6 +526,16 @@ static bool job_show_per_app_policy(prte_job_t *jdata)
         u16ptr = &u16;
         b = prte_get_attribute(&app->attributes, PRTE_APP_RESOLVED_BINDTO,
                                (void **) &u16ptr, PMIX_UINT16) ? u16 : 0;
+        /* An app that was mapped by something other than the job's own
+         * policy has to be shown, even if all its siblings were mapped the
+         * same way: the job-level line would otherwise report the default
+         * the job never used. That is what every app saying "--map-by
+         * pe-list=..." looks like - the apps agree with each other and
+         * disagree with the job. */
+        if (m != jdata->map->mapping || r != jdata->map->ranking
+            || b != jdata->map->binding) {
+            return true;
+        }
         if (!have_first) {
             m0 = m;
             r0 = r;

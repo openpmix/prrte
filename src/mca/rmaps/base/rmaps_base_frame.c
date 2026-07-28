@@ -225,6 +225,52 @@ static char *qualifier_value(char *qual)
     return ptr + 1;
 }
 
+/*
+ * Validate a pe-list value: a comma-delimited list of cpu ids and id ranges,
+ * "0-3,6".
+ *
+ * Non-destructive, deliberately. The job-level parser used to run strtok
+ * over the value - which cuts it into pieces - and then had to store a
+ * second, untouched pointer to the same text to have anything left to
+ * record. Splitting a copy lets both callers validate the string they are
+ * about to keep.
+ */
+static int check_pe_list(const char *spec)
+{
+    char **entries, **range;
+    char *endp;
+    int i, n, rc = PRTE_SUCCESS;
+
+    entries = PMIx_Argv_split(spec, ',');
+    if (NULL == entries) {
+        pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                       "mapping", "PE-LIST", spec);
+        return PRTE_ERR_SILENT;
+    }
+    for (i = 0; NULL != entries[i] && PRTE_SUCCESS == rc; i++) {
+        range = PMIx_Argv_split(entries[i], '-');
+        if (2 < PMIx_Argv_count(range)) {
+            /* can only have one '-' delimiter */
+            rc = PRTE_ERR_SILENT;
+        } else {
+            for (n = 0; NULL != range[n]; n++) {
+                (void) strtol(range[n], &endp, 10);
+                if (endp == range[n] || '\0' != *endp) {
+                    rc = PRTE_ERR_SILENT;
+                    break;
+                }
+            }
+        }
+        PMIx_Argv_free(range);
+    }
+    PMIx_Argv_free(entries);
+    if (PRTE_SUCCESS != rc) {
+        pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                       "mapping", "PE-LIST", spec);
+    }
+    return rc;
+}
+
 static int check_modifiers(char *ck, prte_job_t *jdata,
                            prte_app_context_t *app,
                            prte_mapping_policy_t *tmp)
@@ -635,12 +681,11 @@ int prte_rmaps_base_set_default_mapping(prte_job_t *jdata,
 
 int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
 {
-    char **ck, **range;
+    char **ck;
     char *ptr, *cptr, *val;
     prte_mapping_policy_t tmp;
-    int rc, n;
+    int rc;
     bool ppr = false;
-    char *temp_token, *parm_delimiter;
 
     /* set defaults */
     tmp = 0;
@@ -867,42 +912,15 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
             free(cptr);
             return PRTE_ERR_SILENT;
         }
-        /* Verify the list is composed of comma-delimited ranges */
-        temp_token = strtok(val, ",");
-        while (NULL != temp_token) {
-            // check for range
-            range = PMIx_Argv_split(temp_token, '-');
-            if (2 < PMIx_Argv_count(range)) {
-                // can only have one '-' delimiter
-                pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
-                               "mapping", "PE-LIST", ck[0]);
-                PMIx_Argv_free(ck);
-                PMIx_Argv_free(range);
-                free(cptr);
-                if (NULL != val) {
-                    free(val);
-                }
-                return PRTE_ERR_SILENT;
-             }
-             for (n=0; NULL != range[n]; n++) {
-                (void)strtol(range[n], &parm_delimiter, 10);
-                if ('\0' != *parm_delimiter) {
-                    pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
-                                   "mapping", "PE-LIST", val);
-                    PMIx_Argv_free(ck);
-                    PMIx_Argv_free(range);
-                    free(cptr);
-                    if (NULL != val) {
-                        free(val);
-                    }
-                    return PRTE_ERR_SILENT;
-                }
-            }
-            PMIx_Argv_free(range);
-            temp_token = strtok(NULL, ",");
+        rc = check_pe_list(val);
+        if (PRTE_SUCCESS != rc) {
+            PMIx_Argv_free(ck);
+            free(cptr);
+            free(val);
+            return rc;
         }
         prte_set_attribute(&jdata->attributes, PRTE_JOB_CPUSET, PRTE_ATTR_GLOBAL,
-                           ptr, PMIX_STRING);
+                           val, PMIX_STRING);
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_PELIST);
         PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
 
@@ -1152,6 +1170,29 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYHWTHREAD);
         prte_set_attribute(&app->attributes, PRTE_APP_HWT_CPUS,
                            PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_PELIST)) {
+        /* the cpus this app is to run on. Recorded per app, exactly as the
+         * job-level parser records the job's: which cpus one app of an MPMD
+         * job may use is as much its own business as which object it maps
+         * by, and a multi-app command line has nowhere else to say it */
+        if (NULL == val) {
+            /* malformed option */
+            pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
+                           true, "mapping", ck[0]);
+            PMIx_Argv_free(ck);
+            free(cptr);
+            return PRTE_ERR_SILENT;
+        }
+        rc = check_pe_list(val);
+        if (PRTE_SUCCESS != rc) {
+            PMIx_Argv_free(ck);
+            free(cptr);
+            free(val);
+            return rc;
+        }
+        prte_set_attribute(&app->attributes, PRTE_APP_CPUSET, PRTE_ATTR_GLOBAL,
+                           val, PMIX_STRING);
+        PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_PELIST);
     } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_NOLOCAL)) {
         PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_NO_USE_LOCAL);
     } else {
