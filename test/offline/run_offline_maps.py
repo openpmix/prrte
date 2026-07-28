@@ -499,9 +499,8 @@ class Case:
     expect: str = "map"          # "map" | "reject"
     expect_banner: str = None    # substring expected on reject
     # value pinned for rmaps_default_mapping_policy; "" = the no-directive
-    # baseline. A case that needs the DVM default to permit oversubscription
-    # sets ":oversubscribe" here (OVERSUBSCRIBE cannot be given as a per-app
-    # --map-by qualifier, so it must come from the default policy).
+    # baseline. A case that wants oversubscription to come from the DVM
+    # default rather than from the command line sets ":oversubscribe" here.
     default_map_policy: str = ""
 
 
@@ -545,25 +544,20 @@ def negative_cases(topo):
         yield Case(cid, "negative", topo, "even", hostspec, pool, n=4,
                    expect="reject", expect_banner=banner, **kw)
 
-    # A qualifier whose effect spans the whole job cannot be attached to one
-    # app of several: one app cannot oversubscribe its nodes while its
-    # siblings do not.  It takes TWO directives to make this per-app at all -
-    # with only one on the cmd line the directive is the job's, however many
-    # apps there are, and "--map-by core:nooversubscribe" is then perfectly
-    # legal.  (It used to be refused, because a lone directive was copied
-    # into the app spec as well as the job's and then judged as if the user
-    # had attached it to that app.)
+    # A qualifier whose effect spans the whole job may be written in one app's
+    # spec - see perapp.jobqual below - but the apps have to agree about it.
+    # One app cannot oversubscribe its nodes while its siblings refuse to.
     yield Case("negative.%s.perappmod" % topo.name, "negative", topo, "even",
                hostspec, pool,
-               apps=[AppSpec(2, map_by="core"),
+               apps=[AppSpec(2, map_by="core:oversubscribe"),
                      AppSpec(2, map_by="node:nooversubscribe")],
-               expect="reject", expect_banner="not supported")
+               expect="reject", expect_banner="conflicting values")
 
 
 def group_cases(topo):
-    # oversubscribe: more procs than slots. OVERSUBSCRIBE cannot be a per-app
-    # --map-by qualifier, so this case permits it through the DVM default
-    # mapping policy instead (pinned per-case, keeping the harness hermetic).
+    # oversubscribe: more procs than slots, permitted through the DVM default
+    # mapping policy (pinned per-case, keeping the harness hermetic) rather
+    # than the command line - perapp.jobqual covers the command-line form.
     hostspec, pool = LAYOUTS["uneven"]   # 12 slots
     total = sum(s for _, s in pool)
     yield Case("group.%s.oversub" % topo.name, "oversubscribe", topo,
@@ -612,6 +606,19 @@ def perapp_cases(topo):
     yield Case("perapp.%s.rank.node-slot" % topo.name, "perapp", topo, "even",
                hostspec, pool,
                apps=[AppSpec(4, rank_by="node"), AppSpec(4, rank_by="slot")],
+               expect="map")
+
+    # A qualifier that describes the whole job, written in one app's spec.
+    # Two mapping directives are what makes the mapping per-app, and once the
+    # line is per-app there is no job-level directive left to hang
+    # OVERSUBSCRIBE on - so it has to be legal here, and it has to apply to
+    # the job: 28 procs onto 24 slots maps only if it did.  (It used to be
+    # refused outright, leaving a multi-app command line with no way to ask
+    # for oversubscription at all.)
+    yield Case("perapp.%s.jobqual" % topo.name, "perapp", topo, "even",
+               hostspec, pool,
+               apps=[AppSpec(14, map_by="slot:oversubscribe"),
+                     AppSpec(14, map_by="node")],
                expect="map")
 
     # three app contexts, three different object maps, default rank/bind each.

@@ -139,6 +139,13 @@ PRTE_EXPORT int prte_rmaps_base_set_app_ranking_policy(prte_app_context_t *app,
 PRTE_EXPORT int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app,
                                                         char *spec);
 
+/* move the qualifiers that describe the whole job off the apps that carried
+ * them, holding the apps to agreeing about them. The agreed oversubscription
+ * directive is returned for the caller to apply once the job's mapping policy
+ * has been resolved */
+PRTE_EXPORT int prte_rmaps_base_hoist_job_directives(prte_job_t *jdata,
+                                                     prte_mapping_policy_t *oversubscribe);
+
 PRTE_EXPORT int prte_rmaps_base_set_default_ranking(prte_job_t *jdata,
                                                     prte_rmaps_options_t *options);
 PRTE_EXPORT int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec);
