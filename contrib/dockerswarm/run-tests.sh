@@ -517,6 +517,313 @@ test_slurm() {
     cleanup_swarm
 }
 
+########################################################################
+# rmaps: mapping, ranking and binding across real nodes
+########################################################################
+#
+# The offline harness (test/offline) covers the map/rank/bind matrix against
+# synthetic topologies, and test/unit/rmaps covers the parsers and the base
+# helpers.  Neither can say anything about the two things that only a live,
+# multi-node, *persistent* DVM can show:
+#
+#   - a mapping request that cannot be satisfied must fail the job and leave
+#     the DVM standing.  A mapper that walks off the end of its node list
+#     takes the HNP down with it, and on a persistent DVM that is every other
+#     user's job too, not just the one that asked.
+#   - the user-ranked mappers (rankfile, seq) name hosts.  With one node, any
+#     placement is the right placement; the rank -> host assignment only
+#     means something when there is more than one host to get wrong.
+#
+# Every case reports rank and host from the process itself rather than
+# parsing --display map, so what is checked is where the job actually ran.
+RANKHOST='bash -c '"'"'echo RH $PMIX_RANK $(hostname)'"'"''
+# "RH <rank> <host>" -> the host that ran that rank, or empty
+rh_host() { echo "$1" | awk -v r="$2" '$1=="RH" && $2==r {print $3}' | head -1; }
+# from a "--display map" dump: the cpus a rank was bound to, and the app it
+# belongs to. The display groups procs under "Data for node:", so this is the
+# one place that says both where a rank went and what it got there.
+map_bound() { echo "$1" | sed -n "s/.*Process rank: $2 Bound: \(.*\)\$/\1/p" | head -1; }
+map_app()   { echo "$1" | sed -n "s/.*App: \([0-9]*\) Process rank: $2 .*/\1/p" | head -1; }
+
+test_rmaps() {
+    local out rc n ncore missing lvl b0 b1 b2
+
+    banner "rmaps: an impossible mapping fails the job, not the DVM"
+    # max_slots is a hard bound: no oversubscribe directive may push past it.
+    # The by-object mapper asks the base "can this node take another proc?",
+    # and once the node is at its max the base says no AND drops the node
+    # from the mapper's list.  The mapper used to re-offer the same node, so
+    # the base removed an item that was no longer on its list and released a
+    # reference it no longer held -- a segfault in the HNP, taking the whole
+    # persistent DVM with it.  The job must simply be refused.
+    #
+    # Needs a node with more cores than max_slots, so that free CPUs remain
+    # when the slot bound is reached; otherwise the mapper stops for lack of
+    # CPUs and never reaches the path under test.
+    #
+    # max_slots has to come from the DVM's own allocation: a hostfile given
+    # to prun selects within the allocation, it does not redefine it, so a
+    # slot bound written there would simply be ignored.  Allocating node2
+    # alone also keeps the head node out of the map, leaving the bounded
+    # node as the only place the job could go.
+    cleanup_swarm
+    ncore=$(ON 2 'nproc' 2>/dev/null | tr -d ' \r')
+    if [ -z "$ncore" ] || [ "$ncore" -lt 2 ] 2>/dev/null; then
+        skp "max_slots overrun (node2 has $ncore core(s), need >= 2)"
+    else
+        RUN 'printf "node2 slots=1 max_slots=1\n" > /tmp/rmaps_max.txt;
+             nohup prte --daemonize --hostfile /tmp/rmaps_max.txt >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+        if RUN 'pgrep -x prte >/dev/null'; then
+            # the bound itself is honored: one proc fits, four do not
+            out=$(RUN 'timeout 60 prun -n 1 hostname' 2>&1)
+            [ "$(echo "$out" | grep -c '^node2$')" = 1 ] \
+                && ok "a job within max_slots runs" \
+                || bad "a job within max_slots was refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+            out=$(RUN 'timeout 60 prun --map-by core:OVERSUBSCRIBE -n 4 hostname' 2>&1)
+            rc=$?
+            [ "$rc" != 0 ] && ok "job asking past max_slots was refused (rc=$rc)" \
+                           || bad "job asking past max_slots was allowed to run"
+            # the point of the test: the DVM is still there afterwards
+            if RUN 'pgrep -x prte >/dev/null'; then
+                ok "DVM survived the refused mapping"
+                # one slot is what this allocation has, so one proc is what
+                # a still-healthy DVM will map
+                out=$(RUN 'timeout 30 prun -n 1 hostname' 2>&1)
+                n=$(echo "$out" | grep -cE '^node[0-9]+$')
+                [ "$n" = 1 ] && ok "DVM still maps and launches after the refusal" \
+                             || bad "DVM alive but no longer usable: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+            else
+                bad "DVM died on an impossible mapping request"
+            fi
+            RUN 'rm -f /tmp/rmaps_max.txt; timeout -k 5 30 pterm' >/dev/null 2>&1
+        else
+            bad "could not start a DVM for the max_slots test"
+        fi
+    fi
+    cleanup_swarm
+
+    banner "rmaps: rankfile places each rank on the host it names"
+    # A rankfile is an explicit rank -> host map, so a multi-node DVM is the
+    # only place it can be shown to work.  The ranks here are deliberately
+    # written out of order: the parser's duplicate-rank check filed every
+    # record under index 0, so a file whose first "slot=" line was for any
+    # rank but 0 rejected its own rank 0 line as a duplicate of it.
+    RUN 'nohup prte --daemonize --host node1:2,node2:2,node3:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        RUN 'printf "rank 2=node3 slot=0\nrank 0=node1 slot=0\nrank 1=node2 slot=0\n" > /tmp/rmaps_rf.txt'
+        out=$(RUN "timeout 60 prun --map-by rankfile:FILE=/tmp/rmaps_rf.txt -n 3 $RANKHOST" 2>&1)
+        rc=$?
+        if [ "$rc" = 0 ]; then
+            n=0
+            for pair in "0 node1" "1 node2" "2 node3"; do
+                set -- $pair
+                [ "$(rh_host "$out" "$1")" = "$2" ] || { n=1; printf '    rank %s ran on "%s", rankfile says %s\n' \
+                    "$1" "$(rh_host "$out" "$1")" "$2"; }
+            done
+            [ "$n" = 0 ] && ok "ranks 0/1/2 landed on node1/node2/node3 as written" \
+                         || bad "rankfile placement did not follow the file"
+        else
+            bad "rankfile job failed (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        fi
+        # a real duplicate is still an error
+        RUN 'printf "rank 0=node1 slot=0\nrank 0=node2 slot=0\n" > /tmp/rmaps_dup.txt'
+        out=$(RUN 'timeout 60 prun --map-by rankfile:FILE=/tmp/rmaps_dup.txt -n 2 hostname' 2>&1)
+        echo "$out" | grep -q 'already assigned' \
+            && ok "a genuinely duplicated rank is still rejected" \
+            || bad "duplicate rank assignment went unnoticed"
+        RUN 'rm -f /tmp/rmaps_rf.txt /tmp/rmaps_dup.txt; timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the rankfile test"
+    fi
+    cleanup_swarm
+
+    banner "rmaps: seq lays ranks down one per file line, in file order"
+    # The sequential mapper's whole contract is "line k names the node for
+    # rank k", so it says nothing on a single node.  It also hands the base
+    # helper a list of hostfile entries rather than of nodes, which is why
+    # the helper must never try to drop a node from the list it was given.
+    RUN 'nohup prte --daemonize --host node1:2,node2:2,node3:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        RUN 'printf "node3\nnode1\nnode2\nnode3\n" > /tmp/rmaps_seq.txt'
+        out=$(RUN "timeout 60 prun --map-by seq:FILE=/tmp/rmaps_seq.txt -n 4 $RANKHOST" 2>&1)
+        rc=$?
+        if [ "$rc" = 0 ]; then
+            n=0
+            for pair in "0 node3" "1 node1" "2 node2" "3 node3"; do
+                set -- $pair
+                [ "$(rh_host "$out" "$1")" = "$2" ] || { n=1; printf '    rank %s ran on "%s", line %s says %s\n' \
+                    "$1" "$(rh_host "$out" "$1")" "$(($1+1))" "$2"; }
+            done
+            [ "$n" = 0 ] && ok "4 ranks followed the 4 hostfile lines in order" \
+                         || bad "seq placement did not follow the file"
+        else
+            bad "seq job failed (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        fi
+        RUN 'rm -f /tmp/rmaps_seq.txt; timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the seq test"
+    fi
+    cleanup_swarm
+
+    banner "rmaps: rank-by node and rank-by slot order the same placement differently"
+    # Mapping and ranking are orthogonal, and the difference between them is
+    # only visible across nodes: by-slot fills a node's ranks before moving
+    # on, by-node deals one rank to each node in turn.
+    RUN 'nohup prte --daemonize --host node1:2,node2:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        out=$(RUN "timeout 60 prun --map-by slot --rank-by slot -n 4 $RANKHOST" 2>&1)
+        [ "$(rh_host "$out" 0)" = "$(rh_host "$out" 1)" ] \
+            && [ "$(rh_host "$out" 0)" != "$(rh_host "$out" 2)" ] \
+            && ok "rank-by slot filled the first node before the second" \
+            || bad "rank-by slot did not front-load: $(echo "$out" | grep '^RH' | tr '\n' ' ')"
+        sleep 2   # let the DVM finish reaping the previous job before the next
+        out=$(RUN "timeout 60 prun --map-by node --rank-by node -n 4 $RANKHOST" 2>&1)
+        [ "$(rh_host "$out" 0)" != "$(rh_host "$out" 1)" ] \
+            && [ "$(rh_host "$out" 0)" = "$(rh_host "$out" 2)" ] \
+            && ok "rank-by node dealt one rank to each node in turn" \
+            || bad "rank-by node did not alternate: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the ranking test"
+    fi
+    cleanup_swarm
+
+    banner "rmaps: mapping by an object the node does not have is an error"
+    # We map by a hardware object only because the user asked for it, so
+    # being unable to is a request we cannot answer. The mapper used to drop
+    # the node from consideration instead - shrinking the allocation without
+    # saying so - and the caller then quietly downgraded the whole job to
+    # by-slot, placing it by a rule nobody asked for.
+    RUN 'nohup prte --daemonize --host node1:2,node2:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        # Find an object level these containers genuinely lack, keeping the
+        # output of the run that found it. Probing and then re-running the
+        # same command would throw the evidence away: show_help emits a given
+        # message once per HNP, so the second identical failure is silent.
+        missing=""
+        out=""
+        for lvl in l3cache l2cache l1cache numa; do
+            out=$(RUN "timeout 40 prun --map-by $lvl -n 2 hostname" 2>&1)
+            rc=$?
+            if [ "$rc" != 0 ]; then missing=$lvl; break; fi
+        done
+        if [ -z "$missing" ]; then
+            skp "map-by a missing object (this host's topology has every level)"
+        else
+            echo "$out" | grep -q 'no object of that type' \
+                && ok "--map-by $missing said the node has no such object" \
+                || bad "--map-by $missing failed without explaining why: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            echo "$out" | grep -qE '^node[0-9]+$' \
+                && bad "--map-by $missing silently placed the job anyway" \
+                || ok "no job was placed by some other rule instead"
+            RUN 'pgrep -x prte >/dev/null' && ok "DVM survived the refusal" \
+                                           || bad "DVM died on an unavailable mapping object"
+            # ppr names the resource to place on, so the same rule applies:
+            # "2 per <thing this node has none of>" placed nothing there and
+            # still reported success. Restart the DVM so show_help has not
+            # already spent this message on the run above.
+            RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+            cleanup_swarm
+            RUN 'nohup prte --daemonize --host node1:2,node2:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+            out=$(RUN "timeout 40 prun --map-by ppr:2:$missing hostname" 2>&1)
+            rc=$?
+            [ "$rc" != 0 ] && echo "$out" | grep -q 'no object of that type' \
+                && ok "ppr:2:$missing said the node has no such resource" \
+                || bad "ppr:2:$missing did not refuse (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            RUN 'pgrep -x prte >/dev/null' && ok "DVM survived the ppr refusal" \
+                                           || bad "DVM died on an unavailable ppr resource"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the missing-object test"
+    fi
+    cleanup_swarm
+
+    banner "rmaps: a seq entry's cpu list is the binding for that rank"
+    # A sequence file line is "hostname [cpuset ...]", so an entry may say not
+    # just which node a rank goes on but which cpus it gets there. That list
+    # was parsed and then thrown away - the rank was bound by the ordinary
+    # policy instead, and two entries naming the same node could not be given
+    # different cpus. Needs >= 2 cpus to tell one binding from another.
+    ncore=$(ON 2 'nproc' 2>/dev/null | tr -d ' \r')
+    if [ -z "$ncore" ] || [ "$ncore" -lt 2 ] 2>/dev/null; then
+        skp "seq per-entry cpusets (node2 has $ncore cpu(s), need >= 2)"
+    else
+        RUN 'nohup prte --daemonize --host node1:2,node2:2,node3:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+        if RUN 'pgrep -x prte >/dev/null'; then
+            RUN 'printf "node2 0\nnode2 1\nnode3 0\n" > /tmp/rmaps_seqcpu.txt'
+            out=$(RUN 'timeout 60 prun --display map --map-by seq:FILE=/tmp/rmaps_seqcpu.txt -n 3 hostname' 2>&1)
+            b0=$(map_bound "$out" 0); b1=$(map_bound "$out" 1); b2=$(map_bound "$out" 2)
+            [ -n "$b0" ] && [ -n "$b1" ] && [ "$b0" != "$b1" ] \
+                && ok "two entries on one node got the two different cpus they named" \
+                || bad "seq entry cpusets were not applied (rank0='$b0' rank1='$b1')"
+            [ "$b0" = "$b2" ] \
+                && ok "the same cpu named on another node bound the same way" \
+                || bad "cpu 0 on node3 bound differently from cpu 0 on node2 ('$b2' vs '$b0')"
+            # two entries claiming the same cpus on the same node is refused
+            RUN 'printf "node2 0\nnode2 0\n" > /tmp/rmaps_seqdup.txt'
+            out=$(RUN 'timeout 60 prun --map-by seq:FILE=/tmp/rmaps_seqdup.txt -n 2 hostname' 2>&1)
+            echo "$out" | grep -q 'already in use' \
+                && ok "two entries claiming one cpu is refused" \
+                || bad "overlapping seq cpusets went unnoticed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            RUN 'rm -f /tmp/rmaps_seqcpu.txt /tmp/rmaps_seqdup.txt; timeout -k 5 30 pterm' >/dev/null 2>&1
+        else
+            bad "could not start a DVM for the seq cpuset test"
+        fi
+    fi
+    cleanup_swarm
+
+    banner "rmaps: pe-list can be given per app"
+    # Which cpus an app may use is as much its own business as which object
+    # it maps by, and a multi-app command line has nowhere else to say it -
+    # it takes two mapping directives to make the mapping per-app at all. A
+    # per-app pe-list used to be rejected as an unrecognized policy.
+    ncore=$(ON 2 'nproc' 2>/dev/null | tr -d ' \r')
+    if [ -z "$ncore" ] || [ "$ncore" -lt 4 ] 2>/dev/null; then
+        skp "per-app pe-list (node2 has $ncore cpu(s), need >= 4)"
+    else
+        RUN 'nohup prte --daemonize --host node2:4 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+        if RUN 'pgrep -x prte >/dev/null'; then
+            out=$(RUN 'timeout 60 prun --display map -n 1 --map-by pe-list=0 hostname : -n 1 --map-by pe-list=3 hostname' 2>&1)
+            rc=$?
+            b0=$(map_bound "$out" 0); b1=$(map_bound "$out" 1)
+            if [ "$rc" = 0 ] && [ -n "$b0" ] && [ -n "$b1" ]; then
+                [ "$b0" != "$b1" ] \
+                    && ok "each app was bound to the cpu list it named ('$b0' vs '$b1')" \
+                    || bad "both apps got the same binding '$b0' - the per-app list was ignored"
+                [ "$(map_app "$out" 0)" = "0" ] && [ "$(map_app "$out" 1)" = "1" ] \
+                    && ok "the two apps kept distinct ranks" \
+                    || bad "per-app ranks are wrong"
+            else
+                bad "per-app pe-list job failed (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+            fi
+            RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+        else
+            bad "could not start a DVM for the per-app pe-list test"
+        fi
+    fi
+    cleanup_swarm
+
+    banner "rmaps: per-app (MPMD) mapping gives every app its own policy and distinct ranks"
+    # Two apps with different --map-by directives send the job down the
+    # per-app dispatch path, where each app is mapped on its own and the base
+    # ranks them with a running cursor.  If that cursor is lost the apps both
+    # start at rank 0 and the job launches with colliding ranks.
+    RUN 'nohup prte --daemonize --host node1:2,node2:2,node3:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        out=$(RUN "timeout 60 prun --map-by node -n 2 $RANKHOST : --map-by slot -n 2 $RANKHOST" 2>&1)
+        rc=$?
+        n=$(echo "$out" | grep '^RH ' | awk '{print $2}' | sort -u | wc -l | tr -d ' ')
+        [ "$rc" = 0 ] && [ "$n" = 4 ] \
+            && ok "4 procs across 2 apps got 4 distinct ranks" \
+            || bad "per-app ranks collided or the job failed (rc=$rc, distinct=$n): $(echo "$out" | grep '^RH' | tr '\n' ' ')"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the per-app mapping test"
+    fi
+    cleanup_swarm
+}
+
 test_linux() {
     if ! docker ps --format '{{.Names}}' | grep -qx prte-node1; then
         echo "swarm not up -- run: docker compose up -d" >&2; exit 2
@@ -1035,6 +1342,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         bad "could not start a DVM for the relative-node-syntax test"
     fi
     cleanup_swarm
+
+    test_rmaps
 
     test_slurm_alloc
     test_slurm
