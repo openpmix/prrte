@@ -13,7 +13,7 @@
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -109,6 +109,11 @@ typedef struct {
 
     /* binding values */
     prte_binding_policy_t bind;
+    /* the full binding policy word of an app that gave its own --bind-to,
+     * directives and all; zero when the app gave none and the job's stand.
+     * Only the map display reads it - "bind" carries the bare policy the
+     * mappers use */
+    prte_binding_policy_t appbind;
     bool dobind;
     hwloc_obj_type_t hwb;
     uint16_t limit;
