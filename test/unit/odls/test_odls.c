@@ -56,6 +56,8 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/runtime/runtime.h"
 #include "src/util/pmix_argv.h"
+#include "src/runtime/prte_globals.h"
+#include "src/util/attr.h"
 #include "src/util/proc_info.h"
 
 #include "src/mca/odls/odls.h"
@@ -306,6 +308,65 @@ static int test_classes(void)
     return failures;
 }
 
+/*
+ * The envar directives (SET/ADD/UNSET/PREPEND/APPEND) are multi-valued job
+ * and app attributes, and process_envars() applies them to the process
+ * environment by walking that list FRONT TO BACK.  The order of the list is
+ * therefore the order the user's directives take effect in, and the user's
+ * command line is what decides it: "--prepend-env FOO[:] x --set-env FOO=1"
+ * must leave FOO=1, while the reverse order must leave FOO=x:1.
+ *
+ * That makes the append-vs-prepend distinction a behavioral contract, not a
+ * style choice: prte_append_attribute() is what preserves generation order,
+ * and prte_prepend_attribute() is what puts an entry in FRONT of everything
+ * already there (used for the values PMIx_server_setup_application hands
+ * back, which must be applied before - and hence be overridable by - the
+ * user's own).  Assert both, since a swap in either direction is silent.
+ */
+static int test_attribute_order(void)
+{
+    int failures = 0;
+    pmix_list_t attrs;
+    prte_attribute_t *attr;
+    pmix_envar_t envt;
+    int n;
+    const char *names[] = {"FIRST", "SECOND", "THIRD"};
+
+    PMIX_CONSTRUCT(&attrs, pmix_list_t);
+
+    /* appending preserves the order the entries were generated in */
+    for (n = 0; n < 3; n++) {
+        PMIX_ENVAR_CONSTRUCT(&envt);
+        envt.envar = (char *) names[n];
+        envt.value = (char *) "v";
+        envt.separator = ':';
+        prte_append_attribute(&attrs, PRTE_JOB_SET_ENVAR, PRTE_ATTR_GLOBAL,
+                              &envt, PMIX_ENVAR);
+    }
+    n = 0;
+    PMIX_LIST_FOREACH(attr, &attrs, prte_attribute_t) {
+        CHECK("append keeps generation order",
+              n < 3 && 0 == strcmp(attr->data.data.envar.envar, names[n]));
+        ++n;
+    }
+    CHECK("append added every entry", 3 == n);
+
+    /* prepending puts the new entry in front of all of them */
+    PMIX_ENVAR_CONSTRUCT(&envt);
+    envt.envar = (char *) "SETUP";
+    envt.value = (char *) "v";
+    envt.separator = ':';
+    prte_prepend_attribute(&attrs, PRTE_JOB_SET_ENVAR, PRTE_ATTR_GLOBAL,
+                           &envt, PMIX_ENVAR);
+    attr = (prte_attribute_t *) pmix_list_get_first(&attrs);
+    CHECK("prepend lands in front",
+          NULL != attr && 0 == strcmp(attr->data.data.envar.envar, "SETUP"));
+    CHECK("prepend kept the rest", 4 == pmix_list_get_size(&attrs));
+
+    PMIX_LIST_DESTRUCT(&attrs);
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -330,6 +391,7 @@ int main(void)
     failures += test_daemon_cmd_uniqueness();
     failures += test_child_err_enum();
     failures += test_classes();
+    failures += test_attribute_order();
 
     (void) pmix_mca_base_framework_close(&prte_odls_base_framework);
     prte_finalize();

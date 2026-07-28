@@ -313,6 +313,20 @@ table.
   personality's `setup_fork` does. If you are adding envar handling, add
   it there, not here.
 
+  **The envar directives take effect in the order the user gave them**, and
+  that is a contract, not an accident. `SET` replaces a value outright
+  while `PREPEND`/`APPEND` edit the one already there, so
+  `--prepend-env FOO[:] x --set-env FOO=1` must leave `FOO=1` and the
+  reverse order must leave `FOO=x:1`. Both are what the user asked for.
+  Three places have to agree for that to hold: `prte_app_parse.c` walks
+  `results->instances` **in list order** (which is the order the options
+  first appeared) rather than looking each key up in a fixed sequence;
+  `pmix_server_dyn.c` uses `prte_append_attribute()`, not
+  `prte_prepend_attribute()`, so the attribute list keeps that order; and
+  `process_envars()` walks the list front to back. The one case this
+  cannot reproduce is an option type repeated after another has
+  intervened — every occurrence is grouped onto that option's single
+  instance, so it applies at the position of its first appearance.
 - **`prte_schizo_base_getline` / `_strip_quotes` / `_root_error_msg`** —
   small shared utilities. The first two are fed **user data** (MCA
   param/tune files, `--prtemca` values), so they must not assume it is

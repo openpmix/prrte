@@ -572,84 +572,27 @@ int prte_schizo_base_setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     char *param, *p2, *saveptr, *p, *defprefix;
     int i;
     prte_job_t *daemons;
+    /* the job is part of the hook's contract, but the only prefix this
+     * function consults is the app's own and the DVM-wide default carried
+     * on the daemon job */
+    PRTE_HIDE_UNUSED_PARAMS(jdata);
 
     /* flag that we started this job */
     PMIx_Setenv("PRTE_LAUNCHED", "1", true, &app->env);
 
-    /* now process any envar attributes - we begin with the job-level
-     * ones as the app-specific ones can override them. We have to
-     * process them in the order they were given to ensure we wind
-     * up in the desired final state */
-    PMIX_LIST_FOREACH(attr, &jdata->attributes, prte_attribute_t)
-    {
-        if (PRTE_JOB_SET_ENVAR == attr->key) {
-            PMIx_Setenv(attr->data.data.envar.envar,
-                               attr->data.data.envar.value,
-                               true, &app->env);
-        } else if (PRTE_JOB_ADD_ENVAR == attr->key) {
-            PMIx_Setenv(attr->data.data.envar.envar,
-                               attr->data.data.envar.value,
-                               false, &app->env);
-        } else if (PRTE_JOB_UNSET_ENVAR == attr->key) {
-            pmix_unsetenv(attr->data.data.string, &app->env);
-        } else if (PRTE_JOB_PREPEND_ENVAR == attr->key) {
-            /* see if the envar already exists */
-            exists = false;
-            for (i = 0; NULL != app->env[i]; i++) {
-                saveptr = strchr(app->env[i], '='); // cannot be NULL
-                *saveptr = '\0';
-                if (0 == strcmp(app->env[i], attr->data.data.envar.envar)) {
-                    /* we have the var - prepend it */
-                    param = saveptr;
-                    ++param; // move past where the '=' sign was
-                    pmix_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
-                                  attr->data.data.envar.separator, param);
-                    *saveptr = '='; // restore the current envar setting
-                    PMIx_Setenv(attr->data.data.envar.envar, p2, true, &app->env);
-                    free(p2);
-                    exists = true;
-                    break;
-                } else {
-                    *saveptr = '='; // restore the current envar setting
-                }
-            }
-            if (!exists) {
-                /* just insert it */
-                PMIx_Setenv(attr->data.data.envar.envar,
-                                   attr->data.data.envar.value,
-                                   true, &app->env);
-            }
-        } else if (PRTE_JOB_APPEND_ENVAR == attr->key) {
-            /* see if the envar already exists */
-            exists = false;
-            for (i = 0; NULL != app->env[i]; i++) {
-                saveptr = strchr(app->env[i], '='); // cannot be NULL
-                *saveptr = '\0';
-                if (0 == strcmp(app->env[i], attr->data.data.envar.envar)) {
-                    /* we have the var - prepend it */
-                    param = saveptr;
-                    ++param; // move past where the '=' sign was
-                    pmix_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
-                                  attr->data.data.envar.value);
-                    *saveptr = '='; // restore the current envar setting
-                    PMIx_Setenv(attr->data.data.envar.envar, p2, true, &app->env);
-                    free(p2);
-                    exists = true;
-                    break;
-                } else {
-                    *saveptr = '='; // restore the current envar setting
-                }
-            }
-            if (!exists) {
-                /* just insert it */
-                PMIx_Setenv(attr->data.data.envar.envar,
-                                   attr->data.data.envar.value,
-                                   true, &app->env);
-            }
-        }
-    }
+    /* NOTE: the generic envar directives (SET/ADD/UNSET/PREPEND/APPEND, at
+     * both job and app level) are NOT applied here.  odls' process_envars()
+     * applies all of them to app->env immediately before calling this hook,
+     * and applying them a second time is not a no-op: PREPEND and APPEND
+     * edit the existing value, so doing it twice yields "head:head:middle"
+     * and duplicates every entry a user prepends onto PATH or
+     * LD_LIBRARY_PATH.  process_envars() is also the more complete of the
+     * two (it supports the '*' wildcard on UNSET) and it runs for every
+     * personality, whatever that personality's setup_fork does - which is
+     * why it, and not this hook, owns those directives.
+     *
+     * What remains here is what only this hook does: the PMIx prefix. */
 
-    /* now do the same thing for any app-level attributes */
     PMIX_LIST_FOREACH(attr, &app->attributes, prte_attribute_t)
     {
         if (PRTE_APP_PMIX_PREFIX == attr->key) {
@@ -694,75 +637,6 @@ int prte_schizo_base_setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                 free(p2);
                 free(param);
             }
-
-        } else if (PRTE_APP_SET_ENVAR == attr->key) {
-            PMIx_Setenv(attr->data.data.envar.envar,
-                               attr->data.data.envar.value,
-                               true, &app->env);
-
-        } else if (PRTE_APP_ADD_ENVAR == attr->key) {
-            PMIx_Setenv(attr->data.data.envar.envar,
-                               attr->data.data.envar.value,
-                               false, &app->env);
-
-        } else if (PRTE_APP_UNSET_ENVAR == attr->key) {
-            pmix_unsetenv(attr->data.data.string, &app->env);
-
-        } else if (PRTE_APP_PREPEND_ENVAR == attr->key) {
-            /* see if the envar already exists */
-            exists = false;
-            for (i = 0; NULL != app->env[i]; i++) {
-                saveptr = strchr(app->env[i], '='); // cannot be NULL
-                *saveptr = '\0';
-                if (0 == strcmp(app->env[i], attr->data.data.envar.envar)) {
-                    /* we have the var - prepend it */
-                    param = saveptr;
-                    ++param; // move past where the '=' sign was
-                    pmix_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
-                                  attr->data.data.envar.separator, param);
-                    *saveptr = '='; // restore the current envar setting
-                    PMIx_Setenv(attr->data.data.envar.envar, p2, true, &app->env);
-                    free(p2);
-                    exists = true;
-                    break;
-                } else {
-                    *saveptr = '='; // restore the current envar setting
-                }
-            }
-            if (!exists) {
-                /* just insert it */
-                PMIx_Setenv(attr->data.data.envar.envar,
-                                   attr->data.data.envar.value,
-                                   true, &app->env);
-            }
-
-        } else if (PRTE_APP_APPEND_ENVAR == attr->key) {
-            /* see if the envar already exists */
-            exists = false;
-            for (i = 0; NULL != app->env[i]; i++) {
-                saveptr = strchr(app->env[i], '='); // cannot be NULL
-                *saveptr = '\0';
-                if (0 == strcmp(app->env[i], attr->data.data.envar.envar)) {
-                    /* we have the var - prepend it */
-                    param = saveptr;
-                    ++param; // move past where the '=' sign was
-                    pmix_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
-                                  attr->data.data.envar.value);
-                    *saveptr = '='; // restore the current envar setting
-                    PMIx_Setenv(attr->data.data.envar.envar, p2, true, &app->env);
-                    free(p2);
-                    exists = true;
-                    break;
-                } else {
-                    *saveptr = '='; // restore the current envar setting
-                }
-            }
-            if (!exists) {
-                /* just insert it */
-                PMIx_Setenv(attr->data.data.envar.envar,
-                                   attr->data.data.envar.value,
-                                   true, &app->env);
-            }
         }
     }
 
@@ -770,7 +644,8 @@ int prte_schizo_base_setup_fork(prte_job_t *jdata, prte_app_context_t *app)
      * of a default one */
     if (!prefix_defined) {
         daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-        if (prte_get_attribute(&daemons->attributes, PRTE_JOB_PMIX_PREFIX, (void **)&defprefix, PMIX_STRING)) {
+        if (NULL != daemons &&
+            prte_get_attribute(&daemons->attributes, PRTE_JOB_PMIX_PREFIX, (void **)&defprefix, PMIX_STRING)) {
             PMIx_Setenv("PMIX_PREFIX",
                                defprefix,
                                true, &app->env);

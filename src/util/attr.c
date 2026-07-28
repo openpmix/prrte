@@ -170,6 +170,23 @@ int prte_prepend_attribute(pmix_list_t *attributes, prte_attribute_key_t key, bo
     return PRTE_SUCCESS;
 }
 
+int prte_append_attribute(pmix_list_t *attributes, prte_attribute_key_t key, bool local,
+                          void *data, pmix_data_type_t type)
+{
+    prte_attribute_t *kv;
+    int rc;
+
+    kv = PMIX_NEW(prte_attribute_t);
+    kv->key = key;
+    kv->local = local;
+    if (PRTE_SUCCESS != (rc = prte_attr_load(kv, data, type))) {
+        PMIX_RELEASE(kv);
+        return rc;
+    }
+    pmix_list_append(attributes, &kv->super);
+    return PRTE_SUCCESS;
+}
+
 void prte_remove_attribute(pmix_list_t *attributes, prte_attribute_key_t key)
 {
     prte_attribute_t *kv;
