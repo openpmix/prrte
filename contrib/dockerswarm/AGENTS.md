@@ -278,6 +278,51 @@ with `--prtemca prte_rml_radix 2`, the daemon tree is 3–4 deep, so the
 routing/relay is broken the fence hangs to the 60s timeout instead of
 completing.
 
+**Personalities and CLI translation (`schizo`, `test_schizo`)**: schizo is
+a front-end framework, so most of it is covered by `test/unit/schizo`
+with no DVM at all. Three things are only observable across daemons, and
+those are what this phase asserts:
+
+- the **envar directives** (`-x`, `--set/prepend/append/unset-env`) are
+  applied by `odls`' `process_envars()` on the `prted` that forks the
+  process, not by the tool — so the probe runs on node2/node3 and prints
+  its own environment. They must take effect **in the order the user gave
+  them** (`--prepend-env FOO[:] x --set-env FOO=1` leaves `FOO=1`; the
+  reverse leaves `FOO=x:1`), and each exactly once — they used to be
+  applied twice, which duplicated every entry prepended onto `PATH`.
+- **`--output file=…`** is written per-daemon, and its `:`-delimited
+  qualifiers (`raw`, `copy`/`nocopy`) decide whether the output is *also*
+  copied back over the wire. Both qualifier orders must behave the same;
+  they did not when the qualifier run was split on the wrong delimiter.
+  The `pattern` qualifier is checked here too: its `%` conversions may
+  appear in the **directory** part of the name (`%h/rank-%R`), so each
+  daemon creates the directory its own expansion names — which is exactly
+  what one host cannot show.
+- a job's **personality is resolved again on every daemon** (`odls` calls
+  `detect_proxy` with the job's personality list), so a personality
+  nobody claims must be refused with a diagnostic — and, on a persistent
+  DVM, refused without taking the HNP down.
+
+### The install persists too, so a failed build is silently testable
+
+Same shape as the sticky-configure-args trap below, one level up. The
+install lives in the shared volume and outlives any one `build.sh` run, so
+a build that dies part-way — `configure` rejecting the baked PMIx because
+it predates a capability PRRTE now requires is the everyday case — leaves
+the **previous** install standing. `run-tests.sh`'s "tools on PATH" check
+passes, the whole suite runs, and every failure it reports is really
+"you are testing something else".
+
+`build.sh` now deletes `/opt/prte/.build-stamp` before it starts and
+rewrites it only after `make install` succeeds; `run-tests.sh`'s preflight
+prints the stamp and refuses to run without one. If you see
+`no build stamp in the volume`, re-run `build.sh` and **read its exit
+status** — a redirected `./build.sh > log 2>&1; echo rc=$?` reports the
+`echo`'s status if you are not careful, which is how this was missed.
+
+If your PMIx is the thing `configure` rejected, build PMIx from source in
+the same container: `PMIX_SRC=/path/to/openpmix ./build.sh`.
+
 ### The build dirs persist, so configure arguments are sticky
 
 The VPATH build dirs live in the shared volume and outlive any one run.
