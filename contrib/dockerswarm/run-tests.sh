@@ -824,6 +824,287 @@ test_rmaps() {
     cleanup_swarm
 }
 
+########################################################################
+# schizo: personalities and CLI translation, end to end
+########################################################################
+#
+# test/unit/schizo covers the parsers themselves - argv normalization, the
+# sanity checker, the output/display converters, and each personality's
+# deprecated-option table - with no DVM at all.  What only a live,
+# multi-node DVM can show is that the *result* of that translation survives
+# the trip to a remote daemon:
+#
+#   - the envar directives (-x, --set-env, --prepend-env, --append-env,
+#     --unset-env) are applied by prte_schizo_base_setup_fork() on the prted
+#     that forks the process, not by the tool.  The only place to see whether
+#     they were applied - and applied in the right order - is a REMOTE proc's
+#     own environment.
+#   - --output file=... is written by each daemon.  Its ':'-delimited
+#     qualifiers (raw, copy/nocopy) decide whether output is also copied back
+#     over the wire, so file-vs-stdout is a cross-daemon observation.
+#   - a job's personality is resolved again on every daemon (odls looks it up
+#     with detect_proxy from the job's personality list), so a personality
+#     the daemons cannot resolve is a launch-time failure, not a CLI one.
+#
+# The ompi personality gates root execution on OMPI_ALLOW_RUN_AS_ROOT rather
+# than the PRTE_* pair RUN() sets, so ompi cases carry their own.
+OMPIROOT='OMPI_ALLOW_RUN_AS_ROOT=1 OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1'
+
+test_schizo() {
+    local out rc n f
+
+    banner "schizo: envar directives reach a REMOTE process"
+    # -x forwards a variable from the tool's environment; --set-env sets one
+    # outright; --unset-env removes one (and takes a trailing '*' as a
+    # prefix).  All of them are recorded as job/app attributes by the tool
+    # and only turned into environment on the daemon, so running the probe on
+    # node2/node3 - never the head node - is what proves they were applied
+    # there.  A remote daemon's environment is its OWN, not the submitting
+    # shell's, so a variable the probe expects to see has to be forwarded:
+    # that is what makes -x worth testing here and untestable locally.
+    out=$(RUN 'SZ_FWD=fwd-ok SZ_GONE=leftover SZ_ALSO=leftover prterun \
+                 --host node2:1,node3:1 -np 2 --map-by node \
+                 -x SZ_FWD \
+                 --set-env SZ_SET=set-ok \
+                 --unset-env "SZ_GO*" \
+                 bash -c "echo SZ \$(hostname) \$SZ_FWD \$SZ_SET \${SZ_GONE:-unset} \${SZ_ALSO:-unset}"' 2>&1); rc=$?
+    # SZ_ALSO is never forwarded, so it must read "unset" on the remote node -
+    # which is what makes SZ_FWD reading "fwd-ok" mean -x actually did it
+    n=$(echo "$out" | grep -cE '^SZ node[23] fwd-ok set-ok unset unset$')
+    [ "$rc" = 0 ] && [ "$n" = 2 ] \
+        && ok "-x / set / wildcard-unset applied on both remote nodes" \
+        || bad "envar directives wrong on a remote node (rc=$rc, matched=$n): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+
+    # PREPEND/APPEND edit an EXISTING value, so they need a variable the
+    # daemon really owns - PATH.  Two things are checked at once:
+    #
+    #   - the entry is added exactly ONCE.  These directives used to be
+    #     applied twice, by odls' process_envars() and again by the schizo
+    #     setup_fork hook.  SET and UNSET are idempotent so nothing showed,
+    #     but every entry a user prepended onto PATH or LD_LIBRARY_PATH was
+    #     duplicated.
+    #   - a differently-named variable that merely STARTS with the same
+    #     letters is left alone.  The match used to be a bare strncmp of the
+    #     name's length with no '=' anchor, so "PATH" also matched PATHOLOGY
+    #     - whichever the environment happened to list first.
+    out=$(RUN 'PATHOLOGY=untouched prterun --host node2:1 -np 1 \
+                 -x PATHOLOGY --prepend-env "PATH[:]" /SZDIR --append-env "PATH[:]" /SZEND \
+                 bash -c "echo SZP \$(echo \$PATH | tr : \\\\n | grep -c \"^/SZDIR\$\") \
+                          \$(echo \$PATH | tr : \\\\n | grep -c \"^/SZEND\$\") \$PATHOLOGY"' 2>&1)
+    echo "$out" | grep -qE '^SZP 1 1 untouched$' \
+        && ok "--prepend/append-env PATH each added their entry once, PATHOLOGY untouched" \
+        || bad "--prepend/append-env PATH misapplied: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    # A repeated --set-env must set BOTH variables.  pmix_cmd_line_parse
+    # stores one value per occurrence for --set-env (unlike --prepend-env,
+    # which stores a name and a value), so walking the value array two at a
+    # time skipped every other one - silently, since a variable that was
+    # never set just reads as empty in the app.
+    out=$(RUN 'prterun --host node2:1 -np 1 \
+                 --set-env SZ_A=a-ok --set-env SZ_B=b-ok \
+                 bash -c "echo SZ2 \${SZ_A:-missing} \${SZ_B:-missing}"' 2>&1)
+    echo "$out" | grep -q 'SZ2 a-ok b-ok' \
+        && ok "both --set-env directives reached the remote process" \
+        || bad "a repeated --set-env was dropped: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    banner "schizo: --merge-stderr-to-stdout is honored, not silently dropped"
+    # The deprecated spelling is in the prterun/prun option tables.  With no
+    # conversion behind it, it parsed cleanly and then did nothing at all -
+    # the user asked for merged output and got separate streams, with no
+    # error to say so.  Read stdout only: SZ-ERR appears there only if the
+    # merge really happened on the daemon that forked the process.
+    out=$(RUN 'prterun --host node2:1 -np 1 --merge-stderr-to-stdout \
+                 bash -c "echo SZ-OUT; echo SZ-ERR 1>&2" 2>/dev/null' )
+    echo "$out" | grep -q SZ-OUT && echo "$out" | grep -q SZ-ERR \
+        && ok "--merge-stderr-to-stdout merged a remote proc's stderr into stdout" \
+        || bad "--merge-stderr-to-stdout was ignored: $(echo "$out" | tr '\n' ' ')"
+    # the modern spelling must of course still work
+    out=$(RUN 'prterun --host node2:1 -np 1 --output merge-stderr-to-stdout \
+                 bash -c "echo SZ-OUT; echo SZ-ERR 1>&2" 2>/dev/null' )
+    echo "$out" | grep -q SZ-ERR \
+        && ok "--output merge-stderr-to-stdout still merges" \
+        || bad "--output merge-stderr-to-stdout stopped merging: $(echo "$out" | tr '\n' ' ')"
+
+    banner "schizo: envar directives take effect in the order they were given"
+    # SET replaces a value outright; PREPEND/APPEND edit the one already
+    # there.  Which of them the process ends up with therefore depends on the
+    # ORDER the user gave them in, and that order is theirs to choose - not a
+    # merge policy PRRTE gets to pick.  The attributes used to be assembled
+    # with prte_prepend_attribute(), which reversed the command line, so
+    # "-x FOO --prepend-env FOO[:] head" applied the -x SET last and threw
+    # the prepend away.
+    out=$(RUN 'prterun --host node2:1 -np 1 \
+                 --prepend-env "SZO[:]" x --set-env SZO=1 \
+                 bash -c "echo SZO1=\$SZO"' 2>&1)
+    echo "$out" | grep -q '^SZO1=1$' \
+        && ok "prepend then set: the later set wins, as asked" \
+        || bad "prepend-then-set gave the wrong value: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    out=$(RUN 'prterun --host node2:1 -np 1 \
+                 --set-env SZO=1 --prepend-env "SZO[:]" x \
+                 bash -c "echo SZO2=\$SZO"' 2>&1)
+    echo "$out" | grep -q '^SZO2=x:1$' \
+        && ok "set then prepend: the prepend edits the value the set left" \
+        || bad "set-then-prepend gave the wrong value: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    out=$(RUN 'SZO=middle prterun --host node2:1 -np 1 \
+                 -x SZO --prepend-env "SZO[:]" head --append-env "SZO[:]" tail \
+                 bash -c "echo SZO3=\$SZO"' 2>&1)
+    echo "$out" | grep -q '^SZO3=head:middle:tail$' \
+        && ok "-x then prepend then append wrap the forwarded value" \
+        || bad "-x with prepend/append gave the wrong value: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    banner "schizo: --output file=...:pattern names the files, not PRRTE"
+    # Without "pattern" the name is a stem PMIx annotates with the namespace
+    # and rank.  With it, the name is the user's own and its '%' conversions
+    # are expanded - including in the DIRECTORY part, which is why this is a
+    # multi-node case: each daemon creates the directory its own expansion
+    # names, and %h differs between them.
+    for n in 1 2 3; do ON "$n" 'rm -rf /tmp/szpat' >/dev/null 2>&1; done
+    out=$(RUN 'prterun --host node2:1,node3:1 -np 2 --map-by node \
+                 --output "file=/tmp/szpat/%h/rank-%R:pattern" \
+                 bash -c "echo PAT-\$PMIX_RANK"' 2>&1)
+    f=0
+    for n in 2 3; do
+        ON "$n" 'cat /tmp/szpat/node'"$n"'/rank-*.out 2>/dev/null' | grep -q '^PAT-' && f=$((f+1))
+    done
+    [ "$f" = 2 ] \
+        && ok "each daemon expanded %h/%R and wrote under the directory it named" \
+        || bad "pattern expansion produced files on $f/2 nodes: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    # and the stream suffix is still appended, so stdout and stderr are split
+    for n in 1 2 3; do ON "$n" 'rm -rf /tmp/szpat' >/dev/null 2>&1; done
+    RUN 'prterun --host node2:1 -np 1 --output "file=/tmp/szpat/r%r:pattern" \
+           bash -c "echo P-OUT; echo P-ERR 1>&2"' >/dev/null 2>&1
+    o=$(ON 2 'cat /tmp/szpat/r0.out 2>/dev/null')
+    e=$(ON 2 'cat /tmp/szpat/r0.err 2>/dev/null')
+    [ "$(echo "$o" | tr -d '\r')" = "P-OUT" ] && [ "$(echo "$e" | tr -d '\r')" = "P-ERR" ] \
+        && ok "the .out/.err suffix still splits the streams under a pattern" \
+        || bad "pattern streams wrong (out='$o' err='$e')"
+    # an unrecognized conversion is refused before anything is launched
+    out=$(RUN 'prterun --host node2:1 -np 1 --output "file=/tmp/szpat/%q:pattern" hostname' 2>&1)
+    echo "$out" | grep -q 'unrecognized conversion' \
+        && ok "a bad pattern conversion is reported, not launched with" \
+        || bad "a bad pattern conversion was accepted: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    for n in 1 2 3; do ON "$n" 'rm -rf /tmp/szpat' >/dev/null 2>&1; done
+
+    banner "schizo: every --output qualifier counts, whatever its position"
+    # Qualifiers are ':'-delimited and were split on ',' instead - which the
+    # directive split has already consumed - so the whole ':'-joined run was
+    # matched as ONE token.  Prefix matching then made the FIRST qualifier
+    # win and silently discarded the rest.  "copy" is the discriminator:
+    # nocopy is also the default, so only asking for copy can tell whether
+    # the qualifier was read at all.  Both orders must behave identically.
+    # Each rank's file is written by its own daemon, so this also checks the
+    # directive survived the wire.
+    for q in "copy:raw" "raw:copy"; do
+        for n in 1 2 3; do ON "$n" 'rm -rf /tmp/szout' >/dev/null 2>&1; done
+        out=$(RUN "prterun --host node2:1,node3:1 -np 2 --map-by node \
+                     --output file=/tmp/szout/o:$q bash -c 'echo SZ-FILE-OK'" 2>/dev/null)
+        n=$(echo "$out" | grep -c SZ-FILE-OK)
+        [ "$n" = 2 ] \
+            && ok "--output file=...:$q copied output back to stdout as asked" \
+            || bad "--output file=...:$q lost the copy qualifier ($n/2 lines on stdout)"
+        f=0
+        for n in 2 3; do
+            ON "$n" 'grep -rl SZ-FILE-OK /tmp/szout 2>/dev/null | head -1' | grep -q . && f=$((f+1))
+        done
+        [ "$f" = 2 ] && ok "--output file=...:$q wrote a file on each daemon" \
+                     || bad "--output file=...:$q produced files on $f/2 nodes"
+    done
+    # and nocopy really does keep it off stdout
+    for n in 1 2 3; do ON "$n" 'rm -rf /tmp/szout' >/dev/null 2>&1; done
+    out=$(RUN "prterun --host node2:1 -np 1 \
+                 --output file=/tmp/szout/o:raw:nocopy bash -c 'echo SZ-FILE-OK'" 2>/dev/null)
+    [ -z "$(echo "$out" | grep SZ-FILE-OK)" ] \
+        && ok "--output file=...:raw:nocopy kept output off stdout" \
+        || bad "--output file=...:raw:nocopy leaked output to stdout"
+    for n in 1 2 3; do ON "$n" 'rm -rf /tmp/szout' >/dev/null 2>&1; done
+
+    banner "schizo: --personality is honored in both spellings"
+    # normalize_argv() is what finds the personality, before any option table
+    # exists to parse with.  It only understood "--personality ompi" and not
+    # the "--personality=ompi" form getopt_long equally accepts, so the "="
+    # form silently fell back to the default (prte) personality - and then
+    # rejected every ompi-only option as unrecognized.  --display-comm is
+    # defined ONLY by the ompi personality, so it is the discriminator.
+    for form in "--personality ompi" "--personality=ompi"; do
+        out=$(RUN "$OMPIROOT prterun $form --host node2:1,node3:1 -np 2 --map-by node \
+                     --display-comm hostname" 2>&1); rc=$?
+        n=$(echo "$out" | grep -cE '^node[23]$')
+        [ "$rc" = 0 ] && [ "$n" = 2 ] \
+            && ok "\"$form\" selected the ompi personality and launched" \
+            || bad "\"$form\" did not select ompi (rc=$rc, procs=$n): $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    done
+    # the same for a renamed option given with '=' - the tables carry the
+    # un-hyphenated key, so "--map-by=node" only reaches them if normalize
+    # rewrote it
+    out=$(RUN 'prterun --host node2:1,node3:1 -np 2 --map-by=node hostname' 2>&1); rc=$?
+    n=$(echo "$out" | grep -cE '^node[23]$')
+    [ "$rc" = 0 ] && [ "$n" = 2 ] \
+        && ok "--map-by=node (the '=' spelling) was normalized and honored" \
+        || bad "--map-by=node was rejected (rc=$rc, procs=$n): $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    banner "schizo: a bare '--map-by ppr' is refused, not a crash"
+    # The socket->package rewrite reaches for the resource field of a ppr
+    # pattern.  Under the ompi personality it did so with strrchr(), which
+    # returns NULL for a pattern with no ':' at all - and the result was
+    # advanced past and dereferenced, killing the tool at address 0x1 before
+    # it ever reached the mapper.  prte had been fixed; ompi had not.
+    out=$(RUN 'prterun --host node2:1 -np 1 --map-by ppr hostname' 2>&1)
+    echo "$out" | grep -qiE 'signal|Segmentation' \
+        && bad "prterun (prte) crashed on a bare --map-by ppr" \
+        || ok "prterun (prte) refused a bare --map-by ppr without crashing"
+    out=$(RUN "$OMPIROOT prterun --personality ompi --host node2:1 -np 1 --map-by ppr hostname" 2>&1)
+    echo "$out" | grep -qiE 'signal|Segmentation' \
+        && bad "prterun --personality ompi crashed on a bare --map-by ppr" \
+        || ok "prterun --personality ompi refused a bare --map-by ppr without crashing"
+
+    banner "schizo: an option that takes one value may not be repeated"
+    # pmix_cmd_line_parse appends every occurrence of an option to the SAME
+    # instance, and every consumer reads values[0] - so "-np 2 -np 3" ran
+    # silently with 2 procs.  The guard that was meant to catch that had its
+    # comparison inverted and never fired.
+    out=$(RUN 'prterun --host node2:2 -np 2 -np 3 hostname' 2>&1)
+    echo "$out" | grep -q 'too many instances' \
+        && ok "a repeated --np is reported instead of silently taking the first" \
+        || bad "a repeated --np was accepted: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    banner "schizo: a personality nobody claims falls back to the native one"
+    # No component claims an unrecognized personality, so every bid is zero.
+    # The election used to award the job to whichever component carried the
+    # highest static priority, silently reading the command line in the OMPI
+    # dialect - a different option table and a different MCA translation than
+    # the user asked for.  It must land on the catch-all instead.
+    #
+    # Falling back rather than refusing is deliberate and load-bearing: Open
+    # MPI starts a singleton's DVM with "--prtemca schizo prte", so only the
+    # native component is loaded, and then spawns with
+    # PMIX_PERSONALITY="ompi5".  Refusing that fails every MPI_Comm_spawn from
+    # a singleton.  --display-comm is defined ONLY by the ompi personality, so
+    # it is what tells the two apart.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --host node1:1,node2:1,node3:1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        out=$(RUN 'timeout 30 prun --personality no-such-personality --display-comm -np 1 hostname' 2>&1)
+        echo "$out" | grep -q 'unrecognized option' \
+            && ok "an unknown --personality reads the command line as prte, not ompi" \
+            || bad "an unknown --personality did not fall back to prte: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        out=$(RUN 'timeout 30 prun --personality no-such-personality --host node2:1 -np 1 hostname' 2>&1)
+        echo "$out" | grep -qE '^node2$' \
+            && ok "and a prte-valid command line still runs under it" \
+            || bad "the fallback personality could not run a job: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        RUN 'pgrep -x prte >/dev/null' \
+            && ok "the persistent DVM survived both" \
+            || bad "the DVM died on an unknown --personality"
+        out=$(RUN 'timeout 30 prun --host node2:1,node3:1 -np 2 --map-by node hostname' 2>&1)
+        n=$(echo "$out" | grep -cE '^node[23]$')
+        [ "$n" = 2 ] && ok "the DVM still launches jobs afterwards" \
+                     || bad "the DVM could not launch afterwards ($n/2)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the unknown-personality test"
+    fi
+    cleanup_swarm
+}
+
 test_linux() {
     if ! docker ps --format '{{.Names}}' | grep -qx prte-node1; then
         echo "swarm not up -- run: docker compose up -d" >&2; exit 2
@@ -841,6 +1122,21 @@ test_linux() {
         ok "prterun/prte/prun/pterm/elastic on PATH"
     else
         bad "tools missing -- did ./build.sh run?"; return
+    fi
+    # The install lives in a volume that outlives any one build, so "the tools
+    # are on PATH" says nothing about WHICH source they were built from. A
+    # build.sh run that dies part-way -- configure rejecting the baked PMIx is
+    # the usual way -- leaves the previous install standing, and without this
+    # check the whole suite runs against code the author never built, reporting
+    # failures that are really "you are testing something else".
+    stamp=$(RUN 'cat /opt/prte/.build-stamp 2>/dev/null' | tr -d '\r')
+    if [ -n "$stamp" ]; then
+        ok "install built $stamp"
+    else
+        bad "no build stamp in the volume -- the last ./build.sh did not complete."
+        echo "     Re-run ./build.sh and check its exit status; the install now" >&2
+        echo "     present is from an earlier build and would be tested instead." >&2
+        return
     fi
 
     banner "prterun (non-elastic, one-shot) -- local"
@@ -1352,6 +1648,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     cleanup_swarm
 
     test_rmaps
+
+    test_schizo
 
     test_slurm_alloc
     test_slurm

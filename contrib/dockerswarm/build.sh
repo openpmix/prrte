@@ -175,6 +175,10 @@ build_linux() {
                 echo ">>>> PMIx: using baked $PMIX_PREFIX"
             fi
 
+            # invalidate the freshness stamp up front: from here until the
+            # build finishes, whatever is installed is NOT this source tree
+            rm -f /opt/prte/.build-stamp
+
             echo ">>>> PRRTE VPATH build -> /opt/prte/prte"
             mkdir -p /opt/prte/vpath-linux && cd /opt/prte/vpath-linux
             # --with-jansson is deliberate: it is off by default, and without
@@ -220,6 +224,15 @@ build_linux() {
             # runtime env for login shells (node-entrypoint handles ld.so)
             printf "export PATH=/opt/prte/prte/bin:\$PATH\nexport LD_LIBRARY_PATH=/opt/prte/prte/lib:%s/lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}\n" \
                 "$PMIX_PREFIX" > /opt/prte/env.sh
+
+            # Written LAST, and only on success.  The install lives in a
+            # volume that outlives any one build, so a build that fails
+            # part-way -- configure rejecting the baked PMIx is the usual way
+            # -- leaves the PREVIOUS install standing, and run-tests.sh will
+            # happily exercise it and report on code that was never built.
+            # The stamp is what lets the suite say so.  It is removed first so
+            # a build that dies midway cannot leave a stale one behind.
+            date -u +%Y-%m-%dT%H:%M:%SZ > /opt/prte/.build-stamp
             echo ">>>> done: install in /opt/prte/prte"
         '
     echo ">>> Linux build complete."
