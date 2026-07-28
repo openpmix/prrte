@@ -252,10 +252,15 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
         opts->use_hwthreads = false;
     }
 
-    /* 5. PRTE_APP_CPUSET → opts->cpuset */
+    /* 5. PRTE_APP_CPUSET → opts->cpuset. The struct owns whatever is in
+     * these two fields, so an app that names its own replaces (rather than
+     * strands) the value the struct came in carrying. */
     str = NULL;
     if (prte_get_attribute(&app->attributes, PRTE_APP_CPUSET, (void **)&str, PMIX_STRING)) {
-        opts->cpuset = str;  /* caller owns this allocation */
+        if (NULL != opts->cpuset) {
+            free(opts->cpuset);
+        }
+        opts->cpuset = str;
     }
 
     /* 6. PRTE_APP_MAP_FILE — read directly by seq/rank_file components via app->attributes */
@@ -263,6 +268,9 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
     /* 7. PRTE_APP_DIST_DEVICE → opts->dist_device */
     str = NULL;
     if (prte_get_attribute(&app->attributes, PRTE_APP_DIST_DEVICE, (void **)&str, PMIX_STRING)) {
+        if (NULL != opts->dist_device) {
+            free(opts->dist_device);
+        }
         opts->dist_device = str;
     }
 
@@ -327,6 +335,22 @@ static void free_cpusets(prte_rmaps_options_t *opts)
         opts->job_cpuset = NULL;
     }
     free_target(opts);
+}
+
+/* return the strings an options struct owns. Both are read out of an
+ * attribute, which hands back a copy, so whoever filled the struct owns
+ * them - and a pe-list mapper consumes and replaces "cpuset" as it goes,
+ * so the pointer here is whatever it left behind, not what we read. */
+static void free_strings(prte_rmaps_options_t *opts)
+{
+    if (NULL != opts->cpuset) {
+        free(opts->cpuset);
+        opts->cpuset = NULL;
+    }
+    if (NULL != opts->dist_device) {
+        free(opts->dist_device);
+        opts->dist_device = NULL;
+    }
 }
 
 /* Record the effective map/rank/bind policies for one app of a per-app
@@ -523,14 +547,20 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         PMIX_XFER_PROCID(&pptr[0], target_proc);
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_PROCS, (void**)&darray, PMIX_DATA_ARRAY)) {
-        if (colocate_daemons) {
-            pmix_output(0, "Error: Both colocate daemons and colocate procs were provided\n");
-            jdata->exit_code = PRTE_ERR_BAD_PARAM;
-            PRTE_ERROR_LOG(jdata->exit_code);
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
-            goto cleanup;
-        }
+    /* asking for the colocation targets is what allocates them, so a job
+     * that also asked to colocate daemons has to be refused before the
+     * request is made - reading it into "darray" first would strand the
+     * array built just above */
+    if (colocate_daemons &&
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_PROCS, NULL, PMIX_DATA_ARRAY)) {
+        pmix_output(0, "Error: Both colocate daemons and colocate procs were provided\n");
+        jdata->exit_code = PRTE_ERR_BAD_PARAM;
+        PRTE_ERROR_LOG(jdata->exit_code);
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+        goto cleanup;
+    }
+    if (!colocate_daemons &&
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_PROCS, (void**)&darray, PMIX_DATA_ARRAY)) {
         if (NULL == darray) {
             pmix_output(0, "Error: Colocate failed to provide procs\n");
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
@@ -760,6 +790,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     }
     if (NULL != nptr) {
         PMIX_PROC_RELEASE(nptr);
+        nptr = NULL;
     }
 
     /* apply the oversubscription answer hoisted off the apps. It goes on
@@ -1168,7 +1199,9 @@ ranking:
         pmix_show_help("help-prte-hwloc-base.txt", "bind-upwards", true,
                        prte_rmaps_base_print_mapping(options.map),
                        prte_hwloc_base_print_binding(options.bind));
-        jdata->exit_code = rc;
+        /* the message is out - rc still holds the SUCCESS of the last call
+         * that ran, so do not pass it off as this failure's code */
+        jdata->exit_code = PRTE_ERR_SILENT;
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
         goto cleanup;
     }
@@ -1241,7 +1274,8 @@ ranking:
         prte_topology_t *t0;
         if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0))) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            PMIX_RELEASE(caddy);
+            /* no PMIX_RELEASE(caddy) here - the cleanup label below owns it,
+             * and releasing twice dropped a live event caddy */
             jdata->exit_code = PRTE_ERR_NOT_FOUND;
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
@@ -1336,11 +1370,18 @@ ranking:
             /* hand back whatever the previous app's map left behind before
              * this app overwrites it */
             free_cpusets(&app_options);
+            free_strings(&app_options);
             app_options = options;   /* shallow copy of job defaults */
             /* the copy must not inherit ownership of the job-level cpusets -
              * the mappers compute their own per node */
             app_options.job_cpuset = NULL;
             app_options.target = NULL;
+            /* nor of the job-level strings: a pe-list mapper frees and
+             * rewrites "cpuset" as it places procs, so each app needs its
+             * own copy rather than a second pointer to the job's */
+            app_options.cpuset = (NULL == options.cpuset) ? NULL : strdup(options.cpuset);
+            app_options.dist_device = (NULL == options.dist_device) ? NULL
+                                                                   : strdup(options.dist_device);
             app_options.app_idx = n;
             /* the default-binding nprocs rule keys off this app's own proc
              * count, not the job-wide total inherited from options.nprocs.
@@ -1469,6 +1510,12 @@ cleanup:
     }
     free_cpusets(&options);
     free_cpusets(&app_options);
+    free_strings(&options);
+    free_strings(&app_options);
+    if (NULL != nptr) {
+        PMIX_PROC_RELEASE(nptr);
+        nptr = NULL;
+    }
     /* cleanup */
     PMIX_RELEASE(caddy);
 }
