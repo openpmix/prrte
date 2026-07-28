@@ -45,6 +45,17 @@ Three concepts govern the whole framework, and they are **orthogonal**:
 (`PE=n`, `SPAN`, `OVERSUBSCRIBE`, `NOLOCAL`, `HWTCPUS`, `INHERIT`,
 `ORDERED`, `FILE=…`, …). `--rank-by slot`/`node`/`fill`/`span`.
 
+All three may be given **per app context** as well as per job: an MPMD
+command line takes two mapping directives to become per-app at all, and
+once it is, there is no job-level directive left to hang anything on. The
+per-app parsers live beside the job-level ones in `rmaps_base_frame.c`
+(`prte_rmaps_base_set_app_{mapping,ranking,binding}_policy`) and record onto
+`app->attributes`; `prte_rmaps_base_resolve_app_options()` turns those into
+the per-app `options` a mapper sees. Keep the two levels in step — a policy
+or qualifier accepted at one and refused at the other is the recurring bug
+in this file (`pe-list` was job-level only; `:SPAN` and `:ORDERED` were
+silently rejected per app).
+
 ---
 
 ## Directory layout
@@ -175,6 +186,17 @@ from failure — it relies on the `map_succeeded` local. Any new early-out
 must go through `cleanup` and ensure a non-zero `jdata->exit_code` on
 failure, or a failed map silently reports success.
 
+`cleanup` owns the caddy, the colocation `darray`, the launch-proxy
+`pmix_proc_t`, and both options structs' cpusets and strings. **Never release
+any of those at the early-out itself** — an early-out that also released the
+caddy dropped a live event caddy twice.
+
+Note also that `rc` at any given point holds the result of the last call that
+ran, which on a *validation* failure (a policy combination that cannot work)
+is `PRTE_SUCCESS`. Set `jdata->exit_code` explicitly on those paths —
+`PRTE_ERR_SILENT` when the help text has already been shown — rather than
+assigning `rc`.
+
 ---
 
 ## `prte_rmaps_options_t` — the scratch struct
@@ -213,7 +235,7 @@ A mapper is mostly glue around them:
 | `prte_rmaps_base_get_target_nodes()` | Build the usable node list for an app: honor `-host`/`-hostfile`, filter by the job's target session(s), drop down/excluded/no-daemon/full nodes, compute total available slots, apply the bookmark starting point. |
 | `prte_rmaps_base_get_cpuset()` | Compute `options->job_cpuset` for a node (the job's allowed CPUs, or a `pe-list`-generated set). |
 | `prte_rmaps_base_get_ncpus()` | How many usable cpus/cores an object (or whole node) offers under the current cpu-type. |
-| `prte_rmaps_base_check_avail()` | Can this node/object take more procs? Also adds the node to `jdata->map->nodes` exactly once and sets `options->target`. |
+| `prte_rmaps_base_check_avail()` | Can this node/object take more procs? Also adds the node to `jdata->map->nodes` exactly once and sets `options->target`. **It can also remove and release the node** — see below. |
 | `prte_rmaps_base_check_oversubscribed()` | After placing a proc, flag/deny oversubscription per the node's SLOTS_GIVEN and the job's OVERSUBSCRIBE directive. |
 | `prte_rmaps_base_setup_proc()` | Create the `prte_proc_t`, attach it to the node, assign node rank, bump `slots_inuse`, and **bind it** (`prte_rmaps_base_bind_proc`). |
 | `prte_rmaps_base_compute_vpids()` | Assign global ranks by slot/node/fill/span, then derive local & app ranks. |
@@ -223,6 +245,37 @@ The universal mapper loop is therefore: for each app → `get_target_nodes`
 → for each node → `get_cpuset`, `check_support`, `get_ncpus`,
 `check_avail`, then `setup_proc` (which binds) and `check_oversubscribed`
 per proc → finally `compute_vpids` (only when `app_idx < 0`).
+
+**Order matters: `check_oversubscribed` runs *after* `setup_proc`.** It
+reads the node's proc count, so asking before the proc is placed judges the
+node one proc behind. Every mapper follows the order above.
+
+### `check_avail` may take the node off your list
+
+When a node has reached its `slots_max` — a hard bound no oversubscribe
+directive can lift — `check_avail` returns false *and* removes the node from
+the `node_list` you handed it, releasing the reference that list held. Two
+obligations follow:
+
+- **A false return means "done with this node."** Do not offer the same node
+  again in the same pass. Doing so asks `check_avail` to remove an item that
+  is no longer on the list and to drop a reference it no longer holds; that
+  corrupted the list and segfaulted the HNP (`--map-by <object>` against a
+  hostfile carrying `max_slots`).
+- **Pass `NULL` if your list is not a list of the nodes you are placing on.**
+  The sequential mapper walks hostfile entries, not `prte_node_t`s, so it
+  passes `NULL` and simply takes the "no" — handing over a list of the wrong
+  type meant removing a `prte_node_t` from a list of `seq_node_t`.
+
+### Who owns what in `options`
+
+`job_cpuset` and `target` are hwloc bitmaps the mappers recycle per node;
+`cpuset` and `dist_device` are strings the *struct* owns (they come out of an
+attribute, which returns a copy). `bind_to_cpuset` consumes `cpuset` one
+entry at a time and rewrites it, so the pointer at the end of a map is
+whatever the mapper left, not what was read in. `prte_rmaps_base_map_job()`
+frees all four at `cleanup`, and the per-app copy gets its own `strdup` of
+the strings so two structs never share one allocation.
 
 ---
 
@@ -242,6 +295,17 @@ the base rejects them otherwise. `by-user` mappers (rankfile, seq, lsf)
 set the rank themselves; because their `SEQ`/`BYUSER` mapping policy makes
 the base set `options.userranked`, `compute_vpids` only back-fills
 local/app ranks.
+
+**Every scheme that loops until `app->num_procs` needs a "did this pass rank
+anything?" guard.** by-node and by-span both cycle rather than iterating a
+bounded index, so a pass that matches no proc — an app whose `num_procs`
+outruns what was actually placed, or a proc whose locale is not an object of
+the mapping type — must break the loop rather than repeat it. Without the
+guard the mapper does not fail, it hangs, and a hung mapper is a wedged HNP.
+
+In per-app (MPMD) dispatch the base calls `compute_vpids` once per app with
+`app_idx = n` and a `next_vpid` cursor threaded across the calls; that cursor
+is the only thing keeping two apps from both starting at rank 0.
 
 ---
 
@@ -290,12 +354,94 @@ node→session deviation.
 - **Mappers accept then defer.** Keep the "is this job mine?" gate at the
   very top and return `PRTE_ERR_TAKE_NEXT_OPTION` (never a hard error)
   when it isn't.
+- **A policy we cannot honor is an error, never a substitution.** Every
+  mapping policy that reaches a mapper is one the user asked for, so a
+  mapper that cannot satisfy it must say so and fail the job. Silently
+  falling back to something else — round_robin used to downgrade an
+  unavailable object map to by-slot, and to drop the offending node from
+  consideration first — places the job by a rule nobody asked for and
+  quietly shrinks the allocation the user gave us.
+- **Qualifier names may be abbreviated; read values after the `=`, never at
+  a fixed offset.** `PMIX_CHECK_CLI_OPTION` matches any unambiguous prefix,
+  so `P=2` is `PE=2` and `F=path` is `FILE=path`. Indexing past the full
+  spelling turned `--map-by core:P=2` into pes-per-proc **0** (and then a
+  misleading "out of resource") and `seq:F=path` into an attempt to open the
+  path five characters in. `qualifier_value()` in `rmaps_base_frame.c` is the
+  one way to get a qualifier's value. **The same pattern still exists outside
+  this framework** — `src/hwloc/hwloc.c` reads the job-level `--bind-to`
+  `LIMIT=` value at `&quals[i][6]`.
+- **Module-static state outlives the job.** `rank_file` and `lsf` both keep
+  their parsed rank map and rank count in file statics. Reset them at the
+  start of every map and reclaim them on *every* exit, success or failure —
+  a stale count is handed to the next job as its process count.
 - **The version macro is `PRTE_RMAPS_BASE_VERSION_5_0_0`.** The `4_0_0`
   alias is deliberately redefined to `5_0_0` so stale out-of-tree
   components fail loudly instead of silently violating ABI.
 - Standard PRRTE rules still apply: `prte_config.h` first, braces on
   every block, `NULL ==`/constant-on-left comparisons, no new compiler
   warnings, `PRTE_ERROR_LOG`/`PRTE_ACTIVATE_JOB_STATE` for errors.
+
+---
+
+## Testing
+
+Three layers, and each answers a question the others cannot. Run the first
+two for any change in here; run the third when you touch a mapper that names
+hosts, or anything that can fail a map.
+
+**1. Unit tests — `test/unit/rmaps/` (`make check`).** Everything reachable
+without a node pool, a topology, or a DVM:
+
+| File | Covers |
+|------|--------|
+| `test_policy_parse.c` | the per-app `--map-by`/`--rank-by`/`--bind-to` parsers |
+| `test_job_policy.c` | the job-level parsers (policy+qualifiers, ppr, pe-list, rankfile) and the policy printer |
+| `test_job_qualifiers.c` | `hoist_job_directives` — the qualifiers that describe the whole job |
+| `test_resolve_options.c` | `resolve_app_options` and the rank/bind default derivations |
+| `test_ranking.c` | `compute_vpids`: by-slot/by-node traversal, the per-app cursor, by-user pass-through, and that a cycling scheme terminates |
+| `test_check_avail.c` | `check_avail`: the map-add-once rule, `max_slots`, and the node-removal contract above |
+| `test_dispatch.c`, `test_<component>.c` | each mapper's accept/defer gate |
+
+`test_ranking.c` builds a job map by hand — synthetic nodes carrying
+synthetic procs — which is why ranking is checkable at all without a DVM.
+`test_check_avail.c` builds synthetic nodes and stays on the bind-to-none
+path so no topology is needed. Both are cheap patterns to extend.
+
+**2. Offline mapper harness — `make -C test/offline check-offline`.** Over a
+thousand `--map-by` × `--rank-by` × `--bind-to` combinations against the
+synthetic topologies in `test/topologies/`, checked against invariants
+derived from the topology. This is the cheapest way to catch a placement
+regression and you should run it for *any* change to mapping, ranking, or
+binding. It is not part of `make check` (it needs a freshly built
+`prterun`).
+
+**3. Multi-node — `contrib/dockerswarm/run-tests.sh linux`,
+`test_rmaps()`.** Three things only a live, multi-node, *persistent* DVM can
+show:
+
+- **An impossible mapping must fail the job and leave the DVM standing.** A
+  mapper that walks off the end of its node list takes the HNP down, and on
+  a persistent DVM that is every other user's job as well. Two cases: a
+  request past `max_slots`, and a map by an object the node does not have.
+- **The user-ranked mappers name hosts.** With one node any placement is the
+  right placement; rankfile and seq only mean something when there is more
+  than one host to get wrong.
+- **Per-entry and per-app cpu lists have to reach the right proc.** A seq
+  entry's cpuset and an app's `pe-list` both bind specific procs to specific
+  cpus, which is only checkable against a real topology.
+
+It also covers rank-by node vs. slot ordering and per-app (MPMD) rank
+numbering, both of which are invisible on a single node. Placement cases
+report rank and host from the process itself rather than parsing
+`--display map`, so what is checked is where the job actually ran; the
+binding cases read `--display map`, which is the only thing that says both
+where a rank went and what it got there.
+
+**Compile coverage for `lsf`.** The LSF mapper is only built with
+`--with-lsf`. On a machine without LSF, configure with
+`--enable-testbuild-launchers` to compile it against declaration-only stubs;
+that tree builds and runs but the stubbed components can do no real work, so
+do not install it over a good installation.
 
 ---
 

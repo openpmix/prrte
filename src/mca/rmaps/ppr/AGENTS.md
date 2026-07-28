@@ -86,7 +86,9 @@ On acceptance it stamps `last_mapper = "ppr"`.
        directly (no object loop).
      - **by-object**: for each node get `#objs = nbobjs_by_type`, and for
        each object place `pprn` procs bound to it (`setup_proc` with the
-       `obj`), skipping objects that lack enough free cpus.
+       `obj`), skipping objects that lack enough free cpus. A node with
+       **zero** objects of the pattern's type is a hard error
+       (`rmaps:mapping-target-not-found`) — see below.
    - Overloaded-but-not-oversubscribed nodes get an unset binding reset
      to NONE (same idiom as round_robin).
    - Stops at `app->num_procs`; errors with `ppr-too-many-procs` if it
@@ -104,6 +106,14 @@ On acceptance it stamps `last_mapper = "ppr"`.
 - **Derived proc counts only when `app->num_procs == 0`.** If the user
   gave `-n`, respect it; ppr then places up to that many and may leave a
   node partially filled.
+- **A node with none of the pattern's resource is an error, not a skip.**
+  The pattern names what to place procs on, so a node that has none of it
+  cannot answer the request. Skipping it quietly shrank the allocation the
+  user gave us and changed what the pattern meant — `ppr:2:l3cache` over
+  nodes with no L3 cache placed nothing on them and still reported success.
+  Same rule, and the same help message, as round_robin's object mapper; see
+  the framework guide's "a policy we cannot honor is an error, never a
+  substitution".
 - **`rc = PRTE_SUCCESS;` reset before `jdata->num_procs +=`.** The
   per-node placement loop can leave `rc` holding the benign
   `PRTE_ERR_TAKE_NEXT_OPTION` "node full" signal from the last
@@ -111,6 +121,8 @@ On acceptance it stamps `last_mapper = "ppr"`.
   the mapper's overall result. A regression here makes successful ppr
   jobs look like failures.
 - **`jobppr` must be freed on every exit path** (it's `strdup`'d from the
-  attribute); the `error:` label and the success path both free it.
+  attribute); the `error:` label and the success path both free it. That is
+  also why the placement loops must `goto error` rather than `return rc`
+  directly — a bare return leaked both `jobppr` and the node list.
 - Honor `options->app_idx` and the `initial_map` convention exactly as
   round_robin does — the per-app/MPMD hazards are identical.
