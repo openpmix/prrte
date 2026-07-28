@@ -256,6 +256,32 @@ BEGIN_C_DECLS
 #define PRTE_CLI_RAW        "raw"
 #define PRTE_CLI_PATTERN    "pattern"
 
+/*
+ * The value of a qualifier declared above with a trailing '=' - PE=2,
+ * FILE=path, LIMIT=4 - or NULL when it carries none.
+ *
+ * Use this rather than indexing past the qualifier's name.
+ * PMIX_CHECK_CLI_OPTION matches any unambiguous prefix, so the user may
+ * write "P=2" for PE=2 or "F=path" for FILE=path, and an offset fixed to
+ * the full spelling then reads the wrong thing: "--map-by core:P=2" set
+ * pes-per-proc to zero, "--map-by seq:F=/path" opened the path five
+ * characters in, and a qualifier written with no value at all read past
+ * the end of its own string.
+ */
+static inline char *prte_cli_qualifier_value(char *qual)
+{
+    char *ptr;
+
+    if (NULL == qual) {
+        return NULL;
+    }
+    ptr = strchr(qual, '=');
+    if (NULL == ptr || '\0' == *(ptr + 1)) {
+        return NULL;
+    }
+    return ptr + 1;
+}
+
 END_C_DECLS
 
 #endif /* PRTE_CMD_LINE_H */

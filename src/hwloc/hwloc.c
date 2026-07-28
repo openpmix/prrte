@@ -611,13 +611,25 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                     free(myspec);
                     return PRTE_ERR_SILENT;
                 }
-                /* Numeric value must immediately follow '=' (LIMIT=2) */
-                u16 = strtol(&quals[i][6], &p2, 10);
-                if ('\0' != *p2) {
-                    /* missing the value or value is invalid */
+                /* Numeric value follows the '=' (LIMIT=2). Do not index past
+                 * the qualifier's full spelling - the name may be abbreviated
+                 * to any unambiguous prefix, so "L=2" is this same option */
+                p2 = prte_cli_qualifier_value(quals[i]);
+                if (NULL == p2) {
+                    /* missing the value */
                     pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
                                    "binding limit", "LIMIT", quals[i]);
                     PMIx_Argv_free(quals);
+                    free(myspec);
+                    return PRTE_ERR_SILENT;
+                }
+                u16 = strtol(p2, &p2, 10);
+                if ('\0' != *p2) {
+                    /* value is invalid */
+                    pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                                   "binding limit", "LIMIT", quals[i]);
+                    PMIx_Argv_free(quals);
+                    free(myspec);
                     return PRTE_ERR_SILENT;
                 }
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_BINDING_LIMIT, PRTE_ATTR_GLOBAL,
