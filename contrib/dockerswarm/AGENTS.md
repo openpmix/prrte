@@ -278,6 +278,23 @@ with `--prtemca prte_rml_radix 2`, the daemon tree is 3–4 deep, so the
 routing/relay is broken the fence hangs to the 60s timeout instead of
 completing.
 
+### The build dirs persist, so configure arguments are sticky
+
+The VPATH build dirs live in the shared volume and outlive any one run.
+`build.sh` therefore used to configure only when there was no
+`config.status`, which quietly reused the arguments of whichever run
+created the directory. Setting `PMIX_SRC` after a plain build built your
+PMIx *and then linked PRRTE against the baked one anyway*, with nothing in
+the output to say so — a build that looks like it tested your change and
+did not.
+
+`build.sh` now stamps the configure arguments in `.configure-args` beside
+`config.status` and reconfigures when they differ; it says
+`(re)configuring PRRTE: …` when it does. If you are chasing something that
+depends on a configure-time decision, check that line rather than assuming.
+This is the same shape as the `show_help` staleness trap below: a
+persistent build dir plus a "only if missing" rule.
+
 ### Writing a case that asserts on an error message
 
 **`show_help` emits a given message once per HNP.** A test that probes with
@@ -297,8 +314,16 @@ foreground under `docker exec -d` (see §5).
 
 ## 7. Cleanup hygiene
 
-`run-tests.sh` cleans up between phases; if you drive things by hand, clear
-stale state on **every** node between DVM runs:
+`run-tests.sh` cleans every node before its first case and between phases.
+That first sweep matters more than it looks: the nodes are long-lived
+containers while the install they read is replaced under them, so a daemon
+or a `pmix.*` rendezvous file left from a previous run may be holding a
+library that no longer exists. Rebuilding with a different `PMIX_SRC` and
+running straight away produced twenty-one failures with nothing in them
+pointing at the cause — the first launch simply came back killed.
+
+If you drive things by hand, clear stale state on **every** node between
+DVM runs:
 
 ```sh
 for n in $(seq 1 10); do
