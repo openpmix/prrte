@@ -271,6 +271,35 @@ int test_job_policy(void)
           PRTE_RANK_BY_FILL == PRTE_GET_RANKING_POLICY(jdata->map->ranking));
     PMIX_RELEASE(jdata);
 
+    /* === the job-level --bind-to parser reads its LIMIT= value the same
+     * way, and lives in src/hwloc rather than here.  It is tested from this
+     * file because the abbreviation rule is the same rule: the qualifier
+     * name may be shortened, so the value cannot live at a fixed offset,
+     * and "L=1" used to read two bytes past the end of its own string === */
+    jdata = newjob();
+    rc = prte_hwloc_base_set_binding_policy(jdata, "core:LIMIT=2");
+    CHECK("bindto core:LIMIT=2: rc", PRTE_SUCCESS == rc);
+    CHECK("bindto core:LIMIT=2: limit", 2 == get_u16(&jdata->attributes,
+                                                     PRTE_JOB_BINDING_LIMIT));
+    PMIX_RELEASE(jdata);
+
+    jdata = newjob();
+    rc = prte_hwloc_base_set_binding_policy(jdata, "core:L=2");
+    CHECK("bindto core:L=2: rc", PRTE_SUCCESS == rc);
+    CHECK("bindto core:L=2: limit", 2 == get_u16(&jdata->attributes,
+                                                 PRTE_JOB_BINDING_LIMIT));
+    PMIX_RELEASE(jdata);
+
+    jdata = newjob();
+    rc = prte_hwloc_base_set_binding_policy(jdata, "core:LIMIT=");
+    CHECK("bindto core:LIMIT= (empty): refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(jdata);
+
+    jdata = newjob();
+    rc = prte_hwloc_base_set_binding_policy(jdata, "core:LIMIT=two");
+    CHECK("bindto core:LIMIT=two: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(jdata);
+
     /* === the printer.  Every qualifier at once is the longest string it
      * can be asked to produce, and it has to come back whole === */
     {
