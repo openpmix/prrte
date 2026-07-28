@@ -15,6 +15,7 @@
 #include "constants.h"
 #include "src/runtime/prte_globals.h"
 #include "src/mca/rmaps/base/base.h"
+#include "src/mca/rmaps/base/rmaps_private.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/util/attr.h"
@@ -222,6 +223,72 @@ int test_policy_parse(void)
     u16 = get_u16(&app->attributes, PRTE_APP_RANKBY);
     CHECK("rankby fill: policy", PRTE_RANK_BY_FILL == PRTE_GET_RANKING_POLICY(u16));
     PMIX_RELEASE(app);
+
+    /* --- an abbreviated qualifier keeps its value.  The matcher accepts any
+     * unambiguous prefix, so reading the value at an offset fixed to the full
+     * spelling ("PE=", "FILE=", "LIMIT=") silently truncated or zeroed it --- */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "slot:P=2");
+    CHECK("mapby slot:P=2: rc", PRTE_SUCCESS == rc);
+    u16 = get_u16(&app->attributes, PRTE_APP_PES_PER_PROC);
+    CHECK("mapby slot:P=2: pes", 2 == u16);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "seq:F=/tmp/myfile");
+    CHECK("mapby seq:F=path: rc", PRTE_SUCCESS == rc);
+    sval = get_str(&app->attributes, PRTE_APP_MAP_FILE);
+    CHECK("mapby seq:F=path: whole path", NULL != sval && 0 == strcmp(sval, "/tmp/myfile"));
+    free(sval);
+    PMIX_RELEASE(app);
+
+    /* --- pe-list is a per-app directive too.  Which cpus one app of an MPMD
+     * job may use is as much its own business as which object it maps by,
+     * and a multi-app command line has nowhere else to say it --- */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "pe-list=0-3,6");
+    CHECK("mapby pe-list: rc", PRTE_SUCCESS == rc);
+    u16 = get_u16(&app->attributes, PRTE_APP_MAPBY);
+    CHECK("mapby pe-list: policy", PRTE_MAPPING_PELIST == PRTE_GET_MAPPING_POLICY(u16));
+    sval = get_str(&app->attributes, PRTE_APP_CPUSET);
+    CHECK("mapby pe-list: cpuset", NULL != sval && 0 == strcmp(sval, "0-3,6"));
+    free(sval);
+    PMIX_RELEASE(app);
+
+    /* the value is validated here, not left for the mapper to trip over */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "pe-list=0-3-5");
+    CHECK("mapby pe-list bad range: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "pe-list=zero");
+    CHECK("mapby pe-list non-numeric: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "pe-list");
+    CHECK("mapby pe-list with no value: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    /* --- and it survives resolution into the per-app options struct, which
+     * is what actually reaches the mapper --- */
+    {
+        prte_rmaps_options_t opts;
+        app = PMIX_NEW(prte_app_context_t);
+        prte_rmaps_base_set_app_mapping_policy(app, "pe-list=2-3");
+        memset(&opts, 0, sizeof(opts));
+        opts.map = PRTE_MAPPING_BYSLOT;
+        opts.app_idx = 0;
+        rc = prte_rmaps_base_resolve_app_options(NULL, app, &opts);
+        CHECK("resolve pe-list: rc", PRTE_SUCCESS == rc);
+        CHECK("resolve pe-list: map", PRTE_MAPPING_PELIST == opts.map);
+        CHECK("resolve pe-list: maptype", HWLOC_OBJ_MACHINE == opts.maptype);
+        CHECK("resolve pe-list: cpuset", NULL != opts.cpuset
+              && 0 == strcmp(opts.cpuset, "2-3"));
+        free(opts.cpuset);
+        PMIX_RELEASE(app);
+    }
 
     /* --- binding policy: "core" --- */
     app = PMIX_NEW(prte_app_context_t);
