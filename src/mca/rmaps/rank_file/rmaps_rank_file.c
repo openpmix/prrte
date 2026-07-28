@@ -168,11 +168,14 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     /* setup the node list */
     PMIX_CONSTRUCT(&node_list, pmix_list_t);
 
-    /* pickup the first app - there must be at least one */
+    /* pickup the first app - there must be at least one. This returns
+     * directly rather than through "error", which reclaims a rankmap that
+     * has not been constructed yet */
     app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0);
     if (NULL == app) {
-        rc = PRTE_ERR_SILENT;
-        goto error;
+        PMIX_LIST_DESTRUCT(&node_list);
+        free(rankfile);
+        return PRTE_ERR_SILENT;
     }
 
     /* start at the beginning... */
@@ -185,6 +188,10 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     if (options->app_idx < 0) {
         jdata->num_procs = 0;
     }
+    /* rankmap and num_ranks are module-static and are rebuilt for every map;
+     * a stale count from a previous job in this DVM would be handed to an app
+     * that gave no -n as its process count */
+    num_ranks = 0;
     PMIX_CONSTRUCT(&rankmap, pmix_pointer_array_t);
     rc = pmix_pointer_array_init(&rankmap,
                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
@@ -192,6 +199,8 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
     if (PMIX_SUCCESS != rc) {
         PMIX_DESTRUCT(&rankmap);
+        PMIX_LIST_DESTRUCT(&node_list);
+        free(rankfile);
         return PRTE_ERROR;
     }
 
@@ -265,12 +274,17 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                     break;
                 }
                 if (NULL == node) {
-                    /* all would be oversubscribed, so take the least loaded one */
-                    k = (int32_t) UINT32_MAX;
+                    /* all would be oversubscribed, so take the least loaded
+                     * one. Track the running minimum in its own variable: this
+                     * used to borrow k, the loop counter carrying the rank we
+                     * are placing, so a single unlisted rank on a full
+                     * allocation rewrote the loop's position and the ranks it
+                     * went on to assign */
+                    pmix_rank_t least = UINT32_MAX;
                     PMIX_LIST_FOREACH(nd, &node_list, prte_node_t)
                     {
-                        if (nd->num_procs < (pmix_rank_t) k) {
-                            k = nd->num_procs;
+                        if (nd->num_procs < least) {
+                            least = nd->num_procs;
                             node = nd;
                         }
                     }
@@ -305,7 +319,8 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                             pmix_show_help("help-rmaps_rank_file.txt", "bad-index", true,
                                            rfmap->node_name);
                             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-                            return PRTE_ERR_BAD_PARAM;
+                            rc = PRTE_ERR_BAD_PARAM;
+                            goto error;
                         }
                         root_node = (prte_node_t *) pmix_list_get_first(&node_list);
                         for (tmp_cnt = 0; tmp_cnt < relative_index; tmp_cnt++) {
@@ -317,14 +332,17 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                 }
             }
             if (NULL == node) {
-                pmix_show_help("help-rmaps_rank_file.txt", "bad-host", true, rfmap->node_name);
+                /* rfmap is NULL for a rank the file did not list, which the
+                 * fallback above placed on a node of its own choosing */
+                pmix_show_help("help-rmaps_rank_file.txt", "bad-host", true,
+                               (NULL == rfmap) ? "N/A" : rfmap->node_name);
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }
             if (!options->donotlaunch) {
                 rc = prte_rmaps_base_check_support(jdata, node, options);
                 if (PRTE_SUCCESS != rc) {
-                    return rc;
+                    goto error;
                 }
             }
             prte_rmaps_base_get_cpuset(jdata, node, options);
@@ -334,20 +352,28 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                 goto error;
             }
             if (!prte_rmaps_base_check_avail(jdata, app, node, &node_list, NULL, options)) {
-                pmix_show_help("help-rmaps_rank_file.txt", "bad-host", true, rfmap->node_name);
+                /* rfmap is NULL for a rank the file did not list, which the
+                 * fallback above placed on a node of its own choosing */
+                pmix_show_help("help-rmaps_rank_file.txt", "bad-host", true,
+                               (NULL == rfmap) ? "N/A" : rfmap->node_name);
                 rc = PRTE_ERR_SILENT;
-                goto error;
-            }
-            /* check if we are oversubscribed */
-            rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
-            if (PRTE_SUCCESS != rc) {
-                PMIX_RELEASE(proc);
                 goto error;
             }
             proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, NULL, options);
             if (NULL == proc) {
                 PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                 rc = PRTE_ERR_OUT_OF_RESOURCE;
+                goto error;
+            }
+            /* check if we are oversubscribed. This runs after the proc has
+             * been placed, as it does in every other mapper: it reads the
+             * node's proc count, so asking before placement judged the node
+             * one proc behind - and released a "proc" that had not been
+             * created yet on the way out */
+            rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
+            if (PRTE_SUCCESS != rc &&
+                PRTE_ERR_TAKE_NEXT_OPTION != rc) {
+                PMIX_RELEASE(proc);
                 goto error;
             }
             /* set the vpid */
@@ -470,6 +496,15 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
 
 error:
     PMIX_LIST_DESTRUCT(&node_list);
+    /* the rankmap is module-static, so a map that failed part way through
+     * has to hand back its entries here or they survive into the next job */
+    for (i = 0; i < rankmap.size; i++) {
+        if (NULL != (rfmap = pmix_pointer_array_get_item(&rankmap, i))) {
+            PMIX_RELEASE(rfmap);
+        }
+    }
+    PMIX_DESTRUCT(&rankmap);
+    num_ranks = 0;
     if (NULL != rankfile) {
         free(rankfile);
     }
@@ -632,7 +667,12 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
                 goto unlock;
             }
 
-            /* check for a duplicate rank assignment */
+            /* check for a duplicate rank assignment. The record has to be
+             * filed under the rank it describes, and it has to be a copy:
+             * indexing every record at 0 (and pointing them all at one reused
+             * stack buffer) meant a rankfile whose first "slot=" line was for
+             * any rank but 0 rejected its own rank 0 line as a duplicate, and
+             * a genuine duplicate of any other rank went unnoticed */
             if (NULL != pmix_pointer_array_get_item(assigned_ranks_array, rank)) {
                 pmix_show_help("help-rmaps_rank_file.txt", "bad-assign", true, rank,
                                pmix_pointer_array_get_item(assigned_ranks_array, rank), rankfile);
@@ -642,7 +682,8 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
             } else {
                 /* prepare rank assignment string for the help message in case of a bad-assign */
                 snprintf(tmp_rank_assignment, RMAPS_RANK_FILE_MAX_SLOTS, "%s slot=%s", node_name, value);
-                pmix_pointer_array_set_item(assigned_ranks_array, 0, tmp_rank_assignment);
+                pmix_pointer_array_set_item(assigned_ranks_array, rank,
+                                            strdup(tmp_rank_assignment));
             }
 
             /* check the rank item */
@@ -660,12 +701,23 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
             break;
         }
     }
-    fclose(prte_rmaps_rank_file_in);
-    prte_rmaps_rank_file_lex_destroy();
-
 unlock:
+    /* every exit has to give the file and the lexer back - the error paths
+     * used to jump straight past the close, leaking a descriptor and the
+     * lexer's buffers for every malformed rankfile */
+    if (NULL != prte_rmaps_rank_file_in) {
+        fclose(prte_rmaps_rank_file_in);
+        prte_rmaps_rank_file_in = NULL;
+        prte_rmaps_rank_file_lex_destroy();
+    }
     if (NULL != node_name) {
         free(node_name);
+    }
+    for (i = 0; i < assigned_ranks_array->size; i++) {
+        value = (char *) pmix_pointer_array_get_item(assigned_ranks_array, i);
+        if (NULL != value) {
+            free(value);
+        }
     }
     PMIX_RELEASE(assigned_ranks_array);
     return rc;
