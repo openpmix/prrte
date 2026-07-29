@@ -245,6 +245,18 @@ const char *prte_strerror(int errnum)
     case PRTE_ERR_FILE_ALERT:
         retval = "File alert - proc may have stalled";
         break;
+    case PRTE_ERR_MODEL_DECLARED:
+        retval = "Programming model declared";
+        break;
+    case PRTE_PMIX_LAUNCH_DIRECTIVE:
+        retval = "Launch directive";
+        break;
+    case PRTE_PMIX_LAUNCHER_READY:
+        retval = "Launcher ready";
+        break;
+    case PRTE_OPERATION_SUCCEEDED:
+        retval = "Operation succeeded";
+        break;
     case PRTE_ERR_RECV_LESS_THAN_POSTED:
         retval = "Receive was less than posted size";
         break;
@@ -396,6 +408,9 @@ const char *prte_strerror(int errnum)
         break;
     case PRTE_ERR_OPEN_CONDUIT_FAIL:
         retval = "Open messaging conduit failed";
+        break;
+    case PRTE_ERR_DUPLICATE_MSG:
+        retval = "Duplicate message";
         break;
     case PRTE_ERR_OUT_OF_ORDER_MSG:
         retval = "Out of order message";

@@ -36,23 +36,6 @@ number:
 The given value must be an integer within the signal number range.
 Please correct the value and try again.
 #
-[malformed-uri]
-
-PRTE has detected a malformed URI:
-
-   URI:  %s
-
-Accepted values follow IETF RFC3986, e.g.
-"file://192.168.1.1/over/there"
-#
-[relative-path]
-
-When creating a URI, all files must be specified in absolute paths:
-
-   Value provided: %s
-
-Please update your application to provide the full path to the file.
-#
 [sys-limit-failed]
 
 Per request, PRTE attempted to set a system resource limit to a given
@@ -67,7 +50,7 @@ check the system or remove the request and try again.
 #
 [sys-limit-unrecognized]
 
-PRTE received a request to set a system resource limit. Sadly, OMPI
+PRTE received a request to set a system resource limit. Sadly, PRTE
 does not recognize or currently support the specified resource:
 
    Resource:  %s

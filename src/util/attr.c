@@ -54,8 +54,10 @@ bool prte_get_attribute(pmix_list_t *attributes, prte_attribute_key_t key, void 
     {
         if (key == kv->key) {
             if (kv->data.type != type) {
+                pmix_output(0, "PRTE ERROR: attribute %s holds %s, requested as %s",
+                            prte_attr_key_to_str(key), PMIx_Data_type_string(kv->data.type),
+                            PMIx_Data_type_string(type));
                 PRTE_ERROR_LOG(PRTE_ERR_TYPE_MISMATCH);
-                pmix_output(0, "KV %s TYPE %s", PMIx_Data_type_string(kv->data.type), PMIx_Data_type_string(type));
                 return false;
             }
             if (NULL != data) {
@@ -447,7 +449,7 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
         case PRTE_JOB_APPEND_ENVAR:
             return "PRTE_JOB_APPEND_ENVAR";
         case PRTE_JOB_ADD_ENVAR:
-            return "PRTE_APP_ADD_ENVAR";
+            return "PRTE_JOB_ADD_ENVAR";
         case PRTE_JOB_APP_SETUP_DATA:
             return "PRTE_JOB_APP_SETUP_DATA";
         case PRTE_JOB_OUTPUT_TO_DIRECTORY:
@@ -791,11 +793,18 @@ int prte_attr_load(prte_attribute_t *kv, void *data, pmix_data_type_t type)
     case PMIX_ENVAR:
         envar = (pmix_envar_t *) data;
         if (NULL != envar) {
+            /* clear both fields as they are released: only the ones the new
+             * value supplies were being reassigned, so reloading an
+             * attribute with an envar that carries no value (or no name)
+             * left a pointer to freed storage behind - and the destructor
+             * then freed it again */
             if (NULL != kv->data.data.envar.envar) {
                 free(kv->data.data.envar.envar);
+                kv->data.data.envar.envar = NULL;
             }
             if (NULL != kv->data.data.envar.value) {
                 free(kv->data.data.envar.value);
+                kv->data.data.envar.value = NULL;
             }
             if (NULL != envar->envar) {
                 kv->data.data.envar.envar = strdup(envar->envar);
@@ -808,9 +817,15 @@ int prte_attr_load(prte_attribute_t *kv, void *data, pmix_data_type_t type)
         break;
 
     case PMIX_DATA_ARRAY:
+        /* release any array this attribute is already carrying, and hand
+         * back a PRTE status like every other branch here does */
+        if (NULL != kv->data.data.darray) {
+            PMIX_VALUE_DESTRUCT(&kv->data);
+            kv->data.type = type;
+            kv->data.data.darray = NULL;
+        }
         rc = PMIx_Data_copy((void**)&kv->data.data.darray, data, PMIX_DATA_ARRAY);
-        return rc;
-        break;
+        return prte_pmix_convert_status(rc);
 
     default:
         PRTE_ERROR_LOG(PRTE_ERR_NOT_SUPPORTED);

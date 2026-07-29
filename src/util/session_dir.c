@@ -185,11 +185,11 @@ static int setup_base(void)
 {
     int rc;
 
-    // only do this once
+    // only do this once, and only latch that once it has actually worked -
+    // a failed attempt used to be remembered as a success
     if (setup_base_complete) {
         return PRTE_SUCCESS;
     }
-    setup_base_complete = true;
 
     /* Ensure that system info is set */
     prte_proc_info();
@@ -197,7 +197,7 @@ static int setup_base(void)
     /* BEFORE doing anything else, check to see if this prefix is
      * allowed by the system
      */
-    if (NULL != prte_prohibited_session_dirs || NULL != prte_process_info.tmpdir_base) {
+    if (NULL != prte_prohibited_session_dirs && NULL != prte_process_info.tmpdir_base) {
         char **list;
         int i, len;
         /* break the string into tokens - it should be
@@ -220,6 +220,9 @@ static int setup_base(void)
     }
 
     rc = _setup_top_session_dir();
+    if (PRTE_SUCCESS == rc) {
+        setup_base_complete = true;
+    }
 
     return rc;
 }
@@ -329,6 +332,7 @@ static bool _check_file(const char *root, const char *path)
         if (0 != stat(fullpath, &st)) {
             pmix_output(0, "%s Syscall failure for stat: %s(%d)",
                         PMIX_NAME_PRINT(&pmix_globals.myid), strerror(errno), errno);
+            free(fullpath);
             return true;
         }
         free(fullpath);

@@ -113,7 +113,6 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
     char *node_name = NULL;
     char *username = NULL;
     int cnt;
-    int number_of_slots = 0;
     char buff[64];
 
     if (PRTE_HOSTFILE_STRING == token || PRTE_HOSTFILE_HOSTNAME == token ||
@@ -302,6 +301,9 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             token = prte_util_hostfile_lex();
         }
         free(node_name);
+        /* prte_set_attribute() copied it, and the already-known-node branch
+         * above never touched it at all */
+        free(username);
         return PRTE_SUCCESS;
 
     } else {
@@ -403,12 +405,6 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             PMIX_RELEASE(node);
             return PRTE_ERROR;
         }
-        if (number_of_slots > node->slots) {
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-            pmix_list_remove_item(updates, &node->super);
-            PMIX_RELEASE(node);
-            return PRTE_ERROR;
-        }
     }
 
 done:
@@ -433,6 +429,10 @@ static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_
     cur_hostfile_name = hostfile;
 
     prte_util_hostfile_done = false;
+    /* the lexer's line counter is a global that it only ever increments, so
+     * every hostfile after the first reported its parse errors at a line
+     * number carried over from the ones before it */
+    prte_util_hostfile_line = 1;
     prte_util_hostfile_in = fopen(hostfile, "r");
     if (NULL == prte_util_hostfile_in) {
         if (NULL == prte_default_hostfile || 0 != strcmp(prte_default_hostfile, hostfile)) {
@@ -488,14 +488,21 @@ static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_
 
         default:
             hostfile_parse_error(token);
+            rc = PRTE_ERROR;
             goto unlock;
         }
     }
-    fclose(prte_util_hostfile_in);
-    prte_util_hostfile_in = NULL;
-    prte_util_hostfile_lex_destroy();
 
 unlock:
+    /* close and reset the lexer on *every* exit, not just the clean one. A
+     * parse error used to jump straight past this, leaking the descriptor
+     * and leaving the flex buffer live - so the next hostfile parsed in the
+     * same process resumed in the middle of the failed one. */
+    if (NULL != prte_util_hostfile_in) {
+        fclose(prte_util_hostfile_in);
+        prte_util_hostfile_in = NULL;
+        prte_util_hostfile_lex_destroy();
+    }
     cur_hostfile_name = NULL;
 
     return rc;
@@ -808,17 +815,14 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
      */
     if (0 != pmix_list_get_size(&newnodes)) {
         pmix_show_help("help-hostfile.txt", "not-all-mapped-alloc", true, hostfile);
-        while (NULL != (item1 = pmix_list_remove_first(&newnodes))) {
-            PMIX_RELEASE(item1);
-        }
-        PMIX_DESTRUCT(&newnodes);
-        return PRTE_ERR_SILENT;
+        rc = PRTE_ERR_SILENT;
+        goto cleanup;
     }
 
     if (!remove) {
         /* all done */
-        PMIX_DESTRUCT(&newnodes);
-        return PRTE_SUCCESS;
+        rc = PRTE_SUCCESS;
+        goto cleanup;
     }
 
     /* clear the rest of the nodes list */
@@ -832,7 +836,13 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
     }
 
 cleanup:
-    PMIX_DESTRUCT(&newnodes);
+    /* "keep" holds nodes this routine took *off* the caller's list, so on
+     * any path that does not put them back they are the caller's nodes being
+     * dropped on the floor - every error return used to leak them, along
+     * with the two lists themselves */
+    PMIX_LIST_DESTRUCT(&keep);
+    PMIX_LIST_DESTRUCT(&newnodes);
+    PMIX_LIST_DESTRUCT(&exclude);
 
     return rc;
 }
@@ -902,13 +912,20 @@ int prte_util_get_ordered_host_list(pmix_list_t *nodes, char *hostfile)
                     /* if the slot count here is less than the
                      * total slots avail on this node, set it
                      * to the specified count - this allows people
-                     * to subdivide an allocation
+                     * to subdivide an allocation.
+                     *
+                     * Only if the hostfile actually gave a count, though: a
+                     * bare "+e" is a placeholder node whose slots are still
+                     * the constructor's zero, and taking that as "subdivide
+                     * to zero slots" handed back nodes with no slots at all.
                      */
-                    if (node->slots < node_from_pool->slots) {
+                    if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)
+                        && node->slots < node_from_pool->slots) {
                         newnode->slots = node->slots;
                     } else {
                         newnode->slots = node_from_pool->slots;
                     }
+                    PRTE_FLAG_SET(newnode, PRTE_NODE_FLAG_SLOTS_GIVEN);
                     pmix_list_insert_pos(nodes, item1, &newnode->super);
                     /* track number added */
                     --num_empty;
@@ -954,13 +971,17 @@ int prte_util_get_ordered_host_list(pmix_list_t *nodes, char *hostfile)
             /* if the slot count here is less than the
              * total slots avail on this node, set it
              * to the specified count - this allows people
-             * to subdivide an allocation
+             * to subdivide an allocation. As with "+e" above, a bare
+             * "+n<K>" carries no count of its own, so only honor one that
+             * the hostfile actually gave.
              */
-            if (node->slots < node_from_pool->slots) {
+            if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)
+                && node->slots < node_from_pool->slots) {
                 newnode->slots = node->slots;
             } else {
                 newnode->slots = node_from_pool->slots;
             }
+            PRTE_FLAG_SET(newnode, PRTE_NODE_FLAG_SLOTS_GIVEN);
             /* insert it before item1 */
             pmix_list_insert_pos(nodes, item1, &newnode->super);
             /* since we have expanded the provided node, remove
@@ -980,21 +1001,23 @@ int prte_util_get_ordered_host_list(pmix_list_t *nodes, char *hostfile)
         item2 = item1;
     }
 
-    /* remove from the list of nodes those that are in the exclude list */
+    /* remove from the list of nodes those that are in the exclude list.
+     * This list keeps duplicates, so every match has to be removed - which
+     * means the successor has to be saved before the item is released, not
+     * read out of it afterwards. */
     while (NULL != (item = pmix_list_remove_first(&exclude))) {
         prte_node_t *exnode = (prte_node_t *) item;
         /* check for matches on nodes */
-        for (itm = pmix_list_get_first(nodes); itm != pmix_list_get_end(nodes);
-             itm = pmix_list_get_next(itm)) {
+        itm = pmix_list_get_first(nodes);
+        while (itm != pmix_list_get_end(nodes)) {
             prte_node_t *node = (prte_node_t *) itm;
+            pmix_list_item_t *nxt = pmix_list_get_next(itm);
             if (prte_nptr_match(exnode, node)) {
                 /* match - remove it */
                 pmix_list_remove_item(nodes, itm);
                 PMIX_RELEASE(itm);
-                /* have to cycle through the entire list as we could
-                 * have duplicates
-                 */
             }
+            itm = nxt;
         }
         PMIX_RELEASE(item);
     }

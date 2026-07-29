@@ -67,12 +67,27 @@ static int prte_setlimit(int resource, char *value, rlim_t *out)
 
     rlim.rlim_cur = 0;
 
+    if (NULL == value || '\0' == value[0]) {
+        return PRTE_ERR_BAD_PARAM;
+    }
     if (0 == strcmp(value, "max")) {
         maxlim = (rlim_t) -1;
     } else if (0 == strncmp(value, "unlimited", strlen(value))) {
         maxlim = RLIM_INFINITY;
     } else {
-        maxlim = strtol(value, NULL, 10);
+        char *endptr = NULL;
+        long lval;
+
+        /* strtol() reports a non-numeric value as zero, and this function
+         * then dutifully *lowered* the limit to zero - "openfiles:many"
+         * left the daemon unable to open a single file. Refuse anything
+         * that is not a complete non-negative integer instead. */
+        errno = 0;
+        lval = strtol(value, &endptr, 10);
+        if (0 != errno || NULL == endptr || '\0' != *endptr || 0 > lval) {
+            return PRTE_ERR_BAD_PARAM;
+        }
+        maxlim = (rlim_t) lval;
     }
 
     if (0 <= getrlimit(resource, &rlim)) {
@@ -172,7 +187,7 @@ int prte_util_init_sys_limits(char **errmsg)
 #if HAVE_DECL_RLIMIT_CORE
             if (PRTE_SUCCESS != prte_setlimit(RLIMIT_CORE, setlim, &value)) {
                 *errmsg = pmix_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
-                                                "openfiles", setlim);
+                                                "core", setlim);
                 goto out;
             }
 #endif

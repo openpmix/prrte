@@ -93,11 +93,27 @@ static prte_print_args_buffers_t *get_print_name_buffer(void)
 
     if (NULL == ptr) {
         ptr = (prte_print_args_buffers_t *) malloc(sizeof(prte_print_args_buffers_t));
+        if (NULL == ptr) {
+            return NULL;
+        }
         for (i = 0; i < PRTE_PRINT_NAME_ARG_NUM_BUFS; i++) {
             ptr->buffers[i] = (char *) malloc((PRTE_PRINT_NAME_ARGS_MAX_SIZE + 1) * sizeof(char));
+            if (NULL == ptr->buffers[i]) {
+                /* buffer_cleanup() free()s all NUM_BUFS slots, so the tail
+                 * has to be NULL before we hand the block to anyone */
+                for (; i < PRTE_PRINT_NAME_ARG_NUM_BUFS; i++) {
+                    ptr->buffers[i] = NULL;
+                }
+                buffer_cleanup(ptr);
+                return NULL;
+            }
         }
         ptr->cntr = 0;
         ret = pmix_tsd_setspecific(print_args_tsd_key, (void *) ptr);
+        if (PRTE_SUCCESS != ret) {
+            buffer_cleanup(ptr);
+            return NULL;
+        }
     }
 
     return (prte_print_args_buffers_t *) ptr;
@@ -179,7 +195,7 @@ char *prte_util_print_jobids(const pmix_nspace_t job)
 char *prte_util_print_job_family(const pmix_nspace_t job)
 {
     prte_print_args_buffers_t *ptr;
-    char *cptr;
+    const char *cptr;
 
     ptr = get_print_name_buffer();
 
@@ -197,15 +213,20 @@ char *prte_util_print_job_family(const pmix_nspace_t job)
     if (PMIX_NSPACE_INVALID(job)) {
         snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "[INVALID]");
     } else {
-        /* find the '@' sign delimiting the job family */
+        /* find the '@' sign delimiting the job family. Copy up to it rather
+         * than punching a temporary '\0' into the caller's nspace: the
+         * argument is almost always a live jdata->nspace or
+         * PRTE_PROC_MY_NAME->nspace, and truncating it in place - even for
+         * the duration of one snprintf - is visible to any other thread
+         * reading that name, and is undefined behavior outright if the
+         * caller handed us a string literal. */
         cptr = strrchr(job, '@');
         if (NULL == cptr) {
             /* this isn't a PRRTE job */
             snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
         } else {
-            *cptr = '\0';
-            snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
-            *cptr = '@';
+            snprintf(ptr->buffers[ptr->cntr], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%.*s",
+                     (int) (cptr - job), job);
         }
         ptr->cntr++;
     }
@@ -215,7 +236,7 @@ char *prte_util_print_job_family(const pmix_nspace_t job)
 char *prte_util_print_local_jobid(const pmix_nspace_t job)
 {
     prte_print_args_buffers_t *ptr;
-    char *cptr;
+    const char *cptr;
 
     ptr = get_print_name_buffer();
 
@@ -311,10 +332,11 @@ int prte_util_convert_vpid_to_string(char **vpid_string, const pmix_rank_t vpid)
 
 int prte_util_convert_string_to_process_name(pmix_proc_t *name, const char *name_string)
 {
-    char *p;
+    const char *p;
+    size_t len;
 
     /* check for NULL string - error */
-    if (NULL == name_string) {
+    if (NULL == name || NULL == name_string) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
     }
@@ -326,9 +348,16 @@ int prte_util_convert_string_to_process_name(pmix_proc_t *name, const char *name
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
     }
-    *p = '\0';
-    PMIX_LOAD_NSPACE(name->nspace, name_string);
-    *p = '.';
+    /* copy out the nspace rather than punching a temporary '\0' into the
+     * caller's string - it is declared const, and the callers hand us
+     * pointers into a URI they may well have received in read-only storage */
+    len = (size_t) (p - name_string);
+    if (PMIX_MAX_NSLEN < len) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
+    memset(name->nspace, 0, sizeof(name->nspace));
+    memcpy(name->nspace, name_string, len);
     ++p;
     name->rank = strtoul(p, NULL, 10);
 
@@ -378,9 +407,19 @@ int prte_util_compare_name_fields(prte_ns_cmp_bitmask_t fields, const pmix_proc_
             && (0 == strlen(name1->nspace) || 0 == strlen(name2->nspace))) {
             goto check_vpid;
         }
-        if (strlen(name1->nspace) < strlen(name2->nspace)) {
+        /* compare the namespace *contents*. This used to compare only their
+         * lengths, which made any two distinct namespaces of equal length
+         * indistinguishable - and PRRTE hands out namespaces that differ
+         * only in a trailing job number ("...@1" vs "...@2"), so rank N of
+         * one job in a DVM compared EQUAL to rank N of every sibling job.
+         * That is exactly the question the callers ask: "is this proc me?"
+         * (errmgr/prted), "is this the proc whose stdin I hold?"
+         * (iof/prted), and "who breaks the tie on a simultaneous connect?"
+         * (oob/tcp). */
+        int nscmp = strncmp(name1->nspace, name2->nspace, PMIX_MAX_NSLEN);
+        if (0 > nscmp) {
             return PRTE_VALUE2_GREATER;
-        } else if (strlen(name1->nspace) > strlen(name2->nspace)) {
+        } else if (0 < nscmp) {
             return PRTE_VALUE1_GREATER;
         }
     }
@@ -434,6 +473,13 @@ char *prte_util_make_version_string(const char *scope, int major, int minor, int
     char *str = NULL, *tmp;
     char temp[BUFSIZ];
 
+    if (NULL == scope) {
+        return NULL;
+    }
+    /* start empty rather than merely NUL-terminating the last byte: an
+     * unrecognized scope falls through every branch below and then
+     * strdup()s this buffer, which would otherwise be uninitialized stack */
+    temp[0] = '\0';
     temp[BUFSIZ - 1] = '\0';
     if (0 == strcmp(scope, "full") || 0 == strcmp(scope, "all")) {
         snprintf(temp, BUFSIZ - 1, "%d.%d", major, minor);
@@ -461,9 +507,10 @@ char *prte_util_make_version_string(const char *scope, int major, int minor, int
     } else if (0 == strcmp(scope, "release")) {
         snprintf(temp, BUFSIZ - 1, "%d", release);
     } else if (0 == strcmp(scope, "greek")) {
-        str = strdup(greek);
+        /* a release with no greek/repo component has these NULL */
+        str = (NULL == greek) ? NULL : strdup(greek);
     } else if (0 == strcmp(scope, "repo")) {
-        str = strdup(repo);
+        str = (NULL == repo) ? NULL : strdup(repo);
     }
 
     if (NULL == str) {
