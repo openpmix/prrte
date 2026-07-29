@@ -1752,6 +1752,147 @@ test_prted() {
 }
 
 ########################################################################
+# src/tools -- the executables themselves
+########################################################################
+#
+# The tools are main() around a library, so almost nothing in src/tools can
+# be unit tested (what could be is in test/unit/tools).  What is left is
+# behavior that only shows up when there is more than one node or more than
+# one DVM to be wrong about:
+#
+#   * prte-info describing the build that is actually installed on each node
+#     -- a swarm running a stale install on some nodes is otherwise a launch
+#     failure with no obvious cause
+#   * pterm picking the DVM it was told to pick, out of several, and leaving
+#     the others alone.  With one DVM every selector "works"
+#   * a rejected command line not being allowed to disturb a running DVM
+#   * an appfile spreading its app contexts over different nodes
+#   * a job's exit status coming back from a proc that ran somewhere else
+test_tools() {
+    local out rc n uri1 uri2 pid1 pid2
+
+    banner "tools: prte-info reports the same build on every node"
+    # Cheap, and it catches the single most confusing swarm failure: some
+    # nodes reading an older install out of the shared volume.
+    cleanup_swarm
+    # the version banner starts with a blank line - take the first line
+    # that has anything on it
+    out=$(RUN 'prte-info --version' 2>&1 | awk 'NF{print; exit}')
+    if [ -z "$out" ]; then
+        bad "prte-info produced no version on node1"
+    else
+        n=0
+        for i in $(seq 2 10); do
+            [ "$(ON "$i" 'prte-info --version' 2>/dev/null | awk 'NF{print; exit}')" = "$out" ] && n=$((n+1))
+        done
+        [ "$n" = 9 ] && ok "prte-info agrees on all 10 nodes ($out)" \
+                     || bad "prte-info version differs on $((9-n)) node(s); node1 says '$out'"
+    fi
+    # ...and it must not need a DVM, a socket, or an argument
+    RUN 'prte-info --all >/dev/null 2>&1'  && ok "prte-info --all runs with no DVM" \
+                                           || bad "prte-info --all failed with no DVM"
+    RUN 'prte-info bogusarg >/dev/null 2>&1'
+    rc=$?
+    [ "$rc" != 0 ] && ok "prte-info rejects a stray argument (rc=$rc)" \
+                   || bad "prte-info accepted a stray argument"
+
+    banner "tools: pterm --pid terminates the DVM it names and no other"
+    # Two DVMs on the same head node, each with daemons of its own.  This is
+    # the case that makes --pid mean anything -- and the case where a --pid
+    # that was silently ignored used to kill whichever DVM was found first.
+    cleanup_swarm
+    RUN "rm -f /tmp/dvm1.uri /tmp/dvm2.uri /tmp/dvm1.pid /tmp/dvm2.pid" >/dev/null 2>&1
+    RUN "timeout -k 5 60 prte --daemonize --report-uri /tmp/dvm1.uri \
+             --report-pid /tmp/dvm1.pid --host node1:2,node2:2" >/dev/null 2>&1
+    RUN "timeout -k 5 60 prte --daemonize --report-uri /tmp/dvm2.uri \
+             --report-pid /tmp/dvm2.pid --host node1:2,node3:2" >/dev/null 2>&1
+    sleep 5
+    pid1=$(RUN 'cat /tmp/dvm1.pid' 2>/dev/null | tr -d " \r")
+    pid2=$(RUN 'cat /tmp/dvm2.pid' 2>/dev/null | tr -d " \r")
+    if [ -z "$pid1" ] || [ -z "$pid2" ] || [ "$pid1" = "$pid2" ]; then
+        bad "could not start two distinguishable DVMs (pids '$pid1' '$pid2')"
+    else
+        ok "two DVMs are running (pids $pid1, $pid2)"
+
+        # a --pid that is not a PID at all must be refused, not acted on
+        RUN 'timeout -k 5 30 pterm --pid not-a-pid >/dev/null 2>&1'
+        rc=$?
+        n=$(RUN "kill -0 $pid1 2>/dev/null && echo up" | tr -d " \r")
+        if [ "$rc" != 0 ] && [ "$n" = up ]; then
+            ok "pterm rejects a malformed --pid and leaves both DVMs alone"
+        else
+            bad "pterm acted on a malformed --pid (rc=$rc, dvm1 '$n')"
+        fi
+
+        # ...and a real one, given through a file, must take down exactly
+        # the DVM it names
+        RUN "timeout -k 5 30 pterm --pid file:/tmp/dvm2.pid" >/dev/null 2>&1
+        sleep 3
+        n=$(RUN "kill -0 $pid2 2>/dev/null && echo up" | tr -d " \r")
+        [ -z "$n" ] && ok "pterm --pid file: terminated the DVM it named" \
+                    || bad "pterm --pid file: did not terminate DVM 2"
+        n=$(RUN "kill -0 $pid1 2>/dev/null && echo up" | tr -d " \r")
+        [ "$n" = up ] && ok "...and left the other DVM running" \
+                      || bad "pterm --pid file: took down the wrong DVM"
+
+        # the survivor must still be usable -- a DVM that lost its daemons
+        # to another DVM's pterm would still answer, so launch through it
+        out=$(RUN "timeout -k 5 60 prun --dvm-uri file:/tmp/dvm1.uri --host node2:1 -n 1 hostname" 2>&1)
+        echo "$out" | grep -q '^node2$' \
+            && ok "...and the survivor still launches on its own nodes" \
+            || bad "surviving DVM cannot launch: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        RUN "timeout -k 5 30 pterm --pid file:/tmp/dvm1.pid" >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
+    banner "tools: a rejected command line does not disturb the DVM"
+    # Every tool must be able to say no without taking the runtime with it.
+    # A prun that fails to parse used to be able to drive a phantom job
+    # through the state machine of the HNP.
+    if ! prted_dvm_start 'node1:2,node2:2,node3:2'; then
+        bad "could not start a DVM for the bad-command-line test"
+    else
+        RUN "timeout -k 5 30 prun --dvm-uri file:$PRTED_URI --no-such-option hostname" >/dev/null 2>&1
+        RUN "timeout -k 5 30 prun --dvm-uri file:$PRTED_URI --map-by no-such-policy hostname" >/dev/null 2>&1
+        RUN "timeout -k 5 30 pterm --dvm-uri file:$PRTED_URI no-such-argument" >/dev/null 2>&1
+        RUN "timeout -k 5 30 prte-info no-such-argument" >/dev/null 2>&1
+        # everything above should have been refused; the DVM must still work
+        out=$(PRUN '--host node3:1 -n 1 hostname' 2>&1)
+        echo "$out" | grep -q '^node3$' \
+            && ok "the DVM survived four rejected command lines" \
+            || bad "a rejected command line disturbed the DVM: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+        banner "tools: an appfile spreads its app contexts across nodes"
+        # --app is read by prun after its own command line has been parsed,
+        # and each line becomes a separate app context.  One node cannot tell
+        # a working appfile from one that collapsed into a single app.
+        RUN "printf -- '--host node2:1 -n 1 hostname\n--host node3:1 -n 1 hostname\n' > /tmp/appfile" >/dev/null 2>&1
+        out=$(PRUN '--app /tmp/appfile' 2>&1)
+        n=$(echo "$out" | grep -cE '^node[23]$')
+        if [ "$n" = 2 ] && echo "$out" | grep -q '^node2$' && echo "$out" | grep -q '^node3$'; then
+            ok "the appfile ran one app context on each named node"
+        else
+            bad "appfile did not spread over both nodes: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        fi
+
+        banner "tools: the exit status of a remote proc reaches prun"
+        # The status has to travel proc -> its daemon -> HNP -> prun.  On one
+        # node that whole chain is inside a single process.
+        PRUN '--host node3:1 -n 1 false' >/dev/null 2>&1
+        rc=$?
+        [ "$rc" != 0 ] && ok "a failing remote proc gives prun a non-zero status (rc=$rc)" \
+                       || bad "prun reported success for a proc that exited non-zero"
+        PRUN '--host node3:1 -n 1 true' >/dev/null 2>&1
+        rc=$?
+        [ "$rc" = 0 ] && ok "...and a succeeding one gives zero" \
+                      || bad "prun reported failure (rc=$rc) for a proc that exited 0"
+
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+}
+
+########################################################################
 # src/rml -- routing tree, relay, and the TCP transport
 ########################################################################
 #
@@ -2488,6 +2629,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_state
 
     test_prted
+
+    test_tools
 
     test_runtime
 
