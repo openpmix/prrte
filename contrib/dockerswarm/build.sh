@@ -27,6 +27,24 @@
 # even the same architecture.  So this script distcleans whenever it finds an
 # in-tree build, not just on the first run.
 #
+# It is tempting to narrow this to "only when the out-of-tree build will have
+# to run configure" -- an incremental build has all its own objects, so VPATH
+# is never searched for one.  That was tried, and it does not work.  The
+# blocker is prte_config.h: src/include/constants.h does #include
+# "prte_config.h", and BOTH files live in src/include, so the compiler's
+# "directory of the including file first" rule for quoted includes finds the
+# SOURCE tree's stale prte_config.h before any -I or -iquote path.  No flag
+# ordering can override that, which is why configure.ac putting the build
+# tree ahead of the source tree -- correct, and it does fix files that
+# include prte_config.h directly -- still leaves this case.  The give-away is
+# an "OAC_HAVE_APPLE redefined" error when the two trees were configured for
+# different platforms; same-platform, different --with-pmix is the quiet and
+# much nastier version.
+#
+# So the distclean cannot be conditioned on anything cheaper than "is there an
+# in-tree build".  The way to stop paying for it is to not keep one -- see
+# AGENTS.md, "When a distclean is actually needed".
+#
 # That costs you the in-tree build: the next `make check`, `make -C test/offline
 # check-offline` or `make install` has to reconfigure and rebuild first.  If you
 # run those often, keep the host side out of tree too (./build.sh macos) and
@@ -198,13 +216,35 @@ build_linux() {
             # incremental build, and the daemons serve stale (or missing) text
             # while the .txt looks correct.  This build dir persists in the
             # volume across runs, so drop the generated file every time.
-            rm -f src/util/prte_show_help_content.c src/util/prte_show_help_content.lo
+            # The .deps entry has to go too.  This file is generated, and if
+            # the SOURCE tree happened to hold a copy when an earlier build
+            # ran (an in-tree build between swarm runs is enough), VPATH
+            # resolved it there and the recorded prerequisite is the srcdir
+            # path.  The next distclean removes that copy and make then stops
+            # with "No rule to make target
+            # '/prrte-src/src/util/prte_show_help_content.c'" -- a build dir
+            # poisoned by a file that no longer exists.
+            rm -f src/util/prte_show_help_content.c src/util/prte_show_help_content.lo \
+                  src/util/.deps/prte_show_help_content.Plo
             make -j"$jobs"
             make install
 
             echo ">>>> elastic test client"
             gcc -O0 -g -o /opt/prte/prte/bin/elastic \
                 /prrte-src/contrib/dockerswarm/elastic.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -lpmix
+
+            # examples/dynamic.c is the PMIx_Spawn example shipped in this
+            # tree: rank 0 spawns "client" from its cwd as a CHILD JOB.  It
+            # is the only way this harness can produce a parent/child job
+            # pair, which is what the report-child-jobs-separately test
+            # needs -- that policy decides whether a CHILD job exit status
+            # reaches the launcher, and no single-job test can show it.
+            # NOTE: this whole block is inside bash -c '...', so an
+            # apostrophe anywhere in it (even in a comment) ends the script.
+            echo ">>>> dynamic (PMIx_Spawn) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/dynamic \
+                /prrte-src/examples/dynamic.c -I/prrte-src/examples \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -lpmix
 
             # The fake SLURM control plane, installed under its own prefix --
