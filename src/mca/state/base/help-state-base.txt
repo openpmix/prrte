@@ -54,3 +54,13 @@ result in a complete teardown of all child jobs.
 
 In the absence of the attribute, the runtime will default to the "true"
 behavior.
+#
+[child-job-status]
+Child job %s exited with status %d.
+
+This status is being reported on its own and does not contribute to the
+exit status returned for the primary job, because the
+"report-child-jobs-separately" runtime option is in effect. Remove that
+option (or set it to "false") if you want the first non-zero status
+returned by the primary job or any job it spawned to be reported as the
+overall exit status.
