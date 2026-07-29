@@ -340,20 +340,17 @@ int prte_ess_base_prted_setup(void)
         error = "prte_odls_base_select";
         goto error;
     }
-    if (PRTE_SUCCESS
-        != (ret = pmix_mca_base_framework_open(&prte_rmaps_base_framework,
-                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_rmaps_base_open";
-        goto error;
-    }
-    if (PRTE_SUCCESS != (ret = prte_rmaps_base_select())) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_rmaps_base_select";
-        goto error;
-    }
+    /* NOTE: a daemon does NOT open the rmaps framework. Mapping is the
+     * HNP's job - the mapper is driven by the DVM state machine, which a
+     * daemon does not run, and the launch path deliberately does not even
+     * forward the rmaps MCA params out to us. The parsers and printers a
+     * daemon does use (translating a local client's map-by/rank-by spawn
+     * directives in pmix_server_dyn) live in the base and are compiled
+     * into libprrte, so they need no open framework behind them. Neither
+     * is ras opened here: only the HNP allocates.
+     */
 
-    /* if a topology file was given, then the rmaps framework open
+    /* if a topology file was given, then the framework opens above
      * will have reset our topology. Ensure we always get the right
      * one by setting our node topology afterwards
      */

@@ -42,7 +42,7 @@ prte_finalize()
 
 Nothing else in the process is usable until `prte_ess.init()` returns.
 The selected module's `init` is where `state`, `errmgr`, `plm`,
-`grpcomm`, `odls`, `rmaps`, `ras` (HNP only), `iof`, `filem`,
+`grpcomm`, `odls`, `rmaps` and `ras` (both HNP only), `iof`, `filem`,
 `prtereachable`, and the `rml` are opened and selected, the PMIx server
 is started, and the process's own job/proc/node data objects are
 created. In other words, **`ess` is the orchestrator of startup**; the
@@ -257,7 +257,14 @@ after setting their name. In order, it:
 8. Starts the PMIx server (`pmix_server_init` → later
    `pmix_server_start`), gathers interface aliases.
 9. Opens/selects the communication stack: `prtereachable`, `rml`.
-10. Selects `errmgr`; opens/selects `grpcomm`, `odls`, `rmaps`.
+10. Selects `errmgr`; opens/selects `grpcomm`, `odls`. **Not `rmaps`, and
+    not `ras`** — both are HNP-only. A daemon never maps and never
+    allocates: the mapper is driven by the DVM state machine, which no
+    daemon runs, and the launch path does not even forward the `rmaps`
+    MCA params out to a `prted`. The base parsers/printers a daemon does
+    use (translating a local client's `map-by`/`rank-by` spawn directives
+    in `pmix_server_dyn`) are compiled into `libprrte` and need no open
+    framework behind them.
 11. Adds the local topology to `prte_node_topologies`.
 12. If a PLM was opened, calls `prte_plm.init()` (must come after comms).
 13. Opens/selects `iof` and `filem`.

@@ -106,10 +106,20 @@ allocation and name/launch daemons. Conversely, the daemon path opens
 ## `rte_finalize` — HNP tear-down
 
 Reverse order: finalize `errmgr`; close
-`filem`/`grpcomm`/`iof`/`plm`; kill local procs
+`filem`/`grpcomm`/`iof`/`plm`/`rmaps`; kill local procs
 (`prte_odls.kill_local_procs`) unless `prte_abnormal_term_ordered`; close
 `odls`; close the `rml`; close `prtereachable`/`errmgr`/`state`; emit the
 XML end tag; finalize the PMIx server; flush stdout/stderr.
+
+**`ras` is the one framework this module opens and does not close.** A
+`prte_session_t` destructor asks the ras base to release the underlying
+allocation, and the sessions are torn down *after* `prte_ess.finalize()`
+returns — so closing `ras` here would leave that release with no modules
+to call, silently stranding a dynamically-acquired allocation.
+`prte_finalize` closes it instead, immediately after the session
+teardown and under a `PRTE_PROC_IS_MASTER` guard so no daemon ever
+touches it. See [`src/runtime/AGENTS.md`](../../../runtime/AGENTS.md),
+"Session teardown at finalize".
 
 ---
 
