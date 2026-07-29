@@ -105,7 +105,9 @@ packs every daemon's `PMIX_PROC_URI` into a nidmap and `xcast`s
 `PRTE_RML_TAG_WIREUP` to all daemons (skipped for a single-daemon or
 `DO_NOT_LAUNCH` DVM). On any pack/get failure it drives
 `PRTE_JOB_STATE_FORCED_EXIT` with a `NULL` job (tearing the whole DVM
-down). In elastic mode it then drains completed grow campaigns
+down) — **and each of those five bailouts must still release the
+caddy**; they did not, and every wireup failure leaked the caddy plus the
+job reference it held. In elastic mode it then drains completed grow campaigns
 (`prte_plm_base_grow_drain(true)`) so held jobs are admitted only after
 new daemons are wired up. For the master's own job it sets
 `prte_dvm_ready`, emits the "DVM ready" handshake (stdout or
@@ -113,8 +115,18 @@ new daemons are wired up. For the master's own job it sets
 it (`WAITING_FOR_DAEMONS`, elastic grow in progress) or prepositions
 files and advances to `MAP`.
 
-### `check_complete` (the teardown)
+### `check_complete` + `check_complete_resume` (the teardown)
 Registered on `PRTE_JOB_STATE_TERMINATED` and by far the largest handler.
+It is **split in two** around `PMIx_server_deregister_nspace`:
+`check_complete` runs up to the deregistration, issues it with
+`dvm_dereg_complete` as the callback, and returns; that callback (on the
+PMIx thread) does nothing but `PRTE_PMIX_THREADSHIFT` the caddy back onto
+`prte_event_base`, where `check_complete_resume` finishes the job. It used
+to block instead — see the framework guide's *Never block a state handler
+on PMIx*, which explains why that stalled the whole HNP and why the
+`PMIx_server_IOF_deliver` further down is a deliberate exception.
+`check_complete_resume` also owns the exit-status decision, including
+`report_child_jobs_separately()`.
 It: cancels the job timeout; if the job is the daemon job (or NULL),
 drains pending grow campaigns and, once `prte_rml_base.n_children == 0`,
 activates `DAEMONS_TERMINATED`; otherwise marks the app job terminated,
@@ -122,13 +134,13 @@ applies reservation-inheritance dispositions
 (`prte_ras_base_check_reservations_on_term`), sends the spawn response,
 clears local children, tells IOF the job is done, deregisters the nspace
 from the PMIx server, and (for a non-persistent run) reports abnormal
-termination and shuts down when the last job ends. It then **releases the
+termination and shuts down when the last job ends. (That second half is `check_complete_resume`.) It then **releases the
 job's mapped resources** (walks `jdata->map`, decrements
 `slots_inuse`/`num_procs`, restores each proc's bound cpus to
 `node->available`, releases procs/nodes, frees the map), removes any
 named psets, aborts non-separated child jobs, and finally activates
-`NOTIFY_COMPLETED`. This is the DVM's richer counterpart to the base's
-`prte_state_base_check_all_complete`.
+`NOTIFY_COMPLETED`. This is the only job-teardown path in the tree — the
+base used to carry an unregistered second copy, which has been removed.
 
 ### `dvm_notify`
 Builds the `PMIX_EVENT_JOB_END` notification (status, affected proc,
@@ -170,14 +182,44 @@ the PMIx server for nspace deregistration and events, and `prte_plm`
   for a state that has no unique numeric value in
   [`src/mca/plm/plm_types.h`](../../../plm/plm_types.h) is the classic
   mistake — see the framework guide.
-- **`check_complete` and the two other resource-release paths must stay
+- **`check_complete` and the other resource-release paths must stay
   consistent.** The same map-teardown logic (restore cpus, decrement
   counters, drop procs/nodes) appears in `check_complete` here, in the
-  prted component's `track_procs`, and in `prte_state_base_check_all_complete`.
-  A change to how resources are recovered usually needs to be mirrored.
-- **Every handler ends with `PMIX_RELEASE(caddy)`.** The early-return
-  error paths in `vm_ready`/`dvm_notify` must release too (they do) —
-  keep that invariant when adding new bailouts.
+  prted component's `track_procs`, and in
+  `prte_state_base_recover_resources` (the errmgr's per-proc recovery). A
+  change to how resources are recovered usually needs to be mirrored.
+- **A handler that hands its caddy to a continuation must NOT release it.**
+  `check_complete` returns without releasing once it has passed the caddy
+  to `PMIx_server_deregister_nspace`; `check_complete_resume` owns it from
+  there. Adding an early return between those two points needs a release;
+  adding one after the hand-off must not have one.
+- **Every other handler ends with `PMIX_RELEASE(caddy)` — the error paths too.**
+  This is where this component has repeatedly gone wrong: `vm_ready`'s
+  five `FORCED_EXIT` bailouts, `job_started`'s missing-launch-proxy
+  bailout, and `dvm_notify`'s two `DVM_CLEANUP_JOB` pack failures all
+  returned without releasing. `PRTE_ACTIVATE_JOB_STATE(...); return;` is
+  **not** a release — the activation queues a *new* caddy; yours is still
+  yours to drop. When adding a bailout, add the release with it.
+- **Release a `pmix_proc_t` from `prte_get_attribute` exactly once.**
+  `PRTE_JOB_LAUNCH_PROXY` hands back an allocated `pmix_proc_t`;
+  `ready_for_debug` released it as soon as it had been copied into the
+  info list, and then released it *again* on a later error path.
+- **Clear `PRTE_NODE_FLAG_MAPPED` before releasing the node.** The map
+  holds a reference, so `PMIX_RELEASE(node)` can be the last one; touching
+  the flag afterwards is a use-after-free waiting for the refcount to line
+  up. Same ordering applies in the prted component and in
+  `prte_state_base_recover_resources`.
+- **A `continue` inside the per-proc release loop skips the release.**
+  `check_complete` restores each proc's bound cpus before dropping it from
+  the node; when the cpuset failed to decode it used to `continue`, which
+  also skipped `pmix_pointer_array_set_item(node->procs, i, NULL)` and the
+  `PMIX_RELEASE(proc)` — leaking the proc and leaving a dangling entry on
+  the node. That block is now a `do { … } while (0)` so a `break`
+  abandons only the cpu restore.
+- **Log the status you actually failed with.** Two pack failures in
+  `vm_ready` called `PMIX_ERROR_LOG(ret)` where `ret` still held the
+  *previous* `PMIx_Get`'s status (`PMIX_SUCCESS`), reporting success for a
+  failure. Check the variable name when you copy an error block.
 - **Persistent vs. non-persistent branches differ.** `check_complete`
   and `dvm_notify` behave differently under `prte_persistent`; test both
   a one-shot `prterun` and a `prte --daemonize` + `prun` + `pterm` cycle

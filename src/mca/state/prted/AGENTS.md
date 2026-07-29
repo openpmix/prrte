@@ -146,3 +146,19 @@ touch `ras`/`rmaps`/`plm` launch logic — those run on the HNP.
   the matching `*_states[]`/`*_callbacks[]` position.
 - **Every handler ends with `PMIX_RELEASE(caddy)`** (via the `cleanup:`
   label). New early-outs must reach it.
+- **Clear `PRTE_NODE_FLAG_MAPPED` before releasing the node.** In
+  `track_procs`' resource-release loop the map holds a reference, so
+  `PMIX_RELEASE(node)` may be the last one; updating the flag after it is
+  a use-after-free that only shows up when the refcount happens to line
+  up. The same ordering bug existed in the DVM component and in
+  `prte_state_base_recover_resources`.
+- **`track_procs` hands its caddy to `job_teardown`; it must not release
+  it.** The TERMINATED path ends by issuing
+  `PMIx_server_deregister_nspace` with `dereg_complete` and returning; that
+  callback thread-shifts the caddy back onto `prte_event_base`, where
+  `job_teardown` releases the job's resources and the caddy. It used to
+  block on the deregistration instead, which parked the only thread
+  driving `prte_event_base` and left the daemon deaf for the duration —
+  see the framework guide's *Never block a state handler on PMIx*.
+  Because a **proc**-state activation leaves `caddy->jdata` NULL,
+  `track_procs` takes its own reference on the job before the hand-off.
