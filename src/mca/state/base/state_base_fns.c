@@ -70,9 +70,12 @@ void prte_state_base_activate_job_state(prte_job_t *jdata, prte_job_state_t stat
                 return;
             }
             caddy = PMIX_NEW(prte_state_caddy_t);
+            /* the state is always recorded, even when no job accompanies it -
+             * handlers reached via the ERROR/ANY fallback read it to decide
+             * what happened */
+            caddy->job_state = state;
             if (NULL != jdata) {
                 caddy->jdata = jdata;
-                caddy->job_state = state;
                 PMIX_RETAIN(jdata);
             }
             PRTE_PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc);
@@ -98,9 +101,11 @@ void prte_state_base_activate_job_state(prte_job_t *jdata, prte_job_state_t stat
         return;
     }
     caddy = PMIX_NEW(prte_state_caddy_t);
+    /* record the state that actually fired, not the fallback we matched -
+     * this is the only way the ERROR/ANY handler can tell what happened */
+    caddy->job_state = state;
     if (NULL != jdata) {
         caddy->jdata = jdata;
-        caddy->job_state = state;
         PMIX_RETAIN(jdata);
     }
     PRTE_REACHING_JOB_STATE(jdata, state);
@@ -188,6 +193,15 @@ void prte_state_base_activate_proc_state(pmix_proc_t *proc, prte_proc_state_t st
     pmix_list_item_t *itm, *any = NULL, *error = NULL;
     prte_state_t *s;
     prte_state_caddy_t *caddy;
+
+    /* the proc machine is keyed entirely on the name - there is nothing
+     * to dispatch without one */
+    if (NULL == proc) {
+        PMIX_OUTPUT_VERBOSE((1, prte_state_base_framework.framework_output,
+                             "ACTIVATE: NULL PROC FOR STATE %s",
+                             prte_proc_state_to_str(state)));
+        return;
+    }
 
     for (itm = pmix_list_get_first(&prte_proc_states); itm != pmix_list_get_end(&prte_proc_states);
          itm = pmix_list_get_next(itm)) {
@@ -313,9 +327,16 @@ void prte_state_base_print_proc_state_machine(void)
 void prte_state_base_local_launch_complete(int fd, short argc, void *cbdata)
 {
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
-    prte_job_t *jdata = state->jdata;
+    prte_job_t *jdata;
     bool found = false;
     PRTE_HIDE_UNUSED_PARAMS(fd, argc);
+
+    PMIX_ACQUIRE_OBJECT(state);
+    jdata = state->jdata;
+    if (NULL == jdata) {
+        PMIX_RELEASE(state);
+        return;
+    }
 
     found = prte_get_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, NULL, PMIX_BOOL);
     if (found) {
@@ -335,6 +356,10 @@ void prte_state_base_report_progress(int fd, short argc, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
+    if (NULL == jdata) {
+        PMIX_RELEASE(caddy);
+        return;
+    }
 
     pmix_output(prte_clean_output,
                 "App launch reported: %d (out of %d) daemons - %d (out of %d) procs",
@@ -571,10 +596,11 @@ void prte_state_base_check_fds(prte_job_t *jdata)
             /* no open fd in that slot */
             continue;
         }
-        snprintf(path, 1024, "/proc/self/fd/%d", i);
-        memset(info, 0, 256);
-        /* read the info about this fd */
-        rc = readlink(path, info, 256);
+        snprintf(path, sizeof(path), "/proc/self/fd/%d", i);
+        memset(info, 0, sizeof(info));
+        /* read the info about this fd.  readlink() does not NUL-terminate,
+         * so leave room for the terminator the memset above supplied */
+        rc = readlink(path, info, sizeof(info) - 1);
         if (-1 == rc) {
             /* this fd is unavailable */
             continue;
@@ -634,10 +660,15 @@ void prte_state_base_check_fds(prte_job_t *jdata)
         }
         ++cnt;
     }
+    /* on a platform with no /proc (e.g. macOS) every readlink above fails and
+     * result is still NULL - do not hand that to a "%s" conversion */
     pmix_asprintf(&r2, "%s: %d open file descriptors after job %d completed\n%s",
-                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cnt, PRTE_LOCAL_JOBID(jdata->nspace), result);
+                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cnt, PRTE_LOCAL_JOBID(jdata->nspace),
+                  (NULL == result) ? "" : result);
     pmix_output(0, "%s", r2);
-    free(result);
+    if (NULL != result) {
+        free(result);
+    }
     free(r2);
 }
 
@@ -651,7 +682,6 @@ void prte_state_base_recover_resources(prte_job_t *jdata, prte_proc_t *pptr)
     hwloc_obj_t obj;
     hwloc_obj_type_t type;
     hwloc_cpuset_t boundcpus, tgt;
-    PRTE_HIDE_UNUSED_PARAMS(jdata, pptr);
 
     node = pptr->node;
     map = jdata->map;
@@ -761,10 +791,12 @@ next:
             /* set the node location to NULL */
             pmix_pointer_array_set_item(map->nodes, node_idx, NULL);
         }
+        /* flag that the node is no longer in a map.  This must happen BEFORE
+         * the release below: the map holds a reference, and dropping it can
+         * be the last one, leaving the flag update to touch freed memory */
+        PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
         /* maintain accounting */
         PMIX_RELEASE(node);
-        /* flag that the node is no longer in a map */
-        PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
     }
 
     // release the scratch bitmap

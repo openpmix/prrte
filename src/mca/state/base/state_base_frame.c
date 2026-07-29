@@ -141,8 +141,18 @@ PMIX_CLASS_INSTANCE(prte_state_t, pmix_list_item_t, prte_state_construct, NULL);
 
 static void prte_state_caddy_construct(prte_state_caddy_t *caddy)
 {
+    /* PMIX_NEW does not zero the allocation, so every field has to be
+     * initialized here.  The state/proc fields in particular are read by
+     * handlers that were reached through the ERROR/ANY fallback - e.g. the
+     * errmgr's job_errors does "jdata->state = caddy->job_state" - and an
+     * activation that carries no job (PRTE_ACTIVATE_JOB_STATE(NULL, ...))
+     * would otherwise hand them uninitialized heap.
+     */
     memset(&caddy->ev, 0, sizeof(prte_event_t));
     caddy->jdata = NULL;
+    caddy->job_state = PRTE_JOB_STATE_UNDEF;
+    PMIX_LOAD_PROCID(&caddy->name, NULL, PMIX_RANK_INVALID);
+    caddy->proc_state = PRTE_PROC_STATE_UNDEF;
 }
 static void prte_state_caddy_destruct(prte_state_caddy_t *caddy)
 {
