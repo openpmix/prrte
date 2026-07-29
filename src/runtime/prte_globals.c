@@ -1070,8 +1070,16 @@ static void session_des(prte_session_t *s)
     for (n=0; n < s->nodes->size; n++) {
         nd = (prte_node_t*)pmix_pointer_array_get_item(s->nodes, n);
         if (NULL != nd) {
-            PMIX_RELEASE(nd);
+            /* The node's session backpointer is borrowed, so it does not keep
+             * us alive - which means a node that survives this release (the
+             * global pool holds its own reference) would be left pointing at
+             * freed memory. Clear it while the node is still here. Must come
+             * BEFORE the release, which may be the node's last. */
+            if (nd->session == s) {
+                nd->session = NULL;
+            }
             pmix_pointer_array_set_item(s->nodes, n, NULL);
+            PMIX_RELEASE(nd);
         }
     }
     PMIX_RELEASE(s->nodes);

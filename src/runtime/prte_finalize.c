@@ -58,6 +58,7 @@ int prte_finalize(void)
     prte_proc_t *p;
     prte_node_t *node;
     prte_topology_t *topo;
+    prte_session_t *session;
 
     PMIX_ACQUIRE_THREAD(&prte_init_lock);
     if (!prte_initialized) {
@@ -113,16 +114,60 @@ int prte_finalize(void)
     }
     (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
 
-    // clean up the node array
-    for (n = 0; n < prte_node_pool->size; n++) {
-        node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n);
-        if (NULL == node) {
-            continue;
+    /* Tear the sessions down, and with them the node pool.
+     *
+     * Order matters in three ways. A reservation holds a COUNTED reference on
+     * each of its nodes, so it has to give those back while the nodes are
+     * still alive - hence sessions before the pool. prte_default_session's
+     * node array IS prte_node_pool (prte_init substitutes it), so releasing
+     * that session performs the pool teardown itself and must therefore go
+     * last. And session_des asks the ras base to release the underlying
+     * allocation, which walks prte_ras_base.selected_modules: the ras
+     * framework is deliberately never closed - neither ess/hnp's rte_finalize
+     * nor ess/base's prted_finalize closes it - so that list is still valid
+     * here. If that ever changes, this block has to move ahead of the close.
+     *
+     * Note that release_allocation only cancels an allocation PRRTE itself
+     * created dynamically and still tracks; a user's own resource-manager
+     * allocation is left alone. So reaching it here is the correct cleanup
+     * for a DVM that exits still holding a sub-allocation, not a hazard.
+     *
+     * session->children is not walked separately: nothing in the tree ever
+     * populates it, and session_des empties it anyway. */
+    if (NULL != prte_sessions) {
+        for (n = 0; n < prte_sessions->size; n++) {
+            session = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, n);
+            if (NULL == session || session == prte_default_session) {
+                continue;
+            }
+            pmix_pointer_array_set_item(prte_sessions, n, NULL);
+            PMIX_RELEASE(session);
         }
-        pmix_pointer_array_set_item(prte_node_pool, n, NULL);
-        PMIX_RELEASE(node);
+        if (NULL != prte_default_session) {
+            /* this is what releases prte_node_pool and every node in it */
+            PMIX_RELEASE(prte_default_session);
+            prte_default_session = NULL;
+            prte_node_pool = NULL;
+        }
+        PMIX_RELEASE(prte_sessions);
+        prte_sessions = NULL;
     }
-    PMIX_RELEASE(prte_node_pool);
+
+    /* Only reached if there was no default session to carry the pool away -
+     * a process that failed partway through prte_init, or one that never
+     * built one. */
+    if (NULL != prte_node_pool) {
+        for (n = 0; n < prte_node_pool->size; n++) {
+            node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n);
+            if (NULL == node) {
+                continue;
+            }
+            pmix_pointer_array_set_item(prte_node_pool, n, NULL);
+            PMIX_RELEASE(node);
+        }
+        PMIX_RELEASE(prte_node_pool);
+        prte_node_pool = NULL;
+    }
 
     for (n = 0; n < prte_job_data->size; n++) {
         jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, n);
