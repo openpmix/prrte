@@ -1351,6 +1351,193 @@ test_state() {
     cleanup_swarm
 }
 
+########################################################################
+# src/prted -- the daemon body and the PMIx server host module
+########################################################################
+#
+# Everything interesting in src/prted needs more than one daemon.  A single
+# node hides the whole point of the code: the command dispatcher only has one
+# recipient, every client is a client of the HNP, and a job-level Get is
+# always answered out of the local cache.  These are the cases that only exist
+# across nodes.
+#
+# NOTE on DVM discovery: several cases here leave a prun running in the
+# background, and a live prun holds its own pmix.* rendezvous file.  A later
+# prun that searches $TMPDIR then finds more than one server and refuses to
+# guess ("multiple possible servers ... connection handles have been read from
+# files named pmix.*").  So every case that starts a persistent DVM reports its
+# URI to a file and every prun is pointed at it explicitly.
+PRTED_URI=/tmp/prted-test.uri
+# start a persistent DVM on node1 with the given --host spec, reporting its URI
+prted_dvm_start() {
+    RUN "rm -f $PRTED_URI" >/dev/null 2>&1
+    RUN "timeout -k 5 60 prte --daemonize --report-uri $PRTED_URI --host $1" >/dev/null 2>&1
+    sleep 4
+    RUN "test -s $PRTED_URI"
+}
+# run a tool against that DVM, from the head node ($@ = argv after "prun")
+PRUN() { RUN "timeout -k 5 60 prun --dvm-uri file:$PRTED_URI $*"; }
+# ...and in the background, with its output captured on node1
+PRUN_BG() {
+    local outf=$1; shift
+    docker exec -d -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+        prte-node1 bash -lc ". /opt/prte/env.sh;
+            prun --dvm-uri file:$PRTED_URI $* > $outf 2>&1"
+}
+test_prted() {
+    local out rc ns n bpid
+
+    banner "prted: a job-level Get of ANOTHER job is answered by the daemon"
+    # A client asks for the JOB-LEVEL data of a DIFFERENT job, from a node
+    # that hosts none of that job's procs.  This is the cross-job job-level
+    # query path, and it only exists with more than one daemon.
+    #
+    # SCOPE, honestly: depending on what the daemon has already registered
+    # with its PMIx server, this may be answered out of the PMIx cache
+    # without ever upcalling into dmodex_req.  So treat these two cases as
+    # COVERAGE of the query working end to end across nodes -- they are not
+    # a guaranteed reproducer for the tproc/target mix-up in the dmodex
+    # in-flight check (that one is established by inspection: req->target is
+    # only ever assigned on the monitor and tool-connect paths, so on a
+    # dmodex it is {"", PMIX_RANK_INVALID}, which PMIx matches against any
+    # nspace and against PMIX_RANK_WILDCARD).  If you find a way to force
+    # the upcall, tighten these.
+    cleanup_swarm
+    if ! RUN 'command -v jobinfo >/dev/null'; then
+        skp "jobinfo client not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start 'node1:2,node2:2,node3:2,node4:2'; then
+        bad "could not start a DVM for the direct-modex tests"
+    else
+        # target job: 2 procs, pinned to node2, alive for the duration
+        PRUN_BG /tmp/ji-pub.out '--host node2:2 -n 2 jobinfo publish 90'
+        sleep 8
+        ns=$(RUN 'grep -m1 "^NSPACE " /tmp/ji-pub.out' 2>/dev/null | awk '{print $2}' | tr -d '\r')
+        if [ -z "$ns" ]; then
+            bad "target job never reported its nspace: $(RUN 'cat /tmp/ji-pub.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+        else
+            ok "target job is up on node2 (nspace $ns)"
+            # the asking client runs on node3, whose daemon holds no procs of $ns
+            out=$(PRUN "--host node3:1 -n 1 jobinfo fetch $ns 20" 2>&1)
+            n=$(echo "$out" | grep -m1 '^JOBSIZE ' | awk '{print $2}' | tr -d '\r')
+            [ "$n" = 2 ] \
+                && ok "wildcard direct-modex from a daemon hosting no procs returned JOB_SIZE=2" \
+                || bad "wildcard direct-modex did not answer (got '$n'): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+            banner "prted: ...and still answers with another request already parked"
+            # THE regression case.  Before answering, dmodex_req scans the
+            # daemon's request array for an in-flight request for the same
+            # target.  It compared against req->target, which only the monitor
+            # and tool-connect paths ever set -- so for every dmodex it is
+            # {"", PMIX_RANK_INVALID}.  PMIx treats an empty nspace as matching
+            # anything and PMIX_RANK_WILDCARD as matching anything, so a
+            # wildcard request "matched" whatever unrelated entry happened to
+            # be in the array, was filed as already-requested, and was never
+            # answered.  The client hangs until its timeout.
+            #
+            # So: park an unrelated request in a daemon first (a Get of a
+            # specific remote rank with PMIX_REQUIRED_KEY, which the hosting
+            # daemon holds waiting for a key that never arrives), then ask the
+            # wildcard question through the SAME daemon.
+            #
+            # This has to be a DIFFERENT node from the case above.  Answering a
+            # wildcard request registers the nspace with that daemon's PMIx
+            # server, so a second Get on node3 would be served straight out of
+            # the PMIx cache and never reach the host at all -- the case would
+            # pass without exercising anything.  node4 has not seen $ns yet.
+            PRUN_BG /tmp/ji-park.out "--host node4:1 -n 1 jobinfo fetchkey $ns 0 prte.test.never 60"
+            sleep 10
+            if RUN 'grep -q FETCHKEY-STARTED /tmp/ji-park.out' && \
+               ! RUN 'grep -q FETCHKEY-DONE /tmp/ji-park.out'; then
+                ok "an unrelated request is parked in node4's daemon"
+            else
+                skp "could not park a request in node4's daemon; the next case is weaker"
+            fi
+            out=$(PRUN "--host node4:1 -n 1 jobinfo fetch $ns 20" 2>&1)
+            n=$(echo "$out" | grep -m1 '^JOBSIZE ' | awk '{print $2}' | tr -d '\r')
+            [ "$n" = 2 ] \
+                && ok "wildcard direct-modex still answered with a request parked" \
+                || bad "wildcard direct-modex was swallowed by the in-flight check: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
+    banner "prted: a signal reaches the job it was sent to, and no other"
+    # PRTE_DAEMON_SIGNAL_LOCAL_PROCS carries the target job's nspace.  The
+    # daemon used to unpack it and then hand NULL to the ODLS, which means
+    # "every local child" -- so in a persistent DVM running more than one job,
+    # signalling one job killed them all.  One node cannot show this: it needs
+    # two jobs whose procs land on the same daemon, and a persistent DVM to
+    # hold them both.
+    # cleanup_swarm reaps daemons and tools but not the application procs
+    # they left behind, and this case counts procs on node2 - a stray sleep
+    # from an earlier run would make the precondition check nonsense
+    for n in 1 2; do docker exec "prte-node$n" sh -c 'pkill -9 -x sleep 2>/dev/null; true'; done
+    if ! prted_dvm_start 'node1:4,node2:4'; then
+        bad "could not start a DVM for the job-scoped signal test"
+    else
+        # SIGUSR1 is in the default forwarded-signal set (ess_base_frame.c),
+        # so no --forward-signals is needed -- and prun would reject it: the
+        # option is only in the prte/prterun tables.
+        PRUN_BG /tmp/jobA.out '--host node2:1 -n 1 sleep 120'
+        PRUN_BG /tmp/jobB.out '--host node2:1 -n 1 sleep 120'
+        sleep 10
+        n=$(ON 2 'pgrep -c -x sleep' 2>/dev/null | tr -d ' \r')
+        if [ "$n" = 2 ]; then
+            ok "two jobs are running, both with procs on node2"
+            # signal ONLY job A's launcher; prun relays it as a job-scoped
+            # PMIX_JOB_CTRL_SIGNAL for its own nspace
+            # match the launcher by executable name: "pgrep -f sleep 120"
+            # would also match the shell this very command runs in
+            bpid=$(RUN 'pgrep -x prun | head -1' 2>/dev/null | tr -d ' \r')
+            RUN "kill -USR1 $bpid" >/dev/null 2>&1
+            sleep 10
+            n=$(ON 2 'pgrep -c -x sleep' 2>/dev/null | tr -d ' \r')
+            [ "$n" = 1 ] \
+                && ok "the signalled job died and the other one did not" \
+                || bad "signal was not job-scoped ($n of 2 procs left on node2; expected 1)"
+            n=$(RUN 'pgrep -c -x prun' 2>/dev/null | tr -d ' \r')
+            [ "$n" = 1 ] \
+                && ok "the unsignalled launcher is still waiting on its job" \
+                || bad "$n launchers left after signalling one job; expected 1"
+        else
+            bad "could not get two concurrent jobs running on node2 (saw $n procs)"
+        fi
+        RUN 'pkill -f "sleep 120"' >/dev/null 2>&1
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
+    banner "prted: a malformed --singleton is refused, not a crash"
+    # The value is handed straight down to PMIx_server_init as PMIX_SINGLETON,
+    # which faults on anything that is not "<nspace>.<rank>", so prte has to
+    # reject it BEFORE prte_init.  A crash here is a segfault at startup.
+    out=$(RUN 'timeout -k 5 30 prte --singleton notanid' 2>&1)
+    echo "$out" | grep -q 'malformed singleton identifier' \
+        && ok "a malformed --singleton is reported and refused" \
+        || bad "malformed --singleton was not cleanly refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    echo "$out" | grep -qi 'signal: segmentation' \
+        && bad "malformed --singleton still crashes" \
+        || ok "...and does not crash"
+    cleanup_swarm
+
+    banner "prted: a root path prefix does not corrupt the heap"
+    # The four --prefix normalizers used strncpy(param, PRTE_PATH_SEP,
+    # sizeof(param) - 1) on a char*, so sizeof gave the size of the POINTER
+    # and strncpy NUL-padded eight bytes into a two-byte allocation.
+    # "--prefix /" is that two-byte allocation.  The job has to actually RUN:
+    # a corrupted heap shows up as a crash or a hang later in startup, and
+    # "no output" would otherwise look like a pass.
+    out=$(RUN 'timeout -k 5 60 prterun --prefix / --host node1:1 -n 1 hostname' 2>&1)
+    echo "$out" | grep -qE '^node1$' \
+        && ok "--prefix / still launched the job" \
+        || bad "--prefix / broke the launch: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    echo "$out" | grep -qi 'signal: segmentation\|corrupt\|malloc' \
+        && bad "--prefix / corrupted the heap: $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+        || ok "...and did not corrupt the heap"
+    cleanup_swarm
+}
+
 test_linux() {
     if ! docker ps --format '{{.Names}}' | grep -qx prte-node1; then
         echo "swarm not up -- run: docker compose up -d" >&2; exit 2
@@ -1898,6 +2085,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_schizo
 
     test_state
+
+    test_prted
 
     test_slurm_alloc
     test_slurm
