@@ -79,6 +79,8 @@ void prte_rml_recv_failures_notice(
     }
 
     prte_rml_repair_routing_tree(&failed_ranks, global);
+    /* repair takes a copy of what it needs, so the unpacked array is ours */
+    PMIx_Data_array_destruct(&failed_ranks);
 }
 
 void prte_rml_recv_adoption_notice(
@@ -115,7 +117,10 @@ void prte_rml_recv_adoption_notice(
         different = ((pmix_rank_t*)report.array)[i] !=
             ((pmix_rank_t*)prte_rml_base.ancestors.array)[i];
     }
-    if(!different) return;
+    if(!different){
+        PMIx_Data_array_destruct(&report);
+        return;
+    }
 
     if(report.size > prte_rml_base.ancestors.size){
         // This should never happen -- it implies there is some extra failure
@@ -160,7 +165,10 @@ void prte_rml_recv_adoption_notice(
     while(ancestors.size > report.size){
         pmix_rank_t ancestor = ((pmix_rank_t*)ancestors.array)[report.size];
 
-        if(infer_i <= inferred.size) resize_ranks(&inferred, (infer_i+1)*1.5);
+        // grow only when the next slot is past the end - "<=" also fired while
+        // the array still had room and shrank it back under the entries we had
+        // already recorded
+        if(infer_i >= inferred.size) resize_ranks(&inferred, (infer_i+1)*1.5);
         ((pmix_rank_t*)inferred.array)[infer_i++] = ancestor;
 
         pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, ancestor);
@@ -261,6 +269,7 @@ static void send_failures_notice(const prte_rml_recovery_status_t* status){
     if(PMIX_SUCCESS != ret){
         PMIX_ERROR_LOG(ret);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+        PMIX_DATA_BUFFER_RELEASE(msg);
         return;
     }
 
@@ -299,6 +308,8 @@ static void send_failures_notice(const prte_rml_recovery_status_t* status){
                 ((pmix_rank_t*)arr.array)[idx++] = rank;
             }
         }
+        PMIX_DESTRUCT(&ones);
+        PMIX_DESTRUCT(&local_only);
     } else {
         // Parent is unchanged, just report current failures in my subtree
         resize_ranks(&arr, status->failed_ranks.size);
