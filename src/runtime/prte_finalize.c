@@ -39,6 +39,7 @@
 #include "src/mca/base/pmix_mca_base_alias.h"
 #include "src/mca/base/pmix_mca_base_var.h"
 #include "src/mca/base/pmix_base.h"
+#include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/ess/ess.h"
 #include "src/runtime/prte_globals.h"
@@ -86,7 +87,15 @@ int prte_finalize(void)
     // we always must cleanup the session directory tree
     prte_job_session_dir_finalize(NULL);
 
-#ifdef PRTE_PICKY_COMPILERS
+    /* NOTE: everything below used to sit behind "#ifdef PRTE_PICKY_COMPILERS",
+     * which never excluded anything: configure emits that symbol with
+     * AC_DEFINE_UNQUOTED as 0 or 1, so it is always *defined* and #ifdef is
+     * always true. The teardown has therefore always run in every build, and
+     * it needs to - a persistent DVM's session directories and the PMIx
+     * server both depend on it. Spelling it "#if PRTE_PICKY_COMPILERS" to
+     * match the project rule would have silently deleted all of it from a
+     * normal (non-picky) build, so the guard is gone instead of corrected. */
+
     /* release the cache */
     PMIX_RELEASE(prte_cache);
     PMIX_RELEASE(prte_held_jobs);
@@ -94,9 +103,13 @@ int prte_finalize(void)
     PMIX_LIST_DESTRUCT(&prte_shrink_campaigns);
     PMIX_LIST_DESTRUCT(&prte_grow_campaigns);
 
-    /* call the finalize function for this environment */
-    if (PRTE_SUCCESS != (rc = prte_ess.finalize())) {
-        return rc;
+    /* call the finalize function for this environment. Report a failure but
+     * keep going: bailing out here would skip the rest of the teardown - and
+     * PMIx_server_finalize with it - leaving the session directory tree and
+     * the server's listener behind on the way out. */
+    rc = prte_ess.finalize();
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
     }
     (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
 
@@ -166,7 +179,6 @@ int prte_finalize(void)
     prte_proc_info_finalize();
 
     pmix_output_finalize();
-#endif
 
     /* now shutdown PMIx - need to do this last as it finalizes
      * the utilities and class system we depend upon */
