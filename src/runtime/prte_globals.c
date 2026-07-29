@@ -1112,8 +1112,21 @@ static void session_des(prte_session_t *s)
         pmix_pointer_array_set_item(prte_sessions, s->index, NULL);
     }
 }
+/* The parent class here has to be pmix_object_t, because that is what
+ * prte_session_t actually embeds. Declaring pmix_list_item_t made the class
+ * system run pmix_list_item_t's constructor and destructor over a struct
+ * that has no room for one: next/prev and the debug bookkeeping land on top
+ * of the session's own leading fields. The constructor damage is masked
+ * because session_con runs afterwards and rewrites those fields, but the
+ * destructor is not - pmix_list_item_destruct asserts that the item is not
+ * still linked into a list, and reads that "refcount" out of the middle of
+ * the session's own data. Releasing any session under a debug PMIx
+ * therefore aborted the process; it went unnoticed only because the one
+ * session that always exists, prte_default_session, is never released.
+ * A session lives in prte_sessions (a pointer array) and is never placed on
+ * a pmix_list_t, so it needs nothing pmix_list_item_t provides. */
 PMIX_CLASS_INSTANCE(prte_session_t,
-                    pmix_list_item_t,
+                    pmix_object_t,
                     session_con, session_des);
 
 bool prte_session_is_owned_by(prte_session_t *session,
