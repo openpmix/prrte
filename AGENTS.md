@@ -100,7 +100,10 @@ The three central data structures — `prte_job_t`, `prte_node_t`, and
 `prte_proc_t` — are defined in `src/runtime/prte_globals.h` and carry
 all runtime state for a running job.  Code throughout the tree reaches
 for these; understand them before touching launch, mapping, or error
-handling paths.
+handling paths.  [`src/runtime/AGENTS.md`](src/runtime/AGENTS.md) covers
+the object model, who owns whom (several of those references are
+deliberately *borrowed*, not counted), the three-stage init, and the
+global registries.
 
 ---
 
