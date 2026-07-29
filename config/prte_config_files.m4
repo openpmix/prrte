@@ -45,5 +45,6 @@ AC_DEFUN([PRTE_CONFIG_FILES],[
         test/unit/ras/Makefile
         test/unit/schizo/Makefile
         test/unit/state/Makefile
+        test/unit/tools/Makefile
     ])
 ])
