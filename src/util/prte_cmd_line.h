@@ -220,7 +220,12 @@ BEGIN_C_DECLS
 #define PRTE_CLI_REPORT_STATE       "report-state-on-timeout"       // optional arg
 #define PRTE_CLI_STACK_TRACES       "get-stack-traces"              // optional arg
 #define PRTE_CLI_REPORT_CHILD_SEP   "report-child-jobs-separately"  // optional arg
-#define PRTE_CLI_AGG_HELP           "aggregate-help"                // optional arg
+// the full name is what the runtime-options help text and the MCA param
+// description both document; the option matcher accepts any unambiguous
+// prefix, so the shorter "aggregate-help" still works. Naming the SHORT
+// form here had the opposite effect - a directive longer than the name
+// matches no prefix of it, so the documented spelling was rejected.
+#define PRTE_CLI_AGG_HELP           "aggregate-help-messages"       // optional arg
 #define PRTE_CLI_NOTIFY_ERRORS      "notifyerrors"                  // optional flag
 #define PRTE_CLI_OUTPUT_PROCTABLE   "output-proctable"              // optional arg
 

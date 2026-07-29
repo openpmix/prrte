@@ -266,6 +266,9 @@ typedef uint16_t prte_job_flags_t;
                                                                        // allocations (sessions) this job may map onto; empty token = default session
 #define PRTE_JOB_OUTPUT_FILE_PATTERN        (PRTE_JOB_START_KEY + 125) // bool - treat PRTE_JOB_OUTPUT_TO_FILE as a name pattern the user
                                                                        // controls instead of annotating it with nspace and rank
+#define PRTE_JOB_REPORT_CHILD_SEP           (PRTE_JOB_START_KEY + 126) // bool - report the exit status of child jobs separately: return the
+                                                                       // primary job's status only, rather than the first non-zero status
+                                                                       // returned by the primary job or any job it spawned
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 
