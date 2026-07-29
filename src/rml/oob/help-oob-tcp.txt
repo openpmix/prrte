@@ -123,3 +123,16 @@ A message being sent between two PRRTE daemons is too large:
 Please increase the size limit via the "prte_max_msg_size" MCA
 parameter, or if you believe the message to be inappropriately
 large, report the problem to a PRRTE developer.
+#
+[no-interfaces]
+No usable network interfaces were found on this host, so no TCP
+sockets can be opened for out-of-band communication between PRRTE
+daemons.
+
+  Local host: %s
+
+This is most often caused by an interface include or exclude list
+that leaves nothing behind.  Interfaces that are down, that are not
+IPv4 (or IPv6, where enabled), and that appear to be virtual are
+also skipped.  Please check the "prte_if_include" and
+"prte_if_exclude" MCA parameters and retry.

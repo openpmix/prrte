@@ -160,11 +160,20 @@ void prte_rml_register(void)
     }
 
     ret = pmix_mca_base_var_register("prte", "rml", "base", "radix",
-                                     "Radix to be used for routing tree",
+                                     "Radix to be used for routing tree (minimum 2)",
                                      PMIX_MCA_BASE_VAR_TYPE_INT,
                                      &prte_rml_base.radix);
     pmix_mca_base_var_register_synonym(ret, "prte", "routed", "radix", NULL,
                                        PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+    /* The radix-tree math divides by (radix - 1) and takes a logarithm to base
+     * radix, so anything below 2 is not a degenerate tree - it is a division by
+     * zero the moment a second daemon exists. This is the only place a user
+     * value enters, so clamp it here rather than defending every call site. */
+    if (2 > prte_rml_base.radix) {
+        pmix_output(0, "PRRTE: routing tree radix %d is invalid (minimum is 2)"
+                       " - using 2", prte_rml_base.radix);
+        prte_rml_base.radix = 2;
+    }
 
     prte_oob_register();
 
@@ -200,6 +209,11 @@ void prte_rml_close(void)
     PMIx_Data_array_destruct(&prte_rml_base.children);
     if (0 <= prte_rml_base.rml_output) {
         pmix_output_close(prte_rml_base.rml_output);
+        prte_rml_base.rml_output = -1;
+    }
+    if (0 <= prte_rml_base.routed_output) {
+        pmix_output_close(prte_rml_base.routed_output);
+        prte_rml_base.routed_output = -1;
     }
 }
 
@@ -255,15 +269,31 @@ int prte_rml_open(void)
 
     prte_rml_base.lifeline = PRTE_PROC_MY_PARENT->rank;
 
-    prte_oob_open();
+    /* Bring up the transport. This fails for real reasons a user can cause -
+     * an if_include/if_exclude that leaves no usable interface, or a static
+     * port range nothing could bind - and every one of them leaves us with no
+     * address to advertise. Ignoring the return meant walking on to
+     * get_addr(), which answers NULL, and then strdup()ing it: a segfault
+     * where the user should have gotten "no interfaces available". */
+    ret = prte_oob_open();
+    if (PRTE_SUCCESS != ret) {
+        PRTE_ERROR_LOG(ret);
+        return ret;
+    }
 
     /* store our URI for later */
     prte_oob_base_get_addr(&uri);
+    if (NULL == uri) {
+        /* the listeners came up but produced no advertisable address */
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_AVAILABLE);
+        return PRTE_ERR_NOT_AVAILABLE;
+    }
     PMIX_VALUE_LOAD(&val, uri, PMIX_STRING);
     ret = PMIx_Store_internal(PRTE_PROC_MY_NAME, PMIX_PROC_URI, &val);
     if (PMIX_SUCCESS != ret) {
         PRTE_ERROR_LOG(PRTE_ERROR);
         PMIX_VALUE_DESTRUCT(&val);
+        free(uri);
         return PRTE_ERROR;
     }
     PMIX_VALUE_DESTRUCT(&val);

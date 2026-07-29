@@ -144,8 +144,11 @@ Routing: the radix tree
 
 Daemons are numbered ``0 .. N-1`` (rank 0 is the HNP) and arranged in a radix
 tree.  The radix (fan-out) defaults to 64 and is set with
-``--prtemca prte_rml_radix``.  The tree keeps the number of hops between any two
-daemons small while bounding each daemon's connection count.
+``--prtemca rml_base_radix`` (``--prtemca routed_radix`` is a deprecated
+synonym).  The minimum is 2 — the tree arithmetic divides by ``radix - 1``, so
+a smaller value is not a degenerate tree but a division by zero, and a value
+below 2 is clamped with a warning.  The tree keeps the number of hops between
+any two daemons small while bounding each daemon's connection count.
 
 ``prte_rml_get_route(target)`` (``routed_radix.c``) returns the rank of the next
 hop:
