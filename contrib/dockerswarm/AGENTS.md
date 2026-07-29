@@ -325,6 +325,38 @@ those are what this phase asserts:
   nobody claims must be refused with a diagnostic — and, on a persistent
   DVM, refused without taking the HNP down.
 
+**The daemon body and the PMIx server host module (`src/prted`,
+`test_prted`)**: `src/prted` is where the DVM actually lives, and almost
+none of it means anything on one node. This phase asserts the three things
+that need a second daemon, plus two cheap startup-hardening cases:
+
+- a **cross-job job-level query** — a client asks for another job's
+  `PMIX_JOB_SIZE` from a node that hosts none of that job's procs. The
+  probe is `jobinfo`, a bare PMIx client that `build.sh` compiles the same
+  way it compiles `elastic`. Note the honest scope comment in the test: the
+  local PMIx server may satisfy this from its own cache without upcalling
+  into `dmodex_req`, so treat it as coverage of the query working across
+  nodes rather than as a guaranteed reproducer for the request-tracker
+  mix-up it was written for.
+- **job-scoped signal delivery**. `PRTE_DAEMON_SIGNAL_LOCAL_PROCS` carries
+  the target job's nspace, and the daemon used to ignore it and signal
+  every local child — so in a persistent DVM running two jobs, signalling
+  one killed both. It takes two jobs whose procs land on the *same* daemon,
+  which means a persistent DVM and more than one node. This case does catch
+  the regression: against the unfixed daemon both jobs die.
+- a **malformed `--singleton`** and a **`--prefix /`**. Both are startup
+  paths that used to fault (the first inside PMIx, the second by
+  overrunning a two-byte heap allocation), and both are one line to check
+  once a swarm is up.
+
+Two harness notes if you extend this phase. A live `prun` holds its own
+`pmix.*` rendezvous file, so any case that leaves one running in the
+background must point every later tool at the DVM explicitly — the helpers
+`prted_dvm_start`/`PRUN`/`PRUN_BG` do that with `--report-uri` and
+`--dvm-uri`. And `cleanup_swarm` reaps daemons and tools but not the
+application processes they left behind, so a case that counts procs on a
+node should clear strays first.
+
 ### The install persists too, so a failed build is silently testable
 
 Same shape as the sticky-configure-args trap below, one level up. The
