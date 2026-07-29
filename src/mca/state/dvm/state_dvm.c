@@ -81,6 +81,8 @@ prte_state_base_module_t prte_state_dvm_module = {
 };
 
 static void dvm_notify(int sd, short args, void *cbdata);
+static void dvm_dereg_complete(pmix_status_t status, void *cbdata);
+static void check_complete_resume(int fd, short args, void *cbdata);
 
 /* defined default state machine sequence - individual
  * plm's must add a state for launching daemons
@@ -269,7 +271,7 @@ static void vm_ready(int fd, short args, void *cbdata)
     int32_t v;
     pmix_value_t *val;
     pmix_status_t ret;
-    PRTE_HIDE_UNUSED_PARAMS(fd, args, cbdata);
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(caddy);
     /* if this is my job, then we are done */
@@ -290,6 +292,7 @@ static void vm_ready(int fd, short args, void *cbdata)
                  * failed as part of that teardown, so leave the fence
                  * untouched here */
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+                PMIX_RELEASE(caddy);
                 return;
             }
             /* get wireup info for daemons */
@@ -307,27 +310,30 @@ static void vm_ready(int fd, short args, void *cbdata)
                      * failed as part of that teardown, so leave the fence
                      * untouched here */
                     PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+                    PMIX_RELEASE(caddy);
                     return;
                 }
                 rc = PMIx_Data_pack(NULL, &buf, &dmn->name, 1, PMIX_PROC);
                 if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(ret);
+                    PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_DESTRUCT(&buf);
                     /* the whole DVM is being torn down; held jobs will be
                      * failed as part of that teardown, so leave the fence
                      * untouched here */
                     PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+                    PMIX_RELEASE(caddy);
                     return;
                 }
                 rc = PMIx_Data_pack(NULL, &buf, &val->data.string, 1, PMIX_STRING);
                 if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(ret);
+                    PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_DESTRUCT(&buf);
                     PMIX_VALUE_RELEASE(val);
                     /* the whole DVM is being torn down; held jobs will be
                      * failed as part of that teardown, so leave the fence
                      * untouched here */
                     PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+                    PMIX_RELEASE(caddy);
                     return;
                 }
                 PMIX_VALUE_RELEASE(val);
@@ -341,6 +347,7 @@ static void vm_ready(int fd, short args, void *cbdata)
                  * failed as part of that teardown, so leave the fence
                  * untouched here */
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+                PMIX_RELEASE(caddy);
                 return;
             }
             PMIX_DATA_BUFFER_DESTRUCT(&buf);
@@ -420,6 +427,7 @@ static void job_started(int fd, short args, void *cbdata)
         if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC)
             || NULL == nptr) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            PMIX_RELEASE(caddy);
             return;
         }
         timestamp = time(NULL);
@@ -502,7 +510,8 @@ static void ready_for_debug(int fd, short args, void *cbdata)
         PMIX_ERROR_LOG(rc);
         PRTE_UPDATE_EXIT_STATUS(rc);
         PMIX_INFO_LIST_RELEASE(tinfo);
-        PMIX_PROC_RELEASE(nptr);
+        /* nptr was released as soon as it was added to the list above -
+         * releasing it again here freed it twice */
         goto DONE;
     } else {
         iptr = (pmix_info_t *) darray.array;
@@ -518,44 +527,34 @@ DONE:
     PMIX_RELEASE(caddy);
 }
 
-static void opcbfunc(pmix_status_t status, void *cbdata)
+/* Is the exit status of child jobs reported separately from the primary
+ * job's?  The policy belongs to the run rather than to any one job - it is
+ * consulted as EACH job reaches teardown - so it is read from the
+ * prte_report_child_jobs_separately MCA param or from the copy that the
+ * "report-child-jobs-separately" runtime option leaves on the daemon job.
+ * See prte_state_base_set_runtime_options() for why it is recorded there. */
+static bool report_child_jobs_separately(void)
 {
-    prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
+    prte_job_t *djob;
 
-    PMIX_POST_OBJECT(lk);
-    lk->status = prte_pmix_convert_status(status);
-    PRTE_PMIX_WAKEUP_THREAD(lk);
+    if (prte_report_child_jobs_separately) {
+        return true;
+    }
+    djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    if (NULL == djob) {
+        return false;
+    }
+    return prte_get_attribute(&djob->attributes, PRTE_JOB_REPORT_CHILD_SEP, NULL, PMIX_BOOL);
 }
-static void lkcbfunc(pmix_status_t status, void *cbdata)
-{
-    prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
 
-    PMIX_POST_OBJECT(lk);
-    lk->status = prte_pmix_convert_status(status);
-    PRTE_PMIX_WAKEUP_THREAD(lk);
-}
 static void check_complete(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
-    prte_session_t *session;
-    prte_job_t *jdata, *jptr;
+    prte_job_t *jdata;
     prte_proc_t *proc;
-    int i, rc, nprocs;
-    prte_node_t *node;
-    prte_job_map_t *map;
-    int32_t index;
+    int i, rc;
     pmix_proc_t pname;
-    prte_pmix_lock_t lock;
-    uint8_t command = PRTE_PMIX_PURGE_PROC_CMD;
-    pmix_data_buffer_t *buf;
-    pmix_pointer_array_t procs;
     prte_timer_t *timer;
-    prte_app_context_t *app;
-    hwloc_obj_t obj;
-    hwloc_obj_type_t type;
-    hwloc_cpuset_t boundcpus, tgt;
-    bool takeall, sep, *sepptr = &sep;
-    prte_pmix_server_pset_t *pst, *pst2;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(caddy);
@@ -654,15 +653,77 @@ static void check_complete(int fd, short args, void *cbdata)
         prte_iof.complete(jdata);
     }
 
-    /* tell the PMIx subsystem the job is complete */
-    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    PMIx_server_deregister_nspace(pname.nspace, opcbfunc, &lock);
-    PRTE_PMIX_WAIT_THREAD(&lock);
-    PRTE_PMIX_DESTRUCT_LOCK(&lock);
+    /* Tell the PMIx subsystem the job is complete and resume the teardown
+     * when it says so.  This must NOT block: prte_event_base has no progress
+     * thread of its own (event.c: "PRTE tools block in their own loop over
+     * the event base"), so waiting here parks the ONE thread driving it and
+     * the HNP goes deaf - no RML, no IOF, no other job's state transitions -
+     * for as long as PMIx takes to tear the nspace down.  That is unbounded:
+     * the deregistration runs each peer's filesystem epilog.  On a persistent
+     * DVM it stalls every other job in flight. */
+    PMIx_server_deregister_nspace(pname.nspace, dvm_dereg_complete, caddy);
+    /* the continuation owns the caddy now */
+    return;
+}
+
+/* Completion of the nspace deregistration.  Runs on the PMIx progress
+ * thread, so it does nothing but hand the caddy back to ours - everything
+ * the continuation touches is a PRRTE object. */
+static void dvm_dereg_complete(pmix_status_t status, void *cbdata)
+{
+    prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(status);
+
+    PRTE_PMIX_THREADSHIFT(caddy, prte_event_base, check_complete_resume);
+}
+
+/* The remainder of check_complete, resumed once PMIx has finished
+ * deregistering the nspace.  Runs on the PRRTE progress thread. */
+static void check_complete_resume(int fd, short args, void *cbdata)
+{
+    prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
+    prte_session_t *session;
+    prte_job_t *jdata, *jptr;
+    prte_proc_t *proc;
+    int i, rc, nprocs;
+    prte_node_t *node;
+    prte_job_map_t *map;
+    int32_t index;
+    pmix_proc_t pname;
+    uint8_t command = PRTE_PMIX_PURGE_PROC_CMD;
+    pmix_data_buffer_t *buf;
+    pmix_pointer_array_t procs;
+    prte_app_context_t *app;
+    hwloc_obj_t obj;
+    hwloc_obj_type_t type;
+    hwloc_cpuset_t boundcpus, tgt;
+    bool takeall, sep, *sepptr = &sep;
+    prte_pmix_server_pset_t *pst, *pst2;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
+
+    PMIX_ACQUIRE_OBJECT(caddy);
+    jdata = caddy->jdata;
+    PMIX_LOAD_PROCID(&pname, jdata->nspace, PMIX_RANK_WILDCARD);
+
 
     if (!prte_persistent) {
-        /* update our exit status */
-        PRTE_UPDATE_EXIT_STATUS(jdata->exit_code);
+        /* Update our exit status.
+         *
+         * With child jobs reported separately, only the PRIMARY job's status
+         * is returned - a child's non-zero status is reported to the user but
+         * does not become the DVM's exit code.  Otherwise every job feeds the
+         * same status and PRTE_UPDATE_EXIT_STATUS keeps the first non-zero
+         * one, which is the documented default.  The primary job is the one
+         * the launcher created, local jobid 1; anything above that was
+         * spawned by it. */
+        if (report_child_jobs_separately() && 1 != PRTE_LOCAL_JOBID(jdata->nspace)) {
+            if (0 != jdata->exit_code) {
+                pmix_show_help("help-state-base.txt", "child-job-status", true,
+                               PRTE_LOCAL_JOBID_PRINT(jdata->nspace), jdata->exit_code);
+            }
+        } else {
+            PRTE_UPDATE_EXIT_STATUS(jdata->exit_code);
+        }
         /* if this is an abnormal termination, report it */
         if (jdata->state > PRTE_JOB_STATE_ERROR) {
             char *msg;
@@ -672,20 +733,22 @@ static void check_complete(int fd, short args, void *cbdata)
                 PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
                 bo.bytes = (char *) msg;
                 bo.size = strlen(msg);
-                PRTE_PMIX_CONSTRUCT_LOCK(&lock);
+                /* This one stays synchronous, but PMIx does the blocking:
+                 * with a NULL callback PMIx_server_IOF_deliver waits on its
+                 * OWN lock, so no PRRTE object is touched from the PMIx
+                 * thread.  Waiting is required rather than merely tidy - the
+                 * API borrows the source proc and the byte object BY POINTER
+                 * and both live on this stack.  The cost is acceptable here
+                 * where it is not for the deregistration above: this runs
+                 * only for a non-persistent (prterun) DVM already tearing
+                 * down after an abnormal exit, and the delivery is a bounded,
+                 * purely PMIx-internal write with no host upcall. */
                 rc = PMIx_server_IOF_deliver(&prte_process_info.myproc,
                                              PMIX_FWD_STDDIAG_CHANNEL,
-                                             &bo, NULL, 0, lkcbfunc, (void *) &lock);
-                if (PMIX_SUCCESS != rc) {
+                                             &bo, NULL, 0, NULL, NULL);
+                if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
                     PMIX_ERROR_LOG(rc);
-                } else {
-                    /* wait for completion */
-                    PRTE_PMIX_WAIT_THREAD(&lock);
-                    if (PMIX_SUCCESS != lock.status) {
-                        PMIX_ERROR_LOG(lock.status);
-                    }
                 }
-                PRTE_PMIX_DESTRUCT_LOCK(&lock);
                 free(msg);
             }
         }
@@ -815,31 +878,39 @@ release:
                     node->next_node_rank--;
                 }
                 /* release the resources held by the proc - only the first
-                 * cpu in the proc's cpuset was used to mark usage */
+                 * cpu in the proc's cpuset was used to mark usage.  The
+                 * do/while(0) lets a failure to decode the cpuset abandon just
+                 * the cpu restore: a "continue" here would also skip dropping
+                 * the proc from the node below, leaking it and leaving a
+                 * dangling entry behind in the node's proc array. */
                 if (NULL != proc->cpuset) {
-                    if (0 != (rc = hwloc_bitmap_list_sscanf(boundcpus, proc->cpuset))) {
-                        pmix_output(0, "hwloc_bitmap_sscanf returned %s for the string %s",
-                                    prte_strerror(rc), proc->cpuset);
-                        continue;
-                    }
-                    if (takeall) {
-                        tgt = boundcpus;
-                    } else {
-                        /* we only want to restore the first CPU of whatever region
-                         * the proc was bound to, so we have to first narrow the
-                         * bitmap down to only that region */
-                        hwloc_bitmap_andnot(prte_rmaps_base.available, boundcpus, node->available);
-                        /* the set bits in the result are the bound cpus that are still
-                         * marked as in-use */
-                        obj = hwloc_get_obj_inside_cpuset_by_type(node->topology->topo,
-                                                                  prte_rmaps_base.available, type, 0);
-                        if (NULL == obj) {
-                            pmix_output(0, "COULD NOT GET BOUND CPU FOR RESOURCE RELEASE");
-                            continue;
+                    do {
+                        if (0 != (rc = hwloc_bitmap_list_sscanf(boundcpus, proc->cpuset))) {
+                            pmix_output(0, "hwloc_bitmap_sscanf returned %s for the string %s",
+                                        prte_strerror(rc), proc->cpuset);
+                            break;
                         }
-                        tgt = obj->cpuset;
-                    }
-                    hwloc_bitmap_or(node->available, node->available, tgt);
+                        if (takeall) {
+                            tgt = boundcpus;
+                        } else {
+                            /* we only want to restore the first CPU of whatever region
+                             * the proc was bound to, so we have to first narrow the
+                             * bitmap down to only that region */
+                            hwloc_bitmap_andnot(prte_rmaps_base.available, boundcpus,
+                                                node->available);
+                            /* the set bits in the result are the bound cpus that are still
+                             * marked as in-use */
+                            obj = hwloc_get_obj_inside_cpuset_by_type(node->topology->topo,
+                                                                      prte_rmaps_base.available,
+                                                                      type, 0);
+                            if (NULL == obj) {
+                                pmix_output(0, "COULD NOT GET BOUND CPU FOR RESOURCE RELEASE");
+                                break;
+                            }
+                            tgt = obj->cpuset;
+                        }
+                        hwloc_bitmap_or(node->available, node->available, tgt);
+                    } while (0);
                 }
 
                 PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
@@ -853,10 +924,12 @@ release:
             }
             /* set the node location to NULL */
             pmix_pointer_array_set_item(map->nodes, index, NULL);
+            /* flag that the node is no longer in a map.  This has to precede
+             * the release: the map holds a reference, and dropping it may be
+             * the last one */
+            PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
             /* maintain accounting */
             PMIX_RELEASE(node);
-            /* flag that the node is no longer in a map */
-            PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
         }
         hwloc_bitmap_free(boundcpus);
         PMIX_RELEASE(map);
@@ -1126,12 +1199,14 @@ static void dvm_notify(int sd, short args, void *cbdata)
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
+            PMIX_RELEASE(caddy);
             return;
         }
         rc = PMIx_Data_pack(NULL, reply, &jdata->nspace, 1, PMIX_PROC_NSPACE);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
+            PMIX_RELEASE(caddy);
             return;
         }
         prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, reply);
