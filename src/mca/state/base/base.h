@@ -87,10 +87,8 @@ PRTE_EXPORT void prte_util_print_proc_state_machine(void);
 
 /* common state processing functions */
 PRTE_EXPORT void prte_state_base_local_launch_complete(int fd, short argc, void *cbdata);
-PRTE_EXPORT void prte_state_base_cleanup_job(int fd, short argc, void *cbdata);
 PRTE_EXPORT void prte_state_base_report_progress(int fd, short argc, void *cbdata);
 PRTE_EXPORT void prte_state_base_track_procs(int fd, short argc, void *cbdata);
-PRTE_EXPORT void prte_state_base_check_all_complete(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_state_base_check_fds(prte_job_t *jdata);
 PRTE_EXPORT void prte_state_base_notify_data_server(pmix_proc_t *target);
 
