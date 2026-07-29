@@ -268,19 +268,6 @@ static int test_session_registry(void)
     CHECK("session: duplicate id refused", PRTE_EXISTS == prte_set_session_object(dup));
     PMIX_RELEASE(dup);
 
-    /* relatedness: identity, parent/child, and unrelated */
-    CHECK("session: a session is related to itself", prte_sessions_related(s1, s1));
-    CHECK("session: unrelated sessions are not related", !prte_sessions_related(s1, s2));
-    PMIX_RETAIN(s2);
-    pmix_pointer_array_add(s1->children, s2);
-    CHECK("session: a child is related to its parent", prte_sessions_related(s1, s2));
-    /* ...but the relation as implemented is one-way: only s1's children are
-     * consulted.  Pin the behavior so a change to it is deliberate. */
-    CHECK("session: the relation is checked parent-to-child only",
-          !prte_sessions_related(s2, s1));
-    CHECK("session: NULL operands are not related", !prte_sessions_related(NULL, s1));
-    CHECK("session: NULL operands are not related (2)", !prte_sessions_related(s1, NULL));
-
     reset_globals();
     return failures;
 }

@@ -231,7 +231,6 @@ typedef struct{
     struct timeval timeout;  // time limit on session
     pmix_pointer_array_t *nodes;
     pmix_pointer_array_t *jobs;
-    pmix_pointer_array_t *children;
     /* namespaces entitled to spawn onto this session's nodes. Seeded with the
      * namespace the reservation was created for, then extended with each job
      * spawned into the session. Empty for the default session (which everyone
@@ -508,8 +507,6 @@ PRTE_EXPORT prte_session_t *prte_get_session_object_from_id(const char *id);
 PRTE_EXPORT prte_session_t *prte_get_session_object_from_refid(const char *refid);
 
 PRTE_EXPORT int prte_set_session_object(prte_session_t *session);
-
-PRTE_EXPORT bool prte_sessions_related(prte_session_t *session1, prte_session_t *session2);
 
 /* True if nspace is in session->owners, or session is the default session,
  * or nspace is the scheduler. */

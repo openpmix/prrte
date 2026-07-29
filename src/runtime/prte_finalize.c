@@ -130,10 +130,7 @@ int prte_finalize(void)
      * Note that release_allocation only cancels an allocation PRRTE itself
      * created dynamically and still tracks; a user's own resource-manager
      * allocation is left alone. So reaching it here is the correct cleanup
-     * for a DVM that exits still holding a sub-allocation, not a hazard.
-     *
-     * session->children is not walked separately: nothing in the tree ever
-     * populates it, and session_des empties it anyway. */
+     * for a DVM that exits still holding a sub-allocation, not a hazard. */
     if (NULL != prte_sessions) {
         for (n = 0; n < prte_sessions->size; n++) {
             session = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, n);
