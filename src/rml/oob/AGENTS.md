@@ -63,11 +63,36 @@ relaying is just "send again from here."
 ## The wire header
 
 Every message carries a `prte_oob_tcp_hdr_t` (`oob_tcp_hdr.h`): `origin`, final
-`dst`, `tag`, a sequence number, payload length, and a message `type`
-(`IDENT`/`PROBE` for the handshake, `USER` for a normal message). It is
-exchanged **only** among daemons of the same DVM, which all run the same build,
-so it is **not** a stable ABI — you may change its layout, but every daemon must
-agree; there is no versioning.
+`dst`, `tag`, a sequence number, payload length, the origin's boot `epoch`, and
+a message `type` (`IDENT`/`PROBE` for the handshake, `USER` for a normal
+message). It is exchanged **only** among daemons of the same DVM, which all run
+the same build, so it is **not** a stable ABI — you may change its layout, but
+every daemon must agree; there is no versioning.
+
+Two rules that are not obvious from the struct:
+
+- **Every multi-byte field is byte-order converted**, by
+  `MCA_OOB_TCP_HDR_HTON`/`_NTOH`. Add a field, extend both macros — a field
+  that is quietly not converted works perfectly until two daemons differ in
+  endianness.
+- **The whole struct goes on the wire, padding included.** The handshake builds
+  its header on the stack, so zero it before filling it in; leaving a field (or
+  the padding) undefined ships uninitialized bytes and trips every memory
+  checker.
+
+## Message-size bound
+
+`prte_max_msg_size` (MBytes, default 100) bounds what a *receiving* daemon will
+`malloc` for an incoming message. This matters more than a tuning knob usually
+does: the length comes straight off the wire, so without the check a peer
+dictates the allocation. It is enforced in two places — the normal recv path in
+`oob_tcp_sendrecv.c` and the handshake in `oob_tcp_connection.c` — and both
+respond by refusing the message and closing the connection with the
+`msg-too-big` help text.
+
+Note when trying to *test* this: PMIx compresses the launch buffer, so a large
+payload of repeated bytes shrinks to nothing on the wire and sails under any
+cap. Driving the cap to `0` is the unambiguous probe.
 
 ## Connection retry and backoff
 
@@ -108,5 +133,39 @@ In a launcher-less (bootstrapped) DVM daemons boot independently, so:
   thread, and never block on it.
 - **The header is not an ABI.** See above; do not add versioning, but do keep
   every daemon in a build in sync.
+- **Finish a send, never just free it.** A `prte_rml_send_t` that is abandoned
+  — no route, no peer, the connection torn down — must go through
+  `PRTE_RML_SEND_COMPLETE` so the caller's callback runs with a status.
+  `PMIX_RELEASE` frees the buffer and tells nobody, which is invisible for the
+  default callback and a lost message for RELM.
+- **The recv object owns its payload.** `prte_oob_tcp_recv_t`'s destructor
+  frees `data`; the paths that hand the payload on (`PMIx_Data_load` for local
+  delivery, the relay) null the pointer first. Add a third path and it has to
+  do the same, or free it.
+- **`prte_oob_base_send_nb` runs on a *hop*, and the hop can be
+  `PMIX_RANK_INVALID`** when the target sits behind a hole the tree cannot
+  reach past. Handle that before it reaches the peer lookup.
+- **Don't tear down a peer over one bad address.** `set_addr` parses a URI that
+  may name several addresses, and the peer object it is filling in may be an
+  existing one with a live socket and queued sends. A malformed address is a
+  reason to skip that address, not to remove the peer from `prte_oob_base.peers`.
+- **`prte_reachable.reachable()` returns a refcounted object**, and the
+  `pmix_list_t` of remote interfaces you build for it holds objects the list
+  destructor will not touch. `PMIX_RELEASE` the former, `PMIX_LIST_RELEASE` the
+  latter.
+- **`prte_oob_open` has real failure modes.** No usable interface (an
+  if_include/if_exclude that leaves nothing) and no bindable port both return an
+  error with a `show_help` explaining it. Callers must not walk on.
 - **Warnings are errors.** Debug builds enable `--enable-devel-check`; keep the
   tree warning-free.
+
+## Testing
+
+`prte_oob_split_and_resolve` — the interface-selection parser — is covered by
+`test/unit/rml/test_rml`, which runs under `make check` with no DVM. Everything
+else in this directory needs sockets between real daemons and lives in the
+`test_rml` phase of `contrib/dockerswarm/run-tests.sh`: relaying through an
+intermediate hop (which needs `--prtemca rml_base_radix 2`, since a ten-node
+DVM at the default radix 64 is flat), a payload large enough to force partial
+writes and reads, the message-size guard, interface include/exclude actually
+binding, and the teardown path when a daemon dies under a live DVM.
