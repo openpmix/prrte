@@ -31,6 +31,12 @@
 #ifdef HAVE_UNISTD_H
 #    include <unistd.h>
 #endif
+#ifdef HAVE_SYS_TYPES_H
+#    include <sys/types.h>
+#endif
+#ifdef HAVE_SYS_STAT_H
+#    include <sys/stat.h>
+#endif
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
@@ -273,6 +279,54 @@ BEGIN_C_DECLS
  * second implementation of a rule this easy to get wrong is a second thing
  * to keep right; configure refuses such a PMIx instead.
  */
+
+/*
+ * Interpreters for option values that more than one tool accepts.  These
+ * live here, and not in a tool's main(), because a tool's main() cannot be
+ * unit tested - see test/unit/tools.
+ */
+
+/**
+ * Interpret the value of "--pid": either a decimal PID, or "file:<path>"
+ * naming a file whose first token is one.
+ *
+ * @param value     the option's value
+ * @param pid       filled in on success
+ * @param filename  if non-NULL, set to the path within @c value when the
+ *                  "file:" form was used (borrowed, not a copy), else NULL.
+ *                  Callers use it to name the file in an error message.
+ *
+ * @retval PRTE_SUCCESS
+ * @retval PRTE_ERR_BAD_PARAM          neither form, or out of range
+ * @retval PRTE_ERR_FILE_OPEN_FAILURE  the named file could not be opened
+ * @retval PRTE_ERR_FILE_READ_FAILURE  the file held no readable PID
+ */
+PRTE_EXPORT int prte_parse_pid_option(const char *value, pid_t *pid,
+                                      const char **filename);
+
+/**
+ * Append the contents of an appfile to an argument vector, one app
+ * context per line, ':'-delimited as if they had been typed.
+ *
+ * @param filename  the appfile
+ * @param argv      argv to append to - may already hold the tool's own
+ *                  arguments, and is created if it points at NULL
+ *
+ * @retval PRTE_SUCCESS
+ * @retval PRTE_ERR_FILE_OPEN_FAILURE
+ */
+PRTE_EXPORT int prte_load_appfile(const char *filename, char ***argv);
+
+/**
+ * Interpret an octal umask string, as handed to a daemon in
+ * PRTE_DAEMON_UMASK_VALUE.
+ *
+ * @return true (and fills @c mask) only for a complete, in-range octal
+ *         value - an empty or trailing-garbage string is refused rather
+ *         than silently read as 0, which would leave every file the
+ *         daemon creates world-writable.
+ */
+PRTE_EXPORT bool prte_parse_umask(const char *value, mode_t *mask);
 
 END_C_DECLS
 

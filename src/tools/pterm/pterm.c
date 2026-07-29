@@ -91,22 +91,12 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/runtime.h"
 
-typedef struct {
-    prte_pmix_lock_t lock;
-    pmix_info_t *info;
-    size_t ninfo;
-} mylock_t;
-
-static pmix_list_t job_info;
-static pmix_nspace_t myjobid = {0};
-
 static pmix_proc_t myproc;
 static bool forcibly_die = false;
 static prte_event_t term_handler;
 static int term_pipe[2];
-static pmix_mutex_t prun_abort_inprogress_lock = PMIX_MUTEX_STATIC_INIT;
+static pmix_mutex_t pterm_abort_inprogress_lock = PMIX_MUTEX_STATIC_INIT;
 static prte_event_base_t *myevbase = NULL;
-static bool proxyrun = false;
 static bool verbose = false;
 
 static void abort_signal_callback(int signal);
@@ -116,17 +106,8 @@ static void infocb(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *
                    pmix_release_cbfunc_t release_fn, void *release_cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
-    PRTE_HIDE_UNUSED_PARAMS(info, ninfo);
+    PRTE_HIDE_UNUSED_PARAMS(info, ninfo, status);
 
-#if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
-    /* The callback should likely not have been called
-     * see the comment below */
-    if (PMIX_ERR_COMM_FAILURE == status) {
-        return;
-    }
-#else
-    PRTE_HIDE_UNUSED_PARAMS(status);
-#endif
     PMIX_ACQUIRE_OBJECT(lock);
 
     if (verbose) {
@@ -154,41 +135,35 @@ static void evhandler(size_t evhdlr_registration_id, pmix_status_t status,
                       pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
     prte_pmix_lock_t *lock = NULL;
-    int jobstatus = 0;
-    pmix_nspace_t jobid = {0};
     size_t n;
     char *msg = NULL;
     PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, source, results, nresults);
 
     if (verbose) {
-        pmix_output(0, "PRUN: EVHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
+        pmix_output(0, "PTERM: EVHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
     }
 
-    /* we should always have info returned to us - if not, there is
-     * nothing we can do */
+    /* we are registered only for loss of the connection to the DVM, which
+     * is how we learn that the termination we ordered has completed */
     if (NULL != info) {
         for (n = 0; n < ninfo; n++) {
-            if (0 == strncmp(info[n].key, PMIX_JOB_TERM_STATUS, PMIX_MAX_KEYLEN)) {
-                jobstatus = prte_pmix_convert_status(info[n].value.data.status);
-            } else if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {
-                PMIX_LOAD_NSPACE(jobid, info[n].value.data.proc->nspace);
-            } else if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
+            if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
                 lock = (prte_pmix_lock_t *) info[n].value.data.ptr;
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_TEXT_MESSAGE, PMIX_MAX_KEYLEN)) {
                 msg = info[n].value.data.string;
             }
         }
-        if (verbose && PMIX_CHECK_NSPACE(jobid, myjobid)) {
-            pmix_output(0, "JOB %s COMPLETED WITH STATUS %d", PRTE_JOBID_PRINT(jobid), jobstatus);
-        }
     }
     if (NULL != lock) {
-        /* save the status */
-        lock->status = jobstatus;
+        lock->status = PRTE_SUCCESS;
         if (NULL != msg) {
             lock->msg = strdup(msg);
         }
-        /* release the lock */
+        /* release the lock.  This is a PMIx callback, so it runs on the
+         * PMIx progress thread - but pterm's waiter blocks in the lock's
+         * condition variable and does not drive a PRRTE event base, so
+         * the direct wakeup is correct here.  See the thread rule in the
+         * top-level AGENTS.md before copying this anywhere that does. */
         PRTE_PMIX_WAKEUP_THREAD(lock);
     }
 
@@ -219,44 +194,51 @@ int main(int argc, char *argv[])
     pmix_cli_item_t *opt;
     prte_schizo_base_module_t *schizo;
 
-    /* init the globals */
-    PMIX_CONSTRUCT(&job_info, pmix_list_t);
-
     prte_tool_basename = pmix_basename(argv[0]);
     prte_tool_actual = "pterm";
     gethostname(hostname, sizeof(hostname));
     PMIX_CONSTRUCT(&results, pmix_cli_result_t);
 
+    /* every failure through the end of setup exits with 1: main() can
+     * only hand the shell the low eight bits of what it returns, so a
+     * PRRTE error code arrives as a meaningless 251 or 255 */
     rc = prte_init_minimum();
     if (PRTE_SUCCESS != rc) {
-        return rc;
+        return 1;
     }
 
     /* we always need the prrte and pmix params */
     rc = prte_schizo_base_parse_prte(argc, 0, argv, NULL);
     if (PRTE_SUCCESS != rc) {
-        return rc;
+        return 1;
     }
 
     rc = prte_schizo_base_parse_pmix(argc, 0, argv, NULL);
     if (PRTE_SUCCESS != rc) {
-        return rc;
+        return 1;
     }
 
-    /* init the tiny part of PRTE we use */
-    prte_init_util(PRTE_PROC_MASTER);
+    /* Init the tiny part of PRTE we use.  We declare ourselves MASTER so
+     * that prte_register_params resolves our tmpdir the same way the HNP
+     * resolved its own (prte_local_tmpdir_base) - we have to look for the
+     * DVM's rendezvous file exactly where the DVM put it.  A failure here
+     * must not be carried into the connection attempt. */
+    rc = prte_init_util(PRTE_PROC_MASTER);
+    if (PRTE_SUCCESS != rc) {
+        return 1;
+    }
 
     /* open the SCHIZO framework */
     rc = pmix_mca_base_framework_open(&prte_schizo_base_framework,
                                       PMIX_MCA_BASE_OPEN_DEFAULT);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
-        return rc;
+        return 1;
     }
 
     if (PRTE_SUCCESS != (rc = prte_schizo_base_select())) {
         PRTE_ERROR_LOG(rc);
-        return rc;
+        return 1;
     }
 
     /* look for any personality specification */
@@ -311,10 +293,17 @@ int main(int argc, char *argv[])
                 printf("%s", ptr);
                 free(ptr);
             }
-            return -1;
+            free(param);
+            /* a PRRTE error code returned from main() is a negative number,
+             * which the shell reports as 251 or 255 - say "failed" in a way
+             * a caller can act on */
+            return 1;
         }
         free(param);
     }
+
+    // report our verbosity setting to the debug output above
+    verbose = pmix_cmd_line_is_taken(&results, PRTE_CLI_VERBOSE);
 
     /* setup options */
     PMIX_INFO_LIST_START(tinfo);
@@ -326,62 +315,54 @@ int main(int argc, char *argv[])
     rank = 0;
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_TOOL_RANK, &rank, PMIX_PROC_RANK);
 
-    if (pmix_cmd_line_is_taken(&results, "system-server-first")) {
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_SYS_SERVER_FIRST)) {
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
-    } else if (pmix_cmd_line_is_taken(&results, "system-server-only")) {
+    } else if (pmix_cmd_line_is_taken(&results, PRTE_CLI_SYS_SERVER_ONLY)) {
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_TO_SYSTEM, NULL, PMIX_BOOL);
     }
-    opt = pmix_cmd_line_get_param(&results, "wait-to-connect");
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_WAIT_TO_CONNECT);
     if (NULL != opt) {
         ui32 = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
     }
-    opt = pmix_cmd_line_get_param(&results, "num-connect-retries");
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_NUM_CONNECT_RETRIES);
     if (NULL != opt) {
         ui32 = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
     }
-    opt = pmix_cmd_line_get_param(&results, "pid");
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_PID);
     if (NULL != opt) {
-        /* see if it is an integer value */
-        char *leftover;
-        leftover = NULL;
-        pid = strtol(opt->values[0], &leftover, 10);
-        if (NULL == leftover || 0 == strlen(leftover)) {
-            /* it is an integer */
+        ret = prte_parse_pid_option(opt->values[0], &pid, (const char **) &ptr);
+        switch (ret) {
+        case PRTE_SUCCESS:
             PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
-        } else if (0 == strncasecmp(opt->values[0], "file", 4)) {
-            FILE *fp;
-            /* step over the file: prefix */
-            param = strchr(opt->values[0], ':');
-            if (NULL == param) {
-                /* malformed input */
-                pmix_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
-                               "--pid", opt->values[0], "file:path");
-                return PRTE_ERR_BAD_PARAM;
-            }
-            ++param;
-            fp = fopen(param, "r");
-            if (NULL == fp) {
-                pmix_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
-                               "--pid", opt->values[0], param);
-                return PRTE_ERR_BAD_PARAM;
-            }
-            rc = fscanf(fp, "%lu", (unsigned long *) &pid);
-            if (1 != rc) {
-                /* if we were unable to obtain the single conversion we
-                 * require, then error out */
-                pmix_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
-                               "--pid", opt->values[0], param);
-                return PRTE_ERR_BAD_PARAM;
-            }
-            fclose(fp);
-            PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
+            break;
+        case PRTE_ERR_FILE_OPEN_FAILURE:
+            pmix_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
+                           "--" PRTE_CLI_PID, opt->values[0], ptr);
+            PMIX_INFO_LIST_RELEASE(tinfo);
+            return 1;
+        case PRTE_ERR_FILE_READ_FAILURE:
+            pmix_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
+                           "--" PRTE_CLI_PID, opt->values[0], ptr);
+            PMIX_INFO_LIST_RELEASE(tinfo);
+            return 1;
+        default:
+            pmix_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
+                           "--" PRTE_CLI_PID, opt->values[0], "file:path");
+            PMIX_INFO_LIST_RELEASE(tinfo);
+            return 1;
         }
     }
 
+    /* if they told us which DVM to talk to by name, pass that along */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_NAMESPACE);
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_SERVER_NSPACE, opt->values[0], PMIX_STRING);
+    }
+
     /* if they specified the URI, then pass it along */
-    opt = pmix_cmd_line_get_param(&results, "dvm-uri");
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DVM_URI);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_SERVER_URI, opt->values[0], PMIX_STRING);
     }
@@ -428,11 +409,14 @@ int main(int argc, char *argv[])
     signal(SIGINT, abort_signal_callback);
     signal(SIGHUP, abort_signal_callback);
 
-    /* now initialize PMIx - we have to indicate we are a launcher so that we
-     * will provide rendezvous points for tools to connect to us */
+    /* now initialize PMIx and connect to the DVM we are to terminate */
     if (PMIX_SUCCESS != (ret = PMIx_tool_init(&myproc, iptr, ninfo))) {
-        fprintf(stderr, "%s failed to initialize, likely due to no DVM being available\n",
-                prte_tool_basename);
+        /* "no DVM available" is only the most common cause - report what
+         * PMIx actually said, since an ambiguous or unreachable server
+         * looks identical to the user otherwise */
+        fprintf(stderr, "%s failed to initialize: %s (%d)\n",
+                prte_tool_basename, PMIx_Error_string(ret), ret);
+        PMIX_INFO_FREE(iptr, ninfo);
         exit(1);
     }
     PMIX_INFO_FREE(iptr, ninfo);
@@ -448,43 +432,45 @@ int main(int argc, char *argv[])
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     flag = true;
     PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_TERMINATE, &flag, PMIX_BOOL);
-    if (!proxyrun) {
-        fprintf(stderr, "TERMINATING DVM...");
-    }
+    fprintf(stderr, "TERMINATING DVM...");
+
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
     rc = PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void *) &lock);
     if (PMIX_SUCCESS == rc) {
-#if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
-        /* There is a bug in PMIx 3.0.0 up to 3.0.2 that causes the callback never
-         * being called when the server terminates. The callback might be eventually
-         * called though then the connection to the server closes with
-         * status PMIX_ERR_COMM_FAILURE */
-        poll(NULL, 0, 1000);
-        infocb(PMIX_SUCCESS, NULL, 0, (void *) &lock, NULL, NULL);
-#endif
+        /* the callback will fire when the DVM acknowledges the order */
         PRTE_PMIX_WAIT_THREAD(&lock);
         PRTE_PMIX_DESTRUCT_LOCK(&lock);
-        /* wait for connection to depart */
+        /* wait for the connection to depart, which is how we know the
+         * DVM actually went away and not just that it heard us */
         PRTE_PMIX_WAIT_THREAD(&rellock);
         PRTE_PMIX_DESTRUCT_LOCK(&rellock);
+        fprintf(stderr, "DONE\n");
+        rc = PRTE_SUCCESS;
     } else {
-        PRTE_PMIX_WAIT_THREAD(&lock);
+        /* PMIx did not accept the request, so infocb will never be
+         * called - waiting on that lock would hang here forever, which
+         * is precisely what this used to do */
+        PRTE_PMIX_DESTRUCT_LOCK(&lock);
         PRTE_PMIX_DESTRUCT_LOCK(&rellock);
+        fprintf(stderr, "FAILED: %s (%d)\n", PMIx_Error_string(rc), rc);
+        rc = 1;
     }
-    /* wait for the connection to go away */
-    fprintf(stderr, "DONE\n");
-#if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
-    return rc;
-#endif
 
     /* cleanup and leave */
     ret = PMIx_tool_finalize();
     if (PRTE_SUCCESS == rc && PMIX_SUCCESS != ret) {
-        rc = ret;
+        rc = 1;
     }
     return rc;
 }
 
+/*
+ * Runs on the progress thread when the signal handler below pokes
+ * term_pipe.  This is the "safe place" the handler cannot itself reach,
+ * so the actual teardown belongs here - not inside the already-aborting
+ * branch, which is where it used to live, leaving the first ctrl-c
+ * with nothing to do but take the lock.
+ */
 static void clean_abort(int fd, short flags, void *arg)
 {
     PRTE_HIDE_UNUSED_PARAMS(fd, flags, arg);
@@ -492,59 +478,57 @@ static void clean_abort(int fd, short flags, void *arg)
     /* if we have already ordered this once, don't keep
      * doing it to avoid race conditions
      */
-    if (pmix_mutex_trylock(&prun_abort_inprogress_lock)) { /* returns 1 if already locked */
+    if (pmix_mutex_trylock(&pterm_abort_inprogress_lock)) { /* returns 1 if already locked */
         if (forcibly_die) {
             /* exit with a non-zero status */
             exit(1);
         }
         fprintf(stderr,
-                "prun: abort is already in progress...hit ctrl-c again to forcibly terminate\n\n");
+                "%s: abort is already in progress...hit ctrl-c again to forcibly terminate\n\n",
+                prte_tool_basename);
         forcibly_die = true;
         /* reset the event */
         prte_event_add(&term_handler, NULL);
-        PMIx_tool_finalize();
         return;
     }
+
+    /* we asked the DVM to terminate and are waiting on that; the user has
+     * given up on us, so drop the connection and go away.  Nothing here
+     * has to be undone in the DVM - a job control request either reached
+     * it or did not */
+    fflush(stderr);
+    PMIx_tool_finalize();
+    exit(PRTE_ERROR_DEFAULT_EXIT_CODE);
 }
 
-static struct timeval current, last = {0, 0};
 static bool first = true;
+static bool second = true;
 
 /*
- * Attempt to terminate the job and wait for callback indicating
- * the job has been abprted.
+ * Attempt to terminate cleanly, but do not let a wedged connection trap
+ * the user: the second ctrl-c warns, the third one takes the process out
+ * from under whatever it is stuck in.
  */
 static void abort_signal_callback(int fd)
 {
     uint8_t foo = 1;
-    char *msg
-        = "Abort is in progress...hit ctrl-c again within 5 seconds to forcibly terminate\n\n";
+    char *msg = "Abort is in progress...hit ctrl-c again to forcibly terminate\n\n";
     PRTE_HIDE_UNUSED_PARAMS(fd);
 
-    /* if this is the first time thru, just get
-     * the current time
-     */
     if (first) {
         first = false;
-        gettimeofday(&current, NULL);
+        /* tell the event lib to attempt to abnormally terminate */
+        if (-1 == write(term_pipe[1], &foo, 1)) {
+            _exit(1);
+        }
+    } else if (second) {
+        second = false;
+        if (-1 == write(2, (void *) msg, strlen(msg))) {
+            _exit(1);
+        }
     } else {
-        /* get the current time */
-        gettimeofday(&current, NULL);
-        /* if this is within 5 seconds of the
-         * last time we were called, then just
-         * exit - we are probably stuck
-         */
-        if ((current.tv_sec - last.tv_sec) < 5) {
-            exit(1);
-        }
-        if (-1 == write(1, (void *) msg, strlen(msg))) {
-            exit(1);
-        }
-    }
-    /* save the time */
-    last.tv_sec = current.tv_sec;
-    /* tell the event lib to attempt to abnormally terminate */
-    if (-1 == write(term_pipe[1], &foo, 1)) {
-        exit(1);
+        /* a signal handler may not call exit(), and by now there is
+         * nothing left worth flushing */
+        _exit(1);
     }
 }

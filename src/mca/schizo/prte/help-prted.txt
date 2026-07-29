@@ -106,13 +106,13 @@ option to the help request as "--help <option>".
 | <uri>"               | publish/lookup data server                    |
 +----------------------+-----------------------------------------------+
 
-Report bugs to %s
+%s
 #
 [version]
 
 %s (%s) %s
 
-Report bugs to %s
+%s
 #
 [dvm-master-uri]
 

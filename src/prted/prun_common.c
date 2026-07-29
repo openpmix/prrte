@@ -441,46 +441,28 @@ int prun_common(pmix_cli_result_t *results,
 
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_PID);
     if (NULL != opt) {
-        /* see if it is an integer value */
-        char *leftover;
-        leftover = NULL;
-        pid = strtol(opt->values[0], &leftover, 10);
-        if (NULL == leftover || 0 == strlen(leftover)) {
-            /* it is an integer */
+        rc = prte_parse_pid_option(opt->values[0], &pid, (const char **) &param);
+        switch (rc) {
+        case PRTE_SUCCESS:
             PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
-        } else if (0 == strncasecmp(opt->values[0], "file", 4)) {
-            FILE *fp;
-            /* step over the file: prefix */
-            param = strchr(opt->values[0], ':');
-            if (NULL == param) {
-                /* malformed input */
-                pmix_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
-                               "--pid", opt->values[0], "file:path");
-                return PRTE_ERR_BAD_PARAM;
-            }
-            ++param;
-            fp = fopen(param, "r");
-            if (NULL == fp) {
-                pmix_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
-                               "--pid", opt->values[0], param);
-                return PRTE_ERR_BAD_PARAM;
-            }
-            rc = fscanf(fp, "%lu", (unsigned long *) &pid);
-            if (1 != rc) {
-                /* if we were unable to obtain the single conversion we
-                 * require, then error out */
-                pmix_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
-                               "--pid", opt->values[0], param);
-                fclose(fp);
-                return PRTE_ERR_BAD_PARAM;
-            }
-            fclose(fp);
-            PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
-        } else { /* a string that's neither an integer nor starts with 'file:' */
-                pmix_show_help("help-prun.txt", "bad-option-input", true,
-                               prte_tool_basename, "--pid",
-                               opt->values[0], "file:path");
-                return PRTE_ERR_BAD_PARAM;
+            break;
+        case PRTE_ERR_FILE_OPEN_FAILURE:
+            pmix_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
+                           "--" PRTE_CLI_PID, opt->values[0], param);
+            PMIX_INFO_LIST_RELEASE(tinfo);
+            return PRTE_ERR_BAD_PARAM;
+        case PRTE_ERR_FILE_READ_FAILURE:
+            /* we could not obtain the single conversion we require */
+            pmix_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
+                           "--" PRTE_CLI_PID, opt->values[0], param);
+            PMIX_INFO_LIST_RELEASE(tinfo);
+            return PRTE_ERR_BAD_PARAM;
+        default: /* neither an integer nor a usable 'file:' spec */
+            pmix_show_help("help-prun.txt", "bad-option-input", true,
+                           prte_tool_basename, "--" PRTE_CLI_PID,
+                           opt->values[0], "file:path");
+            PMIX_INFO_LIST_RELEASE(tinfo);
+            return PRTE_ERR_BAD_PARAM;
         }
     }
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_NAMESPACE);

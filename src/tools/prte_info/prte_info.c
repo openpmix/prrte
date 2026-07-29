@@ -125,16 +125,19 @@ int main(int argc, char *argv[])
     }
 
     /* open the SCHIZO framework */
+    /* every failure below exits with 1: main() hands the shell the low
+     * eight bits of what it returns, so a PRRTE error code arrives as a
+     * meaningless 251 or 255 */
     ret = pmix_mca_base_framework_open(&prte_schizo_base_framework,
                                        PMIX_MCA_BASE_OPEN_DEFAULT);
     if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
-        return ret;
+        return 1;
     }
 
     if (PRTE_SUCCESS != (ret = prte_schizo_base_select())) {
         PRTE_ERROR_LOG(ret);
-        return ret;
+        return 1;
     }
 
     /* detect if we are running as a proxy and select the active
@@ -156,20 +159,22 @@ int main(int argc, char *argv[])
         if (PRTE_ERR_SILENT != ret) {
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(ret));
         }
-        return ret;
+        return 1;
     }
     // we do NOT accept arguments other than our own
     if (NULL != results.tail) {
         str = PMIx_Argv_join(results.tail, ' ');
         if (0 != strcmp(str, argv[0])) {
-            ptr = pmix_show_help_string("help-pterm.txt", "no-args", false,
+            ptr = pmix_show_help_string("help-prte-info.txt", "no-args", false,
                                         prte_tool_basename, str, prte_tool_basename);
             free(str);
             if (NULL != ptr) {
                 printf("%s", ptr);
                 free(ptr);
             }
-            return -1;
+            /* a negative return from main() reaches the shell as its
+             * low eight bits - say "failed" in a way a caller can use */
+            return 1;
         }
         free(str);
     }
@@ -282,7 +287,7 @@ int main(int argc, char *argv[])
         /* register params for pmix */
         if (PMIX_SUCCESS != (ret = pmix_register_params())) {
             fprintf(stderr, "pmix_register_params failed with %d\n", ret);
-            return PMIX_ERROR;
+            return 1;
         }
 
 
@@ -425,14 +430,11 @@ int main(int argc, char *argv[])
             } else if (NULL == opt->values) {
                 pmix_info_show_pmix_package();
                 pmix_info_show_pmix_version();
-                pmix_info_show_component_version("PRRTE", &mca_types, &prte_component_map, pmix_info_type_all,
+                /* we are under the "PMIx CONFIGURATION" banner - showing
+                 * the PRRTE components here again was a copy/paste slip */
+                pmix_info_show_component_version("PMIx", &mca_types, &prte_component_map, pmix_info_type_all,
                                                  pmix_info_component_all, pmix_info_ver_full,
                                                  pmix_info_ver_all);
-                if (include_pmix) {
-                    pmix_info_show_component_version("PMIx", &mca_types, &prte_component_map, pmix_info_type_all,
-                                                     pmix_info_component_all, pmix_info_ver_full,
-                                                     pmix_info_ver_all);
-                }
 
             } else {
                 if (0 == strcasecmp(opt->values[0], "prte") ||

@@ -68,13 +68,13 @@ Terminate an instance of the PMIx Reference RTE (PRRTE) DVM
 |                      | root-execution guard applies                  |
 +----------------------+-----------------------------------------------+
 
-Report bugs to %s
+%s
 #
 [version]
 
 %s (%s) %s
 
-Report bugs to %s
+%s
 #
 [allow-run-as-root]
 
