@@ -1105,6 +1105,252 @@ test_schizo() {
     cleanup_swarm
 }
 
+########################################################################
+# state: the machine that sequences every job, and the runtime options
+#        it translates into per-job attributes
+########################################################################
+test_state() {
+    local out rc n t0 t1 dt
+
+    banner "state: a boolean runtime option set to false must be OFF"
+    # Every consumer of a boolean runtime option tests it by PRESENCE --
+    # prte_get_attribute(&attrs, KEY, NULL, PMIX_BOOL) is true as soon as the
+    # key is on the list, whatever value it holds.  The directive parser
+    # stored the parsed boolean AS THE VALUE, so "error-nonzero-status=false"
+    # left the attribute present-and-false, which every one of those call
+    # sites read as ENABLED.  Asking for the option to be off turned it on.
+    #
+    # The daemon's odls consults exactly that attribute when a child exits
+    # non-zero: with it set, the proc goes to TERM_NON_ZERO and the job is
+    # torn down with "exited with non-zero status"; without it, the exit is
+    # a normal termination.  So the message is the observable, and it takes
+    # a real DVM with a real forked child to produce.
+    cleanup_swarm
+    out=$(RUN 'prterun --host node2:1 -np 1 --runtime-options error-nonzero-status=false /bin/false' 2>&1)
+    echo "$out" | grep -q 'non-zero status' \
+        && bad "error-nonzero-status=false still treated a non-zero exit as an error" \
+        || ok "error-nonzero-status=false let a non-zero exit terminate normally"
+
+    # ... and the same option left at true must still report, so the fix
+    # cannot have been "ignore the directive entirely"
+    out=$(RUN 'prterun --host node2:1 -np 1 --runtime-options error-nonzero-status=true /bin/false' 2>&1)
+    echo "$out" | grep -q 'non-zero status' \
+        && ok "error-nonzero-status=true still reports a non-zero exit" \
+        || bad "error-nonzero-status=true no longer reports a non-zero exit: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    # a bare directive carries no '=' and means true
+    out=$(RUN 'prterun --host node2:1 -np 1 --runtime-options error-nonzero-status /bin/false' 2>&1)
+    echo "$out" | grep -q 'non-zero status' \
+        && ok "a bare error-nonzero-status means true" \
+        || bad "a bare error-nonzero-status was not honored: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    banner "state: a boolean runtime option that is not already set must go OFF"
+    # prte_set_attribute only DROPS a boolean when the key is already on the
+    # list; when it is not, "opt=false" is ADDED with a false value -- and
+    # every consumer tests these by presence, so the option reads as ON.
+    # notifyerrors is the probe because set_runtime_options checks it itself:
+    # notifications can never be delivered unless the job is recoverable or
+    # continuous, so a notifyerrors that is ON is refused with an explanatory
+    # message.  Asking for it to be OFF must therefore let the job RUN.
+    out=$(RUN 'prterun --host node2:1 -np 1 --runtime-options notifyerrors=false hostname' 2>&1)
+    echo "$out" | grep -q 'NOTIFYERRORS was set to true' \
+        && bad "notifyerrors=false was recorded as ON and refused the job" \
+        || ok "notifyerrors=false left the option off"
+    echo "$out" | grep -qE '^node2$' \
+        && ok "and the job ran" \
+        || bad "notifyerrors=false did not run the job: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    # ... while asking for it ON, with nothing to make the job survivable,
+    # must still be refused -- the fix cannot be "ignore the directive"
+    out=$(RUN 'prterun --host node2:1 -np 1 --runtime-options notifyerrors hostname' 2>&1)
+    echo "$out" | grep -q 'NOTIFYERRORS was set to true' \
+        && ok "a bare notifyerrors is still caught as an unusable combination" \
+        || bad "a bare notifyerrors was silently accepted: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    banner "state: a directive AFTER 'timeout=' is still applied"
+    # The directive walk used its loop index as a scratch variable: the
+    # timeout branch assigned the converted seconds to it, so "timeout=60,..."
+    # resumed the walk at index 60 -- past the end of the option array.  The
+    # out-of-bounds slot is then run through the whole if-chain and matches
+    # nothing, so the spec is rejected as "not recognized" even though every
+    # directive in it is valid.  notifyerrors is again the probe: reaching it
+    # produces the bad-combination message, so the two failure modes (dropped
+    # vs. bogus rejection) are both distinguishable from success.
+    out=$(RUN 'prterun --host node2:1 -np 1 --runtime-options timeout=60,notifyerrors hostname' 2>&1)
+    echo "$out" | grep -q 'not recognized' \
+        && bad "a valid spec after 'timeout=' was rejected as unrecognized (walked off the option array)" \
+        || ok "a valid spec after 'timeout=' was not falsely rejected"
+    echo "$out" | grep -q 'NOTIFYERRORS was set to true' \
+        && ok "the directive after 'timeout=' was parsed" \
+        || bad "the directive after 'timeout=' was dropped: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    # same defect in the max-restarts branch, which reused the index to walk
+    # the app array -- there the later directives are silently dropped
+    out=$(RUN 'prterun --host node2:1 -np 1 --runtime-options max-restarts=3,notifyerrors hostname' 2>&1)
+    echo "$out" | grep -q 'NOTIFYERRORS was set to true' \
+        && ok "the directive after 'max-restarts=' was parsed" \
+        || bad "the directive after 'max-restarts=' was dropped: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    # and the timeout itself must still work -- the fix must not have broken
+    # the branch it repaired
+    t0=$(date +%s)
+    RUN 'prterun --host node2:1 -np 1 --runtime-options timeout=5 sleep 120' >/dev/null 2>&1
+    t1=$(date +%s); dt=$((t1-t0))
+    [ "$dt" -lt 60 ] && ok "runtime-options timeout=5 still killed the job (${dt}s)" \
+                     || bad "runtime-options timeout=5 did not take effect (${dt}s)"
+
+    banner "state: report-child-jobs-separately is implemented, not just documented"
+    # The directive is listed in the runtime-options help text and passes
+    # schizo's validator, but the parser that turns a directive into a job
+    # attribute had no branch for it at all - so the documented option was
+    # refused as unrecognized, and its only reader was inside a handler no
+    # component registers.  It now sets PRTE_JOB_REPORT_CHILD_SEP and the
+    # DVM teardown consults it when deciding whose exit status is returned.
+    out=$(RUN 'prterun --host node2:1 -np 1 --runtime-options report-child-jobs-separately hostname' 2>&1)
+    echo "$out" | grep -q 'not recognized' \
+        && bad "the documented report-child-jobs-separately directive is still refused" \
+        || ok "report-child-jobs-separately is accepted"
+    echo "$out" | grep -qE '^node2$' \
+        && ok "and the job runs under it" \
+        || bad "report-child-jobs-separately did not run the job: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    out=$(RUN 'prterun --host node2:1 -np 1 --runtime-options report-child-jobs-separately=false hostname' 2>&1)
+    echo "$out" | grep -qE '^node2$' \
+        && ok "and so is the explicit =false form" \
+        || bad "report-child-jobs-separately=false was refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    # The PRIMARY job's status must still be returned when the option is on -
+    # only a job it SPAWNED is reported separately.
+    RUN 'prterun --host node2:1 -np 1 --runtime-options report-child-jobs-separately /bin/false' >/dev/null 2>&1
+    rc=$?
+    [ "$rc" != 0 ] && ok "the primary job's non-zero exit is still returned (rc=$rc)" \
+                   || bad "report-child-jobs-separately swallowed the PRIMARY job's exit status"
+    RUN 'prterun --host node2:1 -np 1 --runtime-options report-child-jobs-separately /bin/true' >/dev/null 2>&1
+    rc=$?
+    [ "$rc" = 0 ] && ok "and a clean primary job still exits zero" \
+                  || bad "a clean job under report-child-jobs-separately exited $rc"
+
+    # The same policy also has a STANDALONE spelling, defined in prterun's and
+    # mpirun's option tables and documented in both - but nothing read it, so
+    # the flag parsed and was silently discarded.
+    out=$(RUN 'prterun --host node2:1 --report-child-jobs-separately -np 1 hostname' 2>&1)
+    echo "$out" | grep -qE '^node2$' \
+        && ok "the standalone --report-child-jobs-separately flag runs a job" \
+        || bad "--report-child-jobs-separately broke the launch: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    RUN 'prterun --host node2:1 --report-child-jobs-separately -np 1 /bin/false' >/dev/null 2>&1
+    rc=$?
+    [ "$rc" != 0 ] && ok "and still returns the primary job's status (rc=$rc)" \
+                   || bad "--report-child-jobs-separately swallowed the PRIMARY job's exit status"
+
+    banner "state: a CHILD job's exit status is withheld only when asked for"
+    # This is the case the option exists for, and it needs a real parent/child
+    # job pair -- examples/dynamic.c, the tree's PMIx_Spawn example, which
+    # build.sh installs as "dynamic".  Rank 0 spawns "client" from its cwd, so
+    # the child's exit status is whatever we put there: a script that exits 7.
+    # The parent itself exits 0.
+    #
+    # Without the option the launcher returns the first non-zero status from
+    # EITHER job, so prterun must exit 7.  With it, only the primary job's
+    # status counts, so prterun must exit 0 -- and the child's status has to be
+    # reported rather than silently dropped.
+    #
+    # The script must exist on every node the child could be mapped onto: the
+    # spawn names an absolute path derived from the parent's cwd, and /tmp is
+    # per-container.
+    for n in 1 2 3; do
+        ON $n 'rm -rf /tmp/dyn && mkdir -p /tmp/dyn &&
+               printf "#!/bin/sh\nexit 7\n" > /tmp/dyn/client && chmod +x /tmp/dyn/client' >/dev/null 2>&1
+    done
+    dynhosts='--host node1:2,node2:2,node3:2'
+
+    out=$(RUN "cd /tmp/dyn && timeout 90 prterun $dynhosts -np 1 dynamic" 2>&1); rc=$?
+    if ! echo "$out" | grep -q 'Spawn success'; then
+        bad "dynamic could not spawn a child job -- the rest of this case is meaningless: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    else
+        ok "dynamic spawned a child job"
+        [ "$rc" = 7 ] \
+            && ok "by default the child's exit status becomes the launcher's (rc=$rc)" \
+            || bad "expected the child's status 7 to be returned by default, got rc=$rc"
+
+        out=$(RUN "cd /tmp/dyn && timeout 90 prterun $dynhosts --report-child-jobs-separately -np 1 dynamic" 2>&1); rc=$?
+        [ "$rc" = 0 ] \
+            && ok "with --report-child-jobs-separately the launcher returns the PRIMARY job's status (rc=0)" \
+            || bad "--report-child-jobs-separately did not withhold the child's status (rc=$rc)"
+        echo "$out" | grep -q 'Child job' \
+            && ok "and the child's status is still reported to the user" \
+            || bad "the child's status was withheld AND never reported: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+        # the runtime-option spelling must behave identically
+        out=$(RUN "cd /tmp/dyn && timeout 90 prterun $dynhosts --runtime-options report-child-jobs-separately -np 1 dynamic" 2>&1); rc=$?
+        [ "$rc" = 0 ] \
+            && ok "the --runtime-options spelling withholds it too (rc=0)" \
+            || bad "--runtime-options report-child-jobs-separately did not withhold the child's status (rc=$rc)"
+    fi
+    for n in 1 2 3; do ON $n 'rm -rf /tmp/dyn' >/dev/null 2>&1; done
+
+    banner "state: an unrecognized runtime option is refused, not ignored"
+    out=$(RUN 'prterun --host node2:1 -np 1 --runtime-options no-such-option hostname' 2>&1)
+    echo "$out" | grep -q 'not recognized' \
+        && ok "an unknown runtime option is rejected" \
+        || bad "an unknown runtime option was silently accepted: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    banner "state: a job-state activation carrying no job still says which state"
+    # 80-odd call sites activate an error state with a NULL job --
+    # PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_NEVER_LAUNCHED) here.  No
+    # component registers that state, so it falls through to the errmgr's
+    # PRTE_JOB_STATE_ERROR catch-all, which does "jdata->state =
+    # caddy->job_state" against the DAEMON job.  The dispatcher only filled
+    # caddy->job_state in when a job accompanied the activation, and PMIX_NEW
+    # does not zero its allocation -- so the daemon job's state was assigned
+    # uninitialized heap, and which recovery branch the errmgr then took was
+    # down to whatever the allocator handed back.
+    #
+    # An unfindable launch agent is the cheapest deterministic way to reach
+    # it.  With the state correctly carried, the errmgr recognizes
+    # NEVER_LAUNCHED, disables routing and tears the DVM down: the tool must
+    # report the agent failure and exit promptly rather than hang.
+    t0=$(date +%s)
+    bounded 90 docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+        prte-node1 bash -lc '. /opt/prte/env.sh;
+            prterun --mca plm_ssh_agent /no/such/launch/agent --host node2:1,node3:1 -np 2 hostname'
+    rc=$?
+    t1=$(date +%s); dt=$((t1-t0))
+    if [ "$rc" = 124 ]; then
+        bad "a failed launch agent hung the tool (${dt}s) instead of reporting"
+    else
+        ok "a failed launch agent terminated the DVM promptly (${dt}s, rc=$rc)"
+        grep -qi 'launch agent\|agent-not-found\|unable to find' "$BOUT" \
+            && ok "and reported the launch-agent failure" \
+            || bad "but reported nothing about the agent: $(tr '\n' ' ' < "$BOUT" | tail -c 200)"
+    fi
+    rm -f "$BOUT"
+    cleanup_swarm
+
+    banner "state: the DVM sequences a job through to a clean teardown"
+    # check_complete is the largest handler in the machine: it releases the
+    # job's mapped resources back to every node, drops the map, deregisters
+    # the nspace, and notifies.  Its resource accounting is only observable
+    # across successive jobs on the SAME persistent DVM -- if a node's
+    # slots_inuse/num_procs are not restored, the second job cannot be
+    # mapped onto the nodes the first one used.
+    RUN 'nohup prte --daemonize --host node2:2,node3:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        n=0
+        for i in 1 2 3; do
+            out=$(RUN 'timeout 60 prun -n 4 --map-by node hostname' 2>&1)
+            [ "$(echo "$out" | grep -cE '^node[23]$')" = 4 ] && n=$((n+1))
+        done
+        [ "$n" = 3 ] && ok "three successive full-allocation jobs all mapped (resources recovered each time)" \
+                     || bad "only $n/3 successive jobs filled the allocation -- resources not returned on teardown"
+        RUN 'pgrep -x prte >/dev/null' \
+            && ok "the DVM survived all three teardowns" \
+            || bad "the DVM died during repeated job teardown"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the teardown-accounting test"
+    fi
+    cleanup_swarm
+}
+
 test_linux() {
     if ! docker ps --format '{{.Names}}' | grep -qx prte-node1; then
         echo "swarm not up -- run: docker compose up -d" >&2; exit 2
@@ -1650,6 +1896,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_rmaps
 
     test_schizo
+
+    test_state
 
     test_slurm_alloc
     test_slurm
