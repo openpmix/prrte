@@ -1138,8 +1138,15 @@ bool prte_session_is_owned_by(prte_session_t *session,
     if (NULL == session || session == prte_default_session) {
         return true;
     }
-    /* the scheduler is an implicit owner of every session */
-    if (PMIX_CHECK_NSPACE(prte_pmix_server_globals.scheduler.nspace, nspace)) {
+    /* The scheduler is an implicit owner of every session - but only if
+     * there IS one. PMIX_CHECK_NSPACE answers "true" when either side is an
+     * empty nspace (that is its wildcard rule), and scheduler.nspace is
+     * empty until a scheduler connects. Testing it unguarded therefore
+     * declared every namespace to be the scheduler on every DVM running
+     * without one, which is the common case - and that turned the whole
+     * reservation ownership check into an unconditional "yes". */
+    if (!PMIX_NSPACE_INVALID(prte_pmix_server_globals.scheduler.nspace) &&
+        PMIX_CHECK_NSPACE(prte_pmix_server_globals.scheduler.nspace, nspace)) {
         return true;
     }
     if (NULL == session->owners) {
