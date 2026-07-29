@@ -11,9 +11,6 @@
 # $HEADER$
 #
 #
-[normal-termination-but]
-While %s job %s terminated normally, %d %s. Further examination may be required.
-#
 [bad-combination]
 The runtime option NOTIFYERRORS was set to true. This requests that the
 runtime provide a PMIx event whenever a job encounters an error - e.g., a
