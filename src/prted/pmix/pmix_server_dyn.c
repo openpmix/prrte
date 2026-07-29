@@ -703,10 +703,6 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
             prte_set_attribute(&jdata->attributes, PRTE_SPAWN_TIMEOUT,
                                PRTE_ATTR_GLOBAL, &rc, PMIX_INT);
 
-        } else if (PMIX_CHECK_KEY(info, PMIX_TIMEOUT)) {
-            prte_set_attribute(&jdata->attributes, PRTE_SPAWN_TIMEOUT, PRTE_ATTR_GLOBAL,
-                               &info->value.data.integer, PMIX_INT);
-
         } else if (PMIX_CHECK_KEY(info, PMIX_JOB_TIMEOUT)) {
             if (PMIX_STRING == info->value.type) {
                 rc = PMIX_CONVERT_TIME(info->value.data.string);
@@ -823,7 +819,10 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                     /* get the cwd */
                     if (PRTE_SUCCESS != (rc = pmix_getcwd(cwd, sizeof(cwd)))) {
                         pmix_show_help("help-prted.txt", "cwd", true, "spawn", rc);
-                        PMIX_RELEASE(jdata);
+                        /* jdata belongs to our caller - it constructed it and
+                         * will dispose of it on our error return.  Releasing
+                         * it here would leave the caller with a dangling
+                         * pointer it goes on to use and release again */
                         return rc;
                     }
                     /* construct the absolute path */
@@ -856,7 +855,7 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                 ck = PMIx_Argv_split(info->value.data.string, ':');
                 if (3 > PMIx_Argv_count(ck)) {
                     PMIx_Argv_free(ck);
-                    return PMIX_ERR_BAD_PARAM;
+                    return PRTE_ERR_BAD_PARAM;
                 }
                 if (0 == strcasecmp(ck[0], "ppr")) {
                     ppn =  strtoul(ck[1], NULL, 10);
@@ -1084,7 +1083,14 @@ static void interim(int sd, short args, void *cbdata)
     return;
 
 complete:
-    if (NULL != cd->spcbfunc) {
+    if (NULL == cd->spcbfunc) {
+        /* nobody to answer - discard the partially-built job rather than
+         * leaking it */
+        PMIX_RELEASE(jdata);
+        PMIX_RELEASE(cd);
+        return;
+    }
+    {
         pmix_status_t prc;
         pmix_nspace_t nspace;
         PMIX_LOAD_NSPACE(nspace, NULL);

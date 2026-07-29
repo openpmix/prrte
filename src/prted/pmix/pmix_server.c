@@ -987,6 +987,9 @@ int pmix_server_init(void)
     /* if we were launched by a debugger, then we need to have
      * notification of our termination sent */
     if (PRTE_PROC_IS_MASTER && NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {
+        /* must be an explicit "true" - `flag` at this point still holds
+         * whatever an unrelated earlier directive left in it */
+        flag = true;
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_EVENT_SILENT_TERMINATION, &flag, PMIX_BOOL);
         if (PMIX_SUCCESS != prc) {
             PMIX_INFO_LIST_RELEASE(ilist);
@@ -1065,7 +1068,7 @@ int pmix_server_init(void)
 
     /* register our hostname so everyone agrees on it */
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_HOSTNAME, prte_process_info.nodename, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
+    if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
         rc = prte_pmix_convert_status(prc);
         return rc;
@@ -1076,7 +1079,7 @@ int pmix_server_init(void)
         tmp = PMIx_Argv_join(prte_process_info.aliases, ',');
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_HOSTNAME_ALIASES, tmp, PMIX_STRING);
         free(tmp);
-        if (PMIX_SUCCESS != rc) {
+        if (PMIX_SUCCESS != prc) {
             PMIX_INFO_LIST_RELEASE(ilist);
             rc = prte_pmix_convert_status(prc);
             return rc;
@@ -1095,7 +1098,9 @@ int pmix_server_init(void)
     ninfo = darray.size;
     prc = PMIx_server_register_resources(info, ninfo, NULL, NULL);
     PMIX_INFO_FREE(info, ninfo);
-    rc = prte_pmix_convert_status(prc);
+    if (PMIX_SUCCESS != prc) {
+        return prte_pmix_convert_status(prc);
+    }
 
     /* register the "lost-connection" event handler */
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
@@ -1108,7 +1113,9 @@ int pmix_server_init(void)
     prc = lock.status;
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_FREE(info, ninfo);
-    rc = prte_pmix_convert_status(prc);
+    if (PMIX_SUCCESS != prc) {
+        return prte_pmix_convert_status(prc);
+    }
 
 #if defined(PMIX_ALLOC_TIMEOUT_WARNING)
     /* register the allocation-timeout-warning relay handler */
@@ -1646,13 +1653,17 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
         tv.tv_sec = 2;
         prte_event_evtimer_add(&req->cycle, &tv);
 
-        /* if they asked for a timeout, then set that too */
+        /* if they asked for a timeout, then set that too - arm it on the
+         * request's own event, NOT on the retry cycle: adding to the cycle
+         * would re-arm the 2-second retry with the timeout interval and
+         * leave the timeout itself unarmed, so the request would never
+         * time out */
         if (0 < timeout) {
             prte_event_evtimer_set(prte_event_base, &req->ev, timeout_cbfunc, req);
             req->event_active = true;
             PMIX_POST_OBJECT(req);
             tv.tv_sec = timeout;
-            prte_event_evtimer_add(&req->cycle, &tv);
+            prte_event_evtimer_add(&req->ev, &tv);
         }
         return;
     }
@@ -2294,21 +2305,25 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
             goto reply;
     }
 
-    // need to add the requestor's ID to the info array, so expand it
+    /* Need to add the requestor's ID to the info array, so allocate one
+     * extra slot for it.  Note that ninfo must then be advanced to cover
+     * that slot: it is both the count we hand downstream (the requestor
+     * entry is the whole point of the expansion) and the count the request
+     * destructor frees with. */
     if (0 < ninfo) {
         PMIX_INFO_CREATE(info, ninfo+1);
         cnt = ninfo;
         rc = PMIx_Data_unpack(NULL, buffer, info, &cnt, PMIX_INFO);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            PMIX_INFO_FREE(info, ninfo);
+            PMIX_INFO_FREE(info, ninfo+1);
             goto reply;
         }
     } else {
-        ninfo = 1;
         PMIX_INFO_CREATE(info, 1);
     }
     PMIX_INFO_LOAD(&info[ninfo], PMIX_REQUESTOR, &source, PMIX_PROC);
+    ++ninfo;
 
     if (PRTE_PMIX_ALLOC_REQ == cmd) {
         req = PMIX_NEW(prte_pmix_server_req_t);
