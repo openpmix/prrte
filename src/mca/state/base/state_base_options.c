@@ -49,12 +49,33 @@
 
 #include "src/mca/state/base/base.h"
 
+/* Apply one boolean runtime option.
+ *
+ * Every consumer of these attributes tests them by PRESENCE -
+ * prte_get_attribute(&attrs, KEY, NULL, PMIX_BOOL) returns true as soon as
+ * the key is on the list, whatever value it carries.  So a directive of
+ * "opt=false" has to REMOVE the attribute: storing a false value under the
+ * key leaves it present, and every one of those call sites then reads the
+ * option as ENABLED - the exact opposite of what the user asked for.  This
+ * is the same translation the defaults branch below performs, and its
+ * comment explains the rationale: callers should not have to check a value
+ * everywhere a boolean option is used.
+ */
+static void set_bool_option(prte_job_t *jdata, prte_attribute_key_t key, bool flag)
+{
+    if (flag) {
+        prte_set_attribute(&jdata->attributes, key, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+    } else {
+        prte_remove_attribute(&jdata->attributes, key);
+    }
+}
+
 /* this function is called if pmix_server_dyn receives a
  * PMIX_RUNTIME_OPTIONS info struct */
 int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
 {
     char **options, *ptr;
-    int n;
+    int n, k, tm;
     bool flag, *fptr = &flag;
     int32_t i32;
     prte_job_t *djob;
@@ -153,6 +174,20 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
             }
         }
 
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP, (void**)&fptr, PMIX_BOOL)) {
+            /* it is present - check the value */
+            if (!flag) {
+                /* remove the attribute */
+                prte_remove_attribute(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP);
+            }
+        } else {
+            /* set it based on default value */
+            if (prte_report_child_jobs_separately) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP,
+                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+            }
+        }
+
         if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_EXEC_AGENT, NULL, PMIX_STRING)) {
             if (NULL != prte_odls_globals.exec_agent) {
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_EXEC_AGENT,
@@ -209,69 +244,65 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
             /* check the options */
             if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_ERROR_NZ)) {
                 flag = PMIX_CHECK_TRUE(&value);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_ERROR_NONZERO_EXIT,
-                                   PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
+                set_bool_option(jdata, PRTE_JOB_ERROR_NONZERO_EXIT, flag);
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_NOLAUNCH)) {
                 flag = PMIX_CHECK_TRUE(&value);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
+                set_bool_option(jdata, PRTE_JOB_DO_NOT_LAUNCH, flag);
                 /* if we are not in a persistent DVM, then make sure we also
                  * apply this to the daemons */
                 if (!prte_persistent) {
                     djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-                    prte_set_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
-                                       &flag, PMIX_BOOL);
+                    if (NULL != djob) {
+                        set_bool_option(djob, PRTE_JOB_DO_NOT_LAUNCH, flag);
+                    }
                 }
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_NOSPAWN)) {
                 flag = PMIX_CHECK_TRUE(&value);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_SPAWN, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
+                set_bool_option(jdata, PRTE_JOB_DO_NOT_SPAWN, flag);
                 /* if we are not in a persistent DVM, then make sure we also
                  * apply this to the daemons */
                 if (!prte_persistent) {
                     djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-                    prte_set_attribute(&djob->attributes, PRTE_JOB_DO_NOT_SPAWN, PRTE_ATTR_GLOBAL,
-                                       &flag, PMIX_BOOL);
+                    if (NULL != djob) {
+                        set_bool_option(djob, PRTE_JOB_DO_NOT_SPAWN, flag);
+                    }
                 }
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_SHOW_PROGRESS)) {
                 flag = PMIX_CHECK_TRUE(&value);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
+                set_bool_option(jdata, PRTE_JOB_SHOW_PROGRESS, flag);
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_NOTIFY_ERRORS)) {
                 flag = PMIX_CHECK_TRUE(&value);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_NOTIFY_ERRORS, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
+                set_bool_option(jdata, PRTE_JOB_NOTIFY_ERRORS, flag);
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_RECOVERABLE)) {
                 flag = PMIX_CHECK_TRUE(&value);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
+                set_bool_option(jdata, PRTE_JOB_RECOVERABLE, flag);
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_AUTORESTART)) {
                 flag = PMIX_CHECK_TRUE(&value);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_AUTORESTART, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
+                set_bool_option(jdata, PRTE_JOB_AUTORESTART, flag);
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_CONTINUOUS)) {
                 flag = PMIX_CHECK_TRUE(&value);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
+                set_bool_option(jdata, PRTE_JOB_CONTINUOUS, flag);
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_MAX_RESTARTS)) {
                 if (NULL == ptr || '\0' == *ptr) {
                     /* missing the value */
                     pmix_show_help("help-prte-rmaps-base.txt", "missing-value", true,
                                    "runtime options", options[n], "empty");
+                    PMIX_VALUE_DESTRUCT(&value);
                     PMIx_Argv_free(options);
                     return PRTE_ERR_BAD_PARAM;
                 }
                 i32 = strtol(ptr, NULL, 10);
-                for (n = 0; n < jdata->apps->size; n++) {
-                    app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
+                /* 'k', not 'n' - 'n' indexes the option list we are walking */
+                for (k = 0; k < jdata->apps->size; k++) {
+                    app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, k);
                     if (NULL == app) {
                         continue;
                     }
@@ -320,29 +351,52 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                 }
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_TIMEOUT)) {
-                n = PMIX_CONVERT_TIME(ptr);
+                /* 'tm', not 'n' - assigning the converted time to the loop
+                 * index made the walk resume at "60" for "timeout=60", running
+                 * off the end of the option array */
+                tm = PMIX_CONVERT_TIME(ptr);
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT, PRTE_ATTR_GLOBAL,
-                                   &n, PMIX_INT);
+                                   &tm, PMIX_INT);
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_SPAWN_TIMEOUT)) {
-                n = PMIX_CONVERT_TIME(ptr);
+                tm = PMIX_CONVERT_TIME(ptr);
                 prte_set_attribute(&jdata->attributes, PRTE_SPAWN_TIMEOUT, PRTE_ATTR_GLOBAL,
-                                   &n, PMIX_INT);
+                                   &tm, PMIX_INT);
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STACK_TRACES)) {
                 flag = PMIX_CHECK_TRUE(&value);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_STACKTRACES, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
+                set_bool_option(jdata, PRTE_JOB_STACKTRACES, flag);
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_REPORT_STATE)) {
                 flag = PMIX_CHECK_TRUE(&value);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
+                set_bool_option(jdata, PRTE_JOB_REPORT_STATE, flag);
+
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_REPORT_CHILD_SEP)) {
+                flag = PMIX_CHECK_TRUE(&value);
+                set_bool_option(jdata, PRTE_JOB_REPORT_CHILD_SEP, flag);
+                /* This governs how the DVM reports its OVERALL exit status,
+                 * not just this job's, and it is consumed as each job -
+                 * including a child this job spawns - reaches teardown.  So
+                 * record it on the daemon job too, where every teardown can
+                 * see it; that is what donotlaunch/donotspawn above do for
+                 * the same reason.  The !prte_persistent gate matches where
+                 * it is read: only a one-shot DVM reports an exit status, so
+                 * a job spawned into a persistent DVM cannot use this to
+                 * change policy for everybody else. */
+                if (!prte_persistent) {
+                    djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+                    if (NULL != djob) {
+                        set_bool_option(djob, PRTE_JOB_REPORT_CHILD_SEP, flag);
+                    }
+                }
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_AGG_HELP)) {
+                /* the attribute is the NEGATIVE of the directive: the user asks
+                 * to aggregate help, PRTE_JOB_NOAGG_HELP records the request NOT
+                 * to.  Driving it from the directive's own sense (as this did)
+                 * made "aggregate-help=true" mean "do not aggregate". */
                 flag = PMIX_CHECK_TRUE(&value);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
+                set_bool_option(jdata, PRTE_JOB_NOAGG_HELP, !flag);
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_OUTPUT_PROCTABLE)) {
                 if (NULL == ptr || '\0' == *ptr) {
@@ -360,8 +414,13 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
             } else {
                 pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true,
                                "runtime options", spec);
+                PMIX_VALUE_DESTRUCT(&value);
+                PMIx_Argv_free(options);
                 return PRTE_ERR_SILENT;
             }
+            /* PMIX_VALUE_LOAD copied the value string - release it before
+             * the next directive overwrites the struct */
+            PMIX_VALUE_DESTRUCT(&value);
         }
         PMIx_Argv_free(options);
     }

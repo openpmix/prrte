@@ -518,6 +518,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "EXEC-AGENT";
         case PRTE_JOB_NOAGG_HELP:
             return "DO-NOT-AGGREGATE-HELP";
+        case PRTE_JOB_REPORT_CHILD_SEP:
+            return "REPORT-CHILD-JOBS-SEPARATELY";
         case PRTE_JOB_COLOCATE_PROCS:
             return "COLOCATE PROCS";
         case PRTE_JOB_COLOCATE_NPERPROC:
