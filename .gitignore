@@ -77,6 +77,12 @@ test/unit/schizo/Makefile
 test/unit/schizo/test_schizo
 test/unit/state/Makefile
 test/unit/state/test_state
+test/unit/tools/Makefile
+test/unit/tools/test_tools
+test/unit/prted/Makefile
+test/unit/prted/test_prted
+test/unit/util/Makefile
+test/unit/util/test_util
 static-components.h
 static-components.h.new.extern
 static-components.h.new.struct

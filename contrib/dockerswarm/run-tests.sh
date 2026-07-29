@@ -1914,6 +1914,147 @@ test_tools() {
 #   * interface selection actually binding and connecting, not just parsing
 #   * a daemon dying under a live DVM, which is what prte_rml_route_lost and
 #     the peer teardown exist for
+test_util() {
+    local out n rc c hf
+
+    # src/util is a library of helpers, so almost all of it is pinned down by
+    # test/unit/util. What that test CANNOT reach is the multi-node meaning of
+    # the two parsers: a hostfile or a -host list is a statement about a set of
+    # machines, and every defect below was a defect in which machines came out
+    # of it. With one node in the pool they all look correct.
+
+    banner "util: -host slot specifications do not leak between tokens"
+    # "nodeA:*,nodeB" - the auto-detect marker on the first token used to
+    # carry over to the second, which read it as "this node has no slots",
+    # so nodeB was allocated zero. Two nodes are the minimum to see it.
+    cleanup_swarm
+    out=$(RUN 'timeout 90 prterun --host node2:*,node3 -n 2 --map-by node hostname' 2>&1)
+    if echo "$out" | grep -q '^node3$'; then
+        ok "a plain host following a ':*' host still got its slot"
+    else
+        bad "':*' on the first -host token starved the second: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    cleanup_swarm
+
+    banner "util: -host tokens after a '+e:N' are not dropped"
+    # parse_dash_host() scanned the node pool with the SAME loop index it was
+    # using to walk the comma-separated tokens, so it came back with that
+    # index past the end and every token after a "+e:N" was silently
+    # discarded. Needs a DVM whose pool is bigger than the request.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --host node1:1,node2:1,node3:1,node4:1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        # one empty node plus an explicitly named one: the named node must
+        # appear, which it cannot if the token was thrown away
+        out=$(RUN 'timeout 30 prun --host +e:1,node4 -n 2 --map-by node hostname' 2>&1)
+        if echo "$out" | grep -q '^node4$'; then
+            ok "an explicit host named after '+e:1' was honored"
+        else
+            bad "the token after '+e:1' was dropped: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the '+e:N' token test"
+    fi
+    cleanup_swarm
+
+    banner "util: a hostfile '^host' line excludes that host"
+    # The exclusion syntax has always been implemented in hostfile.c, and the
+    # lexer has always rejected it: the '^' was only allowed on the
+    # "user@host" form, so a bare "^node3" fell through to the catch-all and
+    # the WHOLE hostfile was refused as a parse error. Both halves show here -
+    # the file has to parse at all, and node3 must not be in the result.
+    cleanup_swarm
+    hf=/tmp/util_exclude.txt
+    RUN "printf 'node2 slots=1\nnode3 slots=1\nnode4 slots=1\n^node3\n' > $hf"
+    out=$(RUN "timeout 90 prterun --hostfile $hf -n 2 --map-by node hostname" 2>&1)
+    rc=$?
+    if [ "$rc" != 0 ] || echo "$out" | grep -qi 'parse error'; then
+        bad "a hostfile with a '^host' line was refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    else
+        ok "a hostfile with a '^host' line parses"
+        if echo "$out" | grep -q '^node3$'; then
+            bad "the excluded host was used anyway: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        else
+            ok "the excluded host was not used"
+        fi
+        n=$(echo "$out" | grep -cE '^node[24]$')
+        [ "$n" = 2 ] && ok "both remaining hosts were used" \
+                     || bad "$n/2 procs landed on the remaining hosts: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    fi
+    RUN "rm -f $hf" >/dev/null 2>&1
+    cleanup_swarm
+
+    banner "util: a hostfile parse error does not poison the next parse"
+    # The parser's FILE* and flex buffer are process globals, and the error
+    # path used to skip both the fclose() and the lex_destroy(). A prterun
+    # that reads a bad hostfile and then a good one is the shortest way to
+    # see it: the second parse resumed inside the first.
+    cleanup_swarm
+    RUN "printf 'node2 slots=notanumber\n' > /tmp/util_bad.txt"
+    RUN "printf 'node2 slots=2\nnode3 slots=2\n' > /tmp/util_good.txt"
+    RUN 'timeout 60 prterun --hostfile /tmp/util_bad.txt -n 1 hostname' >/dev/null 2>&1
+    rc=$?
+    [ "$rc" != 0 ] && ok "a malformed hostfile is refused (rc=$rc)" \
+                   || bad "a malformed hostfile was accepted"
+    out=$(RUN 'timeout 90 prterun --hostfile /tmp/util_good.txt -n 4 --map-by node hostname' 2>&1)
+    c=$(echo "$out" | grep -cE '^node[23]$')
+    [ "$c" = 4 ] && ok "the next hostfile parsed correctly after the failure" \
+                 || bad "the parse after a failed one produced $c/4 procs: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    RUN 'rm -f /tmp/util_bad.txt /tmp/util_good.txt' >/dev/null 2>&1
+    cleanup_swarm
+
+    banner "util: node names are compared by content, not by length"
+    # prte_util_compare_name_fields() compared namespaces by LENGTH, so two
+    # jobs of the same DVM ("<dvm>@1" and "<dvm>@2") had identical names as
+    # far as it was concerned. iof/prted uses it to find the proc whose
+    # output it is holding, so two concurrent jobs on the same node is the
+    # case that shows it: each job's output must carry its own tag.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --host node2:2,node3:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        # two jobs at once, each tagging its output with its own namespace
+        out=$(RUN 'timeout 60 sh -c "
+                  prun --tag-output -n 2 echo JOBA > /tmp/a.out 2>&1 &
+                  prun --tag-output -n 2 echo JOBB > /tmp/b.out 2>&1 &
+                  wait; cat /tmp/a.out /tmp/b.out"' 2>&1)
+        n=$(echo "$out" | grep -c 'JOBA')
+        c=$(echo "$out" | grep -c 'JOBB')
+        if [ "$n" = 2 ] && [ "$c" = 2 ]; then
+            ok "two concurrent jobs each got their own output back"
+        else
+            bad "concurrent job output crossed over (JOBA=$n JOBB=$c): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        # ...and the tags name two DIFFERENT namespaces
+        n=$(echo "$out" | sed -n 's/^\[\([^,]*\),.*/\1/p' | sort -u | wc -l | tr -d ' ')
+        [ "$n" = 2 ] && ok "the two jobs are distinguishable by namespace" \
+                     || bad "the two jobs' output carried $n distinct namespace tag(s)"
+        RUN 'rm -f /tmp/a.out /tmp/b.out' >/dev/null 2>&1
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the concurrent-job test"
+    fi
+    cleanup_swarm
+
+    banner "util: an unrecognized system limit is refused, not applied as zero"
+    # prte_setlimit() fed a non-numeric value to strtol(), got zero, and
+    # LOWERED the limit to it -- a daemon that cannot open a file. Refusing
+    # the request has to happen before any daemon is launched.
+    cleanup_swarm
+    RUN 'timeout 60 prterun --prtemca prte_set_max_sys_limits openfiles:many \
+             -n 1 hostname' >/dev/null 2>&1
+    rc=$?
+    [ "$rc" != 0 ] && ok "a non-numeric system limit is refused (rc=$rc)" \
+                   || bad "a non-numeric system limit was accepted"
+    # ...while a real one still works and does not stop the launch
+    out=$(RUN 'timeout 90 prterun --prtemca prte_set_max_sys_limits openfiles:max \
+                   --host node2:1,node3:1 -n 2 --map-by node hostname' 2>&1)
+    n=$(echo "$out" | grep -cE '^node[23]$')
+    [ "$n" = 2 ] && ok "a valid system limit is applied and the launch proceeds" \
+                 || bad "a valid system limit broke the launch: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    cleanup_swarm
+}
+
 test_rml() {
     local out rc n c
 
@@ -2653,6 +2794,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_prted
 
     test_tools
+
+    test_util
 
     test_runtime
 
