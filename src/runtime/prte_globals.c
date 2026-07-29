@@ -346,7 +346,7 @@ prte_session_t *prte_get_session_object_from_id(const char *id)
             continue;
         }
         if (NULL == session->alloc_refid) {
-	     continue;
+            continue;
         }
         if (0 == strcasecmp(session->alloc_refid, id)) {
             return session;
@@ -371,6 +371,9 @@ prte_session_t *prte_get_session_object_from_refid(const char *refid)
     for (i = 0; i < prte_sessions->size; i++) {
         session = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, i);
         if (NULL == session) {
+            continue;
+        }
+        if (NULL == session->user_refid) {
             continue;
         }
         if (0 == strcasecmp(session->user_refid, refid)) {
@@ -415,11 +418,15 @@ int prte_set_session_object(prte_session_t *session)
     return PRTE_SUCCESS;
 }
 
-bool prte_sessions_related(prte_session_t *session1, prte_session_t *session2){
+bool prte_sessions_related(prte_session_t *session1, prte_session_t *session2)
+{
     int n;
     prte_session_t *session_ptr;
 
-    if(session1->session_id == session2->session_id){
+    if (NULL == session1 || NULL == session2) {
+        return false;
+    }
+    if (session1->session_id == session2->session_id) {
         return true;
     }
 
@@ -493,11 +500,41 @@ prte_node_rank_t prte_get_proc_node_rank(const pmix_proc_t *proc)
     return proct->node_rank;
 }
 
+/* does this node answer to either the name as given or the name it was
+ * resolved to?  Kept in one place so the list walk and the pool walk below
+ * cannot drift apart. */
+static bool node_answers_to(prte_node_t *nptr, const char *name, const char *nm)
+{
+    int m;
+
+    if (NULL == nptr->name) {
+        return false;
+    }
+    if (0 == strcmp(nptr->name, nm)) {
+        return true;
+    }
+    if (NULL == nptr->aliases) {
+        return false;
+    }
+    /* no choice but an exhaustive search - fortunately, these lists are short! */
+    for (m = 0; NULL != nptr->aliases[m]; m++) {
+        if (0 == strcmp(name, nptr->aliases[m])) {
+            /* this is the node! */
+            return true;
+        }
+    }
+    return false;
+}
+
 prte_node_t* prte_node_match(pmix_list_t *nodes, const char *name)
 {
-    int m, n;
+    int n;
     prte_node_t *nptr;
     char *nm;
+
+    if (NULL == name) {
+        return NULL;
+    }
 
     /* does the name refer to me? */
     if (prte_check_host_is_local(name)) {
@@ -508,40 +545,25 @@ prte_node_t* prte_node_match(pmix_list_t *nodes, const char *name)
 
     if (NULL != nodes) {
         PMIX_LIST_FOREACH(nptr, nodes, prte_node_t) {
-            if (0 == strcmp(nptr->name, nm)) {
+            if (node_answers_to(nptr, name, nm)) {
                 return nptr;
-            }
-            if (NULL == nptr->aliases) {
-                continue;
-            }
-            /* no choice but an exhaustive search - fortunately, these lists are short! */
-            for (m = 0; NULL != nptr->aliases[m]; m++) {
-                if (0 == strcmp(name, nptr->aliases[m])) {
-                    /* this is the node! */
-                    return nptr;
-                }
             }
         }
-    } else {
-        /* check the node pool */
-        for (n=0; n < prte_node_pool->size; n++) {
-            nptr = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, n);
-            if (NULL == nptr) {
-                continue;
-            }
-            if (0 == strcmp(nptr->name, nm)) {
-                return nptr;
-            }
-            if (NULL == nptr->aliases) {
-                continue;
-            }
-            /* no choice but an exhaustive search - fortunately, these lists are short! */
-            for (m = 0; NULL != nptr->aliases[m]; m++) {
-                if (0 == strcmp(name, nptr->aliases[m])) {
-                    /* this is the node! */
-                    return nptr;
-                }
-            }
+        return NULL;
+    }
+
+    /* check the node pool - which may not exist yet if we are being
+     * called before prte_init laid out the global arrays */
+    if (NULL == prte_node_pool) {
+        return NULL;
+    }
+    for (n=0; n < prte_node_pool->size; n++) {
+        nptr = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, n);
+        if (NULL == nptr) {
+            continue;
+        }
+        if (node_answers_to(nptr, name, nm)) {
+            return nptr;
         }
     }
 
