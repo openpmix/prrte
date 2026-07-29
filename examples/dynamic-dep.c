@@ -50,7 +50,11 @@ int main(int argc, char **argv)
     return -1;
 #else
 
-    int rc, exitcode;
+    int rc;
+    /* the success path falls through to "return exitcode" without ever
+     * assigning it - only the error paths do - so it has to start at 0 or
+     * a clean run exits with whatever was on the stack */
+    int exitcode = 0;
     char nsp2[PMIX_MAX_NSLEN + 1];
     pmix_proc_t proc;
     pmix_app_t *app;

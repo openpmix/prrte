@@ -42,7 +42,11 @@ static pmix_proc_t myproc;
 
 int main(int argc, char **argv)
 {
-    int rc, exitcode;
+    int rc;
+    /* the success path falls through to "return exitcode" without ever
+     * assigning it - only the error paths do - so it has to start at 0 or
+     * a clean run exits with whatever was on the stack */
+    int exitcode = 0;
     pmix_value_t value;
     pmix_value_t *val = &value;
     pmix_proc_t proc;
