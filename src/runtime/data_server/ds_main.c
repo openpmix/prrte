@@ -164,6 +164,9 @@ void prte_data_server(int status, pmix_proc_t *sender,
         return;
     }
 
+    /* From here on the handlers own "answer": each of them either sends it
+     * or releases it and returns PMIX_SUCCESS. Anything else comes back to
+     * us still holding the buffer, and we turn it into an error reply. */
     switch (command) {
         case PRTE_PMIX_PUBLISH_CMD:
             rc = prte_ds_publish(sender, buffer, answer);
@@ -193,18 +196,24 @@ void prte_data_server(int status, pmix_proc_t *sender,
     }
 
     if (PMIX_SUCCESS != rc) {
+        pmix_status_t ret;
+
         pmix_output_verbose(1, prte_data_store.output,
                             "%s data server: sending error %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             PRTE_ERROR_NAME(rc));
-        /* pack the error code */
-        rc = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_STATUS);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
+        /* pack the error code. Keep the pack status in its own variable:
+         * overwriting rc with it lost the very code we were reporting, and
+         * a failed pack then went out as a "successful" empty answer. */
+        ret = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_STATUS);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_RELEASE(answer);
+            return;
         }
-        PRTE_RML_RELIABLE_SEND(rc, sender->rank, answer, PRTE_RML_TAG_DATA_CLIENT);
-        if (PRTE_SUCCESS != rc) {
-            PRTE_ERROR_LOG(rc);
+        PRTE_RML_RELIABLE_SEND(ret, sender->rank, answer, PRTE_RML_TAG_DATA_CLIENT);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_RELEASE(answer);
         }
     }
@@ -282,6 +291,11 @@ pmix_status_t prte_data_server_check_range(prte_data_req_t *req,
 static void construct(prte_data_object_t *ptr)
 {
     ptr->index = -1;
+    /* proxy has to be initialized here as well as owner: it is what the
+     * PMIX_RANGE_LOCAL check compares against, and PMIX_NEW does not zero
+     * the allocation, so an object whose publisher never filled it in was
+     * matching requestors against uninitialized memory */
+    PMIX_PROC_CONSTRUCT(&ptr->proxy);
     PMIX_PROC_CONSTRUCT(&ptr->owner);
     ptr->uid = UINT32_MAX;
     ptr->range = PMIX_RANGE_SESSION;
@@ -301,6 +315,9 @@ PMIX_CLASS_INSTANCE(prte_data_object_t,
 
 static void rqcon(prte_data_req_t *p)
 {
+    PMIX_PROC_CONSTRUCT(&p->proxy);
+    PMIX_PROC_CONSTRUCT(&p->requestor);
+    p->room_number = -1;
     p->keys = NULL;
     p->uid = UINT32_MAX;
     p->range = PMIX_RANGE_UNDEF;

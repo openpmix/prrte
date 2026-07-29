@@ -77,6 +77,7 @@ pmix_status_t prte_ds_unpublish(pmix_proc_t *sender,
     rc = PMIx_Data_unpack(NULL, buffer, &rq.requestor, &count, PMIX_PROC);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
+        PMIX_DESTRUCT(&rq);
         return rc;
     }
 
@@ -90,11 +91,13 @@ pmix_status_t prte_ds_unpublish(pmix_proc_t *sender,
     rc = PMIx_Data_unpack(NULL, buffer, &ninfo, &count, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
+        PMIX_DESTRUCT(&rq);
         return rc;
     }
     if (0 == ninfo) {
         /* they forgot to send us the keys?? */
         PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        PMIX_DESTRUCT(&rq);
         return PMIX_ERR_BAD_PARAM;
     }
 
@@ -116,6 +119,7 @@ pmix_status_t prte_ds_unpublish(pmix_proc_t *sender,
     rc = PMIx_Data_unpack(NULL, buffer, &ninfo, &count, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
+        PMIX_DESTRUCT(&rq);
         return rc;
     }
     if (0 < ninfo) {
@@ -125,6 +129,7 @@ pmix_status_t prte_ds_unpublish(pmix_proc_t *sender,
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_INFO_FREE(info, ninfo);
+            PMIX_DESTRUCT(&rq);
             return rc;
         }
         /* scan the directives for things we care about */
@@ -178,10 +183,13 @@ pmix_status_t prte_ds_unpublish(pmix_proc_t *sender,
     PMIX_DESTRUCT(&rq);
 
     if (PMIX_SUCCESS == rc) {
+        pmix_status_t st = PMIX_SUCCESS;
+
         // send back an answer
-        rc = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_STATUS);
+        rc = PMIx_Data_pack(NULL, answer, &st, 1, PMIX_STATUS);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
+            return rc;
         }
         PRTE_RML_RELIABLE_SEND(rc, sender->rank, answer, PRTE_RML_TAG_DATA_CLIENT);
         if (PRTE_SUCCESS != rc) {
