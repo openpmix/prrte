@@ -1384,6 +1384,219 @@ PRUN_BG() {
         prte-node1 bash -lc ". /opt/prte/env.sh;
             prun --dvm-uri file:$PRTED_URI $* > $outf 2>&1"
 }
+########################################################################
+# src/runtime -- the object model, the global registries, and the
+# publish/lookup data server.  Most of src/runtime is covered without a DVM
+# by test/unit/runtime; what lands here is what only exists between real
+# daemons.
+########################################################################
+# Absolute path, deliberately.  The node entrypoint symlinks the install bin
+# into /usr/local/bin when the CONTAINER starts, and an app launched into the
+# DVM inherits the daemon PATH -- which does not contain the install bindir.
+# So a helper added since the containers came up is not on the app PATH, and a
+# bare name fails with PMIX_ERR_JOB_FAILED_TO_LAUNCH and no diagnostic.
+DS=/opt/prte/prte/bin/dataserver
+
+test_runtime() {
+    local out n rc
+
+    banner "runtime/data_server: publish on one node, look it up from another"
+    # The store is a SINGLE pointer array living on the HNP.  Every client
+    # reaches it over the RML through its own daemon, so a publish on node2
+    # and a lookup on node3 is the only shape that exercises the real path:
+    # PMIx -> prted -> RML(PRTE_RML_TAG_DATA_SERVER) -> HNP -> ds_publish,
+    # and the reply back out through a DIFFERENT daemon.  On one node the
+    # whole thing collapses into the local PMIx server.
+    cleanup_swarm
+    if ! RUN "test -x $DS"; then
+        skp "dataserver client not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start 'node1:2,node2:2,node3:2,node4:2'; then
+        bad "could not start a DVM for the data-server tests"
+    else
+        PRUN_BG /tmp/ds-pub.out "--host node2:1 -n 1 $DS publish prte.test.k1 hello session 90"
+        sleep 8
+        if ! RUN 'grep -q "^PUBLISHED prte.test.k1" /tmp/ds-pub.out'; then
+            bad "publisher never published: $(RUN 'cat /tmp/ds-pub.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+        else
+            ok "a proc on node2 published into the HNP store"
+            out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.k1 20" 2>&1)
+            echo "$out" | grep -q '^FOUND prte.test.k1 hello' \
+                && ok "a proc on node3 looked it up and got the value back" \
+                || bad "cross-node lookup failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            # ...and the answer names the publisher, which is the "data owner"
+            # field ds_publish packs ahead of every returned value
+            echo "$out" | grep -q 'from .*:0)' \
+                && ok "...and the reply carried the publisher's identity" \
+                || bad "the reply did not name the data owner: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+            banner "runtime/data_server: a key nobody published is NOT_FOUND, not a hang"
+            # A miss travels the same path and has to come back as a status.
+            # ds_lookup used to have exits that returned without sending
+            # anything AND without releasing the answer buffer.
+            out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.nosuchkey 15" 2>&1)
+            echo "$out" | grep -qE 'STATUS .*(NOT.FOUND|NOT_FOUND)' \
+                && ok "a missing key came back as not-found" \
+                || bad "a missing key did not report not-found: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+            banner "runtime/data_server: a partial lookup is reported as partial"
+            # Two keys, one published.  ds_lookup used to set
+            # PMIX_ERR_PARTIAL_SUCCESS and then fall straight through to
+            # "return rc" without sending anything, so the caller relayed a
+            # bare error, the values that HAD been found were dropped, and
+            # the buffer holding them leaked.  It now packs the status and
+            # the payload and sends them like any other answer.
+            #
+            # It takes BOTH halves of the round trip to be right, which is
+            # why this asserts on the value and not just the status.  The
+            # PMIx client used to discard the payload too - answering the
+            # lookup callback with (ret, NULL, 0) for any status that was not
+            # PMIX_SUCCESS, even though the layer immediately above it
+            # explicitly handles PMIX_ERR_PARTIAL_SUCCESS as data-carrying -
+            # so a correct server still produced an empty answer.  Needs a
+            # PMIx built from source (PMIX_SRC=... ./build.sh).
+            out=$(PRUN "--host node4:1 -n 1 $DS lookup2 prte.test.k1 prte.test.absent 15" 2>&1)
+            echo "$out" | grep -q 'STATUS PMIX_ERR_PARTIAL_SUCCESS' \
+                && ok "a half-satisfiable lookup came back as PARTIAL_SUCCESS" \
+                || bad "a partial lookup did not report itself as partial: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            echo "$out" | grep -q '^FOUND prte.test.k1 hello' \
+                && ok "...carrying the key that did exist, not an empty answer" \
+                || bad "a partial lookup lost the data it found: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            echo "$out" | grep -q '^FOUND prte.test.absent' \
+                && bad "a key nobody published was reported as found" \
+                || ok "...and the absent key was not invented"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
+    banner "runtime/data_server: a waiting lookup is satisfied by a later publish"
+    # PMIX_WAIT parks the request on prte_data_store.pending until somebody
+    # publishes the key.  The publish arrives from one daemon and the reply
+    # goes back out through another, so the parked request has to carry the
+    # requestor's proxy and room number across the gap.  The park side also
+    # has to dispose of the answer buffer it was handed but will never send
+    # -- otherwise every waiting lookup leaks one on the HNP.
+    if ! RUN "test -x $DS"; then
+        skp "dataserver client not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start 'node1:2,node2:2,node3:2,node4:2'; then
+        bad "could not start a DVM for the waiting-lookup test"
+    else
+        PRUN_BG /tmp/ds-wait.out "--host node3:1 -n 1 $DS lookupwait prte.test.later 60"
+        sleep 8
+        if ! RUN 'grep -q "^WAITING" /tmp/ds-wait.out'; then
+            skp "the waiting lookup never started; the next case is weaker"
+        else
+            ok "a lookup on node3 is parked waiting for a key"
+            # nothing may have been answered yet
+            RUN 'grep -q "^FOUND" /tmp/ds-wait.out' \
+                && bad "the parked lookup answered before anything was published" \
+                || ok "...and it has not been answered yet"
+        fi
+        PRUN_BG /tmp/ds-late.out "--host node2:1 -n 1 $DS publish prte.test.later worldwide session 40"
+        sleep 12
+        RUN 'grep -q "^FOUND prte.test.later worldwide" /tmp/ds-wait.out' \
+            && ok "the publish from node2 satisfied the lookup parked from node3" \
+            || bad "a parked lookup was never satisfied: $(RUN 'cat /tmp/ds-wait.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+        # a fully-resolved parked request must report SUCCESS, not
+        # PARTIAL_SUCCESS: ds_publish derived that by counting req->keys,
+        # which by then holds only the keys still UNresolved (i.e. none), so
+        # a complete answer was reported as partial
+        RUN 'grep -qE "^STATUS SUCCESS|^STATUS .*(PMIX_SUCCESS)" /tmp/ds-wait.out' \
+            && ok "...and reported it as a complete, not partial, result" \
+            || bad "a fully satisfied lookup was reported as partial: $(RUN 'grep "^STATUS" /tmp/ds-wait.out' 2>&1 | tr -d '\r')"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
+    banner "runtime/data_server: unpublish removes the data"
+    # Only the publisher may unpublish its own keys, so this runs in one
+    # process: publish, confirm, unpublish, confirm gone.
+    if ! RUN "test -x $DS"; then
+        skp "dataserver client not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start 'node1:2,node2:2,node3:2'; then
+        bad "could not start a DVM for the unpublish test"
+    else
+        out=$(PRUN "--host node2:1 -n 1 $DS unpublish prte.test.gone 15" 2>&1)
+        echo "$out" | grep -q '^FOUND prte.test.gone' \
+            && ok "the key was there before the unpublish" \
+            || bad "the key was never findable: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        echo "$out" | grep -q '^UNPUBLISHED prte.test.gone' \
+            && ok "unpublish was accepted" \
+            || bad "unpublish was refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        n=$(echo "$out" | grep -c '^FOUND prte.test.gone')
+        [ "$n" = 1 ] \
+            && ok "...and the key was gone afterwards" \
+            || bad "the key survived the unpublish (FOUND $n times)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
+    banner "runtime/data_server: PMIX_RANGE_LOCAL data does not leave its node"
+    # A LOCAL-range publish is not sent to the HNP at all: the daemon routes
+    # it to its OWN data server instance (pmix_server_pub.c picks
+    # target = PRTE_PROC_MY_NAME for that range), so the item lives in the
+    # store of the daemon that relayed it.  A lookup has to carry the same
+    # range to be routed to the same place.
+    #
+    # That is the property worth asserting across nodes, and one host cannot
+    # show it: with a single daemon "the local store" and "the HNP store"
+    # are the same object, so LOCAL data confined to a node and LOCAL data
+    # leaking everywhere look identical.  (The proxy comparison in
+    # prte_data_server_check_range that backs this up - and that was reading
+    # an uninitialized field - is covered directly in test/unit/runtime.)
+    if ! RUN "test -x $DS"; then
+        skp "dataserver client not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start 'node1:2,node2:2,node3:2'; then
+        bad "could not start a DVM for the range test"
+    else
+        PRUN_BG /tmp/ds-loc.out "--host node2:1 -n 1 $DS publish prte.test.loc mine local 60"
+        sleep 8
+        if ! RUN 'grep -q "^PUBLISHED prte.test.loc" /tmp/ds-loc.out'; then
+            bad "the LOCAL-range publish never happened: $(RUN 'cat /tmp/ds-loc.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+        else
+            ok "a LOCAL-range key was published from node2"
+            # a peer behind the SAME daemon may see it
+            out=$(PRUN "--host node2:1 -n 1 $DS lookup prte.test.loc 15 local" 2>&1)
+            echo "$out" | grep -q '^FOUND prte.test.loc mine' \
+                && ok "a peer on the same node can see it" \
+                || bad "a LOCAL-range key was hidden from its own node: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            # ...and the same LOCAL-range lookup from another node reaches
+            # THAT node's daemon, which has never seen the key
+            out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.loc 15 local" 2>&1)
+            echo "$out" | grep -q '^FOUND prte.test.loc' \
+                && bad "a LOCAL-range key leaked to another node" \
+                || ok "a client on another node cannot see it, as LOCAL range requires"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
+    banner "runtime: a DVM tears down cleanly with jobs and sessions built"
+    # The object destructors -- and the ownership rules they encode -- only
+    # run for real at teardown.  prte_session_t was registered against the
+    # wrong parent class, and the destructor that exposed it (an assert
+    # inside pmix_list_item_destruct reading the middle of the session's own
+    # data) fires only when a session is actually RELEASED.  Run some jobs,
+    # then take the DVM down and check it went quietly.
+    if ! prted_dvm_start 'node1:2,node2:2,node3:2,node4:2'; then
+        bad "could not start a DVM for the teardown test"
+    else
+        PRUN '--host node2:1,node3:1 -n 2 --map-by node hostname' >/dev/null 2>&1
+        PRUN '--host node4:2 -n 2 hostname' >/dev/null 2>&1
+        out=$(RUN 'timeout -k 5 30 pterm' 2>&1); rc=$?
+        [ "$rc" = 0 ] \
+            && ok "the DVM shut down cleanly after running jobs" \
+            || bad "pterm failed (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        echo "$out" | grep -qiE 'assert|signal|segmentation|abort' \
+            && bad "teardown produced a crash diagnostic: $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+            || ok "...with no assert or fault on the way out"
+        n=$(prted_count 1 2 3 4)
+        [ "$n" = 0 ] && ok "no daemons survived the teardown" \
+                     || bad "$n daemons still running after pterm"
+    fi
+    cleanup_swarm
+}
+
 test_prted() {
     local out rc ns n bpid
 
@@ -2275,6 +2488,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_state
 
     test_prted
+
+    test_runtime
 
     test_rml
 
