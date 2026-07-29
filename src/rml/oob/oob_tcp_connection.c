@@ -164,6 +164,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         pmix_output(0, "%s CANNOT CREATE SOCKET, OUT OF MEMORY",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
+        PMIX_RELEASE(op);
         return;
     }
 
@@ -503,7 +504,9 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         }
         /* close the socket */
         CLOSE_THE_SOCKET(peer->sd);
-        goto out;
+        /* "cleanup", not "out": the caddy is ours to release on this path too,
+         * and only the connect-in-progress return above hands it off */
+        goto cleanup;
     } else {
         pmix_output(0,
                     "%s prte_tcp_peer_try_connect: "
@@ -520,10 +523,15 @@ cleanup:
     PMIX_RELEASE(op);
 out:
     if (NULL != results) {
-        free(results);
+        /* a reference-counted object whose destructor frees the single block
+         * backing the whole weight matrix - free()ing the object itself leaks
+         * that block on every connection attempt */
+        PMIX_RELEASE(results);
     }
     if (NULL != remote_list) {
-        PMIX_RELEASE(remote_list);
+        /* the list destructor does not touch the items, and every pmix_pif_t
+         * on this list was allocated above just for this call */
+        PMIX_LIST_RELEASE(remote_list);
     }
 }
 
@@ -541,12 +549,15 @@ static int tcp_peer_send_connect_ack(prte_oob_tcp_peer_t *peer)
     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                         "%s SEND CONNECT ACK", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
-    /* load the header */
+    /* load the header. Zero it first: the whole struct goes on the wire, so
+     * every field - including the epoch and any padding - has to be defined */
+    memset(&hdr, 0, sizeof(hdr));
     hdr.origin = *PRTE_PROC_MY_NAME;
     hdr.dst = peer->name;
     hdr.type = MCA_OOB_TCP_IDENT;
     hdr.tag = 0;
     hdr.seq_num = 0;
+    hdr.epoch = prte_rml_boot_epoch;
 
     /* payload size */
     sdsize = sizeof(ack_flag) + strlen(prte_version_string) + 1;
@@ -595,12 +606,14 @@ static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name)
     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                         "%s SEND CONNECT NACK", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
-    /* load the header */
+    /* load the header - see the note in tcp_peer_send_connect_ack */
+    memset(&hdr, 0, sizeof(hdr));
     hdr.origin = *PRTE_PROC_MY_NAME;
     hdr.dst = *name;
     hdr.type = MCA_OOB_TCP_IDENT;
     hdr.tag = 0;
     hdr.seq_num = 0;
+    hdr.epoch = prte_rml_boot_epoch;
 
     /* payload size */
     sdsize = sizeof(ack_flag);
@@ -1139,7 +1152,8 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
     close(peer->sd);
     peer->sd = -1;
 
-    /* clean up any partial send/recv data */
+    /* clean up any partial send/recv data - the recv object's destructor
+     * disposes of whatever payload had already been read into it */
     if (NULL != peer->recv_msg) {
         PMIX_RELEASE(peer->recv_msg);
         peer->recv_msg = NULL;

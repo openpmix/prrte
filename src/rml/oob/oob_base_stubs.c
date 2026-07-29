@@ -77,6 +77,21 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
     /* do we have a route to this peer (could be direct)? */
     PMIX_LOAD_NSPACE(hop.nspace, PRTE_PROC_MY_NAME->nspace);
     hop.rank = prte_rml_get_route(msg->dst.rank);
+    if (PMIX_RANK_INVALID == hop.rank && PRTE_PROC_MY_HNP->rank != msg->dst.rank) {
+        /* The routing tree has no next hop toward this target - it sits behind
+         * a hole we cannot get any closer to.  Report that to the sender rather
+         * than dragging an invalid rank through the lookup below.  A message
+         * for the HNP is the exception: it is allowed to fall through to the
+         * direct-to-HNP attempt just below, which is the last resort when our
+         * whole ancestor chain has died. */
+        pmix_output_verbose(4, prte_oob_base.output,
+                            "%s oob:base:send no route to %s",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PRTE_NAME_PRINT(&msg->dst));
+        msg->status = PRTE_ERR_NO_PATH_TO_TARGET;
+        PRTE_RML_SEND_COMPLETE(msg);
+        return;
+    }
     /* do we know this hop? */
     if (NULL == (peer = prte_oob_tcp_peer_lookup(&hop))) {
         /* if this message is going to the HNP, send it direct */
@@ -91,6 +106,10 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
         PRTE_MODEX_RECV_VALUE_OPTIONAL(rc, PMIX_PROC_URI, &hop, (char **) &uri, PMIX_STRING);
         if (PRTE_SUCCESS == rc && NULL != uri) {
             peer = process_uri(uri);
+            /* process_uri only reads (and temporarily splits) the string - the
+             * copy the modex handed us is ours to release */
+            free(uri);
+            uri = NULL;
             if (NULL == peer) {
                 /* that is just plain wrong */
                 pmix_output_verbose(5, prte_oob_base.output,
@@ -98,13 +117,17 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                     PRTE_NAME_PRINT(&msg->dst));
 
-                if (prte_prteds_term_ordered || prte_finalizing || prte_abnormal_term_ordered) {
-                    /* just ignore the problem */
-                    PMIX_RELEASE(msg);
-                    return;
+                /* Complete the send, do not merely release it: the callback is
+                 * how the originator learns the message died. Releasing frees
+                 * the buffer and tells nobody - invisible for the default
+                 * callback, a silently lost message for anything that tracks
+                 * completion (all of RELM). */
+                if (!prte_prteds_term_ordered && !prte_finalizing
+                    && !prte_abnormal_term_ordered) {
+                    PRTE_ACTIVATE_PROC_STATE(&hop, PRTE_PROC_STATE_UNABLE_TO_SEND_MSG);
                 }
-                PRTE_ACTIVATE_PROC_STATE(&hop, PRTE_PROC_STATE_UNABLE_TO_SEND_MSG);
-                PMIX_RELEASE(msg);
+                msg->status = PRTE_ERR_ADDRESSEE_UNKNOWN;
+                PRTE_RML_SEND_COMPLETE(msg);
                 return;
             }
         } else if (prte_bootstrap_setup) {
@@ -121,15 +144,15 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
             }
         }
         if (NULL == peer) {
-            // unable to send it
-             if (prte_prteds_term_ordered || prte_finalizing || prte_abnormal_term_ordered) {
-                /* just ignore the problem */
-                PMIX_RELEASE(msg);
-                return;
+            // unable to send it - as above, complete rather than release so
+            // the originator's callback runs with a status
+            if (!prte_prteds_term_ordered && !prte_finalizing
+                && !prte_abnormal_term_ordered) {
+                PMIX_ERROR_LOG(rc);
+                PRTE_ACTIVATE_PROC_STATE(&hop, PRTE_PROC_STATE_UNABLE_TO_SEND_MSG);
             }
-            PMIX_ERROR_LOG(rc);
-            PRTE_ACTIVATE_PROC_STATE(&hop, PRTE_PROC_STATE_UNABLE_TO_SEND_MSG);
-            PMIX_RELEASE(msg);
+            msg->status = PRTE_ERR_ADDRESSEE_UNKNOWN;
+            PRTE_RML_SEND_COMPLETE(msg);
             return;
        }
    }
@@ -365,6 +388,7 @@ static void set_addr(pmix_proc_t *peer, char **uris)
         ports = strrchr(tcpuri, ':');
         if (NULL == ports) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            PMIx_Argv_free(masks);
             free(tcpuri);
             continue;
         }
@@ -438,11 +462,13 @@ static void set_addr(pmix_proc_t *peer, char **uris)
             if (PRTE_SUCCESS
                 != (rc = parse_uri(af_family, host, ports,
                                    (struct sockaddr_storage *) &(maddr->addr)))) {
+                /* one unparseable address is not a reason to tear down the
+                 * peer: it may well be an established one with a live socket
+                 * and queued sends, and the remaining addresses in this URI may
+                 * be perfectly usable. Drop just this address and carry on. */
                 PRTE_ERROR_LOG(rc);
                 PMIX_RELEASE(maddr);
-                pmix_list_remove_item(&prte_oob_base.peers, &pr->super);
-                PMIX_RELEASE(pr);
-                return;
+                continue;
             }
             maddr->if_mask = if_mask;
 
@@ -453,6 +479,7 @@ static void set_addr(pmix_proc_t *peer, char **uris)
             pmix_list_append(&pr->addrs, &maddr->super);
         }
         PMIx_Argv_free(addrs);
+        PMIx_Argv_free(masks);
         free(tcpuri);
     }
 }

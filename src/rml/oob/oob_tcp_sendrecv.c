@@ -534,6 +534,8 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                     PRTE_RML_POST_MESSAGE(&peer->recv_msg->hdr.origin, peer->recv_msg->hdr.tag,
                                           peer->recv_msg->hdr.seq_num, peer->recv_msg->data,
                                           peer->recv_msg->hdr.nbytes);
+                    /* PMIx_Data_load took ownership of the payload */
+                    peer->recv_msg->data = NULL;
                     PMIX_RELEASE(peer->recv_msg);
                 } else {
                     /* not for us - we are an intermediate hop. Re-enter the
@@ -620,7 +622,19 @@ static void rcv_cons(prte_oob_tcp_recv_t *ptr)
 {
     memset(&ptr->hdr, 0, sizeof(prte_oob_tcp_hdr_t));
     ptr->hdr_recvd = false;
+    ptr->data = NULL;
     ptr->rdptr = NULL;
     ptr->rdbytes = 0;
 }
-PMIX_CLASS_INSTANCE(prte_oob_tcp_recv_t, pmix_list_item_t, rcv_cons, NULL);
+/* the payload buffer belongs to the recv object until somebody takes it: the
+ * two paths that hand it on (deliver locally, relay onward) clear the pointer
+ * first, so anything still here - a message dropped as a stale incarnation, or
+ * a partial recv abandoned when the peer was closed - is ours to free
+ */
+static void rcv_des(prte_oob_tcp_recv_t *ptr)
+{
+    if (NULL != ptr->data) {
+        free(ptr->data);
+    }
+}
+PMIX_CLASS_INSTANCE(prte_oob_tcp_recv_t, pmix_list_item_t, rcv_cons, rcv_des);

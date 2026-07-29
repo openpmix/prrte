@@ -67,21 +67,27 @@ typedef struct {
 /**
  * Convert the message header to host byte order
  */
-#define MCA_OOB_TCP_HDR_NTOH(h)                 \
-    (h)->origin.rank = ntohl((h)->origin.rank); \
-    (h)->dst.rank = ntohl((h)->dst.rank);       \
-    (h)->tag = PRTE_RML_TAG_NTOH((h)->tag);     \
-    (h)->nbytes = ntohl((h)->nbytes);           \
-    (h)->epoch = prte_ntoh64((h)->epoch);
+#define MCA_OOB_TCP_HDR_NTOH(h)                     \
+    do {                                            \
+        (h)->origin.rank = ntohl((h)->origin.rank); \
+        (h)->dst.rank = ntohl((h)->dst.rank);       \
+        (h)->tag = PRTE_RML_TAG_NTOH((h)->tag);     \
+        (h)->seq_num = ntohl((h)->seq_num);         \
+        (h)->nbytes = ntohl((h)->nbytes);           \
+        (h)->epoch = prte_ntoh64((h)->epoch);       \
+    } while (0)
 
 /**
  * Convert the message header to network byte order
  */
-#define MCA_OOB_TCP_HDR_HTON(h)                 \
-    (h)->origin.rank = htonl((h)->origin.rank); \
-    (h)->dst.rank = htonl((h)->dst.rank);       \
-    (h)->tag = PRTE_RML_TAG_HTON((h)->tag);     \
-    (h)->nbytes = htonl((h)->nbytes);           \
-    (h)->epoch = prte_hton64((h)->epoch);
+#define MCA_OOB_TCP_HDR_HTON(h)                     \
+    do {                                            \
+        (h)->origin.rank = htonl((h)->origin.rank); \
+        (h)->dst.rank = htonl((h)->dst.rank);       \
+        (h)->tag = PRTE_RML_TAG_HTON((h)->tag);     \
+        (h)->seq_num = htonl((h)->seq_num);         \
+        (h)->nbytes = htonl((h)->nbytes);           \
+        (h)->epoch = prte_hton64((h)->epoch);       \
+    } while (0)
 
 #endif /* _MCA_OOB_TCP_HDR_H_ */
