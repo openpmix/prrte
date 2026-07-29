@@ -85,6 +85,7 @@ pmix_rank_t prte_rml_get_route(pmix_rank_t target){
         for(size_t i = 0; i < prte_rml_base.ancestors.size; i++){
             if(ancestors[i] == target){
                 ret = PRTE_PROC_MY_PARENT->rank;
+                break;
             }
         }
     }
@@ -275,7 +276,13 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global){
     shrink_ranks(&status.failed_ranks);
 
     //If no new information, just return
-    if(status.failed_ranks.size == 0) return;
+    if(status.failed_ranks.size == 0){
+        // the status carries heap copies of the previous ancestor/child arrays,
+        // so even the do-nothing path has to destruct it - a duplicate failure
+        // notice is the common case, not a rare one
+        PMIX_DESTRUCT(&status);
+        return;
+    }
 
     if(!global){
         // Skip this work for global, since it will have already been done
@@ -583,9 +590,18 @@ static void build_tree_from_base(void){
     resize_ranks(&prte_rml_base.children, prte_rml_base.radix);
     pmix_rank_t* children = (pmix_rank_t*) prte_rml_base.children.array;
     radix_node_t child;
-    int child_index = 0;
+    size_t child_index = 0;
     RADIX_CHILD_FOREACH(prte_rml_base.cur_node, child){
         children[child_index++] = child.rank;
+    }
+    // Clear the tail. resize_ranks only fills with INVALID the slots it newly
+    // creates, and it is a no-op when the array is already radix long - so
+    // without this any slot the walk above did not reach keeps whatever child
+    // the *previous* computation put there. A recompute (which is what a DVM
+    // grow, and a revival, both do) would then keep routing to children this
+    // daemon no longer has.
+    for(; child_index < prte_rml_base.children.size; child_index++){
+        children[child_index] = PMIX_RANK_INVALID;
     }
     shrink_ranks(&prte_rml_base.children);
     prte_rml_base.n_children = prte_rml_base.children.size;
@@ -636,11 +652,13 @@ void prte_rml_compute_routing_tree(void){
         0, "%s: parent %s num_children %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
         PRTE_VPID_PRINT(PRTE_PROC_MY_PARENT->rank), prte_rml_base.n_children
     );
+    // the daemon job may not be registered yet the first time we compute the
+    // tree, so this debug-only lookup has to tolerate its absence
     prte_job_t* dmns = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     for(size_t i = 0; i < prte_rml_base.children.size; i++){
         pmix_rank_t child_rank = ((pmix_rank_t*) prte_rml_base.children.array)[i];
 
-        prte_proc_t* d =
+        prte_proc_t* d = (NULL == dmns || NULL == dmns->procs) ? NULL :
             (prte_proc_t*) pmix_pointer_array_get_item(dmns->procs, child_rank);
         bool has_name = NULL!=d && NULL!=d->node && NULL!=d->node->name;
         char* node_name = has_name ? d->node->name : "";

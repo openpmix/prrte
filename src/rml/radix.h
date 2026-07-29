@@ -282,9 +282,16 @@ static void radix_to_next(radix_node_t* node){
     if(node->rank >= prte_rml_base.n_dmns){
         node->rank = PMIX_RANK_INVALID;
     } else if(node->rank+node->width < prte_rml_base.n_dmns){
-        // Node has at least one child
+        // Node has at least one child. Walk in from the rightmost child slot
+        // until we land on a rank that actually exists: valid ranks are
+        // [0, n_dmns), so a child equal to n_dmns is one past the end and must
+        // keep stepping left. Testing "> n_dmns" instead left the traversal
+        // sitting on the non-existent rank n_dmns whenever a node's rightmost
+        // child slot fell exactly on the boundary (e.g. rank 0 with the default
+        // radix 64 in a 64-daemon DVM), which made radix_to_next_living give up
+        // and silently drop every rank in that subtree from the repaired tree.
         pmix_rank_t child = node->rank + node->width*prte_rml_base.radix;
-        while(child > prte_rml_base.n_dmns) child -= node->width;
+        while(child >= prte_rml_base.n_dmns) child -= node->width;
         radix_incr_depth(node);
         node->rank = child;
     } else {
