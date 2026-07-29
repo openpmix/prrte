@@ -164,7 +164,11 @@ void prte_rml_base_process_msg(int fd, short flags, void *cbdata)
         (5, prte_rml_base.rml_output, "%s message received from %s for tag %d",
          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&msg->sender), msg->tag));
 
-    /* if this message is just to warmup the connection, then drop it */
+    /* a warmup message exists only to establish the connection - nobody ever
+     * posts a recv for it, so it must be consumed here rather than falling
+     * through to the matching loop, which would park it in unmatched_msgs
+     * forever. If the node map has not been communicated yet, answer it with
+     * one first. Either way the message dies here. */
     if (PRTE_RML_TAG_WARMUP_CONNECTION == msg->tag) {
         if (!prte_nidmap_communicated) {
             pmix_data_buffer_t *buffer;
@@ -175,6 +179,7 @@ void prte_rml_base_process_msg(int fd, short flags, void *cbdata)
             if (PRTE_SUCCESS != (rc = prte_util_nidmap_create(prte_node_pool, buffer))) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(buffer);
+                PMIX_RELEASE(msg);
                 return;
             }
 
@@ -183,11 +188,10 @@ void prte_rml_base_process_msg(int fd, short flags, void *cbdata)
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(buffer);
-                return;
             }
-            PMIX_RELEASE(msg);
-            return;
         }
+        PMIX_RELEASE(msg);
+        return;
     }
 
     /* see if we have a waiting recv for this message */

@@ -33,7 +33,10 @@ void prte_rml_purge(pmix_proc_t* peer){
     PMIX_LIST_FOREACH_SAFE(
         msg, next_msg, &prte_rml_base.unmatched_msgs, prte_rml_recv_t
     ) {
-        if(msg->sender.nspace != peer->nspace) continue;
+        // as above: compare the nspace strings, not the addresses of the two
+        // char arrays - "!=" on those is a pointer comparison that is always
+        // true, so no held message was ever purged
+        if(!PMIx_Check_nspace(msg->sender.nspace, peer->nspace)) continue;
         if(msg->sender.rank   != peer->rank  ) continue;
 
         pmix_list_remove_item(&prte_rml_base.unmatched_msgs, &msg->super);
