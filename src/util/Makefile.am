@@ -45,44 +45,35 @@ EXTRA_DIST = \
 
 headers = \
         attr.h \
-        bit_ops.h \
         prte_cmd_line.h \
-        crc.h \
         daemon_init.h \
         dash_host/dash_host.h \
         error_strings.h \
         ethtool.h \
         error.h \
-        malloc.h \
         name_fns.h \
         nidmap.h \
-        numtostr.h \
         prte_bootstrap.h \
         proc_info.h \
         session_dir.h \
         stacktrace.h \
-        sys_limits.h \
-        uri.h
+        sys_limits.h
 
 sources = \
         attr.c \
-        crc.c \
         daemon_init.c \
         dash_host/dash_host.c \
         error_strings.c \
         ethtool.c \
         error.c \
-        malloc.c \
         name_fns.c \
         nidmap.c \
-        numtostr.c \
         prte_bootstrap.c \
         prte_cmd_line.c \
         proc_info.c \
         session_dir.c \
         stacktrace.c \
         sys_limits.c \
-        uri.c \
         prte_show_help_content.c
 
 libprrteutil_la_SOURCES = $(headers) $(sources)

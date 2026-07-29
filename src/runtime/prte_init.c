@@ -45,7 +45,6 @@
 #include "src/util/error.h"
 #include "src/util/error_strings.h"
 #include "src/util/pmix_keyval_parse.h"
-#include "src/util/malloc.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
@@ -366,9 +365,6 @@ int prte_init_util(prte_proc_type_t flags)
 
     /* ensure we know the type of proc for when we finalize */
     prte_process_info.proc_type = flags;
-
-    /* initialize the memory allocator */
-    prte_malloc_init();
 
     /* initialize the output system */
     pmix_output_init();
