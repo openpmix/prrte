@@ -244,6 +244,82 @@ static void shutdown_callback(int fd, short flags, void *arg)
     exit(PRTE_ERROR_DEFAULT_EXIT_CODE);
 }
 
+
+/* Strip any trailing path separators from an in-place prefix string.  A value
+ * consisting solely of separators normalizes to a single separator.
+ *
+ * NOTE: this must not be done with strncpy(param, PRTE_PATH_SEP,
+ * sizeof(param) - 1) at the call site, as the code here once did four times
+ * over: `param` is a char*, so sizeof yields the size of the *pointer*, and
+ * strncpy then NUL-pads out to that many bytes - overrunning the heap for any
+ * prefix shorter than a pointer.  "--prefix /" (a two-byte allocation) was
+ * enough to corrupt the heap.  The loop below also has to guard len before
+ * indexing param[len - 1]; an empty prefix string used to read off the front
+ * of the allocation.
+ */
+void prte_strip_trailing_pathsep(char *param)
+{
+    size_t len;
+
+    if (NULL == param) {
+        return;
+    }
+    len = strlen(param);
+    if (0 == len) {
+        /* nothing to strip - and no room to write a separator into */
+        return;
+    }
+    while (0 < len && 0 == strcmp(PRTE_PATH_SEP, &param[len - 1])) {
+        param[len - 1] = '\0';
+        --len;
+    }
+    if (0 == len) {
+        /* it was nothing but separators, so the prefix is a single
+         * separator.  The original string held at least one character,
+         * so the buffer has room for this. */
+        param[0] = PRTE_PATH_SEP[0];
+        param[1] = '\0';
+    }
+}
+
+/* Split a singleton identifier of the form "<nspace>.<rank>" into its parts.
+ * Returns PRTE_SUCCESS and fills nspace/rank on success.  The value arrives
+ * straight off the command line, so a missing "." must be reported rather
+ * than dereferenced - strrchr returns NULL and "prte --singleton foo" used
+ * to segfault on the spot.
+ */
+int prte_parse_singleton_id(const char *name, pmix_nspace_t nspace, pmix_rank_t *rank)
+{
+    char *ptr, *p1, *end;
+    unsigned long rk;
+
+    if (NULL == name || NULL == rank) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    ptr = strdup(name);
+    if (NULL == ptr) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    p1 = strrchr(ptr, '.');
+    if (NULL == p1 || p1 == ptr || '\0' == p1[1]) {
+        /* no rank suffix, or an empty nspace/rank */
+        free(ptr);
+        return PRTE_ERR_BAD_PARAM;
+    }
+    *p1 = '\0';
+    ++p1;
+    errno = 0;
+    rk = strtoul(p1, &end, 10);
+    if (0 != errno || NULL == end || '\0' != *end) {
+        free(ptr);
+        return PRTE_ERR_BAD_PARAM;
+    }
+    PMIX_LOAD_NSPACE(nspace, ptr);
+    free(ptr);
+    *rank = (pmix_rank_t) rk;
+    return PRTE_SUCCESS;
+}
+
 PRTE_EXPORT int prte(int argc, char *argv[])
 {
     int rc = 1, i;
@@ -253,7 +329,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     prte_pmix_app_t *app;
     pmix_info_t *iptr, *iptr2, info;
     pmix_status_t ret;
-    size_t n, ninfo, param_len;
+    size_t n, ninfo;
     pmix_app_t *papps;
     size_t napps;
     mylock_t mylock;
@@ -662,10 +738,21 @@ PRTE_EXPORT int prte(int argc, char *argv[])
         setenv("PRTE_MCA_prte_launch_agent", opt->values[0], true); // cmd line overrides all
     }
 
-    /* if we are supporting a singleton, cache its ID
-     * so it can get picked up and registered by server init */
+    /* If we are supporting a singleton, cache its ID so it can get picked
+     * up and registered by server init.  Validate it here, before prte_init:
+     * the value is handed straight down to PMIx_server_init as
+     * PMIX_SINGLETON, and a value that is not "<nspace>.<rank>" faults
+     * inside the PMIx library long before PRRTE's own prep_singleton would
+     * ever see it. */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_SINGLETON);
     if (NULL != opt) {
+        pmix_nspace_t sgltn;
+        pmix_rank_t sgrank;
+        if (PRTE_SUCCESS != prte_parse_singleton_id(opt->values[0], sgltn, &sgrank)) {
+            pmix_show_help("help-prte.txt", "bad-singleton", true,
+                           prte_tool_basename, opt->values[0]);
+            return 1;
+        }
         prte_pmix_server_globals.singleton = strdup(opt->values[0]);
     }
 
@@ -841,36 +928,14 @@ PRTE_EXPORT int prte(int argc, char *argv[])
             param = strdup(prte_install_dirs.prefix);
         }
         /* "Parse" the param, aka remove superfluous path_sep. */
-        param_len = strlen(param);
-        while (0 == strcmp(PRTE_PATH_SEP, &(param[param_len - 1]))) {
-            param[param_len - 1] = '\0';
-            param_len--;
-            if (0 == param_len) {
-                /* We get here if we removed all PATH_SEP's and end up
-                   with an empty string.  In this case, the prefix is
-                   just a single PATH_SEP. */
-                strncpy(param, PRTE_PATH_SEP, sizeof(param) - 1);
-                break;
-            }
-        }
+        prte_strip_trailing_pathsep(param);
     } else if (NULL != (cptr = getenv("PRTE_PREFIX"))) {
         /* need to cover the case where "want prefix by default" is not
          * given, but PRTE_PREFIX was added to the environment prior
          * to actually invoking prte */
         param = strdup(cptr);
         /* "Parse" the param, aka remove superfluous path_sep. */
-        param_len = strlen(param);
-        while (0 == strcmp(PRTE_PATH_SEP, &(param[param_len - 1]))) {
-            param[param_len - 1] = '\0';
-            param_len--;
-            if (0 == param_len) {
-                /* We get here if we removed all PATH_SEP's and end up
-                   with an empty string.  In this case, the prefix is
-                   just a single PATH_SEP. */
-                strncpy(param, PRTE_PATH_SEP, sizeof(param) - 1);
-                break;
-            }
-        }
+        prte_strip_trailing_pathsep(param);
     } else {
         /* Check if called with fully-qualified path to prte.
            (Note: Put this second so can override with --prefix (above). */
@@ -946,33 +1011,11 @@ PRTE_EXPORT int prte(int argc, char *argv[])
      * cmd line above, so we can just use that result */
     if (NULL != param) {
         /* "Parse" the param, aka remove superfluous path_sep. */
-        param_len = strlen(param);
-        while (0 == strcmp(PRTE_PATH_SEP, &(param[param_len - 1]))) {
-            param[param_len - 1] = '\0';
-            param_len--;
-            if (0 == param_len) {
-                /* We get here if we removed all PATH_SEP's and end up
-                   with an empty string.  In this case, the prefix is
-                   just a single PATH_SEP. */
-                strncpy(param, PRTE_PATH_SEP, sizeof(param) - 1);
-                break;
-            }
-        }
+        prte_strip_trailing_pathsep(param);
     } else if (NULL != (cptr = getenv("PMIX_PREFIX"))) {
         param = strdup(cptr);
         /* "Parse" the param, aka remove superfluous path_sep. */
-        param_len = strlen(param);
-        while (0 == strcmp(PRTE_PATH_SEP, &(param[param_len - 1]))) {
-            param[param_len - 1] = '\0';
-            param_len--;
-            if (0 == param_len) {
-                /* We get here if we removed all PATH_SEP's and end up
-                   with an empty string.  In this case, the prefix is
-                   just a single PATH_SEP. */
-                strncpy(param, PRTE_PATH_SEP, sizeof(param) - 1);
-                break;
-            }
-        }
+        prte_strip_trailing_pathsep(param);
     }
     if (NULL != param) {
         // add the directive to the daemon job object
@@ -1539,7 +1582,7 @@ static void abort_signal_callback(int fd)
 
 static int prep_singleton(const char *name)
 {
-    char *ptr, *p1;
+    pmix_nspace_t nspace;
     prte_job_t *jdata;
     prte_node_t *node;
     prte_proc_t *proc;
@@ -1549,14 +1592,13 @@ static int prep_singleton(const char *name)
     char cwd[PRTE_PATH_MAX];
     prte_pmix_lock_t lock;
 
-    ptr = strdup(name);
-    p1 = strrchr(ptr, '.');
-    *p1 = '\0';
-    ++p1;
-    rank = strtoul(p1, NULL, 10);
+    rc = prte_parse_singleton_id(name, nspace, &rank);
+    if (PRTE_SUCCESS != rc) {
+        pmix_show_help("help-prte.txt", "bad-singleton", true, prte_tool_basename, name);
+        return rc;
+    }
     jdata = PMIX_NEW(prte_job_t);
-    PMIX_LOAD_NSPACE(jdata->nspace, ptr);
-    free(ptr);
+    PMIX_LOAD_NSPACE(jdata->nspace, nspace);
     jdata->session = prte_default_session;
     rc = prte_set_job_data_object(jdata);
     if (PRTE_SUCCESS != rc) {
@@ -1569,8 +1611,6 @@ static int prep_singleton(const char *name)
     app->app = strdup(jdata->nspace);
     app->num_procs = 1;
     PMIx_Argv_append_nosize(&app->argv, app->app);
-    pmix_getcwd(cwd, sizeof(cwd));
-    app->cwd = strdup(cwd);
     pmix_pointer_array_set_item(jdata->apps, 0, app);
     jdata->num_apps = 1;
 
@@ -1584,6 +1624,11 @@ static int prep_singleton(const char *name)
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
+    if (PRTE_SUCCESS != pmix_getcwd(cwd, sizeof(cwd))) {
+        cwd[0] = '\0';
+    }
+    free(app->cwd);
+    app->cwd = strdup(cwd);
     PMIX_RETAIN(node);
     pmix_pointer_array_add(jdata->map->nodes, node);
     ++(jdata->map->num_nodes);
