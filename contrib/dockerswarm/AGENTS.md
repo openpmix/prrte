@@ -42,6 +42,7 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | `docker-compose.yml` | The ten nodes `prte-node1`..`prte-node10`, each mounting the shared `prte-build` volume. |
 | `elastic.c` | The elastic test client (`elastic` in the install): issues a PMIx allocation request and waits for the phase-two completion event. |
 | *(no file here)* | `build.sh` also compiles [`examples/dynamic.c`](../../examples/dynamic.c) from the main tree as `dynamic` — the only client in this harness that calls `PMIx_Spawn`, and so the only way to get a **parent/child job pair**. See §11. |
+| `dataserver.c` | A bare PMIx client for the publish/lookup service (`dataserver` in the install): publish/lookup/lookupwait/lookup2/unpublish. Drives `src/runtime/data_server`. See §13. |
 | `fake-slurm.py` | A stand-in SLURM control plane (`sbatch`/`scontrol`/`scancel`) so `ras/slurm`'s elastic modify surface can be exercised. See §12. |
 
 ## 2. How it works
@@ -607,3 +608,104 @@ separates a parser error from whatever the launch path later does with the
 number. The pool is asserted too, separately — a node whose count came
 from the scheduler must still carry that count at mapping time
 (`PRTE_NODE_FLAG_SLOTS_GIVEN`).
+
+## 13. The data server (`dataserver`, `test_runtime`)
+
+Most of [`src/runtime`](../../src/runtime/AGENTS.md) needs no DVM and is
+covered by `test/unit/runtime`. Two things are not, and they are what the
+`test_runtime` phase asserts.
+
+**The publish/lookup data server is a single store on the HNP** that every
+client reaches over the RML through its own daemon. That shape is what makes
+it a multi-node subject:
+
+- **`PMIX_RANGE_LOCAL` compares the publisher's proxy against the
+  requestor's proxy** — the daemons that relayed the two requests. On one
+  node those are the same object no matter what the code does, so the check
+  cannot be wrong there. (It was: neither object's constructor initialized
+  `proxy`, and `PMIX_NEW` does not zero its allocation.)
+- **A `PMIX_WAIT` lookup parks in the store** until a later publish
+  satisfies it. The publish arrives from one daemon and the reply goes back
+  out through another, so the parked request has to carry the requestor's
+  proxy and room number across the gap. That path also has to *dispose of*
+  the answer buffer it was handed and will never send.
+- **A partial lookup** (two keys, one published) has to return the half it
+  found alongside `PMIX_ERR_PARTIAL_SUCCESS`. It used to return the status
+  and drop both the values and the buffer holding them.
+
+The probe is `dataserver`, compiled by `build.sh` the same way as `elastic`
+and `jobinfo`:
+
+```sh
+dataserver publish <key> <value> [session|namespace|local|proc-local|global] [secs]
+dataserver lookup <key> [secs]           # no wait
+dataserver lookupwait <key> [secs]       # PMIX_WAIT -- parks in the store
+dataserver lookup2 <key1> <key2> [secs]  # the partial-success shape
+dataserver unpublish <key> [secs]        # publish, confirm, unpublish, confirm gone
+```
+
+`publish` and `lookupwait` stay alive for their `secs` argument and print a
+marker line (`PUBLISHED`, `WAITING`) as soon as they reach that state, so a
+test runs them with `PRUN_BG` and greps the capture file rather than
+sleeping blind.
+
+**The second thing** is that the object destructors — and the ownership
+rules in `src/runtime/AGENTS.md` they encode — only run for real at
+teardown. `prte_session_t` had been registered against the wrong parent
+class, and the symptom (an assert inside `pmix_list_item_destruct` reading
+the middle of the session's own data) fires only when a session is actually
+*released*. So the phase ends by running jobs and then taking the DVM down,
+asserting `pterm` succeeds, that nothing on the way out looks like an assert
+or a fault, and that no daemon survived.
+
+Note that the harness image builds a debug PMIx. That matters here: the
+class-hierarchy check that catches this is `#if PMIX_ENABLE_DEBUG` only, so
+against a release PMIx the same bug is silent memory corruption instead.
+
+## 14. A remote app gets an EMPTY environment, and that hides a stale PMIx
+
+Two related traps, same root cause, and the second one is genuinely nasty.
+
+**The root cause.** An application launched onto a node other than node1
+does *not* inherit the head node's login environment. Concretely, for a
+proc on node4:
+
+```
+$ prun --host node4:1,node1:1 -n 2 --map-by node sh -c 'echo $(hostname) LDLP=$LD_LIBRARY_PATH'
+node4 LDLP=
+node1 LDLP=/opt/prte/prte/lib:/opt/prte/pmix/lib:...
+```
+
+`-x LD_LIBRARY_PATH` does not change that. node1 works only because its
+apps inherit from the HNP, which *was* started from a shell that sourced
+`env.sh`.
+
+**Trap 1 — PATH.** The node entrypoint symlinks the install's `bin` into
+`/usr/local/bin` when the **container** starts, so anything added by a later
+`build.sh` is not on a remote app's PATH. A bare name then fails with
+`PMIX_ERR_JOB_FAILED_TO_LAUNCH` and *no diagnostic*. Use an absolute path
+for helpers in new cases (`DS=/opt/prte/prte/bin/dataserver`); the older
+`jobinfo`/`elastic` cases work only because the entrypoint happened to link
+them.
+
+**Trap 2 — the wrong libpmix, silently.** `/usr/local/lib/libpmix.so.2` is
+the PMIx baked into the *image*. With no `LD_LIBRARY_PATH`, that is what a
+remote app loads — same soname, same version string, different code — so
+every PMIx-linking helper on nodes 2-10 was running the image's PMIx rather
+than the one `PMIX_SRC=... ./build.sh` had just built. Nothing announces
+this. A change spanning both code bases passes on node1 and quietly tests
+the wrong library everywhere else; that is exactly how the partial-lookup
+case (§13) looked broken after it had been fixed.
+
+`build.sh` now links every helper with `-Wl,-rpath,$PMIX_PREFIX/lib` so the
+binary finds the right PMIx regardless of environment. **Any new helper must
+carry that too.** To check one:
+
+```sh
+docker exec prte-node4 sh -c 'ldd /opt/prte/prte/bin/<helper> | grep pmix'
+# must say /opt/prte/pmix/lib, NOT /usr/local/lib
+```
+
+The daemons themselves are fine — `prted` is launched with the right
+environment and loads the volume's PMIx on every node. It is only the
+application processes they fork that lose it.
