@@ -263,6 +263,7 @@ int prte_oob_open(void)
         }
         copied_interface = PMIX_NEW(pmix_pif_t);
         if (NULL == copied_interface) {
+            PMIx_Argv_free(interfaces);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
         pmix_string_copy(copied_interface->if_name, selected_interface->if_name, PMIX_IF_NAMESIZE);
@@ -295,11 +296,17 @@ int prte_oob_open(void)
         && 0 == PMIx_Argv_count(prte_oob_base.ipv6conns)
 #endif
     ) {
+        /* say so: this is reachable straight from user input (an if_include or
+         * if_exclude that leaves nothing), and the caller can only turn the
+         * bare error code into an abort */
+        pmix_show_help("help-oob-tcp.txt", "no-interfaces", true,
+                       prte_process_info.nodename);
         return PRTE_ERR_NOT_AVAILABLE;
     }
 
     // start the listeners
     if (PRTE_SUCCESS != (rc = prte_oob_tcp_start_listening())) {
+        pmix_show_help("help-oob-tcp.txt", "no-listeners", true);
         PRTE_ERROR_LOG(rc);
     }
     return rc;
@@ -324,6 +331,29 @@ void prte_oob_close(void)
 
     PMIX_LIST_DESTRUCT(&prte_oob_base.local_ifs);
     PMIX_LIST_DESTRUCT(&prte_oob_base.peers);
+    /* the listener objects and the parsed port ranges are ours too - this tree
+     * is kept valgrind-clean, so tear down everything prte_oob_open and
+     * prte_oob_register built */
+    PMIX_LIST_DESTRUCT(&prte_oob_base.listeners);
+
+    if (NULL != prte_oob_base.tcp_static_ports) {
+        PMIx_Argv_free(prte_oob_base.tcp_static_ports);
+        prte_oob_base.tcp_static_ports = NULL;
+    }
+    if (NULL != prte_oob_base.tcp_dyn_ports) {
+        PMIx_Argv_free(prte_oob_base.tcp_dyn_ports);
+        prte_oob_base.tcp_dyn_ports = NULL;
+    }
+#if PRTE_ENABLE_IPV6
+    if (NULL != prte_oob_base.tcp6_static_ports) {
+        PMIx_Argv_free(prte_oob_base.tcp6_static_ports);
+        prte_oob_base.tcp6_static_ports = NULL;
+    }
+    if (NULL != prte_oob_base.tcp6_dyn_ports) {
+        PMIx_Argv_free(prte_oob_base.tcp6_dyn_ports);
+        prte_oob_base.tcp6_dyn_ports = NULL;
+    }
+#endif
 
     if (NULL != prte_oob_base.ipv4conns) {
         PMIx_Argv_free(prte_oob_base.ipv4conns);
