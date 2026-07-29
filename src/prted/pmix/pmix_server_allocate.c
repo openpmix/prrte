@@ -58,6 +58,7 @@ void pmix_server_alloc_request_resp(int status, pmix_proc_t *sender,
         goto ANSWER;
     }
 
+    cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &req->ninfo, &cnt, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
@@ -67,6 +68,9 @@ void pmix_server_alloc_request_resp(int status, pmix_proc_t *sender,
 
     if (0 < req->ninfo) {
         PMIX_INFO_CREATE(req->info, req->ninfo);
+        /* the request now owns this array - without this its destructor
+         * leaves the whole unpacked result behind */
+        req->copy = true;
 
         cnt = req->ninfo;
         rc = PMIx_Data_unpack(NULL, buffer, req->info, &cnt, PMIX_INFO);

@@ -66,7 +66,7 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
                                       size_t ntargets, const pmix_info_t directives[], size_t ndirs)
 {
     int rc, j;
-    int32_t signum;
+    int32_t signum, ntgts;
     size_t m, n;
     prte_proc_t *proc;
     pmix_nspace_t jobid;
@@ -204,8 +204,12 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
                 PMIX_DATA_BUFFER_RELEASE(cmd);
                 return rc;
             }
-            // pack the #targets
-            rc = PMIx_Data_pack(NULL, cmd, &ntargets, 1, PMIX_INT32);
+            /* pack the #targets - the receiver unpacks an int32, so
+             * narrow it here rather than handing PMIx the address of a
+             * size_t and letting it read the wrong half on a big-endian
+             * machine */
+            ntgts = (int32_t) ntargets;
+            rc = PMIx_Data_pack(NULL, cmd, &ntgts, 1, PMIX_INT32);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(cmd);

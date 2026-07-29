@@ -478,13 +478,19 @@ void pmix_server_monitor_resp(int status, pmix_proc_t *sender,
     // record that another daemon reported
     ++req->nreported;
 
+    /* Note that every failure below records the error on the request and
+     * then falls through to the completion check.  Returning early would
+     * leave nreported already incremented for this daemon, so a malformed
+     * response from the LAST daemon to report would mean the request never
+     * completes and the requestor hangs forever. */
+
     // unpack the returned status
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &rstatus, &cnt, PMIX_STATUS);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         req->pstatus = rc;
-        return;
+        goto complete;
     }
     req->pstatus = rstatus;
 
@@ -495,7 +501,7 @@ void pmix_server_monitor_resp(int status, pmix_proc_t *sender,
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             req->pstatus = rc;
-            return;
+            goto complete;
         }
         if (0 < ninfo) {
             PMIX_INFO_CREATE(info, ninfo);
@@ -503,9 +509,9 @@ void pmix_server_monitor_resp(int status, pmix_proc_t *sender,
             rc = PMIx_Data_unpack(NULL, buffer, info, &cnt, PMIX_INFO);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
-                PMIx_Info_free(info, ninfo);
+                PMIX_INFO_FREE(info, ninfo);
                 req->pstatus = rc;
-                return;
+                goto complete;
             }
         }
         // add these to the collected results
@@ -526,12 +532,16 @@ void pmix_server_monitor_resp(int status, pmix_proc_t *sender,
                 ++m;
             }
             PMIX_INFO_FREE(req->info, req->ninfo);
+            /* PMIX_INFO_XFER deep-copies, so the array we just unpacked
+             * still owns its entries - release them */
+            PMIX_INFO_FREE(info, ninfo);
             req->info = results;
             req->ninfo = sz;
         }
         req->copy = true;
     }
 
+complete:
     // if all daemons have reported, then we are complete
     if (req->ndaemons == req->nreported) {
         if (NULL != req->infocbfunc) {

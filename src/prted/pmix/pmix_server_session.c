@@ -18,8 +18,15 @@
 #include "src/mca/schizo/base/base.h"
 #include "src/util/pmix_show_help.h"
 
-/* Process the session control directive from the scheduler */
-static int process_directive(prte_pmix_server_req_t *req)
+/* Process the session control directive from the scheduler.
+ *
+ * Returns a pmix_status_t - NOT a PRRTE return code.  The caller
+ * (pass_request) hands the result straight to req->infocbfunc, which is a
+ * PMIx callback, so every exit from here must already be in PMIx's numbering.
+ * This function must also never invoke that callback itself: pass_request
+ * falls through to its "callback:" tail on return, so answering here too
+ * would deliver the response twice and release the request twice. */
+static pmix_status_t process_directive(prte_pmix_server_req_t *req)
 {
     char *user_refid = NULL, *alloc_refid = NULL;
     pmix_info_t *personality = NULL, *iptr;
@@ -31,7 +38,7 @@ static int process_directive(prte_pmix_server_req_t *req)
     pmix_app_t *apps;
     size_t napps;
     size_t n, i;
-    int j;
+    int j, prc;
     pmix_status_t rc;
     bool terminate = false;
     bool pause = false;
@@ -51,21 +58,19 @@ static int process_directive(prte_pmix_server_req_t *req)
             if (NULL != session) {
                 // this is an error - cannot instantiate a preexisting
                 // session
-                rc = PMIX_ERR_BAD_PARAM;
-                goto ANSWER;
+                return PMIX_ERR_BAD_PARAM;
             }
             /* create a new session object */
             session = PMIX_NEW(prte_session_t);
             if (NULL == session) {
-                rc = PRTE_ERR_OUT_OF_RESOURCE;
-                PRTE_ERROR_LOG(rc);
-                goto ANSWER;
+                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                return PMIX_ERR_NOMEM;
             }
             session->session_id = req->sessionID;
-            rc = prte_set_session_object(session);
-            if (PRTE_SUCCESS != rc) {
+            prc = prte_set_session_object(session);
+            if (PRTE_SUCCESS != prc) {
                 PMIX_RELEASE(session);
-                goto ANSWER;
+                return prte_pmix_convert_rc(prc);
             }
             // if a job has already been described, add it here
             if (NULL != jdata) {
@@ -92,11 +97,10 @@ static int process_directive(prte_pmix_server_req_t *req)
             // transfer the job description across
             iptr = (pmix_info_t*)req->info[n].value.data.darray->array;
             i = req->info[n].value.data.darray->size;
-            rc = prte_pmix_xfer_job_info(jdata, iptr, i);
-            if (PRTE_SUCCESS != rc) {
-                PRTE_ERROR_LOG(rc);
-                rc = prte_pmix_convert_rc(rc);
-                goto ANSWER;
+            prc = prte_pmix_xfer_job_info(jdata, iptr, i);
+            if (PRTE_SUCCESS != prc) {
+                PRTE_ERROR_LOG(prc);
+                return prte_pmix_convert_rc(prc);
             }
 
         } else if (PMIX_CHECK_KEY(&req->info[n], PMIX_SESSION_APP)) {
@@ -112,11 +116,10 @@ static int process_directive(prte_pmix_server_req_t *req)
             apps = (pmix_app_t*)req->info[n].value.data.darray->array;
             napps = req->info[n].value.data.darray->size;
             for (i=0; i < napps; i++) {
-                rc = prte_pmix_xfer_app(jdata, &apps[n]);
-                if (PRTE_SUCCESS != rc) {
-                    PRTE_ERROR_LOG(rc);
-                    rc = prte_pmix_convert_rc(rc);
-                    goto ANSWER;
+                prc = prte_pmix_xfer_app(jdata, &apps[i]);
+                if (PRTE_SUCCESS != prc) {
+                    PRTE_ERROR_LOG(prc);
+                    return prte_pmix_convert_rc(prc);
                 }
             }
 
@@ -137,8 +140,7 @@ static int process_directive(prte_pmix_server_req_t *req)
         } else if (PMIX_CHECK_KEY(&req->info[n], PMIX_SESSION_PROVISION_NODES) ||
                    PMIX_CHECK_KEY(&req->info[n], PMIX_SESSION_PROVISION_IMAGE)) {
             // we don't support these directives
-            rc = PMIX_ERR_NOT_SUPPORTED;
-            goto ANSWER;
+            return PMIX_ERR_NOT_SUPPORTED;
 
         } else if(PMIX_CHECK_KEY(&req->info[n], PMIX_ALLOC_ID)) {
             if (NULL != session) {
@@ -159,8 +161,7 @@ static int process_directive(prte_pmix_server_req_t *req)
 
         } else if (PMIX_CHECK_KEY(&req->info[n], PMIX_ALLOC_NUM_CPU_LIST)) {
             // we don't support this directive
-            rc = PMIX_ERR_NOT_SUPPORTED;
-            goto ANSWER;
+            return PMIX_ERR_NOT_SUPPORTED;
 
         } else if (PMIX_CHECK_KEY(&req->info[n], PMIX_SESSION_PAUSE)) {
             pause = PMIX_INFO_TRUE(&req->info[n]);
@@ -181,7 +182,7 @@ static int process_directive(prte_pmix_server_req_t *req)
             signal = true;
             PMIX_VALUE_GET_NUMBER(rc, &req->info[n].value, sigvalue, int);
             if (PMIX_SUCCESS != rc) {
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
 
         } else if (PMIX_CHECK_KEY(&req->info[n], PMIX_SESSION_EXTEND)) {
@@ -190,7 +191,7 @@ static int process_directive(prte_pmix_server_req_t *req)
         } else if (PMIX_CHECK_KEY(&req->info[n], PMIX_TIMEOUT)) {
             PMIX_VALUE_GET_NUMBER(rc, &req->info[n].value, tval, int);
             if (PMIX_SUCCESS != rc) {
-                return PRTE_ERR_BAD_PARAM;
+                return PMIX_ERR_BAD_PARAM;
             }
         }
     }  // for loop
@@ -201,14 +202,14 @@ static int process_directive(prte_pmix_server_req_t *req)
         session = prte_get_session_object(req->sessionID);
         if (NULL == session) {
             // we don't know about it
-            return PRTE_ERR_NOT_FOUND;
+            return PMIX_ERR_NOT_FOUND;
         }
         // TODO: execute the specified operation on this session
         if (terminate || pause || resume || restore || preempt ||
             signal || extend || 0 < tval || 0 < sigvalue) {
-            return PRTE_ERR_NOT_SUPPORTED;
+            return PMIX_ERR_NOT_SUPPORTED;
         }
-        return PRTE_SUCCESS;
+        return PMIX_SUCCESS;
     }
 
     // continue working on a new instantiation
@@ -241,8 +242,7 @@ static int process_directive(prte_pmix_server_req_t *req)
              * for someone downstream to dereference */
             pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename,
                            (NULL == personality) ? "NULL" : personality->value.data.string);
-            rc = PMIX_ERR_NOT_FOUND;
-            goto ANSWER;
+            return PMIX_ERR_NOT_FOUND;
         }
     }
 
@@ -267,16 +267,7 @@ static int process_directive(prte_pmix_server_req_t *req)
             }
         }
     }
-    return PRTE_SUCCESS;
-
-// only come here upon error
-ANSWER:
-    if (NULL != req->infocbfunc) {
-        req->infocbfunc(rc, req->info, req->ninfo, req->cbdata, prte_pmix_server_req_release, req);
-    } else {
-        PMIX_RELEASE(req);
-    }
-    return PRTE_SUCCESS;
+    return PMIX_SUCCESS;
 }
 
 /* Callbacks to process a session control answer from the scheduler
@@ -290,13 +281,75 @@ static void passthru(int sd, short args, void *cbdata)
     if (NULL != req->infocbfunc) {
         // call the requestor's callback with the returned info
         req->infocbfunc(req->status, req->info, req->ninfo, req->cbdata, req->rlcbfunc, req->rlcbdata);
-    } else {
-        // let them cleanup
+    } else if (NULL != req->rlcbfunc) {
+        // no one to answer, but the result array still has to go back
         req->rlcbfunc(req->rlcbdata);
     }
     // cleanup our request
     pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
     PMIX_RELEASE(req);
+}
+
+/* Caddy carrying a session-control result from the PMIx progress thread over
+ * to the PRRTE progress thread - the same shape, and for the same reason, as
+ * prte_alloc_resp_caddy_t in pmix_server.c.  A prte_pmix_server_req_t is a
+ * PRRTE object owned by the PRRTE progress thread, so the PMIx-thread callback
+ * must only capture the result; recording it on the request - and above all
+ * freeing the array the request was carrying - has to happen in the shifted
+ * handler. */
+typedef struct {
+    pmix_object_t super;
+    prte_event_t ev;
+    prte_pmix_server_req_t *req;
+    pmix_status_t status;
+    pmix_info_t *info;
+    size_t ninfo;
+    pmix_release_cbfunc_t rel;
+    void *relcbdata;
+} prte_sessctrl_resp_caddy_t;
+static void srcon(prte_sessctrl_resp_caddy_t *p)
+{
+    p->req = NULL;
+    p->status = PMIX_SUCCESS;
+    p->info = NULL;
+    p->ninfo = 0;
+    p->rel = NULL;
+    p->relcbdata = NULL;
+}
+static void srdes(prte_sessctrl_resp_caddy_t *p)
+{
+    if (NULL != p->req) {
+        PMIX_RELEASE(p->req);
+    }
+}
+static PMIX_CLASS_INSTANCE(prte_sessctrl_resp_caddy_t, pmix_object_t, srcon, srdes);
+
+/* record the result on the request and answer - runs on the PRRTE
+ * progress thread */
+static void _sessctrl_resp(int sd, short args, void *cbdata)
+{
+    prte_sessctrl_resp_caddy_t *cd = (prte_sessctrl_resp_caddy_t*)cbdata;
+    prte_pmix_server_req_t *req = cd->req;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_ACQUIRE_OBJECT(cd);
+
+    /* now safe to touch the request. Beware that a caller may hand the
+     * request's OWN info array back as the result - do not free it in
+     * that case */
+    req->status = cd->status;
+    if (req->copy && NULL != req->info && cd->info != req->info) {
+        PMIX_INFO_FREE(req->info, req->ninfo);
+        req->copy = false;
+    }
+    req->info = cd->info;
+    req->ninfo = cd->ninfo;
+    req->rlcbfunc = cd->rel;
+    req->rlcbdata = cd->relcbdata;
+
+    passthru(0, 0, req);
+    /* passthru released the request's array-slot reference; drop ours */
+    PMIX_RELEASE(cd);
 }
 
 static void infocbfunc(pmix_status_t status,
@@ -305,22 +358,20 @@ static void infocbfunc(pmix_status_t status,
                        pmix_release_cbfunc_t rel, void *relcbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
+    prte_sessctrl_resp_caddy_t *cd;
 
-    // need to pass this into our progress thread for processing
-    // since we touch the global request array
-    req->status = status;
-    if (req->copy && NULL != req->info) {
-        PMIX_INFO_FREE(req->info, req->ninfo);
-        req->copy = false;
-    }
-    req->info = info;
-    req->ninfo = ninfo;
-    req->rlcbfunc = rel;
-    req->rlcbdata = relcbdata;
+    /* GOLDEN RULE: this can be invoked on the PMIx progress thread, so
+     * capture the result and post it - touch no PRRTE state here */
+    cd = PMIX_NEW(prte_sessctrl_resp_caddy_t);
+    PMIX_RETAIN(req);
+    cd->req = req;
+    cd->status = status;
+    cd->info = info;
+    cd->ninfo = ninfo;
+    cd->rel = rel;
+    cd->relcbdata = relcbdata;
 
-    prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, passthru, req);
-    PMIX_POST_OBJECT(req);
-    prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
+    PRTE_PMIX_THREADSHIFT(cd, prte_event_base, _sessctrl_resp);
 }
 
 static void pass_request(int sd, short args, void *cbdata)

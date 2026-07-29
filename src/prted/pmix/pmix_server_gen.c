@@ -392,9 +392,10 @@ void pmix_server_tconn_return(int status, pmix_proc_t *sender,
     pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, room, NULL);
 
     if (NULL == req) {
-        /* we are hosed */
+        /* we are hosed - note that the jobid has not been unpacked yet,
+         * so it must not be reported here */
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        pmix_output(0, "UNABLE TO RETRIEVE SPWN_REQ FOR JOB %s [room=%d]", jobid, room);
+        pmix_output(0, "UNABLE TO RETRIEVE TOOL CONNECTION REQ [room=%d]", room);
         return;
     }
 
@@ -404,6 +405,7 @@ void pmix_server_tconn_return(int status, pmix_proc_t *sender,
         rc = PMIx_Data_unpack(NULL, buffer, &jobid, &cnt, PMIX_PROC_NSPACE);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
+            PMIX_RELEASE(req);
             return;
         }
         PMIX_LOAD_NSPACE(req->target.nspace, jobid);

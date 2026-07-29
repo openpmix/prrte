@@ -96,7 +96,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
     pmix_value_t *pval;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
-    PMIX_ACQUIRE_OBJECT(rq);
+    PMIX_ACQUIRE_OBJECT(req);
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s DMODX REQ FOR %s:%u",
@@ -142,13 +142,21 @@ static void dmodex_req(int sd, short args, void *cbdata)
     }
 
     /* has anyone already requested data for this target? If so,
-     * then the data is already on its way */
+     * then the data is already on its way.
+     *
+     * Compare against the other request's tproc - the proc whose data was
+     * asked for.  It must NOT be compared against r->target, which only the
+     * monitor and tool-connection paths ever set and which is therefore
+     * {"", PMIX_RANK_INVALID} for every dmodex request: PMIx_Check_nspace
+     * treats an empty nspace as matching anything, so a request for
+     * PMIX_RANK_WILDCARD (the job-level data fetch below) would "match" the
+     * first entry in the array, get parked here, and never be answered. */
     for (rnum = 0; rnum < prte_pmix_server_globals.local_reqs.size; rnum++) {
         r = (prte_pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, rnum);
         if (NULL == r) {
             continue;
         }
-        if (PMIX_CHECK_PROCID(&r->target, &req->tproc)) {
+        if (PMIX_CHECK_PROCID(&r->tproc, &req->tproc)) {
             /* save the request in the array until the
              * data is returned */
             req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
