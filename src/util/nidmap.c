@@ -103,6 +103,10 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
      * the buffer to the span so it holds every packed vpid. */
     nbytes = span * sizeof(pmix_rank_t);
     vpids = (pmix_rank_t *) malloc(nbytes);
+    if (NULL == vpids) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
 
     ndaemons = 0;
     for (n = 0; n < pool->size; n++) {
@@ -209,7 +213,14 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
     free(bo.bytes);
     bo.bytes = NULL;
 
-    /* compress the vpids */
+    /* compress the vpids. Only the entries we actually filled: the buffer is
+     * sized to the vpid *span*, which exceeds the daemon count whenever the
+     * DVM carries a shrink hole, and the tail past ndaemons is uninitialized
+     * heap. The receiver reads one vpid per packed node name, so those bytes
+     * were never wanted - they were just being compressed and shipped to
+     * every daemon (and made the compressed and uncompressed encodings
+     * disagree about the object's length). */
+    nbytes = ndaemons * sizeof(pmix_rank_t);
     if (PMIx_Data_compress((uint8_t *) vpids, nbytes, (uint8_t **) &bo.bytes, &sz)) {
         /* mark that this was compressed */
         compressed = true;
@@ -384,6 +395,23 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
 
     /* get the daemon job object */
     daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    if (NULL == daemons) {
+        /* should never happen - we are a daemon reading our own DVM's map */
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        rc = PRTE_ERR_NOT_FOUND;
+        goto cleanup;
+    }
+
+    /* the three arrays are built in lockstep by nidmap_create, so anything
+     * shorter than the node-name list means the message is not one of ours -
+     * and the loop below indexes all three by the same subscript */
+    if (NULL == names || NULL == aliases || NULL == vpid
+        || PMIx_Argv_count(names) > PMIx_Argv_count(aliases)
+        || (size_t) PMIx_Argv_count(names) > sz / sizeof(pmix_rank_t)) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        rc = PRTE_ERR_BAD_PARAM;
+        goto cleanup;
+    }
 
     /* get our topology */
     t = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, 0);
@@ -486,6 +514,11 @@ cleanup:
     }
     if (NULL != names) {
         PMIx_Argv_free(names);
+    }
+    /* the alias list was leaked on every single decode, including the clean
+     * one - and every daemon decodes a nidmap on each DVM update */
+    if (NULL != aliases) {
+        PMIx_Argv_free(aliases);
     }
     return rc;
 }

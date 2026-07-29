@@ -184,7 +184,16 @@ cores_per_socket   { prte_util_hostfile_value.sval = yytext;
                       prte_util_hostfile_value.sval = yytext;
                       return PRTE_HOSTFILE_IPV6; }
 
-(\^?[A-Za-z0-9][A-Za-z0-9_\-]*"@")?[A-Za-z0-9][A-Za-z0-9_\-\.]*  {
+%{ /* A leading '^' excludes the named host. It has to be allowed on the
+    * plain "hostname" form and not only on the "user@hostname" one: it sat
+    * inside the optional user@ group, which the "@" makes mandatory, so a
+    * bare "^host" line never matched this rule at all - it fell through to
+    * the catch-all below and the whole hostfile was rejected as a parse
+    * error. hostfile_parse_line() has always known how to strip the '^' and
+    * put the node on the exclude list; it simply never saw one.
+    */
+%}
+\^?([A-Za-z0-9][A-Za-z0-9_\-]*"@")?[A-Za-z0-9][A-Za-z0-9_\-\.]*  {
                      prte_util_hostfile_value.sval = yytext;
                      return PRTE_HOSTFILE_HOSTNAME; }
 

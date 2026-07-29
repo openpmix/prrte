@@ -98,13 +98,19 @@ static bool relative_token_matches(const char *token, prte_node_t *node)
     int nodeidx;
 
     if ('e' == token[1] || 'E' == token[1]) {
-        /* an empty node - which of them were actually taken was settled
-         * when the node list was filtered */
-        return (0 == node->num_procs);
+        /* An empty node - which of them were actually taken was settled
+         * when the node list was filtered. "Empty" is slots_inuse, the same
+         * measure prte_util_filter_dash_host_nodes() and the hostfile parser
+         * use. num_procs is the count the mapper is *building* for the job
+         * being mapped, so testing it here made a node stop answering to
+         * "+e" the moment the mapper placed its first process there - and
+         * the slot count computed for the rest of that same map came out as
+         * zero. */
+        return (0 == node->slots_inuse);
     }
     if ('n' == token[1] || 'N' == token[1]) {
         nodeidx = strtol(&token[2], NULL, 10);
-        if (0 > nodeidx || nodeidx > (int) prte_node_pool->size) {
+        if (0 > nodeidx || nodeidx >= (int) prte_node_pool->size) {
             return false;
         }
         /* the pool is offset by one when the HNP is not in the allocation */
@@ -180,10 +186,10 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts)
     prte_node_t *node, *nd;
     pmix_list_t adds;
     bool needcheck;
-    int slots = 0;
+    int slots;
     bool slots_given;
     char *cptr;
-    bool add_slots = false;
+    bool add_slots;
 
     PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                          "%s dashhost: parsing args %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -250,7 +256,18 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              mini_map[i]));
 
-        /* see if the node contains the number of slots */
+        /* see if the node contains the number of slots.
+         *
+         * Every one of these has to be reset for each token: they describe
+         * the token being looked at, not the specification as a whole. Left
+         * over from a prior token, "slots" made "--host a:*,b" hand b the
+         * a:* auto-detect marker (-1), which the branches below read as
+         * "this node has no slots at all" - so b came out with zero, and a
+         * job that asked for one process on it was refused. "add_slots"
+         * likewise turned "--host a:+2,b" into an increment request against
+         * b's discovered slot count. */
+        slots = 0;
+        add_slots = false;
         slots_given = false;
         if (NULL != (cptr = strchr(mini_map[i], ':'))) {
             *cptr = '\0';
@@ -386,7 +403,7 @@ cleanup:
  */
 static int parse_dash_host(char ***mapped_nodes, char *hosts)
 {
-    int32_t j, k, start;
+    int32_t j, k, n, start;
     int rc = PRTE_SUCCESS;
     char **mini_map = NULL, *cptr;
     int nodeidx, nnodes, p;
@@ -423,13 +440,24 @@ static int parse_dash_host(char ***mapped_nodes, char *hosts)
                             goto cleanup;
                         }
                         nnodes = strtol(cptr, NULL, 10);
-                        for (j=start, p=0; j < (int32_t)prte_node_pool->size && p < nnodes; j++) {
-                            node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, j);
+                        /* scan the pool with its own index: this used to
+                         * reuse "j", the index of the outer loop over the
+                         * comma-separated tokens, leaving it past the end of
+                         * that loop - so every token after a "+e:N" was
+                         * silently dropped ("--host +e:2,node07" asked for
+                         * two empty nodes and forgot node07 entirely) */
+                        for (n=start, p=0; n < (int32_t)prte_node_pool->size && p < nnodes; n++) {
+                            node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n);
                             if (NULL == node) {
                                 continue;
                             }
-                            // if the node is empty, capture it
-                            if (0 == node->num_procs) {
+                            // if the node is empty, capture it. "Empty" is
+                            // slots_inuse everywhere else this feature is
+                            // implemented - the bare "+e" form a few lines
+                            // below defers to the filter, which tests
+                            // slots_inuse, so "+e" and "+e:N" chose from
+                            // different sets of nodes.
+                            if (0 == node->slots_inuse) {
                                 PMIx_Argv_append_nosize(mapped_nodes, node->name);
                                 ++p;
                             }
@@ -451,7 +479,7 @@ static int parse_dash_host(char ***mapped_nodes, char *hosts)
                      * look it up on global pool
                      */
                     nodeidx = strtol(&mini_map[k][2], NULL, 10);
-                    if (nodeidx < 0 || nodeidx > (int) prte_node_pool->size) {
+                    if (nodeidx < 0 || nodeidx >= (int) prte_node_pool->size) {
                         /* this is an error */
                         pmix_show_help("help-dash-host.txt",
                                        "dash-host:relative-node-out-of-bounds", true, nodeidx,
@@ -706,6 +734,15 @@ int prte_util_get_ordered_dash_host_list(pmix_list_t *nodes, char *hosts)
 
     if (PRTE_SUCCESS != (rc = parse_dash_host(&mapped_nodes, hosts))) {
         PRTE_ERROR_LOG(rc);
+        /* the parse failed, so there is no list to walk - and on the
+         * failure paths there may be no array at all. Falling through to
+         * the loop below dereferenced mapped_nodes[0] of a NULL array. */
+        PMIx_Argv_free(mapped_nodes);
+        return rc;
+    }
+    if (NULL == mapped_nodes) {
+        /* nothing was named */
+        return PRTE_SUCCESS;
     }
 
     /* for each entry, create a node entry on the list */

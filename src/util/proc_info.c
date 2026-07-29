@@ -45,6 +45,7 @@
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/pmix_output.h"
+#include "src/util/pmix_string_copy.h"
 #include "src/util/proc_info.h"
 
 #include "src/util/proc_info.h"
@@ -93,8 +94,14 @@ void prte_setup_hostname(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_keep_fqdn_hostnames);
 
-    /* get the nodename */
-    gethostname(hostname, sizeof(hostname));
+    /* get the nodename. POSIX does not require gethostname() to terminate
+     * the buffer when the name does not fit, so leave room and terminate it
+     * ourselves - and fall back to something usable if the call fails, since
+     * every session directory and node name downstream is built from this */
+    memset(hostname, 0, sizeof(hostname));
+    if (0 != gethostname(hostname, sizeof(hostname) - 1)) {
+        pmix_string_copy(hostname, "localhost", sizeof(hostname));
+    }
 
     prte_strip_prefix = NULL;
     (void) pmix_mca_base_var_register(
@@ -158,11 +165,16 @@ bool prte_check_host_is_local(const char *name)
 {
     int i;
 
+    /* the hostfile and dash-host parsers call this on every name they see,
+     * and both can run before prte_setup_hostname() has filled these in */
+    if (NULL == name || NULL == prte_process_info.nodename) {
+        return false;
+    }
     if (0 == strcmp(name, prte_process_info.nodename)) {
         return true;
     }
 
-    for (i = 0; NULL != prte_process_info.aliases[i]; i++) {
+    for (i = 0; NULL != prte_process_info.aliases && NULL != prte_process_info.aliases[i]; i++) {
         if (0 == strcmp(name, prte_process_info.aliases[i])) {
             return true;
         }
