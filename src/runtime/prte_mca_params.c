@@ -78,8 +78,10 @@ int prte_register_params(void)
     pmix_output_stream_t lds;
     char *string = NULL;
     char *fstype = NULL;
-    char *home;
     char cwd[MAXPATHLEN];
+#if PRTE_WANT_HOME_CONFIG_FILES
+    char *home;
+#endif
 
     /* only go thru this once - mpirun calls it twice, which causes
      * any error messages to show up twice
@@ -526,18 +528,19 @@ int prte_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_homo_nodes);
 
-    home = (char *) pmix_home_directory(geteuid());
     if (NULL == getcwd(cwd, MAXPATHLEN)) {
         return PRTE_ERROR;
     }
 
 #if PRTE_WANT_HOME_CONFIG_FILES
+    home = (char *) pmix_home_directory(geteuid());
     pmix_asprintf(&prte_param_files,
                    "%s" PMIX_PATH_SEP ".prte" PMIX_PATH_SEP "mca-params.conf%c%s" PMIX_PATH_SEP
                    "prte-mca-params.conf",
                    home, ',', prte_install_dirs.sysconfdir);
 #else
-    pmix_sprintf(&prte_param_files, "%s" PMIX_PATH_SEP "prte-mca-params.conf",
+    /* --disable-per-user-config-files: only the system file is consulted */
+    pmix_asprintf(&prte_param_files, "%s" PMIX_PATH_SEP "prte-mca-params.conf",
                   prte_install_dirs.sysconfdir);
 #endif
     /* the var system takes the current value as the default and then hands
