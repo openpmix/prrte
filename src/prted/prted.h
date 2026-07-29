@@ -57,6 +57,16 @@ PRTE_EXPORT int prun_common(pmix_cli_result_t *cli,
 PRTE_EXPORT int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
                                            prte_schizo_base_module_t *schizo,
                                            pmix_list_t *apps);
+
+/* Normalize a prefix string in place, removing any trailing path
+ * separators.  A value consisting solely of separators becomes a single
+ * separator; an empty string is left alone. */
+PRTE_EXPORT void prte_strip_trailing_pathsep(char *param);
+
+/* Split a singleton identifier of the form "<nspace>.<rank>" into its
+ * parts.  Returns PRTE_ERR_BAD_PARAM if the value is not of that form. */
+PRTE_EXPORT int prte_parse_singleton_id(const char *name, pmix_nspace_t nspace,
+                                        pmix_rank_t *rank);
 END_C_DECLS
 
 #endif /* PRTED_H */

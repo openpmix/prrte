@@ -418,3 +418,15 @@ Output a brief periodic report on DVM startup progress
 [rtos]
 
 #include#help-schizo-rtos.txt#rtos
+
+#
+[bad-singleton]
+%s was given a malformed singleton identifier:
+
+  Identifier: %s
+
+The value of the "--singleton" option must have the form
+
+  <namespace>.<rank>
+
+for example, "myapp.0". Please correct the identifier and try again.
