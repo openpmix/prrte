@@ -53,7 +53,7 @@ state — this is the whole point of the design:
 | `PRTE_JOB_STATE_LAUNCH_DAEMONS` | `plm` | `launch_daemons` — **added by the plm base**, not by `state` (see below) |
 | `PRTE_JOB_STATE_MAP` | `rmaps` | `prte_rmaps_base_map_job` — assign procs to nodes |
 | `PRTE_JOB_STATE_LAUNCH_APPS` | `plm` | `prte_plm_base_launch_apps` — tell daemons to fork/exec |
-| `PRTE_JOB_STATE_TERMINATED` | `state` (component) | `check_complete` / `check_all_complete` — teardown |
+| `PRTE_JOB_STATE_TERMINATED` | `state` (component) | `check_complete` — teardown |
 
 The `LAUNCH_DAEMONS` entry is deliberately **absent** from the DVM
 component's own table: the comment in `state_dvm.c` reads *"individual
@@ -127,6 +127,29 @@ activation time. Note the caddy carries the `pmix_proc_t` **by value**
 (`name`), not by pointer — the proc machine is usable from contexts where
 no `prte_proc_t` object exists.
 
+> **`PMIX_NEW` does not zero its allocation.** `pmix_obj_new_tma()` is a
+> plain `malloc`, so every caddy field a handler might read has to be set
+> by `prte_state_caddy_construct()` — and it is. This is not cosmetic:
+> `caddy->job_state` is read by handlers reached through the **ERROR/ANY
+> fallback**, which is precisely where the activation may have carried no
+> job at all. The errmgr's `job_errors` does `jdata->state =
+> caddy->job_state` against the *daemon* job in exactly that case. The
+> dispatcher therefore records `caddy->job_state = state`
+> **unconditionally**, before it even looks at `jdata`. If you add a field
+> to the caddy, initialize it in the constructor.
+
+There is a unit test for all of this — [`test/unit/state/`](../../../test/unit/state/),
+`make check`.
+
+### Caddy field ownership
+
+| Field | Set by | Meaning when the activation carried no job/proc |
+|-------|--------|--------------------------------------------------|
+| `jdata` | `activate_job_state` (with `PMIX_RETAIN`) | `NULL` — a job-machine handler **must** NULL-check it |
+| `job_state` | `activate_job_state`, always | the state that fired (never the fallback that matched) |
+| `name` | `activate_proc_state` (by value) | rank `PMIX_RANK_INVALID` |
+| `proc_state` | `activate_proc_state` | `PRTE_PROC_STATE_UNDEF` |
+
 ---
 
 ## The module contract (`state.h`)
@@ -164,6 +187,13 @@ state is absent — except the proc variant, which returns
 state was not registered. `activate_*` returns `void`: an unregistered
 state that matches no ERROR/ANY fallback is **silently dropped** (see
 below), so a typo'd or unregistered state fails quietly, not loudly.
+`activate_proc_state` also drops a `NULL` proc name — the proc machine is
+keyed entirely on the name, so there is nothing to dispatch on.
+
+The asymmetry in `set_*` is deliberate and load-bearing, not an
+oversight: the **job** variant appends when the state is absent (so it
+doubles as "add if missing"), the **proc** variant refuses with
+`PRTE_ERR_NOT_FOUND`. Both are pinned by the unit test.
 
 ---
 
@@ -225,20 +255,138 @@ These live in `state_base_fns.c` and are wired into components' tables
 | Handler | Role |
 |---------|------|
 | `prte_state_base_track_procs` | The proc-state workhorse. Advances `pdata->state`, counts `num_launched`/`num_reported`/`num_terminated`, and rolls those counts up into job-state activations: first `RUNNING` → `STARTED`, all running → `RUNNING`; all registered → `REGISTERED`; `IOF_COMPLETE` + `WAITPID_FIRED` together → `TERMINATED`; all terminated → job `TERMINATED` (and, if the daemon job and routes are gone, `DAEMONS_TERMINATED`). Also gates `READY_FOR_DEBUG`. |
-| `prte_state_base_check_all_complete` | The generic "is every job done?" sweep: marks the job terminated, deregisters the nspace from the PMIx server, releases the job's mapped node/proc resources, and — when no non-daemon job remains alive — calls `prte_plm.terminate_orteds()`. (The DVM component uses its own richer `check_complete` instead; see that component's guide.) |
 | `prte_state_base_local_launch_complete` | Optionally kicks `REPORT_PROGRESS` every 100 daemons when `PRTE_JOB_SHOW_PROGRESS` is set. |
 | `prte_state_base_report_progress` | Prints the "App launch reported: N daemons / M procs" line. |
-| `prte_state_base_cleanup_job` | Marks a job `NOTIFIED` and re-drives it through `TERMINATED`. |
 | `prte_state_base_check_fds` | Debug leak check: enumerates open fds after a job completes (enabled by `state_base_check_fds`). |
 | `prte_state_base_notify_data_server` | Tells a co-resident data server to purge a terminated nspace's published data. |
 | `prte_state_base_recover_resources` | Idempotently returns one proc's slot/cpu resources to its node and drops the node from the map when empty — used on daemon-loss / partial-failure recovery paths. Written to tolerate being called twice for the same proc. |
 
+### Every handler here is wired — keep it that way
+
+`base/` used to also carry `prte_state_base_check_all_complete` and
+`prte_state_base_cleanup_job`. Nothing registered either one: both
+components install their own richer `check_complete`/`cleanup_job`, so the
+two exported bodies were unreachable — and, worse, a second copy of the
+teardown logic that drifted away from the one that actually runs. They have
+been removed, along with the `normal-termination-but` help topic that only
+`check_all_complete` used.
+
+The lesson generalizes: a handler in `base/` earns its place by being
+registered in some component's `init()` table (or added by another
+framework, as plm does for `LAUNCH_DAEMONS`). Before extending or "fixing"
+one, `grep` for a registration — an unregistered handler is not a fallback,
+it is dead weight that will diverge from the live path.
+
+### Never block a state handler on PMIx — there is no other thread
+
+`prte_event_base` has **no progress thread of its own**. `event.c` sets
+`prte_event_base = prte_sync_event_base` with the comment *"PRTE tools
+block in their own loop over the event base, so no progress thread is
+required"* — so the thread running a state handler **is** the only thread
+that drives PRRTE. Park it and the whole process goes deaf: no RML, no
+IOF, no other job's state transitions, until it is woken.
+
+The teardown handlers used to do exactly that around
+`PMIx_server_deregister_nspace`: hand PMIx a callback that woke a
+`prte_pmix_lock_t` directly from the PMIx thread, then sit in
+`PRTE_PMIX_WAIT_THREAD`. That is unbounded — the deregistration runs each
+peer's filesystem epilog — and on a persistent DVM it stalls every other
+job in flight. It also only worked *because* the wakeup was direct: the
+thread-shifted wakeup the top-level golden rule asks for could never have
+run on a parked thread, so "fixing" the callback in isolation would have
+deadlocked. The two halves were consistently wrong in a way that
+cancelled out.
+
+The correct shape is the caddy/threadshift pattern, and it is what both
+live paths now use:
+
+```c
+/* on the progress thread: issue and return, handing over the caddy */
+PMIx_server_deregister_nspace(nspace, dereg_complete, caddy);
+return;
+
+/* on the PMIx thread: nothing but the hop back */
+static void dereg_complete(pmix_status_t status, void *cbdata)
+{
+    PRTE_PMIX_THREADSHIFT((prte_state_caddy_t *) cbdata,
+                          prte_event_base, job_teardown);
+}
+```
+
+`state_dvm.c` splits `check_complete` → `check_complete_resume` this way,
+and `state_prted.c` splits `track_procs` → `job_teardown`. The caddy
+carries the job across the hop; note that a **proc**-state activation
+leaves `caddy->jdata` NULL, so `state_prted.c` takes a reference of its
+own before handing it over.
+
+Two deliberate exceptions, both of which pass `NULL` as the callback so
+that **PMIx blocks on its own lock** and no PRRTE object is touched from
+the PMIx thread:
+
+- `PMIx_server_IOF_deliver` in `check_complete_resume`. Waiting is
+  required, not merely tidy: the API borrows the source proc and the byte
+  object *by pointer* and both live on the caller's stack. The stall is
+  acceptable here — it runs only for a non-persistent (`prterun`) DVM
+  already tearing down after an abnormal exit, and the delivery is a
+  bounded, purely PMIx-internal write with no host upcall.
+
+**What the split changes semantically.** Other events now run between the
+two halves, where before the whole handler was one indivisible dispatch.
+Nothing is dispatched *concurrently* — there is still only one thread — so
+a second activation of the same state cannot interleave *inside* either
+half; it queues behind them. But a continuation must not assume the world
+is unchanged since the first half ran. Re-check anything you cached, and
+keep the re-entry guards ahead of the hand-off: `state_prted.c` sets
+`PRTE_JOB_TERM_NOTIFIED` before it issues the deregistration precisely so
+a second `TERMINATED` cannot re-enter the branch while the continuation is
+pending. The job object itself is safe — the caddy holds a reference, and
+the only other remover of a `prte_job_data` slot is the `prte_job_t`
+destructor.
+
+For the record, the deregistration path in PMIx makes **no host-module
+upcall** today — `_deregister_nspace`, `remove_client` and `_iofdeliver`
+touch only PMIx internals — so the old code did not actually deadlock.
+But nothing enforced that, and a single future upcall on that path would
+have turned a stall into a hang. Do not reintroduce the pattern.
+
 `prte_state_base_set_runtime_options()` (in `state_base_options.c`)
 translates a `PMIX_RUNTIME_OPTIONS` spec (or the framework defaults) into
-per-job attributes — `error-nonzero-exit`, `recoverable`, `continuous`,
+per-job attributes — `error-nonzero-status`, `recoverable`, `continuous`,
 `autorestart`, `stop-on-exec`, `timeout`, `max-restarts`, etc. It is
-called from the PMIx spawn path, not from a state handler, but lives here
-because the defaults it reads are this framework's MCA params.
+called from `prte`/`prterun`'s own option handling (`src/prted/prte.c`),
+from the PMIx spawn path (`pmix_server_dyn.c`), and with a `NULL` spec
+from each schizo component's `set_default_rto`. It lives here because the
+defaults it reads are this framework's MCA params.
+
+> **A boolean runtime option is consumed by PRESENCE, not by value.**
+> Every call site tests these with
+> `prte_get_attribute(&attrs, KEY, NULL, PMIX_BOOL)`, which is true as
+> soon as the key is on the list — whatever value it holds. So `opt=false`
+> must leave the attribute **absent**. Note that `prte_set_attribute()`
+> only removes a false boolean when the key is *already* on the list; when
+> it is not, it happily appends it with a false value, and the option then
+> reads as **enabled** everywhere. The `set_bool_option()` helper in
+> `state_base_options.c` is the correct way to apply one; use it for any
+> boolean directive you add. Watch the sense, too: `aggregate-help` drives
+> `PRTE_JOB_NOAGG_HELP`, its negation.
+
+> **`report-child-jobs-separately` is a run-level policy, not a job-level
+> one.** It decides whose exit status `prterun` returns, and it is
+> consulted as *each* job reaches teardown — including a child the primary
+> job spawned, which never carries the directive itself. So the parser
+> records it on the **daemon job** as well (the same thing `donotlaunch`
+> and `donotspawn` do), and `state_dvm.c`'s `report_child_jobs_separately()`
+> reads it from there or from the `prte_report_child_jobs_separately` MCA
+> param. The `!prte_persistent` gate on that copy matches where it is
+> read: only a one-shot DVM reports an exit status, so a job spawned into
+> a persistent DVM cannot change the policy for everyone else.
+
+> **Do not use the directive loop's index as a scratch variable.** The
+> walk is `for (n = 0; NULL != options[n]; n++)`. Two branches used to
+> assign to `n` — the converted seconds in the `timeout` branch and the
+> app-array index in `max-restarts` — which resumed the walk at an
+> arbitrary offset, dropping every later directive and reading past the
+> end of the option array. Declare your own index.
 
 ---
 
@@ -296,7 +444,17 @@ contention — the process's role decides which machine it runs.
   dropped unless an ERROR/ANY fallback catches it.
 - **Handlers must release the caddy.** Every state callback ends with
   `PMIX_RELEASE(caddy)` (which drops the retained `jdata`). Forgetting it
-  leaks the job object.
+  leaks the job object — **including on every early-return error path**.
+  This is the single most common defect in this tree: a pack failure or a
+  missing attribute bails out with a bare `return` and strands both the
+  caddy and the job reference it holds.
+- **A job-state handler must NULL-check `caddy->jdata`.** Roughly eighty
+  call sites activate with no job at all
+  (`PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED)` and
+  friends, mostly from `src/rml/` and the fault paths). Those land on
+  whatever ERROR/ANY catch-all is registered, so *any* handler you put on
+  a fallback entry will see a `NULL` job sooner or later. `caddy->job_state`
+  is always valid; `caddy->jdata` is not.
 - **Never do real work in the activator.** Activation only queues an
   event; the handler runs later on the progress thread. Don't assume the
   handler has run when `PRTE_ACTIVATE_*_STATE` returns, and don't read
@@ -329,6 +487,29 @@ verbosity > 5 each component dumps its full state→cbfunc table at
 `..._proc_state_machine`). Pair it with `plm_base_verbose` (daemon
 launch) and `rmaps_base_verbose` (mapping) to see the handlers those
 states invoke.
+
+---
+
+## Testing
+
+| Layer | Where | Covers |
+|-------|-------|--------|
+| Unit | [`test/unit/state/test_state.c`](../../../test/unit/state/test_state.c) (`make check`) | the table API and its return protocol; dispatch incl. the ERROR/ANY fallback ordering and the NULL-cbfunc/NULL-proc guards; the caddy initialization contract (the NULL-job case above); `set_runtime_options` directive parsing — boolean sense, directive ordering, unknown/bad-combination refusals; per-role component selection. |
+| Multi-node | `test_state` in [`contrib/dockerswarm/run-tests.sh`](../../../contrib/dockerswarm/run-tests.sh) | the runtime-option directives end-to-end through `prterun` (a real forked child is what makes the boolean sense observable, via `odls`); **`report-child-jobs-separately` against a real parent/child job pair** (see below); a `NULL`-job `NEVER_LAUNCHED` reaching the errmgr fallback and tearing the DVM down promptly instead of hanging; and `check_complete`'s resource accounting, which only shows up as successive jobs re-filling the same allocation on one persistent DVM. |
+
+Testing a policy that discriminates between a **primary** job and one it
+**spawned** needs an application that calls `PMIx_Spawn`. The tree ships
+one: [`examples/dynamic.c`](../../../examples/dynamic.c), which
+`contrib/dockerswarm/build.sh` installs as `dynamic`. Rank 0 spawns
+`client` **from its own cwd**, so the child's exit status is whatever you
+put at that path — the swarm test drops in a script that exits 7, runs the
+parent from that directory, and asserts `prterun` returns 7 by default and
+0 under the option (with the child's status still reported). The child
+script has to exist on every node the child could map onto; the spawn names
+an absolute path and `/tmp` is per-container.
+
+Nothing here needs the offline mapper harness — this framework does not
+touch mapping.
 
 ---
 

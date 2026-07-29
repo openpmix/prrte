@@ -41,7 +41,8 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | `Dockerfile` | Base image: toolchain, a baked PMIx, SSH wiring, and a node entrypoint. It does **not** contain PRRTE. |
 | `docker-compose.yml` | The ten nodes `prte-node1`..`prte-node10`, each mounting the shared `prte-build` volume. |
 | `elastic.c` | The elastic test client (`elastic` in the install): issues a PMIx allocation request and waits for the phase-two completion event. |
-| `fake-slurm.py` | A stand-in SLURM control plane (`sbatch`/`scontrol`/`scancel`) so `ras/slurm`'s elastic modify surface can be exercised. See §11. |
+| *(no file here)* | `build.sh` also compiles [`examples/dynamic.c`](../../examples/dynamic.c) from the main tree as `dynamic` — the only client in this harness that calls `PMIx_Spawn`, and so the only way to get a **parent/child job pair**. See §11. |
+| `fake-slurm.py` | A stand-in SLURM control plane (`sbatch`/`scontrol`/`scancel`) so `ras/slurm`'s elastic modify surface can be exercised. See §12. |
 
 ## 2. How it works
 
@@ -99,6 +100,27 @@ bites:
 So `build.sh` distcleans whenever it finds in-tree artifacts, and says
 so. `--no-distclean` skips it (only safe if the tree really is clean);
 `--distclean` forces it.
+
+**Do not try to narrow this to "only when configure has to run."** It is
+the obvious optimization — an incremental out-of-tree build already has
+every object of its own, so VPATH is never searched for one — and it has
+been tried and measured. It fails on `prte_config.h`:
+`src/include/constants.h` does `#include "prte_config.h"`, and *both files
+live in `src/include`*, so the compiler's "search the directory of the
+including file first" rule for quoted includes picks up the **source**
+tree's stale copy before any `-I` or `-iquote` path. Nothing in `CPPFLAGS`
+can override that. (`configure.ac` does now put the build tree ahead of the
+source tree, which is correct and fixes every file that includes
+`prte_config.h` directly — it just cannot reach this case.) The symptom is
+an `"OAC_HAVE_APPLE" redefined` error when the two trees were configured
+for different platforms; the quiet and far worse version is same-platform
+with a different `--with-pmix`.
+
+The only way to stop paying for the distclean is to stop keeping an
+in-tree build (below). Removing the destructive step entirely would mean
+building from a *snapshot* of the source inside the volume rather than a
+bind mount of the live tree — a real change to how this harness works, not
+a smarter trigger.
 
 **The cost, and how to avoid paying it repeatedly.** A distclean destroys
 *your* in-tree build, so the next `make check`, `make -C test/offline
@@ -440,7 +462,42 @@ at `/opt/prte`, where `build.sh` installs PRRTE (`/opt/prte/prte`) and writes
 `/opt/prte/env.sh`. To add or remove nodes, copy or delete a service block in
 `docker-compose.yml` (and adjust the `seq 1 10` loops to match).
 
-## 11. Faking a SLURM environment (`ras/slurm`)
+## 11. Spawning a child job (`dynamic`)
+
+Some behavior only exists between a **primary** job and a job it spawned —
+`report-child-jobs-separately`, which decides whether a child's exit status
+reaches the launcher's, is the reason this was added. No amount of
+single-job testing can show it.
+
+`build.sh` compiles the tree's own `PMIx_Spawn` example,
+[`examples/dynamic.c`](../../examples/dynamic.c), into the install as
+`dynamic`. Two things about it drive how a test is written:
+
+- **Rank 0 spawns `client` from its own cwd** (`$PWD/client`, an absolute
+  path built with `getcwd()`). So you choose what the child *is*, and what
+  it exits with, by putting an executable at that path and running the
+  parent from that directory.
+- **`/tmp` is per-container.** The spawn names an absolute path, and the
+  child is mapped by the normal policy across the DVM, so the file has to
+  exist on *every node the child could land on* — not just the head node.
+  A missing file shows up as `PMIX_ERR_JOB_FAILED_TO_LAUNCH`, and too few
+  slots as `PMIX_ERR_JOB_FAILED_TO_MAP` (the child asks for 2 procs on top
+  of the parent, so allocate at least 3 slots).
+
+```sh
+for n in 1 2 3; do
+    docker exec prte-node$n bash -lc 'mkdir -p /tmp/dyn &&
+        printf "#!/bin/sh\nexit 7\n" > /tmp/dyn/client && chmod +x /tmp/dyn/client'
+done
+$RUN '. /opt/prte/env.sh; cd /tmp/dyn &&
+      prterun --host node1:2,node2:2,node3:2 -np 1 dynamic'   # -> exits 7
+```
+
+Always assert that `Spawn success` appears before asserting on the exit
+code: a spawn that failed to map or launch also produces a non-zero status,
+and would otherwise read as the child's.
+
+## 12. Faking a SLURM environment (`ras/slurm`)
 
 `ras/slurm` is the only ras component with a full elastic **modify** surface,
 and everything past initial discovery is a shell-out: `sbatch` to grow,
