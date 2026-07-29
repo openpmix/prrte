@@ -1538,6 +1538,194 @@ test_prted() {
     cleanup_swarm
 }
 
+########################################################################
+# src/rml -- routing tree, relay, and the TCP transport
+########################################################################
+#
+# The RML is the one subsystem a single host cannot exercise at all: with one
+# daemon every send is a send-to-self, nothing is ever routed, and no byte
+# ever crosses a socket.  The unit tests (test/unit/rml) cover the tree math,
+# the incarnation guard, the purge, and URI parsing, all of which are pure
+# computation.  What is left -- and what lives here -- is everything that
+# needs a real tree of real daemons:
+#
+#   * a message being RELAYED by an intermediate daemon, which is a distinct
+#     code path from either sending or receiving one (oob_tcp_sendrecv.c
+#     rebuilds a prte_rml_send_t and re-enters the send path)
+#   * the tree actually being a tree -- with the default radix of 64 and ten
+#     nodes every daemon is a direct child of the HNP, so nothing is ever
+#     relayed. Forcing a small radix is the only way to get interior nodes.
+#   * a payload larger than one socket write, which is what drives the
+#     partial-writev / partial-read bookkeeping
+#   * interface selection actually binding and connecting, not just parsing
+#   * a daemon dying under a live DVM, which is what prte_rml_route_lost and
+#     the peer teardown exist for
+test_rml() {
+    local out rc n c
+
+    banner "rml: a small radix builds an interior tree and messages get relayed"
+    # radix 2 over 7 nodes gives the HNP two children and four grandchildren,
+    # so every launch command for a leaf is relayed by an interior daemon and
+    # every line of output travels back the same way.  If the relay path is
+    # broken this hangs or loses procs rather than returning 7 hostnames.
+    cleanup_swarm
+    out=$(RUN 'timeout -k 5 90 prterun --prtemca rml_base_radix 2 \
+                  --host node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1 \
+                  -np 7 --map-by node hostname' 2>&1); rc=$?
+    n=$(echo "$out" | grep -cE '^node[1-7]$')
+    [ "$rc" = 0 ] && [ "$n" = 7 ] \
+        && ok "radix 2: 7 procs across 7 nodes through a relayed tree" \
+        || bad "radix 2 relay failed (rc=$rc, lines=$n): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    c=$(prted_count 1 2 3 4 5 6 7 8 9 10)
+    [ "$c" = 0 ] && ok "no daemons linger after the radix-2 run" \
+                 || bad "$c stray prted after the radix-2 run"
+
+    banner "rml: every daemon computes the same tree the HNP does"
+    # Each daemon derives its own placement from the radix math alone -- there
+    # is no tree broadcast -- so a disagreement is silent until a message goes
+    # somewhere nobody is listening.  routed_base_verbose makes each daemon
+    # print the parent and children it arrived at; with radix 2 over 7 nodes
+    # the HNP must report exactly two children, and somebody other than the
+    # HNP must report children of its own (i.e. the tree really has an
+    # interior).  --leave-session-attached is what gets daemon stderr back.
+    cleanup_swarm
+    out=$(RUN 'timeout -k 5 90 prterun --prtemca rml_base_radix 2 \
+                  --prtemca routed_base_verbose 1 --leave-session-attached \
+                  --host node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1 \
+                  -np 7 --map-by node hostname' 2>&1)
+    if echo "$out" | grep -q 'num_children'; then
+        # the HNP's own line (rank 0): two children at radix 2
+        echo "$out" | grep -E '@0,0\]: parent .* num_children 2' >/dev/null \
+            && ok "the HNP computed two children at radix 2" \
+            || bad "the HNP did not report 2 children: $(echo "$out" | grep num_children | tr '\n' ' ' | tail -c 300)"
+        # at least one NON-root daemon reporting children => a real interior
+        n=$(echo "$out" | grep 'num_children' | grep -vE '@0,0\]:' | grep -cvE 'num_children 0')
+        [ "$n" -ge 1 ] \
+            && ok "at least one interior daemon has children of its own ($n)" \
+            || bad "no interior daemon reported children -- the tree is flat"
+    else
+        skp "daemons did not report their tree (no routed verbose output captured)"
+    fi
+    cleanup_swarm
+
+    banner "rml: a payload larger than one socket write survives the relay"
+    # IOF output travels the same tree as everything else, so a proc on a leaf
+    # emitting a few MB forces the partial-writev/partial-read bookkeeping in
+    # oob_tcp_sendrecv.c on both the leaf's daemon and every relaying hop.  A
+    # byte-count check catches truncation, which a "did it run" check cannot.
+    out=$(RUN 'timeout -k 5 120 prterun --prtemca rml_base_radix 2 \
+                  --host node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1 \
+                  -np 7 --map-by node \
+                  sh -c "head -c 500000 /dev/zero | tr \"\\0\" \"x\""' 2>&1)
+    n=$(echo "$out" | tr -cd 'x' | wc -c | tr -d ' ')
+    [ "$n" = 3500000 ] \
+        && ok "3.5 MB of output relayed back intact" \
+        || bad "large payload was truncated or lost (got $n bytes of 3500000)"
+    cleanup_swarm
+
+    banner "rml: the max-message-size guard rejects an oversized message"
+    # prte_max_msg_size bounds what a receiving daemon will malloc for an
+    # incoming message -- the length comes off the wire, so without the check
+    # a peer dictates the allocation.  IOF output is chunked well below any
+    # cap, so the launch message is the one that can be made arbitrarily
+    # large: it carries the job's environment, and a 1.5 MB envar against a
+    # 1 MB cap is certain to trip it on the receiving daemon.
+    # The cap is driven to 0 rather than 1 MB, and that is deliberate.  Two
+    # things defeat the obvious probe of "send something bigger than the cap":
+    # a single argv/envp string is capped at MAX_ARG_STRLEN (128 KB) so a lone
+    # multi-megabyte variable cannot even be exec'd, and PMIx compresses the
+    # launch buffer, so a payload of repeated bytes shrinks to nothing on the
+    # wire and sails under any cap.  A cap of 0 makes the check unambiguous:
+    # every message is over it, so the guard must fire, name both sizes, and
+    # tear the connection down instead of trusting the length off the wire.
+    out=$(RUN 'timeout -k 5 60 prterun --prtemca prte_max_msg_size 0 \
+                  --host node2:1 -np 1 hostname' 2>&1)
+    echo "$out" | grep -q 'too large' \
+        && ok "the size guard refused a message over the cap" \
+        || bad "a message past prte_max_msg_size was accepted: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    echo "$out" | grep -qE 'Limit: *0' \
+        && ok "...and reported the limit it enforced" \
+        || bad "the size guard did not report its limit"
+    # ...and the same job under the default cap must still run, so the guard
+    # cannot have been "refuse everything"
+    out=$(RUN 'timeout -k 5 60 prterun --host node2:1 -np 1 hostname' 2>&1)
+    echo "$out" | grep -qE '^node2$' \
+        && ok "the same job runs under the default size limit" \
+        || bad "the default size limit broke the launch: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    cleanup_swarm
+
+    banner "rml/oob: interface selection actually binds and connects"
+    # The unit test proves prte_oob_split_and_resolve parses a specification;
+    # only a real DVM proves the interface it picked is the one the sockets
+    # end up on.  eth0 is what the compose network gives every container.
+    out=$(RUN 'timeout -k 5 60 prterun --prtemca prte_if_include eth0 \
+                  --host node1:1,node2:1,node3:1 -np 3 --map-by node hostname' 2>&1); rc=$?
+    n=$(echo "$out" | grep -cE '^node[1-3]$')
+    [ "$rc" = 0 ] && [ "$n" = 3 ] \
+        && ok "if_include eth0 formed a working DVM" \
+        || bad "if_include eth0 broke the DVM (rc=$rc, lines=$n): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+    # Excluding the only usable interface leaves the OOB with no address to
+    # advertise.  prte_rml_open used to ignore what prte_oob_open returned,
+    # walk on to get_addr() -- which answers NULL -- and strdup() it, so the
+    # user got a SIGSEGV where a diagnostic belonged.  Assert on the
+    # diagnostic, not merely on "it did not hang": a crash also does not hang.
+    out=$(RUN 'timeout -k 5 60 prterun --prtemca prte_if_exclude eth0 \
+                  --host node1:1,node2:1 -np 2 --map-by node hostname' 2>&1); rc=$?
+    [ "$rc" != 124 ] \
+        && ok "excluding every usable interface failed instead of hanging (rc=$rc)" \
+        || bad "excluding every usable interface hung the launch"
+    echo "$out" | grep -qi 'no usable network interfaces' \
+        && ok "...and said why" \
+        || bad "no diagnostic for an empty interface list: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    echo "$out" | grep -qi 'signal: segmentation\|Segmentation fault' \
+        && bad "an empty interface list crashed the daemon" \
+        || ok "...without crashing"
+    cleanup_swarm
+
+    banner "rml: losing a daemon under a live DVM is detected, not hung on"
+    # Killing an interior daemon drops its sockets; the peers' recv handlers
+    # see the close, run prte_oob_tcp_peer_close (which must complete every
+    # queued send as a failure rather than leak it) and call
+    # prte_rml_route_lost.  The observable is that the DVM notices and the
+    # job ends -- a leaked send or a missed teardown shows up as a hang.
+    cleanup_swarm
+    if prted_dvm_start 'node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1'; then
+        PRUN_BG /tmp/rml-longrun.out '--host node7:1 -n 1 sleep 120'
+        sleep 6
+        # the whole case is meaningless if the job never got going: a prun
+        # that already exited makes the wait loop below fall through at once
+        # and report a pass it did not earn
+        if ! RUN 'pgrep -x prun' >/dev/null 2>&1; then
+            bad "the long-running job never started: $(RUN 'cat /tmp/rml-longrun.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+        elif ! ON 7 'pgrep -x prted' >/dev/null 2>&1; then
+            bad "node7 has no daemon to kill -- the job did not land where expected"
+        else
+            ok "a job is running on node7 with its daemon up"
+            # kill the daemon hosting the live proc: its peers' recv handlers
+            # see the socket close, run prte_oob_tcp_peer_close (which must
+            # complete every queued send as a failure) and call route_lost
+            ON 7 'pkill -9 -x prted' >/dev/null 2>&1
+            n=0
+            while [ "$n" -lt 45 ]; do
+                RUN 'pgrep -x prun' >/dev/null 2>&1 || break
+                sleep 1; n=$((n+1))
+            done
+            [ "$n" -lt 45 ] \
+                && ok "the DVM noticed the lost daemon and released the job (${n}s)" \
+                || bad "prun never returned after its daemon died -- route_lost did not fire"
+            # the HNP itself must survive: losing a leaf is not fatal to the DVM
+            RUN 'pgrep -x prte' >/dev/null 2>&1 \
+                && ok "the HNP survived losing a daemon" \
+                || bad "the HNP died along with the lost daemon"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the lost-daemon test"
+    fi
+    cleanup_swarm
+}
+
 test_linux() {
     if ! docker ps --format '{{.Names}}' | grep -qx prte-node1; then
         echo "swarm not up -- run: docker compose up -d" >&2; exit 2
@@ -1689,7 +1877,7 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     # directly to the HNP, so a wrong routing/child list shows up as a launch
     # that hangs at DAEMONS_LAUNCHED rather than a wrong answer.
     cleanup_swarm
-    out=$(RUN 'prterun --prtemca prte_rml_radix 2 \
+    out=$(RUN 'prterun --prtemca rml_base_radix 2 \
                  --host node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1,node8:1 \
                  -np 8 --map-by node hostname' 2>&1); rc=$?
     n=$(echo "$out" | grep -cE '^node[1-8]$')
@@ -2088,6 +2276,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
 
     test_prted
 
+    test_rml
+
     test_slurm_alloc
     test_slurm
 
@@ -2153,7 +2343,7 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     fi
 
     banner "elastic DVM: radix-2 deep tree grow + shrink (multi-hop relay)"
-    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 --prtemca prte_rml_radix 2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 --prtemca rml_base_radix 2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
     out=$(RUN 'elastic grow node2:2,node3:2,node4:2,node5:2,node6:2,node7:2,node8:2,node9:2' 2>&1)
     echo "$out" | grep -q PMIX_DVM_IS_READY \
         && ok "radix-2 grow onto 8 nodes completed (relay fence succeeded)" \
