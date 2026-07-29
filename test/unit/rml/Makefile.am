@@ -7,14 +7,19 @@ AM_CPPFLAGS = \
     -I$(top_srcdir)/include \
     -I$(top_srcdir)
 
-check_PROGRAMS = test_rml
+check_PROGRAMS = test_rml test_rml_routing
 
 test_rml_SOURCES = \
     test_rml.c
 
 test_rml_LDADD = $(top_builddir)/src/libprrte.la
 
-TESTS = test_rml
+test_rml_routing_SOURCES = \
+    test_rml_routing.c
+
+test_rml_routing_LDADD = $(top_builddir)/src/libprrte.la
+
+TESTS = test_rml test_rml_routing
 
 # Run against the components in this build tree, not just an installed
 # one: without this a --enable-mca-dso build has no components to find

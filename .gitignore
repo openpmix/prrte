@@ -68,6 +68,7 @@ test/unit/plm/Makefile
 test/unit/plm/test_plm
 test/unit/rml/Makefile
 test/unit/rml/test_rml
+test/unit/rml/test_rml_routing
 test/unit/ras/Makefile
 test/unit/ras/test_ras
 test/unit/schizo/Makefile
