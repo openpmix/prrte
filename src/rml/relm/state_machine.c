@@ -104,7 +104,9 @@ prte_relm_msg_t* prte_relm_get_msg(prte_relm_signature_t* sig){
     );
     if(PMIX_SUCCESS != ret){
         PMIX_ERROR_LOG(ret);
-        PMIX_RELEASE(rank);
+        /* the message never made it into the table, so it is the object that
+         * has to go - the rank is still live and still holds its other msgs */
+        PMIX_RELEASE(msg);
         return NULL;
     }
     return msg;
@@ -191,7 +193,7 @@ int prte_relm_start_msg(
     if(NULL == buf){
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
-    } else if(dst > prte_rml_base.n_dmns){
+    } else if(dst >= prte_rml_base.n_dmns){
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
     } else if(!prte_rml_is_node_up(dst)){
@@ -405,7 +407,14 @@ void prte_relm_message_handler(pmix_rank_t src, pmix_data_buffer_t* buf){
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         return;
     } else if(msg->prev_uid <= PRTE_RELM_UID_MAX){
-        prte_relm_get_prev_msg(msg)->next_uid = msg->uid;
+        prte_relm_msg_t* prev = prte_relm_get_prev_msg(msg);
+        if(NULL == prev){
+            /* get_msg returns NULL on a bad signature or a table failure */
+            PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+            return;
+        }
+        prev->next_uid = msg->uid;
     }
 
     prte_relm_state_t state = prte_relm_unpack_state(buf);

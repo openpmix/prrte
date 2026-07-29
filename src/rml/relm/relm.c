@@ -24,6 +24,11 @@ void prte_relm_open(void){
 }
 
 void prte_relm_close(void){
-    prte_relm.finalize();
+    /* prte_rml_open() can fail before it ever reaches prte_relm_open(), and
+     * prte_rml_close() runs regardless - so the module may still be the zeroed
+     * initializer */
+    if (NULL != prte_relm.finalize) {
+        prte_relm.finalize();
+    }
     prte_relm = (prte_relm_module_t) {0};
 }

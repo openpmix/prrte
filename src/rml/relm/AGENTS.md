@@ -74,5 +74,31 @@ new neighbors so in-flight messages resume over the repaired tree.
   evicted; cached data is dropped by timer (`relm_base_cache_ms`) or when the
   cache exceeds `relm_base_cache_max_count`. Don't assume `msg->data.bytes` is
   non-NULL.
+- **Every lookup helper can answer NULL.** `prte_relm_find_rank`,
+  `find_msg`, `get_rank`, `get_msg`, `find_prev_msg`, `get_prev_msg` all return
+  NULL for a bad signature, an out-of-range rank, or a hash-table failure. They
+  are usually called where a predecessor "must" exist — which is exactly the
+  assumption a fault breaks. Check.
+- **The hash tables hold references, not copies.** Removing a
+  `prte_relm_rank_t` from `prte_relm_sm->ranks` (or a `prte_relm_msg_t` from
+  `rank->msgs`) drops only the table's entry; the object came from `PMIX_NEW`
+  and still has to be `PMIX_RELEASE`d, along with everything hanging off it.
+  The purge in `base/link_updates.c` is where this matters most.
+- **`prte_relm_close` may run without `prte_relm_open`.** `prte_rml_open` has
+  error returns before it reaches RELM, and `prte_rml_close` runs regardless —
+  so the module can still be the zeroed initializer. Guard before calling
+  through it.
 - **Warnings are errors.** Debug builds enable `--enable-devel-check`; keep the
   tree warning-free.
+
+## Testing
+
+RELM has no unit test, and the reason is structural rather than an oversight:
+every entry point either thread-shifts onto `prte_event_base` or is reached
+from the RML's fault handler, and the state machine's whole purpose is what
+happens across *several* daemons when one of them dies. Coverage therefore
+lives in `contrib/dockerswarm` — the `test_rml` phase drives the relay and
+lost-daemon paths RELM sits on, and the elastic grow/shrink phases exercise the
+link-update exchange after a tree change. If you add a unit test here, the
+tractable pieces are the pure ones: the pack/unpack helpers in `util.c` and the
+UID/GUID identity and ordering logic in `types.h`/`state_machine.c`.
