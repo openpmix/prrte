@@ -418,29 +418,6 @@ int prte_set_session_object(prte_session_t *session)
     return PRTE_SUCCESS;
 }
 
-bool prte_sessions_related(prte_session_t *session1, prte_session_t *session2)
-{
-    int n;
-    prte_session_t *session_ptr;
-
-    if (NULL == session1 || NULL == session2) {
-        return false;
-    }
-    if (session1->session_id == session2->session_id) {
-        return true;
-    }
-
-    for (n = 0; n < session1->children->size; n++){
-        session_ptr = (prte_session_t *) pmix_pointer_array_get_item(session1->children, n);
-        if (NULL != session_ptr) {
-            if (session_ptr->session_id == session2->session_id) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 prte_proc_t *prte_get_proc_object(const pmix_proc_t *proc)
 {
     prte_job_t *jdata;
@@ -1059,10 +1036,6 @@ static void session_con(prte_session_t *s)
     pmix_pointer_array_init(s->jobs, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
                             PRTE_GLOBAL_ARRAY_MAX_SIZE,
                             PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
-    s->children = PMIX_NEW(pmix_pointer_array_t);
-    pmix_pointer_array_init(s->children, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                            PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                            PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
     s->owners = NULL;
     PMIX_LOAD_NSPACE(s->owner, NULL);
     s->owner_job = NULL;
@@ -1074,7 +1047,6 @@ static void session_des(prte_session_t *s)
     int n;
     prte_node_t *nd;
     prte_job_t *job;
-    prte_session_t *session;
 
     /* notify the RAS so it can release the underlying allocation */
     prte_ras_base_release_allocation(s);
@@ -1118,15 +1090,6 @@ static void session_des(prte_session_t *s)
         }
     }
     PMIX_RELEASE(s->jobs);
-
-    for (n=0; n < s->children->size; n++) {
-        session = (prte_session_t*)pmix_pointer_array_get_item(s->children, n);
-        if (NULL != session) {
-            PMIX_RELEASE(session);
-            pmix_pointer_array_set_item(s->children, n, NULL);
-        }
-    }
-    PMIX_RELEASE(s->children);
 
     if (NULL != s->owners) {
         PMIx_Argv_free(s->owners);

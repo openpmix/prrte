@@ -103,7 +103,7 @@ This is the part that bites. The rules, and the reason for each:
 | `node->session` | **no** — borrowed | same reason, against `session->nodes`. `prte_ras_base_release_allocation` clears it when a reservation is torn down. |
 | `session->nodes[]` | yes | a reservation withholds its nodes |
 | `session->jobs[]` | **no** — borrowed | a job's lifetime is governed by the global job pool, not by the session it ran in |
-| `session->children[]`, `session->owner_job` | yes | |
+| `session->owner_job` | yes | |
 | `job->target_sessions[]` | **no** — borrowed | owned via `prte_set_session_object`; the destructor frees only the array |
 | `node->topology` | yes | a topology outlives any one node pointing at it |
 | `map->nodes[]` | yes | `prte_job_map_destruct` releases every node it holds — so anything that *puts* a node in a map must retain it |
@@ -234,9 +234,11 @@ cancels an allocation PRRTE itself created dynamically and still tracks, so
 a DVM that exits still holding a sub-allocation gives it back, while a
 user's own resource-manager allocation is left alone.
 
-`session->children` needs no separate walk. Nothing in the tree ever
-populates that array — which also means `prte_sessions_related()` can only
-ever report identity, and its parent/child branch is unreachable today.
+Sessions do not form a tree. `prte_session_t` used to carry a `children`
+array and a `prte_sessions_related()` predicate over it, but nothing in the
+tree ever populated the array, so the predicate could only ever report
+identity; both are gone. If a reservation hierarchy is ever needed, build it
+deliberately rather than reviving these.
 
 ## Known gaps
 
