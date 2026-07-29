@@ -77,6 +77,7 @@ sources = \
         nidmap.c \
         numtostr.c \
         prte_bootstrap.c \
+        prte_cmd_line.c \
         proc_info.c \
         session_dir.c \
         stacktrace.c \

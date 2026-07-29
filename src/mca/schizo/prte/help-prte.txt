@@ -164,7 +164,7 @@ option to the help request as "--help <option>".
 |                      | and topological layers, etc.                  |
 +----------------------+-----------------------------------------------+
 
-Report bugs to %s
+%s
 #
 [prtemca]
 

@@ -177,9 +177,11 @@ int main(int argc, char *argv[])
 
     char *umask_str = getenv("PRTE_DAEMON_UMASK_VALUE");
     if (NULL != umask_str) {
-        char *endptr;
-        long mask = strtol(umask_str, &endptr, 8);
-        if ((!(0 == mask && (EINVAL == errno || ERANGE == errno))) && (*endptr == '\0')) {
+        mode_t mask;
+        /* an unparsable value is ignored, not obeyed - reading an empty
+         * or malformed string as 0 would leave every file we create
+         * world-writable */
+        if (prte_parse_umask(umask_str, &mask)) {
             umask(mask);
         }
     }
@@ -210,15 +212,18 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* we always need the prrte and pmix params */
+    /* we always need the prrte and pmix params.  Every failure from here
+     * until we have a runtime exits with 1: main() hands the shell the low
+     * eight bits of what it returns, so a PRRTE error code would arrive as
+     * a meaningless 251 or 255 */
     ret = prte_schizo_base_parse_prte(pargc, 0, pargv, NULL);
     if (PRTE_SUCCESS != ret) {
-        return ret;
+        return 1;
     }
 
     ret = prte_schizo_base_parse_pmix(pargc, 0, pargv, NULL);
     if (PRTE_SUCCESS != ret) {
-        return ret;
+        return 1;
     }
 
     /* A bootstrapping daemon must publish the DVM-wide MCA parameters (ports,
@@ -237,20 +242,25 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* init the tiny part of PRTE we initially use */
-    prte_init_util(PRTE_PROC_DAEMON);
+    /* init the tiny part of PRTE we initially use.  Every later step -
+     * schizo, the CLI parse, prte_init - assumes the install dirs and
+     * the output system this establishes */
+    ret = prte_init_util(PRTE_PROC_DAEMON);
+    if (PRTE_SUCCESS != ret) {
+        return 1;
+    }
 
     /* open the SCHIZO framework */
     ret = pmix_mca_base_framework_open(&prte_schizo_base_framework,
                                        PMIX_MCA_BASE_OPEN_DEFAULT);
     if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
-        return ret;
+        return 1;
     }
 
     if (PRTE_SUCCESS != (ret = prte_schizo_base_select())) {
         PRTE_ERROR_LOG(ret);
-        return ret;
+        return 1;
     }
 
     /* look for any personality specification */
@@ -280,7 +290,7 @@ int main(int argc, char *argv[])
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename,
                     prte_strerror(ret));
         }
-        return ret;
+        return 1;
     }
 
     /* second bootstrap phase: now that init_util has established our hostname,
@@ -290,7 +300,7 @@ int main(int argc, char *argv[])
     if (prte_bootstrap_setup) {
         ret = prte_ess_base_bootstrap(&bootstrap_controller);
         if (PRTE_SUCCESS != ret) {
-            return ret;
+            return 1;
         }
     }
 
@@ -376,7 +386,7 @@ int main(int argc, char *argv[])
                                          bootstrap_controller ? PRTE_PROC_MASTER
                                                               : PRTE_PROC_DAEMON))) {
         PRTE_ERROR_LOG(ret);
-        return ret;
+        return 1;
     }
     // get the daemon job object
     jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
@@ -443,16 +453,17 @@ int main(int argc, char *argv[])
                 pmix_output(0, "%s is executing clean abnormal termination",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
-                /* do -not- call finalize as this will send a message to the HNP
-                 * indicating clean termination! Instead, just forcibly cleanup
-                 * the local session_dir tree and exit
+                /* do -not- call finalize as this will send a message to the
+                 * HNP indicating clean termination! Instead, just forcibly
+                 * cleanup the local session_dir tree and exit.  Releasing
+                 * the daemon job removes it from the global array and takes
+                 * its session directory with it, so we must not then fall
+                 * into the DONE path - that runs prte_finalize, which is
+                 * exactly what this branch exists to avoid.
                  */
-                jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+                prte_finalizing = true;
                 PMIX_RELEASE(jdata);
-
-                /* return with non-zero status */
-                ret = PRTE_ERROR_DEFAULT_EXIT_CODE;
-                goto DONE;
+                exit(PRTE_ERROR_DEFAULT_EXIT_CODE);
             }
         }
     }
@@ -585,6 +596,7 @@ int main(int argc, char *argv[])
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(buffer);
+        ret = PRTE_ERROR;
         goto DONE;
     }
 
@@ -593,6 +605,7 @@ int main(int argc, char *argv[])
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(buffer);
+        ret = PRTE_ERROR;
         goto DONE;
     }
     prc = PMIx_Data_pack(NULL, buffer, &vptr->data.string, 1, PMIX_STRING);
@@ -608,6 +621,7 @@ int main(int argc, char *argv[])
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(buffer);
+        ret = PRTE_ERROR;
         goto DONE;
     }
 
@@ -634,6 +648,7 @@ int main(int argc, char *argv[])
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(buffer);
+        ret = PRTE_ERROR;
         goto DONE;
     }
 
@@ -650,6 +665,7 @@ int main(int argc, char *argv[])
             PMIX_ERROR_LOG(prc);
             PMIX_DATA_BUFFER_RELEASE(buffer);
             PMIX_DATA_BUFFER_DESTRUCT(&data);
+            ret = PRTE_ERROR;
             goto DONE;
         }
         if (PMIx_Data_compress((uint8_t *) data.base_ptr, data.bytes_used, (uint8_t **) &pbo.bytes,
@@ -669,6 +685,7 @@ int main(int argc, char *argv[])
             PMIX_ERROR_LOG(prc);
             PMIX_DATA_BUFFER_RELEASE(buffer);
             PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+            ret = PRTE_ERROR;
             goto DONE;
         }
         /* pack the data */
@@ -677,6 +694,7 @@ int main(int argc, char *argv[])
             PMIX_ERROR_LOG(prc);
             PMIX_DATA_BUFFER_RELEASE(buffer);
             PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+            ret = PRTE_ERROR;
             goto DONE;
         }
         PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
@@ -720,7 +738,12 @@ int main(int argc, char *argv[])
         if (NULL != opt) {
             // cycle across found values
             for (i=0; NULL != opt->values[i]; i++) {
+                /* the CLI parser always hands us "name=value", but this
+                 * is a bare pointer deref if it ever does not */
                 char *t = strchr(opt->values[i], '=');
+                if (NULL == t) {
+                    continue;
+                }
                 *t = '\0';
                 ++t;
                 ignore = false;
@@ -745,6 +768,9 @@ int main(int argc, char *argv[])
             // cycle across found values - we always pass PMIx values
             for (i=0; NULL != opt->values[i]; i++) {
                 char *t = strchr(opt->values[i], '=');
+                if (NULL == t) {
+                    continue;
+                }
                 *t = '\0';
                 ++t;
                 PMIx_Argv_append_nosize(&prted_cmd_line, "--"PRTE_CLI_PMIXMCA);
@@ -784,6 +810,16 @@ bootstrap_wait:
 DONE:
     /* update the exit status, in case it wasn't done */
     PRTE_UPDATE_EXIT_STATUS(ret);
+
+    /* the rollup bucket is only consumed on the tree-spawn path, so on
+     * every other one it is still ours to release */
+    if (NULL != bucket) {
+        PMIX_DATA_BUFFER_RELEASE(bucket);
+    }
+    if (NULL != mybucket) {
+        PMIX_DATA_BUFFER_RELEASE(mybucket);
+    }
+    PMIX_DESTRUCT(&results);
 
     /* cleanup and leave */
     prte_finalize();
@@ -900,6 +936,10 @@ static void report_prted(void)
         if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_RELEASE(mybucket);
+        } else {
+            /* the RML owns it now - drop our reference so teardown does
+             * not release it a second time */
+            mybucket = NULL;
         }
     }
 }

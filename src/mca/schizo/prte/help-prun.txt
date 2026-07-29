@@ -294,7 +294,7 @@ option to the help request as "--help <option>".
 |                      | "SIGALRM", and "SIGCONT"                      |
 +----------------------+-----------------------------------------------+
 
-Report bugs to %s
+%s
 #
 [dvm-uri]
 

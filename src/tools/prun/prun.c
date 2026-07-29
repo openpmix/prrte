@@ -95,16 +95,10 @@
 #include "src/runtime/runtime.h"
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
-typedef struct {
-    prte_pmix_lock_t lock;
-    pmix_info_t *info;
-    size_t ninfo;
-} mylock_t;
 
 int prun(int argc, char *argv[])
 {
     int rc = 1;
-    pmix_list_t apps;
     char **pargv;
     int pargc;
     prte_schizo_base_module_t *schizo;
@@ -114,22 +108,21 @@ int prun(int argc, char *argv[])
     pmix_cli_item_t *opt;
     FILE *fp;
     char *mypidfile = NULL;
-    bool first;
-    char **split;
     char *param;
-    int n;
 
     /* init the globals */
-    PMIX_CONSTRUCT(&apps, pmix_list_t);
     prte_tool_basename = pmix_basename(argv[0]);
     prte_tool_actual = "prun";
     pargc = argc;
     pargv = pmix_argv_copy_strip(argv);  // strip any quoted arguments
     gethostname(hostname, sizeof(hostname));
 
+    /* every failure from here to the end of setup exits with 1: a PRRTE
+     * error code is negative, and main() can only hand the shell the low
+     * eight bits of whatever it returns */
     rc = prte_init_minimum();
     if (PRTE_SUCCESS != rc) {
-        return rc;
+        return 1;
     }
 
     /* because we have to use the schizo framework and init our hostname
@@ -137,15 +130,20 @@ int prun(int argc, char *argv[])
      * search to support passing of impacted options (e.g., verbosity for schizo) */
     rc = prte_schizo_base_parse_prte(pargc, 0, pargv, NULL);
     if (PRTE_SUCCESS != rc) {
-        return rc;
+        return 1;
     }
     rc = prte_schizo_base_parse_pmix(pargc, 0, pargv, NULL);
     if (PRTE_SUCCESS != rc) {
-        return rc;
+        return 1;
     }
 
-    /* init the tiny part of PRTE we use */
-    prte_init_util(PRTE_PROC_TYPE_NONE);
+    /* init the tiny part of PRTE we use - if that fails we have no
+     * output system and no install dirs, so there is nothing to be
+     * gained by pressing on into the schizo framework */
+    rc = prte_init_util(PRTE_PROC_TYPE_NONE);
+    if (PRTE_SUCCESS != rc) {
+        return 1;
+    }
 
     /* setup an event base */
     rc = prte_event_base_open();
@@ -159,12 +157,12 @@ int prun(int argc, char *argv[])
                                       PMIX_MCA_BASE_OPEN_DEFAULT);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
-        return rc;
+        return 1;
     }
 
     if (PRTE_SUCCESS != (rc = prte_schizo_base_select())) {
         PRTE_ERROR_LOG(rc);
-        return rc;
+        return 1;
     }
 
     /* normalize deprecated option spellings and look for any personality
@@ -216,7 +214,9 @@ int prun(int argc, char *argv[])
             if (PRTE_ERR_SILENT != rc) {
                 fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
             }
-            return rc;
+            /* a PRRTE error code is negative, and would reach the shell as
+             * a meaningless 8-bit remainder */
+            return 1;
         }
     }
 
@@ -275,31 +275,13 @@ int prun(int argc, char *argv[])
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_APPFILE);
     if (NULL != opt) {
         // parse the file and add its context to the argv array
-        fp = fopen(opt->values[0], "r");
-        if (NULL == fp) {
+        rc = prte_load_appfile(opt->values[0], &pargv);
+        if (PRTE_SUCCESS != rc) {
             pmix_show_help("help-prun.txt", "appfile-failure", true, opt->values[0]);
-            if (NULL != mypidfile) {
-                free(mypidfile);
-            }
-            return 1;
+            PRTE_UPDATE_EXIT_STATUS(1);
+            goto DONE;
         }
-        first = true;
-        while (NULL != (param = pmix_getline(fp))) {
-            if (!first) {
-                // add a colon delimiter
-                PMIx_Argv_append_nosize(&pargv, ":");
-                ++pargc;
-            }
-            // break the line down into parts
-            split = PMIx_Argv_split(param, ' ');
-            for (n=0; NULL != split[n]; n++) {
-                PMIx_Argv_append_nosize(&pargv, split[n]);
-                ++pargc;
-            }
-            PMIx_Argv_free(split);
-            first = false;
-        }
-        fclose(fp);
+        pargc = PMIx_Argv_count(pargv);
     }
 
     // open the ess framework so it can init the signal forwarding
