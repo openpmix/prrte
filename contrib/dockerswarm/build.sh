@@ -229,10 +229,19 @@ build_linux() {
             make -j"$jobs"
             make install
 
+            # NOTE the -Wl,-rpath on every helper below.  An application
+            # launched onto a NON-head node gets an EMPTY LD_LIBRARY_PATH --
+            # the head node inherits the login shell that sourced env.sh, the
+            # others do not -- so without an rpath these binaries load the
+            # PMIx baked into the image (/usr/local/lib) instead of the one
+            # this script just built.  That is silent: same soname, same
+            # version, different code.  Anything testing a PMIx change would
+            # pass on node1 and quietly test the wrong library everywhere
+            # else.
             echo ">>>> elastic test client"
             gcc -O0 -g -o /opt/prte/prte/bin/elastic \
                 /prrte-src/contrib/dockerswarm/elastic.c \
-                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -lpmix
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
             # jobinfo: a bare PMIx client used to drive the direct-modex
             # paths in the daemon.  A job-level (wildcard) Get of data
@@ -243,7 +252,18 @@ build_linux() {
             echo ">>>> jobinfo (direct-modex) test client"
             gcc -O0 -g -o /opt/prte/prte/bin/jobinfo \
                 /prrte-src/contrib/dockerswarm/jobinfo.c \
-                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -lpmix
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
+            # dataserver: a bare PMIx client for the publish/lookup service
+            # in src/runtime/data_server.  The store is a single array on
+            # the HNP and every client reaches it through its own daemon, so
+            # the publisher proxy vs requestor proxy distinction that
+            # PMIX_RANGE_LOCAL turns on only exists across nodes.
+            # (No apostrophes here: see the note further down.)
+            echo ">>>> dataserver (publish/lookup) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/dataserver \
+                /prrte-src/contrib/dockerswarm/dataserver.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
             # examples/dynamic.c is the PMIx_Spawn example shipped in this
             # tree: rank 0 spawns "client" from its cwd as a CHILD JOB.  It
@@ -256,7 +276,7 @@ build_linux() {
             echo ">>>> dynamic (PMIx_Spawn) test client"
             gcc -O0 -g -o /opt/prte/prte/bin/dynamic \
                 /prrte-src/examples/dynamic.c -I/prrte-src/examples \
-                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -lpmix
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
             # The fake SLURM control plane, installed under its own prefix --
             # NOT into the install bin/, which the node entrypoint symlinks
