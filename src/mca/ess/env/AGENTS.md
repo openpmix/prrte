@@ -55,7 +55,7 @@ claims the process.
 2. **`env_set_name()`** — establish this daemon's identity from the base
    MCA params (see below).
 3. **`prte_ess_base_prted_setup()`** — the entire shared daemon bring-up
-   (signals, topology, state/errmgr/grpcomm/odls/rmaps/iof/filem/comms,
+   (signals, topology, state/errmgr/grpcomm/odls/iof/filem/comms,
    PMIx server, session dir, job/proc objects). See the framework guide.
 
 `rte_finalize` is just `prte_ess_base_prted_finalize()`.

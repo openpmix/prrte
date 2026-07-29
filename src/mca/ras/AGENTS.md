@@ -354,6 +354,20 @@ documented in each component's guide.
   DECLARE; there is no separate close file. (An orphaned
   `ras_base_close.c` — never in `base/Makefile.am`, referencing
   long-gone `active_module`/`ras_opened` fields — was removed.)
+- **`ess/hnp` opens the framework; `prte_finalize` closes it.** That
+  split is deliberate and is the one thing to know before moving either
+  call. `session_des` → `prte_ras_base_release_allocation` walks
+  `selected_modules`, and the sessions are torn down *after*
+  `prte_ess.finalize()` has returned, so the close has to wait for them;
+  `prte_finalize` does it immediately after that teardown, guarded by
+  `PRTE_PROC_IS_MASTER` (a daemon never opens `ras` — only the HNP may
+  allocate — so a daemon must never close it either). Closing it is what
+  gives every selected module its `finalize`: `ras/slurm` frees its
+  session stack, its shrink trackers and its pending extend requests
+  there, and until the close existed none of that ever ran. Get the
+  order backwards and nothing crashes — `PMIX_LIST_DESTRUCT` leaves the
+  list empty but walkable — the allocation is just silently never
+  released.
 - **A `prte_node_t` only acquires a `topology` when its daemon reports
   in.** Any pool walk that dereferences `node->topology` must NULL-check
   first — the pool routinely holds allocated-but-not-yet-launched nodes

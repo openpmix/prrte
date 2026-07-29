@@ -224,10 +224,16 @@ Three constraints fix the order, and all three have to hold:
    partway through `prte_init`).
 3. **Before the `ras` framework closes.** `session_des` calls
    `prte_ras_base_release_allocation`, which walks
-   `prte_ras_base.selected_modules`. Today nothing closes that framework —
-   neither `ess/hnp`'s `rte_finalize` nor `ess/base`'s `prted_finalize` — so
-   the list is still valid at finalize. **If you ever add that close, this
-   block has to move ahead of it**, or the walk runs over a destructed list.
+   `prte_ras_base.selected_modules`, so `ras` has to still be open while the
+   sessions go down. `prte_finalize` therefore closes it **itself**,
+   immediately after this block and under a `PRTE_PROC_IS_MASTER` guard —
+   `ess/hnp` opens it (no other role may allocate) but cannot close it,
+   because `prte_ess.finalize()` runs long before the sessions do. Nothing
+   may be inserted between the teardown and that close. Note the failure
+   mode if you get this backwards is silent, not a crash:
+   `PMIX_LIST_DESTRUCT` leaves the list empty but walkable, so the release
+   simply never reaches a module and a dynamically-acquired allocation is
+   never handed back.
 
 Reaching `release_allocation` here is deliberate, not collateral: it only
 cancels an allocation PRRTE itself created dynamically and still tracks, so

@@ -51,7 +51,6 @@
 #include "src/mca/grpcomm/base/base.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/plm/base/base.h"
-#include "src/mca/ras/base/base.h"
 #include "src/rml/rml.h"
 
 #include "src/mca/filem/base/base.h"

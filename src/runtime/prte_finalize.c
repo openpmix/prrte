@@ -42,6 +42,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/ess/ess.h"
+#include "src/mca/ras/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
 #include "src/runtime/prte_progress_threads.h"
@@ -122,10 +123,10 @@ int prte_finalize(void)
      * node array IS prte_node_pool (prte_init substitutes it), so releasing
      * that session performs the pool teardown itself and must therefore go
      * last. And session_des asks the ras base to release the underlying
-     * allocation, which walks prte_ras_base.selected_modules: the ras
-     * framework is deliberately never closed - neither ess/hnp's rte_finalize
-     * nor ess/base's prted_finalize closes it - so that list is still valid
-     * here. If that ever changes, this block has to move ahead of the close.
+     * allocation, which walks prte_ras_base.selected_modules, so the ras
+     * framework has to still be open while this runs - which is why it is
+     * closed just below this block rather than by the ess module that
+     * opened it. Nothing may be inserted between the two.
      *
      * Note that release_allocation only cancels an allocation PRRTE itself
      * created dynamically and still tracks; a user's own resource-manager
@@ -164,6 +165,17 @@ int prte_finalize(void)
         }
         PMIX_RELEASE(prte_node_pool);
         prte_node_pool = NULL;
+    }
+
+    /* Every session has now had its chance to give its allocation back, so
+     * the ras framework can go - which is what runs each selected module's
+     * finalize, letting a component release whatever it is still holding
+     * (ras/slurm, for one, carries its session stack, its shrink trackers
+     * and its pending extend requests). Only the HNP ever opens ras -
+     * ess/hnp does it, since no other role is permitted to allocate - so
+     * only the HNP closes it. */
+    if (PRTE_PROC_IS_MASTER) {
+        (void) pmix_mca_base_framework_close(&prte_ras_base_framework);
     }
 
     for (n = 0; n < prte_job_data->size; n++) {

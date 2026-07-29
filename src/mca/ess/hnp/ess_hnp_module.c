@@ -445,6 +445,13 @@ static int rte_finalize(void)
     (void) pmix_mca_base_framework_close(&prte_filem_base_framework);
     (void) pmix_mca_base_framework_close(&prte_grpcomm_base_framework);
     (void) pmix_mca_base_framework_close(&prte_iof_base_framework);
+    /* mapping is over, so rmaps can go here - the close frees the base's
+     * hwloc bitmaps and runs each mapper's finalize. The ras framework we
+     * also opened is NOT closed here: a session destructor asks it to
+     * release the underlying allocation, and the sessions are torn down
+     * after this function returns, so prte_finalize closes it once that
+     * teardown is done. */
+    (void) pmix_mca_base_framework_close(&prte_rmaps_base_framework);
     (void) pmix_mca_base_framework_close(&prte_plm_base_framework);
     if (!prte_abnormal_term_ordered) {
         /* make sure our local procs are dead */
