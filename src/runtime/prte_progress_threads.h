@@ -67,4 +67,19 @@ PRTE_EXPORT int prte_progress_thread_pause(const char *name);
  */
 PRTE_EXPORT int prte_progress_thread_resume(const char *name);
 
+/** Upper bound on how many cpu ids the prte_progress_thread_cpus
+ * specification may name.  Sized well past any plausible binding for a
+ * single service thread, and only used to bound the parse. */
+#define PRTE_MAX_PROGRESS_THREAD_CPUS 1024
+
+/**
+ * Expand the comma-delimited list of cpu ranges given in
+ * prte_progress_thread_cpus ("0", "0,3", "2-5,8") into cpus[], which must
+ * have room for max entries.  Ranges are inclusive of both bounds.
+ *
+ * Returns the number of cpu ids stored, or PRTE_ERR_BAD_PARAM if the
+ * specification does not parse or names more cpus than will fit.
+ */
+PRTE_EXPORT int prte_progress_thread_parse_cpus(const char *spec, int *cpus, int max);
+
 #endif

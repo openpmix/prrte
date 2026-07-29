@@ -243,12 +243,72 @@ static void stop_progress_engine(prte_progress_tracker_t *trk)
     pmix_thread_join(&trk->engine, NULL);
 }
 
+/* Expand a comma-delimited list of cpu ranges - "0", "0,3", "2-5,8" - into
+ * cpus[], returning how many ids were stored or PRTE_ERR_BAD_PARAM if the
+ * specification does not parse. Always compiled, and reachable from the unit
+ * test, even though its one caller sits behind HAVE_PTHREAD_SETAFFINITY_NP:
+ * the parsing is where the bugs were, and leaving it inside the ifdef meant
+ * nothing could check it on a platform without pthread_setaffinity_np. */
+int prte_progress_thread_parse_cpus(const char *spec, int *cpus, int max)
+{
+    char **ranges, *dash, *end_ptr;
+    int n, k, ncpus = 0;
+    unsigned long start, end;
+
+    if (NULL == spec || NULL == cpus || 0 >= max) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    ranges = PMIx_Argv_split(spec, ',');
+    if (NULL == ranges) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    for (n = 0; NULL != ranges[n]; n++) {
+        // look for '-'. Note that strtoul always hands back a non-NULL end
+        // pointer - it points at the first character it did not consume - so
+        // the range test has to look at what that character IS. Testing the
+        // pointer itself let a bare "3" fall into the range branch, where the
+        // "skip the dash" step walked off the end of the string.
+        start = strtoul(ranges[n], &dash, 10);
+        if (dash == ranges[n]) {
+            /* no digits at all */
+            PMIx_Argv_free(ranges);
+            return PRTE_ERR_BAD_PARAM;
+        }
+        if ('-' != *dash) {
+            if ('\0' != *dash) {
+                PMIx_Argv_free(ranges);
+                return PRTE_ERR_BAD_PARAM;
+            }
+            end = start;
+        } else {
+            ++dash;  // skip over the '-'
+            end = strtoul(dash, &end_ptr, 10);
+            if (end_ptr == dash || '\0' != *end_ptr || end < start) {
+                PMIx_Argv_free(ranges);
+                return PRTE_ERR_BAD_PARAM;
+            }
+        }
+        // the range is inclusive of its upper bound: "0-3" names four cpus,
+        // not three
+        for (k = (int) start; k <= (int) end; k++) {
+            if (ncpus >= max) {
+                PMIx_Argv_free(ranges);
+                return PRTE_ERR_BAD_PARAM;
+            }
+            cpus[ncpus++] = k;
+        }
+    }
+    PMIx_Argv_free(ranges);
+    return ncpus;
+}
+
 static int start_progress_engine(prte_progress_tracker_t *trk)
 {
 #ifdef HAVE_PTHREAD_SETAFFINITY_NP
     cpu_set_t cpuset;
-    char **ranges, *dash;
-    int k, n, start, end;
+    int cpus[PRTE_MAX_PROGRESS_THREAD_CPUS];
+    int ncpus, n;
 #endif
 
     assert(!trk->ev_active);
@@ -261,25 +321,24 @@ static int start_progress_engine(prte_progress_tracker_t *trk)
     int rc = pmix_thread_start(&trk->engine);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
+        /* no thread was created, so there is nothing to bind and nothing
+         * for a later stop_progress_engine to join */
+        trk->ev_active = false;
+        return rc;
     }
 
 #ifdef HAVE_PTHREAD_SETAFFINITY_NP
     if (NULL != prte_progress_thread_cpus) {
+        ncpus = prte_progress_thread_parse_cpus(prte_progress_thread_cpus, cpus,
+                                                PRTE_MAX_PROGRESS_THREAD_CPUS);
+        if (0 > ncpus) {
+            pmix_output(0, "Could not parse prte_progress_thread_cpus \"%s\"",
+                        prte_progress_thread_cpus);
+            return prte_bind_progress_thread_reqd ? PRTE_ERR_BAD_PARAM : PRTE_SUCCESS;
+        }
         CPU_ZERO(&cpuset);
-        // comma-delimited list of cpu ranges
-        ranges = PMIx_Argv_split(prte_progress_thread_cpus, ',');
-        for (n=0; NULL != ranges[n]; n++) {
-            // look for '-'
-            start = strtoul(ranges[n], &dash, 10);
-            if (NULL == dash) {
-                CPU_SET(start, &cpuset);
-            } else {
-                ++dash;  // skip over the '-'
-                end = strtoul(dash, NULL, 10);
-                for (k=start; k < end; k++) {
-                    CPU_SET(k, &cpuset);
-                }
-            }
+        for (n = 0; n < ncpus; n++) {
+            CPU_SET(cpus[n], &cpuset);
         }
         rc = pthread_setaffinity_np(trk->engine.t_handle, sizeof(cpu_set_t), &cpuset);
         if (0 != rc && prte_bind_progress_thread_reqd) {
@@ -404,20 +463,32 @@ int prte_progress_thread_pause(const char *name)
         return PRTE_ERR_NOT_FOUND;
     }
 
-    /* find the specified engine */
-    PMIX_LIST_FOREACH(trk, &tracking, prte_progress_tracker_t)
-    {
-        if (NULL == name || 0 == strcmp(name, trk->name)) {
+    /* a NULL name means "pause them all", and finding none is not an error */
+    if (NULL == name) {
+        PMIX_LIST_FOREACH(trk, &tracking, prte_progress_tracker_t)
+        {
             if (trk->ev_active) {
                 stop_progress_engine(trk);
             }
-            if (NULL != name) {
-                break;
+        }
+        return PRTE_SUCCESS;
+    }
+
+    /* find the specified engine */
+    PMIX_LIST_FOREACH(trk, &tracking, prte_progress_tracker_t)
+    {
+        if (0 == strcmp(name, trk->name)) {
+            if (trk->ev_active) {
+                stop_progress_engine(trk);
             }
+            return PRTE_SUCCESS;
         }
     }
 
-    return PRTE_SUCCESS;
+    /* the header promises PRTE_ERR_NOT_FOUND for a name we do not have, and
+     * its siblings resume/finalize deliver that - pause used to fall off the
+     * end and report success for a thread that does not exist */
+    return PRTE_ERR_NOT_FOUND;
 }
 
 #if PRTE_HAVE_LIBEV
