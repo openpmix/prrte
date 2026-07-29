@@ -192,7 +192,6 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
             if (PRTE_SUCCESS != (ret = prte_odls.kill_local_procs(NULL))) {
                 PRTE_ERROR_LOG(ret);
             }
-            break;
         } else {
             /* kill the procs */
             if (PRTE_SUCCESS != (ret = prte_odls.kill_local_procs(&procarray))) {
@@ -200,11 +199,13 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
             }
         }
 
-        /* cleanup */
+        /* cleanup - these are PMIX_NEW'd class objects, so they must be
+         * released, not free()d: free() skips the destructor and leaks
+         * everything the proc object owns */
     KILL_PROC_CLEANUP:
         for (i = 0; i < procarray.size; i++) {
             if (NULL != (proct = (prte_proc_t *) pmix_pointer_array_get_item(&procarray, i))) {
-                free(proct);
+                PMIX_RELEASE(proct);
             }
         }
         PMIX_DESTRUCT(&procarray);
@@ -250,9 +251,28 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signal);
         }
 
-        /* signal them */
-        if (PRTE_SUCCESS != (ret = prte_odls.signal_local_procs(NULL, signal))) {
-            PRTE_ERROR_LOG(ret);
+        /* Signal them.  The command names a target job, so honor it:
+         * handing NULL to the ODLS means "every local child", which in a
+         * persistent DVM hosting several jobs would deliver the signal to
+         * jobs that were never named.  An empty nspace means "all jobs",
+         * which is what the job-control path packs when it is given no
+         * targets at all. */
+        if (0 == strlen(job)) {
+            if (PRTE_SUCCESS != (ret = prte_odls.signal_local_procs(NULL, signal))) {
+                PRTE_ERROR_LOG(ret);
+            }
+        } else {
+            for (i = 0; i < prte_local_children->size; i++) {
+                proct = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
+                if (NULL == proct ||
+                    !PMIX_CHECK_NSPACE(proct->name.nspace, job)) {
+                    continue;
+                }
+                ret = prte_odls.signal_local_procs(&proct->name, signal);
+                if (PRTE_SUCCESS != ret) {
+                    PRTE_ERROR_LOG(ret);
+                }
+            }
         }
         break;
 
@@ -306,7 +326,8 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
             ret = PMIx_Data_unpack(NULL, buffer, &(cur_proc->name), &n, PMIX_PROC);
             if (PMIX_SUCCESS != ret) {
                 PMIX_ERROR_LOG(ret);
-                goto CLEANUP;
+                PMIX_RELEASE(cur_proc);
+                goto ABORT_PROC_CLEANUP;
             }
 
             /* See if duplicate */
@@ -335,7 +356,11 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
                 PMIX_RETAIN(cur_proc);
                 pmix_pointer_array_add(procs_prev_ordered_to_terminate, (void *) cur_proc);
                 num_new_procs++;
+            } else {
+                /* nobody took a reference to it */
+                PMIX_RELEASE(cur_proc);
             }
+            cur_proc = NULL;
         }
 
         /*
@@ -353,7 +378,17 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
                                  "terminating from request (%2d / %2d).",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_new_procs, num_procs));
         }
-
+    ABORT_PROC_CLEANUP:
+        /* terminate_procs copies what it needs, so release our tracking
+         * array and the references it holds */
+        for (p = 0; p < procs_to_kill->size; ++p) {
+            cur_proc = (prte_proc_t *) pmix_pointer_array_get_item(procs_to_kill, p);
+            if (NULL != cur_proc) {
+                PMIX_RELEASE(cur_proc);
+            }
+        }
+        PMIX_RELEASE(procs_to_kill);
+        procs_to_kill = NULL;
         break;
 
         /****    DEFINE PSET    ****/
@@ -369,20 +404,24 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
         n = 1;
         ret = PMIx_Data_unpack(NULL, buffer, &num_procs, &n, PMIX_INT32);
         if (PMIX_SUCCESS != ret) {
-            PRTE_ERROR_LOG(ret);
+            PMIX_ERROR_LOG(ret);
+            free(cmd_str);
             goto CLEANUP;
         }
         // create space for them
         pptr = PMIx_Proc_create(num_procs);
         if (NULL == pptr) {
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            free(cmd_str);
             goto CLEANUP;
         }
         // unpack the targets
         n = num_procs;
         ret = PMIx_Data_unpack(NULL, buffer, pptr, &n, PMIX_PROC);
         if (PMIX_SUCCESS != ret) {
-            PRTE_ERROR_LOG(ret);
+            PMIX_ERROR_LOG(ret);
+            free(cmd_str);
+            PMIx_Proc_free(pptr, num_procs);
             goto CLEANUP;
         }
         // define the pset
@@ -401,7 +440,8 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
             pmix_output(0, "%s prted_cmd: received exit cmd", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         }
         jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
+        if (NULL != jdata &&
+            prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             return;
         }
@@ -445,7 +485,8 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
         prte_abnormal_term_ordered = true;
 
         jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
+        if (NULL != jdata &&
+            prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             return;
         }
@@ -597,6 +638,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
         ret = PMIx_Data_unpack(NULL, buffer, &job, &n, PMIX_PROC_NSPACE);
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_RELEASE(answer);
             goto CLEANUP;
         }
 
@@ -615,6 +657,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
             if (NULL != gstack_exec) {
                 free(gstack_exec);
             }
+            PMIX_DATA_BUFFER_RELEASE(answer);
             break;
         }
 
