@@ -56,7 +56,7 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
     int32_t count;
     int i, k;
     size_t nanswers;
-    pmix_status_t rc;
+    pmix_status_t rc, ret;
     pmix_proc_t requestor;
     size_t n, ninfo;
     char **keys = NULL, **cache = NULL;
@@ -215,6 +215,8 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
             PMIX_LIST_DESTRUCT(&answers);
             PMIx_Argv_free(keys);
             PMIx_Argv_free(cache);
+            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+            PMIX_DESTRUCT(&rq);
             return rc;
         }
         /* loop thru and pack the individual responses - this is somewhat less
@@ -230,6 +232,8 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
                 PMIX_LIST_DESTRUCT(&answers);
                 PMIx_Argv_free(keys);
                 PMIx_Argv_free(cache);
+                PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+                PMIX_DESTRUCT(&rq);
                 return rc;
             }
             rc = PMIx_Data_pack(NULL, &pbkt, &rinfo->info, 1, PMIX_INFO);
@@ -238,6 +242,8 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
                 PMIX_LIST_DESTRUCT(&answers);
                 PMIx_Argv_free(keys);
                 PMIx_Argv_free(cache);
+                PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+                PMIX_DESTRUCT(&rq);
                 return rc;
             }
         }
@@ -263,48 +269,72 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
             pmix_list_append(&prte_data_store.pending, &req->super);
             PMIx_Argv_free(keys);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+            PMIX_DESTRUCT(&rq);
+            /* No answer goes back now - the request waits until a publish
+             * satisfies it. Our caller's contract is "PMIX_SUCCESS means the
+             * handler has disposed of the answer buffer", so dispose of it:
+             * the publish path builds a fresh reply of its own, and leaving
+             * this one behind leaked a buffer per waiting lookup. */
+            PMIX_DATA_BUFFER_RELEASE(answer);
             return PMIX_SUCCESS; // do not return an answer
         } else {
             PMIx_Argv_free(cache);
+            cache = NULL;
             if (0 == nanswers) {
                 /* nothing was found - indicate that situation */
                 rc = PMIX_ERR_NOT_FOUND;
                 PMIx_Argv_free(keys);
                 PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+                PMIX_DESTRUCT(&rq);
                 return rc;
             } else {
                 rc = PMIX_ERR_PARTIAL_SUCCESS;
             }
         }
+    } else {
+        rc = PMIX_SUCCESS;
     }
     PMIx_Argv_free(keys);
+    PMIX_DESTRUCT(&rq);
 
     pmix_output_verbose(1, prte_data_store.output,
                         "%s data server:lookup: data found - status %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PMIx_Error_string(rc));
 
-    if (PMIX_SUCCESS == rc) {
-        /* pack the status */
-        rc = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_STATUS);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-            return rc;
-        }
-        /* unload the packed values */
-        rc = PMIx_Data_unload(&pbkt, &pbo);
-        /* pack it into our reply */
-        rc = PMIx_Data_pack(NULL, answer, &pbo, 1, PMIX_BYTE_OBJECT);
-        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-        }
-        PRTE_RML_RELIABLE_SEND(rc, sender->rank, answer, PRTE_RML_TAG_DATA_CLIENT);
-        if (PRTE_SUCCESS != rc) {
-            PRTE_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(answer);
-        }
+    /* We get here having found at least something, so the answer carries
+     * data whether the status is SUCCESS or PARTIAL_SUCCESS - a partial
+     * result used to fall straight through to "return rc", which handed the
+     * caller an error to relay and quietly dropped both the values we found
+     * and the buffer holding them. */
+    ret = rc;
+    /* pack the status */
+    rc = PMIx_Data_pack(NULL, answer, &ret, 1, PMIX_STATUS);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+        return rc;
     }
-    return rc;
+    /* unload the packed values */
+    rc = PMIx_Data_unload(&pbkt, &pbo);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+        return rc;
+    }
+    /* pack it into our reply */
+    rc = PMIx_Data_pack(NULL, answer, &pbo, 1, PMIX_BYTE_OBJECT);
+    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return rc;
+    }
+    PRTE_RML_RELIABLE_SEND(rc, sender->rank, answer, PRTE_RML_TAG_DATA_CLIENT);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(answer);
+        return rc;
+    }
+    /* the answer has been sent - tell our caller not to send another */
+    return PMIX_SUCCESS;
 }

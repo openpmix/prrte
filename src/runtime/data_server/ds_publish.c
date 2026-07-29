@@ -134,6 +134,10 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
             pmix_list_append(&data->info, &ds1->super);
         }
     }
+    /* the values we keep were copied into the data object above, so the
+     * unpacked array has done its job - it used to be freed only on the
+     * unpack-failure path, which leaked it on every successful publish */
+    PMIX_INFO_FREE(info, ninfo);
 
     // add this data to our store
     data->index = pmix_pointer_array_add(&prte_data_store.store, data);
@@ -224,29 +228,26 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
         rc = PMIx_Data_pack(NULL, reply, &req->room_number, 1, PMIX_INT);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(reply);
-            return rc;
+            goto reply_failed;
         }
         /* we are responding to a lookup cmd */
         command = PRTE_PMIX_LOOKUP_CMD;
         rc = PMIx_Data_pack(NULL, reply, &command, 1, PMIX_UINT8);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(reply);
-            return rc;
+            goto reply_failed;
         }
-        /* if we found all of the requested keys, then indicate so */
-        if (n == (size_t) PMIx_Argv_count(req->keys)) {
-            rc = PMIX_SUCCESS;
-        } else {
-            rc = PMIX_ERR_PARTIAL_SUCCESS;
-        }
+        /* If every key the request was still waiting on has now been
+         * resolved, the lookup completed. Do NOT re-derive that from
+         * req->keys: the unresolved remainder was swapped into it a few
+         * lines above, so comparing our answer count against it reported
+         * PARTIAL_SUCCESS for a request we had in fact satisfied in full. */
+        ret = complete_resolved ? PMIX_SUCCESS : PMIX_ERR_PARTIAL_SUCCESS;
         /* return the status */
-        rc = PMIx_Data_pack(NULL, reply, &rc, 1, PMIX_STATUS);
+        rc = PMIx_Data_pack(NULL, reply, &ret, 1, PMIX_STATUS);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(reply);
-            return rc;
+            goto reply_failed;
         }
 
         /* pack the rest into a pmix_data_buffer_t */
@@ -257,8 +258,7 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
             PMIX_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             rc = PRTE_ERR_PACK_FAILURE;
-            PMIX_DATA_BUFFER_RELEASE(reply);
-            return rc;
+            goto reply_failed;
         }
         /* loop thru and pack the individual responses - this is somewhat less
          * efficient than packing an info array, but avoids another malloc
@@ -269,25 +269,31 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
             ret = PMIx_Data_pack(NULL, &pbkt, &data->owner, 1, PMIX_PROC);
             if (PMIX_SUCCESS != ret) {
                 PMIX_ERROR_LOG(ret);
+                PMIX_RELEASE(ds3);
                 PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                 rc = PRTE_ERR_PACK_FAILURE;
-                PMIX_DATA_BUFFER_RELEASE(reply);
-                return rc;
+                goto reply_failed;
             }
             /* pack the data */
             ret = PMIx_Data_pack(NULL, &pbkt, &ds3->info, 1, PMIX_INFO);
+            PMIX_RELEASE(ds3);
             if (PMIX_SUCCESS != ret) {
                 PMIX_ERROR_LOG(ret);
                 PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                 rc = PRTE_ERR_PACK_FAILURE;
-                PMIX_DATA_BUFFER_RELEASE(reply);
-                return rc;
+                goto reply_failed;
             }
         }
         PMIX_LIST_DESTRUCT(&answers);
 
         /* unload the pmix buffer */
         rc = PMIx_Data_unload(&pbkt, &pbo);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+            PMIX_DATA_BUFFER_RELEASE(reply);
+            return rc;
+        }
 
         /* pack it into our reply */
         rc = PMIx_Data_pack(NULL, reply, &pbo, 1, PMIX_BYTE_OBJECT);
@@ -295,7 +301,9 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
-            PMIX_RELEASE(req);
+            /* Leave the request on the pending list. It used to be released
+             * right here while still linked into that list, which left a
+             * freed item behind for the next publish to walk into. */
             return rc;
         }
         PRTE_RML_RELIABLE_SEND(rc, req->proxy.rank, reply, PRTE_RML_TAG_DATA_CLIENT);
@@ -317,13 +325,26 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
         if (NULL == data) {
             break;
         }
+        continue;
+
+    reply_failed:
+        /* a reply to one waiting requestor could not be assembled. Drop it
+         * and let the publish itself report the failure - but not before
+         * releasing the partial reply and the answers we had collected,
+         * both of which used to leak straight out of the function. */
+        PMIX_LIST_DESTRUCT(&answers);
+        PMIX_DATA_BUFFER_RELEASE(reply);
+        return rc;
     }
 
     if (PMIX_SUCCESS == rc) {
+        pmix_status_t st = PMIX_SUCCESS;
+
         // send back an answer
-        rc = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_STATUS);
+        rc = PMIx_Data_pack(NULL, answer, &st, 1, PMIX_STATUS);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
+            return rc;
         }
         PRTE_RML_RELIABLE_SEND(rc, sender->rank, answer, PRTE_RML_TAG_DATA_CLIENT);
         if (PRTE_SUCCESS != rc) {

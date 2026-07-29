@@ -56,8 +56,9 @@ void prte_ds_purge(pmix_proc_t *sender,
     int32_t count;
     prte_data_object_t *data;
     int k;
-    pmix_status_t rc;
+    pmix_status_t rc, ret;
     pmix_proc_t requestor;
+    prte_data_req_t *req, *rqnext;
 
     /* unpack the proc whose data is to be purged - session
      * data is purged by providing a requestor whose rank
@@ -89,15 +90,35 @@ void prte_ds_purge(pmix_proc_t *sender,
         PMIX_RELEASE(data);
     }
 
-done:
-    // send back an answer
-    rc = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_STATUS);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
+    /* Drop any lookup this process left parked on the pending list. Those
+     * requests outlived their requestor: a later publish would match one and
+     * try to reply to a process that no longer exists, and until then the
+     * request kept the (already purged) proc's keys alive. */
+    PMIX_LIST_FOREACH_SAFE(req, rqnext, &prte_data_store.pending, prte_data_req_t) {
+        if (!PMIX_CHECK_PROCID(&requestor, &req->requestor)) {
+            continue;
+        }
+        pmix_output_verbose(1, prte_data_store.output,
+                            "%s data server: dropping pending request from %s",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PMIX_NAME_PRINT(&req->requestor));
+        pmix_list_remove_item(&prte_data_store.pending, &req->super);
+        PMIX_RELEASE(req);
     }
-    PRTE_RML_RELIABLE_SEND(rc, sender->rank, answer, PRTE_RML_TAG_DATA_CLIENT);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
+
+done:
+    // send back an answer. Keep the pack status separate from the status
+    // being reported: packing into the same variable we are packing FROM
+    // discards the outcome the requestor asked about.
+    ret = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_STATUS);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_DATA_BUFFER_RELEASE(answer);
+        return;
+    }
+    PRTE_RML_RELIABLE_SEND(ret, sender->rank, answer, PRTE_RML_TAG_DATA_CLIENT);
+    if (PRTE_SUCCESS != ret) {
+        PRTE_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_RELEASE(answer);
     }
 }
