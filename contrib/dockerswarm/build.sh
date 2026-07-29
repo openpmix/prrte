@@ -234,6 +234,17 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/elastic.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -lpmix
 
+            # jobinfo: a bare PMIx client used to drive the direct-modex
+            # paths in the daemon.  A job-level (wildcard) Get of data
+            # belonging to ANOTHER job is answered by the daemon itself, and
+            # is only reachable when the asking client sits on a daemon that
+            # hosts none of the procs of the target job -- i.e. never on one
+            # node.  (No apostrophes here: see the note further down.)
+            echo ">>>> jobinfo (direct-modex) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/jobinfo \
+                /prrte-src/contrib/dockerswarm/jobinfo.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -lpmix
+
             # examples/dynamic.c is the PMIx_Spawn example shipped in this
             # tree: rank 0 spawns "client" from its cwd as a CHILD JOB.  It
             # is the only way this harness can produce a parent/child job
