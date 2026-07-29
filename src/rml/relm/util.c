@@ -61,8 +61,14 @@ void prte_relm_post(prte_relm_msg_t* msg){
 }
 
 bool prte_relm_prev_is_posted(prte_relm_msg_t* msg){
-    return PRTE_RELM_UID_NONE == msg->prev_uid
-        || PRTE_RELM_STATE_ACKED == prte_relm_get_prev_msg(msg)->state;
+    if(PRTE_RELM_UID_NONE == msg->prev_uid){
+        return true;
+    }
+    /* get_prev_msg answers NULL for a bad/absent predecessor; treat that as
+     * "not posted yet" so the caller keeps the message PENDING rather than
+     * dereferencing nothing */
+    prte_relm_msg_t* prev = prte_relm_get_prev_msg(msg);
+    return NULL != prev && PRTE_RELM_STATE_ACKED == prev->state;
 }
 
 #define RELM_STATE_CASE(s) case PRTE_RELM_STATE_ ## s: return #s

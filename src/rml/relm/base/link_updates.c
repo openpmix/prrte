@@ -224,9 +224,13 @@ static size_t purge_rank(
 
 static void purge(const prte_rml_recovery_status_t* status){
     for(size_t i = 0; i < status->failed_ranks.size; i++){
-        pmix_hash_table_remove_value_uint32(
-            &prte_relm_sm->ranks, ((pmix_rank_t*)status->failed_ranks.array)[i]
-        );
+        pmix_rank_t failed = ((pmix_rank_t*)status->failed_ranks.array)[i];
+        /* removing the table entry only drops the reference the table held -
+         * the rank object (and every message still hanging off it) came from
+         * PMIX_NEW and has to be released as well */
+        prte_relm_rank_t* rank = prte_relm_find_rank(failed);
+        pmix_hash_table_remove_value_uint32(&prte_relm_sm->ranks, failed);
+        if(NULL != rank) PMIX_RELEASE(rank);
     }
 
     pmix_rank_t* empty = malloc(

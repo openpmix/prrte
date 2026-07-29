@@ -52,5 +52,19 @@ For the protocol itself see
   recovery messages will be silently dropped.
 - **Never persist ephemeral states.** `CACHED`/`EVICTED`/`NEW`/`ACKACKED` are
   transitions, not stored states (see `../AGENTS.md`).
+- **The purge frees objects, not just table entries.** `purge()` drops a failed
+  rank from `prte_relm_sm->ranks` and drops individual messages from
+  `rank->msgs`. Both tables hold `PMIX_NEW`ed objects, and removing the entry
+  releases nothing — the rank (and every message still hanging off it) has to
+  be `PMIX_RELEASE`d explicitly. The per-message half of the routine already
+  does this; the per-rank half is the one that is easy to get wrong, because
+  the leak is silent and grows with every fault.
+- **The link bitmaps are indexed by link slot, not by rank.** `link_i_to_r` /
+  `link_r_to_i` map between the two: slots `0..radix-1` are the children (in
+  `prte_rml_base.children` order) and slot `radix` is the lifeline. A slot past
+  the current child count is `PMIX_RANK_INVALID`, which the fault handler
+  treats as "nothing to exchange" — that is also what keeps it from indexing
+  `status->prev_children` past its end, since `repair_routing_tree` only
+  guarantees `prev_children` is at least as long as the *current* child array.
 - **Warnings are errors.** Debug builds enable `--enable-devel-check`; keep the
   tree warning-free.
