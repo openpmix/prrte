@@ -1006,6 +1006,17 @@ PRTE_EXPORT int prte(int argc, char *argv[])
         goto DONE;
     }
 
+    /* --report-child-jobs-separately is the standalone spelling of the
+     * runtime option of the same name.  It is defined in the prterun and
+     * mpirun option tables and documented in both, but nothing consumed it,
+     * so the flag was accepted and silently ignored.  jdata here is the
+     * DVM's own job, which is exactly where state/dvm's teardown looks for
+     * this policy - see report_child_jobs_separately() there. */
+    if (NULL != pmix_cmd_line_get_param(&results, PRTE_CLI_REPORT_CHILD_SEP)) {
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP,
+                           PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+    }
+
     /* check a couple of display options for the DVM itself */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DISPLAY);
     if (NULL != opt) {
