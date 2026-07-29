@@ -945,13 +945,25 @@ prte_show_subtitle "Compiler flags"
 # will install it for us. If we VPATH building, we do need to include the
 # source directories, however.
 #
+# ORDER MATTERS, and the build directory has to come FIRST.  Every generated
+# header - prte_config.h above all - lives in the build tree, and a source
+# tree that has ever been configured in-tree still holds its own copy of
+# them.  With the source directory searched first, a VPATH build silently
+# compiles against THAT stale copy instead of its own: the give-away is a
+# redefinition error for one of the OAC_HAVE_* platform macros when the two
+# trees were configured for different platforms, but the quiet case is
+# worse - same platform, different --with-pmix, and the build succeeds and
+# then fails at run time.  Searching the build directory first makes a
+# VPATH build independent of whatever the source tree happens to contain,
+# which is the entire point of building out of tree.
+#
 
 if test "$PRTE_TOP_BUILDDIR" != "$PRTE_TOP_SRCDIR"; then
     # Note the embedded m4 directives here -- we must embed them
     # rather than have successive assignments to these shell
     # variables, lest the $(foo) names try to get evaluated here.
     # Yuck!
-    cpp_includes="$PRTE_TOP_SRCDIR $PRTE_TOP_BUILDDIR $PRTE_TOP_SRCDIR/src/include $PRTE_TOP_BUILDDIR/src/include $PRTE_TOP_BUILDDIR/include"
+    cpp_includes="$PRTE_TOP_BUILDDIR $PRTE_TOP_SRCDIR $PRTE_TOP_BUILDDIR/src/include $PRTE_TOP_SRCDIR/src/include $PRTE_TOP_BUILDDIR/include"
 else
     cpp_includes="$PRTE_TOP_SRCDIR $PRTE_TOP_SRCDIR/src/include"
 fi
