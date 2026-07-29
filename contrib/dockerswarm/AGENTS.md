@@ -378,6 +378,75 @@ status** — a redirected `./build.sh > log 2>&1; echo rc=$?` reports the
 If your PMIx is the thing `configure` rejected, build PMIx from source in
 the same container: `PMIX_SRC=/path/to/openpmix ./build.sh`.
 
+### The containers persist too, so a rebuilt image does not reach them
+
+The third instance of the same shape, and the nastiest, because the stale
+thing is not in the volume at all. The ten nodes are long-lived containers.
+Rebuilding the base image — which is how the **baked PMIx** gets updated —
+changes `prte-swarm:latest` but leaves the running containers on the image
+they were created from. `build.sh` then compiles PRRTE inside a *new*
+container (so, against the new PMIx) and installs it into the volume the
+*old* containers read, and the daemons load the old PMIx. What you see is
+an undefined symbol from `libprrte` in whichever case first reaches a new
+PMIx entry point — `undefined symbol: pmix_iof_check_pattern` was the real
+one — and nothing in the message mentions containers.
+
+`run-tests.sh`'s preflight now compares each container's image ID against
+`prte-swarm:latest` and refuses to run when they differ. The fix is
+
+```sh
+docker compose up -d --force-recreate
+```
+
+**and it matters where you run that from.** The compose project name
+defaults to the *directory* name, `dockerswarm` — which is also the name of
+openpmix's identical harness directory. Run from the wrong place (or with a
+project name that does not match the containers you have) and compose
+adopts the other project: it stopped the `pmix-node*` swarm, renamed our
+own containers out from under themselves, failed on the name collision, and
+left the ten `prte-node*` containers running the previous image. That is
+exactly how the state above was reached. `docker-compose.yml` now pins
+`name: prteswarm`, so a plain `docker compose` from this directory always
+means this swarm. Verify with:
+
+```sh
+docker inspect prte-node1 --format '{{.Image}}'
+docker images --no-trunc --format '{{.ID}}' prte-swarm:latest
+```
+
+### Rebuilding the image really does need `--no-cache`
+
+`./build.sh image` alone is often not enough. The Dockerfile builds the
+baked PMIx from
+
+```dockerfile
+RUN git clone --recursive --depth=1 -b "$PMIX_REF" "$PMIX_REPO" /src/pmix
+```
+
+and docker caches that layer by its *text*, not by what the remote now
+contains — so a rebuild "succeeds" in seconds and bakes exactly the same
+PMIx you were trying to get away from. To actually move the baked PMIx
+forward:
+
+```sh
+docker build --no-cache --build-arg PMIX_REF=master -t prte-swarm:latest .
+docker run --rm -v prte-build:/opt/prte prte-swarm:latest \
+    rm -rf /opt/prte/vpath-linux /opt/prte/vpath-linux-pmix \
+           /opt/prte/pmix /opt/prte/prte /opt/prte/.build-stamp
+./build.sh                        # rebuild against the new PMIx
+docker compose up -d --force-recreate
+```
+
+The volume wipe is not optional: `build.sh` reconfigures when the configure
+*arguments* change, and they do not change when only the image's PMIx does
+(see the sticky-arguments trap above).
+
+The `PMIX_SRC=/path/to/openpmix` route avoids all of this, but the checkout
+it names must be **autogen'd and not itself configured in-tree**: `build.sh`
+runs `/pmix-src/configure` from a VPATH directory over a read-only bind
+mount, so a tree with its own `config.status` is refused ("source directory
+already configured") and a fresh `git clone` has no `configure` at all.
+
 ### The build dirs persist, so configure arguments are sticky
 
 The VPATH build dirs live in the shared volume and outlive any one run.
@@ -444,7 +513,7 @@ safe.
 | pick up a PRRTE source edit | `./build.sh` (incremental into the volume) |
 | pick up an openpmix edit | `PMIX_SRC=/path/to/openpmix ./build.sh` |
 | force a clean PRRTE rebuild | `docker volume rm prte-build && ./build.sh` |
-| rebuild the base image (new baked PMIx) | `./build.sh image` (or `PMIX_REF=v6.1.0 ./build.sh image`) |
+| rebuild the base image (new baked PMIx) | `docker build --no-cache --build-arg PMIX_REF=master -t prte-swarm:latest .` — `./build.sh image` reuses docker's cached `git clone`; then wipe the volume's VPATH dirs and recreate the containers (see "The containers persist too") |
 | tear down the swarm | `docker compose down` (the `prte-build` volume persists) |
 
 ## 9. Grow after a shrink

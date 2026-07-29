@@ -11,6 +11,21 @@
 # sitting on one branch of the radix routing tree at once, which is the scenario
 # the collective-shrink-completion work (openpmix/prrte#2492) needs to exercise.
 
+# Pin the compose project.  Without this, the project name comes from the
+# directory - "dockerswarm" - which is also the name of openpmix's identical
+# harness directory, so `docker compose up -d` run here adopts THAT project's
+# containers: it stopped the pmix-node* swarm, renamed our own containers out
+# from under themselves, and then failed on the name collision, leaving the
+# ten prte-node* containers running the PREVIOUS image while
+# prte-swarm:latest had moved on.  A swarm whose containers predate the
+# image is the single most confusing state this harness can be in - the
+# daemons run one PMIx and the build in the volume was compiled against
+# another, and the symptom is an undefined-symbol failure in an unrelated
+# test.  Verify with:
+#   docker inspect prte-node1 --format '{{.Image}}'
+#   docker images --no-trunc --format '{{.ID}}' prte-swarm:latest
+name: prteswarm
+
 x-node: &node
   image: prte-swarm:latest
   networks: [dvm]
