@@ -2114,6 +2114,28 @@ test_linux() {
         return
     fi
 
+    # ...and the same question about the CONTAINERS. They are long-lived, so a
+    # rebuilt image (which is how the baked PMIx gets updated) does not reach
+    # them until they are recreated.  build.sh then compiles PRRTE against the
+    # NEW image's PMIx while the daemons run the old one, and the symptom is an
+    # undefined symbol from libprrte in whichever test first uses a new PMIx
+    # entry point -- nothing points at the container.
+    banner "preflight: containers are running the current image"
+    imgid=$(docker images --no-trunc --format '{{.ID}}' "$IMAGE" 2>/dev/null | head -1)
+    stalenodes=""
+    for imgn in $(seq 1 10); do
+        cimg=$(docker inspect "prte-node$imgn" --format '{{.Image}}' 2>/dev/null)
+        [ "$cimg" = "$imgid" ] || stalenodes="$stalenodes node$imgn"
+    done
+    if [ -z "$stalenodes" ]; then
+        ok "all 10 containers are on the current $IMAGE"
+    else
+        bad "containers predate $IMAGE:$stalenodes"
+        echo "     Recreate them: docker compose up -d --force-recreate" >&2
+        echo "     (from contrib/dockerswarm, so the pinned project name applies)" >&2
+        return
+    fi
+
     banner "prterun (non-elastic, one-shot) -- local"
     out=$(RUN 'prterun -np 4 hostname'); rc=$?
     [ "$rc" = 0 ] && [ "$(echo "$out" | grep -c node1)" = 4 ] \
