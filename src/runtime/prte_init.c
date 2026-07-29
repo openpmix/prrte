@@ -185,12 +185,27 @@ int prte_init_minimum(void)
      * cross version operations from inside of PRRTE.
      */
     rvers = PMIx_Get_version();
-    ret = sscanf(rvers, "%s %u.%u.%u",
-                 token, &major, &minor, &release);
-    ret = sscanf(PRTE_PMIX_MIN_VERSION_STRING, "%u.%u.%u",
-                 &reqmajor, &reqminor, &reqrelease);
-    ret = sscanf(PRTE_PMIX_MAX_VERSION_STRING, "%u.%u.%u",
-                 &maxmajor, &maxminor, &maxrelease);
+    /* Check what sscanf actually converted. These returns used to be
+     * assigned and thrown away, so a version string we could not parse left
+     * major/minor/release uninitialized and the range checks below then ran
+     * on whatever was on the stack - which can as easily pass as fail. */
+    if (4 != sscanf(rvers, "%s %u.%u.%u",
+                    token, &major, &minor, &release) ||
+        3 != sscanf(PRTE_PMIX_MIN_VERSION_STRING, "%u.%u.%u",
+                    &reqmajor, &reqminor, &reqrelease) ||
+        3 != sscanf(PRTE_PMIX_MAX_VERSION_STRING, "%u.%u.%u",
+                    &maxmajor, &maxminor, &maxrelease)) {
+        fprintf(stderr, "************************************************\n");
+        fprintf(stderr, "We were unable to parse the version of the PMIx\n");
+        fprintf(stderr, "library we were given:\n\n");
+        fprintf(stderr, "    Runtime:  %s\n", (NULL == rvers) ? "NULL" : rvers);
+        fprintf(stderr, "    Minimum:  %s\n", PRTE_PMIX_MIN_VERSION_STRING);
+        fprintf(stderr, "    Maximum:  %s\n\n", PRTE_PMIX_MAX_VERSION_STRING);
+        fprintf(stderr, "Please update your LD_LIBRARY_PATH to point\n");
+        fprintf(stderr, "us to the same PMIx version used to build PRRTE.\n");
+        fprintf(stderr, "************************************************\n");
+        return PRTE_ERR_SILENT;
+    }
 
     /* check the version triplet agains the min values
      * specified in VERSION
@@ -317,8 +332,19 @@ int prte_init_minimum(void)
         return 1;
     }
 
-    /* pre-load any default mca param files */
-    prte_preload_default_mca_params();
+    /* pre-load any default mca param files. A malformed file has to be
+     * fatal: the values in it steer component selection and launch, so
+     * silently carrying on with a partial set - which is what discarding
+     * this return did - starts a DVM configured differently from what the
+     * files say. */
+    ret = prte_preload_default_mca_params();
+    if (PRTE_SUCCESS != ret) {
+        if (PRTE_ERR_SILENT != ret) {
+            pmix_show_help("help-prte-runtime", "prte_init:startup:internal-failure", true,
+                           "prte preload mca params", PRTE_ERROR_NAME(ret), ret);
+        }
+        return ret;
+    }
 
     return PRTE_SUCCESS;
 }
@@ -599,7 +625,7 @@ int prte_preload_default_mca_params(void)
         free(file);
         if (PMIX_SUCCESS != rc && PMIX_ERR_NOT_FOUND != rc) {
             // it is okay if the file isn't found
-            return rc;
+            goto failed;
         }
         /* now get the user-level defaults */
         file = pmix_os_path(false, home, ".prte", "mca-params.conf", NULL);
@@ -607,7 +633,7 @@ int prte_preload_default_mca_params(void)
         free(file);
         if (PMIX_SUCCESS != rc && PMIX_ERR_NOT_FOUND != rc) {
             // it is okay if the file isn't found
-            return rc;
+            goto failed;
         }
     } else {
         // split the string on commas
@@ -618,7 +644,7 @@ int prte_preload_default_mca_params(void)
             if (PMIX_SUCCESS != rc && PMIX_ERR_NOT_FOUND != rc) {
                 // it is okay if the file isn't found
                 PMIx_Argv_free(paths);
-                return rc;
+                goto failed;
             }
         }
         PMIx_Argv_free(paths);
@@ -655,16 +681,17 @@ int prte_preload_default_mca_params(void)
     PMIX_LIST_DESTRUCT(&params);
     PMIX_LIST_DESTRUCT(&params2);
 
-    // process any override params
+    // process any override params. Both lists are re-constructed (params2
+    // stays empty) so that the shared error exit below can destruct all
+    // three unconditionally.
     PMIX_CONSTRUCT(&params, pmix_list_t);
+    PMIX_CONSTRUCT(&params2, pmix_list_t);
     if (NULL != prte_override_param_file) {
         // process the file
         rc = pmix_mca_base_parse_paramfile(prte_override_param_file, &params);
         if (PMIX_SUCCESS != rc && PMIX_ERR_NOT_FOUND != rc) {
             // it is okay if the file isn't found
-            PMIX_LIST_DESTRUCT(&params);
-            PMIX_LIST_DESTRUCT(&pfinal);
-            return rc;
+            goto failed;
         }
         if (0 < pmix_list_get_size(&params)) {
             // check the params against any given
@@ -713,7 +740,10 @@ int prte_preload_default_mca_params(void)
             }
         }
         PMIX_LIST_DESTRUCT(&params);
+        PMIX_CONSTRUCT(&params, pmix_list_t);
     }
+    PMIX_LIST_DESTRUCT(&params);
+    PMIX_LIST_DESTRUCT(&params2);
 
     /* now process the final list - but do not overwrite if the
      * user already has the param in our environment as their
@@ -740,4 +770,12 @@ int prte_preload_default_mca_params(void)
 
     PMIX_LIST_DESTRUCT(&pfinal);
     return PRTE_SUCCESS;
+
+failed:
+    /* every one of these bail-outs used to return with the three lists still
+     * holding their parsed entries */
+    PMIX_LIST_DESTRUCT(&params);
+    PMIX_LIST_DESTRUCT(&params2);
+    PMIX_LIST_DESTRUCT(&pfinal);
+    return rc;
 }
