@@ -973,13 +973,104 @@ static void relcb(void *cbdata)
     PMIX_RELEASE(cd);
 }
 
-static void lkopcbfunc(int status, void *cbdata)
-{
-    prte_pmix_grp_caddy_t *cd = (prte_pmix_grp_caddy_t*)cbdata;
-    PRTE_HIDE_UNUSED_PARAMS(status);
+/* Carrier for the second half of grp_release.
+ *
+ * A construct's resources are registered with our local PMIx server BEFORE
+ * we tell our local clients the construct completed, so that anything asking
+ * that server about the group finds it already there.  That ordering used to
+ * be enforced by waiting on the registration, but we must not wait here:
+ * grp_release runs on the progress thread, and prte_event_base
+ * has no thread of its own (event.c: "PRTE tools block in their own loop over
+ * the event base"), so parking it makes the daemon deaf - no RML, no IOF, no
+ * other job's state transitions - for the duration of the registration.  That
+ * is not a once-per-job teardown cost either: this path runs on every daemon
+ * for every group construct, so a session-heavy job pays it repeatedly.
+ *
+ * The ordering is therefore expressed as a continuation: the caddy carries
+ * everything the remainder of grp_release needs, and the registration's
+ * completion callback hands it back to our progress thread.
+ */
+typedef struct {
+    pmix_object_t super;
+    prte_event_t ev;
+    prte_grpcomm_direct_group_signature_t *sig;
+    pmix_status_t st;
+    void *nlist;
+    pmix_info_t *info;
+    size_t ninfo;
+    pmix_proc_t *finalmembership;
+    size_t nfinal;
+    pmix_info_t *grpinfo;
+    size_t ngrpinfo;
+    pmix_info_t *endpts;
+    size_t nendpts;
+} prte_grpcomm_release_caddy_t;
 
-    cd->lock.status = status;
-    PMIX_WAKEUP_THREAD(&cd->lock);
+static void rlcon(prte_grpcomm_release_caddy_t *p)
+{
+    p->sig = NULL;
+    p->st = PMIX_SUCCESS;
+    p->nlist = NULL;
+    p->info = NULL;
+    p->ninfo = 0;
+    p->finalmembership = NULL;
+    p->nfinal = 0;
+    p->grpinfo = NULL;
+    p->ngrpinfo = 0;
+    p->endpts = NULL;
+    p->nendpts = 0;
+}
+static void rldes(prte_grpcomm_release_caddy_t *p)
+{
+    if (NULL != p->info) {
+        PMIX_INFO_FREE(p->info, p->ninfo);
+    }
+    if (NULL != p->grpinfo) {
+        PMIX_INFO_FREE(p->grpinfo, p->ngrpinfo);
+    }
+    if (NULL != p->endpts) {
+        PMIX_INFO_FREE(p->endpts, p->nendpts);
+    }
+    if (NULL != p->finalmembership) {
+        PMIX_PROC_FREE(p->finalmembership, p->nfinal);
+    }
+    if (NULL != p->nlist) {
+        PMIX_INFO_LIST_RELEASE(p->nlist);
+    }
+    if (NULL != p->sig) {
+        PMIX_RELEASE(p->sig);
+    }
+}
+static PMIX_CLASS_INSTANCE(prte_grpcomm_release_caddy_t, pmix_object_t,
+                           rlcon, rldes);
+
+static void grp_release_complete(prte_grpcomm_release_caddy_t *cd);
+
+/* Resumption point for the continuation - runs on the PRRTE progress
+ * thread, where every object the completion touches belongs. */
+static void grp_release_resume(int fd, short args, void *cbdata)
+{
+    prte_grpcomm_release_caddy_t *cd = (prte_grpcomm_release_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
+
+    PMIX_ACQUIRE_OBJECT(cd);
+    grp_release_complete(cd);
+}
+
+/* Completion of the resource registration.  Runs on the PMIx progress
+ * thread, so it does nothing but record the status and hand the caddy
+ * back to ours. */
+static void grp_release_regcbfunc(pmix_status_t status, void *cbdata)
+{
+    prte_grpcomm_release_caddy_t *cd = (prte_grpcomm_release_caddy_t *) cbdata;
+
+    /* a group whose resources did not make it into our server is not a
+     * group our local clients can use - report the failure rather than
+     * handing them one whose endpoint lookups will quietly come up empty */
+    if (PMIX_SUCCESS != status) {
+        cd->st = status;
+    }
+    PRTE_PMIX_THREADSHIFT(cd, prte_event_base, grp_release_resume);
 }
 
 static void find_delete_tracker(prte_grpcomm_direct_group_signature_t *sig)
@@ -1002,22 +1093,14 @@ void prte_grpcomm_direct_grp_release(int status, pmix_proc_t *sender,
 {
     prte_grpcomm_group_t *coll;
     prte_grpcomm_direct_group_signature_t *sig = NULL;
-    prte_pmix_grp_caddy_t cd2, *cd;
+    prte_grpcomm_release_caddy_t *cd;
     int32_t cnt;
     pmix_status_t rc = PMIX_SUCCESS, st = PMIX_SUCCESS;
-    pmix_proc_t *finalmembership = NULL;
-    size_t nfinal = 0;
-    size_t nendpts = 0;
-    size_t ngrpinfo = 0;
     size_t n;
     pmix_data_array_t darray;
-    pmix_info_t *grpinfo = NULL;
-    pmix_info_t *endpts = NULL;
     prte_pmix_server_pset_t *pset;
-    void *ilist, *nlist;
+    void *ilist;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
-
-    PMIX_ACQUIRE_OBJECT(cd);
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s group release recvd",
@@ -1030,10 +1113,6 @@ void prte_grpcomm_direct_grp_release(int status, pmix_proc_t *sender,
         return;
     }
 
-    /* check for the tracker - okay if not found, it just
-     * means that we had no local participants */
-    coll = get_tracker(sig, false);
-
     // unpack the status
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &st, &cnt, PMIX_STATUS);
@@ -1045,6 +1124,9 @@ void prte_grpcomm_direct_grp_release(int status, pmix_proc_t *sender,
     /* if this was a destruct operation, then there is nothing
      * further to unpack */
     if (PMIX_GROUP_DESTRUCT == sig->op) {
+        /* check for the tracker - okay if not found, it just
+         * means that we had no local participants */
+        coll = get_tracker(sig, false);
         /* find this group ID on our list of groups */
         PMIX_LIST_FOREACH(pset, &prte_pmix_server_globals.groups, prte_pmix_server_pset_t)
         {
@@ -1066,10 +1148,18 @@ void prte_grpcomm_direct_grp_release(int status, pmix_proc_t *sender,
 
     // setup to cache info
     ilist = PMIx_Info_list_start();
-    nlist = PMIx_Info_list_start();
+
+    /* everything from here on has to survive the registration of the
+     * group's resources with our local PMIx server, which we are not
+     * allowed to wait for - hand it to the continuation caddy, which
+     * takes over ownership of the signature as well */
+    cd = PMIX_NEW(prte_grpcomm_release_caddy_t);
+    cd->sig = sig;
+    cd->st = st;
+    cd->nlist = PMIx_Info_list_start();
 
     // must be a construct operation - continue unpacking
-    if (PMIX_SUCCESS != st) {
+    if (PMIX_SUCCESS != cd->st) {
         PMIX_INFO_LIST_RELEASE(ilist);
         goto notify;
     }
@@ -1078,14 +1168,14 @@ void prte_grpcomm_direct_grp_release(int status, pmix_proc_t *sender,
         PMIX_INFO_LIST_ADD(rc, ilist, PMIX_GROUP_CONTEXT_ID, &sig->ctxid, PMIX_SIZE);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            st = rc;
+            cd->st = rc;
             PMIX_INFO_LIST_RELEASE(ilist);
             goto notify;
         }
-        PMIX_INFO_LIST_ADD(rc, nlist, PMIX_GROUP_CONTEXT_ID, &sig->ctxid, PMIX_SIZE);
+        PMIX_INFO_LIST_ADD(rc, cd->nlist, PMIX_GROUP_CONTEXT_ID, &sig->ctxid, PMIX_SIZE);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            st = rc;
+            cd->st = rc;
             PMIX_INFO_LIST_RELEASE(ilist);
             goto notify;
         }
@@ -1093,32 +1183,33 @@ void prte_grpcomm_direct_grp_release(int status, pmix_proc_t *sender,
 
     // unpack the final membership
     cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &nfinal, &cnt, PMIX_SIZE);
+    rc = PMIx_Data_unpack(NULL, buffer, &cd->nfinal, &cnt, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        st = rc;
+        cd->st = rc;
+        cd->nfinal = 0;
         PMIX_INFO_LIST_RELEASE(ilist);
         goto notify;
     }
-    if (0 < nfinal) {
-        PMIX_PROC_CREATE(finalmembership, nfinal);
-        cnt = nfinal;
-        rc = PMIx_Data_unpack(NULL, buffer, finalmembership, &cnt, PMIX_PROC);
+    if (0 < cd->nfinal) {
+        PMIX_PROC_CREATE(cd->finalmembership, cd->nfinal);
+        cnt = cd->nfinal;
+        rc = PMIx_Data_unpack(NULL, buffer, cd->finalmembership, &cnt, PMIX_PROC);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            st = rc;
+            cd->st = rc;
             PMIX_INFO_LIST_RELEASE(ilist);
             goto notify;
         }
         // pass back the final group membership
         darray.type = PMIX_PROC;
-        darray.array = finalmembership;
-        darray.size = nfinal;
+        darray.array = cd->finalmembership;
+        darray.size = cd->nfinal;
         // load the array - note: this copies the array!
-        PMIX_INFO_LIST_ADD(rc, nlist, PMIX_GROUP_MEMBERSHIP, &darray, PMIX_DATA_ARRAY);
+        PMIX_INFO_LIST_ADD(rc, cd->nlist, PMIX_GROUP_MEMBERSHIP, &darray, PMIX_DATA_ARRAY);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            st = rc;
+            cd->st = rc;
             PMIX_INFO_LIST_RELEASE(ilist);
             goto notify;
         }
@@ -1126,87 +1217,83 @@ void prte_grpcomm_direct_grp_release(int status, pmix_proc_t *sender,
 
     // unpack group info
     cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &ngrpinfo, &cnt, PMIX_SIZE);
+    rc = PMIx_Data_unpack(NULL, buffer, &cd->ngrpinfo, &cnt, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        st = rc;
+        cd->st = rc;
+        cd->ngrpinfo = 0;
         PMIX_INFO_LIST_RELEASE(ilist);
         goto notify;
     }
-    if (0 < ngrpinfo) {
-        PMIX_INFO_CREATE(grpinfo, ngrpinfo);
-        cnt = ngrpinfo;
-        rc = PMIx_Data_unpack(NULL, buffer, grpinfo, &cnt, PMIX_INFO);
+    if (0 < cd->ngrpinfo) {
+        PMIX_INFO_CREATE(cd->grpinfo, cd->ngrpinfo);
+        cnt = cd->ngrpinfo;
+        rc = PMIx_Data_unpack(NULL, buffer, cd->grpinfo, &cnt, PMIX_INFO);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            st = rc;
+            cd->st = rc;
             PMIX_INFO_LIST_RELEASE(ilist);
-            PMIX_INFO_FREE(grpinfo, ngrpinfo);
             goto notify;
         }
         // transfer them to both lists
-        for (n=0; n < ngrpinfo; n++) {
-            rc = PMIx_Info_list_add_value(ilist, PMIX_GROUP_INFO, &grpinfo[n].value);
+        for (n=0; n < cd->ngrpinfo; n++) {
+            rc = PMIx_Info_list_add_value(ilist, PMIX_GROUP_INFO, &cd->grpinfo[n].value);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
-                st = rc;
+                cd->st = rc;
                 PMIX_INFO_LIST_RELEASE(ilist);
-                PMIX_INFO_FREE(grpinfo, ngrpinfo);
                 goto notify;
             }
-            rc = PMIx_Info_list_add_value(nlist, PMIX_GROUP_INFO, &grpinfo[n].value);
+            rc = PMIx_Info_list_add_value(cd->nlist, PMIX_GROUP_INFO, &cd->grpinfo[n].value);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
-                st = rc;
+                cd->st = rc;
                 PMIX_INFO_LIST_RELEASE(ilist);
-                PMIX_INFO_FREE(grpinfo, ngrpinfo);
                 goto notify;
             }
         }
-        PMIX_INFO_FREE(grpinfo, ngrpinfo);
+        PMIX_INFO_FREE(cd->grpinfo, cd->ngrpinfo);
     }
 
 
     // unpack endpts
     cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &nendpts, &cnt, PMIX_SIZE);
+    rc = PMIx_Data_unpack(NULL, buffer, &cd->nendpts, &cnt, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        st = rc;
+        cd->st = rc;
+        cd->nendpts = 0;
         PMIX_INFO_LIST_RELEASE(ilist);
         goto notify;
     }
-    if (0 < nendpts) {
-        PMIX_INFO_CREATE(endpts, nendpts);
-        cnt = nendpts;
-        rc = PMIx_Data_unpack(NULL, buffer, endpts, &cnt, PMIX_INFO);
+    if (0 < cd->nendpts) {
+        PMIX_INFO_CREATE(cd->endpts, cd->nendpts);
+        cnt = cd->nendpts;
+        rc = PMIx_Data_unpack(NULL, buffer, cd->endpts, &cnt, PMIX_INFO);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            st = rc;
+            cd->st = rc;
             PMIX_INFO_LIST_RELEASE(ilist);
-            PMIX_INFO_FREE(endpts, nendpts);
             goto notify;
         }
         // transfer them to both lists
-        for (n=0; n < nendpts; n++) {
-            rc = PMIx_Info_list_add_value(ilist, PMIX_GROUP_ENDPT_DATA, &endpts[n].value);
+        for (n=0; n < cd->nendpts; n++) {
+            rc = PMIx_Info_list_add_value(ilist, PMIX_GROUP_ENDPT_DATA, &cd->endpts[n].value);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
-                st = rc;
+                cd->st = rc;
                 PMIX_INFO_LIST_RELEASE(ilist);
-                PMIX_INFO_FREE(endpts, nendpts);
                 goto notify;
             }
-            rc = PMIx_Info_list_add_value(nlist, PMIX_GROUP_ENDPT_DATA, &endpts[n].value);
+            rc = PMIx_Info_list_add_value(cd->nlist, PMIX_GROUP_ENDPT_DATA, &cd->endpts[n].value);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
-                st = rc;
+                cd->st = rc;
                 PMIX_INFO_LIST_RELEASE(ilist);
-                PMIX_INFO_FREE(endpts, nendpts);
                 goto notify;
             }
         }
-        PMIX_INFO_FREE(endpts, nendpts);
+        PMIX_INFO_FREE(cd->endpts, cd->nendpts);
     }
 
     // PRRTE automatically ensures that all daemons register all jobs
@@ -1215,33 +1302,76 @@ void prte_grpcomm_direct_grp_release(int status, pmix_proc_t *sender,
     // do not need to collect/pass job data for participants
     // in the group construct
 
-    // pass the information down to the PMIx server
+    /* pass the information down to the PMIx server.  This completes before
+     * we service our local clients, so that anything asking that server
+     * about the group finds it already there - but the rest of this
+     * operation runs as a continuation off the registration rather than
+     * waiting on it here. */
     PMIX_INFO_LIST_CONVERT(rc, ilist, &darray);
-    PMIX_CONSTRUCT(&cd2, prte_pmix_grp_caddy_t);
-    cd2.info = (pmix_info_t*)darray.array;
-    cd2.ninfo = darray.size;
     PMIX_INFO_LIST_RELEASE(ilist);
-
-    rc = PMIx_server_register_resources(cd2.info, cd2.ninfo, lkopcbfunc, &cd2);
-    if (PMIX_SUCCESS == rc) {
-        PMIX_WAIT_THREAD(&cd2.lock);
-        rc = cd2.lock.status;
+    if (PMIX_SUCCESS != rc) {
+        /* an empty list just means the construct carried nothing the server
+         * needs to cache, so there is simply nothing to register - anything
+         * else is a real failure.  Either way darray was left untouched, so
+         * we must not reach for it. */
+        if (PMIX_ERR_EMPTY != rc) {
+            PMIX_ERROR_LOG(rc);
+            cd->st = rc;
+        }
+        goto notify;
     }
-    PMIX_DESTRUCT(&cd2);
+    cd->info = (pmix_info_t *) darray.array;
+    cd->ninfo = darray.size;
 
-    if (PMIX_SUCCESS == st) {
+    rc = PMIx_server_register_resources(cd->info, cd->ninfo,
+                                        grp_release_regcbfunc, cd);
+    if (PMIX_SUCCESS == rc) {
+        /* the completion callback owns the caddy now */
+        return;
+    }
+    if (PMIX_OPERATION_SUCCEEDED != rc) {
+        PMIX_ERROR_LOG(rc);
+        cd->st = rc;
+    }
+    /* it completed immediately, and we are already on the progress
+     * thread - so just carry straight on */
+
+notify:
+    grp_release_complete(cd);
+}
+
+/* The remainder of grp_release, run once the group's resources are in our
+ * local PMIx server.  Always executes on the PRRTE progress thread. */
+static void grp_release_complete(prte_grpcomm_release_caddy_t *cd)
+{
+    prte_grpcomm_group_t *coll;
+    prte_pmix_grp_caddy_t *ccd;
+    prte_pmix_server_pset_t *pset;
+    pmix_data_array_t darray;
+    pmix_status_t rc;
+
+    if (PMIX_SUCCESS == cd->st) {
        /* add it to our list of known groups */
         pset = PMIX_NEW(prte_pmix_server_pset_t);
-        pset->name = strdup(sig->groupID);
-        if (NULL != finalmembership) {
-            pset->num_members = nfinal;
+        pset->name = strdup(cd->sig->groupID);
+        if (NULL != cd->finalmembership) {
+            pset->num_members = cd->nfinal;
             PMIX_PROC_CREATE(pset->members, pset->num_members);
-            memcpy(pset->members, finalmembership, nfinal * sizeof(pmix_proc_t));
+            memcpy(pset->members, cd->finalmembership,
+                   cd->nfinal * sizeof(pmix_proc_t));
         }
         pmix_list_append(&prte_pmix_server_globals.groups, &pset->super);
     }
 
-notify:
+    /* Look the tracker up now instead of carrying it across the
+     * registration: the progress thread was free while PMIx worked, so an
+     * abort or a duplicate release could have completed and deleted it in
+     * the interim - in which case our local participants have already been
+     * serviced and there is nothing left here to do.  It is equally fine
+     * for it to have never existed, which simply means we had no local
+     * participants. */
+    coll = get_tracker(cd->sig, false);
+
     // regardless of prior error, we MUST notify any pending clients
     // so they don't hang
 
@@ -1249,34 +1379,28 @@ notify:
         // service the procs that are part of the collective
 
         // convert for returning to PMIx server library
-        cd = PMIX_NEW(prte_pmix_grp_caddy_t);
-        if (PMIX_SUCCESS == st) {
-            PMIX_INFO_LIST_CONVERT(rc, nlist, &darray);
-            if (PMIX_SUCCESS != rc && PMIX_ERR_EMPTY != rc) {
-                PMIX_ERROR_LOG(rc);
+        ccd = PMIX_NEW(prte_pmix_grp_caddy_t);
+        if (PMIX_SUCCESS == cd->st) {
+            PMIX_INFO_LIST_CONVERT(rc, cd->nlist, &darray);
+            if (PMIX_SUCCESS != rc) {
+                if (PMIX_ERR_EMPTY != rc) {
+                    PMIX_ERROR_LOG(rc);
+                }
+            } else {
+                ccd->info = (pmix_info_t*)darray.array;
+                ccd->ninfo = darray.size;
             }
-            cd->info = (pmix_info_t*)darray.array;
-            cd->ninfo = darray.size;
         }
 
         /* return to the PMIx server library for relay to
          * local procs in the operation */
-        coll->cbfunc(st, cd->info, cd->ninfo, coll->cbdata, relcb, (void*)cd);
+        coll->cbfunc(cd->st, ccd->info, ccd->ninfo, coll->cbdata, relcb, (void*)ccd);
     }
 
-    if (0 < nendpts) {
-        PMIX_INFO_FREE(endpts, nendpts);
-    }
-    if (0 < ngrpinfo) {
-        PMIX_INFO_FREE(grpinfo, ngrpinfo);
-    }
-    if (0 < nfinal) {
-        PMIX_PROC_FREE(finalmembership, nfinal);
-    }
-    PMIX_INFO_LIST_RELEASE(nlist);
     // remove this collective from our tracker
-    find_delete_tracker(sig);
-    PMIX_RELEASE(sig);
+    find_delete_tracker(cd->sig);
+    /* the caddy owns the signature and everything we unpacked into it */
+    PMIX_RELEASE(cd);
 }
 
 
