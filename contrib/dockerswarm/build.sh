@@ -92,6 +92,45 @@ srcdir_has_intree() {
     [ -n "$(find "$root/src" -name '*.lo' -print -quit 2>/dev/null)" ]
 }
 
+# --- generate the flex output the builder cannot generate itself ------------
+# In a pristine checkout a *.l has no companion *.c: automake produces it at
+# build time, and ylwrap writes it into the SOURCE directory next to the .l --
+# but the builder mounts both source trees READ-ONLY, so the build dies with
+#
+#     config/ylwrap: line 204: .../keyval_lex.c: Read-only file system
+#
+# A tree that has been built in place at least once already carries the file,
+# which is why this only ever bites a *fresh* clone -- precisely what PMIX_SRC
+# usually points at.  Generate it here on the host the way automake would; the
+# -P symbol prefix lives in the sibling Makefile.am AM_LFLAGS.  These are
+# git-ignored maintainer files, so writing them into the checkout is exactly
+# what building it normally does.
+gen_lex() {
+    local tree="$1" lfile cfile prefix
+    while IFS= read -r lfile; do
+        [ -n "$lfile" ] || continue
+        cfile="${lfile%.l}.c"
+        if [ -f "$cfile" ]; then
+            continue
+        fi
+        if ! command -v flex >/dev/null 2>&1; then
+            echo ">>> WARNING: $lfile has no generated .c and flex is not" \
+                 "installed; the read-only builder cannot make one"
+            return 0
+        fi
+        prefix="$(sed -n 's/^AM_LFLAGS *= *-P//p' "$(dirname "$lfile")/Makefile.am" \
+                  2>/dev/null | head -1)"
+        echo ">>> flex $lfile (the builder mounts this tree read-only)"
+        if [ -n "$prefix" ]; then
+            flex "-P$prefix" -o "$cfile" "$lfile"
+        else
+            flex -o "$cfile" "$lfile"
+        fi
+    done <<EOF
+$(find "$tree" -name '*.l' 2>/dev/null)
+EOF
+}
+
 # --- make the source tree VPATH-ready (idempotent) --------------------------
 prep_srcdir() {
     if srcdir_has_intree && [ "$distclean" != never ]; then
@@ -128,6 +167,8 @@ prep_srcdir() {
         echo ">>> autogen.pl"
         ( cd "$root" && ./autogen.pl )
     fi
+
+    gen_lex "$root"
 }
 
 # --- (re)build the base image if needed -------------------------------------
@@ -152,7 +193,10 @@ build_linux() {
     prep_srcdir linux
 
     local pmix_mount=()
-    [ -n "$PMIX_SRC" ] && pmix_mount=(-v "$(cd "$PMIX_SRC" && pwd)":/pmix-src:ro)
+    if [ -n "$PMIX_SRC" ]; then
+        gen_lex "$(cd "$PMIX_SRC" && pwd)"
+        pmix_mount=(-v "$(cd "$PMIX_SRC" && pwd)":/pmix-src:ro)
+    fi
 
     echo ">>> building PRRTE (and PMIx if PMIX_SRC set) into volume $VOLUME"
     docker run --rm \

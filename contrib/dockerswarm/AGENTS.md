@@ -515,6 +515,31 @@ runs `/pmix-src/configure` from a VPATH directory over a read-only bind
 mount, so a tree with its own `config.status` is refused ("source directory
 already configured") and a fresh `git clone` has no `configure` at all.
 
+A `git worktree` off an existing clone is the clean way to get one (and it
+keeps you out of a tree another session may be building in). Two things it
+needs beyond `autogen.pl`:
+
+```sh
+git -c submodule.config/oac.url=<clone>/config/oac submodule update --init config/oac
+```
+
+because openpmix's `.gitmodules` points `config/oac` at a local path that
+will not exist on your machine — and nothing else, because **`build.sh` now
+pre-generates the flex output itself**. That was the other trap: a pristine
+checkout has a `*.l` with no generated `*.c`, automake produces it at build
+time *in the source directory*, and the builder mounts the source
+read-only, so the build died with
+
+```
+config/ylwrap: line 204: .../keyval_lex.c: Read-only file system
+```
+
+A tree that has been built in place once already carries the file, which is
+why this only ever bit a fresh clone — exactly what `PMIX_SRC` is usually
+pointed at. `gen_lex` in `build.sh` runs `flex` on the host for any missing
+one (taking the `-P` symbol prefix from the sibling `Makefile.am`), for the
+PRRTE tree as well as the PMIx one.
+
 ### The build dirs persist, so configure arguments are sticky
 
 The VPATH build dirs live in the shared volume and outlive any one run.
