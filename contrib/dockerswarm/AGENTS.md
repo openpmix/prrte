@@ -43,6 +43,8 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | `elastic.c` | The elastic test client (`elastic` in the install): issues a PMIx allocation request and waits for the phase-two completion event. |
 | *(no file here)* | `build.sh` also compiles [`examples/dynamic.c`](../../examples/dynamic.c) from the main tree as `dynamic` — the only client in this harness that calls `PMIx_Spawn`, and so the only way to get a **parent/child job pair**. See §11. |
 | `dataserver.c` | A bare PMIx client for the publish/lookup service (`dataserver` in the install): publish/lookup/lookupwait/lookup2/unpublish. Drives `src/runtime/data_server`. See §13. |
+| `jobinfo.c` | A bare PMIx client for the **direct-modex** paths (`jobinfo` in the install): `publish`/`fetch`/`fetchkey`. Drives `src/prted/pmix/pmix_server_fence.c` from a daemon that hosts none of the target job's procs. |
+| `proctable.c` | A bare PMIx client for the **proc-table queries** (`proctable` in the install): `procs`/`localprocs`. Those are the only callers of `prte_pmix_convert_state()`, and the local-vs-global proc-table split has no meaning on one host. Drives `src/pmix`. |
 | `slowcat.c` | A deliberately **slow** stdin reader (`slowcat` in the install, no PMIx dependency): copies stdin to a file in small reads with a pause between them, so the daemon feeding it keeps hitting *partial* writes. That is the only way to reach the iof short-write path. |
 | `fake-slurm.py` | A stand-in SLURM control plane (`sbatch`/`scontrol`/`scancel`) so `ras/slurm`'s elastic modify surface can be exercised. See §12. |
 
@@ -393,6 +395,24 @@ owning every core of it. Note that an assertion on a binding has to match the
 **whole** bracketed site list: a rank bound to `core:L0-7` starts with a `0`
 and slips past a pattern that only looks at the first number, which is
 exactly how that defect stayed hidden behind a passing test.
+
+**The PRRTE/PMIx translation shim (`src/pmix`, `test_pmix`)**: everything in
+`src/pmix/pmix.c` is a pure integer mapping and is covered exhaustively,
+without a DVM, by `test/unit/pmix`. What this phase adds is the one thing a
+table test cannot show — that the mapping is actually *reached*, with real
+proc states, on a daemon that is not the one you are standing on. The probe
+is `proctable`, and it asserts:
+
+- `PMIX_QUERY_PROC_TABLE` over a job spread across four nodes returns every
+  proc, the table spans more than one node, and **no proc reports
+  `PMIX_PROC_STATE_UNDEF`**. That last one is the whole point:
+  `prte_pmix_convert_state()` was written with bare integer cases against a
+  state space that does not number like PMIx's, so several real PRRTE states
+  fell through to `UNDEF` — a legal answer, so nothing anywhere logged an
+  error and the proc simply had no state.
+- `PMIX_QUERY_LOCAL_PROC_TABLE` returns *some but not all* of a job's procs.
+  On one host "local" and "all" are the same set, so this case cannot exist
+  there.
 
 **The daemon body and the PMIx server host module (`src/prted`,
 `test_prted`)**: `src/prted` is where the DVM actually lives, and almost

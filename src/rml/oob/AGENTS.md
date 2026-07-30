@@ -145,6 +145,12 @@ In a launcher-less (bootstrapped) DVM daemons boot independently, so:
 - **`prte_oob_base_send_nb` runs on a *hop*, and the hop can be
   `PMIX_RANK_INVALID`** when the target sits behind a hole the tree cannot
   reach past. Handle that before it reaches the peer lookup.
+- **`PRTE_MODEX_RECV_VALUE_OPTIONAL` yields a `pmix_status_t`.** The URI
+  lookup in `prte_oob_base_send_nb` is the only use of it in this directory.
+  Comparing its result against `PRTE_SUCCESS` works — both spaces call
+  success 0 — but it is comparing against the wrong space, and anything
+  beyond the success test needs `prte_pmix_convert_status()` first. See
+  [`../../pmix/AGENTS.md`](../../pmix/AGENTS.md).
 - **Don't tear down a peer over one bad address.** `set_addr` parses a URI that
   may name several addresses, and the peer object it is filling in may be an
   existing one with a live socket and queued sends. A malformed address is a
