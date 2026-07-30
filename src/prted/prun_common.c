@@ -767,12 +767,21 @@ DONE:
     return rc;
 }
 
+/* the mutually-exclusive ways of naming the allocation a job is to be
+ * mapped onto - see the resolution order in prte_plm_base_recv() */
+static const char *alloc_target_opts[] = {
+    PRTE_CLI_SESSION_ID,
+    PRTE_CLI_TARGET_ALLOC,
+    PRTE_CLI_ALLOC_REFID,
+    NULL
+};
+
 int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
                                prte_schizo_base_module_t *schizo,
                                pmix_list_t *apps)
 {
     pmix_cli_item_t *opt, opt2;
-    int ret, i;
+    int ret, i, ntargets;
     uint32_t ui32;
     bool flag;
     prte_pmix_app_t *app;
@@ -921,6 +930,65 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
         info.value.data.string = opt->values[0];
         flag = PMIX_INFO_TRUE(&info);
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_GPU_SUPPORT, &flag, PMIX_BOOL);
+    }
+
+    /* Determine the allocation upon which this job is to be mapped. The
+     * three options are alternative spellings of the same thing - the
+     * numeric ID of the session that holds the allocation, the identifier
+     * the host environment assigned to the allocation, or the reference ID
+     * the user attached to it when the allocation was requested. The DVM
+     * master resolves them in a fixed order, so naming more than one is
+     * ambiguous: refuse it here rather than silently honoring just one.
+     * Each is a job-level directive - there is no way to map different
+     * app contexts of a single job onto different allocations - so a
+     * second instance means the user attached one to an app in an MPMD
+     * line, which we likewise cannot honor. */
+    ntargets = 0;
+    for (i = 0; NULL != alloc_target_opts[i]; i++) {
+        if (1 < pmix_cmd_line_get_ninsts(results, alloc_target_opts[i])) {
+            pmix_show_help("help-schizo-base.txt", "multi-instances", true,
+                           alloc_target_opts[i]);
+            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+            return PRTE_ERR_BAD_PARAM;
+        }
+        if (pmix_cmd_line_is_taken(results, alloc_target_opts[i])) {
+            ++ntargets;
+        }
+    }
+    if (1 < ntargets) {
+        pmix_show_help("help-schizo-base.txt", "alloc-target-conflict", true,
+                       PRTE_CLI_SESSION_ID, PRTE_CLI_TARGET_ALLOC, PRTE_CLI_ALLOC_REFID);
+        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    opt = pmix_cmd_line_get_param(results, PRTE_CLI_SESSION_ID);
+    if (NULL != opt) {
+        char *endptr = NULL;
+        unsigned long sid;
+
+        /* require a bare run of digits: strtoul would otherwise accept a
+         * leading sign or whitespace, and silently wrap "-1" into a valid
+         * (and quite possibly meaningful) session ID */
+        errno = 0;
+        sid = strtoul(opt->values[0], &endptr, 10);
+        if (!isdigit((unsigned char) opt->values[0][0]) || '\0' != *endptr ||
+            0 != errno || sid != (unsigned long) (uint32_t) sid) {
+            pmix_show_help("help-schizo-base.txt", "bad-session-id", true,
+                           PRTE_CLI_SESSION_ID, opt->values[0]);
+            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+            return PRTE_ERR_BAD_PARAM;
+        }
+        ui32 = (uint32_t) sid;
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_SESSION_ID, &ui32, PMIX_UINT32);
+    }
+    opt = pmix_cmd_line_get_param(results, PRTE_CLI_TARGET_ALLOC);
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_ALLOC_ID, opt->values[0], PMIX_STRING);
+    }
+    opt = pmix_cmd_line_get_param(results, PRTE_CLI_ALLOC_REFID);
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_ALLOC_REQ_ID, opt->values[0], PMIX_STRING);
     }
 
     /* give the schizo components a chance to add to the job info */

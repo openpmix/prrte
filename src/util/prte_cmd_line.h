@@ -119,6 +119,9 @@ BEGIN_C_DECLS
 #define PRTE_CLI_DISABLE_RECOVERY       "disable-recovery"          // none
 #define PRTE_CLI_MEM_ALLOC_KIND			"memory-alloc-kinds"        // required
 #define PRTE_CLI_GPU_SUPPORT			"gpu-support"				// required
+#define PRTE_CLI_TARGET_ALLOC           "alloc-id"                  // required
+#define PRTE_CLI_ALLOC_REFID            "alloc-refid"               // required
+#define PRTE_CLI_SESSION_ID             "session-id"                // required
 
 // Placement options
 #define PRTE_CLI_MAPBY                  "mapby"                     // required
