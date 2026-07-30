@@ -273,10 +273,10 @@ option to the help request as "--help <option>".
 | "--allow-run-as-     | Allow execution as root (**STRONGLY           |
 | root"                | DISCOURAGED**)                                |
 +----------------------+-----------------------------------------------+
-| "--forward-signals   | Comma-delimited list of additional signals    |
-| <signals>"           | (names or integers) to forward to application |
-|                      | processes ["none" => forward nothing].        |
-|                      | Signals provided by default include           |
+| "--forward-signals   | Comma-delimited list of the signals (names or |
+| <signals>"           | integers) to be forwarded to application      |
+|                      | processes, replacing the default set ["none"  |
+|                      | => forward nothing]. The default set is       |
 |                      | "SIGTSTP", "SIGUSR1", "SIGUSR2", "SIGABRT",   |
 |                      | "SIGALRM", and "SIGCONT"                      |
 +----------------------+-----------------------------------------------+
@@ -380,10 +380,10 @@ Printout URI on stdout [-], stderr [+], or a file [anything else]
 #
 [forward-signals]
 
-Comma-delimited list of additional signals (names or integers) to
-forward to application processes ("none" = forward nothing). Signals
-provided by default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT,
-SIGALRM, and SIGCONT.
+Comma-delimited list of the signals (names or integers) to be forwarded
+to application processes ("none" = forward nothing). The list replaces
+the default set, which is SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM,
+and SIGCONT.
 #
 [map-by]
 

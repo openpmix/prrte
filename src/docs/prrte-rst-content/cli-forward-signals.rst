@@ -12,7 +12,10 @@
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
 
-Comma-delimited list of additional signals (names or integers) to
-forward to application processes (``none`` = forward
-nothing). Signals provided by default include SIGTSTP, SIGUSR1,
-SIGUSR2, SIGABRT, SIGALRM, and SIGCONT.
+Comma-delimited list of the signals (names or integers) to be
+forwarded to application processes (``none`` = forward nothing).
+
+The list *replaces* the default set rather than adding to it, so it
+names every signal that is to be forwarded. The default set, used when
+this option is not given, is SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT,
+SIGALRM, and SIGCONT.
