@@ -259,6 +259,14 @@ constructs with the documented defaults (all rollup counters zero, the
 group tracker's info-lists opened) and destructs without leaking or
 crashing. Extend it when you add a class or change a constructor default.
 
+The live collectives are covered by the
+[dockerswarm harness](../../../contrib/dockerswarm/AGENTS.md): `xcast`
+and `fence` fall out of nearly every phase, and `test_grpcomm` drives
+`PMIx_Group_construct`/`_destruct` across four nodes with the `groupcon`
+client. That phase exists because `grp_release()` runs on **every**
+daemon, and a daemon that merely *received* the down-tree broadcast —
+rather than originating it as the HNP — does not exist on one host.
+
 ---
 
 ## Debugging

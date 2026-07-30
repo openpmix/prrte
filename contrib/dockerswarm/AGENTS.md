@@ -45,6 +45,7 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | `dataserver.c` | A bare PMIx client for the publish/lookup service (`dataserver` in the install): publish/lookup/lookupwait/lookup2/unpublish. Drives `src/runtime/data_server`. See §13. |
 | `jobinfo.c` | A bare PMIx client for the **direct-modex** paths (`jobinfo` in the install): `publish`/`fetch`/`fetchkey`. Drives `src/prted/pmix/pmix_server_fence.c` from a daemon that hosts none of the target job's procs. |
 | `proctable.c` | A bare PMIx client for the **proc-table and server-URI queries** (`proctable` in the install): `procs`/`localprocs`/`serveruri`. Those are the only callers of `prte_pmix_convert_state()`, and the local-vs-global proc-table split has no meaning on one host. Drives `src/pmix`. |
+| `groupcon.c` | A bare PMIx client that drives a **group construct/destruct** (`groupcon` in the install): every rank contributes a local cid, asks for a context id, constructs, reads every peer's contribution back, destructs. Drives `grpcomm/direct`'s `grp_release` on daemons that merely *received* the broadcast. See §15. |
 | `slowcat.c` | A deliberately **slow** stdin reader (`slowcat` in the install, no PMIx dependency): copies stdin to a file in small reads with a pause between them, so the daemon feeding it keeps hitting *partial* writes. That is the only way to reach the iof short-write path. |
 | `fake-slurm.py` | A stand-in SLURM control plane (`sbatch`/`scontrol`/`scancel`) so `ras/slurm`'s elastic modify surface can be exercised. See §12. |
 
@@ -1002,3 +1003,55 @@ docker exec prte-node4 sh -c 'ldd /opt/prte/prte/bin/<helper> | grep pmix'
 The daemons themselves are fine — `prted` is launched with the right
 environment and loads the volume's PMIx on every node. It is only the
 application processes they fork that lose it.
+
+## 15. Group collectives (`groupcon`, `test_grpcomm`)
+
+`PMIx_Group_construct` is a two-phase collective — an up-tree rollup to
+the HNP, then an xcast of the assembled result back down — and the half
+worth testing across nodes is the **down-tree** one. `grp_release()` runs
+on *every* daemon: it takes the broadcast, hands the group's context id,
+group info and endpoint data to its **own** local PMIx server via
+`PMIx_server_register_resources()`, and only then releases the local
+participants of the collective. On one host there is exactly one daemon
+and it is also the HNP, so a daemon that merely *received* the release is
+never exercised at all.
+
+That registration used to be waited on, parking the daemon's whole event
+loop on every construct; it is now a continuation
+(`grp_release_regcbfunc` → `grp_release_resume` →
+`grp_release_complete`). **That continuation is what this phase guards.**
+Lose the caddy anywhere between issuing the registration and resuming and
+the local participants are never released — the construct does not fail,
+it *hangs*, on every daemon at once. Deleting the thread-shift and
+re-running turns 7 of the phase's 10 assertions red, which is how the
+teeth were confirmed rather than assumed.
+
+The probe is `groupcon`, compiled by `build.sh` the same way as
+`elastic`/`dataserver`/`proctable`:
+
+```sh
+groupcon <groupID> [secs]
+```
+
+Every rank contributes `PMIX_GROUP_LOCAL_CID` = 1234 + rank as
+`PMIX_GROUP_INFO`, requests `PMIX_GROUP_ASSIGN_CONTEXT_ID`, constructs,
+reads **every** rank's local cid back, and destructs. Output is one
+grep-friendly `GRP <rank> <what> …` line per step.
+
+**One thing this phase deliberately does not claim.** The read-back runs
+with no fence after the construct returns, which looks like an assertion
+that the daemon registered the group with its PMIx server before
+releasing its clients. It is not, and saying so would be wrong: the
+construct hands the same group info back to the client in its *results*,
+so the client library answers those reads out of its own cache —
+skipping `PMIx_server_register_resources` entirely still passes them
+(measured). What the reads are good for is checking that the membership
+and group info each daemon returned are complete and identical, which is
+a genuinely per-daemon property.
+
+The other two assertions in the phase are shape checks worth keeping: the
+group must actually span more than one node (or the case is a
+single-host test wearing a hat), and three back-to-back constructs
+followed by a plain job must all succeed — a caddy leak or a tracker that
+is never deleted shows up as drift across runs rather than as one bad
+one.
