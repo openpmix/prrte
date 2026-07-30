@@ -2028,9 +2028,20 @@ test_util() {
             bad "concurrent job output crossed over (JOBA=$n JOBB=$c): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
         fi
         # ...and the tags name two DIFFERENT namespaces
+        # This also guards an IOF race that only two concurrent jobs expose.
+        # A tool parses its spawn's --output directives before the request
+        # goes out, but could only record them against the namespace once the
+        # reply named it - so output from a proc that wrote and exited before
+        # the reply arrived had nowhere to look for its format and came out
+        # UNTAGGED. One prun almost always wins that race; two contending for
+        # the same HNP did not, and this assertion failed about one run in
+        # three. See pmix_globals.spawn_iof_flags.
         n=$(echo "$out" | sed -n 's/^\[\([^,]*\),.*/\1/p' | sort -u | wc -l | tr -d ' ')
         [ "$n" = 2 ] && ok "the two jobs are distinguishable by namespace" \
                      || bad "the two jobs' output carried $n distinct namespace tag(s)"
+        n=$(echo "$out" | grep -cE '^JOB[AB]$')
+        [ "$n" = 0 ] && ok "every line was tagged" \
+                     || bad "$n line(s) came back untagged"
         RUN 'rm -f /tmp/a.out /tmp/b.out' >/dev/null 2>&1
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
@@ -2054,6 +2065,213 @@ test_util() {
     n=$(echo "$out" | grep -cE '^node[23]$')
     [ "$n" = 2 ] && ok "a valid system limit is applied and the launch proceeds" \
                  || bad "a valid system limit broke the launch: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    cleanup_swarm
+}
+
+test_hwloc() {
+    local out rc n c bad_cores
+
+    # src/hwloc is a library of pure functions over a topology, so nearly all
+    # of it is pinned down by test/unit/hwloc against synthetic topologies.
+    # What that test cannot reach is the case PRRTE actually runs in: the
+    # topology being rendered or queried arrived from ANOTHER machine, as XML
+    # over the wire, and lives in the HNP alongside nine others. Every case
+    # below is a defect that only shows there.
+    #
+    # These containers are the right shape for it on purpose: 8 cores, one
+    # package, no SMT, and no NUMA node in sysfs.
+
+    banner "hwloc: a remote node's binding is rendered from its own topology"
+    # cset2str() runs in the HNP against the topology the daemon shipped it,
+    # not against the HNP's own. Its package loop dereferenced each package
+    # object unchecked, and the range builder it calls appended to a 2048-byte
+    # stack buffer with memcpy() and no bound. A proc on a remote node is the
+    # only way to exercise that path with a topology the HNP did not sense.
+    # --display map (not --display bind): the map is rendered BY THE HNP from
+    # the topology each daemon shipped it, which is the path under test. The
+    # per-rank "Rank N bound to" line comes from the daemon's own stderr and
+    # is not forwarded here.
+    cleanup_swarm
+    out=$(RUN 'timeout 90 prterun --host node2:2,node3:2 -n 4 --map-by node \
+                   --bind-to core --display map hostname' 2>&1)
+    n=$(echo "$out" | grep -cE 'Process rank: [0-9]+ Bound: package\[[0-9]+\]\[core:L')
+    [ "$n" = 4 ] && ok "all 4 remote ranks rendered a package/core binding" \
+                 || bad "$n/4 remote ranks rendered a binding: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # ...and the renders are not a constant - bind-to core gives each rank on
+    # a node its own core
+    c=$(echo "$out" | sed -n 's/.*\[core:L\([0-9-]*\)\].*/\1/p' | sort -u | wc -l | tr -d ' ')
+    [ "$c" -ge 2 ] && ok "the rendered cores differ between ranks" \
+                   || bad "every rank rendered the same core ($c distinct)"
+    cleanup_swarm
+
+    banner "hwloc: a wide binding renders without corrupting the HNP's heap"
+    # THE overflow. prte_hwloc_get_binding_info() writes one
+    # "<core>N</core>\n" element per bound core, each 20 spaces of indent plus
+    # ~14 characters, into a buffer its caller sizes at 20 bytes PER PU. The
+    # element loop advanced its write pointer through a run of set bits without
+    # ever charging those bytes against the budget it handed snprintf, so a
+    # process bound to more than about half the cores wrote past the end.
+    #
+    # These nodes have 8 cores and no SMT, so "--bind-to package" is exactly
+    # that shape: 8 elements (~270 bytes) into 160 bytes. The corruption lands
+    # in the HNP, which is holding every node's topology, so the failure is a
+    # crash somewhere unrelated - which is why this asserts on the whole run
+    # completing as well as on the output.
+    cleanup_swarm
+    out=$(RUN 'timeout 90 prterun --host node2:1,node3:1 -n 2 --map-by node \
+                   --bind-to package --display map:parseable hostname' 2>&1)
+    rc=$?
+    [ "$rc" = 0 ] && ok "a package-wide binding on 2 nodes completed (rc=0)" \
+                  || bad "a package-wide binding run failed (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # every core of both nodes has to appear, 8 per rank
+    n=$(echo "$out" | grep -cE '<core>[0-9]+</core>')
+    [ "$n" = 16 ] && ok "all 16 bound cores were rendered (8 per rank)" \
+                  || bad "$n/16 <core> elements were rendered: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # the package id is computed, not left as whatever was on the stack
+    bad_cores=$(echo "$out" | sed -n 's/.*<package id="\(-\?[0-9]*\)">.*/\1/p' \
+                | grep -vcE '^[0-9]$' || true)
+    [ "$bad_cores" = 0 ] && ok "every rendered package id is a small non-negative number" \
+                         || bad "$bad_cores rendered package id(s) were not plausible: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # ...and the XML is still well formed, which it is not once the writes run
+    # off the end of the element buffer
+    n=$(echo "$out" | grep -c '</binding>')
+    c=$(echo "$out" | grep -c '<binding>')
+    [ "$n" = "$c" ] && [ "$n" = 2 ] && ok "the parseable map is balanced (2 bindings)" \
+                                    || bad "parseable map is malformed (<binding>=$c </binding>=$n)"
+    cleanup_swarm
+
+    banner "hwloc: --map-by numa works against topologies the HNP never sensed"
+    # The NUMA count and lookup both read a cutoff cached on the topology's
+    # root, and used to answer "this node has no NUMA domains" whenever that
+    # cache had not been built yet - a silent zero that a map-by numa job
+    # believes, so it places nothing. The HNP's OWN topology always has the
+    # cache (it is built when the topology is sensed); a topology that arrived
+    # from a daemon only has it if someone remembered, which is the case that
+    # can regress.
+    cleanup_swarm
+    out=$(RUN 'timeout 90 prterun --host node2:2,node3:2,node4:2 -n 3 \
+                   --map-by numa hostname' 2>&1)
+    n=$(echo "$out" | grep -cE '^node[234]$')
+    [ "$n" = 3 ] && ok "map-by numa placed all 3 procs across the remote nodes" \
+                 || bad "map-by numa placed $n/3 procs: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    cleanup_swarm
+
+    banner "hwloc: a DVM cpu-set constrains every node, not just the first"
+    # filter_cpus() expands the DVM's cpu-set against each node's topology in
+    # turn, and REWRITES the process-wide list with the expansion as it goes.
+    # One node cannot show whether the second node got the same answer.
+    cleanup_swarm
+    # The cpu-set is written as a RANGE ("0-1") on purpose. PMIx's
+    # command-line parser used to reject any MCA value whose second character
+    # was a dash as "not-enough-arguments", so this exact spelling was
+    # unusable; it is the regression test for that fix as much as for the
+    # per-node expansion. Bind to core: that is the level at which a cpu-set
+    # is honored today (see the note at the end of this case).
+    out=$(RUN 'timeout 90 prterun --prtemca hwloc_default_cpu_list 0-1 \
+                   --host node2:2,node3:2,node4:2 -n 6 --map-by node \
+                   --bind-to core --display map hostname' 2>&1)
+    rc=$?
+    if echo "$out" | grep -q 'not-enough-arguments'; then
+        skp "this PMIx predates the command-line fix for dash-bearing MCA values (pmix_cmd_line.c) -- rebuild the image or build with PMIX_SRC"
+    elif [ "$rc" != 0 ]; then
+        bad "a DVM cpu-set run failed (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    else
+        ok "a DVM cpu-set given as a range was accepted and applied"
+        # the expansion is reported back in the map header
+        echo "$out" | grep -q 'Cpu set: *0,1' \
+            && ok "the range was expanded to the individual cpus" \
+            || bad "the cpu-set header did not show the expansion: $(echo "$out" | grep -m1 'Cpu set:')"
+        # Every rank on every node must be inside the set. Match the WHOLE
+        # bracketed site list, not just its first number: a rank bound to
+        # "core:L0-7" starts with a 0 and would sail past a looser pattern.
+        bad_cores=$(echo "$out" | sed -n 's/.*\[core:L\([0-9,-]*\)\].*/\1/p' \
+                    | grep -vcE '^(0|1|0-1)$' || true)
+        [ "$bad_cores" = 0 ] && ok "no rank was bound outside the cpu-set on any node" \
+                             || bad "$bad_cores rank(s) were bound outside cores 0-1: $(echo "$out" | grep -o '\[core:L[0-9,-]*\]' | tr '\n' ' ')"
+        n=$(echo "$out" | grep -c 'Bound: package')
+        [ "$n" = 6 ] && ok "all 6 ranks reported a binding" \
+                     || bad "$n/6 ranks reported a binding"
+    fi
+    # ...and the same must hold when binding to an object WIDER than a core.
+    # A rank bound to a package used to come back owning every core of it,
+    # cpu-set or no cpu-set - the constraint was honored at the core level
+    # only, which is the one level that made the defect invisible. The
+    # documented intent is the cpu_list comment in src/hwloc/hwloc.c.
+    out=$(RUN 'timeout 90 prterun --prtemca hwloc_default_cpu_list 0-1 \
+                   --host node2:2,node3:2 -n 4 --map-by node \
+                   --bind-to package --display map hostname' 2>&1)
+    rc=$?
+    if echo "$out" | grep -q 'not-enough-arguments'; then
+        skp "package binding under a cpu-set: PMIx predates the command-line fix"
+    elif [ "$rc" != 0 ]; then
+        bad "package binding under a cpu-set failed (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    else
+        ok "a package-wide binding under a cpu-set completed"
+        bad_cores=$(echo "$out" | sed -n 's/.*\[core:L\([0-9,-]*\)\].*/\1/p' \
+                    | grep -vcE '^0-1$' || true)
+        [ "$bad_cores" = 0 ] \
+            && ok "a package-wide binding is confined to the cpu-set" \
+            || bad "$bad_cores rank(s) got cores outside the cpu-set: $(echo "$out" | grep -o '\[core:L[0-9,-]*\]' | tr '\n' ' ')"
+        n=$(echo "$out" | grep -c 'Bound: package')
+        [ "$n" = 4 ] && ok "all 4 ranks reported a package binding" \
+                     || bad "$n/4 ranks reported a binding"
+    fi
+    cleanup_swarm
+
+    banner "hwloc: a malformed cpu-set is refused before anything launches"
+    # The cpu ids went through a bare strtoul(), which reports 0 for "foo" -
+    # so a typo did not fail, it confined the ENTIRE DVM to cpu 0 on every
+    # node. Refusing it has to happen before any daemon is launched, and the
+    # message has to name the offending entry.
+    cleanup_swarm
+    out=$(RUN 'timeout 60 prterun --prtemca hwloc_default_cpu_list 0,foo \
+                   --host node2:1,node3:1 -n 2 hostname' 2>&1)
+    rc=$?
+    [ "$rc" != 0 ] && ok "a non-numeric cpu-set entry is refused (rc=$rc)" \
+                   || bad "a non-numeric cpu-set entry was accepted"
+    echo "$out" | grep -q 'could not be resolved' \
+        && ok "the refusal names the unresolvable entry" \
+        || bad "no cpu-set diagnostic was printed: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    echo "$out" | grep -qE '^node[23]$' \
+        && bad "procs launched anyway on a refused cpu-set" \
+        || ok "nothing was launched"
+    # ...and it is a REFUSAL, not a crash. The unresolved cpu-set came back as
+    # a NULL cpuset and nothing between here and the mapper checked it, so the
+    # diagnostic was followed by a segfault in the HNP inside hwloc.
+    echo "$out" | grep -qE 'Segmentation fault|Bus error|signal' \
+        && bad "the HNP crashed after refusing the cpu-set: $(echo "$out" | tr '\n' ' ' | tail -c 300)" \
+        || ok "the refusal did not take the HNP down"
+    # an id past the end of the topology is the same class of mistake
+    out=$(RUN 'timeout 60 prterun --prtemca hwloc_default_cpu_list 0,99 \
+                   --host node2:1 -n 1 hostname' 2>&1)
+    rc=$?
+    [ "$rc" != 0 ] && ok "a cpu-set naming cpus the node does not have is refused (rc=$rc)" \
+                   || bad "a cpu-set of 0,99 was accepted on an 8-core node"
+    echo "$out" | grep -qE 'Segmentation fault|Bus error|signal' \
+        && bad "the HNP crashed on an out-of-range cpu-set: $(echo "$out" | tr '\n' ' ' | tail -c 300)" \
+        || ok "an out-of-range cpu-set did not take the HNP down"
+    cleanup_swarm
+
+    banner "hwloc: every node's topology can be printed"
+    # --display topo runs prte_hwloc_print() over each node's topology in the
+    # HNP. It rendered each object's cpuset into a 1024-byte buffer while
+    # telling hwloc the buffer was 2048 - a stack overflow waiting for a wide
+    # enough machine. These nodes are not wide enough to trip it, but the
+    # traversal is exercised here for all of them at once, which is the only
+    # place it runs against more than one topology.
+    cleanup_swarm
+    out=$(RUN 'timeout 90 prterun --host node2:1,node3:1,node4:1 -n 3 \
+                   --map-by node --display topo hostname' 2>&1)
+    rc=$?
+    [ "$rc" = 0 ] && ok "--display topo completed for 3 nodes (rc=0)" \
+                  || bad "--display topo failed (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    n=$(echo "$out" | grep -c 'Type: Machine')
+    [ "$n" -ge 1 ] && ok "at least one machine-level topology was rendered ($n)" \
+                   || bad "no topology was rendered: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # a rendered cpuset has to be intact, not truncated mid-word
+    echo "$out" | grep -q 'Cpuset:  0x' \
+        && ok "object cpusets were rendered" \
+        || bad "no cpuset was rendered in the topology dump"
     cleanup_swarm
 }
 
@@ -2798,6 +3016,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_tools
 
     test_util
+
+    test_hwloc
 
     test_runtime
 
