@@ -24,6 +24,9 @@
  */
 
 #include "prte_config.h"
+
+#include <errno.h>
+#include <limits.h>
 #include "constants.h"
 
 #include <string.h>
@@ -1228,8 +1231,9 @@ int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app, char *spec)
 {
     int i;
     prte_binding_policy_t tmp = 0;
-    char **quals, *myspec, *ptr, *p2;
+    char **quals, *myspec, *ptr, *p2, *endp;
     uint16_t u16;
+    long lval;
 
     if (NULL == spec) {
         return PRTE_SUCCESS;
@@ -1259,14 +1263,23 @@ int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app, char *spec)
                     free(myspec);
                     return PRTE_ERR_SILENT;
                 }
-                u16 = (uint16_t)strtol(p2, &p2, 10);
-                if ('\0' != *p2) {
+                /* Must agree with the job-level parser in
+                 * prte_hwloc_base_set_binding_policy(): the attribute is a
+                 * uint16, so casting strtol()'s result into one turned
+                 * "limit=70000" into a limit of 4464, and a limit of zero is
+                 * read downstream as "no limit at all" rather than as what
+                 * the user wrote. */
+                errno = 0;
+                lval = strtol(p2, &endp, 10);
+                if (endp == p2 || '\0' != *endp || 0 != errno ||
+                    0 >= lval || UINT16_MAX < lval) {
                     pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
                                    "binding limit", "LIMIT", quals[i]);
                     PMIx_Argv_free(quals);
                     free(myspec);
                     return PRTE_ERR_SILENT;
                 }
+                u16 = (uint16_t) lval;
                 prte_set_attribute(&app->attributes, PRTE_APP_BINDING_LIMIT,
                                    PRTE_ATTR_GLOBAL, &u16, PMIX_UINT16);
             } else {

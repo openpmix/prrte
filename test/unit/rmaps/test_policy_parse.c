@@ -312,5 +312,44 @@ int test_policy_parse(void)
     CHECK("bindto NULL: rc", PRTE_SUCCESS == rc);
     PMIX_RELEASE(app);
 
+    /* --- binding policy: the LIMIT qualifier ---
+     * PRTE_APP_BINDING_LIMIT is a uint16, and the value used to be cast
+     * straight out of strtol(), so "limit=70000" quietly became 4464. Zero is
+     * refused because rmaps_base_binding.c reads a limit of zero as "no limit
+     * at all" (0 < options->limit), which is not what the user wrote. This
+     * parser must agree with its job-level twin,
+     * prte_hwloc_base_set_binding_policy(). */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_binding_policy(app, "core:limit=2");
+    CHECK("bindto limit: rc", PRTE_SUCCESS == rc);
+    u16 = get_u16(&app->attributes, PRTE_APP_BINDING_LIMIT);
+    CHECK("bindto limit: value", 2 == u16);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_binding_policy(app, "core:limit=70000");
+    CHECK("bindto limit past uint16 is refused, not truncated", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_binding_policy(app, "core:limit=foo");
+    CHECK("bindto limit non-numeric is refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_binding_policy(app, "core:limit=2x");
+    CHECK("bindto limit with trailing garbage is refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_binding_policy(app, "core:limit=-1");
+    CHECK("bindto limit negative is refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_binding_policy(app, "core:limit=0");
+    CHECK("bindto limit zero is refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
     return failures;
 }
