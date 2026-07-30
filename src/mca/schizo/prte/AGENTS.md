@@ -207,5 +207,16 @@ wider by mistake:
 - **Edit the matching `help-*.txt`** for any user-visible option change,
   then follow the GOLDEN RULE (`rm src/util/prte_show_help_content.*`
   and rebuild) or the binary serves stale help.
+- **An option whose only consumer is a runtime option converts, it does
+  not get its own consumer.** `--show-progress` and
+  `--report-child-jobs-separately` are deprecated standalone spellings
+  of runtime options: they belong in the **deprecated** section of the
+  option tables, are converted to `--rtos <directive>` by
+  `convert_deprecated_cli` with the component's `warn` flag, and are
+  **not** listed in the `help-*.txt` usage tables — a deprecated option
+  is accepted for compatibility, not advertised. (`--runtime-options
+  show-progress` is what the docs point users to.) The same pair lives
+  in ompi's deprecated section, documented under "Deprecated command
+  line options" in `schizo-ompi-cli.rstxt`.
 - **`warned` is one-shot per process.** Deprecation warnings fire once;
   don't rely on repeated warnings in a single tool invocation.

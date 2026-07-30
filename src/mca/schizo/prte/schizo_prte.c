@@ -135,6 +135,7 @@ static struct option prteoptions[] = {
     // deprecated options
     PMIX_OPTION_DEFINE("machinefile", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("hetero-nodes", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_SHOW_PROGRESS, PMIX_ARG_NONE),
 
     PMIX_OPTION_END
 };
@@ -170,7 +171,6 @@ static struct option prterunoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_FWD_SIGNALS, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_PERSONALITY, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_RUN_AS_ROOT, PMIX_ARG_NONE),
-    PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_CHILD_SEP, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_DVM, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_HOMO_NODES, PMIX_ARG_NONE),
 
@@ -235,6 +235,8 @@ static struct option prterunoptions[] = {
     // deprecated options
     PMIX_OPTION_DEFINE("mca", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("n", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_SHOW_PROGRESS, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_CHILD_SEP, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("xml", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("tag-output", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("timestamp-output", PMIX_ARG_NONE),
@@ -366,6 +368,8 @@ static struct option prunoptions[] = {
     // deprecated options
     PMIX_OPTION_DEFINE("mca", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("n", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_SHOW_PROGRESS, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_CHILD_SEP, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("xml", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("tag-output", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("timestamp-output", PMIX_ARG_NONE),
@@ -958,6 +962,24 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
         else if (0 == strcmp(option, "fwd-environment")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_RTOS, PRTE_CLI_FWD_ENVIRON,
+                                                warn);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+        }
+
+        /* --show-progress  ->  --runtime-options show-progress, and
+         * --report-child-jobs-separately  ->  the runtime option of the
+         * same name.  Both are deprecated standalone spellings of a
+         * runtime option, and only the runtime option has a consumer -
+         * the standalone flags were accepted and then dropped on the
+         * floor. */
+        else if (0 == strcmp(option, PRTE_CLI_SHOW_PROGRESS)) {
+            rc = prte_schizo_base_add_directive(results, option,
+                                                PRTE_CLI_RTOS, PRTE_CLI_SHOW_PROGRESS,
+                                                warn);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+        } else if (0 == strcmp(option, PRTE_CLI_REPORT_CHILD_SEP)) {
+            rc = prte_schizo_base_add_directive(results, option,
+                                                PRTE_CLI_RTOS, PRTE_CLI_REPORT_CHILD_SEP,
                                                 warn);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }

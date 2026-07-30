@@ -74,9 +74,6 @@ Launch options
 * ``--set-cwd-to-session-dir``: Set the working directory of the
   started processes to their session directory.
 
-* ``--show-progress``: Output a brief periodic report on launch
-  progress.
-
 * ``--wd <dir>``: Synonym for ``--wdir``.
 
 * ``--wdir <dir>``: Set the working directory of the started processes.
@@ -124,9 +121,6 @@ Output options
 * ``--output <list>``: Comma-delimited list of options that control
   how output is generated.  :ref:`See below for details
   <label-schizo-ompi-output>`.
-
-* ``--report-child-jobs-separately``: Return the exit status of the
-  primary job only.
 
 * ``--stream-buffering <value>``: Control how output is buffered.
   :ref:`See below for details <label-schizo-ompi-stream-buffering>`.
@@ -553,6 +547,16 @@ The ``--report-bindings`` option
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. include:: /prrte-rst-content/deprecated-report-bindings.rst
+
+The ``--report-child-jobs-separately`` option
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. include:: /prrte-rst-content/deprecated-report-child-jobs-separately.rst
+
+The ``--show-progress`` option
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. include:: /prrte-rst-content/deprecated-show-progress.rst
 
 The ``--tag-output`` option
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
