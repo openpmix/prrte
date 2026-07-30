@@ -21,20 +21,11 @@
 #include "prte_config.h"
 #include "src/include/constants.h"
 
-#include <regex.h>
+#include <stdlib.h>
 
-#include <string.h>
-#include <time.h>
-#ifdef HAVE_UNISTD_H
-#    include <unistd.h>
-#endif
-
-#include "src/class/pmix_hash_table.h"
-#include "src/mca/plm/base/plm_private.h"
+#include "src/mca/plm/plm_types.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/pmix_threads.h"
-#include "src/util/proc_info.h"
 
 pmix_status_t prte_pmix_convert_rc(int rc)
 {
@@ -126,6 +117,41 @@ pmix_status_t prte_pmix_convert_rc(int rc)
     case PRTE_ERR_OUT_OF_RESOURCE:
         return PMIX_ERR_OUT_OF_RESOURCE;
 
+    case PRTE_ERR_RESOURCE_BUSY:
+        return PMIX_ERR_RESOURCE_BUSY;
+
+    case PRTE_ERR_NOT_AVAILABLE:
+        return PMIX_ERR_NOT_AVAILABLE;
+
+    case PRTE_ERR_COMM_FAILURE:
+        return PMIX_ERR_COMM_FAILURE;
+
+    /* PRTE_ERR_SILENT means "this failure has already been reported to
+     * the user, do not report it again". Dropping it on the floor here
+     * turned every silent abort into a second, redundant error at the
+     * tool. */
+    case PRTE_ERR_SILENT:
+        return PMIX_ERR_SILENT;
+
+    /* the pack/unpack family - see the note on prte_pmix_convert_status() */
+    case PRTE_ERR_PACK_FAILURE:
+        return PMIX_ERR_PACK_FAILURE;
+
+    case PRTE_ERR_UNPACK_FAILURE:
+        return PMIX_ERR_UNPACK_FAILURE;
+
+    case PRTE_ERR_UNPACK_INADEQUATE_SPACE:
+        return PMIX_ERR_UNPACK_INADEQUATE_SPACE;
+
+    case PRTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER:
+        return PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER;
+
+    case PRTE_ERR_TYPE_MISMATCH:
+        return PMIX_ERR_TYPE_MISMATCH;
+
+    case PRTE_ERR_UNKNOWN_DATA_TYPE:
+        return PMIX_ERR_UNKNOWN_DATA_TYPE;
+
     case PRTE_ERR_DATA_VALUE_NOT_FOUND:
         return PMIX_ERR_DATA_VALUE_NOT_FOUND;
 
@@ -164,6 +190,14 @@ pmix_status_t prte_pmix_convert_rc(int rc)
     }
 }
 
+/* The two code spaces overlap numerically: a PRRTE error is
+ * PRTE_ERR_BASE - n for n in [1,72] and a PMIx status runs from -1 down
+ * past -160, so most PMIx statuses are *also* the value of some real
+ * PRRTE constant. Falling through with the input unconverted therefore
+ * does not produce a recognisably foreign code, it produces a
+ * confidently wrong one - PMIX_ERR_PACK_FAILURE arrived as
+ * PRTE_ERR_FILE_OPEN_FAILURE, PMIX_ERR_EMPTY as PRTE_ERR_NODE_DOWN.
+ * Every case must land on a PRRTE constant, and the default must too. */
 int prte_pmix_convert_status(pmix_status_t status)
 {
     switch (status) {
@@ -246,6 +280,45 @@ int prte_pmix_convert_status(pmix_status_t status)
     case PMIX_MODEL_DECLARED:
         return PRTE_ERR_MODEL_DECLARED;
 
+    /* the pack/unpack family. These are far and away the most common
+     * thing this function is handed - PRRTE routes essentially every
+     * bfrops return through here - and every one of them used to fall
+     * through to the raw-status default and land on an unrelated
+     * file-I/O code. */
+    case PMIX_ERR_PACK_FAILURE:
+        return PRTE_ERR_PACK_FAILURE;
+    case PMIX_ERR_UNPACK_FAILURE:
+        return PRTE_ERR_UNPACK_FAILURE;
+    case PMIX_ERR_UNPACK_INADEQUATE_SPACE:
+        return PRTE_ERR_UNPACK_INADEQUATE_SPACE;
+    case PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER:
+        return PRTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER;
+    case PMIX_ERR_TYPE_MISMATCH:
+        return PRTE_ERR_TYPE_MISMATCH;
+    case PMIX_ERR_UNKNOWN_DATA_TYPE:
+        return PRTE_ERR_UNKNOWN_DATA_TYPE;
+
+    case PMIX_ERR_NOMEM:
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    case PMIX_ERR_RESOURCE_BUSY:
+        return PRTE_ERR_RESOURCE_BUSY;
+    case PMIX_ERR_NOT_AVAILABLE:
+        return PRTE_ERR_NOT_AVAILABLE;
+    case PMIX_ERR_COMM_FAILURE:
+        return PRTE_ERR_COMM_FAILURE;
+    case PMIX_ERR_DATA_VALUE_NOT_FOUND:
+        return PRTE_ERR_DATA_VALUE_NOT_FOUND;
+    case PMIX_ERR_EXISTS_OUTSIDE_SCOPE:
+        return PRTE_EXISTS;
+    case PMIX_ERR_JOB_APP_NOT_EXECUTABLE:
+        return PRTE_ERR_EXE_NOT_ACCESSIBLE;
+    case PMIX_ERR_JOB_NO_EXE_SPECIFIED:
+        return PRTE_ERR_NO_EXE_SPECIFIED;
+    case PMIX_ERR_JOB_FAILED_TO_MAP:
+        return PRTE_ERR_FAILED_TO_MAP;
+    case PMIX_ERR_JOB_CANCELED:
+        return PRTE_ERR_JOB_CANCELLED;
+
     case PMIX_ERROR:
         return PRTE_ERROR;
     case PMIX_ERR_SILENT:
@@ -253,51 +326,90 @@ int prte_pmix_convert_status(pmix_status_t status)
     case PMIX_SUCCESS:
     case PMIX_OPERATION_SUCCEEDED:
         return PRTE_SUCCESS;
-    case PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER:
-        return PRTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER;
 
     default:
-        return status;
+        /* an unrecognized PMIx status is an error we have no PRRTE name
+         * for. It is NOT a PRRTE error code, so do not hand it back as
+         * though it were. */
+        return PRTE_ERROR;
     }
 }
 
+/* Never spell these cases as bare integers. The two state spaces share
+ * a numbering scheme but not a numbering: PRRTE has no PREPPED, so its
+ * pre-termination states sit one below PMIx's all the way up to
+ * CONNECTED, while from PRTE_PROC_STATE_ERROR/PMIX_PROC_STATE_ERROR on
+ * up the offsets do line up. Writing "case 59" rather than the name is
+ * how PRTE_PROC_STATE_HEARTBEAT_FAILED came to report itself as
+ * PMIX_PROC_STATE_MIGRATING while PRTE_PROC_STATE_MIGRATING fell
+ * through to UNDEF. */
 pmix_proc_state_t prte_pmix_convert_state(int state)
 {
     switch (state) {
-    case 0:
+    case PRTE_PROC_STATE_UNDEF:
         return PMIX_PROC_STATE_UNDEF;
-    case 1:
+    case PRTE_PROC_STATE_INIT:
         return PMIX_PROC_STATE_LAUNCH_UNDERWAY;
-    case 2:
+    case PRTE_PROC_STATE_RESTART:
         return PMIX_PROC_STATE_RESTART;
-    case 3:
+    case PRTE_PROC_STATE_TERMINATE:
         return PMIX_PROC_STATE_TERMINATE;
-    case 4:
+    case PRTE_PROC_STATE_RUNNING:
         return PMIX_PROC_STATE_RUNNING;
-    case 5:
+    case PRTE_PROC_STATE_REGISTERED:
         return PMIX_PROC_STATE_CONNECTED;
-    case 51:
+
+    /* PRRTE tracks a few more milestones on the way to reaping a proc
+     * than PMIx names. All of them sit below the UNTERMINATED boundary,
+     * so the proc is still alive as far as a querying tool is
+     * concerned - saying UNDEF would be a lie. */
+    case PRTE_PROC_STATE_IOF_COMPLETE:
+    case PRTE_PROC_STATE_WAITPID_FIRED:
+    case PRTE_PROC_STATE_MODEX_READY:
+    case PRTE_PROC_STATE_READY_FOR_DEBUG:
+        return PMIX_PROC_STATE_RUNNING;
+
+    case PRTE_PROC_STATE_UNTERMINATED:
+        return PMIX_PROC_STATE_UNTERMINATED;
+    case PRTE_PROC_STATE_TERMINATED:
+        return PMIX_PROC_STATE_TERMINATED;
+
+    case PRTE_PROC_STATE_KILLED_BY_CMD:
         return PMIX_PROC_STATE_KILLED_BY_CMD;
-    case 52:
+    case PRTE_PROC_STATE_ABORTED:
         return PMIX_PROC_STATE_ABORTED;
-    case 53:
+    case PRTE_PROC_STATE_FAILED_TO_START:
         return PMIX_PROC_STATE_FAILED_TO_START;
-    case 54:
+    case PRTE_PROC_STATE_ABORTED_BY_SIG:
         return PMIX_PROC_STATE_ABORTED_BY_SIG;
-    case 55:
+    case PRTE_PROC_STATE_TERM_WO_SYNC:
         return PMIX_PROC_STATE_TERM_WO_SYNC;
-    case 56:
-        return PMIX_PROC_STATE_COMM_FAILED;
-    case 58:
+    case PRTE_PROC_STATE_SENSOR_BOUND_EXCEEDED:
+        return PMIX_PROC_STATE_SENSOR_BOUND_EXCEEDED;
+    case PRTE_PROC_STATE_CALLED_ABORT:
         return PMIX_PROC_STATE_CALLED_ABORT;
-    case 59:
+    case PRTE_PROC_STATE_HEARTBEAT_FAILED:
+        return PMIX_PROC_STATE_HEARTBEAT_FAILED;
+    case PRTE_PROC_STATE_MIGRATING:
         return PMIX_PROC_STATE_MIGRATING;
-    case 61:
+    case PRTE_PROC_STATE_CANNOT_RESTART:
         return PMIX_PROC_STATE_CANNOT_RESTART;
-    case 62:
+    case PRTE_PROC_STATE_TERM_NON_ZERO:
         return PMIX_PROC_STATE_TERM_NON_ZERO;
-    case 63:
+    case PRTE_PROC_STATE_FAILED_TO_LAUNCH:
         return PMIX_PROC_STATE_FAILED_TO_LAUNCH;
+
+    /* every way PRRTE describes losing touch with a peer. PMIx has
+     * the one bucket - the same collapse prte_pmix_convert_proc_state_to_error()
+     * makes onto PMIX_ERR_COMM_FAILURE. */
+    case PRTE_PROC_STATE_COMM_FAILED:
+    case PRTE_PROC_STATE_UNABLE_TO_SEND_MSG:
+    case PRTE_PROC_STATE_LIFELINE_LOST:
+    case PRTE_PROC_STATE_NO_PATH_TO_TARGET:
+    case PRTE_PROC_STATE_FAILED_TO_CONNECT:
+    case PRTE_PROC_STATE_PEER_UNKNOWN:
+        return PMIX_PROC_STATE_COMM_FAILED;
+
     default:
         return PMIX_PROC_STATE_UNDEF;
     }
@@ -307,46 +419,50 @@ int prte_pmix_convert_pstate(pmix_proc_state_t state)
 {
     switch (state) {
     case PMIX_PROC_STATE_UNDEF:
-        return 0;
+        return PRTE_PROC_STATE_UNDEF;
     case PMIX_PROC_STATE_PREPPED:
     case PMIX_PROC_STATE_LAUNCH_UNDERWAY:
-        return 1;
+        return PRTE_PROC_STATE_INIT;
     case PMIX_PROC_STATE_RESTART:
-        return 2;
+        return PRTE_PROC_STATE_RESTART;
     case PMIX_PROC_STATE_TERMINATE:
-        return 3;
+        return PRTE_PROC_STATE_TERMINATE;
     case PMIX_PROC_STATE_RUNNING:
-        return 4;
+        return PRTE_PROC_STATE_RUNNING;
     case PMIX_PROC_STATE_CONNECTED:
-        return 5;
+        return PRTE_PROC_STATE_REGISTERED;
     case PMIX_PROC_STATE_UNTERMINATED:
-        return 15;
+        return PRTE_PROC_STATE_UNTERMINATED;
     case PMIX_PROC_STATE_TERMINATED:
-        return 20;
+        return PRTE_PROC_STATE_TERMINATED;
     case PMIX_PROC_STATE_KILLED_BY_CMD:
-        return 51;
+        return PRTE_PROC_STATE_KILLED_BY_CMD;
     case PMIX_PROC_STATE_ABORTED:
-        return 52;
+        return PRTE_PROC_STATE_ABORTED;
     case PMIX_PROC_STATE_FAILED_TO_START:
-        return 53;
+        return PRTE_PROC_STATE_FAILED_TO_START;
     case PMIX_PROC_STATE_ABORTED_BY_SIG:
-        return 54;
+        return PRTE_PROC_STATE_ABORTED_BY_SIG;
     case PMIX_PROC_STATE_TERM_WO_SYNC:
-        return 55;
+        return PRTE_PROC_STATE_TERM_WO_SYNC;
     case PMIX_PROC_STATE_COMM_FAILED:
-        return 56;
+        return PRTE_PROC_STATE_COMM_FAILED;
+    case PMIX_PROC_STATE_SENSOR_BOUND_EXCEEDED:
+        return PRTE_PROC_STATE_SENSOR_BOUND_EXCEEDED;
     case PMIX_PROC_STATE_CALLED_ABORT:
-        return 58;
+        return PRTE_PROC_STATE_CALLED_ABORT;
+    case PMIX_PROC_STATE_HEARTBEAT_FAILED:
+        return PRTE_PROC_STATE_HEARTBEAT_FAILED;
     case PMIX_PROC_STATE_MIGRATING:
-        return 60;
+        return PRTE_PROC_STATE_MIGRATING;
     case PMIX_PROC_STATE_CANNOT_RESTART:
-        return 61;
+        return PRTE_PROC_STATE_CANNOT_RESTART;
     case PMIX_PROC_STATE_TERM_NON_ZERO:
-        return 62;
+        return PRTE_PROC_STATE_TERM_NON_ZERO;
     case PMIX_PROC_STATE_FAILED_TO_LAUNCH:
-        return 63;
+        return PRTE_PROC_STATE_FAILED_TO_LAUNCH;
     default:
-        return 0; // undef
+        return PRTE_PROC_STATE_UNDEF;
     }
 }
 
@@ -429,71 +545,6 @@ pmix_status_t prte_pmix_convert_proc_state_to_error(int state)
     }
 }
 
-static void cleanup_cbfunc(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *cbdata,
-                           pmix_release_cbfunc_t release_fn, void *release_cbdata)
-{
-    prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
-    PRTE_HIDE_UNUSED_PARAMS(info, ninfo);
-
-    PMIX_POST_OBJECT(lk);
-
-    /* let the library release the data and cleanup from
-     * the operation */
-    if (NULL != release_fn) {
-        release_fn(release_cbdata);
-    }
-
-    /* release the block */
-    lk->status = status;
-    PRTE_PMIX_WAKEUP_THREAD(lk);
-}
-
-int prte_pmix_register_cleanup(char *path, bool directory, bool ignore, bool jobscope)
-{
-    prte_pmix_lock_t lk;
-    pmix_info_t pinfo[3];
-    size_t n, ninfo = 0;
-    pmix_status_t rc, ret;
-
-    PRTE_PMIX_CONSTRUCT_LOCK(&lk);
-
-    if (ignore) {
-        /* they want this path ignored */
-        PMIX_INFO_LOAD(&pinfo[ninfo], PMIX_CLEANUP_IGNORE, path, PMIX_STRING);
-        ++ninfo;
-    } else {
-        if (directory) {
-            PMIX_INFO_LOAD(&pinfo[ninfo], PMIX_REGISTER_CLEANUP_DIR, path, PMIX_STRING);
-            ++ninfo;
-            /* recursively cleanup directories */
-            PMIX_INFO_LOAD(&pinfo[ninfo], PMIX_CLEANUP_RECURSIVE, NULL, PMIX_BOOL);
-            ++ninfo;
-        } else {
-            /* order cleanup of the provided path */
-            PMIX_INFO_LOAD(&pinfo[ninfo], PMIX_REGISTER_CLEANUP, path, PMIX_STRING);
-            ++ninfo;
-        }
-    }
-
-    /* if they want this applied to the job, then indicate so */
-    if (jobscope) {
-        rc = PMIx_Job_control_nb(NULL, 0, pinfo, ninfo, cleanup_cbfunc, (void *) &lk);
-    } else {
-        rc = PMIx_Job_control_nb(PRTE_PROC_MY_NAME, 1, pinfo, ninfo, cleanup_cbfunc, (void *) &lk);
-    }
-    if (PMIX_SUCCESS != rc) {
-        ret = rc;
-    } else {
-        PRTE_PMIX_WAIT_THREAD(&lk);
-        ret = lk.status;
-    }
-    PRTE_PMIX_DESTRUCT_LOCK(&lk);
-    for (n = 0; n < ninfo; n++) {
-        PMIX_INFO_DESTRUCT(&pinfo[n]);
-    }
-    return ret;
-}
-
 /* handler side of prte_pmix_shifted_wakeup - executes on the
  * PRRTE progress thread */
 static void shifted_wakeup(int fd, short args, void *cbdata)
@@ -505,7 +556,11 @@ static void shifted_wakeup(int fd, short args, void *cbdata)
     cd->lock->status = cd->status;
     if (NULL != cd->msg) {
         /* transfer ownership to the lock - the caddy destructor
-         * must not free it */
+         * must not free it. A lock reused across operations may still
+         * be holding the previous message. */
+        if (NULL != cd->lock->msg) {
+            free(cd->lock->msg);
+        }
         cd->lock->msg = cd->msg;
         cd->msg = NULL;
     }
