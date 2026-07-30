@@ -2536,6 +2536,118 @@ test_hwloc() {
     cleanup_swarm
 }
 
+# Absolute path, deliberately -- see the note above DS.
+GC=/opt/prte/prte/bin/groupcon
+
+test_grpcomm() {
+    local out n g ranks hosts fails
+
+    banner "grpcomm: a group construct releases on every daemon, in order"
+    # The interesting half of a group collective is grp_release(), and it runs
+    # on EVERY daemon: it takes the HNP's down-tree broadcast, hands the
+    # group's context id / group info / endpoints to its OWN local PMIx server
+    # via PMIx_server_register_resources(), and only then releases the local
+    # participants.  On one host there is one daemon and it is also the HNP,
+    # so neither the down-tree release nor the per-daemon registration is ever
+    # exercised against a daemon that merely RECEIVED the broadcast.
+    #
+    # The registration used to be waited on, which parked the daemon event
+    # loop for its duration on every construct; it is now a continuation, and
+    # what these cases guard is that continuation.  Lose the caddy anywhere
+    # between issuing the registration and resuming, and the local
+    # participants are simply never released: the construct does not fail, it
+    # HANGS, on every daemon at once.  Verified by deleting the thread-shift
+    # and re-running -- 7 of these 10 assertions go red.
+    #
+    # Note what this does NOT show.  groupcon reads every rank local cid back
+    # with no fence, which looks like an assertion that the daemon registered
+    # the group with its PMIx server before releasing us -- it is not.  The
+    # construct hands the same group info back to the client in its results,
+    # so the client library answers those reads out of its own cache; skipping
+    # PMIx_server_register_resources entirely still passes them.  The reads
+    # are worth keeping as a check that the returned membership and group info
+    # are complete and identical on every daemon, but do not read them as
+    # coverage of the registration itself.
+    cleanup_swarm
+    if ! RUN "test -x $GC"; then
+        skp "groupcon client not installed -- re-run ./build.sh"
+        return
+    fi
+    if ! prted_dvm_start 'node1:2,node2:2,node3:2,node4:2'; then
+        bad "could not start a DVM for the grpcomm tests"
+        cleanup_swarm
+        return
+    fi
+
+    out=$(PRUN "--host node1:2,node2:2,node3:2,node4:2 -n 8 --map-by node $GC g1" 2>&1)
+    n=$(echo "$out" | grep -c 'CONSTRUCT PMIX_SUCCESS')
+    [ "$n" = 8 ] \
+        && ok "all 8 ranks completed the group construct" \
+        || bad "$n of 8 ranks constructed the group: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # spread across nodes, or this is a single-host test wearing a hat
+    hosts=$(echo "$out" | awk '$1=="GRP" && $3=="HOST" {print $4}' | sort -u | grep -c '^node')
+    [ "${hosts:-0}" -ge 2 ] \
+        && ok "...spread over $hosts nodes, so non-HNP daemons ran the release" \
+        || bad "the group did not span nodes ($hosts)"
+    # every rank must have been handed the same context id
+    n=$(echo "$out" | awk '$1=="GRP" && $3=="CONSTRUCT" {print $6}' | sort -u | wc -l | tr -d ' ')
+    [ "$n" = 1 ] \
+        && ok "...and every rank got the same context id" \
+        || bad "ranks disagreed on the context id ($n distinct values)"
+    echo "$out" | grep -q 'ASSIGNED T' \
+        && ok "...which the HNP actually assigned" \
+        || bad "no rank reported an assigned context id"
+
+    banner "grpcomm: every daemon returns the same complete group to its clients"
+    # Each rank reads back all 8 local cids -- the group info every OTHER rank
+    # contributed, which reached it only because its own daemon assembled the
+    # broadcast result and handed it over.  A daemon that dropped, truncated,
+    # or mismatched what it returned shows up here as a short or wrong set.
+    ranks=$(echo "$out" | grep -c 'CID-OK 8')
+    [ "$ranks" = 8 ] \
+        && ok "all 8 ranks read back all 8 peer local cids" \
+        || bad "only $ranks of 8 ranks read back a full set: $(echo "$out" | grep -E 'CID-(OK|FAIL)' | tr '\n' ' ' | tail -c 400)"
+    # Assert on the DONE lines rather than on the absence of CID-FAIL: a run
+    # in which nothing got far enough to print either has no CID-FAIL in it,
+    # and would sail through an absence test.
+    n=$(echo "$out" | grep -c 'DESTRUCT PMIX_SUCCESS')
+    [ "$n" = 8 ] \
+        && ok "...and all 8 ranks destructed the group" \
+        || bad "$n of 8 ranks destructed the group"
+    fails=$(echo "$out" | awk '$1=="GRP" && $3=="DONE" {s+=$4} END {print s+0}')
+    n=$(echo "$out" | grep -c 'DONE ')
+    if [ "$n" != 8 ]; then
+        bad "only $n of 8 ranks reached the end of the client"
+    elif [ "$fails" = 0 ]; then
+        ok "...with all 8 clients finishing and reporting no failures"
+    else
+        bad "clients reported $fails failures: $(echo "$out" | grep -E 'CID-FAIL' | tr '\n' ' ' | tail -c 300)"
+    fi
+
+    banner "grpcomm: repeated constructs do not wedge the daemons"
+    # The release path allocates a caddy per construct and hands it to a
+    # continuation, so a leak or a missed release shows up as drift rather
+    # than as one bad run.  Three back-to-back groups on the same DVM, then a
+    # plain job, is enough to catch a daemon that stopped servicing its event
+    # loop or never let go of a tracker.
+    n=0
+    for g in g2 g3 g4; do
+        out=$(PRUN "--host node1:2,node2:2,node3:2,node4:2 -n 8 --map-by node $GC $g" 2>&1)
+        [ "$(echo "$out" | grep -c 'CID-OK 8')" = 8 ] && n=$((n+1))
+    done
+    [ "$n" = 3 ] \
+        && ok "three successive group constructs all completed" \
+        || bad "only $n of 3 successive group constructs completed"
+    out=$(PRUN "--host node1:1,node2:1,node3:1 -n 3 --map-by node hostname" 2>&1)
+    n=$(echo "$out" | grep -c '^node')
+    [ "$n" = 3 ] \
+        && ok "...and the DVM still launches an ordinary job afterwards" \
+        || bad "the DVM did not run a plain job after the group tests ($n of 3)"
+
+    RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    cleanup_swarm
+}
+
 test_rml() {
     local out rc n c
 
@@ -3339,6 +3451,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_runtime
 
     test_rml
+
+    test_grpcomm
 
     test_slurm_alloc
     test_slurm

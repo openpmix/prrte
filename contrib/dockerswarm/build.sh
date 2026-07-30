@@ -348,6 +348,19 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/proctable.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
+            # groupcon: a bare PMIx client that drives a group construct and
+            # destruct.  The interesting half of a group collective runs in
+            # grp_release on EVERY daemon: it registers the result with its
+            # own PMIx server and only then releases the local participants.
+            # On one host there is one daemon and it is also the HNP, so the
+            # down-tree release and the per-daemon registration are never
+            # exercised against a daemon that merely received the broadcast.
+            # (No apostrophes here: see the note further down.)
+            echo ">>>> groupcon (group construct/destruct) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/groupcon \
+                /prrte-src/contrib/dockerswarm/groupcon.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
             # slowcat: a deliberately slow stdin reader (no PMIx at all).  The
             # stdin bugs in iof live in the back-pressure path, and a normal
             # "cat" drains its pipe as fast as the daemon fills it, so the
