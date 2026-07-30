@@ -87,9 +87,6 @@ option to the help request as "--help <option>".
 |                      | actually launch it (usually used to test      |
 |                      | mapping patterns)                             |
 +----------------------+-----------------------------------------------+
-| "--test-suicide      | Suicide instead of clean abort after          |
-| <arg0>"              | specified delay                               |
-+----------------------+-----------------------------------------------+
 
 +----------------------+-----------------------------------------------+
 |                      | Output Options                                |
@@ -440,11 +437,6 @@ Printout prterun's PID on stdout ("-"), stderr ("+"), or a file
 
 Printout prterun's URI on stdout ("-"), stderr ("+"), or a file
 (anything else).
-#
-[test-suicide]
-
-Test DVM cleanup upon daemon failure by having one daemon suicide
-after delay
 #
 [singleton]
 

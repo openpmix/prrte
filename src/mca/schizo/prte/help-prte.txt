@@ -64,9 +64,6 @@ option to the help request as "--help <option>".
 | "--no-aggregate-help" | Do not aggregate help output from multiple   |
 |                      | processes.                                    |
 +----------------------+-----------------------------------------------+
-| "--test-suicide      | Suicide instead of clean abort after          |
-| <arg0>"              | specified delay                               |
-+----------------------+-----------------------------------------------+
 
 +----------------------+-----------------------------------------------+
 |                      | DVM Options                                   |
@@ -227,11 +224,6 @@ Printout DVM controller's PID on stdout [-], stderr [+], or a file
 
 Printout DVM controller's URI on stdout [-], stderr [+], or a file
 (passed as anything else)
-#
-[test-suicide]
-
-Test DVM cleanup upon daemon failure by having one daemon suicide
-after delay
 #
 [default-hostfile]
 

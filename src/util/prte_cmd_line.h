@@ -76,7 +76,6 @@ BEGIN_C_DECLS
 #define PRTE_CLI_SET_SID                "set-sid"                   // none
 #define PRTE_CLI_REPORT_PID             "report-pid"                // required
 #define PRTE_CLI_REPORT_URI             "report-uri"                // required
-#define PRTE_CLI_TEST_SUICIDE           "test-suicide"              // none
 #define PRTE_CLI_DEFAULT_HOSTFILE       "default-hostfile"          // required
 #define PRTE_CLI_SINGLETON              "singleton"                 // required
 #define PRTE_CLI_KEEPALIVE              "keepalive"                 // required
