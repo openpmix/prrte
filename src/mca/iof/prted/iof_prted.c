@@ -16,7 +16,7 @@
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -372,8 +372,10 @@ static void stdin_write_handler(int _fd, short event, void *cbdata)
                 (1, prte_iof_base_framework.framework_output,
                  "%s prted:stdin:write:handler incomplete write %d - adjusting data",
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_written));
-            /* incomplete write - adjust data to avoid duplicate output */
-            memmove(output->data, &output->data[num_written], output->numbytes - num_written);
+            /* incomplete write - drop what went out and re-base the
+             * remainder to avoid duplicate output
+             */
+            prte_iof_base_adjust_short_write(output, num_written);
             /* push this item back on the front of the list */
             pmix_list_prepend(&wev->outputs, item);
             /* leave the write event running so it will call us again

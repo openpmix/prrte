@@ -125,8 +125,9 @@ preceding data and then closes the proc's stdin fd.
 
 The daemon's sink write callback drains `wev->outputs` to the local proc's
 stdin fd with the usual non-blocking handling (EAGAIN/EINTR → prepend +
-re-arm; partial write → `memmove` + prepend + re-arm; `numbytes == 0` →
-release the write event and null `sink->wev` to close). Its distinctive
+re-arm; partial write → `prte_iof_base_adjust_short_write` + prepend +
+re-arm; `numbytes == 0` → release the write event and null `sink->wev` to
+close). Its distinctive
 behavior is **flow-control recovery**: on a fatal write error it sends
 `PRTE_IOF_XOFF`, and at the `CHECK` label, whenever `xoff` is latched and
 the backlog has fallen below `PRTE_IOF_MAX_INPUT_BUFFERS`, it clears the
