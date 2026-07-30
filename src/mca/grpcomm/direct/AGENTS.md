@@ -244,11 +244,71 @@ much richer signature and payload.
 - **`grp_release`** (`PRTE_RML_TAG_GROUP_RELEASE`, via the xcast). For a
   **destruct** it removes the group from the server's pset list and
   completes the local participants. For a **construct** it unpacks the
-  final membership / context-id / grpinfo / endpoints, calls
-  `PMIx_server_register_resources` (blocking on a caddy lock), records the
-  new group in `prte_pmix_server_globals.groups`, and returns the assembled
-  info to local clients via `coll->cbfunc`. Finally it deletes the tracker
+  final membership / context-id / grpinfo / endpoints and calls
+  `PMIx_server_register_resources`. It is **split in two** around that
+  call — see below. The continuation, `grp_release_complete`, records the
+  new group in `prte_pmix_server_globals.groups`, returns the assembled
+  info to local clients via `coll->cbfunc`, and deletes the tracker
   (`find_delete_tracker`, keyed by groupID).
+
+#### `grp_release` is a continuation, not a wait
+
+The registration used to be waited on with `PMIX_WAIT_THREAD`. Nothing
+raced — the lock is a `pmix_lock_t`, so the wakeup from the PMIx thread
+touched no PRRTE object — but the wait parked the **progress thread**,
+and `prte_event_base` has no thread of its own (`event.c`: "PRTE tools
+block in their own loop over the event base"). While it sat there the
+daemon was deaf: no RML, no IOF, no other job's state transitions. And
+unlike the teardown waits converted for
+[#2534](https://github.com/openpmix/prrte/issues/2534), this one is not
+a once-per-job cost — it runs on **every daemon for every group
+construct**, so a session-heavy job pays it over and over.
+
+So the ordering the wait was enforcing — the group's resources have to
+be in the local PMIx server before the local participants are told the
+construct succeeded — is now expressed by chaining:
+
+```c
+rc = PMIx_server_register_resources(cd->info, cd->ninfo,
+                                    grp_release_regcbfunc, cd);
+if (PMIX_SUCCESS == rc) {
+    return;                 /* the completion callback owns the caddy */
+}
+```
+
+`grp_release_regcbfunc` runs on the PMIx thread and does nothing but
+record the status and `PRTE_PMIX_THREADSHIFT` to `grp_release_resume`,
+which calls `grp_release_complete` on the progress thread. Three things
+about the shape are load-bearing:
+
+- **A file-local caddy owns everything that has to survive the gap** —
+  `prte_grpcomm_release_caddy_t` carries the signature, the status, the
+  `nlist`, and every array unpacked from the broadcast, and frees all of
+  it in its destructor. The unpacking writes into caddy fields directly
+  so that the dozen `goto notify` error paths need no per-path transfer.
+- **The tracker is re-looked-up in the continuation, not carried.** The
+  progress thread is free while PMIx works, so an abort or a duplicate
+  release can complete and delete the tracker in the interim — in which
+  case the local participants have already been serviced and there is
+  nothing to do. A cached `coll` pointer would be dangling.
+- **`PMIX_OPERATION_SUCCEEDED` means it already finished**, and we are
+  still on the progress thread, so that path falls straight through to
+  `grp_release_complete` rather than waiting for a callback that will
+  never come.
+
+Two defects went with the conversion. The registration status was
+assigned to a dead local and discarded, so a group whose resources never
+made it into the server was still reported to clients as successfully
+constructed; it now propagates. And both `PMIX_INFO_LIST_CONVERT` calls
+ignored their result while reading `darray` unconditionally — on an
+empty list (a construct with no context-id request, no group info and no
+endpoints) `darray` is left untouched, so `cd->info` picked up whatever
+the *previous* assignment had put there, which on the ilist path was the
+`pmix_proc_t` membership array about to be handed to
+`PMIx_server_register_resources` as `pmix_info_t` and then freed twice.
+
+Coverage is `test_grpcomm` in the dockerswarm harness — one host cannot
+exercise a daemon that merely *received* the release.
 
 ### Group fault tolerance (`#if PRTE_PMIX_HAVE_GROUP_FT`)
 
