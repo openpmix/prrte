@@ -168,13 +168,13 @@ exactly what this harness was built to do.
 
 The habit worth forming is: **the source tree is sources.** If you find
 yourself running `./configure` or `make` at the repo root, you are
-setting up the next distclean and the next twenty-minute rebuild. This
-does not conflict with the top-level
-[`AGENTS.md`](../../AGENTS.md) golden rule about building with `make`
-from the repository root — that rule is about not hand-compiling single
-files or building from deep inside a subdirectory. Run `make` from the
-top of the *build* directory and it is satisfied; VPATH is which
-directory that is, not a shortcut around the build system.
+setting up the next distclean and the next twenty-minute rebuild. That is
+now stated project-wide — see the top-level
+[`AGENTS.md`](../../AGENTS.md), "GOLDEN RULE: build out of tree" — and it
+sits alongside, not against, the golden rule about running `make` from
+the top of your build tree: that one is about not hand-compiling single
+files or building from deep inside a subdirectory, and VPATH only changes
+*which* directory the top is.
 
 The trap to know about if you *do* end up with an in-tree build that gets
 cleaned: a distcleaned tree does not announce itself. `make check` says
