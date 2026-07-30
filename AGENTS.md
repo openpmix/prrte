@@ -305,6 +305,20 @@ and pick up your help-text changes.  Skipping this step leaves the binary
 serving the old (or missing) messages even though the `.txt` source looks
 correct.
 
+The same converter also **cross-checks each tool's help file against that
+tool's `schizo` command-line option table** and fails the build when they
+disagree — a help file that documents an option the parser rejects, or a
+help topic for an option the tool does not accept.  Because of the
+dependency gap above, that check cannot rely on the generation rule
+firing, so it also runs on every `make check`.  If you add or remove a
+command-line option, expect to touch both the option table and the
+matching `help-*.txt`; run the check directly with:
+
+```sh
+python3 src/util/prte-convert-help.py --root . --check-only \
+    --cppflags="$(pkg-config --cflags-only-I pmix)"
+```
+
 ### Unique numeric values for status and state codes
 
 Error constants, job states, and process states are hand-assigned
