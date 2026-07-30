@@ -744,6 +744,14 @@ void prte_rmaps_base_get_cpuset(prte_job_t *jdata,
         options->job_cpuset = prte_hwloc_base_generate_cpuset(node->topology->topo,
                                                               options->use_hwthreads,
                                                               &options->cpuset);
+        if (NULL == options->job_cpuset) {
+            /* the cpu-set does not resolve against this node's topology.
+             * generate_cpuset() has already said which entry failed; hand
+             * back an empty set so this node simply offers nothing, rather
+             * than a NULL for the callers below to intersect */
+            options->job_cpuset = hwloc_bitmap_alloc();
+            hwloc_bitmap_zero(options->job_cpuset);
+        }
     } else {
         options->job_cpuset = hwloc_bitmap_dup(node->available);
     }
