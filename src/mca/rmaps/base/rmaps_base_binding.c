@@ -52,6 +52,45 @@
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
 
+/* Record the cpuset a proc bound to "obj" is to get: every cpu of the
+ * object, less any cpu this job is not permitted to use.
+ *
+ * Binding to an object means binding to the whole object - but "the whole
+ * object" has to be read within the cpu-set the user restricted the job to.
+ * This used to hand back obj->cpuset raw, so a DVM cpu-set was honored by
+ * --bind-to core (where the object is inside the set anyway) and silently
+ * ignored by --bind-to package or numa: the rank came back owning every core
+ * of the object. The documented intent is the opposite - see the cpu_list
+ * comment in src/hwloc/hwloc.c.
+ *
+ * The constraint is taken from node->jobcache, the node's availability as
+ * this job first found it, because that is where a DVM-wide cpu-set has
+ * already been applied and - unlike node->available - it does not shrink as
+ * procs are placed. Every proc bound to the same object therefore gets the
+ * same answer. A per-job --cpu-set does not narrow node->available at all,
+ * so it is applied separately from options->job_cpuset.
+ *
+ * With no cpu-set in force the intersection is a no-op: jobcache is then the
+ * node's entire allowed set.
+ */
+static void set_proc_cpuset(prte_proc_t *proc, prte_node_t *node,
+                            hwloc_obj_t obj, prte_rmaps_options_t *options)
+{
+    hwloc_bitmap_and(prte_rmaps_base.baseset, obj->cpuset, node->jobcache);
+    if (NULL != options->cpuset) {
+        hwloc_bitmap_and(prte_rmaps_base.baseset, prte_rmaps_base.baseset,
+                         options->job_cpuset);
+    }
+    if (hwloc_bitmap_iszero(prte_rmaps_base.baseset)) {
+        /* Should be unreachable - this object was chosen precisely because it
+         * had free cpus in this intersection. Bind to the object rather than
+         * to nothing: the paths that do not run through get_target_nodes
+         * (colocation) never populate jobcache. */
+        hwloc_bitmap_copy(prte_rmaps_base.baseset, obj->cpuset);
+    }
+    hwloc_bitmap_list_asprintf(&proc->cpuset, prte_rmaps_base.baseset);
+}
+
 static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
                         prte_node_t *node, hwloc_obj_t obj,
                         prte_rmaps_options_t *options)
@@ -176,7 +215,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
             }
             objcnt = (prte_hwloc_obj_data_t *) trg_obj->userdata;
             objcnt->nprocs++;
-            hwloc_bitmap_list_asprintf(&proc->cpuset, trg_obj->cpuset);
+            set_proc_cpuset(proc, node, trg_obj, options);
             pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "%s BOUND PROC %s[%s] TO %s (overloaded)",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -193,11 +232,10 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
         }
     }
 
-    tgtcpus = trg_obj->cpuset;
-    if (NULL == tgtcpus) {
+    if (NULL == trg_obj->cpuset) {
         return PRTE_ERROR;
     }
-    hwloc_bitmap_list_asprintf(&proc->cpuset, tgtcpus); // bind to the entire target object
+    set_proc_cpuset(proc, node, trg_obj, options);
     if (4 < pmix_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
         char *tmp1;
         bool physical;
