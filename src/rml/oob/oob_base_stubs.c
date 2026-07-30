@@ -103,8 +103,9 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
             }
         }
         // see if we know the contact info for it
+        /* the macro reports a PMIx status, not a PRRTE error code */
         PRTE_MODEX_RECV_VALUE_OPTIONAL(rc, PMIX_PROC_URI, &hop, (char **) &uri, PMIX_STRING);
-        if (PRTE_SUCCESS == rc && NULL != uri) {
+        if (PMIX_SUCCESS == rc && NULL != uri) {
             peer = process_uri(uri);
             /* process_uri only reads (and temporarily splits) the string - the
              * copy the modex handed us is ours to release */
