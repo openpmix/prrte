@@ -617,6 +617,36 @@ int main(int argc, char *argv[])
         goto DONE;
     }
 
+    /* include our PMIx server's rendezvous URI. This is NOT how daemons
+     * reach each other - that is the RML's job, and the URI above is what
+     * it uses. This one exists solely so the master can answer a TOOL that
+     * asks "where is the PMIx server on node X?" (a hostname- or
+     * nodeid-qualified PMIX_SERVER_URI query - see pmix_server_queries.c
+     * and examples/tool.c). Only useful to a remote tool when the server
+     * was told to accept remote connections, but that is the requester's
+     * business, not ours.
+     *
+     * A PMIx that will not tell us our own server URI is not a reason to
+     * fail the launch - this is auxiliary information. Pack a NULL and let
+     * the master record nothing. */
+    vptr = NULL;
+    prc = PMIx_Get(&prte_process_info.myproc, PMIX_SERVER_URI, NULL, 0, &vptr);
+    if (PMIX_SUCCESS == prc && NULL != vptr && PMIX_STRING == vptr->type) {
+        prc = PMIx_Data_pack(NULL, buffer, &vptr->data.string, 1, PMIX_STRING);
+    } else {
+        char *nulluri = NULL;
+        prc = PMIx_Data_pack(NULL, buffer, &nulluri, 1, PMIX_STRING);
+    }
+    if (NULL != vptr) {
+        PMIX_VALUE_RELEASE(vptr);
+    }
+    if (PMIX_SUCCESS != prc) {
+        PMIX_ERROR_LOG(prc);
+        ret = PRTE_ERROR;
+        PMIX_DATA_BUFFER_RELEASE(buffer);
+        goto DONE;
+    }
+
     /* include our node name */
     prc = PMIx_Data_pack(NULL, buffer, &prte_process_info.nodename, 1, PMIX_STRING);
     if (PMIX_SUCCESS != prc) {

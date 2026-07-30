@@ -269,7 +269,7 @@ static void vm_ready(int fd, short args, void *cbdata)
     prte_job_t *jptr;
     prte_proc_t *dmn;
     int32_t v;
-    pmix_value_t *val;
+    pmix_value_t *val, *sval;
     pmix_status_t ret;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
@@ -337,6 +337,43 @@ static void vm_ready(int fd, short args, void *cbdata)
                     return;
                 }
                 PMIX_VALUE_RELEASE(val);
+
+                /* ...and that node's PMIx SERVER rendezvous URI. This is not
+                 * wireup in the RML sense - no daemon ever opens a PMIx
+                 * connection to another daemon, and the URI just above is
+                 * what they route with. It rides along here so that every
+                 * daemon can answer a TOOL asking "where is the PMIx server
+                 * on node X?" (a hostname/nodeid-qualified PMIX_SERVER_URI
+                 * query - see src/pmix/AGENTS.md). Collecting it only at the
+                 * master would mean the answer depended on which daemon the
+                 * tool happened to be connected to.
+                 *
+                 * Each daemon reported this in its PRTED_CALLBACK rollup and
+                 * we stored it against its name, so this is a local lookup.
+                 * A daemon that could not report one leaves nothing to find:
+                 * pack a NULL rather than failing the DVM over auxiliary
+                 * information. */
+                sval = NULL;
+                ret = PMIx_Get(&dmn->name, PMIX_SERVER_URI, NULL, 0, &sval);
+                if (PMIX_SUCCESS == ret && NULL != sval && PMIX_STRING == sval->type) {
+                    rc = PMIx_Data_pack(NULL, &buf, &sval->data.string, 1, PMIX_STRING);
+                } else {
+                    char *nulluri = NULL;
+                    rc = PMIx_Data_pack(NULL, &buf, &nulluri, 1, PMIX_STRING);
+                }
+                if (NULL != sval) {
+                    PMIX_VALUE_RELEASE(sval);
+                }
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_DESTRUCT(&buf);
+                    /* the whole DVM is being torn down; held jobs will be
+                     * failed as part of that teardown, so leave the fence
+                     * untouched here */
+                    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+                    PMIX_RELEASE(caddy);
+                    return;
+                }
             }
 
             /* goes to all daemons */
