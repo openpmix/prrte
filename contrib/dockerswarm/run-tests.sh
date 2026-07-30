@@ -1396,6 +1396,8 @@ PRUN_BG() {
 # So a helper added since the containers came up is not on the app PATH, and a
 # bare name fails with PMIX_ERR_JOB_FAILED_TO_LAUNCH and no diagnostic.
 DS=/opt/prte/prte/bin/dataserver
+# ...and the same for the slow stdin reader, for the same reason.
+SC=/opt/prte/prte/bin/slowcat
 
 test_runtime() {
     local out n rc
@@ -2597,7 +2599,50 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
             && ok "wildcard stdin (--stdin all) reached the HNP-local and the remote proc" \
             || bad "wildcard stdin reached $n/2 procs (rc=$rc): $(echo "$out" | tr '\n' ' ')"
 
-        RUN 'rm -f /tmp/iof_stdin_in.txt /tmp/iof_stdin_out.txt /tmp/iof_stdin_err.txt' >/dev/null 2>&1
+        # Same wire, different consumer: a proc that reads its stdin SLOWLY.
+        # "cat" above drains the pipe as fast as the daemon can fill it, so
+        # the daemon non-blocking write(2) nearly always completes in full and
+        # the short-write path is never taken -- which is why a 256 KB "cat"
+        # test passed for years while piping a large file into a real
+        # application corrupted it (issue #2579).  slowcat keeps the pipe
+        # saturated, so once the input passes the pipe capacity (64 KB on
+        # Linux) essentially every write the daemon attempts is partial.
+        #
+        # The failure mode is DUPLICATION, not loss: re-basing the queued
+        # chunk data without also decrementing its count left the tail of the
+        # chunk holding bytes that had already gone out, and each retry sent
+        # them again -- the reporter measured a 2,064-line input arriving as
+        # 1,089,247 lines.  So the assertion is on the byte count first: the
+        # app must receive exactly what was piped in, no more.
+        insum=$(RUN 'md5sum < /tmp/iof_stdin_in.txt' | awk '{print $1}')
+        insz=$(RUN 'wc -c < /tmp/iof_stdin_in.txt' | tr -d ' ')
+        out=$(RUN 'cd /tmp && timeout 180 prun --host node2:1 -n 1 \
+                     '"$SC"' /tmp/iof_slow_out.txt 256 1000 < iof_stdin_in.txt \
+                     2>iof_slow_err.txt; echo "rc=$?"')
+        rc=$(echo "$out" | sed -n 's/^rc=//p')
+        got=$(echo "$out" | sed -n 's/^SLOWCAT-BYTES //p')
+        outsum=$(ON 2 'md5sum < /tmp/iof_slow_out.txt 2>/dev/null' | awk '{print $1}')
+        [ "$rc" = 0 ] && [ -n "$got" ] && [ "$got" = "$insz" ] && [ "$insum" = "$outsum" ] \
+            && ok "large stdin ($insz bytes) survived a SLOW remote reader (short writes)" \
+            || bad "slow-reader stdin corrupted (rc=$rc, sent=$insz received=$got, md5 $insum vs $outsum): $(RUN 'head -c 200 /tmp/iof_slow_err.txt')"
+        ON 2 'rm -f /tmp/iof_slow_out.txt' >/dev/null 2>&1
+
+        # And the same slow reader on the HNP node, where push_stdin writes
+        # into the proc sink directly instead of going out over the RML: the
+        # HNP and the daemon carry separate copies of the write handler, so a
+        # short-write fix in one says nothing about the other.
+        out=$(RUN 'cd /tmp && timeout 180 prun --host node1:1 -n 1 \
+                     '"$SC"' /tmp/iof_slow_out.txt 256 1000 < iof_stdin_in.txt \
+                     2>iof_slow_err.txt; echo "rc=$?"')
+        rc=$(echo "$out" | sed -n 's/^rc=//p')
+        got=$(echo "$out" | sed -n 's/^SLOWCAT-BYTES //p')
+        outsum=$(RUN 'md5sum < /tmp/iof_slow_out.txt 2>/dev/null' | awk '{print $1}')
+        [ "$rc" = 0 ] && [ -n "$got" ] && [ "$got" = "$insz" ] && [ "$insum" = "$outsum" ] \
+            && ok "large stdin ($insz bytes) survived a SLOW HNP-local reader (short writes)" \
+            || bad "slow-reader stdin corrupted on the HNP (rc=$rc, sent=$insz received=$got, md5 $insum vs $outsum): $(RUN 'head -c 200 /tmp/iof_slow_err.txt')"
+
+        RUN 'rm -f /tmp/iof_stdin_in.txt /tmp/iof_stdin_out.txt /tmp/iof_stdin_err.txt \
+                   /tmp/iof_slow_out.txt /tmp/iof_slow_err.txt' >/dev/null 2>&1
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
         bad "could not start a DVM for the stdin tests"
