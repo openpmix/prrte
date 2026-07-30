@@ -16,6 +16,7 @@ test_rmaps_SOURCES = \
     test_job_qualifiers.c  \
     test_resolve_options.c \
     test_ranking.c         \
+    test_binding.c         \
     test_check_avail.c     \
     test_dispatch.c        \
     test_round_robin.c     \
