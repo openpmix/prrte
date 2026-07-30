@@ -20,6 +20,11 @@
  *       Same, but PMIX_QUERY_LOCAL_PROC_TABLE -- only the procs the
  *       answering daemon hosts.
  *
+ *   proctable serveruri [hostname] [seconds]
+ *       PMIx_Query(PMIX_SERVER_URI), optionally qualified by PMIX_HOSTNAME so
+ *       the answer must come from ANOTHER node's daemon record. Prints
+ *       "URI <uri>" or "ERR <status> <name>".
+ *
  * Why this exists, and why it cannot be a unit test:
  *
  * prte_pmix_convert_state() is the only thing standing between a
@@ -37,6 +42,22 @@
  * and ten. The local-vs-global proc table split has no meaning at all on a
  * single host.
  *
+ * PMIX_SERVER_URI qualified by hostname is here for the same reason: it is
+ * the one query that resolves a *different node's* daemon and then goes out
+ * over PRTE_MODEX_RECV_VALUE_OPTIONAL for its URI. That macro yields a PMIx
+ * status, and its caller used to run the result through
+ * prte_pmix_convert_rc() -- the PRRTE-to-PMIx direction -- so every failure
+ * on this path was reported to the tool as a bare PMIX_ERROR. On one host
+ * the hostname qualifier resolves to the local daemon and the interesting
+ * branch is never taken.
+ *
+ * Note that PMIX_SERVER_URI is the rendezvous address of a node's PMIx
+ * SERVER -- how a client or tool connects to it. It is not how daemons reach
+ * each other; that is the RML, using PMIX_PROC_URI. The qualified form works
+ * only against the master, which is the one that collects every daemon's URI
+ * from its rollup; a non-master daemon answers for its own node and
+ * NOT_FOUND for any other. This client reports the raw status rather than
+ * just succeeding or failing because the status is the interesting part.
  */
 
 #include <stdio.h>
@@ -161,13 +182,50 @@ static int do_proc_table(const char *key, int seconds)
     return 0;
 }
 
+static int do_server_uri(const char *hostname, int seconds)
+{
+    pmix_query_t query;
+    pmix_info_t *results = NULL;
+    size_t n, nresults = 0;
+    pmix_status_t rc;
+
+    PMIX_QUERY_CONSTRUCT(&query);
+    PMIX_ARGV_APPEND(rc, query.keys, PMIX_SERVER_URI);
+    if (NULL != hostname) {
+        PMIX_QUERY_QUALIFIERS_CREATE(&query, 1);
+        PMIX_INFO_LOAD(&query.qualifiers[0], PMIX_HOSTNAME, hostname, PMIX_STRING);
+    }
+
+    rc = PMIx_Query_info(&query, 1, &results, &nresults);
+    if (PMIX_SUCCESS != rc) {
+        /* This is the interesting line for the harness: the status has to be
+         * a PMIx status that says something, not a blanket PMIX_ERROR
+         * manufactured by converting in the wrong direction. */
+        printf("ERR %d %s\n", (int) rc, PMIx_Error_string(rc));
+        PMIX_QUERY_DESTRUCT(&query);
+        return 1;
+    }
+    for (n = 0; n < nresults; n++) {
+        if (PMIX_STRING == results[n].value.type && NULL != results[n].value.data.string) {
+            printf("URI %s\n", results[n].value.data.string);
+        }
+    }
+    PMIX_INFO_FREE(results, nresults);
+    PMIX_QUERY_DESTRUCT(&query);
+
+    if (0 < seconds) {
+        sleep(seconds);
+    }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     pmix_status_t rc;
     int ret = 1;
 
     if (2 > argc) {
-        fprintf(stderr, "usage: %s procs|localprocs [args]\n", argv[0]);
+        fprintf(stderr, "usage: %s procs|localprocs|serveruri [args]\n", argv[0]);
         return 2;
     }
 
@@ -181,6 +239,9 @@ int main(int argc, char **argv)
         ret = do_proc_table(PMIX_QUERY_PROC_TABLE, (3 <= argc) ? atoi(argv[2]) : 0);
     } else if (0 == strcmp(argv[1], "localprocs")) {
         ret = do_proc_table(PMIX_QUERY_LOCAL_PROC_TABLE, (3 <= argc) ? atoi(argv[2]) : 0);
+    } else if (0 == strcmp(argv[1], "serveruri")) {
+        const char *host = (3 <= argc && 0 != strcmp(argv[2], "-")) ? argv[2] : NULL;
+        ret = do_server_uri(host, (4 <= argc) ? atoi(argv[3]) : 0);
     } else {
         fprintf(stderr, "unknown mode: %s\n", argv[1]);
         ret = 2;
