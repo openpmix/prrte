@@ -19,3 +19,9 @@ the value.
 Example: ``--prepend-envar LD_LIBRARY_PATH[:] foo/lib`` will result in:
 
 ``LD_LIBRARY_PATH=foo/lib:$LD_LIBRARY_PATH``
+
+These directives are applied in the order they are given on the command
+line. ``--set-env`` replaces a value outright while ``--prepend-env`` and
+``--append-env`` edit the value already there, so the order is the result:
+``--set-env FOO=1 --prepend-env FOO[:] x`` leaves ``FOO=x:1``, while
+``--prepend-env FOO[:] x --set-env FOO=1`` leaves ``FOO=1``.

@@ -269,6 +269,25 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                        [$prte_pmix_iof_file_pattern],
                        [Whether PMIx can expand an output-file name pattern])
 
+    dnl The environment directives (--set-env, --prepend-env, --append-env,
+    dnl --unset-env, -x) edit each other, so the order the user gave them in
+    dnl is the value the process ends up with.  Recovering that order from a
+    dnl parse result requires PMIx to have recorded where each value was
+    dnl given: the result groups every occurrence of an option onto that
+    dnl option's single instance, so an option repeated after another has
+    dnl intervened cannot be placed from the grouped view alone.  Without the
+    dnl stamps we fall back to that view, which is right for every command
+    dnl line that does not interleave repeats.
+    AC_MSG_CHECKING([for PMIx command-line occurrence order])
+    PRTE_CHECK_PMIX_CAP([CLI_ORDER],
+                        [AC_MSG_RESULT([yes])
+                         prte_pmix_cli_order=1],
+                        [AC_MSG_RESULT([no])
+                         prte_pmix_cli_order=0])
+    AC_DEFINE_UNQUOTED([PRTE_PMIX_CLI_ORDER],
+                       [$prte_pmix_cli_order],
+                       [Whether PMIx records where each command line option occurred])
+
     AC_MSG_CHECKING([for LTO compatibility])
     PRTE_CHECK_PMIX_CAP([LTO],
                         [PRTE_PMIX_LTO_CAPABILITY=1
