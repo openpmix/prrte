@@ -234,6 +234,7 @@ static struct option prterunoptions[] = {
 
     // deprecated options
     PMIX_OPTION_DEFINE("mca", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("n", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("xml", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("tag-output", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("timestamp-output", PMIX_ARG_NONE),
@@ -364,6 +365,7 @@ static struct option prunoptions[] = {
 
     // deprecated options
     PMIX_OPTION_DEFINE("mca", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("n", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("xml", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("tag-output", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("timestamp-output", PMIX_ARG_NONE),
