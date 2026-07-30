@@ -47,6 +47,11 @@ node so the mapper has something to work with). Returns `PRTE_SUCCESS`.
 
 Often paired with `ras_base_multiplier` to inflate node counts further.
 
+If the job's `PRTE_JOB_CPUSET` cannot be resolved against the topology,
+`prte_hwloc_base_generate_cpuset()` returns NULL and this module has to fail
+the allocation: every fabricated node dups that bitmap into
+`node->available`, which the mapper copies without checking.
+
 ---
 
 ## Things to watch when editing

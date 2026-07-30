@@ -105,6 +105,13 @@ the object model, who owns whom (several of those references are
 deliberately *borrowed*, not counted), the three-stage init, and the
 global registries.
 
+Topology is the other thing code all over the tree reaches for.
+[`src/hwloc/AGENTS.md`](src/hwloc/AGENTS.md) covers the hwloc integration:
+why NUMA is counted through PRRTE's own wrappers rather than hwloc's, the
+data PRRTE caches on hwloc `userdata` pointers, the binding-policy word,
+and the fact that in the HNP almost every topology in play belongs to some
+*other* machine.
+
 ---
 
 ## MCA Frameworks

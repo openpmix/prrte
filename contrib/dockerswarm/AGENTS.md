@@ -326,6 +326,55 @@ those are what this phase asserts:
   nobody claims must be refused with a diagnostic — and, on a persistent
   DVM, refused without taking the HNP down.
 
+**Topology handling (`src/hwloc`, `test_hwloc`)**: `src/hwloc` is a library
+of pure functions over a topology, so `test/unit/hwloc` covers nearly all of
+it against synthetic topologies. What it cannot reach is the case PRRTE
+actually runs in — the topology being queried or rendered arrived from
+*another* machine as XML and sits in the HNP alongside nine others. This
+phase asserts:
+
+- a **remote node's binding is rendered from its own topology**. The map is
+  built by the HNP from what each daemon shipped it, so `--display map` (not
+  `--display bind`, whose per-rank line comes from the daemon's own stderr
+  and is not forwarded here) is what exercises the path.
+- a **package-wide binding does not overrun the element buffer**. These
+  containers are 8 cores, one package, **no SMT, and no NUMA node in sysfs**
+  — which is exactly the shape that trips it: `--display map:parseable`
+  writes one `<core>N</core>` element per bound core into a buffer its caller
+  sizes at 20 bytes per PU, while each element needs ~34. The corruption
+  lands in the HNP, which is holding every node's topology, so the symptom is
+  a crash somewhere unrelated. Do not "simplify" this case onto one node.
+- **`--map-by numa` against topologies the HNP never sensed**. The NUMA count
+  comes from a cutoff cached on each topology's root object; a topology that
+  arrived from a daemon only has that cache if someone built it, and the
+  answer when it is missing used to be a silent zero.
+- a **DVM cpu-set constrains every node, not just the first**. The expansion
+  runs against each node's topology in turn and rewrites the process-wide
+  list as it goes, so one node cannot show whether the second got the same
+  answer.
+- a **malformed cpu-set is refused without taking the HNP down**. An
+  unresolvable entry came back as a NULL cpuset that nothing checked, so the
+  diagnostic was followed by a segfault inside hwloc.
+- **`--display topo` over several topologies at once** — the only place that
+  traversal runs against more than one.
+
+Two harness notes. The cpu-set case is written as a **range** (`0-1`) on
+purpose: PMIx's command-line parser used to reject any MCA value whose second
+character was a dash as `not-enough-arguments`, so that spelling was
+unusable, and the case is now the end-to-end regression test for the fix as
+much as for the per-node expansion. If it is ever run against a PMIx that
+predates the fix it **skips** with a message saying so rather than failing —
+the harness bakes PMIx into the image, so an old image is a real possibility.
+Build with `PMIX_SRC=<checkout>` to test against a local PMIx.
+
+And the cpu-set case checks **both** binding levels — to a core and to a
+package — because a cpu-set used to be honored only at the core level, where
+the object sits inside the set anyway; a rank bound to a package came back
+owning every core of it. Note that an assertion on a binding has to match the
+**whole** bracketed site list: a rank bound to `core:L0-7` starts with a `0`
+and slips past a pattern that only looks at the first number, which is
+exactly how that defect stayed hidden behind a passing test.
+
 **The daemon body and the PMIx server host module (`src/prted`,
 `test_prted`)**: `src/prted` is where the DVM actually lives, and almost
 none of it means anything on one node. This phase asserts the three things

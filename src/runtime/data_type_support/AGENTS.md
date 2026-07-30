@@ -108,6 +108,15 @@ you put it there. `prte_proc_print` had NULL checks on
 none of the three checked `src->node` itself, which is NULL for an unmapped
 proc and for a proc that outlived its node.
 
+The XML arm sizes a buffer for `prte_hwloc_get_binding_info()` itself, and
+has to size it from the **element** it will hold, not from a round number:
+each is 20 spaces of indent plus `<core>%d</core>\n`, so ~34 bytes for a
+single-digit core index and more as indices grow. The estimate used to be 20
+bytes per PU, which silently truncated the site list for any process bound to
+more than about half the cores of a non-SMT node — and, before `src/hwloc`
+bounded its writes, overran the buffer outright. See
+[`src/hwloc/AGENTS.md`](../../hwloc/AGENTS.md), "Rendering a binding".
+
 The string building is `pmix_asprintf`-and-free chaining: `tmp` always owns
 the accumulated string, each step builds `tmp2` from it, frees `tmp`, and
 reassigns. Any `continue` inside such a loop that skips the
