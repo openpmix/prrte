@@ -172,6 +172,13 @@ Include paths for these symbols come from PMIx's installed headers (found
 via `pkg-config` or `--with-pmix=`).  The shim at `src/pmix/pmix-internal.h`
 and `src/pmix/pmix.c` is PRRTE's integration point — consult it before
 reaching for PMIx symbols elsewhere.
+[`src/pmix/AGENTS.md`](src/pmix/AGENTS.md) covers it, and in particular the
+one rule that governs every crossing of this boundary: **PRRTE's error codes
+and PMIx's status codes are different numbering schemes that overlap
+numerically**, so a code handed across unconverted does not look foreign —
+it looks like some other, real code.  Convert at the boundary with
+`prte_pmix_convert_rc()` / `prte_pmix_convert_status()`, and never spell a
+proc state as a bare integer.
 
 ### Check capability flags
 

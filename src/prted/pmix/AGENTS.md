@@ -265,10 +265,22 @@ it is enforced here:
 - **PMIx status vs. PRRTE status.** Functions reachable from an upcall
   must return `pmix_status_t`; functions in the PRRTE half return `int`
   PRRTE codes. They are *different numbering schemes* that happen to
-  agree on 0. Convert with `prte_pmix_convert_rc()` /
+  agree on 0 — and, worse, that **overlap** everywhere else, so a code
+  used in the wrong space is not obviously foreign, it is some other
+  real code. Convert with `prte_pmix_convert_rc()` /
   `prte_pmix_convert_status()` at the boundary, and log with
   `PMIX_ERROR_LOG` or `PRTE_ERROR_LOG` to match. Mixing them silently
-  reports the wrong error to the application.
+  reports the wrong error to the application. See
+  [`../../pmix/AGENTS.md`](../../pmix/AGENTS.md) for the table of what
+  collides with what.
+  - **Converting the wrong *direction* is the easy version of this
+    mistake**, because it type-checks and the success case still works
+    (both spaces call success 0). `pmix_server_queries.c` ran the result
+    of `PRTE_MODEX_RECV_VALUE_OPTIONAL` — which yields a **PMIx**
+    status — through `prte_pmix_convert_rc()`, the PRRTE→PMIx direction,
+    so every failure of the `PMIX_SERVER_URI` query reached the tool as a
+    bare `PMIX_ERROR`. Before converting, ask which space the value is
+    already in.
 - **A helper must not answer for its caller.** `process_directive()` in
   `pmix_server_session.c` used to invoke `req->infocbfunc` itself on an
   error and then return to a caller that also invokes it — a double
