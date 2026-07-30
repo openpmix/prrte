@@ -100,8 +100,9 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | "--daemonize"        | Daemonize the DVM daemons into the background |
 +----------------------+-----------------------------------------------+
-| "--forward-signals   | Comma-delimited list of additional signals    |
-| <signals>"           | (names or integers) to forward                |
+| "--forward-signals   | Comma-delimited list of the signals (names or |
+| <signals>"           | integers) to be forwarded, replacing the      |
+|                      | default set                                   |
 +----------------------+-----------------------------------------------+
 | "--keepalive <arg0>" | Pipe to monitor - DVM will terminate upon     |
 |                      | closure                                       |
@@ -306,10 +307,10 @@ of the PMIx installation used to build PRRTE.
 #
 [forward-signals]
 
-Comma-delimited list of additional signals (names or integers) to
-forward to application processes ("none" = forward nothing). Signals
-provided by default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT,
-SIGALRM, and SIGCONT.
+Comma-delimited list of the signals (names or integers) to be forwarded
+to application processes ("none" = forward nothing). The list replaces
+the default set, which is SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM,
+and SIGCONT.
 #
 [allow-run-as-root]
 

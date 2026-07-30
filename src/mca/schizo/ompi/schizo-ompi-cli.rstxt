@@ -144,9 +144,9 @@ Specific options
 
 * ``--daemonize``: Daemonize the DVM daemons into the background.
 
-* ``--forward-signals <list>``: Comma-delimited list of additional
-  signals (names or integers) to forward to application
-  processes.
+* ``--forward-signals <list>``: Comma-delimited list of the signals
+  (names or integers) to be forwarded to application processes,
+  replacing the default set.
   :ref:`See below for details <label-schizo-ompi-forward-signals>`.
 
 * ``--launch-agent <agent>``: Name of daemon executable used to start
