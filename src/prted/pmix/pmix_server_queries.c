@@ -490,8 +490,12 @@ static void _query(int sd, short args, void *cbdata)
                  * an PRTE progress thread */
                 PRTE_MODEX_RECV_VALUE_OPTIONAL(rc, PMIX_SERVER_URI, &proct->name,
                                                (char **) &uri, PMIX_STRING);
-                if (PRTE_SUCCESS != rc) {
-                    ret = prte_pmix_convert_rc(rc);
+                if (PMIX_SUCCESS != rc) {
+                    /* the macro yields a PMIx status - it is already in the
+                     * space this function returns. Running it through
+                     * prte_pmix_convert_rc() converts the wrong direction
+                     * and turned every failure here into PMIX_ERROR. */
+                    ret = rc;
                     goto done;
                 }
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_SERVER_URI, uri, PMIX_STRING);
