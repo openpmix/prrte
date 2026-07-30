@@ -269,6 +269,16 @@ obligations follow:
 
 ### Who owns what in `options`
 
+`node->available` and `options->job_cpuset` are **never NULL**. The mappers
+copy and intersect both without checking (`hwloc_bitmap_copy(node->jobcache,
+node->available)` in `get_target_nodes()` is the first one), so a NULL is a
+segfault in the HNP inside hwloc. When a `--cpu-set` cannot be resolved
+against a node's topology, `prte_hwloc_base_filter_cpus()` and
+`prte_rmaps_base_get_cpuset()` hand back an **empty** set — the node then
+offers nothing and is reported unusable through the normal path, and
+`src/hwloc` has already told the user which entry failed. See
+[`src/hwloc/AGENTS.md`](../../hwloc/AGENTS.md).
+
 `job_cpuset` and `target` are hwloc bitmaps the mappers recycle per node;
 `cpuset` and `dist_device` are strings the *struct* owns (they come out of an
 attribute, which returns a copy). `bind_to_cpuset` consumes `cpuset` one
@@ -318,7 +328,35 @@ first with free cpus (honoring an optional per-object `limit`). If none
 is free it either errors (required binding) or, when `overload` is
 allowed, round-robins onto the least-loaded object without consuming
 `node->available` (so a non-overloading later job still sees the node as
-full). `bind_multiple` handles `cpus_per_rank > 1`; `bind_to_cpuset`
+full).
+
+**Binding to an object means the whole object, read within the job's
+cpu-set.** `set_proc_cpuset()` is the only place a `proc->cpuset` is
+written for object binding, and it intersects the object with
+`node->jobcache` — the node's availability as this job first found it,
+which is where a DVM-wide cpu-set has already been applied. `jobcache` and
+not `node->available`, because `available` shrinks as procs are placed and
+every proc bound to the same object has to get the same answer. A per-job
+`--cpu-set` never narrows `node->available` at all, so it is applied
+separately out of `options->job_cpuset`. Handing back `obj->cpuset` raw —
+which is what this used to do — meant a cpu-set was honored by `--bind-to
+core` (where the object sits inside the set anyway) and silently discarded
+by `--bind-to package` or `numa`: the rank came back owning every core of
+the object. Note that `prte_node_construct()` leaves `jobcache` allocated
+but **empty**, and the colocation path reaches binding without going
+through `get_target_nodes`, so the intersection falls back to the bare
+object when it would otherwise come up empty.
+
+The `limit` qualifier is parsed **twice** — per-app by
+`prte_rmaps_base_set_app_binding_policy()` here, and job-level by
+`prte_hwloc_base_set_binding_policy()` in
+[`src/hwloc`](../../hwloc/AGENTS.md). The two must agree. Both back it with a
+`uint16_t` attribute, so a value that does not fit has to be *refused* rather
+than cast (`limit=70000` used to become 4464), and both refuse zero, because
+`bind_generic` reads a limit of zero as "no limit at all" (`0 < options->limit`)
+rather than as what the user wrote.
+
+`bind_multiple` handles `cpus_per_rank > 1`; `bind_to_cpuset`
 handles `pe-list` and soft-cgroup cases. Binding writes `proc->cpuset`
 (a hwloc bitmap string). Rankfile/LSF/seq compute the cpuset directly
 from their slot lists and skip `bind_generic`.
