@@ -1369,7 +1369,17 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     }
     PMIX_ACQUIRE_OBJECT(&lock.lock);
     if (PMIX_SUCCESS != lock.status) {
-        PRTE_UPDATE_EXIT_STATUS(lock.status);
+        /* The request was accepted but the spawn itself failed - e.g., the
+         * job named an allocation the DVM does not have, or it could not be
+         * mapped. Nothing else reports this: we are the tool, and the only
+         * trace of the failure is the status handed back through the
+         * callback. Say the same thing the synchronous failure above says,
+         * so which side of the call detected it is not something the user
+         * has to care about. */
+        pmix_output(0, "PMIx_Spawn failed (%d): %s", lock.status,
+                    PMIx_Error_string(lock.status));
+        rc = lock.status;
+        PRTE_UPDATE_EXIT_STATUS(rc);
         goto DONE;
     }
     PMIX_LOAD_NSPACE(spawnednspace, lock.msg);
