@@ -176,11 +176,6 @@ option to the help request as "--help <option>".
 |                      | context is specified ("key" is the parameter  |
 |                      | name; "value" is the parameter value)         |
 +----------------------+-----------------------------------------------+
-| "--gpmixmca <key>    | Pass global PMIx MCA parameters that are      |
-| <value>"             | applicable to all contexts ("key" is the      |
-|                      | parameter name; "value" is the parameter      |
-|                      | value)                                        |
-+----------------------+-----------------------------------------------+
 | "--preload-files     | Preload the comma separated list of files to  |
 | <files>"             | the remote machines current working directory |
 |                      | before starting the remote process.           |
@@ -273,8 +268,6 @@ option to the help request as "--help <option>".
 | "--max-vm-size       | Number of daemons to start                    |
 | <num>"               |                                               |
 +----------------------+-----------------------------------------------+
-| "--no-ready-msg"     | Do not print a DVM ready message              |
-+----------------------+-----------------------------------------------+
 | "--system-server"    | Start prterun and its daemons as the system   |
 |                      | server on their nodes                         |
 +----------------------+-----------------------------------------------+
@@ -300,8 +293,6 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | "--set-sid"          | Direct the DVM daemons to separate from the   |
 |                      | current session                               |
-+----------------------+-----------------------------------------------+
-| "--singleton <id>"   | ID of the singleton process that started us   |
 +----------------------+-----------------------------------------------+
 | "--tune <files>"     | File(s) containing MCA params for tuning DVM  |
 |                      | operations                                    |
@@ -394,15 +385,6 @@ Pass a PMIx MCA parameter
 Syntax: "--pmixmca <key> <value>", where "key" is the parameter name
 and "value" is the parameter value.
 #
-[gpmixmca]
-
-Syntax: "--gpmixmca <key> <value>"
-
-where "key" is the parameter name and "value" is the parameter value.
-The "g" prefix indicates that this PMIx parameter is to be applied to
-_all_ application contexts and not just the one in which the directive
-appears.
-#
 [tune]
 
 Comma-delimited list of one or more files containing PRRTE and PMIx
@@ -437,12 +419,6 @@ Printout prterun's PID on stdout ("-"), stderr ("+"), or a file
 
 Printout prterun's URI on stdout ("-"), stderr ("+"), or a file
 (anything else).
-#
-[singleton]
-
-"prterun" is being started by a singleton process (i.e., one not
-started by prterun) — the argument must be the PMIx ID of the
-singleton process that started us
 #
 [keepalive]
 
