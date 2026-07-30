@@ -3,31 +3,50 @@
 # node2..node10 are spare nodes the DVM can grow onto and shrink back out of.
 #
 # PRRTE is NOT baked into the image: build.sh compiles your live working tree
-# out-of-tree into the shared `prte-build` volume, which every node mounts
-# read-only at /opt/prte.  So `docker compose up -d` must be preceded by a
-# `./build.sh` (which populates the volume).  See README.md.
+# out-of-tree into the shared build volume, which every node mounts read-only
+# at /opt/prte.  So `docker compose up -d` must be preceded by a `./build.sh`
+# (which populates the volume).  See AGENTS.md.
 #
 # The larger node count (was four) lets a shrink campaign target several daemons
 # sitting on one branch of the radix routing tree at once, which is the scenario
 # the collective-shrink-completion work (openpmix/prrte#2492) needs to exercise.
 
-# Pin the compose project.  Without this, the project name comes from the
-# directory - "dockerswarm" - which is also the name of openpmix's identical
-# harness directory, so `docker compose up -d` run here adopts THAT project's
-# containers: it stopped the pmix-node* swarm, renamed our own containers out
-# from under themselves, and then failed on the name collision, leaving the
-# ten prte-node* containers running the PREVIOUS image while
-# prte-swarm:latest had moved on.  A swarm whose containers predate the
-# image is the single most confusing state this harness can be in - the
-# daemons run one PMIx and the build in the volume was compiled against
+# ---------------------------------------------------------------------------
+# EVERY global name this harness claims is derived from $PRTE_SWARM, so that
+# two clones on one host can each run their own swarm.  Unset, it is "prte" and
+# every name below is exactly what it has always been.
+#
+#   PRTE_SWARM=alt ./build.sh
+#   PRTE_SWARM=alt docker compose up -d
+#   PRTE_SWARM=alt ./run-tests.sh linux
+#
+# The variable has to be in the environment of the `docker compose` command
+# itself -- compose interpolates this file, the scripts do not.  Set it for the
+# whole shell (`export PRTE_SWARM=alt`) and every step agrees.
+#
+# What is NOT per-swarm: the image.  It is read-only to a running swarm and
+# expensive to build, so both instances share it -- but `./build.sh image`
+# rebuilds it under the other swarm's feet, and that swarm's containers then
+# fail run-tests.sh's "containers are running the current image" preflight
+# until they are recreated.
+#
+# Pinning the project name matters even for a single swarm.  Without it the
+# project name comes from the directory - "dockerswarm" - which is also the
+# name of openpmix's identical harness directory, so `docker compose up -d`
+# run here adopts THAT project's containers: it stopped the pmix-node* swarm,
+# renamed our own containers out from under themselves, and then failed on the
+# name collision, leaving the ten prte-node* containers running the PREVIOUS
+# image while prte-swarm:latest had moved on.  A swarm whose containers
+# predate the image is the single most confusing state this harness can be in
+# - the daemons run one PMIx and the build in the volume was compiled against
 # another, and the symptom is an undefined-symbol failure in an unrelated
 # test.  Verify with:
 #   docker inspect prte-node1 --format '{{.Image}}'
 #   docker images --no-trunc --format '{{.ID}}' prte-swarm:latest
-name: prteswarm
+name: ${PRTE_SWARM:-prte}swarm
 
 x-node: &node
-  image: prte-swarm:latest
+  image: ${IMAGE:-prte-swarm:latest}
   networks: [dvm]
   tty: true
   volumes:
@@ -37,51 +56,58 @@ services:
   node1:
     <<: *node
     hostname: node1
-    container_name: prte-node1
+    container_name: ${PRTE_SWARM:-prte}-node1
   node2:
     <<: *node
     hostname: node2
-    container_name: prte-node2
+    container_name: ${PRTE_SWARM:-prte}-node2
   node3:
     <<: *node
     hostname: node3
-    container_name: prte-node3
+    container_name: ${PRTE_SWARM:-prte}-node3
   node4:
     <<: *node
     hostname: node4
-    container_name: prte-node4
+    container_name: ${PRTE_SWARM:-prte}-node4
   node5:
     <<: *node
     hostname: node5
-    container_name: prte-node5
+    container_name: ${PRTE_SWARM:-prte}-node5
   node6:
     <<: *node
     hostname: node6
-    container_name: prte-node6
+    container_name: ${PRTE_SWARM:-prte}-node6
   node7:
     <<: *node
     hostname: node7
-    container_name: prte-node7
+    container_name: ${PRTE_SWARM:-prte}-node7
   node8:
     <<: *node
     hostname: node8
-    container_name: prte-node8
+    container_name: ${PRTE_SWARM:-prte}-node8
   node9:
     <<: *node
     hostname: node9
-    container_name: prte-node9
+    container_name: ${PRTE_SWARM:-prte}-node9
   node10:
     <<: *node
     hostname: node10
-    container_name: prte-node10
+    container_name: ${PRTE_SWARM:-prte}-node10
 
+# Left to compose to name (it becomes <project>_dvm), which is what keeps two
+# swarms apart: every node sets hostname node<N>, so both swarms contain a
+# "node1".  Each user-defined bridge network has its own embedded DNS serving
+# only the containers attached to it, so "node2" from inside one swarm can
+# only ever mean that swarm's node2.
 networks:
   dvm:
     driver: bridge
 
-# Populated by build.sh (docker volume create prte-build) and shared,
-# read-only, by every node.  Declared external so the builder container and
-# these services reference the exact same volume name (no compose prefix).
+# Populated by build.sh (docker volume create) and shared, read-only, by every
+# node of THIS swarm.  Declared external so the builder container and these
+# services reference the exact same volume name (no compose prefix) -- which
+# also means the name has to carry the swarm identity itself.
 volumes:
   prte-build:
+    name: ${PRTE_SWARM:-prte}-build
     external: true

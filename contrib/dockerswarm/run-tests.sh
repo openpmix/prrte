@@ -18,14 +18,41 @@
 # The multi-node grow/shrink/relay tests only exist in the 'linux' suite --
 # native macOS has a single node, so it covers build + single-host launch,
 # which is what catches Darwin-specific regressions.
+#
+# Two clones on one host can each run a suite: set PRTE_SWARM (below) for the
+# linux swarm, and note that the macOS subset isolates itself automatically --
+# it drives only its own install by absolute path and gives PRRTE a private
+# TMPDIR, so neither its pkill nor its cleanup can reach the other clone.
 
 set -uo pipefail
 
 mode="${1:-linux}"
 pass=0 fail=0 skip=0
+# Which swarm to drive.  Must match the PRTE_SWARM that build.sh and
+# `docker compose up -d` ran under -- see docker-compose.yml.  Unset, this is
+# "prte" and every name below is what it has always been.
+PRTE_SWARM="${PRTE_SWARM:-prte}"
+# Reject what docker would reject, before it turns into a confusing compose
+# error.  The filter runs through LC_ALL=C tr rather than a shell [a-z] range
+# because in a UTF-8 locale that range follows collation order and matches
+# 'B' quite happily -- which let "Bad_Name" through the obvious version of
+# this test.  The leading-character check uses a literal set for the same
+# reason.
+case "$PRTE_SWARM" in [_-]*) PRTE_SWARM="" ;; esac
+if [ -z "$PRTE_SWARM" ] || \
+   [ "$PRTE_SWARM" != "$(printf '%s' "$PRTE_SWARM" | LC_ALL=C tr -cd 'a-z0-9_-')" ]; then
+    echo "PRTE_SWARM must be lowercase [a-z0-9_-] and start with a letter or digit" >&2
+    exit 2
+fi
+NODE="$PRTE_SWARM-node"                 # container names: ${NODE}1 .. ${NODE}10
+# Prefix for the compose commands we suggest in diagnostics: empty for the
+# default swarm, "PRTE_SWARM=<name> " otherwise, because compose reads the
+# variable from the environment of the compose command itself.
+SWARM_ENV=""
+[ "$PRTE_SWARM" = prte ] || SWARM_ENV="PRTE_SWARM=$PRTE_SWARM "
 # must match build.sh -- the bootstrap tests reach into the shared install
 IMAGE="${IMAGE:-prte-swarm:latest}"
-VOLUME="${VOLUME:-prte-build}"
+VOLUME="${VOLUME:-$PRTE_SWARM-build}"
 ok()   { pass=$((pass+1)); printf '  \033[32mPASS\033[0m %s\n' "$1"; }
 bad()  { fail=$((fail+1)); printf '  \033[31mFAIL\033[0m %s\n' "$1"; }
 skp()  { skip=$((skip+1)); printf '  \033[33mSKIP\033[0m %s\n' "$1"; }
@@ -51,29 +78,39 @@ bounded() {
 
 # run a command on the head node (login env so PATH/LD_LIBRARY_PATH are set)
 RUN() { docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
-            prte-node1 bash -lc ". /opt/prte/env.sh; $*"; }
-ON()  { docker exec "prte-node$1" bash -lc ". /opt/prte/env.sh 2>/dev/null; ${*:2}"; }
+            "${NODE}1" bash -lc ". /opt/prte/env.sh; $*"; }
+ON()  { docker exec "$NODE$1" bash -lc ". /opt/prte/env.sh 2>/dev/null; ${*:2}"; }
 
+# What must not survive into the next test, on one node.  Each tool has its
+# OWN session-dir prefix -- prte.<pid> for the HNP, prtrn.<pid> for prterun,
+# prted.<pid> for a bootstrapped daemon standing on its own, prun.<pid> for
+# prun itself, and ompi.<pid> for anything run under the ompi personality --
+# and every one of them holds a pmix.* server rendezvous file.  A system-level
+# server drops one (pmix.sys.<host>) straight into the tmpdir as well.  Leaving
+# any behind is what makes a later prun report "multiple possible servers ...
+# connection handles have been read from files named pmix.*" and fail to find
+# the DVM, so clear them all: the prefixes we know by name, and then whatever
+# pmix.* is still standing in the tmpdir or one level below it, which catches
+# the session dir of a tool this list has not heard of.  The nodes leave TMPDIR
+# unset, so that tmpdir is /tmp -- as every other path in this suite assumes.
+# Kill the tools too, not just the daemons: a live prun or pterm is holding a
+# rendezvous file of its own, and killing it is the point of a teardown.
+SWARM_CLEAN='
+    for t in prted prte prterun prun pterm; do pkill -9 -x $t 2>/dev/null; done
+    rm -rf /tmp/prte.* /tmp/prted.* /tmp/prtrn.* /tmp/prun.* /tmp/ompi.* \
+           /tmp/pmix.* 2>/dev/null
+    find /tmp -maxdepth 2 -name "pmix.*" -prune -exec rm -rf {} + 2>/dev/null
+    true'
 cleanup_swarm() {
     for n in $(seq 1 10); do
-        # NOTE: each tool has its OWN session-dir prefix -- prte.<pid> for the
-        # HNP, prtrn.<pid> for prterun, and prted.<pid> for a bootstrapped
-        # daemon standing on its own. Every one of them holds a pmix.* server
-        # rendezvous file, and leaving any behind is what makes a later prun
-        # report "multiple possible servers ... connection handles have been
-        # read from files named pmix.*" and fail to find the DVM. Clear them all.
-        docker exec "prte-node$n" sh -c \
-            'pkill -9 -x prted 2>/dev/null; pkill -9 -x prte 2>/dev/null;
-             pkill -9 -x prterun 2>/dev/null;
-             rm -rf /tmp/prte.* /tmp/prted.* /tmp/prtrn.* /tmp/pmix.* \
-                    /tmp/prun.session.* 2>/dev/null; true'
+        docker exec "$NODE$n" sh -c "$SWARM_CLEAN"
     done
 }
 prted_count() { local c=0 n; for n in "$@"; do ON "$n" 'pgrep -x prted' >/dev/null 2>&1 && c=$((c+1)); done; echo "$c"; }
 # how many prted PROCESSES are running on one node (not how many nodes have
 # one) -- two daemons on a single machine is what a duplicated node-pool
 # entry produces
-prted_procs() { docker exec "prte-node$1" sh -c 'pgrep -x prted 2>/dev/null | wc -l' | tr -d ' \r'; }
+prted_procs() { docker exec "$NODE$1" sh -c 'pgrep -x prted 2>/dev/null | wc -l' | tr -d ' \r'; }
 
 # --- fake-SLURM helpers -----------------------------------------------------
 # ras/slurm reaches its scheduler by shelling out to sbatch/scontrol/scancel,
@@ -84,10 +121,10 @@ prted_procs() { docker exec "prte-node$1" sh -c 'pgrep -x prted 2>/dev/null | wc
 FS_BIN=/opt/prte/fakeslurm/bin
 # run on the head node inside a faked SLURM allocation
 SL() { docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
-           prte-node1 bash -lc ". /opt/prte/env.sh; export PATH=$FS_BIN:\$PATH;
+           "${NODE}1" bash -lc ". /opt/prte/env.sh; export PATH=$FS_BIN:\$PATH;
                                 eval \"\$(fake-slurm env)\"; $*"; }
 # run a fake-slurm housekeeping command (no SLURM_* env needed)
-FS() { docker exec prte-node1 bash -lc "export PATH=$FS_BIN:\$PATH; fake-slurm $*"; }
+FS() { docker exec "${NODE}1" bash -lc "export PATH=$FS_BIN:\$PATH; fake-slurm $*"; }
 # "node2,node4" -> "2 4", for prted_count
 fs_idx() { echo "$1" | tr ',' '\n' | sed 's/^node//' | tr '\n' ' '; }
 # the sbatch argv that created a given fake job
@@ -116,11 +153,11 @@ bootstrap_restore_conf() {
 bootstrap_start() {
     local ctrl=$1; shift
     docker exec -d -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
-        "prte-node$ctrl" bash -lc '. /opt/prte/env.sh; prted --bootstrap > /tmp/boot.out 2>&1'
+        "$NODE$ctrl" bash -lc '. /opt/prte/env.sh; prted --bootstrap > /tmp/boot.out 2>&1'
     sleep 6
     for n in "$@"; do
         docker exec -d -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
-            "prte-node$n" bash -lc '. /opt/prte/env.sh; prted --bootstrap > /tmp/boot.out 2>&1'
+            "$NODE$n" bash -lc '. /opt/prte/env.sh; prted --bootstrap > /tmp/boot.out 2>&1'
     done
     sleep 14
 }
@@ -153,7 +190,7 @@ bootstrap_start() {
 slurm_dvm_start() {
     SL 'rm -f /tmp/prte.out' >/dev/null 2>&1
     docker exec -d -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
-        prte-node1 bash -lc ". /opt/prte/env.sh; export PATH=$FS_BIN:\$PATH;
+        "${NODE}1" bash -lc ". /opt/prte/env.sh; export PATH=$FS_BIN:\$PATH;
             eval \"\$(fake-slurm env)\"; cd /root &&
             prte --prtemca ras_base_verbose 5 $* >/tmp/prte.out 2>&1"
     sleep 8
@@ -265,7 +302,7 @@ test_slurm() {
     fi
     SL 'rm -f /tmp/prte.out /tmp/pwned' >/dev/null 2>&1
     docker exec -d -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
-        prte-node1 bash -lc ". /opt/prte/env.sh; export PATH=$FS_BIN:\$PATH;
+        "${NODE}1" bash -lc ". /opt/prte/env.sh; export PATH=$FS_BIN:\$PATH;
             eval \"\$(fake-slurm env)\"; cd /root &&
             prte --prtemca prte_elastic_mode 1 --prtemca ras_base_verbose 5 \
                  >/tmp/prte.out 2>&1"
@@ -491,7 +528,7 @@ test_slurm() {
     # exactly those two arguments and leave the rest of the line intact.
     FS 'init --jobid 1000 --base node1 --tasks 2 --pool node2,node3' >/dev/null
     docker exec -d -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
-        prte-node1 bash -lc ". /opt/prte/env.sh; export PATH=$FS_BIN:\$PATH;
+        "${NODE}1" bash -lc ". /opt/prte/env.sh; export PATH=$FS_BIN:\$PATH;
             eval \"\$(fake-slurm env)\"; cd /root &&
             prte --prtemca prte_elastic_mode 1 --prtemca ras_slurm_propagate_qos 0 \
                  --prtemca ras_slurm_propagate_time 0 >/tmp/prte.out 2>&1"
@@ -1310,7 +1347,7 @@ test_state() {
     # report the agent failure and exit promptly rather than hang.
     t0=$(date +%s)
     bounded 90 docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
-        prte-node1 bash -lc '. /opt/prte/env.sh;
+        "${NODE}1" bash -lc '. /opt/prte/env.sh;
             prterun --mca plm_ssh_agent /no/such/launch/agent --host node2:1,node3:1 -np 2 hostname'
     rc=$?
     t1=$(date +%s); dt=$((t1-t0))
@@ -1381,7 +1418,7 @@ PRUN() { RUN "timeout -k 5 60 prun --dvm-uri file:$PRTED_URI $*"; }
 PRUN_BG() {
     local outf=$1; shift
     docker exec -d -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
-        prte-node1 bash -lc ". /opt/prte/env.sh;
+        "${NODE}1" bash -lc ". /opt/prte/env.sh;
             prun --dvm-uri file:$PRTED_URI $* > $outf 2>&1"
 }
 ########################################################################
@@ -1687,7 +1724,7 @@ test_prted() {
     # cleanup_swarm reaps daemons and tools but not the application procs
     # they left behind, and this case counts procs on node2 - a stray sleep
     # from an earlier run would make the precondition check nonsense
-    for n in 1 2; do docker exec "prte-node$n" sh -c 'pkill -9 -x sleep 2>/dev/null; true'; done
+    for n in 1 2; do docker exec "$NODE$n" sh -c 'pkill -9 -x sleep 2>/dev/null; true'; done
     if ! prted_dvm_start 'node1:4,node2:4'; then
         bad "could not start a DVM for the job-scoped signal test"
     else
@@ -2444,8 +2481,16 @@ test_rml() {
 }
 
 test_linux() {
-    if ! docker ps --format '{{.Names}}' | grep -qx prte-node1; then
-        echo "swarm not up -- run: docker compose up -d" >&2; exit 2
+    if ! docker ps --format '{{.Names}}' | grep -qx "${NODE}1"; then
+        # Name the swarm we looked for. Forgetting PRTE_SWARM on the compose
+        # command (it interpolates docker-compose.yml, so it has to be in that
+        # command's environment) brings up the DEFAULT swarm instead, and
+        # "swarm not up" alone sends you looking for a docker problem.
+        echo "swarm '$PRTE_SWARM' not up -- no container named ${NODE}1" >&2
+        echo "run: ${SWARM_ENV}docker compose up -d" >&2
+        [ -z "$SWARM_ENV" ] || \
+            echo "     (and ${SWARM_ENV}./build.sh first, so volume $VOLUME exists)" >&2
+        exit 2
     fi
     # Start from a clean slate rather than trusting the last run to have
     # tidied up. The nodes are long-lived containers while the install they
@@ -2487,14 +2532,17 @@ test_linux() {
     imgid=$(docker images --no-trunc --format '{{.ID}}' "$IMAGE" 2>/dev/null | head -1)
     stalenodes=""
     for imgn in $(seq 1 10); do
-        cimg=$(docker inspect "prte-node$imgn" --format '{{.Image}}' 2>/dev/null)
+        cimg=$(docker inspect "$NODE$imgn" --format '{{.Image}}' 2>/dev/null)
         [ "$cimg" = "$imgid" ] || stalenodes="$stalenodes node$imgn"
     done
     if [ -z "$stalenodes" ]; then
         ok "all 10 containers are on the current $IMAGE"
     else
         bad "containers predate $IMAGE:$stalenodes"
-        echo "     Recreate them: docker compose up -d --force-recreate" >&2
+        # The image is shared by every swarm on this host, so the other clone
+        # rebuilding it is one way to land here without having touched
+        # anything yourself.
+        echo "     Recreate them: ${SWARM_ENV}docker compose up -d --force-recreate" >&2
         echo "     (from contrib/dockerswarm, so the pinned project name applies)" >&2
         return
     fi
@@ -2521,7 +2569,7 @@ test_linux() {
     # points at. This exercises the real cross-daemon delivery path (xcast ->
     # recv_files -> write_handler -> link_local_files), which a single-host run
     # cannot prove because the source file is already present locally.
-    docker exec prte-node1 bash -lc '. /opt/prte/env.sh 2>/dev/null; cat > /root/staged_marker.c <<"CEOF"
+    docker exec "${NODE}1" bash -lc '. /opt/prte/env.sh 2>/dev/null; cat > /root/staged_marker.c <<"CEOF"
 #include <unistd.h>
 #include <stdio.h>
 int main(void){ char h[64]; gethostname(h, sizeof(h)); printf("STAGED-BIN-OK %s\n", h); return 0; }
@@ -2543,7 +2591,7 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     else
         bad "could not compile the marker binary on node1 (need gcc in the image)"
     fi
-    docker exec prte-node1 sh -c 'rm -f /root/staged_marker /root/staged_marker.c' 2>/dev/null
+    docker exec "${NODE}1" sh -c 'rm -f /root/staged_marker /root/staged_marker.c' 2>/dev/null
 
     banner "iof: stdin forwarded to a REMOTE proc (HNP -> prted -> proc)"
     # Rank 0 is mapped onto node2, not the head node, so every stdin byte must
@@ -3156,10 +3204,58 @@ test_macos() {
     if [ ! -x "$prefix/bin/prterun" ]; then
         echo "native build missing -- run: ./build.sh macos" >&2; exit 2
     fi
-    export PATH="$prefix/bin:$PATH"
     export DYLD_LIBRARY_PATH="$prefix/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
     export PRTE_ALLOW_RUN_AS_ROOT=1 PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1
-    macpk() { pkill -9 -x prterun 2>/dev/null; pkill -9 -x prte 2>/dev/null; pkill -9 -x prted 2>/dev/null; true; }
+
+    # Unlike the swarm, this subset runs on the developer's own machine, where
+    # another clone of PRRTE may be running this very same subset.  Nothing
+    # here may reach a process or a file that clone owns, which takes both of:
+    #
+    #  - every tool is started by ABSOLUTE path out of THIS clone's install
+    #    ($B below, never PATH), so "is this process mine" is a question about
+    #    the argv, which is what mypgrep/mypkill ask.  A bare `pkill -x prte`
+    #    kills the other clone's DVM; a bare `pgrep -x prte` is worse still,
+    #    because it reports the other clone's DVM as ours and the case then
+    #    PASSES on a process this run never started.
+    #  - PRRTE gets a PRIVATE TMPDIR, so the session dirs -- and the pmix.*
+    #    rendezvous files inside them, which a -9'd tool never removes -- land
+    #    somewhere only this run will ever delete.  It is made under /tmp
+    #    rather than beside the build because the rendezvous socket path has
+    #    to fit in sun_path (104 bytes on Darwin), and the per-user $TMPDIR a
+    #    Mac hands out is already ~50 of them.
+    # MAC_BRE and MAC_TMP are deliberately NOT `local`: the traps below fire
+    # after this function has returned, and a local is out of scope by then --
+    # which would silently leave the private directory behind on every run.
+    local B="$prefix/bin"
+    MAC_BRE="$(printf '%s' "$B" | sed 's/[].[^$*+?(){}|\\]/\\&/g')"
+    mypgrep() { pgrep -f "^$MAC_BRE/$1( |\$)" >/dev/null 2>&1; }
+    mypkill() { pkill -9 -f "^$MAC_BRE/$1( |\$)" 2>/dev/null; true; }
+    MAC_TMP="$(mktemp -d /tmp/prtesuite.XXXXXX)" || {
+        echo "cannot create a private TMPDIR under /tmp" >&2; exit 2; }
+    export TMPDIR="$MAC_TMP"
+    # Take the private dir down however we leave, ^C included -- it holds only
+    # this run's session dirs, so there is nothing in it worth keeping.
+    macdone() {
+        local t
+        for t in prterun prte prted prun pterm; do mypkill "$t"; done
+        [ -n "${MAC_TMP:-}" ] && rm -rf "$MAC_TMP"
+        true
+    }
+    trap macdone EXIT
+    trap 'macdone; exit 130' INT TERM
+
+    # Reap this run's strays between cases.  Session dirs only, not the whole
+    # private dir: `bounded` puts its capture file there too (mktemp honors
+    # TMPDIR) and a case reads that file after the macpk in its own error
+    # branch has run.  Everything named here is unambiguously ours, pmix.*
+    # included, because the directory it sits in is.
+    macpk() {
+        local t
+        for t in prterun prte prted prun pterm; do mypkill "$t"; done
+        rm -rf "${TMPDIR:?}"/prte.* "${TMPDIR:?}"/prted.* "${TMPDIR:?}"/prtrn.* \
+               "${TMPDIR:?}"/prun.* "${TMPDIR:?}"/ompi.* "${TMPDIR:?}"/pmix.* 2>/dev/null
+        true
+    }
 
     banner "macOS: native Darwin build"
     ok "PRRTE built and installed for Darwin ($prefix)"
@@ -3170,7 +3266,7 @@ test_macos() {
 
     banner "macOS: prterun (one-shot, single host)"
     macpk; sleep 1
-    if bounded 60 prterun -np 4 hostname; then
+    if bounded 60 "$B/prterun" -np 4 hostname; then
         # count hostname lines only -- ignore any libxml/DNS stderr noise
         [ "$(grep -Fc "$hn" "$BOUT")" = 4 ] \
             && ok "prterun -np 4 -> 4 procs on $hn, exit 0" \
@@ -3196,7 +3292,7 @@ test_macos() {
     # would never see EOF and would hang on a defect that is not PRRTE's.
     macpk; sleep 1
     printf 'STDIN-DELIVERY-OK\n' > "$root/vpath-macos/stdin_probe.txt"
-    if bounded 60 sh -c "prterun -np 2 head -1 < '$root/vpath-macos/stdin_probe.txt'"; then
+    if bounded 60 sh -c "'$B/prterun' -np 2 head -1 < '$root/vpath-macos/stdin_probe.txt'"; then
         [ "$(grep -Fc STDIN-DELIVERY-OK "$BOUT")" = 1 ] \
             && ok "directed stdin (default rank 0) -> 1 proc" \
             || bad "directed stdin: $(tr '\n' ' ' <"$BOUT")"
@@ -3205,7 +3301,7 @@ test_macos() {
     fi
     rm -f "$BOUT"
     macpk; sleep 1
-    if bounded 60 sh -c "prterun -np 2 --stdin all head -1 < '$root/vpath-macos/stdin_probe.txt'"; then
+    if bounded 60 sh -c "'$B/prterun' -np 2 --stdin all head -1 < '$root/vpath-macos/stdin_probe.txt'"; then
         [ "$(grep -Fc STDIN-DELIVERY-OK "$BOUT")" = 2 ] \
             && ok "wildcard stdin (--stdin all) -> both procs" \
             || bad "wildcard stdin reached $(grep -Fc STDIN-DELIVERY-OK "$BOUT")/2 procs: $(tr '\n' ' ' <"$BOUT")"
@@ -3216,15 +3312,15 @@ test_macos() {
 
     banner "macOS: persistent DVM + prun + pterm (single host)"
     macpk; sleep 1
-    bounded 60 prte --daemonize; sleep 3
-    if pgrep -x prte >/dev/null; then
+    bounded 60 "$B/prte" --daemonize; sleep 3
+    if mypgrep prte; then
         ok "prte --daemonize started"
-        if bounded 30 prun -np 2 hostname && [ "$(grep -Fc "$hn" "$BOUT")" = 2 ]; then
+        if bounded 30 "$B/prun" -np 2 hostname && [ "$(grep -Fc "$hn" "$BOUT")" = 2 ]; then
             ok "prun -np 2 -> 2 procs on $hn, exit 0"
         else skp "prun timed out/short (native Darwin DVM unstable)"; fi
-        bounded 20 pterm >/dev/null 2>&1 || true
+        bounded 20 "$B/pterm" >/dev/null 2>&1 || true
         sleep 1
-        pgrep -x prte >/dev/null && { skp "pterm did not stop the DVM (native Darwin instability)"; macpk; } \
+        mypgrep prte && { skp "pterm did not stop the DVM (native Darwin instability)"; macpk; } \
                                   || ok "pterm cleanly terminated the DVM"
     else
         skp "prte --daemonize did not come up -- native Darwin DVM is unstable on this host (pre-existing); build is verified"
@@ -3239,11 +3335,11 @@ test_macos() {
     # every other job on the machine with it. Single host is enough - the
     # request is rejected at the HNP, before any daemon is involved.
     macpk; sleep 1
-    bounded 60 prte --daemonize; sleep 3
-    if pgrep -x prte >/dev/null; then
+    bounded 60 "$B/prte" --daemonize; sleep 3
+    if mypgrep prte; then
         for badarg in "--map-by NOSUCHPOLICY" "--bind-to NOSUCHOBJECT" "--rank-by NOSUCHTHING"; do
-            bounded 30 sh -c "prun $badarg -np 1 hostname" >/dev/null 2>&1
-            if pgrep -x prte >/dev/null; then
+            bounded 30 sh -c "'$B/prun' $badarg -np 1 hostname" >/dev/null 2>&1
+            if mypgrep prte; then
                 ok "DVM survived a rejected 'prun $badarg'"
             else
                 bad "DVM died on 'prun $badarg'"
@@ -3251,14 +3347,14 @@ test_macos() {
             fi
         done
         # and it must still be able to run a job afterwards
-        if pgrep -x prte >/dev/null; then
-            if bounded 30 prun -np 2 hostname && [ "$(grep -Fc "$hn" "$BOUT")" = 2 ]; then
+        if mypgrep prte; then
+            if bounded 30 "$B/prun" -np 2 hostname && [ "$(grep -Fc "$hn" "$BOUT")" = 2 ]; then
                 ok "DVM still launches jobs after the rejected requests"
             else
                 skp "post-rejection prun timed out (native Darwin DVM unstable)"
             fi
         fi
-        bounded 20 pterm >/dev/null 2>&1 || true; sleep 1; macpk
+        bounded 20 "$B/pterm" >/dev/null 2>&1 || true; sleep 1; macpk
     else
         skp "prte --daemonize did not come up -- cannot test spawn rejection"
     fi
@@ -3270,7 +3366,7 @@ test_macos() {
     # daemon command line was assembled. One host cannot exercise the daemon
     # side of either, but both must at least remain launchable.
     macpk; sleep 1
-    if bounded 60 prterun --uniform-nodes -np 2 hostname; then
+    if bounded 60 "$B/prterun" --uniform-nodes -np 2 hostname; then
         [ "$(grep -Fc "$hn" "$BOUT")" = 2 ] \
             && ok "prterun --uniform-nodes -> 2 procs on $hn" \
             || bad "uniform-nodes launch wrong output: $(tr '\n' ' ' <"$BOUT")"
@@ -3279,7 +3375,7 @@ test_macos() {
     fi
     rm -f "$BOUT"
     macpk; sleep 1
-    if bounded 60 sh -c "PRTE_MCA_prte_test_kv='a=b' prterun -np 2 hostname"; then
+    if bounded 60 sh -c "PRTE_MCA_prte_test_kv='a=b' '$B/prterun' -np 2 hostname"; then
         [ "$(grep -Fc "$hn" "$BOUT")" = 2 ] \
             && ok "launch works with an '='-bearing mca value in the environment" \
             || bad "'='-bearing mca value broke the launch: $(tr '\n' ' ' <"$BOUT")"
