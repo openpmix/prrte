@@ -12,7 +12,7 @@
  * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -109,6 +109,27 @@ int prte_iof_base_write_output(const pmix_proc_t *name, prte_iof_tag_t stream,
     return num_buffered;
 }
 
+void prte_iof_base_adjust_short_write(prte_iof_write_output_t *output, int num_written)
+{
+    if (0 >= num_written || num_written >= output->numbytes) {
+        /* nothing made it out, or the chunk is complete - either way
+         * there is nothing to re-base
+         */
+        return;
+    }
+
+    /* Both the count and the data have to move. Sliding the unwritten
+     * tail to the front while leaving numbytes alone leaves the last
+     * "num_written" bytes of the chunk holding a stale copy of data we
+     * already wrote, and the next write emits them again - so a stream
+     * that takes short writes (any pipe whose reader falls behind, i.e.
+     * any input larger than the pipe's capacity) comes out of the far
+     * end with chunks duplicated, once per retry.
+     */
+    output->numbytes -= num_written;
+    memmove(output->data, &output->data[num_written], output->numbytes);
+}
+
 void prte_iof_base_write_handler(int _fd, short event, void *cbdata)
 {
     prte_iof_sink_t *sink = (prte_iof_sink_t *) cbdata;
@@ -154,10 +175,10 @@ void prte_iof_base_write_handler(int _fd, short event, void *cbdata)
             PMIX_RELEASE(output);
             goto ABORT;
         } else if (num_written < output->numbytes) {
-            /* incomplete write - adjust data to avoid duplicate output */
-            memmove(output->data, &output->data[num_written], output->numbytes - num_written);
-            /* adjust the number of bytes remaining to be written */
-            output->numbytes -= num_written;
+            /* incomplete write - drop what went out and re-base the
+             * remainder to avoid duplicate output
+             */
+            prte_iof_base_adjust_short_write(output, num_written);
             /* push this item back on the front of the list */
             pmix_list_prepend(&wev->outputs, item);
             /* if the list is getting too large, abort */

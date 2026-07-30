@@ -46,6 +46,12 @@
  *      it with the write event pre-marked pending so no libevent activation
  *      is needed, exercising the enqueue/accounting logic directly.
  *
+ *      Its consumer-side counterpart is equally pure: what every write
+ *      handler does with a chunk the fd only partly accepted
+ *      (prte_iof_base_adjust_short_write).  Getting that wrong duplicates
+ *      the stream rather than dropping it, so the test drains a chunk
+ *      through short writes and compares the result byte for byte.
+ *
  *   6. The always-readable/always-writable fd predicate
  *      (prte_iof_base_fd_always_ready), which decides timer-vs-fd events
  *      for every stream.
@@ -451,6 +457,94 @@ static int test_write_output_chunking(void)
 }
 
 /*
+ * The consumer side of the sink write engine: what the write handlers do
+ * with a chunk the fd only partially accepted.
+ *
+ * A non-blocking write to a pipe whose reader has fallen behind returns a
+ * short count, and the handler must resume from exactly where that write
+ * stopped: prte_iof_base_adjust_short_write drops the bytes that made it
+ * out and slides the remainder to the front of the chunk.  Sliding the
+ * data without decrementing the count leaves the tail of the chunk holding
+ * a stale copy of already-written bytes and re-sends them on every retry,
+ * which is how a stdin file larger than the pipe capacity reached the
+ * application duplicated many times over (issue #2579).
+ *
+ * So the invariant under test is a stream one: drain a chunk through a
+ * sequence of short writes and the bytes that came out must be the bytes
+ * that went in -- no loss, no duplication.
+ */
+static int test_short_write_adjust(void)
+{
+    int failures = 0;
+    prte_iof_write_output_t *chunk;
+    unsigned char source[300];
+    /* room for far more than the source, so a handler that re-sends data
+     * overruns the expected length instead of looping forever */
+    unsigned char drained[4 * sizeof(source)];
+    const int bite = 64;
+    size_t i, ndrained = 0;
+    int nwritten, rounds = 0;
+
+    for (i = 0; i < sizeof(source); i++) {
+        source[i] = (unsigned char) (i % 251);
+    }
+
+    chunk = PMIX_NEW(prte_iof_write_output_t);
+    memcpy(chunk->data, source, sizeof(source));
+    chunk->numbytes = (int) sizeof(source);
+
+    /* drain the chunk the way a write handler does: take what the fd
+     * accepted, re-base the chunk, come back for the rest
+     */
+    while (0 < chunk->numbytes && 100 > rounds) {
+        rounds++;
+        nwritten = (bite < chunk->numbytes) ? bite : chunk->numbytes;
+        if (sizeof(drained) < ndrained + (size_t) nwritten) {
+            fprintf(stderr, "FAIL [short_write_adjust]: chunk is re-sending data\n");
+            failures++;
+            break;
+        }
+        memcpy(&drained[ndrained], chunk->data, nwritten);
+        ndrained += nwritten;
+        if (nwritten == chunk->numbytes) {
+            /* the chunk went out completely - the handler releases it */
+            break;
+        }
+        prte_iof_base_adjust_short_write(chunk, nwritten);
+    }
+
+    CHECK("short writes drain exactly the original byte count",
+          sizeof(source) == ndrained);
+    CHECK("short writes deliver the original bytes in order",
+          ndrained <= sizeof(drained) && 0 == memcmp(drained, source, ndrained));
+
+    PMIX_RELEASE(chunk);
+
+    /* the degenerate counts must leave the chunk alone: nothing went out,
+     * or everything did (the handler releases the chunk in that case and
+     * must not be handed a re-based copy of it)
+     */
+    chunk = PMIX_NEW(prte_iof_write_output_t);
+    memcpy(chunk->data, source, sizeof(source));
+    chunk->numbytes = (int) sizeof(source);
+
+    prte_iof_base_adjust_short_write(chunk, 0);
+    CHECK("zero-byte write leaves the count alone", (int) sizeof(source) == chunk->numbytes);
+    CHECK("zero-byte write leaves the data alone", 0 == memcmp(chunk->data, source, sizeof(source)));
+
+    prte_iof_base_adjust_short_write(chunk, (int) sizeof(source));
+    CHECK("complete write leaves the count alone", (int) sizeof(source) == chunk->numbytes);
+    CHECK("complete write leaves the data alone", 0 == memcmp(chunk->data, source, sizeof(source)));
+
+    PMIX_RELEASE(chunk);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_short_write_adjust\n");
+    }
+    return failures;
+}
+
+/*
  * prte_iof_base_fd_always_ready decides whether a stream is driven by a
  * zero-length timer (regular files / non-tty char devs / block devs, which
  * never signal readiness through the event loop) or by a real fd event.
@@ -526,6 +620,7 @@ int main(void)
     failures += test_classes();
     failures += test_write_output_accounting();
     failures += test_write_output_chunking();
+    failures += test_short_write_adjust();
     failures += test_fd_always_ready();
 
     (void) pmix_mca_base_framework_close(&prte_iof_base_framework);

@@ -235,8 +235,9 @@ This is the heart of the **stdin / output-to-fd** path:
   writes:
   - `EAGAIN`/`EINTR` → prepend the chunk back and leave the event armed to
     retry;
-  - **partial write** → `memmove` the unwritten tail to the front, fix
-    `numbytes`, prepend, retry;
+  - **partial write** → re-base the chunk with
+    `prte_iof_base_adjust_short_write` (slide the unwritten tail to the
+    front **and** drop `numbytes` by what went out), prepend, retry;
   - `numbytes == 0` chunk → close the stream by releasing the sink.
 
   If the backlog ever exceeds `prte_iof_base_output_limit` it declares IOF
@@ -249,7 +250,14 @@ This is the heart of the **stdin / output-to-fd** path:
   components each define their **own** near-identical
   `stdin_write_handler` (with subtly different close/`xoff` semantics) and
   pass it to `PRTE_IOF_SINK_DEFINE` — so when editing write semantics,
-  check all three copies.
+  check all three copies. That triplication has already cost once: the
+  short-write adjustment was fixed in the HNP copy (2025,
+  [#2220](https://github.com/openpmix/prrte/issues/2220)) and missed in the
+  daemon copy, so piping a large file into a remote rank still duplicated
+  it ([#2579](https://github.com/openpmix/prrte/issues/2579)). The
+  adjustment itself now lives in **one** place,
+  `prte_iof_base_adjust_short_write`, and all three handlers call it — keep
+  it that way rather than re-inlining the `memmove`.
 
 ### Sink macros (`base.h`)
 
@@ -430,11 +438,22 @@ what *is* exercisable without them:
 - the chunk-splitting of an oversized write (every chunk within
   `PRTE_IOF_BASE_TAGGED_OUT_MAX`, the pieces reassembling to the original
   bytes) and the negative-count degradation to the close sentinel;
+- the **consumer side**'s one pure piece —
+  `prte_iof_base_adjust_short_write`, driven by draining a chunk through a
+  run of short writes and comparing the bytes that came out with the bytes
+  that went in (the #2579 failure mode is duplication, so the byte count is
+  the assertion that matters);
 - the `prte_iof_base_fd_always_ready` predicate (pipe vs. regular file vs.
   `/dev/null`).
 
 The end-to-end capture/relay/inject behavior is covered by the integration
 harness (`prte --daemonize` → `prun` → `pterm`), not by `make check`.
+Note that the *interesting* stdin behavior needs a **slow** reader as well
+as a live DVM: a proc that drains its pipe as fast as the daemon fills it
+never produces a short write, which is why a large-payload `cat` test
+passed throughout the life of #2579. The swarm harness
+([`contrib/dockerswarm`](../../../contrib/dockerswarm/)) has a `slowcat`
+client for exactly this.
 
 ## Debugging
 

@@ -121,8 +121,9 @@ send (but still forwards to non-daemon tools that may be watching an abort).
 
 The HNP's own sink write callback drains `wev->outputs` to the proc's
 stdin fd with the standard non-blocking dance (EAGAIN/EINTR → prepend and
-re-arm; partial write → `memmove` + prepend + re-arm; `numbytes == 0` →
-close). It differs from the base `prte_iof_base_write_handler` in two
+re-arm; partial write → `prte_iof_base_adjust_short_write` + prepend +
+re-arm; `numbytes == 0` → close). It differs from the base
+`prte_iof_base_write_handler` in two
 ways: it dumps pending data immediately if `prte_abnormal_term_ordered`
 (the DVM is aborting), and it honors the sink's `closed` flag, releasing
 the sink once the last queued byte is written.

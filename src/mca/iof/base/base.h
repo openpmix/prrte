@@ -17,7 +17,7 @@
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -253,6 +253,16 @@ PRTE_EXPORT int prte_iof_base_write_output(const pmix_proc_t *name, prte_iof_tag
                                            const unsigned char *data, int numbytes,
                                            prte_iof_write_event_t *channel);
 PRTE_EXPORT void prte_iof_base_write_handler(int fd, short event, void *cbdata);
+
+/* Re-base a queued chunk after a short write: discard the "num_written"
+ * bytes that made it out and slide the remainder to the front of the
+ * chunk so the next write resumes where this one stopped. Every write
+ * handler that re-queues a partially written chunk must call this - both
+ * halves matter, and adjusting the data without the count re-sends the
+ * tail of the chunk on every retry (see the comment in the function).
+ */
+PRTE_EXPORT void prte_iof_base_adjust_short_write(prte_iof_write_output_t *output,
+                                                  int num_written);
 
 /* Emit "string" as though it were output from "source" on the given channel.
  * NOTE: this takes ownership of "string" - it must be a heap allocation, and
