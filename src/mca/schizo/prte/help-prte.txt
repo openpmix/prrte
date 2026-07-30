@@ -147,9 +147,6 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | "--system-server"    | Start the DVM as the system server            |
 +----------------------+-----------------------------------------------+
-| "--tmpdir <dir>"     | Set the filesystem root for the session       |
-|                      | directory tree                                |
-+----------------------+-----------------------------------------------+
 | "--tune <arg0>"      | File(s) containing MCA params for tuning DVM  |
 |                      | operations                                    |
 +----------------------+-----------------------------------------------+
@@ -288,13 +285,6 @@ for this option is to ensure that the daemon output streams (i.e.,
 stdout and stderr) remain open after launch, thus allowing the user to
 see any daemon-generated error messages. Otherwise, the daemon will
 "daemonize" itself upon launch, thereby closing its output streams.
-#
-[tmpdir]
-
-Define the root location for the PRRTE session directory tree
-
-See the "Session directory" HTML documentation for additional details
-about the PRRTE session directory.
 #
 [prefix]
 
