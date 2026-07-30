@@ -44,7 +44,7 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | *(no file here)* | `build.sh` also compiles [`examples/dynamic.c`](../../examples/dynamic.c) from the main tree as `dynamic` — the only client in this harness that calls `PMIx_Spawn`, and so the only way to get a **parent/child job pair**. See §11. |
 | `dataserver.c` | A bare PMIx client for the publish/lookup service (`dataserver` in the install): publish/lookup/lookupwait/lookup2/unpublish. Drives `src/runtime/data_server`. See §13. |
 | `jobinfo.c` | A bare PMIx client for the **direct-modex** paths (`jobinfo` in the install): `publish`/`fetch`/`fetchkey`. Drives `src/prted/pmix/pmix_server_fence.c` from a daemon that hosts none of the target job's procs. |
-| `proctable.c` | A bare PMIx client for the **proc-table queries** (`proctable` in the install): `procs`/`localprocs`. Those are the only callers of `prte_pmix_convert_state()`, and the local-vs-global proc-table split has no meaning on one host. Drives `src/pmix`. |
+| `proctable.c` | A bare PMIx client for the **proc-table and server-URI queries** (`proctable` in the install): `procs`/`localprocs`/`serveruri`. Those are the only callers of `prte_pmix_convert_state()`, and the local-vs-global proc-table split has no meaning on one host. Drives `src/pmix`. |
 | `slowcat.c` | A deliberately **slow** stdin reader (`slowcat` in the install, no PMIx dependency): copies stdin to a file in small reads with a pause between them, so the daemon feeding it keeps hitting *partial* writes. That is the only way to reach the iof short-write path. |
 | `fake-slurm.py` | A stand-in SLURM control plane (`sbatch`/`scontrol`/`scancel`) so `ras/slurm`'s elastic modify surface can be exercised. See §12. |
 
@@ -459,6 +459,40 @@ is `proctable`, and it asserts:
 - `PMIX_QUERY_LOCAL_PROC_TABLE` returns *some but not all* of a job's procs.
   On one host "local" and "all" are the same set, so this case cannot exist
   there.
+- **every daemon serves every node's `PMIX_SERVER_URI`**. The consumer here
+  is a **tool**, not a daemon — daemons reach each other over the RML and
+  never form PMIx connections to one another; see `examples/tool.c --uri
+  <nodename>`. Each daemon ships its own server URI to the master in its
+  `PRTED_CALLBACK` rollup, and the master puts the whole set into the
+  `WIREUP` xcast alongside the nidmap, so the answer does not depend on
+  which daemon the tool attached to. (Before that the query asked for a key
+  nobody published and answered `NOT_FOUND` for every node but the one being
+  asked — the producing half of commit `6e481fbb95` was never written.)
+
+  The case asks a **non-master** daemon about three other nodes — the case
+  that needs the xcast rather than just the rollup — and requires three
+  **distinct** URIs, so an implementation that echoed the local server back
+  would not pass. It then checks the master and a non-master agree on a
+  third node's URI. An unknown node must come back with a specific status,
+  never the generic `PMIX_ERROR` that the wrong-direction conversion used to
+  manufacture out of every failure on this path.
+
+- a served URI is **actually reachable**. With `--prtemca
+  pmix_remote_connections 1` the servers bind a routable interface, and the
+  URI served for a *remote* node must carry that node's own address — not
+  loopback, and not the master's. Off (the default) every server binds
+  loopback, so the answer is truthful but only usable by a tool on that
+  node. This is the assertion that says the feature is worth having, and one
+  host cannot make it.
+
+- the URIs **follow the DVM across a grow and a shrink**. `vm_ready()` runs
+  on every `VM_READY` and re-sends the whole set, so a grow redistributes
+  with no code of its own — asserted rather than assumed. A shrink needs
+  nothing: the query resolves hostname → node → `node->daemon` and a shrink
+  NULLs that, so a departed node cannot be answered for at all. The case
+  shrinks node3 and requires its URI to stop being served while node2's is
+  unaffected, so that stays true rather than being an accident of the
+  current teardown order.
 
 **The daemon body and the PMIx server host module (`src/prted`,
 `test_prted`)**: `src/prted` is where the DVM actually lives, and almost

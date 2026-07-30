@@ -30,7 +30,15 @@ behind almost every DVM-wide action:
 
 - The `plm`/`state` code broadcasts launch messages, wireup (nidmap), and
   DAEMON commands with `prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, …)` /
-  `PRTE_RML_TAG_WIREUP`.
+  `PRTE_RML_TAG_WIREUP`. The receive side of the wireup lives here, in
+  `process_wireup()` (`direct/grpcomm_direct_xcast.c`): after the nidmap it
+  reads a **three-field record per daemon** — name, `PMIX_PROC_URI`
+  (RML contact info), `PMIX_SERVER_URI` (that node's PMIx server
+  rendezvous, redistributed only so any daemon can answer a tool's query;
+  PRRTE never connects to it). The sender is `vm_ready()` in `state/dvm`.
+  The loop skips storing what it already knows, so mind the invariant:
+  **every field of a record must be unpacked before any `continue`**, or
+  the next iteration reads the leftover string as a `pmix_proc_t`.
 - The PMIx server shim satisfies `PMIx_Fence` /
   `PMIx_server_register_resources` for local clients via
   `prte_grpcomm.fence(...)` (see `src/prted/pmix/pmix_server_fence.c`).
