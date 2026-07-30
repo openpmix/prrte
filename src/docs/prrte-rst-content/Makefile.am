@@ -67,6 +67,8 @@ dist_rst_DATA = \
     deprecated-output-directory.rst \
     deprecated-output-filename.rst \
     deprecated-report-bindings.rst \
+    deprecated-report-child-jobs-separately.rst \
+    deprecated-show-progress.rst \
     deprecated-tag-output.rst \
     deprecated-timestamp-output.rst \
     deprecated-xml.rst \

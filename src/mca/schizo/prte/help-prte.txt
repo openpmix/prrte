@@ -92,9 +92,6 @@ option to the help request as "--help <option>".
 | "--prtemca <key>     | Pass PRTE MCA parameters to the DVM           |
 | <value>"             |                                               |
 +----------------------+-----------------------------------------------+
-| "--show-progress"    | Output a brief periodic report on DVM startup |
-|                      | progress                                      |
-+----------------------+-----------------------------------------------+
 | "-x                  | Export an environment variable, optionally    |
 | <var_name>[=value]"  | specifying a value                            |
 +----------------------+-----------------------------------------------+
@@ -367,10 +364,6 @@ example:
 
 * "-x foo*" exports all current environmental variables starting with
   "foo".
-#
-[show-progress]
-
-Output a brief periodic report on DVM startup progress
 #
 [hostfile]
 

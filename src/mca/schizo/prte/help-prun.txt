@@ -94,9 +94,6 @@ option to the help request as "--help <option>".
 |                      | include "NOCOPY" (do not copy the output to   |
 |                      | the stdout/stderr streams).                   |
 +----------------------+-----------------------------------------------+
-| "--report-child-     | Return the exit status of the primary job     |
-| jobs-separately"     | only                                          |
-+----------------------+-----------------------------------------------+
 | "--xterm <ranks>"    | Create a new xterm window and display output  |
 |                      | from the specified ranks there                |
 +----------------------+-----------------------------------------------+
@@ -194,9 +191,6 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | "--set-cwd-to-       | Set the working directory of the started      |
 | session-dir"         | processes to their session directory          |
-+----------------------+-----------------------------------------------+
-| "--show-progress"    | Output a brief periodic report on launch      |
-|                      | progress                                      |
 +----------------------+-----------------------------------------------+
 | "--wd <dir>"         | Synonym for "--wdir"                          |
 +----------------------+-----------------------------------------------+

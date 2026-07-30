@@ -119,7 +119,6 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_NOPREFIX, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_FWD_SIGNALS, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_RUN_AS_ROOT, PMIX_ARG_NONE),
-    PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_CHILD_SEP, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_HOMO_NODES, PMIX_ARG_NONE),
 
     /* debug options */
@@ -161,7 +160,6 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_WDIR, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("wd", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_PATH, PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE(PRTE_CLI_SHOW_PROGRESS, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_PSET, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_HOSTFILE, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("machinefile", PMIX_ARG_REQD),
@@ -220,6 +218,8 @@ static struct option ompioptions[] = {
     // deprecated options
     PMIX_OPTION_DEFINE("mca", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("gmca", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_SHOW_PROGRESS, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_CHILD_SEP, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("xml", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("tag-output", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("timestamp-output", PMIX_ARG_NONE),
@@ -560,10 +560,20 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                                                 warn);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
-        /* --show-progress -> --runtime-options show-progress */
+        /* --show-progress -> --runtime-options show-progress, and
+         * --report-child-jobs-separately -> the runtime option of the same
+         * name.  The prte personality performs the same two conversions;
+         * without the second one here, the standalone flag reached nothing
+         * at all. */
         else if(0 == strcmp(option, PRTE_CLI_SHOW_PROGRESS)) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_RTOS, PRTE_CLI_SHOW_PROGRESS,
+                                                warn);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+        }
+        else if(0 == strcmp(option, PRTE_CLI_REPORT_CHILD_SEP)) {
+            rc = prte_schizo_base_add_directive(results, option,
+                                                PRTE_CLI_RTOS, PRTE_CLI_REPORT_CHILD_SEP,
                                                 warn);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }

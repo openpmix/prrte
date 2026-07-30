@@ -96,9 +96,6 @@ option to the help request as "--help <option>".
 | "--output <arg0>"    | Comma-delimited list of options that control  |
 |                      | how output is generated.                      |
 +----------------------+-----------------------------------------------+
-| "--report-child-     | Return the exit status of the primary job     |
-| jobs-separately"     | only                                          |
-+----------------------+-----------------------------------------------+
 | "--xterm <ranks>"    | Create a new xterm window for each of the     |
 |                      | comma-delimited ranges of application process |
 |                      | ranks                                         |
@@ -201,9 +198,6 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | "--set-cwd-to-       | Set the working directory of the started      |
 | session-dir"         | processes to their session directory          |
-+----------------------+-----------------------------------------------+
-| "--show-progress"    | Output a brief periodic report on launch      |
-|                      | progress                                      |
 +----------------------+-----------------------------------------------+
 | "--wd <dir>"         | Synonym for "--wdir"                          |
 +----------------------+-----------------------------------------------+
@@ -587,10 +581,6 @@ protection by providing one of the following:
 
 Again, we recommend this only be done if absolutely necessary.
 #
-[report-child-jobs-separately]
-
-Return the exit status of the primary job only
-#
 [timeout]
 
 Timeout the job if execution time exceeds the specified number of
@@ -679,10 +669,6 @@ directory
 [path]
 
 Path to be used to look for executables to start processes
-#
-[show-progress]
-
-Output a brief periodic report on launch progress
 #
 [pset]
 
