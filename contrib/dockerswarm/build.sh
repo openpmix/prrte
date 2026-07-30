@@ -55,7 +55,9 @@
 # there is nothing to clean.
 #
 #   --distclean      force it
-#   --no-distclean   skip it (only safe if the tree really is clean)
+#   --no-distclean   skip it -- an assertion that the tree really is clean.
+#                    If it is not, this script STOPS rather than building a
+#                    tree it has just been told to poison.
 #
 # See AGENTS.md, "When a distclean is actually needed".
 #
@@ -187,8 +189,22 @@ prep_srcdir() {
         find "$root/src" -name '*.lo' -delete 2>/dev/null || true
         find "$root/src" -name '.libs' -type d -exec rm -rf {} + 2>/dev/null || true
     elif srcdir_has_intree; then
-        echo ">>> WARNING: --no-distclean, but the source tree holds an in-tree" \
-             "build; the out-of-tree build may pick up its objects via VPATH"
+        # Refuse rather than warn.  --no-distclean asserts "the tree really is
+        # clean"; it is not, so the assertion is false and proceeding builds
+        # exactly the poisoned tree everything above exists to prevent.  The
+        # cheap failure is stopping here.  The expensive one is a build that
+        # succeeds -- same platform, different --with-pmix -- and quietly
+        # tests a library nobody chose, with nothing in the output to say so.
+        # A warning does not stop that, because the run continues and the next
+        # thing anyone reads is the test results.
+        echo ">>> ERROR: --no-distclean, but the source tree holds an in-tree" \
+             "build." >&2
+        echo ">>>        VPATH=srcdir means this build would link objects out" \
+             "of the SOURCE tree, and pick up its stale prte_config.h ahead of" \
+             "the one configure just wrote." >&2
+        echo ">>>        Drop --no-distclean, or clean the tree yourself" \
+             "(make distclean at $root)." >&2
+        exit 2
     fi
 
     if [ ! -x "$root/configure" ] || [ "$root/configure.ac" -nt "$root/configure" ]; then

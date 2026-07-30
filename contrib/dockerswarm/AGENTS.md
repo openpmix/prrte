@@ -103,8 +103,22 @@ bites:
    incremental rebuild.
 
 So `build.sh` distcleans whenever it finds in-tree artifacts, and says
-so. `--no-distclean` skips it (only safe if the tree really is clean);
-`--distclean` forces it.
+so. `--distclean` forces it. `--no-distclean` skips the *detection* — it
+is an assertion that the tree really is clean, and if it is not,
+`build.sh` **stops with an error** rather than building the tree it has
+just been told to poison. That is deliberate: it used to warn and carry
+on, but nobody reads a warning scrolled off the top of a build whose test
+results come out looking fine. The failure mode it was hiding is the
+quiet one — same platform, different `--with-pmix`, a suite that passes
+against a library nobody chose.
+
+Note what this means for who decides. It is tempting to move the call to
+the caller entirely ("the person running it knows whether a distclean is
+needed"), and that is wrong: the trigger is *"does the source tree hold
+an in-tree build right now"*, which is a property of the tree, not of
+your intent. Another worktree, another agent, or your own previous
+session may have put one there. `build.sh` can look; you can only guess,
+and the two ways of being wrong cost wildly different amounts.
 
 **Do not try to narrow this to "only when configure has to run."** It is
 the obvious optimization — an incremental out-of-tree build already has
@@ -134,11 +148,38 @@ whole tree first. That failure is easy to misread, because a distcleaned
 tree does not announce itself — `make check` just says *"No rule to make
 target `check'"* and `make` at the root exits 0 having done nothing.
 
-If you run the host-side suites often, **stop keeping an in-tree build**:
-build the host side out of tree too (`./build.sh macos`, which installs
-into `vpath-macos/install`) and run `make check` from `vpath-macos`. Then
-the source tree stays pristine, both builds coexist exactly as this
-harness intends, and there is never anything to clean.
+### Build both sides out of tree — that is the intended workflow
+
+**Do not keep an in-tree build.** Build the host side out of tree too and
+the whole problem above stops existing:
+
+```sh
+./build.sh macos                    # -> <repo>/vpath-macos, install in vpath-macos/install
+make -C vpath-macos check           # unit tests
+make -C vpath-macos/test/offline check-offline
+./build.sh                          # -> /opt/prte/vpath-linux in the volume
+```
+
+Then the source tree is never configured at all: `srcdir_has_intree` is
+never true, the distclean never fires, nothing you built gets destroyed,
+and the tree is always ready to hand to the swarm without a reconfigure
+first. Both builds coexist from the same pristine sources, which is
+exactly what this harness was built to do.
+
+The habit worth forming is: **the source tree is sources.** If you find
+yourself running `./configure` or `make` at the repo root, you are
+setting up the next distclean and the next twenty-minute rebuild. This
+does not conflict with the top-level
+[`AGENTS.md`](../../AGENTS.md) golden rule about building with `make`
+from the repository root — that rule is about not hand-compiling single
+files or building from deep inside a subdirectory. Run `make` from the
+top of the *build* directory and it is satisfied; VPATH is which
+directory that is, not a shortcut around the build system.
+
+The trap to know about if you *do* end up with an in-tree build that gets
+cleaned: a distcleaned tree does not announce itself. `make check` says
+*"No rule to make target `check'"* and a root-level `make` exits 0 having
+done nothing.
 
 ## 3. Prerequisites
 
@@ -156,16 +197,23 @@ harness intends, and there is never anything to clean.
 # from this directory (contrib/dockerswarm/)
 
 # ---- Linux swarm ----
-./build.sh                 # autogen (+ distclean only if a VPATH configure
-                           #   must run), build image, build PRRTE into the
-                           #   shared volume from your live tree
+./build.sh                 # autogen (+ distclean if the source tree holds an
+                           #   in-tree build -- see §2), build image, build
+                           #   PRRTE into the shared volume from your live tree
 docker compose up -d       # start prte-node1 .. prte-node10
 ./run-tests.sh linux       # full suite: prterun, elastic grow/shrink, relay
 
 # ---- native macOS (single host) ----
 ./build.sh macos           # native VPATH build into <repo>/vpath-macos
 ./run-tests.sh macos       # build + single-host launch smoke
+
+# ---- and run the host-side suites from that build, not the source tree ----
+make -C ../../vpath-macos check
+make -C ../../vpath-macos/test/offline check-offline
 ```
+
+Keeping the host side out of tree as well is the intended workflow, not
+an optimization for heavy users — see §2, "Build both sides out of tree".
 
 **On macOS, say which dependencies to build against.** Unlike the container,
 this host is whatever you have installed, and the two knobs are:
