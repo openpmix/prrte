@@ -612,6 +612,20 @@ moveon:
                              "%s plm:base:receive - error on launch: %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), rc));
 
+        /* Capture the requester's room number *before* we dispose of the job
+         * object below - it lives on that object, and it is the only handle
+         * the requester has on this request. Without it,
+         * pmix_server_launch_resp() cannot match the response to anything and
+         * simply drops it, leaving the requester (e.g., prun) waiting for a
+         * completion that will never come. We may have no job object at all
+         * here - e.g., if the request failed to unpack. */
+        found = false;
+        if (NULL != jdata &&
+            prte_get_attribute(&jdata->attributes, PRTE_JOB_ROOM_NUM,
+                               (void **) &rmptr, PMIX_INT)) {
+            found = true;
+        }
+
         /* release the launch proxy procID if we retrieved one */
         if (NULL != nptr) {
             PMIX_PROC_RELEASE(nptr);
@@ -630,8 +644,13 @@ moveon:
         /* setup the response */
         PMIX_DATA_BUFFER_CREATE(answer);
 
-        /* pack the error code to be returned */
-        rc = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_INT32);
+        /* Pack the error code to be returned. The requester hands this
+         * straight to PMIx (see pmix_server_notify_spawn), and every other
+         * producer of a spawn response passes a PMIx status, so convert out
+         * of PRRTE's numbering scheme here - the two overlap, so an
+         * unconverted code arrives at the tool as some other, real error. */
+        ret = prte_pmix_convert_rc(rc);
+        rc = PMIx_Data_pack(NULL, answer, &ret, 1, PMIX_INT32);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
         }
@@ -643,10 +662,8 @@ moveon:
             PMIX_ERROR_LOG(rc);
         }
 
-        /* pack the room number of the request - note that we may not have a
-         * job object at all here (e.g., if it failed to unpack) */
-        if (NULL != jdata &&
-            prte_get_attribute(&jdata->attributes, PRTE_JOB_ROOM_NUM, (void **) &rmptr, PMIX_INT)) {
+        /* pack the room number of the request, if we were able to recover it */
+        if (found) {
             rc = PMIx_Data_pack(NULL, answer, &room, 1, PMIX_INT);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
