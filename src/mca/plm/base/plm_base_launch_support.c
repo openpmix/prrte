@@ -1807,11 +1807,6 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
         pmix_argv_append(argc, argv, "--uniform-nodes");
     }
 
-    /* the following is not an mca param */
-    if (NULL != getenv("PRTE_TEST_PRTED_SUICIDE")) {
-        pmix_argv_append(argc, argv, "--test-suicide");
-    }
-
     /* tell the orted what ESS component to use */
     if (NULL != ess) {
         pmix_argv_append(argc, argv, "--prtemca");

@@ -246,9 +246,6 @@ Debug options
 * ``--spawn-timeout <seconds>``: Timeout the job if spawn takes more
   than the specified number of seconds.
 
-* ``--test-suicide <seconds>``: Suicide instead of clean abort after
-  delay.
-
 * ``--timeout <seconds>``: Timeout the job after the specified number
   of seconds.
 

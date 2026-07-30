@@ -51,9 +51,6 @@ option to the help request as "--help <option>".
 | "--leave-session-    | Do not daemonize the "prted"                  |
 | attached"            |                                               |
 +----------------------+-----------------------------------------------+
-| "--test-suicide      | Suicide instead of clean abort after          |
-| <arg0>"              | specified delay                               |
-+----------------------+-----------------------------------------------+
 
 +----------------------+-----------------------------------------------+
 |                      | DVM Options                                   |
@@ -124,11 +121,6 @@ The allocation contains multiple topologies, so optimize the launch for
 that scenario. For example, the scheduler could be allocating individual
 CPUs instead of entire nodes, thus effectively creating different topologies
 (due to differing allocated CPUs) on each node.
-#
-[test-suicide]
-
-Test DVM cleanup upon daemon failure by having one daemon suicide
-after delay
 #
 [system-server]
 
