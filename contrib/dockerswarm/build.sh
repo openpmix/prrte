@@ -265,6 +265,16 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/dataserver.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
+            # slowcat: a deliberately slow stdin reader (no PMIx at all).  The
+            # stdin bugs in iof live in the back-pressure path, and a normal
+            # "cat" drains its pipe as fast as the daemon fills it, so the
+            # daemon short-write path is never taken.  slowcat keeps the pipe
+            # saturated so every write the daemon attempts is a partial one.
+            # (No apostrophes here: see the note further down.)
+            echo ">>>> slowcat (slow stdin reader) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/slowcat \
+                /prrte-src/contrib/dockerswarm/slowcat.c
+
             # examples/dynamic.c is the PMIx_Spawn example shipped in this
             # tree: rank 0 spawns "client" from its cwd as a CHILD JOB.  It
             # is the only way this harness can produce a parent/child job

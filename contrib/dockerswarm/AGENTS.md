@@ -43,6 +43,7 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | `elastic.c` | The elastic test client (`elastic` in the install): issues a PMIx allocation request and waits for the phase-two completion event. |
 | *(no file here)* | `build.sh` also compiles [`examples/dynamic.c`](../../examples/dynamic.c) from the main tree as `dynamic` — the only client in this harness that calls `PMIx_Spawn`, and so the only way to get a **parent/child job pair**. See §11. |
 | `dataserver.c` | A bare PMIx client for the publish/lookup service (`dataserver` in the install): publish/lookup/lookupwait/lookup2/unpublish. Drives `src/runtime/data_server`. See §13. |
+| `slowcat.c` | A deliberately **slow** stdin reader (`slowcat` in the install, no PMIx dependency): copies stdin to a file in small reads with a pause between them, so the daemon feeding it keeps hitting *partial* writes. That is the only way to reach the iof short-write path. |
 | `fake-slurm.py` | A stand-in SLURM control plane (`sbatch`/`scontrol`/`scancel`) so `ras/slurm`'s elastic modify surface can be exercised. See §12. |
 
 ## 2. How it works
@@ -274,6 +275,24 @@ locally, `push_stdin` writes straight into the proc's sink and the wire format
 is never exercised. The payload is deliberately far larger than the 4096-byte
 read fragment and the 8192-byte write chunk. A companion case pipes a short
 line with `--stdin all` to check the wildcard/xcast delivery.
+
+**Slow-reader stdin (`iof`)**: the same payload again, but read by `slowcat`
+instead of `cat` — and this is the case that finds real bugs, because volume
+alone does not reach the interesting code. `cat` drains its stdin pipe as
+fast as the daemon can fill it, so the daemon's non-blocking `write(2)`
+essentially always completes in full and the **short-write** path is never
+taken. `slowcat` keeps the pipe saturated, so once the input passes the pipe
+capacity (64 KB on Linux) nearly every write is partial. That is the state
+in which [#2579](https://github.com/openpmix/prrte/issues/2579) lived for
+years behind a passing 256 KB `cat` test: re-basing a queued chunk without
+also decrementing its count re-sent the tail of the chunk on every retry, so
+the application received its input **duplicated** — measured here as 354 KB
+in, 37 MB out, and then a hang, since the backlog could never drain. The
+assertion is therefore on the byte count first (`SLOWCAT-BYTES` must equal
+what was piped in) and the md5 second. It runs twice, once with the rank on
+node2 and once on node1, because the HNP and the daemon carry **separate**
+copies of the write handler — the HNP copy was fixed upstream in 2025 and
+the daemon copy was missed.
 
 **Grow** (`elastic grow node2:2,node3:2`): phase-1 `PMIX_SUCCESS`, then phase-2
 `PMIX_DVM_IS_READY`, and `prted` now running on node2 and node3.
