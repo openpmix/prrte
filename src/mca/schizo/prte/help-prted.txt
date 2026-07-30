@@ -168,8 +168,6 @@ Self-construct the DVM based on a configuration file
 [pubsub-server]
 
 Contact information for external PRRTE publish/lookup data server
-
-%s
 #
 [cwd]
 
