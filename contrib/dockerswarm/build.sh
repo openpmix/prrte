@@ -18,6 +18,10 @@
 #   ./build.sh macos    # build natively on this host into <repo>/vpath-macos
 #   ./build.sh image    # (re)build just the base container image
 #
+# Two clones on one host: set PRTE_SWARM (see below) in the whole shell, and
+# each gets its own containers, volume, and network.  The macOS build is
+# already per-clone -- it lives in <repo>/vpath-macos.
+#
 # Distcleaning the source tree
 # ----------------------------
 # An out-of-tree build cannot share a source tree with an in-tree build: VPATH
@@ -66,8 +70,32 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(git -C "$here" rev-parse --show-toplevel)"
 
+# Which swarm this is.  Every global name the harness claims -- the compose
+# project, the ten container names, the build volume, the docker network --
+# is derived from it, so two clones on one host can each drive their own
+# swarm without touching the other's containers, install, or /tmp.  Unset, it
+# is "prte" and every name is what it has always been.  Set it for the whole
+# shell, because `docker compose` interpolates docker-compose.yml itself:
+#
+#   export PRTE_SWARM=alt
+#   ./build.sh && docker compose up -d && ./run-tests.sh linux
+#
+# The image is deliberately NOT per-swarm (see docker-compose.yml).
+PRTE_SWARM="${PRTE_SWARM:-prte}"
+# Rejected here rather than left to docker.  Filtering through LC_ALL=C tr,
+# not a shell [a-z] range: in a UTF-8 locale that range follows collation
+# order and matches 'B', so the obvious form of this test accepts names
+# docker then refuses.  Same reason the leading-character check is a literal
+# set.
+case "$PRTE_SWARM" in [_-]*) PRTE_SWARM="" ;; esac
+if [ -z "$PRTE_SWARM" ] || \
+   [ "$PRTE_SWARM" != "$(printf '%s' "$PRTE_SWARM" | LC_ALL=C tr -cd 'a-z0-9_-')" ]; then
+    echo "PRTE_SWARM must be lowercase [a-z0-9_-] and start with a letter or digit" >&2
+    exit 2
+fi
+
 IMAGE="${IMAGE:-prte-swarm:latest}"
-VOLUME="${VOLUME:-prte-build}"
+VOLUME="${VOLUME:-$PRTE_SWARM-build}"
 PMIX_REF="${PMIX_REF:-master}"          # baked-image PMIx branch
 PMIX_REPO="${PMIX_REPO:-https://github.com/openpmix/openpmix.git}"
 PMIX_SRC="${PMIX_SRC:-}"                # optional openpmix checkout to build
@@ -372,7 +400,17 @@ build_linux() {
             echo ">>>> done: install in /opt/prte/prte"
         '
     echo ">>> Linux build complete."
-    echo ">>> next: docker compose up -d && ./run-tests.sh linux"
+    if [ "$PRTE_SWARM" = prte ]; then
+        echo ">>> next: docker compose up -d && ./run-tests.sh linux"
+    else
+        # Say it with the variable: compose reads PRTE_SWARM from the
+        # environment of the compose command, and a `docker compose up -d`
+        # without it brings up the DEFAULT swarm against the default volume,
+        # leaving this build sitting in $VOLUME unused.
+        echo ">>> next: PRTE_SWARM=$PRTE_SWARM docker compose up -d &&" \
+             "PRTE_SWARM=$PRTE_SWARM ./run-tests.sh linux"
+        echo ">>>       (swarm '$PRTE_SWARM': containers $PRTE_SWARM-node1..10, volume $VOLUME)"
+    fi
 }
 
 # --- macOS build (native, on this host) -------------------------------------
