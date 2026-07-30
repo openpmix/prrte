@@ -398,6 +398,13 @@ Printout PID on stdout [-], stderr [+], or a file [anything else]
 
 Printout URI on stdout [-], stderr [+], or a file [anything else]
 #
+[forward-signals]
+
+Comma-delimited list of additional signals (names or integers) to
+forward to application processes ("none" = forward nothing). Signals
+provided by default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT,
+SIGALRM, and SIGCONT.
+#
 [map-by]
 
 #include#help-mapby.txt#map-by

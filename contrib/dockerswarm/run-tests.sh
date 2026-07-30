@@ -1690,10 +1690,12 @@ test_prted() {
         bad "could not start a DVM for the job-scoped signal test"
     else
         # SIGUSR1 is in the default forwarded-signal set (ess_base_frame.c),
-        # so no --forward-signals is needed -- and prun would reject it: the
-        # option is only in the prte/prterun tables.
-        PRUN_BG /tmp/jobA.out '--host node2:1 -n 1 sleep 120'
-        PRUN_BG /tmp/jobB.out '--host node2:1 -n 1 sleep 120'
+        # but name it explicitly: --forward-signals used to be documented in
+        # help-prun.txt and missing from prunoptions, so prun rejected the
+        # very option its own help advertised (issue #2569).  Naming the
+        # signal here keeps a live check on that path.
+        PRUN_BG /tmp/jobA.out '--forward-signals SIGUSR1 --host node2:1 -n 1 sleep 120'
+        PRUN_BG /tmp/jobB.out '--forward-signals SIGUSR1 --host node2:1 -n 1 sleep 120'
         sleep 10
         n=$(ON 2 'pgrep -c -x sleep' 2>/dev/null | tr -d ' \r')
         if [ "$n" = 2 ]; then
