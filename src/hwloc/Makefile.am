@@ -20,5 +20,4 @@ headers += \
 
 libprrte_la_SOURCES += \
         hwloc/hwloc.c \
-        hwloc/hwloc_base_util.c \
-        hwloc/hwloc_base_maffinity.c
+        hwloc/hwloc_base_util.c

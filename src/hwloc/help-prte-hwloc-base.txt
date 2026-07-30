@@ -1,6 +1,6 @@
 # -*- text -*-
 #
-# Copyright (c) 2025      Nanook Consulting  All rights reserved.
+# Copyright (c) 2025-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -9,17 +9,6 @@
 #
 # This is the US/English general help file for PRTE's hwloc support.
 #
-[mbind failure]
-
-PRRTE failed to bind internal memory to a specific NUMA node.  This
-message will only be reported at most once per process.
-
-   Local host: %s
-   PID:        %d
-   File:       %s:%d
-   Message:    %s
-   Severity:   %s
-#
 [invalid binding_policy]
 
 The specified %s policy is not recognized:
@@ -27,14 +16,6 @@ The specified %s policy is not recognized:
    Policy: %s
 
 Please check for a typo or ensure that the option is a supported one.
-#
-[obj-idx-failed]
-
-PRRTE failed to find a cache of a specified type.  This is a highly
-unusual error; it may indicate a system configuration error.  This
-additional information may be of help:
-
-   Message:     %s
 #
 [bad-processor-type]
 
@@ -85,14 +66,15 @@ for us to report in a string. There will be no impact to your application
 so we will continue but will not be able to output the binding locations.
 #
 [unfound-cpu]
-The CPU list provided on your cmd line contains at least one ID that was
-not found:
+The CPU list provided on your cmd line contains at least one entry that
+could not be resolved:
 
   CPU list:  %s
-  CPU ID:    %u (%s)
+  Entry:     %s
   CPU type:  %s
 
-The most common reason for this is specifying the CPU list in terms of
-HWTs while failing to request that we treat HWTs as independent CPUs
-(which means we default to treating the CPU IDs as cores).
+Each entry must be a logical CPU index, or a "low-high" range of them.
+The most common reason for a failure here is specifying the CPU list in
+terms of HWTs while failing to request that we treat HWTs as independent
+CPUs (which means we default to treating the CPU IDs as cores).
 Please correct your input and try again.

@@ -209,9 +209,8 @@ void prte_odls_base_prepare_binding(prte_odls_spawn_caddy_t *cd)
         if (report) {
             report_binding(jobdat, child->name.rank, cd->bind_cpuset);
         }
-        /* precompute the memory-binding policy (mirrors
-           prte_hwloc_base_set_process_membind_policy) so the child need not
-           read any MCA state */
+        /* precompute the memory-binding policy from prte_hwloc_base_map so
+           the child need not read any MCA state */
         cd->do_membind = true;
         switch (prte_hwloc_base_map) {
         case PRTE_HWLOC_BASE_MAP_LOCAL_ONLY:
