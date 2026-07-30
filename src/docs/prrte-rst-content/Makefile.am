@@ -21,6 +21,8 @@ rstdir = $(prtedatadir)/rst/prrte-rst-content
 dist_rst_DATA = \
     cli-add-host.rst \
     cli-add-hostfile.rst \
+    cli-alloc-id.rst \
+    cli-alloc-refid.rst \
     cli-allow-run-as-root.rst \
     cli-app-prefix.rst \
     cli-append-env.rst \
@@ -48,6 +50,7 @@ dist_rst_DATA = \
     cli-no-app-prefix.rst \
     cli-rank-by.rst \
     cli-runtime-options.rst \
+    cli-session-id.rst \
     cli-set-env.rst \
     cli-stream-buffering.rst \
     cli-tune.rst \

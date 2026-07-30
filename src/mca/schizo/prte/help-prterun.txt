@@ -116,13 +116,13 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | Option               | Description                                   |
 |======================|===============================================|
-| "--mapby <type>" |   | Mapping Policy for job                        |
+| "--mapby <type>" |   | Mapping Policy for job or for individual app  |
 | "--map-by <type>"    |                                               |
 +----------------------+-----------------------------------------------+
-| "--rankby <type>" |  | Ranking Policy for job                        |
+| "--rankby <type>" |  | Ranking Policy for job or for individual app  |
 | "--rank-by <type>"   |                                               |
 +----------------------+-----------------------------------------------+
-| "--bindto <type>" |  | Binding policy for job.                       |
+| "--bindto <type>" |  | Binding policy for job or for individual app  |
 | "--bind-to <type>"   |                                               |
 +----------------------+-----------------------------------------------+
 
@@ -236,6 +236,16 @@ option to the help request as "--help <option>".
 | "--gpu-support <val>"| Direct application to either enable (true) or |
 |                      | disable (false) its internal library's GPU    |
 |                      | support                                       |
++----------------------+-----------------------------------------------+
+| "--alloc-id <val>"   | ID assigned by the host environment to the    |
+|                      | allocation to be used for mapping the job     |
++----------------------+-----------------------------------------------+
+| "--alloc-refid <val>"| Reference ID assigned by the user when the    |
+|                      | allocation to be used for mapping the job     |
+|                      | was requested                                 |
++----------------------+-----------------------------------------------+
+| "--session-id <val>" | ID of the session whose allocation is to      |
+|                      | be used for mapping the job                   |
 +----------------------+-----------------------------------------------+
 
 +----------------------+-----------------------------------------------+
@@ -549,6 +559,30 @@ the value.
 Example: "--prepend-envar LD_LIBRARY_PATH[:] foo/lib" will result in:
 
 LD_LIBRARY_PATH=foo/lib:$LD_LIBRARY_PATH
+#
+[gpu-support]
+
+Direct application to either enable (true) or disable (false) its internal
+library's GPU support
+
+#
+[alloc-id]
+
+ID of the allocation to be used for mapping the job, as assigned to
+that allocation by the host environment (e.g., a scheduler).
+
+#
+[alloc-refid]
+
+ID of the allocation to be used for mapping the job, as assigned to
+that allocation by the user at the time the allocation was requested.
+
+#
+[session-id]
+
+Numerical ID of the session whose allocation is to be used for
+mapping the job.
+
 #
 [forward-signals]
 

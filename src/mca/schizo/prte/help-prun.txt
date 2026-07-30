@@ -230,6 +230,16 @@ option to the help request as "--help <option>".
 |                      | disable (false) its internal library's GPU    |
 |                      | support                                       |
 +----------------------+-----------------------------------------------+
+| "--alloc-id <val>"   | ID assigned by the host environment to the    |
+|                      | allocation to be used for mapping the job     |
++----------------------+-----------------------------------------------+
+| "--alloc-refid <val>"| Reference ID assigned by the user when the    |
+|                      | allocation to be used for mapping the job     |
+|                      | was requested                                 |
++----------------------+-----------------------------------------------+
+| "--session-id <val>" | ID of the session whose allocation is to      |
+|                      | be used for mapping the job                   |
++----------------------+-----------------------------------------------+
 
 +----------------------+-----------------------------------------------+
 |                      | Specific Options                              |
@@ -351,6 +361,30 @@ the value.
 Example: "--prepend-envar LD_LIBRARY_PATH[:] foo/lib" will result in:
 
 LD_LIBRARY_PATH=foo/lib:$LD_LIBRARY_PATH
+#
+[gpu-support]
+
+Direct application to either enable (true) or disable (false) its internal
+library's GPU support
+
+#
+[alloc-id]
+
+ID of the allocation to be used for mapping the job, as assigned to
+that allocation by the host environment (e.g., a scheduler).
+
+#
+[alloc-refid]
+
+ID of the allocation to be used for mapping the job, as assigned to
+that allocation by the user at the time the allocation was requested.
+
+#
+[session-id]
+
+Numerical ID of the session whose allocation is to be used for
+mapping the job.
+
 #
 [hostfile]
 
