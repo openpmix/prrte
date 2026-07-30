@@ -163,11 +163,6 @@ option to the help request as "--help <option>".
 |                      | context is specified ("key" is the parameter  |
 |                      | name; "value" is the parameter value)         |
 +----------------------+-----------------------------------------------+
-| "--gpmixmca <key>    | Pass global PMIx MCA parameters that are      |
-| <value>"             | applicable to all contexts ("key" is the      |
-|                      | parameter name; "value" is the parameter      |
-|                      | value)                                        |
-+----------------------+-----------------------------------------------+
 | "--app-pmix-prefix <dir>" | Prefix to be used by app procs to look   |
 |                      | for their PMIx installation on remote nodes.  |
 |                      | This is the location of the top-level         |
