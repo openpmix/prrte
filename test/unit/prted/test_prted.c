@@ -427,7 +427,110 @@ static int test_job_info_cache(void)
  * and the value a process would actually end up with after they are
  * applied the way the odls applies them.  The second is the one that
  * matters to a user; the first says where it went wrong when it does.
+ *
+ * Built against a PMIx that predates PMIX_CAP_CLI_ORDER there are no
+ * position stamps to take the order from, and create_app() falls back to
+ * walking the parse result's instances -- which emits every occurrence of
+ * an option at the position of that option's FIRST occurrence.  That is
+ * the documented, correct-as-far-as-it-goes fallback, so the cases it
+ * cannot place are skipped there rather than failed: a build against an
+ * older PMIx still checks everything the fallback does claim to get
+ * right.  What went unchecked is counted and reported, so the reduced
+ * coverage is visible rather than passing silently.
  */
+
+/* The environment directive options, and how many tokens of value each
+ * one carries after it. */
+static const struct {
+    const char *opt;
+    int nvals;
+} envar_opts[] = {
+    {"--set-env", 1},
+    {"--unset-env", 1},
+    {"-x", 1},
+    {"--prepend-env", 2},   /* the variable name, then the value */
+    {"--append-env", 2},
+    {NULL, 0}
+};
+
+/*
+ * Collect the directive options of one app segment -- argv from "start"
+ * up to a ':' or the end -- and return the index the scan stopped at, so
+ * an MPMD command line can be walked segment by segment.  An option's
+ * values are consumed with it: they are values, not options, even when
+ * one happens to be spelled like one.
+ */
+static size_t envar_segment_opts(const char *const *argv, size_t start,
+                                 const char **opts, size_t maxopts,
+                                 size_t *nopts)
+{
+    size_t n, i;
+    int v;
+
+    *nopts = 0;
+    for (n = start; NULL != argv[n];) {
+        if (0 == strcmp(":", argv[n])) {
+            return n + 1;
+        }
+        for (i = 0; NULL != envar_opts[i].opt; i++) {
+            if (0 == strcmp(envar_opts[i].opt, argv[n])) {
+                break;
+            }
+        }
+        if (NULL == envar_opts[i].opt) {
+            /* not a directive - nothing to place */
+            ++n;
+            continue;
+        }
+        if (*nopts < maxopts) {
+            opts[(*nopts)++] = envar_opts[i].opt;
+        }
+        for (v = 0, ++n; v < envar_opts[i].nvals && NULL != argv[n]; v++, n++) {
+            continue;
+        }
+    }
+    return n;
+}
+
+/* Do the occurrences of each option in this sequence already sit
+ * together?  If they do, grouping them onto each option's first
+ * occurrence changes nothing and the instances walk reproduces the
+ * command line; if they do not, only the stamps can place them. */
+static bool envar_opts_contiguous(const char *const *opts, size_t nopts)
+{
+    size_t n, i;
+
+    for (n = 1; n < nopts; n++) {
+        if (0 == strcmp(opts[n], opts[n - 1])) {
+            continue;
+        }
+        /* a different option than the one before it - so this is the
+         * start of a run, and it must be this option's FIRST run */
+        for (i = 0; i < n; i++) {
+            if (0 == strcmp(opts[n], opts[i])) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+/* True when this command line can only be ordered from the stamps: some
+ * directive option recurs after a different one intervened.  Checked per
+ * app segment, because each segment is parsed on its own. */
+static bool envar_needs_cli_order(const char *const *argv)
+{
+    const char *opts[32];
+    size_t nopts, n = 0;
+
+    while (NULL != argv[n]) {
+        n = envar_segment_opts(argv, n, opts, 32, &nopts);
+        if (!envar_opts_contiguous(opts, nopts)) {
+            return true;
+        }
+    }
+    return false;
+}
 
 /* Find "name" in an env array and return a pointer to its value, or NULL.
  * Mirrors envar_value() in odls_base_default_fns.c. */
@@ -720,7 +823,7 @@ static int check_envar_app(const char *desc, prte_pmix_app_t *app,
     return failures;
 }
 
-static int test_envar_order(void)
+static int test_envar_order(int *nskipped)
 {
     prte_schizo_base_module_t *schizo;
     envar_case_t *c;
@@ -734,6 +837,10 @@ static int test_envar_order(void)
     }
 
     for (c = envar_cases; NULL != c->desc; c++) {
+        if (!PRTE_PMIX_CLI_ORDER && envar_needs_cli_order(c->argv)) {
+            ++(*nskipped);
+            continue;
+        }
         PMIX_CONSTRUCT(&apps, pmix_list_t);
         rc = prte_parse_locals(schizo, &apps, (char **) c->argv,
                                NULL, NULL, NULL);
@@ -787,16 +894,25 @@ static envar_directive_t envar_pool[] = {
 #define ENVAR_POOL_SIZE ((int) (sizeof(envar_pool) / sizeof(envar_pool[0])))
 
 static int check_envar_permutation(prte_schizo_base_module_t *schizo,
-                                   const int *order)
+                                   const int *order, int *nskipped)
 {
     char **argv = NULL, **wanted = NULL, **rendered = NULL;
     char *want = NULL, *got = NULL, *desc = NULL, *entry;
+    const char *opts[ENVAR_POOL_SIZE];
     pmix_data_array_t darray;
     pmix_info_t *infos;
     pmix_list_t apps;
     prte_pmix_app_t *app;
     int failures = 0, rc, i;
     size_t n;
+
+    for (i = 0; i < ENVAR_POOL_SIZE; i++) {
+        opts[i] = envar_pool[order[i]].tok1;
+    }
+    if (!PRTE_PMIX_CLI_ORDER && !envar_opts_contiguous(opts, ENVAR_POOL_SIZE)) {
+        ++(*nskipped);
+        return 0;
+    }
 
     PMIx_Argv_append_nosize(&argv, "prterun");
     for (i = 0; i < ENVAR_POOL_SIZE; i++) {
@@ -859,16 +975,16 @@ cleanup:
 
 /* Heap's algorithm - every ordering of the pool, each exactly once */
 static int permute_envar(prte_schizo_base_module_t *schizo, int *order,
-                         int k, int *ncases)
+                         int k, int *ncases, int *nskipped)
 {
     int failures = 0, i, tmp;
 
     if (1 == k) {
         ++(*ncases);
-        return check_envar_permutation(schizo, order);
+        return check_envar_permutation(schizo, order, nskipped);
     }
     for (i = 0; i < k; i++) {
-        failures += permute_envar(schizo, order, k - 1, ncases);
+        failures += permute_envar(schizo, order, k - 1, ncases, nskipped);
         if (0 == (k % 2)) {
             tmp = order[i];
             order[i] = order[k - 1];
@@ -882,11 +998,11 @@ static int permute_envar(prte_schizo_base_module_t *schizo, int *order,
     return failures;
 }
 
-static int test_envar_order_permutations(void)
+static int test_envar_order_permutations(int *nskipped)
 {
     prte_schizo_base_module_t *schizo;
     int order[ENVAR_POOL_SIZE];
-    int failures, ncases = 0, i;
+    int failures, ncases = 0, skipped = 0, i;
 
     schizo = envar_test_schizo();
     if (NULL == schizo) {
@@ -895,9 +1011,10 @@ static int test_envar_order_permutations(void)
     for (i = 0; i < ENVAR_POOL_SIZE; i++) {
         order[i] = i;
     }
-    failures = permute_envar(schizo, order, ENVAR_POOL_SIZE, &ncases);
-    fprintf(stdout, "envar order: %d orderings checked, %d failed\n",
-            ncases, failures);
+    failures = permute_envar(schizo, order, ENVAR_POOL_SIZE, &ncases, &skipped);
+    fprintf(stdout, "envar order: %d orderings generated, %d checked, %d skipped, %d failed\n",
+            ncases, ncases - skipped, skipped, failures);
+    *nskipped += skipped;
     return failures;
 }
 
@@ -906,7 +1023,7 @@ static int test_envar_order_permutations(void)
  * they are parsed into separate results - so the ordering has to hold
  * per segment, not just for the first one.
  */
-static int test_envar_order_mpmd(void)
+static int test_envar_order_mpmd(int *nskipped)
 {
     static envar_case_t first = {
         "mpmd/app1", {NULL},
@@ -928,6 +1045,11 @@ static int test_envar_order_mpmd(void)
     schizo = envar_test_schizo();
     if (NULL == schizo) {
         return 1;
+    }
+    /* both segments repeat an option after another intervened */
+    if (!PRTE_PMIX_CLI_ORDER && envar_needs_cli_order((const char *const *) argv)) {
+        ++(*nskipped);
+        return 0;
     }
 
     PMIX_CONSTRUCT(&apps, pmix_list_t);
@@ -954,7 +1076,7 @@ static int test_envar_order_mpmd(void)
 
 int main(void)
 {
-    int rc, failures = 0;
+    int rc, failures = 0, skipped = 0;
 
     /* the schizo modules pick their option table off prte_tool_actual and
      * put prte_tool_basename in their error text - a tool sets both in
@@ -1017,9 +1139,9 @@ int main(void)
     failures += test_xfer_job_info();
     failures += test_xfer_app();
     failures += test_job_info_cache();
-    failures += test_envar_order();
-    failures += test_envar_order_permutations();
-    failures += test_envar_order_mpmd();
+    failures += test_envar_order(&skipped);
+    failures += test_envar_order_permutations(&skipped);
+    failures += test_envar_order_mpmd(&skipped);
 
     (void) pmix_mca_base_framework_close(&prte_schizo_base_framework);
     (void) pmix_mca_base_framework_close(&prte_state_base_framework);
@@ -1027,6 +1149,15 @@ int main(void)
     prte_event_base_close();
     prte_finalize();
 
+    if (0 < skipped) {
+        fprintf(stdout,
+                "NOTE: %d envar-ordering case(s) skipped - this PMIx predates "
+                "PMIX_CAP_CLI_ORDER,\n      so create_app() cannot order a "
+                "directive repeated after another intervened.\n"
+                "      Build against a PMIx that has the capability to check "
+                "those cases.\n",
+                skipped);
+    }
     if (0 == failures) {
         fprintf(stdout, "PASSED all prted unit tests\n");
     } else {
