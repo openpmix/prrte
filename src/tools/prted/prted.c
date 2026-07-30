@@ -609,6 +609,7 @@ int main(int argc, char *argv[])
         goto DONE;
     }
     prc = PMIx_Data_pack(NULL, buffer, &vptr->data.string, 1, PMIX_STRING);
+    PMIX_VALUE_RELEASE(vptr);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
         ret = PRTE_ERROR;
