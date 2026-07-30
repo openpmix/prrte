@@ -13,6 +13,9 @@
 
 #include "prte_config.h"
 
+#include <errno.h>
+#include <limits.h>
+
 #include "src/hwloc/hwloc-internal.h"
 #include "src/include/constants.h"
 #include "src/mca/base/pmix_base.h"
@@ -31,7 +34,6 @@
  */
 bool prte_hwloc_base_inited = false;
 hwloc_topology_t prte_hwloc_topology = NULL;
-hwloc_cpuset_t prte_hwloc_my_cpuset = NULL;
 prte_hwloc_base_map_t prte_hwloc_base_map = PRTE_HWLOC_BASE_MAP_NONE;
 prte_hwloc_base_mbfa_t prte_hwloc_base_mbfa = PRTE_HWLOC_BASE_MBFA_WARN;
 prte_binding_policy_t prte_hwloc_default_binding_policy = 0;
@@ -39,25 +41,18 @@ char *prte_hwloc_default_cpu_list = NULL;
 char *prte_hwloc_base_topo_file = NULL;
 int prte_hwloc_base_output = -1;
 bool prte_hwloc_default_use_hwthread_cpus = false;
-bool prte_hwloc_synthetic_topo = false;
-
-hwloc_obj_type_t prte_hwloc_levels[] = {
-    HWLOC_OBJ_MACHINE,
-    HWLOC_OBJ_NUMANODE,
-    HWLOC_OBJ_PACKAGE,
-    HWLOC_OBJ_L3CACHE,
-    HWLOC_OBJ_L2CACHE,
-    HWLOC_OBJ_L1CACHE,
-    HWLOC_OBJ_CORE,
-    HWLOC_OBJ_PU
-};
 
 static char *prte_hwloc_base_binding_policy = NULL;
 static int verbosity = 0;
 static char *default_cpu_list = NULL;
 static bool bind_to_core = false;
 static bool bind_to_socket = false;
-static char *enum_values = NULL;
+/* Each string MCA parameter needs its own backing store: the MCA layer
+ * keeps the address we hand it, reports the current value through it,
+ * and frees it at finalize. Two parameters sharing one variable means
+ * each reports the other's value. */
+static char *mem_alloc_policy = NULL;
+static char *mem_bind_failure_action = NULL;
 
 int prte_hwloc_base_register(void)
 {
@@ -105,24 +100,23 @@ int prte_hwloc_base_register(void)
                                      "example, if \"local_only\" is used and local NUMA domain memory is exhausted, a new "
                                      "memory allocation may cause paging.",
                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                     &enum_values);
+                                     &mem_alloc_policy);
     if (0 > ret) {
         return ret;
     }
-    if (NULL != enum_values) {
-        if (0 == strncasecmp(enum_values, "none", strlen("none"))) {
+    if (NULL != mem_alloc_policy) {
+        if (0 == strcasecmp(mem_alloc_policy, "none")) {
             prte_hwloc_base_map = PRTE_HWLOC_BASE_MAP_NONE;
-        } else if (0 == strncasecmp(enum_values, "local_only", strlen("local_only"))) {
+        } else if (0 == strcasecmp(mem_alloc_policy, "local_only")) {
             prte_hwloc_base_map = PRTE_HWLOC_BASE_MAP_LOCAL_ONLY;
         } else {
             pmix_show_help("help-prte-hwloc-base.txt", "invalid binding_policy", true,
-                           enum_values);
+                           "memory allocation", mem_alloc_policy);
             return PRTE_ERR_SILENT;
         }
     }
 
     /* hwloc_base_bind_failure_action */
-    enum_values = NULL;
     prte_hwloc_base_mbfa = PRTE_HWLOC_BASE_MBFA_WARN;
     ret = pmix_mca_base_var_register("prte", "hwloc", "default", "mem_bind_failure_action",
                                      "What PRTE will do if it explicitly tries to bind memory to a specific NUMA "
@@ -133,20 +127,20 @@ int prte_hwloc_base_register(void)
                                      "(possibly with degraded performance).  A value of \"error\" means that PRTE "
                                      "will abort the job if this happens.",
                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                     &enum_values);
+                                     &mem_bind_failure_action);
     if (0 > ret) {
         return ret;
     }
-    if (NULL != enum_values) {
-        if (0 == strncasecmp(enum_values, "silent", strlen("silent"))) {
+    if (NULL != mem_bind_failure_action) {
+        if (0 == strcasecmp(mem_bind_failure_action, "silent")) {
             prte_hwloc_base_mbfa = PRTE_HWLOC_BASE_MBFA_SILENT;
-        } else if (0 == strncasecmp(enum_values, "warn", strlen("warn"))) {
+        } else if (0 == strcasecmp(mem_bind_failure_action, "warn")) {
             prte_hwloc_base_mbfa = PRTE_HWLOC_BASE_MBFA_WARN;
-        } else if (0 == strncasecmp(enum_values, "error", strlen("error"))) {
+        } else if (0 == strcasecmp(mem_bind_failure_action, "error")) {
             prte_hwloc_base_mbfa = PRTE_HWLOC_BASE_MBFA_ERROR;
         } else {
             pmix_show_help("help-prte-hwloc-base.txt", "invalid binding_policy", true,
-                           enum_values);
+                           "memory bind failure action", mem_bind_failure_action);
             return PRTE_ERR_SILENT;
         }
     }
@@ -176,11 +170,14 @@ int prte_hwloc_base_register(void)
                                               PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
     (void) pmix_mca_base_var_register_synonym(ret, "prte", "hwloc", "default", "binding_policy",
                                               PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+    /* The MCA layer owns whatever this variable points at and frees it at
+     * finalize, so the deprecated shortcuts have to hand it heap memory -
+     * a string literal here becomes a free() of read-only storage. */
     if (NULL == prte_hwloc_base_binding_policy) {
         if (bind_to_core) {
-            prte_hwloc_base_binding_policy = "core";
+            prte_hwloc_base_binding_policy = strdup("core");
         } else if (bind_to_socket) {
-            prte_hwloc_base_binding_policy = "package";
+            prte_hwloc_base_binding_policy = strdup("package");
         }
     }
 
@@ -275,6 +272,10 @@ void prte_hwloc_base_close(void)
 
     if (NULL != prte_hwloc_default_cpu_list) {
         free(prte_hwloc_default_cpu_list);
+        /* several subsystems test this for NULL to decide whether the DVM
+         * was given a cpu-set; leaving a dangling pointer here makes any
+         * post-finalize reader read freed memory */
+        prte_hwloc_default_cpu_list = NULL;
     }
 
     /* destroy the topology */
@@ -467,105 +468,40 @@ prte_hwloc_print_buffers_t *prte_hwloc_get_print_buffer(void)
 
     if (NULL == ptr) {
         ptr = (prte_hwloc_print_buffers_t *) malloc(sizeof(prte_hwloc_print_buffers_t));
+        if (NULL == ptr) {
+            return NULL;
+        }
         for (i = 0; i < PRTE_HWLOC_PRINT_NUM_BUFS; i++) {
             ptr->buffers[i] = (char *) malloc((PRTE_HWLOC_PRINT_MAX_SIZE + 1) * sizeof(char));
+            if (NULL == ptr->buffers[i]) {
+                /* hand back what we got so the cleanup below is well-defined */
+                while (0 < i) {
+                    free(ptr->buffers[--i]);
+                }
+                free(ptr);
+                return NULL;
+            }
         }
         ptr->cntr = 0;
         ret = pmix_tsd_setspecific(print_tsd_key, (void *) ptr);
+        if (PRTE_SUCCESS != ret) {
+            buffer_cleanup(ptr);
+            return NULL;
+        }
     }
 
     return (prte_hwloc_print_buffers_t *) ptr;
 }
 
-char *prte_hwloc_base_print_locality(prte_hwloc_locality_t locality)
-{
-    prte_hwloc_print_buffers_t *ptr;
-    int idx;
-
-    ptr = prte_hwloc_get_print_buffer();
-    if (NULL == ptr) {
-        return prte_hwloc_print_null;
-    }
-    /* cycle around the ring */
-    if (PRTE_HWLOC_PRINT_NUM_BUFS == ptr->cntr) {
-        ptr->cntr = 0;
-    }
-
-    idx = 0;
-
-    if (PRTE_PROC_ON_LOCAL_CLUSTER(locality)) {
-        ptr->buffers[ptr->cntr][idx++] = 'C';
-        ptr->buffers[ptr->cntr][idx++] = 'L';
-        ptr->buffers[ptr->cntr][idx++] = ':';
-    }
-    if (PRTE_PROC_ON_LOCAL_CU(locality)) {
-        ptr->buffers[ptr->cntr][idx++] = 'C';
-        ptr->buffers[ptr->cntr][idx++] = 'U';
-        ptr->buffers[ptr->cntr][idx++] = ':';
-    }
-    if (PRTE_PROC_ON_LOCAL_NODE(locality)) {
-        ptr->buffers[ptr->cntr][idx++] = 'N';
-        ptr->buffers[ptr->cntr][idx++] = ':';
-    }
-    if (PRTE_PROC_ON_LOCAL_PACKAGE(locality)) {
-        ptr->buffers[ptr->cntr][idx++] = 'S';
-        ptr->buffers[ptr->cntr][idx++] = ':';
-    }
-    if (PRTE_PROC_ON_LOCAL_NUMA(locality)) {
-        ptr->buffers[ptr->cntr][idx++] = 'N';
-        ptr->buffers[ptr->cntr][idx++] = 'M';
-        ptr->buffers[ptr->cntr][idx++] = ':';
-    }
-    if (PRTE_PROC_ON_LOCAL_L3CACHE(locality)) {
-        ptr->buffers[ptr->cntr][idx++] = 'L';
-        ptr->buffers[ptr->cntr][idx++] = '3';
-        ptr->buffers[ptr->cntr][idx++] = ':';
-    }
-    if (PRTE_PROC_ON_LOCAL_L2CACHE(locality)) {
-        ptr->buffers[ptr->cntr][idx++] = 'L';
-        ptr->buffers[ptr->cntr][idx++] = '2';
-        ptr->buffers[ptr->cntr][idx++] = ':';
-    }
-    if (PRTE_PROC_ON_LOCAL_L1CACHE(locality)) {
-        ptr->buffers[ptr->cntr][idx++] = 'L';
-        ptr->buffers[ptr->cntr][idx++] = '1';
-        ptr->buffers[ptr->cntr][idx++] = ':';
-    }
-    if (PRTE_PROC_ON_LOCAL_CORE(locality)) {
-        ptr->buffers[ptr->cntr][idx++] = 'C';
-        ptr->buffers[ptr->cntr][idx++] = ':';
-    }
-    if (PRTE_PROC_ON_LOCAL_HWTHREAD(locality)) {
-        ptr->buffers[ptr->cntr][idx++] = 'H';
-        ptr->buffers[ptr->cntr][idx++] = 'w';
-        ptr->buffers[ptr->cntr][idx++] = 't';
-        ptr->buffers[ptr->cntr][idx++] = ':';
-    }
-    if (0 < idx) {
-        ptr->buffers[ptr->cntr][idx - 1] = '\0';
-    } else if (PRTE_PROC_NON_LOCAL & locality) {
-        ptr->buffers[ptr->cntr][idx++] = 'N';
-        ptr->buffers[ptr->cntr][idx++] = 'O';
-        ptr->buffers[ptr->cntr][idx++] = 'N';
-        ptr->buffers[ptr->cntr][idx++] = '\0';
-    } else {
-        /* must be an unknown locality */
-        ptr->buffers[ptr->cntr][idx++] = 'U';
-        ptr->buffers[ptr->cntr][idx++] = 'N';
-        ptr->buffers[ptr->cntr][idx++] = 'K';
-        ptr->buffers[ptr->cntr][idx++] = '\0';
-    }
-
-    return ptr->buffers[ptr->cntr];
-}
 
 int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
 {
     int i;
     prte_binding_policy_t tmp;
-    char **quals, *myspec, *ptr, *p2;
+    char **quals, *myspec, *ptr, *p2, *endp;
     prte_job_t *jdata = (prte_job_t *) jdat;
     uint16_t u16;
+    long lval;
 
     /* set default */
     tmp = 0;
@@ -598,6 +534,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                 if (NULL == jdata) {
                     pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                    "binding policy", quals[i]);
+                    PMIx_Argv_free(quals);
                     free(myspec);
                     return PRTE_ERR_SILENT;
                 }
@@ -608,6 +545,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                 if (NULL == jdata) {
                     pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                    "binding policy", quals[i]);
+                    PMIx_Argv_free(quals);
                     free(myspec);
                     return PRTE_ERR_SILENT;
                 }
@@ -623,15 +561,22 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                     free(myspec);
                     return PRTE_ERR_SILENT;
                 }
-                u16 = strtol(p2, &p2, 10);
-                if ('\0' != *p2) {
-                    /* value is invalid */
+                /* the attribute is a uint16, so a value that does not fit has
+                 * to be rejected here - truncating it silently would bind to
+                 * a limit the user never asked for */
+                errno = 0;
+                lval = strtol(p2, &endp, 10);
+                if (endp == p2 || '\0' != *endp || 0 != errno ||
+                    0 >= lval || UINT16_MAX < lval) {
+                    /* value is not a number, has trailing garbage, or is out
+                     * of range (a limit of zero is meaningless) */
                     pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
                                    "binding limit", "LIMIT", quals[i]);
                     PMIx_Argv_free(quals);
                     free(myspec);
                     return PRTE_ERR_SILENT;
                 }
+                u16 = (uint16_t) lval;
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_BINDING_LIMIT, PRTE_ATTR_GLOBAL,
                                    &u16, PMIX_UINT16);
 
