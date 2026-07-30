@@ -1458,6 +1458,38 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
         daemon->rml_uri = strdup(cnctinfo.data.string);
         PMIX_VALUE_DESTRUCT(&cnctinfo);
 
+        /* unload the rendezvous URI of that node's PMIx server. Nothing in
+         * PRRTE connects to it - daemons talk over the RML, using the URI
+         * above. We record it so that a TOOL can ask us where the server on
+         * a given node is (a hostname- or nodeid-qualified PMIX_SERVER_URI
+         * query). Storing it against the daemon's name is what makes that
+         * query work: it fetches with PMIx_Get() keyed on exactly this
+         * name, the same way the PMIX_PROC_URI above is fetched.
+         *
+         * A daemon that could not report one packs a NULL, which is not an
+         * error - the query then answers NOT_FOUND for that node, as it did
+         * for every node before this was collected at all. */
+        PMIX_VALUE_CONSTRUCT(&cnctinfo);
+        cnctinfo.type = PMIX_STRING;
+        idx = 1;
+        ret = PMIx_Data_unpack(NULL, buffer, &cnctinfo.data.string, &idx, PMIX_STRING);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            PMIX_VALUE_DESTRUCT(&cnctinfo);
+            prted_failed_launch = true;
+            goto CLEANUP;
+        }
+        if (NULL != cnctinfo.data.string) {
+            ret = PMIx_Store_internal(&dname, PMIX_SERVER_URI, &cnctinfo);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                PMIX_VALUE_DESTRUCT(&cnctinfo);
+                prted_failed_launch = true;
+                goto CLEANUP;
+            }
+        }
+        PMIX_VALUE_DESTRUCT(&cnctinfo);
+
         /* unpack the node name */
         idx = 1;
         ret = PMIx_Data_unpack(NULL, buffer, &nodename, &idx, PMIX_STRING);

@@ -707,10 +707,12 @@ static void process_wireup(pmix_data_buffer_t *msg){
     }
 
     pmix_value_t val = PMIX_VALUE_STATIC_INIT;
+    pmix_value_t sval = PMIX_VALUE_STATIC_INIT;
     pmix_proc_t dmn;
     int cnt = 1;
     do {
         PMIx_Value_destruct(&val);
+        PMIx_Value_destruct(&sval);
         ret = PMIx_Data_unpack(NULL, msg, &dmn, &cnt, PMIX_PROC);
         if(PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER == ret) return;
         if(PMIX_SUCCESS != ret){ PMIX_ERROR_LOG(ret); break; }
@@ -721,6 +723,26 @@ static void process_wireup(pmix_data_buffer_t *msg){
         ret = PMIx_Data_unpack(NULL, msg, &val.data.string, &cnt, PMIX_STRING);
         if(PMIX_SUCCESS != ret){ PMIX_ERROR_LOG(ret); break; }
 
+        /* that node's PMIx SERVER rendezvous URI - for tools asking where a
+         * given node's server is, never for reaching the daemon (that is the
+         * PROC_URI above). It is a per-record field, so it MUST be unpacked
+         * here, before any of the skips below: a `continue` that left it in
+         * the buffer would make the next iteration read this string as a
+         * pmix_proc_t. May be NULL if that daemon reported none. */
+        PMIx_Value_construct(&sval);
+        sval.type = PMIX_STRING;
+
+        ret = PMIx_Data_unpack(NULL, msg, &sval.data.string, &cnt, PMIX_STRING);
+        if(PMIX_SUCCESS != ret){ PMIX_ERROR_LOG(ret); break; }
+
+        /* store it for every daemon but ourselves - PMIx already holds our
+         * own server's URI, and unlike the PROC_URI skips below we have no
+         * other source for the HNP's or our parent's */
+        if(!PMIX_CHECK_PROCID(&dmn, PRTE_PROC_MY_NAME) && NULL != sval.data.string){
+            ret = PMIx_Store_internal(&dmn, PMIX_SERVER_URI, &sval);
+            if(PMIX_SUCCESS != ret){ PMIX_ERROR_LOG(ret); break; }
+        }
+
         if(PMIX_CHECK_PROCID(&dmn, PRTE_PROC_MY_HNP)) continue;
         if(PMIX_CHECK_PROCID(&dmn, PRTE_PROC_MY_NAME)) continue;
         if(PMIX_CHECK_PROCID(&dmn, PRTE_PROC_MY_PARENT)) continue;
@@ -730,6 +752,7 @@ static void process_wireup(pmix_data_buffer_t *msg){
     } while(PMIX_SUCCESS == ret);
 
     if(val.type != PMIX_UNDEF) PMIx_Value_destruct(&val);
+    if(sval.type != PMIX_UNDEF) PMIx_Value_destruct(&sval);
     PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
     return;
 }
