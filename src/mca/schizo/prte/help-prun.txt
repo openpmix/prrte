@@ -266,8 +266,6 @@ option to the help request as "--help <option>".
 | "--system-server-    | Connect only to a system-level server         |
 | only"                |                                               |
 +----------------------+-----------------------------------------------+
-| "--tmpdir <dir>"     | Set the root for the session directory tree   |
-+----------------------+-----------------------------------------------+
 | "--wait-to-connect   | Delay specified number of seconds before      |
 | <seconds>`"          | trying to connect                             |
 +----------------------+-----------------------------------------------+
@@ -321,13 +319,6 @@ First look for a system server and connect to it if found
 [system-server-only]
 
 Connect only to a system-level server - abort if one is not found
-#
-[tmpdir]
-
-Define the root location for the PRRTE session directory tree
-
-See the "Session directory" HTML documentation for additional details
-about the PRRTE session directory.
 #
 [wait-to-connect]
 

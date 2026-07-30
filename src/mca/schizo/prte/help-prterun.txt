@@ -306,8 +306,6 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | "--singleton <id>"   | ID of the singleton process that started us   |
 +----------------------+-----------------------------------------------+
-| "--tmpdir <dir>"     | Set the root for the session directory tree   |
-+----------------------+-----------------------------------------------+
 | "--tune <files>"     | File(s) containing MCA params for tuning DVM  |
 |                      | operations                                    |
 +----------------------+-----------------------------------------------+
@@ -496,13 +494,6 @@ for this option is to ensure that the daemon output streams (i.e.,
 stdout and stderr) remain open after launch, thus allowing the user to
 see any daemon-generated error messages. Otherwise, the daemon will
 "daemonize" itself upon launch, thereby closing its output streams.
-#
-[tmpdir]
-
-Define the root location for the PRRTE session directory tree
-
-See the "Session directory" HTML documentation for additional details
-about the PRRTE session directory.
 #
 [prefix]
 

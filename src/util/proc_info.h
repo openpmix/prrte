@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2020 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -83,9 +83,10 @@ typedef struct prte_process_info_t {
     uint16_t my_port;           /**< TCP port for out-of-band comm */
     /* The session directory has the form
      * <prefix>/<openmpi-sessions-user>/<jobid>/<procid>, where the prefix
-     * can either be provided by the user via the
-     * --tmpdir command-line flag, the use of one of several
-     * environmental variables, or else a default location.
+     * can either be provided by the user via the prte_tmpdir_base (or
+     * prte_local_tmpdir_base / prte_remote_tmpdir_base) MCA parameter, the
+     * use of one of several environmental variables, or else a default
+     * location.
      */
     char *tmpdir_base;        /**< Base directory of the session dir tree */
     char *sessdir_prefix;     /**< starting string for top session dir name */
