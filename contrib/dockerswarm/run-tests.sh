@@ -1599,6 +1599,84 @@ test_runtime() {
     cleanup_swarm
 }
 
+########################################################################
+# src/pmix -- the shim that translates between PRRTE's code space and
+# PMIx's.  Every function in it is a pure integer mapping and is covered
+# exhaustively, without a DVM, by test/unit/pmix.  What lands here is the
+# one thing a table test cannot show: that the mapping is actually reached,
+# with real proc states, on a daemon that is not the one you are standing on.
+########################################################################
+# Absolute path -- an app launched into the DVM inherits the daemon PATH,
+# which does not contain the install bindir.  See the note on $DS.
+PT=/opt/prte/prte/bin/proctable
+
+test_pmix() {
+    local out rc n hosts undef
+
+    banner "pmix: the queried proc table carries a real state for every proc"
+    # PMIX_QUERY_PROC_TABLE is the only caller of prte_pmix_convert_state(),
+    # which was written with bare integer cases against a state space that
+    # does not number like PMIx's.  Several PRRTE states fell through to
+    # PMIX_PROC_STATE_UNDEF -- a legal answer, so nothing reported an error;
+    # the proc simply had no state.  The invariant worth asserting is
+    # therefore not "state X" but "not UNDEF": a running proc always has
+    # something truthful to say about itself.
+    cleanup_swarm
+    if ! RUN "test -x $PT"; then
+        skp "proctable client not installed -- re-run ./build.sh"
+        return
+    fi
+    if ! prted_dvm_start 'node1:2,node2:2,node3:2,node4:2'; then
+        bad "could not start a DVM for the pmix shim tests"
+        cleanup_swarm
+        return
+    fi
+
+    out=$(PRUN "--host node1:2,node2:2,node3:2,node4:2 -n 8 --map-by node $PT procs" 2>&1)
+    n=$(echo "$out" | grep -m1 '^COUNT ' | awk '{print $2}' | tr -d '\r')
+    # every proc of the job, from whichever daemon answered
+    [ "$n" = 8 ] \
+        && ok "PMIX_QUERY_PROC_TABLE returned all 8 procs" \
+        || bad "proc table returned $n entries, expected 8: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    undef=$(echo "$out" | grep -c 'UNDEF' | tr -d ' ')
+    [ "$undef" = 0 ] \
+        && ok "...and no proc reported PMIX_PROC_STATE_UNDEF" \
+        || bad "$undef procs reported UNDEF: $(echo "$out" | grep UNDEF | tr '\n' ' ' | tail -c 300)"
+    # the table has to name the node each proc is on, and they must not all
+    # be the same one -- otherwise this is a single-host test wearing a hat
+    hosts=$(echo "$out" | awk '$1=="PROC" {print $3}' | sort -u | grep -c '^node')
+    [ "${hosts:-0}" -ge 2 ] \
+        && ok "...and the table spans $hosts nodes" \
+        || bad "proc table did not span nodes ($hosts): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    echo "$out" | grep -q 'UNRECOGNIZED' \
+        && bad "a proc reported a state PMIx does not define" \
+        || ok "...and every state was one PMIx defines"
+
+    banner "pmix: the LOCAL proc table is the answering daemon's own procs"
+    # The local/global split does not exist on one host.  Six procs spread
+    # over three nodes, two each: whichever daemon answers must report only
+    # the two it hosts, and again with real states.
+    out=$(PRUN "--host node2:2,node3:2,node4:2 -n 6 --map-by node $PT localprocs" 2>&1)
+    n=$(echo "$out" | grep -m1 '^COUNT ' | awk '{print $2}' | tr -d '\r')
+    if [ -z "$n" ]; then
+        bad "local proc table produced no COUNT: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    elif [ "$n" -gt 0 ] && [ "$n" -lt 6 ]; then
+        ok "PMIX_QUERY_LOCAL_PROC_TABLE returned $n of 6 -- only the local procs"
+    else
+        bad "local proc table returned $n of 6 (0 or all means the filter did nothing)"
+    fi
+    undef=$(echo "$out" | grep -c 'UNDEF' | tr -d ' ')
+    [ "$undef" = 0 ] \
+        && ok "...and no local proc reported UNDEF" \
+        || bad "$undef local procs reported UNDEF"
+
+    RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    n=$(prted_count 1 2 3 4)
+    [ "$n" = 0 ] && ok "no daemons survived the pmix-shim teardown" \
+                 || bad "$n daemons still running after pterm"
+    cleanup_swarm
+}
+
 test_prted() {
     local out rc ns n bpid
 
@@ -3055,6 +3133,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_schizo
 
     test_state
+
+    test_pmix
 
     test_prted
 

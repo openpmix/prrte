@@ -309,6 +309,17 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/dataserver.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
+            # proctable: a bare PMIx client that queries the proc table and
+            # the server URI.  Those two queries are the only callers of
+            # prte_pmix_convert_state(), and the local-vs-global proc table
+            # split plus a hostname-qualified server URI have no meaning at
+            # all on a single host.
+            # (No apostrophes here: see the note further down.)
+            echo ">>>> proctable (query/state translation) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/proctable \
+                /prrte-src/contrib/dockerswarm/proctable.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
             # slowcat: a deliberately slow stdin reader (no PMIx at all).  The
             # stdin bugs in iof live in the back-pressure path, and a normal
             # "cat" drains its pipe as fast as the daemon fills it, so the
