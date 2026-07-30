@@ -395,6 +395,14 @@ priority-insert, dump the final priority list at verbosity > 4).
   the top-level guide, after editing any `help-*.txt` you must
   `rm src/util/prte_show_help_content.*` and rebuild, or the binary
   serves stale text.
+- **A tool's help file and its option table are cross-checked.**
+  `src/util/prte-convert-help.py` compares the options each tool's
+  `[usage]` table documents against the option table that tool's
+  `parse_cli` selects, and fails the build on a disagreement in either
+  direction. The check runs when the show_help content is generated
+  (`--purge`) and on every `make check`. See
+  [`prte/AGENTS.md`](prte/AGENTS.md) for what it catches and how to run
+  it by hand.
 - **`check_sanity` is a developer guard, not user UX.** Its show_help
   output is aimed at contributors; real user-facing validation of a
   directive belongs in the owning framework (mostly `rmaps`).
