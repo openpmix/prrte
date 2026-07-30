@@ -146,7 +146,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_DVM                    "dvm"                       // optional
 
 // Daemon-specific CLI options
-#define PRTE_CLI_PUBSUB_SERVER          "prte-server"               // required
+#define PRTE_CLI_PUBSUB_SERVER          "pubsub-server"             // required
 #define PRTE_CLI_CONTROLLER_URI         "dvm-master-uri"            // required
 #define PRTE_CLI_PARENT_URI             "parent-uri"                // required
 #define PRTE_CLI_TREE_SPAWN             "tree-spawn"                // required
