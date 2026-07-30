@@ -361,8 +361,14 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
             hwloc_bitmap_list_sscanf(mycpus, src->cpuset);
 
             npus = prte_hwloc_base_get_nbobjs_by_type(src->node->topology->topo, HWLOC_OBJ_PU);
-            /* assuming each "core" xml element will take 20 characters. There could be at most npus such elements */
-            int sz = sizeof(char) * npus * 20;
+            /* There can be one element per PU, and each is 20 spaces of
+             * indent plus "<core>%d</core>\n" - 34 characters for a
+             * single-digit index and more as the index grows. The estimate
+             * used to be 20 per element, so a process bound to more than
+             * about half the cores of a non-SMT node had its site list
+             * silently truncated (and, before the writes were bounded,
+             * overran this buffer outright). */
+            int sz = sizeof(char) * (npus * 48 + 64);
             cores = (char*)malloc(sz);
             if (NULL == cores) {
                 pmix_asprintf(&tmp, "\n%*c<MemoryError/>\n", 8, xmlsp);
