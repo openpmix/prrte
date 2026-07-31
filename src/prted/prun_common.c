@@ -92,6 +92,7 @@
 #include "src/mca/state/base/base.h"
 #include "src/prted/prted.h"
 #include "src/runtime/prte_globals.h"
+#include "src/runtime/prte_quit.h"
 #include "src/runtime/runtime.h"
 
 #include "src/prted/prted.h"
@@ -244,6 +245,55 @@ static void evhandler(size_t evhdlr_registration_id, pmix_status_t status,
         }
         /* release the lock */
         PRTE_PMIX_WAKEUP_THREAD(lock);
+    }
+
+    /* we _always_ have to execute the evhandler callback or
+     * else the event progress engine will hang */
+    if (NULL != cbfunc) {
+        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    }
+}
+
+/* A launch that fails before we have an nspace is reported here and nowhere
+ * else.  The spawn call is about to return an error and we will leave without
+ * ever registering the job-termination handler that carries this news for a
+ * job that at least started, so the DVM sends it ahead of the spawn response
+ * precisely so that we are still here to receive it.
+ *
+ * The DVM sends the facts, not the sentence, and we compose the sentence -
+ * because the message names the tool that could not launch the application,
+ * and that is us.  Rendered on the HNP it would tell a prun user that "prte"
+ * had failed them. */
+static void launch_failed_cbfunc(size_t evhdlr_registration_id, pmix_status_t status,
+                                 const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
+                                 pmix_info_t *results, size_t nresults,
+                                 pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
+{
+    const char *app = NULL, *wdir = NULL, *nodename = NULL;
+    pmix_rank_t rank = PMIX_RANK_WILDCARD;
+    int code = 0;
+    char *msg;
+    size_t n;
+    PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, status, source, results, nresults);
+
+    for (n = 0; n < ninfo; n++) {
+        if (PMIX_CHECK_KEY(&info[n], PMIX_EVENT_AFFECTED_PROC)) {
+            rank = info[n].value.data.proc->rank;
+        } else if (PMIX_CHECK_KEY(&info[n], PMIX_HOSTNAME)) {
+            nodename = info[n].value.data.string;
+        } else if (PMIX_CHECK_KEY(&info[n], "prte.launch.failed.app")) {
+            app = info[n].value.data.string;
+        } else if (PMIX_CHECK_KEY(&info[n], "prte.launch.failed.wdir")) {
+            wdir = info[n].value.data.string;
+        } else if (PMIX_CHECK_KEY(&info[n], "prte.launch.failed.code")) {
+            code = info[n].value.data.int32;
+        }
+    }
+
+    msg = prte_render_launch_failure(code, app, wdir, nodename, rank);
+    if (NULL != msg) {
+        fprintf(stderr, "%s\n", msg);
+        free(msg);
     }
 
     /* we _always_ have to execute the evhandler callback or
@@ -520,6 +570,27 @@ int prun_common(pmix_cli_result_t *results,
     PRTE_PMIX_WAIT_THREAD(&lock);
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_FREE(iptr, 2);
+
+    /* Register for the launch-failure event BEFORE we spawn - the whole point
+     * of it is to describe a job that never got an nspace, so there is no
+     * later moment at which we could ask for it.  The DVM aims it at us
+     * alone, so no affected-proc filter is needed.
+     *
+     * Name the concrete code rather than leaning on the default handler just
+     * above.  A PMIx server records a default registration only by appending
+     * it to a default entry it already holds, and creates no entry when it
+     * holds none - so the first tool to attach to a server is dropped from
+     * its dispatch list and silently receives no default-routed event again.
+     * That is fixed upstream, but PRRTE builds against any PMIx from 6.1.0
+     * on, and this has to work on all of them. */
+    PMIX_INFO_CREATE(iptr, 1);
+    PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_HDLR_NAME, "LAUNCH-FAILED", PMIX_STRING);
+    code = PMIX_ERR_JOB_FAILED_TO_LAUNCH;
+    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
+    PMIx_Register_event_handler(&code, 1, iptr, 1, launch_failed_cbfunc, regcbfunc, &lock);
+    PRTE_PMIX_WAIT_THREAD(&lock);
+    PRTE_PMIX_DESTRUCT_LOCK(&lock);
+    PMIX_INFO_FREE(iptr, 1);
 
     /***** CONSTRUCT THE APP'S JOB-INFO ****/
     PMIX_INFO_LIST_START(jinfo);

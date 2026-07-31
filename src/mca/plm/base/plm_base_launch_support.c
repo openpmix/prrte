@@ -1003,6 +1003,183 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
     PMIX_RELEASE(caddy);
 }
 
+/* Send the failure to a requester that is a separate tool.
+ *
+ * Note what travels: the FACTS, not the prose.  The message has to come out
+ * in the requester's own voice - a prun user must be told that "prun" could
+ * not launch their application, not that "prte" could not - and only the
+ * requester knows its own name.  So the tool renders it, with the same
+ * prte_render_launch_failure() the DVM would have used.
+ *
+ * It cannot come as the job's output either: a tool has no IOF sink for
+ * this job yet, since it learns the nspace from the very response we are
+ * about to send.  What it does have is a handler it registered for exactly
+ * this code before it ever called PMIx_Spawn (see prun_common.c).  Aim the
+ * event at that one tool with a custom range, so no other tool attached to
+ * the DVM sees it. */
+static void notify_launch_failure(pmix_proc_t *proxy, prte_proc_t *pptr,
+                                  const char *app, const char *cwd, const char *nodename)
+{
+    pmix_proc_t affected;
+    pmix_data_array_t darray;
+    pmix_info_t *iptr;
+    size_t ninfo;
+    void *tinfo;
+    int32_t code;
+    int rc;
+
+    PMIX_INFO_LIST_START(tinfo);
+    /* target this notification solely to the tool that asked for the job */
+    PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_EVENT_CUSTOM_RANGE, proxy, PMIX_PROC);
+    /* which proc failed, so the tool can name the rank */
+    PMIX_LOAD_PROCID(&affected, pptr->name.nspace, pptr->name.rank);
+    PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_EVENT_AFFECTED_PROC, &affected, PMIX_PROC);
+    /* where it failed */
+    if (NULL != nodename) {
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_HOSTNAME, (void *) nodename, PMIX_STRING);
+    }
+    /* and what it was trying to run there.  The tool knows the apps it
+     * submitted, but not which one this rank belonged to, so say. */
+    if (NULL != app) {
+        PMIX_INFO_LIST_ADD(rc, tinfo, "prte.launch.failed.app", (void *) app, PMIX_STRING);
+    }
+    if (NULL != cwd) {
+        PMIX_INFO_LIST_ADD(rc, tinfo, "prte.launch.failed.wdir", (void *) cwd, PMIX_STRING);
+    }
+    /* the code that selects the message.  Deliberately NOT converted: it is
+     * whatever the odls stashed in the proc's exit_code, and the renderer
+     * switches on both PMIx statuses and PRRTE codes - which no longer
+     * collide, now that PRRTE's are based at PMIX_EXTERNAL_ERR_BASE. */
+    code = pptr->exit_code;
+    PMIX_INFO_LIST_ADD(rc, tinfo, "prte.launch.failed.code", &code, PMIX_INT32);
+    /* we are on the progress thread and about to make the blocking call, so
+     * the loop-breaking marker is mandatory here - see the golden rule in
+     * the top-level AGENTS.md */
+    PMIX_INFO_LIST_ADD(rc, tinfo, "prte.notify.donotloop", NULL, PMIX_BOOL);
+
+    PMIX_INFO_LIST_CONVERT(rc, tinfo, &darray);
+    PMIX_INFO_LIST_RELEASE(tinfo);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    iptr = (pmix_info_t *) darray.array;
+    ninfo = darray.size;
+
+    /* Blocking form: the write to the tool must be queued before the spawn
+     * response that follows it, or the tool is released and gone before the
+     * message arrives.  Waiting is what orders the two. */
+    PMIx_Notify_event(PMIX_ERR_JOB_FAILED_TO_LAUNCH, &prte_process_info.myproc,
+                      PMIX_RANGE_CUSTOM, iptr, ninfo, NULL, NULL);
+    PMIX_INFO_FREE(iptr, ninfo);
+}
+
+/* Write the diagnostic to the failed job's error stream.
+ *
+ * This is the path for a requester that is this very process - prterun,
+ * which is both the DVM and the tool.  Rendering here is rendering in the
+ * requester's voice, because it is the same process, and the delivery lands
+ * on the user's terminal honoring whatever output routing they asked for
+ * (which a bare pmix_output would not). */
+static void deliver_launch_failure(prte_proc_t *pptr, const char *app, const char *cwd,
+                                   const char *nodename)
+{
+    pmix_byte_object_t bo;
+    pmix_proc_t source;
+    pmix_status_t rc;
+    char *msg;
+
+    msg = prte_render_launch_failure(pptr->exit_code, app, cwd, nodename, pptr->name.rank);
+    if (NULL == msg) {
+        /* this code says nothing by design - PMIX_ERR_SILENT and friends */
+        return;
+    }
+
+    /* attribute the output to the proc that failed */
+    PMIX_LOAD_PROCID(&source, pptr->name.nspace, pptr->name.rank);
+    PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
+    bo.bytes = msg;
+    bo.size = strlen(msg);
+    /* Passing a NULL callback makes PMIx block on its OWN lock, so no PRRTE
+     * object is touched from the PMIx thread - the same deliberate exception
+     * check_complete_resume() takes, and for the same reason: the API borrows
+     * the source proc and the byte object BY POINTER and both live on this
+     * stack.  The cost is bounded - a purely PMIx-internal write with no host
+     * upcall, on a path that only runs once a launch has already failed. */
+    rc = PMIx_server_IOF_deliver(&source, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
+    if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
+        PMIX_ERROR_LOG(rc);
+    }
+    free(msg);
+}
+
+/* Tell the requester why its launch failed.
+ *
+ * The DVM knows exactly what went wrong - which proc, on which node, with
+ * which error - and that has always been rendered as a sentence naming all
+ * three.  But only later, as the PMIX_EVENT_TEXT_MESSAGE carried on the
+ * job-end event.  A requester whose *spawn* failed never sees that: the
+ * failed spawn response is what releases it from PMIx_Spawn, and it is gone
+ * well before the event is raised - having no nspace, it never even
+ * registered the handler that would have received it.  So a mistyped
+ * executable produced nothing but
+ *
+ *     PMIx_Spawn failed (-181): PMIX_ERR_JOB_FAILED_TO_LAUNCH
+ *
+ * while the sentence naming the executable sat unread on the HNP.  On a
+ * single node the failing daemon's own stderr used to cover for that, since
+ * it is the user's terminal; on any other node it did not, and the user was
+ * told only that something, somewhere, had gone wrong.
+ *
+ * So say it here, before the response goes out and while the requester is
+ * still parked inside its spawn call.
+ *
+ * Which way it goes turns on the launch proxy, because that - not
+ * PRTE_JOB_DVM_JOB, which only a PMIX_REQUESTOR_IS_TOOL spawn sets - is
+ * what actually distinguishes the two shapes: prterun records ITSELF as the
+ * proxy, while a prun records its own tool procID. */
+static void report_launch_failure(prte_job_t *jdata)
+{
+    prte_proc_t *pptr = NULL;
+    prte_app_context_t *app;
+    pmix_proc_t *proxy = NULL;
+    const char *appname = NULL, *wdir = NULL, *nodename = NULL;
+
+    /* The errmgr records the first proc to fail.  Without one there is no
+     * failure of ours to describe - an allocation or mapping failure, say,
+     * which whoever detected it has already reported. */
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, (void **) &pptr,
+                            PMIX_POINTER) || NULL == pptr) {
+        return;
+    }
+    /* say it once.  This is the same one-shot the job-end path respects, so
+     * claiming it here also keeps dvm_notify() from repeating us later - in
+     * its own voice, which is the voice we are here to avoid. */
+    if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ERR_REPORTED)) {
+        return;
+    }
+    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ERR_REPORTED);
+
+    app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, pptr->app_idx);
+    if (NULL != app) {
+        appname = app->app;
+        wdir = app->cwd;
+    }
+    if (NULL != pptr->node) {
+        nodename = pptr->node->name;
+    }
+
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &proxy, PMIX_PROC)
+        && NULL != proxy && !PMIX_CHECK_PROCID(proxy, PRTE_PROC_MY_NAME)) {
+        notify_launch_failure(proxy, pptr, appname, wdir, nodename);
+    } else {
+        deliver_launch_failure(pptr, appname, wdir, nodename);
+    }
+    if (NULL != proxy) {
+        PMIX_PROC_RELEASE(proxy);
+    }
+}
+
 int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
 {
     int rc;
@@ -1027,6 +1204,12 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
     /* if the response has already been sent, don't do it again */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED, NULL, PMIX_BOOL)) {
         return PRTE_SUCCESS;
+    }
+
+    /* a status is all the requester is going to get out of this response,
+     * so tell it what actually happened while it is still listening */
+    if (PMIX_SUCCESS != status) {
+        report_launch_failure(jdata);
     }
 
     /* if the requestor was a tool, use PMIx to notify them of
