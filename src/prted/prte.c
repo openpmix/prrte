@@ -1356,7 +1356,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
      * get properly recorded - e.g., forwarding IOF */
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
     ret = PMIx_Spawn_nb(iptr, ninfo, papps, napps, spcbfunc, &lock);
-    if (PRTE_SUCCESS != ret) {
+    if (PMIX_SUCCESS != ret) {
         pmix_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
         rc = ret;
         PRTE_UPDATE_EXIT_STATUS(rc);
