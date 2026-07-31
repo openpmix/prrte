@@ -1098,7 +1098,18 @@ int pmix_server_init(void)
     ninfo = darray.size;
     prc = PMIx_server_register_resources(info, ninfo, NULL, NULL);
     PMIX_INFO_FREE(info, ninfo);
-    if (PMIX_SUCCESS != prc) {
+    /* the blocking form of this call reports success as
+     * PMIX_OPERATION_SUCCEEDED, not PMIX_SUCCESS. Treating that as a
+     * failure returned from here with everything below it skipped - and
+     * because prte_pmix_convert_status maps OPERATION_SUCCEEDED onto
+     * PRTE_SUCCESS, the caller saw a clean init and nothing complained.
+     * What silently went missing were the two event handlers registered
+     * below, most consequentially "lost connection": without it a daemon
+     * never learns that a tool departed, so the tool's job object is
+     * never terminated and any allocation it reserved is never disposed
+     * of - the nodes stay withheld from the general pool for the life of
+     * the DVM, unusable by anyone. */
+    if (PMIX_SUCCESS != prc && PMIX_OPERATION_SUCCEEDED != prc) {
         return prte_pmix_convert_status(prc);
     }
 
