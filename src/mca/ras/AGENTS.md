@@ -285,6 +285,22 @@ elastic-DVM or PMIx_Allocation code:
 | `prte_ras_base_teardown_reservation()` | Drop a reservation's hold on its nodes (clear `node->session` back to the default pool), deregister it, and — if `return_to_scheduler` — shrink its daemon-carrying nodes out of the DVM. |
 | `prte_ras_base_check_reservations_on_term()` | On namespace termination, fire each reservation's inheritance disposition (`PMIX_ALLOC_INHERIT_NONE`/`CHILD`/`CHILD_DEFAULT`/`DEFAULT`). |
 
+**A reservation requested by a tool lives and dies with that tool**, and
+that hangs on the daemon being told when the tool goes. It is not a child,
+so no waitpid fires for it; the connection drop that follows a clean
+`PMIx_tool_finalize` raises no lost-connection event either, because PMIx
+has already marked the peer finalized. The only notice is PMIx's
+`client_finalized` upcall, which reaches tools from
+`PMIX_CAP_TOOL_FINALIZED` onwards — `_client_finalized()`
+([`src/prted/pmix/pmix_server_gen.c`](../../prted/pmix/pmix_server_gen.c))
+turns it into `PRTE_PROC_STATE_TERMINATED` for a job flagged
+`PRTE_JOB_FLAG_TOOL`, which is what eventually walks the table above.
+Without that the disposition never runs at all, and a grow driven from a
+command line strands its nodes for the life of the DVM: out of the general
+pool, and unreachable through the reservation as well, since
+`prte_session_is_owned_by` will only admit a namespace that no longer
+exists.
+
 Elastic shrink is a two-phase collective: `PMIX_ALLOC_RELEASE` records a
 `prte_shrink_campaign_t`, xcasts the shrink command with a completion
 callback (`shrink_xcast_complete` → thread-shifted

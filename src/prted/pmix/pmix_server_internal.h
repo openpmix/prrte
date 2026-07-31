@@ -236,6 +236,10 @@ PRTE_EXPORT extern pmix_status_t pmix_server_client_finalized_fn(const pmix_proc
                                                                  void *server_object,
                                                                  pmix_op_cbfunc_t cbfunc,
                                                                  void *cbdata);
+/* Retire a tool that has left us - locally if we are the DVM master, else by
+ * telling the master, which is the only place a tool's job object lives. */
+PRTE_EXPORT void prte_pmix_server_tool_departed(pmix_proc_t *tool);
+
 PRTE_EXPORT extern pmix_status_t pmix_server_abort_fn(const pmix_proc_t *proc, void *server_object,
                                                       int status, const char msg[],
                                                       pmix_proc_t procs[], size_t nprocs,

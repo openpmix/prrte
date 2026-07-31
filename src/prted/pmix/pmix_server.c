@@ -574,20 +574,21 @@ static void _lost_conn(int sd, short args, void *cbdata)
 
      // check the source to see if it is a client or tool
      jdata = prte_get_job_data_object(cd->proc.nspace);
-     if (NULL == jdata) {
-        // we don't know this job
-        goto complete;
-     }
-
-     if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+     if (NULL != jdata && !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
         // client - do nothing, the ODLS will see it go away
         goto complete;
      }
 
-     // tool - since the tool isn't a child of ours, we cannot
-     // see a waitpid fire, so this is the only notice we will
-     // receive that the tool is no longer connected to us
-     PRTE_ACTIVATE_PROC_STATE(&cd->proc, PRTE_PROC_STATE_TERMINATED);
+     // Either a tool, or a peer we hold no job object for - which on a
+     // daemon other than the master is what a tool looks like, since only
+     // the master keeps one. Not knowing the job is therefore not a reason
+     // to do nothing here; prte_pmix_server_tool_departed() decides, and on
+     // the master it re-checks the TOOL flag before acting.
+     //
+     // A tool isn't a child of ours, so we cannot see a waitpid fire: this
+     // is the only notice we get that a tool has dropped without finalizing
+     // (a clean finalize arrives as the client_finalized upcall instead).
+     prte_pmix_server_tool_departed(&cd->proc);
 
 complete:
     // progress the PMIx event notification chain
