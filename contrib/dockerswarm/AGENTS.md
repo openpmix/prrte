@@ -394,17 +394,39 @@ the daemon copy was missed.
 **Grow** (`elastic grow node2:2,node3:2`): phase-1 `PMIX_SUCCESS`, then phase-2
 `PMIX_DVM_IS_READY`, and `prted` now running on node2 and node3.
 
-> The grown nodes join the **reservation** created by the request, so a plain
-> `prun -n 3 --map-by node hostname` still lands only on node1 — its default job
-> allocation is node1's base pool, not the reservation. Confirm a grow by
-> `prted` presence on the targets and the `PMIX_DVM_IS_READY` event, not by
-> plain-`prun` placement.
+> The grown nodes join the **reservation** created by the request, and for as
+> long as the requesting tool is alive they belong to it alone: a plain
+> `prun -n 3 --map-by node hostname` still lands only on node1, because its
+> default job allocation is node1's base pool, not the reservation. While the
+> tool is running, confirm a grow by `prted` presence on the targets and the
+> `PMIX_DVM_IS_READY` event, not by plain-`prun` placement.
 >
-> To actually **run something on a grown node**, spawn into the reservation:
-> `elastic grow node4:2 -- <cmd>` takes the `PMIX_ALLOC_ID` the request handed
-> back and spawns `<cmd>` with `PMIX_SPAWN_TARGET` naming it. The grow and the
-> spawn must happen in one `elastic` invocation — the HNP only lets a namespace
-> target a reservation it owns, and the owner is the tool that created it.
+> To **run something on a grown node while the reservation is still held**,
+> spawn into it: `elastic grow node4:2 -- <cmd>` takes the `PMIX_ALLOC_ID` the
+> request handed back and spawns `<cmd>` with `PMIX_SPAWN_TARGET` naming it.
+> A **later** command of the same user can reach it too:
+> `prun --alloc-id <id>` spawns into the reservation from a separate tool.
+> Ownership is namespace *and* user — the namespace test is what keeps other
+> jobs in the DVM out, and the uid is what keeps the allocation usable after
+> the one-shot tool that created it has gone. An allocation the DVM does not
+> know is still `PMIX_ERR_NOT_FOUND`, and a job whose namespace is not an
+> owner is refused with `PMIX_ERR_NO_PERMISSIONS` (`PRTE_ERR_PERM`) — the two
+> answers are deliberately distinct, so "you may not" cannot be read as
+> "there is no such allocation".
+>
+> **Once that tool exits, the reservation is gone.** Its inheritance
+> disposition fires — by default "unreserve into the general pool" — so the
+> nodes it grew become ordinary pool members and a plain `prun --host node4`
+> reaches them with no allocation directive at all. This needs a PMIx defining
+> `PMIX_CAP_TOOL_FINALIZED`: a tool that finalizes cleanly is reported to the
+> host by nothing else (it is not a child, so no waitpid; and the connection
+> drop that follows raises no lost-connection event, because the peer is
+> already marked finalized). Against an older PMIx the DVM never learns the
+> tool went away, the disposition never runs, and the grown nodes stay
+> stranded for the life of the DVM — outside the general pool and unreachable
+> through the reservation too, since the only namespace allowed to name it no
+> longer exists. `run-tests.sh` skips the cases that assert the released-pool
+> behavior when the capability is absent (`pmix_cap`).
 
 **Shrink** (`elastic shrink node3`): phase-1 `PMIX_SUCCESS`, then phase-2
 `PMIX_DVM_IS_READY`, plus a **"PRRTE has lost communication with a remote

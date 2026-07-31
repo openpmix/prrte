@@ -94,7 +94,7 @@ codes). A few load-bearing boundaries and values:
 | Proc state | `UNTERMINATED = 15`; `RUNNING = 4`, `REGISTERED = 5`; `TERMINATED = 20`; `ERROR = 50` (error codes are offsets from it — `FAILED_TO_START = ERROR+3`, `COMM_FAILED = ERROR+6`, `ABORTED = ERROR+2`, …). Anything `< UNTERMINATED` means still-running. |
 | Job state | `LAUNCH_DAEMONS = 8`, `DAEMONS_LAUNCHED = 9`, `DAEMONS_REPORTED = 10`, `VM_READY = 11`, `RUNNING = 14`; `UNTERMINATED = 30`, `TERMINATED = 31`; `ERROR = 50` (`FAILED_TO_START = ERROR+3`, `NEVER_LAUNCHED = ERROR+10`, `MAP_FAILED = ERROR+19`, …). |
 | Node state | `UP = 3`, `DOWN = 2`, `DO_NOT_USE = 5`, `NOT_INCLUDED = 6`, `ADDED = 7`. |
-| PLM commands | `LAUNCH_JOB_CMD = 1`, `UPDATE_PROC_STATE = 2`, `REGISTERED_CMD = 3`, `TOOL_ATTACHED_CMD = 4`, `READY_FOR_DEBUG_CMD = 5`, `LOCAL_LAUNCH_COMP_CMD = 6`. |
+| PLM commands | `LAUNCH_JOB_CMD = 1`, `UPDATE_PROC_STATE = 2`, `REGISTERED_CMD = 3`, `TOOL_ATTACHED_CMD = 4`, `READY_FOR_DEBUG_CMD = 5`, `LOCAL_LAUNCH_COMP_CMD = 6`, `TOOL_DEPARTED_CMD = 7`. |
 
 Note the sequences deliberately **skip** some offsets (e.g. job error
 `ERROR+15`) — do not reuse a gap assuming it is free.
@@ -312,6 +312,14 @@ thread-safe on the progress thread) and switches on
   procs launched (pid + state); advances to `STARTED` on the first and
   `RUNNING` when `num_launched == num_procs`.
 - **`PRTE_PLM_TOOL_ATTACHED_CMD`** — register a connecting tool as a job.
+- **`PRTE_PLM_TOOL_DEPARTED_CMD`** — the partner of the above: a tool the
+  master registered has gone. Only the master holds a tool's job object, so
+  a daemon the tool connected *through* has nothing local to retire and
+  reports the departure instead. The master vets the namespace's
+  `PRTE_JOB_FLAG_TOOL` before acting — the reporting daemon can only say
+  "this peer was not a client of mine", and a namespace that turns out to be
+  an application job must not be terminated on the strength of that. An
+  unknown namespace is not an error; the DVM may have discarded it already.
 
 ### orted command-line construction
 

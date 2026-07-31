@@ -112,6 +112,29 @@ prted_count() { local c=0 n; for n in "$@"; do ON "$n" 'pgrep -x prted' >/dev/nu
 # entry produces
 prted_procs() { docker exec "$NODE$1" sh -c 'pgrep -x prted 2>/dev/null | wc -l' | tr -d ' \r'; }
 
+# Run something on the head node detached, capturing its output to a file --
+# for a tool that has to stay alive while the case pokes at the DVM around it.
+RUN_BG() {
+    local outf=$1; shift
+    docker exec -d -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+        "${NODE}1" bash -lc ". /opt/prte/env.sh; $* > $outf 2>&1"
+}
+
+# Does the PMIx this install was BUILT against define a given capability flag?
+# The harness can be pointed at either of two PMIx installs -- the one baked
+# into the image or a PMIX_SRC build -- and the only record of which one is in
+# play is the --with-pmix that build.sh stamped into the VPATH build dir, so
+# read the prefix from there rather than guessing at a path.  A case that
+# asserts behavior an older PMIx cannot produce skips on this rather than
+# failing: the baked PMIx goes stale as a matter of course (see AGENTS.md),
+# and red for that reads as "your tree is broken" when it is not.
+pmix_cap() {
+    ON 1 "p=\$(sed -n 's|.*--with-pmix=\\([^ ]*\\).*|\\1|p' \
+                  /opt/prte/vpath-linux/.configure-args 2>/dev/null); \
+          [ -n \"\$p\" ] || p=/usr/local; \
+          grep -qs $1 \"\$p/include/pmix_version.h\"" >/dev/null 2>&1
+}
+
 # --- fake-SLURM helpers -----------------------------------------------------
 # ras/slurm reaches its scheduler by shelling out to sbatch/scontrol/scancel,
 # so the harness supplies them: build.sh installs fake-slurm.py into the shared
@@ -3351,13 +3374,24 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     # already filled", which is what a NULL topology on the grown node looks
     # like from the outside.
     #
-    # Proving the node is usable means running something on it, and a grown
-    # node joins the reservation the grow created rather than the default
-    # pool -- so "prun --host node4" has no allocation to map onto no matter
-    # what its topology says. The elastic client therefore spawns INTO that
-    # reservation, naming it with the PMIX_ALLOC_ID the grow handed back
-    # (PMIX_SPAWN_TARGET). The grow and the spawn have to happen in one tool
-    # session: the HNP only lets a namespace target a reservation it owns.
+    # Proving the node is usable means running something on it, and that is
+    # asserted twice over, because the two ways of reaching a grown node are
+    # different code:
+    #
+    #   - WHILE the requesting tool still holds the reservation, only that
+    #     tool can put work on it -- the HNP lets a namespace target a
+    #     reservation only if it owns it, which is why the grow and the spawn
+    #     happen in one "elastic" invocation, naming the reservation with the
+    #     PMIX_ALLOC_ID the grow handed back (PMIX_SPAWN_TARGET).
+    #   - ONCE that tool exits, the reservation's inheritance disposition
+    #     fires and (by default) unreserves its nodes into the general pool,
+    #     so a plain "prun --host node4" reaches them with no allocation
+    #     directive at all.
+    #
+    # The second half is gated on the PMIx capability, because a tool that
+    # finalizes cleanly is reported to the host only by a PMIx that has
+    # PMIX_CAP_TOOL_FINALIZED; without it the DVM never learns the tool went
+    # away and the nodes stay withheld for the life of the DVM.
     cleanup_swarm
     ON 4 'rm -f /tmp/survivor.out' >/dev/null 2>&1
     RUN 'nohup prte --daemonize --uniform-nodes --prtemca prte_elastic_mode 1 \
@@ -3384,6 +3418,25 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         [ "$marker" = node4 ] \
             && ok "the grown node ran the job - it inherited from a survivor" \
             || bad "grown node never ran the job (marker='$marker')"
+        # The elastic client has exited by now, so its reservation is gone
+        # and the node it grew is back in the general pool -- reachable by a
+        # plain --host with no allocation directive of any kind. This is the
+        # assertion the topology question is really about: a node whose
+        # topology stayed NULL fails to map here with "All nodes which are
+        # allocated for this job are already filled".
+        if pmix_cap PMIX_CAP_TOOL_FINALIZED; then
+            sleep 2
+            # spell the slot count out: --host with a bare name contributes
+            # ONE slot, so -np 2 would fail as oversubscription rather than
+            # for any reason this case is about
+            out=$(RUN 'timeout 60 prun --host node4:2 -np 2 hostname' 2>&1)
+            n=$(echo "$out" | grep -c '^node4$')
+            [ "$n" = 2 ] \
+                && ok "plain prun maps onto the grown node once its reservation is released" \
+                || bad "prun --host node4 placed $n/2 procs: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        else
+            skp "prun onto the released reservation (PMIx predates PMIX_CAP_TOOL_FINALIZED)"
+        fi
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
         bad "could not start an elastic DVM for the survivor-topology test"
