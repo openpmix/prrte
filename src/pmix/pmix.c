@@ -96,7 +96,13 @@ pmix_status_t prte_pmix_convert_rc(int rc)
     case PRTE_ERR_NOT_FOUND:
         return PMIX_ERR_NOT_FOUND;
 
+    /* keep "you may not" distinct from "I could not get there". They used to
+     * share PMIX_ERR_UNREACH, so a job refused for want of permission - the
+     * ownership check on an allocation is the live case - reached the user as
+     * a connectivity failure, which is neither true nor actionable. */
     case PRTE_ERR_PERM:
+        return PMIX_ERR_NO_PERMISSIONS;
+
     case PRTE_ERR_UNREACH:
     case PRTE_ERR_SERVER_NOT_AVAIL:
         return PMIX_ERR_UNREACH;
@@ -253,8 +259,10 @@ int prte_pmix_convert_status(pmix_status_t status)
         return PRTE_ERR_BAD_PARAM;
 
     case PMIX_ERR_UNREACH:
-    case PMIX_ERR_NO_PERMISSIONS:
         return PRTE_ERR_UNREACH;
+
+    case PMIX_ERR_NO_PERMISSIONS:
+        return PRTE_ERR_PERM;
 
     case PMIX_ERR_TIMEOUT:
         return PRTE_ERR_TIMEOUT;

@@ -368,6 +368,18 @@ static int test_status_known_collisions(void)
     CHECK("not-available is not a checkpoint",
           PRTE_ERR_PROC_CHECKPOINT != prte_pmix_convert_status(PMIX_ERR_NOT_AVAILABLE));
 
+    /* "you may not" and "I could not get there" used to share
+     * PMIX_ERR_UNREACH, so a job refused by the allocation ownership check
+     * reached the user as a connectivity failure. */
+    CHECK("a permission failure says so",
+          PMIX_ERR_NO_PERMISSIONS == prte_pmix_convert_rc(PRTE_ERR_PERM));
+    CHECK("a permission failure is not unreachable",
+          PMIX_ERR_UNREACH != prte_pmix_convert_rc(PRTE_ERR_PERM));
+    CHECK("unreachable is still unreachable",
+          PMIX_ERR_UNREACH == prte_pmix_convert_rc(PRTE_ERR_UNREACH));
+    CHECK("no-permissions comes back as a permission failure",
+          PRTE_ERR_PERM == prte_pmix_convert_status(PMIX_ERR_NO_PERMISSIONS));
+
     return failures;
 }
 
@@ -402,6 +414,8 @@ static int test_status_roundtrip(void)
         PRTE_ERR_PROC_MIGRATE,
         PRTE_ERR_EVENT_REGISTRATION,
         PRTE_ERR_DATA_VALUE_NOT_FOUND,
+        PRTE_ERR_PERM,
+        PRTE_ERR_UNREACH,
         PRTE_SUCCESS,
     };
     size_t n;
