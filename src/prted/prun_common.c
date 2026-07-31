@@ -711,7 +711,7 @@ int prun_common(pmix_cli_result_t *results,
     }
 
     ret = PMIx_Spawn(iptr, ninfo, papps, napps, spawnednspace);
-    if (PRTE_SUCCESS != ret) {
+    if (PMIX_SUCCESS != ret) {
         pmix_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
         rc = ret;
         goto DONE;
