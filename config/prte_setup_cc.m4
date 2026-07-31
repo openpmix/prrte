@@ -171,25 +171,28 @@ AC_DEFUN([PRTE_SETUP_CC],[
     PRTE_PROG_CC_C11
     PRTE_CHECK_CC_IQUOTE
 
+    # C11 is a requirement, and specifically C11 *atomics* are: PRRTE shares
+    # its threading model with PMIx, and src/include/prte_stdatomic.h
+    # declares its one atomic type with the _Atomic keyword unconditionally,
+    # exactly as PMIx's pmix_stdatomic.h does.
+    #
+    # PRTE_PROG_CC_C11 sets prte_cv_c11_supported only after compiling
+    # <stdatomic.h>, a _Thread_local, an _Atomic variable and
+    # atomic_fetch_xor_explicit, so it is precisely the question we need
+    # answered - there is nothing further to probe.
+    #
+    # This used to fall back to a C99 compiler, with the C11 error sitting
+    # commented out waiting for the day PRRTE required it. The fallback
+    # could not produce a working build: the atomics header has no non-C11
+    # arm to fall back to. Failing here, at the point of detection, also
+    # means the user is told by the compiler checks they just watched run
+    # rather than several hundred checks later.
     if test $prte_cv_c11_supported = no ; then
-        # It is not currently an error if C11 support is not available. Uncomment the
-        # following lines and update the warning when we require a C11 compiler.
-        # AC_MSG_WARNING([PRRTE requires a C11 (or newer) compiler])
-        # AC_MSG_ERROR([Aborting.])
-        # We require a C99 compiant compiler
-        # with autoconf 2.70 AC_PROG_CC makes AC_PROG_CC_C99 obsolete
-        m4_version_prereq([2.70],
-            [],
-            [AC_PROG_CC_C99])
-        # The C99 result of AC_PROG_CC is stored in ac_cv_prog_cc_c99
-        if test "x$ac_cv_prog_cc_c99" = xno ; then
-            AC_MSG_WARN([PRRTE requires a C99 (or newer) compiler. C11 is recommended.])
-            AC_MSG_ERROR([Aborting.])
-        fi
-
-        # Get the correct result for C11 support flags now that the compiler flags have
-        # changed
-        PRTE_PROG_CC_C11_HELPER([],[],[])
+        AC_MSG_WARN([PRRTE requires a C11 (or newer) compiler, and specifically])
+        AC_MSG_WARN([one providing C11 atomics. The compiler in use does not])
+        AC_MSG_WARN([provide them - see the "supports C11" checks just above])
+        AC_MSG_WARN([for which of them failed.])
+        AC_MSG_ERROR([Aborting.])
     fi
 
     # Check if compiler support __thread

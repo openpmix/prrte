@@ -40,7 +40,6 @@
 
 #include "prte_stdint.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/include/hash_string.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"

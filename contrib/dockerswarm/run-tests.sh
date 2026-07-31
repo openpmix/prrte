@@ -2814,6 +2814,218 @@ test_rml() {
     cleanup_swarm
 }
 
+########################################################################
+# src/event -- the event base every daemon and tool runs on.
+#
+# test/unit/event covers the API itself: allocation, dispatch, timers, the
+# threadshift caddy, base open/close.  What it cannot cover is any event
+# whose consequence is on another machine, and that is most of what this
+# directory exists for.  Three things land here:
+#
+#   - a timer on the HNP that has to fire (or not fire) against a job whose
+#     processes are spread over the swarm;
+#   - a signal event on prun that has to travel the RML and be re-raised by
+#     a daemon that never saw the signal itself;
+#   - the event base's teardown, which only happens in prte_finalize() and
+#     therefore only when a real DVM shuts down.
+########################################################################
+test_event() {
+    local out rc n c
+
+    banner "event: a job timeout fires and takes the job with it"
+    # --timeout arms a prte_event_evtimer on the HNP.  A single node would
+    # exercise the timer but not the part that matters: when it fires, the
+    # HNP has to reach processes it does not host.  Ask for a job that will
+    # never finish on its own and require the timer to end it.
+    #
+    # cleanup_swarm reaps daemons and tools but NOT the application processes
+    # they left behind, and this case counts sleeps - a stray one from an
+    # earlier phase would make the assertion nonsense.  Clear them first.
+    cleanup_swarm
+    for i in 1 2 3; do docker exec "$NODE$i" sh -c 'pkill -9 -x sleep 2>/dev/null; true'; done
+    out=$(RUN 'timeout -k 5 120 prterun --timeout 10 \
+                  --host node1:1,node2:1,node3:1 -np 3 --map-by node sleep 300' 2>&1); rc=$?
+    [ "$rc" != 0 ] && [ "$rc" != 124 ] \
+        && ok "the timeout ended the job (rc=$rc)" \
+        || bad "the job outlived its timeout (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    # and it really killed the remote processes, not just the launcher
+    n=0
+    for i in 1 2 3; do
+        ON "$i" 'pgrep -x sleep' >/dev/null 2>&1 && n=$((n+1))
+    done
+    [ "$n" = 0 ] && ok "no application processes survived the timeout" \
+                 || bad "$n node(s) still running the timed-out job's procs"
+    c=$(prted_count 1 2 3 4 5 6 7 8 9 10)
+    [ "$c" = 0 ] && ok "no daemons linger after a timeout" \
+                 || bad "$c stray prted after a timeout"
+
+    banner "event: a job that beats its timeout is not killed by it"
+    # The other half, and the one a broken evtimer_del() breaks: when the job
+    # finishes first, the pending timer has to be deleted.  If the del does
+    # not take, the timer fires afterwards against a job that is already
+    # gone.  Give a fast job a long timeout and require a clean result.
+    cleanup_swarm
+    out=$(RUN 'timeout -k 5 120 prterun --timeout 60 \
+                  --host node1:1,node2:1,node3:1 -np 3 --map-by node hostname' 2>&1); rc=$?
+    n=$(echo "$out" | grep -cE '^node[1-3]$')
+    [ "$rc" = 0 ] && [ "$n" = 3 ] \
+        && ok "a job well inside its timeout completes normally" \
+        || bad "job failed under a generous timeout (rc=$rc, lines=$n): $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    echo "$out" | grep -qi 'timeout\|timed out' \
+        && bad "a job that finished in time still reported a timeout" \
+        || ok "no spurious timeout was reported"
+    cleanup_swarm
+
+    banner "event: a signal caught on one node is re-raised on another"
+    # prun catches the signal on ITS event base (a PRTE_EV_SIGNAL event, kept
+    # on a prte_event_list_item_t), reads the number back with
+    # PRTE_EVENT_SIGNAL(), and relays it over the RML; the daemon holding the
+    # process re-raises it locally.  test_prted covers the job *scoping* of
+    # that path with both jobs on one node.  What is only visible across
+    # nodes is the relay itself -- put the launcher on node1 and the process
+    # on node4, so nothing about the delivery can be local.
+    for i in 1 4; do docker exec "$NODE$i" sh -c 'pkill -9 -x sleep 2>/dev/null; true'; done
+    if ! prted_dvm_start 'node1:2,node4:2'; then
+        bad "could not start a DVM for the cross-node signal test"
+    else
+        PRUN_BG /tmp/sigjob.out '--forward-signals SIGUSR1 --host node4:1 -n 1 sleep 300'
+        sleep 10
+        n=$(ON 4 'pgrep -c -x sleep' 2>/dev/null | tr -d ' \r')
+        if [ "$n" = 1 ]; then
+            ok "a process is running on node4 with its launcher on node1"
+            c=$(RUN 'pgrep -x prun | head -1' 2>/dev/null | tr -d ' \r')
+            RUN "kill -USR1 $c" >/dev/null 2>&1
+            sleep 10
+            n=$(ON 4 'pgrep -c -x sleep' 2>/dev/null | tr -d ' \r')
+            [ "$n" = 0 ] \
+                && ok "the signal crossed to node4 and reached the process" \
+                || bad "the process on node4 never received the relayed signal"
+        else
+            bad "could not place a process on node4 (saw $n)"
+        fi
+        RUN 'pkill -f "sleep 300"' >/dev/null 2>&1
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
+    banner "event: the DVM tears its event base down cleanly on every node"
+    # prte_finalize() closes the event base -- it frees prte_sync_event_base
+    # and clears both globals, which nothing did until recently (the function
+    # existed and had no callers, and left both pointing at freed memory).
+    # A base freed while something still holds a registered event, or freed
+    # before the last PMIx server upcall has drained, shows up here as a
+    # daemon that crashes or hangs instead of exiting.  Only a real shutdown
+    # runs that code, so this is the one place it is exercised at all.
+    if ! prted_dvm_start 'node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1,node8:1'; then
+        bad "could not start a DVM for the teardown test"
+    else
+        c=$(prted_count 2 3 4 5 6 7 8)
+        [ "$c" = 7 ] && ok "the DVM came up on all seven remote nodes" \
+                     || bad "only $c of 7 remote daemons started"
+        # give the daemons real work first, so there are live events (iof
+        # read events, timers, collectives) on each base at shutdown
+        out=$(PRUN '-n 8 --map-by node hostname' 2>&1); rc=$?
+        n=$(echo "$out" | grep -cE '^node[1-8]$')
+        [ "$rc" = 0 ] && [ "$n" = 8 ] \
+            && ok "a job ran across the DVM before teardown" \
+            || bad "the pre-teardown job failed (rc=$rc, lines=$n)"
+        out=$(RUN 'timeout -k 5 60 pterm' 2>&1); rc=$?
+        [ "$rc" = 0 ] && ok "pterm returned success" \
+                      || bad "pterm exited $rc: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        echo "$out" | grep -qiE 'segmentation|bus error|abort|assert|corrupt' \
+            && bad "pterm reported a crash during teardown: $(echo "$out" | tr '\n' ' ' | tail -c 200)" \
+            || ok "no crash was reported during teardown"
+        sleep 3
+        c=$(prted_count 1 2 3 4 5 6 7 8 9 10)
+        [ "$c" = 0 ] && ok "every daemon exited on pterm" \
+                     || bad "$c daemon(s) survived pterm"
+        # a daemon that died in teardown leaves its session directory behind
+        n=0
+        for i in 1 2 3 4 5 6 7 8; do
+            ON "$i" 'ls -d /tmp/prte.* /tmp/prted.* 2>/dev/null | head -1' \
+                | grep -q . && n=$((n+1))
+        done
+        [ "$n" = 0 ] && ok "no session directories were left behind" \
+                     || bad "$n node(s) left a session directory after teardown"
+    fi
+    cleanup_swarm
+}
+
+########################################################################
+# src/include -- the constants every other directory is compiled against.
+#
+# test/unit/include covers the numbering arithmetic.  What it cannot cover
+# is whether a code that a *daemon* produces still arrives at the user as a
+# sentence.  PRRTE's error codes were renumbered onto PMIX_EXTERNAL_ERR_BASE
+# (they used to sit on top of PMIx's own statuses, 46 of them exactly), and
+# the way that goes wrong is not a build failure -- it is a real failure
+# path that reports "Unknown error" to the user, or reports somebody else's
+# error.  Those paths run on the daemon that hosts the process, so they need
+# a remote node to be exercised at all.
+########################################################################
+test_include() {
+    local out rc
+
+    banner "include: a failure on a remote node is reported as a sentence"
+    # PRTE_ERR_EXE_NOT_FOUND is raised by the odls on node2, travels back as
+    # a proc state, and is rendered for the user on node1.  If a code has
+    # lost its prte_strerror() entry -- which is exactly what renumbering
+    # can do -- this is where it surfaces, as "Unknown error".
+    cleanup_swarm
+    out=$(RUN 'timeout -k 5 90 prterun --host node2:1 -np 1 /no/such/executable' 2>&1); rc=$?
+    [ "$rc" != 0 ] && ok "a missing executable fails the job (rc=$rc)" \
+                   || bad "a missing executable was reported as success"
+    echo "$out" | grep -qi 'unknown error' \
+        && bad "the failure came back as \"Unknown error\": $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+        || ok "the failure was named, not reported as \"Unknown error\""
+    # What is NOT asserted, and why.  PRRTE has a complete diagnostic for
+    # this - prte_quit.c renders "prun:exe-not-accessible" naming the
+    # executable, the node and the rank, from the PMIX_ERR_EXE_NOT_ACCESSIBLE
+    # that the odls stashed in the proc exit_code.  The user never sees it.
+    #
+    # The launch fails inside PMIx_Spawn, so prun prints the bare status and
+    # goes to DONE without registering the job-termination handler that would
+    # have printed the text (prun_common.c ~716).  The DVM meanwhile hands the
+    # message to whichever of check_job_complete() or dvm_notify() gets there
+    # first - and prte_dump_aborted_procs() is single-shot
+    # (PRTE_JOB_FLAG_ERR_REPORTED), so the loser gets NULL.  One path prints
+    # to a tool that has already left; the other packs it into an event
+    # nobody is listening for yet.
+    #
+    # So all a user gets for a mistyped executable is:
+    #     PMIx_Spawn failed (-181): PMIX_ERR_JOB_FAILED_TO_LAUNCH
+    # Assert the floor - it fails, and it is not "Unknown error" - and leave
+    # the message assertion out until the tool-side path is fixed, rather
+    # than have this phase fail for a defect it is not testing.
+    banner "include: a bad working directory on a remote node is named too"
+    # A second code from the other documentation group in constants.h
+    # (PRTE_ERR_WDIR_NOT_FOUND), so a renumbering that orphaned one group
+    # and not the other is still caught.
+    cleanup_swarm
+    out=$(RUN 'timeout -k 5 90 prterun --host node2:1 --wdir /no/such/dir -np 1 hostname' 2>&1); rc=$?
+    [ "$rc" != 0 ] && ok "a missing wdir fails the job (rc=$rc)" \
+                   || bad "a missing wdir was reported as success"
+    echo "$out" | grep -qi 'unknown error' \
+        && bad "the wdir failure came back as \"Unknown error\": $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+        || ok "the wdir failure was named, not reported as \"Unknown error\""
+    # (same gap as the executable case above - PMIX_ERR_JOB_WDIR_NOT_FOUND
+    # has a prte_quit.c renderer too, and it reaches the user just as rarely)
+    banner "include: an over-subscription is refused with a real message"
+    # Slot exhaustion is decided by the mapper on the HNP against a node
+    # pool that only has more than one entry in a real DVM.
+    cleanup_swarm
+    out=$(RUN 'timeout -k 5 90 prterun --host node2:1,node3:1 -np 64 hostname' 2>&1); rc=$?
+    [ "$rc" != 0 ] && ok "an impossible request is refused (rc=$rc)" \
+                   || bad "64 procs were placed on 2 slots"
+    echo "$out" | grep -qi 'unknown error' \
+        && bad "the mapping failure came back as \"Unknown error\": $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+        || ok "the mapping failure was named, not reported as \"Unknown error\""
+    echo "$out" | grep -qiE 'slot|oversubscribe|not enough|available' \
+        && ok "the message explains what was short" \
+        || bad "no recognisable diagnostic: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    cleanup_swarm
+}
+
 test_linux() {
     if ! docker ps --format '{{.Names}}' | grep -qx "${NODE}1"; then
         # Name the swarm we looked for. Forgetting PRTE_SWARM on the compose
@@ -3447,6 +3659,10 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_util
 
     test_hwloc
+
+    test_event
+
+    test_include
 
     test_runtime
 

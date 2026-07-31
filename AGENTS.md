@@ -112,6 +112,17 @@ data PRRTE caches on hwloc `userdata` pointers, the binding-policy word,
 and the fact that in the HNP almost every topology in play belongs to some
 *other* machine.
 
+Two small directories underpin everything above them.
+[`src/event/AGENTS.md`](src/event/AGENTS.md) covers the event API — why
+`prte_event_base` and `prte_sync_event_base` are deliberately the *same*
+object, and why `prte_event_alloc()` must return zeroed storage.  PRRTE
+builds against **Libevent only**; the libev alternative is gone, because
+PRRTE shares an event base with PMIx and PMIx is Libevent-only.
+[`src/include/AGENTS.md`](src/include/AGENTS.md) covers the constants and
+the portability layer — in particular that the error codes must stay based
+at `PMIX_EXTERNAL_ERR_BASE`, the range PMIx reserves for projects built on
+it.
+
 ---
 
 ## MCA Frameworks
@@ -173,12 +184,17 @@ via `pkg-config` or `--with-pmix=`).  The shim at `src/pmix/pmix-internal.h`
 and `src/pmix/pmix.c` is PRRTE's integration point — consult it before
 reaching for PMIx symbols elsewhere.
 [`src/pmix/AGENTS.md`](src/pmix/AGENTS.md) covers it, and in particular the
-one rule that governs every crossing of this boundary: **PRRTE's error codes
-and PMIx's status codes are different numbering schemes that overlap
-numerically**, so a code handed across unconverted does not look foreign —
-it looks like some other, real code.  Convert at the boundary with
+one rule that governs every crossing of this boundary: **PRRTE's codes and
+PMIx's are different numbering schemes**, so convert at the boundary with
 `prte_pmix_convert_rc()` / `prte_pmix_convert_status()`, and never spell a
 proc state as a bare integer.
+
+PRRTE's *error codes* are now based at `PMIX_EXTERNAL_ERR_BASE`, the range
+PMIx reserves for projects layered on it, so an unconverted one at least
+lands somewhere PMIx will never assign.  That was not true until recently —
+46 PRRTE codes had the value of a live PMIx status meaning something else —
+and it is still **not** true of the *proc and job states*, which share PMIx's
+numbering by design.  Convert; do not rely on a bad value looking wrong.
 
 ### Check capability flags
 
@@ -341,7 +357,9 @@ duplicate silently makes two distinct codes compare equal and is a
 miserable bug to track down.
 
 - Error/return codes live in [`src/include/constants.h`](src/include/constants.h),
-  numbered as offsets from `PRTE_ERR_BASE` and `PRTE_ERR_SPLIT`.
+  numbered as offsets from `PRTE_ERR_BASE` — which **must** stay defined as
+  `PMIX_EXTERNAL_ERR_BASE`, the range PMIx reserves for projects built on
+  it.  See [`src/include/AGENTS.md`](src/include/AGENTS.md).
 - Job and process states live in
   [`src/mca/plm/plm_types.h`](src/mca/plm/plm_types.h), numbered as
   offsets from `PRTE_JOB_STATE_ERROR` and `PRTE_PROC_STATE_ERROR` (note

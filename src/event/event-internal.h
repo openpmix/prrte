@@ -8,10 +8,12 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  *
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
+ *
+ * $HEADER$
  */
 
 #ifndef PRTE_MCA_EVENT_H
@@ -29,9 +31,7 @@
 #include <stdint.h>
 
 #include <event.h>
-#if !PRTE_HAVE_LIBEV
-#    include <event2/thread.h>
-#endif
+#include <event2/thread.h>
 
 #include "src/class/pmix_list.h"
 #include "src/util/pmix_output.h"
@@ -41,11 +41,6 @@ typedef event_callback_fn prte_event_cbfunc_t;
 BEGIN_C_DECLS
 
 #define PRTE_EVENT_SIGNAL(ev) prte_event_get_signal(ev)
-
-#define PRTE_TIMEOUT_DEFAULT \
-    {                        \
-        1, 0                 \
-    }
 
 typedef struct event_base prte_event_base_t;
 typedef struct event prte_event_t;
@@ -73,25 +68,12 @@ PRTE_EXPORT prte_event_t *prte_event_alloc(void);
 
 #define prte_event_reinit(b) event_reinit((b))
 
-#define prte_event_base_init_common_timeout (b, t) event_base_init_common_timeout((b), (t))
-
-#if PRTE_HAVE_LIBEV
-#    define prte_event_use_threads()
-#    define prte_event_free(b)       free(b)
-#    define prte_event_get_signal(x) (x)->ev_fd
-#else
-
 /* thread support APIs */
-#    define prte_event_use_threads() evthread_use_pthreads()
-#    define prte_event_free(x)       event_free(x)
-#    define prte_event_get_signal(x) event_get_signal(x)
-#endif
+#define prte_event_use_threads() evthread_use_pthreads()
 
-/* Event priority APIs */
-#define prte_event_base_priority_init(b, n) event_base_priority_init((b), (n))
+#define prte_event_free(x) event_free(x)
 
-/* Basic event APIs */
-#define prte_event_enable_debug_mode() event_enable_debug_mode()
+#define prte_event_get_signal(x) event_get_signal(x)
 
 PRTE_EXPORT int prte_event_assign(struct event *ev, prte_event_base_t *evbase, int fd, short arg,
                                   event_callback_fn cbfn, void *cbd);
@@ -99,25 +81,18 @@ PRTE_EXPORT int prte_event_assign(struct event *ev, prte_event_base_t *evbase, i
 #define prte_event_set(b, x, fd, fg, cb, arg) \
     prte_event_assign((x), (b), (fd), (fg), (event_callback_fn)(cb), (arg))
 
-#if PRTE_HAVE_LIBEV
-PRTE_EXPORT int prte_event_add(struct event *ev, struct timeval *tv);
-PRTE_EXPORT int prte_event_del(struct event *ev);
-PRTE_EXPORT void prte_event_active(struct event *ev, int res, short ncalls);
-PRTE_EXPORT void prte_event_base_loopexit(prte_event_base_t *b);
-#else
-#    define prte_event_add(ev, tv)      event_add((ev), (tv))
-#    define prte_event_del(ev)          event_del((ev))
-#    define prte_event_active(x, y, z)  event_active((x), (y), (z))
-#    define prte_event_base_loopexit(b) event_base_loopexit(b, NULL)
+#define prte_event_add(ev, tv)      event_add((ev), (tv))
+#define prte_event_del(ev)          event_del((ev))
+#define prte_event_active(x, y, z)  event_active((x), (y), (z))
+#define prte_event_base_loopexit(b) event_base_loopexit(b, NULL)
 
-#endif
-
-PRTE_EXPORT prte_event_t *prte_event_new(prte_event_base_t *b, int fd, short fg,
-                                         event_callback_fn cbfn, void *cbd);
-
-/* Timer APIs */
-#define prte_event_evtimer_new(b, cb, arg) prte_event_new((b), -1, 0, (cb), (arg))
-
+/* Timer APIs.
+ *
+ * Note that there is deliberately no "new" here: an event is allocated with
+ * prte_event_alloc() and given its base by one of the _set macros below.
+ * A wrapper for libevent's event_new() used to be declared, and for
+ * evtimer_new() on top of it, but neither was ever defined - the first use
+ * of either would have been a link error rather than a compile error. */
 #define prte_event_evtimer_add(x, tv) prte_event_add((x), (tv))
 
 #define prte_event_evtimer_set(b, x, cb, arg) \
@@ -125,21 +100,19 @@ PRTE_EXPORT prte_event_t *prte_event_new(prte_event_base_t *b, int fd, short fg,
 
 #define prte_event_evtimer_del(x) prte_event_del((x))
 
-#define prte_event_evtimer_pending(x, tv) event_pending((x), EV_TIMEOUT, (tv))
-
-#define prte_event_evtimer_initialized(x) event_initialized((x))
-
-/* Signal APIs */
-#define prte_event_signal_add(x, tv) event_add((x), (tv))
+/* Signal APIs.
+ *
+ * These go through prte_event_add/prte_event_del rather than straight to
+ * libevent's event_add/event_del, which is what they used to do.  Today the
+ * two are the same macro, so this is a consistency point rather than a fix:
+ * every other wrapper in this header routes through the prte_ spelling, and
+ * these were the only ones that did not. */
+#define prte_event_signal_add(x, tv) prte_event_add((x), (tv))
 
 #define prte_event_signal_set(b, x, fd, cb, arg) \
     prte_event_assign((x), (b), (fd), EV_SIGNAL | EV_PERSIST, (event_callback_fn)(cb), (arg))
 
-#define prte_event_signal_del(x) event_del((x))
-
-#define prte_event_signal_pending(x, tv) event_pending((x), EV_SIGNAL, (tv))
-
-#define prte_event_signal_initalized(x) event_initialized((x))
+#define prte_event_signal_del(x) prte_event_del((x))
 
 #define prte_event_loop(b, fg) event_base_loop((b), (fg))
 
@@ -159,4 +132,4 @@ PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_event_list_item_t);
 
 END_C_DECLS
 
-#endif /* PRTE_EVENT_H_ */
+#endif /* PRTE_MCA_EVENT_H */

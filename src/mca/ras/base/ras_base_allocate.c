@@ -557,6 +557,28 @@ void prte_ras_base_release_allocation(prte_session_t *session)
     prte_ras_base_selected_module_t *mod;
     int rc;
 
+    /* Only the HNP opens the ras framework - ess/hnp does it, because no
+     * other role is permitted to allocate - so on a prted this list has
+     * never been PMIX_CONSTRUCT'ed.  It is not empty-but-walkable in that
+     * state: PMIX_LIST_STATIC_INIT leaves the sentinel's "next" NULL rather
+     * than pointing at itself, so PMIX_LIST_FOREACH starts at NULL, fails
+     * its "!= &sentinel" test, and dereferences it.
+     *
+     * That matters because session_des() calls this unconditionally, and
+     * EVERY prted releases prte_default_session in prte_finalize().  So
+     * every daemon on every node but the head node was segfaulting on the
+     * way out, of every job, successful or not.  It went unnoticed because
+     * a daemon's stderr is not forwarded - the backtrace only appears under
+     * --leave-session-attached, long after the job's own output.
+     *
+     * Guard on the framework's own open count rather than on
+     * PRTE_PROC_IS_MASTER: that is the condition that actually decides
+     * whether the list was constructed, so it stays correct if some other
+     * role is ever allowed to open ras. */
+    if (0 == prte_ras_base_framework.framework_refcnt) {
+        return;
+    }
+
     PMIX_LIST_FOREACH(mod, &prte_ras_base.selected_modules, prte_ras_base_selected_module_t) {
         if (NULL == mod->module->release_allocation) {
             continue;

@@ -238,5 +238,12 @@ int prte_finalize(void)
      * the utilities and class system we depend upon */
     PMIx_server_finalize();
 
+    /* Release the event base prte_init opened.  This has to come after
+     * PMIx_server_finalize(): that call can still drive server-module
+     * upcalls, and every one of those thread-shifts its work onto this
+     * base.  Nothing in the tree touches prte_event_base after
+     * prte_finalize() returns - the tools go straight to exit(). */
+    prte_event_base_close();
+
     return PRTE_SUCCESS;
 }
