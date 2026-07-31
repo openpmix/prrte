@@ -700,6 +700,8 @@ static void prte_job_construct(prte_job_t *job)
     PMIX_DATA_BUFFER_CONSTRUCT(&job->launch_msg);
     PMIX_CONSTRUCT(&job->children, pmix_list_t);
     PMIX_LOAD_NSPACE(job->launcher, NULL);
+    job->uid = PRTE_INVALID_UID;
+    job->gid = PRTE_INVALID_GID;
     job->target_sessions = NULL;
     job->num_target_sessions = 0;
     job->ntraces = 0;
@@ -1040,6 +1042,7 @@ static void session_con(prte_session_t *s)
     PMIX_LOAD_NSPACE(s->owner, NULL);
     s->owner_job = NULL;
     PMIX_LOAD_PROCID(&s->requestor, NULL, PMIX_RANK_INVALID);
+    s->owner_uid = PRTE_INVALID_UID;
     s->inheritance = PRTE_INHERIT_DEFAULT_VALUE;
 }
 static void session_des(prte_session_t *s)
@@ -1125,6 +1128,7 @@ PMIX_CLASS_INSTANCE(prte_session_t,
 bool prte_session_is_owned_by(prte_session_t *session,
                               const pmix_nspace_t nspace)
 {
+    prte_job_t *jdata;
     int n;
 
     /* the default session is usable by everyone */
@@ -1142,15 +1146,34 @@ bool prte_session_is_owned_by(prte_session_t *session,
         PMIX_CHECK_NSPACE(prte_pmix_server_globals.scheduler.nspace, nspace)) {
         return true;
     }
-    if (NULL == session->owners) {
-        return false;
-    }
-    for (n = 0; NULL != session->owners[n]; n++) {
-        if (PMIX_CHECK_NSPACE(session->owners[n], nspace)) {
-            return true;
+    if (NULL != session->owners) {
+        for (n = 0; NULL != session->owners[n]; n++) {
+            if (PMIX_CHECK_NSPACE(session->owners[n], nspace)) {
+                return true;
+            }
         }
     }
-    return false;
+
+    /* The namespace test above is what keeps other JOBS in this DVM out of
+     * somebody else's allocation, and it is the whole answer for them. It is
+     * not the whole answer for a TOOL: a tool namespace is minted per
+     * invocation, so the reservation a user's first command created could
+     * never be named by their second one - and once that first command
+     * exited, its namespace was gone and the allocation was unreachable by
+     * anybody at all. The user is the other half of the identity here, so a
+     * tool presenting the uid the reservation was granted to may act on it:
+     * spawn into it, extend it, release it. An application job never reaches
+     * this - it is not a tool, and its namespace is its identity. */
+    if (PRTE_INVALID_UID == session->owner_uid) {
+        return false;
+    }
+    jdata = prte_get_job_data_object(nspace);
+    if (NULL == jdata ||
+        !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL) ||
+        PRTE_INVALID_UID == jdata->uid) {
+        return false;
+    }
+    return (jdata->uid == session->owner_uid);
 }
 
 void prte_session_add_owner(prte_session_t *session,

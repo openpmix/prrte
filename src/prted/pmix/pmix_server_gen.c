@@ -511,6 +511,7 @@ static void _toolconn(int sd, short args, void *cbdata)
     prte_pmix_server_req_t *cd = (prte_pmix_server_req_t *) cbdata;
     int rc;
     char *tmp;
+    uint32_t u32;
     size_t n;
     pmix_data_buffer_t *buf;
     prte_plm_cmd_flag_t command = PRTE_PLM_TOOL_ATTACHED_CMD;
@@ -698,6 +699,20 @@ static void _toolconn(int sd, short args, void *cbdata)
     }
     // and the pid
     rc = PMIx_Data_pack(NULL, buf, &cd->pid, 1, PMIX_PID);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+    }
+    // and who is running it - the master records this on the tool's job so a
+    // reservation the tool creates can be reached by another command the same
+    // user runs. Only the master keeps a job object for a tool, so this is the
+    // only chance to tell it.
+    u32 = (uint32_t) cd->uid;
+    rc = PMIx_Data_pack(NULL, buf, &u32, 1, PMIX_UINT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+    }
+    u32 = (uint32_t) cd->gid;
+    rc = PMIx_Data_pack(NULL, buf, &u32, 1, PMIX_UINT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
     }

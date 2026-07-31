@@ -86,6 +86,12 @@ PRTE_EXPORT extern bool prte_elastic_mode;
 PRTE_EXPORT extern hwloc_cpuset_t
     prte_proc_applied_binding; /* instantiated in src/runtime/prte_init.c */
 
+/* "no user recorded". uid_t/gid_t are unsigned, and (uid_t)-1 is the value
+ * the setresuid family already reserves for "leave this alone", so no real
+ * account can carry it. */
+#define PRTE_INVALID_UID ((uid_t) -1)
+#define PRTE_INVALID_GID ((gid_t) -1)
+
 /* Shortcut for some commonly used names */
 #define PRTE_NAME_WILDCARD (&prte_name_wildcard)
 PRTE_EXPORT extern pmix_proc_t prte_name_wildcard; /** instantiated in src/runtime/prte_init.c */
@@ -248,6 +254,14 @@ typedef struct{
     /* The process that requested this allocation (req->tproc). Target of the
      * relayed PMIX_ALLOC_TIMEOUT_WARNING. Refreshed on EXTEND. */
     pmix_proc_t requestor;
+    /* The user the reservation was granted to, taken from the requesting
+     * tool's connection. A namespace owns the reservation, but the USER owns
+     * it too: a tool namespace lasts only as long as the command that made
+     * it, so without this the allocation would be unusable by every later
+     * command the same person ran - including the one that releases it.
+     * PRTE_INVALID_UID when the requester presented no identity, which
+     * matches nothing. */
+    uid_t owner_uid;
     /* Disposition recorded at creation, governing teardown when the owning
      * namespace (NONE/DEFAULT) or the last derived child (CHILD/CHILD_DEFAULT)
      * terminates. Stored as the uint8_t underlying pmix_alloc_inheritance_t so
@@ -428,6 +442,16 @@ typedef struct prte_job_t {
     pmix_list_t children;
     /* track the launcher of these jobs */
     pmix_nspace_t launcher;
+    /* The user this job belongs to. Recorded only for a TOOL job, from the
+     * PMIX_USERID/PMIX_GRPID the tool presented when it connected, and left
+     * PRTE_INVALID_UID/GID everywhere else - an application job's identity is
+     * its namespace, and nothing consults these for one. HNP-local; never
+     * packed. This is what lets a reservation be reached by a LATER tool the
+     * same user ran: a tool namespace is minted per invocation, so namespace
+     * identity alone would make an allocation unusable by everything except
+     * the one command that asked for it. */
+    uid_t uid;
+    gid_t gid;
     /* Sessions this job may map onto, resolved from PRTE_JOB_SPAWN_TARGET on the
      * HNP after the ownership check. HNP-local; never packed (rebuilt from the
      * attribute if ever needed). Defaults to { jdata->session } when no spawn

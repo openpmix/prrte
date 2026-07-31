@@ -221,6 +221,8 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
     prte_app_context_t *app, *child_app;
     pmix_proc_t name, *nptr = NULL;
     pid_t pid;
+    uid_t tooluid = PRTE_INVALID_UID;
+    gid_t toolgid = PRTE_INVALID_GID;
     bool debugging, found;
     int i, room, *rmptr = &room;
     char *tmp;
@@ -314,11 +316,31 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
                 free(tmp);
                 goto CLEANUP;
             }
+            // and who is running it
+            count = 1;
+            rc = PMIx_Data_unpack(NULL, buffer, &ui32, &count, PMIX_UINT32);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                free(tmp);
+                goto CLEANUP;
+            }
+            tooluid = (uid_t) ui32;
+            count = 1;
+            rc = PMIx_Data_unpack(NULL, buffer, &ui32, &count, PMIX_UINT32);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                free(tmp);
+                goto CLEANUP;
+            }
+            toolgid = (gid_t) ui32;
 
             // need to add the tool job
             jdata = PMIX_NEW(prte_job_t);
             PMIX_LOAD_NSPACE(jdata->nspace, name.nspace);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
+            /* record who is running the tool - see prte_session_is_owned_by */
+            jdata->uid = tooluid;
+            jdata->gid = toolgid;
             rc = prte_set_job_data_object(jdata);
             app = PMIX_NEW(prte_app_context_t);
             if (NULL != tmp) {
@@ -418,6 +440,17 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             rc = PRTE_ERR_NOT_FOUND;
             goto ANSWER_LAUNCH;
+        }
+
+        /* The job belongs to whoever asked for it. Identity descends the job
+         * tree from the tool that started it, so an allocation an application
+         * requests is recorded against the user who launched that application
+         * - not left anonymous because the job itself never presented
+         * credentials. */
+        parent = prte_get_job_data_object(nptr->nspace);
+        if (NULL != parent) {
+            jdata->uid = parent->uid;
+            jdata->gid = parent->gid;
         }
 
         /* A spawn-target list takes precedence and may name multiple sessions

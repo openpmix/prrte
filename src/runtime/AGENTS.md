@@ -139,7 +139,20 @@ unreserved pool; it is special-cased everywhere:
 - `prte_ras_base_release_allocation` returns immediately for it.
 
 `prte_session_is_owned_by` is the ownership gate for spawning into a
-reservation. Note the trap it stepped in: **`PMIX_CHECK_NSPACE` answers
+reservation, and it answers on **two** identities. The namespace test — the
+`owners[]` array, seeded with the requester and extended with each job
+spawned in — is what keeps other jobs in the DVM out of somebody else's
+allocation, and for a job it is the whole answer. It cannot be the whole
+answer for a **tool**: a tool namespace is minted per invocation, so the
+reservation a user's first command created could never be named by their
+second, and once the first exited its namespace was gone and the allocation
+was unreachable by anyone. So a reservation also records `owner_uid`, and a
+job flagged `PRTE_JOB_FLAG_TOOL` carrying that uid passes. `prte_job_t.uid`
+is recorded when a tool connects (from the `PMIX_USERID` it presents) and
+descends the job tree from there, so an allocation an *application* requests
+is attributed to the user who launched it rather than to nobody.
+
+Note the trap this function stepped in: **`PMIX_CHECK_NSPACE` answers
 "true" when either side is an empty nspace** — that is its wildcard rule.
 `prte_pmix_server_globals.scheduler.nspace` is empty until a scheduler
 connects, so testing it unguarded declared every namespace to be the
