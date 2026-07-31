@@ -3502,6 +3502,94 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     [ "$out" = node1 ] && ok "prun works post-shrink" || bad "prun broken post-shrink"
     RUN 'pterm' >/dev/null 2>&1; cleanup_swarm
 
+    banner "elastic DVM: a departing tool releases the allocation it reserved"
+    # A grow creates a RESERVATION owned by the namespace that asked for it,
+    # and every reservation carries a disposition saying what becomes of it
+    # when that namespace terminates. The default -- and what the elastic
+    # client asks for by saying nothing -- is to unreserve the nodes into the
+    # general pool. For a command-line tool "that namespace terminates" means
+    # the tool exited, and nothing else ever will: it is not a child, so no
+    # waitpid fires, and the connection it drops afterwards raises no
+    # lost-connection event because PMIx has already marked the peer
+    # finalized. Until PMIX_CAP_TOOL_FINALIZED the host was simply never
+    # told, so the disposition never ran and a grow driven from a command
+    # line stranded its nodes for the life of the DVM -- outside the general
+    # pool, and unreachable through the reservation too, since the only
+    # namespace permitted to name it no longer existed.
+    #
+    # Two nodes, so the assertion cannot pass on a job that quietly fell back
+    # to the head node.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        out=$(RUN 'timeout 90 elastic grow node2:2,node3:2' 2>&1)
+        echo "$out" | grep -q PMIX_DVM_IS_READY \
+            && ok "grow node2,node3 completed" || bad "grow did not complete"
+        if pmix_cap PMIX_CAP_TOOL_FINALIZED; then
+            # the disposition runs on the HNP's progress thread once the
+            # tool's finalize lands, so give it a beat before asking
+            sleep 2
+            out=$(RUN 'timeout 60 prun --host node2:2,node3:2 -np 2 --map-by node hostname' 2>&1)
+            n=$(echo "$out" | grep -cE '^node[23]$')
+            [ "$n" = 2 ] \
+                && ok "the grown nodes joined the general pool when the tool exited" \
+                || bad "prun reached $n/2 grown nodes: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        else
+            skp "released-reservation placement (PMIx predates PMIX_CAP_TOOL_FINALIZED)"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start an elastic DVM for the reservation-release test"
+    fi
+    cleanup_swarm
+
+    banner "elastic DVM: the user who reserved an allocation can use it again"
+    # A reservation is owned by the namespace that requested it, which is what
+    # keeps other JOBS in the DVM out of it. That cannot be the whole rule for
+    # a TOOL, though: a tool namespace is minted per invocation, so a user's
+    # second command could never name the allocation their first one made, and
+    # once that first command exited nothing could name it at all. So the user
+    # is recorded alongside the namespace, and a tool presenting the same uid
+    # may act on the reservation -- here, spawn into it by --alloc-id from a
+    # completely separate prun. Naming an allocation the DVM does not have is
+    # still NOT_FOUND, and the case checks that too, so "allowed" cannot
+    # quietly become "not checked at all".
+    #
+    # A reservation only exists while its owner does, so the probe has to run
+    # while the elastic client is still alive -- hence the background client,
+    # holding its reservation open with a job of its own.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        RUN 'rm -f /tmp/owner.out' >/dev/null 2>&1
+        RUN_BG /tmp/owner.out "timeout 120 elastic grow node2:4 -- sleep 40"
+        for _ in $(seq 1 40); do
+            RUN 'grep -q "^>>> SPAWNED" /tmp/owner.out' >/dev/null 2>&1 && break
+            sleep 2
+        done
+        aid=$(RUN 'sed -n "s/^>>> ALLOC_ID //p" /tmp/owner.out' | tr -d '\r')
+        if [ -n "$aid" ]; then
+            ok "the grow handed back an allocation id ($aid)"
+            out=$(RUN "timeout 60 prun --alloc-id $aid -np 1 hostname" 2>&1)
+            [ "$(echo "$out" | grep -c '^node2$')" = 1 ] \
+                && ok "another tool of the same user may spawn into the reservation" \
+                || bad "prun --alloc-id did not run on the reserved node: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+            out=$(RUN "timeout 60 prun --alloc-id no-such-allocation -np 1 hostname" 2>&1)
+            echo "$out" | grep -q NOT_FOUND \
+                && ok "an allocation the DVM does not know is NOT_FOUND" \
+                || bad "wrong refusal for an unknown allocation: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+            RUN 'pgrep -x prte >/dev/null' && ok "the HNP survived the refusal" \
+                                           || bad "the HNP died on a refused --alloc-id"
+        else
+            bad "no allocation id from the background grow: $(RUN 'tr "\n" " " < /tmp/owner.out' | tail -c 200)"
+        fi
+        RUN 'pkill -x elastic' >/dev/null 2>&1
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start an elastic DVM for the reservation-ownership test"
+    fi
+    cleanup_swarm
+
     banner "elastic DVM: grow AFTER a shrink completes (phase-two event)"
     # A grow launches a daemon onto every node that lacks one -- which after a
     # shrink includes the shrunk node, since releasing the reservation reverts

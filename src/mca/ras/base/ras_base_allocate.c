@@ -816,6 +816,11 @@ static prte_session_t *create_reservation(const char *nspace, uint8_t inherit,
     if (NULL != ownerjob) {
         PMIX_RETAIN(ownerjob);
         s->owner_job = ownerjob;
+        /* Record the user as well as the namespace. A tool's namespace lives
+         * only as long as the command that made it, so a reservation
+         * identified by namespace alone becomes unusable - by anyone - the
+         * moment the requester exits. See prte_session_is_owned_by. */
+        s->owner_uid = ownerjob->uid;
     }
     /* seed the owner set with the owning namespace */
     prte_session_add_owner(s, nspace);

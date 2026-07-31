@@ -874,6 +874,11 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
     jdata = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, cd->target.nspace);
     PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
+    /* remember who ran this tool - a tool's namespace lasts only as long as
+     * the command, so the user is the durable half of its identity and is
+     * what lets a later command of theirs reach an allocation this one made */
+    jdata->uid = cd->uid;
+    jdata->gid = cd->gid;
     rc = prte_set_job_data_object(jdata);
     app = PMIX_NEW(prte_app_context_t);
     app->argv = PMIx_Argv_split(cd->cmdline, ' ');
