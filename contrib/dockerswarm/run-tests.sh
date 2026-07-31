@@ -2978,25 +2978,23 @@ test_include() {
     echo "$out" | grep -qi 'unknown error' \
         && bad "the failure came back as \"Unknown error\": $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
         || ok "the failure was named, not reported as \"Unknown error\""
-    # What is NOT asserted, and why.  PRRTE has a complete diagnostic for
-    # this - prte_quit.c renders "prun:exe-not-accessible" naming the
-    # executable, the node and the rank, from the PMIX_ERR_EXE_NOT_ACCESSIBLE
-    # that the odls stashed in the proc exit_code.  The user never sees it.
-    #
-    # The launch fails inside PMIx_Spawn, so prun prints the bare status and
-    # goes to DONE without registering the job-termination handler that would
-    # have printed the text (prun_common.c ~716).  The DVM meanwhile hands the
-    # message to whichever of check_job_complete() or dvm_notify() gets there
-    # first - and prte_dump_aborted_procs() is single-shot
-    # (PRTE_JOB_FLAG_ERR_REPORTED), so the loser gets NULL.  One path prints
-    # to a tool that has already left; the other packs it into an event
-    # nobody is listening for yet.
-    #
-    # So all a user gets for a mistyped executable is:
-    #     PMIx_Spawn failed (-181): PMIX_ERR_JOB_FAILED_TO_LAUNCH
-    # Assert the floor - it fails, and it is not "Unknown error" - and leave
-    # the message assertion out until the tool-side path is fixed, rather
-    # than have this phase fail for a defect it is not testing.
+    # And the diagnostic itself, which is the whole point of the code being
+    # named: prte_quit.c renders "prun:exe-not-accessible" from the
+    # PMIX_ERR_EXE_NOT_ACCESSIBLE the odls stashed in the proc exit_code, and
+    # prte_plm_base_spawn_response() now hands it to the requester ahead of
+    # the failed spawn response.  It used to be produced and thrown away: the
+    # tool was released from PMIx_Spawn by that response and left before the
+    # job-end event carrying the text was ever raised.  On one node the
+    # failing daemon's stderr is the user's terminal and covered for it -
+    # which is exactly why the case has to be run with the executable on a
+    # node that is NOT the one running prterun.
+    echo "$out" | grep -q '/no/such/executable' \
+        && ok "the message names the executable that could not be run" \
+        || bad "no diagnostic naming the executable: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    echo "$out" | grep -q 'node2' \
+        && ok "the message names the node it failed on" \
+        || bad "the diagnostic does not name node2: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
     banner "include: a bad working directory on a remote node is named too"
     # A second code from the other documentation group in constants.h
     # (PRTE_ERR_WDIR_NOT_FOUND), so a renumbering that orphaned one group
@@ -3008,8 +3006,12 @@ test_include() {
     echo "$out" | grep -qi 'unknown error' \
         && bad "the wdir failure came back as \"Unknown error\": $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
         || ok "the wdir failure was named, not reported as \"Unknown error\""
-    # (same gap as the executable case above - PMIX_ERR_JOB_WDIR_NOT_FOUND
-    # has a prte_quit.c renderer too, and it reaches the user just as rarely)
+    # PMIX_ERR_JOB_WDIR_NOT_FOUND has a prte_quit.c renderer of its own, and
+    # it reaches the user by the same route the executable case does
+    echo "$out" | grep -q '/no/such/dir' \
+        && ok "the message names the working directory that was missing" \
+        || bad "no diagnostic naming the wdir: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
     banner "include: an over-subscription is refused with a real message"
     # Slot exhaustion is decided by the mapper on the HNP against a node
     # pool that only has more than one entry in a real DVM.
