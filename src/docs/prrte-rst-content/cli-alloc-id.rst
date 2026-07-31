@@ -18,10 +18,19 @@ it was created. The DVM reports this value back to the requester when
 an allocation request completes, and it is the value returned by a
 query of the allocation.
 
-The named allocation must be one the requester owns |mdash| a job can
-only be spawned onto resources its requester has been granted. Naming
-an allocation the DVM does not know about, or one the requester does
-not own, is an unrecoverable error: the job is not launched.
+The named allocation must be one the requester is entitled to use
+|mdash| a job can only be spawned onto resources its requester has been
+granted. Entitlement is by namespace and by user: the namespace that
+requested the allocation holds it, as does every job spawned into it,
+and so does any tool run by the user the allocation was granted to.
+That last part is what lets a later command reach an allocation an
+earlier one created, since a tool's namespace lasts only as long as the
+command that made it.
+
+Naming an allocation the DVM does not know about is an unrecoverable
+error and reports ``PMIX_ERR_NOT_FOUND``; naming one the requester may
+not use is likewise unrecoverable and reports
+``PMIX_ERR_NO_PERMISSIONS``. In either case the job is not launched.
 
 If no allocation is named, the job is mapped onto the allocation of the
 session that requested it (the DVM's default session, in the case of a
