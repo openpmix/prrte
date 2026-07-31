@@ -254,6 +254,45 @@ static void proc_errors(int fd, short args, void *cbdata)
 
     if (PMIX_CHECK_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
         /* NOTE: this is a daemon process that had the error */
+
+        /* Failing to send to a daemon that has never reported for duty says
+         * nothing about that daemon: it has been recorded and launched, and
+         * has simply not started listening yet.  Answering that as a comm
+         * failure takes the whole DVM down - PEER_UNKNOWN is not even among
+         * the states handled below, so it reaches the "unsupported" fallback,
+         * which forces DAEMONS_TERMINATED.
+         *
+         * Any job that terminates while daemons are being added produces
+         * exactly this: the job's completion notice is xcast over a routing
+         * tree that already holds them, because the tree is built from the
+         * expected daemon count precisely so wireup can route to them.  An
+         * `elastic extend` is the reliable way to see it, since it returns to
+         * its caller as soon as the scheduler answers, so the tool exits (and
+         * its job terminates) while the launch is still in flight.
+         *
+         * The test for "has not reported" is that we hold no contact info for
+         * it, which is both exact and the very reason the send failed - there
+         * was no address to send to.  Neither PRTE_PROC_FLAG_ALIVE nor a
+         * RUNNING state can serve: plm/ssh sets both when it *records* the
+         * launch, long before the daemon says anything.  rml_uri is written
+         * only by prte_plm_base_daemon_callback, i.e. only by the daemon
+         * itself reporting in.
+         *
+         * Only send failures are swallowed here.  A daemon that genuinely
+         * fails to come up reports FAILED_TO_START and is handled below, and
+         * a daemon that has departed still carries the contact info it
+         * reported with, so it does not land here either. */
+        if ((PRTE_PROC_STATE_UNABLE_TO_SEND_MSG == state ||
+             PRTE_PROC_STATE_PEER_UNKNOWN == state ||
+             PRTE_PROC_STATE_NO_PATH_TO_TARGET == state) &&
+            NULL == pptr->rml_uri) {
+            PMIX_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+                                 "%s Comm failure for daemon %s, not yet reported - ignoring it",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 PRTE_NAME_PRINT(proc)));
+            goto cleanup;
+        }
+
         /* we MUST handle a communication failure with special care to
          * avoid normal termination issues */
         if (PRTE_PROC_STATE_COMM_FAILED == state ||
