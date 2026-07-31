@@ -45,7 +45,6 @@
 #include "src/mca/iof/iof.h"
 #include "src/mca/plm/base/plm_private.h"
 #include "src/mca/plm/plm.h"
-#include "src/mca/plm/base/plm_private.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml.h"
 #include "src/mca/schizo/schizo.h"
