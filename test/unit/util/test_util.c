@@ -267,23 +267,13 @@ static int test_name_printing(void)
  * "added a code and forgot the string" and "reused a skipped offset" (which
  * the coding rules call out by name) show up as a failure here.
  */
-static const int base_gaps[] = {-1};                 /* none */
-static const int split_gaps[] = {7, 8, -1};
-
-static bool is_gap(const int *gaps, int off)
-{
-    int i;
-
-    for (i = 0; 0 <= gaps[i]; i++) {
-        if (off == gaps[i]) {
-            return true;
-        }
-    }
-    return false;
-}
-
-#define BASE_CODE_COUNT  72 /* PRTE_OPERATION_SUCCEEDED */
-#define SPLIT_CODE_COUNT 57 /* PRTE_ERR_SLURM_SHRINK_FAILURE */
+/* The code list is one contiguous run of offsets from PRTE_ERR_BASE, with a
+ * deliberate hole between the two groups (see constants.h): offsets 1..72
+ * are the codes mirrored from PMIx, 101.. are PRRTE's own. Nothing is
+ * assigned in between. */
+#define GROUP1_LAST  72  /* PRTE_OPERATION_SUCCEEDED */
+#define GROUP2_FIRST 101 /* PRTE_ERR_RECV_LESS_THAN_POSTED */
+#define GROUP2_LAST  155 /* PRTE_ERR_SLURM_SHRINK_FAILURE */
 
 static int test_error_strings(void)
 {
@@ -293,9 +283,9 @@ static int test_error_strings(void)
 
     CHECK("success has a string", 0 == strcmp("Success", prte_strerror(PRTE_SUCCESS)));
 
-    for (off = 1; off <= BASE_CODE_COUNT; off++) {
-        if (is_gap(base_gaps, off)) {
-            continue;
+    for (off = 1; off <= GROUP2_LAST; off++) {
+        if (off > GROUP1_LAST && off < GROUP2_FIRST) {
+            continue; /* the reserved hole between the groups */
         }
         s = prte_strerror(PRTE_ERR_BASE - off);
         if (NULL == s || 0 == strcmp("Unknown error", s)) {
@@ -303,23 +293,13 @@ static int test_error_strings(void)
             failures++;
         }
     }
-    for (off = 1; off <= SPLIT_CODE_COUNT; off++) {
-        if (is_gap(split_gaps, off)) {
-            continue;
-        }
-        s = prte_strerror(PRTE_ERR_SPLIT - off);
-        if (NULL == s || 0 == strcmp("Unknown error", s)) {
-            fprintf(stderr, "FAIL [strerror]: PRTE_ERR_SPLIT - %d has no string\n", off);
-            failures++;
-        }
-    }
-    /* an offset the header skips must stay unassigned - if it acquires a
-     * string, somebody reused it */
-    CHECK("skipped offsets stay unassigned",
-          0 == strcmp("Unknown error", prte_strerror(PRTE_ERR_SPLIT - 7)));
-    /* and something well outside both ranges is still handled */
+    /* an offset in the reserved hole must stay unassigned - if it acquires a
+     * string, somebody put a code there without saying so */
+    CHECK("the reserved hole stays unassigned",
+          0 == strcmp("Unknown error", prte_strerror(PRTE_ERR_BASE - (GROUP1_LAST + 1))));
+    /* and something well outside the range is still handled */
     CHECK("an unknown code is reported as unknown",
-          0 == strcmp("Unknown error", prte_strerror(PRTE_ERR_MAX - 1000)));
+          0 == strcmp("Unknown error", prte_strerror(PRTE_ERR_BASE - 1000)));
 
     /* PRTE_ERR_SILENT must never be logged - PRTE_ERROR_LOG() suppresses it -
      * but it still needs a name for anything that prints it directly */

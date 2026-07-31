@@ -28,16 +28,13 @@ headers += \
         include/constants.h \
         include/types.h \
         include/prte_frameworks.h \
-        include/hash_string.h \
-        include/prefetch.h \
         include/prte_config_top.h \
         include/prte_config_bottom.h \
         include/prte_portable_platform.h \
         include/prte_portable_platform_real.h \
         include/prte_stdint.h \
         include/prte_stdatomic.h \
-        include/prte_socket_errno.h \
-        include/align.h
+        include/prte_socket_errno.h
 
 nodist_headers += \
         include/prte_config.h \

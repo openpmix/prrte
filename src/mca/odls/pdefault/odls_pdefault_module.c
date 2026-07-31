@@ -132,7 +132,6 @@
 #include "src/runtime/prte_wait.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
-#include "src/util/pmix_show_help.h"
 
 #include "src/mca/odls/base/base.h"
 #include "src/prted/pmix/pmix_server.h"
@@ -426,10 +425,21 @@ static void render_child_msg(prte_odls_spawn_caddy_t *cd, prte_odls_pipe_err_msg
         } else {
             wdir = "<unknown>";
         }
-        /* ENOENT with an existing file means cd->cmd is a script with a
-           bad interpreter on its first line, not a missing executable */
-        if (ENOENT == msg->errnum && 0 == stat(cd->app->app, &statbuf)) {
-            errmsg = "the executable has a bad interpreter on its first line";
+        /* strerror() alone is misleading for the two shapes that reach
+           execve() most often, so name them.  A directory is X_OK on most
+           systems - it means "searchable" - so it sails through the
+           check_context_app() test in the base and only fails here, as a
+           bare "Permission denied".  And ENOENT on a file that plainly
+           exists is not a missing executable at all: it is a script whose
+           "#!" line names an interpreter that is missing. */
+        if (0 == stat(cd->app->app, &statbuf)) {
+            if (S_ISDIR(statbuf.st_mode)) {
+                errmsg = "it is a directory, not an executable";
+            } else if (ENOENT == msg->errnum) {
+                errmsg = "the executable has a bad interpreter on its first line";
+            } else {
+                errmsg = strerror(msg->errnum);
+            }
         } else {
             errmsg = strerror(msg->errnum);
         }

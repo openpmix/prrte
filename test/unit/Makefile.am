@@ -2,4 +2,4 @@
 # Additional copyrights may follow
 # $HEADER$
 
-SUBDIRS = rmaps runtime errmgr ess filem grpcomm hwloc odls iof plm pmix prted rml ras schizo state tools util
+SUBDIRS = rmaps runtime errmgr ess event filem grpcomm hwloc include odls iof plm pmix prted rml ras schizo state tools util

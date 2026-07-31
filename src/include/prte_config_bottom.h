@@ -261,7 +261,10 @@
    including stdint.h */
 #    define __STDC_LIMIT_MACROS
 #endif
-#include "prte_config.h"
+/* NOTE: this file is included from the bottom of prte_config.h, so there is
+ * no need to include prte_config.h back - it used to, which the include
+ * guard turned into a no-op but which left prte_config.h listed as a
+ * dependency of itself in every .deps file. */
 #include "prte_stdint.h"
 
 /***********************************************************************
@@ -289,10 +292,9 @@
 #    endif
 
 /*
- * Set the compile-time path-separator on this system and variable separator
+ * Set the compile-time path-separator on this system
  */
 #    define PRTE_PATH_SEP "/"
-#    define PRTE_ENV_SEP  ':'
 
 #    if defined(MAXHOSTNAMELEN)
 #        define PRTE_MAXHOSTNAMELEN (MAXHOSTNAMELEN + 1)
@@ -302,8 +304,6 @@
 /* SUSv2 guarantees that "Host names are limited to 255 bytes". */
 #        define PRTE_MAXHOSTNAMELEN (255 + 1)
 #    endif
-
-#    define PRTE_DEBUG_ZERO(obj)
 
 /*
  * printf functions for portability (only when building PRTE)
@@ -371,25 +371,24 @@ static inline uint16_t ntohs(uint16_t netvar)
 #        define __func__ __FILE__
 #    endif
 
-#    define IOVBASE_TYPE void
-
 /* ensure the bool type is defined as it is used everywhere */
 #    include <stdbool.h>
-
-/**
- * If we generate our own bool type, we need a special way to cast the result
- * in such a way to keep the compilers silent.
- */
-#    define PRTE_INT_TO_BOOL(VALUE) (bool) (VALUE)
 
 /**
  * Top level define to check 2 things: a) if we want ipv6 support, and
  * b) the underlying system supports ipv6.  Having one #define for
  * this makes it simpler to check throughout the code base.
+ *
+ * This is the one place in the tree that legitimately #undef's a logical
+ * macro.  configure already emitted PRTE_ENABLE_IPV6 as 0 or 1; all we do
+ * here is narrow a "yes" that the platform cannot actually honor, and C
+ * requires the #undef before a redefinition with a different body.  Writing
+ * it as an unconditional re-#define -- which is what this used to be --
+ * makes the compiler emit -Wmacro-redefined on exactly the platform the
+ * narrowing exists for, which under --enable-devel-check is a build error.
  */
-#    if PRTE_ENABLE_IPV6 && defined(HAVE_STRUCT_SOCKADDR_IN6)
-#        define PRTE_ENABLE_IPV6 1
-#    else
+#    if PRTE_ENABLE_IPV6 && !defined(HAVE_STRUCT_SOCKADDR_IN6)
+#        undef PRTE_ENABLE_IPV6
 #        define PRTE_ENABLE_IPV6 0
 #    endif
 

@@ -38,16 +38,22 @@ client, you want `src/prted/pmix/`, not here.
 This is the whole reason `pmix.c` exists, and the source of every defect it
 has had.
 
-- A PRRTE error code is `PRTE_ERR_BASE - n` for `n` in `[1, 72]`, or
-  `PRTE_ERR_SPLIT - n` — see [`src/include/constants.h`](../include/constants.h).
+- A PRRTE **error code** is `PRTE_ERR_BASE - n`, and `PRTE_ERR_BASE` is
+  `PMIX_EXTERNAL_ERR_BASE` (-3000) — see
+  [`src/include/constants.h`](../include/constants.h).
+- A PRRTE **proc/job state** is a small positive integer, and so is PMIx's —
+  see [`src/mca/plm/plm_types.h`](../mca/plm/plm_types.h).
 - A PMIx status runs from `-1` down past `-160`.
 
-So **most PMIx statuses are also the numeric value of a real PRRTE
-constant**. Returning an unconverted status does not produce a
-recognisably foreign number that someone will notice; it produces a
-confidently wrong PRRTE code that `prte_strerror()` will happily name.
-`prte_pmix_convert_status()` used to end in `default: return status;`, which
-meant, among others:
+The error codes were moved out of PMIx's range only recently. Until then
+they were based at `0` and `-100`, and **46 PRRTE codes had the value of a
+live PMIx status meaning something else** — `PRTE_ERR_SLURM_SHRINK_FAILURE`
+was `PMIX_OPERATION_SUCCEEDED`, and `PRTE_ERR_TAKE_NEXT_OPTION`, a
+control-flow signal rather than a failure, was `PMIX_ERR_NOT_FOUND`.
+Returning an unconverted status did not produce a recognisably foreign
+number that someone would notice; it produced a confidently wrong PRRTE code
+that `prte_strerror()` would happily name. `prte_pmix_convert_status()` used
+to end in `default: return status;`, which meant, among others:
 
 | PMIx status | value | arrived as |
 |---|---|---|
@@ -65,9 +71,12 @@ in `src/runtime/data_type_support/`.
 constant in the target space, and so does `default`. A code you have no name
 for is `PRTE_ERROR` / `PMIX_ERROR`, never the input.
 
-The one legitimate identity is `PRTE_ERROR == PMIX_ERROR == -1`, and
-`PRTE_SUCCESS == PMIX_SUCCESS == 0`. `test/unit/pmix` sweeps both ranges to
-prove there are no others.
+The one remaining identity is `PRTE_SUCCESS == PMIX_SUCCESS == 0`.
+`PRTE_ERROR == PMIX_ERROR == -1` used to be a second one, and it was the
+worst-placed of the lot: it made a passthrough bug invisible in exactly the
+case a test would most naturally construct. Now that PRRTE's codes hang off
+`PMIX_EXTERNAL_ERR_BASE` the two error spaces are disjoint, and
+`test/unit/pmix` sweeps both ranges to prove it — with no exemptions left.
 
 ## GOLDEN RULE: never spell a state as a bare integer
 

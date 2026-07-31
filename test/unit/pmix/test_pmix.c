@@ -20,15 +20,20 @@
  *
  * The traps these tests pin down:
  *
- *  - The two spaces OVERLAP numerically. A PRRTE error is PRTE_ERR_BASE - n
- *    for n in [1,72]; a PMIx status runs -1 down past -160. So most PMIx
- *    statuses are also the value of a real PRRTE constant.
+ *  - The two spaces used to OVERLAP numerically, and the tests here were
+ *    written when they did: PRRTE's errors were based at 0 and -100 while a
+ *    PMIx status runs -1 down past -160, so 46 PRRTE codes had the value of
+ *    a live PMIx status meaning something else.
  *    prte_pmix_convert_status() used to `return status` for anything its
  *    switch did not name, which did not yield a recognisably foreign code --
  *    it yielded a confidently wrong one. PMIX_ERR_PACK_FAILURE arrived as
  *    PRTE_ERR_FILE_OPEN_FAILURE and PMIX_ERR_EMPTY as PRTE_ERR_NODE_DOWN.
- *    test_status_no_passthrough() sweeps the whole PMIx range to prove no
- *    input can produce a code that is not deliberately chosen.
+ *    PRRTE's codes now hang off PMIX_EXTERNAL_ERR_BASE, which PMIx reserves
+ *    for projects layered on it, so the error spaces are disjoint -- but the
+ *    *state* spaces still are not, and a converter that is not total is
+ *    still a converter that lies. test_status_no_passthrough() sweeps the
+ *    whole PMIx range to prove no input can produce a code that is not
+ *    deliberately chosen.
  *
  *  - The two PROC STATE spaces share a numbering scheme but not a numbering.
  *    PRRTE has no PREPPED, so below the error boundary its states sit one
@@ -237,19 +242,26 @@ static int test_state_roundtrip(void)
 /* status translation                                                 */
 /* ------------------------------------------------------------------ */
 
-/* Is this value a legal PRRTE return code? The two families are
- * PRTE_ERR_BASE - n and PRTE_ERR_SPLIT - n, both descending, so the test is a
- * range test rather than a membership test -- close enough to catch a raw PMIx
- * status, which is what we care about. */
+/* How far below PRTE_ERR_BASE the code list is allowed to run. Local to this
+ * test on purpose: constants.h used to export a PRTE_ERR_MAX for it, which
+ * nothing in the tree ever used and which -- because the base it was
+ * computed from had the wrong sign -- evaluated to PRTE_SUCCESS. */
+#define PRTE_CODE_SPAN 200
+
+/* Is this value a legal PRRTE return code? They are all PRTE_ERR_BASE - n,
+ * descending, so this is a range test rather than a membership test -- which
+ * is all we need to catch a raw PMIx status leaking through.
+ *
+ * The base sits below PMIX_EXTERNAL_ERR_BASE, so this range does not overlap
+ * PMIx's status space at all and the predicate is now exact rather than
+ * merely indicative. PRTE_SUCCESS is the one code that is not an offset from
+ * the base -- it is zero -- so it is named separately. */
 static bool is_prte_code(int rc)
 {
-    if (rc <= PRTE_ERR_BASE && rc > (PRTE_ERR_BASE - 100)) {
+    if (PRTE_SUCCESS == rc) {
         return true;
     }
-    if (rc <= PRTE_ERR_SPLIT && rc > (PRTE_ERR_SPLIT - 100)) {
-        return true;
-    }
-    return false;
+    return (rc <= PRTE_ERR_BASE && rc > (PRTE_ERR_BASE - PRTE_CODE_SPAN));
 }
 
 /* The headline defect: nothing prte_pmix_convert_status() returns may be a
@@ -293,32 +305,27 @@ static int test_status_no_passthrough(void)
 }
 
 /* Likewise outbound: a PRRTE code must never be handed to PMIx unconverted.
- * Sweep both PRRTE families. */
+ * Sweep the whole PRRTE range. */
 static int test_rc_no_passthrough(void)
 {
     int failures = 0;
     int rc;
     int leaked = 0;
 
-    for (rc = PRTE_ERR_BASE - 1; rc > (PRTE_ERR_BASE - 100); rc--) {
+    for (rc = PRTE_ERR_BASE - 1; rc > (PRTE_ERR_BASE - PRTE_CODE_SPAN); rc--) {
         pmix_status_t s = prte_pmix_convert_rc(rc);
         if (PMIX_SUCCESS == s) {
             fprintf(stderr, "FAIL [rc success]: PRRTE code %d converted to PMIX_SUCCESS\n", rc);
             failures++;
         }
-        if (s == rc && PRTE_ERROR != rc) {
-            /* PRTE_ERROR and PMIX_ERROR are both -1 and mean the same thing,
-             * so that identity is deliberate. Any other code coming back
-             * unchanged is a value that fell through the switch. */
+        if (s == rc) {
+            /* Any code coming back unchanged is a value that fell through
+             * the switch. This check used to need an exemption for
+             * PRTE_ERROR, because it and PMIX_ERROR were both -1; now that
+             * PRRTE's codes hang off PMIX_EXTERNAL_ERR_BASE there is no
+             * value the two schemes share, so there is nothing to exempt. */
             fprintf(stderr, "FAIL [rc passthrough]: PRRTE code %d returned unconverted\n", rc);
             leaked++;
-        }
-    }
-    for (rc = PRTE_ERR_SPLIT - 1; rc > (PRTE_ERR_SPLIT - 100); rc--) {
-        pmix_status_t s = prte_pmix_convert_rc(rc);
-        if (PMIX_SUCCESS == s) {
-            fprintf(stderr, "FAIL [rc success]: PRRTE code %d converted to PMIX_SUCCESS\n", rc);
-            failures++;
         }
     }
     if (0 < leaked) {

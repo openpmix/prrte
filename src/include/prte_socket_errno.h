@@ -21,9 +21,8 @@
 #ifndef PRTE_GET_SOCKET_ERROR_H
 #define PRTE_GET_SOCKET_ERROR_H
 
-#include "constants.h"
 #include <errno.h>
 
 #define prte_socket_errno errno
 
-#endif /* PRTE_GET_ERROR_H */
+#endif /* PRTE_GET_SOCKET_ERROR_H */

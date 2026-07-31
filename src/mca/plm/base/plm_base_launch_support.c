@@ -40,7 +40,6 @@
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/include/hash_string.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/prted/pmix/pmix_server.h"
 

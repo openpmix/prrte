@@ -255,12 +255,27 @@ build_linux() {
             # reuses the arguments of whatever run created them.  Point
             # PMIX_SRC at a checkout after a plain build and PRRTE keeps the
             # baked PMIx, with nothing in the output to say so -- a build
-            # that looks like it tested your change and did not.  Stamp the
-            # arguments and reconfigure when they differ.
-            reconfigure_needed() {   # $1 = build dir, $2 = argument string
+            # that looks like it tested your change and did not.
+            #
+            # $1 = build dir, $2 = argument string, $3 = srcdir
+            #
+            # Three ways a persistent build dir can be stale:
+            #   - never configured at all;
+            #   - configured with different arguments (the PMIX_SRC trap
+            #     above);
+            #   - configured before the build system was regenerated.
+            #     Editing configure.ac or a config/*.m4 and re-running
+            #     autogen.pl leaves configure and Makefile.in newer than the
+            #     config.status here, and an incremental make then walks into
+            #     maintainer-mode regeneration INSIDE the container -- which
+            #     needs the exact aclocal/automake version the host used, and
+            #     dies with "aclocal-N.NN: command not found", leaving the
+            #     PREVIOUS install standing with no build stamp.
+            reconfigure_needed() {
                 [ -f "$1/config.status" ] || return 0
                 [ -f "$1/.configure-args" ] || return 0
                 [ "$(cat "$1/.configure-args")" = "$2" ] || return 0
+                [ "$3/configure" -nt "$1/config.status" ] && return 0
                 return 1
             }
 
@@ -269,7 +284,7 @@ build_linux() {
                 echo ">>>> PMIx from bind-mounted /pmix-src -> $PMIX_PREFIX"
                 mkdir -p /opt/prte/vpath-linux-pmix && cd /opt/prte/vpath-linux-pmix
                 pmix_args="--prefix=$PMIX_PREFIX"
-                if reconfigure_needed . "$pmix_args"; then
+                if reconfigure_needed . "$pmix_args" /pmix-src; then
                     echo ">>>> (re)configuring PMIx: $pmix_args"
                     /pmix-src/configure $pmix_args
                     echo "$pmix_args" > .configure-args
@@ -293,7 +308,7 @@ build_linux() {
             # "scontrol --json" (the whole elastic extend/release surface) are
             # never even compiled.  libjansson-dev is baked into the image.
             prte_args="--prefix=/opt/prte/prte --with-pmix=$PMIX_PREFIX --with-jansson --enable-debug"
-            if reconfigure_needed . "$prte_args"; then
+            if reconfigure_needed . "$prte_args" /prrte-src; then
                 echo ">>>> (re)configuring PRRTE: $prte_args"
                 /prrte-src/configure $prte_args
                 echo "$prte_args" > .configure-args

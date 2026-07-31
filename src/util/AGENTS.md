@@ -129,8 +129,9 @@ Two rules, both enforced by `test/unit/util`:
 1. **Every error code needs a `prte_strerror()` entry.** `PRTE_ERROR_LOG()`
    prints nothing else, so a missing entry surfaces to the user as
    `PRTE ERROR: Unknown error in file ... at line ...`. The test sweeps the
-   whole numeric range of both bands in
-   [`constants.h`](../include/constants.h) rather than a hand-kept list.
+   whole numeric range of [`constants.h`](../include/constants.h) rather
+   than a hand-kept list, skipping only the reserved hole between the two
+   documentation groups.
 2. **Every job/proc/node/app state needs a name**, and no two states may
    share a name *or* a value. The state families in
    [`plm_types.h`](../mca/plm/plm_types.h) have intentional holes, so the

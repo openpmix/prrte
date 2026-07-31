@@ -41,8 +41,6 @@
 #include "src/class/pmix_hash_table.h"
 #include "src/class/pmix_list.h"
 #include "src/event/event-internal.h"
-#include "src/include/hash_string.h"
-
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"

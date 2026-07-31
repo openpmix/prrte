@@ -21,42 +21,22 @@
 #    include "prte_stdint.h"
 #    include <stdbool.h>
 
-#    if PRTE_ATOMIC_C11
-
-#ifdef HAVE_STDATOMIC_H
-#        include <stdatomic.h>
-#endif
-
-typedef atomic_int prte_atomic_int_t;
-typedef atomic_long prte_atomic_long_t;
+/* PRRTE shares almost all of its threading primitives with PMIx and needs
+ * exactly one atomic type of its own: the flag the OOB's listener thread
+ * spins on while the main thread clears it (oob_tcp_listener.c).  The other
+ * nine typedefs this header used to carry - int/long/int32/uint32/int64/
+ * uint64/size/ssize/intptr/uintptr - had no users at all.
+ *
+ * C11 atomics are a requirement, not a preference, so there is no
+ * alternative arm here - PMIx's pmix_stdatomic.h says the same thing the
+ * same way, and the two projects share a threading model.  There used to be
+ * a `volatile`-typed fallback selected by PRTE_ATOMIC_C11 == 0; `volatile`
+ * is not an atomic type, so that arm was a way to build something that
+ * could not be correct.  PRTE_CONFIG_ASM (config/prte_config_asm.m4) now
+ * fails configure outright when the compiler cannot supply C11 atomics.
+ */
+#    include <stdatomic.h>
 
 typedef _Atomic bool prte_atomic_bool_t;
-typedef _Atomic int32_t prte_atomic_int32_t;
-typedef _Atomic uint32_t prte_atomic_uint32_t;
-typedef _Atomic int64_t prte_atomic_int64_t;
-typedef _Atomic uint64_t prte_atomic_uint64_t;
-
-typedef _Atomic size_t prte_atomic_size_t;
-typedef _Atomic ssize_t prte_atomic_ssize_t;
-typedef _Atomic intptr_t prte_atomic_intptr_t;
-typedef _Atomic uintptr_t prte_atomic_uintptr_t;
-
-#    else
-
-typedef volatile int prte_atomic_int_t;
-typedef volatile long prte_atomic_long_t;
-
-typedef volatile bool prte_atomic_bool_t;
-typedef volatile int32_t prte_atomic_int32_t;
-typedef volatile uint32_t prte_atomic_uint32_t;
-typedef volatile int64_t prte_atomic_int64_t;
-typedef volatile uint64_t prte_atomic_uint64_t;
-
-typedef volatile size_t prte_atomic_size_t;
-typedef volatile ssize_t prte_atomic_ssize_t;
-typedef volatile intptr_t prte_atomic_intptr_t;
-typedef volatile uintptr_t prte_atomic_uintptr_t;
-
-#    endif
 
 #endif /* !defined(PRTE_STDATOMIC_H) */

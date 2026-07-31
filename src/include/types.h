@@ -42,14 +42,6 @@
 #    include <arpa/inet.h>
 #endif
 
-#if PRTE_ENABLE_DEBUG
-#    include "src/util/pmix_output.h"
-#endif
-
-/**
- * Supported datatypes for messaging and storage operations.
- */
-
 /** rank on node, used for both local and node rank. We
  * don't send these around on their own, so don't create
  * dedicated type support for them - we are defining them
@@ -58,43 +50,13 @@
  */
 typedef uint16_t prte_local_rank_t;
 typedef uint16_t prte_node_rank_t;
-#define PRTE_LOCAL_RANK         PMIX_UINT16
-#define PRTE_NODE_RANK          PMIX_UINT16
-#define PRTE_LOCAL_RANK_MAX     UINT16_MAX - 1
-#define PRTE_NODE_RANK_MAX      UINT16_MAX - 1
+#define PRTE_LOCAL_RANK_MAX     (UINT16_MAX - 1)
+#define PRTE_NODE_RANK_MAX      (UINT16_MAX - 1)
 #define PRTE_LOCAL_RANK_INVALID UINT16_MAX
 #define PRTE_NODE_RANK_INVALID  UINT16_MAX
 
 /* index for app_contexts */
 typedef uint32_t prte_app_idx_t;
-#define PRTE_APP_IDX     PMIX_UINT32
-#define PRTE_APP_IDX_MAX UINT32_MAX
-
-/*
- * portable assignment of pointer to int
- */
-
-typedef union {
-    uint64_t lval;
-    uint32_t ival;
-    void *pval;
-    struct {
-        uint32_t uval;
-        uint32_t lval;
-    } sval;
-} prte_ptr_t;
-
-/*
- * handle differences in iovec
- */
-
-#if defined(__APPLE__) || defined(__WINDOWS__)
-typedef char *prte_iov_base_ptr_t;
-#    define PRTE_IOVBASE char
-#else
-#    define PRTE_IOVBASE void
-typedef void *prte_iov_base_ptr_t;
-#endif
 
 /*
  * handle differences in socklen_t
@@ -108,6 +70,14 @@ typedef int prte_socklen_t;
 
 /*
  * Convert a 64 bit value to network byte order.
+ *
+ * These two are the OOB's 64-bit wire conversion - oob_tcp_hdr.h runs the
+ * message header's origin epoch through them - so they are the one thing in
+ * this header a heterogeneous DVM depends on being right.  Note the
+ * #ifdef: HAVE_UNIX_BYTESWAP is AC_DEFINE'd only when the check succeeds
+ * (it is absent, not 0, otherwise), so #ifdef is correct here and #if would
+ * be wrong.  Where it is absent, prte_config_bottom.h supplies identity
+ * htonl/htons stubs and these follow suit.
  */
 static inline uint64_t prte_hton64(uint64_t val) __prte_attribute_const__;
 static inline uint64_t prte_hton64(uint64_t val)
@@ -154,85 +124,5 @@ static inline uint64_t prte_ntoh64(uint64_t val)
     return val;
 #endif
 }
-
-/**
- * Convert between a local representation of pointer and a 64 bits value.
- */
-static inline uint64_t prte_ptr_ptol(void *ptr) __prte_attribute_const__;
-static inline uint64_t prte_ptr_ptol(void *ptr)
-{
-    return (uint64_t)(uintptr_t) ptr;
-}
-
-static inline void *prte_ptr_ltop(uint64_t value) __prte_attribute_const__;
-static inline void *prte_ptr_ltop(uint64_t value)
-{
-#if SIZEOF_VOID_P == 4 && PRTE_ENABLE_DEBUG
-    if (value > ((1ULL << 32) - 1ULL)) {
-        pmix_output(0, "Warning: truncating value in prte_ptr_ltop");
-    }
-#endif
-    return (void *) (uintptr_t) value;
-}
-
-#if defined(WORDS_BIGENDIAN) || !defined(HAVE_UNIX_BYTESWAP)
-static inline uint16_t prte_swap_bytes2(uint16_t val) __prte_attribute_const__;
-static inline uint16_t prte_swap_bytes2(uint16_t val)
-{
-    union {
-        uint16_t bigval;
-        uint8_t arrayval[2];
-    } w, r;
-
-    w.bigval = val;
-    r.arrayval[0] = w.arrayval[1];
-    r.arrayval[1] = w.arrayval[0];
-
-    return r.bigval;
-}
-
-static inline uint32_t prte_swap_bytes4(uint32_t val) __prte_attribute_const__;
-static inline uint32_t prte_swap_bytes4(uint32_t val)
-{
-    union {
-        uint32_t bigval;
-        uint8_t arrayval[4];
-    } w, r;
-
-    w.bigval = val;
-    r.arrayval[0] = w.arrayval[3];
-    r.arrayval[1] = w.arrayval[2];
-    r.arrayval[2] = w.arrayval[1];
-    r.arrayval[3] = w.arrayval[0];
-
-    return r.bigval;
-}
-
-static inline uint64_t prte_swap_bytes8(uint64_t val) __prte_attribute_const__;
-static inline uint64_t prte_swap_bytes8(uint64_t val)
-{
-    union {
-        uint64_t bigval;
-        uint8_t arrayval[8];
-    } w, r;
-
-    w.bigval = val;
-    r.arrayval[0] = w.arrayval[7];
-    r.arrayval[1] = w.arrayval[6];
-    r.arrayval[2] = w.arrayval[5];
-    r.arrayval[3] = w.arrayval[4];
-    r.arrayval[4] = w.arrayval[3];
-    r.arrayval[5] = w.arrayval[2];
-    r.arrayval[6] = w.arrayval[1];
-    r.arrayval[7] = w.arrayval[0];
-
-    return r.bigval;
-}
-
-#else
-#    define prte_swap_bytes2 htons
-#    define prte_swap_bytes4 htonl
-#    define prte_swap_bytes8 prte_hton64
-#endif /* WORDS_BIGENDIAN || !HAVE_UNIX_BYTESWAP */
 
 #endif

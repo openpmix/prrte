@@ -27,18 +27,64 @@
 #define PRTE_CONSTANTS_H
 
 #include "prte_config.h"
-#include "constants.h"
+
+#include <pmix_common.h>
 
 BEGIN_C_DECLS
 
-#define PRTE_ERR_BASE  0
-#define PRTE_ERR_SPLIT 100
+/* PRRTE's return codes are negative offsets from a single base, running
+ * -3001 downwards.  PRTE_SUCCESS is zero and is the only code that is not
+ * an offset.  Every value must be unique: a duplicate makes two distinct
+ * codes compare equal, which is a miserable bug to find.  Uniqueness is
+ * enforced by the compiler -- prte_strerror() switches on every code, so a
+ * repeated value is a duplicate-case error -- and test/unit/include checks
+ * the range arithmetic around it.
+ *
+ * GOLDEN RULE: the base is PMIX_EXTERNAL_ERR_BASE, and must be.
+ *
+ * PMIx reserves everything below that constant for projects layered on top
+ * of it -- "negative values larger than this are guaranteed not to conflict
+ * with PMIx values" -- and PRRTE is such a project.  PRRTE and PMIx codes
+ * cross paths constantly, and a code that escapes prte_pmix_convert_rc() /
+ * prte_pmix_convert_status() does not look foreign if the two schemes
+ * overlap: it looks like some other, real code.
+ *
+ * This is not hypothetical.  PRRTE used to base its codes at 0, and 46 of
+ * them were numerically identical to a PMIx status meaning something else:
+ * PRTE_ERR_SLURM_SHRINK_FAILURE was PMIX_OPERATION_SUCCEEDED,
+ * PRTE_ERR_NO_PATH_TO_TARGET was PMIX_ERR_EVENT_REGISTRATION, and
+ * PRTE_ERR_TAKE_NEXT_OPTION -- a control-flow signal, not a failure -- was
+ * PMIX_ERR_NOT_FOUND.  Follow PMIx's own instruction and define these
+ * relative to the constant, never to a specific value: PMIx may move it.
+ *
+ * The list below is in two groups, split at offset 100 so each has room to
+ * grow: the codes PRRTE mirrors from PMIx so a notification status has a
+ * PRRTE spelling (offsets 1..72), and the codes that are PRRTE's alone
+ * (offsets 101..).  That is a convention for readers, not arithmetic --
+ * appending at the end of either group is fine, and appending at the very
+ * end always is.
+ *
+ * There used to be a second base, PRTE_ERR_SPLIT, for the lower group.  It
+ * came from ORTE, where the two groups belonged to two separate projects --
+ * OPAL owned the first and ORTE started where OPAL's allocation ended, so
+ * each could append without coordinating with the other.  OPAL and ORTE
+ * were merged into this one tree in 2019, and a second base for a second
+ * half of one enum in one file bought nothing after that but a pair of
+ * "did the bands collide" questions.  (It also arrived here mis-typed:
+ * ORTE's base was OPAL_ERR_MAX == -100, and the minus sign was dropped in
+ * the merge, so for several years the whole lower group was a set of
+ * *positive* error codes and PRTE_ERR_MAX evaluated to 0 -- the value of
+ * PRTE_SUCCESS.)
+ */
+#define PRTE_ERR_BASE PMIX_EXTERNAL_ERR_BASE
 
 enum {
     /* Error codes inherited from PRTE.  Still enum values so that we
        get the nice debugger help. */
 
-    PRTE_SUCCESS = (PRTE_ERR_BASE),
+    /* Success is zero, and is the ONE code not numbered off the base -
+     * every caller in the tree spells its check "PRTE_SUCCESS != rc". */
+    PRTE_SUCCESS = 0,
 
     PRTE_ERROR = (PRTE_ERR_BASE - 1),
     PRTE_ERR_OUT_OF_RESOURCE = (PRTE_ERR_BASE - 2),      /* fatal error */
@@ -120,64 +166,62 @@ enum {
         or at the least not be able to report the new error correctly.
      */
 
-    PRTE_ERR_RECV_LESS_THAN_POSTED = (PRTE_ERR_SPLIT - 1),
-    PRTE_ERR_RECV_MORE_THAN_POSTED = (PRTE_ERR_SPLIT - 2),
-    PRTE_ERR_NO_MATCH_YET = (PRTE_ERR_SPLIT - 3),
-    PRTE_ERR_REQUEST = (PRTE_ERR_SPLIT - 4),
-    PRTE_ERR_NO_CONNECTION_ALLOWED = (PRTE_ERR_SPLIT - 5),
-    PRTE_ERR_CONNECTION_REFUSED = (PRTE_ERR_SPLIT - 6),
-    PRTE_ERR_COMPARE_FAILURE = (PRTE_ERR_SPLIT - 9),
-    PRTE_ERR_COPY_FAILURE = (PRTE_ERR_SPLIT - 10),
-    PRTE_ERR_PROC_STATE_MISSING = (PRTE_ERR_SPLIT - 11),
-    PRTE_ERR_PROC_EXIT_STATUS_MISSING = (PRTE_ERR_SPLIT - 12),
-    PRTE_ERR_INDETERMINATE_STATE_INFO = (PRTE_ERR_SPLIT - 13),
-    PRTE_ERR_NODE_FULLY_USED = (PRTE_ERR_SPLIT - 14),
-    PRTE_ERR_INVALID_NUM_PROCS = (PRTE_ERR_SPLIT - 15),
-    PRTE_ERR_ADDRESSEE_UNKNOWN = (PRTE_ERR_SPLIT - 16),
-    PRTE_ERR_SYS_LIMITS_PIPES = (PRTE_ERR_SPLIT - 17),
-    PRTE_ERR_PIPE_SETUP_FAILURE = (PRTE_ERR_SPLIT - 18),
-    PRTE_ERR_SYS_LIMITS_CHILDREN = (PRTE_ERR_SPLIT - 19),
-    PRTE_ERR_FAILED_GET_TERM_ATTRS = (PRTE_ERR_SPLIT - 20),
-    PRTE_ERR_WDIR_NOT_FOUND = (PRTE_ERR_SPLIT - 21),
-    PRTE_ERR_EXE_NOT_FOUND = (PRTE_ERR_SPLIT - 22),
-    PRTE_ERR_PIPE_READ_FAILURE = (PRTE_ERR_SPLIT - 23),
-    PRTE_ERR_EXE_NOT_ACCESSIBLE = (PRTE_ERR_SPLIT - 24),
-    PRTE_ERR_FAILED_TO_START = (PRTE_ERR_SPLIT - 25),
-    PRTE_ERR_FILE_NOT_EXECUTABLE = (PRTE_ERR_SPLIT - 26),
-    PRTE_ERR_HNP_COULD_NOT_START = (PRTE_ERR_SPLIT - 27),
-    PRTE_ERR_SYS_LIMITS_SOCKETS = (PRTE_ERR_SPLIT - 28),
-    PRTE_ERR_SOCKET_NOT_AVAILABLE = (PRTE_ERR_SPLIT - 29),
-    PRTE_ERR_SYSTEM_WILL_BOOTSTRAP = (PRTE_ERR_SPLIT - 30),
-    PRTE_ERR_RESTART_LIMIT_EXCEEDED = (PRTE_ERR_SPLIT - 31),
-    PRTE_ERR_INVALID_NODE_RANK = (PRTE_ERR_SPLIT - 32),
-    PRTE_ERR_INVALID_LOCAL_RANK = (PRTE_ERR_SPLIT - 33),
-    PRTE_ERR_UNRECOVERABLE = (PRTE_ERR_SPLIT - 34),
-    PRTE_ERR_MEM_LIMIT_EXCEEDED = (PRTE_ERR_SPLIT - 35),
-    PRTE_ERR_HEARTBEAT_LOST = (PRTE_ERR_SPLIT - 36),
-    PRTE_ERR_PROC_STALLED = (PRTE_ERR_SPLIT - 37),
-    PRTE_ERR_NO_APP_SPECIFIED = (PRTE_ERR_SPLIT - 38),
-    PRTE_ERR_NO_EXE_SPECIFIED = (PRTE_ERR_SPLIT - 39),
-    PRTE_ERR_COMM_DISABLED = (PRTE_ERR_SPLIT - 40),
-    PRTE_ERR_FAILED_TO_MAP = (PRTE_ERR_SPLIT - 41),
-    PRTE_ERR_SENSOR_LIMIT_EXCEEDED = (PRTE_ERR_SPLIT - 42),
-    PRTE_ERR_ALLOCATION_PENDING = (PRTE_ERR_SPLIT - 43),
-    PRTE_ERR_NO_PATH_TO_TARGET = (PRTE_ERR_SPLIT - 44),
-    PRTE_ERR_OP_IN_PROGRESS = (PRTE_ERR_SPLIT - 45),
-    PRTE_ERR_OPEN_CONDUIT_FAIL = (PRTE_ERR_SPLIT - 46),
-    PRTE_ERR_DUPLICATE_MSG = (PRTE_ERR_SPLIT - 47),
-    PRTE_ERR_OUT_OF_ORDER_MSG = (PRTE_ERR_SPLIT - 48),
-    PRTE_ERR_FORCE_SELECT = (PRTE_ERR_SPLIT - 49),
-    PRTE_ERR_JOB_CANCELLED = (PRTE_ERR_SPLIT - 50),
-    PRTE_ERR_CONDUIT_SEND_FAIL = (PRTE_ERR_SPLIT - 51),
-    PRTE_ERR_JSON_PARSE_FAILURE = (PRTE_ERR_SPLIT - 52),
-    PRTE_ERR_SLURM_QUERY_FAILURE = (PRTE_ERR_SPLIT - 53),
-    PRTE_ERR_SLURM_BAD_JOB_STATUS = (PRTE_ERR_SPLIT - 54),
-    PRTE_ERR_SLURM_SUBMIT_FAILURE = (PRTE_ERR_SPLIT - 55),
-    PRTE_ERR_SLURM_CANCEL_FAILURE = (PRTE_ERR_SPLIT - 56),
-    PRTE_ERR_SLURM_SHRINK_FAILURE = (PRTE_ERR_SPLIT - 57)
+    PRTE_ERR_RECV_LESS_THAN_POSTED = (PRTE_ERR_BASE - 101),
+    PRTE_ERR_RECV_MORE_THAN_POSTED = (PRTE_ERR_BASE - 102),
+    PRTE_ERR_NO_MATCH_YET = (PRTE_ERR_BASE - 103),
+    PRTE_ERR_REQUEST = (PRTE_ERR_BASE - 104),
+    PRTE_ERR_NO_CONNECTION_ALLOWED = (PRTE_ERR_BASE - 105),
+    PRTE_ERR_CONNECTION_REFUSED = (PRTE_ERR_BASE - 106),
+    PRTE_ERR_COMPARE_FAILURE = (PRTE_ERR_BASE - 107),
+    PRTE_ERR_COPY_FAILURE = (PRTE_ERR_BASE - 108),
+    PRTE_ERR_PROC_STATE_MISSING = (PRTE_ERR_BASE - 109),
+    PRTE_ERR_PROC_EXIT_STATUS_MISSING = (PRTE_ERR_BASE - 110),
+    PRTE_ERR_INDETERMINATE_STATE_INFO = (PRTE_ERR_BASE - 111),
+    PRTE_ERR_NODE_FULLY_USED = (PRTE_ERR_BASE - 112),
+    PRTE_ERR_INVALID_NUM_PROCS = (PRTE_ERR_BASE - 113),
+    PRTE_ERR_ADDRESSEE_UNKNOWN = (PRTE_ERR_BASE - 114),
+    PRTE_ERR_SYS_LIMITS_PIPES = (PRTE_ERR_BASE - 115),
+    PRTE_ERR_PIPE_SETUP_FAILURE = (PRTE_ERR_BASE - 116),
+    PRTE_ERR_SYS_LIMITS_CHILDREN = (PRTE_ERR_BASE - 117),
+    PRTE_ERR_FAILED_GET_TERM_ATTRS = (PRTE_ERR_BASE - 118),
+    PRTE_ERR_WDIR_NOT_FOUND = (PRTE_ERR_BASE - 119),
+    PRTE_ERR_EXE_NOT_FOUND = (PRTE_ERR_BASE - 120),
+    PRTE_ERR_PIPE_READ_FAILURE = (PRTE_ERR_BASE - 121),
+    PRTE_ERR_EXE_NOT_ACCESSIBLE = (PRTE_ERR_BASE - 122),
+    PRTE_ERR_FAILED_TO_START = (PRTE_ERR_BASE - 123),
+    PRTE_ERR_FILE_NOT_EXECUTABLE = (PRTE_ERR_BASE - 124),
+    PRTE_ERR_HNP_COULD_NOT_START = (PRTE_ERR_BASE - 125),
+    PRTE_ERR_SYS_LIMITS_SOCKETS = (PRTE_ERR_BASE - 126),
+    PRTE_ERR_SOCKET_NOT_AVAILABLE = (PRTE_ERR_BASE - 127),
+    PRTE_ERR_SYSTEM_WILL_BOOTSTRAP = (PRTE_ERR_BASE - 128),
+    PRTE_ERR_RESTART_LIMIT_EXCEEDED = (PRTE_ERR_BASE - 129),
+    PRTE_ERR_INVALID_NODE_RANK = (PRTE_ERR_BASE - 130),
+    PRTE_ERR_INVALID_LOCAL_RANK = (PRTE_ERR_BASE - 131),
+    PRTE_ERR_UNRECOVERABLE = (PRTE_ERR_BASE - 132),
+    PRTE_ERR_MEM_LIMIT_EXCEEDED = (PRTE_ERR_BASE - 133),
+    PRTE_ERR_HEARTBEAT_LOST = (PRTE_ERR_BASE - 134),
+    PRTE_ERR_PROC_STALLED = (PRTE_ERR_BASE - 135),
+    PRTE_ERR_NO_APP_SPECIFIED = (PRTE_ERR_BASE - 136),
+    PRTE_ERR_NO_EXE_SPECIFIED = (PRTE_ERR_BASE - 137),
+    PRTE_ERR_COMM_DISABLED = (PRTE_ERR_BASE - 138),
+    PRTE_ERR_FAILED_TO_MAP = (PRTE_ERR_BASE - 139),
+    PRTE_ERR_SENSOR_LIMIT_EXCEEDED = (PRTE_ERR_BASE - 140),
+    PRTE_ERR_ALLOCATION_PENDING = (PRTE_ERR_BASE - 141),
+    PRTE_ERR_NO_PATH_TO_TARGET = (PRTE_ERR_BASE - 142),
+    PRTE_ERR_OP_IN_PROGRESS = (PRTE_ERR_BASE - 143),
+    PRTE_ERR_OPEN_CONDUIT_FAIL = (PRTE_ERR_BASE - 144),
+    PRTE_ERR_DUPLICATE_MSG = (PRTE_ERR_BASE - 145),
+    PRTE_ERR_OUT_OF_ORDER_MSG = (PRTE_ERR_BASE - 146),
+    PRTE_ERR_FORCE_SELECT = (PRTE_ERR_BASE - 147),
+    PRTE_ERR_JOB_CANCELLED = (PRTE_ERR_BASE - 148),
+    PRTE_ERR_CONDUIT_SEND_FAIL = (PRTE_ERR_BASE - 149),
+    PRTE_ERR_JSON_PARSE_FAILURE = (PRTE_ERR_BASE - 150),
+    PRTE_ERR_SLURM_QUERY_FAILURE = (PRTE_ERR_BASE - 151),
+    PRTE_ERR_SLURM_BAD_JOB_STATUS = (PRTE_ERR_BASE - 152),
+    PRTE_ERR_SLURM_SUBMIT_FAILURE = (PRTE_ERR_BASE - 153),
+    PRTE_ERR_SLURM_CANCEL_FAILURE = (PRTE_ERR_BASE - 154),
+    PRTE_ERR_SLURM_SHRINK_FAILURE = (PRTE_ERR_BASE - 155)
 };
-
-#define PRTE_ERR_MAX (PRTE_ERR_SPLIT - 100)
 
 END_C_DECLS
 

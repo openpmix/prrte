@@ -706,6 +706,24 @@ depends on a configure-time decision, check that line rather than assuming.
 This is the same shape as the `show_help` staleness trap below: a
 persistent build dir plus a "only if missing" rule.
 
+**Arguments are not the only thing that goes stale.** A build dir configured
+before the build system was *regenerated* is stale too, and it fails in a way
+that points nowhere near the cause. Edit `configure.ac` or a `config/*.m4`,
+re-run `./autogen.pl` on the host, and `configure`/`Makefile.in` are now newer
+than the volume's `config.status`. An incremental `make` inside the container
+then walks into maintainer-mode regeneration — and the container does not have
+the exact `aclocal`/`automake` the host used:
+
+```
+/prrte-src/config/missing: line 85: aclocal-1.18: command not found
+make: *** [Makefile:730: /prrte-src/aclocal.m4] Error 127
+```
+
+`build.sh` dies there, so the **previous** install stays in the volume and the
+stamp is gone — which at least makes `run-tests.sh` refuse to run rather than
+test it. `reconfigure_needed` now also reconfigures when `configure` is newer
+than `config.status`, which is the condition that matters.
+
 ### Writing a case that asserts on an error message
 
 **`show_help` emits a given message once per HNP.** A test that probes with
@@ -1103,3 +1121,65 @@ single-host test wearing a hat), and three back-to-back constructs
 followed by a plain job must all succeed — a caddy leak or a tracker that
 is never deleted shows up as drift across runs rather than as one bad
 one.
+
+## 16. The event base and the constants (`test_event`, `test_include`)
+
+Two phases for two directories that are almost entirely covered without a
+DVM — [`src/event`](../../src/event/AGENTS.md) by `test/unit/event` and
+[`src/include`](../../src/include/AGENTS.md) by `test/unit/include`. What
+lands here is only what a single process cannot show.
+
+**`test_event`.** Three things, all of which need an event on one machine to
+have a consequence on another:
+
+- **A job timeout fires, and takes the job with it.** `--timeout` arms a
+  `prte_event_evtimer` on the HNP; when it fires, the HNP has to reach
+  processes it does not host. The case requires both a non-zero exit *and*
+  no surviving application process on any of the three nodes.
+- **A job that beats its timeout is not killed by it.** The other half, and
+  the one a broken `prte_event_evtimer_del()` breaks: a pending timer that
+  is not deleted fires afterwards against a job that has already finished.
+  A generous timeout over a fast job must produce a clean result with no
+  timeout reported.
+- **A signal caught on one node is re-raised on another.** `prun` catches
+  the signal on its own event base (a `PRTE_EV_SIGNAL` event on a
+  `prte_event_list_item_t`), reads the number back with
+  `PRTE_EVENT_SIGNAL()`, and relays it over the RML; the daemon holding the
+  process re-raises it locally. `test_prted` already covers the *job
+  scoping* of that path with both jobs on one node — what only exists
+  across nodes is the relay, so this case puts the launcher on node1 and the
+  process on node4.
+- **The DVM tears its event base down cleanly on every node.**
+  `prte_finalize()` closes the event base — it frees `prte_sync_event_base`
+  and clears both globals. Nothing called that function until recently: it
+  existed, had no callers, and left both globals pointing at freed memory.
+  A base freed while something still holds a registered event, or freed
+  before the last PMIx server upcall has drained, shows up here as a daemon
+  that crashes or hangs instead of exiting. Only a real shutdown runs that
+  code. The case gives eight daemons real work first, then requires `pterm`
+  to return 0 with no crash text, every daemon gone, and no session
+  directory left behind.
+
+Note the unit test deliberately does **not** assert that raising a signal
+runs its callback. Whether a signal raised before the loop is entered is
+reported at all is a property of the event library backend — libevent's
+kqueue backend on macOS does not report it, and a three-line program using
+`event_assign`/`event_add`/`raise` hangs in `event_base_loop()` the same
+way. That assertion belongs here, where the signal arrives at a running
+process.
+
+**`test_include`.** PRRTE's error codes were renumbered onto
+`PMIX_EXTERNAL_ERR_BASE` — they used to sit on top of PMIx's own statuses,
+46 of them exactly, and the second half of the list was *positive*. A
+renumbering does not break the build. It breaks a real failure path into
+"Unknown error", or into somebody else's error. Those paths run on the
+daemon that hosts the process, so the phase provokes genuine failures on a
+**remote** node — a missing executable, a missing working directory, an
+impossible slot request — and requires each to come back named, never as
+"Unknown error" and never as a bare number.
+
+The byte-order helpers (`prte_hton64`/`prte_ntoh64`) need no case of their
+own: every message between daemons runs its header epoch through them, so
+every other phase in this suite exercises them already. What no container
+swarm can cover is the case they exist for — a **heterogeneous** DVM, where
+the two ends disagree about endianness.
