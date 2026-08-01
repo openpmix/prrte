@@ -3365,6 +3365,56 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
             && ok "large stdin ($insz bytes) survived a SLOW HNP-local reader (short writes)" \
             || bad "slow-reader stdin corrupted on the HNP (rc=$rc, sent=$insz received=$got, md5 $insum vs $outsum): $(RUN 'head -c 200 /tmp/iof_slow_err.txt')"
 
+        # --- output-to-file: the terminal is supposed to stay CLEAN ---------
+        # NOCOPY is the documented default for --output (see
+        # docs/prrte-rst-content/cli-output.rst), so "file=" means the output
+        # goes to files and NOT to the tool's stdout.  It leaked: a tool learns
+        # that its spawned job is not to be written locally only when the spawn
+        # REPLY lands, and output arriving before that found no namespace record
+        # and fell back to the process-wide flag - which for a tool says "yes,
+        # write it".  So a nondeterministic subset of the job appeared on a
+        # terminal the user had asked to keep quiet: whichever ranks' first
+        # chunk beat the reply, typically one rank in two.
+        #
+        # That is why this runs several times.  A single pass is not evidence:
+        # before the fix the same command printed nothing on roughly a third of
+        # runs, so one clean run proves nothing at all.
+        if ! pmix_cap PMIX_CAP_IOF_DELIVER_LOCAL; then
+            # No flag marks this fix by itself; this one stands in for "a PMIx
+            # carrying the IOF work these cases assert", and the baked PMIx
+            # goes stale as a matter of course (see AGENTS.md).
+            skp "PMIx predates the output-file terminal fix -- skipping"
+        else
+            RUN 'rm -rf /tmp/ofterm; mkdir -p /tmp/ofterm' >/dev/null 2>&1
+            ON 2 'rm -rf /tmp/ofterm; mkdir -p /tmp/ofterm' >/dev/null 2>&1
+            leaked=0
+            copied=0
+            for i in 1 2 3 4 5; do
+                n=$(RUN 'timeout -k 5 45 prun --output file=/tmp/ofterm/out \
+                             --host node1:1,node2:1 -n 2 --map-by node hostname 2>&1' \
+                        | grep -cE '^node[12]$')
+                [ "$n" = 0 ] || leaked=$((leaked+1))
+                n=$(RUN 'timeout -k 5 45 prun --output file=/tmp/ofterm/out:copy \
+                             --host node1:1,node2:1 -n 2 --map-by node hostname 2>&1' \
+                        | grep -cE '^node[12]$')
+                [ "$n" = 2 ] && copied=$((copied+1))
+            done
+            [ "$leaked" = 0 ] \
+                && ok "--output file= kept the terminal clean on all 5 runs" \
+                || bad "--output file= leaked job output to the terminal on $leaked of 5 runs"
+            [ "$copied" = 5 ] \
+                && ok "...and the copy qualifier still delivers every rank" \
+                || bad "--output file=:copy delivered both ranks on only $copied of 5 runs"
+            # the files themselves must still be there - "clean terminal" must
+            # not have been achieved by dropping the output on the floor
+            n=$(RUN 'ls /tmp/ofterm | wc -l' | tr -d ' \r')
+            [ "$n" -gt 0 ] \
+                && ok "...and the output files were written ($n on the head node)" \
+                || bad "--output file= wrote no files at all"
+            RUN 'rm -rf /tmp/ofterm' >/dev/null 2>&1
+            ON 2 'rm -rf /tmp/ofterm' >/dev/null 2>&1
+        fi
+
         RUN 'rm -f /tmp/iof_stdin_in.txt /tmp/iof_stdin_out.txt /tmp/iof_stdin_err.txt \
                    /tmp/iof_slow_out.txt /tmp/iof_slow_err.txt' >/dev/null 2>&1
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
