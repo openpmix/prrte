@@ -11,3 +11,4 @@ with schedulers.
    overview.rst
    structures.rst
    flow_of_control.rst
+   session_control.rst

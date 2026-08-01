@@ -25,4 +25,7 @@ pass the request on to the scheduler, and transport the reply back
 to the requestor.
 
 PRRTE only creates a session object as a result of a call from the
-scheduler via ``PMIx_Session_control``.
+scheduler via ``PMIx_Session_control``. What it does with each directive
+of that API - and where it deviates from the letter of the attribute
+description, as it must for preemption - is documented in
+:ref:`Session Control <session-control-label>`.

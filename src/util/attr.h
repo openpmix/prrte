@@ -128,6 +128,8 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_FLAG_FORWARD_OUTPUT    0x0020 // forward output from the apps
 #define PRTE_JOB_FLAG_DO_NOT_MONITOR    0x0040 // do not monitor apps for termination
 #define PRTE_JOB_FLAG_FORWARD_COMM      0x0080 //
+#define PRTE_JOB_FLAG_SUSPENDED         0x0100 // job's procs have been stopped by a session
+                                               // pause/preempt directive and await a resume/restore
 #define PRTE_JOB_FLAG_RESTART           0x0200 //
 #define PRTE_JOB_FLAG_PROCS_MIGRATING   0x0400 // some procs in job are migrating from one node to another
 #define PRTE_JOB_FLAG_OVERSUBSCRIBED    0x0800 // at least one node in the job is oversubscribed
@@ -338,6 +340,20 @@ typedef uint16_t prte_proc_flags_t;
 typedef uint16_t prte_session_flags_t;
 #define PRTE_SESSION_FLAG_DYNAMIC       0x0001 // session was dynamically allocated
 #define PRTE_SESSION_FLAG_RESERVED      0x0002 // nodes withheld from default pool
+#define PRTE_SESSION_FLAG_DETACHED      0x0004 // session lifetime is independent of its owning
+                                               // namespace (PMIX_SESSION_SEP) - the inheritance
+                                               // disposition is not fired when that namespace ends
+#define PRTE_SESSION_FLAG_PAUSED        0x0008 // every job in the session has been stopped by a
+                                               // PMIX_SESSION_PAUSE directive
+#define PRTE_SESSION_FLAG_SCHEDULER     0x0010 // session was instantiated by the scheduler via
+                                               // PMIx_Session_control, so its completion must be
+                                               // reported back to the scheduler
+#define PRTE_SESSION_FLAG_TERMINATING   0x0020 // a PMIX_SESSION_TERMINATE is in flight - the
+                                               // session is reclaimed once its jobs have retired
+#define PRTE_SESSION_FLAG_AUTO_COMPLETE 0x0040 // the session exists to run the jobs it was
+                                               // instantiated with, so it is reclaimed when the
+                                               // last of them retires rather than persisting
+                                               // until an explicit terminate
 
 
 /*** FLAG OPS ***/

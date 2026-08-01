@@ -363,6 +363,10 @@ static prte_regattr_input_t prte_attributes[] = {
                          NULL}},
     {.function = "PMIx_Session_control",
      .attrs = (char *[]){"PMIX_SESSION_CTRL_ID",
+                         "PMIX_REQUESTOR",
+                         "PMIX_SESSION_INSTANTIATE",
+                         "PMIX_SESSION_RESOURCES",
+                         "PMIX_SESSION_JOB",
                          "PMIX_SESSION_APP",
                          "PMIX_SESSION_PAUSE",
                          "PMIX_SESSION_RESUME",
@@ -370,7 +374,16 @@ static prte_regattr_input_t prte_attributes[] = {
                          "PMIX_SESSION_PREEMPT",
                          "PMIX_SESSION_RESTORE",
                          "PMIX_SESSION_SIGNAL",
-                         "PMIX_SESSION_COMPLETE",
+                         "PMIX_SESSION_EXTEND",
+                         "PMIX_SESSION_SEP",
+                         "PMIX_ALLOC_ID",
+                         "PMIX_ALLOC_REQ_ID",
+                         "PMIX_ALLOC_NODE_LIST",
+                         "PMIX_ALLOC_TIME",
+                         "PMIX_PERSONALITY",
+                         "PMIX_USERID",
+                         "PMIX_NSPACE",
+                         "PMIX_TIMEOUT",
                          NULL}},
     {.function = ""},
 };
@@ -2196,6 +2209,10 @@ static void _send_alloc_resp(int sd, short args, void *cbdata)
     }
 
     /* send the response */
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s sending sched response to %s for their req %d",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&req->proxy), req->remote_index);
     PRTE_RML_RELIABLE_SEND(rc, req->proxy.rank, buf, PRTE_RML_TAG_SCHED_RESP);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
@@ -2216,6 +2233,23 @@ cleanup:
     pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
     PMIX_RELEASE(req);
     PMIX_RELEASE(cd);
+}
+
+/* Run a relayed session-control directive on the progress thread.
+ *
+ * pmix_server_sched() is an RML RECEIVE callback, and serving a session
+ * control means driving the PLM and xcasting daemon commands - work that
+ * re-enters the RML to send while we are still inside its dispatch. The
+ * allocation branch of that same handler posts an event to reach
+ * prte_ras_base_modify for exactly this reason; do the same here rather than
+ * calling inline, which wedged the master's event loop outright. */
+static void _relayed_session_ctrl(int sd, short args, void *cbdata)
+{
+    prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_ACQUIRE_OBJECT(req);
+    prte_pmix_server_session_ctrl_local(req);
 }
 
 static void send_alloc_resp(pmix_status_t status,
@@ -2367,19 +2401,9 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
 
     // session control request
 
-    /* we are the DVM master, so handle this ourselves - start
-     * by ensuring the scheduler is connected to us */
-    rc = prte_pmix_set_scheduler();
-    if (PMIX_SUCCESS != rc) {
-        /* the scheduler has not attached to us - there is
-         * nothing we can do */
-        rc = PMIX_ERR_NOT_SUPPORTED;
-        PMIX_INFO_FREE(info, ninfo);
-        goto reply;
-    }
-
     req = PMIX_NEW(prte_pmix_server_req_t);
     pmix_asprintf(&req->operation, "SESSIONCTRL: %u", sessionID);
+    req->sessionID = sessionID;
     req->remote_index = refid;
     req->copy = true;
     req->info = info;
@@ -2392,6 +2416,38 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
      * release callback on this path belongs to the PMIx library),
      * so an extra retain would leak it */
     req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+    req->infocbfunc = send_alloc_resp;
+    req->cbdata = req;
+
+    /* see whether a scheduler is available to us - this is allowed to fail,
+     * since a DVM running without one is its own authority over its sessions */
+    rc = prte_pmix_set_scheduler();
+
+    /* A directive that originated with the scheduler is a directive to this
+     * DVM and is executed here; so is one from anybody else when there is no
+     * scheduler to defer to. This has to match the decision pass_request()
+     * makes for a request that arrives at the master directly, or the same
+     * request would be served or refused depending on which daemon the caller
+     * happened to be attached to. */
+    if (PMIX_SUCCESS != rc ||
+        PMIX_CHECK_PROCID(&prte_pmix_server_globals.scheduler, &req->tproc)) {
+        /* Hand it to the progress thread; it takes over the request from
+         * there, answering through send_alloc_resp.
+         *
+         * Take the extra reference the allocation branch above takes, and for
+         * the same reason: completing through send_alloc_resp consumes TWO
+         * releases - the explicit one in _send_alloc_resp and the one its
+         * caddy's destructor performs - whereas the answering side here
+         * (answer_request) drops only the reference the request was created
+         * with. Without this the last release runs the destructor while the
+         * object lock is held, and the DVM master deadlocks against itself. */
+        PMIX_RETAIN(req);
+        prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE,
+                       _relayed_session_ctrl, req);
+        PMIX_POST_OBJECT(req);
+        prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
+        return;
+    }
 
     rc = PMIx_Session_control(sessionID, req->info, req->ninfo,
                               send_alloc_resp, req);

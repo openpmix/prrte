@@ -415,6 +415,19 @@ build_linux() {
                 /prrte-src/examples/dynamic.c -I/prrte-src/examples \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
+            # sessionctrl: the PMIx_Session_control example shipped in this
+            # tree.  Session control is a DVM-master operation whose whole
+            # point is a set of nodes, so the parts that matter -- carving a
+            # reservation out of the pool, a request relayed from a NON-master
+            # daemon, a signal reaching the jobs on every node of the session
+            # -- do not exist on one host.
+            # NOTE: this whole block is inside bash -c ..., so an apostrophe
+            # anywhere in it (even in a comment) ends the script.
+            echo ">>>> sessionctrl (PMIx_Session_control) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/sessionctrl \
+                /prrte-src/examples/sessionctrl.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
             # The fake SLURM control plane, installed under its own prefix --
             # NOT into the install bin/, which the node entrypoint symlinks
             # onto the default PATH of every node. ras/slurm gates on SLURM_JOBID,

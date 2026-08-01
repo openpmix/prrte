@@ -1022,6 +1022,9 @@ static void session_con(prte_session_t *s)
     s->alloc_refid = NULL;
     s->alloc_module = NULL;
     memset(&s->timeout, 0, sizeof(struct timeval));
+    s->timer = NULL;
+    s->results = NULL;
+    s->nresults = 0;
     s->nodes = PMIX_NEW(pmix_pointer_array_t);
     pmix_pointer_array_init(s->nodes, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
                             PRTE_GLOBAL_ARRAY_MAX_SIZE,
@@ -1045,6 +1048,19 @@ static void session_des(prte_session_t *s)
 
     /* notify the RAS so it can release the underlying allocation */
     prte_ras_base_release_allocation(s);
+
+    /* disarm the session time limit, if one was in force - the event holds a
+     * bare pointer to us and would fire on freed memory */
+    if (NULL != s->timer) {
+        prte_event_evtimer_del(s->timer->ev);
+        PMIX_RELEASE(s->timer);
+        s->timer = NULL;
+    }
+    if (NULL != s->results) {
+        PMIX_INFO_FREE(s->results, s->nresults);
+        s->results = NULL;
+        s->nresults = 0;
+    }
 
     if (NULL != s->user_refid) {
         free(s->user_refid);

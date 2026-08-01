@@ -343,6 +343,28 @@ PRTE_EXPORT extern pmix_status_t pmix_server_monitor_fn(const pmix_proc_t *reque
                                                         const pmix_info_t directives[], size_t ndirs,
                                                         pmix_info_cbfunc_t cbfunc, void *cbdata);
 
+/* Hand a caller-constructed job object to the PLM for launch, exactly as a
+ * PMIx_Spawn would once its directives have been translated. Must be called
+ * on the PRRTE progress thread; cbfunc reports the launched namespace. */
+PRTE_EXPORT extern void prte_pmix_server_launch_job(prte_job_t *jdata,
+                                                    pmix_spawn_cbfunc_t cbfunc,
+                                                    void *cbdata);
+
+/* Report to the scheduler that a session it instantiated has completed - all
+ * of its jobs have terminated and its resources have been recovered. Called
+ * from the DVM state machine as each job retires. A no-op for a session the
+ * scheduler did not instantiate. */
+PRTE_EXPORT extern void prte_pmix_server_session_complete(prte_session_t *session);
+
+/* Notice from the DVM state machine that a job in the given session has
+ * terminated. Records the job's termination status for the completion report
+ * and, when the session was defined to run that job (or is being torn down)
+ * and nothing is left running in it, reclaims the session. Must be called
+ * AFTER the job has been removed from session->jobs, and only on the DVM
+ * master. */
+PRTE_EXPORT extern void prte_pmix_server_session_job_terminated(prte_session_t *session,
+                                                                prte_job_t *jdata);
+
 /* declare the RML recv functions for responses */
 PRTE_EXPORT extern void pmix_server_launch_resp(int status, pmix_proc_t *sender,
                                                 pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
@@ -404,6 +426,20 @@ pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,
                             uint32_t sessionID,
                             const pmix_info_t directives[], size_t ndirs,
                             pmix_info_cbfunc_t cbfunc, void *cbdata);
+
+/* Interpret a PMIX_ALLOC_TIME session time limit -
+ * "[[[[months:]days:]hours:]minutes:]seconds", scanned from the right - and
+ * return it in seconds, or -1 if the string is not a well-formed time. */
+PRTE_EXPORT extern long prte_pmix_server_parse_session_time(const char *str);
+
+/* Execute a session control directive against this DVM's own sessions, and
+ * answer the request. Used when the directive came from the scheduler (a
+ * directive TO us) or when there is no scheduler to defer to, in which case
+ * the DVM master is the authority over its own sessions. Takes over the
+ * request: the caller must neither answer nor release it afterwards. Must be
+ * called on the PRRTE progress thread, on the DVM master. */
+PRTE_EXPORT extern void
+prte_pmix_server_session_ctrl_local(prte_pmix_server_req_t *req);
 
 
 /* exposed shared variables */

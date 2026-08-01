@@ -66,6 +66,7 @@ EXAMPLES = \
 	dynamic-dep \
 	abort \
 	elastic \
+	sessionctrl \
 	slurm/elastic-coordination
 
 all: $(EXAMPLES)

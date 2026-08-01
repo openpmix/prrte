@@ -47,7 +47,8 @@ upcall; each file below implements a related group of them.
 | `pmix_server_group.c` | `group` — a thin pass-through to grpcomm. |
 | `pmix_server_job_ctrl.c` | `job_control` — kill/terminate/signal/define-pset, as daemon commands. |
 | `pmix_server_monitor.c` | `monitor` — heartbeat/file monitoring, fanned out to all daemons and collected. |
-| `pmix_server_alloc*.c`, `pmix_server_session.c` | `allocate` and `session_control`, relayed to the DVM master and on to a scheduler. |
+| `pmix_server_alloc*.c` | `allocate`, relayed to the DVM master and on to a scheduler. |
+| `pmix_server_session.c` | `session_control` — see its own section below. |
 
 ---
 
@@ -243,6 +244,75 @@ onto PRRTE job and app attributes. Notes for extending them:
 
 ---
 
+## Session control (`pmix_server_session.c`)
+
+`PMIx_Session_control` is the scheduler's API for creating, operating on and
+reclaiming a `prte_session_t` — PRRTE's allocation object. The whole surface
+is implemented here; the user-facing description of what each directive does
+(and where PRRTE deliberately deviates) is
+[`docs/how-things-work/schedulers/session_control.rst`](../../../docs/how-things-work/schedulers/session_control.rst).
+The parts that matter when editing this file:
+
+- **Who decides.** A request from the scheduler is a directive *to* this DVM
+  and is executed here. One from anybody else is forwarded to the scheduler —
+  **unless there is no scheduler**, in which case the DVM master is the
+  authority and answers for itself, gated on `prte_session_is_owned_by`. That
+  decision is made in **two** places, `pass_request()` here and
+  `pmix_server_sched()` in `pmix_server.c` (the relay from a peer daemon), and
+  they must agree: otherwise the same request is served or refused depending
+  on which daemon the caller happened to attach to.
+- **Parse first, act second.** `parse_directives()` walks the whole array and
+  records; nothing acts during the walk. An info array has no defined order,
+  and the previous single-pass version mis-handled an `INSTANTIATE` that
+  arrived *before* its `SESSION_JOB` — the job was built but never attached to
+  the session. Operations are alternatives, not a program: more than one is
+  `PMIX_ERR_BAD_PARAM`.
+- **An unrecognized directive is not an error.** A request may be addressed at
+  more than one kind of RTE. Refuse only what PRRTE is being asked to do and
+  cannot (`PROVISION_*`, anything asking it to *choose* machines).
+- **`answer_request()` owns the completion for both callers**, because they
+  answer through different callbacks: a local client's answer goes to PMIx's
+  own callback (synchronous), a relayed one to `send_alloc_resp` (which
+  thread-shifts and packs later). A response array this file built is
+  therefore **detached** from the request and handed over with its own release
+  callback — tying it to the request instead would free it under the deferred
+  half. The same detach is why `local_index` is invalidated after the slot is
+  cleared: `_send_alloc_resp` clears it again from the other side, by which
+  time the index may belong to somebody else.
+- **A deferred answer returns `PMIX_OPERATION_IN_PROGRESS`.** Only an
+  instantiation that launches apps does this — the answer carries the launched
+  nspace, so it waits for the launch. Everything else answers inline.
+- **The relayed path must be thread-shifted, and must arrive holding an extra
+  reference.** `pmix_server_sched()` is an RML *receive* callback, and serving
+  a session control drives the PLM and xcasts daemon commands — re-entering
+  the RML from inside its own dispatch. Post an event (the allocation branch
+  of that same handler already does). And `_send_alloc_resp` releases the
+  request **twice** — explicitly, and again through its caddy's destructor —
+  so the request has to be handed over with the `PMIX_RETAIN` the allocation
+  branch takes. Without it the last release runs the destructor while the
+  object lock is held and the master deadlocks against itself
+  (`futex_wait_queue` in `pmix_obj_update`, from `ardes`).
+- **A session created here is DETACHED by default**, unlike a reservation. A
+  reservation dies with the tool that took it; a session is named and
+  addressable and must outlive the request that created it, or its own jobs
+  would be reclaimed the moment the requesting tool exited.
+- **Reclaiming a session is `reclaim_session()`, and it is not a terminate.**
+  It runs when the last job of an auto-completing or terminating session
+  retires (`prte_pmix_server_session_job_terminated()`, called from
+  `state_dvm.c`'s `check_complete`). Whether the nodes go back to the
+  *scheduler* or back to the DVM's general pool is the session's
+  `PMIX_ALLOC_INHERITANCE` disposition, and the default is the general pool:
+  handing them away is destructive and must be asked for. Note that
+  `prte_ras_base_teardown_reservation` never shrinks the master's own daemon
+  out of the DVM — a single-node DVM whose whole allocation is one session
+  would otherwise terminate itself when that session ended.
+- **The completion report is accumulated, not gathered.** `PMIX_SESSION_COMPLETE`
+  must carry every job's termination status, and the job objects do not survive
+  to the end of the session — so each one is recorded on `session->results` as
+  it retires.
+
+---
+
 ## A tool's departure
 
 `_client_finalized()` is the **only** notice a daemon gets that a tool has
@@ -329,8 +399,9 @@ it is enforced here:
 ## Testing
 
 **Unit — `test/unit/prted/`.** The directive translators
-(`prte_pmix_xfer_job_info`, `prte_pmix_xfer_app`) and the job-info cache
-are pure data transforms and are covered there. Most of the rest of this
+(`prte_pmix_xfer_job_info`, `prte_pmix_xfer_app`), the job-info cache, and
+the session time-limit parser (`prte_pmix_server_parse_session_time`) are
+pure data transforms and are covered there. Most of the rest of this
 directory needs a live PMIx server and at least one peer daemon.
 
 **Live smoke test.** `prte --daemonize && prun -n 4 hostname && pterm`
@@ -345,7 +416,11 @@ only exist with more than one daemon:
   `target` bug hung;
 - a **tool connecting through a non-master daemon**, which exercises the
   `TCONN` relay rather than the HNP's local shortcut;
-- **job-scoped signal delivery** in a DVM running more than one job.
+- **job-scoped signal delivery** in a DVM running more than one job;
+- **session control** (`test_session`) — a reservation actually withholding
+  its nodes from a general job, a request relayed from a non-master daemon,
+  and a session signal reaching the jobs on every node they occupy. It is
+  driven by `examples/sessionctrl.c`, which `build.sh` installs.
 
 ---
 
