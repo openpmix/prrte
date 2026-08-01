@@ -49,25 +49,31 @@ int test_rank_file(void)
         return 0;
     }
 
-    /* not a rankfile (BYUSER) job -> defer */
+    /* Not a rankfile (BYUSER) job -> defer. The policy the gate has to read
+     * is the resolved one in "opts", which in per-app dispatch is this app's
+     * own: the job map is deliberately left saying "byuser", so a gate that
+     * asks the job rather than the options fails here. */
     jdata = PMIX_NEW(prte_job_t);
     jdata->map = PMIX_NEW(prte_job_map_t);
-    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
+    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYUSER);
     memset(&opts, 0, sizeof(opts));
-    opts.app_idx = -1;
+    opts.app_idx = 0;
+    opts.map = PRTE_MAPPING_BYSLOT;
     rc = mod->map_job(jdata, &opts);
     CHECK("rf defers non-byuser policy", PRTE_ERR_TAKE_NEXT_OPTION == rc);
     PMIX_RELEASE(jdata);
 
-    /* a different mapper was requested -> defer */
+    /* ...and it reaches BAD_PARAM rather than deferring when the policy IS
+     * its own but no rankfile was named - the policy alone selects it, and
+     * "you asked for a rankfile and gave none" is an answer, not a pass */
     jdata = PMIX_NEW(prte_job_t);
     jdata->map = PMIX_NEW(prte_job_map_t);
-    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYUSER);
-    jdata->map->req_mapper = strdup("round_robin");
+    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
     memset(&opts, 0, sizeof(opts));
-    opts.app_idx = -1;
+    opts.app_idx = 0;
+    opts.map = PRTE_MAPPING_BYUSER;
     rc = mod->map_job(jdata, &opts);
-    CHECK("rf defers other req_mapper", PRTE_ERR_TAKE_NEXT_OPTION == rc);
+    CHECK("rf claims a byuser policy the job did not set", PRTE_ERR_BAD_PARAM == rc);
     PMIX_RELEASE(jdata);
 
     if (0 == failures) {

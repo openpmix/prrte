@@ -92,6 +92,46 @@ int test_dispatch(void)
     PMIX_RELEASE(app0);
     PMIX_RELEASE(app1);
 
+    /* A per-app ppr pattern is two answers, not one: how many, and per what.
+     * Only the count used to be kept, so an app asking for two per package
+     * got two per whatever object the job's own policy had resolved. */
+    app0 = PMIX_NEW(prte_app_context_t);
+    prte_rmaps_base_set_app_mapping_policy(app0, "ppr:3:l2cache");
+    job_baseline(&o0);
+    o0.app_idx = 0;
+    o0.pprn = 7;                    /* the job's pattern, which must not stand */
+    o0.maptype = HWLOC_OBJ_CORE;
+    CHECK("ppr resolve rc", PRTE_SUCCESS == prte_rmaps_base_resolve_app_options(NULL, app0, &o0));
+    CHECK("ppr app map", PRTE_MAPPING_PPR == o0.map);
+    CHECK("ppr app count", 3 == o0.pprn);
+    CHECK("ppr app object", HWLOC_OBJ_L2CACHE == o0.maptype);
+    CHECK("ppr app depth", PRTE_BIND_TO_L2CACHE == o0.mapdepth);
+    PMIX_RELEASE(app0);
+
+    /* an app that names no pattern of its own keeps the job's */
+    app0 = PMIX_NEW(prte_app_context_t);
+    prte_rmaps_base_set_app_binding_policy(app0, "core");
+    job_baseline(&o0);
+    o0.app_idx = 0;
+    o0.map = PRTE_MAPPING_PPR;
+    o0.pprn = 7;
+    o0.maptype = HWLOC_OBJ_CORE;
+    CHECK("ppr inherit rc", PRTE_SUCCESS == prte_rmaps_base_resolve_app_options(NULL, app0, &o0));
+    CHECK("ppr inherit count", 7 == o0.pprn);
+    CHECK("ppr inherit object", HWLOC_OBJ_CORE == o0.maptype);
+    PMIX_RELEASE(app0);
+
+    /* a malformed pattern is refused rather than mapped by half of it */
+    app0 = PMIX_NEW(prte_app_context_t);
+    prte_set_attribute(&app0->attributes, PRTE_APP_PPR, PRTE_ATTR_GLOBAL,
+                       "2:notanobject", PMIX_STRING);
+    job_baseline(&o0);
+    o0.app_idx = 0;
+    o0.map = PRTE_MAPPING_PPR;
+    CHECK("ppr bad object refused",
+          PRTE_SUCCESS != prte_rmaps_base_resolve_app_options(NULL, app0, &o0));
+    PMIX_RELEASE(app0);
+
     if (0 == failures) {
         fprintf(stdout, "  PASS test_dispatch\n");
     }

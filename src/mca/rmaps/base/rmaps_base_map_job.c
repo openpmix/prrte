@@ -61,6 +61,55 @@ static void inherit_env_directives(prte_job_t *jdata,
                                    prte_job_t *parent,
                                    pmix_proc_t *proxy);
 
+/* Translate the object half of a ppr pattern ("N:<object>") into the hwloc
+ * object type and binding depth the mappers work against. Returns false if
+ * the name is not one we map by; the caller reports it, because the job and
+ * the app have different things to say about where the bad spelling came
+ * from. Names may be abbreviated, which is why each comparison is against
+ * the length of what the user actually wrote. */
+static bool ppr_object(const char *obj,
+                       hwloc_obj_type_t *maptype,
+                       prte_binding_policy_t *mapdepth)
+{
+    size_t len = strlen(obj);
+
+    if (0 == len) {
+        return false;
+    }
+    if (0 == strncasecmp(obj, "node", len)) {
+        *maptype = HWLOC_OBJ_MACHINE;
+        *mapdepth = PRTE_BIND_TO_NONE;
+    } else if (0 == strncasecmp(obj, "hwthread", len) ||
+               0 == strncasecmp(obj, "thread", len)) {
+        *maptype = HWLOC_OBJ_PU;
+        *mapdepth = PRTE_BIND_TO_HWTHREAD;
+    } else if (0 == strncasecmp(obj, "core", len)) {
+        *maptype = HWLOC_OBJ_CORE;
+        *mapdepth = PRTE_BIND_TO_CORE;
+    } else if (0 == strncasecmp(obj, "package", len) ||
+               0 == strncasecmp(obj, "skt", len) ||
+               0 == strncasecmp(obj, "socket", len)) {
+        *maptype = HWLOC_OBJ_PACKAGE;
+        *mapdepth = PRTE_BIND_TO_PACKAGE;
+    } else if (0 == strncasecmp(obj, "numa", len) ||
+               0 == strncasecmp(obj, "nm", len)) {
+        *maptype = HWLOC_OBJ_NUMANODE;
+        *mapdepth = PRTE_BIND_TO_NUMA;
+    } else if (0 == strncasecmp(obj, "l1cache", len)) {
+        *maptype = HWLOC_OBJ_L1CACHE;
+        *mapdepth = PRTE_BIND_TO_L1CACHE;
+    } else if (0 == strncasecmp(obj, "l2cache", len)) {
+        *maptype = HWLOC_OBJ_L2CACHE;
+        *mapdepth = PRTE_BIND_TO_L2CACHE;
+    } else if (0 == strncasecmp(obj, "l3cache", len)) {
+        *maptype = HWLOC_OBJ_L3CACHE;
+        *mapdepth = PRTE_BIND_TO_L3CACHE;
+    } else {
+        return false;
+    }
+    return true;
+}
+
 /* Override job-level opts with per-app attributes where present.
  * Does not modify jdata->map. */
 /* Derive the default ranking policy from a mapping policy, mirroring the
@@ -182,6 +231,7 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
     if (have_map) {
         appmap = u16;
         opts->map = PRTE_GET_MAPPING_POLICY(appmap);
+        opts->mapgiven = (0 != (PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(appmap)));
         opts->mapspan = (0 != (PRTE_MAPPING_SPAN & PRTE_GET_MAPPING_DIRECTIVE(appmap)));
         opts->ordered = (0 != (PRTE_MAPPING_ORDERED & PRTE_GET_MAPPING_DIRECTIVE(appmap)));
         switch (opts->map) {
@@ -233,10 +283,24 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
         }
     }
 
-    /* 2. PPR count: read PRTE_APP_PPR; fall back to existing opts->pprn */
+    /* 2. PPR pattern: read PRTE_APP_PPR, which carries both halves of what
+     * the app asked for - "N:object". Fall back to the job's pprn/maptype
+     * when the app named no pattern of its own. */
     if (PRTE_MAPPING_PPR == PRTE_GET_MAPPING_POLICY(opts->map)) {
-        if (prte_get_attribute(&app->attributes, PRTE_APP_PPR, (void **)&u16ptr, PMIX_UINT16)) {
-            opts->pprn = u16;
+        str = NULL;
+        if (prte_get_attribute(&app->attributes, PRTE_APP_PPR, (void **)&str, PMIX_STRING) &&
+            NULL != str) {
+            char **pk = PMIx_Argv_split(str, ':');
+            if (2 != PMIx_Argv_count(pk) ||
+                !ppr_object(pk[1], &opts->maptype, &opts->mapdepth)) {
+                pmix_show_help("help-prte-rmaps-ppr.txt", "invalid-ppr", true, str);
+                PMIx_Argv_free(pk);
+                free(str);
+                return PRTE_ERR_SILENT;
+            }
+            opts->pprn = strtoul(pk[0], NULL, 10);
+            PMIx_Argv_free(pk);
+            free(str);
         }
     }
 
@@ -406,6 +470,74 @@ static void record_resolved_app_policy(prte_app_context_t *app,
     }
     prte_set_attribute(&app->attributes, PRTE_APP_RESOLVED_BINDTO,
                        PRTE_ATTR_LOCAL, &ebind, PMIX_UINT16);
+}
+
+/* Record which mapping component placed an app - app_idx < 0 means the whole
+ * job was placed by one of them. This is the only record PRRTE keeps of the
+ * choice, and it is deliberately per-app: with each app's own policy deciding
+ * which component claims it, two apps of one job can be placed by two
+ * different mappers, and a single job-level name could only ever be half the
+ * answer. Job-local, never packed - nothing off this daemon has any use for
+ * it, and mapping happens nowhere else. */
+static void record_mapper(prte_job_t *jdata, int app_idx, const char *mapper)
+{
+    prte_app_context_t *app;
+    int n;
+
+    if (NULL == mapper) {
+        return;
+    }
+    for (n = 0; n < jdata->apps->size; n++) {
+        if (0 <= app_idx && n != app_idx) {
+            continue;
+        }
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
+        if (NULL == app) {
+            continue;
+        }
+        prte_set_attribute(&app->attributes, PRTE_APP_LAST_MAPPER,
+                           PRTE_ATTR_LOCAL, (void *) mapper, PMIX_STRING);
+    }
+}
+
+/* Nobody would take this map. Report it - and say so specifically when the
+ * framework has been restricted, because that is much the likeliest reason
+ * and the generic "none of the available mappers was able to" sends the
+ * reader looking at the mapping directive rather than at the MCA parameter
+ * that removed the component which would have served it. We cannot refuse
+ * the restriction: which components load is settled at framework open, long
+ * before any job exists. What we can do is fail the job with the reason. */
+static void report_no_mapper(prte_job_t *jdata, prte_app_context_t *app,
+                             prte_rmaps_options_t *opts, int rc)
+{
+    prte_rmaps_base_selected_module_t *mod;
+    char **names = NULL, *loaded;
+    int nprocs;
+
+    nprocs = (NULL == app) ? (int) jdata->num_procs : (int) app->num_procs;
+
+    if (1 < pmix_list_get_size(&prte_rmaps_base.selected_modules)) {
+        /* the full set is loaded, so the request is simply not one any of
+         * them implements */
+        pmix_show_help("help-prte-rmaps-base.txt", "failed-map", true,
+                       PRTE_ERROR_NAME(rc),
+                       (NULL == app) ? "N/A" : app->app, nprocs,
+                       prte_rmaps_base_print_mapping(opts->map),
+                       prte_hwloc_base_print_binding(opts->bind));
+        return;
+    }
+
+    PMIX_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules,
+                      prte_rmaps_base_selected_module_t) {
+        PMIx_Argv_append_nosize(&names, mod->component->pmix_mca_component_name);
+    }
+    loaded = (NULL == names) ? strdup("none") : PMIx_Argv_join(names, ',');
+    pmix_show_help("help-prte-rmaps-base.txt", "mapper-restricted", true,
+                   prte_rmaps_base_print_mapping(opts->map),
+                   prte_hwloc_base_print_binding(opts->bind),
+                   (NULL == app) ? "N/A" : app->app, loaded);
+    free(loaded);
+    PMIx_Argv_free(names);
 }
 
 void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
@@ -879,36 +1011,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
         /* compute the #procs per resource */
         options.pprn = strtoul(ck[0], NULL, 10);
-        len = strlen(ck[1]);
-        if (0 == strncasecmp(ck[1], "node", len)) {
-            options.maptype = HWLOC_OBJ_MACHINE;
-            options.mapdepth = PRTE_BIND_TO_NONE;
-        } else if (0 == strncasecmp(ck[1], "hwthread", len) ||
-                   0 == strncasecmp(ck[1], "thread", len)) {
-            options.maptype = HWLOC_OBJ_PU;
-            options.mapdepth = PRTE_BIND_TO_HWTHREAD;
-        } else if (0 == strncasecmp(ck[1], "core", len)) {
-            options.maptype = HWLOC_OBJ_CORE;
-            options.mapdepth = PRTE_BIND_TO_CORE;
-        } else if (0 == strncasecmp(ck[1], "package", len) ||
-                   0 == strncasecmp(ck[1], "skt", len) ||
-                   0 == strncasecmp(ck[1], "socket", len)) {
-            options.maptype = HWLOC_OBJ_PACKAGE;
-            options.mapdepth = PRTE_BIND_TO_PACKAGE;
-        } else if (0 == strncasecmp(ck[1], "numa", len) ||
-                   0 == strncasecmp(ck[1], "nm", len)) {
-            options.maptype = HWLOC_OBJ_NUMANODE;
-            options.mapdepth = PRTE_BIND_TO_NUMA;
-        } else if (0 == strncasecmp(ck[1], "l1cache", len)) {
-            options.maptype = HWLOC_OBJ_L1CACHE;
-            options.mapdepth = PRTE_BIND_TO_L1CACHE;
-        } else if (0 == strncasecmp(ck[1], "l2cache", len)) {
-            options.maptype = HWLOC_OBJ_L2CACHE;
-            options.mapdepth = PRTE_BIND_TO_L2CACHE;
-        } else if (0 == strncasecmp(ck[1], "l3cache", len)) {
-            options.maptype = HWLOC_OBJ_L3CACHE;
-            options.mapdepth = PRTE_BIND_TO_L3CACHE;
-        } else {
+        if (!ppr_object(ck[1], &options.maptype, &options.mapdepth)) {
             /* unknown spec */
             pmix_show_help("help-prte-rmaps-ppr.txt", "unrecognized-ppr-option", true,
                            ck[1], tmp);
@@ -1293,6 +1396,11 @@ ranking:
         }
     }
 
+    /* record whether the mapping policy is the user's or one we derived -
+     * a mapper that only claims a job nobody described has to be able to
+     * tell, and once dispatch is per-app the question is per-app too */
+    options.mapgiven = (0 != (PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)));
+
     /* scan for per-app mapping directives */
     for (n = 0; n < jdata->apps->size; n++) {
         app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
@@ -1329,16 +1437,15 @@ ranking:
          * the job
          */
         did_map = false;
-        if (1 == pmix_list_get_size(&prte_rmaps_base.selected_modules)) {
-            /* forced selection */
-            mod = (prte_rmaps_base_selected_module_t *) pmix_list_get_first(
-                &prte_rmaps_base.selected_modules);
-            jdata->map->req_mapper = strdup(mod->component->pmix_mca_component_name);
-        }
         PMIX_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules, prte_rmaps_base_selected_module_t)
         {
             if (PRTE_SUCCESS == (rc = mod->module->map_job(jdata, &options)) ||
                 PRTE_ERR_RESOURCE_BUSY == rc) {
+                /* the base records who did the mapping, not the mapper - a
+                 * mapper that stamps itself on entry cannot know it will
+                 * still be the answer. Every app of a whole-job map was
+                 * placed by the same component, so they all get the name */
+                record_mapper(jdata, -1, mod->component->pmix_mca_component_name);
                 did_map = true;
                 break;
             }
@@ -1350,6 +1457,12 @@ ranking:
                 PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
                 goto cleanup;
             }
+        }
+        if (!did_map) {
+            report_no_mapper(jdata, NULL, &options, rc);
+            jdata->exit_code = PRTE_ERR_SILENT;
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
         }
     } else {
         /* per-app dispatch: call mappers once per app with per-app options */
@@ -1383,6 +1496,10 @@ ranking:
             app_options.dist_device = (NULL == options.dist_device) ? NULL
                                                                    : strdup(options.dist_device);
             app_options.app_idx = n;
+            /* where this app's ranks start: the mappers that number their
+             * own procs need the cursor the base is threading, or every app
+             * numbers itself from zero */
+            app_options.start_vpid = next_vpid;
             /* the default-binding nprocs rule keys off this app's own proc
              * count, not the job-wide total inherited from options.nprocs.
              * (the mappers overwrite options.nprocs per node as they run, so
@@ -1391,16 +1508,19 @@ ranking:
 
             rc = prte_rmaps_base_resolve_app_options(jdata, app, &app_options);
             if (PRTE_SUCCESS != rc) {
+                jdata->exit_code = rc;
                 PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
                 goto cleanup;
             }
 
             bool app_did_map = false;
+            const char *app_mapper = NULL;
             PMIX_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules,
                               prte_rmaps_base_selected_module_t) {
                 rc = mod->module->map_job(jdata, &app_options);
                 if (PRTE_SUCCESS == rc) {
                     app_did_map = true;
+                    app_mapper = mod->component->pmix_mca_component_name;
                     break;
                 }
                 if (PRTE_ERR_RESOURCE_BUSY == rc) {
@@ -1414,13 +1534,8 @@ ranking:
                 }
             }
             if (!app_did_map) {
-                pmix_show_help("help-prte-rmaps-base.txt", "failed-map", true,
-                               PRTE_ERROR_NAME(rc),
-                               app->app,
-                               app->num_procs,
-                               prte_rmaps_base_print_mapping(app_options.map),
-                               prte_hwloc_base_print_binding(app_options.bind));
-                jdata->exit_code = -PRTE_JOB_STATE_MAP_FAILED;
+                report_no_mapper(jdata, app, &app_options, rc);
+                jdata->exit_code = PRTE_ERR_SILENT;
                 PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
                 goto cleanup;
             }
@@ -1430,8 +1545,10 @@ ranking:
                 PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
                 goto cleanup;
             }
-            /* record this app's effective policies for the map display */
+            /* record this app's effective policies, and who applied them,
+             * for the map display */
             record_resolved_app_policy(app, job_map, job_rank, job_bind, &app_options);
+            record_mapper(jdata, n, app_mapper);
             did_map = true;
         }
     }

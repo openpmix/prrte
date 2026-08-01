@@ -45,9 +45,8 @@ static int ppr_mapper(prte_job_t *jdata,
 {
     int rc = PRTE_SUCCESS, j, idx, ncpus;
     prte_proc_t *proc;
-    pmix_mca_base_component_t *c = &prte_mca_rmaps_ppr_component;
     prte_node_t *node, *nd;
-    prte_app_context_t *app;
+    prte_app_context_t *app, *myapp = NULL;
     int nprocs_mapped;
     prte_mapping_policy_t mapping = 0;
     prte_ranking_policy_t ranking;
@@ -72,22 +71,27 @@ static int ppr_mapper(prte_job_t *jdata,
                             PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
-    if (NULL != jdata->map->req_mapper
-        && 0 != strcasecmp(jdata->map->req_mapper, c->pmix_mca_component_name)) {
-        /* a mapper has been specified, and it isn't me */
-        pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:ppr: job %s not using ppr mapper",
-                            PRTE_JOBID_PRINT(jdata->nspace));
-        return PRTE_ERR_TAKE_NEXT_OPTION;
+    /* The policy is what selects the mapper, so find the pattern this
+     * request carries: in per-app dispatch, the app's own if it gave one,
+     * and only then the job's. Asking the job first meant a per-app
+     * "--map-by ppr:N:obj" was placed by whatever the job's default had
+     * resolved to, since the job's own policy is not PPR at all */
+    if (0 <= options->app_idx) {
+        myapp = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps,
+                                                                   options->app_idx);
+        if (NULL != myapp) {
+            prte_get_attribute(&myapp->attributes, PRTE_APP_PPR, (void **) &jobppr, PMIX_STRING);
+        }
     }
-
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void **) &jobppr, PMIX_STRING) ||
-        NULL == jobppr || PRTE_MAPPING_PPR != PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+    if (NULL == jobppr) {
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void **) &jobppr, PMIX_STRING);
+    }
+    if (NULL == jobppr || PRTE_MAPPING_PPR != PRTE_GET_MAPPING_POLICY(options->map)) {
         /* not for us */
         pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:ppr: job %s not using ppr mapper PPR %s policy %s",
                             PRTE_JOBID_PRINT(jdata->nspace), (NULL == jobppr) ? "NULL" : jobppr,
-                            (PRTE_MAPPING_PPR == PRTE_GET_MAPPING_POLICY(jdata->map->mapping))
+                            (PRTE_MAPPING_PPR == PRTE_GET_MAPPING_POLICY(options->map))
                                 ? "PPRSET"
                                 : "PPR NOTSET");
         if (NULL != jobppr) {
@@ -99,12 +103,6 @@ static int ppr_mapper(prte_job_t *jdata,
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:ppr: mapping job %s with ppr %s",
                         PRTE_JOBID_PRINT(jdata->nspace), jobppr);
-
-    /* flag that I did the mapping */
-    if (NULL != jdata->map->last_mapper) {
-        free(jdata->map->last_mapper);
-    }
-    jdata->map->last_mapper = strdup(c->pmix_mca_component_name);
 
     ranking = PRTE_RANK_BY_SLOT;
     if (HWLOC_OBJ_MACHINE == options->maptype) {
@@ -126,13 +124,24 @@ static int ppr_mapper(prte_job_t *jdata,
         mapping = PRTE_MAPPING_BYHWTHREAD;
     }
 
-    /* record the results */
-    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, mapping);
-    if (!PRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
-        PRTE_SET_RANKING_POLICY(jdata->map->ranking, ranking);
+    /* record the results. A ppr by an object is recorded as the equivalent
+     * BY<object> mapping so the display and the ranking agree with where
+     * the procs actually went. In per-app dispatch that answer is this
+     * app's alone: writing it onto the job would hand every app after this
+     * one a mapping policy its user never gave it */
+    if (0 > options->app_idx) {
+        PRTE_SET_MAPPING_POLICY(jdata->map->mapping, mapping);
+        if (!PRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
+            PRTE_SET_RANKING_POLICY(jdata->map->ranking, ranking);
+        }
+        options->map = PRTE_GET_MAPPING_POLICY(jdata->map->mapping);
+        options->rank = PRTE_GET_RANKING_POLICY(jdata->map->ranking);
+    } else {
+        options->map = mapping;
+        if (!PRTE_RANKING_POLICY_IS_SET(options->rank)) {
+            options->rank = ranking;
+        }
     }
-    options->map = PRTE_GET_MAPPING_POLICY(jdata->map->mapping);
-    options->rank = PRTE_GET_RANKING_POLICY(jdata->map->ranking);
     if (PRTE_RANK_BY_SPAN == options->rank ||
         PRTE_RANK_BY_FILL == options->rank) {
         if (options->map < PRTE_MAPPING_BYNUMA ||

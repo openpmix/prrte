@@ -89,6 +89,39 @@ mapping operation.
   Binding policy:      %s
 
 #
+[mapper-not-supported]
+The spawn request included a PMIX_MAPPER directive:
+
+  Requested mapper:  %s
+
+PRRTE does not support naming a mapping component. The choice of mapper
+IS the mapping policy - each component claims the policies it knows how
+to perform - so a request that names a component says nothing that
+PMIX_MAPBY has not already said, and the two can contradict each other.
+
+Use PMIX_MAPBY to describe the placement you want and let PRRTE select
+the component that performs it.
+
+#
+[mapper-restricted]
+The requested mapping policy cannot be performed by any of the mapping
+components that are loaded:
+
+  Mapping policy:      %s
+  Binding policy:      %s
+  Application:         %s
+  Loaded mapper(s):    %s
+
+Which components are loaded is decided when the rmaps framework is
+opened, so naming one with an MCA parameter -
+
+  --prtemca rmaps <component>
+
+- restricts PRRTE to that component alone. A mapping policy it does not
+implement then cannot be performed at all. Either drop the restriction,
+or ask for a mapping the named component supports.
+
+#
 [span-packages-multiple]
 Your job failed to map because either a package with sufficient
 available cpus could not be found on the node, or the resulting

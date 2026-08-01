@@ -67,8 +67,11 @@ typedef uint8_t prte_app_context_flags_t;
 #define PRTE_APP_PSET_NAME          23 // string - user-assigned name for the process
                                        //          set containing the given process
 #define PRTE_APP_PES_PER_PROC       24 // uint16_t - number of cpus to be assigned to each process
-#define PRTE_APP_PPR                25 // uint16_t - number of procs to place on the resource specified
-                                       //           in the job ppr string
+#define PRTE_APP_PPR                25 // string - this app's ppr pattern, "N:object", in the same
+                                       //          spelling as the job-level PRTE_JOB_PPR. The object
+                                       //          is part of the pattern: an app that asks for
+                                       //          "2:package" is not asking for the job's object
+                                       //          twice per node
 #define PRTE_APP_MAPBY              26 /* uint16_t mapping policy enum */
 #define PRTE_APP_RANKBY             27 /* uint16_t ranking policy enum */
 #define PRTE_APP_BINDTO             28 /* uint16_t binding policy enum */
@@ -84,6 +87,11 @@ typedef uint8_t prte_app_context_flags_t;
 #define PRTE_APP_RESOLVED_MAPBY     35 /* uint16_t resolved mapping policy */
 #define PRTE_APP_RESOLVED_RANKBY    36 /* uint16_t resolved ranking policy */
 #define PRTE_APP_RESOLVED_BINDTO    37 /* uint16_t resolved binding policy */
+/* the mapping component that placed this app, recorded by the rmaps base once
+ * a mapper accepts it. There is no matching "which mapper to use" key: the
+ * mapping policy is the choice of mapper. Local to the HNP - never
+ * packed/sent. */
+#define PRTE_APP_LAST_MAPPER        38 /* char* mapping component that placed this app */
 
 #define PRTE_APP_MAX_KEY 100
 

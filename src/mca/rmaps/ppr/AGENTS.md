@@ -52,11 +52,18 @@ mapper for its gate check and error messages.
 Defers with `PRTE_ERR_TAKE_NEXT_OPTION` when:
 
 - `PRTE_JOB_FLAG_RESTART` is set.
-- `jdata->map->req_mapper` names a different mapper.
-- The job has no `PRTE_JOB_PPR` attribute, or
-  `PRTE_GET_MAPPING_POLICY(jdata->map->mapping) != PRTE_MAPPING_PPR`.
+- Neither this app nor the job carries a ppr pattern, or
+  `PRTE_GET_MAPPING_POLICY(options->map) != PRTE_MAPPING_PPR`.
 
-On acceptance it stamps `last_mapper = "ppr"`.
+The pattern is read from the app's own `PRTE_APP_PPR` first when
+`options->app_idx >= 0`, and only then from the job's `PRTE_JOB_PPR`. Both
+hold the whole pattern, `"N:object"` — an app that asks for two per package
+is not asking for two per whatever object the job resolved.
+
+On acceptance the base records that ppr was the component; the mapper does
+not stamp it. Nor does it write its derived `BY<object>` policy onto
+`jdata->map` in per-app dispatch — that answer is this app's, and writing it
+to the job would hand every app after it a policy its user never gave.
 
 ---
 

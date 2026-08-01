@@ -43,16 +43,18 @@ Defers with `PRTE_ERR_TAKE_NEXT_OPTION` when:
 - `PRTE_JOB_FLAG_RESTART` is set.
 - `LSB_AFFINITY_HOSTFILE` is **not** in the environment (not an LSF
   affinity job).
-- The user gave an explicit `--map-by` directive
-  (`PRTE_MAPPING_GIVEN`) — an explicit request overrides LSF's pinning.
+- The user gave an explicit `--map-by` directive (`options->mapgiven`) — an
+  explicit request overrides LSF's pinning. Read from the options rather
+  than the job map, because in per-app dispatch it is this app that either
+  described its placement or did not.
 - `options->ordered` was requested.
 - The affinity file parses to **zero ranks** (LSF set no pinning) — let a
   normal mapper handle it.
 
 On acceptance it forces hwthread-as-cpu semantics (`PRTE_JOB_HWT_CPUS`,
 `options->use_hwthreads = true`) because LSF reports CPUs as hwthreads,
-defaults binding to hwthread if the user set none, stamps
-`last_mapper = "lsf"`, and sets `options->map = PRTE_MAPPING_BYUSER`.
+defaults binding to hwthread if the user set none, and sets
+`options->map = PRTE_MAPPING_BYUSER`. The base records the component.
 
 ---
 
@@ -96,7 +98,10 @@ An empty file (stat size 0) means "no affinity" and returns success with
 
 Per app (honoring `options->app_idx`), for each rank `k`:
 
-1. Look up `rankmap[vpid_start + k]`.
+1. Look up `rankmap[vpid_start + k]` — the affinity file's numbering, which
+   is not the job's. The rank actually assigned is `options->start_vpid + k`,
+   the base's cursor past everything earlier apps took; in whole-job
+   dispatch that is zero and the two coincide.
    - **Present:** use its slot list; find its host in the node list
      (supporting `+nK` relative indices, as in rank_file).
    - **Absent:** fall back to `options->cpuset` / `prte_hwloc_default_cpu_list`

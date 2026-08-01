@@ -106,12 +106,12 @@ the "--mapby" option (except where noted):
   list" directives)
 
 * "OVERSUBSCRIBE" allow more processes on a node than processing
-  elements. NOTE: this is a job-level-only qualifier and may not be
-  used in a per-app-context "--mapby" string (see "Per-App-Context
-  Mapping" below).
+  elements. NOTE: this describes the whole job. It may be written in a
+  per-app "--mapby" string, where it is taken to describe the job (see
+  "Per-App-Context Mapping" below).
 
-* "NOOVERSUBSCRIBE" means "!OVERSUBSCRIBE". NOTE: job-level only (see
-  above).
+* "NOOVERSUBSCRIBE" means "!OVERSUBSCRIBE". NOTE: describes the whole
+  job (see above).
 
 * "NOLOCAL" do not launch processes on the same node as "prun". This
   qualifier may be applied per app context in an MPMD job — see
@@ -123,10 +123,11 @@ the "--mapby" option (except where noted):
 
 * "INHERIT" indicates that a child job (i.e., one spawned from within
   an application) shall inherit the placement policies of the parent
-  job that spawned it. NOTE: job-level only — may not be used in a
-  per-app-context "--mapby" string.
+  job that spawned it. NOTE: this describes the whole job; written in a
+  per-app "--mapby" string it is taken to describe the job.
 
-* "NOINHERIT" means "!INHERIT". NOTE: job-level only (see above).
+* "NOINHERIT" means "!INHERIT". NOTE: describes the whole job (see
+  above).
 
 * "FILE=<path>" (path to file containing sequential or rankfile
   entries).
@@ -168,38 +169,65 @@ Per-App-Context Mapping (MPMD Jobs)
 
 In a multi-program multiple-data (MPMD) job, each application context
 separated by ":" on the "prun" command line may carry its own
-"--mapby", "--rankby", and "--bindto" directives that override the
-job-level policy for that app only. Apps that carry no per-app
-directive inherit the job-level policy unchanged.
+"--mapby", "--rankby", and "--bindto" directives.
 
-Example:
+Which app such a directive describes follows one rule: the FIRST app
+segment is where the command line speaks for the job. A directive
+written there and nowhere else applies to the whole job, however many
+apps follow. A directive written on any later app describes that app
+alone; apps that were given none take the ordinary defaults, since an
+app that says nothing is not agreeing with one that did.
 
-  prun -n 4 app1 --mapby core : -n 2 app2 --mapby node --rank-by fill
+Examples:
+
+  prun --mapby core -n 4 app1 : -n 2 app2
+
+Both apps are mapped by core: the only directive is on the first app,
+so it describes the job.
+
+  prun --mapby core -n 4 app1 : --mapby node --rankby fill -n 2 app2
 
 Here "app1" is mapped by core and "app2" is mapped by node with fill
 ranking. The binding policy defaults to the job-level value for both.
 
-  prun -n 8 app1 --mapby slot:nolocal : -n 1 app2 --mapby slot
+  prun -n 4 app1 : --mapby node -n 2 app2
+
+Only "app2" is mapped by node; "app1" takes the default mapping.
+
+  prun --mapby slot:nolocal -n 8 app1 : --mapby slot -n 1 app2
 
 Here "app1" is excluded from the head node while "app2" may run
 anywhere, including the head node.
 
-Per-app restrictions:
+Every mapping policy may be given per app - "seq", "rankfile",
+"ppr:N:obj" and "pe-list=..." included, each with the file or pattern
+it needs - so two apps of one job may be placed by two different
+mapping components. "--display devel-map" names the component that
+placed each app.
 
-* "OVERSUBSCRIBE" and "NOOVERSUBSCRIBE" may NOT appear in a per-app
-  "--mapby" string. Oversubscription is a job-wide property.
-  Specifying either will abort the job with an error.
+Qualifiers that describe the whole job:
 
-* "INHERIT" and "NOINHERIT" may NOT appear in a per-app "--mapby"
-  string. Inheritance is a job-wide property. Specifying either will
-  abort the job with an error.
+* "OVERSUBSCRIBE" / "NOOVERSUBSCRIBE" and "INHERIT" / "NOINHERIT"
+  describe the job, not an app, so wherever they are written they are
+  applied to the job. Apps that say nothing about them are silent, not
+  dissenting; only apps that answer the same question in OPPOSITE ways
+  are refused, and that aborts the job with an error.
 
 * "NOLOCAL" MAY be applied per app. It prevents that specific app's
   processes from running on the head node without affecting other apps.
 
 Per-app directives can also be supplied via the "PMIx_Spawn" API by
-placing "PMIX_MAPBY", "PMIX_RANKBY", and "PMIX_BINDTO" keys in the
-per-app "info[]" array on the corresponding "pmix_app_t".
+placing "PMIX_MAPBY", "PMIX_RANKBY", "PMIX_BINDTO" and "PMIX_PPR" keys
+in the per-app "info[]" array on the corresponding "pmix_app_t". On that
+path there is no "first app" rule: the array a key was written in says
+what it describes.
+
+Note that "PMIX_MAPPER" is NOT supported, per job or per app, and a
+spawn request carrying it is refused. Naming a mapping component says
+nothing that "PMIX_MAPBY" has not already said - the mapping policy is
+what selects the component - and the two can contradict each other.
+Describe the placement you want with "PMIX_MAPBY" and let PRRTE choose
+the component that performs it.
 
 A more detailed description of the mapping, ranking, and binding
 procedure can be obtained via the "--help placement" option.

@@ -66,3 +66,29 @@ specifically at Git hash gf21c349.
 The exact value of the "number of Git commits past a tag" integer is
 fairly meaningless; its sole purpose is to provide an easy,
 human-recognizable ordering for snapshot tarballs.
+
+
+Version Compatibility Within a DVM
+==================================
+
+**Every process in a DVM must come from the same PRRTE build.** Mixing
+versions — a ``prte`` of one version with ``prted`` or ``prun`` of another,
+or daemons of differing versions across the nodes of one DVM — is strictly
+forbidden and is not supported in any form.
+
+This is not a statement about how far apart the versions are: there is no
+"close enough" range and no compatibility window. The messages PRRTE's
+processes exchange (the launch message, the daemon rollup, the nidmap, the
+collectives) carry no format version and no self-description; both ends are
+hand-written mirrors of each other, compiled from the same source. A field
+added, removed, or retyped on one side and not the other does not produce a
+diagnosable error. It silently produces wrong values, or desynchronizes
+everything that follows it in the buffer.
+
+So a mixed-version DVM does not fail in a way that points at the mismatch.
+It fails as corrupt data somewhere else entirely — a job mapped onto the
+wrong nodes, a rank bound to nothing, a daemon that crashes with an
+unrelated-looking backtrace. If you are running one, the first step in
+diagnosing *any* misbehavior is to stop running one.
+
+Install one build, and make sure every node reaches that same installation.

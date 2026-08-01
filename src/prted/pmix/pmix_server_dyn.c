@@ -229,9 +229,20 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
                 }
             }
 
-            /***   REQUESTED MAPPER   ***/
+            /***   REQUESTED MAPPER - no longer supported   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_MAPPER)) {
-            jdata->map->req_mapper = strdup(info->value.data.string);
+            /* Naming a mapping component is not a directive PRRTE can act
+             * on. The choice of mapper IS the mapping policy - each
+             * component claims the policies it implements - so a request
+             * that names a component says nothing PMIX_MAPBY has not
+             * already said, and when the two disagreed there was no answer
+             * that could be right. Refuse it rather than silently ignore
+             * it: a caller asking for a specific mapper is asking for
+             * something we cannot promise. */
+            pmix_show_help("help-prte-rmaps-base.txt", "mapper-not-supported", true,
+                           (NULL == info->value.data.string) ? "NULL"
+                                                             : info->value.data.string);
+            return PRTE_ERR_NOT_SUPPORTED;
 
             /***   DISPLAY ALLOCATION   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_ALLOCATION)) {
@@ -849,18 +860,42 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
 
             /***   PPR (PROCS-PER-RESOURCE)   ***/
             } else if (PMIX_CHECK_KEY(info, PMIX_PPR)) {
-                char **ck, *p;
-                uint16_t ppn, pes;
+                char **ck, *p, *pattern;
+                uint16_t pes, appmap = 0, *u16ptr = &appmap;
                 int n;
+                /* a pattern IS a mapping policy, so it conflicts with a
+                 * PMIX_MAPBY on the same app exactly as it does at job
+                 * level - and the info array has no order to break the tie */
+                if (prte_get_attribute(&app->attributes, PRTE_APP_MAPBY,
+                                       (void **) &u16ptr, PMIX_UINT16) &&
+                    PRTE_MAPPING_POLICY_IS_SET(appmap)) {
+                    pmix_show_help("help-prte-rmaps-base.txt", "redefining-policy", true,
+                                   "mapping", info->value.data.string,
+                                   prte_rmaps_base_print_mapping(appmap));
+                    return PRTE_ERR_BAD_PARAM;
+                }
                 ck = PMIx_Argv_split(info->value.data.string, ':');
                 if (3 > PMIx_Argv_count(ck)) {
                     PMIx_Argv_free(ck);
                     return PRTE_ERR_BAD_PARAM;
                 }
                 if (0 == strcasecmp(ck[0], "ppr")) {
-                    ppn =  strtoul(ck[1], NULL, 10);
+                    /* ck[1] is the count and ck[2] the object - keep both, in
+                     * the spelling the job-level attribute uses. Keeping only
+                     * the count placed the app N-per-whatever-object the job
+                     * had resolved */
+                    pmix_asprintf(&pattern, "%s:%s", ck[1], ck[2]);
                     prte_set_attribute(&app->attributes, PRTE_APP_PPR,
-                                       PRTE_ATTR_GLOBAL, &ppn, PMIX_UINT16);
+                                       PRTE_ATTR_GLOBAL, pattern, PMIX_STRING);
+                    free(pattern);
+                    /* a pattern is a mapping directive: without the policy to
+                     * go with it, the pattern reached no mapper at all. Set it
+                     * on whatever this app's mapping word already holds, so
+                     * qualifiers given alongside are kept */
+                    PRTE_SET_MAPPING_POLICY(appmap, PRTE_MAPPING_PPR);
+                    PRTE_SET_MAPPING_DIRECTIVE(appmap, PRTE_MAPPING_GIVEN);
+                    prte_set_attribute(&app->attributes, PRTE_APP_MAPBY,
+                                       PRTE_ATTR_GLOBAL, &appmap, PMIX_UINT16);
                     // ck[2] has the object type
                     pes = 0;
                     for (n=2; NULL != ck[n]; n++) {
@@ -878,8 +913,29 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                 } 
                 PMIx_Argv_free(ck);
  
+                /***   REQUESTED MAPPER (per-app) - no longer supported   ***/
+            } else if (PMIX_CHECK_KEY(info, PMIX_MAPPER)) {
+                /* see prte_pmix_xfer_job_info(): the mapping policy is the
+                 * choice of mapper, so naming a component is not something
+                 * PRRTE can act on - per app any more than per job */
+                pmix_show_help("help-prte-rmaps-base.txt", "mapper-not-supported", true,
+                               (NULL == info->value.data.string) ? "NULL"
+                                                                 : info->value.data.string);
+                return PRTE_ERR_NOT_SUPPORTED;
+
                 /***   MAP-BY (per-app)   ***/
             } else if (PMIX_CHECK_KEY(info, PMIX_MAPBY)) {
+                uint16_t appmap = 0, *u16ptr = &appmap;
+                /* the same conflict from the other side: this app cannot be
+                 * given two mapping policies, whichever spelling they use */
+                if (prte_get_attribute(&app->attributes, PRTE_APP_MAPBY,
+                                       (void **) &u16ptr, PMIX_UINT16) &&
+                    PRTE_MAPPING_POLICY_IS_SET(appmap)) {
+                    pmix_show_help("help-prte-rmaps-base.txt", "redefining-policy", true,
+                                   "mapping", info->value.data.string,
+                                   prte_rmaps_base_print_mapping(appmap));
+                    return PRTE_ERR_BAD_PARAM;
+                }
                 rc = prte_rmaps_base_set_app_mapping_policy(app, info->value.data.string);
                 if (PRTE_SUCCESS != rc) {
                     return rc;

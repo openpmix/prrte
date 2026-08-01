@@ -256,9 +256,12 @@ nothing is tracking completion. The long comment above
 and produces `prte_pmix_app_t` list entries plus two out-params
 (`hostfiles`, `hosts`) and a `jobdata` list of directives that belong to
 the **job** rather than to any one app. That last list is why
-`--map-by` given once applies to the whole job however many apps there
-are — `prte.c` and `prun_common.c` both walk `jobdata` looking for
-`PMIX_MAPBY`/`RANKBY`/`BINDTO` and the two prefix keys.
+`--map-by` written on the *first* app segment and nowhere else applies to
+the whole job however many apps there are — `prte.c` and `prun_common.c`
+both walk `jobdata` looking for `PMIX_MAPBY`/`RANKBY`/`BINDTO` and the two
+prefix keys. Written on any later app it stays with that app, and the apps
+that gave none fall back to the defaults: saying nothing is not the same as
+agreeing.
 
 `prun_common()` is the tool body: `PMIx_tool_init` (with whatever DVM
 search directive the user gave), register event handlers for job

@@ -36,13 +36,21 @@ The comment at the top of `prte_job_pack` is the important one:
 
 So this is **not** serialization of a `prte_job_t`. It is the launch
 message. `job->map` is packed for the policies it carries, not for the nodes
-it mapped (`prte_map_pack` sends `req_mapper`/`last_mapper`/mapping/ranking/
-binding/`num_nodes` and nothing else). Node procs, topologies, session
+it mapped (`prte_map_pack` sends mapping/ranking/binding/`num_nodes` and
+nothing else - deliberately no mapper name: mapping happens only on the HNP,
+so the identity of the component that did it was read by nothing at the far
+end). Node procs, topologies, session
 backpointers, the session dir, `cli`, and the counters are all left behind.
 
 The two sides are hand-written mirrors with no format version and no
-self-description. **Every field added to the packer must be added to the
-unpacker in the same position, in the same PMIx type.** There is nothing
+self-description. That is workable only because **mixed-version DVMs are
+strictly forbidden** — every process in a DVM comes from the same build, so
+the two sides are always the same source (see the top-level
+[`AGENTS.md`](../../../AGENTS.md) and [`docs/versions.rst`](../../../docs/versions.rst)).
+It also means you may freely add, remove or retype a field, and need keep
+nothing for compatibility — but **every field added to the packer must be
+added to the unpacker in the same position, in the same PMIx type, in the
+same commit.** There is nothing
 that will catch a mismatch for you: a type of the same width (`PMIX_INT32`
 against `PMIX_UINT32`) silently produces wrong values, and a type of a
 different width desynchronizes everything after it.

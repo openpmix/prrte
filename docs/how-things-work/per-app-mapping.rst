@@ -34,35 +34,58 @@ Command-Line Syntax
 -------------------
 
 Per-app directives are specified using the standard MPMD separator (``:``) on
-the ``prun`` command line.  Each ``--map-by``, ``--rank-by``, and ``--bind-to``
-option that appears after a ``:`` separator applies only to the application
-context that follows it.  Options that appear before the first ``:`` separator
-continue to apply at the job level.
+the ``prun`` command line.  Which app a ``--map-by``, ``--rank-by`` or
+``--bind-to`` describes follows one rule:
+
+**The first app segment is where the command line speaks for the job.**  A
+directive written there and nowhere else applies to the whole job, however
+many apps follow — it is the same thing a single-app command line says, and
+it is the only place a qualifier that spans the job (see the next section)
+can be written without being taken off an app again.
+
+**A directive written on any later app describes that app, and only that
+app.**  Apps that were given none are not agreeing with it — they said
+nothing, and what an app that says nothing gets is the ordinary default
+resolution.
 
 .. code-block:: sh
 
+   # both apps mapped by core: the only directive is on the first app
+   prun --map-by core -n 4 app1 : -n 2 app2
+
    # app1 mapped by core, app2 mapped by node and ranked by fill
-   prun -n 4 app1 --map-by core : -n 2 app2 --map-by node --rank-by fill
+   prun --map-by core -n 4 app1 : --map-by node --rank-by fill -n 2 app2
+
+   # app1 takes the default mapping; only app2 is mapped by node
+   prun -n 4 app1 : --map-by node -n 2 app2
 
    # app1 avoids the head node; app2 can use all nodes
-   prun -n 8 app1 --map-by slot:nolocal : -n 2 app2 --map-by slot
+   prun --map-by slot:nolocal -n 8 app1 : --map-by slot -n 2 app2
 
-   # app1 uses a rankfile for precise placement; app2 uses default slot mapping
-   prun -n 3 app1 --map-by rankfile:file=/path/to/rfile : -n 2 app2
+   # app2 is placed by a rankfile of its own; app1 takes the default mapping
+   prun -n 3 app1 : --map-by rankfile:file=/path/to/rfile -n 2 app2
+
+The three classes are decided independently: a ``--map-by`` on the first app
+can describe the job while a ``--rank-by`` on the third app describes only
+that app.
 
 Any ``--map-by`` qualifier that is valid at the job level is also valid per
-app.  A few of them describe the job rather than the app, and are handled as
-described in the next section.
+app, and every mapping policy is — ``seq``, ``rankfile``, ``ppr:N:obj`` and
+``pe-list=…`` included, each with the file or pattern it needs.  So two apps
+of one job can be placed by two different mapping components; ``--display
+devel-map`` names the component that placed each one.  A few qualifiers
+describe the job rather than the app, and are handled as described in the
+next section.
 
 
 Job-Level Directives Written On An App
 --------------------------------------
 
 Some qualifiers are properties of the job as a whole.  They may still be
-written in a per-app ``--map-by`` string — indeed on a multi-app command line
-there is nowhere else to write them, since it takes two mapping directives to
-make the mapping per-app at all, and a lone directive belongs to the job.  So
-PRRTE takes such a qualifier off the app that carried it and applies it to the
+written in a per-app ``--map-by`` string — and on a multi-app command line
+there may be nowhere else to write them, since once the apps carry their own
+directives there is no job-level one left to hang a qualifier on.  So PRRTE
+takes such a qualifier off the app that carried it and applies it to the
 job.
 
 What cannot be honored is app contexts that answer the same question in
@@ -79,11 +102,11 @@ each other, and with any job-level directive.
     .. code-block:: sh
 
        # legal: the qualifier is written once and applies to the whole job
-       prun -n 14 app1 --map-by slot:oversubscribe : -n 14 app2 --map-by node
+       prun --map-by slot:oversubscribe -n 14 app1 : --map-by node -n 14 app2
 
        # refused: the two apps ask for opposite things
-       prun -n 4 app1 --map-by core:oversubscribe : \
-            -n 4 app2 --map-by node:nooversubscribe
+       prun --map-by core:oversubscribe -n 4 app1 : \
+            --map-by node:nooversubscribe -n 4 app2
 
 ``INHERIT`` / ``NOINHERIT``
     These modifiers control whether a spawned child job copies its parent's
@@ -112,7 +135,7 @@ same job can use it:
 .. code-block:: sh
 
    # app1 will not run on the head node; app2 may
-   prun -n 8 app1 --map-by slot:nolocal : -n 1 app2 --map-by slot
+   prun --map-by slot:nolocal -n 8 app1 : --map-by slot -n 1 app2
 
 Internally, ``NOLOCAL`` is stored as a directive bit within the
 ``PRTE_APP_MAPBY`` attribute on the ``prte_app_context_t``.  The node-list
@@ -132,12 +155,22 @@ keys are:
 * ``PMIX_RANKBY`` — equivalent to ``--rank-by``
 * ``PMIX_BINDTO`` — equivalent to ``--bind-to``
 
+``PMIX_PPR`` may also be given per app.
+
 When these keys appear in a per-app ``info[]`` array (rather than in the
 job-level ``info[]`` array), PRRTE stores them as per-app attributes on the
 corresponding ``prte_app_context_t`` and routes them through the same per-app
 dispatch path as the command-line case.  When the same keys appear in the
 job-level ``info[]`` array, they continue to set the job-level policy as
-before.
+before.  On this path there is no "first app" rule: the array a key was
+written in says what it describes.
+
+``PMIX_MAPPER`` is **not supported**, per job or per app.  A spawn request
+carrying it is refused with ``PMIX_ERR_NOT_SUPPORTED``, and it is not listed
+in the ``PMIX_QUERY_SPAWN_SUPPORT`` answer.  Naming a mapping component says
+nothing ``PMIX_MAPBY`` has not already said — the mapping policy is what
+selects the component, since each one claims the policies it implements —
+and the two can contradict each other with no answer that could be right.
 
 
 Inheritance and Fallback
@@ -178,7 +211,13 @@ switches to a per-app loop:
    single-dispatch path.  Each component's ``map_job()`` is called with
    ``app_options``.  Because ``app_options.app_idx >= 0``, each component skips
    any app context whose index does not match, returning
-   ``PRTE_ERR_TAKE_NEXT_OPTION`` for those it cannot handle.
+   ``PRTE_ERR_TAKE_NEXT_OPTION`` for those it cannot handle.  A component
+   decides whether the app is for it from the *resolved* options —
+   ``options->map`` and ``options->mapgiven`` — not from the job-level
+   policy, which is why a per-app ``seq``, ``rankfile`` or ``ppr`` reaches
+   its own component.  Different app contexts of one job may
+   therefore be placed by different components; the component that placed
+   each one is recorded on the app and shown by ``--display devel-map``.
 
 #. **Rank assignment** — ``prte_rmaps_base_compute_vpids()`` is called once
    per app context after placement, with the app index and a running vpid
@@ -186,7 +225,10 @@ switches to a per-app loop:
    across the whole job.  Per-app ranking controls only the *order* in which
    processes within that app are assigned ranks relative to each other; the
    starting rank for each app is always the first rank not yet assigned by any
-   previous app.
+   previous app.  The mappers that number their own processes — ``rank_file``,
+   ``seq`` and ``lsf`` — are handed that same counter, so a per-app rankfile
+   or sequence file numbers *that app's* ranks and PRRTE offsets them into the
+   job's numbering.
 
 #. **Binding** — no structural changes are required.  Because
    ``prte_rmaps_base_setup_proc()`` is called from within each component's
@@ -244,11 +286,26 @@ the following keys (defined in ``src/util/attr.h``):
      - Maximum number of processes to bind to a single target object before
        moving to the next
 
-The existing ``PRTE_APP_PPR`` (25) and ``PRTE_APP_PES_PER_PROC`` (24)
-attributes are unchanged.  When a per-app ``--map-by`` string contains a
-``ppr:N:obj`` specification, the parsed N value is written to ``PRTE_APP_PPR``
-in addition to setting ``PRTE_APP_MAPBY = PRTE_MAPPING_PPR``, so that the
-``ppr`` mapping component can read it through the standard path.
+``PRTE_APP_PPR`` (25) holds this app's whole ``N:object`` pattern, in the
+same spelling as the job-level ``PRTE_JOB_PPR`` — the object is as much a
+part of what the app asked for as the count.  When a per-app ``--map-by``
+string contains a ``ppr:N:obj`` specification, that pattern is written to
+``PRTE_APP_PPR`` in addition to setting ``PRTE_APP_MAPBY =
+PRTE_MAPPING_PPR``, so that the ``ppr`` mapping component can read it through
+the standard path.  ``PRTE_APP_PES_PER_PROC`` (24) is unchanged.
+
+Two further attributes are recorded by the rmaps base rather than supplied by
+the user, are local to the HNP, and are never packed or sent off-node:
+``PRTE_APP_RESOLVED_MAPBY`` / ``RANKBY`` / ``BINDTO`` (35-37), the policies
+this app was actually placed with, and ``PRTE_APP_LAST_MAPPER`` (38), the
+component that placed it.  ``--display devel-map`` reads all four.
+
+``PRTE_APP_LAST_MAPPER`` is the *only* record PRRTE keeps of which component
+mapped anything; ``prte_job_map_t`` carries no mapper name at all.  It is
+per-app because with each app's own policy deciding which component claims
+it, two apps of one job can be placed by two different mappers — a single
+job-level name could only ever be half the answer — and because mapping
+happens on the HNP alone, so nothing off that daemon has any use for it.
 
 
 Framework Version

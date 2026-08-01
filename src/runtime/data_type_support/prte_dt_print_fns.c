@@ -568,15 +568,45 @@ static bool job_show_per_app_policy(prte_job_t *jdata)
     return false;
 }
 
+/* The mapping component that placed this job, for the single-policy display.
+ * There is no such field on the map: which component ran is recorded on each
+ * app by the rmaps base, because with per-app policies two apps of one job
+ * can be placed by two different components and one job-level name could
+ * only ever be half the answer. Every app of a single-policy job carries the
+ * same name, so the first one that has it speaks for the job. */
+static char *job_mapper(prte_job_t *jdata)
+{
+    prte_app_context_t *app;
+    char *mapper;
+    int i;
+
+    for (i = 0; i < jdata->apps->size; i++) {
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i);
+        if (NULL == app) {
+            continue;
+        }
+        mapper = NULL;
+        if (prte_get_attribute(&app->attributes, PRTE_APP_LAST_MAPPER,
+                               (void **) &mapper, PMIX_STRING) && NULL != mapper) {
+            return mapper;
+        }
+    }
+    return strdup("N/A");
+}
+
 /* Build one "App N: Mapping/Ranking/Binding policy" line per app for a job
  * that was mapped with per-app policies, joined by newlines and each prefixed
  * with 'indent'. An app that did not record a resolved policy falls back to
- * the job-level value. Caller frees the returned string. */
+ * the job-level value. The mapping component that placed the app is named
+ * too: with each app's own policy deciding which mapper claims it, two apps
+ * of one job can be placed by two different components, and the job-level
+ * "Last mapper" line can only name one of them. Caller frees the returned
+ * string. */
 static char *per_app_policy_lines(prte_job_t *jdata, const char *indent)
 {
     prte_job_map_t *src = jdata->map;
     prte_app_context_t *app;
-    char *block, *tmp;
+    char *block, *tmp, *mapper;
     int i;
     uint16_t u16, *u16ptr;
 
@@ -599,11 +629,18 @@ static char *per_app_policy_lines(prte_job_t *jdata, const char *indent)
         u16ptr = &u16;
         b = prte_get_attribute(&app->attributes, PRTE_APP_RESOLVED_BINDTO, (void **) &u16ptr, PMIX_UINT16)
                 ? (prte_binding_policy_t) u16 : src->binding;
-        pmix_asprintf(&tmp, "%s%s%sApp %d: Mapping policy: %s  Ranking policy: %s  Binding policy: %s",
-                      block, ('\0' == block[0]) ? "" : "\n", indent, (int) app->idx,
+        mapper = NULL;
+        if (!prte_get_attribute(&app->attributes, PRTE_APP_LAST_MAPPER,
+                                (void **) &mapper, PMIX_STRING) || NULL == mapper) {
+            mapper = strdup("N/A");
+        }
+        pmix_asprintf(&tmp,
+                      "%s%s%sApp %d: Mapper: %s  Mapping policy: %s  Ranking policy: %s  Binding policy: %s",
+                      block, ('\0' == block[0]) ? "" : "\n", indent, (int) app->idx, mapper,
                       prte_rmaps_base_print_mapping(m),
                       prte_rmaps_base_print_ranking(r),
                       prte_hwloc_base_print_binding(b));
+        free(mapper);
         free(block);
         block = tmp;
     }
@@ -621,7 +658,7 @@ void prte_map_print(char **output, prte_job_t *jdata)
     prte_node_t *node;
     prte_job_map_t *src = jdata->map;
     uint16_t u16, *u16ptr = &u16;
-    char *ppr, *cpus_per_rank, *cpu_type, *cpuset = NULL;
+    char *ppr, *cpus_per_rank, *cpu_type, *cpuset = NULL, *mapper;
 
     /* set default result */
     *output = NULL;
@@ -704,29 +741,27 @@ void prte_map_print(char **output, prte_job_t *jdata)
                 &tmp,
                 "\n=================================   JOB MAP   =================================\n"
                 "Data for JOB %s offset %s Total slots allocated %lu\n"
-                "Mapper requested: %s  Last mapper: %s\n"
                 "%s\n"
                 "Cpu set: %s  PPR: %s  Cpus-per-rank: %s  Cpu Type: %s",
                 PRTE_JOBID_PRINT(jdata->nspace), PRTE_VPID_PRINT(jdata->offset),
                 (long unsigned) jdata->total_slots_alloc,
-                (NULL == src->req_mapper) ? "NULL" : src->req_mapper,
-                (NULL == src->last_mapper) ? "NULL" : src->last_mapper,
                 plines, cpuset, ppr, cpus_per_rank, cpu_type);
             free(plines);
         } else {
+            mapper = job_mapper(jdata);
             pmix_asprintf(
                 &tmp,
                 "\n=================================   JOB MAP   =================================\n"
                 "Data for JOB %s offset %s Total slots allocated %lu\n"
-                "Mapper requested: %s  Last mapper: %s  Mapping policy: %s  Ranking policy: %s\n"
+                "Mapper: %s  Mapping policy: %s  Ranking policy: %s\n"
                 "Binding policy: %s  Cpu set: %s  PPR: %s  Cpus-per-rank: %s  Cpu Type: %s",
                 PRTE_JOBID_PRINT(jdata->nspace), PRTE_VPID_PRINT(jdata->offset),
                 (long unsigned) jdata->total_slots_alloc,
-                (NULL == src->req_mapper) ? "NULL" : src->req_mapper,
-                (NULL == src->last_mapper) ? "NULL" : src->last_mapper,
+                mapper,
                 prte_rmaps_base_print_mapping(src->mapping),
                 prte_rmaps_base_print_ranking(src->ranking),
                 prte_hwloc_base_print_binding(src->binding), cpuset, ppr, cpus_per_rank, cpu_type);
+            free(mapper);
         }
 
         if (PMIX_RANK_INVALID == src->daemon_vpid_start) {

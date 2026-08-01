@@ -1038,7 +1038,6 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
     prte_mapping_policy_t tmp;
     int rc;
     bool ppr = false;
-    uint16_t u16;
 
     tmp = 0;
 
@@ -1054,9 +1053,14 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
                 PMIx_Argv_free(ck);
                 return PRTE_ERR_SILENT;
             }
-            /* ck[1] = N, ck[2] = object type */
-            u16 = (uint16_t)strtoul(ck[1], NULL, 10);
-            prte_set_attribute(&app->attributes, PRTE_APP_PPR, PRTE_ATTR_GLOBAL, &u16, PMIX_UINT16);
+            /* ck[1] = N, ck[2] = object type. Save the whole pattern, in the
+             * same spelling the job-level parser uses: the object is as much
+             * a part of what this app asked for as the count, and recording
+             * only the count left the app placed N-per-whatever-object the
+             * job happened to resolve */
+            pmix_asprintf(&cptr, "%s:%s", ck[1], ck[2]);
+            prte_set_attribute(&app->attributes, PRTE_APP_PPR, PRTE_ATTR_GLOBAL, cptr, PMIX_STRING);
+            free(cptr);
             PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_PPR);
             PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
             ppr = true;
@@ -1178,6 +1182,26 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
         prte_set_attribute(&app->attributes, PRTE_APP_CPUSET, PRTE_ATTR_GLOBAL,
                            val, PMIX_STRING);
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_PELIST);
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_RANKFILE)) {
+        /* the file naming this app's rank->host+cpuset assignments. The
+         * FILE= qualifier was parsed above onto PRTE_APP_MAP_FILE; without
+         * one, fall back to the MCA default the job-level parser also uses.
+         * There is no job to read here - the job-level PRTE_JOB_FILE is
+         * checked by the rank_file mapper itself when the app named none */
+        if (!prte_get_attribute(&app->attributes, PRTE_APP_MAP_FILE, NULL, PMIX_STRING)) {
+            if (NULL == prte_rmaps_base.file) {
+                pmix_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename", true);
+                PMIx_Argv_free(ck);
+                free(cptr);
+                if (NULL != val) {
+                    free(val);
+                }
+                return PRTE_ERR_SILENT;
+            }
+            prte_set_attribute(&app->attributes, PRTE_APP_MAP_FILE, PRTE_ATTR_GLOBAL,
+                               prte_rmaps_base.file, PMIX_STRING);
+        }
+        PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYUSER);
     } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_NOLOCAL)) {
         PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_NO_USE_LOCAL);
     } else {

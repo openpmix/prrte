@@ -888,6 +888,111 @@ test_rmaps() {
         bad "could not start a DVM for the per-app mapping test"
     fi
     cleanup_swarm
+
+    banner "rmaps: a directive on a later app describes that app alone"
+    # The first app segment is where the command line speaks for the job, so
+    # a lone directive written there applies to every app.  Written on a
+    # LATER app it is that app's alone, and the apps that gave none take the
+    # defaults -- an app that says nothing is not agreeing with one that did.
+    # This used to place every app the way the one directive said, whichever
+    # app carried it, with no way to say what was plainly meant.  Only
+    # visible across nodes: by-node deals one rank per node, the default
+    # by-slot fills a node first.
+    RUN 'nohup prte --daemonize --host node1:4,node2:4,node3:4 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        # directive on the second app only: app0 (ranks 0-1) takes the
+        # default and lands together, app1 (ranks 2-3) is spread by node
+        out=$(RUN "timeout 60 prun -n 2 $RANKHOST : --map-by node -n 2 $RANKHOST" 2>&1)
+        rc=$?
+        if [ "$rc" = 0 ]; then
+            [ "$(rh_host "$out" 0)" = "$(rh_host "$out" 1)" ] \
+                && ok "the app that gave no directive followed the default rules" \
+                || bad "app0 was placed by app1's directive: $(echo "$out" | grep '^RH' | tr '\n' ' ')"
+            [ "$(rh_host "$out" 2)" != "$(rh_host "$out" 3)" ] \
+                && ok "the app that gave one followed its own" \
+                || bad "app1's --map-by node was not applied: $(echo "$out" | grep '^RH' | tr '\n' ' ')"
+        else
+            bad "later-app directive job failed (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        fi
+        sleep 2
+        # the same directive on the FIRST app and nowhere else describes the
+        # job, so both apps are spread by node
+        out=$(RUN "timeout 60 prun --map-by node -n 2 $RANKHOST : -n 2 $RANKHOST" 2>&1)
+        rc=$?
+        if [ "$rc" = 0 ]; then
+            [ "$(rh_host "$out" 0)" != "$(rh_host "$out" 1)" ] \
+                && [ "$(rh_host "$out" 2)" != "$(rh_host "$out" 3)" ] \
+                && ok "a directive on the first app applied to both apps" \
+                || bad "the first app's directive did not reach the job: $(echo "$out" | grep '^RH' | tr '\n' ' ')"
+        else
+            bad "first-app directive job failed (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the directive-distribution test"
+    fi
+    cleanup_swarm
+
+    banner "rmaps: two apps of one job can be placed by two mapping components"
+    # Every mapper's gate used to ask the JOB which policy it had, and the
+    # job's policy is whatever default was resolved for the apps that gave no
+    # directive -- so seq, rankfile and ppr all deferred and a per-app
+    # request for them was quietly placed by round_robin instead.  The gates
+    # now read each app's own resolved policy.  A rankfile names hosts, so
+    # this needs more than one host to mean anything; and the ranks it names
+    # are that app's, offset into the job's numbering by what came before.
+    RUN 'nohup prte --daemonize --host node1:2,node2:2,node3:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        RUN 'printf "rank 0=node3 slot=0\nrank 1=node2 slot=0\n" > /tmp/rmaps_pa_rf.txt'
+        out=$(RUN "timeout 60 prun -n 2 $RANKHOST : --map-by rankfile:FILE=/tmp/rmaps_pa_rf.txt -n 2 $RANKHOST" 2>&1)
+        rc=$?
+        if [ "$rc" = 0 ]; then
+            n=$(echo "$out" | grep '^RH ' | awk '{print $2}' | sort -u | wc -l | tr -d ' ')
+            [ "$n" = 4 ] \
+                && ok "4 procs across the two apps got 4 distinct ranks" \
+                || bad "the rankfile app renumbered from 0 (distinct=$n): $(echo "$out" | grep '^RH' | tr '\n' ' ')"
+            # the rankfile's own rank 0 is the job's rank 2, on node3
+            [ "$(rh_host "$out" 2)" = "node3" ] && [ "$(rh_host "$out" 3)" = "node2" ] \
+                && ok "the per-app rankfile placed its ranks on the hosts it named" \
+                || bad "per-app rankfile placement was ignored: $(echo "$out" | grep '^RH' | tr '\n' ' ')"
+        else
+            bad "per-app rankfile job failed (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        fi
+        sleep 2
+        # a per-app seq file, same story. Both files name node2/node3 and
+        # leave node1 to the app that gave no directive: node1 is where the
+        # default placement puts it, and these nodes have only two slots
+        # apiece, so a sequence entry naming node1 would be asking for a
+        # slot the first app has already taken.
+        RUN 'printf "node3\nnode2\n" > /tmp/rmaps_pa_seq.txt'
+        out=$(RUN "timeout 60 prun -n 2 $RANKHOST : --map-by seq:FILE=/tmp/rmaps_pa_seq.txt -n 2 $RANKHOST" 2>&1)
+        rc=$?
+        if [ "$rc" = 0 ]; then
+            [ "$(rh_host "$out" 2)" = "node3" ] && [ "$(rh_host "$out" 3)" = "node2" ] \
+                && ok "the per-app seq file placed its ranks in file order" \
+                || bad "per-app seq placement was ignored: $(echo "$out" | grep '^RH' | tr '\n' ' ')"
+        else
+            bad "per-app seq job failed (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        fi
+        sleep 2
+        # a per-app ppr pattern names both a count and an object; only the
+        # count used to be kept, so the app was placed N per whatever object
+        # the job had resolved
+        out=$(RUN "timeout 60 prun -n 1 $RANKHOST : --map-by ppr:2:node -n 4 $RANKHOST" 2>&1)
+        rc=$?
+        if [ "$rc" = 0 ]; then
+            n=$(echo "$out" | grep '^RH ' | awk '$1=="RH" && $2>=1 {print $3}' | sort -u | wc -l | tr -d ' ')
+            [ "$n" = 2 ] \
+                && ok "ppr:2:node put the app's 4 procs two to a node" \
+                || bad "per-app ppr pattern was not honored (nodes=$n): $(echo "$out" | grep '^RH' | tr '\n' ' ')"
+        else
+            bad "per-app ppr job failed (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        fi
+        RUN 'rm -f /tmp/rmaps_pa_rf.txt /tmp/rmaps_pa_seq.txt; timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the per-app mapper-selection test"
+    fi
+    cleanup_swarm
 }
 
 ########################################################################
@@ -2130,40 +2235,55 @@ test_prted() {
         # from the master.  node1 is the HNP (its own children take the
         # read-handler path) and node2 is an ordinary daemon (the forwarded
         # path); both relay points are covered by requiring both names.
-        out=$(ONT 3 'timeout -k 5 45 prun --host node1:1,node2:1 -n 2 --map-by node hostname 2>&1')
-        if echo "$out" | grep -qE '^node1$' && echo "$out" | grep -qE '^node2$'; then
-            ok "a tool on a non-master daemon saw output from ranks on both other nodes"
+        #
+        # The relay is compiled out without PMIX_CAP_IOF_DELIVER_LOCAL
+        # (PRTE_PMIX_IOF_DELIVER_LOCAL): the delivery has no way to say "give
+        # this to the tool but do not emit it here", so the HNP does not relay
+        # at all.  These cases can therefore only ever fail against a PMIx
+        # that predates the flag, and the baked PMIx goes stale as a matter of
+        # course (see AGENTS.md) -- red for that reads as "your tree is
+        # broken" when it is not.  The file-emission cases below are skipped
+        # with them: with no relay happening, "no files appeared here" is true
+        # for the wrong reason.
+        if ! pmix_cap PMIX_CAP_IOF_DELIVER_LOCAL; then
+            skp "output relayed back to a tool (PMIx predates PMIX_CAP_IOF_DELIVER_LOCAL)"
         else
-            bad "output never reached the tool on node3: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            out=$(ONT 3 'timeout -k 5 45 prun --host node1:1,node2:1 -n 2 --map-by node hostname 2>&1')
+            if echo "$out" | grep -qE '^node1$' && echo "$out" | grep -qE '^node2$'; then
+                ok "a tool on a non-master daemon saw output from ranks on both other nodes"
+            else
+                bad "output never reached the tool on node3: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            fi
+
+            # Every line exactly once.  The relay skips the daemon that
+            # already delivered a chunk to its own PMIx server, and if that
+            # dedup were dropped a tool would see its own node's ranks twice.
+            out=$(ONT 2 'timeout -k 5 60 prun --host node1:2,node2:2,node3:2 -n 6 --map-by node sh -c "for i in \$(seq 1 50); do echo RELAYLINE-\$i; done" 2>&1')
+            n=$(echo "$out" | grep -c '^RELAYLINE-')
+            u=$(echo "$out" | grep '^RELAYLINE-' | sort | uniq -c | awk '{print $1}' | sort -u | tr '\n' ' ')
+            [ "$n" = 300 ] && [ "$u" = "6 " ] \
+                && ok "300 lines from 6 ranks reached the tool, each exactly once" \
+                || bad "relayed output was lost or duplicated (got $n lines, per-line counts '$u'; expected 300 and '6 ')"
+
+            # The relayed copy must not be EMITTED where it lands.  Every
+            # daemon registers the job's namespace with the same output
+            # directives, so a daemon handed another node's output writes its
+            # own copy of that rank's file unless the delivery says not to --
+            # and node3 hosts none of these ranks, so any file appearing there
+            # is a duplicate of one node1 or node2 already wrote.  Measured,
+            # not assumed: flipping the PMIX_IOF_LOCAL_OUTPUT directive to
+            # true puts a full set here.
+            for i in 1 2 3; do ON $i 'rm -rf /tmp/relayout; mkdir -p /tmp/relayout' >/dev/null 2>&1; done
+            ONT 3 'timeout -k 5 45 prun --output file=/tmp/relayout/out --host node1:1,node2:1 -n 2 --map-by node hostname' >/dev/null 2>&1
+            n=$(ON 3 'find /tmp/relayout -type f 2>/dev/null | wc -l' | tr -d ' \r')
+            m=$(ON 2 'find /tmp/relayout -type f 2>/dev/null | wc -l' | tr -d ' \r')
+            [ "$n" = 0 ] \
+                && ok "the tool's daemon wrote no output files for ranks it does not host" \
+                || bad "relayed output was emitted on the tool's node too ($n files); two daemons are writing one --output file"
+            [ "$m" = 1 ] \
+                && ok "...and the daemon that does host a rank still wrote its file" \
+                || bad "output-to-file broke on the hosting daemon ($m files, expected 1)"
         fi
-
-        # Every line exactly once.  The relay skips the daemon that already
-        # delivered a chunk to its own PMIx server, and if that dedup were
-        # dropped a tool would see its own node's ranks twice.
-        out=$(ONT 2 'timeout -k 5 60 prun --host node1:2,node2:2,node3:2 -n 6 --map-by node sh -c "for i in \$(seq 1 50); do echo RELAYLINE-\$i; done" 2>&1')
-        n=$(echo "$out" | grep -c '^RELAYLINE-')
-        u=$(echo "$out" | grep '^RELAYLINE-' | sort | uniq -c | awk '{print $1}' | sort -u | tr '\n' ' ')
-        [ "$n" = 300 ] && [ "$u" = "6 " ] \
-            && ok "300 lines from 6 ranks reached the tool, each exactly once" \
-            || bad "relayed output was lost or duplicated (got $n lines, per-line counts '$u'; expected 300 and '6 ')"
-
-        # The relayed copy must not be EMITTED where it lands.  Every daemon
-        # registers the job's namespace with the same output directives, so a
-        # daemon handed another node's output writes its own copy of that
-        # rank's file unless the delivery says not to -- and node3 hosts none
-        # of these ranks, so any file appearing there is a duplicate of one
-        # node1 or node2 already wrote.  Measured, not assumed: flipping the
-        # PMIX_IOF_LOCAL_OUTPUT directive to true puts a full set here.
-        for i in 1 2 3; do ON $i 'rm -rf /tmp/relayout; mkdir -p /tmp/relayout' >/dev/null 2>&1; done
-        ONT 3 'timeout -k 5 45 prun --output file=/tmp/relayout/out --host node1:1,node2:1 -n 2 --map-by node hostname' >/dev/null 2>&1
-        n=$(ON 3 'find /tmp/relayout -type f 2>/dev/null | wc -l' | tr -d ' \r')
-        m=$(ON 2 'find /tmp/relayout -type f 2>/dev/null | wc -l' | tr -d ' \r')
-        [ "$n" = 0 ] \
-            && ok "the tool's daemon wrote no output files for ranks it does not host" \
-            || bad "relayed output was emitted on the tool's node too ($n files); two daemons are writing one --output file"
-        [ "$m" = 1 ] \
-            && ok "...and the daemon that does host a rank still wrote its file" \
-            || bad "output-to-file broke on the hosting daemon ($m files, expected 1)"
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     fi
     cleanup_swarm

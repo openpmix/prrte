@@ -81,13 +81,12 @@ static int lsf_map(prte_job_t *jdata,
     int32_t i, k;
     pmix_list_t node_list;
     prte_node_t *node, *nd, *root_node;
-    pmix_rank_t rank, vpid_start;
+    pmix_rank_t rank, entry, vpid_start, rank_base;
     int32_t num_slots;
     prte_rmaps_lsf_map_t *rfmap;
     int32_t relative_index, tmp_cnt;
     int rc;
     prte_proc_t *proc;
-    pmix_mca_base_component_t *c = &prte_mca_rmaps_lsf_component.super;
     char *slots = NULL;
     /* see rmaps_rr.c: reset the per-node "mapped" flags only on the genuine
      * first mapping pass so per-app dispatch (one entry per app) does not
@@ -113,8 +112,10 @@ static int lsf_map(prte_job_t *jdata,
                             "mca:rmaps:lsf: affinity file not given in environment");
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
-    if (PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-        // user gave a mapping directive, so it cannot be us
+    if (options->mapgiven) {
+        /* the user gave a mapping directive, so it cannot be us. Read from
+         * the resolved options rather than the job map: in per-app dispatch
+         * it is this app that either described its placement or did not */
         pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:lsf: mapping directive given - skipping lsf");
         return PRTE_ERR_TAKE_NEXT_OPTION;
@@ -140,11 +141,6 @@ static int lsf_map(prte_job_t *jdata,
                         "mca:rmaps:lsf: mapping job %s",
                         PRTE_JOBID_PRINT(jdata->nspace));
 
-    /* flag that I did the mapping */
-    if (NULL != jdata->map->last_mapper) {
-        free(jdata->map->last_mapper);
-    }
-    jdata->map->last_mapper = strdup(c->pmix_mca_component_name);
     options->map = PRTE_MAPPING_BYUSER;
 
     /* setup the node list */
@@ -159,6 +155,11 @@ static int lsf_map(prte_job_t *jdata,
 
     /* start at the beginning... */
     vpid_start = 0;
+    /* ...of the affinity file, which is not the same place as the beginning
+     * of the job: in per-app dispatch the global rank an entry lands on
+     * depends on how many procs the apps before it took, and the base hands
+     * us that cursor. In whole-job dispatch it is zero and the two coincide */
+    rank_base = (pmix_rank_t) options->start_vpid;
     /* Zero the job-wide count only when we were handed the whole job. The
      * per-app (MPMD) dispatch calls us once per app, and resetting here
      * would leave jdata->num_procs holding just the last app's count while
@@ -225,9 +226,11 @@ static int lsf_map(prte_job_t *jdata,
         }
 
         for (k = 0; k < app->num_procs; k++) {
-            rank = vpid_start + k;
+            /* "entry" numbers the affinity file, "rank" numbers the job */
+            entry = vpid_start + k;
+            rank = rank_base + k;
             /* get the rankfile entry for this rank */
-            rfmap = (prte_rmaps_lsf_map_t *) pmix_pointer_array_get_item(&rankmap, rank);
+            rfmap = (prte_rmaps_lsf_map_t *) pmix_pointer_array_get_item(&rankmap, entry);
             if (NULL == rfmap) {
                 /* if this job was given a slot-list, then use it */
                 if (NULL != options->cpuset) {
@@ -237,7 +240,7 @@ static int lsf_map(prte_job_t *jdata,
                     slots = prte_hwloc_default_cpu_list;
                 } else {
                     /* all ranks must be specified */
-                    pmix_show_help("help-rmaps_lsf.txt", "missing-rank", true, rank,
+                    pmix_show_help("help-rmaps_lsf.txt", "missing-rank", true, entry,
                                    affinity_file);
                     rc = PRTE_ERR_SILENT;
                     goto error;
@@ -447,6 +450,7 @@ static int lsf_map(prte_job_t *jdata,
         }
         /* update the starting point */
         vpid_start += app->num_procs;
+        rank_base += app->num_procs;
         /* cleanup the node list - it can differ from one app_context
          * to another, so we have to get it every time
          */

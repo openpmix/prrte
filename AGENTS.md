@@ -349,6 +349,24 @@ python3 src/util/prte-convert-help.py --root . --check-only \
     --cppflags="$(pkg-config --cflags-only-I pmix)"
 ```
 
+### Mixed-version DVMs are strictly forbidden
+
+Every process in a DVM comes from the same build. There is no version
+negotiation, no compatibility window, and no supported way to mix a `prte`
+of one version with a `prted` or `prun` of another.
+
+That is a rule for users (see
+[`docs/versions.rst`](docs/versions.rst)), and for you it is a *licence*:
+the messages daemons exchange carry no format version and no
+self-description, so you may add, remove or retype a packed field **provided
+you change the packer and the unpacker together, in the same commit**. You do
+not have to keep an old field for compatibility, and you must not invent a
+version byte to avoid changing both sides. See
+[`src/runtime/data_type_support/AGENTS.md`](src/runtime/data_type_support/AGENTS.md).
+
+Nothing catches a half-done change: a type of the same width silently yields
+wrong values, and a different width desynchronizes the rest of the buffer.
+
 ### Unique numeric values for status and state codes
 
 Error constants, job states, and process states are hand-assigned

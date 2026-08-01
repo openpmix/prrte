@@ -120,15 +120,43 @@ int test_policy_parse(void)
     CHECK("mapby core:nolocal: directive", PRTE_MAPPING_NO_USE_LOCAL & u16);
     PMIX_RELEASE(app);
 
-    /* --- ppr:2:core stores PPR count and policy --- */
+    /* --- ppr:2:core stores the whole pattern and the policy ---
+     * Both halves: an app that asks for two per core is not asking for two
+     * per whatever object the job resolved.  The spelling matches the
+     * job-level PRTE_JOB_PPR attribute so one reader serves both. */
     app = PMIX_NEW(prte_app_context_t);
     rc = prte_rmaps_base_set_app_mapping_policy(app, "ppr:2:core");
     CHECK("mapby ppr:2:core: rc", PRTE_SUCCESS == rc);
-    u16 = get_u16(&app->attributes, PRTE_APP_PPR);
-    CHECK("mapby ppr:2:core: ppn=2", 2 == u16);
+    sval = get_str(&app->attributes, PRTE_APP_PPR);
+    CHECK("mapby ppr:2:core: pattern", NULL != sval && 0 == strcmp(sval, "2:core"));
+    free(sval);
     u16 = get_u16(&app->attributes, PRTE_APP_MAPBY);
     CHECK("mapby ppr:2:core: policy=PPR", PRTE_MAPPING_PPR == PRTE_GET_MAPPING_POLICY(u16));
     PMIX_RELEASE(app);
+
+    /* --- a per-app rankfile names the file it is to read --- */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "rankfile:file=/tmp/myrf");
+    CHECK("mapby rankfile:file: rc", PRTE_SUCCESS == rc);
+    u16 = get_u16(&app->attributes, PRTE_APP_MAPBY);
+    CHECK("mapby rankfile:file: policy=BYUSER",
+          PRTE_MAPPING_BYUSER == PRTE_GET_MAPPING_POLICY(u16));
+    sval = get_str(&app->attributes, PRTE_APP_MAP_FILE);
+    CHECK("mapby rankfile:file: path", NULL != sval && 0 == strcmp(sval, "/tmp/myrf"));
+    free(sval);
+    PMIX_RELEASE(app);
+
+    /* --- ...and is refused when it names none, exactly as at job level.
+     * The MCA default file is the other place a name can come from, so
+     * clear it for this case rather than depend on the developer not having
+     * set one. */
+    sval = prte_rmaps_base.file;
+    prte_rmaps_base.file = NULL;
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "rankfile");
+    CHECK("mapby rankfile without a file: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+    prte_rmaps_base.file = sval;
 
     /* --- the qualifiers that span the whole job ---
      * These describe the job, not the app, but they are accepted in a per-app
