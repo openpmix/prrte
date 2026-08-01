@@ -192,3 +192,23 @@ unsigned 32-bit integer:
   Value:   %s
 
 Please correct your command line and try again.
+#
+[non-boolean-value]
+A boolean directive was given a value that is neither true nor false:
+
+  Option:     --%s
+  Directive:  %s
+  Value:      %s
+
+A boolean directive may be written bare - which asserts it - or with an
+explicit truth value:
+
+  <directive>        the directive is requested
+  <directive>=1      the same, said explicitly
+  <directive>=0      the directive is NOT requested
+
+True may also be written "T", "Y", "TRUE", "YES" or "ENABLE", and false
+"F", "N", "FALSE", "NO" or "DISABLE" - case-insensitively, and as whole
+words ("TR" is not an abbreviation of "TRUE").
+
+Please correct your command line and try again.

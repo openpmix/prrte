@@ -384,6 +384,36 @@ static int check_ndirs(pmix_cli_item_t *opt)
     return PRTE_SUCCESS;
 }
 
+/* Every other directive of those three options is a BOOLEAN: written bare
+ * to assert it, or with a truth value to say so explicitly.  These are the
+ * ones that carry a value of their own instead, so "timeout=60" and
+ * "timeout=30" are two different answers rather than two ways of saying
+ * "true". */
+static char *valued_directives[] = {
+    PRTE_CLI_DIR,
+    PRTE_CLI_FILE,
+    PRTE_CLI_TOPO,
+    PRTE_CLI_CPUS,
+    PRTE_CLI_MAX_RESTARTS,
+    PRTE_CLI_EXEC_AGENT,
+    PRTE_CLI_TIMEOUT,
+    PRTE_CLI_SPAWN_TIMEOUT,
+    PRTE_CLI_OUTPUT_PROCTABLE,
+    NULL
+};
+
+bool prte_schizo_base_directive_is_valued(const char *directive)
+{
+    size_t n;
+
+    for (n = 0; NULL != valued_directives[n]; n++) {
+        if (PMIX_CHECK_CLI_OPTION((char *) directive, valued_directives[n])) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /* the sanity checker is provided for DEVELOPERS as it checks that
  * the options contained in the cmd line being passed to PRRTE for
  * execution meet PRRTE requirements. Although it does emit
@@ -647,12 +677,119 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     return PRTE_SUCCESS;
 }
 
+/*
+ * The boolean directives and qualifiers of one option, and the PMIx key
+ * each of them turns into.
+ *
+ * They are recorded here as the directive list is walked and emitted once
+ * it has been walked in full, rather than emitted where they are matched.
+ * That is what makes the value form work: "tag=0" has to leave the key
+ * ABSENT - every consumer of these keys tests them by presence - so a
+ * directive cannot be emitted before the whole list has had its say.  It
+ * also makes a repeat harmless, which matters now that a directive list can
+ * be assembled from several app segments of one MPMD command line.
+ */
+typedef struct {
+    const char *directive;
+    const char *key;
+    bool given;
+    bool flag;
+} prte_bool_directive_t;
+
+/*
+ * Record the truth of one boolean directive.
+ *
+ * The table is searched in order because the matcher accepts any
+ * unambiguous prefix and "tag" is a prefix of "tag-detailed": whichever
+ * entry comes first is what a bare "tag" means, so the order here is the
+ * user-facing definition of the abbreviations and must not be shuffled.
+ *
+ * Returns false if the token names no boolean directive in this table -
+ * the caller then tries the directives that carry a real value.  On a
+ * malformed value it reports the error itself and hands back *rc.
+ */
+static bool set_bool_directive(prte_bool_directive_t *tbl, const char *option,
+                               char *token, const char *value, int *rc)
+{
+    size_t n;
+    bool flag;
+
+    *rc = PRTE_SUCCESS;
+    for (n = 0; NULL != tbl[n].directive; n++) {
+        if (!PMIX_CHECK_CLI_OPTION(token, (char *) tbl[n].directive)) {
+            continue;
+        }
+        if (PRTE_SUCCESS != prte_cli_bool_value(value, &flag)) {
+            pmix_show_help("help-schizo-base.txt", "non-boolean-value", true,
+                           option, tbl[n].directive, value);
+            *rc = PRTE_ERR_SILENT;
+            return true;
+        }
+        tbl[n].given = true;
+        tbl[n].flag = flag;
+        return true;
+    }
+    return false;
+}
+
+/* Emit the keys of every boolean directive that was given as true.
+ *
+ * Two entries may share a key - "parseable" and "parsable" are one
+ * question spelled two ways - so a key already emitted is skipped rather
+ * than added twice. */
+static int emit_bool_directives(prte_bool_directive_t *tbl, void *jinfo)
+{
+    pmix_status_t ret;
+    size_t n, m;
+    bool dup;
+
+    for (n = 0; NULL != tbl[n].directive; n++) {
+        if (!tbl[n].given || !tbl[n].flag) {
+            continue;
+        }
+        dup = false;
+        for (m = 0; m < n; m++) {
+            if (tbl[m].given && tbl[m].flag &&
+                0 == strcmp(tbl[m].key, tbl[n].key)) {
+                dup = true;
+                break;
+            }
+        }
+        if (dup) {
+            continue;
+        }
+        PMIX_INFO_LIST_ADD(ret, jinfo, tbl[n].key, NULL, PMIX_BOOL);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            return prte_pmix_convert_status(ret);
+        }
+    }
+    return PRTE_SUCCESS;
+}
+
 int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
 {
-    int n, idx;
+    int n, idx, rc;
     size_t m;
     pmix_status_t ret;
-    char **targv, *ptr, *cptr, **quals;
+    char **targv = NULL, *ptr, *cptr, **quals = NULL;
+    char *topo = NULL, *cpus = NULL;
+    bool topogiven = false, cpusgiven = false;
+    prte_bool_directive_t bools[] = {
+        /* "map" must precede "map-devel"; see the comment on
+         * set_bool_directive() */
+        {PRTE_CLI_ALLOC, PMIX_DISPLAY_ALLOCATION, false, false},
+        {PRTE_CLI_MAP, PMIX_DISPLAY_MAP, false, false},
+        {PRTE_CLI_MAPDEV, PMIX_DISPLAY_MAP_DETAILED, false, false},
+        {PRTE_CLI_BIND, PMIX_REPORT_BINDINGS, false, false},
+        {NULL, NULL, false, false}
+    };
+    prte_bool_directive_t qualtbl[] = {
+        {PRTE_CLI_PARSEABLE, PMIX_DISPLAY_PARSEABLE_OUTPUT, false, false},
+        {PRTE_CLI_PARSABLE, PMIX_DISPLAY_PARSEABLE_OUTPUT, false, false},
+        {PRTE_CLI_PHYSICAL_CPUS, PMIX_REPORT_PHYSICAL_CPUS, false, false},
+        {NULL, NULL, false, false}
+    };
 
     for (n=0; NULL != opt->values[n]; n++) {
         targv = PMIx_Argv_split(opt->values[n], ',');
@@ -665,66 +802,29 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                 quals = PMIx_Argv_split(cptr, ':');
                 /* check qualifiers */
                 for (m=0; NULL != quals[m]; m++) {
-                    if (PMIX_CHECK_CLI_OPTION(quals[m], PRTE_CLI_PARSEABLE) ||
-                        PMIX_CHECK_CLI_OPTION(quals[m], PRTE_CLI_PARSABLE)) {
-                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL);
-                        if (PMIX_SUCCESS != ret) {
-                            PMIX_ERROR_LOG(ret);
-                            PMIx_Argv_free(quals);
-                            PMIx_Argv_free(targv);
-                            return ret;
-                        }
-
-                    } else if (PMIX_CHECK_CLI_OPTION(quals[m], PRTE_CLI_PHYSICAL_CPUS)) {
-                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REPORT_PHYSICAL_CPUS, NULL, PMIX_BOOL);
-                        if (PMIX_SUCCESS != ret) {
-                            PMIX_ERROR_LOG(ret);
-                            PMIx_Argv_free(quals);
-                            PMIx_Argv_free(targv);
-                            return ret;
-                        }
-
-                    } else {
+                    if (!set_bool_directive(qualtbl, PRTE_CLI_DISPLAY, quals[m],
+                                            PMIX_CLI_QUALIFIER_VALUE(quals[m]), &rc)) {
                         pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-qualifier", true,
-                                       "display", cptr, "PARSEABLE,PARSABLE");
-                        PMIx_Argv_free(quals);
-                        PMIx_Argv_free(targv);
-                        return PRTE_ERR_FATAL;
+                                       "display", cptr, "PARSEABLE,PARSABLE,PHYSICAL");
+                        rc = PRTE_ERR_FATAL;
+                        goto cleanup;
+                    }
+                    if (PRTE_SUCCESS != rc) {
+                        goto cleanup;
                     }
                 }
                 PMIx_Argv_free(quals);
+                quals = NULL;
+            }
+            if ('\0' == targv[idx][0]) {
+                // only qualifiers were given
+                continue;
             }
 
-            if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_ALLOC)) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_ALLOCATION, NULL, PMIX_BOOL);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    PMIx_Argv_free(targv);
-                    return ret;
-                }
-
-            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MAP)) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_MAP, NULL, PMIX_BOOL);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    PMIx_Argv_free(targv);
-                    return ret;
-                }
-
-            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MAPDEV)) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_MAP_DETAILED, NULL, PMIX_BOOL);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    PMIx_Argv_free(targv);
-                    return ret;
-                }
-
-            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_BIND)) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REPORT_BINDINGS, NULL, PMIX_BOOL);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    PMIx_Argv_free(targv);
-                    return ret;
+            if (set_bool_directive(bools, PRTE_CLI_DISPLAY, targv[idx],
+                                   PMIX_CLI_QUALIFIER_VALUE(targv[idx]), &rc)) {
+                if (PRTE_SUCCESS != rc) {
+                    goto cleanup;
                 }
 
             } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TOPO)) {
@@ -734,17 +834,20 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                     if ('\0' == *ptr) {
                         /* missing the value or value is invalid */
                         pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
-                                       "display", "PROCESSORS", targv[idx]);
-                        PMIx_Argv_free(targv);
-                        return PRTE_ERR_FATAL;
+                                       "display", "TOPO", targv[idx]);
+                        rc = PRTE_ERR_FATAL;
+                        goto cleanup;
                     }
                 }
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_TOPOLOGY, ptr, PMIX_STRING);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    PMIx_Argv_free(targv);
-                    return ret;
+                /* "topo" with no value means "every node", which is a
+                 * legitimate request - so record that it was asked for
+                 * separately from the value it may have carried */
+                if (NULL != topo) {
+                    free(topo);
                 }
+                topo = (NULL == ptr) ? NULL : strdup(ptr);
+                topogiven = true;
+
             } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_CPUS)) {
                 ptr = strchr(targv[idx], '=');
                 if (NULL != ptr) {
@@ -753,34 +856,90 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                         /* missing the value or value is invalid */
                         pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
                                        "display", "PROCESSORS", targv[idx]);
-                        PMIx_Argv_free(targv);
-                        return PRTE_ERR_FATAL;
+                        rc = PRTE_ERR_FATAL;
+                        goto cleanup;
                     }
                 }
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_PROCESSORS, ptr, PMIX_STRING);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    PMIx_Argv_free(targv);
-                    return ret;
+                if (NULL != cpus) {
+                    free(cpus);
                 }
+                cpus = (NULL == ptr) ? NULL : strdup(ptr);
+                cpusgiven = true;
             }
         }
         PMIx_Argv_free(targv);
+        targv = NULL;
     }
 
-    return PRTE_SUCCESS;
+    /* the whole list has now been seen, so what it asked for is known - see
+     * the comment on prte_bool_directive_t for why nothing above emitted a
+     * key of its own */
+    rc = emit_bool_directives(bools, jinfo);
+    if (PRTE_SUCCESS != rc) {
+        goto cleanup;
+    }
+    rc = emit_bool_directives(qualtbl, jinfo);
+    if (PRTE_SUCCESS != rc) {
+        goto cleanup;
+    }
+    if (topogiven) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_TOPOLOGY, topo, PMIX_STRING);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            rc = prte_pmix_convert_status(ret);
+            goto cleanup;
+        }
+    }
+    if (cpusgiven) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_PROCESSORS, cpus, PMIX_STRING);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            rc = prte_pmix_convert_status(ret);
+            goto cleanup;
+        }
+    }
+    rc = PRTE_SUCCESS;
+
+cleanup:
+    PMIx_Argv_free(quals);
+    PMIx_Argv_free(targv);
+    if (NULL != topo) {
+        free(topo);
+    }
+    if (NULL != cpus) {
+        free(cpus);
+    }
+    return rc;
 }
 
 int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
 {
     char *outdir=NULL;
     char *outfile=NULL;
+    char *outfileraw=NULL;
     char **targv = NULL, *ptr, *cptr, **options = NULL;
-    int m, n, idx;
-    pmix_status_t ret = PRTE_SUCCESS;
+    int m, n, idx, rc;
+    pmix_status_t ret;
     bool fileonly = true;
     bool copyqualgiven = false;
     bool patternqualgiven = false;
+    bool flag;
+    prte_bool_directive_t bools[] = {
+        /* "tag" must precede "tag-detailed"/"tag-fullname"; see the comment
+         * on set_bool_directive() */
+        {PRTE_CLI_TAG, PMIX_IOF_TAG_OUTPUT, false, false},
+        {PRTE_CLI_TAG_DET, PMIX_IOF_TAG_DETAILED_OUTPUT, false, false},
+        {PRTE_CLI_TAG_FULL, PMIX_IOF_TAG_FULLNAME_OUTPUT, false, false},
+        {PRTE_CLI_RANK, PMIX_IOF_RANK_OUTPUT, false, false},
+        {PRTE_CLI_TIMESTAMP, PMIX_IOF_TIMESTAMP_OUTPUT, false, false},
+        {PRTE_CLI_XML, PMIX_IOF_XML_OUTPUT, false, false},
+        {PRTE_CLI_MERGE_ERROUT, PMIX_IOF_MERGE_STDERR_STDOUT, false, false},
+        {NULL, NULL, false, false}
+    };
+    prte_bool_directive_t qualtbl[] = {
+        {PRTE_CLI_RAW, PMIX_IOF_OUTPUT_RAW, false, false},
+        {NULL, NULL, false, false}
+    };
 
     for (n=0; NULL != opt->values[n]; n++) {
         /* every value on this option is a directive list of its own - the
@@ -807,41 +966,66 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                         if (copyqualgiven) {
                             // cannot give both copy and nocopy
                             pmix_show_help("help-schizo-output.txt", "copy-nocopy", true, cptr);
-                            ret = PRTE_ERR_SILENT;
+                            rc = PRTE_ERR_SILENT;
                             goto cleanup;
                         }
-                        fileonly = true;
+                        if (PRTE_SUCCESS != prte_cli_bool_value(PMIX_CLI_QUALIFIER_VALUE(options[m]),
+                                                                &flag)) {
+                            pmix_show_help("help-schizo-base.txt", "non-boolean-value", true,
+                                           PRTE_CLI_OUTPUT, PRTE_CLI_NOCOPY,
+                                           PMIX_CLI_QUALIFIER_VALUE(options[m]));
+                            rc = PRTE_ERR_SILENT;
+                            goto cleanup;
+                        }
+                        fileonly = flag;
                         copyqualgiven = true;
 
                     } else if (PMIX_CHECK_CLI_OPTION(options[m], PRTE_CLI_COPY)) {
                         if (copyqualgiven) {
                             // cannot give both copy and nocopy
                             pmix_show_help("help-schizo-output.txt", "copy-nocopy", true, cptr);
-                            ret = PRTE_ERR_SILENT;
+                            rc = PRTE_ERR_SILENT;
                             goto cleanup;
                         }
-                        fileonly = false;
+                        if (PRTE_SUCCESS != prte_cli_bool_value(PMIX_CLI_QUALIFIER_VALUE(options[m]),
+                                                                &flag)) {
+                            pmix_show_help("help-schizo-base.txt", "non-boolean-value", true,
+                                           PRTE_CLI_OUTPUT, PRTE_CLI_COPY,
+                                           PMIX_CLI_QUALIFIER_VALUE(options[m]));
+                            rc = PRTE_ERR_SILENT;
+                            goto cleanup;
+                        }
+                        fileonly = !flag;
                         copyqualgiven = true;
 
                     } else if (PMIX_CHECK_CLI_OPTION(options[m], PRTE_CLI_PATTERN)) {
+                        if (PRTE_SUCCESS != prte_cli_bool_value(PMIX_CLI_QUALIFIER_VALUE(options[m]),
+                                                                &flag)) {
+                            pmix_show_help("help-schizo-base.txt", "non-boolean-value", true,
+                                           PRTE_CLI_OUTPUT, PRTE_CLI_PATTERN,
+                                           PMIX_CLI_QUALIFIER_VALUE(options[m]));
+                            rc = PRTE_ERR_SILENT;
+                            goto cleanup;
+                        }
 #if PRTE_PMIX_IOF_FILE_PATTERN
                         /* only record it here - the key is emitted with the
                          * filename it qualifies, since it means nothing
                          * without one */
-                        patternqualgiven = true;
+                        patternqualgiven = flag;
 #else
                         /* expanding the pattern is PMIx's job, and this one
                          * cannot do it - say so rather than accept a
                          * qualifier that would be silently ignored */
-                        pmix_show_help("help-schizo-output.txt", "pattern-unsupported", true);
-                        ret = PRTE_ERR_SILENT;
-                        goto cleanup;
+                        if (flag) {
+                            pmix_show_help("help-schizo-output.txt", "pattern-unsupported", true);
+                            rc = PRTE_ERR_SILENT;
+                            goto cleanup;
+                        }
 #endif
 
-                    } else if (PMIX_CHECK_CLI_OPTION(options[m], PRTE_CLI_RAW)) {
-                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_RAW, NULL, PMIX_BOOL);
-                        if (PMIX_SUCCESS != ret) {
-                            PMIX_ERROR_LOG(ret);
+                    } else if (set_bool_directive(qualtbl, PRTE_CLI_OUTPUT, options[m],
+                                                  PMIX_CLI_QUALIFIER_VALUE(options[m]), &rc)) {
+                        if (PRTE_SUCCESS != rc) {
                             goto cleanup;
                         }
                     }
@@ -858,52 +1042,8 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 *ptr = '\0';
                 ++ptr; // step over '=' sign
             }
-            if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TAG)) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_OUTPUT, NULL, PMIX_BOOL);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    goto cleanup;
-                }
-
-            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TAG_DET)) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_DETAILED_OUTPUT, NULL, PMIX_BOOL);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    goto cleanup;
-                }
-
-            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TAG_FULL)) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_FULLNAME_OUTPUT, NULL, PMIX_BOOL);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    goto cleanup;
-                }
-
-            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_RANK)) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_RANK_OUTPUT, NULL, PMIX_BOOL);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    goto cleanup;
-                }
-
-            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TIMESTAMP)) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    goto cleanup;
-                }
-
-            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_XML)) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    goto cleanup;
-                }
-
-            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MERGE_ERROUT)) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
+            if (set_bool_directive(bools, PRTE_CLI_OUTPUT, targv[idx], ptr, &rc)) {
+                if (PRTE_SUCCESS != rc) {
                     goto cleanup;
                 }
 
@@ -912,32 +1052,31 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     pmix_show_help("help-prte-rmaps-base.txt",
                                    "missing-qualifier", true,
                                    "output", "directory", "directory");
-                    ret = PRTE_ERR_FATAL;
+                    rc = PRTE_ERR_FATAL;
                     goto cleanup;
                 }
                 if (NULL != outfile) {
                     pmix_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, ptr);
-                    ret = PRTE_ERR_FATAL;
+                    rc = PRTE_ERR_FATAL;
                     goto cleanup;
                 }
                 /* If the given filename isn't an absolute path, then
                  * convert it to one so the name will be relative to
                  * the directory where prun was given as that is what
                  * the user will have seen */
+                if (NULL != outdir) {
+                    free(outdir);
+                    outdir = NULL;
+                }
                 if (!pmix_path_is_absolute(ptr)) {
                     char cwd[PRTE_PATH_MAX];
                     if (NULL == getcwd(cwd, sizeof(cwd))) {
-                        ret = PRTE_ERR_FATAL;
+                        rc = PRTE_ERR_FATAL;
                         goto cleanup;
                     }
                     outdir = pmix_os_path(false, cwd, ptr, NULL);
                 } else {
                     outdir = strdup(ptr);
-                }
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_DIRECTORY, outdir, PMIX_STRING);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    goto cleanup;
                 }
 
             } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_FILE)) {
@@ -945,66 +1084,33 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     pmix_show_help("help-prte-rmaps-base.txt",
                                    "missing-qualifier", true,
                                    "output", "filename", "filename");
-                    ret = PRTE_ERR_FATAL;
+                    rc = PRTE_ERR_FATAL;
                     goto cleanup;
                 }
                 if (NULL != outdir) {
                     pmix_show_help("help-prted.txt", "both-file-and-dir-set", true, ptr, outdir);
-                    ret = PRTE_ERR_FATAL;
+                    rc = PRTE_ERR_FATAL;
                     goto cleanup;
                 }
                 /* If the given filename isn't an absolute path, then
                  * convert it to one so the name will be relative to
                  * the directory where prun was given as that is what
                  * the user will have seen */
+                if (NULL != outfile) {
+                    free(outfile);
+                    outfile = NULL;
+                    free(outfileraw);
+                }
+                outfileraw = strdup(ptr);
                 if (!pmix_path_is_absolute(ptr)) {
                     char cwd[PRTE_PATH_MAX];
                     if (NULL == getcwd(cwd, sizeof(cwd))) {
-                        ret = PRTE_ERR_FATAL;
+                        rc = PRTE_ERR_FATAL;
                         goto cleanup;
                     }
                     outfile = pmix_os_path(false, cwd, ptr, NULL);
                 } else {
                     outfile = strdup(ptr);
-                }
-#if PRTE_PMIX_IOF_FILE_PATTERN
-                if (patternqualgiven) {
-                    /* the name is a pattern the user composed, so check its
-                     * conversions now - while they are still looking at the
-                     * command line they typed.  PMIx owns the expansion, so
-                     * it owns the definition of what is valid; asking it
-                     * here is what keeps the two answers the same. */
-                    char *badconv = NULL;
-                    ret = pmix_iof_check_pattern(outfile, &badconv);
-                    if (PMIX_SUCCESS != ret) {
-                        pmix_show_help("help-schizo-output.txt", "bad-pattern", true,
-                                       ptr, (NULL == badconv) ? "(none)" : badconv);
-                        if (NULL != badconv) {
-                            free(badconv);
-                        }
-                        ret = PRTE_ERR_SILENT;
-                        goto cleanup;
-                    }
-                }
-#endif
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_FILE, outfile, PMIX_STRING);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    goto cleanup;
-                }
-                if (patternqualgiven) {
-                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
-                    if (PMIX_SUCCESS != ret) {
-                        PMIX_ERROR_LOG(ret);
-                        goto cleanup;
-                    }
-                }
-                if (copyqualgiven) {
-                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, &fileonly, PMIX_BOOL);
-                    if (PMIX_SUCCESS != ret) {
-                        PMIX_ERROR_LOG(ret);
-                        goto cleanup;
-                    }
                 }
             }
         }
@@ -1016,10 +1122,79 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
          * has nothing to qualify, and silently ignoring it would leave the
          * user believing they had asked for something */
         pmix_show_help("help-schizo-output.txt", "pattern-needs-file", true);
-        ret = PRTE_ERR_SILENT;
+        rc = PRTE_ERR_SILENT;
         goto cleanup;
     }
-    ret = PRTE_SUCCESS;
+
+    /* the whole list has now been seen, so what it asked for is known - see
+     * the comment on prte_bool_directive_t for why nothing above emitted a
+     * key of its own */
+    rc = emit_bool_directives(bools, jinfo);
+    if (PRTE_SUCCESS != rc) {
+        goto cleanup;
+    }
+    rc = emit_bool_directives(qualtbl, jinfo);
+    if (PRTE_SUCCESS != rc) {
+        goto cleanup;
+    }
+
+    if (NULL != outdir) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_DIRECTORY, outdir, PMIX_STRING);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            rc = prte_pmix_convert_status(ret);
+            goto cleanup;
+        }
+    }
+    if (NULL != outfile) {
+#if PRTE_PMIX_IOF_FILE_PATTERN
+        if (patternqualgiven) {
+            /* the name is a pattern the user composed, so check its
+             * conversions now - while they are still looking at the
+             * command line they typed.  PMIx owns the expansion, so
+             * it owns the definition of what is valid; asking it
+             * here is what keeps the two answers the same. */
+            char *badconv = NULL;
+            ret = pmix_iof_check_pattern(outfile, &badconv);
+            if (PMIX_SUCCESS != ret) {
+                pmix_show_help("help-schizo-output.txt", "bad-pattern", true,
+                               outfileraw, (NULL == badconv) ? "(none)" : badconv);
+                if (NULL != badconv) {
+                    free(badconv);
+                }
+                rc = PRTE_ERR_SILENT;
+                goto cleanup;
+            }
+        }
+#endif
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_FILE, outfile, PMIX_STRING);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            rc = prte_pmix_convert_status(ret);
+            goto cleanup;
+        }
+        if (patternqualgiven) {
+            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                rc = prte_pmix_convert_status(ret);
+                goto cleanup;
+            }
+        }
+    }
+    /* "copy"/"nocopy" says whether the output ALSO reaches the terminal, so
+     * it qualifies a directory of output files exactly as it qualifies a
+     * single one - it used to be applied only alongside "file=", which left
+     * "--output dir=X:copy" asking for something it silently did not get */
+    if (copyqualgiven && (NULL != outfile || NULL != outdir)) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, &fileonly, PMIX_BOOL);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            rc = prte_pmix_convert_status(ret);
+            goto cleanup;
+        }
+    }
+    rc = PRTE_SUCCESS;
 
 cleanup:
     PMIx_Argv_free(options);
@@ -1030,8 +1205,11 @@ cleanup:
     if (NULL != outfile) {
         free(outfile);
     }
+    if (NULL != outfileraw) {
+        free(outfileraw);
+    }
 
-    return ret;
+    return rc;
 }
 
 PMIX_CLASS_INSTANCE(prte_schizo_base_active_module_t,

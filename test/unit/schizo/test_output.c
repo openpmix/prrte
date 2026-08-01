@@ -116,6 +116,15 @@ int test_output(void)
     char *dvals3[] = {"map:parseable", NULL};
     char *dvals4[] = {"topo=node1;node2", NULL};
     char *dvals5[] = {"map:bogus", NULL};
+    char *bvals1[] = {"tag=0", NULL};
+    char *bvals2[] = {"tag=1,timestamp=false", NULL};
+    char *bvals3[] = {"tag=maybe", NULL};
+    char *bvals4[] = {"tag", "tag=0", NULL};
+    char *bvals5[] = {"file=/tmp/prte-schizo-test:raw=0", NULL};
+    char *bvals6[] = {"dir=/tmp/prte-schizo-testdir:copy", NULL};
+    char *dbvals1[] = {"map=0,bind", NULL};
+    char *dbvals2[] = {"map:parseable=no", NULL};
+    char *dbvals3[] = {"map:parseable=perhaps", NULL};
 
     /*** comma-delimited directives in ONE value ***/
     rc = run_parser(prte_schizo_base_parse_output, PRTE_CLI_OUTPUT, vals1,
@@ -221,6 +230,81 @@ int test_output(void)
     rc = run_parser(prte_schizo_base_parse_display, PRTE_CLI_DISPLAY, dvals5,
                     &iptr, &ninfo);
     CHECK("display:bad-qual", PRTE_SUCCESS != rc);
+
+    /*** THE VALUE FORM.
+     ***
+     *** Every boolean directive may be written bare or with a truth value.
+     *** "tag=0" has to leave the key ABSENT, because every consumer of
+     *** these keys tests them by presence - emitting a false one reads as
+     *** ENABLED everywhere.  Before this existed, "--output tag=0" parsed
+     *** happily and applied the tag. ***/
+    rc = run_parser(prte_schizo_base_parse_output, PRTE_CLI_OUTPUT, bvals1,
+                    &iptr, &ninfo);
+    CHECK("output:false-rc", PRTE_SUCCESS == rc);
+    CHECK("output:false-absent", !has_key(iptr, ninfo, PMIX_IOF_TAG_OUTPUT));
+    PMIX_INFO_FREE(iptr, ninfo);
+
+    rc = run_parser(prte_schizo_base_parse_output, PRTE_CLI_OUTPUT, bvals2,
+                    &iptr, &ninfo);
+    CHECK("output:mixed-rc", PRTE_SUCCESS == rc);
+    CHECK("output:mixed-tag", has_key(iptr, ninfo, PMIX_IOF_TAG_OUTPUT));
+    CHECK("output:mixed-timestamp",
+          !has_key(iptr, ninfo, PMIX_IOF_TIMESTAMP_OUTPUT));
+    PMIX_INFO_FREE(iptr, ninfo);
+
+    /* a value that is neither true nor false is refused, not read as false */
+    fprintf(stderr, "--- expected error output follows (non-boolean value) ---\n");
+    rc = run_parser(prte_schizo_base_parse_output, PRTE_CLI_OUTPUT, bvals3,
+                    &iptr, &ninfo);
+    CHECK("output:non-boolean", PRTE_SUCCESS != rc);
+
+    /* the whole list has its say before anything is emitted, so the last
+     * writing of a directive is the one that counts */
+    rc = run_parser(prte_schizo_base_parse_output, PRTE_CLI_OUTPUT, bvals4,
+                    &iptr, &ninfo);
+    CHECK("output:last-wins-rc", PRTE_SUCCESS == rc);
+    CHECK("output:last-wins", !has_key(iptr, ninfo, PMIX_IOF_TAG_OUTPUT));
+    PMIX_INFO_FREE(iptr, ninfo);
+
+    /* the qualifiers take a value too */
+    rc = run_parser(prte_schizo_base_parse_output, PRTE_CLI_OUTPUT, bvals5,
+                    &iptr, &ninfo);
+    CHECK("output:raw-false-rc", PRTE_SUCCESS == rc);
+    CHECK("output:raw-false-file", has_key(iptr, ninfo, PMIX_IOF_OUTPUT_TO_FILE));
+    CHECK("output:raw-false", !has_key(iptr, ninfo, PMIX_IOF_OUTPUT_RAW));
+    PMIX_INFO_FREE(iptr, ninfo);
+
+    /* "copy"/"nocopy" says whether the output also reaches the terminal, so
+     * it qualifies a directory of files exactly as it qualifies one file -
+     * it used to be applied only alongside "file=" */
+    rc = run_parser(prte_schizo_base_parse_output, PRTE_CLI_OUTPUT, bvals6,
+                    &iptr, &ninfo);
+    CHECK("output:dir-copy-rc", PRTE_SUCCESS == rc);
+    val = key_is_true(iptr, ninfo, PMIX_IOF_FILE_ONLY, &found);
+    CHECK("output:dir-copy-present", found);
+    CHECK("output:dir-copy-false", !val);
+    PMIX_INFO_FREE(iptr, ninfo);
+
+    /*** the same, for --display ***/
+    rc = run_parser(prte_schizo_base_parse_display, PRTE_CLI_DISPLAY, dbvals1,
+                    &iptr, &ninfo);
+    CHECK("display:false-rc", PRTE_SUCCESS == rc);
+    CHECK("display:false-map", !has_key(iptr, ninfo, PMIX_DISPLAY_MAP));
+    CHECK("display:false-bind", has_key(iptr, ninfo, PMIX_REPORT_BINDINGS));
+    PMIX_INFO_FREE(iptr, ninfo);
+
+    rc = run_parser(prte_schizo_base_parse_display, PRTE_CLI_DISPLAY, dbvals2,
+                    &iptr, &ninfo);
+    CHECK("display:qual-false-rc", PRTE_SUCCESS == rc);
+    CHECK("display:qual-false-map", has_key(iptr, ninfo, PMIX_DISPLAY_MAP));
+    CHECK("display:qual-false",
+          !has_key(iptr, ninfo, PMIX_DISPLAY_PARSEABLE_OUTPUT));
+    PMIX_INFO_FREE(iptr, ninfo);
+
+    fprintf(stderr, "--- expected error output follows (non-boolean qualifier) ---\n");
+    rc = run_parser(prte_schizo_base_parse_display, PRTE_CLI_DISPLAY, dbvals3,
+                    &iptr, &ninfo);
+    CHECK("display:qual-non-boolean", PRTE_SUCCESS != rc);
 
 #if PRTE_PMIX_IOF_FILE_PATTERN
     /*** the "pattern" qualifier hands the naming of the output files to the

@@ -520,6 +520,23 @@ static int test_runtime_options(void)
     free(spec);
     PMIX_RELEASE(jdata);
 
+    /* A boolean directive given a value that is neither true nor false is
+     * refused.  PMIX_CHECK_TRUE reports anything it does not recognize as
+     * FALSE, so this used to mean "donotlaunch=maybe" quietly launched. */
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, "unit-test-rto7");
+    spec = strdup("donotlaunch=maybe");
+    CHECK("non-boolean value refused",
+          PRTE_ERR_SILENT == prte_state_base_set_runtime_options(jdata, spec));
+    free(spec);
+    /* ...but the directives that carry a value of their own are untouched
+     * by that check - "60" is a length of time, not a truth */
+    spec = strdup("timeout=60,exec-agent=/bin/true,output-proctable=-");
+    CHECK("valued directives unaffected",
+          PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
+    free(spec);
+    PMIX_RELEASE(jdata);
+
     if (0 == failures) {
         fprintf(stdout, "PASSED test_runtime_options\n");
     }

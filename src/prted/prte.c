@@ -350,6 +350,8 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     char *personality;
     pmix_cli_result_t results;
     pmix_cli_item_t *opt;
+    pmix_cli_item_t dispopt;
+    bool dispdefault = false;
     FILE *fp;
     prte_info_item_t *iprteinfo;
 
@@ -516,14 +518,21 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     // check if they asked for XML output from us
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_OUTPUT);
     if (NULL != opt) {
-        split = PMIx_Argv_split(opt->values[0], ',');
-        for (n = 0; NULL != split[n]; n++) {
-            if (PMIX_CHECK_CLI_OPTION(split[n], PRTE_CLI_XML)) {
-                prte_xml_output = true;
-                break;
+        for (i = 0; NULL != opt->values[i]; i++) {
+            split = PMIx_Argv_split(opt->values[i], ',');
+            for (n = 0; NULL != split[n]; n++) {
+                if (PMIX_CHECK_CLI_OPTION(split[n], PRTE_CLI_XML)) {
+                    if (PRTE_SUCCESS != prte_cli_bool_value(PMIX_CLI_QUALIFIER_VALUE(split[n]),
+                                                            &prte_xml_output)) {
+                        /* the value is reported where the directive is
+                         * parsed - all this needs is to not act on it */
+                        prte_xml_output = false;
+                    }
+                    break;
+                }
             }
+            PMIx_Argv_free(split);
         }
-        PMIx_Argv_free(split);
     }
 
    /* Did the user specify a default hostfile? */
@@ -1049,75 +1058,51 @@ PRTE_EXPORT int prte(int argc, char *argv[])
         goto DONE;
     }
 
-    /* check a couple of display options for the DVM itself */
+    /* Check a couple of display options for the DVM itself.  Ask the same
+     * parser the job's copy of these directives goes through rather than
+     * re-reading the directive list here: this used to be two more hand
+     * -written scans of it (one for the cmd line, one for the MCA default),
+     * and a directive spelling either of them failed to recognize was
+     * silently honored for the job and ignored by the DVM. */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DISPLAY);
+    if (NULL == opt && NULL != prte_schizo_base.default_display_options) {
+        PMIX_CONSTRUCT(&dispopt, pmix_cli_item_t);
+        dispopt.key = strdup(PRTE_CLI_DISPLAY);
+        PMIx_Argv_append_nosize(&dispopt.values, prte_schizo_base.default_display_options);
+        opt = &dispopt;
+        dispdefault = true;
+    }
     if (NULL != opt) {
-        char **targv;
-        char *tptr;
-        int m;
-        for (n=0; NULL != opt->values[n]; n++) {
-            targv = PMIx_Argv_split(opt->values[n], ',');
-            for (i=0; NULL != targv[i]; i++) {
-                if (PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_ALLOC)) {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC,
-                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-                    break;
-                } else if (PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_PARSEABLE) ||
-                           PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_PARSABLE)) {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT,
-                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-                }
-            }
-            PMIx_Argv_free(targv);
-            /* check for qualifiers */
-            tptr = strchr(opt->values[n], ':');
-            if (NULL != tptr) {
-                ++tptr;
-                targv = PMIx_Argv_split(tptr, ':');
-                /* check qualifiers */
-                for (m=0; NULL != targv[m]; m++) {
-                    if (PMIX_CHECK_CLI_OPTION(targv[m], PRTE_CLI_PARSEABLE) ||
-                        PMIX_CHECK_CLI_OPTION(targv[m], PRTE_CLI_PARSABLE)) {
+        void *dinfo;
+        pmix_data_array_t darray2;
+
+        PMIX_INFO_LIST_START(dinfo);
+        rc = prte_schizo_base_parse_display(opt, dinfo);
+        if (PRTE_SUCCESS == rc) {
+            PMIX_INFO_LIST_CONVERT(ret, dinfo, &darray2);
+            if (PMIX_SUCCESS == ret) {
+                pmix_info_t *dptr = (pmix_info_t *) darray2.array;
+                size_t dn;
+                for (dn = 0; dn < darray2.size; dn++) {
+                    if (PMIX_CHECK_KEY(&dptr[dn], PMIX_DISPLAY_ALLOCATION)) {
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC,
+                                           PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                    } else if (PMIX_CHECK_KEY(&dptr[dn], PMIX_DISPLAY_PARSEABLE_OUTPUT)) {
                         prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT,
                                            PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-                        break;
                     }
                 }
-                PMIx_Argv_free(targv);
+                PMIX_DATA_ARRAY_DESTRUCT(&darray2);
             }
         }
-
-    } else if (NULL != prte_schizo_base.default_display_options) {
-        char **targv;
-        char *tptr;
-        int m;
-        targv = PMIx_Argv_split(prte_schizo_base.default_display_options, ',');
-        for (i=0; NULL != targv[i]; i++) {
-            if (PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_ALLOC)) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-            } else if (PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_PARSEABLE) ||
-                       PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_PARSABLE)) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-            }
+        PMIX_INFO_LIST_RELEASE(dinfo);
+        if (dispdefault) {
+            PMIX_DESTRUCT(&dispopt);
         }
-        PMIx_Argv_free(targv);
-        /* check for qualifiers */
-        tptr = strchr(prte_schizo_base.default_display_options, ':');
-        if (NULL != tptr) {
-            ++tptr;
-            targv = PMIx_Argv_split(tptr, ':');
-            /* check qualifiers */
-            for (m=0; NULL != targv[m]; m++) {
-                if (PMIX_CHECK_CLI_OPTION(targv[m], PRTE_CLI_PARSEABLE) ||
-                    PMIX_CHECK_CLI_OPTION(targv[m], PRTE_CLI_PARSABLE)) {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT,
-                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-                    break;
-                }
-            }
-            PMIx_Argv_free(targv);
+        if (PRTE_SUCCESS != rc) {
+            /* the parser reported what was wrong with it */
+            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+            goto DONE;
         }
     }
 
