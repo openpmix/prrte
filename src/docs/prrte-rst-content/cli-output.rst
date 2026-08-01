@@ -85,3 +85,22 @@ process's stdout to ``run/<hostname>/rank-<rank>.out``.
 
 Any conversion other than those listed above is an error, reported when
 the command line is parsed.
+
+Every directive and qualifier above that asks a yes-or-no question
+|mdash| everything except ``DIR`` and ``FILE``, which name a place to
+write |mdash| may also be given an explicit truth value:
+
+.. code::
+
+   --output tag        the directive is requested
+   --output tag=1      the same, said explicitly
+   --output tag=0      the directive is NOT requested
+
+True may also be written ``T``, ``Y``, ``TRUE``, ``YES`` or ``ENABLE``,
+and false ``F``, ``N``, ``FALSE``, ``NO`` or ``DISABLE`` |mdash|
+case-insensitively, and as whole words (``TR`` is not an abbreviation of
+``TRUE``).
+
+A value that is neither true nor false is refused rather than guessed at:
+the truth test underneath reads anything it does not recognize as
+``false``, so ``tag=maybe`` would otherwise quietly turn tagging off.

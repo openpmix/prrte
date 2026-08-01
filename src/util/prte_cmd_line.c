@@ -37,9 +37,39 @@
 #endif
 
 #include "src/util/pmix_argv.h"
+#include "src/util/pmix_cmd_line.h"
 #include "src/util/pmix_string_copy.h"
 
 #include "src/util/prte_cmd_line.h"
+
+int prte_cli_bool_value(const char *value, bool *flag)
+{
+    pmix_value_t val;
+    int rc = PRTE_SUCCESS;
+
+    if (NULL == flag) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    /* the bare spelling of a boolean directive is its own assertion - the
+     * user wrote it, so they want it */
+    *flag = true;
+    if (NULL == value || '\0' == value[0]) {
+        return PRTE_SUCCESS;
+    }
+
+    PMIX_VALUE_LOAD(&val, (void *) value, PMIX_STRING);
+    if (!PMIX_CHECK_BOOL(&val)) {
+        /* something that is neither true nor false was written where only a
+         * truth value has meaning.  PMIX_CHECK_TRUE would read it as FALSE,
+         * so accepting it would turn "tag=maybe" into "no tags" without a
+         * word to the user */
+        rc = PRTE_ERR_BAD_PARAM;
+    } else {
+        *flag = PMIX_CHECK_TRUE(&val);
+    }
+    PMIX_VALUE_DESTRUCT(&val);
+    return rc;
+}
 
 int prte_parse_pid_option(const char *value, pid_t *pid, const char **filename)
 {

@@ -114,6 +114,17 @@ PRTE_EXPORT int prte_schizo_base_add_qualifier(pmix_cli_result_t *results,
 PRTE_EXPORT int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo);
 PRTE_EXPORT int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo);
 
+/**
+ * Does this directive of "--output"/"--display"/"--rtos" carry a value of
+ * its own, rather than a truth?
+ *
+ * "timeout=60" names a length of time; "tag=1" merely says "yes". Two
+ * writings of the former differ when their values differ; two writings of
+ * the latter differ only when their truths do.
+ */
+PRTE_EXPORT bool prte_schizo_base_directive_is_valued(const char *directive);
+
+
 PRTE_EXPORT int prte_schizo_base_setup_fork(prte_job_t *jdata, prte_app_context_t *app);
 
 

@@ -224,6 +224,70 @@ static int test_umask(void)
 /*
  * --app <file>
  */
+/*
+ * prte_cli_bool_value() - the optional value on a boolean directive.
+ *
+ * The bare spelling asserts the directive; the value form is what lets a
+ * directive an MCA parameter turned on be turned back off, and what lets
+ * one app segment of an MPMD line contradict another visibly.  A value that
+ * is neither true nor false must be REFUSED rather than read: the truth
+ * test underneath reports anything it does not recognize as false, so
+ * accepting "tag=maybe" would silently mean "no tags".
+ */
+static int test_bool_value(void)
+{
+    int failures = 0;
+    bool flag;
+    char label[64];
+    size_t i;
+    /* Every spelling of a truth value a user may reasonably type.  Matching
+     * is case-insensitive; the single letters "y"/"t"/"n"/"f" are accepted
+     * whole, and the words are matched to their full length (so "true" and
+     * "truest" both read as true, but "tru" does NOT - it is a prefix of the
+     * word, not the word).  A number reads as C does: zero is false and
+     * anything else is true. */
+    const char *yes[] = {"1", "2", "42", "y", "Y", "t", "T", "yes", "YES",
+                         "Yes", "true", "TRUE", "True",
+                         "enable", "ENABLE", "enabled", NULL};
+    const char *no[] = {"0", "00", "n", "N", "f", "F", "no", "NO", "No",
+                        "false", "FALSE", "False",
+                        "disable", "DISABLE", "disabled", NULL};
+    /* ...and things that are neither, which must be REFUSED.  The truth
+     * test underneath reports every one of these as "false", so accepting
+     * them would silently turn a directive off.  Note "on"/"off" and the
+     * truncated words: they LOOK like truth values and are not, which is
+     * exactly the case a user needs told about rather than guessed at. */
+    const char *neither[] = {"maybe", "/tmp/out", "on", "off", "-1",
+                             "sure", "tru", "fals", NULL};
+
+    /* the bare form, however it reaches us */
+    flag = false;
+    CHECK("bool:null-rc", PRTE_SUCCESS == prte_cli_bool_value(NULL, &flag));
+    CHECK("bool:null-true", flag);
+    flag = false;
+    CHECK("bool:empty-rc", PRTE_SUCCESS == prte_cli_bool_value("", &flag));
+    CHECK("bool:empty-true", flag);
+
+    for (i = 0; NULL != yes[i]; i++) {
+        flag = false;
+        snprintf(label, sizeof(label), "bool:true[%s]", yes[i]);
+        CHECK(label, PRTE_SUCCESS == prte_cli_bool_value(yes[i], &flag) && flag);
+    }
+    for (i = 0; NULL != no[i]; i++) {
+        flag = true;
+        snprintf(label, sizeof(label), "bool:false[%s]", no[i]);
+        CHECK(label, PRTE_SUCCESS == prte_cli_bool_value(no[i], &flag) && !flag);
+    }
+    for (i = 0; NULL != neither[i]; i++) {
+        snprintf(label, sizeof(label), "bool:refused[%s]", neither[i]);
+        CHECK(label, PRTE_SUCCESS != prte_cli_bool_value(neither[i], &flag));
+    }
+
+    CHECK("bool:null-flag", PRTE_SUCCESS != prte_cli_bool_value("1", NULL));
+
+    return failures;
+}
+
 static int test_appfile(void)
 {
     int failures = 0;
@@ -324,6 +388,7 @@ int main(int argc, char *argv[])
     failures += test_pid_option();
     failures += test_umask();
     failures += test_appfile();
+    failures += test_bool_value();
 
     snprintf(cmd, sizeof(cmd), "rm -rf %s", scratch);
     rc = system(cmd);

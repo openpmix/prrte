@@ -24,11 +24,14 @@ need to be set (e.g., to override a default set by MCA parameter), the
 syntax of the command line directive includes the use of an ``=``
 character to allow inclusion of a value for the option. For example,
 one can set the ``ABORT-NONZERO-STATUS`` option to ``true`` by
-specifying it as ``ABORT-NONZERO-STATUS=1``. Note that boolean options
-can be set to ``true`` using a non-zero integer or a case-insensitive
-string of the word ``true``.  For the latter representation, the user
-need only provide at least the ``T`` character. The same policy
-applies to setting a boolean option to ``false``.
+specifying it as ``ABORT-NONZERO-STATUS=1``. A boolean option can be
+set to ``true`` using a non-zero integer, the single letter ``T`` or
+``Y``, or the whole word ``TRUE``, ``YES`` or ``ENABLE``; and to
+``false`` using zero, the single letter ``F`` or ``N``, or the whole
+word ``FALSE``, ``NO`` or ``DISABLE``. All of these are
+case-insensitive. Note that these are the whole words |mdash| ``TR``
+is not an abbreviation of ``TRUE`` |mdash| and that a value which is
+neither true nor false is refused rather than guessed at.
 
 Note that a boolean option will default to ``true`` if provided
 without a value. Thus, ``--runtime-options abort-nonzero`` is
@@ -165,3 +168,7 @@ The ``--runtime-options`` command line option has no qualifiers.
 
 .. note:: Directives are case-insensitive.  ``FWD-ENVIRONMENT`` is the
           same as ``fwd-environment``.
+
+A value that is neither true nor false is refused rather than guessed at:
+the truth test underneath reads anything it does not recognize as
+``false``, so ``donotlaunch=maybe`` would otherwise quietly launch.

@@ -53,3 +53,19 @@ colon (":") and any combination of one or more of the following
 
 Provided qualifiers will apply to *all* of the display directives unless
 noted. Note that directives and qualifiers are case-insensitive
+
+Every directive and qualifier above that asks a yes-or-no question -
+everything except "TOPO" and "CPUS", which name a list of nodes - may also
+be given an explicit truth value:
+
+  --display map        the directive is requested
+  --display map=1      the same, said explicitly
+  --display map=0      the directive is NOT requested
+
+True may also be written "T", "Y", "TRUE", "YES" or "ENABLE", and false
+"F", "N", "FALSE", "NO" or "DISABLE" - case-insensitively, and as whole
+words ("TR" is not an abbreviation of "TRUE").
+
+A value that is neither true nor false is refused rather than guessed at:
+the truth test underneath reads anything it does not recognize as "false",
+so "map=maybe" would otherwise quietly turn the display off.

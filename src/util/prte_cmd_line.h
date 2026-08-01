@@ -289,6 +289,29 @@ BEGIN_C_DECLS
  */
 
 /**
+ * Interpret the optional value carried by a boolean directive or qualifier.
+ *
+ * Every boolean directive of "--output", "--display" and "--rtos" may be
+ * written bare ("tag") or with a value ("tag=0", "tag=false", "tag=no").
+ * The bare form is the assertion; the value form says the same thing out
+ * loud, and is the only way to say the opposite.
+ *
+ * A value that is neither true nor false is REFUSED rather than read as
+ * false.  The truth test underneath reports anything it does not recognize
+ * as false, so "tag=maybe" would otherwise mean "no tags" - and "tag=0"
+ * used to mean "tags", since the value was not looked at at all.  The
+ * caller reports the error, since only the caller knows which directive of
+ * which option was being written.
+ *
+ * @param value  the text after the '=' - NULL or empty for the bare form
+ * @param flag   the truth the directive carries; bare == true
+ *
+ * @retval PRTE_SUCCESS
+ * @retval PRTE_ERR_BAD_PARAM  the value is not a truth value
+ */
+PRTE_EXPORT int prte_cli_bool_value(const char *value, bool *flag);
+
+/**
  * Interpret the value of "--pid": either a decimal PID, or "file:<path>"
  * naming a file whose first token is one.
  *

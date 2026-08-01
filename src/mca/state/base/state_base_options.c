@@ -38,6 +38,7 @@
 #include "src/mca/odls/base/base.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/rmaps_types.h"
+#include "src/mca/schizo/base/base.h"
 #include "src/rml/rml.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/runtime/prte_globals.h"
@@ -241,6 +242,20 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                 }
             }
             PMIX_VALUE_LOAD(&value, ptr, PMIX_STRING); // just in case we need to evaluate a bool
+            /* Every directive below except the handful that carry a value of
+             * their own is a BOOLEAN, read with PMIX_CHECK_TRUE - which
+             * reports anything that is neither true nor false as FALSE.  So
+             * "donotlaunch=maybe" would quietly launch.  Refuse the value
+             * here instead, where it is still the user's command line and
+             * not a policy nobody asked for. */
+            if (NULL != ptr && !prte_schizo_base_directive_is_valued(options[n]) &&
+                PRTE_SUCCESS != prte_cli_bool_value(ptr, &flag)) {
+                pmix_show_help("help-schizo-base.txt", "non-boolean-value", true,
+                               PRTE_CLI_RTOS, options[n], ptr);
+                PMIX_VALUE_DESTRUCT(&value);
+                PMIx_Argv_free(options);
+                return PRTE_ERR_SILENT;
+            }
             /* check the options */
             if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_ERROR_NZ)) {
                 flag = PMIX_CHECK_TRUE(&value);
