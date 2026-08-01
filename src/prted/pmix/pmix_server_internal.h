@@ -432,6 +432,9 @@ typedef struct {
     bool no_foreign_tools;
     bool system_controller;
     bool scheduler_connected;
+    /* we have already looked for a scheduler to attach to and found none - do
+     * not look again. See prte_pmix_set_scheduler(). */
+    bool scheduler_lookup_done;
     bool remote_connections;
     bool tool_support;
     bool require_pid_match;

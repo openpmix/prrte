@@ -119,13 +119,36 @@ pmix_status_t prte_pmix_set_scheduler(void)
     pmix_info_t info[2];
 
     if (!prte_pmix_server_globals.scheduler_connected) {
-        /* the scheduler has not attached to us - see if we
-         * can attach to it, make it optional so we don't
-         * hang if there is no scheduler available */
+        /* Look for a scheduler to attach to - ONCE.
+         *
+         * PMIx_tool_attach_to_server is a BLOCKING call, and this runs on the
+         * PRRTE progress thread, which is the only thread driving the DVM. It
+         * hunts for a rendezvous and tries to connect to what it finds, so
+         * repeating it per request puts a filesystem scan and a connect
+         * attempt in front of every allocation and every session-control
+         * request. Against a DVM with no scheduler - the ordinary case, where
+         * it can only ever fail - that is pure cost on the one thread that
+         * must not be spent.
+         *
+         * Nothing is lost by looking only once. A scheduler that appears
+         * later announces itself by attaching to US, and the tool-connect
+         * upcall (pmix_server_gen.c) sets scheduler_connected from there. */
+        if (prte_pmix_server_globals.scheduler_lookup_done) {
+            return PMIX_ERR_UNREACH;
+        }
+        prte_pmix_server_globals.scheduler_lookup_done = true;
+        /* make it optional so we don't hang if there is no scheduler */
         PMIX_INFO_LOAD(&info[0], PMIX_CONNECT_TO_SCHEDULER, NULL, PMIX_BOOL);
         PMIX_INFO_LOAD(&info[1], PMIX_TOOL_CONNECT_OPTIONAL, NULL, PMIX_BOOL);
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s looking for a scheduler to attach to",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         rc = PMIx_tool_attach_to_server(NULL, &prte_pmix_server_globals.scheduler,
                                         info, 2);
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s scheduler attach returned %s",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PMIx_Error_string(rc));
         PMIX_INFO_DESTRUCT(&info[0]);
         PMIX_INFO_DESTRUCT(&info[1]);
         if (PMIX_SUCCESS != rc) {
