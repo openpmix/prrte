@@ -195,6 +195,21 @@ callback:
     PMIX_RELEASE(req);
 }
 
+/* Submit a fully-constructed job for launch.  This is the same path a
+ * PMIx_Spawn takes once interim() has finished translating it, exposed so
+ * that a caller which builds its own job object - notably a session
+ * instantiation carrying PMIX_SESSION_APP definitions - can hand it to the
+ * PLM without duplicating the request-tracking and packing in spawn().
+ *
+ * MUST be called on the PRRTE progress thread. cbfunc is invoked with the
+ * launched job's namespace once the HNP answers, or with a NULL namespace
+ * and a PMIx error if the request could not be sent. */
+void prte_pmix_server_launch_job(prte_job_t *jdata,
+                                 pmix_spawn_cbfunc_t cbfunc, void *cbdata)
+{
+    PRTE_SPN_REQ(jdata, spawn, cbfunc, cbdata);
+}
+
 int prte_pmix_xfer_job_info(prte_job_t *jdata,
                             pmix_info_t *iptr,
                             size_t ninfo)

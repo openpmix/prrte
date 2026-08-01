@@ -114,6 +114,19 @@ PRTE_EXPORT void prte_ras_base_check_reservations_on_term(prte_job_t *jdata);
 
 PRTE_EXPORT int prte_ras_base_add_hosts(prte_job_t *jdata);
 
+/* Render the node specification carried by a PMIX_ALLOC_NODE_LIST-style info
+ * (a string, a regex, or a regex2) into a comma-delimited node-name string the
+ * caller must free. Returns PMIX_ERR_BAD_PARAM for any other value type. */
+PRTE_EXPORT pmix_status_t prte_ras_base_parse_node_list(pmix_info_t *info,
+                                                        char **ndstring);
+
+/* Add the named nodes to the global pool, marking each PRTE_NODE_STATE_ADDED,
+ * and register them with the destination reservation (which withholds them
+ * from general use). Pass NULL or the default session to leave them in the
+ * general pool. Returns a PRRTE code. */
+PRTE_EXPORT int prte_ras_base_insert_node_string(char *ndstring,
+                                                 prte_session_t *dest);
+
 PRTE_EXPORT char *prte_ras_base_flag_string(prte_node_t *node);
 
 PRTE_EXPORT void prte_ras_base_activate_dvm_grow(void);

@@ -2327,6 +2327,158 @@ test_prted() {
 # behavior that only shows up when there is more than one node or more than
 # one DVM to be wrong about:
 #
+########################################################################
+# src/prted/pmix/pmix_server_session.c -- PMIx_Session_control.
+#
+# A session is a set of NODES, so nothing interesting about it exists on one
+# host.  What only appears here:
+#
+#   * a reservation actually withholding its nodes -- a job that names no
+#     session must land somewhere else, which needs more nodes than one
+#   * a request arriving at a NON-MASTER daemon and being relayed to the DVM
+#     master, which is the only way the PRTE_PMIX_SESSION_CTRL relay runs at all
+#   * a signal reaching the jobs of a session on every node they occupy
+#   * a session terminate killing its jobs across nodes and giving the nodes
+#     back to the general pool
+########################################################################
+# sessionctrl is installed by build.sh; use the absolute path for the same
+# reason DS and SC do (an app inherits the daemon PATH, not the install bin).
+SESSCTL=/opt/prte/prte/bin/sessionctrl
+
+test_session() {
+    local out rc n ns
+
+    banner "session: instantiate reserves its nodes out of the general pool"
+    # The DVM spans node1-node4.  Instantiate a session holding node3+node4
+    # and put a long-lived job in it.  A SECOND job, naming no session, must
+    # then be unable to reach node3/node4 at all -- that is what "reserved"
+    # means, and with a single node there is nothing to observe.
+    cleanup_swarm
+    # the session jobs below are bare "sleep" processes, and this phase counts
+    # them to decide whether a signal landed -- so make sure none is left over
+    # from anything else (cleanup_swarm only reaps PRRTE tools and daemons)
+    for n in $(seq 1 10); do docker exec "$NODE$n" sh -c 'pkill -9 -x sleep 2>/dev/null; true'; done
+    if ! RUN "test -x $SESSCTL"; then
+        skp "sessionctrl not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start 'node1:2,node2:2,node3:2,node4:2'; then
+        bad "could not start a DVM for the session-control tests"
+    else
+        # name the slot counts explicitly: a node list is parsed by the
+        # dash-host rules, so a bare name means ONE slot -- and it overwrites
+        # the count the pool already had for that node.
+        out=$(RUN "timeout 60 $SESSCTL instantiate 4242 --hosts node3:2,node4:2 \
+                       --np 2 --mapby node -- /bin/sleep 240" 2>&1)
+        ns=$(echo "$out" | grep -m1 'pmix.nspace' | awk -F'= ' '{print $2}' | tr -d '\r')
+        if echo "$out" | grep -q PMIX_SUCCESS && [ -n "$ns" ]; then
+            ok "session 4242 instantiated on node3,node4 running $ns"
+        else
+            bad "instantiate failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+
+        # a general job may now only use node1/node2
+        sleep 3
+        out=$(PRUN '-n 4 --map-by node hostname' 2>&1)
+        n=$(echo "$out" | grep -cE '^node(3|4)$')
+        [ "$n" = 0 ] \
+            && ok "a general job was kept off the reserved nodes" \
+            || bad "a general job landed on reserved nodes: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+        banner "session: a request relayed from a non-master daemon is served"
+        # node3 is not the DVM master, so this goes out on PRTE_RML_TAG_SCHED
+        # and comes back on ..._SCHED_RESP.  With one daemon that relay never
+        # runs.  Run the tool THROUGH node3 by executing it there: it attaches
+        # to its local daemon, which is not the master.
+        out=$(ONT 3 "timeout 60 $SESSCTL pause 4242" 2>&1)
+        echo "$out" | grep -q PMIX_SUCCESS \
+            && ok "pause relayed through node3 was served by the master" \
+            || bad "relayed pause failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+        # the procs of the session are stopped -- on BOTH nodes
+        sleep 2
+        n=0
+        for h in 3 4; do
+            ON $h 'ps -o stat= -C sleep 2>/dev/null | grep -q T' && n=$((n+1))
+        done
+        [ "$n" = 2 ] \
+            && ok "both nodes of the session have stopped procs" \
+            || skp "could not confirm stopped procs on both nodes (saw $n); ps may not report state here"
+
+        out=$(ONT 3 "timeout 60 $SESSCTL resume 4242" 2>&1)
+        echo "$out" | grep -q PMIX_SUCCESS \
+            && ok "resume relayed through node3 was served" \
+            || bad "relayed resume failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+        banner "session: signal reaches the session jobs on every node"
+        # SIGTERM through the session, not through prun.  This is the path
+        # that packed the target namespace: it used to pack the ADDRESS OF THE
+        # POINTER rather than the name, so every daemon matched no job and the
+        # signal was silently dropped -- invisible on one node too, but this
+        # is where it is checked.
+        out=$(RUN "timeout 60 $SESSCTL signal 4242 15" 2>&1)
+        echo "$out" | grep -q PMIX_SUCCESS \
+            && ok "session signal accepted" \
+            || bad "session signal failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        sleep 5
+        n=0
+        for h in 1 2 3 4; do
+            ON $h 'pgrep -x sleep >/dev/null' && n=$((n+1))
+        done
+        [ "$n" = 0 ] \
+            && ok "the signal reached the session procs on every node" \
+            || bad "session procs survived the signal on $n node(s)"
+
+        banner "session: a session created to run apps is reclaimed when they end"
+        # 4242 was instantiated WITH apps, so it exists in order to run them
+        # and is finished when the last of them retires -- which the signal
+        # above just caused.  It must be gone, and its nodes must be back in
+        # the general pool without anyone having asked.
+        sleep 4
+        out=$(RUN "timeout 60 $SESSCTL pause 4242" 2>&1)
+        echo "$out" | grep -q PMIX_ERR_NOT_FOUND \
+            && ok "the session retired with its jobs" \
+            || bad "session 4242 outlived its only job: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        out=$(PRUN '-n 8 --map-by node hostname' 2>&1)
+        n=$(echo "$out" | grep -E '^node[0-9]+$' | sort -u | wc -l | tr -d ' ')
+        [ "$n" = 4 ] \
+            && ok "all four nodes are back in the general pool" \
+            || bad "expected 4 usable nodes after the session ended, saw $n: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+        banner "session: a standing reservation persists until it is terminated"
+        # Instantiated with NO apps, so nothing retires and nothing reclaims
+        # it.  It holds node4 until an explicit terminate says otherwise.
+        out=$(RUN "timeout 60 $SESSCTL instantiate 4243 --hosts node4:2" 2>&1)
+        echo "$out" | grep -q PMIX_SUCCESS \
+            && ok "standing reservation 4243 instantiated" \
+            || bad "instantiate failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        sleep 2
+        out=$(PRUN '-n 6 --map-by node hostname' 2>&1)
+        n=$(echo "$out" | grep -cE '^node4$')
+        [ "$n" = 0 ] \
+            && ok "the standing reservation is withholding its node" \
+            || bad "a general job used the reserved node: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        out=$(RUN "timeout 60 $SESSCTL terminate 4243" 2>&1)
+        echo "$out" | grep -q PMIX_SUCCESS \
+            && ok "session 4243 terminated on request" \
+            || bad "terminate failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        sleep 4
+        out=$(PRUN '-n 8 --map-by node hostname' 2>&1)
+        n=$(echo "$out" | grep -E '^node[0-9]+$' | sort -u | wc -l | tr -d ' ')
+        [ "$n" = 4 ] \
+            && ok "the terminated reservation gave its node back" \
+            || bad "expected 4 usable nodes after terminate, saw $n: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+        banner "session: an unknown session and a conflicting request are refused"
+        out=$(RUN "timeout 60 $SESSCTL pause 9999" 2>&1)
+        echo "$out" | grep -q PMIX_ERR_NOT_FOUND \
+            && ok "an unknown session id is refused with NOT_FOUND" \
+            || bad "unknown session was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    for n in $(seq 1 10); do docker exec "$NODE$n" sh -c 'pkill -9 -x sleep 2>/dev/null; true'; done
+    cleanup_swarm
+}
+
 #   * prte-info describing the build that is actually installed on each node
 #     -- a swarm running a stale install on some nodes is otherwise a launch
 #     failure with no obvious cause
@@ -4127,6 +4279,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_pmix
 
     test_prted
+
+    test_session
 
     test_tools
 

@@ -1198,6 +1198,56 @@ static int test_directive_distribution(void)
     return failures;
 }
 
+
+/*
+ * A scheduler's session time limit (PMIX_ALLOC_TIME) is the one directive
+ * whose whole meaning is a string parse, and getting it wrong terminates a
+ * user's session early or never. The format is scanned from the RIGHT, so a
+ * bare "2" is two seconds - not two months.
+ */
+static const struct {
+    const char *spec;
+    long expected;      /* -1 == must be rejected */
+} session_time_cases[] = {
+    /* right-to-left: seconds, minutes, hours, days, months */
+    {"0",                       0},
+    {"2",                       2},
+    {"90",                     90},
+    {"1:30",                   90},
+    {"0:01",                    1},
+    {"2:00:00",              7200},
+    {"1:00:00:00",          86400},
+    {"1:00:00:00:00",     2592000},
+    {"1:2:3:4:5",         2592000 + 2*86400 + 3*3600 + 4*60 + 5},
+    /* malformed */
+    {NULL,                     -1},
+    {"",                       -1},
+    {"abc",                    -1},
+    {"1:",                     -1},
+    {":1",                     -1},
+    {"1::2",                   -1},
+    {"-5",                     -1},
+    {"5s",                     -1},
+    {"1:2:3:4:5:6",            -1},   /* one field too many */
+};
+
+static int test_session_time(void)
+{
+    size_t n;
+    long got;
+    int failures = 0;
+    char desc[128];
+
+    for (n = 0; n < sizeof(session_time_cases) / sizeof(session_time_cases[0]); n++) {
+        got = prte_pmix_server_parse_session_time(session_time_cases[n].spec);
+        snprintf(desc, sizeof(desc), "sessiontime/%s",
+                 (NULL == session_time_cases[n].spec) ? "NULL"
+                                                      : session_time_cases[n].spec);
+        CHECK(desc, got == session_time_cases[n].expected);
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0, skipped = 0;
@@ -1263,6 +1313,7 @@ int main(void)
     failures += test_xfer_job_info();
     failures += test_xfer_app();
     failures += test_job_info_cache();
+    failures += test_session_time();
     failures += test_directive_distribution();
     failures += test_envar_order(&skipped);
     failures += test_envar_order_permutations(&skipped);

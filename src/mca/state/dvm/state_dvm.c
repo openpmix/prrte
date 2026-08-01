@@ -875,6 +875,12 @@ release:
                 }
             }
         }
+        /* Tell the session-control layer the job is gone. It records the
+         * termination status for the completion report the scheduler is owed,
+         * and reclaims a session that exists only to run the jobs it was
+         * instantiated with. Must follow the removal above, since that is what
+         * it tests to decide the session has drained. */
+        prte_pmix_server_session_job_terminated(session, jdata);
     }
     if (NULL != jdata->map) {
         map = jdata->map;
