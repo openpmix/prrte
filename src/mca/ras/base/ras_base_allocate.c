@@ -896,6 +896,15 @@ void prte_ras_base_teardown_reservation(prte_session_t *session,
                 if (NULL == nd || NULL == nd->daemon) {
                     continue;
                 }
+                /* Never shrink ourselves out of our own DVM. A reservation may
+                 * legitimately include the head node - a single-node DVM whose
+                 * whole allocation is carved into one session is the extreme
+                 * case - and ordering the master's own daemon to depart takes
+                 * the DVM down with it, losing every other job still running
+                 * on it. The head node simply reverts to the general pool. */
+                if (nd->daemon->name.rank == PRTE_PROC_MY_NAME->rank) {
+                    continue;
+                }
                 ranks[m++] = nd->daemon->name.rank;
             }
         }
