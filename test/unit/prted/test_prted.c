@@ -843,7 +843,7 @@ static int test_envar_order(int *nskipped)
         }
         PMIX_CONSTRUCT(&apps, pmix_list_t);
         rc = prte_parse_locals(schizo, &apps, (char **) c->argv,
-                               NULL, NULL, NULL);
+                               NULL, NULL, NULL, NULL);
         if (PRTE_SUCCESS != rc) {
             fprintf(stderr, "FAIL [%s]: parse failed: %s\n", c->desc,
                     prte_strerror(rc));
@@ -928,7 +928,7 @@ static int check_envar_permutation(prte_schizo_base_module_t *schizo,
     desc = PMIx_Argv_join(argv, ' ');
 
     PMIX_CONSTRUCT(&apps, pmix_list_t);
-    rc = prte_parse_locals(schizo, &apps, argv, NULL, NULL, NULL);
+    rc = prte_parse_locals(schizo, &apps, argv, NULL, NULL, NULL, NULL);
     if (PRTE_SUCCESS != rc || 1 != pmix_list_get_size(&apps)) {
         fprintf(stderr, "FAIL [permute]: %s: parse failed (%s)\n", desc,
                 prte_strerror(rc));
@@ -1053,7 +1053,7 @@ static int test_envar_order_mpmd(int *nskipped)
     }
 
     PMIX_CONSTRUCT(&apps, pmix_list_t);
-    rc = prte_parse_locals(schizo, &apps, argv, NULL, NULL, NULL);
+    rc = prte_parse_locals(schizo, &apps, argv, NULL, NULL, NULL, NULL);
     if (PRTE_SUCCESS != rc) {
         fprintf(stderr, "FAIL [mpmd]: parse failed: %s\n", prte_strerror(rc));
         PMIX_LIST_DESTRUCT(&apps);

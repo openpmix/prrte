@@ -56,6 +56,15 @@ typedef struct {
     char *mapby;
     char *rankby;
     char *bindto;
+    /* The job-level directives this app segment carried. Unlike the three
+     * above these are never per-app - there is no such thing as one app
+     * being displayed, or one app not launching - but the global parse of
+     * the command line stops at the first executable and so cannot see one
+     * written in a later segment. prte_parse_locals() collects them and
+     * hands them back to the tool's parse result. */
+    char *output;
+    char *display;
+    char *rtos;
 } prte_pmix_app_t;
 PMIX_CLASS_DECLARATION(prte_pmix_app_t);
 

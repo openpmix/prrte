@@ -515,26 +515,6 @@ PRTE_EXPORT int prte(int argc, char *argv[])
             return rc;
         }
     }
-    // check if they asked for XML output from us
-    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_OUTPUT);
-    if (NULL != opt) {
-        for (i = 0; NULL != opt->values[i]; i++) {
-            split = PMIx_Argv_split(opt->values[i], ',');
-            for (n = 0; NULL != split[n]; n++) {
-                if (PMIX_CHECK_CLI_OPTION(split[n], PRTE_CLI_XML)) {
-                    if (PRTE_SUCCESS != prte_cli_bool_value(PMIX_CLI_QUALIFIER_VALUE(split[n]),
-                                                            &prte_xml_output)) {
-                        /* the value is reported where the directive is
-                         * parsed - all this needs is to not act on it */
-                        prte_xml_output = false;
-                    }
-                    break;
-                }
-            }
-            PMIx_Argv_free(split);
-        }
-    }
-
    /* Did the user specify a default hostfile? */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DEFAULT_HOSTFILE);
     if (NULL != opt) {
@@ -772,7 +752,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     if (!pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
         /* see if they want to run an application - let's parse
          * the cmd line to get it */
-        rc = prte_parse_locals(schizo, &apps, pargv, &hostfiles, &hosts, &jobdata);
+        rc = prte_parse_locals(schizo, &apps, pargv, &hostfiles, &hosts, &jobdata, &results);
         // not-found => no app given
         if (PRTE_SUCCESS != rc && PRTE_ERR_NOT_FOUND != rc) {
             PRTE_UPDATE_EXIT_STATUS(rc);
@@ -798,6 +778,30 @@ PRTE_EXPORT int prte(int argc, char *argv[])
             }
             /* mark that we are not a persistent DVM */
             prte_persistent = false;
+        }
+    }
+
+    /* check if they asked for XML output from us.  This has to come AFTER
+     * prte_parse_locals(), which is what puts a "--output" written in a
+     * later app segment of an MPMD line back into the parse result - and
+     * it can: the only readers of prte_xml_output run inside prte_init()
+     * below and later still. */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_OUTPUT);
+    if (NULL != opt) {
+        for (i = 0; NULL != opt->values[i]; i++) {
+            split = PMIx_Argv_split(opt->values[i], ',');
+            for (n = 0; NULL != split[n]; n++) {
+                if (PMIX_CHECK_CLI_OPTION(split[n], PRTE_CLI_XML)) {
+                    if (PRTE_SUCCESS != prte_cli_bool_value(PMIX_CLI_QUALIFIER_VALUE(split[n]),
+                                                            &prte_xml_output)) {
+                        /* the value is reported where the directive is
+                         * parsed - all this needs is to not act on it */
+                        prte_xml_output = false;
+                    }
+                    break;
+                }
+            }
+            PMIx_Argv_free(split);
         }
     }
 

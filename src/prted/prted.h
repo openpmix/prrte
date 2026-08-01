@@ -46,9 +46,20 @@ PRTE_EXPORT void prte_daemon_cmd_processor(int fd, short event, void *data);
 PRTE_EXPORT int prte_daemon_process_commands(pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                                              prte_rml_tag_t tag);
 
+/**
+ * Turn an application command line - with its ':'-separated app contexts -
+ * into a list of prte_pmix_app_t.
+ *
+ * @param results  the tool's parse of the whole command line, or NULL if it
+ *                 has none.  The job-level options ("--output", "--display",
+ *                 "--rtos") are handed back here: that parse stops at the
+ *                 first executable, so it cannot see one written in a later
+ *                 app segment, and every consumer of them reads it.
+ */
 PRTE_EXPORT int prte_parse_locals(prte_schizo_base_module_t *schizo, pmix_list_t *jdata,
                                   char **argv, char ***hostfiles, char ***hosts,
-                                  pmix_list_t *jobdata);
+                                  pmix_list_t *jobdata,
+                                  pmix_cli_result_t *results);
 
 PRTE_EXPORT int prun_common(pmix_cli_result_t *cli,
                             prte_schizo_base_module_t *schizo,

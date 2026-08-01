@@ -599,6 +599,9 @@ static void acon(prte_pmix_app_t *p)
     p->mapby = NULL;
     p->rankby = NULL;
     p->bindto = NULL;
+    p->output = NULL;
+    p->display = NULL;
+    p->rtos = NULL;
 }
 static void ades(prte_pmix_app_t *p)
 {
@@ -607,6 +610,9 @@ static void ades(prte_pmix_app_t *p)
     free(p->mapby);
     free(p->rankby);
     free(p->bindto);
+    free(p->output);
+    free(p->display);
+    free(p->rtos);
 }
 PMIX_CLASS_INSTANCE(prte_pmix_app_t, pmix_list_item_t, acon, ades);
 

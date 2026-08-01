@@ -98,6 +98,122 @@ static char *key_string(pmix_info_t *iptr, size_t ninfo, const char *key)
     return NULL;
 }
 
+/* Hand a set of per-app-segment contributions to the hoist and report both
+ * its rc and what the option ended up holding in the parse result. */
+static int run_hoist(const char *key, char **contributions,
+                     char **existing, char **merged)
+{
+    pmix_cli_result_t results;
+    pmix_cli_item_t *opt;
+    char **contrib = NULL;
+    int n, rc;
+
+    *merged = NULL;
+    PMIX_CONSTRUCT(&results, pmix_cli_result_t);
+    if (NULL != existing) {
+        /* what the tool's own parse of the command line saw - which is
+         * always the FIRST app segment's contribution, since that parse
+         * stops at the first executable */
+        schizo_test_add(&results, key, existing[0], NULL);
+    }
+    for (n = 0; NULL != contributions[n]; n++) {
+        PMIx_Argv_append_nosize(&contrib, contributions[n]);
+    }
+
+    rc = prte_schizo_base_hoist_job_option(&results, key, contrib);
+    if (PRTE_SUCCESS == rc) {
+        opt = pmix_cmd_line_get_param(&results, key);
+        if (NULL != opt && NULL != opt->values) {
+            *merged = PMIx_Argv_join(opt->values, '|');
+        }
+    }
+    PMIx_Argv_free(contrib);
+    PMIX_DESTRUCT(&results);
+    return rc;
+}
+
+/*
+ * prte_schizo_base_hoist_job_option() - "--output", "--display" and
+ * "--rtos" describe the JOB, so they may be written in any app segment of
+ * an MPMD command line.  The tool's own parse stops at the first
+ * executable and cannot see a later one; these are what put it back.
+ */
+static int test_hoist(void)
+{
+    int failures = 0, rc;
+    char *merged = NULL;
+    char *one[] = {"tag", NULL};
+    char *two[] = {"tag", "timestamp", NULL};
+    char *same[] = {"tag", "tag", NULL};
+    char *explicit_agree[] = {"tag", "tag=1", NULL};
+    char *contradict[] = {"tag", "tag=0", NULL};
+    char *copies[] = {"file=/tmp/a:copy", ":nocopy", NULL};
+    char *files[] = {"file=/tmp/a", "file=/tmp/b", NULL};
+    char *samefile[] = {"file=/tmp/a", "file=/tmp/a", NULL};
+    char *timeouts[] = {"timeout=60", "timeout=30", NULL};
+    char *empty[] = {NULL};
+
+    /* the ordinary MPMD case: the option was written in one segment, and
+     * that segment may be any of them */
+    rc = run_hoist(PRTE_CLI_OUTPUT, one, one, &merged);
+    CHECK("hoist:one-rc", PRTE_SUCCESS == rc);
+    CHECK("hoist:one-value", NULL != merged && 0 == strcmp(merged, "tag"));
+    free(merged);
+
+    /* two segments, two different directives - both belong to the job */
+    rc = run_hoist(PRTE_CLI_OUTPUT, two, NULL, &merged);
+    CHECK("hoist:two-rc", PRTE_SUCCESS == rc);
+    CHECK("hoist:two-value",
+          NULL != merged && 0 == strcmp(merged, "tag,timestamp"));
+    free(merged);
+
+    /* saying the same thing twice is agreement, not conflict */
+    rc = run_hoist(PRTE_CLI_OUTPUT, same, NULL, &merged);
+    CHECK("hoist:same-rc", PRTE_SUCCESS == rc);
+    free(merged);
+    rc = run_hoist(PRTE_CLI_OUTPUT, explicit_agree, NULL, &merged);
+    CHECK("hoist:explicit-agree-rc", PRTE_SUCCESS == rc);
+    free(merged);
+    rc = run_hoist(PRTE_CLI_OUTPUT, samefile, NULL, &merged);
+    CHECK("hoist:same-file-rc", PRTE_SUCCESS == rc);
+    free(merged);
+
+    /* opposite answers cannot both be honored */
+    fprintf(stderr, "--- expected error output follows (hoist: tag vs tag=0) ---\n");
+    rc = run_hoist(PRTE_CLI_OUTPUT, contradict, NULL, &merged);
+    CHECK("hoist:contradict", PRTE_SUCCESS != rc);
+
+    /* "copy" and "nocopy" are one question spelled two ways */
+    fprintf(stderr, "--- expected error output follows (hoist: copy vs nocopy) ---\n");
+    rc = run_hoist(PRTE_CLI_OUTPUT, copies, NULL, &merged);
+    CHECK("hoist:copy-nocopy", PRTE_SUCCESS != rc);
+
+    /* a directive that carries a VALUE differs when its values differ */
+    fprintf(stderr, "--- expected error output follows (hoist: two files) ---\n");
+    rc = run_hoist(PRTE_CLI_OUTPUT, files, NULL, &merged);
+    CHECK("hoist:two-files", PRTE_SUCCESS != rc);
+
+    /* ...and "60" and "30" are two different lengths of time, however
+     * alike they look to a truth test */
+    fprintf(stderr, "--- expected error output follows (hoist: two timeouts) ---\n");
+    rc = run_hoist(PRTE_CLI_RTOS, timeouts, NULL, &merged);
+    CHECK("hoist:two-timeouts", PRTE_SUCCESS != rc);
+
+    /* no segment wrote the option: whatever the global parse holds is the
+     * whole of it, and must not be disturbed */
+    rc = run_hoist(PRTE_CLI_DISPLAY, empty, one, &merged);
+    CHECK("hoist:empty-rc", PRTE_SUCCESS == rc);
+    CHECK("hoist:empty-untouched",
+          NULL != merged && 0 == strcmp(merged, "tag"));
+    free(merged);
+
+    /* an option that is not job-level does not belong here at all */
+    CHECK("hoist:not-job-level",
+          PRTE_SUCCESS != run_hoist(PRTE_CLI_MAPBY, one, NULL, &merged));
+
+    return failures;
+}
+
 int test_output(void)
 {
     int failures = 0, rc;
@@ -305,6 +421,8 @@ int test_output(void)
     rc = run_parser(prte_schizo_base_parse_display, PRTE_CLI_DISPLAY, dbvals3,
                     &iptr, &ninfo);
     CHECK("display:qual-non-boolean", PRTE_SUCCESS != rc);
+
+    failures += test_hoist();
 
 #if PRTE_PMIX_IOF_FILE_PATTERN
     /*** the "pattern" qualifier hands the naming of the output files to the

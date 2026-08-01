@@ -385,7 +385,7 @@ int prun_common(pmix_cli_result_t *results,
     bool flag;
     size_t n, ninfo;
     pmix_app_t *papps = NULL;
-    size_t napps;
+    size_t napps = 0;
     mylock_t mylock;
     uint32_t ui32;
     pid_t pid;
@@ -658,7 +658,7 @@ int prun_common(pmix_cli_result_t *results,
      * the cmd line to get it */
 
     PMIX_CONSTRUCT(&jobdata, pmix_list_t);
-    rc = prte_parse_locals(schizo, &apps, pargv, NULL, NULL, &jobdata);
+    rc = prte_parse_locals(schizo, &apps, pargv, NULL, NULL, &jobdata, results);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_LIST_DESTRUCT(&jobdata);
