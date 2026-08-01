@@ -36,12 +36,13 @@ The component keeps one piece of state (in
 | `iof_hnp.c` | The module vtable: `init`, `hnp_push`, `hnp_pull`, `hnp_close`, `hnp_complete`, `finalize`, `push_stdin`, and the local `stdin_write_handler`. |
 | `iof_hnp_read.c` | `prte_iof_hnp_read_local_handler` — reads the HNP's *own* children's stdout/stderr and emits them via the PMIx server. |
 | `iof_hnp_receive.c` | `prte_iof_hnp_recv` — the `PRTE_RML_TAG_IOF_HNP` handler: unpacks daemon-forwarded output and emits it via the PMIx server. |
-| `iof_hnp_send.c` | `prte_iof_hnp_send_data_to_endpoint` — packs stdin and sends it to a daemon (or xcasts to all) over `PRTE_RML_TAG_IOF_PROXY`. |
+| `iof_hnp_send.c` | `prte_iof_hnp_send_data_to_endpoint` — packs a payload and sends it to a daemon (or xcasts to all) over `PRTE_RML_TAG_IOF_PROXY` — plus `prte_iof_hnp_relay_to_tool`, which uses it to send a job's output to the daemon hosting the tool that launched it. |
 | `iof_hnp.h` | Component struct + prototypes for the above. |
 
-The module vtable (`prte_iof_hnp_module`) sets `push_stdin` — the HNP is
-the **only** component that implements it, because injecting stdin into
-the job is inherently a master-side operation.
+The module vtable (`prte_iof_hnp_module`) sets `push_stdin`. The `prted`
+module sets it too, but only to relay: *routing* stdin — resolving which
+daemon hosts the target, or xcasting a wildcard — is inherently a
+master-side operation, so a daemon asked to inject stdin sends it here.
 
 ---
 
@@ -85,6 +86,15 @@ destination as Path 1 — the PMIx server — just sourced from a remote node.
 XON/XOFF flow-control messages arrive on this same tag (tag-only buffers);
 they are consumed here as part of the stdin back-pressure protocol.
 
+**One message on this tag runs the other way.** A leading tag of
+`PRTE_IOF_STDIN` is not output at all: it is stdin that a daemon is relaying
+on behalf of a tool attached to *it* rather than to us, and the proc that
+follows is the intended **recipient**, not a source. That branch unpacks the
+same trailing count and bytes and hands them to `push_stdin` below. It is
+screened ahead of the "nothing to do" test on a zero-length payload, because
+a zero-byte stdin push is the sentinel that closes the target's stdin. See
+[`../prted/AGENTS.md`](../prted/AGENTS.md), "Relaying a tool's stdin".
+
 ---
 
 ## Stdin injection (`push_stdin`, `hnp_pull`, `iof_hnp_send.c`)
@@ -127,6 +137,44 @@ re-arm; `numbytes == 0` → close). It differs from the base
 ways: it dumps pending data immediately if `prte_abnormal_term_ordered`
 (the DVM is aborting), and it honors the sink's `closed` flag, releasing
 the sink once the last queued byte is written.
+
+---
+
+## Relaying output to a tool on another daemon (`relay_to_tool`)
+
+`PMIx_server_IOF_deliver` reaches the tools connected to **our** server. A
+tool that attached to some other daemon — a `prun` started on a compute node
+of a persistent DVM — registered its IOF request there, and only that
+server can deliver to it. We are the only process that sees all of the job's
+output, so we send a copy back out.
+
+`prte_iof_hnp_relay_to_tool(source, stream, data, numbytes, already_delivered)`
+is called from **both** output paths, just before the local delivery: from
+`prte_iof_hnp_recv` (passing the forwarding daemon's rank) and from
+`prte_iof_hnp_read_local_handler` (passing our own). It sends on
+`PRTE_RML_TAG_IOF_PROXY` with the stream tag leading, which is how the
+daemon tells it from stdin.
+
+Three tests decide whether a copy is owed, and each is there for a reason:
+
+- **`jdata->originator` must be in the daemon namespace.** On the master that
+  field is the daemon that relayed the spawn (`plm_base_receive` overwrites
+  the tool's own procID with the sender). An originator in any other
+  namespace is a tool that spawned through *us* and is a client of our own
+  server — already served by the local delivery.
+- **...and must not be us.** Same reason.
+- **...and must not be `already_delivered`.** A daemon hands its own procs'
+  output to its own PMIx server before forwarding it to us, so if that
+  daemon is also the tool's, the tool already has this chunk and a relayed
+  copy would duplicate it. This is why a tool sees the ranks on its own node
+  correctly even with no relay at all — and why the bug looked like partial
+  output rather than none.
+
+The receiving daemon must not *emit* the copy; see
+[`../prted/AGENTS.md`](../prted/AGENTS.md), "Relayed output". The whole
+function is compiled out when `PRTE_PMIX_IOF_DELIVER_LOCAL` is 0, because
+without that PMIx capability the relayed copy cannot be marked
+non-emitting and relaying would make two daemons write one output file.
 
 ---
 

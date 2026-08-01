@@ -137,6 +137,10 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
     }
     memcpy(p->bo.bytes, data, numbytes);
     p->bo.size = numbytes;
+    /* a tool watching this job may be attached to another daemon, which never
+     * sees the output of the children we forked ourselves - send it a copy */
+    prte_iof_hnp_relay_to_tool(&proct->name, rev->tag, data, numbytes,
+                               PRTE_PROC_MY_NAME->rank);
     prc = PMIx_server_IOF_deliver(&p->source, pchan, &p->bo, NULL, 0, lkcbfunc, (void*)p);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);

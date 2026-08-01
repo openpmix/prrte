@@ -74,13 +74,143 @@ void prte_iof_prted_send_xonxoff(prte_iof_tag_t tag)
     }
 }
 
+#if PRTE_PMIX_IOF_DELIVER_LOCAL
+static void lkcbfunc(pmix_status_t status, void *cbdata)
+{
+    prte_iof_deliver_t *p = (prte_iof_deliver_t *) cbdata;
+
+    /* nothing to do here - we use this solely to
+     * ensure that IOF_deliver doesn't block */
+    if (PMIX_SUCCESS != status) {
+        PMIX_ERROR_LOG(status);
+    }
+    PMIX_RELEASE(p);
+}
+#endif
+
 /*
- * The only messages coming to an prted are either:
+ * Output from a process on another node, relayed to us by the master because
+ * a tool attached to US asked for it.
+ *
+ * A tool need not attach to the DVM master, and PMIx registers its IOF
+ * request with whichever server it did attach to - ours. Our own processes'
+ * output already reaches that tool, because the read handler hands every
+ * chunk to our PMIx server as well as forwarding it. Output from processes
+ * we do not host never passed through here at all, which is why such a tool
+ * used to see only the part of its job that happened to land on this node.
+ *
+ * The one thing we must NOT do is emit it. The daemon hosting those processes
+ * has already written whatever the job's output directives called for, and
+ * this server holds the same directives - it registered the same namespace.
+ * Emitting here would duplicate the terminal copy and, with --output file=,
+ * would have two daemons writing one file. PMIX_IOF_LOCAL_OUTPUT=false on the
+ * delivery says "deliver this to your registered requestors, but it is not
+ * yours to write."
+ */
+static void deliver_relayed_output(prte_iof_tag_t stream,
+                                   pmix_data_buffer_t *buffer)
+{
+#if PRTE_PMIX_IOF_DELIVER_LOCAL
+    pmix_proc_t source;
+    int32_t count, numbytes;
+    pmix_iof_channel_t pchan;
+    prte_iof_deliver_t *p;
+    pmix_status_t prc;
+    static pmix_info_t relay_directive;
+    static bool directive_ready = false;
+    bool flag = false;
+    int rc;
+
+    /* unpack the process the output came from */
+    count = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &source, &count, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+
+    count = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &numbytes, &count, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    if (0 >= numbytes) {
+        /* nothing to deliver - a negative count is a corrupted message */
+        if (0 > numbytes) {
+            PRTE_ERROR_LOG(PRTE_ERR_COMM_FAILURE);
+        }
+        return;
+    }
+
+    p = PMIX_NEW(prte_iof_deliver_t);
+    PMIX_XFER_PROCID(&p->source, &source);
+    p->bo.bytes = (char *) malloc(numbytes);
+    if (NULL == p->bo.bytes) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PMIX_RELEASE(p);
+        return;
+    }
+    count = numbytes;
+    rc = PMIx_Data_unpack(NULL, buffer, p->bo.bytes, &count, PMIX_BYTE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(p);
+        return;
+    }
+    p->bo.size = count;
+
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                         "%s delivering %d relayed bytes from %s to our tool",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) p->bo.size,
+                         PRTE_NAME_PRINT(&source)));
+
+    pchan = 0;
+    if (PRTE_IOF_STDOUT & stream) {
+        pchan |= PMIX_FWD_STDOUT_CHANNEL;
+    }
+    if (PRTE_IOF_STDERR & stream) {
+        pchan |= PMIX_FWD_STDERR_CHANNEL;
+    }
+    if (PRTE_IOF_STDDIAG & stream) {
+        pchan |= PMIX_FWD_STDDIAG_CHANNEL;
+    }
+
+    /* The delivery is non-blocking, so PMIx reads the directive on its own
+     * progress thread after we have returned - the array has to outlive this
+     * function. It never varies and holds nothing allocated, so one static
+     * built on first use serves every delivery and never needs releasing. */
+    if (!directive_ready) {
+        PMIX_INFO_LOAD(&relay_directive, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
+        directive_ready = true;
+    }
+    prc = PMIx_server_IOF_deliver(&p->source, pchan, &p->bo, &relay_directive, 1,
+                                  lkcbfunc, (void *) p);
+    if (PMIX_SUCCESS != prc) {
+        PMIX_ERROR_LOG(prc);
+        PMIX_RELEASE(p);
+    }
+#else
+    /* the master does not relay output without a PMIx that can be told not to
+     * emit it, so nothing should ever arrive here */
+    PRTE_HIDE_UNUSED_PARAMS(stream, buffer);
+    PRTE_ERROR_LOG(PRTE_ERR_NOT_SUPPORTED);
+#endif
+}
+
+/*
+ * The messages coming to a prted on this tag are:
  *
  * (a) stdin, which is to be copied to whichever local
  *     procs "pull'd" a copy
  *
- * (b) flow control messages
+ * (b) output from processes on OTHER nodes, which the master is relaying
+ *     to us because a tool attached to us asked for it - see
+ *     deliver_relayed_output() below
+ *
+ * (c) flow control messages
+ *
+ * The leading stream tag says which.
  */
 void prte_iof_prted_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                          prte_rml_tag_t tag, void *cbdata)
@@ -101,7 +231,13 @@ void prte_iof_prted_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *bu
         return;
     }
 
-    /* if this isn't stdin, then we have an error */
+    /* output being relayed to us for a tool of ours */
+    if (PRTE_IOF_STDOUTALL & stream) {
+        deliver_relayed_output(stream, buffer);
+        return;
+    }
+
+    /* anything else on this tag has to be stdin */
     if (PRTE_IOF_STDIN != stream) {
         PRTE_ERROR_LOG(PRTE_ERR_COMM_FAILURE);
         return;

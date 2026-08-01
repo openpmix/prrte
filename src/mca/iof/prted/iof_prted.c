@@ -75,6 +75,8 @@ static void prted_complete(const prte_job_t *jdata);
 
 static int finalize(void);
 
+static int prted_push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz);
+
 /* The API's in this module are solely used to support LOCAL
  * procs - i.e., procs that are co-located to the daemon. Output
  * from local procs is automatically sent to the HNP for output
@@ -88,6 +90,7 @@ prte_iof_base_module_t prte_iof_prted_module = {
     .close = prted_close,
     .complete = prted_complete,
     .finalize = finalize,
+    .push_stdin = prted_push_stdin,
 };
 
 static int init(void)
@@ -295,6 +298,94 @@ static void prted_complete(const prte_job_t *jdata)
             PMIX_RELEASE(proct);
         }
     }
+}
+
+/**
+ * Inject stdin into the job.
+ *
+ * Only the DVM master can resolve which daemon hosts a given target proc,
+ * so a daemon cannot route stdin itself - but it can be asked to. A tool
+ * that attaches to an ordinary daemon rather than the master (a prun run
+ * on a compute node of a persistent DVM, which finds its local daemon's
+ * rendezvous file) pushes its stdin through our PMIx server, and always
+ * pushes at least the zero-byte end-of-input marker. Relay that to the
+ * HNP on the same tag we forward output over, tagged as stdin so it is
+ * told apart from output, and let the HNP's push_stdin do the routing -
+ * exactly as if the tool had attached there.
+ */
+static int prted_push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
+{
+    pmix_data_buffer_t *buf;
+    prte_iof_tag_t tag = PRTE_IOF_STDIN;
+    int32_t nbytes;
+    int rc;
+
+    /* don't do this if the dst vpid is invalid */
+    if (PMIX_RANK_INVALID == dst_name->rank) {
+        return PRTE_SUCCESS;
+    }
+
+    /* a zero count is the sentinel that closes the target's stdin, so an
+     * empty push is meaningful and must still be relayed */
+    if (NULL == data || 0 == sz) {
+        nbytes = 0;
+    } else if (INT32_MAX < sz) {
+        /* the wire format counts bytes in an int32 - nothing legitimate
+         * hands us 2GB of stdin in a single push */
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    } else {
+        nbytes = (int32_t) sz;
+    }
+
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                         "%s iof:prted relaying stdin for process %s (size %d) to HNP",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(dst_name), nbytes));
+
+    PMIX_DATA_BUFFER_CREATE(buf);
+
+    /* pack the stream tag first - as with forwarded output, it leads the
+     * message so the HNP can tell what this is before unpacking further */
+    rc = PMIx_Data_pack(NULL, buf, &tag, 1, PMIX_UINT16);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the intended recipient */
+    rc = PMIx_Data_pack(NULL, buf, (void *) dst_name, 1, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the number of bytes that follow */
+    rc = PMIx_Data_pack(NULL, buf, &nbytes, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return prte_pmix_convert_status(rc);
+    }
+
+    if (0 < nbytes) {
+        rc = PMIx_Data_pack(NULL, buf, data, nbytes, PMIX_BYTE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            return prte_pmix_convert_status(rc);
+        }
+    }
+
+    PRTE_RML_RELIABLE_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_IOF_HNP);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return rc;
+    }
+
+    return PRTE_SUCCESS;
 }
 
 static int finalize(void)

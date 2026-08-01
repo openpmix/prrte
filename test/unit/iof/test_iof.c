@@ -27,10 +27,13 @@
  *      (EXCLUSIVE, XON/XOFF, PULL/CLOSE) must not collide with the stream
  *      bits, since a single uint16 carries both.
  *
- *   2. The module contract (iof.h).  Both components fill a 7-slot vtable.
- *      The daemon relay intentionally leaves push_stdin NULL (stdin
- *      injection is master-only); the HNP hub must implement all seven.  A
- *      regression that swapped those would crash or silently drop stdin.
+ *   2. The module contract (iof.h).  Both components fill a 7-slot vtable,
+ *      and both must implement push_stdin: the HNP hub routes stdin to the
+ *      hosting daemon, and the daemon relay hands it up to the HNP, which
+ *      is the only process that can do that routing.  A daemon that left
+ *      the slot NULL segfaulted the moment a tool attached to it pushed
+ *      stdin -- which every prun does, if only to mark end-of-input --
+ *      taking the DVM node down and hanging the tool (issue #2568).
  *
  *   3. The component identities: "hnp" and "prted" (selection needs them).
  *
@@ -137,11 +140,11 @@ static int test_tag_model(void)
 }
 
 /*
- * Both components publish a prte_iof_base_module_t.  Only the HNP hub
- * implements push_stdin (injecting stdin is a master-side operation); the
- * daemon relay must leave it NULL and callers guard on that.  Every other
- * slot must be wired in both, since the base and its callers only NULL-check
- * the optional entry points.
+ * Both components publish a prte_iof_base_module_t, and every slot must be
+ * wired in both.  push_stdin is the one worth stating explicitly: a tool can
+ * attach to any daemon, not just the master, and the first thing prun does
+ * when its job ends is push end-of-input.  The daemon's implementation only
+ * relays to the HNP -- but it must exist, or that push is a NULL call.
  */
 /*
  * Ask the framework for a component by name, and for the module that
@@ -220,14 +223,15 @@ static int test_module_contract(void)
     CHECK("hnp finalize set", NULL != hnp->finalize);
     CHECK("hnp push_stdin set", NULL != hnp->push_stdin);
 
-    /* the daemon relay wires six and deliberately leaves push_stdin NULL */
+    /* the daemon relay wires all seven too - its push_stdin relays to the
+     * HNP rather than routing, but a tool attached to this daemon calls it */
     CHECK("prted init set", NULL != prted->init);
     CHECK("prted push set", NULL != prted->push);
     CHECK("prted pull set", NULL != prted->pull);
     CHECK("prted close set", NULL != prted->close);
     CHECK("prted complete set", NULL != prted->complete);
     CHECK("prted finalize set", NULL != prted->finalize);
-    CHECK("prted push_stdin NULL (HNP-only)", NULL == prted->push_stdin);
+    CHECK("prted push_stdin set", NULL != prted->push_stdin);
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_module_contract\n");
