@@ -52,9 +52,9 @@ goes *and* which cpus it gets there — see "Things to watch" below.
 
 ## What the mapper does
 
-Gate: defer (`TAKE_NEXT_OPTION`) on restart, on a mismatched
-`req_mapper`, or when the policy isn't `PRTE_MAPPING_SEQ`. On acceptance,
-stamp `last_mapper = "seq"`.
+Gate: defer (`TAKE_NEXT_OPTION`) on restart, or when `options->map` isn't
+`PRTE_MAPPING_SEQ`. The base records the component on acceptance; the mapper
+does not stamp it.
 
 Per app (honoring `options->app_idx`):
 
@@ -78,7 +78,9 @@ Per app (honoring `options->app_idx`):
      try to drop the node from it removed an item of the wrong type from a
      list it was never on. NULL says "just tell me yes or no."
    - **Assign the rank sequentially** (`proc->name.rank = vpid++`) and
-     set `app_rank` directly, then insert into `jdata->procs`.
+     set `app_rank` directly, then insert into `jdata->procs`. `vpid` starts
+     at `options->start_vpid` — zero for a whole job, and in per-app dispatch
+     the first rank no earlier app has taken.
    - `check_oversubscribed`, advance to the next list entry.
 5. When not in per-app dispatch, call `compute_vpids` — but since seq
    already set the ranks, this only back-fills local/app ranks.

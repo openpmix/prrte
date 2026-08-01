@@ -587,8 +587,6 @@ static int test_map_copy(void)
     src->num_new_daemons = 11;
     src->daemon_vpid_start = 13;
     src->num_nodes = nnodes;
-    src->req_mapper = strdup("round_robin");
-    src->last_mapper = strdup("ppr");
 
     /* Deliberately more nodes than PRTE_GLOBAL_ARRAY_BLOCK_SIZE, which is
      * what the destination map's array is constructed with.  The old copy
@@ -618,11 +616,6 @@ static int test_map_copy(void)
           11 == cpy->num_new_daemons && 13 == cpy->daemon_vpid_start);
     CHECK("mapcopy: num_nodes carried", nnodes == (int) cpy->num_nodes);
     /* the mapper names were not being copied at all */
-    CHECK("mapcopy: req_mapper carried",
-          NULL != cpy->req_mapper && 0 == strcmp("round_robin", cpy->req_mapper));
-    CHECK("mapcopy: last_mapper carried",
-          NULL != cpy->last_mapper && 0 == strcmp("ppr", cpy->last_mapper));
-    CHECK("mapcopy: mapper names are not shared", cpy->req_mapper != src->req_mapper);
 
     /* every node came across, including the ones past the initial block */
     live = 0;
@@ -733,7 +726,6 @@ static int test_pack_roundtrip(void)
     src->map->ranking = 4;
     src->map->binding = 6;
     src->map->num_nodes = 3;
-    src->map->req_mapper = strdup("seq");
 
     PMIX_DATA_BUFFER_CONSTRUCT(&buf);
     rc = prte_job_pack(&buf, src);
@@ -803,8 +795,6 @@ static int test_pack_roundtrip(void)
             CHECK("wire: map policies round-trip",
                   9 == dst->map->mapping && 4 == dst->map->ranking && 6 == dst->map->binding);
             CHECK("wire: map num_nodes round-trips", 3 == dst->map->num_nodes);
-            CHECK("wire: req_mapper round-trips",
-                  NULL != dst->map->req_mapper && 0 == strcmp("seq", dst->map->req_mapper));
         }
         PMIX_RELEASE(dst);
     }

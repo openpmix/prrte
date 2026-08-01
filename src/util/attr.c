@@ -322,6 +322,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PRTE_APP_RESOLVED_RANKBY";
         case PRTE_APP_RESOLVED_BINDTO:
             return "PRTE_APP_RESOLVED_BINDTO";
+        case PRTE_APP_LAST_MAPPER:
+            return "PRTE_APP_LAST_MAPPER";
 
         case PRTE_NODE_USERNAME:
             return "NODE-USERNAME";

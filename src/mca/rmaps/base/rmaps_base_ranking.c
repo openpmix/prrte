@@ -127,6 +127,15 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
          * on-the-fly during mapping) */
         compute_local_rank(jdata);
         compute_app_rank(jdata);
+        if (0 <= app_idx && NULL != next_vpid) {
+            /* the mapper numbered this app's procs itself, starting from the
+             * cursor it was handed in options->start_vpid. Move the cursor
+             * past what it used, or the next app is numbered on top of it */
+            app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, app_idx);
+            if (NULL != app) {
+                *next_vpid += app->num_procs;
+            }
+        }
         return PRTE_SUCCESS;
     }
 

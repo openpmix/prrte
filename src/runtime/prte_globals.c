@@ -954,8 +954,6 @@ PMIX_CLASS_INSTANCE(prte_proc_t, pmix_list_item_t,
 
 static void prte_job_map_construct(prte_job_map_t *map)
 {
-    map->req_mapper = NULL;
-    map->last_mapper = NULL;
     map->mapping = 0;
     map->ranking = 0;
     map->binding = 0;
@@ -973,12 +971,6 @@ static void prte_job_map_destruct(prte_job_map_t *map)
     int32_t i;
     prte_node_t *node;
 
-    if (NULL != map->req_mapper) {
-        free(map->req_mapper);
-    }
-    if (NULL != map->last_mapper) {
-        free(map->last_mapper);
-    }
     for (i = 0; i < map->nodes->size; i++) {
         if (NULL != (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, i))) {
             PMIX_RELEASE(node);

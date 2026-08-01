@@ -52,7 +52,6 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
     pmix_list_t node_list;
     int32_t num_slots;
     int rc;
-    pmix_mca_base_component_t *c = &prte_mca_rmaps_round_robin_component;
     /* Reset the per-node "mapped" flags only on the genuine first mapping pass.
      * In per-app dispatch this module is entered once per app context; treating
      * each entry as an initial map would re-clear the flags on nodes a previous
@@ -70,15 +69,12 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
                             PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
-    if (NULL != jdata->map->req_mapper
-        && 0 != strcasecmp(jdata->map->req_mapper, c->pmix_mca_component_name)) {
-        /* a mapper has been specified, and it isn't me */
-        pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:rr: job %s not using rr mapper",
-                            PRTE_JOBID_PRINT(jdata->nspace));
-        return PRTE_ERR_TAKE_NEXT_OPTION;
-    }
-    if (PRTE_MAPPING_RR < PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+    /* The policy is what selects the mapper - there is no separate "use this
+     * component" request, because the two could disagree and neither answer
+     * would be right. This reads the resolved options rather than the job
+     * map: in per-app dispatch each app answers for itself, and asking the
+     * job meant an app's own directive never reached the mapper it implies */
+    if (PRTE_MAPPING_RR < PRTE_GET_MAPPING_POLICY(options->map)) {
         /* I don't know how to do these - defer */
         pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr: job %s not using rr mapper",
@@ -89,12 +85,6 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping job %s",
                         PRTE_JOBID_PRINT(jdata->nspace));
-
-    /* flag that I did the mapping */
-    if (NULL != jdata->map->last_mapper) {
-        free(jdata->map->last_mapper);
-    }
-    jdata->map->last_mapper = strdup(c->pmix_mca_component_name);
 
     /* start at the beginning... */
     /* Zero the job-wide count only when we were handed the whole job. The

@@ -34,15 +34,14 @@ Before doing anything, the module defers (`PRTE_ERR_TAKE_NEXT_OPTION`)
 when the job isn't its business:
 
 - `PRTE_JOB_FLAG_RESTART` is set — rr only does initial launch.
-- `jdata->map->req_mapper` names a *different* mapper.
 - `PRTE_GET_MAPPING_POLICY(jdata->map->mapping) > PRTE_MAPPING_RR` — i.e.
   the policy is one of the specialized values (seq/user/ppr, whose
   numeric codes are all `> PRTE_MAPPING_RR == 16`). The round-robin
   policies (by-slot=9, by-node=1, the object codes 2–8, pe-list=11) are
   all `<= 16`, so only those fall through to rr.
 
-If it accepts, it stamps `jdata->map->last_mapper = "round_robin"` and
-loops the app contexts.
+If it accepts, it loops the app contexts; the base records that
+round_robin was the component (`PRTE_APP_LAST_MAPPER`).
 
 ---
 

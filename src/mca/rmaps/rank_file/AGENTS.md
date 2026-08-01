@@ -58,16 +58,20 @@ Every exit from the parser has to close `prte_rmaps_rank_file_in` and call
 label, which does it once.
 
 ### Phase 2 — map (`prte_rmaps_rf_map`)
-Gate: defer (`TAKE_NEXT_OPTION`) on restart, mismatched `req_mapper`,
-non-`BYUSER` policy, or `options->ordered` (the ordered directive is
+Gate: defer (`TAKE_NEXT_OPTION`) on restart, non-`BYUSER` `options->map`,
+or `options->ordered` (the ordered directive is
 incompatible with an explicit rankfile). If no rankfile path is found
 (per-app `PRTE_APP_MAP_FILE`, else job `PRTE_JOB_FILE`), returns
-`PRTE_ERR_BAD_PARAM`. On acceptance it stamps `last_mapper` and sets
-`options->map = PRTE_MAPPING_BYUSER`.
+`PRTE_ERR_BAD_PARAM`. On acceptance it sets
+`options->map = PRTE_MAPPING_BYUSER`; the base records the component.
 
 Then, per app (honoring `options->app_idx`), for each rank `k`:
 
-1. Look up `rankmap[vpid_start + k]`.
+1. Look up `rankmap[vpid_start + k]` — and note that the rankfile's own
+   numbering is not the job's. In per-app dispatch the file this app named
+   numbers *that app's* ranks, so the rank actually assigned is
+   `options->start_vpid + k`: the base's cursor, past everything earlier
+   apps took. In whole-job dispatch the cursor is zero and the two coincide.
    - **Present:** find its `node_name` in the node list (or resolve a
      `+nK` relative index into the list), take its `slot_list`.
    - **Absent:** the rank wasn't listed. Fall back to `options->cpuset`

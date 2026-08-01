@@ -50,12 +50,17 @@ int test_round_robin(void)
         return 0;
     }
 
-    /* a policy this component does not handle -> defer to the next mapper */
+    /* A policy this component does not handle -> defer to the next mapper.
+     * The policy the gate has to read is the resolved one in "opts", which
+     * in per-app dispatch is this app's own: the job map is deliberately
+     * left saying something round_robin *would* take, so a gate that asks
+     * the job rather than the options fails here. */
     jdata = PMIX_NEW(prte_job_t);
     jdata->map = PMIX_NEW(prte_job_map_t);
-    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_SEQ);
+    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYNODE);
     memset(&opts, 0, sizeof(opts));
-    opts.app_idx = -1;
+    opts.app_idx = 0;
+    opts.map = PRTE_MAPPING_SEQ;
     rc = mod->map_job(jdata, &opts);
     CHECK("rr defers non-rr policy", PRTE_ERR_TAKE_NEXT_OPTION == rc);
     PMIX_RELEASE(jdata);
@@ -67,6 +72,7 @@ int test_round_robin(void)
     PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_RESTART);
     memset(&opts, 0, sizeof(opts));
     opts.app_idx = -1;
+    opts.map = PRTE_MAPPING_BYNODE;
     rc = mod->map_job(jdata, &opts);
     CHECK("rr defers restart", PRTE_ERR_TAKE_NEXT_OPTION == rc);
     PMIX_RELEASE(jdata);

@@ -49,9 +49,10 @@ typedef struct {
     void *info;
     /* The mapping/ranking/binding directives this app segment carried, held
      * aside until the whole cmd line has been parsed. Only then is it known
-     * whether they are per-app at all: a directive given just once applies
-     * to the entire job however many apps there are, so it belongs in the
-     * job's spec, not in any app's. prte_parse_locals() decides and
+     * whether they are per-app at all: a directive written on the first app
+     * and nowhere else speaks for the whole job, however many apps there
+     * are, so it belongs in the job's spec rather than any app's. Written on
+     * a later app it is that app's alone. prte_parse_locals() decides and
      * distributes them. */
     char *mapby;
     char *rankby;

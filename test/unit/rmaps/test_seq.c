@@ -49,26 +49,20 @@ int test_seq(void)
         return 0;
     }
 
-    /* not a seq job -> defer */
+    /* Not a seq job -> defer. The policy the gate has to read is the
+     * resolved one in "opts", which in per-app dispatch is this app's own:
+     * the job map is deliberately left saying "seq", so a gate that asks
+     * the job rather than the options fails here. */
     jdata = PMIX_NEW(prte_job_t);
     jdata->map = PMIX_NEW(prte_job_map_t);
-    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
+    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_SEQ);
     memset(&opts, 0, sizeof(opts));
-    opts.app_idx = -1;
+    opts.app_idx = 0;
+    opts.map = PRTE_MAPPING_BYSLOT;
     rc = mod->map_job(jdata, &opts);
     CHECK("seq defers non-seq policy", PRTE_ERR_TAKE_NEXT_OPTION == rc);
     PMIX_RELEASE(jdata);
 
-    /* a different mapper was requested -> defer */
-    jdata = PMIX_NEW(prte_job_t);
-    jdata->map = PMIX_NEW(prte_job_map_t);
-    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_SEQ);
-    jdata->map->req_mapper = strdup("round_robin");
-    memset(&opts, 0, sizeof(opts));
-    opts.app_idx = -1;
-    rc = mod->map_job(jdata, &opts);
-    CHECK("seq defers other req_mapper", PRTE_ERR_TAKE_NEXT_OPTION == rc);
-    PMIX_RELEASE(jdata);
 
     if (0 == failures) {
         fprintf(stdout, "  PASS test_seq\n");

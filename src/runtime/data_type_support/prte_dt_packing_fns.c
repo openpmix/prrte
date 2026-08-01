@@ -561,21 +561,10 @@ int prte_map_pack(pmix_data_buffer_t *bkt, struct prte_job_map_t *mp)
     pmix_status_t rc;
     prte_job_map_t *map = (prte_job_map_t *) mp;
 
-    /* pack the requested mapper */
-    rc = PMIx_Data_pack(NULL, bkt, &map->req_mapper, 1, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return prte_pmix_convert_status(rc);
-    }
-
-    /* pack the last mapper */
-    rc = PMIx_Data_pack(NULL, bkt, &map->last_mapper, 1, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return prte_pmix_convert_status(rc);
-    }
-
-    /* pack the policies */
+    /* pack the policies. Note there is no mapper name on the wire: mapping
+     * happens only on the HNP, so the identity of the component that did it
+     * was never read at the far end - it was two strings per job, per
+     * daemon, that nothing consumed. */
     rc = PMIx_Data_pack(NULL, bkt, &map->mapping, 1, PMIX_UINT16);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);

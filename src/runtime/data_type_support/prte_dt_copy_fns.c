@@ -196,12 +196,6 @@ int prte_map_copy(struct prte_job_map_t **d, struct prte_job_map_t *s)
     }
 
     /* copy data into it */
-    if (NULL != src->req_mapper) {
-        (*dest)->req_mapper = strdup(src->req_mapper);
-    }
-    if (NULL != src->last_mapper) {
-        (*dest)->last_mapper = strdup(src->last_mapper);
-    }
     (*dest)->mapping = src->mapping;
     (*dest)->ranking = src->ranking;
     (*dest)->binding = src->binding;

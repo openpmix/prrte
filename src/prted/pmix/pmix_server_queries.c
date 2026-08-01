@@ -362,7 +362,11 @@ static void _query(int sd, short args, void *cbdata)
                 PMIx_Argv_append_nosize(&ans, PMIX_ADD_HOSTFILE);
                 PMIx_Argv_append_nosize(&ans, PMIX_PREFIX);
                 PMIx_Argv_append_nosize(&ans, PMIX_WDIR);
-                PMIx_Argv_append_nosize(&ans, PMIX_MAPPER);
+                /* deliberately not PMIX_MAPPER: naming a mapping component
+                 * is not a directive PRRTE can act on - the mapping policy
+                 * IS the choice of mapper - and a spawn carrying it is
+                 * refused, so advertising it here would be a promise we
+                 * break at the next call */
                 PMIx_Argv_append_nosize(&ans, PMIX_PPR);
                 PMIx_Argv_append_nosize(&ans, PMIX_MAPBY);
                 PMIx_Argv_append_nosize(&ans, PMIX_RANKBY);

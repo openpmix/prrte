@@ -45,9 +45,13 @@ Three concepts govern the whole framework, and they are **orthogonal**:
 (`PE=n`, `SPAN`, `OVERSUBSCRIBE`, `NOLOCAL`, `HWTCPUS`, `INHERIT`,
 `ORDERED`, `FILE=…`, …). `--rank-by slot`/`node`/`fill`/`span`.
 
-All three may be given **per app context** as well as per job: an MPMD
-command line takes two mapping directives to become per-app at all, and
-once it is, there is no job-level directive left to hang anything on. The
+All three may be given **per app context** as well as per job. On a command
+line the first app segment is where the job is described: a directive
+written there and nowhere else is the job's, however many apps follow.
+Written on any later app it is that app's alone, and its silent siblings
+take the defaults. So an MPMD line can become per-app with a single
+directive, and when it does there may be no job-level directive left to
+hang anything on. The
 per-app parsers live beside the job-level ones in `rmaps_base_frame.c`
 (`prte_rmaps_base_set_app_{mapping,ranking,binding}_policy`) and record onto
 `app->attributes`; `prte_rmaps_base_resolve_app_options()` turns those into
@@ -111,9 +115,40 @@ The return value is a protocol, not just success/failure:
 The base cycles the selected mappers in priority order until one returns
 `PRTE_SUCCESS` (or `RESOURCE_BUSY`). Because of this, **the first thing
 every mapper does is decide whether the job is for it** and bail with
-`PRTE_ERR_TAKE_NEXT_OPTION` if not (wrong `req_mapper`, wrong mapping
-policy, a restart it can't handle, …). See any component's guide for its
+`PRTE_ERR_TAKE_NEXT_OPTION` if not (wrong mapping policy, a restart it
+can't handle, …). See any component's guide for its
 exact gate conditions.
+
+**The policy IS the choice of mapper.** There is no "use this component"
+request anywhere in the framework: each component claims the policies it
+implements, so naming one says nothing the policy has not already said, and
+when the two disagreed there was no answer that could be right.
+`PMIX_MAPPER` is refused on the spawn path
+(`PMIX_ERR_NOT_SUPPORTED`) and is not advertised in
+`PMIX_QUERY_SPAWN_SUPPORT`.
+
+`--prtemca rmaps <component>` cannot be refused — which components load is
+settled at framework open, before any job exists — so a restriction that
+cannot serve the job's policy simply means no mapper accepts. That is an
+error, reported by `report_no_mapper()` with the loaded set named
+(`mapper-restricted`), not a silent placement by some other rule.
+
+**A gate reads `options`, never `jdata->map`.** The policy and the
+was-it-given flag live in the `prte_rmaps_options_t` the base hands over —
+`options->map`, `options->mapgiven` — precisely because in per-app dispatch
+each app answers those questions for itself. Asking the job instead is why a
+per-app `--map-by seq`/`rankfile`/`ppr` never reached its mapper: the job's
+policy is whatever default was resolved for the apps that gave no directive,
+and seq/rank_file/ppr all defer on it. The base fills these fields from the
+job for a whole-job dispatch, so one test serves both paths.
+
+**The base records who mapped**, not the mapper, and it records it *per app*
+(`PRTE_APP_LAST_MAPPER`). A mapper that stamps itself on entry cannot know
+it will still be the answer, and in per-app dispatch it is asked once per
+app. `prte_job_map_t` carries no mapper name at all: two apps of one job can
+be placed by two components, so one job-level name could only ever be half
+the answer — and mapping happens on the HNP alone, so the two strings it
+used to put on the wire were read by nothing at the far end.
 
 ---
 
@@ -218,6 +253,15 @@ load-bearing for the per-app path:
   ranking instead, so ranks don't collide between apps).
 - `nprocs` — reused as a per-node "how many to place here" counter by the
   support functions; do not assume it still holds the job total.
+- `mapgiven` — whether the policy in `map` is the user's rather than one the
+  base derived. From the app in per-app dispatch, from the job otherwise;
+  `lsf`, which claims only a job nobody described, gates on it.
+- `start_vpid` — the first global rank this dispatch may assign. Only the
+  mappers that number their own procs (rank_file, seq, lsf) read it;
+  everyone else leaves ranking to `compute_vpids`, which threads the same
+  cursor. A user-ranked mapper that started from zero for every app gave two
+  apps the same ranks, and the second app's procs then replaced the first's
+  in `jdata->procs`.
 
 `options.target` and `options.job_cpuset` are hwloc bitmaps the mappers
 must free between nodes; leaks here are the classic rmaps bug.
@@ -315,7 +359,12 @@ guard the mapper does not fail, it hangs, and a hung mapper is a wedged HNP.
 
 In per-app (MPMD) dispatch the base calls `compute_vpids` once per app with
 `app_idx = n` and a `next_vpid` cursor threaded across the calls; that cursor
-is the only thing keeping two apps from both starting at rank 0.
+is the only thing keeping two apps from both starting at rank 0. The
+by-user mappers number their own procs, so they get the same cursor as
+`options->start_vpid` and `compute_vpids` advances it past the app it was
+handed. A per-app rankfile or sequence file therefore numbers *that app's*
+ranks — the global rank each one lands on depends on how many procs the
+apps before it took.
 
 ---
 

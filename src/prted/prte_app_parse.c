@@ -689,15 +689,19 @@ cleanup:
  * Hand out one class of directive (mapping, ranking or binding) once the
  * whole cmd line has been parsed.
  *
- * A directive given only once applies to the entire job - even when several
- * apps were given - because that is the only reading under which the apps
- * can differ at all: they differ when the user says so more than once. So a
- * lone directive goes to the job and is left out of every app's spec, which
- * is also what lets it carry a qualifier that spans the job (OVERSUBSCRIBE
- * and friends) - those are refused in an app's spec, and used to be refused
- * even when the user had given exactly one directive for one app.
+ * The first app segment is where a command line speaks for the job: it is
+ * what a single-app line has, and it is what the reader sees first. So a
+ * directive written there and nowhere else describes the whole job, however
+ * many apps follow - which is also what lets it carry a qualifier that spans
+ * the job (OVERSUBSCRIBE and friends), since an app that holds one has to
+ * have it hoisted back out again later.
  *
- * Two or more, and each app keeps its own.
+ * Written anywhere else, it describes the app that carries it and only that
+ * app. Its silent siblings are not agreeing with it - they said nothing, and
+ * what an app that says nothing gets is the default. Reading a lone
+ * directive on the third of four apps as the job's meant that asking for one
+ * app to be placed differently silently placed all four that way, and there
+ * was no way to say what was plainly meant.
  */
 static int distribute_directive(pmix_list_t *apps, pmix_list_t *jobdata,
                                 size_t offset, const char *key)
@@ -706,6 +710,14 @@ static int distribute_directive(pmix_list_t *apps, pmix_list_t *jobdata,
     prte_info_item_t *item;
     char **held;
     int count = 0, rc;
+    bool first_only;
+
+    app = (prte_pmix_app_t *) pmix_list_get_first(apps);
+    if (NULL == app || pmix_list_is_empty(apps)) {
+        return PRTE_SUCCESS;
+    }
+    held = (char **) ((char *) app + offset);
+    first_only = (NULL != *held);
 
     PMIX_LIST_FOREACH(app, apps, prte_pmix_app_t) {
         held = (char **) ((char *) app + offset);
@@ -716,9 +728,12 @@ static int distribute_directive(pmix_list_t *apps, pmix_list_t *jobdata,
     if (0 == count) {
         return PRTE_SUCCESS;
     }
+    /* only the first app carried it? */
+    first_only = first_only && (1 == count);
 
-    if (1 < count) {
-        /* the user distinguished the apps - give each its own */
+    if (!first_only) {
+        /* the user distinguished the apps - give each its own, and leave the
+         * apps that gave none to the defaults */
         PMIX_LIST_FOREACH(app, apps, prte_pmix_app_t) {
             held = (char **) ((char *) app + offset);
             if (NULL != *held) {
@@ -731,7 +746,7 @@ static int distribute_directive(pmix_list_t *apps, pmix_list_t *jobdata,
         return PRTE_SUCCESS;
     }
 
-    /* exactly one - it belongs to the job */
+    /* the first app spoke for the job */
     if (NULL == jobdata) {
         /* nowhere to put it - leave it with the app that carried it so the
          * directive is not simply lost */

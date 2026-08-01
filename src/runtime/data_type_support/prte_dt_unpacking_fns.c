@@ -650,25 +650,7 @@ int prte_map_unpack(pmix_data_buffer_t *bkt, struct prte_job_map_t **mp)
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    /* unpack the requested mapper */
-    n = 1;
-    rc = PMIx_Data_unpack(NULL, bkt, &map->req_mapper, &n, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_RELEASE(map);
-        return prte_pmix_convert_status(rc);
-    }
-
-    /* unpack the last mapper */
-    n = 1;
-    rc = PMIx_Data_unpack(NULL, bkt, &map->last_mapper, &n, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_RELEASE(map);
-        return prte_pmix_convert_status(rc);
-    }
-
-    /* unpack the policies */
+    /* unpack the policies - see prte_map_pack(): no mapper name is sent */
     n = 1;
     rc = PMIx_Data_unpack(NULL, bkt, &map->mapping, &n, PMIX_UINT16);
     if (PMIX_SUCCESS != rc) {

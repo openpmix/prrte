@@ -83,13 +83,12 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     int32_t i, k;
     pmix_list_t node_list;
     prte_node_t *node, *nd, *root_node;
-    pmix_rank_t rank, vpid_start;
+    pmix_rank_t rank, entry, vpid_start, rank_base;
     int32_t num_slots;
     prte_rmaps_rank_file_map_t *rfmap;
     int32_t relative_index, tmp_cnt;
     int rc;
     prte_proc_t *proc;
-    pmix_mca_base_component_t *c = &prte_mca_rmaps_rank_file_component.super;
     char *slots = NULL;
     /* see rmaps_rr.c: reset the per-node "mapped" flags only on the genuine
      * first mapping pass so per-app dispatch (one entry per app) does not
@@ -110,15 +109,12 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                             PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
-    if (NULL != jdata->map->req_mapper
-        && 0 != strcasecmp(jdata->map->req_mapper, c->pmix_mca_component_name)) {
-        /* a mapper has been specified, and it isn't me */
-        pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:rf: job %s not using rank_file mapper",
-                            PRTE_JOBID_PRINT(jdata->nspace));
-        return PRTE_ERR_TAKE_NEXT_OPTION;
-    }
-    if (PRTE_MAPPING_BYUSER != PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+    /* The policy is what selects the mapper. This reads the resolved options
+     * rather than the job map: in per-app dispatch each app answers for
+     * itself, and asking the job meant a per-app "--map-by rankfile" never
+     * reached this mapper at all - the job's policy is whatever default was
+     * resolved for the apps that gave no directive */
+    if (PRTE_MAPPING_BYUSER != PRTE_GET_MAPPING_POLICY(options->map)) {
         /* NOT FOR US */
         pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rf: job %s not using rankfile policy",
@@ -158,11 +154,6 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rank_file: mapping job %s", PRTE_JOBID_PRINT(jdata->nspace));
 
-    /* flag that I did the mapping */
-    if (NULL != jdata->map->last_mapper) {
-        free(jdata->map->last_mapper);
-    }
-    jdata->map->last_mapper = strdup(c->pmix_mca_component_name);
     options->map = PRTE_MAPPING_BYUSER;
 
     /* setup the node list */
@@ -180,6 +171,12 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
 
     /* start at the beginning... */
     vpid_start = 0;
+    /* ...of the rankfile, which is not the same place as the beginning of
+     * the job. In per-app dispatch the file this app named numbers that
+     * app's ranks, and the global rank each one lands on depends on how
+     * many procs the apps before it took - the base hands us that cursor.
+     * In whole-job dispatch it is zero and the two coincide. */
+    rank_base = (pmix_rank_t) options->start_vpid;
     /* Zero the job-wide count only when we were handed the whole job. The
      * per-app (MPMD) dispatch calls us once per app, and resetting here
      * would leave jdata->num_procs holding just the last app's count while
@@ -243,9 +240,11 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
             }
         }
         for (k = 0; k < app->num_procs; k++) {
-            rank = vpid_start + k;
+            /* "entry" numbers the rankfile, "rank" numbers the job */
+            entry = vpid_start + k;
+            rank = rank_base + k;
             /* get the rankfile entry for this rank */
-            rfmap = (prte_rmaps_rank_file_map_t *) pmix_pointer_array_get_item(&rankmap, rank);
+            rfmap = (prte_rmaps_rank_file_map_t *) pmix_pointer_array_get_item(&rankmap, entry);
             if (NULL == rfmap) {
                 /* if this job was given a slot-list, then use it */
                 if (NULL != options->cpuset) {
@@ -255,7 +254,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                     slots = prte_hwloc_default_cpu_list;
                 } else {
                     /* all ranks must be specified */
-                    pmix_show_help("help-rmaps_rank_file.txt", "missing-rank", true, rank,
+                    pmix_show_help("help-rmaps_rank_file.txt", "missing-rank", true, entry,
                                    rankfile);
                     rc = PRTE_ERR_SILENT;
                     goto error;
@@ -468,6 +467,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
         }
         /* update the starting point */
         vpid_start += app->num_procs;
+        rank_base += app->num_procs;
         /* cleanup the node list - it can differ from one app_context
          * to another, so we have to get it every time
          */
