@@ -46,6 +46,8 @@ functions gate on process type, so only one ever returns a module. See
    │  read_handler: read(fd) ──► PMIx_server_IOF_deliver (local echo)   │
    │              └──► pack+RML ─► HNP (PRTE_RML_TAG_IOF_HNP)           │
    │  recv (PRTE_RML_TAG_IOF_PROXY): stdin ─► write_output ─► proc pipe │
+   │            ...and relayed output ─► PMIx_server_IOF_deliver        │
+   │  push_stdin (from an attached tool): ─► RML relay to the HNP       │
    └──────────────────────────────────────────────────┘
                     │ RML                        ▲ RML
                     ▼                            │
@@ -53,6 +55,7 @@ functions gate on process type, so only one ever returns a module. See
    │  hnp iof (DVM master)                             │
    │  recv (PRTE_RML_TAG_IOF_HNP): ─► PMIx_server_IOF_deliver           │
    │  read_local_handler (my own children): ─► PMIx_server_IOF_deliver  │
+   │  relay_to_tool: ─► RML to the daemon hosting the launching tool    │
    │  push_stdin: ─► RML to hosting daemon / local proc pipe            │
    └──────────────────────────────────────────────────┘
                     │
@@ -74,7 +77,10 @@ historical [`README.txt`](README.txt) and the stale docstrings in
 [`iof.h`](iof.h) get wrong relative to today's code.
 
 There is **no proxy-to-proxy traffic**: a daemon never sends output to
-another daemon. Everything funnels HNP-ward and the HNP fans back out.
+another daemon. Everything funnels HNP-ward and the HNP fans back out —
+stdin to the daemon hosting the target, and output to the daemon hosting a
+tool that asked for it. See [A tool is not always on the
+master](#a-tool-is-not-always-on-the-master).
 
 ---
 
@@ -118,7 +124,7 @@ struct prte_iof_base_module_2_0_0_t {
     prte_iof_base_close_fn_t      close;       /* (peer, tag) -> int */
     prte_iof_base_complete_fn_t   complete;    /* (jdata) -> void */
     prte_iof_base_finalize_fn_t   finalize;    /* void -> int */
-    prte_iof_base_push_stdin_fn_t push_stdin;  /* (dst, data, sz) -> int (hnp only) */
+    prte_iof_base_push_stdin_fn_t push_stdin;  /* (dst, data, sz) -> int */
 };
 ```
 
@@ -130,7 +136,7 @@ struct prte_iof_base_module_2_0_0_t {
 | `close` | Tear down the read events and/or sink for the named peer for the streams in `source_tag`; drop the proc from `procs` once all three are gone. | teardown paths |
 | `complete` | Job finished: purge any lingering `prte_iof_proc_t`s belonging to `jdata->nspace`. | `state` machine on `JOB`/`PROC` completion |
 | `finalize` | Cancel the RML receive and destruct the `procs` list. | framework close |
-| `push_stdin` | **Inject stdin.** HNP-only: route a chunk of stdin to a target proc (or wildcard) — to the hosting daemon over RML, or to a local proc's sink. `NULL` in the `prted` module. | PMIx server glue (`pmix_server_gen.c`) |
+| `push_stdin` | **Inject stdin.** Deliver a chunk of stdin to a target proc (or wildcard). In the `hnp` module that means routing it — to the hosting daemon over RML, or to a local proc's sink. In the `prted` module it means relaying to the HNP, which is the only process that can do the routing. Implemented in **both**; a tool can attach to any daemon. | PMIx server glue (`pmix_server_gen.c`) |
 
 Note the naming is a little counter-intuitive and the [`iof.h`](iof.h)
 docstrings are stale: **`push` handles the OUTPUT (read) side**, **`pull`
@@ -139,6 +145,10 @@ header prose.
 
 `init`/`finalize`/`push_stdin`/`complete` may legitimately be `NULL` in a
 module; the base and callers all guard with `if (NULL != prte_iof.xxx)`.
+Both shipped modules do fill all seven — `push_stdin` was `NULL` in `prted`
+until a tool attaching to a non-master daemon turned that into a segfault
+([#2568](https://github.com/openpmix/prrte/issues/2568)) — but the guards
+are the contract, so keep them.
 
 ---
 
@@ -310,8 +320,55 @@ Called by `odls` around the `fork()` of each app proc:
 - `prte_iof` (in [`iof_base_frame.c`](base/iof_base_frame.c)) is the
   selected module; everything outside the framework calls through it
   (`prte_iof.push_stdin(...)`, `prte_iof.complete(...)`).
-- `PRTE_RML_TAG_IOF_HNP` — daemons → HNP (forwarded output and XON/XOFF).
-- `PRTE_RML_TAG_IOF_PROXY` — HNP → daemons (stdin, and xcast stdin to all).
+- `PRTE_RML_TAG_IOF_HNP` — daemons → HNP (forwarded output, XON/XOFF, and
+  stdin a daemon is relaying on behalf of a tool attached to it; the leading
+  stream tag is what tells the three apart).
+- `PRTE_RML_TAG_IOF_PROXY` — HNP → daemons (stdin, xcast stdin to all, and
+  output relayed to the daemon hosting a launching tool; again the leading
+  stream tag distinguishes them).
+
+---
+
+## A tool is not always on the master
+
+A tool attaches to whichever PMIx server it found, and for a `prun` started
+on a compute node of a persistent DVM with no `--dvm-uri` that is the
+**local daemon**, not the HNP. PMIx registers the tool's IOF request with
+that daemon's server (`pmix_server_process_iof` on the spawn), and that
+server is the only one that can deliver to it. Both directions therefore
+need a relay through the master, which is the only process that can route:
+
+| Direction | Path |
+|-----------|------|
+| tool's stdin → the job | tool → its daemon's `push_stdin` → RML (`IOF_HNP`, stream `STDIN`) → HNP's `push_stdin` → hosting daemon → proc's stdin pipe |
+| the job's output → tool | hosting daemon → RML (`IOF_HNP`) → HNP → `relay_to_tool` → RML (`IOF_PROXY`, stream `STDOUT`/`STDERR`) → tool's daemon → `PMIx_server_IOF_deliver` → tool |
+
+Two things make the output half less obvious than it looks:
+
+- **Part of it already works, which is what hides the rest.** A daemon
+  hands its own procs' output to its own PMIx server as well as forwarding
+  it, so a tool always sees the ranks that happen to land on its own node.
+  Only the other ranks go missing, so the symptom is partial output, not
+  none.
+- **The relayed copy must not be emitted where it lands.** Every daemon
+  registers the job's namespace with the same output directives, so a
+  daemon handed another node's output would write it out again — and with
+  `--output file=` that is two daemons writing one file. The delivery
+  therefore carries `PMIX_IOF_LOCAL_OUTPUT=false`, which tells the PMIx
+  server "deliver this to your registered requestors; it is not yours to
+  write." That needs `PMIX_CAP_IOF_DELIVER_LOCAL`; without it the HNP does
+  not relay at all (`PRTE_PMIX_IOF_DELIVER_LOCAL`, set by
+  [`config/prte_setup_pmix.m4`](../../../config/prte_setup_pmix.m4)) rather
+  than relay unsafely.
+
+Who the tool's daemon is comes from `jdata->originator`. On the master that
+field is the **daemon that relayed the spawn** — `plm_base_receive`
+overwrites the requesting tool's own procID with the sender — so an
+originator in the daemon namespace names the daemon to relay to, and an
+originator in any other namespace is a tool that spawned through the master
+and is already a client of its server. Deduplication is by the same handle:
+the daemon that forwarded a chunk has already delivered it locally, so the
+master skips the relay when that daemon is the tool's.
 
 ---
 

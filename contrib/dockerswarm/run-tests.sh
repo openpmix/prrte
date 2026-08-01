@@ -80,6 +80,12 @@ bounded() {
 RUN() { docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
             "${NODE}1" bash -lc ". /opt/prte/env.sh; $*"; }
 ON()  { docker exec "$NODE$1" bash -lc ". /opt/prte/env.sh 2>/dev/null; ${*:2}"; }
+# ...and the same for a case that drives a TOOL from a node other than the
+# head. ON alone is enough for shell housekeeping, but every PRRTE tool
+# refuses to run as root without these two, and the refusal text is long
+# enough to bury whatever the case was actually asserting.
+ONT() { docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+            "$NODE$1" bash -lc ". /opt/prte/env.sh; ${*:2}"; }
 
 # What must not survive into the next test, on one node.  Each tool has its
 # OWN session-dir prefix -- prte.<pid> for the HNP, prtrn.<pid> for prterun,
@@ -2003,6 +2009,105 @@ test_prted() {
             bad "could not get two concurrent jobs running on node2 (saw $n procs)"
         fi
         RUN 'pkill -f "sleep 120"' >/dev/null 2>&1
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
+    banner "prted: a tool attached to a NON-MASTER daemon completes its job"
+    # A prun started on a compute node of a persistent DVM, with no --dvm-uri,
+    # finds its LOCAL daemon's rendezvous file and attaches there instead of to
+    # the HNP.  Everything about that tool then runs through the relay paths:
+    # tool-connect goes to the master as PRTE_PLM_TOOL_ATTACHED_CMD, the spawn
+    # goes as a relayed request, and -- the part that broke -- the stdin the
+    # tool pushes goes to its own daemon's iof module.  Only the HNP module
+    # implemented push_stdin, so on any other daemon that was a NULL call: the
+    # daemon segfaulted, and the tool, whose PMIx server had just died, waited
+    # for a PMIX_EVENT_JOB_END that could no longer reach it.  Issue #2568.
+    #
+    # Every prun pushes stdin even with nothing to send -- the zero-byte
+    # end-of-input marker -- so this needs no piped input to reproduce.  Run it
+    # WITHOUT --dvm-uri, deliberately: pointing the tool at the master's URI is
+    # exactly what the test must not do.
+    cleanup_swarm
+    if ! prted_dvm_start 'node1:2,node2:2,node3:2'; then
+        bad "could not start a DVM for the non-master tool test"
+    else
+        out=$(ONT 2 'timeout -k 5 45 prun --host node2:1 -n 1 hostname 2>&1; echo RC=$?')
+        echo "$out" | grep -q 'RC=0' \
+            && ok "a tool attached to node2's daemon saw its job end and exited" \
+            || bad "tool on a non-master daemon did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        echo "$out" | grep -qE '^node2$' \
+            && ok "...and its job's output reached it" \
+            || bad "...but the job produced no output: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        n=$(prted_count 2)
+        [ "$n" = 1 ] \
+            && ok "...and node2's daemon survived the tool's stdin push" \
+            || bad "node2's daemon died while the tool pushed stdin"
+
+        # ...and the stdin itself has to arrive, not merely fail to crash.  Send
+        # it to a proc on ANOTHER node, so the daemon's relay to the HNP and the
+        # HNP's routing back out are both exercised; read the result from the
+        # file rather than the terminal, because output from a proc the tool's
+        # own daemon does not host has no path back to that tool.
+        ON 1 'rm -f /tmp/tool-stdin.txt' >/dev/null 2>&1
+        ONT 2 'printf "STDIN-RELAY-OK\n" | timeout -k 5 45 prun --host node1:1 -n 1 sh -c "cat > /tmp/tool-stdin.txt"' >/dev/null 2>&1
+        out=$(ON 1 'cat /tmp/tool-stdin.txt 2>&1')
+        echo "$out" | grep -q 'STDIN-RELAY-OK' \
+            && ok "stdin pushed through a non-master daemon reached a proc on another node" \
+            || bad "stdin was lost on the relay to the HNP: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+        # A second tool on the same node must still find exactly one server.
+        # The hung prun of #2568 never released its own pmix.* rendezvous file,
+        # so the next tool reported "multiple possible servers" and gave up --
+        # which is how the hang first showed itself, looking nothing like its
+        # cause.
+        out=$(ONT 2 'timeout -k 5 45 prun --host node2:1 -n 1 hostname 2>&1; echo RC=$?')
+        echo "$out" | grep -q 'RC=0' \
+            && ok "a second tool on that node still finds exactly one server" \
+            || bad "a stale rendezvous file blocked the next tool: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+        # ...and the OTHER direction.  A daemon hands its own procs' output to
+        # its own PMIx server, so a tool has always seen the ranks that landed
+        # on its own node -- which is exactly what hid the gap: the symptom was
+        # PARTIAL output, not none.  Put the tool on node3 and the ranks on
+        # node1 and node2, so every byte it should see has to come back out
+        # from the master.  node1 is the HNP (its own children take the
+        # read-handler path) and node2 is an ordinary daemon (the forwarded
+        # path); both relay points are covered by requiring both names.
+        out=$(ONT 3 'timeout -k 5 45 prun --host node1:1,node2:1 -n 2 --map-by node hostname 2>&1')
+        if echo "$out" | grep -qE '^node1$' && echo "$out" | grep -qE '^node2$'; then
+            ok "a tool on a non-master daemon saw output from ranks on both other nodes"
+        else
+            bad "output never reached the tool on node3: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+
+        # Every line exactly once.  The relay skips the daemon that already
+        # delivered a chunk to its own PMIx server, and if that dedup were
+        # dropped a tool would see its own node's ranks twice.
+        out=$(ONT 2 'timeout -k 5 60 prun --host node1:2,node2:2,node3:2 -n 6 --map-by node sh -c "for i in \$(seq 1 50); do echo RELAYLINE-\$i; done" 2>&1')
+        n=$(echo "$out" | grep -c '^RELAYLINE-')
+        u=$(echo "$out" | grep '^RELAYLINE-' | sort | uniq -c | awk '{print $1}' | sort -u | tr '\n' ' ')
+        [ "$n" = 300 ] && [ "$u" = "6 " ] \
+            && ok "300 lines from 6 ranks reached the tool, each exactly once" \
+            || bad "relayed output was lost or duplicated (got $n lines, per-line counts '$u'; expected 300 and '6 ')"
+
+        # The relayed copy must not be EMITTED where it lands.  Every daemon
+        # registers the job's namespace with the same output directives, so a
+        # daemon handed another node's output writes its own copy of that
+        # rank's file unless the delivery says not to -- and node3 hosts none
+        # of these ranks, so any file appearing there is a duplicate of one
+        # node1 or node2 already wrote.  Measured, not assumed: flipping the
+        # PMIX_IOF_LOCAL_OUTPUT directive to true puts a full set here.
+        for i in 1 2 3; do ON $i 'rm -rf /tmp/relayout; mkdir -p /tmp/relayout' >/dev/null 2>&1; done
+        ONT 3 'timeout -k 5 45 prun --output file=/tmp/relayout/out --host node1:1,node2:1 -n 2 --map-by node hostname' >/dev/null 2>&1
+        n=$(ON 3 'find /tmp/relayout -type f 2>/dev/null | wc -l' | tr -d ' \r')
+        m=$(ON 2 'find /tmp/relayout -type f 2>/dev/null | wc -l' | tr -d ' \r')
+        [ "$n" = 0 ] \
+            && ok "the tool's daemon wrote no output files for ranks it does not host" \
+            || bad "relayed output was emitted on the tool's node too ($n files); two daemons are writing one --output file"
+        [ "$m" = 1 ] \
+            && ok "...and the daemon that does host a rank still wrote its file" \
+            || bad "output-to-file broke on the hosting daemon ($m files, expected 1)"
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     fi
     cleanup_swarm

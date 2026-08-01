@@ -1093,19 +1093,42 @@ static void pmix_server_stdin_push(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
     pmix_byte_object_t *bo = (pmix_byte_object_t *) cd->server_object;
-    size_t n;
+    uint8_t *bytes;
+    size_t nbytes, n;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    /* a client that pushed no data at all leaves us no byte object - PMIx
+     * frees it rather than handing us an empty one - and that is precisely
+     * how a tool signals end-of-input, so treat it as the zero-length push
+     * it is rather than dereferencing it */
+    if (NULL == bo) {
+        bytes = NULL;
+        nbytes = 0;
+    } else {
+        bytes = (uint8_t *) bo->bytes;
+        nbytes = bo->size;
+    }
+
+    /* the vtable slot is optional, so a module that left it unset would
+     * otherwise take the daemon down with a NULL call - which is what used
+     * to happen on every daemon but the master, killing the very daemon the
+     * requesting tool was attached to */
+    if (NULL == prte_iof.push_stdin) {
+        cd->cbfunc(PMIX_ERR_NOT_SUPPORTED, cd->cbdata);
+        PMIX_RELEASE(cd);
+        return;
+    }
 
     for (n = 0; n < cd->nprocs; n++) {
         PMIX_OUTPUT_VERBOSE((1, prte_pmix_server_globals.output,
                              "%s pmix_server_stdin_push to dest %s: size %zu",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_NAME_PRINT(&cd->procs[n]),
-                             bo->size));
-        prte_iof.push_stdin(&cd->procs[n], (uint8_t *) bo->bytes, bo->size);
+                             nbytes));
+        prte_iof.push_stdin(&cd->procs[n], bytes, nbytes);
     }
 
-    if (NULL == bo->bytes || 0 == bo->size) {
+    if (NULL == bytes || 0 == nbytes) {
         cd->cbfunc(PMIX_ERR_IOF_COMPLETE, cd->cbdata);
     } else {
         cd->cbfunc(PMIX_SUCCESS, cd->cbdata);

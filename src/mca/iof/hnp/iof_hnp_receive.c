@@ -72,6 +72,7 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     prte_iof_tag_t stream;
     int32_t count, numbytes;
     int rc;
+    unsigned char *stdindata = NULL;
     prte_iof_proc_t *proct;
     pmix_iof_channel_t pchan;
     prte_iof_deliver_t *p;
@@ -101,6 +102,59 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s received IOF cmd for source %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_NAME_PRINT(&origin)));
+
+    /* a daemon that is hosting a tool cannot route the tool's stdin - only
+     * we know which daemon hosts the target proc - so it relays the push to
+     * us and we inject it exactly as if the tool were attached here. In that
+     * case the proc we just unpacked is the intended recipient rather than
+     * the source of some output. This is screened ahead of the zero-length
+     * test below because a zero-byte stdin push is the sentinel that closes
+     * the target's stdin, not an empty message to be dropped */
+    if (PRTE_IOF_STDIN & stream) {
+        count = 1;
+        rc = PMIx_Data_unpack(NULL, buffer, &numbytes, &count, PMIX_INT32);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            goto CLEAN_RETURN;
+        }
+        if (0 > numbytes) {
+            /* corrupted message */
+            PRTE_ERROR_LOG(PRTE_ERR_COMM_FAILURE);
+            goto CLEAN_RETURN;
+        }
+        if (0 < numbytes) {
+            stdindata = (unsigned char *) malloc(numbytes);
+            if (NULL == stdindata) {
+                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                goto CLEAN_RETURN;
+            }
+            count = numbytes;
+            rc = PMIx_Data_unpack(NULL, buffer, stdindata, &count, PMIX_BYTE);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                free(stdindata);
+                goto CLEAN_RETURN;
+            }
+            /* count holds the number of bytes actually delivered */
+            numbytes = count;
+        }
+        PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                             "%s injecting %d relayed stdin bytes for %s",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
+                             PRTE_NAME_PRINT(&origin)));
+        rc = prte_iof.push_stdin(&origin, stdindata, (size_t) numbytes);
+        /* a target that has already finalized (ADDRESSEE_UNKNOWN) and a sink
+         * that has backed up (OUT_OF_RESOURCE) are both expected outcomes
+         * here, exactly as they are for a locally-attached tool */
+        if (PRTE_SUCCESS != rc && PRTE_ERR_ADDRESSEE_UNKNOWN != rc
+            && PRTE_ERR_OUT_OF_RESOURCE != rc) {
+            PRTE_ERROR_LOG(rc);
+        }
+        if (NULL != stdindata) {
+            free(stdindata);
+        }
+        goto CLEAN_RETURN;
+    }
 
     /* this must have come from a daemon forwarding output - unpack the data */
     count = 1;
@@ -160,6 +214,13 @@ NSTEP:
     if (PRTE_IOF_STDDIAG & stream) {
         pchan |= PMIX_FWD_STDDIAG_CHANNEL;
     }
+    /* a tool watching this job may be attached to some other daemon, which
+     * cannot see this output - only we do. Send it a copy, unless the daemon
+     * that forwarded this to us is that same daemon, in which case it already
+     * gave its own PMIx server a copy before forwarding */
+    prte_iof_hnp_relay_to_tool(&origin, stream, (unsigned char *) p->bo.bytes,
+                               numbytes, sender->rank);
+
     /* output this thru our PMIx server */
     prc = PMIx_server_IOF_deliver(&p->source, pchan, &p->bo, NULL, 0, lkcbfunc, (void*)p);
     if (PMIX_SUCCESS != prc) {

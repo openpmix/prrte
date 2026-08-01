@@ -38,13 +38,14 @@ HNP.
 | File | Contents |
 |------|----------|
 | `iof_prted_component.c` | Registration + `query` (gate on `PRTE_PROC_IS_DAEMON`, priority 80). |
-| `iof_prted.c` | The module vtable: `init`, `prted_push`, `prted_pull`, `prted_close`, `prted_complete`, `finalize`, and the local `stdin_write_handler`. **No `push_stdin`** — that's HNP-only. |
+| `iof_prted.c` | The module vtable: `init`, `prted_push`, `prted_pull`, `prted_close`, `prted_complete`, `finalize`, `prted_push_stdin`, and the local `stdin_write_handler`. |
 | `iof_prted_read.c` | `prte_iof_prted_read_handler` — reads a local proc's stdout/stderr, echoes locally via the PMIx server, and forwards to the HNP. |
-| `iof_prted_receive.c` | `prte_iof_prted_recv` (the `PRTE_RML_TAG_IOF_PROXY` handler for incoming stdin) + `prte_iof_prted_send_xonxoff` (flow control back to the HNP). |
+| `iof_prted_receive.c` | `prte_iof_prted_recv` (the `PRTE_RML_TAG_IOF_PROXY` handler — incoming stdin, and output relayed for a tool of ours) + `deliver_relayed_output` + `prte_iof_prted_send_xonxoff` (flow control back to the HNP). |
 | `iof_prted.h` | Component struct + prototypes. |
 
-The vtable leaves `push_stdin` unset (`NULL`): a daemon receives stdin
-passively over the RML rather than being asked to inject it.
+A daemon receives stdin passively over the RML — but it can also be *asked*
+to inject it, so `push_stdin` is implemented here too. See
+[Relaying a tool's stdin](#relaying-a-tools-stdin-prted_push_stdin) below.
 
 ---
 
@@ -102,7 +103,10 @@ posted by `init()`. Incoming buffers carry `{ stream (uint16), target
 proc, numbytes (int32), bytes }` — the same shape the daemon uses when
 forwarding output HNP-ward:
 
-1. Unpack the stream; if it isn't `PRTE_IOF_STDIN` it's a protocol error
+1. Unpack the stream. An output stream (`PRTE_IOF_STDOUTALL`) is relayed
+   output for a tool of ours — see [Relayed
+   output](#relayed-output-deliver_relayed_output). Anything that is not
+   that and not `PRTE_IOF_STDIN` is a protocol error
    (`PRTE_ERR_COMM_FAILURE`). (Flow-control tags are handled by the HNP,
    not here.)
 2. Unpack the target proc, then the byte count, then `malloc` storage of
@@ -134,6 +138,56 @@ the backlog has fallen below `PRTE_IOF_MAX_INPUT_BUFFERS`, it clears the
 latch and sends `PRTE_IOF_XON` to resume stdin from the HNP. The inline
 `RHC:` comment flags the unsolved case of several procs fighting over
 XON/XOFF at different consumption rates.
+
+### Relaying a tool's stdin (`prted_push_stdin`)
+
+A tool does not have to attach to the master. A `prun` started on a compute
+node of a persistent DVM, with no `--dvm-uri`, finds its **local** daemon's
+rendezvous file and attaches there — and then pushes its stdin through that
+daemon's PMIx server, which lands in `prte_iof.push_stdin`. Every `prun` does
+this even with nothing to send, because the zero-byte end-of-input marker
+goes down the same path.
+
+A daemon cannot route that itself: only the master can resolve which daemon
+hosts the target proc, and only the master can xcast a wildcard target. So
+`prted_push_stdin` packs `{ PRTE_IOF_STDIN, target proc, numbytes, bytes }`
+— the same shape the daemon uses to forward output — and reliable-sends it to
+the HNP on `PRTE_RML_TAG_IOF_HNP`. `prte_iof_hnp_recv` recognizes the leading
+stdin tag, treats the proc that follows as the *recipient* rather than the
+source, and hands it to the HNP's own `push_stdin`. From there it is
+indistinguishable from stdin pushed by a tool attached to the master.
+
+This slot used to be `NULL`, which made that push a NULL call: the daemon
+segfaulted, and the tool — whose PMIx server had just died — hung forever
+waiting for a `PMIX_EVENT_JOB_END`
+([#2568](https://github.com/openpmix/prrte/issues/2568)). If you are tempted
+to drop it again, note that a zero-byte push is unavoidable and arrives on
+*every* job a non-master-attached tool runs.
+
+### Relayed output (`deliver_relayed_output`)
+
+The mirror image of `prted_push_stdin`. A tool attached to us registered its
+IOF request with **our** PMIx server, so we are the only server that can
+deliver to it — but we only ever see the output of procs we host. The master
+sees all of it, and relays what we are missing on
+`PRTE_RML_TAG_IOF_PROXY` with an output stream tag leading. We unpack
+`{ source proc, numbytes, bytes }` and hand it to `PMIx_server_IOF_deliver`.
+
+**With `PMIX_IOF_LOCAL_OUTPUT` set false**, and that is the point. Every
+daemon registers the job's namespace with the same output directives, and
+the daemon that hosts those procs has already written whatever they called
+for. Delivering here without the directive would emit a second copy — with
+`--output file=` in effect, two daemons writing one file. The directive says
+"deliver to your registered requestors; this is not yours to write."
+
+The info array is a function-scope `static` built on first use, not a stack
+variable: the delivery is non-blocking, so PMIx reads the directive on its
+own progress thread after we have returned. It holds nothing allocated and
+never varies, so one copy serves every delivery and never needs releasing.
+
+The whole path is compiled out when `PRTE_PMIX_IOF_DELIVER_LOCAL` is 0 — the
+master does not relay against such a PMIx, so nothing should arrive, and if
+something does it is logged rather than emitted.
 
 ### `prte_iof_prted_send_xonxoff` (`iof_prted_receive.c`)
 

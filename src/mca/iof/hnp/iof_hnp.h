@@ -83,6 +83,11 @@ int prte_iof_hnp_send_data_to_endpoint(const pmix_proc_t *host,
                                        prte_iof_tag_t tag,
                                        unsigned char *data, int numbytes);
 
+void prte_iof_hnp_relay_to_tool(const pmix_proc_t *source,
+                                prte_iof_tag_t stream,
+                                unsigned char *data, int numbytes,
+                                pmix_rank_t already_delivered);
+
 END_C_DECLS
 
 #endif
