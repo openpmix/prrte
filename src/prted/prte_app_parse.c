@@ -653,6 +653,24 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
         app->bindto = strdup(opt->values[0]);
     }
 
+    // Hold the job-level directives this segment carried, for the same
+    // reason: the tool's global parse of the cmd line stops at the first
+    // app, so a directive written in a later segment never reaches it.
+    // These are not per-app at all - prte_parse_locals() hands every
+    // segment's contribution back to that parse once the line is done.
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_OUTPUT);
+    if (NULL != opt) {
+        app->output = PMIx_Argv_join(opt->values, ',');
+    }
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DISPLAY);
+    if (NULL != opt) {
+        app->display = PMIx_Argv_join(opt->values, ',');
+    }
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_RTOS);
+    if (NULL != opt) {
+        app->rtos = PMIx_Argv_join(opt->values, ',');
+    }
+
     *app_ptr = app;
     app = NULL;
     *made_app = true;
@@ -744,10 +762,41 @@ static int distribute_directive(pmix_list_t *apps, pmix_list_t *jobdata,
     return PRTE_SUCCESS;
 }
 
+/*
+ * Gather one job-level option from every app segment that wrote it and hand
+ * the result back to the tool's parse of the whole command line.
+ *
+ * Unlike the mapping directives above, these are never per-app: there is no
+ * such thing as one app being displayed, or one app not launching.  The
+ * only question is whether the segments agree, and that is decided in the
+ * schizo base, where the option's vocabulary lives.
+ */
+static int hoist_job_option(pmix_list_t *apps, pmix_cli_result_t *results,
+                            size_t offset, const char *key)
+{
+    prte_pmix_app_t *app;
+    char **held, **contributions = NULL;
+    int rc;
+
+    if (NULL == results) {
+        return PRTE_SUCCESS;
+    }
+    PMIX_LIST_FOREACH(app, apps, prte_pmix_app_t) {
+        held = (char **) ((char *) app + offset);
+        if (NULL != *held) {
+            PMIx_Argv_append_nosize(&contributions, *held);
+        }
+    }
+    rc = prte_schizo_base_hoist_job_option(results, key, contributions);
+    PMIx_Argv_free(contributions);
+    return rc;
+}
+
 int prte_parse_locals(prte_schizo_base_module_t *schizo,
                       pmix_list_t *jdata, char *argv[],
                       char ***hostfiles, char ***hosts,
-                      pmix_list_t *jobdata)
+                      pmix_list_t *jobdata,
+                      pmix_cli_result_t *results)
 {
     int i, rc;
     char **temp_argv, **env;
@@ -825,6 +874,25 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
     }
     rc = distribute_directive(jdata, jobdata,
                               offsetof(prte_pmix_app_t, bindto), PMIX_BINDTO);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+
+    /* the job-level options go back to the tool's own parse, which is where
+     * every consumer of them looks - including the ones that apply them to
+     * the DVM itself rather than to the job */
+    rc = hoist_job_option(jdata, results,
+                          offsetof(prte_pmix_app_t, output), PRTE_CLI_OUTPUT);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+    rc = hoist_job_option(jdata, results,
+                          offsetof(prte_pmix_app_t, display), PRTE_CLI_DISPLAY);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+    rc = hoist_job_option(jdata, results,
+                          offsetof(prte_pmix_app_t, rtos), PRTE_CLI_RTOS);
     if (PRTE_SUCCESS != rc) {
         return rc;
     }

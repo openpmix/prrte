@@ -384,6 +384,78 @@ static int check_ndirs(pmix_cli_item_t *opt)
     return PRTE_SUCCESS;
 }
 
+/*
+ * The vocabularies of the three JOB-LEVEL options.
+ *
+ * These sit at file scope, and not inside the sanity checker with the
+ * mapping vocabularies, because a second reader needs them: an MPMD command
+ * line may write "--output"/"--display"/"--rtos" in any app segment, and
+ * prte_schizo_base_hoist_job_option() has to recognize the directives it is
+ * collecting from those segments in order to tell a repeat from a
+ * contradiction.  One copy means the two readers cannot drift.
+ */
+static char *output_directives[] = {
+    PRTE_CLI_TAG,
+    PRTE_CLI_TAG_DET,
+    PRTE_CLI_TAG_FULL,
+    PRTE_CLI_RANK,
+    PRTE_CLI_TIMESTAMP,
+    PRTE_CLI_XML,
+    PRTE_CLI_MERGE_ERROUT,
+    PRTE_CLI_DIR,
+    PRTE_CLI_FILE,
+    NULL
+};
+static char *output_quals[] = {
+    PRTE_CLI_COPY,
+    PRTE_CLI_NOCOPY,
+    PRTE_CLI_RAW,
+    PRTE_CLI_PATTERN,
+    NULL
+};
+
+static char *display_directives[] = {
+    PRTE_CLI_ALLOC,
+    PRTE_CLI_MAP,
+    PRTE_CLI_BIND,
+    PRTE_CLI_MAPDEV,
+    PRTE_CLI_TOPO,
+    PRTE_CLI_CPUS,
+    NULL
+};
+static char *display_quals[] = {
+    PRTE_CLI_PARSEABLE,
+    PRTE_CLI_PARSABLE,
+    PRTE_CLI_PHYSICAL_CPUS,
+    NULL
+};
+
+static char *rto_directives[] = {
+    PRTE_CLI_ERROR_NZ,
+    PRTE_CLI_NOLAUNCH,
+    PRTE_CLI_NOSPAWN,
+    PRTE_CLI_SHOW_PROGRESS,
+    PRTE_CLI_RECOVERABLE,
+    PRTE_CLI_AUTORESTART,
+    PRTE_CLI_CONTINUOUS,
+    PRTE_CLI_MAX_RESTARTS,
+    PRTE_CLI_EXEC_AGENT,
+    PRTE_CLI_DEFAULT_EXEC_AGENT,
+    PRTE_CLI_STOP_ON_EXEC,
+    PRTE_CLI_STOP_IN_INIT,
+    PRTE_CLI_STOP_IN_APP,
+    PRTE_CLI_TIMEOUT,
+    PRTE_CLI_SPAWN_TIMEOUT,
+    PRTE_CLI_REPORT_STATE,
+    PRTE_CLI_STACK_TRACES,
+    PRTE_CLI_REPORT_CHILD_SEP,
+    PRTE_CLI_AGG_HELP,
+    PRTE_CLI_NOTIFY_ERRORS,
+    PRTE_CLI_OUTPUT_PROCTABLE,
+    PRTE_CLI_FWD_ENVIRON,
+    NULL
+};
+
 /* Every other directive of those three options is a BOOLEAN: written bare
  * to assert it, or with a truth value to say so explicitly.  These are the
  * ones that carry a value of their own instead, so "timeout=60" and
@@ -412,6 +484,227 @@ bool prte_schizo_base_directive_is_valued(const char *directive)
         }
     }
     return false;
+}
+
+static bool option_vocabulary(const char *key, char ***dirs, char ***quals)
+{
+    if (0 == strcmp(key, PRTE_CLI_OUTPUT)) {
+        *dirs = output_directives;
+        *quals = output_quals;
+        return true;
+    }
+    if (0 == strcmp(key, PRTE_CLI_DISPLAY)) {
+        *dirs = display_directives;
+        *quals = display_quals;
+        return true;
+    }
+    if (0 == strcmp(key, PRTE_CLI_RTOS)) {
+        *dirs = rto_directives;
+        *quals = NULL;
+        return true;
+    }
+    return false;
+}
+
+/* One directive or qualifier, as one app segment wrote it. */
+typedef struct {
+    const char *name;   /* canonical spelling - borrowed from a table above */
+    char *value;        /* the text after its '=' - NULL for the bare form */
+    char *token;        /* as the user wrote it, for the error message */
+    bool invert;        /* this spelling is the negation of "name" */
+} prte_hoist_item_t;
+
+/* Directives that ask ONE question under two names.  Comparing the names
+ * alone would let "copy" in one app segment and "nocopy" in another pass as
+ * two unrelated requests, when they are opposite answers to the same
+ * question - and "parseable"/"parsable" as two requests for the same thing,
+ * which is merely untidy but would defeat the check for the pair given with
+ * opposite truths. */
+static struct {
+    const char *spelling;
+    const char *question;
+    bool invert;
+} directive_aliases[] = {
+    {PRTE_CLI_NOCOPY, PRTE_CLI_COPY, true},
+    {PRTE_CLI_PARSABLE, PRTE_CLI_PARSEABLE, false},
+    {NULL, NULL, false}
+};
+
+/*
+ * Name the question a token asks, or NULL for a token that belongs to
+ * neither vocabulary - the sanity checker reports those, and it reports
+ * them better than this can.
+ */
+static const char *hoist_canonical(char *token, char **dirs, char **quals,
+                                   bool *invert)
+{
+    const char *found = NULL;
+    size_t n;
+
+    *invert = false;
+    if (NULL != dirs) {
+        for (n = 0; NULL == found && NULL != dirs[n]; n++) {
+            if (PMIX_CHECK_CLI_OPTION(token, dirs[n])) {
+                found = dirs[n];
+            }
+        }
+    }
+    if (NULL == found && NULL != quals) {
+        for (n = 0; NULL == found && NULL != quals[n]; n++) {
+            if (PMIX_CHECK_CLI_OPTION(token, quals[n])) {
+                found = quals[n];
+            }
+        }
+    }
+    if (NULL == found) {
+        return NULL;
+    }
+    for (n = 0; NULL != directive_aliases[n].spelling; n++) {
+        if (0 == strcmp(found, directive_aliases[n].spelling)) {
+            *invert = directive_aliases[n].invert;
+            return directive_aliases[n].question;
+        }
+    }
+    return found;
+}
+
+/* Do two writings of the same directive ask for the same thing? */
+static bool hoist_agree(prte_hoist_item_t *a, prte_hoist_item_t *b)
+{
+    bool aflag, bflag;
+
+    if (prte_schizo_base_directive_is_valued(a->name)) {
+        /* the value IS the answer - "timeout=60" and "timeout=30" are two
+         * different ones, however alike they look to a truth test */
+        if (NULL == a->value || NULL == b->value) {
+            return (NULL == a->value && NULL == b->value);
+        }
+        return (0 == strcmp(a->value, b->value));
+    }
+    /* a boolean: the bare form and "=1" are the same answer, and a value
+     * that is neither true nor false is refused where it is parsed - here
+     * it can only be compared literally */
+    if (PRTE_SUCCESS != prte_cli_bool_value(a->value, &aflag) ||
+        PRTE_SUCCESS != prte_cli_bool_value(b->value, &bflag)) {
+        return (NULL != a->value && NULL != b->value &&
+                0 == strcasecmp(a->value, b->value));
+    }
+    if (a->invert) {
+        aflag = !aflag;
+    }
+    if (b->invert) {
+        bflag = !bflag;
+    }
+    return (aflag == bflag);
+}
+
+int prte_schizo_base_hoist_job_option(pmix_cli_result_t *results,
+                                      const char *key, char **contributions)
+{
+    char **dirs = NULL, **quals = NULL;
+    char **toks = NULL, **parts = NULL;
+    prte_hoist_item_t *items = NULL;
+    size_t nitems = 0, alloc = 0, i, j;
+    pmix_cli_item_t *opt;
+    const char *name;
+    char *merged;
+    bool invert;
+    int n, m, p, rc = PRTE_SUCCESS;
+
+    if (NULL == contributions || NULL == contributions[0]) {
+        /* no app segment wrote this option - whatever the global parse
+         * already holds is the whole of it */
+        return PRTE_SUCCESS;
+    }
+    if (!option_vocabulary(key, &dirs, &quals)) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    for (n = 0; NULL != contributions[n]; n++) {
+        toks = PMIx_Argv_split(contributions[n], ',');
+        for (m = 0; NULL != toks[m]; m++) {
+            /* a directive and its qualifiers are ':'-delimited, and each of
+             * them answers a question of its own */
+            parts = PMIx_Argv_split(toks[m], ':');
+            for (p = 0; NULL != parts[p]; p++) {
+                name = hoist_canonical(parts[p], dirs, quals, &invert);
+                if (NULL == name) {
+                    continue;
+                }
+                if (nitems == alloc) {
+                    prte_hoist_item_t *tmp;
+                    alloc += 16;
+                    tmp = (prte_hoist_item_t *) realloc(items,
+                                                        alloc * sizeof(prte_hoist_item_t));
+                    if (NULL == tmp) {
+                        PMIx_Argv_free(parts);
+                        PMIx_Argv_free(toks);
+                        rc = PRTE_ERR_OUT_OF_RESOURCE;
+                        goto cleanup;
+                    }
+                    items = tmp;
+                }
+                items[nitems].name = name;
+                items[nitems].token = strdup(parts[p]);
+                items[nitems].value = PMIX_CLI_QUALIFIER_VALUE(items[nitems].token);
+                items[nitems].invert = invert;
+                ++nitems;
+            }
+            PMIx_Argv_free(parts);
+            parts = NULL;
+        }
+        PMIx_Argv_free(toks);
+        toks = NULL;
+    }
+
+    for (i = 0; i < nitems; i++) {
+        for (j = i + 1; j < nitems; j++) {
+            /* compare by content: the canonical names come from the
+             * vocabulary tables and from the alias table, and nothing
+             * guarantees two identical string literals share an address */
+            if (0 != strcmp(items[i].name, items[j].name)) {
+                continue;
+            }
+            if (hoist_agree(&items[i], &items[j])) {
+                continue;
+            }
+            pmix_show_help("help-schizo-base.txt", "conflicting-job-directives", true,
+                           key, items[i].name, items[i].token, items[j].token);
+            rc = PRTE_ERR_SILENT;
+            goto cleanup;
+        }
+    }
+
+    /* they agree, so the job's directive list is all of them.  It replaces
+     * whatever the global parse recorded rather than adding to it: that
+     * parse stops at the first app, so everything it saw is the first app
+     * segment's contribution and is already in this list. */
+    merged = PMIx_Argv_join(contributions, ',');
+    opt = pmix_cmd_line_get_param(results, key);
+    if (NULL == opt) {
+        opt = PMIX_NEW(pmix_cli_item_t);
+        if (NULL == opt) {
+            free(merged);
+            rc = PRTE_ERR_OUT_OF_RESOURCE;
+            goto cleanup;
+        }
+        opt->key = strdup(key);
+        pmix_list_append(&results->instances, &opt->super);
+    } else {
+        PMIx_Argv_free(opt->values);
+        opt->values = NULL;
+    }
+    PMIx_Argv_append_nosize(&opt->values, merged);
+    free(merged);
+
+cleanup:
+    for (i = 0; i < nitems; i++) {
+        free(items[i].token);
+    }
+    if (NULL != items) {
+        free(items);
+    }
+    return rc;
 }
 
 /* the sanity checker is provided for DEVELOPERS as it checks that
@@ -488,69 +781,6 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         NULL
     };
 
-    char *outputs[] = {
-        PRTE_CLI_TAG,
-        PRTE_CLI_TAG_DET,
-        PRTE_CLI_TAG_FULL,
-        PRTE_CLI_RANK,
-        PRTE_CLI_TIMESTAMP,
-        PRTE_CLI_XML,
-        PRTE_CLI_MERGE_ERROUT,
-        PRTE_CLI_DIR,
-        PRTE_CLI_FILE,
-        NULL
-    };
-    char *outquals[] = {
-        PRTE_CLI_COPY,
-        PRTE_CLI_NOCOPY,
-        PRTE_CLI_RAW,
-        PRTE_CLI_PATTERN,
-        NULL
-    };
-
-    char *displays[] = {
-        PRTE_CLI_ALLOC,
-        PRTE_CLI_MAP,
-        PRTE_CLI_BIND,
-        PRTE_CLI_MAPDEV,
-        PRTE_CLI_TOPO,
-        PRTE_CLI_CPUS,
-        NULL
-    };
-
-    char *displayquals[] = {
-        PRTE_CLI_PARSEABLE,
-        PRTE_CLI_PARSABLE,
-        PRTE_CLI_PHYSICAL_CPUS,
-        NULL
-    };
-
-    char *rtos[] = {
-        PRTE_CLI_ERROR_NZ,
-        PRTE_CLI_NOLAUNCH,
-        PRTE_CLI_NOSPAWN,
-        PRTE_CLI_SHOW_PROGRESS,
-        PRTE_CLI_RECOVERABLE,
-        PRTE_CLI_AUTORESTART,
-        PRTE_CLI_CONTINUOUS,
-        PRTE_CLI_MAX_RESTARTS,
-        PRTE_CLI_EXEC_AGENT,
-        PRTE_CLI_DEFAULT_EXEC_AGENT,
-        PRTE_CLI_STOP_ON_EXEC,
-        PRTE_CLI_STOP_IN_INIT,
-        PRTE_CLI_STOP_IN_APP,
-        PRTE_CLI_TIMEOUT,
-        PRTE_CLI_SPAWN_TIMEOUT,
-        PRTE_CLI_REPORT_STATE,
-        PRTE_CLI_STACK_TRACES,
-        PRTE_CLI_REPORT_CHILD_SEP,
-        PRTE_CLI_AGG_HELP,
-        PRTE_CLI_NOTIFY_ERRORS,
-        PRTE_CLI_OUTPUT_PROCTABLE,
-        PRTE_CLI_FWD_ENVIRON,
-        NULL
-    };
-
     if (1 < pmix_cmd_line_get_ninsts(cmd_line, PRTE_CLI_MAPBY)) {
         pmix_show_help("help-schizo-base.txt", "multi-instances", true, PRTE_CLI_MAPBY);
         return PRTE_ERR_SILENT;
@@ -621,7 +851,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     if (NULL != opt) {
         vtmp = PMIx_Argv_split(opt->values[0], ',');
         for (n=0; NULL != vtmp[n]; n++) {
-            if (!prte_schizo_base_check_directives(PRTE_CLI_OUTPUT, outputs, outquals, vtmp[n])) {
+            if (!prte_schizo_base_check_directives(PRTE_CLI_OUTPUT, output_directives, output_quals, vtmp[n])) {
                 return PRTE_ERR_SILENT;
             }
         }
@@ -632,7 +862,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     if (NULL != opt) {
         vtmp = PMIx_Argv_split(opt->values[0], ',');
         for (n=0; NULL != vtmp[n]; n++) {
-            if (!prte_schizo_base_check_directives(PRTE_CLI_DISPLAY, displays, displayquals, vtmp[n])) {
+            if (!prte_schizo_base_check_directives(PRTE_CLI_DISPLAY, display_directives, display_quals, vtmp[n])) {
                 return PRTE_ERR_SILENT;
             }
         }
@@ -643,7 +873,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     if (NULL != opt) {
         vtmp = PMIx_Argv_split(opt->values[0], ',');
         for (n=0; NULL != vtmp[n]; n++) {
-            if (!prte_schizo_base_check_directives(PRTE_CLI_RTOS, rtos, NULL, vtmp[n])) {
+            if (!prte_schizo_base_check_directives(PRTE_CLI_RTOS, rto_directives, NULL, vtmp[n])) {
                 return PRTE_ERR_SILENT;
             }
         }

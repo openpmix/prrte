@@ -124,6 +124,37 @@ PRTE_EXPORT int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo
  */
 PRTE_EXPORT bool prte_schizo_base_directive_is_valued(const char *directive);
 
+/**
+ * Install the job-level directives an MPMD command line spread across its
+ * app segments.
+ *
+ * "--output", "--display" and "--rtos" describe the job, not an app: there
+ * is no such thing as one app being displayed, or one app not launching.
+ * But the global parse of the command line stops at the first executable,
+ * so a directive written in a later segment is never seen there. The app
+ * parser collects one contribution per segment and hands them here, in the
+ * order they were written.
+ *
+ * Two segments that name the same directive must agree; a contradiction is
+ * refused, because there is no way to honor both. Agreement is enough -
+ * segments that say nothing are silent, not dissenting.
+ *
+ * The merged list REPLACES the option's value in @c results (everything the
+ * global parse saw is the first segment's contribution, and so is already
+ * among these), and is created there if the global parse saw none at all.
+ *
+ * @param results        the tool's parse of the whole command line
+ * @param key            PRTE_CLI_OUTPUT, PRTE_CLI_DISPLAY or PRTE_CLI_RTOS
+ * @param contributions  one directive list per app segment that gave one,
+ *                       in command-line order; NULL or empty is a no-op
+ *
+ * @retval PRTE_SUCCESS
+ * @retval PRTE_ERR_SILENT     the segments contradict each other (reported)
+ * @retval PRTE_ERR_BAD_PARAM  @c key names no job-level option
+ */
+PRTE_EXPORT int prte_schizo_base_hoist_job_option(pmix_cli_result_t *results,
+                                                  const char *key,
+                                                  char **contributions);
 
 PRTE_EXPORT int prte_schizo_base_setup_fork(prte_job_t *jdata, prte_app_context_t *app);
 

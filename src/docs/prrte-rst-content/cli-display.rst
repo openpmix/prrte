@@ -74,3 +74,9 @@ case-insensitively, and as whole words (``TR`` is not an abbreviation of
 A value that is neither true nor false is refused rather than guessed at:
 the truth test underneath reads anything it does not recognize as
 ``false``, so ``map=maybe`` would otherwise quietly turn the display off.
+
+``--display`` describes the job as a whole: there is no such thing as one
+app context of an MPMD command line being displayed. It may therefore be
+written in *any* app context and applies to all of them. Two app contexts
+that ask for opposite things are refused, since there is no way to honor
+both.

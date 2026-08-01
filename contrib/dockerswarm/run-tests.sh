@@ -1084,6 +1084,62 @@ test_schizo() {
         || bad "--output file=...:raw:nocopy leaked output to stdout"
     for n in 1 2 3; do ON "$n" 'rm -rf /tmp/szout' >/dev/null 2>&1; done
 
+    banner "schizo: a job-level option written in a LATER app context"
+    # "--output", "--display" and "--rtos" describe the job, not an app, so
+    # they may be written in any app context of an MPMD command line.  The
+    # tool's global parse stops at the first executable, so a directive in a
+    # later segment was invisible to it and silently discarded - no tags, no
+    # map, launched anyway, and not a word about any of it.  The app parser
+    # now hands each segment's contribution back to that parse.
+    #
+    # Multi-node matters here because the tag is applied by the daemon that
+    # owns the process: a directive that reached the tool but not the wire
+    # would still print untagged lines from node3.
+    out=$(RUN 'prterun --host node2:1 -np 1 hostname \
+                 : --host node3:1 -np 1 --output tag hostname' 2>&1); rc=$?
+    n=$(echo "$out" | grep -cE '^\[[^]]+\]<stdout>: node[23]$')
+    [ "$rc" = 0 ] && [ "$n" = 2 ] \
+        && ok "--output in the second app context tagged BOTH apps' output" \
+        || bad "--output in a later app context was dropped (rc=$rc, tagged=$n): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+
+    out=$(RUN 'prterun --host node2:1 -np 1 hostname \
+                 : --host node3:1 -np 1 --rtos donotlaunch hostname' 2>&1)
+    echo "$out" | grep -q 'DONOTLAUNCH' && ! echo "$out" | grep -qE '^node[23]$' \
+        && ok "--rtos donotlaunch in the second app context stopped the launch" \
+        || bad "--rtos in a later app context was dropped: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+
+    # ...and two app contexts that ask for opposite things cannot both be
+    # honored, so the command line is refused rather than one of them picked
+    out=$(RUN 'prterun --host node2:1 -np 1 --output tag hostname \
+                 : --host node3:1 -np 1 --output tag=0 hostname' 2>&1)
+    echo "$out" | grep -q 'opposite things' \
+        && ok "contradictory job-level directives are refused" \
+        || bad "a contradictory --output was accepted: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+
+    # the value form is what lets a directive be turned back OFF.  Before it
+    # existed "tag=0" parsed cleanly and applied the tag, which is the worst
+    # of the three possible outcomes.  Every spelling of false is accepted.
+    for v in 0 false FALSE no n f disable; do
+        out=$(RUN "prterun --host node2:1,node3:1 -np 2 --map-by node \
+                     --output tag=$v hostname" 2>&1)
+        n=$(echo "$out" | grep -cE '^node[23]$')
+        [ "$n" = 2 ] && ! echo "$out" | grep -q '<stdout>:' \
+            && ok "--output tag=$v turned the tag off" \
+            || bad "--output tag=$v did not suppress the tag: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    done
+    # ...and every spelling of true still asks for it
+    for v in 1 true TRUE yes y t enable; do
+        out=$(RUN "prterun --host node2:1 -np 1 --output tag=$v hostname" 2>&1)
+        echo "$out" | grep -qE '^\[[^]]+\]<stdout>: node2$' \
+            && ok "--output tag=$v tagged the output" \
+            || bad "--output tag=$v lost the tag: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    done
+    # and a value that is neither true nor false is refused, not read as false
+    out=$(RUN 'prterun --host node2:1 -np 1 --output tag=maybe hostname' 2>&1)
+    echo "$out" | grep -q 'neither true nor false' \
+        && ok "a non-boolean directive value is reported" \
+        || bad "a non-boolean directive value was accepted: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+
     banner "schizo: --personality is honored in both spellings"
     # normalize_argv() is what finds the personality, before any option table
     # exists to parse with.  It only understood "--personality ompi" and not

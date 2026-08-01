@@ -212,3 +212,18 @@ True may also be written "T", "Y", "TRUE", "YES" or "ENABLE", and false
 words ("TR" is not an abbreviation of "TRUE").
 
 Please correct your command line and try again.
+#
+[conflicting-job-directives]
+The same directive was given twice, asking for opposite things:
+
+  Option:     --%s
+  Directive:  %s
+  Given as:   %s
+  and as:     %s
+
+This option describes the job as a whole, so on an MPMD command line it
+may be written in any app context and applies to all of them - which is
+also why two app contexts cannot ask for different answers.
+
+There is no way to honor both. Please give the directive once, or give the
+same value everywhere, and try again.
