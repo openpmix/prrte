@@ -1324,6 +1324,15 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
         return rc;
     }
 
+    /* the requestor has now been told, so record it - this is what makes the
+     * "already responded" test at the top of this function mean anything on
+     * the relay path. Only the local-notification branch above used to set it
+     * (inside pmix_server_notify_spawn), so a process that answered by sending
+     * would answer again on every later call - and each of those extra
+     * responses arrives at a requestor whose request is long retired */
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED,
+                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+
     return PRTE_SUCCESS;
 }
 

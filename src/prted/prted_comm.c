@@ -739,11 +739,22 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
              * was already cleaned up, or it was a tool */
             goto CLEANUP;
         }
-        /* if would be rare, but a very fast terminating job could conceivably
-         * reach here prior to the spawn requestor being notified of spawn */
-        ret = prte_plm_base_spawn_response(PMIX_SUCCESS, jdata);
-        if (PRTE_SUCCESS != ret) {
-            PRTE_ERROR_LOG(ret);
+        /* It would be rare, but a very fast terminating job could conceivably
+         * reach here prior to the spawn requestor being notified of spawn.
+         * Only two of us can say anything useful about that: the master, which
+         * knows the launch result, and the daemon hosting the requestor, whose
+         * notification is local. This command is xcast to every daemon, and the
+         * rest of them hold nothing but an unpacked copy of the job - having
+         * them each fire a spawn response at the requestor's daemon means it
+         * gets one real response and one per bystander, and every one after
+         * the first finds its request already retired and logs a spurious
+         * "not found". */
+        if (PRTE_PROC_IS_MASTER ||
+            PMIX_CHECK_PROCID(&jdata->originator, PRTE_PROC_MY_NAME)) {
+            ret = prte_plm_base_spawn_response(PMIX_SUCCESS, jdata);
+            if (PRTE_SUCCESS != ret) {
+                PRTE_ERROR_LOG(ret);
+            }
         }
 
         /* Deregister the nspace and, once that completes, clear any pending
