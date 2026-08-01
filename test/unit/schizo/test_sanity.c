@@ -113,6 +113,17 @@ int test_sanity(void)
     CHECK("sanity:bad-rtos", PRTE_SUCCESS != rc);
     PMIX_DESTRUCT(&results);
 
+    /*** every runtime option the parser acts on has to be in the table the
+     *** sanity checker validates against, or it is refused here and never
+     *** reaches the parser.  "autorestart" and "default-exec-agent" were
+     *** missing from it while being documented and implemented. ***/
+    PMIX_CONSTRUCT(&results, pmix_cli_result_t);
+    schizo_test_add(&results, PRTE_CLI_RTOS,
+                    "autorestart,default-exec-agent,recoverable", NULL);
+    rc = prte_schizo_base_sanity(&results);
+    CHECK("sanity:rtos-autorestart", PRTE_SUCCESS == rc);
+    PMIX_DESTRUCT(&results);
+
     /*** a PE=n mapping already dictates the binding: only core/hwt agree ***/
     PMIX_CONSTRUCT(&results, pmix_cli_result_t);
     schizo_test_add(&results, PRTE_CLI_MAPBY, "slot:pe=2", NULL);
