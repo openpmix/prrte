@@ -392,6 +392,19 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/groupcon.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
+            # fencer: a bare PMIx client that parks a job inside PMIx_Fence
+            # so a daemon can be killed while the collective is in flight.
+            # Rank 0 delays entering, so every other rank is provably still
+            # inside the fence when the harness kills a daemon.  A lost
+            # daemon during a fence used to take the whole DVM down; it now
+            # completes the fence with an error and leaves the DVM standing,
+            # and neither half of that exists on a single host.
+            # (No apostrophes here: see the note further down.)
+            echo ">>>> fencer (fence under daemon loss) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/fencer \
+                /prrte-src/contrib/dockerswarm/fencer.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
             # slowcat: a deliberately slow stdin reader (no PMIx at all).  The
             # stdin bugs in iof live in the back-pressure path, and a normal
             # "cat" drains its pipe as fast as the daemon fills it, so the

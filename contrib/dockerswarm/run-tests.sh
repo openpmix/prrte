@@ -2840,11 +2840,12 @@ test_hwloc() {
     cleanup_swarm
 }
 
-# Absolute path, deliberately -- see the note above DS.
+# Absolute paths, deliberately -- see the note above DS.
 GC=/opt/prte/prte/bin/groupcon
+FN=/opt/prte/prte/bin/fencer
 
 test_grpcomm() {
-    local out n g ranks hosts fails
+    local out n c g ranks hosts fails
 
     banner "grpcomm: a group construct releases on every daemon, in order"
     # The interesting half of a group collective is grp_release(), and it runs
@@ -2948,6 +2949,89 @@ test_grpcomm() {
         && ok "...and the DVM still launches an ordinary job afterwards" \
         || bad "the DVM did not run a plain job after the group tests ($n of 3)"
 
+    RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    cleanup_swarm
+
+    banner "grpcomm: a daemon lost during a fence resolves the fence, not the DVM"
+    # https://github.com/openpmix/prrte/issues/2528.  A fence rolls up over the
+    # routing tree to the HNP and comes back down as an xcast release.  The
+    # fence fault handler had no recovery path at all: if ANY fence was in
+    # flight when a daemon died it activated PRTE_JOB_STATE_COMM_FAILED with no
+    # job, which the errmgr reads as the DAEMON job failing -- so one lost
+    # daemon during any fence terminated the entire DVM.  It now completes the
+    # in-flight fences with an error and leaves the DVM standing.
+    #
+    # Neither half of that exists on one host: there is a single daemon, it is
+    # the HNP, and killing it ends the DVM whatever the handler does.
+    #
+    # The window is made deterministic rather than raced for: rank 0 sits out
+    # 30s before it would enter the fence, so the other three ranks are
+    # provably still inside it (their daemons have rolled their contributions
+    # up to the HNP, which is waiting on rank 0's) when the daemon is killed.
+    # Rank 0 then leaves without fencing -- it must not sit down in a fresh
+    # fence whose other participants have already gone home, which would hang
+    # for reasons that have nothing to do with the fault.
+    #
+    # The daemon that is killed hosts NONE of the job's procs, on purpose.
+    # Killing one that did would abort the job through the errmgr and tell us
+    # nothing about the fence: the clients would be dead either way.
+    cleanup_swarm
+    if ! RUN "test -x $FN"; then
+        skp "fencer client not installed -- re-run ./build.sh"
+        return
+    fi
+    if ! prted_dvm_start 'node1:1,node2:1,node3:1,node4:1,node5:1'; then
+        bad "could not start a DVM for the fence fault test"
+        cleanup_swarm
+        return
+    fi
+    PRUN_BG /tmp/fence-fault.out \
+        "--host node1:1,node2:1,node3:1,node4:1 -n 4 --map-by node $FN 30 skip"
+    # wait for the three non-laggard ranks to be inside the fence
+    n=0
+    while [ "$n" -lt 40 ]; do
+        c=$(RUN 'grep -c " ENTER" /tmp/fence-fault.out 2>/dev/null' 2>/dev/null \
+            | tr -cd '0-9')
+        [ -n "$c" ] && [ "$c" -ge 3 ] && break
+        sleep 1; n=$((n+1))
+    done
+    if [ "$n" -ge 40 ]; then
+        bad "the job never got three ranks into the fence: $(RUN 'cat /tmp/fence-fault.out' 2>&1 | tr '\n' ' ' | tail -c 300)"
+    elif ! ON 5 'pgrep -x prted' >/dev/null 2>&1; then
+        bad "node5 has no daemon to kill -- the DVM did not form as expected"
+    else
+        ok "three ranks are blocked in the fence with the DVM whole (${n}s)"
+        ON 5 'pkill -9 -x prted' >/dev/null 2>&1
+        n=0
+        while [ "$n" -lt 60 ]; do
+            RUN 'pgrep -x prun' >/dev/null 2>&1 || break
+            sleep 1; n=$((n+1))
+        done
+        out=$(RUN 'cat /tmp/fence-fault.out' 2>&1)
+        [ "$n" -lt 60 ] \
+            && ok "...and the fence did not hang once its daemon set was broken (${n}s)" \
+            || bad "the job never returned after the daemon died: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        # the fence has to RESOLVE, not silently succeed and not vanish: every
+        # rank that entered it must come back out with a status
+        c=$(echo "$out" | grep -c 'RESULT ')
+        [ "$c" -ge 3 ] \
+            && ok "...all $c waiting ranks were released with a status" \
+            || bad "only $c of 3 waiting ranks came out of the fence: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        c=$(echo "$out" | grep -c 'RESULT PMIX_SUCCESS')
+        [ "$c" = 0 ] \
+            && ok "...and none of them was told the collective succeeded" \
+            || bad "$c ranks were told a broken fence succeeded"
+        # the point of the issue: the DVM must still be there
+        RUN 'pgrep -x prte' >/dev/null 2>&1 \
+            && ok "the HNP survived a daemon lost during a fence" \
+            || bad "the DVM went down with the daemon -- the fence fault killed it"
+        # ...and still able to run a job, fence included
+        out=$(PRUN "--host node1:1,node2:1,node3:1 -n 3 --map-by node $FN 0" 2>&1)
+        c=$(echo "$out" | grep -c 'RESULT PMIX_SUCCESS')
+        [ "$c" = 3 ] \
+            && ok "...and still completes a fence on the surviving nodes" \
+            || bad "the DVM could not complete a fence afterwards ($c of 3): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    fi
     RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     cleanup_swarm
 }

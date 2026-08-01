@@ -40,6 +40,10 @@
  *      every counter must start at zero so a rollup cannot complete
  *      early), and their destructors must free their owned members --
  *      including the NULL case -- without crashing.
+ *
+ *   5. The fence fault handler.  It needs no DVM: it reads the tracker
+ *      list and the scope of the recovery notice, and its whole job is to
+ *      resolve every in-flight fence rather than kill the job (#2528).
  */
 
 #include "prte_config.h"
@@ -49,12 +53,14 @@
 
 #include "constants.h"
 #include "src/mca/base/pmix_base.h"
+#include "src/runtime/prte_globals.h"
 #include "src/runtime/runtime.h"
 #include "src/util/proc_info.h"
 
 #include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/grpcomm/base/base.h"
 #include "src/mca/grpcomm/direct/grpcomm_direct.h"
+#include "src/rml/rml_types.h"
 
 #define CHECK(label, cond)                                              \
     do {                                                                \
@@ -300,6 +306,119 @@ static int test_classes(void)
     return failures;
 }
 
+#if PRTE_TEST_GRPCOMM_DIRECT
+/* Records what the fence completion callback was handed, standing in for the
+ * PMIx server that would hand it on to the clients blocked in PMIx_Fence. */
+typedef struct {
+    int ncalls;
+    pmix_status_t status;
+    const char *data;
+    size_t ndata;
+} fence_cb_record_t;
+
+static void fence_cb(pmix_status_t status, const char *data, size_t ndata,
+                     void *cbdata, pmix_release_cbfunc_t release_fn,
+                     void *release_cbdata)
+{
+    fence_cb_record_t *rec = (fence_cb_record_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(release_fn, release_cbdata);
+
+    rec->ncalls++;
+    rec->status = status;
+    rec->data = data;
+    rec->ndata = ndata;
+}
+
+/* Append a tracker standing in for a fence that is rolling up right now. */
+static void add_fence_op(fence_cb_record_t *rec)
+{
+    prte_grpcomm_fence_t *coll = PMIX_NEW(prte_grpcomm_fence_t);
+
+    coll->sig = PMIX_NEW(prte_grpcomm_direct_fence_signature_t);
+    coll->sig->sz = 1;
+    coll->sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
+    PMIX_LOAD_PROCID(&coll->sig->signature[0], "unit-test-nspace",
+                     PMIX_RANK_WILDCARD);
+    coll->nexpected = 2;
+    coll->nreported = 1;
+    if (NULL != rec) {
+        coll->cbfunc = fence_cb;
+        coll->cbdata = rec;
+    }
+    pmix_list_append(&prte_mca_grpcomm_direct_component.fence_ops, &coll->super);
+}
+#endif
+
+/*
+ * A daemon failure while a fence is rolling up used to activate
+ * PRTE_JOB_STATE_COMM_FAILED - it killed the job rather than resolving the
+ * collective (#2528).  The handler must now complete every in-flight fence
+ * with a non-success status and drop its tracker, and it must do that in the
+ * global-scope pass: that is the one notice every daemon receives, in the
+ * order the HNP stamped it into the xcast stream, so all of them resolve the
+ * same fences at the same point.  Acting in the local pass would abort the
+ * fence on the daemons nearest the failure while their peers waited forever.
+ */
+static int test_fence_fault_handler(void)
+{
+    int failures = 0;
+#if PRTE_TEST_GRPCOMM_DIRECT
+    prte_rml_recovery_status_t status;
+    fence_cb_record_t rec = {0};
+    fence_cb_record_t rec2 = {0};
+
+    PMIX_CONSTRUCT(&prte_mca_grpcomm_direct_component.fence_ops, pmix_list_t);
+
+    /* nothing in flight: the handler must not care */
+    PMIX_CONSTRUCT(&status, prte_rml_recovery_status_t);
+    status.scope = PRTE_RML_FAULT_SCOPE_GLOBAL;
+    prte_grpcomm_direct_fence_fault_handler(&status);
+    PMIX_DESTRUCT(&status);
+    CHECK("no ops, list still empty",
+          0 == pmix_list_get_size(&prte_mca_grpcomm_direct_component.fence_ops));
+
+    /* the local-scope pass must leave the collective alone */
+    add_fence_op(&rec);
+    PMIX_CONSTRUCT(&status, prte_rml_recovery_status_t);
+    status.scope = PRTE_RML_FAULT_SCOPE_LOCAL;
+    prte_grpcomm_direct_fence_fault_handler(&status);
+    PMIX_DESTRUCT(&status);
+    CHECK("local scope leaves op in flight",
+          1 == pmix_list_get_size(&prte_mca_grpcomm_direct_component.fence_ops));
+    CHECK("local scope fires no callback", 0 == rec.ncalls);
+
+    /* a second fence, this one relayed only - no local participants, so no
+     * callback to fire.  It must still be dropped, and without crashing. */
+    add_fence_op(NULL);
+
+    /* the global-scope pass resolves every in-flight fence */
+    PMIX_CONSTRUCT(&status, prte_rml_recovery_status_t);
+    status.scope = PRTE_RML_FAULT_SCOPE_GLOBAL;
+    prte_grpcomm_direct_fence_fault_handler(&status);
+    PMIX_DESTRUCT(&status);
+    CHECK("global scope drops every tracker",
+          0 == pmix_list_get_size(&prte_mca_grpcomm_direct_component.fence_ops));
+    CHECK("participants completed once", 1 == rec.ncalls);
+    CHECK("completed with an error", PMIX_SUCCESS != rec.status);
+    CHECK("completed with no data", NULL == rec.data && 0 == rec.ndata);
+
+    /* and the job is resolved, not killed: a fence started afterwards is
+     * tracked from scratch rather than colliding with a leftover */
+    add_fence_op(&rec2);
+    CHECK("later fence tracked cleanly",
+          1 == pmix_list_get_size(&prte_mca_grpcomm_direct_component.fence_ops));
+    CHECK("later fence not yet completed", 0 == rec2.ncalls);
+
+    PMIX_LIST_DESTRUCT(&prte_mca_grpcomm_direct_component.fence_ops);
+    PMIX_CONSTRUCT(&prte_mca_grpcomm_direct_component.fence_ops, pmix_list_t);
+#endif
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_fence_fault_handler\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -324,6 +443,7 @@ int main(void)
     failures += test_component_identity();
     failures += test_base_context_id();
     failures += test_classes();
+    failures += test_fence_fault_handler();
 
     (void) pmix_mca_base_framework_close(&prte_grpcomm_base_framework);
     prte_finalize();

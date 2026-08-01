@@ -46,6 +46,7 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | `jobinfo.c` | A bare PMIx client for the **direct-modex** paths (`jobinfo` in the install): `publish`/`fetch`/`fetchkey`. Drives `src/prted/pmix/pmix_server_fence.c` from a daemon that hosts none of the target job's procs. |
 | `proctable.c` | A bare PMIx client for the **proc-table and server-URI queries** (`proctable` in the install): `procs`/`localprocs`/`serveruri`. Those are the only callers of `prte_pmix_convert_state()`, and the local-vs-global proc-table split has no meaning on one host. Drives `src/pmix`. |
 | `groupcon.c` | A bare PMIx client that drives a **group construct/destruct** (`groupcon` in the install): every rank contributes a local cid, asks for a context id, constructs, reads every peer's contribution back, destructs. Drives `grpcomm/direct`'s `grp_release` on daemons that merely *received* the broadcast. See §15. |
+| `fencer.c` | A bare PMIx client that parks a job inside **`PMIx_Fence`** (`fencer` in the install), with rank 0 holding the collective open, so a daemon can be killed while a fence is provably in flight. Drives `grpcomm/direct`'s fence fault handler. See §15. |
 | `slowcat.c` | A deliberately **slow** stdin reader (`slowcat` in the install, no PMIx dependency): copies stdin to a file in small reads with a pause between them, so the daemon feeding it keeps hitting *partial* writes. That is the only way to reach the iof short-write path. |
 | `fake-slurm.py` | A stand-in SLURM control plane (`sbatch`/`scontrol`/`scancel`) so `ras/slurm`'s elastic modify surface can be exercised. See §12. |
 
@@ -1143,6 +1144,39 @@ single-host test wearing a hat), and three back-to-back constructs
 followed by a plain job must all succeed — a caddy leak or a tracker that
 is never deleted shows up as drift across runs rather than as one bad
 one.
+
+### A daemon lost during a fence (`fencer`)
+
+The last case in the phase is about the *other* collective, and about the
+DVM rather than the job:
+[#2528](https://github.com/openpmix/prrte/issues/2528). The fence fault
+handler had no recovery path — any in-flight fence when a daemon died
+activated `PRTE_JOB_STATE_COMM_FAILED` with no job, which the errmgr reads
+as the **daemon** job failing, so one lost daemon during any fence took the
+whole DVM down. It now completes those fences with an error and leaves the
+DVM standing. On one host neither half exists: there is a single daemon, it
+is the HNP, and killing it ends the DVM whatever the handler does.
+
+```sh
+fencer [delay] [skip]
+```
+
+Every rank puts a scrap of modex data and calls `PMIx_Fence` over its whole
+namespace; rank 0 waits `delay` seconds first, and with `skip` it leaves
+without ever entering. Output is one `FENCE <rank> <what> …` line per step.
+
+Two things about how the case is written are deliberate:
+
+- **The window is constructed, not raced for.** Rank 0 sits out 30s, so the
+  other three ranks are provably still inside the fence — their daemons have
+  rolled their contributions up to the HNP, which is waiting on rank 0's —
+  when the daemon is killed. And rank 0 uses `skip`, because a laggard that
+  entered a *fresh* fence after the abort would block waiting for
+  participants who have already gone home, which looks exactly like the
+  hang the case is meant to detect and has nothing to do with the fault.
+- **The daemon that is killed hosts none of the job's procs.** Killing one
+  that did would abort the job through the errmgr and say nothing about the
+  fence: those clients would be dead either way.
 
 ## 16. The event base and the constants (`test_event`, `test_include`)
 

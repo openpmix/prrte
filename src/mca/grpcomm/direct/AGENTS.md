@@ -192,9 +192,52 @@ Message flow:
 participant. The tracker lives on `component.fence_ops`, keyed by exact
 proc-signature match.
 
-The fence `fault_handler` is currently **not resilient**: a TODO. If any
-fence op is in flight when a daemon fails it activates
-`PRTE_JOB_STATE_COMM_FAILED` (kills the job) rather than repairing.
+### Fence fault handling
+
+`prte_grpcomm_direct_fence_fault_handler` resolves every in-flight fence
+when a daemon fails, rather than tearing the DVM down. It used to activate
+`PRTE_JOB_STATE_COMM_FAILED` with a NULL job — which the errmgr reads as
+the *daemon* job failing, so one lost daemon during any fence terminated
+the whole DVM ([#2528](https://github.com/openpmix/prrte/issues/2528)).
+Each tracker is now unlinked and its local participants completed through
+the same callback `fence_release` uses, with `PMIX_ERR_COMM_FAILURE`; the
+PMIx server hands that status to every client blocked in `PMIx_Fence`.
+
+Three properties of the shape are load-bearing:
+
+- **It runs in the GLOBAL-scope pass, on every daemon.** Unlike `group`'s
+  handler this is not HNP-driven, and it emits no message. The global notice
+  is delivered to every daemon by the reliable xcast, and *every* xcast — the
+  fence releases included — is forwarded in the order of the op-id the HNP
+  stamps on it. So every daemon reaches the handler at the same point in one
+  ordered stream: a fence released ahead of the failure notice has completed
+  normally everywhere, and one that was not is aborted everywhere. An
+  HNP-driven abort would also have a hole this does not: the HNP holds no
+  tracker for a fence whose rollup has not reached it yet, so it could not
+  name the collective its descendants are blocked on.
+- **Every in-flight fence is resolved, not just those with a participant on
+  the failed daemon.** A fence rolls up over the routing tree, so a daemon
+  hosting none of the participants can still have been carrying a subtree's
+  contribution. The tracker counts contributions (`nreported`) rather than
+  recording which arrived, so a contribution that transited the failed daemon
+  can be neither proven delivered nor re-driven — and the decision has to come
+  out the same on every daemon or half the DVM would abort while the other
+  half waited. Repairing the unaffected cases instead needs per-contributor
+  accounting and an idempotent re-drive: a protocol change, not a fault
+  handler.
+- **A contribution already in flight when the abort runs still arrives**, and
+  `fence_recv` will create a tracker nobody completes — the same window
+  `abort_group_op()` leaves for groups. Closing it needs a collective
+  generation number every daemon agrees on, *including* one that joined an
+  elastic DVM after the failure. Short of that, dropping "stale" traffic on a
+  daemon whose idea of the generation is behind its peers' turns a rare leaked
+  tracker into a hang, so do not add a bare epoch counter here.
+
+Coverage: `test_fence_fault_handler` in `test/unit/grpcomm` drives the handler
+directly (scope gating, the callback status, relay-only trackers), and the
+dockerswarm `test_grpcomm` phase kills a daemon while three ranks are parked
+in a real fence — the DVM-death half of this cannot exist on one host, where
+the only daemon is the HNP.
 
 ---
 
@@ -368,10 +411,12 @@ deletes the tracker — so a cancel/abort tears down the collective cleanly
   Note the fault-handler abort loop itself is *unguarded* (it uses only
   status fields and `abort_group_op`), but the `PMIX_GROUP_CANCEL` handling
   is guarded — preserve that split.
-- **The fence fault handler is a known gap.** It kills the job on any
-  in-flight fence when a daemon fails (TODO to make it resilient). If you
-  are adding fence resilience, that is the place — do not weaken it into a
-  silent no-op.
+- **The two fault handlers resolve collectives in deliberately different
+  ways** — `fence` locally on every daemon, `group` by an HNP-driven
+  broadcast — and neither may be weakened into a silent no-op. A collective
+  a fault has broken must resolve one way or the other, or its local clients
+  block forever. See *Fence fault handling* above for why the fence one is
+  not modelled on the group one.
 - **Free every allocation the handler still owns before it returns.** The
   entry-point handlers (`begin_xcast`, `fence`, `group`) own the caddy/op
   they were thread-shifted; the recv handlers own the info arrays / darrays

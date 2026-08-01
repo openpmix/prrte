@@ -81,17 +81,73 @@ int prte_grpcomm_direct_fence(const pmix_proc_t procs[], size_t nprocs,
     return PRTE_SUCCESS;
 }
 
+/* Resolve an in-flight fence that a daemon failure has broken, instead of
+ * tearing down the DVM.  Completing the local participants with a non-success
+ * status through the same callback the release path uses is all it takes: the
+ * PMIx server hands that status back to every client blocked in PMIx_Fence, so
+ * they learn the collective failed and can act, and the tracker goes away.
+ * The tracker is unlinked before the callback runs so the list is consistent no
+ * matter what the callback does with it. */
+static void abort_fence_op(prte_grpcomm_fence_t *coll, pmix_status_t st)
+{
+    PMIX_OUTPUT_VERBOSE((0, prte_grpcomm_base_framework.framework_output,
+                         "%s grpcomm:direct:fence aborting fence op - a daemon "
+                         "failed while it was in flight",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+
+    pmix_list_remove_item(&prte_mca_grpcomm_direct_component.fence_ops,
+                          &coll->super);
+    /* a daemon that is only relaying this fence has no local participants and
+     * hence no callback - it just drops the tracker */
+    if (NULL != coll->cbfunc) {
+        coll->cbfunc(st, NULL, 0, coll->cbdata, NULL, NULL);
+    }
+    PMIX_RELEASE(coll);
+}
+
 void prte_grpcomm_direct_fence_fault_handler(const prte_rml_recovery_status_t* status)
 {
-    PRTE_HIDE_UNUSED_PARAMS(status);
-    /* TODO: make this actually resilient
-     * For now, we'll just kill the job if any ops are active */
-    if(0 < pmix_list_get_size(&prte_mca_grpcomm_direct_component.fence_ops)){
-        PMIX_OUTPUT_VERBOSE((0, prte_grpcomm_base_framework.framework_output,
-                             "%s grpcomm:direct:fence daemon failed during"
-                             " active fence operation(s)",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
+    prte_grpcomm_fence_t *coll, *nxt;
+
+    /* Act in the global-scope pass.  The global notice is delivered to every
+     * daemon by the reliable xcast, and every xcast - the fence releases
+     * included - is forwarded in the order of the op-id the HNP stamps on it.
+     * So each daemon reaches this point at the same place in that one ordered
+     * stream: a fence whose release was broadcast ahead of the failure notice
+     * has already completed normally on every daemon, and one whose release was
+     * not is aborted on every daemon.  Aborting in the local pass instead would
+     * resolve the fence on the daemons that noticed the failure while their
+     * peers went on waiting for a rollup that can never arrive. */
+    if (PRTE_RML_FAULT_SCOPE_GLOBAL != status->scope) {
+        return;
+    }
+    if (0 == pmix_list_get_size(&prte_mca_grpcomm_direct_component.fence_ops)) {
+        return;
+    }
+
+    /* Every in-flight fence is resolved, not just those with a participant on
+     * the failed daemon.  A fence rolls up over the routing tree, so a daemon
+     * that hosts none of the participants can still have been carrying a
+     * subtree's contribution when it died - and nothing here can tell whether
+     * it was: the tracker counts contributions (nreported) rather than
+     * recording which ones arrived, so a contribution that transited the failed
+     * daemon can neither be shown to have been delivered nor re-driven.  Nor
+     * could the decision be made per-daemon even if the local one could tell,
+     * because it has to come out the same everywhere or half the DVM would
+     * abort while the other half waited.  Repairing the unaffected cases rather
+     * than aborting them needs per-contributor accounting and an idempotent
+     * re-drive, which is a protocol change, not a fault handler.
+     *
+     * A contribution that was already in flight when we abort still arrives
+     * afterwards and creates a tracker nobody will complete - the same window
+     * abort_group_op() leaves for groups.  Closing it needs a collective
+     * generation number that every daemon agrees on, including one that joined
+     * an elastic DVM after the failure; short of that, dropping "stale" traffic
+     * on a daemon whose idea of the generation is behind its peers' would turn
+     * a rare leaked tracker into a hang. */
+    PMIX_LIST_FOREACH_SAFE(coll, nxt, &prte_mca_grpcomm_direct_component.fence_ops,
+                           prte_grpcomm_fence_t) {
+        abort_fence_op(coll, PMIX_ERR_COMM_FAILURE);
     }
 }
 
