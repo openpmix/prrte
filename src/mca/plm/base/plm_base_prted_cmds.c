@@ -170,10 +170,19 @@ int prte_plm_base_prted_signal_local_procs(pmix_nspace_t job, int32_t signal)
     int rc;
     pmix_data_buffer_t cmd;
     prte_daemon_cmd_flag_t command = PRTE_DAEMON_SIGNAL_LOCAL_PROCS;
+    /* A pmix_nspace_t is an array type, so as a PARAMETER it has decayed to a
+     * char* - and &job is therefore the address of that pointer variable, not
+     * of the name. Packing PMIX_PROC_NSPACE reads PMIX_MAX_NSLEN+1 bytes from
+     * whatever it is handed, so passing &job packed a stack fragment and the
+     * receiving daemon matched no job at all: every signal delivered through
+     * this entry point was silently dropped. Copy into real storage first. */
+    pmix_nspace_t jobid;
 
     PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:prted_cmd sending signal_local_procs cmds",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+
+    PMIX_LOAD_NSPACE(jobid, job);
 
     PMIX_DATA_BUFFER_CONSTRUCT(&cmd);
 
@@ -186,7 +195,7 @@ int prte_plm_base_prted_signal_local_procs(pmix_nspace_t job, int32_t signal)
     }
 
     /* pack the jobid */
-    rc = PMIx_Data_pack(NULL, &cmd, &job, 1, PMIX_PROC_NSPACE);
+    rc = PMIx_Data_pack(NULL, &cmd, &jobid, 1, PMIX_PROC_NSPACE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_DESTRUCT(&cmd);
