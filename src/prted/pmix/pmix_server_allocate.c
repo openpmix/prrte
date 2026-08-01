@@ -14,6 +14,7 @@
 #include "src/rml/rml.h"
 #include "src/util/dash_host/dash_host.h"
 #include "src/mca/ras/base/base.h"
+#include "src/util/name_fns.h"
 
 void pmix_server_alloc_request_resp(int status, pmix_proc_t *sender,
                                     pmix_data_buffer_t *buffer,
@@ -47,9 +48,20 @@ void pmix_server_alloc_request_resp(int status, pmix_proc_t *sender,
         return;
     }
 
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s sched response received for local req %d: %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req_index,
+                        PMIx_Error_string(ret));
+
     req = pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, req_index);
     if (NULL == req) {
-        // nothing we can do
+        /* The index arrived on the wire, so it is untrusted - but it is also
+         * OUR index, echoed back, so a miss means the request was retired
+         * early and whoever is waiting on it will wait forever. There is
+         * nothing to complete, so say so rather than returning in silence. */
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s sched response names local req %d, which is gone",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req_index);
         return;
     }
 
@@ -85,9 +97,18 @@ void pmix_server_alloc_request_resp(int status, pmix_proc_t *sender,
 
 ANSWER:
     if (NULL != req->infocbfunc) {
-        // pass the response back to the requestor
-        req->infocbfunc(ret, req->info, req->ninfo, req, prte_pmix_server_req_release, req);
+        /* Pass the response back to the requestor.  The callback's cbdata is
+         * the one the ORIGINAL caller gave us (req->cbdata) - PMIx uses it to
+         * find the request it is completing.  Handing it the tracker instead
+         * meant every allocation and every session-control request issued
+         * from a non-master daemon was answered into the void: the client sat
+         * in its PMIx call until it timed out, or the library faulted on the
+         * unrecognized pointer. */
+        req->infocbfunc(ret, req->info, req->ninfo, req->cbdata,
+                        prte_pmix_server_req_release, req);
     } else {
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs,
+                                    req->local_index, NULL);
         PMIX_RELEASE(req);
     }
 }
