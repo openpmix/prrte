@@ -78,6 +78,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include "constants.h"
 #include "types.h"
@@ -989,6 +991,89 @@ static int test_print_binding(void)
 }
 
 /* ------------------------------------------------------------------ */
+/* loading the local topology from a file                             */
+/* ------------------------------------------------------------------ */
+
+/* "hwloc_use_topo_file" means "this XML describes the machine I am running
+ * on". hwloc cannot know that, so it zeroes every support bit of an imported
+ * topology - and prte_rmaps_base_check_support() refuses any explicitly
+ * requested binding when those bits are clear, so the option was usable only
+ * with "--bind-to none". PRRTE asserts the bits itself; this pins that it
+ * happens, and that it happens *after* hwloc_topology_load(), which is the
+ * only place it sticks (hwloc's header: the support structure "only contains
+ * valid information after" the load). */
+static int test_topo_file(void)
+{
+    int failures = 0;
+    const struct hwloc_topology_support *support;
+    char path[] = "/tmp/prte_test_topoXXXXXX";
+    char *saved_file;
+    hwloc_topology_t saved_topo;
+    int fd, rc;
+    size_t len;
+    ssize_t wrote;
+
+    fd = mkstemp(path);
+    if (0 > fd) {
+        fprintf(stderr, "SKIP test_topo_file: could not create a temp file\n");
+        return 0;
+    }
+    len = strlen(interleaved_xml);
+    wrote = write(fd, interleaved_xml, len);
+    close(fd);
+    if ((ssize_t) len != wrote) {
+        fprintf(stderr, "SKIP test_topo_file: short write\n");
+        unlink(path);
+        return 0;
+    }
+
+    /* get_topology() reads these two globals and returns early if the
+     * topology is already set, so stand them up and put them back */
+    saved_file = prte_hwloc_base_topo_file;
+    saved_topo = prte_hwloc_topology;
+    prte_hwloc_base_topo_file = path;
+    prte_hwloc_topology = NULL;
+
+    rc = prte_hwloc_base_get_topology();
+    CHECK("a topology file loads", PRTE_SUCCESS == rc);
+    if (PRTE_SUCCESS == rc && NULL != prte_hwloc_topology) {
+        CHECK("the loaded topology has the file's packages",
+              2 == prte_hwloc_base_get_nbobjs_by_type(prte_hwloc_topology,
+                                                      HWLOC_OBJ_PACKAGE));
+        support = hwloc_topology_get_support(prte_hwloc_topology);
+        CHECK("the loaded topology reports support", NULL != support);
+        if (NULL != support) {
+            CHECK("cpubind is asserted for an imported topology",
+                  support->cpubind->set_thisproc_cpubind &&
+                  support->cpubind->set_thisthread_cpubind);
+            CHECK("membind is asserted for an imported topology",
+                  support->membind->set_thisproc_membind &&
+                  support->membind->set_thisthread_membind);
+        }
+        prte_hwloc_base_release_userdata(prte_hwloc_topology);
+        hwloc_topology_destroy(prte_hwloc_topology);
+    }
+
+    /* a file that is not a topology is refused, and leaves no handle behind
+     * for prte_hwloc_base_close() to destroy a second time */
+    prte_hwloc_topology = NULL;
+    fd = open(path, O_WRONLY | O_TRUNC);
+    if (0 <= fd) {
+        wrote = write(fd, "not a topology\n", 15);
+        (void) wrote;
+        close(fd);
+        rc = prte_hwloc_base_get_topology();
+        CHECK("a malformed topology file is refused", PRTE_SUCCESS != rc);
+        CHECK("a refused topology file leaves no handle", NULL == prte_hwloc_topology);
+    }
+
+    prte_hwloc_base_topo_file = saved_file;
+    prte_hwloc_topology = saved_topo;
+    unlink(path);
+    return failures;
+}
+
+/* ------------------------------------------------------------------ */
 /* --bind-to parsing                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -1399,6 +1484,7 @@ int main(void)
     failures += test_cpuset2ranges();
     failures += test_index_basis();
     failures += test_print_binding();
+    failures += test_topo_file();
     failures += test_binding_policy();
     failures += test_userdata();
     failures += test_reset_counters();
