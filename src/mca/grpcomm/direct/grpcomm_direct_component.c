@@ -85,6 +85,7 @@ static void sgcon(prte_grpcomm_direct_group_signature_t *p)
     p->naddmembers = 0;
     p->final_order = NULL;
     p->nfinal = 0;
+    p->ft_collective = false;
 }
 static void sgdes(prte_grpcomm_direct_group_signature_t *p)
 {
@@ -155,6 +156,9 @@ static void gccon(prte_grpcomm_group_t *p)
     p->aborting = false;
     p->timeout = 0;
     p->tev_active = false;
+    p->my_contribution = NULL;
+    p->departed = NULL;
+    p->ndeparted = 0;
     p->grpinfo = PMIx_Info_list_start();
     p->endpts = PMIx_Info_list_start();
     p->cbfunc = NULL;
@@ -167,6 +171,12 @@ static void gcdes(prte_grpcomm_group_t *p)
         p->tev_active = false;
     }
     PMIX_DESTRUCT(&p->reported_slots);
+    if (NULL != p->my_contribution) {
+        PMIX_DATA_BUFFER_RELEASE(p->my_contribution);
+    }
+    if (NULL != p->departed) {
+        PMIX_PROC_FREE(p->departed, p->ndeparted);
+    }
     if (NULL != p->sig) {
         PMIX_RELEASE(p->sig);
     }

@@ -71,6 +71,10 @@ typedef struct {
 } prte_grpcomm_group_memo_t;
 PMIX_CLASS_DECLARATION(prte_grpcomm_group_memo_t);
 
+/* Exported for the unit test: was this member hosted by a daemon that has
+ * since failed? */
+PRTE_MODULE_EXPORT bool prte_grpcomm_direct_group_member_departed(const pmix_proc_t *member);
+
 PRTE_MODULE_EXPORT extern prte_grpcomm_direct_component_t prte_mca_grpcomm_direct_component;
 extern prte_grpcomm_base_module_t prte_grpcomm_direct_module;
 
@@ -102,6 +106,12 @@ typedef struct {
     size_t naddmembers;
     pmix_proc_t *final_order;
     size_t nfinal;
+    // Set when a participant asked for PMIX_GROUP_FT_COLLECTIVE: a construct
+    // that loses a member should complete on the survivors rather than abort.
+    // Accumulated by sticky-OR as contributions merge, so it means "some
+    // surviving participant asked for it" - a participant that requested it
+    // and then died before its contribution rolled up cannot be seen here.
+    bool ft_collective;
 } prte_grpcomm_direct_group_signature_t;
 PRTE_MODULE_EXPORT PMIX_CLASS_DECLARATION(prte_grpcomm_direct_group_signature_t);
 
@@ -189,6 +199,15 @@ typedef struct {
     // its participants instead of hanging them
     prte_event_t tev;
     bool tev_active;
+    // This daemon's own contribution, kept so a fault can replay it: recovery
+    // resets every tracker and each daemon re-injects what it originally
+    // contributed. NULL on a daemon that is only relaying for its subtree.
+    pmix_data_buffer_t *my_contribution;
+    // Members lost with a failed daemon, filled in by the controller when a
+    // fault-tolerant construct completes on the survivors, and carried in the
+    // release so each daemon can tell its own clients who went missing.
+    pmix_proc_t *departed;
+    size_t ndeparted;
     void *grpinfo;  // info list of group info
     void *endpts;   // info list of endpts
     /* callback function */
