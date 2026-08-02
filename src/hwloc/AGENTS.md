@@ -278,8 +278,23 @@ and everything that renders cpu numbers goes through it:
 |----------|--------|
 | `prte_hwloc_base_cpuset2ranges()` | `0,2-3` — the primitive; allocates and returns |
 | `prte_hwloc_base_cset2str()` | `package[0][core:L0,2-3]` — one element per package; allocates |
-| `prte_hwloc_get_binding_info()` | one `<core>N</core>` element per site, plus the package number, into the **caller's** buffer |
+| `prte_hwloc_get_binding_info()` | `<package id="N">` per package, each holding one `<core>N</core>` per site, into the **caller's** buffer |
 | `prte_hwloc_print()` | the whole topology as indented text; allocates |
+
+**The two binding renderers have to agree.** `_cset2str()` (the `--display
+map` short form) and `_get_binding_info()` (the `--display map:parseable`
+XML) describe the same `proc->cpuset`, and they must describe all of it.
+`_get_binding_info()` used to render only the *sites*, into a single
+`<package>` element its caller wrapped around them, and report the package
+number through an out parameter — so a process bound across two packages had
+each package overwrite the previous one from the top of the buffer, and came
+out naming the last package with every earlier one's cores dropped. That is
+not incomplete output, it is *wrong* output, and it is the machine-readable
+half of the pair. It is reachable, too: PRRTE refuses cross-package
+placement in the ordinary mappers and its own diagnostic points the user at
+the rankfile mapper, where a slot list of `P0:0;P1:0` produces exactly this.
+The renderer now emits the `<package>` elements itself and there is no
+`pkgnum`. If you add a third rendering, render every package.
 
 Three renderers used to short-cut this whenever the bits "already were
 cores" (`npus == ncores`) or the job was in hwthreads, and print the raw
@@ -316,16 +331,18 @@ Other rules here, all of which were being broken:
   budget it handed `snprintf`, so a process bound to more than a few cores
   wrote past the end of the caller's buffer — in the HNP, which is holding
   every node's topology, so the corruption surfaced as a crash somewhere
-  unrelated.
+  unrelated. `bounded_append()` is the one way to add to that buffer: it
+  clamps rather than subtracts, because the running total legitimately
+  exceeds the buffer length once anything has been truncated.
 - **A caller sizing a buffer per PU must use the real element size.** Each
-  element is 20 spaces of indent plus `<core>%d</core>\n` — about 34 bytes
-  for a single-digit index, more as indices grow. The one caller in
-  `runtime/data_type_support/prte_dt_print_fns.c` budgeted 20.
+  site element is 20 spaces of indent plus `<core>%d</core>\n` — about 34
+  bytes for a single-digit index, more as indices grow — and each package
+  costs an opening and a closing element on top. The one caller in
+  `runtime/data_type_support/prte_dt_print_fns.c` budgeted 20 per PU and
+  nothing per package.
 - **`hwloc_bitmap_snprintf()` gets `sizeof(buf)`, not a constant that
   happens to be nearby.** `print_hwloc_obj()` declared 1024 bytes and
   claimed 2048.
-- **`*pkgnum` is always set.** Its only caller declares it uninitialized
-  and prints it.
 - **`hwloc_bitmap_isfull()` is never true for a topology's cpuset.** It
   means "infinitely set". A dead `isequal(cpuset, avail) && isfull(avail)`
   "unbound" test lived in two of these functions for years. Deciding a
@@ -436,9 +453,13 @@ summary-not-yet-built case), `_get_npus()` in core and hwthread terms,
 `_cpu_list_parse()` grammar including every id that does not exist,
 `_cset2str()` range collapsing, `prte_hwloc_get_binding_info()` against a
 **guarded** buffer (a canary past `sz` — this is how the element-writer
-overflow is pinned), `_cpuset2ranges()`, the print-buffer ring, the
+overflow is pinned) including a cpuset spanning two packages,
+`_cpuset2ranges()`, the print-buffer ring, the
 `--bind-to` parser, userdata release across the normal hierarchy *and* the
-special NUMA depth, and `_reset_counters()` at both of those places.
+special NUMA depth, `_reset_counters()` at both of those places, and
+`prte_hwloc_print()` — which levels reach the output (NUMA nodes are the
+ones that used to be missing) and whether the child count it prints
+accounts for every child list.
 
 One case cannot be built synthetically: hwloc's synthetic generator always
 makes `os_index` and `logical_index` agree, so **the logical-vs-physical
@@ -505,11 +526,12 @@ enough to fill its cpuset buffer — a few thousand PUs.
   then printed that bitmap with `hwloc_bitmap_list_snprintf()`, mixing two
   index bases in one string. `prte_hwloc_base_cpuset2ranges()` replaces it
   and answers the question the callers were actually asking.
-- **`prte_hwloc_get_binding_info()`'s output is undefined for a process
-  bound across more than one package.** It renders the last matching package
-  and reports that package's number. The caller wraps the result in a single
-  `<package>` element, so the shape of the fix is an API change, not a
-  one-liner.
+- **`prte_hwloc_get_binding_info()` no longer has a `pkgnum` out
+  parameter**, and no longer produces undefined output for a process bound
+  across more than one package. It emits the `<package id="N">` elements
+  itself, one per package the cpuset touches. See "The two binding renderers
+  have to agree" above; the caller's job is now to emit the result verbatim
+  inside its `<binding>` element.
 - **`_cset2str()` and `_get_binding_info()` iterate packages, so a topology
   with no `HWLOC_OBJ_PACKAGE` level renders as nothing at all** (`cset2str`
   returns NULL, and its callers print `UNBOUND`). Every real machine has

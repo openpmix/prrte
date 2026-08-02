@@ -219,10 +219,15 @@ PRTE_EXPORT char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
                                            bool physical,
                                            hwloc_topology_t topo);
 
+/**
+ * Render a binding as XML into the caller's buffer: one <package id="N">
+ * element per package the cpuset touches, each holding one <core>/<hwt>
+ * element per site. Writes at most "sz" bytes and always NUL-terminates.
+ */
 PRTE_EXPORT void prte_hwloc_get_binding_info(hwloc_const_cpuset_t cpuset,
                                              bool use_hwthread_cpus,
                                              bool physical,
-                                             hwloc_topology_t topo, int *pkgnum,
+                                             hwloc_topology_t topo,
                                              char *cores, int sz);
 
 /**

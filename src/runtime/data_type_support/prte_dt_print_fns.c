@@ -317,8 +317,8 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     hwloc_cpuset_t mycpus;
     char *str;
     bool use_hwthread_cpus;
-    int pkgnum;
     int npus;
+    int npkgs;
     char *cores = NULL;
     char xmlsp = ' ';
     bool physical;
@@ -342,29 +342,36 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
             hwloc_bitmap_list_sscanf(mycpus, src->cpuset);
 
             npus = prte_hwloc_base_get_nbobjs_by_type(src->node->topology->topo, HWLOC_OBJ_PU);
+            npkgs = prte_hwloc_base_get_nbobjs_by_type(src->node->topology->topo,
+                                                       HWLOC_OBJ_PACKAGE);
             /* There can be one element per PU, and each is 20 spaces of
              * indent plus "<core>%d</core>\n" - 34 characters for a
              * single-digit index and more as the index grows. The estimate
              * used to be 20 per element, so a process bound to more than
              * about half the cores of a non-SMT node had its site list
              * silently truncated (and, before the writes were bounded,
-             * overran this buffer outright). */
-            int sz = sizeof(char) * (npus * 48 + 64);
+             * overran this buffer outright). Each package the process
+             * touches also costs an opening and a closing element, so budget
+             * for the whole topology's worth of them rather than one. */
+            int sz = sizeof(char) * (npus * 48 + npkgs * 64 + 64);
             cores = (char*)malloc(sz);
             if (NULL == cores) {
                 pmix_asprintf(&tmp, "\n%*c<MemoryError/>\n", 8, xmlsp);
                 *output = tmp;
                 return;
             }
+            /* the renderer emits the <package> elements itself: a process
+             * bound across two packages has two of them, and the shape this
+             * used to wrap around it could only ever name one */
             prte_hwloc_get_binding_info(mycpus, use_hwthread_cpus, physical,
-                                        src->node->topology->topo, &pkgnum, cores, sz);
+                                        src->node->topology->topo, cores, sz);
 
             hwloc_bitmap_free(mycpus);
 
             pmix_asprintf(&tmp, "\n%*c<rank id=\"%s\" appid=\"%ld\">\n%*c<binding>\n"
-                          "%*c<package id=\"%d\">\n%s\n%*c</package>\n%*c</binding>\n%*c</rank>\n",
+                          "%s%*c</binding>\n%*c</rank>\n",
                           8, xmlsp, PRTE_VPID_PRINT(src->name.rank), (long) src->app_idx, 12, xmlsp,
-                          16, xmlsp, pkgnum, cores, 16, xmlsp, 12, xmlsp, 8, xmlsp);
+                          cores, 12, xmlsp, 8, xmlsp);
 
             free (cores);
         } else {

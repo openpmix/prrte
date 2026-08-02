@@ -117,13 +117,22 @@ none of the three checked `src->node` itself, which is NULL for an unmapped
 proc and for a proc that outlived its node.
 
 The XML arm sizes a buffer for `prte_hwloc_get_binding_info()` itself, and
-has to size it from the **element** it will hold, not from a round number:
-each is 20 spaces of indent plus `<core>%d</core>\n`, so ~34 bytes for a
-single-digit core index and more as indices grow. The estimate used to be 20
-bytes per PU, which silently truncated the site list for any process bound to
-more than about half the cores of a non-SMT node — and, before `src/hwloc`
-bounded its writes, overran the buffer outright. See
-[`src/hwloc/AGENTS.md`](../../hwloc/AGENTS.md), "Rendering a binding".
+has to size it from the **elements** it will hold, not from a round number:
+each site is 20 spaces of indent plus `<core>%d</core>\n`, so ~34 bytes for a
+single-digit core index and more as indices grow, and each package the
+process touches costs an opening and a closing element on top. The estimate
+used to be 20 bytes per PU and nothing per package, which silently truncated
+the site list for any process bound to more than about half the cores of a
+non-SMT node — and, before `src/hwloc` bounded its writes, overran the buffer
+outright. See [`src/hwloc/AGENTS.md`](../../hwloc/AGENTS.md), "a cpuset's
+bits are PU OS indices".
+
+**The `<package>` elements come from the renderer, not from here.** This arm
+used to wrap the returned site list in a single `<package id="%d">` built
+from a `pkgnum` out parameter, which meant a process bound across two
+packages was reported as belonging to one — the short form of the same
+binding (`prte_hwloc_base_cset2str`) named both. Emit what the renderer
+returns verbatim.
 
 The string building is `pmix_asprintf`-and-free chaining: `tmp` always owns
 the accumulated string, each step builds `tmp2` from it, frees `tmp`, and
