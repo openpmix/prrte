@@ -160,10 +160,15 @@ enum {
     PRTE_PMIX_LAUNCHER_READY = (PRTE_ERR_BASE - 71),
     PRTE_OPERATION_SUCCEEDED = (PRTE_ERR_BASE - 72),
 
-    /* error codes specific to PRTE - don't forget to update
-        src/util/error_strings.c when adding new error codes!!
-        Otherwise, the error reporting system will potentially crash,
-        or at the least not be able to report the new error correctly.
+    /* Error codes specific to PRRTE.
+     *
+     * Whichever group you append to, give the new code a string in
+     * prte_strerror(), which lives in src/util/error.c -- NOT in
+     * src/util/error_strings.c, which this comment used to name.  That file
+     * holds the *state* strings (prte_job_state_to_str() and friends), so
+     * following the old instruction put the string somewhere prte_strerror()
+     * never looks and left the user reading "Unknown error" -- precisely the
+     * failure the instruction exists to prevent.  test/unit/util catches it.
      */
 
     PRTE_ERR_RECV_LESS_THAN_POSTED = (PRTE_ERR_BASE - 101),
