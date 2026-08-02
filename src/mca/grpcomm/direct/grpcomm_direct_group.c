@@ -1453,9 +1453,13 @@ static prte_grpcomm_group_t *get_tracker(prte_grpcomm_direct_group_signature_t *
                         if (PMIX_CHECK_PROCID(&sig->members[n], &coll->sig->members[nmb])) {
                             // yes, we do
                             found = true;
-                            // check for wildcard as that needs to be retained
+                            // check for wildcard as that needs to be retained.
+                            // note that "n" indexes the incoming signature while
+                            // "nmb" indexes the tracker's - the retention must be
+                            // applied to the entry we matched, not to whatever
+                            // happens to sit at the same offset over here
                             if (PMIX_RANK_WILDCARD == sig->members[n].rank) {
-                                coll->sig->members[n].rank = PMIX_RANK_WILDCARD;
+                                coll->sig->members[nmb].rank = PMIX_RANK_WILDCARD;
                             }
                             break;
                         }
@@ -1502,9 +1506,11 @@ static prte_grpcomm_group_t *get_tracker(prte_grpcomm_direct_group_signature_t *
                         if (PMIX_CHECK_PROCID(&sig->addmembers[n], &coll->sig->addmembers[nmb])) {
                             // yes, we do
                             found = true;
-                            // check for wildcard as that needs to be retained
+                            // check for wildcard as that needs to be retained -
+                            // see the note above on the members loop: "nmb" is
+                            // the index into the tracker's array
                             if (PMIX_RANK_WILDCARD == sig->addmembers[n].rank) {
-                                coll->sig->addmembers[n].rank = PMIX_RANK_WILDCARD;
+                                coll->sig->addmembers[nmb].rank = PMIX_RANK_WILDCARD;
                             }
                             break;
                         }
