@@ -25,7 +25,7 @@ up as strange behavior in whatever subsystem happened to use it.
 | `types.h` | Rank/app-index typedefs, `prte_socklen_t`, the 64-bit byte-order helpers. | no |
 | `prte_config_top.h` | Undefs the autoconf `PACKAGE_*` macros. Included at the *top* of `prte_config.h`. | no |
 | `prte_config_bottom.h` | The portability layer: the `__prte_attribute_*__` wrappers, `PRTE_EXPORT`, `PRTE_PATH_MAX`, the `sockaddr`/`AF_*` fallbacks. Included at the *bottom* of `prte_config.h`. | no |
-| `prte_stdint.h` | Fixed-width types and `PRIsize_t` where the system's are inadequate. | no |
+| `prte_stdint.h` | Pointer-sized integer fallbacks and `PRIsize_t`. | no |
 | `prte_stdatomic.h` | `prte_atomic_bool_t`. That is the whole file. | no |
 | `prte_socket_errno.h` | `#define prte_socket_errno errno`. | no |
 | `prte_portable_platform.h`, `_real.h` | Compiler-identification macros, also read by `config/prte_check_compiler_version.m4`. | vendored — do not edit |
@@ -48,7 +48,8 @@ place before anything else is parsed.
 ```
 PRTE_ERR_BASE  PMIX_EXTERNAL_ERR_BASE  (-3000)
                  offsets   1 ..  72  ->  -3001 .. -3072   mirrored from PMIx
-                 offsets 101 .. 155  ->  -3101 .. -3155   PRRTE's own
+                 offsets 101 .. 156  ->  -3101 .. -3156   PRRTE's own
+PRTE_ERR_MAX                  offset 157  ->  -3157       not a code: the bound
 ```
 
 `PRTE_SUCCESS` is `0` and is the only code that is not an offset. Everything
@@ -82,10 +83,41 @@ were flattened into `src/` in 2019. So the whole lower group became
 **positive** error codes (+99 down to +43), and a `PRTE_ERR_MAX` defined as
 `(PRTE_ERR_SPLIT - 100)` was `0` — the value of `PRTE_SUCCESS`. OPAL and
 ORTE have been one code base since that merge, so the second base is gone
-too: one enum in one file does not need two. `PRTE_ERR_MAX` is gone rather
-than corrected — nothing in the tree ever used it, and a bound with no
-consumer is a bound nobody maintains. If you need one, the range is
-`PRTE_ERR_BASE` downwards and the test that cares defines its own span.
+too: one enum in one file does not need two.
+
+### `PRTE_ERR_MAX` — the bound, and why it is back
+
+`PRTE_ERR_MAX` is the last member of the enum and is **not a code**. Nothing
+returns it, nothing tests for it, and `prte_strerror()` deliberately has no
+case for it. It is one past the last assigned offset, and it exists so that
+code sweeping the list has a bound it does not have to guess.
+
+It was removed once, on the reasoning that nothing consumed it and *a bound
+with no consumer is a bound nobody maintains* — leaving each test that
+needed one to define its own span. That was the wrong shape. Two of them
+(`test/unit/include` and `test/unit/util`) wrote out the last offset as a
+literal `155`, and **both went stale on the very first code appended after
+they were written**. The consequence was worse in `test/unit/util`, whose
+sweep exists precisely to catch a code added without a `prte_strerror()`
+string: it stopped one short of the newest code — the code most likely to be
+missing one.
+
+So the bound is back, with the two things that were missing the first time:
+
+- **It lives next to the append site.** Bump it in the same edit that adds a
+  code. It sits at the bottom of the enum, immediately below where you are
+  appending, for exactly that reason.
+- **A stale bound is a test failure, not a silent loss of coverage.**
+  `test_error_bound()` in `test/unit/util` uses `prte_strerror()` as the
+  oracle: the offset just inside `PRTE_ERR_MAX` must be a real named code,
+  and `PRTE_ERR_MAX` itself must not be. That catches both directions —
+  appending a code without bumping the bound, and bumping the bound past the
+  last code.
+
+`test/unit/pmix` keeps a span of its own (`PRTE_CODE_SPAN`, 200) on purpose.
+It is a deliberately loose range test — "is this value plausibly a PRRTE
+code rather than a raw PMIx status?" — and wants headroom rather than the
+exact end of the list.
 
 Nothing in the tree ever tested a PRRTE code by sign, which is why the
 inversion went unnoticed for so long: the house idiom is `PRTE_SUCCESS != rc`,
@@ -95,15 +127,21 @@ form that stays correct when the base moves.
 
 ### Adding a code
 
-Append it at the end of its group with the next unused offset (or at the very
-end — the two groups are a convention for readers, not arithmetic), leave the
-hole between offsets 72 and 101 alone, and **add its string to
-[`src/util/error.c`](../util/error.c)**. `test/unit/util` sweeps the whole
-range and fails on a code with no string, because `PRTE_ERROR_LOG()` prints
-nothing else and the user would see "Unknown error". `test/unit/include`
-checks the range arithmetic. Uniqueness needs no test: `prte_strerror()`
-switches on every code, so a repeated value is a duplicate-`case` error at
-build time.
+Three steps, all in the same edit:
+
+1. Append it at the end of its group with the next unused offset (or at the
+   very end — the two groups are a convention for readers, not arithmetic),
+   leaving the hole between offsets 72 and 101 alone.
+2. **Bump `PRTE_ERR_MAX`** to one past your new offset. It is the next line
+   down; you cannot miss it, and if you do, `test/unit/util` fails.
+3. **Add its string to [`src/util/error.c`](../util/error.c).**
+   `test/unit/util` sweeps the whole range and fails on a code with no
+   string, because `PRTE_ERROR_LOG()` prints nothing else and the user would
+   see "Unknown error".
+
+`test/unit/include` checks the range arithmetic. Uniqueness needs no test:
+`prte_strerror()` switches on every code, so a repeated value is a
+duplicate-`case` error at build time.
 
 Job and process states are numbered similarly but live somewhere else:
 [`src/mca/plm/plm_types.h`](../mca/plm/plm_types.h). They have **not** been
@@ -134,6 +172,36 @@ project's usual `#if FOO` rule, which applies to the `AC_DEFINE_UNQUOTED`
 0-or-1 symbols. Where it is absent, `prte_config_bottom.h` supplies identity
 `htonl`/`htons` stubs and these follow suit.
 
+---
+
+## `prte_stdint.h`
+
+Fixed-width and pointer-sized integer types, plus `PRIsize_t`. Two notes:
+
+- **`PRIsize_t` is unconditionally `"zu"`.** C11 is a hard requirement, so
+  `"z"` is always available and is the only spelling correct by *definition*
+  rather than by a size coincidence. It used to be a ladder whose `"zu"` arm
+  was guarded on `ACCEPT_C99` — a symbol PRRTE's configure has never defined
+  — so every build fell through to comparing `SIZEOF_SIZE_T` against
+  `SIZEOF_LONG` and `SIZEOF_LONG_LONG`, landing on a working answer for the
+  usual data models and on plain `"u"` for any where it did not.
+- **The `intptr_t`/`uintptr_t` ladder is live** and ends in an `#error`, so
+  it is one of the few things here that fails loudly. It only fires where
+  the system's `<stdint.h>` does not supply the types (configure probes with
+  `HAVE_INTPTR_T`/`HAVE_UINTPTR_T`), which C11 does not require it to.
+
+There was also a 128-bit block here — `prte_int128_t`, `prte_uint128_t` and
+`HAVE_PRTE_INT128_T`, selected from `HAVE_INT128_T` or `HAVE___INT128`. It
+came from OPAL, whose atomics needed a 128-bit type. **Neither configure
+symbol has ever been probed by PRRTE's configure**, so the types were never
+declared and `HAVE_PRTE_INT128_T` was always `0` — and nothing in the tree
+names any of the three. It is gone. If PRRTE ever needs one, probe for it in
+`configure.ac` in the same change.
+
+---
+
+## What `types.h` no longer carries
+
 `types.h` used to also carry `prte_ptr_t`, `prte_iov_base_ptr_t`,
 `prte_ptr_ptol`/`ltop` and a set of `prte_swap_bytes*` functions. Nothing
 used any of them.
@@ -142,7 +210,7 @@ used any of them.
 
 ## `prte_config_bottom.h`
 
-The portability layer. Two things to know:
+The portability layer. Three things to know:
 
 - **The `__prte_attribute_*__` macros are the only correct way to write a
   compiler attribute** in this tree (`__prte_attribute_unused__`,
@@ -158,6 +226,59 @@ The portability layer. Two things to know:
   narrowing exists for — and `--enable-devel-check` makes that an error.
   This is the one place in the tree that legitimately `#undef`s a logical
   macro.
+- **The printf fallbacks all come from PMIx.** Where the platform's libc is
+  missing `asprintf`/`snprintf`/`vasprintf`/`vsnprintf`, this header maps the
+  name onto `pmix_asprintf`/`pmix_snprintf`/`pmix_vasprintf`/`pmix_vsnprintf`
+  from `src/util/pmix_printf.h`. **PRRTE has no printf replacements of its
+  own and never had** — if you find yourself writing `prte_` here, that is
+  the mistake. It was already made once: the `vsnprintf` arm named
+  `prte_vsnprintf`, a symbol in neither tree, so a platform without
+  `vsnprintf()` would have failed to build every tool — and not merely at
+  link time. `pmix_printf.h` pulls in PMIx's own `pmix_config_bottom.h`,
+  which maps `vsnprintf` to `pmix_vsnprintf` under the identical guard, so
+  PRRTE's line would have redefined a live macro with a different body:
+  `-Wmacro-redefined`, which `--enable-devel-check` makes an error. Nothing
+  caught it because the whole block only compiles where the libc function is
+  absent, which is nowhere anyone builds. `test/unit/include` now takes the
+  address of all four, so at least the names have to exist.
+
+Two blocks that used to live here are gone, both unreachable by
+construction rather than merely unused:
+
+- A `__func__` fallback defining it to `__FILE__`, guarded on
+  `AC_CHECK_DECLS(__func__)`. C11 mandates `__func__` (6.4.2.2) and PRRTE
+  requires C11.
+- A VxWorks block including `<ioLib.h>`, `<sockLib.h>` and `<hostLib.h>`,
+  guarded on `MCS_VXWORKS` — a symbol that appears nowhere else in the tree
+  and that nothing under `config/` has ever defined.
+
+The configure checks that existed only to feed them (`AC_CHECK_DECLS`
+for `__func__`, and the three `AC_CHECK_HEADERS` entries) went with them.
+When you delete a guard here, delete its probe too — an emitted symbol with
+no reader is the state that made both of these survive this long. On the
+same principle, `PRTE_HAVE_ATTRIBUTE_DEPRECATED_ARGUMENT` and its
+`_PRTE_CHECK_SPECIFIC_ATTRIBUTE` probe are gone from
+`config/prte_check_attributes.m4`: `prte_config_bottom.h` never grew a
+`__prte_attribute_deprecated_argument__` wrapper for it, so the configure
+result had nowhere to go. (PMIx emits the same symbol and likewise has
+neither a wrapper nor a use — so "parity with PMIx" would only have meant
+keeping the same dead check in two places.)
+
+**And the whole file used to sit inside `#if OMPI_BUILDING`.** That is an
+Open MPI inheritance: there, `mpi.h` set `OMPI_BUILDING` to `0` before
+pulling in the config header, so none of the portability layer —
+`#define snprintf pmix_snprintf`, `#define sockaddr_in6 sockaddr_in`,
+`#define sin6_addr sin_addr`, the `static inline htonl` definitions, the
+redefinition of Apple's `__PRI_64_LENGTH_MODIFIER__` — landed in an MPI
+application's namespace, and an `#else` arm stripped the `PACKAGE_*` macros
+back out for it. The fence earns its keep in Open MPI. In PRRTE it had no
+"outside": there is no `mpi.h`, nothing ever set it to `0`, and with
+`--with-devel-headers` gone PRRTE installs no header an external consumer
+could include at all. So the block always compiled, the `#else` arm was
+unreachable, and an `OMPI_`-prefixed symbol sat in PRRTE's most-included
+header against the project's own symbol-prefix rule. Removing it changes
+nothing: the preprocessed output of `prte_config.h` is byte-identical
+before and after.
 
 ---
 
@@ -218,18 +339,66 @@ does not have, add it to PMIx and require the PMIx that has it via
 adding a framework or a `config/*.m4` change means re-running `./autogen.pl`
 and reconfiguring — a plain `make` will not do it and can wedge the tree.
 
+### PRRTE's headers are not installed, anywhere
+
+`Makefile.am` here appends its files to `headers`, which
+[`src/Makefile.am`](../Makefile.am) feeds to `libprrte_la_SOURCES`. That is
+what puts them in the tarball and makes them tracked build dependencies —
+**not** an install rule. There is no install rule. Do not add one.
+
+`prte_config.h` and `version.h` are deliberately not in that list either:
+they are generated into the build tree and `AC_CONFIG_HEADERS` /
+`AC_CONFIG_FILES` already own them.
+
+There used to be a `--with-devel-headers` option ("for authors doing deeper
+integration") that installed all of it under `$(includedir)/prte`. It has
+been removed, for the reason that settles the question: **PRRTE ships no
+linkable library.** It is a set of executables. There is nothing an
+installed header set could be compiled *against*, so there was never a
+consumer. The option is an ORTE-era inheritance, from when ORTE lived
+inside Open MPI and did have one.
+
+It had also long since stopped working, in two independent ways worth
+knowing about because both are easy to reintroduce:
+
+- The generated headers went into a `nodist_headers` variable that **no
+  `_HEADERS` variable ever referenced**, so `prte_config.h` was never
+  installed — while `prte_config_top.h` and `prte_config_bottom.h`, which
+  each `#error` unless `PRTE_CONFIG_H` is already defined, were. Since every
+  PRRTE header opens with `#include "prte_config.h"`, nothing in the
+  installed tree compiled at all.
+- The `mca` framework `Makefile.am` files set `nobase_prte_HEADERS`
+  *outside* the `WANT_INSTALL_HEADERS` conditional, so their headers
+  installed on every build whether the option was given or not.
+
+And even with the first repaired, it did not work: most `Makefile.am`
+fragments never append to `headers`, so `src/event/`, `src/pmix/` and much
+of `src/util/` were absent while installed headers included them by path.
+Measured before removal: 96 headers installed, 73 of 93 failed to compile
+standalone.
+
 ---
 
 ## Testing
 
 **Unit tests — `test/unit/include/test_include.c`, run by `make check`.**
 Covers the error-code band arithmetic (no code is `PRTE_SUCCESS`, the two
-bands cannot collide, and there is headroom to grow), the rank types and
-their sentinels including the parenthesization trap, `prte_hton64`/`ntoh64`
-round-trip *and* their actual big-endian byte layout — a pair of no-op
-functions round-trips perfectly and still puts the wrong bytes on the wire —
-`PRIsize_t`, the `PRTE_PATH_MAX`/`PRTE_MAXHOSTNAMELEN` fallbacks, and the
-`PRTE_ENABLE_IPV6` narrowing.
+bands cannot collide, there is headroom to grow, and `PRTE_ERR_MAX` really
+is one past the end), the rank types and their sentinels including the
+parenthesization trap, `prte_hton64`/`ntoh64` round-trip *and* their actual
+big-endian byte layout — a pair of no-op functions round-trips perfectly and
+still puts the wrong bytes on the wire — `PRIsize_t`, the pointer-sized
+integer ladder, the `PRTE_PATH_MAX`/`PRTE_MAXHOSTNAMELEN` fallbacks, the
+`PRTE_ENABLE_IPV6` narrowing, and the existence of the four PMIx printf
+replacements.
+
+**The other half of the error-code coverage is in `test/unit/util`**, because
+it needs `prte_strerror()`: `test_error_strings()` sweeps every offset and
+fails on a code with no string, and `test_error_bound()` checks that
+`PRTE_ERR_MAX` — the bound that sweep runs to — has not gone stale in either
+direction. Keeping the bound in `constants.h` and the staleness check next
+to the oracle is deliberate; see the `PRTE_ERR_MAX` section above for what
+happened when each test kept its own copy.
 
 That test deliberately does **not** call `prte_init_util()`. Everything here
 has to be correct before any of PRRTE is running — `prte_init_util` is
