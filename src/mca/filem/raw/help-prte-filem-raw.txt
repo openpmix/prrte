@@ -1,0 +1,35 @@
+# -*- text -*-
+#
+# Copyright (c) 2026      Nanook Consulting  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+# This is the US/English help file for PRRTE's filem:raw component.
+#
+[preload-collision]
+A preloaded file cannot be placed in the working directory of the
+processes that are to use it: something else of that name is already
+there, and its contents are not what was to be staged.
+
+   File:              %s
+   Working directory: %s
+   Node:              %s
+
+PRRTE will not overwrite a file it did not put there, so the job has been
+aborted.
+#
+[preload-name-clash]
+Two different files requested for preloading would be delivered under the
+same name in the working directory of the processes that are to use them:
+
+   First:  %s
+   Second: %s
+   Name:   %s
+
+Only one of them could be delivered, so the job has been aborted rather
+than silently choosing between them. Note that a file named by an absolute
+path is delivered under its basename; name the files by paths relative to a
+common directory, or rename one of them, and try again.

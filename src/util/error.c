@@ -442,6 +442,9 @@ const char *prte_strerror(int errnum)
     case PRTE_ERR_SLURM_SHRINK_FAILURE:
         retval = "Request to shrink Slurm job failed";
         break;
+    case PRTE_ERR_PRELOAD_CONFLICT:
+        retval = "A preloaded file would have overwritten a file in the working directory";
+        break;
     default:
         retval = "Unknown error";
     }

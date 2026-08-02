@@ -11,6 +11,7 @@ find information on that subject here.
 
    session_dirs.rst
    per-app-mapping.rst
+   preloading-files.rst
    schedulers/index.rst
    state_machine.rst
    rml/index.rst

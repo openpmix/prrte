@@ -248,8 +248,10 @@ to `prte_event_base`.
   merges `prte_launch_environ` into `app->env`, applies env directives
   (`process_envars` — the SET/ADD/UNSET/PREPEND/APPEND handling, with app
   attributes trumping job attributes), calls the schizo's `setup_fork`,
-  links prepositioned files (`prte_filem`), checks the executable, and
-  applies resource limits.
+  places prepositioned files **in that working directory** (`prte_filem`,
+  which reads the `app->cwd` `setup_path` just resolved — so the order of
+  those two calls is load-bearing), checks the executable, and applies
+  resource limits.
 
   **`process_envars` owns the envar directives — all of them.** It runs
   for every personality whatever that personality's `setup_fork` does,

@@ -20,6 +20,9 @@
 # $HEADER$
 #
 
+EXTRA_DIST = \
+        help-prte-filem-raw.txt
+
 sources = \
         filem_raw.h \
         filem_raw_component.c \
