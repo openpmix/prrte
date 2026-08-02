@@ -47,6 +47,7 @@ static int fence_sig_pack(pmix_data_buffer_t *bkt,
                           prte_grpcomm_direct_fence_signature_t *sig);
 static int fence_sig_unpack(pmix_data_buffer_t *buffer,
                             prte_grpcomm_direct_fence_signature_t **sig);
+static void check_complete(prte_grpcomm_fence_t *coll);
 
 int prte_grpcomm_direct_fence(const pmix_proc_t procs[], size_t nprocs,
                               const pmix_info_t info[], size_t ninfo, char *data,
@@ -81,17 +82,171 @@ int prte_grpcomm_direct_fence(const pmix_proc_t procs[], size_t nprocs,
     return PRTE_SUCCESS;
 }
 
+/* Frame a contribution with the current recovery epoch. The body is copied,
+ * not consumed, so the caller keeps ownership of it. */
+static int pack_epoch_frame(pmix_data_buffer_t *framed, pmix_data_buffer_t *body)
+{
+    pmix_status_t rc;
+
+    rc = PMIx_Data_pack(NULL, framed,
+                        &prte_mca_grpcomm_direct_component.recovery_epoch, 1, PMIX_UINT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    rc = PMIx_Data_copy_payload(framed, body);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    return PRTE_SUCCESS;
+}
+
+/* End an in-flight fence that cannot complete correctly, without taking
+ * anything else down with it. Only the controller calls this: it broadcasts a
+ * release carrying the signature and a status but no gathered data, which the
+ * normal release path hands to each daemon's local participants. */
+static void abort_fence_op(prte_grpcomm_fence_t *coll, pmix_status_t st)
+{
+    pmix_data_buffer_t *reply;
+    pmix_status_t rc;
+
+    PMIX_DATA_BUFFER_CREATE(reply);
+    rc = fence_sig_pack(reply, coll->sig);
+    if (PMIX_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
+        return;
+    }
+    rc = PMIx_Data_pack(NULL, reply, &st, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
+        return;
+    }
+    /* xcast copies the payload, so the buffer is still ours to free */
+    (void) prte_grpcomm.xcast(PRTE_RML_TAG_FENCE_RELEASE, reply);
+    PMIX_DATA_BUFFER_RELEASE(reply);
+    /* the tracker goes when that release comes back around */
+    coll->aborting = true;
+}
+
+void prte_grpcomm_direct_fence_restart(void)
+{
+    prte_grpcomm_fence_t *coll, *nxt;
+    pmix_data_buffer_t *framed;
+    size_t n;
+    int rc;
+
+    PMIX_LIST_FOREACH_SAFE(coll, nxt, &prte_mca_grpcomm_direct_component.fence_ops,
+                           prte_grpcomm_fence_t) {
+        if (coll->aborting) {
+            continue;
+        }
+
+        /* throw away everything gathered under the old tree */
+        pmix_bitmap_clear_all_bits(&coll->reported_slots);
+        coll->self_reported = false;
+        coll->nreported = 0;
+        coll->converged = false;
+        PMIX_DATA_BUFFER_DESTRUCT(&coll->bucket);
+        PMIX_DATA_BUFFER_CONSTRUCT(&coll->bucket);
+
+        /* recompute what the repaired tree owes us - dmns stays the full
+         * pre-fault set, and get_num_contributors() already skips the daemons
+         * now known to have failed */
+        coll->nexpected = prte_rml_get_num_contributors(coll->dmns, coll->ndmns);
+        for (n = 0; n < coll->ndmns; n++) {
+            if (coll->dmns[n] == PRTE_PROC_MY_NAME->rank) {
+                coll->nexpected++;
+                break;
+            }
+        }
+
+        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+                             "%s grpcomm:direct:fence restarting at epoch %u, "
+                             "nexpected now %d",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             (unsigned) prte_mca_grpcomm_direct_component.recovery_epoch,
+                             (int) coll->nexpected));
+
+        if (NULL == coll->my_contribution) {
+            /* nothing of our own to re-offer - we are relaying for our
+             * subtree. If that subtree has just gone, nexpected is now zero
+             * and this completes on the spot, which is what stops the loss of
+             * a pure relay from stalling the fence */
+            check_complete(coll);
+            continue;
+        }
+
+        PMIX_DATA_BUFFER_CREATE(framed);
+        rc = pack_epoch_frame(framed, coll->my_contribution);
+        if (PRTE_SUCCESS != rc) {
+            PMIX_DATA_BUFFER_RELEASE(framed);
+            continue;
+        }
+        PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME->rank, framed, PRTE_RML_TAG_FENCE);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(framed);
+        }
+    }
+}
+
+/* A fence is an allgather with no opt-in to running degraded: its result is
+ * every participant's contribution, so losing one means the answer cannot be
+ * produced. That is why this differs from the group handler, which can
+ * complete on the survivors when asked to.
+ *
+ * What it must not do is what it used to: kill the job on *any* daemon loss
+ * while *any* fence was in flight, without even asking whether the two had
+ * anything to do with each other. Fences run constantly, so that made an
+ * unrelated daemon failure fatal to bystanders - and because it had no scope
+ * guard it also fired twice per failure and once on every revival, taking a
+ * job down over a daemon that had just come back. */
 void prte_grpcomm_direct_fence_fault_handler(const prte_rml_recovery_status_t* status)
 {
-    PRTE_HIDE_UNUSED_PARAMS(status);
-    /* TODO: make this actually resilient
-     * For now, we'll just kill the job if any ops are active */
-    if(0 < pmix_list_get_size(&prte_mca_grpcomm_direct_component.fence_ops)){
-        PMIX_OUTPUT_VERBOSE((0, prte_grpcomm_base_framework.framework_output,
-                             "%s grpcomm:direct:fence daemon failed during"
-                             " active fence operation(s)",
+    prte_grpcomm_fence_t *coll, *nxt;
+
+    if (0 == pmix_list_get_size(&prte_mca_grpcomm_direct_component.fence_ops)) {
+        return;
+    }
+
+    if (PRTE_RML_FAULT_SCOPE_GLOBAL != status->scope) {
+        /* A revival arrives here: local scope with no failed ranks, since a
+         * death's local pass returns early when it has nothing new. A revival
+         * reshapes the tree as a death does, but it rides a forward-first
+         * broadcast, so it cannot give the parent-before-child ordering a
+         * restart depends on - end the fences instead. */
+        if (PRTE_PROC_IS_MASTER && 0 == status->failed_ranks.size) {
+            PMIX_LIST_FOREACH_SAFE(coll, nxt, &prte_mca_grpcomm_direct_component.fence_ops,
+                                   prte_grpcomm_fence_t) {
+                if (!coll->aborting) {
+                    abort_fence_op(coll, PMIX_ERR_LOST_CONNECTION);
+                }
+            }
+        }
+        return;
+    }
+
+    if (!PRTE_PROC_IS_MASTER) {
+        return;
+    }
+    PMIX_LIST_FOREACH_SAFE(coll, nxt, &prte_mca_grpcomm_direct_component.fence_ops,
+                           prte_grpcomm_fence_t) {
+        if (coll->aborting) {
+            continue;
+        }
+        if (!prte_grpcomm_direct_procs_lost(coll->sig->signature, coll->sig->sz)) {
+            /* only the paths between us changed - the restart driven by the
+             * component's epoch advance re-converges this one */
+            continue;
+        }
+        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+                             "%s grpcomm:direct:fence ending a fence that lost a "
+                             "participant to a failed daemon",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
+        abort_fence_op(coll, PMIX_ERR_LOST_CONNECTION);
     }
 }
 
@@ -101,7 +256,7 @@ static void fence(int sd, short args, void *cbdata)
     prte_grpcomm_direct_fence_signature_t sig;
     prte_grpcomm_fence_t *coll;
     int rc;
-    pmix_data_buffer_t *relay, bkt;
+    pmix_data_buffer_t *relay, *framed, bkt;
     pmix_byte_object_t bo;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
@@ -173,12 +328,39 @@ static void fence(int sd, short args, void *cbdata)
         return;
     }
 
+    /* Keep our own contribution so a fault can replay it: recovery resets
+     * every tracker and has each daemon re-offer what it originally gave.
+     * PRTE_RML_SEND takes ownership of what we hand it, so this is a copy. */
+    if (NULL != coll->my_contribution) {
+        PMIX_DATA_BUFFER_RELEASE(coll->my_contribution);
+    }
+    PMIX_DATA_BUFFER_CREATE(coll->my_contribution);
+    rc = PMIx_Data_copy_payload(coll->my_contribution, relay);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(coll->my_contribution);
+        coll->my_contribution = NULL;
+        PMIX_DATA_BUFFER_RELEASE(relay);
+        PMIX_RELEASE(cd);
+        return;
+    }
+
+    /* stamp it with the current epoch and send that */
+    PMIX_DATA_BUFFER_CREATE(framed);
+    rc = pack_epoch_frame(framed, relay);
+    PMIX_DATA_BUFFER_RELEASE(relay);
+    if (PRTE_SUCCESS != rc) {
+        PMIX_DATA_BUFFER_RELEASE(framed);
+        PMIX_RELEASE(cd);
+        return;
+    }
+
     /* send this to ourselves for processing */
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct:fence sending to ourself",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME->rank, relay,
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME->rank, framed,
                   PRTE_RML_TAG_FENCE);
     PMIX_RELEASE(cd);
     return;
@@ -189,12 +371,12 @@ void prte_grpcomm_direct_fence_recv(int status, pmix_proc_t *sender,
                                     prte_rml_tag_t tag, void *cbdata)
 {
     int32_t cnt;
-    int rc, timeout;
+    int rc, timeout, slot;
+    uint32_t stamp;
     size_t n, ninfo;
     pmix_status_t st;
     pmix_info_t *info = NULL;
     prte_grpcomm_direct_fence_signature_t *sig = NULL;
-    pmix_data_buffer_t *reply;
     prte_grpcomm_fence_t *coll;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
@@ -202,6 +384,30 @@ void prte_grpcomm_direct_fence_recv(int status, pmix_proc_t *sender,
                          "%s grpcomm:direct fence recvd from %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_NAME_PRINT(sender)));
+
+    /* every message on this tag opens with the sender's recovery epoch */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &stamp, &cnt, PMIX_UINT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    if (stamp < prte_mca_grpcomm_direct_component.recovery_epoch) {
+        /* sent before a failure this daemon has already recovered from, so it
+         * belongs to a round that no longer exists */
+        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+                             "%s grpcomm:direct fence stale epoch %u (at %u) - dropping",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned) stamp,
+                             (unsigned) prte_mca_grpcomm_direct_component.recovery_epoch));
+        return;
+    }
+    if (stamp > prte_mca_grpcomm_direct_component.recovery_epoch) {
+        /* should be unreachable - see the recovery_epoch commentary in
+         * grpcomm_direct.h - but adopting it is what our own fault notice
+         * would do a moment later, so do that rather than lose the message */
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_ORDER_MSG);
+        prte_grpcomm_direct_advance_epoch(stamp);
+    }
 
     /* unpack the signature */
     rc = fence_sig_unpack(buffer, &sig);
@@ -218,6 +424,30 @@ void prte_grpcomm_direct_fence_recv(int status, pmix_proc_t *sender,
         return;
     }
     PMIX_RELEASE(sig);
+
+    /* Account for this contribution by which child subtree it came from, and
+     * drop it whole if that subtree has already been heard from - see the
+     * matching note in the group path. This has to happen before the bucket
+     * is merged, because a contribution counted twice is data merged twice. */
+    if (sender->rank == PRTE_PROC_MY_NAME->rank) {
+        if (coll->self_reported) {
+            return;
+        }
+        coll->self_reported = true;
+    } else {
+        slot = prte_rml_get_subtree_index(sender->rank);
+        if (0 > slot) {
+            /* not in any of our subtrees - we are not this daemon's parent,
+             * so this contribution is not ours to aggregate */
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            return;
+        }
+        if (pmix_bitmap_is_set_bit(&coll->reported_slots, slot)) {
+            return;
+        }
+        pmix_bitmap_set_bit(&coll->reported_slots, slot);
+    }
+    coll->nreported++;
 
     // unpack the info structs
     cnt = 1;
@@ -270,116 +500,148 @@ void prte_grpcomm_direct_fence_recv(int status, pmix_proc_t *sender,
         }
     }
 
-    /* increment nprocs reported for collective */
-    coll->nreported++;
-
-    // transfer any data
+    /* transfer any data */
     rc = PMIx_Data_copy_payload(&coll->bucket, buffer);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_INFO_FREE(info, ninfo);
         return;
     }
+    PMIX_INFO_FREE(info, ninfo);
 
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct fence recv nexpected %d nrep %d",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) coll->nexpected,
                          (int) coll->nreported));
 
-    /* see if everyone has reported */
-    if (coll->nreported == coll->nexpected) {
-        if (PRTE_PROC_IS_MASTER) {
-            PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                                 "%s grpcomm:direct fence HNP reports complete",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-            /* the allgather is complete - send the xcast */
-            PMIX_DATA_BUFFER_CREATE(reply);
+    check_complete(coll);
+}
 
-            /* pack the signature */
-            rc = fence_sig_pack(reply, coll->sig);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_INFO_FREE(info, ninfo);
-                return;
-            }
-            /* pack the status */
-            rc = PMIx_Data_pack(NULL, reply, &coll->status, 1, PMIX_INT32);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_INFO_FREE(info, ninfo);
-                return;
-            }
+/* Test whether this fence's rollup is complete and, if so, answer it: the
+ * controller broadcasts the release, everyone else rolls their bucket up to
+ * their parent. Factored out of fence_recv() because a contribution arriving
+ * is no longer the only thing that can complete a fence - a fault can lower
+ * what we are waiting for, and the tracker has to be re-tested with no
+ * message in hand.
+ *
+ * The info array forwarded upward is rebuilt from the tracker's own merged
+ * state rather than echoed from whichever contribution happened to arrive
+ * last. Only the timeout and the local collective status are ever read out of
+ * it, and both are accumulated on the tracker, so this says the same thing
+ * without depending on a message being present. */
+static void check_complete(prte_grpcomm_fence_t *coll)
+{
+    pmix_data_buffer_t *reply, *framed;
+    pmix_info_t *info = NULL;
+    size_t ninfo = 0;
+    int rc;
 
-            /* transfer the collected bucket */
-            rc = PMIx_Data_copy_payload(reply, &coll->bucket);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_INFO_FREE(info, ninfo);
-                return;
-            }
+    if (coll->converged || coll->aborting) {
+        return;
+    }
+    if (coll->nreported < coll->nexpected) {
+        return;
+    }
+    coll->converged = true;
 
-            /* send the release via xcast - it copies the payload, so the
-             * buffer is still ours to free */
-            (void) prte_grpcomm.xcast(PRTE_RML_TAG_FENCE_RELEASE, reply);
+    if (PRTE_PROC_IS_MASTER) {
+        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+                             "%s grpcomm:direct fence HNP reports complete",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        PMIX_DATA_BUFFER_CREATE(reply);
+        rc = fence_sig_pack(reply, coll->sig);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
-        } else {
-            PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                                 "%s grpcomm:direct fence rollup complete - sending to %s",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_PARENT)));
-            PMIX_DATA_BUFFER_CREATE(reply);
-            /* pack the signature */
-            rc = fence_sig_pack(reply, coll->sig);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_INFO_FREE(info, ninfo);
-                return;
-            }
+            return;
+        }
+        rc = PMIx_Data_pack(NULL, reply, &coll->status, 1, PMIX_INT32);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(reply);
+            return;
+        }
+        rc = PMIx_Data_copy_payload(reply, &coll->bucket);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(reply);
+            return;
+        }
+        /* xcast copies the payload, so the buffer is still ours to free */
+        (void) prte_grpcomm.xcast(PRTE_RML_TAG_FENCE_RELEASE, reply);
+        PMIX_DATA_BUFFER_RELEASE(reply);
+        return;
+    }
 
-            // pack the info structs
-            rc = PMIx_Data_pack(NULL, reply, &ninfo, 1, PMIX_SIZE);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_INFO_FREE(info, ninfo);
-                return;
-            }
-            if (0 < ninfo) {
-                rc = PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_DATA_BUFFER_RELEASE(reply);
-                    PMIX_INFO_FREE(info, ninfo);
-                    return;
-                }
-            }
-            PMIX_INFO_FREE(info, ninfo);
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+                         "%s grpcomm:direct fence rollup complete - sending to %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_PARENT)));
 
-            /* transfer the collected bucket */
-            rc = PMIx_Data_copy_payload(reply, &coll->bucket);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(reply);
-                return;
-            }
-            /* send the info to our parent */
-            PRTE_RML_SEND(rc, PRTE_PROC_MY_PARENT->rank, reply,
-                          PRTE_RML_TAG_FENCE);
-            if (PRTE_SUCCESS != rc) {
-                PRTE_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(reply);
-                return;
-            }
+    PMIX_DATA_BUFFER_CREATE(reply);
+    rc = fence_sig_pack(reply, coll->sig);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
+        return;
+    }
+
+    /* rebuild the directives we accumulated */
+    if (0 < coll->timeout) {
+        ++ninfo;
+    }
+    if (PMIX_SUCCESS != coll->status) {
+        ++ninfo;
+    }
+    if (0 < ninfo) {
+        size_t idx = 0;
+        PMIX_INFO_CREATE(info, ninfo);
+        if (0 < coll->timeout) {
+            PMIX_INFO_LOAD(&info[idx++], PMIX_TIMEOUT, &coll->timeout, PMIX_INT);
+        }
+        if (PMIX_SUCCESS != coll->status) {
+            PMIX_INFO_LOAD(&info[idx++], PMIX_LOCAL_COLLECTIVE_STATUS,
+                           &coll->status, PMIX_STATUS);
         }
     }
-    /* free the unpacked info.  The non-HNP rollup path above already freed and
-     * NULLed it before forwarding; on the HNP-complete path and on every
-     * intermediate (not-yet-complete) contribution it is still live here.
-     * PMIX_INFO_FREE is a no-op on a NULL pointer, so this covers all of them
-     * without double-freeing. */
-    PMIX_INFO_FREE(info, ninfo);
+    rc = PMIx_Data_pack(NULL, reply, &ninfo, 1, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_INFO_FREE(info, ninfo);
+        PMIX_DATA_BUFFER_RELEASE(reply);
+        return;
+    }
+    if (0 < ninfo) {
+        rc = PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
+        PMIX_INFO_FREE(info, ninfo);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(reply);
+            return;
+        }
+    }
+
+    rc = PMIx_Data_copy_payload(reply, &coll->bucket);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
+        return;
+    }
+
+    /* stamp it with the epoch it belongs to, so a parent that has already
+     * recovered past it can tell it is stale */
+    PMIX_DATA_BUFFER_CREATE(framed);
+    rc = pack_epoch_frame(framed, reply);
+    PMIX_DATA_BUFFER_RELEASE(reply);
+    if (PRTE_SUCCESS != rc) {
+        PMIX_DATA_BUFFER_RELEASE(framed);
+        return;
+    }
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_PARENT->rank, framed, PRTE_RML_TAG_FENCE);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(framed);
+    }
 }
 
 static void relcb(void *cbdata)
@@ -430,10 +692,12 @@ void prte_grpcomm_direct_fence_release(int status, pmix_proc_t *sender,
         return;
     }
 
-    /* unload the buffer */
+    /* unload the buffer. An aborted fence carries no gathered data, so an
+     * empty or unreadable payload is expected there - do not let that
+     * overwrite the status the controller sent, which is the whole message. */
     PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
     rc = PMIx_Data_unload(buffer, &bo);
-    if (PMIX_SUCCESS != rc) {
+    if (PMIX_SUCCESS != rc && PMIX_SUCCESS == ret) {
         ret = rc;
     }
 

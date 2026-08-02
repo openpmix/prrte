@@ -115,6 +115,12 @@ static void ccon(prte_grpcomm_fence_t *p)
     p->ndmns = 0;
     p->nexpected = 0;
     p->nreported = 0;
+    PMIX_CONSTRUCT(&p->reported_slots, pmix_bitmap_t);
+    pmix_bitmap_init(&p->reported_slots, 1);
+    p->self_reported = false;
+    p->converged = false;
+    p->aborting = false;
+    p->my_contribution = NULL;
     p->timeout = 0;
     p->cbfunc = NULL;
     p->cbdata = NULL;
@@ -123,6 +129,10 @@ static void cdes(prte_grpcomm_fence_t *p)
 {
     if (NULL != p->sig) {
         PMIX_RELEASE(p->sig);
+    }
+    PMIX_DESTRUCT(&p->reported_slots);
+    if (NULL != p->my_contribution) {
+        PMIX_DATA_BUFFER_RELEASE(p->my_contribution);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&p->bucket);
     if (NULL != p->dmns) {
