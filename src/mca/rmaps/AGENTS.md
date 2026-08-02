@@ -193,6 +193,19 @@ framework. Understand its phases before touching anything:
    without a mapping policy → map by the binding object. Then resolve
    default ranking and binding the same way.
 
+   **Order matters here, in one direction only.** Deriving the mapping
+   reads `jdata->map->binding`, so any binding the *user* asked for has to
+   be on the job before that runs — including one inherited from the parent
+   job or from the DVM-wide `bindto` MCA parameter. Those two arms used to
+   run afterwards, so `--prtemca bindto package` derived `BYCORE` and was
+   then refused by the bind-upwards check below, while `--bind-to package`
+   on the command line derived `BYPACKAGE` and worked. Deriving a binding
+   *from* the mapping (`set_default_binding`) is the opposite dependency and
+   necessarily still runs after the mapping is known; `bind_inherited` is
+   what keeps the two from both firing. See
+   [`src/hwloc/AGENTS.md`](../../hwloc/AGENTS.md), "`bindto` is a real
+   parameter, not a suggestion".
+
 4. **Proc counts.** For mappers that don't compute their own counts,
    sum `app->num_procs` (calling `get_target_nodes` to learn slot counts
    when an app gave no explicit `-n`).
