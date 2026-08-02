@@ -231,6 +231,22 @@ Two ordering rules the parser now encodes:
   round, `--bind-to sockets:report` recorded report-bindings on the job and
   *then* rejected the request.
 
+### `bindto` is a real parameter, not a suggestion
+
+Two things had to be true before the DVM-wide `bindto` parameter meant what
+it documents, and neither was. Both are the same shape: the MCA spelling of
+a request was answered differently from the command-line spelling.
+
+- **A `bindto` value the parser refuses is fatal.** The whole point of
+  `prte_hwloc_base_open()` is to validate it, and `prte_init()` used to
+  discard the return — so `--prtemca bindto bogus` printed "the specified
+  binding policy is not recognized" and then launched the job anyway with
+  the default binding. `--bind-to bogus` has always been fatal. `open()`
+  converts its failure to `PRTE_ERR_SILENT` so `prte_init()` does not stack
+  a generic "internal failure" report on top of a diagnostic the parser has
+  already produced; the sibling parameters in `_register()`
+  (`mem_alloc_policy`, `mem_bind_failure_action`) already worked this way.
+
 ---
 
 ## GOLDEN RULE: a cpuset's bits are PU OS indices; a cpu *number* is not
@@ -387,6 +403,12 @@ same thread has cycled through the other 15 — never store one.
   what you want for "how many" and "exactly one".
 - **Comparing unsigneds by subtracting into an `int`** gets the order wrong
   for values far apart. `compare_unsigned()` learned this.
+- **A validator whose answer nobody reads is not a validator.**
+  `prte_hwloc_base_open()` exists to check the `bindto` parameter and
+  `prte_init()` threw its return away, so the check ran, printed, and
+  changed nothing. If you add a function here whose whole job is to say
+  "no", check that its one caller is listening — the failure mode is a
+  user who is told their request was refused and then watches it run.
 - **Warnings are errors.** Debug builds imply `--enable-devel-check`.
 
 ---

@@ -261,11 +261,23 @@ int prte_hwloc_base_open(void)
     }
     prte_hwloc_base_inited = true;
 
-    /* check the provided default binding policy for correctness - specifically want to ensure
-     * there are no disallowed qualifiers and setup the global param */
-    if (PRTE_SUCCESS
-        != (rc = prte_hwloc_base_set_binding_policy(NULL, prte_hwloc_base_binding_policy))) {
-        return rc;
+    /* Check the provided default binding policy for correctness - specifically want to ensure
+     * there are no disallowed qualifiers and setup the global param.
+     *
+     * A bad value here is fatal, exactly as a bad "mem_alloc_policy" or
+     * "mem_bind_failure_action" is in prte_hwloc_base_register() above. It
+     * did not used to be: prte_init() discarded this function's return, so
+     * "--prtemca bindto bogus" printed "the specified binding policy is not
+     * recognized" and then launched the job anyway with the default binding
+     * - having told the user their request was refused. The command-line
+     * spelling of the same mistake ("--bind-to bogus") has always been
+     * fatal, so the two were answering differently for one typo. */
+    rc = prte_hwloc_base_set_binding_policy(NULL, prte_hwloc_base_binding_policy);
+    if (PRTE_SUCCESS != rc) {
+        /* the parser has already said precisely what is wrong with the
+         * value, so keep prte_init() from wrapping that in a generic
+         * "internal failure" report on top of it */
+        return PRTE_ERR_SILENT;
     }
 
     return PRTE_SUCCESS;
