@@ -1559,14 +1559,31 @@ int prte_hwloc_print(char **output, char *prefix, hwloc_topology_t src)
     return PRTE_SUCCESS;
 }
 
+/* zero the placement counters hanging off every object at one level of a
+ * topology. Only ever called for a level below the root: depth 0 carries a
+ * prte_hwloc_topo_data_t, and reinterpreting that as a counter would
+ * scribble on numa_cutoff. */
+static void reset_level_counters(hwloc_topology_t topo, int depth)
+{
+    hwloc_obj_t obj;
+    prte_hwloc_obj_data_t *objcnt;
+    unsigned width, w;
+
+    width = hwloc_get_nbobjs_by_depth(topo, depth);
+    for (w = 0; w < width; w++) {
+        obj = hwloc_get_obj_by_depth(topo, depth, w);
+        if (NULL != obj && NULL != obj->userdata) {
+            objcnt = (prte_hwloc_obj_data_t *) obj->userdata;
+            objcnt->nprocs = 0;
+        }
+    }
+}
+
 void prte_hwloc_base_reset_counters(void)
 {
     prte_topology_t *ptopo;
     hwloc_topology_t topo;
     hwloc_obj_type_t type;
-    hwloc_obj_t obj;
-    prte_hwloc_obj_data_t *objcnt;
-    unsigned width, w;
     unsigned depth, d;
     int n;
 
@@ -1597,31 +1614,23 @@ void prte_hwloc_base_reset_counters(void)
         for (d = 1; d < depth; d++) {
             /* get the object type at this depth */
             type = hwloc_get_depth_type(topo, d);
-            /* if it isn't one of interest, then ignore it */
-            if (HWLOC_OBJ_NUMANODE != type && HWLOC_OBJ_PACKAGE != type &&
+            /* if it isn't one of interest, then ignore it. NUMA nodes are
+             * deliberately absent from this list - they cannot appear at a
+             * normal depth in hwloc 2.x, and are swept separately below. */
+            if (HWLOC_OBJ_PACKAGE != type &&
                 HWLOC_OBJ_L1CACHE != type && HWLOC_OBJ_L2CACHE != type && HWLOC_OBJ_L3CACHE != type &&
                 HWLOC_OBJ_CORE != type && HWLOC_OBJ_PU != type) {
                 continue;
             }
-
-            /* get the width of the topology at this depth */
-            width = hwloc_get_nbobjs_by_depth(topo, d);
-            if (0 == width) {
-                continue;
-            }
-
-            /* scan all objects at this depth to see if
-             * the location overlaps with them
-             */
-            for (w = 0; w < width; w++) {
-                /* get the object at this depth/index */
-                obj = hwloc_get_obj_by_depth(topo, d, w);
-                if (NULL != obj->userdata) {
-                    objcnt = (prte_hwloc_obj_data_t*)obj->userdata;
-                    objcnt->nprocs = 0;
-                }
-            }
+            reset_level_counters(topo, d);
         }
+        /* NUMA nodes live at a special depth of their own, so a walk over
+         * 0..get_depth() never visits one. Binding attaches a counter to a
+         * NUMA node exactly as it does to a package (--bind-to numa), and
+         * missing them here left those counters accumulating across every
+         * job in the life of a DVM: the second "--bind-to numa:limit=N" job
+         * found every domain already at its limit and could not be bound. */
+        reset_level_counters(topo, HWLOC_TYPE_DEPTH_NUMANODE);
     }
 }
 
