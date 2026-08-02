@@ -263,6 +263,14 @@ prefix keys. Written on any later app it stays with that app, and the apps
 that gave none fall back to the defaults: saying nothing is not the same as
 agreeing.
 
+**Every exit from `prte_parse_locals()` owns `temp_argv` and `env`.** It has
+three: the `create_app()` failure inside the segment loop, the one after it
+for the trailing segment, and the success path. Only the last released both,
+so any command line whose *final* segment fails to parse leaked them —
+`--display map --display cpus` is enough, because a repeated option is
+refused right there. `env` is filled in by `create_app()` and belongs to us
+whether or not it then failed.
+
 `prun_common()` is the tool body: `PMIx_tool_init` (with whatever DVM
 search directive the user gave), register event handlers for job
 termination and debugger events, `PMIx_Spawn_nb`, push stdin, wait, then
