@@ -321,8 +321,10 @@ void prte_grpcomm_direct_fence_recv(int status, pmix_proc_t *sender,
                 return;
             }
 
-            /* send the release via xcast */
+            /* send the release via xcast - it copies the payload, so the
+             * buffer is still ours to free */
             (void) prte_grpcomm.xcast(PRTE_RML_TAG_FENCE_RELEASE, reply);
+            PMIX_DATA_BUFFER_RELEASE(reply);
         } else {
             PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:direct fence rollup complete - sending to %s",
