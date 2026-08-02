@@ -273,7 +273,14 @@ static int test_name_printing(void)
  * assigned in between. */
 #define GROUP1_LAST  72  /* PRTE_OPERATION_SUCCEEDED */
 #define GROUP2_FIRST 101 /* PRTE_ERR_RECV_LESS_THAN_POSTED */
-#define GROUP2_LAST  155 /* PRTE_ERR_SLURM_SHRINK_FAILURE */
+/* The end of the list is NOT written out here. It used to be -- as "155 /
+ * PRTE_ERR_SLURM_SHRINK_FAILURE" -- and it stayed that way when
+ * PRTE_ERR_PRELOAD_CONFLICT was appended at offset 156, so this sweep, whose
+ * entire job is to catch a code that was added without a string, stopped one
+ * short of the code most likely to be missing one. It now derives from
+ * PRTE_ERR_MAX in constants.h, and test_error_bound() below fails if that
+ * bound has gone stale in either direction. */
+#define GROUP2_LAST  (PRTE_ERR_BASE - PRTE_ERR_MAX - 1)
 
 static int test_error_strings(void)
 {
@@ -304,6 +311,32 @@ static int test_error_strings(void)
     /* PRTE_ERR_SILENT must never be logged - PRTE_ERROR_LOG() suppresses it -
      * but it still needs a name for anything that prints it directly */
     CHECK("silent has a string", NULL != prte_strerror(PRTE_ERR_SILENT));
+
+    return failures;
+}
+
+/* The sweep above is only as good as the bound it runs to, and a bound is
+ * exactly the kind of thing that goes stale without anyone noticing -- this
+ * one did, the first time a code was appended after it was written, and the
+ * result was a sweep that quietly stopped short of the newest code.
+ *
+ * So check the bound itself. prte_strerror() is the oracle: PRTE_ERR_MAX is
+ * one past the end, so the offset just inside it must be a real named code
+ * and PRTE_ERR_MAX itself must not be. That catches both directions --
+ * appending a code and forgetting to bump the bound, and bumping the bound
+ * past the last code.
+ */
+static int test_error_bound(void)
+{
+    int failures = 0;
+
+    CHECK("the bound is not stale (a code was added without bumping it)",
+          0 != strcmp("Unknown error", prte_strerror(PRTE_ERR_MAX + 1)));
+    CHECK("the bound is not past the end (nothing is assigned at it)",
+          0 == strcmp("Unknown error", prte_strerror(PRTE_ERR_MAX)));
+
+    /* and it really is one past the end of the run the sweep walks */
+    CHECK("the bound agrees with the sweep", (PRTE_ERR_BASE - GROUP2_LAST) == (PRTE_ERR_MAX + 1));
 
     return failures;
 }
@@ -1017,6 +1050,7 @@ int main(void)
     failures += test_compare_name_fields();
     failures += test_name_printing();
     failures += test_error_strings();
+    failures += test_error_bound();
     failures += test_state_strings();
     failures += test_attr_key_names();
     failures += test_attr_round_trip();

@@ -4111,6 +4111,15 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     echo "$out" | grep -q 'already' \
         && ok "collision reported to the user" \
         || bad "collision produced no diagnostic: $(echo "$out" | tr '\n' ' ')"
+    # PRTE_ERR_PRELOAD_CONFLICT is the last code in constants.h, and this is
+    # the only place in the suite that provokes it. That matters beyond
+    # filem: the string sweep in test/unit/util ran to a bound written out by
+    # hand, and when this code was appended the bound was not moved, so the
+    # newest code was precisely the one nothing checked. Assert here that it
+    # still reaches the user as a sentence rather than as "Unknown error".
+    echo "$out" | grep -qi 'unknown error' \
+        && bad "the collision came back as \"Unknown error\": $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+        || ok "the collision was named, not reported as \"Unknown error\""
     c=$(prted_settle 10 1 2 3 4 5 6 7 8 9 10)
     [ "$c" = 0 ] && ok "no daemons linger after the refused preload" || bad "$c stray prted after refused preload"
     for n in 1 2 3; do docker exec "$NODE$n" sh -c 'rm -f /root/pf.dat' >/dev/null 2>&1; done
