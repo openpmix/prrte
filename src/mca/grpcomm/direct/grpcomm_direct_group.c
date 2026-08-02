@@ -1051,97 +1051,134 @@ static void check_complete(prte_grpcomm_group_t *coll)
         coll->tev_active = false;
     }
 
-    {
-        if (PRTE_PROC_IS_MASTER) {
-            pmix_output_verbose(1, prte_grpcomm_base_framework.framework_output,
-                                 "%s grpcomm:direct group HNP reports complete for %s",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->sig->groupID);
+    if (PRTE_PROC_IS_MASTER) {
+        pmix_output_verbose(1, prte_grpcomm_base_framework.framework_output,
+                             "%s grpcomm:direct group HNP reports complete for %s",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->sig->groupID);
 
-            /* the allgather is complete - send the xcast */
-            if (PMIX_GROUP_CONSTRUCT == coll->sig->op) {
-                /* Decide what a construct that lost a member should do. This
-                 * is the one place with the whole picture, it runs exactly
-                 * once, and unlike the fault handler it also covers an
-                 * operation the controller held no tracker for when the
-                 * failure landed. */
-                if (group_lost_member(coll)) {
+        /* the allgather is complete - send the xcast */
+        if (PMIX_GROUP_CONSTRUCT == coll->sig->op) {
+            /* Decide what a construct that lost a member should do. This
+             * is the one place with the whole picture, it runs exactly
+             * once, and unlike the fault handler it also covers an
+             * operation the controller held no tracker for when the
+             * failure landed. */
+            if (group_lost_member(coll)) {
 #if PRTE_PMIX_HAVE_GROUP_FT
-                    if (!coll->sig->ft_collective) {
-                        coll->status = PMIX_GROUP_CONSTRUCT_ABORT;
-                        goto answer;
-                    }
-                    collect_departed(coll);
-                    pmix_output_verbose(1, prte_grpcomm_base_framework.framework_output,
-                                        "%s grpcomm:direct:group \"%s\" completing on the "
-                                        "survivors - %d member(s) lost",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                        coll->sig->groupID, (int) coll->ndeparted);
-#else
-                    /* built against a PMIx with no notion of a fault-tolerant
-                     * group collective, so there is no way to have asked for
-                     * one - the loss of a member ends the construct */
+                if (!coll->sig->ft_collective) {
                     coll->status = PMIX_GROUP_CONSTRUCT_ABORT;
                     goto answer;
+                }
+                collect_departed(coll);
+                pmix_output_verbose(1, prte_grpcomm_base_framework.framework_output,
+                                    "%s grpcomm:direct:group \"%s\" completing on the "
+                                    "survivors - %d member(s) lost",
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                    coll->sig->groupID, (int) coll->ndeparted);
+#else
+                /* built against a PMIx with no notion of a fault-tolerant
+                 * group collective, so there is no way to have asked for
+                 * one - the loss of a member ends the construct */
+                coll->status = PMIX_GROUP_CONSTRUCT_ABORT;
+                goto answer;
 #endif
-                }
-                /* if we were asked to provide a context id, do so */
-                if (coll->sig->assignID) {
-                    coll->sig->ctxid = prte_grpcomm_base.context_id;
-                    --prte_grpcomm_base.context_id;
-                    coll->sig->ctxid_assigned = true;
-                }
+            }
+            /* if we were asked to provide a context id, do so */
+            if (coll->sig->assignID) {
+                coll->sig->ctxid = prte_grpcomm_base.context_id;
+                --prte_grpcomm_base.context_id;
+                coll->sig->ctxid_assigned = true;
+            }
 
-                // construct the final membership
+            // construct the final membership
+            PMIX_CONSTRUCT(&nmlist, pmix_list_t);
+            // sadly, an exhaustive search
+            for (m=0; m < coll->sig->nmembers; m++) {
+                if (member_is_departed(coll, &coll->sig->members[m])) {
+                    continue;
+                }
+                found = false;
+                PMIX_LIST_FOREACH(nm, &nmlist, prte_namelist_t) {
+                    if (PMIX_CHECK_PROCID(&coll->sig->members[m], &nm->name)) {
+                        // if the new one is rank=WILDCARD, then ensure
+                        // we keep it as wildcard
+                        if (PMIX_RANK_WILDCARD == coll->sig->members[m].rank) {
+                            nm->name.rank = PMIX_RANK_WILDCARD;
+                        }
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    nm = PMIX_NEW(prte_namelist_t);
+                    memcpy(&nm->name, &coll->sig->members[m], sizeof(pmix_proc_t));
+                    pmix_list_append(&nmlist, &nm->super);
+                }
+            }
+            // now check any added members
+            for (m=0; m < coll->sig->naddmembers; m++) {
+                if (member_is_departed(coll, &coll->sig->addmembers[m])) {
+                    continue;
+                }
+                found = false;
+                PMIX_LIST_FOREACH(nm, &nmlist, prte_namelist_t) {
+                    if (PMIX_CHECK_PROCID(&coll->sig->addmembers[m], &nm->name)) {
+                        // if the new one is rank=WILDCARD, then ensure
+                        // we keep it as wildcard
+                        if (PMIX_RANK_WILDCARD == coll->sig->addmembers[m].rank) {
+                            nm->name.rank = PMIX_RANK_WILDCARD;
+                        }
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    nm = PMIX_NEW(prte_namelist_t);
+                    memcpy(&nm->name, &coll->sig->addmembers[m], sizeof(pmix_proc_t));
+                    pmix_list_append(&nmlist, &nm->super);
+                }
+            }
+            // create the full membership array
+            nfinal = pmix_list_get_size(&nmlist);
+            PMIX_PROC_CREATE(finalmembership, nfinal);
+            m = 0;
+            PMIX_LIST_FOREACH(nm, &nmlist, prte_namelist_t) {
+                memcpy(&finalmembership[m], &nm->name, sizeof(pmix_proc_t));
+                ++m;
+            }
+            PMIX_LIST_DESTRUCT(&nmlist);
+
+            // if they gave us a final order, then sort the final membership
+            // accordingly. Note that order entries that consist of nspace,wildcard
+            // indicate that all participants from the given nspace should be
+            // included in the final membership at that point - it does NOT mean
+            // that all procs from that nspace are included in the final membership
+            if (NULL != coll->sig->final_order) {
                 PMIX_CONSTRUCT(&nmlist, pmix_list_t);
-                // sadly, an exhaustive search
-                for (m=0; m < coll->sig->nmembers; m++) {
-                    if (member_is_departed(coll, &coll->sig->members[m])) {
-                        continue;
-                    }
-                    found = false;
-                    PMIX_LIST_FOREACH(nm, &nmlist, prte_namelist_t) {
-                        if (PMIX_CHECK_PROCID(&coll->sig->members[m], &nm->name)) {
-                            // if the new one is rank=WILDCARD, then ensure
-                            // we keep it as wildcard
-                            if (PMIX_RANK_WILDCARD == coll->sig->members[m].rank) {
-                                nm->name.rank = PMIX_RANK_WILDCARD;
+                for (m=0; m < coll->sig->nfinal; m++) {
+                    // search the array of final members to capture those that match
+                    for (n=0; n < nfinal; n++) {
+                        if (PMIX_CHECK_PROCID(&coll->sig->final_order[m], &finalmembership[n])) {
+                            // add this proc to the final list
+                            nm = PMIX_NEW(prte_namelist_t);
+                            memcpy(&nm->name, &finalmembership[n], sizeof(pmix_proc_t));
+                            pmix_list_append(&nmlist, &nm->super);
+                            // the final order may have included rank=wildcard - if so,
+                            // then we have to continue
+                            if (PMIX_RANK_WILDCARD != coll->sig->final_order[m].rank) {
+                                // nope - can only match once
+                                break;
                             }
-                            found = true;
-                            break;
                         }
                     }
-                    if (!found) {
-                        nm = PMIX_NEW(prte_namelist_t);
-                        memcpy(&nm->name, &coll->sig->members[m], sizeof(pmix_proc_t));
-                        pmix_list_append(&nmlist, &nm->super);
-                    }
                 }
-                // now check any added members
-                for (m=0; m < coll->sig->naddmembers; m++) {
-                    if (member_is_departed(coll, &coll->sig->addmembers[m])) {
-                        continue;
-                    }
-                    found = false;
-                    PMIX_LIST_FOREACH(nm, &nmlist, prte_namelist_t) {
-                        if (PMIX_CHECK_PROCID(&coll->sig->addmembers[m], &nm->name)) {
-                            // if the new one is rank=WILDCARD, then ensure
-                            // we keep it as wildcard
-                            if (PMIX_RANK_WILDCARD == coll->sig->addmembers[m].rank) {
-                                nm->name.rank = PMIX_RANK_WILDCARD;
-                            }
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found) {
-                        nm = PMIX_NEW(prte_namelist_t);
-                        memcpy(&nm->name, &coll->sig->addmembers[m], sizeof(pmix_proc_t));
-                        pmix_list_append(&nmlist, &nm->super);
-                    }
+                // did we lose anyone?
+                if (nfinal != pmix_list_get_size(&nmlist)) {
+                    pmix_show_help("help-prte-runtime.txt", "bad-final-order", true);
+                    coll->status = PMIX_ERR_BAD_PARAM;
+                    goto answer;
                 }
-                // create the full membership array
-                nfinal = pmix_list_get_size(&nmlist);
-                PMIX_PROC_CREATE(finalmembership, nfinal);
+                // just overwrite the final array
                 m = 0;
                 PMIX_LIST_FOREACH(nm, &nmlist, prte_namelist_t) {
                     memcpy(&finalmembership[m], &nm->name, sizeof(pmix_proc_t));
@@ -1149,259 +1186,220 @@ static void check_complete(prte_grpcomm_group_t *coll)
                 }
                 PMIX_LIST_DESTRUCT(&nmlist);
 
-                // if they gave us a final order, then sort the final membership
-                // accordingly. Note that order entries that consist of nspace,wildcard
-                // indicate that all participants from the given nspace should be
-                // included in the final membership at that point - it does NOT mean
-                // that all procs from that nspace are included in the final membership
-                if (NULL != coll->sig->final_order) {
-                    PMIX_CONSTRUCT(&nmlist, pmix_list_t);
-                    for (m=0; m < coll->sig->nfinal; m++) {
-                        // search the array of final members to capture those that match
-                        for (n=0; n < nfinal; n++) {
-                            if (PMIX_CHECK_PROCID(&coll->sig->final_order[m], &finalmembership[n])) {
-                                // add this proc to the final list
-                                nm = PMIX_NEW(prte_namelist_t);
-                                memcpy(&nm->name, &finalmembership[n], sizeof(pmix_proc_t));
-                                pmix_list_append(&nmlist, &nm->super);
-                                // the final order may have included rank=wildcard - if so,
-                                // then we have to continue
-                                if (PMIX_RANK_WILDCARD != coll->sig->final_order[m].rank) {
-                                    // nope - can only match once
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    // did we lose anyone?
-                    if (nfinal != pmix_list_get_size(&nmlist)) {
-                        pmix_show_help("help-prte-runtime.txt", "bad-final-order", true);
-                        coll->status = PMIX_ERR_BAD_PARAM;
-                        goto answer;
-                    }
-                    // just overwrite the final array
-                    m = 0;
-                    PMIX_LIST_FOREACH(nm, &nmlist, prte_namelist_t) {
-                        memcpy(&finalmembership[m], &nm->name, sizeof(pmix_proc_t));
-                        ++m;
-                    }
-                    PMIX_LIST_DESTRUCT(&nmlist);
+                // zero out the final order cache - no need to send it around
+                PMIX_PROC_FREE(coll->sig->final_order, coll->sig->nfinal);
+                coll->sig->final_order = NULL;
+                coll->sig->nfinal = 0;
 
-                    // zero out the final order cache - no need to send it around
-                    PMIX_PROC_FREE(coll->sig->final_order, coll->sig->nfinal);
-                    coll->sig->final_order = NULL;
-                    coll->sig->nfinal = 0;
-
-                } else {
-                     /* sort the procs so everyone gets the same order */
-                    qsort(finalmembership, nfinal, sizeof(pmix_proc_t), pmix_util_compare_proc);
-                }
-                /* a group of nobody is not a group - if the failure took every
-                 * member, there is nothing left to construct */
-                if (0 == nfinal) {
-                    coll->status = PMIX_GROUP_CONSTRUCT_ABORT;
-                    goto answer;
-                }
+            } else {
+                 /* sort the procs so everyone gets the same order */
+                qsort(finalmembership, nfinal, sizeof(pmix_proc_t), pmix_util_compare_proc);
             }
+            /* a group of nobody is not a group - if the failure took every
+             * member, there is nothing left to construct */
+            if (0 == nfinal) {
+                coll->status = PMIX_GROUP_CONSTRUCT_ABORT;
+                goto answer;
+            }
+        }
 
 answer:
-            // CONSTRUCT THE RELEASE MESSAGE
-            PMIX_DATA_BUFFER_CREATE(reply);
+        // CONSTRUCT THE RELEASE MESSAGE
+        PMIX_DATA_BUFFER_CREATE(reply);
 
-            /* pack the signature */
-            rc = pack_signature(reply, coll->sig);
+        /* pack the signature */
+        rc = pack_signature(reply, coll->sig);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(reply);
+            PMIX_PROC_FREE(finalmembership, nfinal);
+            return;
+        }
+        /* pack the status */
+        rc = PMIx_Data_pack(NULL, reply, &coll->status, 1, PMIX_STATUS);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(reply);
+            PMIX_PROC_FREE(finalmembership, nfinal);
+            return;
+        }
+
+        if (PMIX_GROUP_CONSTRUCT == coll->sig->op) {
+            // pack the final membership
+            rc = PMIx_Data_pack(NULL, reply, &nfinal, 1, PMIX_SIZE);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
                 PMIX_PROC_FREE(finalmembership, nfinal);
                 return;
             }
-            /* pack the status */
-            rc = PMIx_Data_pack(NULL, reply, &coll->status, 1, PMIX_STATUS);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(reply);
+            if (0 < nfinal) {
+                rc = PMIx_Data_pack(NULL, reply, finalmembership, nfinal, PMIX_PROC);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(reply);
+                    PMIX_PROC_FREE(finalmembership, nfinal);
+                    return;
+                }
                 PMIX_PROC_FREE(finalmembership, nfinal);
+            }
+
+            /* pack the members lost to a failed daemon, so each daemon can
+             * tell its own clients who is missing from the membership */
+            rc = PMIx_Data_pack(NULL, reply, &coll->ndeparted, 1, PMIX_SIZE);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(reply);
                 return;
             }
-
-            if (PMIX_GROUP_CONSTRUCT == coll->sig->op) {
-                // pack the final membership
-                rc = PMIx_Data_pack(NULL, reply, &nfinal, 1, PMIX_SIZE);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
-                    PMIX_DATA_BUFFER_RELEASE(reply);
-                    PMIX_PROC_FREE(finalmembership, nfinal);
-                    return;
-                }
-                if (0 < nfinal) {
-                    rc = PMIx_Data_pack(NULL, reply, finalmembership, nfinal, PMIX_PROC);
-                    if (PMIX_SUCCESS != rc) {
-                        PMIX_ERROR_LOG(rc);
-                        PMIX_DATA_BUFFER_RELEASE(reply);
-                        PMIX_PROC_FREE(finalmembership, nfinal);
-                        return;
-                    }
-                    PMIX_PROC_FREE(finalmembership, nfinal);
-                }
-
-                /* pack the members lost to a failed daemon, so each daemon can
-                 * tell its own clients who is missing from the membership */
-                rc = PMIx_Data_pack(NULL, reply, &coll->ndeparted, 1, PMIX_SIZE);
+            if (0 < coll->ndeparted) {
+                rc = PMIx_Data_pack(NULL, reply, coll->departed,
+                                    coll->ndeparted, PMIX_PROC);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
                     return;
                 }
-                if (0 < coll->ndeparted) {
-                    rc = PMIx_Data_pack(NULL, reply, coll->departed,
-                                        coll->ndeparted, PMIX_PROC);
-                    if (PMIX_SUCCESS != rc) {
-                        PMIX_ERROR_LOG(rc);
-                        PMIX_DATA_BUFFER_RELEASE(reply);
-                        return;
-                    }
-                }
-
-                // pack any group info
-                PMIx_Info_list_convert(coll->grpinfo, &darray);
-                info = (pmix_info_t*)darray.array;
-                ninfo = darray.size;
-                rc = PMIx_Data_pack(NULL, reply, &ninfo, 1, PMIX_SIZE);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
-                    PMIX_DATA_BUFFER_RELEASE(reply);
-                    return;
-                }
-                if (0 < ninfo) {
-                   rc =  PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
-                    if (PMIX_SUCCESS != rc) {
-                        PMIX_ERROR_LOG(rc);
-                        PMIX_DATA_BUFFER_RELEASE(reply);
-                        return;
-                    }
-                }
-                PMIX_DATA_ARRAY_DESTRUCT(&darray);
-
-                // pack any endpts
-                PMIx_Info_list_convert(coll->endpts, &darray);
-                info = (pmix_info_t*)darray.array;
-                ninfo = darray.size;
-                rc = PMIx_Data_pack(NULL, reply, &ninfo, 1, PMIX_SIZE);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
-                    PMIX_DATA_BUFFER_RELEASE(reply);
-                    return;
-                }
-                if (0 < ninfo) {
-                    rc = PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
-                    if (PMIX_SUCCESS != rc) {
-                        PMIX_ERROR_LOG(rc);
-                        PMIX_DATA_BUFFER_RELEASE(reply);
-                        return;
-                    }
-                }
-                PMIX_DATA_ARRAY_DESTRUCT(&darray);
             }
 
-            /* send the release via xcast - it copies the payload, so the
-             * buffer is still ours to free */
-            (void) prte_grpcomm.xcast(PRTE_RML_TAG_GROUP_RELEASE, reply);
+            // pack any group info
+            PMIx_Info_list_convert(coll->grpinfo, &darray);
+            info = (pmix_info_t*)darray.array;
+            ninfo = darray.size;
+            rc = PMIx_Data_pack(NULL, reply, &ninfo, 1, PMIX_SIZE);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(reply);
+                return;
+            }
+            if (0 < ninfo) {
+               rc =  PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(reply);
+                    return;
+                }
+            }
+            PMIX_DATA_ARRAY_DESTRUCT(&darray);
+
+            // pack any endpts
+            PMIx_Info_list_convert(coll->endpts, &darray);
+            info = (pmix_info_t*)darray.array;
+            ninfo = darray.size;
+            rc = PMIx_Data_pack(NULL, reply, &ninfo, 1, PMIX_SIZE);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(reply);
+                return;
+            }
+            if (0 < ninfo) {
+                rc = PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(reply);
+                    return;
+                }
+            }
+            PMIX_DATA_ARRAY_DESTRUCT(&darray);
+        }
+
+        /* send the release via xcast - it copies the payload, so the
+         * buffer is still ours to free */
+        (void) prte_grpcomm.xcast(PRTE_RML_TAG_GROUP_RELEASE, reply);
+        PMIX_DATA_BUFFER_RELEASE(reply);
+
+    } else {
+        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+                             "%s grpcomm:direct allgather rollup complete - sending to %s",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_PARENT)));
+
+        // setup to relay our rollup results
+        PMIX_DATA_BUFFER_CREATE(reply);
+
+        /* pack the signature */
+        rc = pack_signature(reply, coll->sig);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
+            return;
+        }
 
-        } else {
-            PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                                 "%s grpcomm:direct allgather rollup complete - sending to %s",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_PARENT)));
-
-            // setup to relay our rollup results
-            PMIX_DATA_BUFFER_CREATE(reply);
-
-            /* pack the signature */
-            rc = pack_signature(reply, coll->sig);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(reply);
-                return;
-            }
-
-            // pack the local collective status
-            rc = PMIx_Data_pack(NULL, reply, &coll->status, 1, PMIX_STATUS);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(reply);
-                return;
-            }
-
-            // pack any timeout directive
-            rc = PMIx_Data_pack(NULL, reply, &coll->timeout, 1, PMIX_INT);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(reply);
-                return;
-            }
-
-            if (PMIX_GROUP_CONSTRUCT == coll->sig->op) {
-                // pack any group info
-                PMIx_Info_list_convert(coll->grpinfo, &darray);
-                info = (pmix_info_t*)darray.array;
-                ninfo = darray.size;
-                rc = PMIx_Data_pack(NULL, reply, &ninfo, 1, PMIX_SIZE);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
-                    PMIX_DATA_BUFFER_RELEASE(reply);
-                    return;
-                }
-                if (0 < ninfo) {
-                    rc = PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
-                    if (PMIX_SUCCESS != rc) {
-                        PMIX_ERROR_LOG(rc);
-                        PMIX_DATA_BUFFER_RELEASE(reply);
-                        return;
-                    }
-                }
-                PMIX_DATA_ARRAY_DESTRUCT(&darray);
-
-                // pack any endpts
-                PMIx_Info_list_convert(coll->endpts, &darray);
-                info = (pmix_info_t*)darray.array;
-                ninfo = darray.size;
-                rc = PMIx_Data_pack(NULL, reply, &ninfo, 1, PMIX_SIZE);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
-                    PMIX_DATA_BUFFER_RELEASE(reply);
-                    return;
-                }
-                if (0 < ninfo) {
-                    rc =PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
-                    if (PMIX_SUCCESS != rc) {
-                        PMIX_ERROR_LOG(rc);
-                        PMIX_DATA_BUFFER_RELEASE(reply);
-                        return;
-                    }
-                }
-                PMIX_DATA_ARRAY_DESTRUCT(&darray);
-            }
-
-            /* stamp our aggregate with the epoch it belongs to, so a parent
-             * that has already recovered past it can tell it is stale */
-            PMIX_DATA_BUFFER_CREATE(framed);
-            rc = pack_epoch_frame(framed, reply);
+        // pack the local collective status
+        rc = PMIx_Data_pack(NULL, reply, &coll->status, 1, PMIX_STATUS);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
-            if (PRTE_SUCCESS != rc) {
-                PMIX_DATA_BUFFER_RELEASE(framed);
-                return;
-            }
+            return;
+        }
 
-            /* send the info to our parent */
-            PRTE_RML_SEND(rc, PRTE_PROC_MY_PARENT->rank, framed,
-                          PRTE_RML_TAG_GROUP);
-            if (PRTE_SUCCESS != rc) {
-                PRTE_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(framed);
+        // pack any timeout directive
+        rc = PMIx_Data_pack(NULL, reply, &coll->timeout, 1, PMIX_INT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(reply);
+            return;
+        }
+
+        if (PMIX_GROUP_CONSTRUCT == coll->sig->op) {
+            // pack any group info
+            PMIx_Info_list_convert(coll->grpinfo, &darray);
+            info = (pmix_info_t*)darray.array;
+            ninfo = darray.size;
+            rc = PMIx_Data_pack(NULL, reply, &ninfo, 1, PMIX_SIZE);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(reply);
                 return;
             }
+            if (0 < ninfo) {
+                rc = PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(reply);
+                    return;
+                }
+            }
+            PMIX_DATA_ARRAY_DESTRUCT(&darray);
+
+            // pack any endpts
+            PMIx_Info_list_convert(coll->endpts, &darray);
+            info = (pmix_info_t*)darray.array;
+            ninfo = darray.size;
+            rc = PMIx_Data_pack(NULL, reply, &ninfo, 1, PMIX_SIZE);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(reply);
+                return;
+            }
+            if (0 < ninfo) {
+                rc =PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(reply);
+                    return;
+                }
+            }
+            PMIX_DATA_ARRAY_DESTRUCT(&darray);
+        }
+
+        /* stamp our aggregate with the epoch it belongs to, so a parent
+         * that has already recovered past it can tell it is stale */
+        PMIX_DATA_BUFFER_CREATE(framed);
+        rc = pack_epoch_frame(framed, reply);
+        PMIX_DATA_BUFFER_RELEASE(reply);
+        if (PRTE_SUCCESS != rc) {
+            PMIX_DATA_BUFFER_RELEASE(framed);
+            return;
+        }
+
+        /* send the info to our parent */
+        PRTE_RML_SEND(rc, PRTE_PROC_MY_PARENT->rank, framed,
+                      PRTE_RML_TAG_GROUP);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(framed);
+            return;
         }
     }
 }
