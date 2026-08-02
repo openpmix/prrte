@@ -146,9 +146,15 @@ static void gccon(prte_grpcomm_group_t *p)
     p->nleaders_reported = 0;
     p->nfollowers = 0;
     p->nfollowers_reported = 0;
-    p->assignID = false;
+    /* the bitmap grows on demand as slots are set, so size it minimally
+     * here - a tracker can be constructed with no routing tree in place */
+    PMIX_CONSTRUCT(&p->reported_slots, pmix_bitmap_t);
+    pmix_bitmap_init(&p->reported_slots, 1);
+    p->self_reported = false;
+    p->converged = false;
+    p->aborting = false;
     p->timeout = 0;
-    p->memsize = 0;
+    p->tev_active = false;
     p->grpinfo = PMIx_Info_list_start();
     p->endpts = PMIx_Info_list_start();
     p->cbfunc = NULL;
@@ -156,6 +162,11 @@ static void gccon(prte_grpcomm_group_t *p)
 }
 static void gcdes(prte_grpcomm_group_t *p)
 {
+    if (p->tev_active) {
+        prte_event_del(&p->tev);
+        p->tev_active = false;
+    }
+    PMIX_DESTRUCT(&p->reported_slots);
     if (NULL != p->sig) {
         PMIX_RELEASE(p->sig);
     }
@@ -168,6 +179,21 @@ static void gcdes(prte_grpcomm_group_t *p)
 PMIX_CLASS_INSTANCE(prte_grpcomm_group_t,
                     pmix_list_item_t,
                     gccon, gcdes);
+
+static void memocon(prte_grpcomm_group_memo_t *p)
+{
+    p->groupID = NULL;
+    p->op = PMIX_GROUP_NONE;
+}
+static void memodes(prte_grpcomm_group_memo_t *p)
+{
+    if (NULL != p->groupID) {
+        free(p->groupID);
+    }
+}
+PMIX_CLASS_INSTANCE(prte_grpcomm_group_memo_t,
+                    pmix_list_item_t,
+                    memocon, memodes);
 
 static void mdcon(prte_pmix_fence_caddy_t *p)
 {

@@ -39,6 +39,10 @@
 #include "src/mca/grpcomm/base/base.h"
 
 static void group(int sd, short args, void *cbdata);
+static void check_complete(prte_grpcomm_group_t *coll);
+static void group_timeout(int sd, short args, void *cbdata);
+static bool group_op_completed(prte_grpcomm_direct_group_signature_t *sig);
+static void group_op_forget(prte_grpcomm_direct_group_signature_t *sig);
 
 static prte_grpcomm_group_t *get_tracker(prte_grpcomm_direct_group_signature_t *sig, bool create);
 
@@ -113,6 +117,31 @@ static void abort_group_op(prte_grpcomm_group_t *coll, pmix_status_t st)
      * xcast copies the payload, so the buffer is still ours to free */
     (void) prte_grpcomm.xcast(PRTE_RML_TAG_GROUP_RELEASE, reply);
     PMIX_DATA_BUFFER_RELEASE(reply);
+    /* the tracker is not deleted here - it goes when the release we just
+     * broadcast comes back around - so mark it, both to keep the rollup from
+     * being driven any further and to keep a second abort from broadcasting */
+    coll->aborting = true;
+}
+
+/* The controller's guard timer for a collective a participant put a deadline
+ * on. Firing it completes every participant with PMIX_ERR_TIMEOUT rather than
+ * leaving them blocked in PMIx_Group_construct forever. */
+static void group_timeout(int sd, short args, void *cbdata)
+{
+    prte_grpcomm_group_t *coll = (prte_grpcomm_group_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_ACQUIRE_OBJECT(coll);
+    coll->tev_active = false;
+    if (coll->converged || coll->aborting) {
+        return;
+    }
+    pmix_output_verbose(1, prte_grpcomm_base_framework.framework_output,
+                        "%s grpcomm:direct:group timeout on \"%s\" after %d seconds",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->sig->groupID,
+                        coll->timeout);
+    coll->status = PMIX_ERR_TIMEOUT;
+    abort_group_op(coll, PMIX_ERR_TIMEOUT);
 }
 
 #if PRTE_PMIX_HAVE_GROUP_FT
@@ -337,6 +366,11 @@ static void group(int sd, short args, void *cbdata)
         }
     }
 
+    /* a local client is starting this operation, which is proof that any
+     * earlier operation of the same name and type is finished with - drop it
+     * from the completed memo so this one is not mistaken for a straggler */
+    group_op_forget(&sig);
+
     /* create a tracker for this operation */
     if (NULL == (coll = get_tracker(&sig, true))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -489,17 +523,12 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
                                   prte_rml_tag_t tag, void *cbdata)
 {
     int32_t cnt;
-    int rc, timeout;
-    size_t m, n, ninfo, nfinal = 0, nendpts, ngrpinfo;
-    pmix_proc_t *finalmembership = NULL;
-    bool found;
-    pmix_list_t nmlist;
-    prte_namelist_t *nm;
-    pmix_data_array_t darray;
+    int rc, timeout, slot;
+    struct timeval tv;
+    size_t n, nendpts, ngrpinfo;
     pmix_status_t st;
-    pmix_info_t *info = NULL, *endpts, *grpinfo = NULL;
+    pmix_info_t *endpts, *grpinfo = NULL;
     prte_grpcomm_direct_group_signature_t *sig = NULL;
-    pmix_data_buffer_t *reply;
     prte_grpcomm_group_t *coll;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
@@ -541,11 +570,58 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
     }
 #endif
 
+    /* if we have already released this operation, then this is a straggler
+     * that lost the race with the release - creating a tracker for it would
+     * strand one nothing will ever complete */
+    if (group_op_completed(sig)) {
+        pmix_output_verbose(1, prte_grpcomm_base_framework.framework_output,
+                            "%s grpcomm:direct group recv for completed op \"%s\" - ignoring",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sig->groupID);
+        PMIX_RELEASE(sig);
+        return;
+    }
+
     /* check for the tracker and create it if not found */
     if (NULL == (coll = get_tracker(sig, true))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         PMIX_RELEASE(sig);
         return;
+    }
+
+    /* Account for this contribution by *which* child subtree it came from
+     * rather than simply counting it, and drop it whole if that subtree has
+     * already been heard from. This has to happen before anything is merged
+     * into the tracker: the group-info and endpoint accumulation below appends
+     * with no key de-duplication, so a contribution counted twice is also a
+     * payload duplicated twice.
+     *
+     * Bootstrap contributions are exempt - they are sent straight to the
+     * controller from arbitrary daemons rather than up the routing tree, so a
+     * subtree index is meaningless for them and they keep the leader/follower
+     * counters. */
+    if (!coll->bootstrap) {
+        if (sender->rank == PRTE_PROC_MY_NAME->rank) {
+            if (coll->self_reported) {
+                PMIX_RELEASE(sig);
+                return;
+            }
+            coll->self_reported = true;
+        } else {
+            slot = prte_rml_get_subtree_index(sender->rank);
+            if (0 > slot) {
+                /* not in any of our subtrees - we are not this daemon's
+                 * parent, so this contribution is not ours to aggregate */
+                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                PMIX_RELEASE(sig);
+                return;
+            }
+            if (pmix_bitmap_is_set_bit(&coll->reported_slots, slot)) {
+                PMIX_RELEASE(sig);
+                return;
+            }
+            pmix_bitmap_set_bit(&coll->reported_slots, slot);
+        }
+        coll->nreported++;
     }
 
     // unpack the local collective status
@@ -571,6 +647,20 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
     }
     if (coll->timeout < timeout) {
         coll->timeout = timeout;
+    }
+    /* A group op has never been bounded in time: the timeout directive is
+     * collected and relayed but nothing ever armed it, so an op that can no
+     * longer converge hangs its participants indefinitely. Arm it here, on the
+     * controller, which is the one daemon every rollup reaches. Only when a
+     * participant actually asked for a timeout - with no directive there is no
+     * deadline to impose, and the behavior is exactly as before. */
+    if (PRTE_PROC_IS_MASTER && !coll->tev_active && 0 < coll->timeout) {
+        prte_event_evtimer_set(prte_event_base, &coll->tev, group_timeout, coll);
+        tv.tv_sec = coll->timeout;
+        tv.tv_usec = 0;
+        coll->tev_active = true;
+        PMIX_POST_OBJECT(coll);
+        prte_event_evtimer_add(&coll->tev, &tv);
     }
 
 
@@ -652,27 +742,69 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) coll->nfollowers_reported,
                              (int) coll->nfollowers);
     } else {
-        // group collective op
-        coll->nreported++;
+        // group collective op - nreported was already bumped by the per-slot
+        // accounting above, which is what makes it duplicate-proof
         pmix_output_verbose(1, prte_grpcomm_base_framework.framework_output,
                              "%s grpcomm:direct group recv nexpected %d nrep %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) coll->nexpected,
                              (int) coll->nreported);
     }
 
+    check_complete(coll);
+    PMIX_RELEASE(sig);
+}
+
+/* Test whether this tracker's rollup is complete and, if so, answer it: the
+ * controller broadcasts the release, everyone else rolls their aggregate up
+ * to their parent. Factored out of grp_recv() because a contribution arriving
+ * is no longer the only thing that can complete a collective - a fault can
+ * lower the number of contributions we are waiting for, and the tracker has
+ * to be re-tested against the new count with no message in hand.
+ *
+ * The completion test is ">=", not "==", precisely because nexpected can now
+ * shrink underneath a tracker that has already counted more than it ends up
+ * needing. The "converged" latch is what keeps that safe: without it a
+ * straggler arriving after completion would drive a second release broadcast,
+ * consuming another context id, or a second rollup to our parent. */
+static void check_complete(prte_grpcomm_group_t *coll)
+{
+    int rc;
+    size_t m, n, ninfo, nfinal = 0;
+    pmix_proc_t *finalmembership = NULL;
+    bool found;
+    pmix_list_t nmlist;
+    prte_namelist_t *nm;
+    pmix_data_array_t darray;
+    pmix_info_t *info = NULL;
+    pmix_data_buffer_t *reply;
+
+    /* an op we have already answered, or one an abort is tearing down, must
+     * not be driven again */
+    if (coll->converged || coll->aborting) {
+        return;
+    }
 
     /* see if everyone has reported */
-    if ((coll->bootstrap && (coll->nleaders_reported == coll->nleaders &&
-                             coll->nfollowers_reported == coll->nfollowers)) ||
-        (!coll->bootstrap && coll->nreported == coll->nexpected)) {
+    if (!((coll->bootstrap && (coll->nleaders_reported >= coll->nleaders &&
+                               coll->nfollowers_reported >= coll->nfollowers)) ||
+          (!coll->bootstrap && coll->nreported >= coll->nexpected))) {
+        return;
+    }
+    coll->converged = true;
+    /* the collective resolved, so the guard timer has done its job */
+    if (coll->tev_active) {
+        prte_event_del(&coll->tev);
+        coll->tev_active = false;
+    }
 
+    {
         if (PRTE_PROC_IS_MASTER) {
             pmix_output_verbose(1, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:direct group HNP reports complete for %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->sig->groupID);
 
             /* the allgather is complete - send the xcast */
-            if (PMIX_GROUP_CONSTRUCT == sig->op) {
+            if (PMIX_GROUP_CONSTRUCT == coll->sig->op) {
                 /* if we were asked to provide a context id, do so */
                 if (coll->sig->assignID) {
                     coll->sig->ctxid = prte_grpcomm_base.context_id;
@@ -790,7 +922,6 @@ answer:
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_RELEASE(sig);
                 PMIX_PROC_FREE(finalmembership, nfinal);
                 return;
             }
@@ -799,18 +930,16 @@ answer:
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_RELEASE(sig);
                 PMIX_PROC_FREE(finalmembership, nfinal);
                 return;
             }
 
-            if (PMIX_GROUP_CONSTRUCT == sig->op) {
+            if (PMIX_GROUP_CONSTRUCT == coll->sig->op) {
                 // pack the final membership
                 rc = PMIx_Data_pack(NULL, reply, &nfinal, 1, PMIX_SIZE);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
-                    PMIX_RELEASE(sig);
                     PMIX_PROC_FREE(finalmembership, nfinal);
                     return;
                 }
@@ -819,7 +948,6 @@ answer:
                     if (PMIX_SUCCESS != rc) {
                         PMIX_ERROR_LOG(rc);
                         PMIX_DATA_BUFFER_RELEASE(reply);
-                        PMIX_RELEASE(sig);
                         return;
                     }
                     PMIX_PROC_FREE(finalmembership, nfinal);
@@ -833,7 +961,6 @@ answer:
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
-                    PMIX_RELEASE(sig);
                     return;
                 }
                 if (0 < ninfo) {
@@ -841,7 +968,6 @@ answer:
                     if (PMIX_SUCCESS != rc) {
                         PMIX_ERROR_LOG(rc);
                         PMIX_DATA_BUFFER_RELEASE(reply);
-                        PMIX_RELEASE(sig);
                         return;
                     }
                 }
@@ -855,7 +981,6 @@ answer:
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
-                    PMIX_RELEASE(sig);
                     return;
                 }
                 if (0 < ninfo) {
@@ -863,7 +988,6 @@ answer:
                     if (PMIX_SUCCESS != rc) {
                         PMIX_ERROR_LOG(rc);
                         PMIX_DATA_BUFFER_RELEASE(reply);
-                        PMIX_RELEASE(sig);
                         return;
                     }
                 }
@@ -889,7 +1013,6 @@ answer:
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_RELEASE(sig);
                 return;
             }
 
@@ -898,7 +1021,6 @@ answer:
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_RELEASE(sig);
                 return;
             }
 
@@ -907,11 +1029,10 @@ answer:
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_RELEASE(sig);
                 return;
             }
 
-            if (PMIX_GROUP_CONSTRUCT == sig->op) {
+            if (PMIX_GROUP_CONSTRUCT == coll->sig->op) {
                 // pack any group info
                 PMIx_Info_list_convert(coll->grpinfo, &darray);
                 info = (pmix_info_t*)darray.array;
@@ -920,7 +1041,6 @@ answer:
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
-                    PMIX_RELEASE(sig);
                     return;
                 }
                 if (0 < ninfo) {
@@ -928,7 +1048,6 @@ answer:
                     if (PMIX_SUCCESS != rc) {
                         PMIX_ERROR_LOG(rc);
                         PMIX_DATA_BUFFER_RELEASE(reply);
-                        PMIX_RELEASE(sig);
                         return;
                     }
                 }
@@ -942,7 +1061,6 @@ answer:
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
-                    PMIX_RELEASE(sig);
                     return;
                 }
                 if (0 < ninfo) {
@@ -950,7 +1068,6 @@ answer:
                     if (PMIX_SUCCESS != rc) {
                         PMIX_ERROR_LOG(rc);
                         PMIX_DATA_BUFFER_RELEASE(reply);
-                        PMIX_RELEASE(sig);
                         return;
                     }
                 }
@@ -963,12 +1080,10 @@ answer:
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_RELEASE(sig);
                 return;
             }
         }
     }
-    PMIX_RELEASE(sig);
 }
 
 static void relcb(void *cbdata)
@@ -1077,9 +1192,63 @@ static void grp_release_regcbfunc(pmix_status_t status, void *cbdata)
     PRTE_PMIX_THREADSHIFT(cd, prte_event_base, grp_release_resume);
 }
 
+/* Has this operation already been released here? */
+static bool group_op_completed(prte_grpcomm_direct_group_signature_t *sig)
+{
+    prte_grpcomm_group_memo_t *memo;
+
+    PMIX_LIST_FOREACH(memo, &prte_mca_grpcomm_direct_component.completed_group_ops,
+                      prte_grpcomm_group_memo_t) {
+        if (sig->op == memo->op && 0 == strcmp(sig->groupID, memo->groupID)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Forget any record of this operation, so a fresh one of the same name and
+ * type can run. Called when a local client starts one: the client asking is
+ * proof that the previous operation of that name is over and done with. */
+static void group_op_forget(prte_grpcomm_direct_group_signature_t *sig)
+{
+    prte_grpcomm_group_memo_t *memo, *nxt;
+
+    PMIX_LIST_FOREACH_SAFE(memo, nxt, &prte_mca_grpcomm_direct_component.completed_group_ops,
+                           prte_grpcomm_group_memo_t) {
+        if (sig->op == memo->op && 0 == strcmp(sig->groupID, memo->groupID)) {
+            pmix_list_remove_item(&prte_mca_grpcomm_direct_component.completed_group_ops,
+                                  &memo->super);
+            PMIX_RELEASE(memo);
+        }
+    }
+}
+
+/* Record that we released this operation, evicting the oldest entry once the
+ * memo is full - it only has to outlive messages still in flight. */
+static void group_op_remember(prte_grpcomm_direct_group_signature_t *sig)
+{
+    prte_grpcomm_group_memo_t *memo;
+
+    if (group_op_completed(sig)) {
+        return;
+    }
+    while (PRTE_GRPCOMM_GROUP_MEMO_MAX <=
+           pmix_list_get_size(&prte_mca_grpcomm_direct_component.completed_group_ops)) {
+        memo = (prte_grpcomm_group_memo_t *)
+            pmix_list_remove_first(&prte_mca_grpcomm_direct_component.completed_group_ops);
+        PMIX_RELEASE(memo);
+    }
+    memo = PMIX_NEW(prte_grpcomm_group_memo_t);
+    memo->groupID = strdup(sig->groupID);
+    memo->op = sig->op;
+    pmix_list_append(&prte_mca_grpcomm_direct_component.completed_group_ops, &memo->super);
+}
+
 static void find_delete_tracker(prte_grpcomm_direct_group_signature_t *sig)
 {
     prte_grpcomm_group_t *coll;
+
+    group_op_remember(sig);
 
     PMIX_LIST_FOREACH(coll, &prte_mca_grpcomm_direct_component.group_ops, prte_grpcomm_group_t) {
         // must match both groupID and operation - the same key get_tracker

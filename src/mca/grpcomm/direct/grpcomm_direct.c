@@ -64,6 +64,7 @@ static int init(void)
                    prte_grpcomm_xcast_t);
     PMIX_CONSTRUCT(&prte_mca_grpcomm_direct_component.fence_ops, pmix_list_t);
     PMIX_CONSTRUCT(&prte_mca_grpcomm_direct_component.group_ops, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_mca_grpcomm_direct_component.completed_group_ops, pmix_list_t);
 
     /* xcast receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST,
@@ -95,6 +96,7 @@ static void finalize(void)
     PMIX_DESTRUCT(&prte_mca_grpcomm_direct_component.xcast_ops);
     PMIX_LIST_DESTRUCT(&prte_mca_grpcomm_direct_component.fence_ops);
     PMIX_LIST_DESTRUCT(&prte_mca_grpcomm_direct_component.group_ops);
+    PMIX_LIST_DESTRUCT(&prte_mca_grpcomm_direct_component.completed_group_ops);
 
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST_ACK);

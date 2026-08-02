@@ -18,6 +18,8 @@
 
 #include "prte_config.h"
 
+#include "src/class/pmix_bitmap.h"
+
 #include "src/mca/grpcomm/grpcomm.h"
 
 BEGIN_C_DECLS
@@ -51,7 +53,23 @@ typedef struct {
     pmix_list_t fence_ops;
     // track ongoiong group operations - list of prte_grpcomm_group_t
     pmix_list_t group_ops;
+    // A short memory of group operations we have already released - list of
+    // prte_grpcomm_group_memo_t, capped at PRTE_GRPCOMM_GROUP_MEMO_MAX. A
+    // contribution can arrive after the release that retired its tracker has
+    // already been processed here; without this, get_tracker() would take it
+    // as the first contribution to a brand-new operation and build a tracker
+    // that nothing will ever complete or delete.
+    pmix_list_t completed_group_ops;
 } prte_grpcomm_direct_component_t;
+
+#define PRTE_GRPCOMM_GROUP_MEMO_MAX 64
+
+typedef struct {
+    pmix_list_item_t super;
+    char *groupID;
+    pmix_group_operation_t op;
+} prte_grpcomm_group_memo_t;
+PMIX_CLASS_DECLARATION(prte_grpcomm_group_memo_t);
 
 PRTE_MODULE_EXPORT extern prte_grpcomm_direct_component_t prte_mca_grpcomm_direct_component;
 extern prte_grpcomm_base_module_t prte_grpcomm_direct_module;
@@ -126,14 +144,28 @@ typedef struct {
     pmix_rank_t *dmns;
     /** number of participating daemons */
     size_t ndmns;
-    /** my index in the dmns array */
-    unsigned long my_rank;
     /* type of collective */
     bool bootstrap;
 
     /*** NON-BOOTSTRAP TRACKERS ***/
     size_t nexpected;  // number of buckets expected
     size_t nreported;  // number reported in
+    // A contribution is identified by which of our routing-tree child
+    // subtrees it arrived from, not merely counted: a bare counter cannot
+    // tell two messages from one child apart from one message from each of
+    // two, which is exactly what a replay after a fault produces. The slot
+    // index is prte_rml_get_subtree_index() of the sender, the same mapping
+    // prte_rml_get_num_contributors() uses to compute nexpected, so the two
+    // agree by construction. Our own contribution has no subtree index and
+    // is tracked separately.
+    pmix_bitmap_t reported_slots;
+    bool self_reported;
+    // set once the rollup has been answered (released by the controller, or
+    // rolled up to our parent) so a straggler cannot drive it a second time
+    bool converged;
+    // set when an abort has been broadcast for this op but the tracker has
+    // not yet been deleted by the returning release
+    bool aborting;
 
     /*** BOOTSTRAP TRACKERS ***/
     // "leaders" are group members reporting as
@@ -151,9 +183,12 @@ typedef struct {
     size_t nfollowers_reported;  // number reported in
 
     /* controls values */
-    bool assignID;
     int timeout;
-    size_t memsize;
+    // the controller arms a timer for "timeout" seconds once a participant
+    // has asked for one, so a collective that can no longer converge fails
+    // its participants instead of hanging them
+    prte_event_t tev;
+    bool tev_active;
     void *grpinfo;  // info list of group info
     void *endpts;   // info list of endpts
     /* callback function */
