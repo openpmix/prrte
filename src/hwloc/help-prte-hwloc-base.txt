@@ -60,11 +60,6 @@ to obtain a processor unit object:
 There will be no impact to your application, so we will continue
 but will not be able to output the binding locations.
 #
-[too-many-sites]
-At least one process in your application is bound to too many sites
-for us to report in a string. There will be no impact to your application
-so we will continue but will not be able to output the binding locations.
-#
 [unfound-cpu]
 The CPU list provided on your cmd line contains at least one entry that
 could not be resolved:

@@ -33,7 +33,7 @@ is the property to preserve.
 | `ess/hnp`, `plm/base` | `prte_hwloc_base_get_topology()`, `_filter_cpus()`, `_setup_summary()` — acquiring the local topology and receiving remote ones |
 | `rmaps/*` | `_get_nbobjs_by_type()`, `_get_obj_by_type()`, `_get_npus()`, `_generate_cpuset()`, `_cpu_list_parse()`, `_reset_counters()`, `prte_hwloc_obj_data_t` |
 | `odls/base` | `prte_hwloc_base_map` / `_mbfa` (the memory-policy globals) and `_cset2str()` |
-| `runtime/data_type_support`, `ras/base` | `_cset2str()`, `prte_hwloc_get_binding_info()`, `prte_hwloc_print()`, `prte_hwloc_build_map()` — every `--display` variant |
+| `runtime/data_type_support`, `ras/base` | `_cset2str()`, `_cpuset2ranges()`, `prte_hwloc_get_binding_info()`, `prte_hwloc_print()` — every `--display` variant |
 | `schizo`, `tools` | `_set_binding_policy()`, `_print_binding()` |
 
 ---
@@ -180,18 +180,55 @@ a value that does not fit has to be rejected rather than truncated.
 
 ---
 
-## Rendering a binding: three functions, three buffer contracts
+## GOLDEN RULE: a cpuset's bits are PU OS indices; a cpu *number* is not
 
-This is where the sharp edges are, because the output is built into
-fixed-size buffers whose size the *caller* chooses.
+Every rendering in PRRTE starts from an `hwloc_cpuset_t`, and the bits of
+one are always **PU OS indices** — the kernel's cpu numbers. What PRRTE
+shows a user is a list of **cores** (or of hwthreads, when the job treats
+hwthreads as cpus), and every PRRTE grammar that *accepts* such a list —
+`--cpu-set`, the rankfile slot lists — resolves it as an hwloc **logical**
+index. Those three numbering schemes coincide only by luck.
 
-| Function | Output | Buffer |
-|----------|--------|--------|
-| `prte_hwloc_base_cset2str()` | `package[0][core:L0,2-3]` | allocates and returns; internally builds through a 2048-byte scratch |
-| `prte_hwloc_get_binding_info()` | one `<core>N</core>` element per bound core, plus the package number | **caller's** buffer and size |
-| `prte_hwloc_print()` | the whole topology as indented text | allocates and returns |
+So: **resolve each bit to the object it belongs to and take that object's
+index.** `prte_hwloc_base_cpuset2ranges()` is the one place that does it,
+and everything that renders cpu numbers goes through it:
 
-Rules that were all being broken:
+| Function | Output |
+|----------|--------|
+| `prte_hwloc_base_cpuset2ranges()` | `0,2-3` — the primitive; allocates and returns |
+| `prte_hwloc_base_cset2str()` | `package[0][core:L0,2-3]` — one element per package; allocates |
+| `prte_hwloc_get_binding_info()` | one `<core>N</core>` element per site, plus the package number, into the **caller's** buffer |
+| `prte_hwloc_print()` | the whole topology as indented text; allocates |
+
+Three renderers used to short-cut this whenever the bits "already were
+cores" (`npus == ncores`) or the job was in hwthreads, and print the raw
+bit numbers under a `core:L`/`hwt:L` label. That is wrong on exactly the
+machines where it matters — any SMT node viewed in hwthreads, and any node
+whose firmware interleaves cpu numbers across packages — and it is worse
+than cosmetic, because the user reads the number back out and hands it to
+`--cpu-set`. The `physical` flag was also simply ignored on those paths.
+`--display cpus` in both `ras/base` and `runtime/data_type_support` carried
+its own copy of the same three-branch short cut; both now call
+`cpuset2ranges()`.
+
+There is no `bits_as_cores` special case left. Do not reintroduce one:
+`cpuset2ranges()` produces the identical answer when the indices happen to
+agree, and the correct one when they do not.
+
+The rule reaches past the display code. A **diagnostic** that names cpu
+numbers is subject to it too, and three mappers were breaking it in the
+same message: `rmaps/seq`, `rmaps/rank_file` and `rmaps/lsf` print
+"requested / available / overlapping" cpu sets when a slot list collides
+with cpus already in use, and rendered them straight off the bitmap while
+quoting the user's own logical slot list beside them — three numbering
+schemes in one message. They call `cpuset2ranges()` now.
+
+The one place a raw `hwloc_bitmap_list_asprintf()` is **correct** is
+`prte_proc_t.cpuset`: that is a wire format, read back with
+`hwloc_bitmap_list_sscanf()`, and it must stay in OS indices. Never show
+it to a user unrendered.
+
+Other rules here, all of which were being broken:
 
 - **Charge every byte written against the remaining room.** The XML element
   writer advanced its cursor through a run of set bits without reducing the
@@ -306,9 +343,18 @@ summary-not-yet-built case), `_get_npus()` in core and hwthread terms,
 `_cpu_list_parse()` grammar including every id that does not exist,
 `_cset2str()` range collapsing, `prte_hwloc_get_binding_info()` against a
 **guarded** buffer (a canary past `sz` — this is how the element-writer
-overflow is pinned), `prte_hwloc_build_map()`, the print-buffer ring, the
-`--bind-to` parser, and userdata release across the normal hierarchy *and*
-the special NUMA depth.
+overflow is pinned), `_cpuset2ranges()`, the print-buffer ring, the
+`--bind-to` parser, userdata release across the normal hierarchy *and* the
+special NUMA depth, and `_reset_counters()` at both of those places.
+
+One case cannot be built synthetically: hwloc's synthetic generator always
+makes `os_index` and `logical_index` agree, so **the logical-vs-physical
+divergence is driven from a hand-written XML topology embedded in the test**
+(`interleaved_xml`: two packages whose PU OS indices interleave, 0/2/4/6 and
+1/3/5/7). That is the only way to prove a renderer reports the basis it
+claims. If you write more XML there, note that hwloc's importer segfaults —
+it does not diagnose — on an object missing `complete_cpuset`/`nodeset`/
+`complete_nodeset`; copy the attribute set from an existing object.
 
 Add to it rather than around it. If a change here is not reachable from a
 synthetic topology plus a string, say why in the test file.
@@ -326,7 +372,11 @@ buffer — those containers are 8 cores, one package, no SMT, no sysfs NUMA
 node, which is exactly the shape that trips it), `--map-by numa` against
 topologies the HNP never sensed, a DVM cpu-set applied to every node rather
 than just the first, a malformed cpu-set being refused without taking the
-HNP down, and `--display topo` over several topologies at once.
+HNP down, `--display topo` over several topologies at once, the
+print-then-accept round trip (`--display cpus` → `--cpu-set` → the same set
+back), both spellings of the index basis, and — the one case that needs a
+**persistent** DVM, because `prterun` takes the stale state down with its
+HNP — three successive `--bind-to numa:limit=1` jobs all binding.
 
 **Not covered anywhere:** `prte_hwloc_base_get_topology()`'s sensing path
 (it reads the real machine), and `prte_hwloc_print()` against a machine wide
@@ -356,8 +406,28 @@ enough to fill its cpuset buffer — a few thousand PUs.
   `_check_on_coprocessor()`), along with the topology-signature builder,
   `_single_cpu()`, `_get_obj_idx()` and `_topology_export_xmlbuffer()` —
   none had callers.
+- **`prte_hwloc_build_map()` is gone**, and with it the "the bits already
+  are cores" short cut its three callers wrapped it in. It produced a
+  *bitmap* of core indices, which is a lossy shape for the job — a caller
+  then printed that bitmap with `hwloc_bitmap_list_snprintf()`, mixing two
+  index bases in one string. `prte_hwloc_base_cpuset2ranges()` replaces it
+  and answers the question the callers were actually asking.
 - **`prte_hwloc_get_binding_info()`'s output is undefined for a process
   bound across more than one package.** It renders the last matching package
   and reports that package's number. The caller wraps the result in a single
   `<package>` element, so the shape of the fix is an API change, not a
   one-liner.
+- **`_cset2str()` and `_get_binding_info()` iterate packages, so a topology
+  with no `HWLOC_OBJ_PACKAGE` level renders as nothing at all** (`cset2str`
+  returns NULL, and its callers print `UNBOUND`). Every real machine has
+  packages; the shape that would not is the same museum piece that has no
+  cores. `_cpuset2ranges()` does not have this problem — reach for it if you
+  need a rendering that does not presuppose packages. Fixing the other two
+  means changing the `package[N][...]` output form and the `<package>`
+  element its caller wraps around it.
+- **A topology with PUs but no cores is rendered in hwthreads**, and says
+  so (`hwt:L` rather than `core:L`). hwloc does not find cores on every
+  platform — PPC64 on old Linux kernels reported only NUMA nodes and PUs —
+  and `prte_hwloc_base_get_pu()` has always allowed for it. The renderers
+  did not: a core-based lookup resolved nothing and every binding on such a
+  machine came back `UNBOUND`.

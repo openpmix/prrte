@@ -46,28 +46,19 @@ static void display_cpus(prte_topology_t *t,
                          prte_job_t *jdata,
                          char *node, char**output)
 {
-    char tmp[2048];
+    char *tmp;
     unsigned pkg, npkgs;
-    bool bits_as_cores = false, use_hwthread_cpus = prte_hwloc_default_use_hwthread_cpus;
-    unsigned npus, ncores;
+    bool use_hwthread_cpus, physical;
     hwloc_obj_t obj;
     hwloc_cpuset_t avail = NULL;
     hwloc_cpuset_t allowed;
-    hwloc_cpuset_t coreset = NULL;
     PRTE_HIDE_UNUSED_PARAMS(node);
 
     char *tmp1, *tmp2;
 
-    npus = prte_hwloc_base_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PU);
-    ncores = prte_hwloc_base_get_nbobjs_by_type(t->topo, HWLOC_OBJ_CORE);
-    if (npus == ncores && !use_hwthread_cpus) {
-        /* the bits in this bitmap represent cores */
-        bits_as_cores = true;
-    }
     use_hwthread_cpus = prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL);
-    if (!use_hwthread_cpus && !bits_as_cores) {
-        coreset = hwloc_bitmap_alloc();
-    }
+    physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL,
+                                  PMIX_BOOL);
     avail = hwloc_bitmap_alloc();
     pmix_asprintf(&tmp1, "        <processors>\n");
     npkgs = prte_hwloc_base_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PACKAGE);
@@ -85,28 +76,18 @@ static void display_cpus(prte_topology_t *t,
             tmp2 = NULL;
             continue;
         }
-        if (bits_as_cores) {
-            /* can just use the hwloc fn directly */
-            hwloc_bitmap_list_snprintf(tmp, 2048, avail);
-            pmix_asprintf(&tmp2, "%s            <package id=\"%d\" cpus=\"%s\"/>\n", tmp1, pkg, tmp);
-        } else if (use_hwthread_cpus) {
-            /* can just use the hwloc fn directly */
-            hwloc_bitmap_list_snprintf(tmp, 2048, avail);
-            pmix_asprintf(&tmp2, "%s            <package id=\"%d\" cpus=\"%s\"/>\n", tmp1, pkg, tmp);
-        } else {
-            prte_hwloc_build_map(t->topo, avail, use_hwthread_cpus | bits_as_cores, coreset);
-            /* now print out the string */
-            hwloc_bitmap_list_snprintf(tmp, 2048, coreset);
-            pmix_asprintf(&tmp2, "%s            <package id=\"%d\" cpus=\"%s\"/>\n", tmp1, pkg, tmp);
-        }
+        /* the bits are PU OS indices; what the user needs to read back out
+         * (and hand to --cpu-set) is the list of cores, or of hwthreads if
+         * that is what this job is using as cpus */
+        tmp = prte_hwloc_base_cpuset2ranges(t->topo, avail, use_hwthread_cpus, physical);
+        pmix_asprintf(&tmp2, "%s            <package id=\"%d\" cpus=\"%s\"/>\n", tmp1, pkg,
+                      (NULL == tmp) ? "NONE" : tmp);
+        free(tmp);
         free(tmp1);
         tmp1 = tmp2;
         tmp2 = NULL;
     }
     hwloc_bitmap_free(avail);
-    if (NULL != coreset) {
-        hwloc_bitmap_free(coreset);
-    }
 
     pmix_asprintf(output, "%s        </processors>\n", tmp1);
     free(tmp1);
@@ -375,7 +356,7 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
                 *output = tmp;
                 return;
             }
-            prte_hwloc_get_binding_info(mycpus, use_hwthread_cpus,
+            prte_hwloc_get_binding_info(mycpus, use_hwthread_cpus, physical,
                                         src->node->topology->topo, &pkgnum, cores, sz);
 
             hwloc_bitmap_free(mycpus);

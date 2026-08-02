@@ -454,9 +454,23 @@ node→session deviation.
   spelling turned `--map-by core:P=2` into pes-per-proc **0** (and then a
   misleading "out of resource") and `seq:F=path` into an attempt to open the
   path five characters in. `qualifier_value()` in `rmaps_base_frame.c` is the
-  one way to get a qualifier's value. **The same pattern still exists outside
-  this framework** — `src/hwloc/hwloc.c` reads the job-level `--bind-to`
-  `LIMIT=` value at `&quals[i][6]`.
+  one way to get a qualifier's value. (`src/hwloc/hwloc.c` had the same bug in
+  the job-level `--bind-to` `LIMIT=` value and now uses
+  `pmix_cli_qualifier_value()`.) A related trap in the same family: an
+  **empty** string matches whatever `PMIX_CHECK_CLI_OPTION` tests it against
+  first, because the comparison is only `min(strlen(a), strlen(b))` long —
+  which is why the `--map-by :QUALIFIER` form needs its own explicit branch,
+  and why `--bind-to :overload-allowed` used to resolve to `none`.
+- **A cpu number shown to a user goes through
+  `prte_hwloc_base_cpuset2ranges()`.** The bits of a cpuset are PU *OS*
+  indices; every grammar this framework accepts — slot lists, rankfile
+  entries, `--cpu-set` — is in hwloc *logical* indices. `seq`, `rank_file`
+  and `lsf` each printed a raw bitmap as the "available" and "overlapping"
+  cpus of a collision message while quoting the user's logical slot list
+  beside it. `prte_proc_t.cpuset` is the one deliberate exception: it is a
+  wire format, read back with `hwloc_bitmap_list_sscanf()`, and must stay in
+  OS indices — so never show *it* to a user either. See
+  [`src/hwloc/AGENTS.md`](../../hwloc/AGENTS.md).
 - **Module-static state outlives the job.** `rank_file` and `lsf` both keep
   their parsed rank map and rank count in file statics. Reset them at the
   start of every map and reclaim them on *every* exit, success or failure —

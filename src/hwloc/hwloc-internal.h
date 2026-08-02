@@ -221,8 +221,27 @@ PRTE_EXPORT char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
 
 PRTE_EXPORT void prte_hwloc_get_binding_info(hwloc_const_cpuset_t cpuset,
                                              bool use_hwthread_cpus,
+                                             bool physical,
                                              hwloc_topology_t topo, int *pkgnum,
                                              char *cores, int sz);
+
+/**
+ * Render the set bits of a cpuset as a comma-separated list of index
+ * ranges - "0-3,7" - in terms of cores, or of hwthreads when
+ * "use_hwthread_cpus" is set. Indices are hwloc logical indices unless
+ * "physical" is set, in which case they are OS indices.
+ *
+ * This is the only correct way to turn a cpuset into a list of cpu numbers
+ * for a user to read: the bits themselves are PU OS indices, so printing
+ * them raw mislabels every topology whose logical and OS numbering differ.
+ *
+ * Returns an allocated string the caller must free, or NULL if the set is
+ * empty or a bit could not be resolved.
+ */
+PRTE_EXPORT char *prte_hwloc_base_cpuset2ranges(hwloc_topology_t topo,
+                                                hwloc_const_cpuset_t bitmap,
+                                                bool use_hwthread_cpus,
+                                                bool physical);
 
 /* get the hwloc object that corresponds to the given processor id  and type */
 PRTE_EXPORT hwloc_obj_t prte_hwloc_base_get_pu(hwloc_topology_t topo, bool use_hwthread_cpus,
@@ -232,11 +251,6 @@ PRTE_EXPORT int prte_hwloc_base_open(void);
 PRTE_EXPORT void prte_hwloc_base_close(void);
 PRTE_EXPORT int prte_hwloc_base_register(void);
 PRTE_EXPORT int prte_hwloc_print(char **output, char *prefix, hwloc_topology_t src);
-
-PRTE_EXPORT void prte_hwloc_build_map(hwloc_topology_t topo,
-                                      hwloc_cpuset_t avail,
-                                      bool use_hwthread_cpus,
-                                      hwloc_bitmap_t coreset);
 
 PRTE_EXPORT bool prte_hwloc_base_core_cpus(hwloc_topology_t topo);
 
