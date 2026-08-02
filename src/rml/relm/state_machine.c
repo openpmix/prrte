@@ -231,9 +231,19 @@ int prte_relm_start_msg(
     PMIx_Byte_object_destruct(&bo);
     if(PMIX_SUCCESS != ret){
         PMIx_Data_buffer_release(data);
+        /* "buf" is the caller's on every error return, exactly as it is for
+         * prte_rml_send_buffer_nb() - so leave it alone here even though the
+         * unload above may already have emptied it. Releasing an emptied
+         * buffer is what the caller then does, and it is harmless. */
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         return ret;
     }
+    /* We took ownership of "buf" by succeeding, and the unload above moved
+     * its payload out into "data" - but that leaves the container itself,
+     * and nothing was releasing it. Every reliable send between daemons
+     * came through here, so this was not a one-off 40 bytes: it was 40
+     * bytes per inter-daemon message, for the life of the DVM. */
+    PMIx_Data_buffer_release(buf);
 
     start_msg_caddy_t* msg_cd = PMIX_NEW(start_msg_caddy_t);
     msg_cd->dst = dst;
