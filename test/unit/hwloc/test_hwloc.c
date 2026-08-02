@@ -459,6 +459,20 @@ static int test_cpu_list_parse(void)
 #define GUARD_LEN 64
 #define GUARD_BYTE 0x5a
 
+/* how many times "needle" occurs in "hay" */
+static int count_substr(const char *hay, const char *needle)
+{
+    const char *p = hay;
+    size_t len = strlen(needle);
+    int n = 0;
+
+    while (NULL != (p = strstr(p, needle))) {
+        ++n;
+        p += len;
+    }
+    return n;
+}
+
 static bool guard_intact(const char *buf, int sz)
 {
     int i;
@@ -477,7 +491,7 @@ static int test_binding_info(void)
     hwloc_topology_t topo;
     hwloc_cpuset_t cpuset;
     char *buf;
-    int pkgnum, sz;
+    int sz;
 
     topo = make_topo("package:2 core:32 pu:1");
     if (NULL == topo) {
@@ -486,28 +500,29 @@ static int test_binding_info(void)
     }
     cpuset = hwloc_bitmap_alloc();
 
-    /* An empty cpuset says so, and leaves pkgnum at a value the caller can
-     * recognize. *pkgnum used to be left untouched here, and the only caller
-     * declares it uninitialized and prints it. */
+    /* An empty cpuset says so rather than rendering nothing at all. */
     sz = 256;
     buf = malloc(sz + GUARD_LEN);
     memset(buf + sz, GUARD_BYTE, GUARD_LEN);
-    pkgnum = 12345;
-    prte_hwloc_get_binding_info(cpuset, false, false, topo, &pkgnum, buf, sz);
-    CHECK("empty cpuset says so", NULL != strstr(buf, "EMPTY CPUSET"));
-    CHECK("empty cpuset reports no package", -1 == pkgnum);
+    prte_hwloc_get_binding_info(cpuset, false, false, topo, buf, sz);
+    /* the element name carries no space - this lands in the document
+     * "--display map:parseable" produces, and "<EMPTY CPUSET/>" does not
+     * parse as one */
+    CHECK("empty cpuset says so", NULL != strstr(buf, "<empty_cpuset/>"));
     CHECK("empty cpuset stays in bounds", guard_intact(buf, sz));
     free(buf);
 
-    /* A cpuset that matches no package likewise has to leave pkgnum set. */
+    /* A cpuset that matches no package renders no package element - and
+     * still comes back NUL-terminated, because the caller emits it verbatim */
     hwloc_bitmap_zero(cpuset);
     hwloc_bitmap_set(cpuset, 4096);
     sz = 256;
     buf = malloc(sz + GUARD_LEN);
     memset(buf + sz, GUARD_BYTE, GUARD_LEN);
-    pkgnum = 12345;
-    prte_hwloc_get_binding_info(cpuset, false, false, topo, &pkgnum, buf, sz);
-    CHECK("cpuset outside every package reports no package", -1 == pkgnum);
+    prte_hwloc_get_binding_info(cpuset, false, false, topo, buf, sz);
+    CHECK("cpuset outside every package renders no package",
+          NULL == strstr(buf, "<package"));
+    CHECK("cpuset outside every package is NUL terminated", sz > (int) strlen(buf));
     CHECK("cpuset outside every package stays in bounds", guard_intact(buf, sz));
     free(buf);
 
@@ -517,10 +532,10 @@ static int test_binding_info(void)
     sz = 256;
     buf = malloc(sz + GUARD_LEN);
     memset(buf + sz, GUARD_BYTE, GUARD_LEN);
-    pkgnum = 12345;
-    prte_hwloc_get_binding_info(cpuset, false, false, topo, &pkgnum, buf, sz);
-    CHECK("single core reports its package", 0 == pkgnum);
+    prte_hwloc_get_binding_info(cpuset, false, false, topo, buf, sz);
+    CHECK("single core names its package", NULL != strstr(buf, "<package id=\"0\">"));
     CHECK("single core is rendered", NULL != strstr(buf, "<core>0</core>"));
+    CHECK("single core closes its package", NULL != strstr(buf, "</package>"));
     CHECK("single core stays in bounds", guard_intact(buf, sz));
     free(buf);
 
@@ -535,9 +550,8 @@ static int test_binding_info(void)
     sz = 32 * 20;
     buf = malloc(sz + GUARD_LEN);
     memset(buf + sz, GUARD_BYTE, GUARD_LEN);
-    pkgnum = 12345;
-    prte_hwloc_get_binding_info(cpuset, false, false, topo, &pkgnum, buf, sz);
-    CHECK("wide binding reports its package", 0 == pkgnum);
+    prte_hwloc_get_binding_info(cpuset, false, false, topo, buf, sz);
+    CHECK("wide binding names its package", NULL != strstr(buf, "<package id=\"0\">"));
     CHECK("wide binding stays in bounds", guard_intact(buf, sz));
     CHECK("wide binding is NUL terminated", sz > (int) strlen(buf));
     free(buf);
@@ -546,21 +560,43 @@ static int test_binding_info(void)
     sz = 8192;
     buf = malloc(sz + GUARD_LEN);
     memset(buf + sz, GUARD_BYTE, GUARD_LEN);
-    pkgnum = 12345;
-    prte_hwloc_get_binding_info(cpuset, false, false, topo, &pkgnum, buf, sz);
+    prte_hwloc_get_binding_info(cpuset, false, false, topo, buf, sz);
     CHECK("wide binding renders the first core", NULL != strstr(buf, "<core>0</core>"));
     CHECK("wide binding renders a middle core", NULL != strstr(buf, "<core>17</core>"));
     CHECK("wide binding renders the last core", NULL != strstr(buf, "<core>31</core>"));
     CHECK("wide binding with room stays in bounds", guard_intact(buf, sz));
     free(buf);
 
+    /* A process bound across TWO packages. The old shape rendered the sites
+     * only, into the caller's single <package> element, and reported one
+     * package number - so each package overwrote the previous one from the
+     * top of the buffer and the result named the last package and dropped
+     * every earlier one's cores. That is not incomplete output, it is wrong
+     * output, and it disagreed with what _cset2str() reports for the same
+     * binding. A rankfile slot list of "P0:0;P1:0" produces exactly this. */
+    hwloc_bitmap_zero(cpuset);
+    hwloc_bitmap_set(cpuset, 0);   /* package 0, core 0 */
+    hwloc_bitmap_set(cpuset, 32);  /* package 1, core 32 */
+    sz = 8192;
+    buf = malloc(sz + GUARD_LEN);
+    memset(buf + sz, GUARD_BYTE, GUARD_LEN);
+    prte_hwloc_get_binding_info(cpuset, false, false, topo, buf, sz);
+    CHECK("cross-package binding names package 0", NULL != strstr(buf, "<package id=\"0\">"));
+    CHECK("cross-package binding names package 1", NULL != strstr(buf, "<package id=\"1\">"));
+    CHECK("cross-package binding keeps package 0's core", NULL != strstr(buf, "<core>0</core>"));
+    CHECK("cross-package binding keeps package 1's core", NULL != strstr(buf, "<core>32</core>"));
+    CHECK("cross-package binding closes both packages",
+          2 == count_substr(buf, "</package>"));
+    CHECK("cross-package binding stays in bounds", guard_intact(buf, sz));
+    free(buf);
+
     /* a truly tiny buffer must still be safe */
     sz = 4;
     buf = malloc(sz + GUARD_LEN);
     memset(buf + sz, GUARD_BYTE, GUARD_LEN);
-    pkgnum = 12345;
-    prte_hwloc_get_binding_info(cpuset, false, false, topo, &pkgnum, buf, sz);
+    prte_hwloc_get_binding_info(cpuset, false, false, topo, buf, sz);
     CHECK("tiny buffer stays in bounds", guard_intact(buf, sz));
+    CHECK("tiny buffer is NUL terminated", sz > (int) strlen(buf));
     free(buf);
 
     hwloc_bitmap_free(cpuset);
@@ -800,7 +836,7 @@ static int test_index_basis(void)
     hwloc_cpuset_t cpuset;
     hwloc_obj_t pkg;
     char *str, *buf;
-    int pkgnum, sz;
+    int sz;
 
     if (0 != hwloc_topology_init(&topo)) {
         fprintf(stdout, "  SKIP index-basis (topology_init failed)\n");
@@ -877,14 +913,13 @@ static int test_index_basis(void)
      * "physical" outright */
     sz = 4096;
     buf = malloc(sz);
-    pkgnum = 12345;
-    prte_hwloc_get_binding_info(cpuset, false, false, topo, &pkgnum, buf, sz);
-    CHECK("binding info reports package 0", 0 == pkgnum);
+    prte_hwloc_get_binding_info(cpuset, false, false, topo, buf, sz);
+    CHECK("binding info reports package 0", NULL != strstr(buf, "<package id=\"0\">"));
     CHECK("binding info renders logical core 3", NULL != strstr(buf, "<core>3</core>"));
     CHECK("binding info does not leak an OS index",
           NULL == strstr(buf, "<core>6</core>"));
 
-    prte_hwloc_get_binding_info(cpuset, false, true, topo, &pkgnum, buf, sz);
+    prte_hwloc_get_binding_info(cpuset, false, true, topo, buf, sz);
     CHECK("binding info honors physical", NULL != strstr(buf, "<core>6</core>"));
     free(buf);
 

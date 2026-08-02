@@ -1216,72 +1216,81 @@ char *prte_hwloc_base_cpuset2ranges(hwloc_topology_t topo,
     return result;
 }
 
-/* Render a list of site indices as one XML element apiece.
+/* Append one formatted item to a bounded buffer, snprintf-style.
  *
- * Returns the number of bytes that *would* have been written (snprintf
- * semantics), so a return >= buflen means the output was truncated. An
- * earlier version advanced the write pointer through a run of bits without
- * also charging the bytes against the remaining budget, so a process bound
- * to more than a few cores walked straight off the end of the caller's
- * buffer - in the HNP, which holds every node's topology.
+ * "total" is how many bytes the output would need so far, which can exceed
+ * "buflen" once we have truncated - so the room handed to vsnprintf is
+ * clamped rather than subtracted. Returns what this item would have needed;
+ * the caller adds it to its running total. An earlier version advanced the
+ * write pointer through a run of set bits without also charging the bytes
+ * against the remaining budget, so a process bound to more than a few cores
+ * walked straight off the end of the caller's buffer - in the HNP, which
+ * holds every node's topology, so the corruption surfaced somewhere else
+ * entirely.
  */
-static int sites_snprintf_exp(char *buf, size_t buflen,
-                              const unsigned *sites, int nsites,
-                              const char *type)
+static int bounded_append(char *buf, size_t buflen, size_t total,
+                          const char *fmt, ...)
+    __prte_attribute_format__(__printf__, 4, 5);
+
+static int bounded_append(char *buf, size_t buflen, size_t total,
+                          const char *fmt, ...)
 {
-    size_t total = 0;
-    int n, res;
+    char *at = (total < buflen) ? buf + total : NULL;
+    size_t room = (total < buflen) ? buflen - total : 0;
+    va_list ap;
+    int res;
 
-    /* mark the end in case we do nothing below */
-    if (0 < buflen) {
-        buf[0] = '\0';
-    }
-
-    for (n = 0; n < nsites; n++) {
-        /* Always hand snprintf the *remaining* room. total can exceed
-         * buflen once we truncate, so clamp rather than subtract. */
-        char *at = (total < buflen) ? buf + total : NULL;
-        size_t room = (total < buflen) ? buflen - total : 0;
-
-        res = snprintf(at, room, "%*c<%s>%u</%s>\n", 20, ' ', type, sites[n], type);
-        if (0 > res) {
-            return -1;
-        }
-        total += (size_t) res;
-    }
-    return (int) total;
+    va_start(ap, fmt);
+    res = vsnprintf(at, room, fmt, ap);
+    va_end(ap);
+    return res;
 }
 
 /*
- * Render a process' binding as XML elements, and report the package it
- * lies in. Output is undefined if a rank is bound to more than 1 package.
+ * Render a process' binding as XML: one <package> element per package the
+ * process has cpus in, each holding one <core>/<hwt> element per site.
  *
- * "cores" always comes back NUL-terminated and "*pkgnum" always comes back
- * set: the caller wraps both in one <package> element, and every caller
- * leaves pkgnum uninitialized on the way in.
+ * "cores" always comes back NUL-terminated, and the caller emits it verbatim
+ * inside its <binding> element.
+ *
+ * This used to render only the *sites*, into the caller's single <package>
+ * element, and report the package number through an out parameter - which
+ * made the output of a process bound across more than one package not merely
+ * incomplete but wrong: each package overwrote the previous one from the top
+ * of the buffer, so the rendering named the last package and dropped every
+ * earlier one's cores. The short form of the same binding
+ * (prte_hwloc_base_cset2str, "--display map") has always reported every
+ * package, so the two renderings of one binding disagreed - and the one that
+ * was wrong is the machine-readable one. It is reachable: PRRTE's own
+ * cross-package diagnostic points users at the rankfile mapper, and a
+ * rankfile slot list of "P0:0;P1:0" produces exactly this.
  */
 void prte_hwloc_get_binding_info(hwloc_const_cpuset_t cpuset,
                                  bool use_hwthread_cpus, bool physical,
                                  hwloc_topology_t topo,
-                                 int *pkgnum, char *cores, int sz)
+                                 char *cores, int sz)
 {
-    int n, npkgs, nsites;
+    int n, npkgs, nsites, i, res;
+    size_t total = 0, buflen;
     hwloc_cpuset_t avail;
     hwloc_obj_t pkg;
     unsigned *sites = NULL;
     bool as_hwt;
+    const char *type;
 
-    *pkgnum = -1;
     if (NULL == cores || 0 >= sz) {
         return;
     }
+    buflen = (size_t) sz;
     cores[0] = '\0';
 
-    /* if the cpuset is all zero, then something is wrong. Say so and stop -
+    /* If the cpuset is all zero, then something is wrong. Say so and stop -
      * the scan below would otherwise find nothing and leave the message in
-     * place only by accident */
+     * place only by accident. The element name carries no space: this goes
+     * into the document "--display map:parseable" produces, and an element
+     * whose name contains a space does not parse. */
     if (hwloc_bitmap_iszero(cpuset)) {
-        snprintf(cores, (size_t) sz, "\n%*c<EMPTY CPUSET/>\n", 20, ' ');
+        snprintf(cores, buflen, "%*c<empty_cpuset/>\n", 16, ' ');
         return;
     }
 
@@ -1289,8 +1298,8 @@ void prte_hwloc_get_binding_info(hwloc_const_cpuset_t cpuset,
     npkgs = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE);
     avail = hwloc_bitmap_alloc();
     as_hwt = report_as_hwthreads(topo, use_hwthread_cpus);
+    type = as_hwt ? "hwt" : "core";
 
-    /* binding happens within a package and not across packages */
     for (n = 0; n < npkgs; n++) {
         pkg = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, n);
         if (NULL == pkg || NULL == pkg->cpuset) {
@@ -1302,13 +1311,33 @@ void prte_hwloc_get_binding_info(hwloc_const_cpuset_t cpuset,
             continue;
         }
         nsites = collect_sites(topo, avail, as_hwt, physical, &sites);
-        if (0 < nsites) {
-            sites_snprintf_exp(cores, (size_t) sz, sites, nsites,
-                               as_hwt ? "hwt" : "core");
+        if (0 >= nsites) {
+            free(sites);
+            sites = NULL;
+            continue;
+        }
+        res = bounded_append(cores, buflen, total, "%*c<package id=\"%d\">\n",
+                             16, ' ', n);
+        if (0 > res) {
+            free(sites);
+            break;
+        }
+        total += (size_t) res;
+        for (i = 0; i < nsites; i++) {
+            res = bounded_append(cores, buflen, total, "%*c<%s>%u</%s>\n",
+                                 20, ' ', type, sites[i], type);
+            if (0 > res) {
+                break;
+            }
+            total += (size_t) res;
         }
         free(sites);
         sites = NULL;
-        *pkgnum = n;
+        res = bounded_append(cores, buflen, total, "%*c</package>\n", 16, ' ');
+        if (0 > res) {
+            break;
+        }
+        total += (size_t) res;
     }
     hwloc_bitmap_free(avail);
 }
