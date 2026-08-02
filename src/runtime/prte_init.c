@@ -450,8 +450,12 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
     /* let the pmix server register params */
     pmix_server_register_params();
 
-    /* open hwloc */
-    prte_hwloc_base_open();
+    /* open hwloc - this is where the DVM-wide "bindto" value is validated,
+     * so a bad one has to stop us here rather than be diagnosed and ignored */
+    if (PRTE_SUCCESS != (ret = prte_hwloc_base_open())) {
+        error = "prte_hwloc_base_open";
+        goto error;
+    }
 
     /* setup the global job and node arrays */
     prte_job_data = PMIX_NEW(pmix_pointer_array_t);

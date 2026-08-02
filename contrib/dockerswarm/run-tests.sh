@@ -3009,6 +3009,34 @@ test_hwloc() {
     done
     cleanup_swarm
 
+    banner "hwloc: the DVM-wide bindto parameter means what it says"
+    # "bindto" is the DVM-wide default binding policy, and it documents eight
+    # values. Five of them were unusable.
+    #
+    # 1. A value the parser refuses was diagnosed and then IGNORED:
+    #    prte_init() discarded prte_hwloc_base_open()'s return, so the DVM
+    #    came up with the default binding after telling the user their request
+    #    was not recognized. The command-line spelling of the same typo
+    #    ("--bind-to bogus") has always been fatal.
+    # 2. A value COARSER THAN A CORE was refused outright. Deriving the
+    #    default mapping reads jdata->map->binding, but the MCA default was
+    #    not copied onto the job until after the mapping had been settled -
+    #    so the job mapped BYCORE and the bind-upwards check then rejected
+    #    binding to a package. "--bind-to package" on the command line
+    #    mapped BYPACKAGE and worked.
+    cleanup_swarm
+    out=$(RUN 'timeout 60 prterun --prtemca bindto bogus --host node2:2 -n 1 hostname' 2>&1)
+    rc=$?
+    [ "$rc" != 0 ] && ok "an unrecognized DVM-wide bindto is fatal (rc=$rc)" \
+                   || bad "bindto=bogus was diagnosed and then ignored"
+    echo "$out" | grep -q 'not recognized' \
+        && ok "the refusal named the unrecognized policy" \
+        || bad "no diagnostic for the unrecognized bindto: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # a job-only qualifier at DVM scope is the same class of mistake
+    out=$(RUN 'timeout 60 prterun --prtemca bindto core:report --host node2:2 -n 1 hostname' 2>&1)
+    rc=$?
+    [ "$rc" != 0 ] && ok "a job-only bindto qualifier is fatal at DVM scope (rc=$rc)" \
+                   || bad "bindto=core:report was diagnosed and then ignored"
     cleanup_swarm
 
     banner "hwloc: per-object binding limits do not carry over between jobs"
