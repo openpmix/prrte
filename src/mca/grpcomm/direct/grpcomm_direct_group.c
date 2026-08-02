@@ -44,7 +44,9 @@ static void group_timeout(int sd, short args, void *cbdata);
 static bool group_op_completed(prte_grpcomm_direct_group_signature_t *sig);
 static void group_op_forget(prte_grpcomm_direct_group_signature_t *sig);
 static void advance_group_epoch(uint32_t to);
+#if PRTE_PMIX_HAVE_GROUP_FT
 static void collect_departed(prte_grpcomm_group_t *coll);
+#endif
 
 /* The group recovery epoch for this daemon.
  *
@@ -2303,6 +2305,7 @@ bool prte_grpcomm_direct_group_member_departed(const pmix_proc_t *member)
  * through the job map here, because the final membership keeps the wildcard
  * entry as-is - we cannot prune a namespace proc-by-proc - but the clients
  * still deserve to be told which specific processes went away. */
+#if PRTE_PMIX_HAVE_GROUP_FT
 static void collect_departed(prte_grpcomm_group_t *coll)
 {
     pmix_list_t dl;
@@ -2361,6 +2364,7 @@ static void collect_departed(prte_grpcomm_group_t *coll)
     }
     PMIX_LIST_DESTRUCT(&dl);
 }
+#endif /* PRTE_PMIX_HAVE_GROUP_FT */
 
 static int create_dmns(prte_grpcomm_direct_group_signature_t *sig,
                        pmix_rank_t **dmns, size_t *ndmns)
