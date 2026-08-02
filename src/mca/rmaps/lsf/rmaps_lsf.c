@@ -97,6 +97,7 @@ static int lsf_map(prte_job_t *jdata,
     char *cpu_bitmap;
     char *avail_bitmap = NULL;
     char *overlap_bitmap = NULL;
+    char *req_bitmap = NULL;
     bool physical;
 
     /* only handle initial launch of rf job */
@@ -412,17 +413,36 @@ static int lsf_map(prte_job_t *jdata,
                 /* Check to see if these slots are available on this node */
                 if (!hwloc_bitmap_isincluded(proc_bitmap, node->available) && !options->overload) {
                     bitmap = hwloc_bitmap_alloc();
-                    hwloc_bitmap_list_asprintf(&avail_bitmap, node->available);
-
                     hwloc_bitmap_andnot(bitmap, proc_bitmap, node->available);
-                    hwloc_bitmap_list_asprintf(&overlap_bitmap, bitmap);
+
+                    /* The user wrote the slot list in logical cpu ids, so
+                     * every set we show back has to be in the same terms.
+                     * proc->cpuset and a raw bitmap render are PU *OS*
+                     * indices - the wire format - which is a different
+                     * numbering on any node whose firmware does not number
+                     * its cpus in hwloc's order. */
+                    req_bitmap = prte_hwloc_base_cpuset2ranges(node->topology->topo, proc_bitmap,
+                                                               options->use_hwthreads, false);
+                    avail_bitmap = prte_hwloc_base_cpuset2ranges(node->topology->topo,
+                                                                 node->available,
+                                                                 options->use_hwthreads, false);
+                    overlap_bitmap = prte_hwloc_base_cpuset2ranges(node->topology->topo, bitmap,
+                                                                   options->use_hwthreads, false);
 
                     pmix_show_help("help-rmaps_lsf.txt", "rmaps:proc-slots-overloaded", true,
                                    PRTE_NAME_PRINT(&proc->name),
                                    node->name,
-                                   proc->cpuset,
-                                   avail_bitmap,
-                                   overlap_bitmap);
+                                   (NULL == req_bitmap) ? "NONE" : req_bitmap,
+                                   (NULL == avail_bitmap) ? "NONE" : avail_bitmap,
+                                   (NULL == overlap_bitmap) ? "NONE" : overlap_bitmap);
+                    /* these three were never released - the error label
+                     * below does not know about them */
+                    free(req_bitmap);
+                    req_bitmap = NULL;
+                    free(avail_bitmap);
+                    avail_bitmap = NULL;
+                    free(overlap_bitmap);
+                    overlap_bitmap = NULL;
 
                     hwloc_bitmap_free(bitmap);
                     hwloc_bitmap_free(proc_bitmap);

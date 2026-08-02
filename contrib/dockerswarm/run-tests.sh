@@ -2786,7 +2786,7 @@ test_util() {
 }
 
 test_hwloc() {
-    local out rc n c bad_cores
+    local out rc n c bad_cores cpus back
 
     # src/hwloc is a library of pure functions over a topology, so nearly all
     # of it is pinned down by test/unit/hwloc against synthetic topologies.
@@ -3014,6 +3014,61 @@ test_hwloc() {
     n=$(echo "$out" | grep -c 'Process rank: 0 Bound: package')
     [ "$n" = 3 ] && ok "all 3 numa:limit jobs bound in one DVM" \
                  || bad "$n/3 numa:limit jobs bound - a per-NUMA counter leaked between jobs: $(echo "$out" | tr '\n' ' ' | tail -c 400)"
+    cleanup_swarm
+
+    banner "hwloc: the cpu numbers PRRTE prints are the ones it accepts"
+    # Every renderer here used to short-cut whenever the bits "already were"
+    # cores (npus == ncores, which is exactly these containers) and print the
+    # raw cpuset bits - PU OS indices - under a "core:L" label. --cpu-set
+    # resolves its input LOGICALLY, so on any node whose OS and logical
+    # numbering differ, the numbers PRRTE printed were not numbers PRRTE
+    # would accept back. This asserts the round trip: whatever --display cpus
+    # reports for a node has to be selectable, and selecting it has to yield
+    # the same set.
+    cleanup_swarm
+    out=$(RUN 'timeout 90 prterun --host node2:8 -n 1 --display cpus hostname' 2>&1)
+    cpus=$(echo "$out" | sed -n 's/^PKG\[0\]: \(.*\)$/\1/p' | head -1)
+    [ -n "$cpus" ] && ok "--display cpus reported package 0 as '$cpus'" \
+                   || bad "--display cpus reported nothing: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    if [ -n "$cpus" ]; then
+        out=$(RUN "timeout 90 prterun --prtemca hwloc_default_cpu_list '$cpus' \
+                       --host node2:8 -n 1 --display cpus hostname" 2>&1)
+        rc=$?
+        [ "$rc" = 0 ] && ok "the reported cpu list is accepted by --cpu-set (rc=0)" \
+                      || bad "--cpu-set rejected the list --display cpus just printed ('$cpus', rc=$rc)"
+        back=$(echo "$out" | sed -n 's/^PKG\[0\]: \(.*\)$/\1/p' | head -1)
+        [ "$back" = "$cpus" ] && ok "selecting those cpus reports the same set back ('$back')" \
+                              || bad "round trip changed the set: printed '$cpus', got back '$back'"
+    fi
+    cleanup_swarm
+
+    banner "hwloc: logical and physical binding reports agree on this node"
+    # --report-bindings renders through the same path with "physical" either
+    # set or not, and it used to be ignored outright whenever the short cut
+    # above fired - both spellings produced the OS indices. These containers
+    # number their cpus 0-7 either way, so this cannot catch a wrong BASIS;
+    # what it does catch is the label going missing or the two spellings
+    # rendering through different code again.
+    cleanup_swarm
+    out=$(RUN 'timeout 90 prterun --host node2:2 -n 2 --bind-to core \
+                   --display map hostname' 2>&1)
+    echo "$out" | grep -q 'core:L' \
+        && ok "a logical binding is labelled core:L" \
+        || bad "no core:L label in the default binding report: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    out=$(RUN 'timeout 90 prterun --host node2:2 -n 2 --bind-to core \
+                   --display map:physical hostname' 2>&1)
+    echo "$out" | grep -q 'core:P' \
+        && ok "a physical binding is labelled core:P" \
+        || bad "--display map:physical did not reach the renderer: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # --display cpus goes through its own renderer, which ignored the
+    # qualifier entirely until both were routed through cpuset2ranges()
+    out=$(RUN 'timeout 90 prterun --host node2:8 -n 1 --display cpus:physical hostname' 2>&1)
+    rc=$?
+    [ "$rc" = 0 ] && ok "--display cpus:physical completed (rc=0)" \
+                  || bad "--display cpus:physical failed (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    echo "$out" | grep -qE '^PKG\[0\]: [0-9]' \
+        && ok "--display cpus:physical reported a package" \
+        || bad "--display cpus:physical reported nothing: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
     cleanup_swarm
 }
 

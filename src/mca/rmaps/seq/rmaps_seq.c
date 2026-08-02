@@ -135,10 +135,20 @@ static int bind_to_entry_cpuset(prte_job_t *jdata, prte_proc_t *proc,
     if (!options->overload && !hwloc_bitmap_isincluded(bits, node->available)) {
         missing = hwloc_bitmap_alloc();
         hwloc_bitmap_andnot(missing, bits, node->available);
-        hwloc_bitmap_list_asprintf(&avail, node->available);
-        hwloc_bitmap_list_asprintf(&overlap, missing);
+        /* The user wrote "cpuset" in logical cpu ids - that is what
+         * prte_hwloc_base_cpu_list_parse() accepts - so the two sets we
+         * show alongside it have to be in the same terms. Rendering the
+         * bitmaps directly prints PU *OS* indices, which put three
+         * different numbering schemes in one message on any node whose
+         * firmware does not number its cpus in hwloc's order. */
+        avail = prte_hwloc_base_cpuset2ranges(node->topology->topo, node->available,
+                                              options->use_hwthreads, false);
+        overlap = prte_hwloc_base_cpuset2ranges(node->topology->topo, missing,
+                                                options->use_hwthreads, false);
         pmix_show_help("help-prte-rmaps-seq.txt", "seq:cpuset-not-available", true,
-                       PRTE_NAME_PRINT(&proc->name), node->name, cpuset, avail, overlap);
+                       PRTE_NAME_PRINT(&proc->name), node->name, cpuset,
+                       (NULL == avail) ? "NONE" : avail,
+                       (NULL == overlap) ? "NONE" : overlap);
         free(avail);
         free(overlap);
         hwloc_bitmap_free(missing);
