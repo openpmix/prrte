@@ -427,6 +427,21 @@ same thread has cycled through the other 15 — never store one.
 - **A failure path that has destroyed the topology must NULL
   `prte_hwloc_topology`.** `prte_hwloc_base_close()` tests it for NULL and
   destroys it again otherwise.
+- **An imported topology reports no binding support, and
+  `hwloc_use_topo_file` has to say otherwise.** hwloc zeroes every bit of
+  `hwloc_topology_get_support()` for a topology it read from XML — it has no
+  way to know what the described machine can do — and
+  `prte_rmaps_base_check_support()` refuses any *explicitly requested*
+  binding when those bits are clear. So `--prtemca hwloc_use_topo_file X
+  --bind-to core` came back "at least one node does NOT support binding
+  processes to cpus" on a machine that supports it perfectly, leaving the
+  option usable only with `--bind-to none`. `set_topology()` asserts the
+  bits itself. **After `hwloc_topology_load()`, not before** — hwloc's own
+  header says the support structure "only contains valid information after"
+  the load, so the assertion that used to sit before it was filled in and
+  wiped by the load and had quietly never done anything.
+  `HWLOC_TOPOLOGY_FLAG_IMPORT_SUPPORT` is a different question (what the
+  *exporting* machine could do) and was deliberately abandoned once before.
 - **`hwloc_bitmap_first()`/`_last()` return `-1` for an empty bitmap.**
   Do not feed that to `hwloc_bitmap_isset()`. `hwloc_bitmap_weight()` is
   what you want for "how many" and "exactly one".
@@ -488,11 +503,22 @@ topologies the HNP never sensed, a DVM cpu-set applied to every node rather
 than just the first, a malformed cpu-set being refused without taking the
 HNP down, `--display topo` over several topologies at once, the
 print-then-accept round trip (`--display cpus` → `--cpu-set` → the same set
-back), both spellings of the index basis, and — the one case that needs a
+back), both spellings of the index basis, that every value the DVM-wide
+`bindto` parameter documents both maps and binds rather than being refused
+as "binding above the map" (and that one it does *not* document is fatal
+rather than diagnosed-and-ignored), and — the one case that needs a
 **persistent** DVM, because `prterun` takes the stale state down with its
 HNP — three successive `--bind-to numa:limit=1` jobs all binding.
 
-**Not covered anywhere:** `prte_hwloc_base_get_topology()`'s sensing path
+The unit test also drives `prte_hwloc_base_get_topology()`'s **file** path
+(`hwloc_use_topo_file`), by writing the embedded XML to a temp file: that it
+loads, that a malformed file is refused without leaving a handle behind, and
+that the binding-support bits come back asserted. The offline harness runs
+that same path 1180 times, which is why a regression in it does not show up
+as a mapping failure — the harness passes `--rtos donotlaunch`, and
+`prte_rmaps_base_check_support()` is skipped for donotlaunch.
+
+**Not covered anywhere:** `prte_hwloc_base_get_topology()`'s *sensing* path
 (it reads the real machine), and `prte_hwloc_print()` against a machine wide
 enough to fill its cpuset buffer — a few thousand PUs.
 

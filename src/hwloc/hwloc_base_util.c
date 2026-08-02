@@ -526,6 +526,7 @@ int prte_hwloc_base_get_topology(void)
 static int set_topology(char *topofile)
 {
     int rc;
+    struct hwloc_topology_support *support;
 
     PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                         "hwloc:base:set_topology %s", topofile));
@@ -547,9 +548,8 @@ static int set_topology(char *topofile)
         return PRTE_ERR_NOT_SUPPORTED;
     }
 
-    /* since we are loading this from an external source, we have to
-     * explicitly set a flag so hwloc sets things up correctly
-     */
+    /* no extra topology flags for an imported description - the support
+     * bits it needs are asserted by hand below, after the load */
     rc = topology_set_flags(prte_hwloc_topology, 0, true);
     if (0 != rc) {
         hwloc_topology_destroy(prte_hwloc_topology);
@@ -562,6 +562,35 @@ static int set_topology(char *topofile)
         prte_hwloc_topology = NULL;
         PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:set_topology failed to load"));
         return PRTE_ERR_NOT_SUPPORTED;
+    }
+
+    /* hwloc zeroes every support bit of an imported topology - it has no way
+     * to know what the machine the XML describes can do, and says so:
+     * "binding is disabled by default ... also marked by putting zeroes in
+     * the corresponding supported feature bits". But this option means "this
+     * file describes the machine I am running on", and
+     * prte_rmaps_base_check_support() refuses any *explicitly requested*
+     * binding when those bits are clear - so "--prtemca hwloc_use_topo_file
+     * X --bind-to core" was answered with "at least one node does NOT support
+     * binding processes to cpus" on a machine that supports it perfectly,
+     * which leaves the option usable only with --bind-to none.
+     *
+     * So assert them, as this code has always meant to. Note the "always
+     * meant to": the assertion used to sit *before* hwloc_topology_load(),
+     * and hwloc's own header says the support structure "only contains valid
+     * information after" the load - the load filled the struct in and wiped
+     * it. It has to be here, after.
+     *
+     * HWLOC_TOPOLOGY_FLAG_IMPORT_SUPPORT is not the answer: it reports what
+     * the *exporting* machine could do, which is a different question and,
+     * per the commit that took it back out, not a reliable one. */
+    support = (struct hwloc_topology_support *)
+              hwloc_topology_get_support(prte_hwloc_topology);
+    if (NULL != support) {
+        support->cpubind->set_thisproc_cpubind = true;
+        support->cpubind->set_thisthread_cpubind = true;
+        support->membind->set_thisproc_membind = true;
+        support->membind->set_thisthread_membind = true;
     }
 
     /* all done */
