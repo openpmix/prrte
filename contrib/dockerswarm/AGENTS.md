@@ -1133,7 +1133,7 @@ The probe is `groupcon`, compiled by `build.sh` the same way as
 `elastic`/`dataserver`/`proctable`:
 
 ```sh
-groupcon <groupID> [secs]
+groupcon [--ft] [--delay <s>] <groupID> [secs]
 ```
 
 Every rank contributes `PMIX_GROUP_LOCAL_CID` = 1234 + rank as
@@ -1158,6 +1158,66 @@ single-host test wearing a hat), and three back-to-back constructs
 followed by a plain job must all succeed — a caddy leak or a tracker that
 is never deleted shows up as drift across runs rather than as one bad
 one.
+
+### Losing a daemon mid-construct (`test_grpcomm_ft`)
+
+The second half of the phase kills a real `prted` while a construct is in
+flight. It is gated on `pmix_cap PMIX_CAP_GROUP_FT` and skips without it,
+since the whole feature compiles out.
+
+**`--delay <s>` is what makes these cases real.** Without a stagger the
+construct is over microseconds after `prun` starts and the kill lands on
+a DVM with nothing in flight — every assertion still passes, and nothing
+has been tested. The ranks sleep before calling construct; the kill goes
+in during that window. If you change the timing, check the capture file
+still shows `DELAYING` lines before the daemon dies.
+
+**`--rtos recoverable` is not optional, and this is the thing that will
+waste your afternoon.** Killing the daemon that hosts a rank does not
+merely remove a group member — by default the errmgr treats the loss of
+any proc as fatal to its whole job and terminates the survivors too, so
+they never reach the construct at all. The capture then contains nothing
+but `DELAYING` lines and *"We cannot recover from this failure, and
+therefore will terminate the job"*, and every assertion fails with an
+empty string, which reads like the feature is broken when it is the test
+that is. The survivors have to be told to survive: `recoverable` (or
+`continuous`) is what flips `errmgr/dvm` from abort-the-job to
+notify-and-continue. That is also the honest usage — an application
+asking for a fault-tolerant group collective is by definition one that
+expects to outlive a lost member.
+
+Note the *"will terminate the job"* text is emitted unconditionally by
+the daemon-loss path, so it still appears in a recoverable run that goes
+on to complete perfectly. Do not read it as a failure, and do not assert
+on its absence.
+
+Four cases:
+
+1. **With `--ft`, the construct completes on the survivors.** Three
+   survivors must each report `CONSTRUCT PMIX_SUCCESS`, agree on
+   `MEMBERS 3`, and receive a `MEMBER-FAILED` event naming the process
+   that went away. The event is the part worth having: the construct
+   returning success only says the group formed, not that the membership
+   is smaller than what was asked for.
+2. **Without `--ft`, the same loss aborts** with
+   `PMIX_GROUP_CONSTRUCT_ABORT`, and the DVM survives. This is the
+   regression guard on the pre-existing behavior, and it is the case that
+   fails if the flag stops being plumbed. Note `groupcon` jumps to its
+   exit on a failed construct, so there is **no** `DESTRUCT` line here —
+   assert on the construct status.
+3. **Losing a relay-only daemon does not stall the construct.** Run at
+   `--prtemca rml_base_radix 2` so the tree is deep enough to have an
+   interior daemon at all; at the default radix every daemon is a child of
+   the controller and the case cannot exist. Membership must be
+   **unchanged** — nothing was lost, only a message path.
+4. **Further constructs still work afterwards**, which is where a leaked
+   tracker, memo entry or caddy shows up.
+
+A note if you extend this. Do not assert on the *absence* of a failure
+marker — a run whose job never started has no marker either. Every case
+here counts positive evidence (`CONSTRUCT`, `MEMBERS`, `MEMBER-FAILED`
+lines) and guards the setup separately by checking the target daemon is
+actually up before killing it.
 
 ## 16. The event base and the constants (`test_event`, `test_include`)
 
