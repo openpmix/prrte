@@ -109,8 +109,10 @@ static void abort_group_op(prte_grpcomm_group_t *coll, pmix_status_t st)
         PMIX_DATA_BUFFER_RELEASE(reply);
         return;
     }
-    /* send the release via xcast to all daemons (ourselves included) */
+    /* send the release via xcast to all daemons (ourselves included).
+     * xcast copies the payload, so the buffer is still ours to free */
     (void) prte_grpcomm.xcast(PRTE_RML_TAG_GROUP_RELEASE, reply);
+    PMIX_DATA_BUFFER_RELEASE(reply);
 }
 
 #if PRTE_PMIX_HAVE_GROUP_FT
@@ -868,8 +870,10 @@ answer:
                 PMIX_DATA_ARRAY_DESTRUCT(&darray);
             }
 
-            /* send the release via xcast */
+            /* send the release via xcast - it copies the payload, so the
+             * buffer is still ours to free */
             (void) prte_grpcomm.xcast(PRTE_RML_TAG_GROUP_RELEASE, reply);
+            PMIX_DATA_BUFFER_RELEASE(reply);
 
         } else {
             PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
