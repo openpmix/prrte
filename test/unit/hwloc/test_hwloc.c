@@ -40,8 +40,24 @@
  *    the end of the caller's buffer. The caller sizes that buffer at 20
  *    bytes per PU while each element needs ~34.
  *
- *  - prte_hwloc_get_binding_info() never set *pkgnum when the cpuset matched
- *    no package, and its only caller prints it uninitialized.
+ *  - prte_hwloc_get_binding_info() rendered only the *sites*, into a single
+ *    <package> element its caller wrapped around them, and reported the
+ *    package number through an out parameter. A process bound across two
+ *    packages therefore had each package overwrite the previous one from the
+ *    top of the buffer: the output named the last package and dropped every
+ *    earlier one's cores, disagreeing with what _cset2str() reports for the
+ *    same binding. It emits the <package> elements itself now.
+ *
+ *  - prte_hwloc_print() walked obj->children[] only, and hwloc 2.x keeps
+ *    NUMA nodes on a separate memory-child list - so "--display topo"
+ *    rendered a topology with no NUMA domains in it at all.
+ *
+ *  - prte_hwloc_base_set_default_binding()'s PPR arm has to reach a policy
+ *    for every object ppr_object() can produce; a hole leaves the binding
+ *    word at zero, which is not a value in the policy space.
+ *
+ *  - the package:core parser recorded a failed element in "rc" and carried
+ *    on, so a later "*" element assigned PRTE_SUCCESS over the top of it.
  *
  *  - the range builder behind prte_hwloc_base_cset2str() appended to the
  *    caller's buffer with memcpy() and no bound at all.
@@ -446,6 +462,21 @@ static int test_cpu_list_parse(void)
 
     rc = prte_hwloc_base_cpu_list_parse("999", topo, false, mask);
     CHECK("unknown bare core is an error", PRTE_SUCCESS != rc);
+
+    /* A bad element must not be forgiven by a good one after it. The
+     * package:core loop recorded the failure and kept going, so a later "*"
+     * element assigned PRTE_SUCCESS over the top of it and "P0:99:*" came
+     * back as "every cpu on package 0" - the nonexistent core silently
+     * dropped. The same shape with a plain core after the bad one kept
+     * accumulating bits into a mask the caller was about to throw away. */
+    rc = prte_hwloc_base_cpu_list_parse("P0:99:*", topo, false, mask);
+    CHECK("a wildcard after an unknown core does not excuse it", PRTE_SUCCESS != rc);
+
+    rc = prte_hwloc_base_cpu_list_parse("P0:99:0", topo, false, mask);
+    CHECK("a good core after an unknown one does not excuse it", PRTE_SUCCESS != rc);
+
+    rc = prte_hwloc_base_cpu_list_parse("P0:0:99", topo, false, mask);
+    CHECK("an unknown core after a good one is still an error", PRTE_SUCCESS != rc);
 
     hwloc_bitmap_free(mask);
     free_topo(topo);
@@ -1074,6 +1105,68 @@ static int test_topo_file(void)
 }
 
 /* ------------------------------------------------------------------ */
+/* the default-binding chooser                                        */
+/* ------------------------------------------------------------------ */
+
+/* prte_hwloc_base_set_default_binding() derives a binding from the mapping
+ * when the user gave none. Every arm of it has to reach a policy: leaving
+ * jdata->map->binding at zero is not "bind to nothing", it is a value that
+ * is not in the policy space at all - PRTE_GET_BINDING_POLICY() yields 0,
+ * which is neither NONE nor any object - and the caller then feeds it to the
+ * bind-upwards check and to a switch that has no case for it. The PPR arm is
+ * the one with an object-by-object chain and hence the one that could
+ * acquire a hole; ppr_object() in rmaps_base_map_job.c produces exactly the
+ * eight types below, so those eight are what this arm has to cover. */
+static int test_default_binding(void)
+{
+    int failures = 0;
+    prte_job_t *jdata;
+    prte_rmaps_options_t options;
+    hwloc_obj_type_t ppr_types[] = {HWLOC_OBJ_MACHINE, HWLOC_OBJ_PACKAGE,
+                                    HWLOC_OBJ_NUMANODE, HWLOC_OBJ_L1CACHE,
+                                    HWLOC_OBJ_L2CACHE, HWLOC_OBJ_L3CACHE,
+                                    HWLOC_OBJ_CORE, HWLOC_OBJ_PU};
+    size_t t;
+    int rc;
+
+    for (t = 0; t < sizeof(ppr_types) / sizeof(ppr_types[0]); t++) {
+        jdata = PMIX_NEW(prte_job_t);
+        jdata->map = PMIX_NEW(prte_job_map_t);
+        PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_PPR);
+
+        memset(&options, 0, sizeof(options));
+        /* a verbosity above the stream's threshold keeps the chooser quiet */
+        options.verbosity = 1000;
+        options.stream = 0;
+        options.maptype = ppr_types[t];
+        options.nprocs = 4;
+
+        rc = prte_hwloc_base_set_default_binding(jdata, &options);
+        CHECK("ppr default binding succeeds", PRTE_SUCCESS == rc);
+        CHECK("ppr default binding lands on a real policy",
+              0 != PRTE_GET_BINDING_POLICY(jdata->map->binding) &&
+              PRTE_BIND_TO_HWTHREAD >= PRTE_GET_BINDING_POLICY(jdata->map->binding));
+        PMIX_RELEASE(jdata);
+    }
+
+    /* a tool is never bound, and that answer is marked as given so nothing
+     * downstream re-derives one for it */
+    jdata = PMIX_NEW(prte_job_t);
+    jdata->map = PMIX_NEW(prte_job_map_t);
+    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
+    memset(&options, 0, sizeof(options));
+    options.verbosity = 1000;
+    options.stream = 0;
+    rc = prte_hwloc_base_set_default_binding(jdata, &options);
+    CHECK("a tool's default binding succeeds", PRTE_SUCCESS == rc);
+    CHECK("a tool is not bound",
+          PRTE_BIND_TO_NONE == PRTE_GET_BINDING_POLICY(jdata->map->binding));
+    PMIX_RELEASE(jdata);
+
+    return failures;
+}
+
+/* ------------------------------------------------------------------ */
 /* --bind-to parsing                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -1092,6 +1185,19 @@ static int test_binding_policy(void)
 
     CHECK("a NULL spec is not an error",
           PRTE_SUCCESS == prte_hwloc_base_set_binding_policy(jdata, NULL));
+
+    /* A job with no map cannot hold the answer, so it is refused before any
+     * qualifier gets the chance to record itself on it. That check used to
+     * run last, so "--bind-to core:report" against a mapless job left
+     * REPORT_BINDINGS on the job and then failed. */
+    {
+        prte_job_t *nomap = PMIX_NEW(prte_job_t);
+        CHECK("a mapless job is refused",
+              PRTE_SUCCESS != prte_hwloc_base_set_binding_policy(nomap, "core:report"));
+        CHECK("a refused mapless job records nothing",
+              !prte_get_attribute(&nomap->attributes, PRTE_JOB_REPORT_BINDINGS, NULL, PMIX_BOOL));
+        PMIX_RELEASE(nomap);
+    }
 
     CHECK("none parses", PRTE_SUCCESS == prte_hwloc_base_set_binding_policy(jdata, "none"));
     CHECK("none is recorded", PRTE_BIND_TO_NONE == PRTE_GET_BINDING_POLICY(jdata->map->binding));
@@ -1485,6 +1591,7 @@ int main(void)
     failures += test_index_basis();
     failures += test_print_binding();
     failures += test_topo_file();
+    failures += test_default_binding();
     failures += test_binding_policy();
     failures += test_userdata();
     failures += test_reset_counters();

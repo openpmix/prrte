@@ -530,6 +530,16 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
         return PRTE_SUCCESS;
     }
 
+    /* A job we cannot record the answer on has to be refused before we parse
+     * anything, not after: the "report" and "limit=N" qualifiers write to
+     * jdata->attributes as they are read, so failing this check at the end
+     * left them on a job whose binding was never set - the same ordering
+     * mistake the policy word above used to make. */
+    if (NULL != jdata && NULL == jdata->map) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
+
     myspec = strdup(spec); // protect the input
 
     /* check for qualifiers */
@@ -672,10 +682,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
     if (NULL == jdata) {
         prte_hwloc_default_binding_policy = tmp;
     } else {
-        if (NULL == jdata->map) {
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-            return PRTE_ERR_BAD_PARAM;
-        }
+        /* jdata->map was checked on the way in */
         jdata->map->binding = tmp;
     }
     return PRTE_SUCCESS;

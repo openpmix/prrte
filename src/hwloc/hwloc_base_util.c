@@ -285,6 +285,14 @@ void prte_hwloc_base_setup_summary(hwloc_topology_t topo)
         root->userdata = (void *) PMIX_NEW(prte_hwloc_topo_data_t);
     }
     sum = (prte_hwloc_topo_data_t *) root->userdata;
+    if (NULL == sum) {
+        /* the summary could not be allocated. Both callers re-read the
+         * root's userdata afterwards and cope with it still being NULL, so
+         * say nothing more than we can - dereferencing it here would turn
+         * an allocation failure into a segfault */
+        PMIX_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+        return;
+    }
 
     /* only need to do this once */
     if (sum->computed) {
@@ -822,7 +830,14 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
         obj_type = HWLOC_OBJ_PU;
     }
 
-    for (i = 1; NULL != package_core[i]; i++) {
+    /* Every element below is user input, and the loop stops at the first one
+     * that does not resolve. It used to record the failure in "rc" and carry
+     * on, which had two consequences: bits from later elements went on
+     * accumulating into a mask the caller was going to discard, and a later
+     * "*" element assigned rc = PRTE_SUCCESS - so "--cpu-set P0:99:*" was
+     * accepted as "every cpu on package 0" with the nonexistent core 99
+     * silently forgiven. */
+    for (i = 1; PRTE_SUCCESS == rc && NULL != package_core[i]; i++) {
         if ('C' == package_core[i][0] || 'c' == package_core[i][0]) {
             corestr = &package_core[i][1];
         } else {

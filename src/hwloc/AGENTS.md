@@ -31,7 +31,8 @@ is the property to preserve.
 | Caller | What it wants |
 |--------|---------------|
 | `ess/hnp`, `plm/base` | `prte_hwloc_base_get_topology()`, `_filter_cpus()`, `_setup_summary()` — acquiring the local topology and receiving remote ones |
-| `rmaps/*` | `_get_nbobjs_by_type()`, `_get_obj_by_type()`, `_get_npus()`, `_generate_cpuset()`, `_cpu_list_parse()`, `_reset_counters()`, `prte_hwloc_obj_data_t` |
+| `rmaps/*` | `_get_nbobjs_by_type()`, `_get_obj_by_type()`, `_generate_cpuset()`, `_cpu_list_parse()`, `_reset_counters()`, `_has_cores()`/`_core_cpus()`, `prte_hwloc_obj_data_t` |
+| `ras/simulator` | `_get_npus()`, `_filter_cpus()` — the only caller of `_get_npus()`, which fabricates a node's slot count from a synthetic topology |
 | `odls/base` | `prte_hwloc_base_map` / `_mbfa` (the memory-policy globals) and `_cset2str()` |
 | `runtime/data_type_support`, `ras/base` | `_cset2str()`, `_cpuset2ranges()`, `prte_hwloc_get_binding_info()`, `prte_hwloc_print()` — every `--display` variant |
 | `schizo`, `tools` | `_set_binding_policy()`, `_print_binding()` |
@@ -103,6 +104,10 @@ Consequences:
   expressed in OS indices.
 - **`numa_cutoff` must never be left at `UINT_MAX`,** on any error path.
   The consumers scan `0..cutoff`.
+- **`prte_hwloc_base_setup_summary()` can fail to allocate the summary.**
+  Both lookups re-read the root's `userdata` after asking for it and cope
+  with a `NULL`; the builder itself has to as well, rather than
+  dereferencing what `PMIX_NEW` just failed to give it.
 
 ---
 
@@ -246,7 +251,11 @@ Two ordering rules the parser now encodes:
 - **Resolve the policy word before applying any qualifier**, because
   `report` and `limit=N` write to `jdata->attributes`. Parsed the other way
   round, `--bind-to sockets:report` recorded report-bindings on the job and
-  *then* rejected the request.
+  *then* rejected the request. The same rule reaches the `jdata->map ==
+  NULL` check, which is what says whether there is anywhere to *put* the
+  answer: it runs before the parse now, because running it last left
+  `PRTE_JOB_REPORT_BINDINGS` on a job whose binding was never set. **Any
+  new reason to refuse a spec belongs above the parsing, not below it.**
 
 ### `bindto` is a real parameter, not a suggestion
 
