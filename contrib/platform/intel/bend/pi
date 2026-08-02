@@ -14,4 +14,3 @@ enable_ipv6=no
 enable_install_libpmix=yes
 with_memory_manager=no
 with_tm=no
-with_devel_headers=yes

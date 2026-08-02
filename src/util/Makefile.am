@@ -108,13 +108,6 @@ check-local:
 		--cppflags="$(CPPFLAGS)" \
 		--check-only
 
-# Conditionally install the header files
-
-if WANT_INSTALL_HEADERS
-prtedir = $(prteincludedir)/$(subdir)
-prte_HEADERS = $(headers)
-endif
-
 clean-local:
 	rm -f prte_show_help_content.c prte_show_help_content.lo
 

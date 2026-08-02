@@ -999,10 +999,12 @@ esac
 
 prtedatadir='${datadir}/prte'
 prtelibdir='${libdir}/prte'
-prteincludedir='${includedir}/prte'
 AC_SUBST(prtedatadir)
 AC_SUBST(prtelibdir)
-AC_SUBST(prteincludedir)
+dnl There was a prteincludedir here, the install root for the headers that
+dnl --with-devel-headers used to install.  Both are gone -- PRRTE ships no
+dnl linkable library, so an installed header set has nothing to be compiled
+dnl against.  See config/prte_configure_options.m4.
 
 prte_want_prd=0
 

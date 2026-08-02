@@ -22,6 +22,5 @@ enable_contrib_no_build=libnbc
 with_memory_manager=no
 with_tm=no
 with_verbs=no
-with_devel_headers=yes
 with_portals=no
 with_valgrind=no

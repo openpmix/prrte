@@ -56,19 +56,19 @@ libprrte_la_DEPENDENCIES = \
 libprrte_la_LDFLAGS = -version-info $(libprrte_so_version)
 libprrte_la_CPPFLAGS =
 
-# included subdirectory Makefile.am's and appended-to variables
+# included subdirectory Makefile.am's and appended-to variables.
+#
+# PRRTE's headers are not installed anywhere -- see
+# config/prte_configure_options.m4 for why --with-devel-headers is gone.
+# $(headers) stays because listing it in libprrte_la_SOURCES is what gets
+# these files into the tarball and tracked as build dependencies.  There was
+# also a $(nodist_headers), holding prte_config.h and version.h; with the
+# install gone nothing reads it, and those two are already handled by
+# AC_CONFIG_HEADERS and AC_CONFIG_FILES.
 headers =
-nodist_headers =
 noinst_LTLIBRARIES =
 EXTRA_DIST =
 libprrte_la_SOURCES += $(headers)
-
-# Conditionally install the header files
-
-if WANT_INSTALL_HEADERS
-prtedir = $(prteincludedir)/$(subdir)
-nobase_prte_HEADERS = $(headers)
-endif
 
 include include/Makefile.am
 include runtime/Makefile.am
