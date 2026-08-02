@@ -37,25 +37,6 @@
 #endif
 
 /*
- * If we build a static library, Visual C define the _LIB symbol. In the
- * case of a shared library _USERDLL get defined.
- *
- * OMPI_BUILDING and _LIB define how prte_config.h
- * handles configuring all of PRTE's "compatibility" code.  Both
- * constants will always be defined by the end of prte_config.h.
- *
- * OMPI_BUILDING affects how much compatibility code is included by
- * prte_config.h.  It will always be 1 or 0.  The user can set the
- * value before including either mpi.h or prte_config.h and it will be
- * respected.  If prte_config.h is included before mpi.h, it will
- * default to 1.  If mpi.h is included before prte_config.h, it will
- * default to 0.
- */
-#ifndef OMPI_BUILDING
-#    define OMPI_BUILDING 1
-#endif
-
-/*
  * Flex is trying to include the unistd.h file. As there is no configure
  * option or this, the flex generated files will try to include the file
  * even on platforms without unistd.h. Therefore, if we
@@ -67,8 +48,7 @@
 
 /***********************************************************************
  *
- * code that should be in ompi_config_bottom.h regardless of build
- * status
+ * The C-linkage and compiler-attribute wrappers.
  *
  **********************************************************************/
 
@@ -269,75 +249,87 @@
 
 /***********************************************************************
  *
- * Code that is only for when building PRTE or utilities that are
- * using the internals of PRTE.  It should not be included when
- * building MPI applications
+ * The portability layer proper.
+ *
+ * This used to sit inside "#if OMPI_BUILDING", an Open MPI inheritance.
+ * There, mpi.h set OMPI_BUILDING to 0 before pulling in the config header
+ * so that none of what follows -- the printf and sockaddr renames, the
+ * static inline htonl definitions, the redefinition of Apple's
+ * __PRI_64_LENGTH_MODIFIER__ -- landed in an MPI application's namespace,
+ * and an #else arm stripped the PACKAGE_* macros back out for it.
+ *
+ * PRRTE has no mpi.h, nothing ever set OMPI_BUILDING to 0, and since the
+ * removal of --with-devel-headers PRRTE installs no header that an outside
+ * consumer could include at all.  So the fence had no "outside": the block
+ * always compiled and the #else arm was unreachable.  It also put an OMPI_
+ * prefixed symbol in PRRTE's most-included header, against the project's
+ * own symbol-prefix rule.
  *
  **********************************************************************/
-#if OMPI_BUILDING
+
 
 /*
  * Maximum size of a filename path.
  */
-#    include <limits.h>
-#    ifdef HAVE_SYS_PARAM_H
-#        include <sys/param.h>
-#    endif
-#    if defined(PATH_MAX)
-#        define PRTE_PATH_MAX (PATH_MAX + 1)
-#    elif defined(_POSIX_PATH_MAX)
-#        define PRTE_PATH_MAX (_POSIX_PATH_MAX + 1)
-#    else
-#        define PRTE_PATH_MAX 256
-#    endif
+#include <limits.h>
+#ifdef HAVE_SYS_PARAM_H
+#    include <sys/param.h>
+#endif
+#if defined(PATH_MAX)
+#    define PRTE_PATH_MAX (PATH_MAX + 1)
+#elif defined(_POSIX_PATH_MAX)
+#    define PRTE_PATH_MAX (_POSIX_PATH_MAX + 1)
+#else
+#    define PRTE_PATH_MAX 256
+#endif
 
 /*
  * Set the compile-time path-separator on this system
  */
-#    define PRTE_PATH_SEP "/"
+#define PRTE_PATH_SEP "/"
 
-#    if defined(MAXHOSTNAMELEN)
-#        define PRTE_MAXHOSTNAMELEN (MAXHOSTNAMELEN + 1)
-#    elif defined(HOST_NAME_MAX)
-#        define PRTE_MAXHOSTNAMELEN (HOST_NAME_MAX + 1)
-#    else
+#if defined(MAXHOSTNAMELEN)
+#    define PRTE_MAXHOSTNAMELEN (MAXHOSTNAMELEN + 1)
+#elif defined(HOST_NAME_MAX)
+#    define PRTE_MAXHOSTNAMELEN (HOST_NAME_MAX + 1)
+#else
 /* SUSv2 guarantees that "Host names are limited to 255 bytes". */
-#        define PRTE_MAXHOSTNAMELEN (255 + 1)
-#    endif
+#    define PRTE_MAXHOSTNAMELEN (255 + 1)
+#endif
 
 /*
  * printf functions for portability (only when building PRTE)
  */
-#    if !defined(HAVE_VASPRINTF) || !defined(HAVE_VSNPRINTF)
-#        include <stdarg.h>
-#        include <stdlib.h>
-#    endif
+#if !defined(HAVE_VASPRINTF) || !defined(HAVE_VSNPRINTF)
+#    include <stdarg.h>
+#    include <stdlib.h>
+#endif
 
-#    if !defined(HAVE_ASPRINTF) || !defined(HAVE_SNPRINTF) || !defined(HAVE_VASPRINTF) \
+#if !defined(HAVE_ASPRINTF) || !defined(HAVE_SNPRINTF) || !defined(HAVE_VASPRINTF) \
         || !defined(HAVE_VSNPRINTF)
-#        include "src/util/pmix_printf.h"
-#    endif
+#    include "src/util/pmix_printf.h"
+#endif
 
-#    ifndef HAVE_ASPRINTF
-#        define asprintf pmix_asprintf
-#    endif
+#ifndef HAVE_ASPRINTF
+#    define asprintf pmix_asprintf
+#endif
 
-#    ifndef HAVE_SNPRINTF
-#        define snprintf pmix_snprintf
-#    endif
+#ifndef HAVE_SNPRINTF
+#    define snprintf pmix_snprintf
+#endif
 
-#    ifndef HAVE_VASPRINTF
-#        define vasprintf pmix_vasprintf
-#    endif
+#ifndef HAVE_VASPRINTF
+#    define vasprintf pmix_vasprintf
+#endif
 
-#    ifndef HAVE_VSNPRINTF
+#ifndef HAVE_VSNPRINTF
 /* pmix_vsnprintf, not prte_vsnprintf: PRRTE has no printf replacements of
  * its own, and never had -- all four of these come from PMIx's
  * src/util/pmix_printf.h, included just above.  This one named a symbol
  * that exists nowhere in either tree, so a platform without vsnprintf()
  * would have failed to link every tool. */
-#        define vsnprintf pmix_vsnprintf
-#    endif
+#    define vsnprintf pmix_vsnprintf
+#endif
 
 /*
  * On some homogenous big-iron machines (Sandia's Red Storm), there
@@ -346,7 +338,7 @@
  * and would want to talk to the outside world... On other platforms
  * we fail to detect them correctly.
  */
-#    if !defined(HAVE_UNIX_BYTESWAP)
+#if !defined(HAVE_UNIX_BYTESWAP)
 static inline uint32_t htonl(uint32_t hostvar)
 {
     return hostvar;
@@ -363,7 +355,7 @@ static inline uint16_t ntohs(uint16_t netvar)
 {
     return netvar;
 }
-#    endif
+#endif
 
 /* There was a fallback here defining __func__ to __FILE__ where the
  * compiler did not supply __func__, guarded on AC_CHECK_DECLS(__func__).
@@ -373,7 +365,7 @@ static inline uint16_t ntohs(uint16_t netvar)
  * it. */
 
 /* ensure the bool type is defined as it is used everywhere */
-#    include <stdbool.h>
+#include <stdbool.h>
 
 /**
  * Top level define to check 2 things: a) if we want ipv6 support, and
@@ -388,40 +380,40 @@ static inline uint16_t ntohs(uint16_t netvar)
  * makes the compiler emit -Wmacro-redefined on exactly the platform the
  * narrowing exists for, which under --enable-devel-check is a build error.
  */
-#    if PRTE_ENABLE_IPV6 && !defined(HAVE_STRUCT_SOCKADDR_IN6)
-#        undef PRTE_ENABLE_IPV6
-#        define PRTE_ENABLE_IPV6 0
-#    endif
+#if PRTE_ENABLE_IPV6 && !defined(HAVE_STRUCT_SOCKADDR_IN6)
+#    undef PRTE_ENABLE_IPV6
+#    define PRTE_ENABLE_IPV6 0
+#endif
 
-#    if !defined(HAVE_STRUCT_SOCKADDR_STORAGE) && defined(HAVE_STRUCT_SOCKADDR_IN)
-#        define sockaddr_storage sockaddr
-#        define ss_family        sa_family
-#    endif
+#if !defined(HAVE_STRUCT_SOCKADDR_STORAGE) && defined(HAVE_STRUCT_SOCKADDR_IN)
+#    define sockaddr_storage sockaddr
+#    define ss_family        sa_family
+#endif
 
 /* Compatibility structure so that we don't have to have as many
    #if checks in the code base */
-#    if !defined(HAVE_STRUCT_SOCKADDR_IN6) && defined(HAVE_STRUCT_SOCKADDR_IN)
-#        define sockaddr_in6 sockaddr_in
-#        define sin6_len     sin_len
-#        define sin6_family  sin_family
-#        define sin6_port    sin_port
-#        define sin6_addr    sin_addr
-#    endif
+#if !defined(HAVE_STRUCT_SOCKADDR_IN6) && defined(HAVE_STRUCT_SOCKADDR_IN)
+#    define sockaddr_in6 sockaddr_in
+#    define sin6_len     sin_len
+#    define sin6_family  sin_family
+#    define sin6_port    sin_port
+#    define sin6_addr    sin_addr
+#endif
 
-#    if !HAVE_DECL_AF_UNSPEC
-#        define AF_UNSPEC 0
-#    endif
-#    if !HAVE_DECL_PF_UNSPEC
-#        define PF_UNSPEC 0
-#    endif
-#    if !HAVE_DECL_AF_INET6
-#        define AF_INET6 AF_UNSPEC
-#    endif
-#    if !HAVE_DECL_PF_INET6
-#        define PF_INET6 PF_UNSPEC
-#    endif
+#if !HAVE_DECL_AF_UNSPEC
+#    define AF_UNSPEC 0
+#endif
+#if !HAVE_DECL_PF_UNSPEC
+#    define PF_UNSPEC 0
+#endif
+#if !HAVE_DECL_AF_INET6
+#    define AF_INET6 AF_UNSPEC
+#endif
+#if !HAVE_DECL_PF_INET6
+#    define PF_INET6 PF_UNSPEC
+#endif
 
-#    if defined(__APPLE__) && defined(HAVE_INTTYPES_H)
+#if defined(__APPLE__) && defined(HAVE_INTTYPES_H)
 /* Prior to Mac OS X 10.3, the length modifier "ll" wasn't
    supported, but "q" was for long long.  This isn't ANSI
    C and causes a warning when using PRI?64 macros.  We
@@ -429,16 +421,16 @@ static inline uint16_t ntohs(uint16_t netvar)
    need such backward compatibility.  Instead, redefine
    the macros to be "ll", which is ANSI C and doesn't
    cause a compiler warning. */
-#        include <inttypes.h>
-#        if defined(__PRI_64_LENGTH_MODIFIER__)
-#            undef __PRI_64_LENGTH_MODIFIER__
-#            define __PRI_64_LENGTH_MODIFIER__ "ll"
-#        endif
-#        if defined(__SCN_64_LENGTH_MODIFIER__)
-#            undef __SCN_64_LENGTH_MODIFIER__
-#            define __SCN_64_LENGTH_MODIFIER__ "ll"
-#        endif
+#    include <inttypes.h>
+#    if defined(__PRI_64_LENGTH_MODIFIER__)
+#        undef __PRI_64_LENGTH_MODIFIER__
+#        define __PRI_64_LENGTH_MODIFIER__ "ll"
 #    endif
+#    if defined(__SCN_64_LENGTH_MODIFIER__)
+#        undef __SCN_64_LENGTH_MODIFIER__
+#        define __SCN_64_LENGTH_MODIFIER__ "ll"
+#    endif
+#endif
 
 /* There was a VxWorks block here, pulling in <ioLib.h>, <sockLib.h> and
  * <hostLib.h> for pipe()/ioctl(), socket() and gethostname().  It was
@@ -452,28 +444,8 @@ static inline uint16_t ntohs(uint16_t netvar)
    nothing.  "restrict" is not part of the C++ language, and we don't
    have a corresponding AC_CXX_RESTRICT to figure out what the C++
    compiler supports. */
-#    if defined(c_plusplus) || defined(__cplusplus)
-#        undef restrict
-#        define restrict
-#    endif
+#if defined(c_plusplus) || defined(__cplusplus)
+#    undef restrict
+#    define restrict
+#endif
 
-#else
-
-/* For a similar reason to what is listed in prte_config_top.h, we
-   want to protect others from the autoconf/automake-generated
-   PACKAGE_<foo> macros in prte_config.h.  We can't put these undef's
-   directly in prte_config.h because they'll be turned into #defines'
-   via autoconf.
-
-   So put them here in case any only else includes OMPI/PRTE's
-   config.h files. */
-
-#    undef PACKAGE_BUGREPORT
-#    undef PACKAGE_NAME
-#    undef PACKAGE_STRING
-#    undef PACKAGE_TARNAME
-#    undef PACKAGE_VERSION
-#    undef PACKAGE_URL
-#    undef HAVE_CONFIG_H
-
-#endif /* OMPI_BUILDING */
