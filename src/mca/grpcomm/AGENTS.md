@@ -85,7 +85,7 @@ component fills it in. Every function pointer **MUST** be provided.
 |-------|-----------|---------------------------|
 | `init` | `int (*)(void)` | Called once on the winning module right after selection. Set up trackers, register RML receives. Returns `PRTE_SUCCESS`. |
 | `finalize` | `void (*)(void)` | Tear down trackers and cancel RML receives. Called by the framework close. |
-| `fault_handler` | `void (*)(const prte_rml_recovery_status_t *status)` | Invoked by the RML/routed layer (`src/rml/routed_radix.c`) when the routing tree changes — a daemon died, revived, or the local node was re-parented/promoted. Repair or abort in-flight collectives. |
+| `fault_handler` | `void (*)(const prte_rml_recovery_status_t *status)` | Invoked **on every daemon** by the RML/routed layer (`src/rml/routed_radix.c`) when the routing tree changes — a daemon died, revived, or the local node was re-parented/promoted. Repair or abort in-flight collectives. Called twice per death (LOCAL then GLOBAL scope); which one a collective keys on depends on what it needs, so read `direct/AGENTS.md` before adding a third. |
 | `xcast` | `int (*)(prte_rml_tag_t tag, pmix_data_buffer_t *msg)` | Scalably broadcast `msg` to **every** daemon in the DVM, to be delivered at `tag`. Non-destructive to `msg` (caller still owns it). Returns `PRTE_SUCCESS` when the broadcast has been *accepted*, not when it completes. |
 | `xcast_nb` | `int (*)(prte_rml_tag_t tag, pmix_data_buffer_t *msg, prte_grpcomm_xcast_complete_fn_t cbfunc, void *cbdata)` | Same as `xcast`, but when `cbfunc != NULL` it fires on the **master** once the whole DVM has confirmed receipt (all ACKs have rolled back up the tree). `cbfunc`/`cbdata` are ignored on non-master daemons. `xcast` is just `xcast_nb(tag, msg, NULL, NULL)`. |
 | `fence` | `int (*)(const pmix_proc_t procs[], size_t nprocs, const pmix_info_t info[], size_t ninfo, char *data, size_t ndata, pmix_modex_cbfunc_t cbfunc, void *cbdata)` | Non-blocking allgather/barrier across the daemons hosting `procs`. Barrier == NULL data. `cbfunc` is invoked with the gathered buffer on completion. Returns `PRTE_SUCCESS` once queued. |
@@ -215,13 +215,20 @@ the framework makes sense:
 - **Non-destructive to the caller's buffer.** `xcast`/`fence` copy the
   payload; the caller keeps ownership of the `pmix_data_buffer_t` it
   passed.
-- **Capability-guarded FT code.** Group fault-tolerance (the
-  `PMIX_GROUP_CANCEL` operation and cancel routing) is compiled only when
-  `#if PRTE_PMIX_HAVE_GROUP_FT`. That macro is defined by
-  `config/prte_setup_pmix.m4` via `PRTE_CHECK_PMIX_CAP([GROUP_FT], …)`,
-  which succeeds when the installed PMIx advertises `PMIX_CAP_GROUP_FT`.
-  Any new group-FT code must live behind that guard, and you must build
-  against a new-enough PMIx (and re-run `autogen.pl`) to exercise it.
+- **Capability-guarded FT code.** Group fault-tolerance — the
+  `PMIX_GROUP_CANCEL` operation and cancel routing, the
+  `PMIX_GROUP_FT_COLLECTIVE` directive, the controller's decision about a
+  construct that lost a member, and the `PMIX_GROUP_MEMBER_FAILED` events —
+  is compiled only when `#if PRTE_PMIX_HAVE_GROUP_FT`. That macro is
+  defined by `config/prte_setup_pmix.m4` via
+  `PRTE_CHECK_PMIX_CAP([GROUP_FT], …)`, which succeeds when the installed
+  PMIx advertises `PMIX_CAP_GROUP_FT`. Any new group-FT code must live
+  behind that guard, and you must build against a new-enough PMIx (and
+  re-run `autogen.pl`) to exercise it.
+  **The wire format is the exception**: the signature's `ft_collective`
+  field is packed and unpacked unguarded, so every daemon in a DVM agrees
+  on the message layout no matter what its PMIx advertised. Guard the
+  *behavior*, never the bytes.
 - **Every entry-point handler owns its caddy/op — release it on *all*
   paths.** `fence`/`group`/`xcast_nb` each allocate a heap object
   (`prte_pmix_fence_caddy_t`, `prte_pmix_grp_caddy_t`, or the xcast `op_t`),
