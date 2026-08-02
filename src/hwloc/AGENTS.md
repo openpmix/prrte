@@ -453,6 +453,11 @@ same thread has cycled through the other 15 — never store one.
   changed nothing. If you add a function here whose whole job is to say
   "no", check that its one caller is listening — the failure mode is a
   user who is told their request was refused and then watches it run.
+- **Anything labelled "parseable" gets checked with a parser, not a grep.**
+  Both this directory's binding renderer and the `--display cpus` copy in
+  `ras/base` emitted documents that no XML reader would accept
+  (`<EMPTY CPUSET/>`, `<pkg=0 cpus=0-7>`), for years, under passing tests
+  that matched on substrings.
 - **Warnings are errors.** Debug builds imply `--enable-devel-check`.
 
 ---
