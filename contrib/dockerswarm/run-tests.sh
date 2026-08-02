@@ -3209,6 +3209,174 @@ test_grpcomm() {
 
     RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     cleanup_swarm
+
+    test_grpcomm_ft
+}
+
+# Losing a whole daemon mid-construct.  This is the daemon-death analog of the
+# client-death handling the PMIx server library already does, and it is the
+# reason grpcomm carries a recovery epoch at all: the rollup's expected counts
+# come from the routing tree, so a failure invalidates every one of them and
+# the collective has to be restarted rather than merely waited on.
+#
+# Every case here kills a real daemon under a live construct, so they need the
+# stagger that --delay gives: without it the construct is long over before the
+# kill lands and the case passes without testing anything.
+test_grpcomm_ft() {
+    local out n g
+
+    if ! pmix_cap PMIX_CAP_GROUP_FT; then
+        skp "grpcomm FT: the installed PMIx has no PMIX_CAP_GROUP_FT"
+        return
+    fi
+
+    banner "grpcomm: an FT construct survives losing a participating daemon"
+    # With PMIX_GROUP_FT_COLLECTIVE the construct must complete on the
+    # survivors with a reduced membership, and each survivor must be told
+    # which processes went away.  Ranks are one per node so killing node4
+    # removes exactly one member.
+    cleanup_swarm
+    if prted_dvm_start 'node1:1,node2:1,node3:1,node4:1'; then
+        PRUN_BG /tmp/grp-ft.out "--rtos recoverable,notifyerrors --host node1:1,node2:1,node3:1,node4:1 -n 4 --map-by node $GC --ft --delay 12 ftgrp"
+        sleep 4
+        if ! ON 4 'pgrep -x prted' >/dev/null 2>&1; then
+            bad "node4 has no daemon to kill -- the job did not land where expected"
+        else
+            ON 4 'pkill -9 -x prted' >/dev/null 2>&1
+            n=0
+            while [ "$n" -lt 60 ]; do
+                RUN 'pgrep -x prun' >/dev/null 2>&1 || break
+                sleep 1; n=$((n+1))
+            done
+            out=$(RUN 'tr -d "\\000" < /tmp/grp-ft.out' 2>&1)
+            # three survivors, each of which must have completed the construct
+            n=$(echo "$out" | grep -c 'CONSTRUCT PMIX_SUCCESS')
+            [ "$n" = 3 ] \
+                && ok "all 3 surviving ranks completed the construct" \
+                || bad "$n of 3 survivors completed the construct: $(echo "$out" | grep CONSTRUCT | tr '\n' ' ' | tail -c 300)"
+            # the membership must have shrunk to the survivors
+            n=$(echo "$out" | grep -c 'MEMBERS 3')
+            [ "$n" = 3 ] \
+                && ok "...on the reduced membership of 3" \
+                || bad "survivors did not agree on a membership of 3: $(echo "$out" | grep MEMBERS | tr '\n' ' ' | tail -c 200)"
+            # and they must have been told who was lost
+            n=$(echo "$out" | grep -c 'MEMBER-FAILED')
+            [ "$n" -ge 3 ] \
+                && ok "...and every survivor was told which member failed" \
+                || bad "only $n MEMBER-FAILED events reached the survivors (want >= 3)"
+            # the reduced group must still be usable: each survivor reads back
+            # every remaining member's contribution and reports no failures
+            n=$(echo "$out" | grep -c 'DONE 0')
+            [ "$n" = 3 ] \
+                && ok "...and the reduced group was intact and usable" \
+                || bad "$n of 3 survivors finished cleanly: $(echo "$out" | grep -E 'CID-FAIL|DONE' | tr '\n' ' ' | tail -c 250)"
+            RUN 'pgrep -x prte' >/dev/null 2>&1 \
+                && ok "the HNP survived the loss" \
+                || bad "the HNP died along with the lost daemon"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the FT group test"
+    fi
+    cleanup_swarm
+
+    banner "grpcomm: without FT_COLLECTIVE the same loss aborts the construct"
+    # The regression guard on the pre-existing behavior.  Note groupcon jumps
+    # straight to its exit on a failed construct, so there is no DESTRUCT line
+    # on this path -- assert on the CONSTRUCT status and on the DVM surviving.
+    if prted_dvm_start 'node1:1,node2:1,node3:1,node4:1'; then
+        PRUN_BG /tmp/grp-noft.out "--rtos recoverable,notifyerrors --host node1:1,node2:1,node3:1,node4:1 -n 4 --map-by node $GC --delay 12 noftgrp"
+        sleep 4
+        if ! ON 4 'pgrep -x prted' >/dev/null 2>&1; then
+            bad "node4 has no daemon to kill -- the job did not land where expected"
+        else
+            ON 4 'pkill -9 -x prted' >/dev/null 2>&1
+            n=0
+            while [ "$n" -lt 60 ]; do
+                RUN 'pgrep -x prun' >/dev/null 2>&1 || break
+                sleep 1; n=$((n+1))
+            done
+            out=$(RUN 'tr -d "\\000" < /tmp/grp-noft.out' 2>&1)
+            n=$(echo "$out" | grep -c 'CONSTRUCT PMIX_GROUP_CONSTRUCT_ABORT')
+            [ "$n" = 3 ] \
+                && ok "all 3 survivors were told the construct aborted" \
+                || bad "$n of 3 survivors reported an abort: $(echo "$out" | grep CONSTRUCT | tr '\n' ' ' | tail -c 300)"
+            RUN 'pgrep -x prte' >/dev/null 2>&1 \
+                && ok "...and the DVM survived the abort" \
+                || bad "the HNP died rather than aborting the construct"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the non-FT group test"
+    fi
+    cleanup_swarm
+
+    banner "grpcomm: losing a relay-only daemon does not stall a construct"
+    # A daemon that hosts no member but sits between the controller and one
+    # that does.  Nothing about the membership changes, so the construct must
+    # simply complete -- with or without --ft.  Before the rollup learned to
+    # recompute what it expects, this was the silent case: the operation was
+    # not "affected", so it was never aborted either, and it hung on a count
+    # that could never be reached.
+    #
+    # radix 2 is what makes the tree deep enough to have an interior node at
+    # all; at the default radix every daemon is a child of the controller.
+    if prted_dvm_start_mca 'node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1' \
+                           '--prtemca rml_base_radix 2'; then
+        # members on node1 and node7 only; node3 relays for node7's side of
+        # the radix-2 tree and hosts nobody
+        PRUN_BG /tmp/grp-relay.out "--host node1:1,node7:1 -n 2 --map-by node $GC --ft --delay 12 relaygrp"
+        sleep 4
+        if ! ON 3 'pgrep -x prted' >/dev/null 2>&1; then
+            bad "node3 has no daemon to kill"
+        else
+            ON 3 'pkill -9 -x prted' >/dev/null 2>&1
+            n=0
+            while [ "$n" -lt 60 ]; do
+                RUN 'pgrep -x prun' >/dev/null 2>&1 || break
+                sleep 1; n=$((n+1))
+            done
+            out=$(RUN 'tr -d "\\000" < /tmp/grp-relay.out' 2>&1)
+            n=$(echo "$out" | grep -c 'CONSTRUCT PMIX_SUCCESS')
+            [ "$n" = 2 ] \
+                && ok "both members completed the construct despite the lost relay" \
+                || bad "$n of 2 members completed: $(echo "$out" | grep -E 'CONSTRUCT|DELAYING' | tr '\n' ' ' | tail -c 300)"
+            n=$(echo "$out" | grep -c 'MEMBERS 2')
+            [ "$n" = 2 ] \
+                && ok "...with the membership intact -- no member was lost" \
+                || bad "the membership changed when only a relay died: $(echo "$out" | grep MEMBERS | tr '\n' ' ' | tail -c 200)"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a radix-2 DVM for the relay-loss test"
+    fi
+    cleanup_swarm
+
+    banner "grpcomm: the DVM still runs group constructs after a loss"
+    # A recovery that leaves a tracker, a memo entry or a caddy behind shows
+    # up as drift on the next operation rather than as a bad run of its own.
+    if prted_dvm_start 'node1:1,node2:1,node3:1,node4:1'; then
+        PRUN_BG /tmp/grp-after.out "--rtos recoverable,notifyerrors --host node1:1,node2:1,node3:1,node4:1 -n 4 --map-by node $GC --ft --delay 12 killgrp"
+        sleep 4
+        ON 4 'pkill -9 -x prted' >/dev/null 2>&1
+        n=0
+        while [ "$n" -lt 60 ]; do
+            RUN 'pgrep -x prun' >/dev/null 2>&1 || break
+            sleep 1; n=$((n+1))
+        done
+        n=0
+        for g in a1 a2; do
+            out=$(PRUN "--host node1:1,node2:1,node3:1 -n 3 --map-by node $GC --ft $g" 2>&1)
+            [ "$(echo "$out" | grep -c 'CID-OK 3')" = 3 ] && n=$((n+1))
+        done
+        [ "$n" = 2 ] \
+            && ok "two further group constructs completed on the reduced DVM" \
+            || bad "only $n of 2 group constructs completed after the loss"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the post-loss group test"
+    fi
+    cleanup_swarm
 }
 
 test_rml() {

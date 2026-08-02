@@ -52,6 +52,10 @@
 #include "src/runtime/runtime.h"
 #include "src/util/proc_info.h"
 
+#include "src/class/pmix_bitmap.h"
+#include "src/rml/rml.h"
+#include "src/runtime/prte_globals.h"
+
 #include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/grpcomm/base/base.h"
 #include "src/mca/grpcomm/direct/grpcomm_direct.h"
@@ -232,12 +236,17 @@ static int test_classes(void)
     CHECK("grp sig naddmembers 0", 0 == gsig->naddmembers);
     CHECK("grp sig final_order NULL", NULL == gsig->final_order);
     CHECK("grp sig nfinal 0", 0 == gsig->nfinal);
-    /* exercise the destructor's free(groupID)/free(members)/free(addmembers) */
+    /* a group is not fault tolerant unless somebody asks for it */
+    CHECK("grp sig ft_collective false", !gsig->ft_collective);
+    /* exercise the destructor's free of groupID/members/addmembers and the
+     * final order, which the destructor used to leak */
     gsig->groupID = strdup("test-group");
     gsig->nmembers = 1;
     gsig->members = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
     gsig->naddmembers = 1;
     gsig->addmembers = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
+    gsig->nfinal = 1;
+    PMIX_PROC_CREATE(gsig->final_order, gsig->nfinal);
     PMIX_RELEASE(gsig);
 
     /* fence tracker: clean rollup counters, constructed bucket */
@@ -310,6 +319,78 @@ static int test_classes(void)
     return failures;
 }
 
+/* The departed-member predicate decides whether a construct that lost a
+ * daemon may complete on the survivors, so it is worth pinning down away from
+ * a live DVM.  It reads only the failed-daemon set and the job data, both of
+ * which can be stood up by hand here. */
+static int test_member_departed(void)
+{
+    int failures = 0;
+    pmix_proc_t member;
+    prte_job_t *jdata;
+    prte_proc_t *proc;
+    prte_node_t *node;
+    prte_proc_t *dmn;
+
+    /* prte_init_util() opens neither the RML nor the job pool, so the two
+     * globals this predicate reads are still raw static storage - stand them
+     * up by hand, as the ras and runtime unit tests do */
+    PMIX_CONSTRUCT(&prte_rml_base.failed_dmns, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.failed_dmns, 8);
+    if (NULL == prte_job_data) {
+        prte_job_data = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_job_data, 8, INT_MAX, 8);
+    }
+
+    /* with nothing failed, nobody has departed - and this is the path every
+     * fault-free collective takes, so it must not even consult the job map */
+    PMIX_LOAD_PROCID(&member, "no-such-nspace", 0);
+    CHECK("departed: clean failed set says no",
+          !prte_grpcomm_direct_group_member_departed(&member));
+
+    /* mark daemon 1 as failed and hang a job off daemons 0 and 1 */
+    pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, 1);
+
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, "ft-test-nspace");
+    prte_set_job_data_object(jdata);
+
+    for (pmix_rank_t r = 0; r < 2; r++) {
+        node = PMIX_NEW(prte_node_t);
+        dmn = PMIX_NEW(prte_proc_t);
+        PMIX_LOAD_PROCID(&dmn->name, PRTE_PROC_MY_NAME->nspace, r);
+        node->daemon = dmn;
+        proc = PMIX_NEW(prte_proc_t);
+        PMIX_LOAD_PROCID(&proc->name, jdata->nspace, r);
+        proc->node = node;
+        pmix_pointer_array_set_item(jdata->procs, r, proc);
+    }
+    jdata->num_procs = 2;
+
+    /* rank 0 lives on the surviving daemon, rank 1 on the failed one */
+    PMIX_LOAD_PROCID(&member, jdata->nspace, 0);
+    CHECK("departed: member on a live daemon survives",
+          !prte_grpcomm_direct_group_member_departed(&member));
+    PMIX_LOAD_PROCID(&member, jdata->nspace, 1);
+    CHECK("departed: member on a failed daemon departed",
+          prte_grpcomm_direct_group_member_departed(&member));
+
+    /* a wildcard names a namespace, not a process, so it is never resolvable
+     * to a single daemon and must not be reported as departed */
+    PMIX_LOAD_PROCID(&member, jdata->nspace, PMIX_RANK_WILDCARD);
+    CHECK("departed: wildcard is not a departed member",
+          !prte_grpcomm_direct_group_member_departed(&member));
+
+    /* an unresolvable member is treated as departed rather than as an error -
+     * losing the mapping is what a node being torn down looks like */
+    PMIX_LOAD_PROCID(&member, "ft-test-missing", 0);
+    CHECK("departed: unresolvable member counts as departed",
+          prte_grpcomm_direct_group_member_departed(&member));
+
+    PMIX_DESTRUCT(&prte_rml_base.failed_dmns);
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -334,6 +415,9 @@ int main(void)
     failures += test_component_identity();
     failures += test_base_context_id();
     failures += test_classes();
+#if PRTE_TEST_GRPCOMM_DIRECT
+    failures += test_member_departed();
+#endif
 
     (void) pmix_mca_base_framework_close(&prte_grpcomm_base_framework);
     prte_finalize();

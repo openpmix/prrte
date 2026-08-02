@@ -11,18 +11,26 @@
  * groupcon -- a minimal PMIx client that drives PMIx_Group_construct /
  * PMIx_Group_destruct across a real, multi-node DVM.
  *
- *   groupcon <groupID> [seconds]
+ *   groupcon [--ft] [--delay <s>] <groupID> [seconds]
  *       Every rank contributes a PMIX_GROUP_LOCAL_CID of its own
  *       (1234 + rank) as PMIX_GROUP_INFO, asks for a context id, and
  *       constructs the group.  As soon as construct returns -- with NO
  *       fence in between -- each rank reads back EVERY rank's local cid
  *       and checks the value.  Then it destructs the group.
  *
+ *       --ft         ask for PMIX_GROUP_FT_COLLECTIVE, so the construct
+ *                    completes on the survivors if a member is lost
+ *       --delay <s>  sleep this long before calling construct.  Staggering
+ *                    the ranks is what makes the collective still be in
+ *                    flight when a daemon is killed; without it the
+ *                    construct is over long before the kill lands.
+ *
  * Output lines, one per rank, all prefixed GRP so the harness can grep:
  *
  *   GRP <rank> HOST <hostname>
  *   GRP <rank> CONSTRUCT <status> CID <cid> ASSIGNED <T|F>
  *   GRP <rank> MEMBERS <n>
+ *   GRP <rank> MEMBER-FAILED <nspace>:<rank>
  *   GRP <rank> CID-OK <n>            (read back n peers' local cids)
  *   GRP <rank> CID-FAIL <peer> <status>
  *   GRP <rank> DESTRUCT <status>
@@ -74,12 +82,51 @@
 
 static pmix_proc_t myproc;
 
+#ifdef PMIX_GROUP_MEMBER_FAILED
+/* A member of the group was lost with its daemon. The DVM raises this at the
+ * survivors of a fault-tolerant construct, so it is the visible half of the
+ * degraded-mode behavior - the construct returning success only says the group
+ * formed, not that anything went missing. */
+static void member_failed_handler(size_t evhdlr_registration_id, pmix_status_t status,
+                                  const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
+                                  pmix_info_t results[], size_t nresults,
+                                  pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
+{
+    size_t n;
+    (void) evhdlr_registration_id;
+    (void) status;
+    (void) source;
+    (void) results;
+    (void) nresults;
+
+    for (n = 0; n < ninfo; n++) {
+        if (PMIX_CHECK_KEY(&info[n], PMIX_EVENT_AFFECTED_PROC)) {
+            printf("GRP %u MEMBER-FAILED %s:%u\n", myproc.rank,
+                   info[n].value.data.proc->nspace,
+                   (unsigned) info[n].value.data.proc->rank);
+            fflush(stdout);
+        }
+    }
+    if (NULL != cbfunc) {
+        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    }
+}
+
+static void reg_handler(pmix_status_t status, size_t refid, void *cbdata)
+{
+    (void) status;
+    (void) refid;
+    (void) cbdata;
+}
+#endif
+
 int main(int argc, char **argv)
 {
     pmix_status_t rc, ret;
     pmix_value_t *val = NULL;
     pmix_value_t value;
-    pmix_proc_t proc, *procs = NULL;
+    pmix_proc_t proc, *procs = NULL, *members = NULL;
+    size_t nmembers = 0;
     pmix_info_t *results = NULL, *info = NULL;
     pmix_info_t tinfo[2];
     pmix_data_array_t darray;
@@ -90,17 +137,41 @@ int main(int argc, char **argv)
     char hostname[256];
     const char *grpid;
     int seconds = 0;
+    int delay = 0;
     int failures = 0;
+    int i, npos = 0;
     bool idassigned = false;
+    bool ft = false;
+#ifdef PMIX_GROUP_MEMBER_FAILED
+    pmix_status_t evcode = PMIX_GROUP_MEMBER_FAILED;
+#endif
 
-    if (2 > argc) {
-        fprintf(stderr, "usage: %s <groupID> [seconds]\n", argv[0]);
+    /* flags may appear anywhere; the positional arguments keep their old
+     * meaning so existing cases in the harness are unaffected */
+    grpid = NULL;
+    for (i = 1; i < argc; i++) {
+        if (0 == strcmp(argv[i], "--ft")) {
+            ft = true;
+        } else if (0 == strcmp(argv[i], "--delay") && (i + 1) < argc) {
+            delay = atoi(argv[++i]);
+        } else if (0 == npos) {
+            grpid = argv[i];
+            ++npos;
+        } else if (1 == npos) {
+            seconds = atoi(argv[i]);
+            ++npos;
+        }
+    }
+    if (NULL == grpid) {
+        fprintf(stderr, "usage: %s [--ft] [--delay <s>] <groupID> [seconds]\n", argv[0]);
         return 2;
     }
-    grpid = argv[1];
-    if (3 <= argc) {
-        seconds = atoi(argv[2]);
+#ifndef PMIX_GROUP_FT_COLLECTIVE
+    if (ft) {
+        fprintf(stderr, "ERROR --ft: this PMIx has no PMIX_GROUP_FT_COLLECTIVE\n");
+        return 2;
     }
+#endif
 
     gethostname(hostname, sizeof(hostname));
     hostname[sizeof(hostname) - 1] = '\0';
@@ -112,6 +183,13 @@ int main(int argc, char **argv)
     }
     printf("GRP %u HOST %s\n", myproc.rank, hostname);
     fflush(stdout);
+
+#ifdef PMIX_GROUP_MEMBER_FAILED
+    /* register before constructing - the notification can arrive with the
+     * construct's own completion */
+    PMIx_Register_event_handler(&evcode, 1, NULL, 0, member_failed_handler,
+                                reg_handler, NULL);
+#endif
 
     /* how many of us are there? */
     PMIX_LOAD_PROCID(&proc, myproc.nspace, PMIX_RANK_WILDCARD);
@@ -151,6 +229,15 @@ int main(int argc, char **argv)
         fprintf(stderr, "ERROR list_add ctxid: %s\n", PMIx_Error_string(rc));
         goto done;
     }
+#ifdef PMIX_GROUP_FT_COLLECTIVE
+    if (ft) {
+        rc = PMIx_Info_list_add(grpinfo, PMIX_GROUP_FT_COLLECTIVE, NULL, PMIX_BOOL);
+        if (PMIX_SUCCESS != rc) {
+            fprintf(stderr, "ERROR list_add ftcoll: %s\n", PMIx_Error_string(rc));
+            goto done;
+        }
+    }
+#endif
     list = PMIx_Info_list_start();
     lcid = GROUPCON_BASE_CID + (size_t) myproc.rank;
     rc = PMIx_Info_list_add(list, PMIX_GROUP_LOCAL_CID, &lcid, PMIX_SIZE);
@@ -180,6 +267,14 @@ int main(int argc, char **argv)
     ninfo = darray.size;
     PMIx_Info_list_release(grpinfo);
 
+    /* hold here if asked, so the collective is still in flight when whatever
+     * the test is doing to the DVM happens */
+    if (0 < delay) {
+        printf("GRP %u DELAYING %d\n", myproc.rank, delay);
+        fflush(stdout);
+        sleep(delay);
+    }
+
     rc = PMIx_Group_construct(grpid, procs, nprocs, info, ninfo, &results, &nresults);
     PMIX_DATA_ARRAY_DESTRUCT(&darray);
     if (PMIX_SUCCESS != rc) {
@@ -196,6 +291,14 @@ int main(int argc, char **argv)
             if (PMIX_DATA_ARRAY == results[m].value.type && NULL != results[m].value.data.darray) {
                 printf("GRP %u MEMBERS %u\n", myproc.rank,
                        (unsigned) results[m].value.data.darray->size);
+                /* keep the membership: it is what we read back below. After a
+                 * fault-tolerant construct it is SMALLER than the job, and
+                 * asking a departed rank for its contribution is a guaranteed
+                 * not-found rather than a real failure. */
+                nmembers = results[m].value.data.darray->size;
+                PMIX_PROC_CREATE(members, nmembers);
+                memcpy(members, results[m].value.data.darray->array,
+                       nmembers * sizeof(pmix_proc_t));
             }
         }
     }
@@ -216,17 +319,24 @@ int main(int argc, char **argv)
     PMIX_INFO_CONSTRUCT(&tinfo[1]);
     PMIX_INFO_LOAD(&tinfo[1], PMIX_TIMEOUT, &get_timeout, PMIX_UINT32);
 
-    for (n = 0; n < nprocs; n++) {
-        PMIX_LOAD_PROCID(&proc, myproc.nspace, n);
-        rc = PMIx_Get(&proc, PMIX_GROUP_LOCAL_CID, tinfo, 2, &val);
+    /* read back the members the group actually ended up with, not every rank
+     * the job started with */
+    for (n = 0; n < nmembers; n++) {
+        if (PMIX_RANK_WILDCARD == members[n].rank) {
+            continue;
+        }
+        rc = PMIx_Get(&members[n], PMIX_GROUP_LOCAL_CID, tinfo, 2, &val);
         if (PMIX_SUCCESS != rc) {
-            printf("GRP %u CID-FAIL %u %s\n", myproc.rank, n, PMIx_Error_string(rc));
+            printf("GRP %u CID-FAIL %u %s\n", myproc.rank,
+                   (unsigned) members[n].rank, PMIx_Error_string(rc));
             fflush(stdout);
             failures++;
             continue;
         }
-        if (PMIX_SIZE != val->type || (GROUPCON_BASE_CID + (size_t) n) != val->data.size) {
-            printf("GRP %u CID-FAIL %u BADVALUE\n", myproc.rank, n);
+        if (PMIX_SIZE != val->type
+            || (GROUPCON_BASE_CID + (size_t) members[n].rank) != val->data.size) {
+            printf("GRP %u CID-FAIL %u BADVALUE\n", myproc.rank,
+                   (unsigned) members[n].rank);
             fflush(stdout);
             failures++;
             PMIX_VALUE_RELEASE(val);
@@ -250,6 +360,9 @@ int main(int argc, char **argv)
 done:
     if (NULL != procs) {
         PMIX_PROC_FREE(procs, nprocs);
+    }
+    if (NULL != members) {
+        PMIX_PROC_FREE(members, nmembers);
     }
     if (0 < seconds) {
         sleep(seconds);
