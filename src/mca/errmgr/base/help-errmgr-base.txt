@@ -66,8 +66,12 @@ PRTE has lost communication with a remote daemon.
 
 This is usually due to either a failure of the TCP network
 connection to the node, or possibly an internal failure of
-the daemon itself. We cannot recover from this failure, and
-therefore will terminate the job.
+the daemon itself.
+
+Any processes that were running on that node have been lost.
+A job that loses a process is terminated unless it asked to
+survive that - see the "recoverable" and "continuous" runtime
+options, for example "--rtos recoverable".
 #
 [simple-message]
 An internal error has occurred in PRTE:
