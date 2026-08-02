@@ -227,6 +227,19 @@ table.
 - **`prte_schizo_base_check_directives` / `_check_qualifiers`** — the
   reusable directive validators, including the special-cased
   `--map-by ppr:N:resource` pattern check.
+
+  **The `mappers[]`/`rankers[]`/`binders[]`/`*quals[]` tables in
+  `prte_schizo_base_sanity()` are the front door.** A name missing from one
+  of them is refused here and never reaches the parser that implements it,
+  and nothing anywhere reports the disagreement — the parser's arm simply
+  becomes unreachable. `bndquals[]` was missing `report`, so the job-level
+  arm for it in `prte_hwloc_base_set_binding_policy()` could not be reached
+  from any command line, including the diagnostic that arm emits at DVM
+  scope telling the user to give it per job instead. When you add a
+  qualifier to a parser, add it here, and check the *other* parser for the
+  same directive — `--bind-to` has two (job-level in
+  [`src/hwloc`](../../hwloc/AGENTS.md), per-app in
+  [`rmaps/base`](../rmaps/AGENTS.md)).
 - **`prte_schizo_base_parse_display` / `_parse_output`** — convert a
   parsed `--display` / `--output` option into `PMIX_INFO` list entries
   (`PMIX_DISPLAY_MAP`, `PMIX_IOF_TAG_OUTPUT`, `PMIX_IOF_OUTPUT_TO_FILE`,

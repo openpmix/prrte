@@ -409,6 +409,20 @@ but **empty**, and the colocation path reaches binding without going
 through `get_target_nodes`, so the intersection falls back to the bare
 object when it would otherwise come up empty.
 
+**`--bind-to` is parsed in two places and gated in a third.** Per-app by
+`prte_rmaps_base_set_app_binding_policy()` here, job-level by
+`prte_hwloc_base_set_binding_policy()` in
+[`src/hwloc`](../../hwloc/AGENTS.md), and whitelisted before either of them
+by `bndquals[]` in `schizo/base/schizo_base_frame.c` — a qualifier missing
+from that list never reaches a parser at all, which is how `report` came to
+be implemented, refused, and undocumented at the same time. All three
+policies and all the qualifiers agree now, with one deliberate exception:
+`report` is **job-level only**, because the attribute behind it
+(`PRTE_JOB_REPORT_BINDINGS`) has no per-app counterpart — reporting is a
+property of the whole job. The per-app parser therefore refuses it *by
+name* (`job-only-modifier`) rather than as an unrecognized qualifier, since
+the same spelling is legal one app segment earlier.
+
 The `limit` qualifier is parsed **twice** — per-app by
 `prte_rmaps_base_set_app_binding_policy()` here, and job-level by
 `prte_hwloc_base_set_binding_policy()` in

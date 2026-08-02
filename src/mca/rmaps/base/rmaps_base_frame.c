@@ -1278,6 +1278,19 @@ int prte_rmaps_base_set_app_binding_policy(prte_app_context_t *app, char *spec)
             } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_NOOVERLOAD)) {
                 tmp = (tmp & ~PRTE_BIND_ALLOW_OVERLOAD);
                 tmp |= PRTE_BIND_OVERLOAD_GIVEN;
+            } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_REPORT)) {
+                /* The job-level parser in src/hwloc accepts this and records
+                 * PRTE_JOB_REPORT_BINDINGS. There is no per-app counterpart
+                 * to that attribute - reporting is a property of the whole
+                 * job - so say precisely that rather than falling into the
+                 * generic "unrecognized qualifier" below, which would be
+                 * baffling now that the schizo whitelist lets the same
+                 * spelling through on the job. */
+                pmix_show_help("help-prte-rmaps-base.txt", "job-only-modifier", true,
+                               "binding", quals[i]);
+                PMIx_Argv_free(quals);
+                free(myspec);
+                return PRTE_ERR_SILENT;
             } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_LIMIT)) {
                 p2 = pmix_cli_qualifier_value(quals[i]);
                 if (NULL == p2) {

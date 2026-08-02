@@ -773,11 +773,20 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         PRTE_CLI_PACKAGE,
         NULL
     };
+    /* This list is the front door: a qualifier missing from it is refused
+     * here and never reaches the parser that implements it. REPORT was
+     * missing, so the job-level arm for it in
+     * prte_hwloc_base_set_binding_policy() was unreachable from any command
+     * line - including the show_help that arm produces at DVM scope, which
+     * tells the user "you can provide this modifier on a per-job basis".
+     * Keep this in step with both parsers (src/hwloc/hwloc.c for the job,
+     * rmaps_base_set_app_binding_policy() below for an app). */
     char *bndquals[] = {
         PRTE_CLI_OVERLOAD,
         PRTE_CLI_NOOVERLOAD,
         PRTE_CLI_IF_SUPP,
         PRTE_CLI_LIMIT,
+        PRTE_CLI_REPORT,
         NULL
     };
 

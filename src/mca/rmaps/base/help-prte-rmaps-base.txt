@@ -374,6 +374,16 @@ Although we were able to map your job, we are unable to launch
 it at this time due to required resources being busy. Please
 try again later.
 #
+[job-only-modifier]
+A %s modifier was given for a single application context, but it
+describes the whole job:
+
+  Modifier:  %s
+
+There is no way to apply it to one application and not another, so it
+can only be given as a job-level directive - on the first application
+context of the command line, or on a command line with only one.
+#
 [unsupported-default-modifier]
 A %s modifier was provided that is not supported as a default value:
 
