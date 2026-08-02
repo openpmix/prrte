@@ -3164,6 +3164,34 @@ test_hwloc() {
         || bad "the mapping policy moved: $(echo "$out" | grep -i 'Mapping policy' | tr '\n' ' ')"
     cleanup_swarm
 
+    banner "hwloc: the REPORT binding qualifier is reachable"
+    # Three lists decide what a --bind-to qualifier is: the schizo whitelist
+    # (bndquals[]), the job-level parser in src/hwloc, and the per-app parser
+    # in rmaps/base. REPORT was implemented only in the job-level parser and
+    # was missing from the whitelist, so no command line could reach it -
+    # including the diagnostic that same arm emits when it is given as a
+    # DVM-wide default, which tells the user to give it per job instead.
+    cleanup_swarm
+    out=$(RUN 'timeout 90 prterun --host node2:4 -n 2 --bind-to core:report hostname' 2>&1)
+    rc=$?
+    [ "$rc" = 0 ] && ok "--bind-to core:report is accepted for a job (rc=0)" \
+                  || bad "--bind-to core:report was refused (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    echo "$out" | grep -qi 'unrecognized qualifier' \
+        && bad "--bind-to core:report is still refused as an unrecognized qualifier" \
+        || ok "the qualifier was not reported as unrecognized"
+    # ...and it describes the whole job, so a later MPMD segment has nowhere
+    # to record it. That has to be said by name - the same spelling is legal
+    # one segment earlier, so the generic "unrecognized qualifier" would be
+    # baffling.
+    out=$(RUN 'timeout 90 prterun --host node2:4 -n 1 hostname : -n 1 --bind-to core:report hostname' 2>&1)
+    rc=$?
+    [ "$rc" != 0 ] && ok "a per-app REPORT is refused (rc=$rc)" \
+                   || bad "a per-app REPORT was accepted, but there is nowhere to record it"
+    echo "$out" | grep -q 'describes the whole job' \
+        && ok "the per-app refusal explains itself" \
+        || bad "the per-app refusal was generic: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    cleanup_swarm
+
     banner "hwloc: logical and physical binding reports agree on this node"
     # --report-bindings renders through the same path with "physical" either
     # set or not, and it used to be ignored outright whenever the short cut

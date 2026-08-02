@@ -85,15 +85,25 @@ combination of one or more of the following to the "--bindto" option:
 * "OVERLOAD" indicates that objects can have more processes bound to
   them than CPUs within them
 
+* "NO-OVERLOAD" indicates that they cannot. This is the default, so
+  the qualifier is only useful for overriding an "OVERLOAD" that a
+  DVM-wide default (the "bindto" MCA parameter) has already applied.
+
 * "IF-SUPPORTED" indicates that the job should continue to be launched
   and executed even if binding cannot be performed as requested.
 
 * "LIMIT=n" limits the number of processes bound to each eligible
   representative of the specified type to the given number. For
-  example, speifying "--bindto l3:limit=2" would direct PRRTE
+  example, specifying "--bindto l3:limit=2" would direct PRRTE
   to bind ranks to the L3caches, limiting the number of processes
   bound to each l3cache to two - i.e., bind 2 processes to a
   given l3cache, and then move on to the next.
+
+* "REPORT" reports each process' binding as it is applied, which is
+  the same thing "--report-bindings" does. It describes the job as a
+  whole: unlike the other qualifiers here it cannot be given per
+  application context, and it cannot be given as a DVM-wide default
+  through the "bindto" MCA parameter.
 
 Note:
 

@@ -213,6 +213,23 @@ index past a qualifier's name to find its `=value`** — use
 `pmix_cli_qualifier_value()`. `limit=N` lands in a `uint16_t` attribute, so
 a value that does not fit has to be rejected rather than truncated.
 
+**Three lists have to agree about what a `--bind-to` qualifier is**, and
+they did not:
+
+| Where | What it is |
+|-------|------------|
+| `bndquals[]` in `schizo/base/schizo_base_frame.c` | the front-door whitelist — a name missing here never reaches a parser |
+| `prte_hwloc_base_set_binding_policy()` (here) | the job-level parser |
+| `prte_rmaps_base_set_app_binding_policy()` (`rmaps/base/rmaps_base_frame.c`) | the per-app parser |
+
+`report` was implemented only in the job-level parser and was missing from
+the whitelist, so no command line could reach it — including the `show_help`
+that same arm produces when it is given at DVM scope, which tells the user
+"you can provide this modifier on a per-job basis". It is in the whitelist
+now. It stays out of the per-app parser deliberately: the only attribute
+behind it is `PRTE_JOB_REPORT_BINDINGS`, and there is no per-app
+counterpart, so `report` describes the whole job or nothing.
+
 Two ordering rules the parser now encodes:
 
 - **`pmix_check_cli_option()` compares only `min(strlen(a), strlen(b))`
