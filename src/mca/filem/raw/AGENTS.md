@@ -18,8 +18,8 @@ if it is absent, the framework falls back to the no-op "none" module.
 or negotiate remote paths. It reads each source file on the HNP, chops it
 into fixed-size chunks, and **`xcast`-broadcasts** the raw bytes to every
 daemon over the RML. Each daemon reassembles the file into its node's
-session directory, auto-extracts archives, and later symlinks the result
-into each local process's session directory.
+session directory, auto-extracts archives, and later copies the result
+into the working directory of each app it is about to launch.
 
 `raw` implements exactly two of the framework's vtable slots —
 `preposition_files` and `link_local_files` — plus `filem_init`,
@@ -50,8 +50,9 @@ job proceeds to mapping.
 | File | Contents |
 |------|----------|
 | `filem_raw_component.c` | Registration, the single `flatten_directory_trees` MCA param, `query` (priority 0). |
-| `filem_raw.h` | The four private classes, `PRTE_FILEM_RAW_CHUNK_MAX` (16384), the `flatten_trees` flag. |
-| `filem_raw_module.c` | Everything: the module vtable, HNP send path, daemon receive path, symlinking, and class instances. |
+| `filem_raw.h` | The four private classes, `PRTE_FILEM_RAW_CHUNK_MAX` (16384), `PRTE_FILEM_RAW_COPY_MAX` (8192), the `flatten_trees` flag. |
+| `filem_raw_module.c` | Everything: the module vtable, HNP send path, daemon receive path, placement, and class instances. |
+| `help-prte-filem-raw.txt` | The daemon-side collision message. |
 
 ### MCA parameter
 
@@ -67,7 +68,7 @@ the working directory instead of recreating their directory tree.
 |-------|----------|------|
 | `prte_filem_raw_outbound_t` | HNP | One preposition request. Holds the list of `xfers`, the aggregate `status`, and the caller's `cbfunc`/`cbdata`. When its `xfers` list drains, the callback fires. |
 | `prte_filem_raw_xfer_t` | HNP | One file being sent. Carries the read `fd`, the libevent `ev` (the caddy field — **named `ev`** as required), `src` (local path, for dup detection), `file` (remote-relative path), `type`, `nchunk` (next chunk index), and `nrecvd` (how many daemons have acked). |
-| `prte_filem_raw_incoming_t` | daemon | One file being received. Carries the write `fd`, `ev`, `file`/`top`/`fullpath`, `type`, the `outputs` list of pending write buffers, and `link_pts` (paths to symlink for each proc). |
+| `prte_filem_raw_incoming_t` | daemon | One file being received. Carries the write `fd`, `ev`, `file`/`fullpath`, `type`, the `outputs` list of pending write buffers, and `link_pts` (the paths, relative to the session dir, to place). |
 | `prte_filem_raw_output_t` | daemon | One received chunk: `numbytes` + a `PRTE_FILEM_RAW_CHUNK_MAX` data buffer, queued on an incoming file's `outputs` list for the write handler. |
 
 `xfer` and `incoming` both embed `ev` and use `PRTE_PMIX_THREADSHIFT` /
@@ -106,22 +107,34 @@ The framework entry point on the master. Steps:
      updated) so the staged copy is what actually executes.
    - `PRTE_APP_PRELOAD_FILES`: split on `,`; infer the `target_flag` from
      the suffix (`.tar`→TAR, `.bz`→BZIP, `.gz`→GZIP, else FILE); compute
-     the `remote_target` (basename if flattening, else the path made
-     relative — absolute paths have their leading `/` stripped); then
+     the `remote_target` — the basename if flattening **or if the file was
+     named by an absolute path**, else the relative path as given; then
      strip any leading `./`/`../` components so nothing escapes above the
-     session dir. The app's `PRTE_APP_PRELOAD_FILES` list is rewritten to
+     destination. The app's `PRTE_APP_PRELOAD_FILES` list is rewritten to
      the cleaned relative names so the daemon side can match them.
-2. If nothing was collected, fire the callback and return `PRTE_SUCCESS`.
-3. Create one `outbound` object, stash `cbfunc`/`cbdata`, append it to
+
+     The absolute case is not arbitrary: the file is going to be placed in
+     the app's **working directory**, and reproducing an absolute source
+     tree there (`/home/me/f.dat` → `./home/me/f.dat`) both puts the file
+     somewhere the app never asked for and scatters directories through the
+     user's own directory. A relative specification is kept as-is because
+     that is exactly the name the app will open.
+2. Check for two *different* files that would land under the same relative
+   name (`/data/a/mesh.dat` and `/data/b/mesh.dat` both basename to
+   `mesh.dat`). Only one could ever be delivered, so this fires the
+   callback with `PRTE_ERR_PRELOAD_CONFLICT` instead of silently letting
+   the second overwrite the first in the session dir.
+3. If nothing was collected, fire the callback and return `PRTE_SUCCESS`.
+4. Create one `outbound` object, stash `cbfunc`/`cbdata`, append it to
    `outbound_files`.
-4. For each file set, **de-duplicate**: skip anything whose `src` already
+5. For each file set, **de-duplicate**: skip anything whose `src` already
    appears in `positioned_files` (already sent) or in any in-flight
    `outbound->xfers` (already queued). This is why the same file
    referenced by multiple apps is broadcast only once.
-5. `open()` the source `O_RDONLY`, set it `O_NONBLOCK`, build a
+6. `open()` the source `O_RDONLY`, set it `O_NONBLOCK`, build a
    `prte_filem_raw_xfer_t`, and `PRTE_PMIX_THREADSHIFT` it to
    `send_chunk`.
-6. If every file turned out to be a duplicate (empty `xfers`), release
+7. If every file turned out to be a duplicate (empty `xfers`), release
    the outbound and fire the callback immediately.
 
 Note the return value only reports whether the *setup* succeeded; actual
@@ -188,11 +201,20 @@ Runs on the progress thread; consumes `incoming->outputs`:
   writes push the remainder back onto the front of the list and re-arm.
 - When it hits the **zero-byte** output (EOF), it closes the fd and
   finalizes by `type`:
-  - `FILE`/`EXE`: register `top` as the single link point, then
-    `send_complete(file, PRTE_SUCCESS)`.
-  - `TAR`/`BZIP`/`GZIP`: `chdir` into the target dir, run
-    `tar xf`/`tar xjf`/`tar xzf` via `system()`, `chdir` back, then call
-    `link_archive` and ack.
+  - `FILE`/`EXE`: register the file's own relative path as the single link
+    point, then `send_complete(file, PRTE_SUCCESS)`.
+  - `TAR`/`BZIP`/`GZIP`: `chdir` to `top_session_dir`, run
+    `tar xf`/`tar xjf`/`tar xzf` on the archive's **full path** via
+    `system()`, `chdir` back, then call `link_archive` and ack.
+
+**Link points are always relative to `top_session_dir`**, which is why the
+archive is unpacked *there* rather than beside itself: an archive staged as
+`sub/bundle.tar` must still deliver its contents at the paths the archive
+names them by, not under `sub/`. (Unpacking beside itself and naming the
+archive by its staged relative name were both broken for any archive with a
+directory component — `tar` was run from a directory the relative name no
+longer resolved in, and the link points then pointed at a tree that was one
+level up from where the files actually were.)
 
 ### `link_archive` — enumerate archive contents
 
@@ -208,21 +230,27 @@ Packs `{file, status}` and `PRTE_RML_SEND`s it to the HNP on
 
 ---
 
-## `raw_link_local_files(jdata, app)` — the daemon-side link phase
+## `raw_link_local_files(jdata, app)` — the daemon-side placement phase
 
-Called by `odls` at fork time, **synchronously**, once per app context:
+Called by `odls` at fork time, **synchronously**, once per app context,
+immediately after `setup_path` has resolved and `chdir`'d to the app's
+working directory:
 
 1. Gather the app's wanted files: the `PRTE_APP_PRELOAD_FILES` list plus,
    if `PRTE_APP_PRELOAD_BIN`, the executable basename.
-2. For every local child in this job/app that is not yet alive, compute
-   its per-proc session dir (`<jdata->session_dir>/<rank>`).
+2. Confirm there is actually a local child of this job/app still to launch
+   (`INIT`/`RESTART`, not `ALIVE`). If not, return without touching
+   anything — the user's directory is not ours to write in speculatively.
 3. For each wanted file, find the matching `incoming` entry and, for each
-   of its `link_pts`, call `create_link` to `symlink()` the file from the
-   job session dir into the proc's session dir (creating intermediate
-   dirs, tolerating an already-existing link).
+   of its `link_pts`, `place_file()` it from `top_session_dir` into
+   **`app->cwd`** (creating intermediate dirs as needed).
 
-This is what makes a staged file appear at the relative path the app
-expects, in each rank's own directory.
+`app->cwd` is the whole point: it is the directory every one of this app's
+procs will start in, whatever put them there — the user's cwd, `--wdir`, or
+the session dir a `--preload-binary`/`--set-cwd-to-session-dir` job runs
+from. Placement is therefore per-**app**, not per-proc: one copy serves
+every local rank of the app, and an MPMD job whose apps have different
+working directories gets each app's files in its own.
 
 ---
 
@@ -252,10 +280,11 @@ already resilient for the not-in-flight case.
 - **Chunk-0 carries the metadata.** File `type` (and the fd-open
   decision) rides only on the first chunk; the zero-byte final chunk
   triggers finalize. Don't reorder or coalesce these.
-- **Paths are forced relative** on both the send side (strip leading
-  `/`, `./`, `../`) and the write side (rooted at `top_session_dir`).
-  This is a security property — staging must never let a user overwrite
-  an absolute path on a remote node. Preserve it.
+- **Paths are forced relative** on both the send side (basename for an
+  absolute spec, leading `./`/`../` stripped from a relative one) and the
+  write side (rooted at `top_session_dir`, then at `app->cwd`). This is a
+  security property — staging must never let a user overwrite an absolute
+  path on a remote node. Preserve it.
 - **`raw` owns `PRTE_RML_TAG_FILEM_BASE`.** It posts its own recv in
   `raw_init` rather than using the base `filem_base_receive.c` service;
   don't start the base comm service alongside it or the two will collide
@@ -286,6 +315,62 @@ already resilient for the not-in-flight case.
   fds leak, and the synchronous error return *plus* the eventual callback
   both drive `PRTE_JOB_STATE_FILES_POSN_FAILED`.
 
+## Placement: copy the data, link only the binary
+
+`place_file()` **copies** a staged data file into `app->cwd`; only a
+preloaded *binary* is symlinked (`create_link`). That split is deliberate:
+
+- A symlink into the working directory points into this node's session
+  directory, which is a path **no other node can resolve** and one that
+  does not outlive the DVM. Where the working directory is on a shared
+  filesystem — the ordinary HPC case — every rank on every other node
+  would get a dangling link. A copy is also what "preload the files to the
+  remote machine's working directory" has always claimed to happen.
+- The **binary** is the exception because `--preload-binary` sets
+  `PRTE_APP_SSNDIR_CWD`, so the working directory resolved by `setup_path`
+  *is* this job's own session directory on this node — never shared, never
+  outliving the job. A link there costs nothing, where a second copy of a
+  large executable can cost a great deal. If the cwd model ever changes,
+  this exception has to move with it.
+
+The copy goes to `<dest>.prte-tmp.<pid>` and is `rename()`d into place, so
+a proc never sees a half-written file — which matters precisely in the
+shared-working-directory case, where several daemons may be placing the
+identical file at the same moment.
+
+### Refusing to overwrite, without refusing ourselves
+
+`place_file` fails with `PRTE_ERR_PRELOAD_CONFLICT` (and a `show_help`
+naming the file, directory and node) when something of that name is already
+there. The test for "already there" is `same_contents()` — a **byte-for-byte
+comparison against what we were about to write** — and it has to stay that,
+because every legitimate repeat looks like a collision otherwise:
+
+- every proc of an app shares one working directory (we place once per app,
+  but several apps or several jobs in a DVM may share the directory);
+- a working directory on a shared filesystem is written by one daemon and
+  found by all the others, each of whose session-dir paths is different;
+- the user's own copy of the file they asked to preload is very often
+  sitting in the directory they launched from.
+
+An identical file is left alone. Anything else — different contents, a
+directory, a dangling symlink — is somebody else's and aborts the launch.
+The error is reported twice by design: the daemon's `show_help` names the
+file (and is the only place that can), while `PRTE_ERR_PRELOAD_CONFLICT`
+travels back as the failing proc's exit code so
+`prte_render_launch_failure()` can say it again in the **tool's** voice —
+a daemon's stderr on a remote node usually reaches nobody.
+
+### Never hand the user's directory to `pmix_os_dirpath_create`
+
+It **chmods a path that already exists** to the mode it was given. Calling
+it unconditionally on the working directory silently reduced the user's own
+cwd to `0700`. `place_file` therefore `stat`s first and only creates a
+directory that is missing, with `S_IRWXU|S_IRWXG|S_IRWXO` so the user's
+umask decides. The copied file's mode is likewise `0644`/`0755` before
+umask, carrying nothing across but whether the staged file was executable
+(which is all the staging path knows).
+
 ## `create_link` returns SUCCESS only when it means it
 
 `raw_link_local_files` aborts the whole launch if `create_link` returns
@@ -306,30 +391,18 @@ non-success, so two things there are load-bearing:
 Both were live bugs that made `--preload-files`/`--preload-binary` fail
 outright.
 
-### Link *target*: proc dir for data, **job dir for the binary**
-
-The link *target* (`create_link`'s `path` arg) is normally the per-proc
-session dir `jdata->session_dir/<rank>`, so each proc finds a staged file
-in its own directory. The **EXE is the exception**: `--preload-binary`
-sets `PRTE_APP_SSNDIR_CWD`, and `setup_path` (in `odls`) resolves that to
-the **job** session dir as the cwd shared by every one of the app's procs.
-So a staged binary must be linked into `jdata->session_dir` (not the proc
-dir) for `./<binary>` to resolve. `raw_link_local_files` selects the
-target by `inbnd->type == PRTE_FILEM_TYPE_EXE`; the link is job-wide, and
-`create_link`'s existence check makes the per-proc repeat a no-op.
-
-If you ever change the cwd model (e.g. make `SSNDIR_CWD` per-proc), this
-EXE-target choice has to move in lockstep — the binary must live wherever
-the proc's cwd ends up.
-
 ### Verifying true delivery
 
 A single-host run **cannot** prove staging works: the source file is
 already present locally, so the app runs even if `filem` did nothing. The
 real cross-daemon path is covered by the dockerswarm harness
-(`contrib/dockerswarm/run-tests.sh`, the "`--preload-binary` cross-node
-staging" case): it compiles a marker binary on node1 only and runs it on
-node2+node3, where it can only work if the bytes were actually staged and
-linked. Run that (or an equivalent multi-node test) after touching the
-send/receive/link paths — the `test/unit/filem` unit test only exercises
-the base classes and the "none" module, not delivery.
+(`contrib/dockerswarm/run-tests.sh`): `--preload-binary` compiles a marker
+binary on node1 only and runs it on node2+node3; `--preload-files` writes a
+data file on node1 only and has the remote ranks read it back by its bare
+relative name out of their working directory; and the collision case plants
+a *different* file of that name on one node and requires the launch to be
+refused with that node's data intact. All three can only pass if the bytes
+were actually staged and placed. Run them (or an equivalent multi-node
+test) after touching the send/receive/placement paths — the
+`test/unit/filem` unit test only exercises the base classes and the "none"
+module, not delivery.

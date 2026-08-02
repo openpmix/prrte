@@ -33,6 +33,11 @@ extern bool prte_filem_raw_flatten_trees;
 
 #define PRTE_FILEM_RAW_CHUNK_MAX 16384
 
+/* buffer size used when copying a staged file into a working directory,
+ * and when comparing one against what is already there
+ */
+#define PRTE_FILEM_RAW_COPY_MAX 8192
+
 /* local classes */
 typedef struct {
     pmix_list_item_t super;
@@ -66,7 +71,6 @@ typedef struct {
     bool pending;
     int fd;
     char *file;
-    char *top;
     char *fullpath;
     int32_t type;
     char **link_pts;

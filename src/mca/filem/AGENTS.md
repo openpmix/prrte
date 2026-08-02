@@ -15,9 +15,9 @@ job launches.** When a user asks for their executable and/or data files
 to be staged out to every node — `prun --preload-binary`,
 `--preload-files a,b,c` (which set the `PRTE_APP_PRELOAD_BIN` and
 `PRTE_APP_PRELOAD_FILES` app-context attributes) — `filem` is what
-actually moves the bytes from the HNP to the daemons and then links them
-into each local process's session directory so the app finds them by a
-relative path.
+actually moves the bytes from the HNP to the daemons and then puts them
+in the **working directory each app will run in**, so the app finds them
+by the relative name it was given.
 
 Unlike most PRRTE frameworks, `filem` runs on **both** ends of the DVM:
 
@@ -26,8 +26,8 @@ Unlike most PRRTE frameworks, `filem` runs on **both** ends of the DVM:
   contents to every daemon.
 - **prted (per-node daemon)** — receives. Each daemon writes the bytes
   into its node's top session directory, unpacks archives, and later
-  symlinks the staged files into the session directory of every local
-  process in the job.
+  copies the staged files into the working directory of each app it is
+  about to launch.
 
 ### Place in the launch flow
 
@@ -50,8 +50,10 @@ The same entry point is also reached from the PLM launch-support path
 Then, much later, when a daemon is about to fork the local application
 processes, `odls` calls the second framework entry point,
 `prte_filem.link_local_files(jdata, app)`
-(`src/mca/odls/base/odls_base_default_fns.c`), to create the per-proc
-symlinks.
+(`src/mca/odls/base/odls_base_default_fns.c`), to put the files in place.
+It is called from the per-app loop **after `setup_path`**, which is what
+makes `app->cwd` the resolved working directory by the time `filem` reads
+it — that ordering is load-bearing.
 
 ---
 
@@ -97,7 +99,7 @@ pointer:
 | `wait` | `int (prte_filem_base_request_t *)` | Block until one async request completes. | `PRTE_SUCCESS`/`PRTE_ERROR` |
 | `wait_all` | `int (pmix_list_t *)` | Block until a list of async requests completes. | `PRTE_SUCCESS`/`PRTE_ERROR` |
 | `preposition_files` | `int (prte_job_t *, prte_filem_completion_cbfunc_t, void *)` | **Stage a whole job's preload files to every node (async).** | `PRTE_SUCCESS`, callback on completion |
-| `link_local_files` | `int (prte_job_t *, prte_app_context_t *)` | **Symlink already-staged files into each local proc's session dir.** | `PRTE_SUCCESS`/error |
+| `link_local_files` | `int (prte_job_t *, prte_app_context_t *)` | **Place already-staged files in the app's working directory.** | `PRTE_SUCCESS`/error |
 
 The completion callback type is
 `typedef void (*prte_filem_completion_cbfunc_t)(int status, void *cbdata)`.
@@ -240,10 +242,18 @@ daemon at fork time.**
 
 ## Conventions & gotchas
 
-- **Preload paths are forced relative.** Staged files always land under a
-  node's session directory; the framework rewrites absolute source paths
-  to relative remote targets so a stray `/etc/...` can never be
-  overwritten on a remote node. Preserve that safety property.
+- **Preload paths are forced relative.** A preloaded file is always
+  placed under the app's working directory, never at an absolute path, so
+  a stray `/etc/...` can never be overwritten on a remote node. Preserve
+  that safety property. A relative specification keeps its relative path
+  (that is the name the app opens it by); an absolute one is placed under
+  its basename.
+- **An existing file is never overwritten.** If something of that name is
+  already in the working directory and is not byte-for-byte what was to be
+  staged, the placement fails with `PRTE_ERR_PRELOAD_CONFLICT` and the
+  launch is aborted. Identical contents are treated as already-in-place,
+  which is what keeps every legitimate repeat quiet (see
+  [`raw/AGENTS.md`](raw/AGENTS.md)).
 - **`preposition_files` MUST fire its callback on every exit path**
   (including "nothing to stage" and error), or the job wedges at
   `VM_READY` forever. The "none" module and `raw` both take care to do
@@ -305,5 +315,5 @@ The test opens the framework but deliberately does **not** run
 
 - [`raw/AGENTS.md`](raw/AGENTS.md) — the only component: how files are
   chunked, `xcast`-broadcast to every daemon, written into the session
-  directory, unarchived, and symlinked into each proc's directory. Read
+  directory, unarchived, and placed in the app's working directory. Read
   this next.

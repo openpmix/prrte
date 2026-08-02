@@ -170,6 +170,11 @@ char *prte_render_launch_failure(int exit_code, const char *app, const char *cwd
                                        prte_tool_basename, app, nodename,
                                        (unsigned long) rank);
         break;
+    case PRTE_ERR_PRELOAD_CONFLICT:
+        output = pmix_show_help_string("help-prun.txt", "prun:preload-collision", true,
+                                       prte_tool_basename, cwd, nodename,
+                                       (unsigned long) rank);
+        break;
     case PRTE_ERR_MULTIPLE_AFFINITIES:
         output = pmix_show_help_string("help-prun.txt", "prun:multiple-paffinity-schemes", true,
                                        NULL);

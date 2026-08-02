@@ -117,6 +117,12 @@ prted_count() { local c=0 n; for n in "$@"; do ON "$n" 'pgrep -x prted' >/dev/nu
 # one) -- two daemons on a single machine is what a duplicated node-pool
 # entry produces
 prted_procs() { docker exec "$NODE$1" sh -c 'pgrep -x prted 2>/dev/null | wc -l' | tr -d ' \r'; }
+# wait up to N seconds for every listed node to have no prted, then echo the
+# count that remains.  A tool that exits on a FAILED launch does not wait for
+# the daemons to finish dying, so a count taken the instant it returns can
+# still see one -- that is teardown in flight, not a stray.
+prted_settle() { local secs=$1 c; shift; for _ in $(seq "$secs"); do
+                     c=$(prted_count "$@"); [ "$c" = 0 ] && break; sleep 1; done; echo "$c"; }
 
 # Run something on the head node detached, capturing its output to a file --
 # for a tool that has to stay alive while the case pokes at the DVM around it.
@@ -3942,6 +3948,55 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         bad "could not compile the marker binary on node1 (need gcc in the image)"
     fi
     docker exec "${NODE}1" sh -c 'rm -f /root/staged_marker /root/staged_marker.c' 2>/dev/null
+
+    banner "filem: --preload-files cross-node staging (data file only on node1)"
+    # The data-file half of the same path. The file exists on node1 only, and
+    # the ranks run on node2/node3 with their ordinary working directory --
+    # so reading it back by the bare relative name proves both that the bytes
+    # crossed and that they were placed where the procs actually run, which is
+    # the whole of issue #2525. Single-host runs cannot show either: the
+    # source file is already sitting in the launch directory.
+    docker exec "${NODE}1" sh -c 'echo PRELOADED-DATA-OK > /root/pf.dat' >/dev/null 2>&1
+    for n in 2 3; do docker exec "$NODE$n" sh -c 'rm -f /root/pf.dat' >/dev/null 2>&1; done
+    leaked=0
+    for n in 2 3; do ON "$n" 'test -e /root/pf.dat' && leaked=1; done
+    if [ "$leaked" != 0 ]; then
+        bad "pf.dat is present on a target node -- staging test would be meaningless"
+    else
+        out=$(RUN 'cd /root && prterun --host node2:1,node3:1 -np 2 --map-by node \
+                     --preload-files /root/pf.dat -- sh -c "cat pf.dat"' 2>&1); rc=$?
+        hits=$(echo "$out" | grep -c 'PRELOADED-DATA-OK')
+        [ "$rc" = 0 ] && [ "$hits" = 2 ] \
+            && ok "preload-files staged from node1 and read by both remote ranks" \
+            || bad "preload-files cross-node failed (rc=$rc, hits=$hits): $(echo "$out" | tr '\n' ' ')"
+        # and it is a real file in the working directory, not a link into a
+        # session dir that will be gone with the DVM
+        placed=0
+        for n in 2 3; do
+            ON "$n" 'test -f /root/pf.dat && ! test -L /root/pf.dat' && placed=$((placed+1))
+        done
+        [ "$placed" = 2 ] && ok "the staged file is a real file in each node's working directory" \
+                          || bad "expected pf.dat placed as a regular file on node2+node3, got $placed"
+    fi
+
+    banner "filem: --preload-files refuses to overwrite a different file"
+    # The safety rule: a file of that name that is NOT what was to be staged
+    # belongs to the user, so the launch is refused rather than clobbering it.
+    # node3 keeps the identical copy from the case above, which must stay
+    # quiet -- only node2's differing file may fail the job.
+    docker exec "${NODE}2" sh -c 'echo NODE2-PRECIOUS > /root/pf.dat' >/dev/null 2>&1
+    out=$(RUN 'cd /root && prterun --host node2:1,node3:1 -np 2 --map-by node \
+                 --preload-files /root/pf.dat -- sh -c "cat pf.dat"' 2>&1); rc=$?
+    kept=$(ON 2 'cat /root/pf.dat' | tr -d '\r')
+    [ "$rc" != 0 ] && [ "$kept" = "NODE2-PRECIOUS" ] \
+        && ok "collision refused the launch and left the user's file alone" \
+        || bad "collision not refused (rc=$rc, node2 file now '$kept')"
+    echo "$out" | grep -q 'already' \
+        && ok "collision reported to the user" \
+        || bad "collision produced no diagnostic: $(echo "$out" | tr '\n' ' ')"
+    c=$(prted_settle 10 1 2 3 4 5 6 7 8 9 10)
+    [ "$c" = 0 ] && ok "no daemons linger after the refused preload" || bad "$c stray prted after refused preload"
+    for n in 1 2 3; do docker exec "$NODE$n" sh -c 'rm -f /root/pf.dat' >/dev/null 2>&1; done
 
     banner "iof: stdin forwarded to a REMOTE proc (HNP -> prted -> proc)"
     # Rank 0 is mapped onto node2, not the head node, so every stdin byte must

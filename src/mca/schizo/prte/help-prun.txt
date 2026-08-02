@@ -659,6 +659,23 @@ I/O forwarding system
 
 while attempting to start process rank %lu.
 #
+[prun:preload-collision]
+
+%s was unable to launch the specified application because a file it was
+asked to preload could not be placed in the working directory: something
+else of that name is already there, and its contents are not what was to
+be staged.
+
+   Working directory: %s
+   Node: %s
+
+while attempting to start process rank %lu.
+
+PRRTE will not overwrite a file it did not put there. Remove or rename
+the file that is in the way, give the job a different working directory
+(see the "--wdir" option), or preload the file under a name that does
+not collide, and try again.
+#
 [prun:wdir-not-found]
 
 %s was unable to launch the specified application as it could not find
