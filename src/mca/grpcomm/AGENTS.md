@@ -266,6 +266,15 @@ constructs with the documented defaults (all rollup counters zero, the
 group tracker's info-lists opened) and destructs without leaking or
 crashing. Extend it when you add a class or change a constructor default.
 
+It also covers the **daemon-failure decisions**, which need no tree even
+though acting on them does: the departed-member predicate, and the fence
+fault handler's choice between re-converging a fence that merely lost a
+message path and ending one that lost a participant. Both read only the
+failed-daemon set and the job map, so the test stands those up by hand and
+stubs `prte_grpcomm.xcast` to capture the release the controller would
+broadcast. That is where to pin a change to the *policy*; the recovery
+itself still needs the dockerswarm harness.
+
 The live collectives are covered by the
 [dockerswarm harness](../../../contrib/dockerswarm/AGENTS.md): `xcast`
 and `fence` fall out of nearly every phase, and `test_grpcomm` drives
