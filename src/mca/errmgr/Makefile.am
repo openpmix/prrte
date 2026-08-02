@@ -30,10 +30,6 @@ libprtemca_errmgr_la_SOURCES += $(headers)
 # pkgdata setup
 EXTRA_DIST =
 
-# Conditionally install the header files
-prtedir = $(prteincludedir)/$(subdir)
-nobase_prte_HEADERS = $(headers)
-
 include base/Makefile.am
 
 distclean-local:

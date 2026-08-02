@@ -25,6 +25,5 @@ enable_mca_direct=pml-ob1
 with_memory_manager=no
 with_tm=no
 with_verbs=no
-with_devel_headers=yes
 with_portals=no
 with_valgrind=no

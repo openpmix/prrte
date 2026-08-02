@@ -30,10 +30,6 @@ EXTRA_DIST =
 headers = rmaps.h rmaps_types.h
 libprtemca_rmaps_la_SOURCES += $(headers)
 
-# Conditionally install the header files
-prtedir = $(prteincludedir)/$(subdir)
-nobase_prte_HEADERS = $(headers)
-
 include base/Makefile.am
 
 distclean-local:

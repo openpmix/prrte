@@ -134,20 +134,23 @@ AC_DEFINE_UNQUOTED(PRTE_MEMORY_SANITIZERS, $WANT_MEMORY_SANITIZERS,
                    [Whether or not we are using memory sanitizers])
 
 #
-# Do we want to install the internal devel headers?
+# There was a --with-devel-headers option here, installing PRRTE's internal
+# headers under $(includedir)/prte for "authors doing deeper integration".
+# It is gone, because there is nothing those headers can be compiled
+# against: PRRTE ships no linkable library at all -- it is a set of
+# executables -- so an installed header set has no consumer.  The option is
+# an inheritance from ORTE, which lived inside Open MPI and did have one.
 #
-AC_MSG_CHECKING([if want to install project-internal header files])
-AC_ARG_WITH(devel-headers,
-    AS_HELP_STRING([--with-devel-headers],
-                   [Normal PRTE users/applications do not need this.  Developer headers are only necessary for authors doing deeper integration (default: disabled).]))
-if test "$with_devel_headers" = "yes"; then
-    AC_MSG_RESULT([yes])
-    WANT_INSTALL_HEADERS=1
-else
-    AC_MSG_RESULT([no])
-    WANT_INSTALL_HEADERS=0
-fi
-AM_CONDITIONAL(WANT_INSTALL_HEADERS, test "$WANT_INSTALL_HEADERS" = 1)
+# It had also stopped working.  The generated headers (prte_config.h and
+# version.h) were collected into a nodist_headers variable that no _HEADERS
+# variable referenced, so they were never installed -- while
+# prte_config_top.h and prte_config_bottom.h, which each #error unless
+# PRTE_CONFIG_H is already defined, were.  Since every PRRTE header opens
+# with #include "prte_config.h", nothing in the installed tree could be
+# compiled.  Separately, the mca framework Makefile.am files set
+# nobase_prte_HEADERS *outside* the conditional, so their headers installed
+# on every build whether the option was given or not.
+#
 
 #
 # Do we want the pretty-print stack trace feature?

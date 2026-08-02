@@ -36,9 +36,14 @@ headers += \
         include/prte_stdatomic.h \
         include/prte_socket_errno.h
 
-nodist_headers += \
-        include/prte_config.h \
-        include/version.h
+# prte_config.h and version.h are deliberately absent from the list above.
+# They are generated into the build tree, and AC_CONFIG_HEADERS /
+# AC_CONFIG_FILES already own them.  They used to be collected into a
+# nodist_headers variable that no _HEADERS variable ever referenced -- so
+# they were never installed, which is one of the reasons the
+# --with-devel-headers option that would have installed them produced a
+# tree that could not be compiled.  That option is gone; see
+# config/prte_configure_options.m4.
 
 libprrte_la_SOURCES += \
         $(headers) \
