@@ -1082,8 +1082,13 @@ static void find_delete_tracker(prte_grpcomm_direct_group_signature_t *sig)
     prte_grpcomm_group_t *coll;
 
     PMIX_LIST_FOREACH(coll, &prte_mca_grpcomm_direct_component.group_ops, prte_grpcomm_group_t) {
-        // must match groupID's
-        if (0 == strcmp(sig->groupID, coll->sig->groupID)) {
+        // must match both groupID and operation - the same key get_tracker
+        // uses. A groupID alone does not identify a tracker: a construct and
+        // a destruct of the same group are distinct operations, and matching
+        // on the name alone lets one operation's release delete the other's
+        // tracker.
+        if (0 == strcmp(sig->groupID, coll->sig->groupID) &&
+            sig->op == coll->sig->op) {
             pmix_list_remove_item(&prte_mca_grpcomm_direct_component.group_ops, &coll->super);
             PMIX_RELEASE(coll);
             return;
