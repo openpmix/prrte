@@ -60,6 +60,14 @@ typedef struct {
     // as the first contribution to a brand-new operation and build a tracker
     // that nothing will ever complete or delete.
     pmix_list_t completed_group_ops;
+    // The collective recovery epoch for this daemon. A daemon failure
+    // invalidates every in-flight rollup, because how many contributions each
+    // daemon expects is derived from the routing tree. Recovery is a
+    // simultaneous restart across the DVM, and this counter is what tells one
+    // round from the next, so a contribution still in flight from before the
+    // failure can be recognized as stale. Shared by fence and group: one
+    // failure, one restart, one epoch.
+    uint32_t recovery_epoch;
 } prte_grpcomm_direct_component_t;
 
 #define PRTE_GRPCOMM_GROUP_MEMO_MAX 64
@@ -71,9 +79,25 @@ typedef struct {
 } prte_grpcomm_group_memo_t;
 PMIX_CLASS_DECLARATION(prte_grpcomm_group_memo_t);
 
-/* Exported for the unit test: was this member hosted by a daemon that has
- * since failed? */
-PRTE_MODULE_EXPORT bool prte_grpcomm_direct_group_member_departed(const pmix_proc_t *member);
+/* Was this process hosted by a daemon that has since failed? A wildcard rank
+ * names a whole namespace rather than one process and so is never answered
+ * here - use prte_grpcomm_direct_procs_lost() for a set that may contain one.
+ * Exported so the unit test can drive it against a synthetic failed set. */
+PRTE_MODULE_EXPORT bool prte_grpcomm_direct_proc_departed(const pmix_proc_t *proc);
+
+/* Did this set of participants lose anyone to a failed daemon? Unlike the
+ * single-process test, a wildcard entry is expanded through the job map, so
+ * a collective whose membership is written as a whole namespace is answered
+ * correctly. */
+PRTE_MODULE_EXPORT bool prte_grpcomm_direct_procs_lost(const pmix_proc_t *procs, size_t nprocs);
+
+/* Advance the recovery epoch and restart every in-flight collective at it.
+ * Idempotent: an epoch at or below the current one does nothing. */
+PRTE_MODULE_EXPORT void prte_grpcomm_direct_advance_epoch(uint32_t to);
+
+/* Per-collective halves of the restart, called only by the above. */
+void prte_grpcomm_direct_group_restart(void);
+void prte_grpcomm_direct_fence_restart(void);
 
 PRTE_MODULE_EXPORT extern prte_grpcomm_direct_component_t prte_mca_grpcomm_direct_component;
 extern prte_grpcomm_base_module_t prte_grpcomm_direct_module;
@@ -134,6 +158,15 @@ typedef struct {
     size_t nexpected;
     /* number reported in */
     size_t nreported;
+    // Which child subtrees have reported, keyed the same way the group
+    // tracker does it - see the note there. A fence replays its
+    // contributions on a fault too, so the same duplicate-proofing applies.
+    pmix_bitmap_t reported_slots;
+    bool self_reported;
+    bool converged;
+    bool aborting;
+    // this daemon's own contribution, saved so a fault can replay it
+    pmix_data_buffer_t *my_contribution;
     /* controls values */
     int timeout;
     /* callback function */

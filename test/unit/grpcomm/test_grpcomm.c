@@ -346,7 +346,7 @@ static int test_member_departed(void)
      * fault-free collective takes, so it must not even consult the job map */
     PMIX_LOAD_PROCID(&member, "no-such-nspace", 0);
     CHECK("departed: clean failed set says no",
-          !prte_grpcomm_direct_group_member_departed(&member));
+          !prte_grpcomm_direct_proc_departed(&member));
 
     /* mark daemon 1 as failed and hang a job off daemons 0 and 1 */
     pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, 1);
@@ -370,22 +370,22 @@ static int test_member_departed(void)
     /* rank 0 lives on the surviving daemon, rank 1 on the failed one */
     PMIX_LOAD_PROCID(&member, jdata->nspace, 0);
     CHECK("departed: member on a live daemon survives",
-          !prte_grpcomm_direct_group_member_departed(&member));
+          !prte_grpcomm_direct_proc_departed(&member));
     PMIX_LOAD_PROCID(&member, jdata->nspace, 1);
     CHECK("departed: member on a failed daemon departed",
-          prte_grpcomm_direct_group_member_departed(&member));
+          prte_grpcomm_direct_proc_departed(&member));
 
     /* a wildcard names a namespace, not a process, so it is never resolvable
      * to a single daemon and must not be reported as departed */
     PMIX_LOAD_PROCID(&member, jdata->nspace, PMIX_RANK_WILDCARD);
     CHECK("departed: wildcard is not a departed member",
-          !prte_grpcomm_direct_group_member_departed(&member));
+          !prte_grpcomm_direct_proc_departed(&member));
 
     /* an unresolvable member is treated as departed rather than as an error -
      * losing the mapping is what a node being torn down looks like */
     PMIX_LOAD_PROCID(&member, "ft-test-missing", 0);
     CHECK("departed: unresolvable member counts as departed",
-          prte_grpcomm_direct_group_member_departed(&member));
+          prte_grpcomm_direct_proc_departed(&member));
 
     PMIX_DESTRUCT(&prte_rml_base.failed_dmns);
     return failures;

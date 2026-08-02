@@ -43,39 +43,17 @@ static void check_complete(prte_grpcomm_group_t *coll);
 static void group_timeout(int sd, short args, void *cbdata);
 static bool group_op_completed(prte_grpcomm_direct_group_signature_t *sig);
 static void group_op_forget(prte_grpcomm_direct_group_signature_t *sig);
-static void advance_group_epoch(uint32_t to);
 #if PRTE_PMIX_HAVE_GROUP_FT
 static void collect_departed(prte_grpcomm_group_t *coll);
 #endif
 
-/* The group recovery epoch for this daemon.
- *
- * A daemon failure invalidates every in-flight group rollup: the number of
- * contributions each daemon should expect is derived from the routing tree,
- * and the tree just changed shape.  Recovery is a simultaneous restart -
- * every daemon resets its trackers, recomputes what it expects from the
- * repaired tree, and re-injects the contribution it originally made - and the
- * epoch is what tells the restarts apart, so a contribution still in flight
- * from before the failure is recognizable as stale and discarded rather than
- * counted against the new round.
- *
- * It is per-daemon rather than per-tracker deliberately.  Trackers are created
- * lazily and destroyed on release, so a counter living on one cannot survive
- * the gap; a daemon-wide counter also covers a tracker that did not yet exist
- * when the failure landed.
- *
- * What makes a simultaneous restart possible without a protocol of its own is
- * the global fault scope: it is delivered to every daemon by one broadcast,
- * in the same order everywhere, after the routing tree has been repaired.
- * DAEMON_DIED is in the xcast "process first" set, so a daemon hands the
- * notice to its own delivery before forwarding it, and libevent runs that
- * active event before the next round of socket reads - so a daemon has
- * advanced its epoch before it can read any contribution a child sent after
- * advancing its own.  A contribution stamped newer than our epoch should
- * therefore be impossible; we handle one anyway by adopting the epoch, which
- * is exactly what the fault handler would have done a moment later.
+/* The recovery epoch lives on the component and is shared with fence: one
+ * failure means one restart of every collective in flight, so there is one
+ * counter. See the commentary on recovery_epoch in grpcomm_direct.h for why a
+ * daemon-wide counter rather than a per-tracker one, and for the ordering
+ * argument that makes a simultaneous restart possible without a protocol of
+ * its own.
  */
-static uint32_t group_epoch = 0;
 
 /* Frame a contribution with the current epoch. The body is copied, not
  * consumed, so the caller keeps ownership of it. */
@@ -83,7 +61,7 @@ static int pack_epoch_frame(pmix_data_buffer_t *framed, pmix_data_buffer_t *body
 {
     pmix_status_t rc;
 
-    rc = PMIx_Data_pack(NULL, framed, &group_epoch, 1, PMIX_UINT32);
+    rc = PMIx_Data_pack(NULL, framed, &prte_mca_grpcomm_direct_component.recovery_epoch, 1, PMIX_UINT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
@@ -234,7 +212,7 @@ static void request_group_cancel(prte_pmix_grp_caddy_t *cd)
     /* every message on the GROUP tag opens with the epoch, so the receiver
      * can read it before it knows what kind of message this is - a cancel
      * carries one even though nothing filters it against the epoch */
-    rc = PMIx_Data_pack(NULL, relay, &group_epoch, 1, PMIX_UINT32);
+    rc = PMIx_Data_pack(NULL, relay, &prte_mca_grpcomm_direct_component.recovery_epoch, 1, PMIX_UINT32);
     if (PMIX_SUCCESS == rc) {
         rc = pack_signature(relay, &sig);
     }
@@ -268,19 +246,8 @@ ack:
  * derived state that a torn-down node can make unresolvable. */
 static bool group_lost_member(prte_grpcomm_group_t *coll)
 {
-    size_t n;
-
-    for (n = 0; n < coll->sig->nmembers; n++) {
-        if (prte_grpcomm_direct_group_member_departed(&coll->sig->members[n])) {
-            return true;
-        }
-    }
-    for (n = 0; n < coll->sig->naddmembers; n++) {
-        if (prte_grpcomm_direct_group_member_departed(&coll->sig->addmembers[n])) {
-            return true;
-        }
-    }
-    return false;
+    return prte_grpcomm_direct_procs_lost(coll->sig->members, coll->sig->nmembers)
+           || prte_grpcomm_direct_procs_lost(coll->sig->addmembers, coll->sig->naddmembers);
 }
 
 /* Is this entry one of the members we have determined to be lost? Used to keep
@@ -303,21 +270,18 @@ static bool member_is_departed(prte_grpcomm_group_t *coll, const pmix_proc_t *me
     return false;
 }
 
-/* Restart every in-flight rollup at a new epoch. Every daemon does this, for
- * every tracker, on the same broadcast - a partial restart, where one daemon
- * re-sends into a parent that did not reset, would double-count that subtree
- * and complete the collective with another one missing. */
-static void advance_group_epoch(uint32_t to)
+/* Restart every in-flight group rollup at the epoch the component has just
+ * moved to. The caller is prte_grpcomm_direct_advance_epoch(), which is what
+ * guarantees every daemon does this on the same broadcast - a partial restart,
+ * where one daemon re-sends into a parent that did not reset, would
+ * double-count that subtree and complete the collective with another one
+ * missing. */
+void prte_grpcomm_direct_group_restart(void)
 {
     prte_grpcomm_group_t *coll, *nxt;
     pmix_data_buffer_t *framed;
     size_t n;
     int rc;
-
-    if (to <= group_epoch) {
-        return;
-    }
-    group_epoch = to;
 
     PMIX_LIST_FOREACH_SAFE(coll, nxt, &prte_mca_grpcomm_direct_component.group_ops,
                            prte_grpcomm_group_t) {
@@ -354,7 +318,7 @@ static void advance_group_epoch(uint32_t to)
                             "%s grpcomm:direct:group restarting \"%s\" at epoch %u, "
                             "nexpected now %d",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->sig->groupID,
-                            (unsigned) group_epoch, (int) coll->nexpected);
+                            (unsigned) prte_mca_grpcomm_direct_component.recovery_epoch, (int) coll->nexpected);
 
         if (NULL == coll->my_contribution) {
             /* nothing of our own to re-offer - we are relaying for our
@@ -457,7 +421,6 @@ void prte_grpcomm_direct_group_fault_handler(const prte_rml_recovery_status_t* s
         }
     }
 
-    advance_group_epoch(group_epoch + 1);
 }
 
 
@@ -810,23 +773,23 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
      * are exempt: they bypass the rollup tree entirely, so a tree repair does
      * not invalidate them and there is nothing to restart. */
     if (0 == sig->bootstrap && !sig->follower) {
-        if (stamp < group_epoch) {
+        if (stamp < prte_mca_grpcomm_direct_component.recovery_epoch) {
             /* sent before the failure this daemon has already recovered from,
              * so it belongs to a round that no longer exists */
             pmix_output_verbose(1, prte_grpcomm_base_framework.framework_output,
                                 "%s grpcomm:direct group recv stale epoch %u (at %u) - dropping",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                (unsigned) stamp, (unsigned) group_epoch);
+                                (unsigned) stamp, (unsigned) prte_mca_grpcomm_direct_component.recovery_epoch);
             PMIX_RELEASE(sig);
             return;
         }
-        if (stamp > group_epoch) {
-            /* Should be unreachable - see the group_epoch commentary. Adopt
+        if (stamp > prte_mca_grpcomm_direct_component.recovery_epoch) {
+            /* Should be unreachable - see the recovery_epoch commentary in grpcomm_direct.h. Adopt
              * it rather than dropping the contribution: that is precisely
              * what our own fault notice would do, just sooner. Log it so the
              * ordering assumption stays falsifiable. */
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_ORDER_MSG);
-            advance_group_epoch(stamp);
+            prte_grpcomm_direct_advance_epoch(stamp);
         }
     }
 
@@ -2270,41 +2233,6 @@ static prte_grpcomm_group_t *get_tracker(prte_grpcomm_direct_group_signature_t *
     return coll;
 }
 
-/* Was this member hosted by a daemon that has since failed?
- *
- * A wildcard member names a whole namespace rather than one process, so it
- * cannot be answered proc-by-proc; the caller enumerates the job map for those
- * instead. A member we cannot resolve at all is treated as departed rather
- * than as an error: the usual reason to lose the mapping is that the node it
- * lived on is being torn down, which is exactly the case we are trying to
- * describe.
- *
- * Exported so the unit test can drive it against a synthetic failed set. */
-bool prte_grpcomm_direct_group_member_departed(const pmix_proc_t *member)
-{
-    prte_job_t *jdata;
-    prte_proc_t *proc;
-
-    if (PMIX_RANK_WILDCARD == member->rank || PMIX_RANK_INVALID == member->rank) {
-        return false;
-    }
-    if (pmix_bitmap_is_clear(&prte_rml_base.failed_dmns)) {
-        /* nothing has failed, so nothing can have departed - and this keeps
-         * the common path from walking the job map at all */
-        return false;
-    }
-    jdata = prte_get_job_data_object(member->nspace);
-    if (NULL == jdata) {
-        return true;
-    }
-    proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, member->rank);
-    if (NULL == proc || NULL == proc->node || NULL == proc->node->daemon) {
-        return true;
-    }
-    return pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns,
-                                  proc->node->daemon->name.rank);
-}
-
 /* Collect the members lost with a failed daemon. Wildcard members are expanded
  * through the job map here, because the final membership keeps the wildcard
  * entry as-is - we cannot prune a namespace proc-by-proc - but the clients
@@ -2329,7 +2257,7 @@ static void collect_departed(prte_grpcomm_group_t *coll)
     for (k = 0; k < 2; k++) {
         for (n = 0; n < nset[k]; n++) {
             if (PMIX_RANK_WILDCARD != set[k][n].rank) {
-                if (prte_grpcomm_direct_group_member_departed(&set[k][n])) {
+                if (prte_grpcomm_direct_proc_departed(&set[k][n])) {
                     nm = PMIX_NEW(prte_namelist_t);
                     memcpy(&nm->name, &set[k][n], sizeof(pmix_proc_t));
                     pmix_list_append(&dl, &nm->super);
