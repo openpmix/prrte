@@ -341,8 +341,23 @@ docker cp prte-node1:/tmp/vg-hnp.txt .
 A daemon can be traced the same way by pointing `prte_launch_agent` at a
 wrapper script that execs `valgrind prted`. Note this is deliberately **not**
 part of `run-tests.sh`: a valgrind run is many times slower than the suite it
-would be embedded in. Compare totals before and after a change rather than
-chasing an absolute number — PMIx and hwloc contribute their own.
+would be embedded in.
+
+**For `definitely lost` the number to expect is zero**, and that command above
+is the one to check it with. Read `still reachable` differently — PMIx, hwloc
+and libevent all keep live state at exit, so compare totals before and after
+rather than chasing an absolute there.
+
+Two things this found that are easy to reintroduce:
+
+- A record with **direct bytes but zero indirect bytes** means a container was
+  dropped after its payload was moved out — someone unloaded a
+  `pmix_data_buffer_t` and never released the shell. That was every
+  inter-daemon reliable message (`prte_relm_start_msg`).
+- The leak you are looking for may only be on an **error** path, so run a
+  command line that *fails*, not just one that works. `prterun -n 1 --display
+  map --display cpus hostname` is refused for the repeated option, and that
+  return leaked the parser's argv until it was fixed.
 
 ## 6. What "success" looks like
 

@@ -840,8 +840,10 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
                                 hostfiles, hosts, jobdata);
                 if (PRTE_SUCCESS != rc) {
                     /* Assume that the error message has already been
-                     printed; */
+                     printed; create_app may still have filled in "env"
+                     before it failed, and it belongs to us either way */
                     PMIx_Argv_free(temp_argv);
+                    PMIx_Argv_free(env);
                     return rc;
                 }
                 if (made_app) {
@@ -863,6 +865,12 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
         rc = create_app(schizo, temp_argv, &app, &made_app, &env,
                         hostfiles, hosts, jobdata);
         if (PRTE_SUCCESS != rc) {
+            /* this return used to skip the two frees below entirely, so
+             * any command line that fails its final segment leaked both -
+             * "--display map --display cpus" is enough, since a repeated
+             * option is refused here */
+            PMIx_Argv_free(temp_argv);
+            PMIx_Argv_free(env);
             return rc;
         }
         if (made_app) {
