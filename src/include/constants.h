@@ -221,7 +221,29 @@ enum {
     PRTE_ERR_SLURM_SUBMIT_FAILURE = (PRTE_ERR_BASE - 153),
     PRTE_ERR_SLURM_CANCEL_FAILURE = (PRTE_ERR_BASE - 154),
     PRTE_ERR_SLURM_SHRINK_FAILURE = (PRTE_ERR_BASE - 155),
-    PRTE_ERR_PRELOAD_CONFLICT = (PRTE_ERR_BASE - 156)
+    PRTE_ERR_PRELOAD_CONFLICT = (PRTE_ERR_BASE - 156),
+
+    /* Not an error code.  Nothing returns it, nothing tests for it, and
+     * prte_strerror() deliberately has no case for it: it is one past the
+     * last assigned offset, and it exists so that the code that sweeps this
+     * list has a bound it does not have to guess.
+     *
+     * Bump it in the same edit that appends a code above.  It sits here,
+     * adjacent to where you are appending, for exactly that reason -- the
+     * two copies of this bound that used to live in test/unit/include and
+     * test/unit/util both went stale on the first code added after they
+     * were written, which silently stopped the string sweep one code short
+     * of the end.  Forgetting is now a test failure rather than a quiet
+     * loss of coverage: test/unit/util checks that PRTE_ERR_MAX itself has
+     * no string and that the code just above it does, so a bound that is
+     * either too low or too high is caught.
+     *
+     * There was an earlier PRTE_ERR_MAX, removed because nothing consumed
+     * it -- and because, computed from a base whose sign had been dropped,
+     * it evaluated to PRTE_SUCCESS.  This one has consumers, and a test
+     * that notices when it lies.
+     */
+    PRTE_ERR_MAX = (PRTE_ERR_BASE - 157)
 };
 
 END_C_DECLS

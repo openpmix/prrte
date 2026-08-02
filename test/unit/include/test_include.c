@@ -91,12 +91,18 @@
         }                                                     \
     } while (0)
 
-/* Where the two documentation groups in constants.h start and end. Kept up
- * to date by hand -- but unlike a table of code *names*, going stale here
- * only weakens the sweep, it cannot make it wrong. */
+/* Where the two documentation groups in constants.h start and end. The
+ * group boundaries are a convention for readers and are stated by hand; the
+ * *end* of the list is not, because a hand-written end goes stale silently.
+ * This one used to read "155 / PRTE_ERR_SLURM_SHRINK_FAILURE" and stayed
+ * that way when PRTE_ERR_PRELOAD_CONFLICT was appended at offset 156, so the
+ * sweep below stopped one short of the newest code -- the code most likely
+ * to be wrong. It now comes from PRTE_ERR_MAX, which lives in constants.h
+ * next to the append site and which test/unit/util fails on if it is
+ * stale. */
 #define GROUP1_LAST  72  /* PRTE_OPERATION_SUCCEEDED */
 #define GROUP2_FIRST 101 /* PRTE_ERR_RECV_LESS_THAN_POSTED */
-#define GROUP2_LAST  155 /* PRTE_ERR_SLURM_SHRINK_FAILURE */
+#define GROUP2_LAST  (PRTE_ERR_BASE - PRTE_ERR_MAX - 1)
 
 /* ------------------------------------------------------------------ */
 /* error code numbering                                               */
@@ -137,10 +143,15 @@ static int test_error_code_numbering(void)
     CHECK("the last code is negative", (PRTE_ERR_BASE - GROUP2_LAST) < 0);
 
     CHECK("PRTE_ERROR is the first code", (PRTE_ERR_BASE - 1) == PRTE_ERROR);
-    CHECK("the last code is where the header says",
-          (PRTE_ERR_BASE - GROUP2_LAST) == PRTE_ERR_SLURM_SHRINK_FAILURE);
     CHECK("the second group starts where the header says",
           (PRTE_ERR_BASE - GROUP2_FIRST) == PRTE_ERR_RECV_LESS_THAN_POSTED);
+
+    /* PRTE_ERR_MAX is one past the end, so it must sit below every code and
+     * must not itself be one. The check that it is not stale -- that the
+     * offset just inside it is a real, named code -- needs prte_strerror()
+     * and lives in test/unit/util; here we only pin the arithmetic. */
+    CHECK("the bound is below the last code", PRTE_ERR_MAX < PRTE_ERR_PRELOAD_CONFLICT);
+    CHECK("the bound is one past the end", (PRTE_ERR_MAX + 1) == PRTE_ERR_PRELOAD_CONFLICT);
 
     /* PRTE_ERROR must NOT be PMIX_ERROR any more. They were both -1, which
      * made a PRRTE code handed to PMIx unconverted invisible in the one
