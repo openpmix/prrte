@@ -493,9 +493,12 @@ DISPLAY:
                 pmix_output(prte_clean_output,
                             "=================================================================\n");
                 pmix_output(prte_clean_output, "TOPOLOGY FOR NODE %s", node->name);
-                prte_hwloc_print(&ptr, NULL, node->topology->topo);
-                pmix_output(prte_clean_output, "%s", ptr);
-                free(ptr);
+                if (PRTE_SUCCESS == prte_hwloc_print(&ptr, NULL, node->topology->topo)) {
+                    pmix_output(prte_clean_output, "%s", ptr);
+                    free(ptr);
+                } else {
+                    pmix_output(prte_clean_output, "TOPOLOGY NOT AVAILABLE");
+                }
                 pmix_output(prte_clean_output,
                             "=================================================================\n");
             }
@@ -509,9 +512,12 @@ DISPLAY:
                 pmix_output(prte_clean_output,
                             "=================================================================\n");
                 pmix_output(prte_clean_output, "TOPOLOGY FOR NODE %s", node->name);
-                prte_hwloc_print(&ptr, NULL, node->topology->topo);
-                pmix_output(prte_clean_output, "%s", ptr);
-                free(ptr);
+                if (PRTE_SUCCESS == prte_hwloc_print(&ptr, NULL, node->topology->topo)) {
+                    pmix_output(prte_clean_output, "%s", ptr);
+                    free(ptr);
+                } else {
+                    pmix_output(prte_clean_output, "TOPOLOGY NOT AVAILABLE");
+                }
                 pmix_output(prte_clean_output,
                             "=================================================================\n");
             }

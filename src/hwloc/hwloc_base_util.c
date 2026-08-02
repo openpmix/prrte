@@ -74,6 +74,12 @@ bool prte_hwloc_base_core_cpus(hwloc_topology_t topo)
     }
     /* see if the cpuset of a core match that of a PU */
     pu = hwloc_get_obj_by_type(topo, HWLOC_OBJ_PU, 0);
+    if (NULL == pu) {
+        /* a topology with cores but no PUs answers no question we can
+         * usefully ask here, and dereferencing the missing PU took the
+         * caller down */
+        return false;
+    }
     /* if the two are equal, then we really don't have
      * cores in this topology */
     if (hwloc_bitmap_isequal(obj->cpuset, pu->cpuset)) {
@@ -155,7 +161,7 @@ hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
 {
     hwloc_cpuset_t avail = NULL, pucpus, res;
     char **ranges = NULL, **range = NULL;
-    int idx, cpu, start, end;
+    int idx, cpu, start, end, nranges;
     hwloc_obj_t pu;
     char **cache = NULL;
     char tmp[256];
@@ -163,11 +169,12 @@ hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
 
     /* find the specified logical cpus */
     ranges = PMIx_Argv_split(*cpulist, ',');
+    nranges = PMIx_Argv_count(ranges);
     avail = hwloc_bitmap_alloc();
     hwloc_bitmap_zero(avail);
     res = hwloc_bitmap_alloc();
     pucpus = hwloc_bitmap_alloc();
-    for (idx = 0; idx < PMIx_Argv_count(ranges); idx++) {
+    for (idx = 0; idx < nranges; idx++) {
         range = PMIx_Argv_split(ranges[idx], '-');
         bad = false;
         switch (PMIx_Argv_count(range)) {
@@ -477,12 +484,11 @@ int prte_hwloc_base_get_topology(void)
     * that aren't really of interest
     */
     obj = hwloc_get_root_obj(prte_hwloc_topology);
-    for (i = 0; i < obj->infos_count; i++) {
-        if (NULL == obj->infos[i].name || NULL == obj->infos[i].value) {
-            continue;
-        }
-        if (0 == strncmp(obj->infos[i].name, "HostName", strlen("HostName")) ||
-            0 == strncmp(obj->infos[i].name, "ProcessName", strlen("ProcessName"))) {
+    i = 0;
+    while (i < obj->infos_count) {
+        if (NULL != obj->infos[i].name && NULL != obj->infos[i].value &&
+            (0 == strcmp(obj->infos[i].name, "HostName") ||
+             0 == strcmp(obj->infos[i].name, "ProcessName"))) {
             free(obj->infos[i].name);
             free(obj->infos[i].value);
             /* left justify the array */
@@ -492,7 +498,12 @@ int prte_hwloc_base_get_topology(void)
             obj->infos[obj->infos_count - 1].name = NULL;
             obj->infos[obj->infos_count - 1].value = NULL;
             obj->infos_count--;
+            /* the entry that just shifted into slot i has not been examined
+             * yet, so do not advance - two removable entries side by side
+             * used to leave the second one behind */
+            continue;
         }
+        i++;
     }
 
     /* fill prte_cache_line_size global with the smallest L2 cache
@@ -760,8 +771,6 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
     int package_id, core_id;
     hwloc_obj_t package, core;
     hwloc_obj_type_t obj_type = HWLOC_OBJ_CORE;
-    unsigned int npus;
-    bool hwthreadcpus = false;
 
     package_core = PMIx_Argv_split(package_core_list, ':');
     if (NULL == package_core || !parse_cpu_id(package_core[0], &package_id)) {
@@ -782,10 +791,7 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
      */
     if (NULL == prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_CORE, 0)) {
         obj_type = HWLOC_OBJ_PU;
-        hwthreadcpus = true;
     }
-    npus = prte_hwloc_base_get_npus(topo, hwthreadcpus, NULL, package);
-    npus = npus * package_id;
 
     for (i = 1; NULL != package_core[i]; i++) {
         if ('C' == package_core[i][0] || 'c' == package_core[i][0]) {
@@ -812,9 +818,14 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
                         rc = PRTE_ERR_BAD_PARAM;
                         break;
                     }
-                    core_id += npus;
-                    /* get that object */
-                    core = prte_hwloc_base_get_obj_by_type(topo, obj_type, core_id);
+                    /* The id is relative to this package. Ask hwloc for the
+                     * nth object *inside* the package's cpuset rather than
+                     * offsetting into the global index by "cores per package
+                     * times package id" - that arithmetic silently names an
+                     * object in the wrong package the moment two packages
+                     * do not hold the same number of them. */
+                    core = hwloc_get_obj_inside_cpuset_by_type(topo, package->cpuset,
+                                                               obj_type, core_id);
                     if (NULL == core) {
                         rc = PRTE_ERR_NOT_FOUND;
                         break;
@@ -835,10 +846,10 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
                     return PRTE_ERR_BAD_PARAM;
                 }
                 for (j = lower_range; j <= upper_range; j++) {
-                    /* get the indexed core from this package */
-                    core_id = j + npus;
-                    /* get that object */
-                    core = prte_hwloc_base_get_obj_by_type(topo, obj_type, core_id);
+                    /* the indexed object within this package - see the note
+                     * on the single-id case above */
+                    core = hwloc_get_obj_inside_cpuset_by_type(topo, package->cpuset,
+                                                               obj_type, j);
                     if (NULL == core) {
                         rc = PRTE_ERR_NOT_FOUND;
                         break;
@@ -1457,8 +1468,18 @@ int prte_hwloc_print(char **output, char *prefix, hwloc_topology_t src)
     hwloc_obj_t obj;
     char *tmp = NULL;
 
+    /* every caller hands us a topology out of prte_node_topologies and
+     * prints the result unconditionally, so answer rather than crash if the
+     * node's topology has not arrived */
+    *output = NULL;
+    if (NULL == src) {
+        return PRTE_ERR_NOT_FOUND;
+    }
     /* get root object */
     obj = hwloc_get_root_obj(src);
+    if (NULL == obj) {
+        return PRTE_ERR_NOT_FOUND;
+    }
     /* print it */
     print_hwloc_obj(&tmp, prefix, src, obj);
     *output = tmp;

@@ -350,6 +350,7 @@ static int test_cpu_list_parse(void)
     int failures = 0;
     hwloc_topology_t topo;
     hwloc_cpuset_t mask;
+    hwloc_obj_t pkg;
     int rc;
 
     topo = make_topo("package:2 core:4 pu:2");
@@ -392,9 +393,36 @@ static int test_cpu_list_parse(void)
     CHECK("package wildcard parses", PRTE_SUCCESS == rc);
     CHECK("package wildcard covers the package", 8 == hwloc_bitmap_weight(mask));
 
+    /* A core id in "package:core" notation is relative to that package. The
+     * lookup used to reach it by adding "cores per package times package id"
+     * to a GLOBAL index, which names a core in the wrong package as soon as
+     * two packages hold different numbers of them - so assert not just how
+     * many cpus came back but that they lie inside the package asked for. */
     rc = prte_hwloc_base_cpu_list_parse("P1:0", topo, false, mask);
     CHECK("package:core parses", PRTE_SUCCESS == rc);
     CHECK("package:core covers one core", 2 == hwloc_bitmap_weight(mask));
+    pkg = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 1);
+    CHECK("package 1 resolves", NULL != pkg);
+    if (NULL != pkg) {
+        CHECK("package:core stays inside the package named",
+              hwloc_bitmap_isincluded(mask, pkg->cpuset));
+    }
+
+    rc = prte_hwloc_base_cpu_list_parse("P1:0-2", topo, false, mask);
+    CHECK("package:core-range parses", PRTE_SUCCESS == rc);
+    CHECK("package:core-range covers three cores", 6 == hwloc_bitmap_weight(mask));
+    if (NULL != pkg) {
+        CHECK("package:core-range stays inside the package named",
+              hwloc_bitmap_isincluded(mask, pkg->cpuset));
+    }
+
+    rc = prte_hwloc_base_cpu_list_parse("P1:0,2", topo, false, mask);
+    CHECK("package:core-list parses", PRTE_SUCCESS == rc);
+    CHECK("package:core-list covers two cores", 4 == hwloc_bitmap_weight(mask));
+    if (NULL != pkg) {
+        CHECK("package:core-list stays inside the package named",
+              hwloc_bitmap_isincluded(mask, pkg->cpuset));
+    }
 
     /* Everything below is a user-supplied name for something that does not
      * exist. Each of these used to reach an unchecked dereference of the
