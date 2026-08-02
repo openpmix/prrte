@@ -106,6 +106,41 @@ Consequences:
 
 ---
 
+## GOLDEN RULE: an hwloc object has four child lists, and `children[]` is one
+
+The same fact bites a second way, away from the counting wrappers. In
+hwloc 2.x an object's children are split across **four** separate lists:
+
+| List | Head | Count | Holds |
+|------|------|-------|-------|
+| normal | `obj->children[]` | `obj->arity` | packages, caches, cores, PUs, groups |
+| memory | `obj->memory_first_child` | `obj->memory_arity` | **NUMA nodes**, memcaches |
+| I/O | `obj->io_first_child` | `obj->io_arity` | bridges, PCI and OS devices |
+| Misc | `obj->misc_first_child` | `obj->misc_arity` | annotations |
+
+So **a recursive walk over `obj->children[0..arity)` visits no NUMA node
+and no device** — the same blind spot as a depth loop, wearing different
+clothes. `prte_hwloc_print()` — the whole of `--display topo` — was written
+that way, so it rendered a topology with no NUMA domains in it at all, on a
+runtime whose `--map-by numa` is usually the reason a user asked to see the
+topology in the first place. It also dropped every I/O object, which this
+directory goes out of its way to *keep* (`topology_set_flags()` asks hwloc
+for `HWLOC_TYPE_FILTER_KEEP_IMPORTANT`), so the network and GPU devices a
+user is looking for when they want to reason about locality were never
+shown either.
+
+**Use `hwloc_get_next_child()`** — it walks normal, then memory, then I/O,
+then Misc — and if you report a child *count*, sum all four arities:
+`obj->arity` alone makes a package holding a NUMA node read as though it
+held only its cores.
+
+Note that this is orthogonal to the `userdata` sweep below: nothing
+attaches PRRTE data to an I/O or Misc object, so
+`prte_hwloc_base_release_userdata()` is right to cover the normal depths
+plus `HWLOC_TYPE_DEPTH_NUMANODE` and no more.
+
+---
+
 ## Two kinds of `userdata`, hanging off the same pointer
 
 PRRTE stores two *different* PMIx objects on hwloc `userdata` pointers:

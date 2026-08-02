@@ -2995,6 +2995,20 @@ test_hwloc() {
     echo "$out" | grep -q 'Cpuset:  0x' \
         && ok "object cpusets were rendered" \
         || bad "no cpuset was rendered in the topology dump"
+    # The dump has to contain the levels PRRTE maps and binds to. NUMA is the
+    # one that was missing: hwloc 2.x hangs NUMA nodes off memory_first_child,
+    # not off the children[] array the renderer walked, so a user who ran
+    # "--display topo" to work out what "--map-by numa" would do got a
+    # topology with no NUMA domains in it at all. hwloc always synthesizes at
+    # least one NUMA node covering the machine, so this holds even here where
+    # sysfs reports none.
+    for lvl in Package Core PU NUMANode; do
+        echo "$out" | grep -q "Type: $lvl" \
+            && ok "--display topo shows $lvl objects" \
+            || bad "--display topo omitted every $lvl object"
+    done
+    cleanup_swarm
+
     cleanup_swarm
 
     banner "hwloc: per-object binding limits do not carry over between jobs"
