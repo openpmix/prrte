@@ -822,13 +822,13 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
      * controller from arbitrary daemons rather than up the routing tree, so a
      * subtree index is meaningless for them and they keep the leader/follower
      * counters. */
+    slot = -1;
     if (!coll->bootstrap) {
         if (sender->rank == PRTE_PROC_MY_NAME->rank) {
             if (coll->self_reported) {
                 PMIX_RELEASE(sig);
                 return;
             }
-            coll->self_reported = true;
         } else {
             slot = prte_rml_get_subtree_index(sender->rank);
             if (0 > slot) {
@@ -842,9 +842,7 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
                 PMIX_RELEASE(sig);
                 return;
             }
-            pmix_bitmap_set_bit(&coll->reported_slots, slot);
         }
-        coll->nreported++;
     }
 
     // unpack the local collective status
@@ -965,8 +963,16 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) coll->nfollowers_reported,
                              (int) coll->nfollowers);
     } else {
-        // group collective op - nreported was already bumped by the per-slot
-        // accounting above, which is what makes it duplicate-proof
+        /* the contribution is in - now commit the per-slot accounting for it.
+         * Doing it here rather than at the test above means a message that
+         * failed to parse cannot leave a subtree counted with none of its
+         * data merged. */
+        if (0 > slot) {
+            coll->self_reported = true;
+        } else {
+            pmix_bitmap_set_bit(&coll->reported_slots, slot);
+        }
+        coll->nreported++;
         pmix_output_verbose(1, prte_grpcomm_base_framework.framework_output,
                              "%s grpcomm:direct group recv nexpected %d nrep %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) coll->nexpected,

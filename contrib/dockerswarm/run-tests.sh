@@ -3352,6 +3352,77 @@ test_grpcomm_ft() {
     fi
     cleanup_swarm
 
+    banner "grpcomm: a daemon loss elsewhere does not disturb a live fence"
+    # The bystander case, and the reason the fence handler was changed. It
+    # used to kill the job whenever ANY daemon failed while ANY fence was in
+    # flight, without asking whether the two were related - and fences run
+    # constantly, so an unrelated failure anywhere was fatal. Here the fence
+    # spans node1 and node2 only, and the daemon that dies hosts none of it.
+    if prted_dvm_start 'node1:1,node2:1,node3:1,node4:1'; then
+        PRUN_BG /tmp/grp-fence1.out "--host node1:1,node2:1 -n 2 --map-by node $GC --fence --delay 12 fen1"
+        sleep 4
+        if ! ON 4 'pgrep -x prted' >/dev/null 2>&1; then
+            bad "node4 has no daemon to kill"
+        else
+            ON 4 'pkill -9 -x prted' >/dev/null 2>&1
+            n=0
+            while [ "$n" -lt 60 ]; do
+                RUN 'pgrep -x prun' >/dev/null 2>&1 || break
+                sleep 1; n=$((n+1))
+            done
+            out=$(RUN 'tr -d "\000" < /tmp/grp-fence1.out' 2>&1)
+            n=$(echo "$out" | grep -c 'FENCE PMIX_SUCCESS')
+            [ "$n" = 2 ] \
+                && ok "both ranks completed the fence despite an unrelated daemon dying" \
+                || bad "$n of 2 ranks completed the fence: $(echo "$out" | grep -E 'FENCE|FENCING' | tr '\n' ' ' | tail -c 250)"
+            RUN 'pgrep -x prte' >/dev/null 2>&1 \
+                && ok "...and the HNP survived" \
+                || bad "the HNP died over a fence it had no part in"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the fence bystander test"
+    fi
+    cleanup_swarm
+
+    banner "grpcomm: a fence that loses a participant fails, and only it"
+    # An allgather has no opt-in to running degraded - its answer is every
+    # participant's contribution - so a fence that really lost one cannot
+    # complete. It must say so to its own participants rather than activating
+    # a DVM-wide comm failure, which is what it used to do.
+    if prted_dvm_start 'node1:1,node2:1,node3:1,node4:1'; then
+        PRUN_BG /tmp/grp-fence2.out "--rtos recoverable,notifyerrors --host node1:1,node2:1,node3:1,node4:1 -n 4 --map-by node $GC --fence --delay 12 fen2"
+        sleep 4
+        if ! ON 4 'pgrep -x prted' >/dev/null 2>&1; then
+            bad "node4 has no daemon to kill"
+        else
+            ON 4 'pkill -9 -x prted' >/dev/null 2>&1
+            n=0
+            while [ "$n" -lt 60 ]; do
+                RUN 'pgrep -x prun' >/dev/null 2>&1 || break
+                sleep 1; n=$((n+1))
+            done
+            out=$(RUN 'tr -d "\000" < /tmp/grp-fence2.out' 2>&1)
+            # the three survivors must each be told the fence failed, rather
+            # than being left blocked in it
+            n=$(echo "$out" | grep -c '^GRP [0-2] FENCE ')
+            [ "$n" = 3 ] \
+                && ok "all 3 survivors were released from the fence" \
+                || bad "$n of 3 survivors got a fence result: $(echo "$out" | grep -E 'FENCE' | tr '\n' ' ' | tail -c 250)"
+            n=$(echo "$out" | grep -c 'FENCE PMIX_SUCCESS')
+            [ "$n" = 0 ] \
+                && ok "...and none of them was told the allgather succeeded" \
+                || bad "$n survivors were told a fence missing a participant had succeeded"
+            RUN 'pgrep -x prte' >/dev/null 2>&1 \
+                && ok "...and the DVM survived" \
+                || bad "the HNP died rather than failing the fence"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the fence participant-loss test"
+    fi
+    cleanup_swarm
+
     banner "grpcomm: the DVM still runs group constructs after a loss"
     # A recovery that leaves a tracker, a memo entry or a caddy behind shows
     # up as drift on the next operation rather than as a bad run of its own.
