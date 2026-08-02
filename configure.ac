@@ -426,7 +426,7 @@ AC_CHECK_HEADERS([arpa/inet.h dirent.h \
                   sys/types.h sys/uio.h sys/un.h net/uio.h sys/utsname.h sys/wait.h syslog.h \
                   termios.h unistd.h util.h malloc.h \
                   paths.h \
-                  ioLib.h sockLib.h hostLib.h stdatomic.h])
+                  stdatomic.h])
 
 # Needed to work around Darwin requiring sys/socket.h for
 # net/if.h
@@ -595,8 +595,6 @@ AC_CHECK_FUNC([htonl], [prte_have_htonl=yes], [prte_have_htonl=no])
 AS_IF([test "$prte_cv_htonl_define" = "yes" || test "$prte_have_htonl" = "yes"],
     [AC_DEFINE_UNQUOTED([HAVE_UNIX_BYTESWAP], [1],
         [whether unix byteswap routines -- htonl, htons, nothl, ntohs -- are available])])
-
-AC_CHECK_DECLS(__func__)
 
 # checkpoint results
 AC_CACHE_SAVE

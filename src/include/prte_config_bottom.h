@@ -365,16 +365,12 @@ static inline uint16_t ntohs(uint16_t netvar)
 }
 #    endif
 
-/*
- * Define __func__-preprocessor directive if the compiler does not
- * already define it.  Define it to __FILE__ so that we at least have
- * a clue where the developer is trying to indicate where the error is
- * coming from (assuming that __func__ is typically used for
- * printf-style debugging).
- */
-#    if defined(HAVE_DECL___FUNC__) && !HAVE_DECL___FUNC__
-#        define __func__ __FILE__
-#    endif
+/* There was a fallback here defining __func__ to __FILE__ where the
+ * compiler did not supply __func__, guarded on AC_CHECK_DECLS(__func__).
+ * C11 mandates __func__ (6.4.2.2) and PRRTE requires a C11 compiler --
+ * config/prte_setup_cc.m4 aborts configure otherwise -- so the fallback was
+ * unreachable, and the configure check that fed it has been dropped with
+ * it. */
 
 /* ensure the bool type is defined as it is used everywhere */
 #    include <stdbool.h>
@@ -444,23 +440,13 @@ static inline uint16_t ntohs(uint16_t netvar)
 #        endif
 #    endif
 
-#    ifdef MCS_VXWORKS
-/* VXWorks puts some common functions in oddly named headers.  Rather
-   than update all the places the functions are used, which would be a
-   maintenance disatster, just update here... */
-#        ifdef HAVE_IOLIB_H
-/* pipe(), ioctl() */
-#            include <ioLib.h>
-#        endif
-#        ifdef HAVE_SOCKLIB_H
-/* socket() */
-#            include <sockLib.h>
-#        endif
-#        ifdef HAVE_HOSTLIB_H
-/* gethostname() */
-#            include <hostLib.h>
-#        endif
-#    endif
+/* There was a VxWorks block here, pulling in <ioLib.h>, <sockLib.h> and
+ * <hostLib.h> for pipe()/ioctl(), socket() and gethostname().  It was
+ * guarded on MCS_VXWORKS -- a symbol that appears nowhere else in the tree
+ * and that neither configure.ac nor any macro under config/ has ever
+ * defined, so it could not be reached however PRRTE was configured.  The
+ * three AC_CHECK_HEADERS entries that existed only to feed it have been
+ * dropped with it. */
 
 /* If we're in C++, then just undefine restrict and then define it to
    nothing.  "restrict" is not part of the C++ language, and we don't
