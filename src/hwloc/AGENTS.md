@@ -178,6 +178,24 @@ index past a qualifier's name to find its `=value`** — use
 `pmix_cli_qualifier_value()`. `limit=N` lands in a `uint16_t` attribute, so
 a value that does not fit has to be rejected rather than truncated.
 
+Two ordering rules the parser now encodes:
+
+- **`pmix_check_cli_option()` compares only `min(strlen(a), strlen(b))`
+  characters, so an empty string matches whatever it is tested against
+  first.** The policy word is empty for the `--bind-to :qualifier` form,
+  and that form used to fall straight into the first arm of the chain —
+  `none` — silently disabling binding *and* dragging the default mapping
+  policy from `BYCORE` down to `BYSLOT` with it. A qualifier with no policy
+  means "the binding I would otherwise have got, plus this qualifier",
+  exactly as `--map-by :OVERSUBSCRIBE` does; leave the policy bits at zero
+  so `PRTE_SET_DEFAULT_BINDING_POLICY` can fill them in around the
+  qualifiers later. Any new empty-string-versus-option test here needs the
+  same guard.
+- **Resolve the policy word before applying any qualifier**, because
+  `report` and `limit=N` write to `jdata->attributes`. Parsed the other way
+  round, `--bind-to sockets:report` recorded report-bindings on the job and
+  *then* rejected the request.
+
 ---
 
 ## GOLDEN RULE: a cpuset's bits are PU OS indices; a cpu *number* is not

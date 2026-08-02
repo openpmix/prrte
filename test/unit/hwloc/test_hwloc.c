@@ -1010,11 +1010,50 @@ static int test_binding_policy(void)
     CHECK("a zero limit is refused",
           PRTE_SUCCESS != prte_hwloc_base_set_binding_policy(jdata, "core:limit=0"));
 
+    /* A qualifier with NO policy means "whatever binding would otherwise
+     * apply, plus this qualifier" - the same thing "--map-by :OVERSUBSCRIBE"
+     * has always meant. pmix_check_cli_option() compares only
+     * min(strlen(a),strlen(b)) characters, so an empty policy word matched
+     * the first option tested against it, which is "none": "--bind-to
+     * :overload-allowed" silently disabled binding altogether. The policy
+     * bits must stay unset so the default chooser can still fill them in,
+     * and the qualifier must survive into the word. */
+    jdata->map->binding = 0;
+    CHECK("a qualifier-only spec parses",
+          PRTE_SUCCESS == prte_hwloc_base_set_binding_policy(jdata, ":overload-allowed"));
+    CHECK("a qualifier-only spec does not choose a policy",
+          !PRTE_BINDING_POLICY_IS_SET(jdata->map->binding));
+    CHECK("a qualifier-only spec did not silently select none",
+          PRTE_BIND_TO_NONE != PRTE_GET_BINDING_POLICY(jdata->map->binding));
+    CHECK("a qualifier-only spec keeps its qualifier",
+          PRTE_BIND_OVERLOAD_ALLOWED(jdata->map->binding));
+    /* ...and the default chooser then fills the policy in around it */
+    PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
+    CHECK("the default policy lands on top of the qualifier",
+          PRTE_BIND_TO_CORE == PRTE_GET_BINDING_POLICY(jdata->map->binding));
+    CHECK("the qualifier survived the default policy",
+          PRTE_BIND_OVERLOAD_ALLOWED(jdata->map->binding));
+
+    /* the same form is legal as a DVM default */
+    CHECK("a qualifier-only default parses",
+          PRTE_SUCCESS == prte_hwloc_base_set_binding_policy(NULL, ":if-supported"));
+    CHECK("a qualifier-only default does not choose a policy",
+          !PRTE_BINDING_POLICY_IS_SET(prte_hwloc_default_binding_policy));
+
     /* bad input */
     CHECK("an unknown policy is refused",
           PRTE_SUCCESS != prte_hwloc_base_set_binding_policy(jdata, "sockets"));
     CHECK("an unknown qualifier is refused",
           PRTE_SUCCESS != prte_hwloc_base_set_binding_policy(jdata, "core:frobnicate"));
+
+    /* A spec that does not parse must leave the job exactly as it was. The
+     * qualifiers used to be applied first, so "sockets:report" recorded
+     * report-bindings on the job and then rejected the request. */
+    prte_remove_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS);
+    CHECK("a bad policy carrying a good qualifier is refused",
+          PRTE_SUCCESS != prte_hwloc_base_set_binding_policy(jdata, "sockets:report"));
+    CHECK("a refused spec records nothing on the job",
+          !prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS, NULL, PMIX_BOOL));
 
     /* the job-only qualifiers are refused on the DVM default, where there is
      * no job to record them against */
