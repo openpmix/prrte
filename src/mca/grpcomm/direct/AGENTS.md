@@ -41,8 +41,10 @@ prte_grpcomm_base_module_t prte_grpcomm_direct_module = {
 (`xcast_ops`, `fence_ops`, `group_ops`) and registers **six** persistent
 RML receives: `XCAST`, `XCAST_ACK`, `FENCE`, `FENCE_RELEASE`, `GROUP`,
 `GROUP_RELEASE`. `finalize()` destructs the trackers and cancels the
-receives. `fault_handler()` simply fans the recovery notice out to the
-xcast, fence, and group fault handlers in turn.
+receives. `fault_handler()` fans the recovery notice out to the xcast,
+fence, and group fault handlers in turn — each ends what it cannot
+recover — and then, on the global-scope pass, advances the shared
+`recovery_epoch` once, which restarts everything still in flight.
 
 ---
 
@@ -50,7 +52,9 @@ xcast, fence, and group fault handlers in turn.
 
 - **`prte_grpcomm_direct_component_t`** — the component. Holds
   `xcast_ops` (a `prte_grpcomm_xcast_t`), `fence_ops` (list of
-  `prte_grpcomm_fence_t`), and `group_ops` (list of `prte_grpcomm_group_t`).
+  `prte_grpcomm_fence_t`), `group_ops` (list of `prte_grpcomm_group_t`), a
+  bounded `completed_group_ops` memo, and the `recovery_epoch` that fence
+  and group share.
 - **`prte_grpcomm_xcast_t`** — global xcast state: the `ops` list of
   in-flight broadcasts, a `pending_completions` FIFO of completion
   callbacks awaiting relay-back, and three sequence counters
@@ -192,9 +196,18 @@ Message flow:
 participant. The tracker lives on `component.fence_ops`, keyed by exact
 proc-signature match.
 
-The fence `fault_handler` is currently **not resilient**: a TODO. If any
-fence op is in flight when a daemon fails it activates
-`PRTE_JOB_STATE_COMM_FAILED` (kills the job) rather than repairing.
+The fence `fault_handler` restarts what it can and ends what it cannot.
+A fence whose participants all survive lost only a message path and
+re-converges over the repaired tree at the new recovery epoch — so the
+loss of a pure relay is invisible to it. A fence that genuinely lost a
+participant cannot produce its answer, because an allgather has no
+opt-in to running degraded, so the controller ends that fence with
+`PMIX_ERR_LOST_CONNECTION` via `abort_fence_op()`. Note the difference
+from a group construct, which *can* complete on the survivors when asked:
+a fence has no equivalent of `PMIX_GROUP_FT_COLLECTIVE`.
+
+It shares the recovery epoch and the restart machinery with `group` —
+see *Surviving a daemon failure* below, which describes both.
 
 ---
 
@@ -336,14 +349,18 @@ that broadcast comes back around.
 
 ### Surviving a daemon failure
 
+This applies to **both** fence and group; where they differ is only in what
+they do about a collective that genuinely lost a participant.
+
 A daemon failure invalidates every in-flight rollup: `nexpected` is derived
 from the routing tree, and the tree just changed shape. Recovery is a
 **restart**, not a repair — each daemon discards what it has gathered,
 recomputes what the repaired tree owes it, and re-offers the contribution
 it originally made (`coll->my_contribution`, kept for exactly this).
 
-**The epoch.** A file-static `group_epoch` per daemon, stamped on every
-message on `PRTE_RML_TAG_GROUP` as `[epoch][body]`, tells one round from
+**The epoch.** One `recovery_epoch` per daemon, on the component and shared
+by both collectives, stamped on every message on `PRTE_RML_TAG_GROUP` and
+`PRTE_RML_TAG_FENCE` as `[epoch][body]`, tells one round from
 the next; a contribution stamped older than the receiver's epoch belongs to
 a round that no longer exists and is dropped before it is merged.
 
@@ -442,10 +459,14 @@ operation is proof the previous one of that name is over.
   Note the fault-handler abort loop itself is *unguarded* (it uses only
   status fields and `abort_group_op`), but the `PMIX_GROUP_CANCEL` handling
   is guarded — preserve that split.
-- **The fence fault handler is a known gap.** It kills the job on any
-  in-flight fence when a daemon fails (TODO to make it resilient). If you
-  are adding fence resilience, that is the place — do not weaken it into a
-  silent no-op.
+- **Fence and group share one recovery epoch, advanced in one place.**
+  It lives on the component and is bumped by the framework's own
+  `fault_handler` in `grpcomm_direct.c`, which then restarts both. Do not
+  give a collective its own counter: the restart is only safe because it
+  is simultaneous across the DVM, and two counters racing to advance would
+  break exactly that. A per-collective handler decides what it cannot
+  recover and marks those trackers `aborting`; the shared restart skips
+  them.
 - **Free every allocation the handler still owns before it returns.** The
   entry-point handlers (`begin_xcast`, `fence`, `group`) own the caddy/op
   they were thread-shifted; the recv handlers own the info arrays / darrays
