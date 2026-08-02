@@ -80,6 +80,11 @@
 #include "constants.h"
 #include "types.h"
 
+/* PMIx's printf replacements -- the four names prte_config_bottom.h maps a
+ * missing libc printf onto. prte_config_bottom.h includes this itself, but
+ * only on a platform that needs it. */
+#include "src/util/pmix_printf.h"
+
 #include "src/include/prte_stdatomic.h"
 #include "src/runtime/runtime.h"
 
@@ -314,6 +319,46 @@ static int test_config_bottom(void)
 }
 
 /* ------------------------------------------------------------------ */
+/* the printf fallbacks                                               */
+/* ------------------------------------------------------------------ */
+
+/* prte_config_bottom.h maps asprintf/snprintf/vasprintf/vsnprintf onto PMIx
+ * replacements on any platform whose libc is missing one. PRRTE has no
+ * printf replacements of its own and never had -- all four come from PMIx's
+ * src/util/pmix_printf.h.
+ *
+ * One of the four named prte_vsnprintf, a symbol that exists in neither
+ * tree, so a platform without vsnprintf() would have failed to link every
+ * tool. Nothing caught it because the mapping is compiled only where the
+ * libc function is absent, which is nowhere anyone builds.
+ *
+ * Be honest about what this proves: it cannot exercise the mapping itself
+ * on a platform that does not need it. What it does do is take the address
+ * of each of the four names the mapping resolves to, so they have to exist
+ * and be linkable here -- which catches both a typo of the kind above and
+ * PMIx dropping or renaming one out from under us. PRRTE builds against
+ * PMIx's *internal* headers, so the latter is a live risk, not a
+ * hypothetical.
+ */
+static int test_printf_fallbacks(void)
+{
+    int failures = 0;
+    const void *fns[4];
+
+    fns[0] = (const void *) (uintptr_t) pmix_asprintf;
+    fns[1] = (const void *) (uintptr_t) pmix_snprintf;
+    fns[2] = (const void *) (uintptr_t) pmix_vasprintf;
+    fns[3] = (const void *) (uintptr_t) pmix_vsnprintf;
+
+    CHECK("the asprintf replacement exists", NULL != fns[0]);
+    CHECK("the snprintf replacement exists", NULL != fns[1]);
+    CHECK("the vasprintf replacement exists", NULL != fns[2]);
+    CHECK("the vsnprintf replacement exists", NULL != fns[3]);
+
+    return failures;
+}
+
+/* ------------------------------------------------------------------ */
 
 int main(void)
 {
@@ -328,6 +373,7 @@ int main(void)
     failures += test_rank_types();
     failures += test_byte_order();
     failures += test_config_bottom();
+    failures += test_printf_fallbacks();
 
     if (0 == failures) {
         fprintf(stdout, "PASSED all include unit tests\n");

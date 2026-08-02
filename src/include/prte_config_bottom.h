@@ -331,7 +331,12 @@
 #    endif
 
 #    ifndef HAVE_VSNPRINTF
-#        define vsnprintf prte_vsnprintf
+/* pmix_vsnprintf, not prte_vsnprintf: PRRTE has no printf replacements of
+ * its own, and never had -- all four of these come from PMIx's
+ * src/util/pmix_printf.h, included just above.  This one named a symbol
+ * that exists nowhere in either tree, so a platform without vsnprintf()
+ * would have failed to link every tool. */
+#        define vsnprintf pmix_vsnprintf
 #    endif
 
 /*
