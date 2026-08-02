@@ -1000,6 +1000,17 @@ static int test_reset_counters(void)
         CHECK("core counter is reset",
               0 == ((prte_hwloc_obj_data_t *) core->userdata)->nprocs);
     }
+    /* The NUMA counter is the one that used to survive. hwloc 2.x keeps NUMA
+     * nodes out of the depth hierarchy, so a walk over 0..get_depth() never
+     * visits one - and "--bind-to numa:limit=N" attaches its per-object
+     * counter there. Missing the reset left those counters accumulating for
+     * the life of the DVM, so the second such job found every domain already
+     * at its limit and could not be bound at all. */
+    CHECK("a numa node resolves", NULL != numa);
+    if (NULL != numa && NULL != numa->userdata) {
+        CHECK("numa counter is reset",
+              0 == ((prte_hwloc_obj_data_t *) numa->userdata)->nprocs);
+    }
     /* The root's summary is NOT an obj_data_t. reset_counters must not walk
      * depth 0, or it would reinterpret the summary as a counter and scribble
      * on numa_cutoff. */

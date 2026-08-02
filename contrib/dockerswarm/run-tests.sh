@@ -2990,6 +2990,31 @@ test_hwloc() {
         && ok "object cpusets were rendered" \
         || bad "no cpuset was rendered in the topology dump"
     cleanup_swarm
+
+    banner "hwloc: per-object binding limits do not carry over between jobs"
+    # prte_hwloc_base_reset_counters() clears the per-object "how many procs
+    # did I already place here" counters between jobs. It walked only the
+    # normal depth hierarchy, and hwloc 2.x keeps NUMA nodes OUT of that
+    # hierarchy - so a counter attached to a NUMA node by "--bind-to
+    # numa:limit=N" was never cleared. It survived for the life of the DVM,
+    # and the SECOND such job found every domain already at its limit and
+    # could not be bound at all.
+    #
+    # A persistent DVM is the only place this shows: prterun starts a fresh
+    # HNP each time and takes the stale counters down with it. One proc per
+    # job against limit=1, so a leaked counter is immediately fatal to the
+    # next job. These containers report a single NUMA node covering the
+    # machine, which is all this needs.
+    cleanup_swarm
+    out=$(RUN 'timeout 90 prte --daemonize --host node2:8 && sleep 2 &&
+               for i in 1 2 3; do
+                   echo "RUN$i";
+                   timeout 60 prun -n 1 --bind-to numa:limit=1 --display map hostname;
+               done; pterm' 2>&1)
+    n=$(echo "$out" | grep -c 'Process rank: 0 Bound: package')
+    [ "$n" = 3 ] && ok "all 3 numa:limit jobs bound in one DVM" \
+                 || bad "$n/3 numa:limit jobs bound - a per-NUMA counter leaked between jobs: $(echo "$out" | tr '\n' ' ' | tail -c 400)"
+    cleanup_swarm
 }
 
 # Absolute path, deliberately -- see the note above DS.

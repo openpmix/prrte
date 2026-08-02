@@ -126,6 +126,14 @@ hwloc does not know these pointers are ours, so:
   reinterpreting it as a counter would scribble on `numa_cutoff`. Release
   code can treat both uniformly (`PMIX_RELEASE` is correct for either), but
   anything that *reads a field* cannot.
+- **`prte_hwloc_base_reset_counters()` must sweep the special NUMA depth
+  too, for the same reason `release_userdata()` does.** It walked only
+  `1..get_depth()` and carried a `HWLOC_OBJ_NUMANODE != type` test that
+  could never fire, so a counter attached to a NUMA node was never cleared:
+  `--bind-to numa:limit=N` accumulated `nprocs` for the life of the DVM and
+  the *second* such job found every domain already at its limit and could
+  not be bound. Any new sweep over "the objects binding touches" has to
+  visit both places.
 - `prte_hwloc_base_reset_counters()` walks `prte_node_topologies`, which is
   NULL until `prte_init()`.
 
