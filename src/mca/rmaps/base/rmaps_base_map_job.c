@@ -549,6 +549,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     int rc = PRTE_SUCCESS;
     int n;
     bool did_map, pernode = false;
+    bool bind_inherited = false;
     prte_rmaps_base_selected_module_t *mod;
     prte_job_t *parent = NULL;
     prte_app_context_t *app;
@@ -790,6 +791,40 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                         PRTE_JOBID_PRINT(jdata->nspace),
                         inherit ? "TRUE" : "FALSE",
                         options.use_hwthreads ? "TRUE" : "FALSE");
+
+    /* Adopt an *explicitly given* inherited binding before the mapping
+     * policy is derived, because deriving the mapping reads it: a binding
+     * given with no mapping given means "map by the binding object" (see
+     * prte_rmaps_base_set_default_mapping), and that test looks at
+     * jdata->map->binding.
+     *
+     * A binding that came from the parent job or from the DVM-wide "bindto"
+     * MCA parameter was not copied onto the job until long after the mapping
+     * had been settled, so the test saw nothing and picked BYCORE. The
+     * bind-upwards sanity check further down then refused the job outright,
+     * because binding to a package while mapping by core is not allowed.
+     * That made five of the eight values "bindto" documents - l1cache,
+     * l2cache, l3cache, numa, package - unusable at DVM scope, while the
+     * command-line spelling of the same request ("--bind-to package") mapped
+     * BYPACKAGE and worked.
+     *
+     * Only the two arms that adopt a binding somebody actually *asked for*
+     * belong up here. Deriving a binding from the mapping stays below, where
+     * the mapping is known. */
+    bind_inherited = false;
+    if (!PRTE_BINDING_POLICY_IS_SET(jdata->map->binding) && inherit) {
+        if (NULL != parent) {
+            jdata->map->binding = parent->map->binding;
+            bind_inherited = true;
+        } else if (PRTE_BINDING_POLICY_IS_SET(prte_hwloc_default_binding_policy)) {
+            /* the user specified a default binding policy via MCA param, so
+             * we use it - this can include a directive to overload */
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                "mca:rmaps[%d] default binding policy given", __LINE__);
+            jdata->map->binding = prte_hwloc_default_binding_policy;
+            bind_inherited = true;
+        }
+    }
 
     /* set the default mapping policy IFF it wasn't provided */
     if (!PRTE_MAPPING_POLICY_IS_SET(jdata->map->mapping)) {
@@ -1260,36 +1295,24 @@ ranking:
      * and reset an unset (default) binding to BIND_TO_NONE for the affected
      * node(s) at that point. Forcing NONE here off the permission alone broke
      * binding for non-oversubscribed jobs whenever a default oversubscribe
-     * policy was in effect. */
-    if (!PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
-        did_map = false;
-        if (inherit) {
-            if (NULL != parent) {
-                jdata->map->binding = parent->map->binding;
-                did_map = true;
-            } else if (PRTE_BINDING_POLICY_IS_SET(prte_hwloc_default_binding_policy)) {
-                /* if the user specified a default binding policy via
-                 * MCA param, then we use it - this can include a directive
-                 * to overload */
-                pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps[%d] default binding policy given", __LINE__);
-                jdata->map->binding = prte_hwloc_default_binding_policy;
-                did_map = true;
-            }
+     * policy was in effect.
+     *
+     * The two inheritance arms that used to live here now run before the
+     * mapping policy is derived - see "bind_inherited" above - because that
+     * derivation reads the binding. What is left is the case that genuinely
+     * cannot move: deriving a binding *from* the mapping. */
+    if (!bind_inherited && !PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
+        // let the job's personality set the default binding behavior
+        if (NULL != schizo->set_default_binding) {
+            rc = schizo->set_default_binding(jdata, &options);
+        } else {
+            rc = prte_hwloc_base_set_default_binding(jdata, &options);
         }
-        if (!did_map) {
-            // let the job's personality set the default binding behavior
-            if (NULL != schizo->set_default_binding) {
-                rc = schizo->set_default_binding(jdata, &options);
-            } else {
-                rc = prte_hwloc_base_set_default_binding(jdata, &options);
-            }
-            if (PRTE_SUCCESS != rc) {
-                // the error message should have been printed
-                jdata->exit_code = rc;
-                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
-                goto cleanup;
-            }
+        if (PRTE_SUCCESS != rc) {
+            // the error message should have been printed
+            jdata->exit_code = rc;
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
         }
     }
     options.overload = PRTE_BIND_OVERLOAD_ALLOWED(jdata->map->binding);

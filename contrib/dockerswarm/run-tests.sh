@@ -3037,6 +3037,19 @@ test_hwloc() {
     rc=$?
     [ "$rc" != 0 ] && ok "a job-only bindto qualifier is fatal at DVM scope (rc=$rc)" \
                    || bad "bindto=core:report was diagnosed and then ignored"
+    # every documented value that this node actually provides must map AND bind
+    for lvl in hwthread core package numa; do
+        out=$(RUN "timeout 60 prterun --prtemca bindto $lvl --host node2:4 -n 2 --display map hostname" 2>&1)
+        rc=$?
+        echo "$out" | grep -q 'lies above the mapping' \
+            && bad "bindto=$lvl was refused by the bind-upwards check" \
+            || ok "bindto=$lvl was not refused as binding above the map"
+        [ "$rc" = 0 ] && ok "bindto=$lvl ran the job" \
+                      || bad "bindto=$lvl failed (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        n=$(echo "$out" | grep -c 'Bound: ')
+        [ "$n" = 2 ] && ok "bindto=$lvl bound both ranks" \
+                     || bad "bindto=$lvl bound $n/2 ranks: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    done
     cleanup_swarm
 
     banner "hwloc: per-object binding limits do not carry over between jobs"

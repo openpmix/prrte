@@ -246,6 +246,18 @@ a request was answered differently from the command-line spelling.
   a generic "internal failure" report on top of a diagnostic the parser has
   already produced; the sibling parameters in `_register()`
   (`mem_alloc_policy`, `mem_bind_failure_action`) already worked this way.
+- **A `bindto` value coarser than a core has to reach the mapping
+  decision.** "Binding given, mapping not given" means *map by the binding
+  object* (`prte_rmaps_base_set_default_mapping()`), and that test reads
+  `jdata->map->binding` — which `rmaps_base_map_job.c` did not populate from
+  `prte_hwloc_default_binding_policy` until long after the mapping had been
+  settled. So `--prtemca bindto package` mapped `BYCORE` and was then
+  refused outright by the bind-upwards check, while `--bind-to package`
+  mapped `BYPACKAGE` and worked. Five of the eight values `bindto`
+  documents were unusable. The two *inheritance* arms (parent's binding,
+  MCA default) now run before the mapping is derived; deriving a binding
+  *from* the mapping necessarily still runs after it. If you add a third
+  source of a binding, ask which side of that line it belongs on.
 
 ---
 
