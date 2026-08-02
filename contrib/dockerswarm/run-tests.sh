@@ -3042,6 +3042,33 @@ test_hwloc() {
     fi
     cleanup_swarm
 
+    banner "hwloc: a qualifier with no policy keeps the default binding"
+    # "--bind-to :overload-allowed" means "the binding I would have got,
+    # but allow overload" - the same thing "--map-by :OVERSUBSCRIBE" has
+    # always meant. pmix_check_cli_option() compares only
+    # min(strlen(a),strlen(b)) characters, so the empty policy word matched
+    # the first option tested against it, which is "none": binding was
+    # silently disabled, and the default MAPPING policy fell from BYCORE to
+    # BYSLOT along with it. Nothing was printed to say so.
+    cleanup_swarm
+    out=$(RUN 'timeout 90 prterun --host node2:4 -n 2 --bind-to :overload-allowed \
+                   --display map hostname' 2>&1)
+    echo "$out" | grep -q 'Binding policy: CORE' \
+        && ok "a qualifier-only --bind-to keeps the default CORE policy" \
+        || bad "qualifier-only --bind-to changed the policy: $(echo "$out" | grep -i 'policy' | tr '\n' ' ')"
+    echo "$out" | grep -q 'OVERLOAD-ALLOWED' \
+        && ok "the qualifier itself survived" \
+        || bad "the qualifier was lost: $(echo "$out" | grep -i 'policy' | tr '\n' ' ')"
+    n=$(echo "$out" | grep -c 'Bound: package')
+    [ "$n" = 2 ] && ok "both ranks were still bound" \
+                 || bad "$n/2 ranks bound under a qualifier-only --bind-to"
+    # and the mapping policy has to be untouched too - it is chosen from the
+    # binding, so "none" dragged it down with it
+    echo "$out" | grep -q 'Mapping policy: BYCORE' \
+        && ok "the mapping policy is unchanged" \
+        || bad "the mapping policy moved: $(echo "$out" | grep -i 'Mapping policy' | tr '\n' ' ')"
+    cleanup_swarm
+
     banner "hwloc: logical and physical binding reports agree on this node"
     # --report-bindings renders through the same path with "physical" either
     # set or not, and it used to be ignored outright whenever the short cut

@@ -518,6 +518,64 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
     if (NULL != ptr) {
         *ptr = '\0';
         ++ptr;
+    }
+
+    /* Resolve the policy word FIRST, before any qualifier can record itself
+     * on the job: a spec whose policy does not parse must leave the job
+     * exactly as it found it.
+     *
+     * An empty policy word - the ":qualifier" form, with no policy at all -
+     * means "keep whatever binding policy would otherwise apply, but with
+     * these qualifiers". That is what "--map-by :OVERSUBSCRIBE" has always
+     * meant on the mapping side, and it has to mean the same here. It did
+     * not: pmix_check_cli_option() compares only min(strlen(a), strlen(b))
+     * characters, so an empty string matches the first option it is tested
+     * against - which is "none". "--bind-to :overload-allowed" therefore
+     * disabled binding outright, silently, and took the default mapping
+     * policy down with it. Leaving the policy bits at zero here means
+     * PRTE_BINDING_POLICY_IS_SET() still answers "no" and
+     * PRTE_SET_DEFAULT_BINDING_POLICY() later fills the policy in while
+     * preserving the qualifier half of the word. */
+    if ('\0' != myspec[0]) {
+        if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_NONE)) {
+            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_NONE);
+
+        } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_HWT)) {
+            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
+
+        } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_CORE)) {
+            /* honor the user's "core" unless the topology has no cores at all;
+             * a core that holds a single hwthread is still a core to bind to */
+            if (!prte_rmaps_base.have_cores) {
+                PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
+            } else {
+                PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_CORE);
+            }
+
+        } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_L1CACHE)) {
+            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L1CACHE);
+
+        } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_L2CACHE)) {
+            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L2CACHE);
+
+        } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_L3CACHE)) {
+            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L3CACHE);
+
+        } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_NUMA)) {
+            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_NUMA);
+
+        } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_PACKAGE)) {
+            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_PACKAGE);
+
+        } else {
+            pmix_show_help("help-prte-hwloc-base.txt", "invalid binding_policy", true, "binding",
+                           spec);
+            free(myspec);
+            return PRTE_ERR_BAD_PARAM;
+        }
+    }
+
+    if (NULL != ptr) {
         quals = PMIx_Argv_split(ptr, ':');
         for (i = 0; NULL != quals[i]; i++) {
             if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_IF_SUPP)) {
@@ -589,43 +647,6 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
             }
         }
         PMIx_Argv_free(quals);
-    }
-
-    if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_NONE)) {
-        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_NONE);
-
-    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_HWT)) {
-        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
-
-    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_CORE)) {
-        /* honor the user's "core" unless the topology has no cores at all;
-         * a core that holds a single hwthread is still a core to bind to */
-        if (!prte_rmaps_base.have_cores) {
-            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
-        } else {
-            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_CORE);
-        }
-
-    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_L1CACHE)) {
-        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L1CACHE);
-
-    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_L2CACHE)) {
-        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L2CACHE);
-
-    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_L3CACHE)) {
-        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L3CACHE);
-
-    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_NUMA)) {
-        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_NUMA);
-
-    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_PACKAGE)) {
-        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_PACKAGE);
-
-    } else {
-        pmix_show_help("help-prte-hwloc-base.txt", "invalid binding_policy", true, "binding",
-                       spec);
-        free(myspec);
-        return PRTE_ERR_BAD_PARAM;
     }
     free(myspec);
 
