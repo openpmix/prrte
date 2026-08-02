@@ -209,6 +209,16 @@ a fence has no equivalent of `PMIX_GROUP_FT_COLLECTIVE`.
 It shares the recovery epoch and the restart machinery with `group` —
 see *Surviving a daemon failure* below, which describes both.
 
+**Only a fence that was in flight when the failure landed is ended.** A
+fence *started afterwards* completes among the survivors, because
+`prte_rml_get_num_contributors()` skips the failed daemons when the
+tracker is built. That is deliberate, and it is the opposite of where the
+group policy sits (at completion, in `check_complete`). The reason is
+that the failed-daemon set is permanent: applying the test at completion
+would make every later fence naming that namespace fail for the life of
+the DVM, which would leave a recoverable job unable to fence at all after
+its first loss. If you move this check, that is the regression to expect.
+
 ---
 
 ## `group` — PMIx group operations (`grpcomm_direct_group.c`)

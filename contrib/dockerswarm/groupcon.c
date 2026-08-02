@@ -11,7 +11,7 @@
  * groupcon -- a minimal PMIx client that drives PMIx_Group_construct /
  * PMIx_Group_destruct across a real, multi-node DVM.
  *
- *   groupcon [--ft] [--delay <s>] <groupID> [seconds]
+ *   groupcon [--ft] [--fence] [--delay <s>] <groupID> [seconds]
  *       Every rank contributes a PMIX_GROUP_LOCAL_CID of its own
  *       (1234 + rank) as PMIX_GROUP_INFO, asks for a context id, and
  *       constructs the group.  As soon as construct returns -- with NO
@@ -20,7 +20,12 @@
  *
  *       --ft         ask for PMIX_GROUP_FT_COLLECTIVE, so the construct
  *                    completes on the survivors if a member is lost
- *       --delay <s>  sleep this long before calling construct.  Staggering
+ *       --fence      run a PMIx_Fence over the whole job instead of a
+ *                    group construct.  Here --delay applies to the LAST
+ *                    rank only, so everyone else blocks inside the fence
+ *                    for that long and a daemon can be killed while the
+ *                    allgather is genuinely in flight
+ *       --delay <s>  sleep this long before calling construct (or fence).  Staggering
  *                    the ranks is what makes the collective still be in
  *                    flight when a daemon is killed; without it the
  *                    construct is over long before the kill lands.
@@ -142,6 +147,7 @@ int main(int argc, char **argv)
     int i, npos = 0;
     bool idassigned = false;
     bool ft = false;
+    bool dofence = false;
 #ifdef PMIX_GROUP_MEMBER_FAILED
     pmix_status_t evcode = PMIX_GROUP_MEMBER_FAILED;
 #endif
@@ -152,6 +158,8 @@ int main(int argc, char **argv)
     for (i = 1; i < argc; i++) {
         if (0 == strcmp(argv[i], "--ft")) {
             ft = true;
+        } else if (0 == strcmp(argv[i], "--fence")) {
+            dofence = true;
         } else if (0 == strcmp(argv[i], "--delay") && (i + 1) < argc) {
             delay = atoi(argv[++i]);
         } else if (0 == npos) {
@@ -163,7 +171,8 @@ int main(int argc, char **argv)
         }
     }
     if (NULL == grpid) {
-        fprintf(stderr, "usage: %s [--ft] [--delay <s>] <groupID> [seconds]\n", argv[0]);
+        fprintf(stderr, "usage: %s [--ft] [--fence] [--delay <s>] <groupID> [seconds]\n",
+                argv[0]);
         return 2;
     }
 #ifndef PMIX_GROUP_FT_COLLECTIVE
@@ -220,6 +229,40 @@ int main(int argc, char **argv)
     PMIX_PROC_CREATE(procs, nprocs);
     for (n = 0; n < nprocs; n++) {
         PMIX_PROC_LOAD(&procs[n], myproc.nspace, n);
+    }
+
+    /* --fence: exercise the allgather rather than the group collective. The
+     * point of the mode is what happens when a daemon dies while one is in
+     * flight, which nothing else here can hold open long enough to test. */
+    if (dofence) {
+        /* Only the LAST rank waits. Everyone else enters the allgather at
+         * once and blocks there, so the fence is genuinely in flight for the
+         * length of the delay - which is the state a test needs in order to
+         * kill a daemon during one. A uniform delay would not do: every rank
+         * would enter after the kill, and the fence would simply run to
+         * completion over whatever was left. */
+        if (0 < delay && myproc.rank == (nprocs - 1)) {
+            printf("GRP %u DELAYING %d\n", myproc.rank, delay);
+            fflush(stdout);
+            sleep(delay);
+        }
+        printf("GRP %u FENCING\n", myproc.rank);
+        fflush(stdout);
+        PMIX_INFO_CREATE(info, 1);
+        ninfo = 1;
+        /* collect the data each rank put, so this is a real allgather and
+         * not just a barrier */
+        PMIX_INFO_LOAD(&info[0], PMIX_COLLECT_DATA, &dofence, PMIX_BOOL);
+        rc = PMIx_Fence(procs, nprocs, info, ninfo);
+        PMIX_INFO_FREE(info, ninfo);
+        info = NULL;
+        ninfo = 0;
+        printf("GRP %u FENCE %s\n", myproc.rank, PMIx_Error_string(rc));
+        fflush(stdout);
+        if (PMIX_SUCCESS != rc) {
+            failures++;
+        }
+        goto done;
     }
 
     /* ask for a context id, and contribute our own local cid as group info */

@@ -425,15 +425,16 @@ void prte_grpcomm_direct_fence_recv(int status, pmix_proc_t *sender,
     }
     PMIX_RELEASE(sig);
 
-    /* Account for this contribution by which child subtree it came from, and
-     * drop it whole if that subtree has already been heard from - see the
-     * matching note in the group path. This has to happen before the bucket
-     * is merged, because a contribution counted twice is data merged twice. */
+    /* Identify which child subtree this came from, and drop it whole if that
+     * subtree has already been heard from - see the matching note in the group
+     * path. Only the *test* happens here: the accounting is committed below,
+     * once the message has parsed, so a truncated one cannot leave a subtree
+     * counted with none of its data merged. */
+    slot = -1;
     if (sender->rank == PRTE_PROC_MY_NAME->rank) {
         if (coll->self_reported) {
             return;
         }
-        coll->self_reported = true;
     } else {
         slot = prte_rml_get_subtree_index(sender->rank);
         if (0 > slot) {
@@ -445,9 +446,7 @@ void prte_grpcomm_direct_fence_recv(int status, pmix_proc_t *sender,
         if (pmix_bitmap_is_set_bit(&coll->reported_slots, slot)) {
             return;
         }
-        pmix_bitmap_set_bit(&coll->reported_slots, slot);
     }
-    coll->nreported++;
 
     // unpack the info structs
     cnt = 1;
@@ -508,6 +507,14 @@ void prte_grpcomm_direct_fence_recv(int status, pmix_proc_t *sender,
         return;
     }
     PMIX_INFO_FREE(info, ninfo);
+
+    /* the contribution is in - now commit the accounting for it */
+    if (0 > slot) {
+        coll->self_reported = true;
+    } else {
+        pmix_bitmap_set_bit(&coll->reported_slots, slot);
+    }
+    coll->nreported++;
 
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct fence recv nexpected %d nrep %d",
