@@ -1598,7 +1598,19 @@ static prte_grpcomm_group_t *get_tracker(prte_grpcomm_direct_group_signature_t *
         coll->sig->addmembers = (pmix_proc_t *) malloc(coll->sig->naddmembers * sizeof(pmix_proc_t));
         memcpy(coll->sig->addmembers, sig->addmembers, coll->sig->naddmembers * sizeof(pmix_proc_t));
     }
+    // save any final membership order that was given - the match path
+    // above caches it, so failing to do so here would silently discard an
+    // order supplied by whichever daemon happens to create the tracker
+    if (NULL != sig->final_order) {
+        PMIX_PROC_CREATE(coll->sig->final_order, sig->nfinal);
+        memcpy(coll->sig->final_order, sig->final_order, sig->nfinal * sizeof(pmix_proc_t));
+        coll->sig->nfinal = sig->nfinal;
+    }
     coll->nfollowers = coll->sig->naddmembers;
+    // the accumulated signature is what we later pack onto the wire, so it
+    // has to carry the bootstrap description too
+    coll->sig->bootstrap = sig->bootstrap;
+    coll->sig->follower = sig->follower;
     // need to know the bootstrap in case one is ongoing
     coll->nleaders = coll->sig->bootstrap;
     if (0 < sig->bootstrap || sig->follower) {
