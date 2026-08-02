@@ -213,9 +213,16 @@ int prte_hwloc_base_register(void)
 
 
     if (NULL != default_cpu_list) {
-        if (NULL != (ptr = strrchr(default_cpu_list, ':'))) {
+        /* The MCA layer owns this string and reports the parameter's value
+         * through it, so parse a copy: splitting the modifier off in place
+         * makes prte_info and every later reader see a truncated value the
+         * user never set. */
+        prte_hwloc_default_cpu_list = strdup(default_cpu_list);
+        if (NULL == prte_hwloc_default_cpu_list) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        if (NULL != (ptr = strrchr(prte_hwloc_default_cpu_list, ':'))) {
             *ptr = '\0';
-            prte_hwloc_default_cpu_list = strdup(default_cpu_list);
             ++ptr;
             if (0 == strcasecmp(ptr, "HWTCPUS")) {
                 prte_hwloc_default_use_hwthread_cpus = true;
@@ -224,10 +231,10 @@ int prte_hwloc_base_register(void)
             } else {
                 pmix_show_help("help-prte-hwloc-base.txt", "bad-processor-type", true,
                                default_cpu_list, ptr);
+                free(prte_hwloc_default_cpu_list);
+                prte_hwloc_default_cpu_list = NULL;
                 return PRTE_ERR_BAD_PARAM;
             }
-        } else {
-            prte_hwloc_default_cpu_list = strdup(default_cpu_list);
         }
     }
 

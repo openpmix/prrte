@@ -365,9 +365,10 @@ static int rte_init(int argc, char **argv)
     if (15 < pmix_output_get_verbosity(prte_ess_base_framework.framework_output)) {
         char *output = NULL;
         pmix_output(0, "%s Topology Info:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-        prte_hwloc_print(&output, "\t", prte_hwloc_topology);
-        pmix_output(0, "%s", output);
-        free(output);
+        if (PRTE_SUCCESS == prte_hwloc_print(&output, "\t", prte_hwloc_topology)) {
+            pmix_output(0, "%s", output);
+            free(output);
+        }
     }
 
     /* Open/select the odls */

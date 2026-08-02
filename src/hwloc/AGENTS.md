@@ -307,6 +307,12 @@ wraps it and is what produces `prte_node_t.available`.
 user input too, and every lookup can legitimately fail — `--cpu-set P99`
 used to be a segfault.
 
+**A core id in `package:core` notation is relative to that package**, so
+resolve it with `hwloc_get_obj_inside_cpuset_by_type()` against the
+package's cpuset. It used to be turned into a global index by adding
+"objects per package × package id", which names an object in the wrong
+package as soon as two packages hold different numbers of them.
+
 ---
 
 ## The print-buffer ring
