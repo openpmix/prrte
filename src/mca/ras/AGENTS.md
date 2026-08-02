@@ -266,6 +266,15 @@ input list.** Walk it carefully before touching allocation code:
   `SLOTS_GIVEN`, `NONUSABLE`) for that display.
 - `prte_ras_base_display_cpus(jdata, nodelist)` prints available
   processors per package for the requested nodes (`--display-cpus`).
+  **Its parseable form has to parse.** It used to emit
+  `<processors node=x>` — an unquoted attribute value — wrapping
+  `<pkg=0 cpus=0-7>`, which is not an element at all, while
+  `--display map:parseable` writes the identical fact as
+  `<package id="0" cpus="0-7"/>` in `prte_node_print()`. Two spellings of
+  one fact, and the one here could not be read by any XML parser. Keep the
+  two in step; the cpu list itself comes from
+  `prte_hwloc_base_cpuset2ranges()` for the reason given in
+  [`src/hwloc/AGENTS.md`](../../hwloc/AGENTS.md).
 
 ---
 

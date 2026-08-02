@@ -204,7 +204,14 @@ static void display_cpus(prte_topology_t *t,
     avail = hwloc_bitmap_alloc();
 
     if (parsable) {
-        pmix_output(prte_clean_output, "<processors node=%s>", node);
+        /* "parseable" has to actually parse. This element carried an
+         * unquoted attribute value and wrapped a "<pkg=0 cpus=0-7>" that is
+         * not an element at all, while the very same information inside
+         * "--display map:parseable" is written as
+         * <package id="0" cpus="0-7"/> - the two spellings of one fact, one
+         * of them unusable by any XML reader. Follow the map document's
+         * shape; see prte_node_print() in runtime/data_type_support. */
+        pmix_output(prte_clean_output, "<processors node=\"%s\">", node);
     } else {
         pmix_output(prte_clean_output,
                     "\n======================   AVAILABLE PROCESSORS [node: %s]   ======================\n\n", node);
@@ -216,7 +223,7 @@ static void display_cpus(prte_topology_t *t,
         hwloc_bitmap_and(avail, obj->cpuset, allowed);
         if (hwloc_bitmap_iszero(avail)) {
             if (parsable) {
-                pmix_output(prte_clean_output, "    <pkg=%d cpus=%s>", pkg, "NONE");
+                pmix_output(prte_clean_output, "    <package id=\"%d\" cpus=\"%s\"/>", pkg, "NONE");
             } else {
                 pmix_output(prte_clean_output, "PKG[%d]: NONE", pkg);
             }
@@ -227,7 +234,7 @@ static void display_cpus(prte_topology_t *t,
          * that is what this job is using as cpus */
         tmp = prte_hwloc_base_cpuset2ranges(t->topo, avail, use_hwthread_cpus, physical);
         if (parsable) {
-            pmix_output(prte_clean_output, "    <pkg=%d cpus=%s>", pkg,
+            pmix_output(prte_clean_output, "    <package id=\"%d\" cpus=\"%s\"/>", pkg,
                         (NULL == tmp) ? "NONE" : tmp);
         } else {
             pmix_output(prte_clean_output, "PKG[%d]: %s", pkg, (NULL == tmp) ? "NONE" : tmp);

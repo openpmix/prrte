@@ -3103,6 +3103,40 @@ test_hwloc() {
     fi
     cleanup_swarm
 
+    banner "hwloc: the parseable renderings actually parse"
+    # PRRTE writes the same fact two ways. "--display map:parseable" runs
+    # prte_hwloc_get_binding_info() and emits <package id="0"><core>N</core>
+    # ...</package>; "--display cpus:parseable" runs the ras/base copy and
+    # used to emit "<processors node=x>" wrapping "<pkg=0 cpus=0-7>" - an
+    # unquoted attribute value around something that is not an element at
+    # all. Neither could be read by an XML parser, which is the one thing
+    # the mode is named for. Both are checked here against a real parser
+    # rather than a grep, because a grep is exactly what let this stand.
+    cleanup_swarm
+    out=$(RUN 'timeout 90 prterun --host node2:4 -n 2 --map-by core --bind-to core \
+                   --display map:parseable hostname' 2>&1)
+    echo "$out" | sed -n '/<map>/,/<\/map>/p' > /tmp/prte-map-parseable.$$
+    python3 -c "import sys,xml.etree.ElementTree as ET; ET.parse(sys.argv[1])" \
+        /tmp/prte-map-parseable.$$ 2>/dev/null \
+        && ok "--display map:parseable produces a well-formed document" \
+        || bad "--display map:parseable does not parse: $(head -c 300 /tmp/prte-map-parseable.$$ | tr '\n' ' ')"
+    grep -q '<package id=' /tmp/prte-map-parseable.$$ \
+        && ok "the map document names each package as an element attribute" \
+        || bad "no <package id=...> element in the map document"
+    rm -f /tmp/prte-map-parseable.$$
+
+    out=$(RUN 'timeout 90 prterun --host node2:4 -n 1 --display cpus:parseable hostname' 2>&1)
+    echo "$out" | sed -n '/<processors/,/<\/processors>/p' > /tmp/prte-cpus-parseable.$$
+    python3 -c "import sys,xml.etree.ElementTree as ET; ET.parse(sys.argv[1])" \
+        /tmp/prte-cpus-parseable.$$ 2>/dev/null \
+        && ok "--display cpus:parseable produces a well-formed document" \
+        || bad "--display cpus:parseable does not parse: $(head -c 300 /tmp/prte-cpus-parseable.$$ | tr '\n' ' ')"
+    grep -q '<package id=' /tmp/prte-cpus-parseable.$$ \
+        && ok "both parseable renderings spell a package the same way" \
+        || bad "--display cpus:parseable does not use the <package id=...> shape"
+    rm -f /tmp/prte-cpus-parseable.$$
+    cleanup_swarm
+
     banner "hwloc: a qualifier with no policy keeps the default binding"
     # "--bind-to :overload-allowed" means "the binding I would have got,
     # but allow overload" - the same thing "--map-by :OVERSUBSCRIBE" has
