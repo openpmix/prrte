@@ -74,6 +74,17 @@ new neighbors so in-flight messages resume over the repaired tree.
   evicted; cached data is dropped by timer (`relm_base_cache_ms`) or when the
   cache exceeds `relm_base_cache_max_count`. Don't assume `msg->data.bytes` is
   non-NULL.
+- **`prte_relm_start_msg()` owns the caller's buffer once it succeeds, and
+  unloading a buffer is not releasing it.** This is the same contract
+  `prte_rml_send_buffer_nb()` follows — every `PRTE_RML_RELIABLE_SEND` caller
+  hands the buffer over on success and releases it itself on an error return.
+  `start_msg` consumed the buffer's *payload* with `PMIx_Data_unload()` into a
+  fresh RELM-framed buffer and then dropped the emptied container on the
+  floor: a `pmix_data_buffer_t` leaked **per inter-daemon reliable message**,
+  for the life of the DVM. The signature to recognize is a valgrind record
+  with direct bytes but *zero* indirect ones — the payload was moved out and
+  freed, only the shell survived. If you add another framing step here,
+  release what you unloaded.
 - **Every lookup helper can answer NULL.** `prte_relm_find_rank`,
   `find_msg`, `get_rank`, `get_msg`, `find_prev_msg`, `get_prev_msg` all return
   NULL for a bad signature, an out-of-range rank, or a hash-table failure. They
