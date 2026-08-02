@@ -97,6 +97,9 @@ static void sgdes(prte_grpcomm_direct_group_signature_t *p)
     if (NULL != p->addmembers) {
         free(p->addmembers);
     }
+    if (NULL != p->final_order) {
+        PMIX_PROC_FREE(p->final_order, p->nfinal);
+    }
 }
 PMIX_CLASS_INSTANCE(prte_grpcomm_direct_group_signature_t,
                     pmix_object_t,
