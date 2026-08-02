@@ -783,6 +783,13 @@ static int create_dmns(prte_grpcomm_direct_fence_signature_t *sig,
     size_t nds = 0;
     pmix_rank_t *dns = NULL;
     int rc = PRTE_SUCCESS;
+    /* Once the DVM has known failures, a participant we cannot resolve is
+     * most likely one whose node is being torn down. Refusing to resolve the
+     * whole set would strand the fence, because the caller drops the
+     * contribution with no completion path - so skip what we cannot place and
+     * carry on. With nothing failed, an unresolvable participant is still a
+     * genuine error and still fatal. */
+    bool tolerate = !pmix_bitmap_is_clear(&prte_rml_base.failed_dmns);
 
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct:fence:create_dmns called with %s signature size %" PRIsize_t "",
@@ -828,6 +835,9 @@ static int create_dmns(prte_grpcomm_direct_fence_signature_t *sig,
                     continue;
                 }
                 if (NULL == node->daemon) {
+                    if (tolerate) {
+                        continue;
+                    }
                     PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                     rc = PRTE_ERR_NOT_FOUND;
                     goto done;
@@ -859,11 +869,17 @@ static int create_dmns(prte_grpcomm_direct_fence_signature_t *sig,
             proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs,
                                                                sig->signature[n].rank);
             if (NULL == proc) {
+                if (tolerate) {
+                    continue;
+                }
                 PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                 rc = PRTE_ERR_NOT_FOUND;
                 goto done;
             }
             if (NULL == proc->node || NULL == proc->node->daemon) {
+                if (tolerate) {
+                    continue;
+                }
                 PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                 rc = PRTE_ERR_NOT_FOUND;
                 goto done;
