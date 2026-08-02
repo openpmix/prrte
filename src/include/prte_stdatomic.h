@@ -32,8 +32,10 @@
  * same way, and the two projects share a threading model.  There used to be
  * a `volatile`-typed fallback selected by PRTE_ATOMIC_C11 == 0; `volatile`
  * is not an atomic type, so that arm was a way to build something that
- * could not be correct.  PRTE_CONFIG_ASM (config/prte_config_asm.m4) now
- * fails configure outright when the compiler cannot supply C11 atomics.
+ * could not be correct.  PRTE_SETUP_CC (config/prte_setup_cc.m4) now fails
+ * configure outright when the compiler cannot supply C11 atomics, right
+ * after the compiler checks that answer the question rather than several
+ * hundred checks later.
  */
 #    include <stdatomic.h>
 
