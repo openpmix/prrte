@@ -265,9 +265,19 @@ static int test_classes(void)
     CHECK("grp trk nleaders_reported 0", 0 == gc->nleaders_reported);
     CHECK("grp trk nfollowers 0", 0 == gc->nfollowers);
     CHECK("grp trk nfollowers_reported 0", 0 == gc->nfollowers_reported);
-    CHECK("grp trk assignID false", !gc->assignID);
     CHECK("grp trk grpinfo opened", NULL != gc->grpinfo);
     CHECK("grp trk endpts opened", NULL != gc->endpts);
+    /* the rollup must start with nothing reported from anywhere: a set slot
+     * bit or a raised self_reported would silently subtract a contribution
+     * from what the collective waits for */
+    CHECK("grp trk no slots reported",
+          0 == pmix_bitmap_num_set_bits(&gc->reported_slots,
+                                        pmix_bitmap_size(&gc->reported_slots)));
+    CHECK("grp trk self_reported false", !gc->self_reported);
+    CHECK("grp trk converged false", !gc->converged);
+    CHECK("grp trk aborting false", !gc->aborting);
+    CHECK("grp trk timeout 0", 0 == gc->timeout);
+    CHECK("grp trk tev inactive", !gc->tev_active);
     PMIX_RELEASE(gc);
 
     /* fence caddy: all borrowed pointers NULL, sizes zero */
