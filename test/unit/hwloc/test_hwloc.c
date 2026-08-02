@@ -1283,6 +1283,67 @@ static int test_reset_counters(void)
 }
 
 /* ------------------------------------------------------------------ */
+/* the topology renderer behind --display topo                        */
+/* ------------------------------------------------------------------ */
+
+static int test_hwloc_print(void)
+{
+    int failures = 0;
+    hwloc_topology_t topo;
+    char *output = NULL;
+    int rc;
+
+    /* two packages, each with its own NUMA domain */
+    topo = make_topo("pack:2 numa:1 core:2 pu:2");
+    if (NULL == topo) {
+        fprintf(stderr, "SKIP test_hwloc_print: no synthetic topology support\n");
+        return 0;
+    }
+
+    /* a NULL topology is answered, not dereferenced: every caller hands us
+     * one out of prte_node_topologies and prints the result unconditionally */
+    output = (char *) 0x1;
+    rc = prte_hwloc_print(&output, NULL, NULL);
+    CHECK("print of a NULL topology reports not-found", PRTE_ERR_NOT_FOUND == rc);
+    CHECK("print of a NULL topology clears the output", NULL == output);
+
+    output = NULL;
+    rc = prte_hwloc_print(&output, NULL, topo);
+    CHECK("print succeeds", PRTE_SUCCESS == rc && NULL != output);
+    if (NULL != output) {
+        /* The levels a user expects to see. NUMANode is the one that was
+         * missing: hwloc 2.x hangs NUMA nodes off memory_first_child, not
+         * off the children[] array the renderer walked, so --display topo
+         * showed a topology with no NUMA domains in it at all - on a runtime
+         * whose "--map-by numa" is usually why the user asked. */
+        CHECK("print includes the machine", NULL != strstr(output, "Type: Machine"));
+        CHECK("print includes packages", NULL != strstr(output, "Type: Package"));
+        CHECK("print includes cores", NULL != strstr(output, "Type: Core"));
+        CHECK("print includes PUs", NULL != strstr(output, "Type: PU"));
+        CHECK("print includes NUMA nodes", NULL != strstr(output, "Type: NUMANode"));
+        /* the child count has to cover every child list, or the object it
+         * names reads as childless right where a memory child hangs */
+        CHECK("machine reports both packages",
+              NULL != strstr(output, "Type: Machine Number of child objects: 2"));
+        CHECK("a package reports its core children and its NUMA child",
+              NULL != strstr(output, "Type: Package Number of child objects: 3"));
+        free(output);
+    }
+
+    /* a prefix is applied to every line of the dump */
+    output = NULL;
+    rc = prte_hwloc_print(&output, "XX", topo);
+    CHECK("prefixed print succeeds", PRTE_SUCCESS == rc && NULL != output);
+    if (NULL != output) {
+        CHECK("the prefix reaches the root", NULL != strstr(output, "XXType: Machine"));
+        free(output);
+    }
+
+    free_topo(topo);
+    return failures;
+}
+
+/* ------------------------------------------------------------------ */
 
 int main(void)
 {
@@ -1306,6 +1367,7 @@ int main(void)
     failures += test_binding_policy();
     failures += test_userdata();
     failures += test_reset_counters();
+    failures += test_hwloc_print();
 
     prte_finalize();
 

@@ -1409,14 +1409,20 @@ static void print_hwloc_obj(char **output, char *prefix, hwloc_topology_t topo, 
 {
     hwloc_obj_t obj2;
     char string[PRTE_HWLOC_MAX_STRING], *tmp, *tmp2, *pfx;
-    unsigned i;
+    unsigned nchildren;
     struct hwloc_topology_support *support;
+
+    /* Count every child, not just the normal ones. In hwloc 2.x an object's
+     * children are split across four lists, and "arity" covers only the
+     * first of them - so reporting it alone understates the object for
+     * exactly the levels a user is most likely to be looking for. */
+    nchildren = obj->arity + obj->memory_arity + obj->io_arity + obj->misc_arity;
 
     /* print the object type */
     hwloc_obj_type_snprintf(string, sizeof(string), obj, 1);
     pmix_asprintf(&pfx, "\n%s\t", (NULL == prefix) ? "" : prefix);
     pmix_asprintf(&tmp, "%sType: %s Number of child objects: %u%sName=%s",
-                  (NULL == prefix) ? "" : prefix, string, obj->arity, pfx,
+                  (NULL == prefix) ? "" : prefix, string, nchildren, pfx,
                   (NULL == obj->name) ? "NULL" : obj->name);
     if (0 < hwloc_obj_attr_snprintf(string, sizeof(string), obj, pfx, 1)) {
         /* print the attributes */
@@ -1451,10 +1457,20 @@ static void print_hwloc_obj(char **output, char *prefix, hwloc_topology_t topo, 
     free(tmp);
     free(pfx);
     pmix_asprintf(&pfx, "%s\t", (NULL == prefix) ? "" : prefix);
-    for (i = 0; i < obj->arity; i++) {
-        obj2 = obj->children[i];
+    /* Walk *all* the children. "obj->children" is the normal-children array
+     * only: in hwloc 2.x NUMA nodes hang off memory_first_child, and the
+     * I/O objects this directory deliberately asks hwloc to keep
+     * (HWLOC_TYPE_FILTER_KEEP_IMPORTANT, see topology_set_flags) hang off
+     * io_first_child. Recursing through the array therefore printed a
+     * topology with no NUMA domains in it at all - on a runtime whose
+     * "--map-by numa" is the thing a user is most often trying to
+     * understand when they ask for the topology. hwloc_get_next_child()
+     * walks normal, then memory, then I/O, then Misc. */
+    obj2 = hwloc_get_next_child(topo, obj, NULL);
+    while (NULL != obj2) {
         /* print the object */
         print_hwloc_obj(&tmp2, pfx, topo, obj2);
+        obj2 = hwloc_get_next_child(topo, obj, obj2);
     }
     free(pfx);
     if (NULL != *output) {
