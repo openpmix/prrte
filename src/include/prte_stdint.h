@@ -43,38 +43,13 @@
 #    include <sys/types.h>
 #endif
 
-/* 128-bit */
-
-#ifdef HAVE_INT128_T
-
-typedef int128_t prte_int128_t;
-typedef uint128_t prte_uint128_t;
-
-#    define HAVE_PRTE_INT128_T 1
-
-#elif defined(HAVE___INT128)
-
-/* suppress warning about __int128 type */
-#    pragma GCC diagnostic push
-/* Clang won't quietly accept "-pedantic", but GCC versions older than ~4.8
- * won't quietly accept "-Wpedanic".  The whole "#pragma GCC diagnostic ..."
- * facility only was added to GCC as of version 4.6. */
-#    if defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 6)
-#        pragma GCC diagnostic ignored "-Wpedantic"
-#    else
-#        pragma GCC diagnostic ignored "-pedantic"
-#    endif
-typedef __int128 prte_int128_t;
-typedef unsigned __int128 prte_uint128_t;
-#    pragma GCC diagnostic pop
-
-#    define HAVE_PRTE_INT128_T 1
-
-#else
-
-#    define HAVE_PRTE_INT128_T 0
-
-#endif
+/* There was a 128-bit block here, selecting prte_int128_t/prte_uint128_t
+ * from HAVE_INT128_T or HAVE___INT128 and setting HAVE_PRTE_INT128_T.  It
+ * was inherited from OPAL, where the atomics needed a 128-bit type.  Neither
+ * of those two configure symbols has ever been probed by PRRTE's configure,
+ * so the types were never declared and HAVE_PRTE_INT128_T was always 0 --
+ * and nothing in the tree names any of the three.  If PRRTE ever needs one,
+ * probe for it in configure.ac at the same time. */
 
 /* Pointers */
 
@@ -116,16 +91,17 @@ typedef unsigned long long uintptr_t;
 /* inttypes.h printf specifiers */
 #include <inttypes.h>
 
+/* PRRTE requires a C11 compiler (config/prte_setup_cc.m4 aborts otherwise),
+ * so "z" is available and is the only spelling that is correct by
+ * definition rather than by a size coincidence.
+ *
+ * This used to be a ladder guarded on ACCEPT_C99 -- a symbol PRRTE's
+ * configure has never defined -- so the "zu" arm was unreachable and every
+ * build fell through to comparing SIZEOF_SIZE_T against SIZEOF_LONG and
+ * SIZEOF_LONG_LONG.  That happens to land on a working answer for the usual
+ * data models and silently lands on "u" for any where it does not. */
 #ifndef PRIsize_t
-#    if defined(ACCEPT_C99)
-#        define PRIsize_t "zu"
-#    elif SIZEOF_SIZE_T == SIZEOF_LONG
-#        define PRIsize_t "lu"
-#    elif SIZEOF_SIZE_T == SIZEOF_LONG_LONG
-#        define PRIsize_t "llu"
-#    else
-#        define PRIsize_t "u"
-#    endif
+#    define PRIsize_t "zu"
 #endif
 
 #endif /* PRTE_STDINT_H */

@@ -290,12 +290,27 @@ static int test_config_bottom(void)
     CHECK("PRTE_MAXHOSTNAMELEN is usable", PRTE_MAXHOSTNAMELEN > 64);
     CHECK("PRTE_PATH_SEP is a separator", 0 == strcmp("/", PRTE_PATH_SEP));
 
-    /* PRIsize_t is picked by comparing SIZEOF_SIZE_T against SIZEOF_LONG and
-     * SIZEOF_LONG_LONG. Get it wrong and every verbose message using it is
-     * undefined behavior rather than a compile error, because the format
-     * string is assembled by concatenation. */
+    /* PRIsize_t is used in verbose output across the tree. Get it wrong and
+     * every message using it is undefined behavior rather than a compile
+     * error, because the format string is assembled by concatenation.
+     *
+     * It is now unconditionally "zu" -- C11 is a hard requirement, so "z" is
+     * always available and is the only spelling correct by definition rather
+     * than by a size coincidence. It used to be a ladder whose "zu" arm was
+     * guarded on ACCEPT_C99, a symbol PRRTE's configure has never defined,
+     * so every build fell through to comparing SIZEOF_SIZE_T against
+     * SIZEOF_LONG and SIZEOF_LONG_LONG -- landing on a working answer for
+     * the usual data models and on "u" for any where it did not. */
     snprintf(buf, sizeof(buf), "%" PRIsize_t, val);
     CHECK("PRIsize_t formats a size_t", 0 == strcmp("1234567", buf));
+
+    /* prte_stdint.h picks intptr_t/uintptr_t by walking SIZEOF_VOID_P
+     * against SIZEOF_INT/LONG/LONG_LONG when the system does not supply
+     * them. The entire point of that ladder is that a pointer fits, and it
+     * is a #error if none of the three match -- but nothing checked the
+     * arm it lands on. */
+    CHECK("an intptr_t holds a pointer", sizeof(intptr_t) >= sizeof(void *));
+    CHECK("a uintptr_t holds a pointer", sizeof(uintptr_t) >= sizeof(void *));
 
     /* PRTE_ENABLE_IPV6 is narrowed in prte_config_bottom.h from what
      * configure asked for to what the platform can honor. It must come out
