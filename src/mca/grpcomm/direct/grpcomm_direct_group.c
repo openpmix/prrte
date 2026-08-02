@@ -665,6 +665,12 @@ static void group(int sd, short args, void *cbdata)
      * every tracker and has each daemon re-inject what it originally
      * contributed; without a copy here there would be nothing to re-inject,
      * since PRTE_RML_SEND takes ownership of the buffer we hand it. */
+    /* a daemon can enter here more than once for the same tracker - several
+     * bootstrap leaders, or a leader and a follower - so let go of any
+     * earlier copy rather than stranding it */
+    if (NULL != coll->my_contribution) {
+        PMIX_DATA_BUFFER_RELEASE(coll->my_contribution);
+    }
     PMIX_DATA_BUFFER_CREATE(coll->my_contribution);
     rc = PMIx_Data_copy_payload(coll->my_contribution, relay);
     if (PMIX_SUCCESS != rc) {
