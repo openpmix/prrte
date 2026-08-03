@@ -320,6 +320,17 @@ int prte_grpcomm_direct_group(pmix_group_operation_t op, char *grpid,
 PRTE_MODULE_EXPORT extern
 void prte_grpcomm_direct_group_fault_handler(const prte_rml_recovery_status_t* status);
 
+/* Fill in a group signature from the directives a participant supplied,
+ * along with the timeout, local status, group info and endpoint data that
+ * ride alongside it. The signature takes a COPY of every array a directive
+ * carries - the directives belong to the PMIx server that handed them to us.
+ * Exported so the unit test can drive it against a synthetic directive set. */
+PRTE_MODULE_EXPORT
+pmix_status_t prte_grpcomm_direct_group_parse_directives(prte_grpcomm_direct_group_signature_t *sig,
+                                                         const pmix_info_t *directives, size_t ndirs,
+                                                         int *timeout, pmix_status_t *st,
+                                                         void *grpinfo, void *endpts);
+
 PRTE_MODULE_EXPORT extern
 void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
                                   pmix_data_buffer_t *buffer,
