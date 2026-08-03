@@ -392,6 +392,19 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/groupcon.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
+            # faulty: a PMIx client that fails on purpose, once per way the
+            # errmgr has a policy branch for (abort, non-zero exit, signal,
+            # exit without finalize).  Both errmgr components are involved in
+            # every one of those -- the prted that owns the proc classifies
+            # and reports it, the HNP decides the fate of the job and whether
+            # the survivors are notified -- and on one host there is only one
+            # process playing both roles, so the report never crosses a wire.
+            # (No apostrophes here: see the note further down.)
+            echo ">>>> faulty (deliberate process failures) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/faulty \
+                /prrte-src/contrib/dockerswarm/faulty.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
             # slowcat: a deliberately slow stdin reader (no PMIx at all).  The
             # stdin bugs in iof live in the back-pressure path, and a normal
             # "cat" drains its pipe as fast as the daemon fills it, so the
