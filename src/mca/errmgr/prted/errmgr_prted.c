@@ -213,7 +213,7 @@ static void prted_abort(int error_code, char *fmt, ...)
     PRTE_RML_RELIABLE_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
-        PMIX_RELEASE(alert);
+        PMIX_DATA_BUFFER_RELEASE(alert);
         /* we can't communicate, so give up */
         prte_quit(0, 0, NULL);
         return;
@@ -306,7 +306,7 @@ static void job_errors(int fd, short args, void *cbdata)
     PRTE_RML_RELIABLE_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
-        PMIX_RELEASE(alert);
+        PMIX_DATA_BUFFER_RELEASE(alert);
     }
 
 cleanup:
@@ -497,7 +497,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             PRTE_RML_RELIABLE_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
-                PMIX_RELEASE(alert);
+                PMIX_DATA_BUFFER_RELEASE(alert);
             }
             /* mark that we notified the HNP for this job so we don't do it again;
              * recoverable jobs need to receive every notifications, though. */
@@ -563,7 +563,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             PRTE_RML_RELIABLE_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
-                PMIX_RELEASE(alert);
+                PMIX_DATA_BUFFER_RELEASE(alert);
             }
             /* mark that we notified the HNP for this job so we don't do it again;
              * recoverable jobs need to receive every notifications, though. */

@@ -665,7 +665,7 @@ static void group(int sd, short args, void *cbdata)
         PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, relay,
                       PRTE_RML_TAG_GROUP);
         if (PRTE_SUCCESS != rc) {
-            PMIX_RELEASE(relay);
+            PMIX_DATA_BUFFER_RELEASE(relay);
             rc = prte_pmix_convert_rc(rc);
             PMIX_DESTRUCT(&sig);
             goto error;
@@ -684,7 +684,7 @@ static void group(int sd, short args, void *cbdata)
     PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME->rank, relay,
                   PRTE_RML_TAG_GROUP);
     if (PRTE_SUCCESS != rc) {
-        PMIX_RELEASE(relay);
+        PMIX_DATA_BUFFER_RELEASE(relay);
         rc = prte_pmix_convert_rc(rc);
         goto error;
     }
