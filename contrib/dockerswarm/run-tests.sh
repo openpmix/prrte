@@ -3662,8 +3662,16 @@ test_ess() {
     # controller's rank, so the daemon would adopt the HNP identity and the
     # DVM would come apart later, nowhere near the cause.  A daemon started
     # by hand with a bad vpid must die saying so, and must not join.
+    #
+    # --leave-session-attached is what makes the diagnostic observable at
+    # all: a daemon launched normally detaches from its controlling
+    # terminal before ess init runs (prte_daemon_init_callback), so its
+    # stderr goes nowhere and the message -- which the code does emit --
+    # cannot be read from here. The flag changes nothing about the path
+    # under test, only whether we can see what it wrote.
     cleanup_swarm
-    out=$(ONT 2 'timeout -k 5 20 prted --prtemca ess_base_nspace bogus-dvm \
+    out=$(ONT 2 'timeout -k 5 20 prted --leave-session-attached \
+                     --prtemca ess_base_nspace bogus-dvm \
                      --prtemca ess_base_vpid not-a-number \
                      --prtemca prte_hnp_uri "bogus-dvm.0;tcp://127.0.0.1:1" 2>&1' 2>&1)
     echo "$out" | grep -qi 'not a valid non-negative number' \
