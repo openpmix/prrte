@@ -169,6 +169,12 @@ typedef struct {
     pmix_data_buffer_t *my_contribution;
     /* controls values */
     int timeout;
+    // the controller arms a timer for "timeout" seconds once a participant
+    // has asked for one. Nothing else bounds a fence: the PMIx server library
+    // deletes its own timeout the moment it hands the request to us, so that
+    // a late answer cannot come back to a tracker it already released.
+    prte_event_t tev;
+    bool tev_active;
     /* callback function */
     pmix_modex_cbfunc_t cbfunc;
     /* user-provided callback data */

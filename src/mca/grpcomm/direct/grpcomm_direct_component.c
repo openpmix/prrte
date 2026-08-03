@@ -122,11 +122,16 @@ static void ccon(prte_grpcomm_fence_t *p)
     p->aborting = false;
     p->my_contribution = NULL;
     p->timeout = 0;
+    p->tev_active = false;
     p->cbfunc = NULL;
     p->cbdata = NULL;
 }
 static void cdes(prte_grpcomm_fence_t *p)
 {
+    if (p->tev_active) {
+        prte_event_del(&p->tev);
+        p->tev_active = false;
+    }
     if (NULL != p->sig) {
         PMIX_RELEASE(p->sig);
     }

@@ -166,6 +166,32 @@ static void abort_fence_op(prte_grpcomm_fence_t *coll, pmix_status_t st)
     coll->aborting = true;
 }
 
+/* The controller's guard timer for a fence a participant put a deadline on.
+ * Firing it completes every participant with PMIX_ERR_TIMEOUT rather than
+ * leaving them blocked in PMIx_Fence forever.
+ *
+ * Nothing else is watching. The PMIx server library arms a timeout of its own
+ * while it gathers the local contributions, but deletes it the moment the
+ * request is handed to us - deliberately, so that an answer arriving after it
+ * fired cannot reach a tracker it has already released. From that point the
+ * deadline the caller asked for exists only here. */
+static void fence_timeout(int sd, short args, void *cbdata)
+{
+    prte_grpcomm_fence_t *coll = (prte_grpcomm_fence_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_ACQUIRE_OBJECT(coll);
+    coll->tev_active = false;
+    if (coll->converged || coll->aborting) {
+        return;
+    }
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+                         "%s grpcomm:direct:fence timeout after %d seconds",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->timeout));
+    coll->status = PMIX_ERR_TIMEOUT;
+    abort_fence_op(coll, PMIX_ERR_TIMEOUT);
+}
+
 void prte_grpcomm_direct_fence_restart(void)
 {
     prte_grpcomm_fence_t *coll, *nxt;
@@ -433,6 +459,7 @@ void prte_grpcomm_direct_fence_recv(int status, pmix_proc_t *sender,
     int32_t cnt;
     int rc, timeout, slot;
     uint32_t stamp;
+    struct timeval tv;
     size_t n, ninfo;
     pmix_status_t st;
     pmix_info_t *info = NULL;
@@ -559,6 +586,19 @@ void prte_grpcomm_direct_fence_recv(int status, pmix_proc_t *sender,
         }
     }
 
+    /* Arm the deadline, if a participant asked for one. Only on the
+     * controller: it is the one daemon every rollup reaches, so it is the
+     * only one that can tell a fence that will never converge from one that
+     * simply has not yet. */
+    if (PRTE_PROC_IS_MASTER && !coll->tev_active && 0 < coll->timeout) {
+        prte_event_evtimer_set(prte_event_base, &coll->tev, fence_timeout, coll);
+        tv.tv_sec = coll->timeout;
+        tv.tv_usec = 0;
+        coll->tev_active = true;
+        PMIX_POST_OBJECT(coll);
+        prte_event_evtimer_add(&coll->tev, &tv);
+    }
+
     /* transfer any data */
     rc = PMIx_Data_copy_payload(&coll->bucket, buffer);
     if (PMIX_SUCCESS != rc) {
@@ -610,6 +650,11 @@ static void check_complete(prte_grpcomm_fence_t *coll)
         return;
     }
     coll->converged = true;
+    /* the fence resolved, so the guard timer has done its job */
+    if (coll->tev_active) {
+        prte_event_del(&coll->tev);
+        coll->tev_active = false;
+    }
 
     if (PRTE_PROC_IS_MASTER) {
         PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
