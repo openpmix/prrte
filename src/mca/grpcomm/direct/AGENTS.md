@@ -227,6 +227,27 @@ contribution never entered the rollup, so no release is coming. The handler
 completes its own participants with the reason, after clearing the
 tracker's `cbfunc` so a later abort cannot complete them twice.
 
+**The fence's deadline is the DVM's to keep.** A participant can put a
+`PMIX_TIMEOUT` on a fence, and the controller arms a timer for it on the
+first contribution that carries one (largest offered wins), disarming on
+convergence and ending the fence with `PMIX_ERR_TIMEOUT` through
+`abort_fence_op()` if it fires. Nothing else is watching: the PMIx server
+library arms a timeout of its own while it gathers the *local*
+contributions, then deletes it the instant the request is handed to the
+host — deliberately, so a late host answer cannot reach a tracker it
+already released. From that hand-off on, the deadline exists only here.
+The harness cannot reproduce a firing: a fence that stalls for a reason
+the fault handler already covers is aborted by the fault handler instead,
+and one that stalls before the local contributions are complete is timed
+out by PMIx before the DVM ever sees it.
+
+**A release with no local callback still has data to free.** `fence_release`
+unloads the broadcast into a byte object and hands it to `coll->cbfunc`,
+which frees it via `relcb` when the PMIx server is done. A daemon that
+holds a tracker only because it relayed for its subtree has no `cbfunc`,
+and that is the common case on any interior daemon — so that branch has to
+free the payload itself.
+
 The fence `fault_handler` restarts what it can and ends what it cannot.
 A fence whose participants all survive lost only a message path and
 re-converges over the repaired tree at the new recovery epoch — so the
