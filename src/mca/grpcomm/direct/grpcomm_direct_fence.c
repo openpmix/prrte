@@ -203,6 +203,20 @@ void prte_grpcomm_direct_fence_restart(void)
         if (coll->aborting) {
             continue;
         }
+        /* A collective the controller has already answered is finished:
+         * its release is on the wire, ordered ahead of anything we could
+         * send now, and every daemon will retire its tracker when that
+         * release lands. Re-running the rollup here would answer it a
+         * second time - a second release broadcast, a second context id
+         * consumed, and a second registration of the same group on every
+         * daemon. Note this is a test only the controller can apply:
+         * "converged" on any other daemon means it rolled its aggregate up
+         * to its parent, and re-sending that aggregate is precisely what
+         * recovery is for, since the failure may have been what swallowed
+         * it. */
+        if (PRTE_PROC_IS_MASTER && coll->converged) {
+            continue;
+        }
 
         /* throw away everything gathered under the old tree */
         pmix_bitmap_clear_all_bits(&coll->reported_slots);
@@ -275,7 +289,7 @@ void prte_grpcomm_direct_fence_fault_handler(const prte_rml_recovery_status_t* s
         if (PRTE_PROC_IS_MASTER && 0 == status->failed_ranks.size) {
             PMIX_LIST_FOREACH_SAFE(coll, nxt, &prte_mca_grpcomm_direct_component.fence_ops,
                                    prte_grpcomm_fence_t) {
-                if (!coll->aborting) {
+                if (!coll->aborting && !coll->converged) {
                     abort_fence_op(coll, PMIX_ERR_LOST_CONNECTION);
                 }
             }
@@ -288,7 +302,8 @@ void prte_grpcomm_direct_fence_fault_handler(const prte_rml_recovery_status_t* s
     }
     PMIX_LIST_FOREACH_SAFE(coll, nxt, &prte_mca_grpcomm_direct_component.fence_ops,
                            prte_grpcomm_fence_t) {
-        if (coll->aborting) {
+        /* already answered, or already being torn down */
+        if (coll->aborting || coll->converged) {
             continue;
         }
         if (!prte_grpcomm_direct_procs_lost(coll->sig->signature, coll->sig->sz)) {
