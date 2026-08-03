@@ -297,12 +297,23 @@ void prte_hwloc_base_close(void)
         prte_hwloc_default_cpu_list = NULL;
     }
 
-    /* destroy the topology */
-    if (NULL != prte_hwloc_topology) {
-        prte_hwloc_base_release_userdata(prte_hwloc_topology);
-        hwloc_topology_destroy(prte_hwloc_topology);
-        prte_hwloc_topology = NULL;
-    }
+    /* Drop our reference to the local topology WITHOUT destroying it.
+     *
+     * prte_hwloc_topology is not ours to free by the time we get here. The
+     * only two callers of prte_hwloc_base_get_topology() - ess/hnp and the
+     * shared daemon bring-up - each immediately wrap it in a prte_topology_t
+     * and add that to prte_node_topologies, and THAT object's destructor
+     * releases the userdata and destroys the topology. So the array owns
+     * every topology it holds, the local one included, and this global is a
+     * borrowed alias of one of its entries.
+     *
+     * Destroying it here as well is a double free, which is exactly why this
+     * function ended up with no callers at all: it could not be called
+     * either before the array release (the array would then destroy freed
+     * memory) or after it (we would). Clearing the alias instead is correct
+     * in both orders, so the ordering stops being a trap.
+     */
+    prte_hwloc_topology = NULL;
 
     /* All done */
     prte_hwloc_base_inited = false;

@@ -225,6 +225,13 @@ int prte_finalize(void)
     }
     PMIX_RELEASE(prte_node_topologies);
 
+    /* Now that every topology is gone, close the hwloc base: it frees the
+     * state that really is its own (the DVM cpu-set) and drops its borrowed
+     * alias of the local topology the array just destroyed.  prte_init calls
+     * prte_hwloc_base_open(); until now nothing anywhere called its
+     * counterpart, so the cpu-set was leaked on every run that used one. */
+    prte_hwloc_base_close();
+
     /* Close the general debug stream */
     pmix_output_close(prte_debug_output);
 
