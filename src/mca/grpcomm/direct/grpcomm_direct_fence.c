@@ -771,6 +771,13 @@ void prte_grpcomm_direct_fence_release(int status, pmix_proc_t *sender,
     /* execute the callback */
     if (NULL != coll->cbfunc) {
         coll->cbfunc(ret, bo.bytes, bo.size, coll->cbdata, relcb, bo.bytes);
+    } else {
+        /* Nobody here was waiting on this fence: we hold a tracker because we
+         * relayed for our subtree, not because we had a participant of our
+         * own. The gathered data is still ours to free - relcb is the only
+         * other thing that frees it, and it only ever runs because the
+         * callback above was handed it. */
+        PMIX_BYTE_OBJECT_DESTRUCT(&bo);
     }
     pmix_list_remove_item(&prte_mca_grpcomm_direct_component.fence_ops, &coll->super);
     PMIX_RELEASE(coll);
