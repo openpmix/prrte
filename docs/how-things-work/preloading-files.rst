@@ -51,7 +51,8 @@ Two directives change this:
 * The ``filem_raw_flatten_directory_trees`` MCA parameter reduces *every*
   preloaded file to its basename, so nothing lands in a subdirectory.
 
-An archive |mdash| a file whose name ends in ``.tar``, ``.bz`` or ``.gz``
+An archive |mdash| a file whose name ends in ``.tar``, ``.tar.gz``,
+``.tgz``, ``.gz``, ``.tar.bz2``, ``.tbz``, ``.tbz2``, ``.bz2`` or ``.bz``
 |mdash| is unpacked, and it is the *contents* that are placed, at the paths
 the archive names them by, relative to the working directory.
 

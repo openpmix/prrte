@@ -83,6 +83,11 @@ PRTE_EXPORT const char *prte_filem_base_strip_leading_dots(const char *path);
  */
 PRTE_EXPORT bool prte_filem_base_has_dotdot(const char *path);
 
+/* Single-quote a path for use in a shell command line. Returns newly
+ * allocated storage the caller must free, or NULL if out of memory.
+ */
+PRTE_EXPORT char *prte_filem_base_shell_quote(const char *path);
+
 END_C_DECLS
 
 #endif /* PRTE_FILEM_BASE_H */

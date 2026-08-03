@@ -4478,6 +4478,33 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     [ "$c" = 0 ] && ok "no daemons linger after the refused preload" || bad "$c stray prted after refused preload"
     for n in 1 2 3; do docker exec "$NODE$n" sh -c 'rm -f /root/pf.dat' >/dev/null 2>&1; done
 
+    banner "filem: --preload-files unpacks an archive whose name has a space"
+    # Two things at once, both of which used to fail. The extract and the
+    # listing go through a shell, so an ordinary "my data" reached tar as two
+    # arguments; and the type was read from the FIRST dot in the name, so
+    # "v2.tar.gz" classified as a plain file and was never unpacked at all.
+    # Both are only visible cross-node: the archive's contents already exist
+    # beside the archive on the node it was built on.
+    docker exec "${NODE}1" bash -lc 'rm -rf /root/pfarc && mkdir -p /root/pfarc/inner \
+        && echo ARCHIVED-DATA-OK > /root/pfarc/inner/a.txt \
+        && cd /root/pfarc && tar czf "/root/my run.v2.tar.gz" inner/a.txt' >/dev/null 2>&1
+    for n in 2 3; do docker exec "$NODE$n" sh -c 'rm -rf /root/inner "/root/my run.v2.tar.gz"' >/dev/null 2>&1; done
+    if RUN 'test -f "/root/my run.v2.tar.gz"'; then
+        out=$(RUN 'cd /root && prterun --host node2:1,node3:1 -np 2 --map-by node \
+                     --preload-files "/root/my run.v2.tar.gz" -- sh -c "cat inner/a.txt"' 2>&1); rc=$?
+        hits=$(echo "$out" | grep -c 'ARCHIVED-DATA-OK')
+        [ "$rc" = 0 ] && [ "$hits" = 2 ] \
+            && ok "an archive named with a space and a double suffix was staged and unpacked" \
+            || bad "archive preload failed (rc=$rc, hits=$hits): $(echo "$out" | tr '\n' ' ')"
+    else
+        bad "could not build the test archive on node1 (need tar/gzip in the image)"
+    fi
+    c=$(prted_settle 10 1 2 3 4 5 6 7 8 9 10)
+    [ "$c" = 0 ] && ok "no daemons linger after the archive preload" || bad "$c stray prted after archive preload"
+    for n in 1 2 3; do
+        docker exec "$NODE$n" sh -c 'rm -rf /root/pfarc /root/inner "/root/my run.v2.tar.gz"' >/dev/null 2>&1
+    done
+
     banner "iof: stdin forwarded to a REMOTE proc (HNP -> prted -> proc)"
     # Rank 0 is mapped onto node2, not the head node, so every stdin byte must
     # travel HNP -> RML(PRTE_RML_TAG_IOF_PROXY) -> prted -> the proc's stdin
