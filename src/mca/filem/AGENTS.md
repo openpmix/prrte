@@ -266,7 +266,13 @@ daemon at fork time.**
 - **`preposition_files` MUST fire its callback on every exit path**
   (including "nothing to stage" and error), or the job wedges at
   `VM_READY` forever. The "none" module and `raw` both take care to do
-  this.
+  this. A non-success status becomes
+  `PRTE_JOB_STATE_FILES_POSN_FAILED`, which `errmgr/dvm` treats as one of
+  the never-launched states: the requestor gets
+  `PMIX_ERR_JOB_FAILED_TO_LAUNCH` and the job object is driven to
+  `TERMINATED`. Both of those had to be added — the state was missing from
+  each list, so a refused pre-position told the tool only `PMIX_ERROR` and
+  left the job behind in a persistent DVM.
 - **Two entry points, two ends of the DVM.** `preposition_files` runs on
   the HNP; `link_local_files` runs on the daemon. Don't assume a single
   address space or that HNP-side state is visible daemon-side — the only
