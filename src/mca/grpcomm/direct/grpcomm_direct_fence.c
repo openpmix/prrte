@@ -49,6 +49,41 @@ static int fence_sig_unpack(pmix_data_buffer_t *buffer,
                             prte_grpcomm_direct_fence_signature_t **sig);
 static void check_complete(prte_grpcomm_fence_t *coll);
 
+/* Work out how many contributions this daemon has to collect for a fence:
+ * one per child subtree holding a participant, plus our own if we are one.
+ *
+ * create_dmns() has one answer it gives without an array: a signature naming
+ * the daemon job itself is "every daemon in the DVM", reported as a count
+ * with a NULL array.  There is nothing to walk in that case, but the answer
+ * is known exactly - each of our children heads a subtree holding at least
+ * one daemon, and we are a participant ourselves.  A NULL array with a zero
+ * count is the opposite statement, "no daemons at all", and falls through to
+ * the general case, which reads it as zero.
+ *
+ * Called again on every recovery, because both terms move: a failure can
+ * take our children and can take participants. */
+static void set_nexpected(prte_grpcomm_fence_t *coll)
+{
+    size_t n;
+
+    if (NULL == coll->dmns && 0 < coll->ndmns) {
+        coll->nexpected = prte_rml_base.n_children + 1;
+        return;
+    }
+
+    coll->nexpected = prte_rml_get_num_contributors(coll->dmns, coll->ndmns);
+
+    /* see if I am in the array of participants - note that I may
+     * be in the rollup tree even though I'm not participating
+     * in the collective itself */
+    for (n = 0; n < coll->ndmns; n++) {
+        if (coll->dmns[n] == PRTE_PROC_MY_NAME->rank) {
+            coll->nexpected++;
+            break;
+        }
+    }
+}
+
 int prte_grpcomm_direct_fence(const pmix_proc_t procs[], size_t nprocs,
                               const pmix_info_t info[], size_t ninfo, char *data,
                               size_t ndata, pmix_modex_cbfunc_t cbfunc, void *cbdata)
@@ -135,7 +170,6 @@ void prte_grpcomm_direct_fence_restart(void)
 {
     prte_grpcomm_fence_t *coll, *nxt;
     pmix_data_buffer_t *framed;
-    size_t n;
     int rc;
 
     PMIX_LIST_FOREACH_SAFE(coll, nxt, &prte_mca_grpcomm_direct_component.fence_ops,
@@ -155,13 +189,7 @@ void prte_grpcomm_direct_fence_restart(void)
         /* recompute what the repaired tree owes us - dmns stays the full
          * pre-fault set, and get_num_contributors() already skips the daemons
          * now known to have failed */
-        coll->nexpected = prte_rml_get_num_contributors(coll->dmns, coll->ndmns);
-        for (n = 0; n < coll->ndmns; n++) {
-            if (coll->dmns[n] == PRTE_PROC_MY_NAME->rank) {
-                coll->nexpected++;
-                break;
-            }
-        }
+        set_nexpected(coll);
 
         PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                              "%s grpcomm:direct:fence restarting at epoch %u, "
@@ -717,7 +745,6 @@ static prte_grpcomm_fence_t* get_tracker(prte_grpcomm_direct_fence_signature_t *
 {
     prte_grpcomm_fence_t *coll;
     int rc;
-    size_t n;
 
     /* search the existing tracker list to see if this already exists */
     PMIX_LIST_FOREACH(coll, &prte_mca_grpcomm_direct_component.fence_ops, prte_grpcomm_fence_t) {
@@ -744,28 +771,26 @@ static prte_grpcomm_fence_t* get_tracker(prte_grpcomm_direct_fence_signature_t *
     // we have to know the participating procs
     coll->sig = PMIX_NEW(prte_grpcomm_direct_fence_signature_t);
     coll->sig->sz = sig->sz;
-    coll->sig->signature = (pmix_proc_t *) malloc(coll->sig->sz * sizeof(pmix_proc_t));
-    memcpy(coll->sig->signature, sig->signature, coll->sig->sz * sizeof(pmix_proc_t));
+    if (0 < coll->sig->sz) {
+        coll->sig->signature = (pmix_proc_t *) malloc(coll->sig->sz * sizeof(pmix_proc_t));
+        memcpy(coll->sig->signature, sig->signature, coll->sig->sz * sizeof(pmix_proc_t));
+    }
     pmix_list_append(&prte_mca_grpcomm_direct_component.fence_ops, &coll->super);
 
     /* now get the daemons involved */
     if (PRTE_SUCCESS != (rc = create_dmns(sig, &coll->dmns, &coll->ndmns))) {
         PRTE_ERROR_LOG(rc);
+        /* a tracker with no daemon set can never be completed, and leaving it
+         * on the list is worse than losing it: the next fence of the same
+         * signature would find this one, see a rollup that expects nothing,
+         * and answer with data it never gathered */
+        pmix_list_remove_item(&prte_mca_grpcomm_direct_component.fence_ops, &coll->super);
+        PMIX_RELEASE(coll);
         return NULL;
     }
 
     /* count the number of contributions we should get */
-    coll->nexpected = prte_rml_get_num_contributors(coll->dmns, coll->ndmns);
-
-    /* see if I am in the array of participants - note that I may
-     * be in the rollup tree even though I'm not participating
-     * in the collective itself */
-    for (n = 0; n < coll->ndmns; n++) {
-        if (coll->dmns[n] == PRTE_PROC_MY_NAME->rank) {
-            coll->nexpected++;
-            break;
-        }
-    }
+    set_nexpected(coll);
 
     return coll;
 }
@@ -798,6 +823,16 @@ static int create_dmns(prte_grpcomm_direct_fence_signature_t *sig,
                          "%s grpcomm:direct:fence:create_dmns called with %s signature size %" PRIsize_t "",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (NULL == sig->signature) ? "NULL" : "NON-NULL", sig->sz));
+
+    /* a signature naming nobody has no daemons behind it. This is not
+     * reachable from a local client, but the signature also arrives off the
+     * wire, where a truncated message unpacks to exactly this - and the
+     * nspace test below would read signature[0] of an array that is NULL */
+    if (0 == sig->sz || NULL == sig->signature) {
+        *dmns = NULL;
+        *ndmns = 0;
+        return PRTE_SUCCESS;
+    }
 
     /* if the target jobid is our own,
      * then all daemons are participating */
