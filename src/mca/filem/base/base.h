@@ -15,7 +15,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -68,6 +68,20 @@ PRTE_EXPORT int prte_filem_base_none_wait_all(pmix_list_t *request_list);
 int prte_filem_base_none_preposition_files(prte_job_t *jdata, prte_filem_completion_cbfunc_t cbfunc,
                                            void *cbdata);
 int prte_filem_base_none_link_local_files(prte_job_t *jdata, prte_app_context_t *app);
+
+/**
+ * Path safety helpers - see filem_base_fns.c
+ */
+/* Skip any leading "./" or "../" components of a relative path, returning
+ * a pointer into the string given. A name that merely starts with a dot
+ * (".bashrc") is left alone.
+ */
+PRTE_EXPORT const char *prte_filem_base_strip_leading_dots(const char *path);
+
+/* True if any component of the path is "..", i.e. following it would step
+ * above the directory the file is meant to land in.
+ */
+PRTE_EXPORT bool prte_filem_base_has_dotdot(const char *path);
 
 END_C_DECLS
 

@@ -16,7 +16,7 @@
  * asynchronous, progress-thread, multi-node I/O and cannot run without a
  * live DVM; it is covered by the integration harnesses.
  *
- * What *can* be exercised in isolation are the two pieces the base owns
+ * What *can* be exercised in isolation are the three pieces the base owns
  * with no I/O:
  *
  *   1. The three reference-counted request classes
@@ -33,6 +33,12 @@
  *      fix -- the fault_handler slot must be non-NULL and callable, since
  *      routed_radix.c invokes prte_filem.fault_handler() unconditionally
  *      on every daemon-fault recovery even when filem is "none".
+ *
+ *   3. The naming rules that keep a preloaded file inside the directory it
+ *      is meant to land in -- what gets stripped, what gets refused, and
+ *      what a dot-file must survive.  These are the whole of filem's
+ *      path-safety property and they are pure functions, so nothing about
+ *      them needs a DVM to check.
  */
 
 #include "prte_config.h"
@@ -175,6 +181,49 @@ static int test_none_module(void)
     return failures;
 }
 
+/*
+ * The naming rules that keep a preloaded file inside the directory it is
+ * meant to land in.
+ */
+static int test_path_rules(void)
+{
+    int failures = 0;
+
+    /* leading dot directories are what a user types and what the app does
+     * NOT open the file by -- they come off */
+    CHECK("strip ./f", 0 == strcmp("f", prte_filem_base_strip_leading_dots("./f")));
+    CHECK("strip ../f", 0 == strcmp("f", prte_filem_base_strip_leading_dots("../f")));
+    CHECK("strip ../../a/b", 0 == strcmp("a/b", prte_filem_base_strip_leading_dots("../../a/b")));
+    CHECK("strip /a/b", 0 == strcmp("a/b", prte_filem_base_strip_leading_dots("/a/b")));
+    /* a name that merely begins with a dot is a dot-FILE and is left be */
+    CHECK("keep .bashrc", 0 == strcmp(".bashrc", prte_filem_base_strip_leading_dots(".bashrc")));
+    CHECK("keep ./.bashrc", 0 == strcmp(".bashrc", prte_filem_base_strip_leading_dots("./.bashrc")));
+    /* an ordinary relative path is untouched -- that is the name the app
+     * will open it by */
+    CHECK("keep sub/f.dat", 0 == strcmp("sub/f.dat", prte_filem_base_strip_leading_dots("sub/f.dat")));
+    CHECK("strip empty", 0 == strcmp("", prte_filem_base_strip_leading_dots("")));
+
+    /* ".." anywhere else is the case stripping does not cover: these all
+     * resolve outside the directory the file is placed in */
+    CHECK("dotdot a/../../f", prte_filem_base_has_dotdot("a/../../f"));
+    CHECK("dotdot leading", prte_filem_base_has_dotdot("../f"));
+    CHECK("dotdot trailing", prte_filem_base_has_dotdot("a/.."));
+    CHECK("dotdot alone", prte_filem_base_has_dotdot(".."));
+    /* ... and these do not, however dot-heavy they look */
+    CHECK("no dotdot in ..f", !prte_filem_base_has_dotdot("..f"));
+    CHECK("no dotdot in a/..f/b", !prte_filem_base_has_dotdot("a/..f/b"));
+    CHECK("no dotdot in a..b", !prte_filem_base_has_dotdot("a..b"));
+    CHECK("no dotdot in plain", !prte_filem_base_has_dotdot("sub/dir/f.dat"));
+    CHECK("no dotdot in dotfile", !prte_filem_base_has_dotdot(".bashrc"));
+    CHECK("no dotdot in empty", !prte_filem_base_has_dotdot(""));
+    CHECK("no dotdot in dot", !prte_filem_base_has_dotdot("."));
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_path_rules\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -200,6 +249,7 @@ int main(void)
 
     failures += test_classes();
     failures += test_none_module();
+    failures += test_path_rules();
 
     (void) pmix_mca_base_framework_close(&prte_filem_base_framework);
 

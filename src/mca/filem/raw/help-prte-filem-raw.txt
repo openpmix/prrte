@@ -21,6 +21,20 @@ there, and its contents are not what was to be staged.
 PRRTE will not overwrite a file it did not put there, so the job has been
 aborted.
 #
+[preload-bad-path]
+A file requested for preloading cannot be delivered under the name it was
+given:
+
+   File: %s
+
+A preloaded file is always placed inside the working directory of the
+processes that are to use it, so the name it is delivered under must be a
+plain relative path within that directory. A name containing a ".."
+component would place the file outside it - somewhere the application
+never asked for, on every node of the DVM - so the job has been aborted.
+Name the file by a path relative to the directory it should appear in, or
+by an absolute path (in which case it is delivered under its basename).
+#
 [preload-name-clash]
 Two different files requested for preloading would be delivered under the
 same name in the working directory of the processes that are to use them:

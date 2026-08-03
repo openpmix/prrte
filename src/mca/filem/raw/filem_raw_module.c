@@ -291,7 +291,10 @@ static int raw_preposition_files(prte_job_t *jdata,
             }
             free(app->argv[0]);
             app->argv[0] = strdup(app->app);
-            fs->remote_target = strdup(app->app);
+            /* the delivered name is what the app will open, relative to
+             * the directory it lands in - so it carries no leading "./"
+             */
+            fs->remote_target = strdup(prte_filem_base_strip_leading_dots(app->app));
             /* ensure the app uses that location as its cwd */
             prte_set_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD,
                                PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
@@ -354,45 +357,23 @@ static int raw_preposition_files(prte_job_t *jdata,
                         fs->remote_target = strdup(files[j]);
                     }
                 }
-                pmix_list_append(&fsets, &fs->super);
-                /* prep the filename for matching on the remote
-                 * end by stripping any leading '.' directories to avoid
-                 * stepping above the session dir location - all
-                 * files will be relative to that point. Ensure
-                 * we *don't* mistakenly strip the dot from a
-                 * filename that starts with one
+                /* strip any leading '.' directories to avoid stepping
+                 * above the session dir location - all files will be
+                 * relative to that point. Normalize the file set's own
+                 * copy, so the name we check for clashes, the name we
+                 * broadcast, and the name we hand back to the app are
+                 * all one and the same
                  */
-                cptr = fs->remote_target;
-                nxt = cptr;
-                nxt++;
-                while ('\0' != *cptr) {
-                    if ('.' == *cptr) {
-                        /* have to check the next character to
-                         * see if it's a dotfile or not
-                         */
-                        if ('.' == *nxt || '/' == *nxt) {
-                            cptr = nxt;
-                            nxt++;
-                        } else {
-                            /* if the next character isn't a dot
-                             * or a slash, then this is a dot-file
-                             * and we need to leave it alone
-                             */
-                            break;
-                        }
-                    } else if ('/' == *cptr) {
-                        /* move to the next character */
-                        cptr = nxt;
-                        nxt++;
-                    } else {
-                        /* the character isn't a dot or a slash,
-                         * so this is the beginning of the filename
-                         */
-                        break;
-                    }
+                cptr = (char *) prte_filem_base_strip_leading_dots(fs->remote_target);
+                if (cptr != fs->remote_target) {
+                    nxt = strdup(cptr);
+                    free(fs->remote_target);
+                    fs->remote_target = nxt;
                 }
+                pmix_list_append(&fsets, &fs->super);
+                /* prep the filename for matching on the remote end */
                 free(files[j]);
-                files[j] = strdup(cptr);
+                files[j] = strdup(fs->remote_target);
             }
             /* replace the app's file list with the revised one so we
              * can find them on the remote end
@@ -405,6 +386,29 @@ static int raw_preposition_files(prte_job_t *jdata,
             free(filestring);
         }
     }
+    /* Every delivered name has to be a plain relative path *under* the
+     * directory the file lands in. Stripping the leading dot directories
+     * above is not enough to guarantee that: a ".." anywhere else in the
+     * path ("a/../../f") still steps above the session directory on every
+     * node, where the file would be created with O_TRUNC over whatever is
+     * already there. Refuse the request rather than honor it.
+     */
+    for (item = pmix_list_get_first(&fsets); item != pmix_list_get_end(&fsets);
+         item = pmix_list_get_next(item)) {
+        fs = (prte_filem_base_file_set_t *) item;
+        if (NULL == fs->remote_target || '\0' == fs->remote_target[0] ||
+            0 == strcmp(fs->remote_target, ".") ||
+            prte_filem_base_has_dotdot(fs->remote_target)) {
+            pmix_show_help("help-prte-filem-raw.txt", "preload-bad-path", true,
+                           fs->local_target);
+            PMIX_LIST_DESTRUCT(&fsets);
+            if (NULL != cbfunc) {
+                cbfunc(PRTE_ERR_BAD_PARAM, cbdata);
+            }
+            return PRTE_SUCCESS;
+        }
+    }
+
     /* Two different files that would be delivered under the same name in
      * the working directory cannot both be delivered - the second would
      * overwrite the first, silently, and whichever app opened that name
@@ -545,43 +549,11 @@ static int raw_preposition_files(prte_job_t *jdata,
         xfer = PMIX_NEW(prte_filem_raw_xfer_t);
         /* save the source so we can avoid duplicate transfers */
         xfer->src = strdup(fs->local_target);
-        /* strip any leading '.' directories to avoid
-         * stepping above the session dir location - all
-         * files will be relative to that point. Ensure
-         * we *don't* mistakenly strip the dot from a
-         * filename that starts with one
-         */
-        cptr = fs->remote_target;
-        nxt = cptr;
-        nxt++;
-        while ('\0' != *cptr) {
-            if ('.' == *cptr) {
-                /* have to check the next character to
-                 * see if it's a dotfile or not
-                 */
-                if ('.' == *nxt || '/' == *nxt) {
-                    cptr = nxt;
-                    nxt++;
-                } else {
-                    /* if the next character isn't a dot
-                     * or a slash, then this is a dot-file
-                     * and we need to leave it alone
-                     */
-                    break;
-                }
-            } else if ('/' == *cptr) {
-                /* move to the next character */
-                cptr = nxt;
-                nxt++;
-            } else {
-                /* the character isn't a dot or a slash,
-                 * so this is the beginning of the filename
-                 */
-                break;
-            }
-        }
         xfer->fd = fd;
-        xfer->file = strdup(cptr);
+        /* remote_target was normalized and validated above - it is already
+         * the relative name the receiving daemon is to write it under
+         */
+        xfer->file = strdup(fs->remote_target);
         xfer->type = fs->target_flag;
         xfer->app_idx = fs->app_idx;
         xfer->outbound = outbound;
@@ -1222,6 +1194,16 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
             continue;
         }
+        /* an archive member that steps above the directory it is unpacked
+         * in is not ours to place - tar itself refuses to extract one, so
+         * there is nothing there to link to anyway
+         */
+        if (prte_filem_base_has_dotdot(path) || '/' == path[0]) {
+            PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
+                                 "%s filem:raw: path %s is not relative - ignoring it",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
+            continue;
+        }
         /* ignore specific useless directory trees */
         if (NULL != strstr(path, ".deps")) {
             PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
@@ -1258,6 +1240,16 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         send_complete(NULL, rc);
+        return;
+    }
+    /* the sender is supposed to have forced this name relative to the
+     * session directory - refuse it if it steps above, rather than
+     * truncating whatever sits at the resulting path
+     */
+    if (prte_filem_base_has_dotdot(file)) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        send_complete(file, PRTE_ERR_BAD_PARAM);
+        free(file);
         return;
     }
     n = 1;

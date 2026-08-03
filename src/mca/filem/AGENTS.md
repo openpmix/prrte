@@ -63,10 +63,11 @@ it — that ordering is load-bearing.
 filem/
   filem.h                     # module/component vtable + the request/file-set/process-set classes
   base/
-    base.h                    # framework-global decls and the "none" no-op prototypes
+    base.h                    # framework-global decls, the "none" no-op prototypes, path helpers
     filem_base_frame.c        # framework open/close; the default "none" prte_filem module
     filem_base_select.c       # component selection — classic PICK-ONE (single winner)
-    filem_base_fns.c          # the request/file-set/process-set PMIX_CLASS_INSTANCEs + all "none" no-ops
+    filem_base_fns.c          # the request/file-set/process-set PMIX_CLASS_INSTANCEs, all "none"
+                              #   no-ops, and the path-safety helpers
     owner.txt                 # owner/status (INTEL, maintenance)
   raw/                        # the ONLY component (pri 0): xcast-based chunked staging
 ```
@@ -139,8 +140,9 @@ module is what you get only if `raw` is unbuilt/unselected.
 
 ## What `base/` provides
 
-The base is thin. It contributes the data classes and the no-op fallback
-module.
+The base is thin. It contributes the data classes, the no-op fallback
+module, and the path-safety helpers that define what a delivered name may
+be.
 
 ### Data structures (`filem.h` + `filem_base_fns.c`)
 
@@ -185,6 +187,25 @@ the DVM the first time a daemon failed while filem was unselected. If you
 add a field to the module vtable, give the none module a no-op for it and
 confirm no unconditional caller dereferences a NULL slot.
 
+### The path-safety helpers (`filem_base_fns.c`)
+
+A preloaded file is always delivered *inside* a directory PRRTE chose —
+the node's top session directory on the way in, the app's working
+directory on the way out. Keeping it there is entirely a property of the
+**name**, so the naming rules live in the base, next to the classes that
+carry those names, where they can be tested with no DVM:
+
+| Helper | Rule |
+|--------|------|
+| `prte_filem_base_strip_leading_dots(path)` | Skip leading `./` and `../` components, returning a pointer into the string given. A name that merely *begins* with a dot (`.bashrc`) is a dot-**file** and is left alone. |
+| `prte_filem_base_has_dotdot(path)` | True if any `/`-separated component is exactly `..`. Stripping the leading dot directories is **not** sufficient: `a/../../f` has none at the front and still lands two levels above where it was meant to go. |
+
+`raw` applies both to every name it is about to broadcast, and
+`has_dotdot` again to every name it *receives* and to every archive member
+it enumerates — a delivered name that escapes its directory would be
+created with `O_TRUNC` over whatever is already at that path, on every
+node of the DVM. `test/unit/filem` pins them.
+
 ### There is no base RML service
 
 The base used to carry a `prte_filem_base_comm_start()` /
@@ -220,12 +241,16 @@ daemon at fork time.**
 
 ## Conventions & gotchas
 
-- **Preload paths are forced relative.** A preloaded file is always
-  placed under the app's working directory, never at an absolute path, so
-  a stray `/etc/...` can never be overwritten on a remote node. Preserve
-  that safety property. A relative specification keeps its relative path
-  (that is the name the app opens it by); an absolute one is placed under
-  its basename.
+- **Preload paths are forced relative *and* kept from stepping up.** A
+  preloaded file is always placed under the app's working directory, never
+  at an absolute path, so a stray `/etc/...` can never be overwritten on a
+  remote node. Preserve that safety property. A relative specification
+  keeps its relative path (that is the name the app opens it by); an
+  absolute one is placed under its basename; leading `./`/`../` come off;
+  and a `..` anywhere else in the name is **refused outright**
+  (`preload-bad-path`) rather than resolved. Use the base helpers above
+  rather than re-deriving the rules — they were re-derived twice already
+  and one copy was wrong.
 - **An existing file is never overwritten.** If something of that name is
   already in the working directory and is not byte-for-byte what was to be
   staged, the placement fails with `PRTE_ERR_PRELOAD_CONFLICT` and the
@@ -282,7 +307,9 @@ What *is* unit-testable with no DVM lives in
 - the default **"none" module** — every slot is a success-returning
   no-op, `preposition_files` fires its completion callback, and
   `fault_handler` is non-NULL and callable (the regression pin for the
-  `routed_radix.c` crash described above).
+  `routed_radix.c` crash described above);
+- the **path-safety helpers** — what gets stripped, what gets refused, and
+  what a dot-file must survive.
 
 The test opens the framework but deliberately does **not** run
 `prte_filem_base_select()`, so `prte_filem` stays the none module.
