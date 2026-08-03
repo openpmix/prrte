@@ -27,6 +27,13 @@
 
 #include <signal.h>
 
+/* the highest signal number this platform can deliver; a few systems still
+ * lack the definition, so fall back to the historical minimum as the
+ * stacktrace code does */
+#ifndef _NSIG
+#    define _NSIG 32
+#endif
+
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/runtime/prte_globals.h"
@@ -213,7 +220,6 @@ pmix_status_t prte_ess_base_setup_signals(char *input)
     if (0 == strcasecmp(mysignals, "none") || signals_added) {
         return PMIX_SUCCESS;
     }
-    signals_added = true; // only do this once
 
     // handle the "all" special case
     if (0 == strcasecmp(mysignals, "all")) {
@@ -225,6 +231,7 @@ pmix_status_t prte_ess_base_setup_signals(char *input)
                 ESS_ADDSIGNAL(known_signals[i].signal, known_signals[i].signame);
             }
         }
+        signals_added = true;
         return PMIX_SUCCESS;
     }
 
@@ -237,6 +244,17 @@ pmix_status_t prte_ess_base_setup_signals(char *input)
             errno = 0;
             sval = strtoul(signals[i], &tmp, 10);
             if (0 != errno || '\0' != *tmp) {
+                pmix_show_help("help-ess-base.txt", "ess-base:unknown-signal", true,
+                               signals[i], mysignals);
+                PMIx_Argv_free(signals);
+                return PMIX_ERR_SILENT;
+            }
+            /* A number outside the range this platform can deliver is no
+             * more forwardable than an unknown name.  strtoul would happily
+             * take "-1" (wrapping it) or "999", and the handler install that
+             * follows fails silently on both - so the user's signal is never
+             * forwarded and nothing ever says why. */
+            if (0 >= sval || _NSIG <= sval) {
                 pmix_show_help("help-ess-base.txt", "ess-base:unknown-signal", true,
                                signals[i], mysignals);
                 PMIx_Argv_free(signals);
@@ -266,8 +284,10 @@ pmix_status_t prte_ess_base_setup_signals(char *input)
             /* they gave us a signal name */
             found = false;
             for (int j = 0; NULL != known_signals[j].signame; ++j) {
-                if (0 == strcasecmp(signals[i], known_signals[j].signame) ||
-                    sval == known_signals[j].signal) {
+                /* compare by name only: sval is still 0 on this branch, so
+                 * the numeric test that used to sit here could never match
+                 * anything (no signal is 0) */
+                if (0 == strcasecmp(signals[i], known_signals[j].signame)) {
                     if (!known_signals[j].can_forward) {
                         pmix_show_help("help-ess-base.txt", "ess-base:cannot-forward", true,
                                        known_signals[j].signame, mysignals);
@@ -308,6 +328,12 @@ pmix_status_t prte_ess_base_setup_signals(char *input)
     }
 
     PMIx_Argv_free(signals);
+    /* Latch only now that the list is fully built.  Latching on entry would
+     * burn the one allowed pass on a request that was rejected partway
+     * through, leaving whatever it had appended installed and no way to
+     * replace it - and it would make every rejection above unreachable a
+     * second time, so none of them could be exercised. */
+    signals_added = true;
     return PMIX_SUCCESS;
 }
 
