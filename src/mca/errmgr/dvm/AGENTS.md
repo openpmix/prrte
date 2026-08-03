@@ -53,7 +53,9 @@ Fires when a job is activated into an error state. Flow:
 1. `PMIX_ACQUIRE_OBJECT(caddy)`; bail immediately if `prte_finalizing`.
 2. If `caddy->jdata == NULL`, this refers to the **daemon job** — back-fill
    it from `prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace)` and
-   `PMIX_RETAIN` it.
+   `PMIX_RETAIN` it. If that lookup comes back `NULL` the handler gives up
+   rather than retaining and dereferencing it: a crash inside the handler
+   whose job is to report crashes is the worst possible outcome here.
 3. Copy `caddy->job_state` into `jdata->state`.
 4. **Two policies, chosen by whose job it is:**
 
@@ -122,7 +124,9 @@ For the communication-loss family — `COMM_FAILED`, `HEARTBEAT_FAILED`,
    activate `DAEMONS_TERMINATED` to exit; else just note the remaining
    routes. `goto cleanup`.
 6. **Unexpected daemon loss** (the real fault path): show
-   `node-died` (unless `FAILED_TO_START`), call `prte_rml_route_lost`.
+   `node-died` (unless `FAILED_TO_START`; and a daemon that was recorded
+   but never placed has no `node`, so the message names it "unknown"
+   rather than dereferencing NULL), call `prte_rml_route_lost`.
    On success **the HNP walks every job** and marks each proc that lived
    on the lost daemon's node `PRTE_PROC_STATE_TERM_WO_SYNC` (only rank 0
    / the HNP does this sweep), then `goto cleanup`. Otherwise mark the
@@ -139,8 +143,12 @@ ERROR STATE …")` branch — a real one indicates a bug upstream.
 
 First, idempotency: `pptr->state = state` only if
 `pptr->state < PRTE_PROC_STATE_TERMINATED` (a proc can be reported more
-than once). If `prte_prteds_term_ordered`, check whether any local child
-is still alive and, if not and no routed children remain, exit.
+than once). If `prte_prteds_term_ordered`, ask
+`prte_errmgr_base_any_live_children(NULL)` whether any local child is
+still alive and, if not and no routed children remain, exit. Ask the
+base; do not write the scan out here — the obvious loop variable in this
+scope is `pptr`, the proc whose error is being handled, and clobbering it
+corrupts every branch below.
 
 Then it always marks the waitpid fired
 (`PRTE_ACTIVATE_PROC_STATE(WAITPID_FIRED)`) and, for a **remote** proc,
@@ -225,6 +233,13 @@ application uses to learn a peer died without the whole job being killed.
   (`proct`) — an earlier version tested the *failed daemon* `pptr`,
   whose `ALIVE` flag had just been cleared a few lines above, so the
   guard was always false and the DVM could declare itself done while a
-  local child was still alive. The two sibling loops (the application
-  arm here, and the daemon `proc_errors` loop in the `prted` component)
-  both correctly test the iterated child; keep all three consistent.
+  local child was still alive. This is the one such scan still written
+  inline, because it adds a `state < PRTE_PROC_STATE_UNTERMINATED` test
+  the shared helper does not make; every other one in the framework now
+  calls `prte_errmgr_base_any_live_children()` instead, after the same
+  mistake in `errmgr/prted` caused it to report the *wrong proc* to the
+  HNP. If you touch this loop, consider whether the extra state test is
+  still earning its keep, and if not, use the helper.
+- **Nothing may be read out of the caddy before `PMIX_ACQUIRE_OBJECT`,**
+  including in a variable initializer — see the threading section of the
+  [framework guide](../AGENTS.md).

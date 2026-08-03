@@ -58,7 +58,7 @@ errmgr/
     errmgr_private.h          # prte_errmgr_default_fns + prte_errmgr_base_log() prototype
     errmgr_base_frame.c       # framework open/close/DECLARE; the global prte_errmgr module
     errmgr_base_select.c      # pmix_mca_base_select — classic single-winner pick-one
-    errmgr_base_fns.c         # prte_errmgr_base_log() — the default logfn implementation
+    errmgr_base_fns.c         # prte_errmgr_base_log() plus the helpers both components share
     help-errmgr-base.txt      # user-facing error/help text (failed-daemon, node-died, …)
     static-components.h       # generated: lists dvm + prted as the static components
   dvm/                        # HNP component (pri 1000, gated PRTE_PROC_IS_MASTER)
@@ -172,14 +172,38 @@ fails the whole selection). If no component is selectable it returns
 `ess_base_std_prted`) call this; tools skip it and keep the default
 module.
 
-### `errmgr_base_fns.c` — `prte_errmgr_base_log()`
+### `errmgr_base_fns.c` — the default `logfn` and the shared helpers
 
-The default `logfn`. Turns an error code into a string via
-`PRTE_ERROR_NAME` (`prte_strerror`) and prints
+`prte_errmgr_base_log()` is the default `logfn`. It turns an error code
+into a string via `PRTE_ERROR_NAME` (`prte_strerror`) and prints
 `"<name> PRTE_ERROR_LOG: <errstring> in file <f> at line <n>"` through
 `pmix_output(0, …)`. If `prte_strerror` returns `NULL` (a "silent"
-error) it prints nothing. This is the only executable code the base
-contributes to error handling.
+error) it prints nothing.
+
+Alongside it live three helpers that both components call. They are here,
+rather than duplicated in each component, because each one had already
+drifted or misfired at least once:
+
+| Helper | What it answers |
+|--------|-----------------|
+| `prte_errmgr_base_any_live_children(job)` | Is any process in `prte_local_children` still `PRTE_PROC_FLAG_ALIVE`? Pass a nspace to restrict it to one job, or `NULL` for any job. |
+| `prte_errmgr_base_pack_state_for_proc(alert, child)` | Pack one proc as `{rank, pid, state, exit_code}`. |
+| `prte_errmgr_base_pack_state_update(alert, jobdat)` | Pack a job's nspace, every local child of it, and the `PMIX_RANK_INVALID` terminator. |
+
+**Never spell out the live-children scan inline.** Every handler that
+decides "is this node empty yet" needs it, and the obvious loop variable
+at each of those call sites is the very proc whose error is being
+handled. One of them did exactly that: the daemon reported a *surviving
+sibling* to the HNP as the proc that had abnormally terminated, and
+overwrote its state on the way. Call the helper; there is then no loop
+variable in your scope to clobber.
+
+The two packers build the body of a `PRTE_PLM_UPDATE_PROC_STATE` message
+whose only reader is `prte_plm_base_receive()`. The wire carries no
+format version (mixed-version DVMs are forbidden — see the top-level
+guide), so packer and reader must change in the same commit; the
+round-trip test in `test/unit/errmgr` is what makes that pairing
+enforceable.
 
 ### `help-errmgr-base.txt`
 
@@ -229,6 +253,15 @@ progress thread, the handlers freely read and mutate global runtime
 state (`prte_local_children`, `prte_process_info.num_daemons`,
 `prte_rml_base.n_children`, the abort/term-ordered flags) without locks.
 
+`PMIX_ACQUIRE_OBJECT(caddy)` is not a formality: it is the barrier
+pairing with the `PMIX_POST_OBJECT` performed by whichever thread
+activated the state. **Read nothing out of the caddy before it** — not
+even in a variable initializer, which is where both `proc_errors`
+handlers used to fetch `caddy->proc_state`. On a weakly-ordered machine
+a read hoisted above the acquire can see the value the caddy's
+constructor left rather than the one the activator wrote, and the
+handler then acts on the wrong state.
+
 Handlers **must not block** and must not do their own thread-shifting for
 the common path — they are already on the right thread. They cause
 further work by activating *other* states
@@ -271,15 +304,12 @@ new events, rather than calling termination logic inline.
 
 ## Testing
 
-Most of this framework is only reachable with a live DVM: the handlers
-mutate global runtime state and drive termination through `prte_plm` /
-`prte_grpcomm`, so their real behavior is exercised by the integration
-and dockerswarm grow/shrink harnesses (see the repo memory on elastic-DVM
-testing), not by an in-process unit test.
+There are two layers, and the split is dictated by what needs a live DVM.
 
-What *is* unit-testable is the framework's structural contract, and
-[`test/unit/errmgr/test_errmgr.c`](../../../test/unit/errmgr/) covers it
-(wired into `make check`):
+### Unit — [`test/unit/errmgr/test_errmgr.c`](../../../test/unit/errmgr/), run by `make check`
+
+What can be checked in one process is the framework's structural
+contract and the shared helpers:
 
 - **Module invariants.** Every module struct — `prte_errmgr_default_fns`,
   the live `prte_errmgr`, and the two role modules
@@ -293,11 +323,47 @@ What *is* unit-testable is the framework's structural contract, and
   with a normal code, `PRTE_SUCCESS`, and an out-of-range code so the
   "silent error" (`prte_strerror` returns NULL) guard is exercised
   without dereferencing NULL.
+- **The live-children scan.** `prte_errmgr_base_any_live_children` is
+  driven over a synthetic `prte_local_children` holding two jobs, a dead
+  child, a hole left by a removed entry, and a live child added *after*
+  the dead one — so a scan that stops early, ignores the job filter, or
+  trips over a hole fails here.
+- **The HNP report wire format.** Both report shapes — a whole-job update
+  and a single-proc report — are packed with the base helpers and then
+  read back by an unpacker that repeats `prte_plm_base_receive()`'s
+  sequence verbatim. A field added, dropped or retyped on one side alone
+  fails the test instead of desynchronizing a running DVM. (Note the
+  test has to `PMIx_server_init` first: `PMIx_Data_pack` refuses to run
+  before PMIx is up, which is the state a daemon reaches the same way.)
 
 Run it from a built tree with `make check` (or
-`make -C test/unit/errmgr check`). When you add a new component or change
-the module contract, extend this test rather than relying solely on a
-live-DVM smoke test.
+`make -C test/unit/errmgr check`). When you add a new component, change
+the module contract, or touch the report format, extend this test rather
+than relying solely on a live-DVM smoke test.
+
+### Multi-node — `contrib/dockerswarm`, the `test_errmgr` phase
+
+Everything else, because every errmgr decision is made in *two*
+processes and on one host a single process plays both roles — so the
+report never crosses a wire and the HNP-side policy never sees a
+daemon's classification arrive from somewhere else. The phase drives a
+purpose-built client, `contrib/dockerswarm/faulty.c`, which fails on
+demand in each way the framework has a branch for (`PMIx_Abort`, a
+non-zero exit, a signal, an exit that skips finalize) and registers a
+default event handler so a notification actually delivered to a survivor
+is visible in its output. The cases assert both halves of each policy —
+the job meets the fate it should *and* the DVM outlives it and still
+runs work — plus the daemon-loss path (kill a compute `prted`: the HNP
+must report it, mark the procs that lived there, and keep the rest of
+the machine usable) and the consolidation of `FAILED_TO_START` into one
+report per daemon rather than one per process.
+
+Note what that phase deliberately does *not* assert: the tool's exit
+status is not the failing rank's. `prun` exits with the job's
+`PMIX_JOB_TERM_STATUS`, which is an error constant rather than an exit
+code (`prterun`, which runs the job itself, does return the rank's
+status). The errmgr's part — adopting the proc's exit code as the job's
+and naming the offending rank — is what the case checks.
 
 ---
 
