@@ -501,6 +501,17 @@ work out how much of one died) and anything in flight across a **revival**
 give the ordering an epoch advance needs). The revival path is discriminated
 by LOCAL scope with an empty `failed_ranks`.
 
+**A converged collective is finished, on the controller.** Neither the
+restart nor the fault handler touches a tracker the controller has already
+answered: the release is on the wire, ordered ahead of anything a restart
+could send, and every daemon retires its tracker when it lands. Re-running
+the rollup there answers twice — a second release, a second context id
+consumed, the same group registered twice on every daemon. The test is
+*only* valid on the controller: `converged` on any other daemon means it
+rolled its aggregate up to its parent, and re-sending that aggregate is
+precisely what recovery is for, since the failure may be what swallowed
+it.
+
 Two supporting pieces are worth knowing about. `nreported` is backed by
 `reported_slots`, a bitmap keyed on `prte_rml_get_subtree_index()` of the
 sender, so a replayed contribution is idempotent rather than double-counted
@@ -549,6 +560,12 @@ operation is proof the previous one of that name is over.
   break exactly that. A per-collective handler decides what it cannot
   recover and marks those trackers `aborting`; the shared restart skips
   them.
+- **One allocator per array.** The proc arrays on a signature are built
+  with `PMIX_PROC_CREATE` and freed with `PMIX_PROC_FREE` everywhere —
+  those allocate and free *inside the PMIx library*, so a plain `free()`
+  on one crosses the library boundary. It works today because both sides
+  land on the same libc; it would not survive a PMIx that accounts for its
+  own allocations.
 - **Free every allocation the handler still owns before it returns.** The
   entry-point handlers (`begin_xcast`, `fence`, `group`) own the caddy/op
   they were thread-shifted; the recv handlers own the info arrays / darrays
