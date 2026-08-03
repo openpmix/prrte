@@ -152,6 +152,28 @@ static void raw_fault_handler(const prte_rml_recovery_status_t *status){
     }
 }
 
+/* Do these two specifications name the same source file?
+ *
+ * A string compare is not enough: "./mesh.dat" and "mesh.dat" are the same
+ * file, and two apps of one job may perfectly well name it each way. Read
+ * as different files they would look like two files fighting over one
+ * delivered name, and the launch would be refused for a collision that
+ * does not exist. Fall back to the string compare if either one cannot be
+ * stat'd - the open() that follows will produce the real diagnostic.
+ */
+static bool same_source(const char *one, const char *two)
+{
+    struct stat sone, stwo;
+
+    if (0 == strcmp(one, two)) {
+        return true;
+    }
+    if (0 != stat(one, &sone) || 0 != stat(two, &stwo)) {
+        return false;
+    }
+    return (sone.st_dev == stwo.st_dev && sone.st_ino == stwo.st_ino);
+}
+
 static bool has_suffix(const char *name, const char *suffix)
 {
     size_t ln = strlen(name), ls = strlen(suffix);
@@ -489,7 +511,7 @@ static int raw_preposition_files(prte_job_t *jdata,
              itm = pmix_list_get_next(itm)) {
             prte_filem_base_file_set_t *fs2 = (prte_filem_base_file_set_t *) itm;
             if (0 == strcmp(fs->remote_target, fs2->remote_target) &&
-                0 != strcmp(fs->local_target, fs2->local_target)) {
+                !same_source(fs->local_target, fs2->local_target)) {
                 pmix_show_help("help-prte-filem-raw.txt", "preload-name-clash", true,
                                fs->local_target, fs2->local_target, fs->remote_target);
                 PMIX_DESTRUCT(&fsets);
@@ -533,13 +555,27 @@ static int raw_preposition_files(prte_job_t *jdata,
                              "%s filem:raw: checking prepositioning of file %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fs->local_target));
 
-        /* have we already sent this file? */
+        /* Have we already sent this file, under this name, to this many
+         * daemons? All three qualifiers earn their place.
+         *
+         * Under this name: the same source delivered under two different
+         * names is two deliveries, and dropping the second leaves the app
+         * looking for a file that was never placed.
+         *
+         * To this many daemons: a file broadcast before an elastic grow
+         * never reached the daemons that joined afterwards, and treating
+         * it as positioned would launch procs on those nodes with the file
+         * simply absent - no error anywhere, just an app that cannot open
+         * its input.
+         */
         already_sent = false;
         for (itm = pmix_list_get_first(&positioned_files);
              !already_sent && itm != pmix_list_get_end(&positioned_files);
              itm = pmix_list_get_next(itm)) {
             xptr = (prte_filem_raw_xfer_t *) itm;
-            if (0 == strcmp(fs->local_target, xptr->src)) {
+            if (same_source(fs->local_target, xptr->src) &&
+                0 == strcmp(fs->remote_target, xptr->file) &&
+                xptr->nrecvd >= prte_process_info.num_daemons) {
                 already_sent = true;
             }
         }
@@ -562,7 +598,8 @@ static int raw_preposition_files(prte_job_t *jdata,
             for (itm2 = pmix_list_get_first(&optr->xfers); itm2 != pmix_list_get_end(&optr->xfers);
                  itm2 = pmix_list_get_next(itm2)) {
                 xptr = (prte_filem_raw_xfer_t *) itm2;
-                if (0 == strcmp(fs->local_target, xptr->src)) {
+                if (same_source(fs->local_target, xptr->src) &&
+                    0 == strcmp(fs->remote_target, xptr->file)) {
                     already_sent = true;
                 }
             }
@@ -612,6 +649,21 @@ static int raw_preposition_files(prte_job_t *jdata,
         PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                              "%s filem:raw: setting up to position file %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fs->local_target));
+        /* we are about to (re)send this file, so drop any stale record of
+         * an earlier delivery that no longer covers the DVM - otherwise
+         * positioned_files accumulates one dead entry per grow
+         */
+        itm = pmix_list_get_first(&positioned_files);
+        while (itm != pmix_list_get_end(&positioned_files)) {
+            xptr = (prte_filem_raw_xfer_t *) itm;
+            itm = pmix_list_get_next(itm);
+            if (same_source(fs->local_target, xptr->src) &&
+                0 == strcmp(fs->remote_target, xptr->file)) {
+                pmix_list_remove_item(&positioned_files, &xptr->super);
+                PMIX_RELEASE(xptr);
+            }
+        }
+
         xfer = PMIX_NEW(prte_filem_raw_xfer_t);
         /* save the source so we can avoid duplicate transfers */
         xfer->src = strdup(fs->local_target);
@@ -972,6 +1024,7 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
     char *wdir;
     prte_proc_t *proc;
     int i, j, k, rc;
+    bool staged;
     bool launching = false;
     prte_filem_raw_incoming_t *inbnd;
     pmix_list_item_t *item;
@@ -1098,6 +1151,29 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
                 }
             }
             break;
+        }
+    }
+    /* Every file this app asked for should have arrived - the HNP does not
+     * advance the job past pre-positioning until every daemon has acked
+     * every file. If one is missing, the app is about to start in a
+     * directory that does not contain a file it was promised, and the only
+     * symptom would be the app failing to open it. Say which one instead.
+     */
+    for (j = 0; NULL != files[j]; j++) {
+        staged = false;
+        for (item = pmix_list_get_first(&incoming_files);
+             !staged && item != pmix_list_get_end(&incoming_files);
+             item = pmix_list_get_next(item)) {
+            inbnd = (prte_filem_raw_incoming_t *) item;
+            if (0 == strcmp(inbnd->file, files[j])) {
+                staged = true;
+            }
+        }
+        if (!staged) {
+            pmix_show_help("help-prte-filem-raw.txt", "preload-not-staged", true,
+                           files[j], prte_process_info.nodename);
+            PMIx_Argv_free(files);
+            return PRTE_ERR_FILE_OPEN_FAILURE;
         }
     }
     PMIx_Argv_free(files);
