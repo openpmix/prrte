@@ -407,12 +407,16 @@ fi
 AM_CONDITIONAL(PRTE_WANT_LEGACY_TOOLS, test "$PRTE_WANT_LEGACY_TOOLS" = 1)
 PRTE_SUMMARY_ADD([Miscellaneous], [Install legacy tools], [], [$prte_legacy_tools])
 
-# use header "shims" for 3rd-party libraries to test-build
-# the PLM launchers
-AC_MSG_CHECKING([if want to test-build PLM launchers that require 3rd-party headers/libraries])
+# Build the resource-manager components that an ordinary developer machine
+# cannot build, so that they are at least compiled somewhere.  Some of them
+# (plm/ras) need header "shims" standing in for a 3rd-party library; others
+# (ess/lsf, ess/pals) need nothing but the gate opened, because their whole
+# dependency on that RM is a getenv - which is exactly why they are the ones
+# that quietly stop compiling.
+AC_MSG_CHECKING([if want to test-build launcher components that require 3rd-party headers/libraries])
 AC_ARG_ENABLE([testbuild-launchers],
     [AS_HELP_STRING([--enable-testbuild-launchers],
-        [Test-build PLM launchers that require 3rd-party headers/libraries (default: disabled)])])
+        [Test-build launcher components (plm/ras/ess) that require 3rd-party headers/libraries (default: disabled)])])
 if test "$enable_testbuild_launchers" = "yes"; then
     AC_MSG_RESULT([yes])
     prte_testbuild_launchers=1
@@ -423,7 +427,7 @@ else
     prte_testbuild_launchers_msg=no
 fi
 AC_DEFINE_UNQUOTED([PRTE_TESTBUILD_LAUNCHERS], [$prte_testbuild_launchers],
-                   [Enable testbuild PLM launchers (default: disabled)])
+                   [Enable testbuild launcher components (default: disabled)])
 PRTE_SUMMARY_ADD([Miscellaneous], [Testbuild launchers], [], [$prte_testbuild_launchers_msg])
 
 ])dnl

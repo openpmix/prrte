@@ -74,7 +74,7 @@ AC_DEFUN([PRTE_MCA],[
                         run-time loadable components (as opposed to
                         statically linked in), if supported on this
                         platform.]),
-                        [], [enable_mca_dso=ess-alps,plm-alps,plm-lsf,plm-tm,ras-alps,ras-flux,ras-lsf,ras-slurm])
+                        [], [enable_mca_dso=plm-lsf,ras-flux,ras-lsf,ras-slurm])
     AC_ARG_ENABLE(mca-static,
         AS_HELP_STRING([--enable-mca-static=LIST],
                        [Comma-separated list of types and/or

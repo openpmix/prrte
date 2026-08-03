@@ -22,12 +22,18 @@ Files:
 | `ess_pals_component.c` | Registration; `prte_mca_ess_pals_component_query` (priority 50 under PALS). |
 | `ess_pals_module.c` | `rte_init` / `rte_finalize` + `pals_set_name()`. |
 | `ess_pals.h` | Component struct + open/close/query prototypes. |
-| `configure.m4` | Gates the build on `PRTE_CHECK_PALS` — only built where PALS is present. |
+| `configure.m4` | Gates the build on `PRTE_CHECK_PALS`, **or** on `--enable-testbuild-launchers`. |
 
 Because `configure.m4` gates on `PRTE_CHECK_PALS`, this component is
-**only compiled where the PALS environment/headers are available**. On a
-platform without PALS it will not appear in the framework's
-`static-components.h` at all.
+normally **only compiled where the PALS environment/headers are
+available** — on a platform without it, it does not appear in the
+framework's `static-components.h` at all.
+
+Configure with **`--enable-testbuild-launchers`** to build it anyway. It
+needs no stub headers and links nothing: its whole PALS dependency is two
+`getenv` calls. That is precisely why it is worth building — a component
+nothing compiles is a component that quietly stops compiling, which is
+what had happened (an unused `char *tmp` made it fail `-Werror`).
 
 ---
 
@@ -89,8 +95,10 @@ Unlike `slurm`, `pals` does **not** rewrite `prte_process_info.nodename`
   (has `PALS_APID`) yet fail `set_name` if `PALS_NODEID` is absent.
 - **The node offset is load-bearing**, exactly as in `slurm`: the base
   vpid is shared, and `PALS_NODEID` disambiguates each daemon's rank.
-- **Build gating.** Any new PALS dependency must be reflected in
-  `configure.m4`'s `PRTE_CHECK_PALS`; do not introduce a hard PALS
-  reference that breaks the build on non-PALS systems.
+- **Keep it library-free.** The moment this component references a real
+  PALS symbol, it stops being safe to build with
+  `--enable-testbuild-launchers` (no stub header covers it) and stops
+  being safe to link into `libprrte`. If you genuinely need one, it has to
+  move to the stub-plus-DSO treatment the `plm` PALS component gets.
 - This component is daemon-only. PALS allocation/launch integration lives
   in the `ras`/`plm` frameworks; here we only bring the daemon's RTE up.
