@@ -286,9 +286,9 @@ already resilient for the not-in-flight case.
   security property — staging must never let a user overwrite an absolute
   path on a remote node. Preserve it.
 - **`raw` owns `PRTE_RML_TAG_FILEM_BASE`.** It posts its own recv in
-  `raw_init` rather than using the base `filem_base_receive.c` service;
-  don't start the base comm service alongside it or the two will collide
-  on the tag.
+  `raw_init`. The base used to carry a second, never-posted service on that
+  same tag; it has been removed rather than left as a collision waiting to
+  happen. If a future component needs its own receive, give it its own tag.
 - **On an error, unlink an object from its list *before* releasing it.**
   Several receive-side error paths add an `incoming` (or `xfer`) to a
   file-scoped list and, on a later failure, must both

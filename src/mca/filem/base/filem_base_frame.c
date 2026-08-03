@@ -13,7 +13,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,7 +50,6 @@ PRTE_EXPORT prte_filem_base_module_t prte_filem
        .wait_all = prte_filem_base_none_wait_all,
        .preposition_files = prte_filem_base_none_preposition_files,
        .link_local_files = prte_filem_base_none_link_local_files};
-bool prte_filem_base_is_active = false;
 
 static int prte_filem_base_close(void)
 {

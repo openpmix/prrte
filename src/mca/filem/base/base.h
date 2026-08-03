@@ -43,19 +43,10 @@ PRTE_EXPORT extern pmix_mca_base_framework_t prte_filem_base_framework;
  */
 PRTE_EXPORT int prte_filem_base_select(void);
 
-/*
- * cmds for base receive
- */
-typedef uint8_t prte_filem_cmd_flag_t;
-#define PRTE_FILEM_CMD                    PMIX_UINT8
-#define PRTE_FILEM_GET_PROC_NODE_NAME_CMD 1
-#define PRTE_FILEM_GET_REMOTE_PATH_CMD    2
-
 /**
  * Globals
  */
 PRTE_EXPORT extern prte_filem_base_module_t prte_filem;
-PRTE_EXPORT extern bool prte_filem_base_is_active;
 
 /**
  * 'None' component functions
@@ -77,15 +68,6 @@ PRTE_EXPORT int prte_filem_base_none_wait_all(pmix_list_t *request_list);
 int prte_filem_base_none_preposition_files(prte_job_t *jdata, prte_filem_completion_cbfunc_t cbfunc,
                                            void *cbdata);
 int prte_filem_base_none_link_local_files(prte_job_t *jdata, prte_app_context_t *app);
-
-/**
- * Some utility functions
- */
-/* base comm functions */
-PRTE_EXPORT int prte_filem_base_comm_start(void);
-PRTE_EXPORT int prte_filem_base_comm_stop(void);
-PRTE_EXPORT void prte_filem_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
-                                      prte_rml_tag_t tag, void *cbdata);
 
 END_C_DECLS
 
