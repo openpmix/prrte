@@ -157,9 +157,12 @@ completion is signalled later through the callback.
 Runs on the progress thread, re-arming itself until EOF:
 
 1. `read()` up to `PRTE_FILEM_RAW_CHUNK_MAX` (16 KB) bytes. On `EAGAIN`/
-   `EINTR`, re-add the event and retry. On a hard error, force
-   `numbytes = 0` to flush an EOF downstream.
-2. If `prte_dvm_abort_ordered`, drop the xfer and stop.
+   `EINTR`, re-add the event and retry. On a hard error, record
+   `PRTE_ERR_FILE_READ_FAILURE` on the xfer and force `numbytes = 0` to
+   flush an EOF downstream — the receivers cannot tell a truncated file
+   from a complete one and will ack it as staged, so this is the only
+   place that knows the bytes never left.
+2. If `prte_dvm_abort_ordered`, retire the xfer and stop.
 3. Pack a buffer `{file(string), nchunk(int32), data(numbytes bytes)}`;
    on the **first chunk** (`nchunk == 0`) also append the `type` so the
    receiver knows how to handle it.
@@ -176,11 +179,33 @@ zero-byte broadcast that tells receivers to close and finalize.
 
 Each daemon sends an ack `{file, status}` per file. `recv_ack` finds the
 matching `xfer` in `outbound_files`, records any non-success status, and
-bumps `xfer->nrecvd`. When `nrecvd == prte_process_info.num_daemons` the
+bumps `xfer->nrecvd`. When `nrecvd >= prte_process_info.num_daemons` the
 file is fully positioned: `xfer_complete` moves the xfer from
 `outbound->xfers` to `positioned_files`. When an outbound's `xfers` list
 is empty, its `cbfunc` fires (this is the state machine's `files_ready`)
 and the outbound is released.
+
+`>=`, not `==`: `num_daemons` is read fresh on every ack, so a daemon
+leaving the DVM mid-transfer can lower it *past* a count already reached,
+and an exactly-equal test would then never fire.
+
+**Every exit from a transfer goes through `xfer_retire()`**, which is the
+one place that unlinks the xfer from `outbound->xfers` and, when that list
+empties, fires the completion callback and releases the outbound. Its
+`positioned` argument says whether the transfer actually reached every
+daemon: `true` parks the xfer on `positioned_files` so a later job in this
+DVM does not resend the same bytes, `false` releases it, because a file
+that failed on the way out was never delivered and recording it as
+positioned would make the next job skip a file that is not there.
+`xfer_complete()` is just `xfer_retire(..., true)`.
+
+A bailout that only closes the fd and returns — which every pack and
+`xcast` failure in `send_chunk` used to do — leaves the xfer on the
+outbound's list with **no further event scheduled for it** and no ack ever
+coming, so the completion callback never fires and the job wedges at
+`VM_READY` forever. Releasing it in place instead (the old
+`prte_dvm_abort_ordered` path) is worse: the outbound's list is left
+walking freed memory.
 
 ---
 

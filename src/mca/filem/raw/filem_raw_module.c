@@ -152,7 +152,16 @@ static void raw_fault_handler(const prte_rml_recovery_status_t *status){
     }
 }
 
-static void xfer_complete(int status, prte_filem_raw_xfer_t *xfer)
+/* Retire a transfer from its outbound request, firing the request's
+ * completion callback once the last of its transfers is gone.
+ *
+ * A transfer that actually reached every daemon is remembered in
+ * positioned_files so a later job in this DVM does not broadcast the same
+ * bytes again; one that failed on the way out is not - it was never
+ * delivered, and recording it as positioned would make the next job skip
+ * a file that is not there.
+ */
+static void xfer_retire(int status, prte_filem_raw_xfer_t *xfer, bool positioned)
 {
     prte_filem_raw_outbound_t *outbound = xfer->outbound;
 
@@ -163,8 +172,12 @@ static void xfer_complete(int status, prte_filem_raw_xfer_t *xfer)
 
     /* this transfer is complete - remove it from list */
     pmix_list_remove_item(&outbound->xfers, &xfer->super);
-    /* add it to the list of files that have been positioned */
-    pmix_list_append(&positioned_files, &xfer->super);
+    if (positioned) {
+        /* add it to the list of files that have been positioned */
+        pmix_list_append(&positioned_files, &xfer->super);
+    } else {
+        PMIX_RELEASE(xfer);
+    }
 
     /* if the list is now empty, then the xfer is complete */
     if (0 == pmix_list_get_size(&outbound->xfers)) {
@@ -176,6 +189,11 @@ static void xfer_complete(int status, prte_filem_raw_xfer_t *xfer)
         pmix_list_remove_item(&outbound_files, &outbound->super);
         PMIX_RELEASE(outbound);
     }
+}
+
+static void xfer_complete(int status, prte_filem_raw_xfer_t *xfer)
+{
+    xfer_retire(status, xfer, true);
 }
 
 static void recv_ack(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
@@ -195,12 +213,20 @@ static void recv_ack(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer
         PMIX_ERROR_LOG(rc);
         return;
     }
+    /* an ack that doesn't name a file matches nothing and cannot be
+     * compared against anything - drop it rather than dereference it
+     */
+    if (NULL == file) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return;
+    }
 
     /* unpack the status */
     n = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &st, &n, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
+        free(file);
         return;
     }
 
@@ -222,8 +248,14 @@ static void recv_ack(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer
                 }
                 /* track number of respondents */
                 xfer->nrecvd++;
-                /* if all daemons have responded, then this is complete */
-                if (xfer->nrecvd == prte_process_info.num_daemons) {
+                /* if all daemons have responded, then this is complete.
+                 * Compare with >= rather than ==: num_daemons is read
+                 * fresh on every ack, so a daemon leaving the DVM
+                 * mid-transfer can lower it past a count we have already
+                 * reached - an exactly-equal test would then never fire
+                 * and the job would wedge at VM_READY
+                 */
+                if (xfer->nrecvd >= prte_process_info.num_daemons) {
                     PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                                          "%s filem:raw: xfer complete for file %s status %d",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), file, xfer->status));
@@ -1053,16 +1085,26 @@ static void send_chunk(int xxx, short argc, void *cbdata)
 
         /* Un-recoverable error. Allow the code to flow as usual in order to
          * to send the zero bytes message up the stream, and then close the
-         * file descriptor and delete the event.
+         * file descriptor and delete the event. Record the failure, though:
+         * the receivers cannot tell a truncated file from a complete one
+         * and will happily ack it as staged, so this is the only place that
+         * knows the bytes the app was promised never left this node.
          */
+        rev->status = PRTE_ERR_FILE_READ_FAILURE;
         numbytes = 0;
     }
 
     /* if job termination has been ordered, just ignore the
-     * data and delete the read event
+     * data and delete the read event. Retire the transfer rather than
+     * simply releasing it - the outbound's xfers list still holds it, and
+     * releasing it in place leaves that list walking freed memory
      */
     if (prte_dvm_abort_ordered) {
-        PMIX_RELEASE(rev);
+        if (0 <= rev->fd) {
+            close(rev->fd);
+            rev->fd = -1;
+        }
+        xfer_retire(PRTE_ERR_JOB_CANCELLED, rev, false);
         return;
     }
 
@@ -1070,38 +1112,34 @@ static void send_chunk(int xxx, short argc, void *cbdata)
                          "%s filem:raw:read handler sending chunk %d of %d bytes for file %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), rev->nchunk, numbytes, rev->file));
 
-    /* package it for transmission */
+    /* package it for transmission.
+     *
+     * Every bailout below has to retire the transfer, not just close the
+     * fd and walk away: this xfer is the only thing keeping its outbound
+     * request alive, no further event is scheduled for it, and the
+     * daemons will never ack a file whose chunks stopped arriving. Left
+     * on the outbound's list it would hold the completion callback
+     * forever and wedge the job at VM_READY.
+     */
     PMIX_DATA_BUFFER_CONSTRUCT(&chunk);
     rc = PMIx_Data_pack(NULL, &chunk, &rev->file, 1, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        close(fd);
-        PMIX_DATA_BUFFER_DESTRUCT(&chunk);
-        return;
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, &chunk, &rev->nchunk, 1, PMIX_INT32);
     }
-    rc = PMIx_Data_pack(NULL, &chunk, &rev->nchunk, 1, PMIX_INT32);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        close(fd);
-        PMIX_DATA_BUFFER_DESTRUCT(&chunk);
-        return;
+    if (PMIX_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, &chunk, data, numbytes, PMIX_BYTE);
     }
-    rc = PMIx_Data_pack(NULL, &chunk, data, numbytes, PMIX_BYTE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        close(fd);
-        PMIX_DATA_BUFFER_DESTRUCT(&chunk);
-        return;
-    }
-    /* if it is the first chunk, then add file type and index of the app */
-    if (0 == rev->nchunk) {
+    /* if it is the first chunk, then add the file type */
+    if (PMIX_SUCCESS == rc && 0 == rev->nchunk) {
         rc = PMIx_Data_pack(NULL, &chunk, &rev->type, 1, PMIX_INT32);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            close(fd);
-            PMIX_DATA_BUFFER_DESTRUCT(&chunk);
-            return;
-        }
+    }
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        close(fd);
+        rev->fd = -1;
+        PMIX_DATA_BUFFER_DESTRUCT(&chunk);
+        xfer_retire(prte_pmix_convert_status(rc), rev, false);
+        return;
     }
 
     /* goes to all daemons */
@@ -1109,6 +1147,8 @@ static void send_chunk(int xxx, short argc, void *cbdata)
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_DESTRUCT(&chunk);
         close(fd);
+        rev->fd = -1;
+        xfer_retire(rc, rev, false);
         return;
     }
     PMIX_DATA_BUFFER_DESTRUCT(&chunk);
@@ -1119,6 +1159,7 @@ static void send_chunk(int xxx, short argc, void *cbdata)
      */
     if (0 == numbytes) {
         close(fd);
+        rev->fd = -1;
         return;
     } else {
         /* restart the read event */
