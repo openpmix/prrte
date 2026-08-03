@@ -650,10 +650,18 @@ static op_t* insert_forwarded_op(signature_t* sig) {
 }
 
 static void forward_op(op_t* op){
+    /* The daemon job object can be gone by the time a broadcast is being
+     * forwarded - teardown retires it while the last xcasts (the halt, the
+     * job-end notifications) are still moving - so this cannot be an
+     * unchecked dereference. Its absence says nothing about whether to
+     * forward; only the do-not-launch attribute does, and without the job
+     * object nobody set it. */
     prte_job_t* daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-    bool skip = prte_get_attribute(&daemons->attributes, PRTE_JOB_DO_NOT_LAUNCH,
-                                   NULL, PMIX_BOOL);
-    if(skip) return;
+    if(NULL != daemons &&
+       prte_get_attribute(&daemons->attributes, PRTE_JOB_DO_NOT_LAUNCH,
+                          NULL, PMIX_BOOL)){
+        return;
+    }
 
     op->replay_pending_parent = false;
     op->nexpected = prte_rml_base.n_children;
