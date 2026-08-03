@@ -282,8 +282,11 @@ static void fence(int sd, short args, void *cbdata)
 {
     prte_pmix_fence_caddy_t *cd = (prte_pmix_fence_caddy_t *) cbdata;
     prte_grpcomm_direct_fence_signature_t sig;
-    prte_grpcomm_fence_t *coll;
+    prte_grpcomm_fence_t *coll = NULL;
     int rc;
+    /* what our own participants are told if this contribution never makes
+     * it into the rollup - PMIX_SUCCESS means it did */
+    pmix_status_t st = PMIX_SUCCESS;
     pmix_data_buffer_t *relay, *framed, bkt;
     pmix_byte_object_t bo;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
@@ -305,6 +308,7 @@ static void fence(int sd, short args, void *cbdata)
      * for releasing it upon completion of the collective */
     coll = get_tracker(&sig, true);
     if (NULL == coll) {
+        st = PMIX_ERR_NOT_FOUND;
         goto done;
     }
     coll->cbfunc = cd->cbfunc;
@@ -321,19 +325,24 @@ static void fence(int sd, short args, void *cbdata)
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(relay);
+        st = prte_pmix_convert_rc(rc);
         goto done;
     }
 
     // pack the info structs
     rc = PMIx_Data_pack(NULL, relay, &cd->ninfo, 1, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(relay);
+        st = rc;
         goto done;
     }
     if (0 < cd->ninfo) {
         rc = PMIx_Data_pack(NULL, relay, cd->info, cd->ninfo, PMIX_INFO);
         if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(relay);
+            st = rc;
             goto done;
         }
     }
@@ -346,7 +355,9 @@ static void fence(int sd, short args, void *cbdata)
     rc = PMIx_Data_copy_payload(relay, &bkt);
     PMIX_DATA_BUFFER_DESTRUCT(&bkt);
     if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(relay);
+        st = rc;
         goto done;
     }
 
@@ -363,6 +374,7 @@ static void fence(int sd, short args, void *cbdata)
         PMIX_DATA_BUFFER_RELEASE(coll->my_contribution);
         coll->my_contribution = NULL;
         PMIX_DATA_BUFFER_RELEASE(relay);
+        st = rc;
         goto done;
     }
 
@@ -372,6 +384,7 @@ static void fence(int sd, short args, void *cbdata)
     PMIX_DATA_BUFFER_RELEASE(relay);
     if (PRTE_SUCCESS != rc) {
         PMIX_DATA_BUFFER_RELEASE(framed);
+        st = prte_pmix_convert_rc(rc);
         goto done;
     }
 
@@ -382,11 +395,34 @@ static void fence(int sd, short args, void *cbdata)
 
     PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME->rank, framed,
                   PRTE_RML_TAG_FENCE);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(framed);
+        st = prte_pmix_convert_rc(rc);
+    }
 
 done:
     /* the signature we computed is ours - the tracker keeps a copy of its
      * own - so it must go back on every path out of here */
     PMIX_DESTRUCT(&sig);
+
+    if (PMIX_SUCCESS != st) {
+        /* Our contribution never entered the rollup, so no release is coming
+         * to complete the clients waiting in PMIx_Fence - and this daemon
+         * returned PRTE_SUCCESS from the entry point, so nothing upstream
+         * knows to fail them either. Complete them here with the reason, and
+         * take them off the tracker first so that a release arriving later
+         * (the controller can still abort the fence) cannot complete them a
+         * second time. The tracker itself is left in place: it is what any
+         * such release still has to find. */
+        if (NULL != coll) {
+            coll->cbfunc = NULL;
+            coll->cbdata = NULL;
+        }
+        if (NULL != cd->cbfunc) {
+            cd->cbfunc(st, NULL, 0, cd->cbdata, NULL, NULL);
+        }
+    }
     PMIX_RELEASE(cd);
 }
 

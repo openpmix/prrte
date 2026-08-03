@@ -66,7 +66,12 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
     // just pass this along
     rc = prte_grpcomm.fence(procs, nprocs, info, ninfo,
                             data, ndata, cbfunc, cbdata);
-    return rc;
+    /* grpcomm answers in PRTE codes and our caller reads PMIx ones - the two
+     * agree only on success, so anything else has to be converted */
+    if (PRTE_SUCCESS != rc) {
+        return prte_pmix_convert_rc(rc);
+    }
+    return PMIX_SUCCESS;
 }
 
 
