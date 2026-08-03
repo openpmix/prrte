@@ -477,6 +477,46 @@ SPECIAL_TOPICS = ["help",
                   "placement-fundamentals",
                   "placement-limits"]
 
+def check_citation_files(parsed_data, citations, verbose=False):
+    # Every file name a show_help call passes must be the name of a help file
+    # that actually exists.
+    #
+    # The lookup at runtime is an exact strcmp against the generated table,
+    # whose keys are the help files' basenames -- ".txt" and all.  So a call
+    # site that drops the extension, or misspells the name, does not fail
+    # loudly: it silently resolves to nothing and the user is handed the
+    # "Sorry! ... I couldn't find that topic" placeholder instead of the
+    # diagnostic the code meant to print.  Nothing else catches this -- the
+    # unused-topic check below is satisfied as long as SOME other call site
+    # cites the topic correctly, which is exactly the situation that let a
+    # whole family of startup-failure messages go unprintable unnoticed.
+    # A citation naming no PRRTE help file at all is not necessarily wrong:
+    # PRRTE code legitimately cites help files owned by PMIx, which resolves
+    # them from its own table.  What is always wrong is naming one of OUR
+    # files with the extension mangled -- that is the failure this exists to
+    # catch, and it can be identified without guessing, by comparing the name
+    # with the extension removed.
+    known = {os.path.basename(f) for f in parsed_data}
+    stems = {f[:-4] if f.endswith(".txt") else f for f in known}
+    errorFound = False
+    reported = set()
+    for (fil, topic) in citations:
+        if fil in known or fil in reported:
+            continue
+        reported.add(fil)
+        stem = fil[:-4] if fil.endswith(".txt") else fil
+        if stem in stems:
+            sys.stderr.write("ERROR: show_help names a PRRTE help file incorrectly\n")
+            sys.stderr.write("    File:  " + fil + "\n")
+            sys.stderr.write("    Topic: " + topic + "\n")
+            sys.stderr.write("    Did you mean \"" + stem + ".txt\"?\n")
+            errorFound = True
+        elif verbose:
+            print("Citation of a non-PRRTE help file (assumed PMIx-owned): ", fil)
+    if verbose and not errorFound:
+        print("All show_help citations name their PRRTE help file correctly")
+    return errorFound
+
 def purge(parsed_data, citations):
     special_topics = SPECIAL_TOPICS
     result_data = {}
@@ -655,6 +695,8 @@ def main():
             if os.path.exists(src):
                 tables.update(parse_option_tables(src, macros, args.verbose))
         if check_tool_options(tool_data, tables, norm, citations, args.verbose):
+            exit(1)
+        if check_citation_files(parsed_data, citations, args.verbose):
             exit(1)
         outdata = purge(parsed_data, citations)
     else:

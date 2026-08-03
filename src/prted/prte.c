@@ -490,7 +490,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     /* Register all global MCA Params */
     if (PRTE_SUCCESS != (rc = prte_register_params())) {
         if (PRTE_ERR_SILENT != rc) {
-            pmix_show_help("help-prte-runtime", "prte_init:startup:internal-failure", true,
+            pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
                            "prte register params",
                            PRTE_ERROR_NAME(rc), rc);
         }
