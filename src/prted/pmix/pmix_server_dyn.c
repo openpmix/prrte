@@ -1347,11 +1347,13 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
     rc = prte_grpcomm.fence(procs, nprocs, info, ninfo,
                             cd->msg.unpack_ptr, cd->msg.bytes_used,
                             connect_release, cd);
-    if (PMIX_SUCCESS != rc) {
+    if (PRTE_SUCCESS != rc) {
         /* the release callback will never fire */
         PMIX_RELEASE(cd);
+        /* grpcomm answers in PRTE codes, our caller reads PMIx ones */
+        return prte_pmix_convert_rc(rc);
     }
-    return rc;
+    return PMIX_SUCCESS;
 }
 
 static void mdxcbfunc(pmix_status_t status,
