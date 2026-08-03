@@ -154,10 +154,15 @@ constructed/destructed in `filem_base_fns.c` via `PMIX_CLASS_INSTANCE`:
   "all procs of a job"; INVALID means "not applicable". Constructed to
   `PRTE_NAME_INVALID` on both ends.
 - **`prte_filem_base_file_set_t`** — one `{local_target, remote_target}`
-  file pairing, plus `app_idx`, local/remote **hints**
+  file pairing, plus local/remote **hints**
   (`PRTE_FILEM_HINT_NONE`/`SHARED`), and a **`target_flag`** file-type
   code (`PRTE_FILEM_TYPE_FILE`/`DIR`/`TAR`/`BZIP`/`GZIP`/`EXE`/`UNKNOWN`).
-  The destructor frees both path strings.
+  The destructor frees both path strings. **Every field must be set by the
+  constructor**: `PMIX_NEW` `malloc`s and does not zero, so a field the
+  constructor forgets is read as whatever was on the heap. That is exactly
+  what happened to the `app_idx` this struct used to carry — the mapper
+  never set it, `raw` copied it into every transfer, and nothing ever read
+  it back; it has been removed.
 - **`prte_filem_base_request_t`** — a whole request: a list of process
   sets, a list of file sets, plus internal bookkeeping arrays
   (`is_done`, `is_active`, `exit_status`, `num_mv`) and a

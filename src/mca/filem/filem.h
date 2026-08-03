@@ -14,7 +14,7 @@
  *                         reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
@@ -106,9 +106,6 @@ PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_filem_base_process_set_t);
 struct prte_filem_base_file_set_1_0_0_t {
     /** This is an object, so must have a super */
     pmix_list_item_t super;
-
-    /* the app_index this pertains to, if applicable */
-    prte_app_idx_t app_idx;
 
     /* Local file reference */
     char *local_target;
