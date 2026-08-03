@@ -403,6 +403,10 @@ int prte_ess_base_bootstrap(bool *is_controller)
 
     /* the DVM namespace is shared by every daemon */
     pmix_asprintf(&dvm_nspace, "%s-prte-dvm", bootstrap_cfg.cluster);
+    if (NULL == dvm_nspace) {
+        rc = PRTE_ERR_OUT_OF_RESOURCE;
+        goto cleanup;
+    }
 
     if (ctrl) {
         /* we are the DVM controller: adopt the deterministic namespace and
@@ -472,6 +476,9 @@ int prte_ess_base_bootstrap_peer_uri(pmix_rank_t rank, char **uri)
 
     family = (6 == bootstrap_cfg.ip_version) ? AF_INET6 : AF_INET;
     pmix_asprintf(&dvm_nspace, "%s-prte-dvm", bootstrap_cfg.cluster);
+    if (NULL == dvm_nspace) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
 
     rc = synth_uri(&bootstrap_cfg, dvm_nspace, family, rank, host, uri);
 
