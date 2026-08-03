@@ -72,9 +72,6 @@ prte_errmgr_base_module_t prte_errmgr_prted_module = {
 };
 
 /* Local functions */
-static bool any_live_children(pmix_nspace_t job);
-static int pack_state_update(pmix_data_buffer_t *alert, prte_job_t *jobdat);
-static int pack_state_for_proc(pmix_data_buffer_t *alert, prte_proc_t *child);
 static void failed_start(prte_job_t *jobdat);
 static void killprocs(pmix_nspace_t job, pmix_rank_t vpid);
 
@@ -297,7 +294,7 @@ static void job_errors(int fd, short args, void *cbdata)
         goto cleanup;
     }
     /* pack the job info */
-    if (PMIX_SUCCESS != (rc = pack_state_update(alert, jdata))) {
+    if (PMIX_SUCCESS != (rc = prte_errmgr_base_pack_state_update(alert, jdata))) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(alert);
         goto cleanup;
@@ -422,18 +419,8 @@ static void proc_errors(int fd, short args, void *cbdata)
 
         if (prte_prteds_term_ordered) {
             /* are any of my children still alive */
-            for (i = 0; i < prte_local_children->size; i++) {
-                if (NULL
-                    != (child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children,
-                                                                            i))) {
-                    if (PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_ALIVE)) {
-                        PMIX_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
-                                             "%s errmgr:default:prted[%s(%d)] proc %s is alive",
-                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__,
-                                             PRTE_NAME_PRINT(&child->name)));
-                        goto cleanup;
-                    }
-                }
+            if (prte_errmgr_base_any_live_children(NULL)) {
+                goto cleanup;
             }
             /* if all my routes and children are gone, then terminate
                ourselves nicely (i.e., this is a normal termination) */
@@ -483,7 +470,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             }
 
             /* now pack the child's info */
-            if (PMIX_SUCCESS != (rc = pack_state_for_proc(alert, child))) {
+            if (PMIX_SUCCESS != (rc = prte_errmgr_base_pack_state_for_proc(alert, child))) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(alert);
                 goto cleanup;
@@ -549,7 +536,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             }
 
             /* now pack the child's info */
-            if (PMIX_SUCCESS != (rc = pack_state_for_proc(alert, child))) {
+            if (PMIX_SUCCESS != (rc = prte_errmgr_base_pack_state_for_proc(alert, child))) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(alert);
                 goto cleanup;
@@ -618,14 +605,14 @@ static void proc_errors(int fd, short args, void *cbdata)
                 PRTE_FLAG_SET(child, PRTE_PROC_FLAG_RECORDED);
                 jdata->num_terminated++;
             }
-            for (i = 0; i < prte_local_children->size; i++) {
-                if (NULL
-                    != (child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children,
-                                                                            i))) {
-                    if (PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_ALIVE)) {
-                        goto keep_going;
-                    }
-                }
+            /* NOTE: ask the base rather than scanning prte_local_children
+             * inline here.  An inline scan wants a loop variable, and the
+             * obvious one - "child" - is the proc whose error we are handling
+             * and the one the keep_going path below reports to the HNP.
+             * Clobbering it reported some *other*, still-running local proc as
+             * having abnormally terminated, and overwrote its state. */
+            if (prte_errmgr_base_any_live_children(NULL)) {
+                goto keep_going;
             }
             /* if all my routes and children are gone, then terminate
                ourselves nicely (i.e., this is a normal termination) */
@@ -665,7 +652,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             }
             child->state = state;
             /* now pack the child's info */
-            if (PMIX_SUCCESS != (rc = pack_state_for_proc(alert, child))) {
+            if (PMIX_SUCCESS != (rc = prte_errmgr_base_pack_state_for_proc(alert, child))) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(alert);
                 goto cleanup;
@@ -700,7 +687,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     }
 
     /* only other state is terminated - see if anyone is left alive */
-    if (!any_live_children(proc->nspace)) {
+    if (!prte_errmgr_base_any_live_children(proc->nspace)) {
         PMIX_DATA_BUFFER_CREATE(alert);
         /* pack update state command */
         cmd = PRTE_PLM_UPDATE_PROC_STATE;
@@ -711,7 +698,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             goto cleanup;
         }
         /* pack the data for the job */
-        if (PMIX_SUCCESS != (rc = pack_state_update(alert, jdata))) {
+        if (PMIX_SUCCESS != (rc = prte_errmgr_base_pack_state_update(alert, jdata))) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(alert);
             goto cleanup;
@@ -752,93 +739,6 @@ cleanup:
 /*****************
  * Local Functions
  *****************/
-static bool any_live_children(pmix_nspace_t job)
-{
-    int i;
-    prte_proc_t *child;
-
-    for (i = 0; i < prte_local_children->size; i++) {
-        if (NULL == (child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i))) {
-            continue;
-        }
-        /* is this child part of the specified job? */
-        if ((PMIX_NSPACE_INVALID(job) || PMIX_CHECK_NSPACE(job, child->name.nspace))
-            && PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_ALIVE)) {
-            return true;
-        }
-    }
-
-    /* if we get here, then nobody is left alive from that job */
-    return false;
-}
-
-static int pack_state_for_proc(pmix_data_buffer_t *alert, prte_proc_t *child)
-{
-    int rc;
-
-    /* pack the child's vpid */
-    rc = PMIx_Data_pack(NULL, alert, &child->name.rank, 1, PMIX_PROC_RANK);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return rc;
-    }
-    /* pack the pid */
-    rc = PMIx_Data_pack(NULL, alert, &child->pid, 1, PMIX_PID);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return rc;
-    }
-    /* pack its state */
-    rc = PMIx_Data_pack(NULL, alert, &child->state, 1, PMIX_UINT32);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return rc;
-    }
-    /* pack its exit code */
-    rc = PMIx_Data_pack(NULL, alert, &child->exit_code, 1, PMIX_INT32);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return rc;
-    }
-
-    return PRTE_SUCCESS;
-}
-
-static int pack_state_update(pmix_data_buffer_t *alert, prte_job_t *jobdat)
-{
-    int rc, i;
-    prte_proc_t *child;
-    pmix_rank_t null = PMIX_RANK_INVALID;
-
-    /* pack the jobid */
-
-    rc = PMIx_Data_pack(NULL, alert, &jobdat->nspace, 1, PMIX_PROC_NSPACE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return rc;
-    }
-    for (i = 0; i < prte_local_children->size; i++) {
-        if (NULL == (child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i))) {
-            continue;
-        }
-        /* if this child is part of the job... */
-        if (PMIX_CHECK_NSPACE(child->name.nspace, jobdat->nspace)) {
-            if (PMIX_SUCCESS != (rc = pack_state_for_proc(alert, child))) {
-                PMIX_ERROR_LOG(rc);
-                return rc;
-            }
-        }
-    }
-    /* flag that this job is complete so the receiver can know */
-    rc = PMIx_Data_pack(NULL, alert, &null, 1, PMIX_PROC_RANK);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return rc;
-    }
-
-    return PRTE_SUCCESS;
-}
-
 static void failed_start(prte_job_t *jobdat)
 {
     int i;

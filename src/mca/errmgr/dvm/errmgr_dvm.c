@@ -470,13 +470,11 @@ static void proc_errors(int fd, short args, void *cbdata)
      * any of our routes or local children remain alive - if not, then
      * terminate ourselves. */
     if (prte_prteds_term_ordered) {
-        for (i = 0; i < prte_local_children->size; i++) {
-            proct = (prte_proc_t*)pmix_pointer_array_get_item(prte_local_children, i);
-            if (NULL != proct) {
-                if (PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE)) {
-                    goto keep_going;
-                }
-            }
+        /* ask the base rather than scanning prte_local_children inline: the
+         * obvious loop variable here is "pptr", the proc whose error we are
+         * handling, and clobbering it corrupts everything below */
+        if (prte_errmgr_base_any_live_children(NULL)) {
+            goto keep_going;
         }
         /* if all my routes and children are gone, then terminate
            ourselves nicely (i.e., this is a normal termination) */

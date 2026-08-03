@@ -92,3 +92,102 @@ void prte_errmgr_base_log(int error_code, char *filename, int line)
     pmix_output(0, "%s PRTE_ERROR_LOG: %s in file %s at line %d",
                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), errstring, filename, line);
 }
+
+bool prte_errmgr_base_any_live_children(const char *job)
+{
+    int i;
+    prte_proc_t *child;
+
+    if (NULL == prte_local_children) {
+        return false;
+    }
+
+    for (i = 0; i < prte_local_children->size; i++) {
+        child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
+        if (NULL == child) {
+            continue;
+        }
+        /* is this child part of the specified job? */
+        if ((PMIX_NSPACE_INVALID(job) || PMIX_CHECK_NSPACE(job, child->name.nspace))
+            && PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_ALIVE)) {
+            PMIX_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+                                 "%s errmgr: proc %s is still alive",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 PRTE_NAME_PRINT(&child->name)));
+            return true;
+        }
+    }
+
+    /* if we get here, then nobody is left alive from that job */
+    return false;
+}
+
+int prte_errmgr_base_pack_state_for_proc(pmix_data_buffer_t *alert, prte_proc_t *child)
+{
+    int rc;
+
+    /* pack the child's vpid */
+    rc = PMIx_Data_pack(NULL, alert, &child->name.rank, 1, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return rc;
+    }
+    /* pack the pid */
+    rc = PMIx_Data_pack(NULL, alert, &child->pid, 1, PMIX_PID);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return rc;
+    }
+    /* pack its state */
+    rc = PMIx_Data_pack(NULL, alert, &child->state, 1, PMIX_UINT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return rc;
+    }
+    /* pack its exit code */
+    rc = PMIx_Data_pack(NULL, alert, &child->exit_code, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return rc;
+    }
+
+    return PRTE_SUCCESS;
+}
+
+int prte_errmgr_base_pack_state_update(pmix_data_buffer_t *alert, prte_job_t *jobdat)
+{
+    int rc, i;
+    prte_proc_t *child;
+    pmix_rank_t null = PMIX_RANK_INVALID;
+
+    /* pack the jobid */
+    rc = PMIx_Data_pack(NULL, alert, &jobdat->nspace, 1, PMIX_PROC_NSPACE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return rc;
+    }
+    if (NULL != prte_local_children) {
+        for (i = 0; i < prte_local_children->size; i++) {
+            child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
+            if (NULL == child) {
+                continue;
+            }
+            /* if this child is part of the job... */
+            if (PMIX_CHECK_NSPACE(child->name.nspace, jobdat->nspace)) {
+                rc = prte_errmgr_base_pack_state_for_proc(alert, child);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    return rc;
+                }
+            }
+        }
+    }
+    /* flag that this job is complete so the receiver can know */
+    rc = PMIx_Data_pack(NULL, alert, &null, 1, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return rc;
+    }
+
+    return PRTE_SUCCESS;
+}

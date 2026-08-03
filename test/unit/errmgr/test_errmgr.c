@@ -26,8 +26,10 @@
 
 #include "prte_config.h"
 #include <stdio.h>
+#include <string.h>
 
 #include "constants.h"
+#include "src/runtime/prte_globals.h"
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/errmgr/base/base.h"
 #include "src/runtime/runtime.h"
@@ -156,13 +158,233 @@ static int test_errmgr_base_log(void)
     return failures;
 }
 
+/*
+ * Stand up a synthetic prte_local_children array.  The errmgr handlers all
+ * consult this global to decide whether this node still has work on it, so a
+ * test can pose that question by populating it directly.
+ */
+static prte_proc_t *add_child(const char *nspace, pmix_rank_t rank, bool alive)
+{
+    prte_proc_t *p = PMIX_NEW(prte_proc_t);
+
+    PMIX_LOAD_PROCID(&p->name, nspace, rank);
+    p->pid = 1000 + rank;
+    p->state = alive ? PRTE_PROC_STATE_RUNNING : PRTE_PROC_STATE_TERMINATED;
+    p->exit_code = alive ? 0 : (int32_t) rank;
+    if (alive) {
+        PRTE_FLAG_SET(p, PRTE_PROC_FLAG_ALIVE);
+    }
+    pmix_pointer_array_add(prte_local_children, p);
+    return p;
+}
+
+static void reset_children(void)
+{
+    int i;
+    prte_proc_t *p;
+
+    if (NULL == prte_local_children) {
+        prte_local_children = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_local_children, 8, INT32_MAX, 8);
+        return;
+    }
+    for (i = 0; i < prte_local_children->size; i++) {
+        p = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
+        if (NULL != p) {
+            pmix_pointer_array_set_item(prte_local_children, i, NULL);
+            PMIX_RELEASE(p);
+        }
+    }
+}
+
+/*
+ * prte_errmgr_base_any_live_children is how every handler answers "is this
+ * node empty yet".  It used to be spelled out inline at each call site, and
+ * one of those inline scans reused the variable holding the proc whose error
+ * was being handled - so a surviving sibling was reported to the HNP as the
+ * failed proc.  Now there is one implementation, and this pins its answers.
+ */
+static int test_any_live_children(void)
+{
+    int failures = 0;
+
+    reset_children();
+
+    /* nobody home */
+    CHECK("empty: any job", !prte_errmgr_base_any_live_children(NULL));
+    CHECK("empty: named job", !prte_errmgr_base_any_live_children("jobA"));
+
+    /* one dead child of jobA */
+    add_child("jobA", 0, false);
+    CHECK("dead only: any job", !prte_errmgr_base_any_live_children(NULL));
+    CHECK("dead only: jobA", !prte_errmgr_base_any_live_children("jobA"));
+
+    /* a live child of jobB - visible to the wildcard and to jobB, but the
+     * question "does jobA still have anyone" must stay false */
+    add_child("jobB", 0, true);
+    CHECK("live jobB: any job", prte_errmgr_base_any_live_children(NULL));
+    CHECK("live jobB: jobB", prte_errmgr_base_any_live_children("jobB"));
+    CHECK("live jobB: jobA unaffected", !prte_errmgr_base_any_live_children("jobA"));
+
+    /* a live child of jobA, added after the dead one, must still be found -
+     * the scan has to cover the whole array, not stop at the first entry */
+    add_child("jobA", 1, true);
+    CHECK("live jobA", prte_errmgr_base_any_live_children("jobA"));
+
+    /* a hole in the middle of the array must not end the scan */
+    reset_children();
+    add_child("jobA", 0, false);
+    pmix_pointer_array_set_item(prte_local_children, 1, NULL);
+    add_child("jobA", 2, true);
+    CHECK("live after hole", prte_errmgr_base_any_live_children("jobA"));
+
+    reset_children();
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_any_live_children\n");
+    }
+    return failures;
+}
+
+/*
+ * The daemon reports proc state to the HNP with a PRTE_PLM_UPDATE_PROC_STATE
+ * message built by prte_errmgr_base_pack_state_{for_proc,update}.  Its only
+ * reader is prte_plm_base_receive(); the wire carries no format version, so
+ * the two must change together.  This test *is* that reader - it repeats the
+ * receiver's unpack sequence verbatim - so a field added, dropped or retyped
+ * on the packing side without the matching change to plm shows up here.
+ */
+static int unpack_and_check(pmix_data_buffer_t *bkt, const char *expect_nspace,
+                            prte_proc_t **expect, int nexpect, bool terminated)
+{
+    int failures = 0, n = 0;
+    pmix_nspace_t job;
+    pmix_rank_t vpid;
+    pid_t pid;
+    uint32_t state;
+    int32_t exit_code;
+    int32_t count;
+    pmix_status_t rc;
+
+    count = 1;
+    rc = PMIx_Data_unpack(NULL, bkt, &job, &count, PMIX_PROC_NSPACE);
+    CHECK("wire: nspace unpacks", PMIX_SUCCESS == rc);
+    if (PMIX_SUCCESS != rc) {
+        return failures;
+    }
+    CHECK("wire: nspace matches", PMIX_CHECK_NSPACE(job, expect_nspace));
+
+    while (1) {
+        count = 1;
+        rc = PMIx_Data_unpack(NULL, bkt, &vpid, &count, PMIX_PROC_RANK);
+        if (PMIX_SUCCESS != rc) {
+            /* running off the end is how a single-proc report ends */
+            CHECK("wire: clean end of buffer", PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER == rc);
+            break;
+        }
+        if (PMIX_RANK_INVALID == vpid) {
+            /* the terminator: the job is complete */
+            CHECK("wire: terminator expected", terminated);
+            terminated = false;
+            break;
+        }
+        count = 1;
+        rc = PMIx_Data_unpack(NULL, bkt, &pid, &count, PMIX_PID);
+        CHECK("wire: pid unpacks", PMIX_SUCCESS == rc);
+        count = 1;
+        rc = PMIx_Data_unpack(NULL, bkt, &state, &count, PMIX_UINT32);
+        CHECK("wire: state unpacks", PMIX_SUCCESS == rc);
+        count = 1;
+        rc = PMIx_Data_unpack(NULL, bkt, &exit_code, &count, PMIX_INT32);
+        CHECK("wire: exit code unpacks", PMIX_SUCCESS == rc);
+        if (PMIX_SUCCESS != rc) {
+            break;
+        }
+        if (n < nexpect) {
+            CHECK("wire: rank round-trips", expect[n]->name.rank == vpid);
+            CHECK("wire: pid round-trips", expect[n]->pid == pid);
+            CHECK("wire: state round-trips", (uint32_t) expect[n]->state == state);
+            CHECK("wire: exit code round-trips", expect[n]->exit_code == exit_code);
+        }
+        ++n;
+    }
+    CHECK("wire: proc count", n == nexpect);
+    CHECK("wire: terminator consumed", !terminated);
+    return failures;
+}
+
+static int test_state_update_wire(void)
+{
+    int failures = 0;
+    pmix_data_buffer_t bkt;
+    prte_proc_t *expect[3];
+    prte_job_t *jdata;
+
+    reset_children();
+
+    /* jobA has two local children; jobB's child must not leak into jobA's
+     * report */
+    expect[0] = add_child("jobA", 0, true);
+    add_child("jobB", 7, true);
+    expect[1] = add_child("jobA", 1, false);
+    expect[1]->state = PRTE_PROC_STATE_TERM_NON_ZERO;
+    expect[1]->exit_code = 42;
+
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, "jobA");
+
+    /* a whole-job update: nspace, every local child of that job, terminator */
+    PMIX_DATA_BUFFER_CONSTRUCT(&bkt);
+    CHECK("pack state update", PRTE_SUCCESS == prte_errmgr_base_pack_state_update(&bkt, jdata));
+    failures += unpack_and_check(&bkt, "jobA", expect, 2, true);
+    PMIX_DATA_BUFFER_DESTRUCT(&bkt);
+
+    /* a single-proc report: the nspace, then exactly the one proc that
+     * failed - and no other.  This is the shape the CALLED_ABORT /
+     * TERM_NON_ZERO / abnormal-termination paths send. */
+    PMIX_DATA_BUFFER_CONSTRUCT(&bkt);
+    CHECK("pack single nspace",
+          PMIX_SUCCESS == PMIx_Data_pack(NULL, &bkt, &jdata->nspace, 1, PMIX_PROC_NSPACE));
+    CHECK("pack single proc",
+          PRTE_SUCCESS == prte_errmgr_base_pack_state_for_proc(&bkt, expect[1]));
+    failures += unpack_and_check(&bkt, "jobA", &expect[1], 1, false);
+    PMIX_DATA_BUFFER_DESTRUCT(&bkt);
+
+    /* a job with no local children still produces a well-formed, complete
+     * report - nspace plus terminator */
+    reset_children();
+    PMIX_DATA_BUFFER_CONSTRUCT(&bkt);
+    CHECK("pack empty update", PRTE_SUCCESS == prte_errmgr_base_pack_state_update(&bkt, jdata));
+    failures += unpack_and_check(&bkt, "jobA", NULL, 0, true);
+    PMIX_DATA_BUFFER_DESTRUCT(&bkt);
+
+    PMIX_RELEASE(jdata);
+    reset_children();
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_state_update_wire\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
+    pmix_status_t prc;
 
     rc = prte_init_util(PRTE_PROC_MASTER);
     if (PRTE_SUCCESS != rc) {
         fprintf(stderr, "prte_init_util failed: %d\n", rc);
+        return 1;
+    }
+
+    /* the state-update report packs a buffer, and PMIx_Data_pack refuses to
+     * run until PMIx itself is up.  A daemon reaches that state through
+     * PMIx_server_init, so do the same */
+    prc = PMIx_server_init(NULL, NULL, 0);
+    if (PMIX_SUCCESS != prc) {
+        fprintf(stderr, "PMIx_server_init failed: %s\n", PMIx_Error_string(prc));
+        prte_finalize();
         return 1;
     }
 
@@ -171,14 +393,18 @@ int main(void)
                                       PMIX_MCA_BASE_OPEN_DEFAULT);
     if (PRTE_SUCCESS != rc) {
         fprintf(stderr, "errmgr framework open failed: %d\n", rc);
-        (void) pmix_mca_base_framework_close(&prte_errmgr_base_framework);
-    prte_finalize();
+        PMIx_server_finalize();
+        prte_finalize();
         return 1;
     }
 
     failures += test_errmgr_modules();
     failures += test_errmgr_base_log();
+    failures += test_any_live_children();
+    failures += test_state_update_wire();
 
+    (void) pmix_mca_base_framework_close(&prte_errmgr_base_framework);
+    PMIx_server_finalize();
     prte_finalize();
 
     if (0 == failures) {
