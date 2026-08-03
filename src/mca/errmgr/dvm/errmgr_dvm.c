@@ -527,6 +527,13 @@ static void proc_errors(int fd, short args, void *cbdata)
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
         }
+        /* nothing below is worth doing once the DVM has been ordered down and
+         * this node is empty: the per-state policy would record an abort,
+         * notify survivors there are none of, and order the termination of a
+         * job that is already going away.  The daemon-side handler has always
+         * stopped here ("no need to alert the HNP - we are already on our way
+         * out"); this one fell through and did the work anyway. */
+        goto cleanup;
     }
 
 keep_going:
