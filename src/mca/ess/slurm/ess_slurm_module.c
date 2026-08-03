@@ -105,35 +105,17 @@ static int rte_finalize(void)
 
 static int slurm_set_name(void)
 {
-    int slurm_nodeid;
-    pmix_rank_t vpid;
     char *tmp;
+    int rc;
 
     PMIX_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:slurm setting name"));
 
-    if (NULL == prte_ess_base_nspace) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+    /* SLURM gives every daemon it starts the same base vpid; each one adds
+     * its own index within the allocation to arrive at a unique rank */
+    rc = prte_ess_base_set_identity("SLURM_NODEID", 0);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
     }
-
-    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, prte_ess_base_nspace);
-
-    if (NULL == prte_ess_base_vpid) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
-    }
-    vpid = strtoul(prte_ess_base_vpid, NULL, 10);
-
-    /* fix up the vpid and make it the "real" vpid */
-    if (NULL == (tmp = getenv("SLURM_NODEID"))) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
-    }
-    slurm_nodeid = atoi(tmp);
-    PRTE_PROC_MY_NAME->rank = vpid + slurm_nodeid;
-
-    PMIX_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:slurm set name to %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* fix up the system info nodename to match exactly what slurm returned */
     if (NULL != prte_process_info.nodename) {
@@ -148,9 +130,6 @@ static int slurm_set_name(void)
     PMIX_OUTPUT_VERBOSE(
         (1, prte_ess_base_framework.framework_output, "ess:slurm set nodename to %s",
          (NULL == prte_process_info.nodename) ? "NULL" : prte_process_info.nodename));
-
-    /* get the num procs as provided in the cmd line param */
-    prte_process_info.num_daemons = prte_ess_base_num_procs;
 
     return PRTE_SUCCESS;
 }

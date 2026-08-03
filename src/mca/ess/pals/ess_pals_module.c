@@ -107,38 +107,9 @@ static int rte_finalize(void)
 
 static int pals_set_name(void)
 {
-    int pals_nodeid;
-    pmix_rank_t vpid;
-    char *tmp;
-
     PMIX_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:pals setting name"));
 
-    if (NULL == prte_ess_base_nspace) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
-    }
-
-    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, prte_ess_base_nspace);
-
-    if (NULL == prte_ess_base_vpid) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
-    }
-    vpid = strtoul(prte_ess_base_vpid, NULL, 10);
-
-    if (NULL != getenv("PALS_NODEID")) {
-        /* fix up the vpid and make it the "real" vpid */
-        pals_nodeid = atoi(getenv("PALS_NODEID"));
-        PRTE_PROC_MY_NAME->rank = vpid + pals_nodeid;
-    } else {
-        return PRTE_ERR_NOT_FOUND;
-    }
-
-    PMIX_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:pals set name to %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-
-    /* get the num procs as provided in the cmd line param */
-    prte_process_info.num_daemons = prte_ess_base_num_procs;
-
-    return PRTE_SUCCESS;
+    /* PALS gives every daemon it starts the same base vpid; each one adds its
+     * own index within the allocation to arrive at a unique rank */
+    return prte_ess_base_set_identity("PALS_NODEID", 0);
 }

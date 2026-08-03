@@ -38,3 +38,27 @@ MCA parameter:
   param:  %s
 
 This is not a recognized signal value. Please fix or remove it.
+#
+[ess-base:bad-identity]
+A daemon could not establish its identity because a value it was given
+is not a valid non-negative number:
+
+  parameter: %s
+  value:     %s
+
+This is normally set by the launcher that started this daemon, so the
+most likely cause is a mismatch between this daemon and the process that
+started it.
+#
+[ess-base:rank-out-of-range]
+A daemon could not establish its identity because the rank computed for
+it does not lie within the valid range:
+
+  base vpid:        %s
+  node index from:  %s
+  node index value: %lu
+  adjustment:       %d
+
+This is normally set by the launcher that started this daemon, so the
+most likely cause is a mismatch between this daemon and the process that
+started it.

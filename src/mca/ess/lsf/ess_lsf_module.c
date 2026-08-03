@@ -55,15 +55,11 @@ prte_ess_base_module_t prte_ess_lsf_module = {
     .finalize = rte_finalize
 };
 
-/*
- * Local variables
- */
-static prte_node_rank_t my_node_rank = PRTE_NODE_RANK_INVALID;
-
 static int rte_init(int argc, char **argv)
 {
     int ret;
     char *error = NULL;
+    PRTE_HIDE_UNUSED_PARAMS(argc, argv);
 
     /* run the prolog */
     if (PRTE_SUCCESS != (ret = prte_ess_base_std_prolog())) {
@@ -106,34 +102,11 @@ static int rte_finalize(void)
 
 static int lsf_set_name(void)
 {
-    int lsf_nodeid;
-    pmix_rank_t vpid;
-    char *tmp;
+    PMIX_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:lsf setting name"));
 
-    if (NULL == prte_ess_base_nspace) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
-    }
-
-    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, prte_ess_base_nspace);
-
-    if (NULL == prte_ess_base_vpid) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
-    }
-    vpid = strtoul(prte_ess_base_vpid, NULL, 10);
-
-    if (NULL == (tmp = getenv("LSF_PM_TASKID"))) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
-    }
-    lsf_nodeid = atoi(tmp);
-    pmix_output_verbose(1, prte_ess_base_framework.framework_output,
-                        "ess:lsf found LSF_PM_TASKID set to %d", lsf_nodeid);
-    PRTE_PROC_MY_NAME->rank = vpid + lsf_nodeid - 1;
-
-    /* get the num procs as provided in the cmd line param */
-    prte_process_info.num_daemons = prte_ess_base_num_procs;
-
-    return PRTE_SUCCESS;
+    /* LSF gives every daemon it starts the same base vpid; each one adds its
+     * own task index to arrive at a unique rank.  LSF numbers those tasks
+     * from one, so back the index off by one to land on the same zero-based
+     * rank every other environment produces. */
+    return prte_ess_base_set_identity("LSF_PM_TASKID", -1);
 }
