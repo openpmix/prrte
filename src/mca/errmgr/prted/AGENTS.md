@@ -50,13 +50,21 @@ the HNP. The wire format built by the packing helpers is, in order:
 1. `PRTE_PLM_UPDATE_PROC_STATE` command (`PMIX_UINT8`).
 2. the job nspace (`PMIX_PROC_NSPACE`).
 3. for each relevant proc: **rank, pid, state, exit_code**
-   (`pack_state_for_proc`).
+   (`prte_errmgr_base_pack_state_for_proc`).
 4. a terminator rank `PMIX_RANK_INVALID` marking the end / job complete.
 
 The buffer is delivered with `PRTE_RML_RELIABLE_SEND(rc,
-PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM)`. `pack_state_update`
-packs *all* local children of a job (steps 2–4); the single-proc paths
-pack the nspace then one `pack_state_for_proc` then the terminator.
+PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM)`.
+`prte_errmgr_base_pack_state_update` packs *all* local children of a job
+(steps 2–4). The single-proc paths pack the nspace and then exactly one
+`prte_errmgr_base_pack_state_for_proc` and **no terminator** — the reader
+loop ends on `PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER`, which it treats
+as a clean end, so the terminator is only needed to say "and the job is
+complete". Both packers now live in the base
+([framework guide](../AGENTS.md)) so that this format and its only reader,
+`prte_plm_base_receive()`, can be pinned together by
+`test/unit/errmgr`; the wire has no version, so a change to one without
+the other silently desynchronizes a running DVM.
 
 A per-job **dedup flag**, `PRTE_JOB_FAIL_NOTIFIED`, ensures the daemon
 reports a given job's failure to the HNP only once — except for
@@ -79,7 +87,13 @@ After the standard acquire / `finalizing` / daemon-job back-fill and
 - default → fall through.
 
 The fall-through path packs `PRTE_PLM_UPDATE_PROC_STATE` +
-`pack_state_update(alert, jdata)` and reliable-sends it to the HNP.
+`prte_errmgr_base_pack_state_update(alert, jdata)` and reliable-sends it
+to the HNP.
+
+The daemon-job back-fill gives up (with a `PRTE_ERROR_LOG`) if
+`prte_get_job_data_object()` cannot find the daemon job, rather than
+retaining and dereferencing NULL — a crash in the handler that reports
+crashes is the worst outcome available here.
 
 ---
 
@@ -89,24 +103,27 @@ The core reporter. After acquire and the `finalizing` guard it filters in
 order:
 
 1. **`HEARTBEAT_FAILED`** → ignore, the HNP owns it.
-2. **Lifeline / unreachable family** (`LIFELINE_LOST`,
-   `UNABLE_TO_SEND_MSG`, `NO_PATH_TO_TARGET`, `PEER_UNKNOWN`,
-   `FAILED_TO_CONNECT`) → we've lost our lifeline to the HNP: set exit
-   status, `killprocs` all children, and `prte_quit()`. Our routed
-   children will see us leave and die on their own.
-3. Look up `jdata`; if `NULL`, the job is already complete — ignore.
-4. **`COMM_FAILED`:**
+2. **Lifeline lost** (`LIFELINE_LOST`) → set exit status, `killprocs` all
+   children, and `prte_quit()`. Our routed children will see us leave and
+   die on their own.
+3. **Unreachable peer** (`UNABLE_TO_SEND_MSG`, `NO_PATH_TO_TARGET`,
+   `PEER_UNKNOWN`, `FAILED_TO_CONNECT`) → **this is not, by itself, our
+   lifeline**, and it must not end the daemon. See the gotcha below;
+   only a failure against the HNP takes the exit path above.
+4. Look up `jdata`; if `NULL`, the job is already complete — ignore.
+5. **`COMM_FAILED`:**
    - to self → ignore.
    - to a **non-daemon** (an application proc) → we can't trust we'll
      catch its waitpid, so re-inject it as a waitpid event: build a
      `prte_wait_tracker_t`, `PMIX_RETAIN` the child, and activate
      `prte_odls_base_default_wait_local_proc` on the event base. This
      reuses the normal local-termination path instead of duplicating it.
-   - to a **daemon** → if `prte_prteds_term_ordered`, check whether any
-     local child is still alive and whether routed children remain
+   - to a **daemon** → if `prte_prteds_term_ordered`, ask
+     `prte_errmgr_base_any_live_children(NULL)` whether any local child is
+     still alive and whether routed children remain
      (`prte_rml_base.n_children`); when all are gone activate
      `DAEMONS_TERMINATED` to exit; otherwise just continue.
-5. Look up the `child` proc_t; a `NULL` is a `PRTE_ERR_NOT_FOUND` and
+6. Look up the `child` proc_t; a `NULL` is a `PRTE_ERR_NOT_FOUND` and
    forces `PRTE_JOB_STATE_FORCED_EXIT`.
 
 Then, per specific application-proc state:
@@ -126,12 +143,15 @@ Then, per specific application-proc state:
 - **`state > TERMINATED`** (abnormal) → if `prte_prteds_term_ordered`,
   update the child's ALIVE/RECORDED bookkeeping and terminate the daemon
   when all children/routes are gone (no HNP alert — we're already
-  leaving). Otherwise (`keep_going:`) report the abnormal termination to
+  leaving); if a sibling is still alive, fall through to `keep_going:`
+  **with `child` still pointing at the proc that failed** (see the gotcha
+  below). Otherwise (`keep_going:`) report the abnormal termination to
   the HNP once, set `PRTE_PROC_FLAG_TERM_REPORTED` and the
   `PRTE_JOB_FAIL_NOTIFIED` dedup flag, and activate `TERMINATED` if the
   proc is fully done.
 - **plain `TERMINATED`** (the final `else`) → if no live children of the
-  job remain (`any_live_children`), pack a full job state update, **remove
+  job remain (`prte_errmgr_base_any_live_children`), pack a full job state
+  update, **remove
   this job's children from `prte_local_children` and `PMIX_RELEASE` the
   jdata locally** (the job is complete on this node), then reliable-send
   the update to the HNP.
@@ -150,7 +170,9 @@ daemon must die but a bare `exit()` would give the user no message. It:
 
 1. Runs at most once (`prte_abnormal_term_ordered` guard), then sets that
    flag.
-2. Emits the message via `help-errmgr-base.txt: simple-message`.
+2. Emits the message via `help-errmgr-base.txt: simple-message`, then
+   frees it. Callers may pass no format at all, and that topic contains a
+   `%s`, so a stand-in string is substituted rather than a NULL.
 3. Packs a `PRTE_PLM_UPDATE_PROC_STATE` alert describing *itself*
    (nspace, its own vpid, its pid, `PRTE_PROC_STATE_CALLED_ABORT`, the
    error code, terminator rank) and reliable-sends it to the HNP on
@@ -180,6 +202,42 @@ daemon must die but a bare `exit()` would give the user no message. It:
   (terminate the DVM, notify submitters) out of here — that belongs to
   `dvm`. The daemon's contract is: tell the HNP, manage local children,
   and exit only when ordered or when its lifeline is lost.
+- **"Cannot reach a peer" is not "lost my lifeline".** These are separate
+  states for a reason and the handler used to conflate them: for years it
+  answered `UNABLE_TO_SEND_MSG`, `NO_PATH_TO_TARGET`, `PEER_UNKNOWN` and
+  `FAILED_TO_CONNECT` by killing every local process and calling
+  `prte_quit()`, under a comment claiming to test whether the peer was
+  our lifeline — a test that was never written. Those states name
+  whatever peer a message could not be handed to:
+  `prte_rml_send_callback()` names the target of the failed send and
+  `prte_oob_base_send_nb()` names the **next hop**, which for a daemon
+  with a subtree is one of its own children. So one unreachable peer took
+  down this daemon, its processes, and everything below it in the tree.
+  The rules now are:
+  - a peer outside the daemon job (a tool, an app proc) is never a reason
+    to die;
+  - `UNABLE_TO_SEND_MSG` / `NO_PATH_TO_TARGET` / `PEER_UNKNOWN` against a
+    daemon other than the HNP are transient — very often a daemon that
+    has been *recorded* but has not finished coming up, the normal state
+    of affairs during an elastic grow — and are ignored; a real departure
+    arrives separately as a dropped connection, which the OOB turns into
+    a route repair plus `COMM_FAILED`;
+  - `FAILED_TO_CONNECT` means the OOB has given up (`connect_max_time` /
+    `max_recon_attempts`), so nothing else is coming: heal the tree with
+    `prte_rml_route_lost()`, which is what `oob_tcp_connection.c` says
+    should happen and which returns an error only for the HNP.
+
+  The HNP-side handler has the mirror of this guard (the "has not
+  reported for duty" branch in `errmgr/dvm`); if you change one, look at
+  the other.
+- **The liveness scan lives in the base.** `proc_errors` reports `child`
+  to the HNP, and `child` is a plain local in the same scope as any loop
+  you might write. It used to be the loop variable of the
+  `prte_local_children` scan under `prte_prteds_term_ordered` — so on the
+  path taken *because* a sibling was still alive, the daemon overwrote
+  the failed proc with that sibling and reported the wrong process as
+  having abnormally terminated. Call
+  `prte_errmgr_base_any_live_children()`; never re-inline the scan.
 - **`PRTE_JOB_FAIL_NOTIFIED` dedup, with the recoverable exception.**
   Every "alert the HNP" branch checks the flag and sets it afterward —
   *except* for `PRTE_JOB_RECOVERABLE` jobs, which must keep receiving
@@ -207,7 +265,17 @@ daemon must die but a bare `exit()` would give the user no message. It:
   completion path (which `goto cleanup`s *after* releasing `jdata`).
   When adding a new exit, prefer `goto cleanup` unless you have already
   released or transferred ownership of the caddy on that path. The
-  send-failure paths (`PMIX_RELEASE(alert)` after a failed
+  send-failure paths (`PMIX_DATA_BUFFER_RELEASE(alert)` after a failed
   `PRTE_RML_RELIABLE_SEND`) deliberately fall through rather than jump —
   they still reach `cleanup`. Note `prted_abort` is a different function
   with no caddy; its bare `return`s are correct.
+- **`alert` is a `pmix_data_buffer_t`, not an object.** Dispose of it with
+  `PMIX_DATA_BUFFER_RELEASE`. `PMIX_RELEASE` compiles, and casts the
+  buffer to a `pmix_object_t` so that the refcount it decrements overlaps
+  `pack_ptr` and the class it would run destructors through is read out of
+  `base_ptr`; against a debug PMIx that aborts on the magic-id assertion,
+  and otherwise it silently leaks. Four send-failure paths here got this
+  wrong (and two more elsewhere in the tree).
+- **Nothing may be read out of the caddy before `PMIX_ACQUIRE_OBJECT`,**
+  including in a variable initializer — see the threading section of the
+  [framework guide](../AGENTS.md).
