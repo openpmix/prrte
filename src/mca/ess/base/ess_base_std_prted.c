@@ -83,8 +83,6 @@ static prte_event_t epipe_handler;
 static char *log_path = NULL;
 static void shutdown_signal(int fd, short flags, void *arg);
 static void epipe_signal_callback(int fd, short flags, void *arg);
-static void signal_forward_callback(int fd, short event, void *arg);
-static prte_event_t *forward_signals_events = NULL;
 
 static void setup_sighandler(int signal, prte_event_t *ev, prte_event_cbfunc_t cbfunc)
 {
@@ -103,8 +101,6 @@ int prte_ess_base_prted_setup(void)
     prte_proc_t *proc;
     prte_app_context_t *app = NULL;
     prte_topology_t *t = NULL;
-    prte_ess_base_signal_t *sig = NULL;
-    int idx;
 
     plm_in_use = false;
 
@@ -112,24 +108,18 @@ int prte_ess_base_prted_setup(void)
     setup_sighandler(SIGPIPE, &epipe_handler, epipe_signal_callback);
     /* Set signal handlers to catch kill signals so we can properly clean up
      * after ourselves.
+     *
+     * NOTE: a daemon installs no handlers for the signals on
+     * prte_ess_base_signals, and must not - that list is empty here.  Signal
+     * forwarding is a TOOL-side feature: prte/prterun and prun each build the
+     * list from their own --forward-signals option, catch the signal
+     * themselves, and relay it to us as a PRTE_DAEMON_SIGNAL_LOCAL_PROCS
+     * command over the RML (see prted_comm.c), which is what reaches the
+     * application processes.  Nothing populates the list in a prted, so
+     * handlers installed from it here would never exist.
      */
     setup_sighandler(SIGTERM, &term_handler, shutdown_signal);
     setup_sighandler(SIGINT, &int_handler, shutdown_signal);
-    /** setup callbacks for signals we should forward */
-    if (0 < (idx = pmix_list_get_size(&prte_ess_base_signals))) {
-        forward_signals_events = (prte_event_t *) malloc(sizeof(prte_event_t) * idx);
-        if (NULL == forward_signals_events) {
-            ret = PRTE_ERR_OUT_OF_RESOURCE;
-            error = "unable to malloc";
-            goto error;
-        }
-        idx = 0;
-        PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
-        {
-            setup_sighandler(sig->signal, forward_signals_events + idx, signal_forward_callback);
-            ++idx;
-        }
-    }
     signals_set = true;
 
     /* get the local topology */
@@ -427,11 +417,6 @@ error:
         pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
                        error, PRTE_ERROR_NAME(ret), ret);
     }
-    if (NULL != forward_signals_events) {
-        free(forward_signals_events);
-        forward_signals_events = NULL;
-        signals_set = false;
-    }
     if (NULL != jdata) {
         PMIX_RELEASE(jdata);
     }
@@ -440,22 +425,10 @@ error:
 
 int prte_ess_base_prted_finalize(void)
 {
-    prte_ess_base_signal_t *sig;
-    unsigned int i;
-
     if (signals_set) {
         prte_event_del(&epipe_handler);
         prte_event_del(&term_handler);
         prte_event_del(&int_handler);
-        /** Remove the USR signal handlers */
-        i = 0;
-        PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
-        {
-            prte_event_signal_del(forward_signals_events + i);
-            ++i;
-        }
-        free(forward_signals_events);
-        forward_signals_events = NULL;
         signals_set = false;
     }
 
@@ -503,52 +476,4 @@ static void epipe_signal_callback(int fd, short flags, void *arg)
     PRTE_HIDE_UNUSED_PARAMS(fd, flags, arg);
     /* for now, we just ignore them */
     return;
-}
-
-/* Pass user signals to the local application processes */
-static void signal_forward_callback(int fd, short event, void *arg)
-{
-    prte_event_t *signal = (prte_event_t *) arg;
-    int32_t signum, rc;
-    pmix_data_buffer_t *cmd;
-    prte_daemon_cmd_flag_t command = PRTE_DAEMON_SIGNAL_LOCAL_PROCS;
-    PRTE_HIDE_UNUSED_PARAMS(fd, event);
-
-    signum = PRTE_EVENT_SIGNAL(signal);
-    if (!prte_execute_quiet) {
-        fprintf(stderr, "PRTE: Forwarding signal %d to job\n", signum);
-    }
-
-    PMIX_DATA_BUFFER_CREATE(cmd);
-
-    /* pack the command */
-    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, cmd, &command, 1, PRTE_DAEMON_CMD);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(cmd);
-        return;
-    }
-
-    /* pack the jobid */
-    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, cmd, &PRTE_JOBID_WILDCARD, 1, PMIX_PROC_NSPACE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(cmd);
-        return;
-    }
-
-    /* pack the signal */
-    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, cmd, &signum, 1, PMIX_INT32);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(cmd);
-        return;
-    }
-
-    /* send it to ourselves */
-    PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME->rank, cmd, PRTE_RML_TAG_DAEMON);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(cmd);
-    }
 }
