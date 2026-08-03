@@ -99,7 +99,6 @@ typedef struct {
     pmix_list_item_t super;
     char *signame;
     int signal;
-    bool can_forward;
 } prte_ess_base_signal_t;
 PMIX_CLASS_DECLARATION(prte_ess_base_signal_t);
 
