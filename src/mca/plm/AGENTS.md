@@ -67,6 +67,7 @@ plm/
     plm_base_frame.c          # framework open/close/register; the DEFAULT "local-only" module
     plm_base_select.c         # pick-ONE-component selection (highest priority wins)
     plm_base_receive.c        # the HNP command processor: tools/daemons → HNP (PRTE_RML_TAG_PLM)
+                              #   ...and the writers for the UPDATE_PROC_STATE body it reads
     plm_base_launch_support.c # the heart: state handlers, daemon callback/wireup, setup_vm, arg building
     plm_base_prted_cmds.c     # xcast-based terminate/kill/signal commands to daemons
     plm_base_jobid.c          # HNP nspace + per-job jobid assignment
@@ -287,6 +288,22 @@ Both recvs are registered by **`prte_plm_base_comm_start()`**
 (`plm_base_receive.c`), which every component calls from `init`. On the
 master it also registers the stack-trace recv; the base
 `prte_plm_base_recv` on `PRTE_RML_TAG_PLM` is registered on all procs.
+
+### The `UPDATE_PROC_STATE` writers (`plm_base_receive.c`)
+
+`prte_plm_base_pack_state_for_proc()` and
+`prte_plm_base_pack_state_update()` build the body of the report a daemon
+sends the HNP: per job, the nspace, then `{rank, pid, state, exit_code}`
+per proc, then a `PMIX_RANK_INVALID` terminator. They are deliberately in
+the same file as `prte_plm_base_recv()`, which is the only thing that
+reads them — the wire carries no format version, so the pair has to
+change in one commit, and there used to be three separate copies of the
+writer (`errmgr/prted`, `state/prted`, and a hand-rolled one in
+`prted_abort()`) for a maintainer to find. `test/unit/plm` round-trips
+both shapes through an unpacker that repeats the receiver's sequence.
+`skip_reported` is for the normal-termination caller: it packs only
+children not yet flagged `PRTE_PROC_FLAG_TERM_REPORTED`, and flags what
+it packs.
 
 ### The command processor (`plm_base_receive.c`)
 

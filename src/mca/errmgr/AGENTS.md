@@ -58,7 +58,7 @@ errmgr/
     errmgr_private.h          # prte_errmgr_default_fns + prte_errmgr_base_log() prototype
     errmgr_base_frame.c       # framework open/close/DECLARE; the global prte_errmgr module
     errmgr_base_select.c      # pmix_mca_base_select — classic single-winner pick-one
-    errmgr_base_fns.c         # prte_errmgr_base_log() plus the helpers both components share
+    errmgr_base_fns.c         # prte_errmgr_base_log() + the live-children scan both components use
     help-errmgr-base.txt      # user-facing error/help text (failed-daemon, node-died, …)
     static-components.h       # generated: lists dvm + prted as the static components
   dvm/                        # HNP component (pri 1000, gated PRTE_PROC_IS_MASTER)
@@ -180,15 +180,9 @@ into a string via `PRTE_ERROR_NAME` (`prte_strerror`) and prints
 `pmix_output(0, …)`. If `prte_strerror` returns `NULL` (a "silent"
 error) it prints nothing.
 
-Alongside it live three helpers that both components call. They are here,
-rather than duplicated in each component, because each one had already
-drifted or misfired at least once:
-
-| Helper | What it answers |
-|--------|-----------------|
-| `prte_errmgr_base_any_live_children(job)` | Is any process in `prte_local_children` still `PRTE_PROC_FLAG_ALIVE`? Pass a nspace to restrict it to one job, or `NULL` for any job. |
-| `prte_errmgr_base_pack_state_for_proc(alert, child)` | Pack one proc as `{rank, pid, state, exit_code}`. |
-| `prte_errmgr_base_pack_state_update(alert, jobdat)` | Pack a job's nspace, every local child of it, and the `PMIX_RANK_INVALID` terminator. |
+Alongside it lives `prte_errmgr_base_any_live_children(job)`: is any
+process in `prte_local_children` still `PRTE_PROC_FLAG_ALIVE`? Pass a
+nspace to restrict the question to one job, or `NULL` for any job.
 
 **Never spell out the live-children scan inline.** Every handler that
 decides "is this node empty yet" needs it, and the obvious loop variable
@@ -198,12 +192,18 @@ sibling* to the HNP as the proc that had abnormally terminated, and
 overwrote its state on the way. Call the helper; there is then no loop
 variable in your scope to clobber.
 
-The two packers build the body of a `PRTE_PLM_UPDATE_PROC_STATE` message
-whose only reader is `prte_plm_base_receive()`. The wire carries no
-format version (mixed-version DVMs are forbidden — see the top-level
-guide), so packer and reader must change in the same commit; the
-round-trip test in `test/unit/errmgr` is what makes that pairing
-enforceable.
+The report a daemon sends the HNP is *not* built here. Its writers,
+`prte_plm_base_pack_state_for_proc()` and
+`prte_plm_base_pack_state_update()`, live in
+[`src/mca/plm/base/plm_base_receive.c`](../plm/base/plm_base_receive.c),
+in the same file as `prte_plm_base_recv()`, which is their only reader.
+The wire carries no format version (mixed-version DVMs are forbidden —
+see the top-level guide), so writer and reader must change in the same
+commit, and keeping them together is what makes that a mechanical rather
+than an archaeological exercise. There used to be three copies of those
+writers — this framework, `state/prted`, and a hand-rolled one in
+`prted_abort()`; the first two are gone. The round-trip test lives with
+them, in `test/unit/plm`.
 
 ### `help-errmgr-base.txt`
 
@@ -328,13 +328,9 @@ contract and the shared helpers:
   child, a hole left by a removed entry, and a live child added *after*
   the dead one — so a scan that stops early, ignores the job filter, or
   trips over a hole fails here.
-- **The HNP report wire format.** Both report shapes — a whole-job update
-  and a single-proc report — are packed with the base helpers and then
-  read back by an unpacker that repeats `prte_plm_base_receive()`'s
-  sequence verbatim. A field added, dropped or retyped on one side alone
-  fails the test instead of desynchronizing a running DVM. (Note the
-  test has to `PMIx_server_init` first: `PMIx_Data_pack` refuses to run
-  before PMIx is up, which is the state a daemon reaches the same way.)
+
+The wire format of the report itself is covered in `test/unit/plm`,
+where its writers now live.
 
 Run it from a built tree with `make check` (or
 `make -C test/unit/errmgr check`). When you add a new component, change
