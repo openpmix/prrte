@@ -277,9 +277,7 @@ static void fence(int sd, short args, void *cbdata)
      * for releasing it upon completion of the collective */
     coll = get_tracker(&sig, true);
     if (NULL == coll) {
-        PMIX_DESTRUCT(&sig);
-        PMIX_RELEASE(cd);
-        return;
+        goto done;
     }
     coll->cbfunc = cd->cbfunc;
     coll->cbdata = cd->cbdata;
@@ -295,23 +293,20 @@ static void fence(int sd, short args, void *cbdata)
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(relay);
-        PMIX_RELEASE(cd);
-        return;
+        goto done;
     }
 
     // pack the info structs
     rc = PMIx_Data_pack(NULL, relay, &cd->ninfo, 1, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
         PMIX_DATA_BUFFER_RELEASE(relay);
-        PMIX_RELEASE(cd);
-        return;
+        goto done;
     }
     if (0 < cd->ninfo) {
         rc = PMIx_Data_pack(NULL, relay, cd->info, cd->ninfo, PMIX_INFO);
         if (PMIX_SUCCESS != rc) {
             PMIX_DATA_BUFFER_RELEASE(relay);
-            PMIX_RELEASE(cd);
-            return;
+            goto done;
         }
     }
 
@@ -324,8 +319,7 @@ static void fence(int sd, short args, void *cbdata)
     PMIX_DATA_BUFFER_DESTRUCT(&bkt);
     if (PMIX_SUCCESS != rc) {
         PMIX_DATA_BUFFER_RELEASE(relay);
-        PMIX_RELEASE(cd);
-        return;
+        goto done;
     }
 
     /* Keep our own contribution so a fault can replay it: recovery resets
@@ -341,8 +335,7 @@ static void fence(int sd, short args, void *cbdata)
         PMIX_DATA_BUFFER_RELEASE(coll->my_contribution);
         coll->my_contribution = NULL;
         PMIX_DATA_BUFFER_RELEASE(relay);
-        PMIX_RELEASE(cd);
-        return;
+        goto done;
     }
 
     /* stamp it with the current epoch and send that */
@@ -351,8 +344,7 @@ static void fence(int sd, short args, void *cbdata)
     PMIX_DATA_BUFFER_RELEASE(relay);
     if (PRTE_SUCCESS != rc) {
         PMIX_DATA_BUFFER_RELEASE(framed);
-        PMIX_RELEASE(cd);
-        return;
+        goto done;
     }
 
     /* send this to ourselves for processing */
@@ -362,8 +354,12 @@ static void fence(int sd, short args, void *cbdata)
 
     PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME->rank, framed,
                   PRTE_RML_TAG_FENCE);
+
+done:
+    /* the signature we computed is ours - the tracker keeps a copy of its
+     * own - so it must go back on every path out of here */
+    PMIX_DESTRUCT(&sig);
     PMIX_RELEASE(cd);
-    return;
 }
 
 void prte_grpcomm_direct_fence_recv(int status, pmix_proc_t *sender,
