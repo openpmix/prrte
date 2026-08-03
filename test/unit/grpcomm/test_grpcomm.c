@@ -504,6 +504,28 @@ static int test_group_directives(void)
     PMIx_Info_list_release(grpinfo);
     PMIx_Info_list_release(endpts);
     PMIX_INFO_FREE(dirs, 1);
+
+    /* an array of the wrong element type is refused rather than copied. The
+     * copy is sized in pmix_proc_t, so an array of anything smaller would be
+     * read past its end by a factor - and this array is whatever a client
+     * chose to send */
+    PMIX_INFO_CREATE(dirs, 1);
+    PMIX_DATA_ARRAY_CONSTRUCT(&darray, 4, PMIX_BYTE);
+    PMIX_INFO_LOAD(&dirs[0], PMIX_GROUP_ADD_MEMBERS, &darray, PMIX_DATA_ARRAY);
+    PMIX_DATA_ARRAY_DESTRUCT(&darray);
+    PMIX_CONSTRUCT(&sig, prte_grpcomm_direct_group_signature_t);
+    grpinfo = PMIx_Info_list_start();
+    endpts = PMIx_Info_list_start();
+    rc = prte_grpcomm_direct_group_parse_directives(&sig, dirs, 1,
+                                                    &timeout, &st, grpinfo, endpts);
+    CHECK("directives: an add-members array of the wrong type is refused",
+          PMIX_SUCCESS != rc);
+    CHECK("directives: ...and nothing was copied out of it",
+          NULL == sig.addmembers && 0 == sig.naddmembers);
+    PMIX_DESTRUCT(&sig);
+    PMIx_Info_list_release(grpinfo);
+    PMIx_Info_list_release(endpts);
+    PMIX_INFO_FREE(dirs, 1);
 #endif
 
     if (0 == failures) {
