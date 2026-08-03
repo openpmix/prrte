@@ -65,12 +65,13 @@ ess/
   ess.h                       # module/component vtable: the init + finalize fn ptrs
   base/
     base.h                    # framework-global struct, base API prototypes, signal class
-    ess_base_frame.c          # framework open/close/register; MCA params; signal-forwarding infra
+    ess_base_frame.c          # framework open/close/register; MCA params; daemon identity;
+                              #   the signal-forwarding list the TOOLS consume
     ess_base_select.c         # prte_ess_base_select() — PICK-ONE highest-priority winner
     ess_base_std_prolog.c     # prte_ess_base_std_prolog() — dt_init + wait_init (all modules)
     ess_base_std_prted.c      # prte_ess_base_prted_setup/_finalize() — shared daemon bring-up/tear-down
     ess_base_bootstrap.c      # launcher-less bootstrap: parse config, publish identity, synth peer URIs
-    help-ess-base.txt         # user-facing signal-forwarding error text
+    help-ess-base.txt         # user-facing signal-forwarding and identity error text
     static-components.h       # generated: the components statically linked into this build
   hnp/                        # HNP / DVM master (pri 100, gated on PRTE_PROC_IS_MASTER)
   env/                        # generic daemon, ssh-launched (pri 1, the daemon default)
@@ -197,17 +198,110 @@ plus a call to the base's `prted_setup`.
     unknown or non-forwardable signals via `help-ess-base.txt`, and
     appends `prte_ess_base_signal_t` items onto the global
     `prte_ess_base_signals` list. Guarded by a `signals_added` latch so
-    it only runs once. The forwardability (`can_forward`) gate is
-    enforced on **both** input forms — a non-forwardable signal is
-    rejected whether given by name (`SIGTERM`) or by number (`15`); keep
-    the two parse branches in sync. Note the latch is set *before*
-    parsing, so a call that fails partway still latches — the tool
-    callers (`prte.c`, `prun_common.c`) abort on error, so this is
-    benign in practice but worth knowing when testing.
+    it only runs once.
+
+    **The two parse branches must stay in step.** A request can name a
+    signal (`SIGTERM`) or give its number (`15`), and each check has to
+    exist on both sides or the number form becomes a way around it:
+
+    - the forwardability (`can_forward`) gate — enforced on both;
+    - the **range** check — a number must be a real signal this platform
+      can deliver (`0 < n < _NSIG`). Without it `strtoul` happily takes
+      `-1` (wrapping it) or `999`, and the libevent handler install that
+      follows fails *silently* on both, so the user gets no forwarding
+      and no diagnostic.
+
+    The latch is set only once the list is fully built. It used to be set
+    on entry, which burned the one allowed pass on a request that was
+    rejected partway through — leaving whatever it had already appended
+    installed, with no way to replace it, and making every rejection
+    unreachable a second time and so untestable.
   - `prte_ess_base_signal_t` — a `pmix_list_item_t` subclass
-    (`signame`/`signal`/`can_forward`), instantiated here with
-    constructor/destructor. The actual libevent signal handlers that
-    consume this list are installed by `prte_ess_base_prted_setup()`.
+    (`signame`/`signal`), instantiated here with constructor/destructor.
+    It used to carry a third field, `can_forward`, that no code ever set
+    or read — every item on the list carried an uninitialized bool. The
+    forwardability decision belongs to `known_signals[]` and is made
+    during the parse; an entry only reaches this list once it has passed.
+
+### Signal forwarding is a tool-side feature
+
+This is the thing to know before touching anything named `*signal*` in
+this framework: **the list `prte_ess_base_setup_signals()` builds is
+consumed by the tools, not by daemons.**
+
+`prte`/`prterun` (`src/prted/prte.c`) and `prun`
+(`src/prted/prun_common.c`) each call it with their own
+`--forward-signals` value and then install their own handlers over the
+resulting list. When one fires, the tool relays the signal to the DVM,
+and each daemon receives it as a `PRTE_DAEMON_SIGNAL_LOCAL_PROCS` command
+on the RML — unpacked in `src/prted/prted_comm.c` as
+`(nspace, int32 signal)` — which is what actually reaches the application
+processes.
+
+Nothing calls `prte_ess_base_setup_signals()` in a `prted`, and the plm
+does not forward the `ess_base_forward_signals` MCA parameter to daemons
+either, so `prte_ess_base_signals` is **always empty in a daemon**.
+`prte_ess_base_prted_setup()` used to install a handler per entry anyway,
+with a `signal_forward_callback` of its own; that block could never run,
+and it has been removed. It was not harmless dead code — a 2021
+regression in that callback (packing a wildcard where the signal number
+belongs) was found and fixed years later in code nothing executes, and it
+misleads anyone reasoning about how a signal reaches a process.
+
+If you are chasing signal delivery, start at the tool, not here. If you
+ever want a daemon to honor a signal sent *directly* to it, that is a new
+feature: it needs the list populated in the daemon and the parameter
+plumbed out to it, neither of which exists.
+
+### Daemon identity is established in one place
+
+`prte_ess_base_set_identity(const char *offset_envar, int offset_adjust)`
+turns the identity a launcher published into this daemon's name, and it
+is the **entire** body of all four daemon modules' `*_set_name`:
+
+| Component | Call |
+|-----------|------|
+| `env`   | `prte_ess_base_set_identity(NULL, 0)` |
+| `slurm` | `prte_ess_base_set_identity("SLURM_NODEID", 0)` |
+| `pals`  | `prte_ess_base_set_identity("PALS_NODEID", 0)` |
+| `lsf`   | `prte_ess_base_set_identity("LSF_PM_TASKID", -1)` |
+
+It loads `prte_ess_base_nspace` into `PRTE_PROC_MY_NAME->nspace`, parses
+`prte_ess_base_vpid`, adds the per-node index the RM exports through
+`offset_envar` (an RM hands every daemon it starts the *same* base vpid;
+the node index is what tells them apart), applies `offset_adjust`
+(LSF numbers its tasks from one, everyone else from zero), and sets
+`prte_process_info.num_daemons` from `prte_ess_base_num_procs`.
+
+**Every input is validated, and that is the point of the function
+existing.** The four modules previously each wrote the obvious shorthand
+— `strtoul(prte_ess_base_vpid, NULL, 10)` and `atoi(getenv(...))`, with
+no check on either — and that shorthand has a silent, severe failure
+mode: any non-numeric value reads as **0**, and rank 0 is the DVM
+controller. A daemon handed a garbled vpid therefore adopts the HNP's
+identity, and the DVM comes apart later in ways that point nowhere near
+the bad input. So a value that is missing, not a plain non-negative
+decimal number, or out of rank range is refused with a diagnostic naming
+it (`ess-base:bad-identity` / `ess-base:rank-out-of-range` in
+`help-ess-base.txt`).
+
+Two details worth keeping:
+
+- The sum is computed and compared as a **signed long**, not a
+  `pmix_rank_t`. `LSF_PM_TASKID` of 0 with the `-1` adjustment would
+  otherwise wrap to a rank near `UINT32_MAX`, and a sum past the end of
+  the rank space would be *truncated into* the valid range by the
+  narrowing cast rather than caught by it.
+- The refusals return **`PRTE_ERR_SILENT`**, because they have already
+  shown their own specific `show_help`. Returning a substantive code
+  instead makes the module's `error:` label print the generic
+  `prte_init:startup:internal-failure` message on top of it. That rule
+  holds everywhere in this framework: **a `show_help` and a non-silent
+  return code together mean the user gets two messages.**
+
+If you are adding a new RM-launched daemon environment, this is the
+function you call — do not re-implement the parse. The per-component
+logic is now only *which* environment variable names the node index.
 
 ### `ess_base_select.c` — the winner
 
@@ -231,17 +325,10 @@ This is the heart of the framework for daemons.
 `prte_ess_base_prted_setup()` is what `env`/`slurm`/`pals`/`lsf` all call
 after setting their name. In order, it:
 
-1. Installs signal handlers: `SIGPIPE` (ignored), `SIGTERM`/`SIGINT`
-   (→ `shutdown_signal` → `PRTE_JOB_STATE_FORCED_EXIT`), and one
-   `signal_forward_callback` handler per entry on
-   `prte_ess_base_signals` (each forwards the signal to local procs by
-   sending a `PRTE_DAEMON_SIGNAL_LOCAL_PROCS` command to itself over the
-   RML). That command's payload is `(jobid=wildcard, signal-number)`,
-   and the packed **signal number must be the actual caught signal**
-   (`PRTE_EVENT_SIGNAL(...)`), matching what `prted_comm.c` unpacks — a
-   subtle 2021 regression packed the wildcard nspace here instead,
-   silently turning every forwarded signal into signal `0` (a no-op).
-   Keep the pack type/value in lock-step with the unpack side.
+1. Installs signal handlers: `SIGPIPE` (ignored) and `SIGTERM`/`SIGINT`
+   (→ `shutdown_signal` → `PRTE_JOB_STATE_FORCED_EXIT`). **That is all a
+   daemon installs** — see "Signal forwarding is a tool-side feature"
+   below.
 2. Discovers the local hwloc topology if not already set.
 3. Defines the HNP name (`PRTE_PROC_MY_HNP` = my nspace, rank 0).
 4. Opens and selects `state`, opens `errmgr`.
@@ -333,7 +420,7 @@ trap for the next reader.
 | `prte_ess` | `ess_base_frame.c` | The selected module's `{init, finalize}`; the framework's only runtime entry point. |
 | `prte_ess_base_framework` | `ess_base_frame.c` | The MCA framework object (its `framework_output` is the verbosity channel). |
 | `prte_ess_base_nspace` / `_vpid` / `_num_procs` | `ess_base_frame.c` | Daemon identity, from MCA params/env; consumed by each daemon module's `*_set_name`. |
-| `prte_ess_base_signals` | `ess_base_frame.c` | List of `prte_ess_base_signal_t` to forward; populated by `setup_signals`, consumed by `prted_setup`. |
+| `prte_ess_base_signals` | `ess_base_frame.c` | List of `prte_ess_base_signal_t` to forward; populated by `setup_signals` and consumed **by the tools** (`prte.c`, `prun_common.c`) — never by a daemon. |
 
 ---
 
@@ -362,6 +449,28 @@ trap for the next reader.
   return `PRTE_ERR_SILENT` (respecting `prte_report_silent_errors`) so
   `prte_init` does not print a second, redundant message. On the `init`
   error path, release any partially-built `jdata`.
+
+  This cuts both ways, and `prte_ess_base_prted_setup()` used to get it
+  wrong in the other direction: steps that deliberately set
+  `PRTE_ERR_SILENT` *because they had already shown a better message*
+  (`pmix_server_init`, the schizo personality selection) had the generic
+  message printed on top of them anyway, because the shared `error:`
+  label showed it unconditionally. It now carries the same
+  `PRTE_ERR_SILENT != ret && !prte_report_silent_errors` guard every
+  module has. **Any new `show_help` on a bring-up path has to be paired
+  with a silent return code**, or the user gets two messages for one
+  fault.
+
+- **Name a help file with its `.txt`.** `pmix_show_help` resolves the
+  file by an exact `strcmp` against the generated table in
+  `prte_show_help_content.c`, whose keys are the help files' basenames —
+  extension included. A call site that drops it does not fail loudly; it
+  resolves to nothing and the user is handed *"Sorry! ... I couldn't find
+  that help reference"* instead of the diagnostic. A whole family of
+  startup-failure messages, this framework's `std_prolog` among them,
+  was unprintable that way. `prte-convert-help.py` now checks every
+  citation and fails the build on a mangled name, so this cannot recur
+  silently — but write the `.txt`.
 - **Order is load-bearing in `prted_setup`.** Comms must be up before
   `plm.init()`; the PMIx server must be init'd before gathering aliases;
   IOF comes after routes. Do not reorder the framework opens casually.
@@ -392,27 +501,64 @@ the failing step (e.g. `prte_ess_base_prted_setup`,
 
 ## Testing
 
-Almost all of `ess` — `prted_setup`, the HNP module, every `set_name` —
-needs a live DVM (it opens the whole downstream framework stack, starts
-the PMIx server, creates the session directory), so those paths are
-exercised by the integration/dockerswarm harnesses, not by a standalone
-unit test.
+Almost all of `ess` is bring-up by construction — it opens the whole
+downstream framework stack, starts the PMIx server, and creates the
+session directory — so most of it needs a live DVM and is covered by the
+integration/dockerswarm harnesses rather than by a unit test.
 
-The one piece that is pure, DVM-free input parsing —
-`prte_ess_base_setup_signals()` — has a unit test at
-[`test/unit/ess/test_ess.c`](../../../test/unit/ess/), wired into
-`make check`. It drives the `"none"` no-op and a mixed
-name/duplicate parse, and asserts each accepted entry carries a real,
-**non-zero** signal number (the value the forwarding callback packs —
-the exact field the 2021 regression got wrong). Because
-`setup_signals` latches after its first non-`"none"` call (see above), a
-single process can drive only one substantive parse; the test is
-structured around that.
+### Unit tests — [`test/unit/ess/test_ess.c`](../../../test/unit/ess/)
 
-Run it from a build tree with `make check` (whole suite) or
-`make -C test/unit/ess check` (just this one).
+Two pieces are pure, DVM-free input parsing, and both are covered. Run
+them with `make check` (whole suite) or `make -C test/unit/ess check`.
 
----
+- **`prte_ess_base_set_identity()`** — driven over the shapes of all four
+  daemon modules (verbatim vpid, vpid + node index, and LSF's one-based
+  index) and, more importantly, over the bad inputs: non-numeric,
+  trailing garbage, empty, negative, missing, and sums that fall outside
+  the rank space. Each bad case asserts the call is **refused** and that
+  it left no rank behind — because the failure this function exists to
+  prevent is the quiet one, where garbage reads as rank 0 and the daemon
+  adopts the HNP's identity. The out-of-range cases have already earned
+  their keep: they caught the range check comparing a value that had
+  been narrowed to `pmix_rank_t` first, so a sum past the end of the rank
+  space was truncated *into* the valid range.
+- **`prte_ess_base_setup_signals()`** — the `"none"` no-op, a table of
+  requests that must be refused (unknown name, non-forwardable by name
+  *and* by number, non-numeric, negative, zero, out of range, and a bad
+  entry inside an otherwise good list), and finally one substantive parse
+  asserting each accepted entry carries a real, **non-zero** signal
+  number — the value the forwarding callback packs, and the exact field a
+  2021 regression got wrong.
+
+  Note the ordering is deliberate: `setup_signals` latches after its
+  first *successful* non-`"none"` parse, so the rejections all run first
+  and the accepting case runs last.
+
+### Multi-node — `test_ess` in [`contrib/dockerswarm`](../../../contrib/dockerswarm/)
+
+Three things need real daemons:
+
+- **Every daemon derives a distinct identity.** A rank collision is
+  silent — the DVM just loses a node — so the case asserts a job mapped
+  one-per-node reaches as many *distinct* hosts as there are nodes.
+- **A daemon given an unusable identity fails cleanly**, with the
+  diagnostic and with no daemon left running.
+- **A bad `--forward-signals` request is refused** through a real tool
+  invocation, by number as well as by name.
+
+Note what is *not* there: a case that signals a `prted` and expects the
+signal to reach a process. Daemons install no handlers for forwarded
+signals (see above); such a case would just kill the daemon. The relay
+that does exist is covered by `test_event` and `test_prted`.
+
+### The help-file citation check
+
+`prte-convert-help.py` now verifies that every `pmix_show_help` call site
+names a help file that exists, and fails the build when one names a PRRTE
+file with the extension mangled. That check exists because of this
+framework: `ess_base_std_prolog.c` asked for `"help-prte-runtime"`
+without the `.txt`, which resolves to nothing. It runs on every
+`make check`.
 
 ## Where to go next
 

@@ -1280,3 +1280,39 @@ own: every message between daemons runs its header epoch through them, so
 every other phase in this suite exercises them already. What no container
 swarm can cover is the case they exist for — a **heterogeneous** DVM, where
 the two ends disagree about endianness.
+
+## 17. Daemon bring-up (`test_ess`)
+
+[`src/mca/ess`](../../src/mca/ess/AGENTS.md) *is* the bring-up, so nearly
+all of it needs a live DVM by construction, and the two pieces that are
+pure parsing are covered without one by `test/unit/ess`. Three things are
+left for a swarm:
+
+- **Every daemon derives a distinct identity.** A daemon's rank is
+  `ess_base_vpid` plus a per-node index, summed in
+  `prte_ess_base_set_identity()`. Getting that sum wrong makes two
+  daemons claim the same rank, and the failure is silent — the DVM simply
+  loses a node with no error anywhere. So the case asserts a job mapped
+  one-per-node reaches as many **distinct** hosts as there are nodes.
+- **A daemon that cannot establish an identity fails cleanly.** A vpid
+  that is not a number used to be read as 0 by `strtoul`, and 0 is the
+  controller's rank, so the daemon would adopt the HNP's identity. The
+  case starts a `prted` by hand with a bad vpid on node2 and requires
+  both the diagnostic and that no daemon is left running.
+- **A bad `--forward-signals` request is refused**, by number as well as
+  by name — those are separate parse branches in
+  `prte_ess_base_setup_signals()`, and a check added to one is easy to
+  leave off the other. This one is single-node by nature; it is here as
+  the end-to-end proof that the refusal reaches the user through a real
+  tool invocation.
+
+**What is deliberately not here: forwarded signals reaching a process.**
+That path is tool-side — `prte`/`prun` catch the signal and relay
+`PRTE_DAEMON_SIGNAL_LOCAL_PROCS` over the RML — and it is already covered
+twice: `test_event` asserts the cross-node relay (launcher on node1,
+process on node4) and `test_prted` asserts its job scoping. A daemon
+installs no handlers of its own for those signals; the block in
+`prte_ess_base_prted_setup()` that appeared to do so read a list that is
+always empty in a `prted`, and has been removed. Do not write a case that
+signals a `prted` directly and expects delivery — it will simply kill the
+daemon.
