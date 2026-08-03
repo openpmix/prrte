@@ -1177,7 +1177,7 @@ static void send_complete(char *file, int status)
     PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_FILEM_BASE_RESP);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
-        PMIX_RELEASE(buf);
+        PMIX_DATA_BUFFER_RELEASE(buf);
     }
 }
 
