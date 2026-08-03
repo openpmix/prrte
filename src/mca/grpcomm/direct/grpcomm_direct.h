@@ -152,8 +152,6 @@ typedef struct {
     pmix_rank_t *dmns;
     /** number of participating daemons */
     size_t ndmns;
-    /** my index in the dmns array */
-    unsigned long my_rank;
     /* number of buckets expected */
     size_t nexpected;
     /* number reported in */

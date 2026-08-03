@@ -263,14 +263,12 @@ void prte_grpcomm_direct_xcast_recv(
     op_t* op = find_op(&sig);
     if(NULL == op){
         op = insert_forwarded_op(&sig);
-        if(PMIX_SUCCESS != unpack_msg(buffer, op)){
-            pmix_list_remove_item(&XCAST.ops, &op->super);
-            PMIX_RELEASE(op);
-            return;
-        }
         /* If we are the master and this is one of our own broadcasts, attach the
          * completion callback queued for it in begin_xcast (FIFO).  Remote-origin
-         * broadcasts queue nothing, so they never consume an entry. */
+         * broadcasts queue nothing, so they never consume an entry.  This has to
+         * happen before the unpack below can abandon the op: the FIFO is
+         * positional, so an entry left on it once its broadcast has been dropped
+         * would be handed to the next broadcast the master makes. */
         if(PRTE_PROC_IS_MASTER && NULL != sender &&
            sender->rank == PRTE_PROC_MY_NAME->rank &&
            !pmix_list_is_empty(&XCAST.pending_completions)){
@@ -279,6 +277,11 @@ void prte_grpcomm_direct_xcast_recv(
             op->cbfunc = pc->cbfunc;
             op->cbdata = pc->cbdata;
             PMIX_RELEASE(pc);
+        }
+        if(PMIX_SUCCESS != unpack_msg(buffer, op)){
+            pmix_list_remove_item(&XCAST.ops, &op->super);
+            PMIX_RELEASE(op);
+            return;
         }
     }
 
