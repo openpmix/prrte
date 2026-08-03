@@ -149,8 +149,15 @@ static void prted_abort(int error_code, char *fmt, ...)
     }
     va_end(arglist);
 
-    /* use the show-help system to get the message out */
-    pmix_show_help("help-errmgr-base.txt", "simple-message", true, outmsg);
+    /* use the show-help system to get the message out.  Callers are not
+     * required to supply a message, and the help topic has a %s in it, so
+     * substitute something printable rather than handing show_help a NULL */
+    pmix_show_help("help-errmgr-base.txt", "simple-message", true,
+                   NULL == outmsg ? "(no further information available)" : outmsg);
+    if (NULL != outmsg) {
+        free(outmsg);
+        outmsg = NULL;
+    }
 
     /* tell the HNP we are in distress */
     PMIX_DATA_BUFFER_CREATE(alert);
@@ -253,6 +260,13 @@ static void job_errors(int fd, short args, void *cbdata)
     /* if the jdata is NULL, then it is referencing the daemon job */
     if (NULL == caddy->jdata) {
         caddy->jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+        if (NULL == caddy->jdata) {
+            /* we are too far gone to have a daemon job - there is nothing
+             * this handler can do, and every line below dereferences it */
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            PMIX_RELEASE(caddy);
+            return;
+        }
         PMIX_RETAIN(caddy->jdata);
     }
 
@@ -314,8 +328,8 @@ static void proc_errors(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata;
-    pmix_proc_t *proc = &caddy->name;
-    prte_proc_state_t state = caddy->proc_state;
+    pmix_proc_t *proc;
+    prte_proc_state_t state;
     prte_proc_t *child, *ptr;
     pmix_data_buffer_t *alert;
     prte_plm_cmd_flag_t cmd;
@@ -324,7 +338,14 @@ static void proc_errors(int fd, short args, void *cbdata)
     prte_wait_tracker_t *t2;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
+    /* nothing in the caddy may be read before this: it is the barrier
+     * pairing with the PMIX_POST_OBJECT on whichever thread activated the
+     * state, and on a weakly-ordered machine a read hoisted above it can
+     * see the field as the constructor left it rather than as the activator
+     * set it */
     PMIX_ACQUIRE_OBJECT(caddy);
+    proc = &caddy->name;
+    state = caddy->proc_state;
 
     PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                          "%s errmgr:prted:proc_errors process %s error state %s",
