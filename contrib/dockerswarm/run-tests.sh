@@ -3749,6 +3749,53 @@ test_errmgr() {
     fi
     cleanup_swarm
 
+    banner "errmgr: losing a leaf daemon does not take down its parent"
+    # With the default radix a 7-node DVM is flat: every daemon is a child of
+    # the HNP, so the only process that ever notices another daemon's death
+    # is the HNP, and errmgr/prted's daemon-loss handling is never exercised.
+    # radix 2 puts interior daemons in between (0 -> {1,2}, 1 -> {3,5},
+    # 2 -> {4,6}), so killing rank 6 (node7) is noticed first by rank 2
+    # (node3), a prted.  Its job is to route around the loss.  It must not
+    # decide that this is its own lifeline going away, kill its local
+    # processes and exit - which is what treating any unreachable peer as a
+    # lifeline loss does, and it costs the whole subtree, not just the leaf.
+    cleanup_swarm
+    if prted_dvm_start_mca 'node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1' \
+                           '--prtemca rml_base_radix 2'; then
+        # the job deliberately does NOT run on the node being killed
+        PRUN_BG /tmp/errmgr-leaf.out "--host node2:1,node3:1,node4:1 -n 3 --map-by node $FLT clean 30"
+        sleep 6
+        if ! ON 7 'pgrep -x prted' >/dev/null 2>&1; then
+            bad "node7 has no daemon to kill -- the DVM did not span 7 nodes"
+        else
+            ON 7 'pkill -9 -x prted' >/dev/null 2>&1
+            sleep 8
+            ON 3 'pgrep -x prted' >/dev/null 2>&1 \
+                && ok "the parent daemon survived losing its child" \
+                || bad "node3 died along with the leaf below it"
+            c=$(prted_count 2 3 4 5 6)
+            [ "$c" = 5 ] && ok "...and so did every other daemon" \
+                         || bad "only $c of 5 remaining daemons survived one leaf death"
+            RUN 'pgrep -x prte' >/dev/null 2>&1 \
+                && ok "...and the HNP" \
+                || bad "the HNP died over a leaf daemon"
+            # the running job never touched node7, so it must finish normally
+            n=0
+            while [ "$n" -lt 60 ]; do
+                RUN 'pgrep -x prun' >/dev/null 2>&1 || break
+                sleep 1; n=$((n+1))
+            done
+            out=$(RUN 'tr -d "\\000" < /tmp/errmgr-leaf.out' 2>&1)
+            [ "$(echo "$out" | grep -c 'SURVIVED')" = 3 ] \
+                && ok "...and the job on the other nodes ran to completion" \
+                || bad "the job did not complete after the leaf died: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a radix-2 DVM for the leaf-loss test"
+    fi
+    cleanup_swarm
+
     banner "errmgr: procs that never start are reported once, together"
     # FAILED_TO_START.  errmgr/prted deliberately does NOT report each proc
     # as it fails: it counts them and only activates the job state once every
