@@ -94,13 +94,19 @@ Fires when a job is activated into an error state. Flow:
      running.
    - If the job never actually launched (`FAILED_TO_START`,
      `NEVER_LAUNCHED`, `FAILED_TO_LAUNCH`, `ALLOC_FAILED`, `MAP_FAILED`,
-     `CANNOT_LAUNCH`), activate `PRTE_JOB_STATE_TERMINATED` explicitly —
-     no proc states will fire to drive termination otherwise.
+     `FILES_POSN_FAILED`, `CANNOT_LAUNCH`), activate
+     `PRTE_JOB_STATE_TERMINATED` explicitly — no proc states will fire to
+     drive termination otherwise.  **Keep this list in step with the
+     pre-launch failure states**: `FILES_POSN_FAILED` was missing from it,
+     and from `prte_pmix_convert_job_state_to_error`, so a job refused at
+     pre-positioning (`--preload-files` naming two files that collide, or
+     a name that steps out of the working directory) was never driven to
+     `TERMINATED` and its requestor was told only `PMIX_ERROR`.
 5. `PMIX_RELEASE(caddy)` on every exit path.
 
-The `MAP_FAILED`/`ALLOC_FAILED`/`NEVER_LAUNCHED` cases are exactly the
-failure states `rmaps`/`ras`/`plm` funnel here — this is the far end of
-those frameworks' `..._FAILED` transitions.
+The `MAP_FAILED`/`ALLOC_FAILED`/`FILES_POSN_FAILED`/`NEVER_LAUNCHED`
+cases are exactly the failure states `rmaps`/`ras`/`filem`/`plm` funnel
+here — this is the far end of those frameworks' `..._FAILED` transitions.
 
 ---
 

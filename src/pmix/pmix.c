@@ -487,6 +487,10 @@ pmix_status_t prte_pmix_convert_job_state_to_error(int state)
         case PRTE_JOB_STATE_FAILED_TO_LAUNCH:
         case PRTE_JOB_STATE_FAILED_TO_START:
         case PRTE_JOB_STATE_CANNOT_LAUNCH:
+        /* pre-positioning happens before mapping, so a job that fails
+         * there never launched either - without this it fell to the
+         * default and the requesting tool was told only "PMIX_ERROR" */
+        case PRTE_JOB_STATE_FILES_POSN_FAILED:
             return PMIX_ERR_JOB_FAILED_TO_LAUNCH;
 
         case PRTE_JOB_STATE_KILLED_BY_CMD:

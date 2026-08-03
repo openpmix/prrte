@@ -240,6 +240,7 @@ static void job_errors(int fd, short args, void *cbdata)
         || PRTE_JOB_STATE_FAILED_TO_LAUNCH == jdata->state
         || PRTE_JOB_STATE_ALLOC_FAILED == jdata->state
         || PRTE_JOB_STATE_MAP_FAILED == jdata->state
+        || PRTE_JOB_STATE_FILES_POSN_FAILED == jdata->state
         || PRTE_JOB_STATE_CANNOT_LAUNCH == jdata->state) {
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
     }
