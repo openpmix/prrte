@@ -3573,6 +3573,208 @@ test_grpcomm_ft() {
     cleanup_swarm
 }
 
+########################################################################
+# src/mca/errmgr -- what happens when a process or a daemon fails.
+#
+# The framework has two components with deliberately opposite policies, and
+# BOTH are involved in every failure: the prted that owns the failing proc
+# classifies it, kills what it must, and reports upward; the HNP decides
+# whether the job dies, whether the DVM dies with it, and whether the
+# survivors are told.  On a single host one process plays both roles and no
+# report ever crosses a wire, so none of that is reachable without a swarm.
+# test/unit/errmgr covers the parts that are: the module contract, the
+# live-children scan, and the wire format of the report itself.
+########################################################################
+# Absolute path, as for the other helpers: an app launched into the DVM
+# inherits the daemon PATH, which does not contain the install bindir.
+FLT=/opt/prte/prte/bin/faulty
+
+test_errmgr() {
+    local out rc n c
+
+    banner "errmgr: an aborting rank kills its job and leaves the DVM standing"
+    # PMIx_Abort on the last rank (node4, not the head node) arrives at its
+    # own daemon as CALLED_ABORT.  errmgr/prted reports it to the HNP, and
+    # errmgr/dvm - because the job is NOT recoverable - flags the job aborted,
+    # terminates the rest of it, and must keep the DVM itself alive.  That
+    # split is the whole point of having two components.
+    cleanup_swarm
+    if prted_dvm_start 'node1:1,node2:1,node3:1,node4:1'; then
+        out=$(PRUN "--host node1:1,node2:1,node3:1,node4:1 -n 4 --map-by node $FLT abort 25" 2>&1)
+        rc=$?
+        [ "$rc" != 0 ] && ok "the aborting rank failed the job (rc=$rc)" \
+                       || bad "a PMIx_Abort was reported as success"
+        echo "$out" | grep -q 'FLT 3 ABORTING' \
+            && ok "...and it was rank 3 on the far node that aborted" \
+            || bad "rank 3 never reached its abort: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        # the survivors must have been killed rather than left to run out
+        # their sleep - an abort takes the whole job with it
+        n=$(echo "$out" | grep -c 'SURVIVED')
+        [ "$n" = 0 ] && ok "...and no rank outlived the abort" \
+                     || bad "$n rank(s) survived a non-recoverable abort"
+        RUN 'pgrep -x prte' >/dev/null 2>&1 \
+            && ok "...and the DVM survived the job it killed" \
+            || bad "the DVM died along with the aborted job"
+        # the surest proof the DVM is still usable: run another job in it
+        out=$(PRUN '--host node2:1,node3:1 -n 2 --map-by node hostname' 2>&1); rc=$?
+        [ "$rc" = 0 ] && ok "...and still runs a job afterwards" \
+                      || bad "the DVM could not run a job after the abort: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the abort test"
+    fi
+    cleanup_swarm
+
+    banner "errmgr: a non-zero exit is reported with its status"
+    # TERM_NON_ZERO in errmgr/prted, which reports the proc to the HNP once
+    # per job (the PRTE_JOB_FAIL_NOTIFIED dedup), and errmgr/dvm, which adopts
+    # the proc exit code as the job exit code and records the proc in
+    # PRTE_JOB_ABORTED_PROC so the eventual report can name it.  That report
+    # is the assertion here: the rank and the code in it are the daemon's
+    # classification arriving intact at the HNP.
+    #
+    # Note the tool's own exit status is NOT the rank's 7 -- prun exits with
+    # the job's PMIX_JOB_TERM_STATUS, which is an error constant, not an exit
+    # code (prterun, running the job itself, does return 7).  That difference
+    # is not errmgr's to fix, so this case only requires non-zero.
+    cleanup_swarm
+    if prted_dvm_start 'node1:1,node2:1,node3:1,node4:1'; then
+        out=$(PRUN "--host node1:1,node2:1,node3:1,node4:1 -n 4 --map-by node $FLT exit 25" 2>&1)
+        rc=$?
+        [ "$rc" != 0 ] && ok "a non-zero exit fails the job (rc=$rc)" \
+                       || bad "a rank exiting 7 was reported as success"
+        echo "$out" | grep -qi 'non-zero status' \
+            && ok "...and the HNP reported it as a non-zero termination" \
+            || bad "no non-zero-exit diagnostic: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        echo "$out" | grep -qE 'Exit code:[[:space:]]*7\b' \
+            && ok "...naming the rank's own exit code (7)" \
+            || bad "the report does not carry exit code 7: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        RUN 'pgrep -x prte' >/dev/null 2>&1 \
+            && ok "...and the DVM survived it" \
+            || bad "the DVM died over a non-zero exit"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the non-zero exit test"
+    fi
+    cleanup_swarm
+
+    banner "errmgr: a rank killed by a signal is named as such"
+    # ABORTED_BY_SIG: the odls waitpid on node4 sees the signal, errmgr/prted
+    # reports it, errmgr/dvm renders it.  The message naming the signal is
+    # produced on the HNP from the state the daemon sent, so a wrong or lost
+    # state shows up here as a missing or generic diagnostic.
+    cleanup_swarm
+    if prted_dvm_start 'node1:1,node2:1,node3:1,node4:1'; then
+        out=$(PRUN "--host node1:1,node2:1,node3:1,node4:1 -n 4 --map-by node $FLT signal 25" 2>&1)
+        rc=$?
+        [ "$rc" != 0 ] && ok "a signalled rank fails the job (rc=$rc)" \
+                       || bad "a SIGSEGV was reported as success"
+        echo "$out" | grep -qiE 'signal|segmentation' \
+            && ok "...and the report names the signal" \
+            || bad "no diagnostic naming the signal: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        echo "$out" | grep -q 'node4' \
+            && ok "...and the node it died on" \
+            || bad "the diagnostic does not name node4: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        RUN 'pgrep -x prte' >/dev/null 2>&1 \
+            && ok "...and the DVM survived it" \
+            || bad "the DVM died over a signalled rank"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the signal test"
+    fi
+    cleanup_swarm
+
+    banner "errmgr: a recoverable job is notified instead of being killed"
+    # The other half of errmgr/dvm's per-state table.  With
+    # --rtos recoverable,notifyerrors the same failure must NOT terminate the
+    # job: check_send_notification xcasts a PMIx event naming the dead peer
+    # to every survivor, and prte_state_base_recover_resources gives its slot
+    # back.  An FLT ... EVENT line is a survivor that actually received it,
+    # which can only happen through a daemon that is not the HNP.
+    cleanup_swarm
+    if prted_dvm_start 'node1:1,node2:1,node3:1,node4:1'; then
+        out=$(PRUN "--rtos recoverable,notifyerrors --host node1:1,node2:1,node3:1,node4:1 \
+                        -n 4 --map-by node $FLT exit 20" 2>&1)
+        n=$(echo "$out" | grep -c 'SURVIVED')
+        [ "$n" = 3 ] && ok "all 3 survivors outlived the failed rank" \
+                     || bad "$n of 3 ranks survived a recoverable failure: $(echo "$out" | grep -cE 'FLT' ) FLT lines"
+        n=$(echo "$out" | grep -c 'FLT .* EVENT ')
+        [ "$n" -ge 3 ] \
+            && ok "...and every survivor was notified of the loss ($n events)" \
+            || bad "only $n survivors were notified of the failure (want >= 3)"
+        RUN 'pgrep -x prte' >/dev/null 2>&1 \
+            && ok "...and the DVM survived" \
+            || bad "the DVM died over a recoverable failure"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the recoverable test"
+    fi
+    cleanup_swarm
+
+    banner "errmgr: losing a daemon is reported and does not take the DVM down"
+    # errmgr/dvm's daemon branch: the HNP marks the daemon gone, shows
+    # help-errmgr-base.txt:node-died, and walks every job marking the procs
+    # that lived on that node TERM_WO_SYNC.  The DVM has to stay up on the
+    # remaining nodes - killing a compute daemon is not a reason to lose the
+    # whole machine.
+    cleanup_swarm
+    if prted_dvm_start 'node1:1,node2:1,node3:1,node4:1'; then
+        PRUN_BG /tmp/errmgr-nodedie.out "--host node2:1,node3:1,node4:1 -n 3 --map-by node $FLT clean 60"
+        sleep 6
+        if ! ON 4 'pgrep -x prted' >/dev/null 2>&1; then
+            bad "node4 has no daemon to kill -- the job did not land where expected"
+        else
+            ON 4 'pkill -9 -x prted' >/dev/null 2>&1
+            n=0
+            while [ "$n" -lt 90 ]; do
+                RUN 'pgrep -x prun' >/dev/null 2>&1 || break
+                sleep 1; n=$((n+1))
+            done
+            [ "$n" -lt 90 ] && ok "the job ended when its daemon was killed" \
+                            || bad "prun never returned after the daemon was killed"
+            out=$(RUN 'tr -d "\\000" < /tmp/errmgr-nodedie.out' 2>&1)
+            echo "$out" | grep -qi 'lost communication' \
+                && ok "...and the HNP reported the lost daemon" \
+                || bad "no node-died diagnostic: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            RUN 'pgrep -x prte' >/dev/null 2>&1 \
+                && ok "...and the DVM survived losing a compute daemon" \
+                || bad "the HNP died when a compute daemon was killed"
+            out=$(PRUN '--host node2:1,node3:1 -n 2 --map-by node hostname' 2>&1); rc=$?
+            [ "$rc" = 0 ] && ok "...and still runs a job on the survivors" \
+                          || bad "the reduced DVM could not run a job: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the daemon-loss test"
+    fi
+    cleanup_swarm
+
+    banner "errmgr: procs that never start are reported once, together"
+    # FAILED_TO_START.  errmgr/prted deliberately does NOT report each proc
+    # as it fails: it counts them and only activates the job state once every
+    # local proc has attempted to start, so the HNP gets ONE consolidated
+    # report per daemon.  With several procs per node a per-proc report would
+    # show up as a storm of duplicate diagnostics.
+    cleanup_swarm
+    out=$(RUN 'timeout -k 5 90 prterun --host node2:2,node3:2 -np 4 --map-by node \
+                  /no/such/executable' 2>&1); rc=$?
+    [ "$rc" != 0 ] && ok "a job that cannot start fails (rc=$rc)" \
+                   || bad "a missing executable was reported as success"
+    echo "$out" | grep -qi 'while attempting to start process' \
+        && ok "...with a diagnostic naming the failure" \
+        || bad "no start-failure diagnostic: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    # ...once.  The consolidation is the point: each daemon waits for all of
+    # its local procs to have attempted a start before it activates the job
+    # state, so two failing procs per node must not produce two reports.
+    n=$(echo "$out" | grep -ci 'while attempting to start process')
+    [ "$n" = 1 ] && ok "...exactly once, not once per failed proc" \
+                 || bad "the start failure was reported $n times (want 1)"
+    c=$(prted_count 1 2 3 4 5 6 7 8 9 10)
+    [ "$c" = 0 ] && ok "...and no daemon is left behind" \
+                 || bad "$c stray prted after a failed start"
+    cleanup_swarm
+}
+
 test_rml() {
     local out rc n c
 
@@ -4822,6 +5024,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_runtime
 
     test_rml
+
+    test_errmgr
 
     test_grpcomm
 
