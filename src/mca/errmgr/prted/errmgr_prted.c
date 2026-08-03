@@ -349,9 +349,61 @@ static void proc_errors(int fd, short args, void *cbdata)
         goto cleanup;
     }
 
-    /* if this was a failed comm, then see if it was to our
-     * lifeline
-     */
+    /* A send failure is reported against the peer we could not reach, which is
+     * very often *not* our lifeline: the RML raises UNABLE_TO_SEND_MSG /
+     * NO_PATH_TO_TARGET / PEER_UNKNOWN against the next hop of whatever message
+     * failed, and that hop may be one of our routed children.  Taking this
+     * daemon down for that turns one unreachable peer into the loss of our
+     * whole subtree - every local proc killed and every daemon below us
+     * orphaned - which is precisely the failure the HNP-side handler was
+     * already taught to ignore (see the "not yet reported for duty" comment in
+     * errmgr/dvm).  The same thing happens here: a daemon relaying an xcast to
+     * a peer that has been recorded but has not finished coming up, the common
+     * case during an elastic grow, has no address to send to yet.
+     *
+     * So only a genuinely lost lifeline ends this daemon.  For the rest:
+     *
+     *  - UNABLE_TO_SEND_MSG / NO_PATH_TO_TARGET / PEER_UNKNOWN against another
+     *    daemon are transient by nature - the peer may simply not be listening
+     *    yet - so we ignore them.  A real departure arrives separately as a
+     *    dropped connection, which the OOB already turns into a route repair
+     *    plus COMM_FAILED.
+     *  - FAILED_TO_CONNECT means the OOB has *given up* on that peer
+     *    (connect_max_time / max_recon_attempts exhausted), so there will be no
+     *    later notice: heal the routing tree around it here, exactly as the
+     *    lost-connection path does.  prte_rml_route_lost() returns an error
+     *    only for the HNP itself, in which case we do exit.
+     *  - Anything against a peer outside the daemon job (a tool, an app proc)
+     *    is never a reason for a daemon to die. */
+    if (PRTE_PROC_STATE_UNABLE_TO_SEND_MSG == state
+        || PRTE_PROC_STATE_NO_PATH_TO_TARGET == state
+        || PRTE_PROC_STATE_PEER_UNKNOWN == state
+        || PRTE_PROC_STATE_FAILED_TO_CONNECT == state) {
+        if (!PMIX_CHECK_NSPACE(proc->nspace, PRTE_PROC_MY_NAME->nspace)) {
+            PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
+                                 "%s errmgr:prted unable to communicate with non-daemon %s "
+                                 "- ignoring it",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
+            goto cleanup;
+        }
+        if (PRTE_PROC_STATE_FAILED_TO_CONNECT == state) {
+            if (PRTE_SUCCESS == prte_rml_route_lost(proc->rank)) {
+                PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
+                                     "%s errmgr:prted gave up connecting to daemon %s "
+                                     "- routed around it",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
+                goto cleanup;
+            }
+        } else if (PRTE_PROC_MY_HNP->rank != proc->rank) {
+            PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
+                                 "%s errmgr:prted unable to send to daemon %s "
+                                 "- it may not be up yet, ignoring it",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
+            goto cleanup;
+        }
+    }
+
+    /* our lifeline is gone - we cannot continue */
     if (PRTE_PROC_STATE_LIFELINE_LOST == state || PRTE_PROC_STATE_UNABLE_TO_SEND_MSG == state
         || PRTE_PROC_STATE_NO_PATH_TO_TARGET == state || PRTE_PROC_STATE_PEER_UNKNOWN == state
         || PRTE_PROC_STATE_FAILED_TO_CONNECT == state) {
