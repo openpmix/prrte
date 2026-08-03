@@ -106,7 +106,10 @@ The framework entry point on the master. Steps:
      (`app->app`, `app->argv[0]`, and `PRTE_APP_SSNDIR_CWD` are all
      updated) so the staged copy is what actually executes.
    - `PRTE_APP_PRELOAD_FILES`: split on `,`; infer the `target_flag` from
-     the suffix (`.tar`→TAR, `.bz`→BZIP, `.gz`→GZIP, else FILE); compute
+     the suffix at the **end** of the name (`.tar.gz`/`.tgz`/`.gz`→GZIP,
+     `.tar.bz2`/`.tbz`/`.bz2`→BZIP, `.tar`→TAR, else FILE — reading from
+     the *first* dot instead left `run.v2.tar.gz` classified as a plain
+     file that was never unpacked); compute
      the `remote_target` — the basename if flattening **or if the file was
      named by an absolute path**, else the relative path as given; then
      strip any leading `./`/`../` components so nothing escapes above the
@@ -266,9 +269,15 @@ level up from where the files actually were.)
 Runs `tar tf <fullpath>` via `popen`, reads each path, skips directories,
 `.deps` trees, and any member that is absolute or steps up through `..`
 (tar refuses to extract those, so there is nothing there to place), and
-appends every remaining file path to `inbnd->link_pts`.
-Because different apps may share a directory tree but need different
-files, each individual file becomes its own link point.
+appends every remaining file path to `inbnd->link_pts`. Because different
+apps may share a directory tree but need different files, each individual
+file becomes its own link point. A non-zero `pclose` status means the
+listing failed, which is reported rather than acked as a delivery.
+
+**Both archive commands go through a shell** (`system` for the extract,
+`popen` for the listing), so the path is passed through
+`prte_filem_base_shell_quote()`. Without it a perfectly ordinary
+`my data.tar.gz` reaches `tar` as two arguments and the extract fails.
 
 ### `send_complete(file, status)`
 

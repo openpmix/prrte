@@ -199,12 +199,13 @@ carry those names, where they can be tested with no DVM:
 |--------|------|
 | `prte_filem_base_strip_leading_dots(path)` | Skip leading `./` and `../` components, returning a pointer into the string given. A name that merely *begins* with a dot (`.bashrc`) is a dot-**file** and is left alone. |
 | `prte_filem_base_has_dotdot(path)` | True if any `/`-separated component is exactly `..`. Stripping the leading dot directories is **not** sufficient: `a/../../f` has none at the front and still lands two levels above where it was meant to go. |
+| `prte_filem_base_shell_quote(path)` | Single-quote a path for a shell command line (the archive commands go through `system`/`popen`). Caller frees. |
 
-`raw` applies both to every name it is about to broadcast, and
+`raw` applies the first two to every name it is about to broadcast, and
 `has_dotdot` again to every name it *receives* and to every archive member
 it enumerates — a delivered name that escapes its directory would be
 created with `O_TRUNC` over whatever is already at that path, on every
-node of the DVM. `test/unit/filem` pins them.
+node of the DVM. `test/unit/filem` pins all three.
 
 ### There is no base RML service
 
@@ -308,8 +309,9 @@ What *is* unit-testable with no DVM lives in
   no-op, `preposition_files` fires its completion callback, and
   `fault_handler` is non-NULL and callable (the regression pin for the
   `routed_radix.c` crash described above);
-- the **path-safety helpers** — what gets stripped, what gets refused, and
-  what a dot-file must survive.
+- the **path-safety helpers** — what gets stripped, what gets refused,
+  and what a dot-file must survive, plus shell quoting of a name with a
+  space or an apostrophe in it.
 
 The test opens the framework but deliberately does **not** run
 `prte_filem_base_select()`, so `prte_filem` stays the none module.

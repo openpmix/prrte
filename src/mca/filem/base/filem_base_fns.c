@@ -211,6 +211,40 @@ bool prte_filem_base_has_dotdot(const char *path)
     return false;
 }
 
+
+/* Wrap a path for use in a shell command line. The archive commands and
+ * the archive listing both go through a shell, and the path came from the
+ * user's --preload-files list - a perfectly ordinary "my data.tar.gz"
+ * would otherwise be handed to tar as two arguments.
+ */
+char *prte_filem_base_shell_quote(const char *path)
+{
+    size_t len = strlen(path);
+    size_t i, j = 0;
+    char *q;
+
+    /* worst case every character is a quote, which costs four bytes */
+    q = (char *) malloc(4 * len + 3);
+    if (NULL == q) {
+        return NULL;
+    }
+    q[j++] = '\'';
+    for (i = 0; i < len; i++) {
+        if ('\'' == path[i]) {
+            /* close the quote, emit an escaped one, reopen */
+            q[j++] = '\'';
+            q[j++] = '\\';
+            q[j++] = '\'';
+            q[j++] = '\'';
+        } else {
+            q[j++] = path[i];
+        }
+    }
+    q[j++] = '\'';
+    q[j] = '\0';
+    return q;
+}
+
 /***********************
  * None component stuff
  ************************/

@@ -36,13 +36,15 @@
  *
  *   3. The naming rules that keep a preloaded file inside the directory it
  *      is meant to land in -- what gets stripped, what gets refused, and
- *      what a dot-file must survive.  These are the whole of filem's
- *      path-safety property and they are pure functions, so nothing about
- *      them needs a DVM to check.
+ *      what a dot-file must survive -- plus the shell quoting the archive
+ *      commands depend on.  These are the whole of filem's path-safety
+ *      property and they are pure functions, so nothing about them needs a
+ *      DVM to check.
  */
 
 #include "prte_config.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "constants.h"
@@ -188,6 +190,7 @@ static int test_none_module(void)
 static int test_path_rules(void)
 {
     int failures = 0;
+    char *q;
 
     /* leading dot directories are what a user types and what the app does
      * NOT open the file by -- they come off */
@@ -217,6 +220,23 @@ static int test_path_rules(void)
     CHECK("no dotdot in dotfile", !prte_filem_base_has_dotdot(".bashrc"));
     CHECK("no dotdot in empty", !prte_filem_base_has_dotdot(""));
     CHECK("no dotdot in dot", !prte_filem_base_has_dotdot("."));
+
+    /* archive paths go through a shell, so an ordinary name with a space
+     * in it has to survive as one argument */
+    q = prte_filem_base_shell_quote("my data.tar.gz");
+    CHECK("quote plain", NULL != q && 0 == strcmp("'my data.tar.gz'", q));
+    free(q);
+    q = prte_filem_base_shell_quote("");
+    CHECK("quote empty", NULL != q && 0 == strcmp("''", q));
+    free(q);
+    /* an embedded single quote has to close, escape, and reopen */
+    q = prte_filem_base_shell_quote("it's");
+    CHECK("quote apostrophe", NULL != q && 0 == strcmp("'it'\\''s'", q));
+    free(q);
+    /* nothing inside the quotes can start a new command */
+    q = prte_filem_base_shell_quote("a;rm -rf /`x`$(y)");
+    CHECK("quote metachars", NULL != q && 0 == strcmp("'a;rm -rf /`x`$(y)'", q));
+    free(q);
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_path_rules\n");

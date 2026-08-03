@@ -152,6 +152,52 @@ static void raw_fault_handler(const prte_rml_recovery_status_t *status){
     }
 }
 
+static bool has_suffix(const char *name, const char *suffix)
+{
+    size_t ln = strlen(name), ls = strlen(suffix);
+
+    return (ln >= ls && 0 == strcmp(name + ln - ls, suffix));
+}
+
+/* Classify a file by the suffix at the END of its name. Anything we know
+ * how to unpack is unpacked on arrival; everything else is delivered as
+ * the bytes it is.
+ */
+static int32_t suffix_type(const char *name)
+{
+    if (has_suffix(name, ".tar.gz") || has_suffix(name, ".tgz") ||
+        has_suffix(name, ".gz")) {
+        return PRTE_FILEM_TYPE_GZIP;
+    }
+    if (has_suffix(name, ".tar.bz2") || has_suffix(name, ".tbz2") ||
+        has_suffix(name, ".tbz") || has_suffix(name, ".bz2") ||
+        has_suffix(name, ".bz")) {
+        return PRTE_FILEM_TYPE_BZIP;
+    }
+    if (has_suffix(name, ".tar")) {
+        return PRTE_FILEM_TYPE_TAR;
+    }
+    return PRTE_FILEM_TYPE_FILE;
+}
+
+static const char *type_name(int32_t type)
+{
+    switch (type) {
+    case PRTE_FILEM_TYPE_TAR:
+        return "TAR";
+    case PRTE_FILEM_TYPE_BZIP:
+        return "BZIP";
+    case PRTE_FILEM_TYPE_GZIP:
+        return "GZIP";
+    case PRTE_FILEM_TYPE_EXE:
+        return "EXE";
+    case PRTE_FILEM_TYPE_FILE:
+        return "FILE";
+    default:
+        return "UNKNOWN";
+    }
+}
+
 /* Retire a transfer from its outbound request, firing the request's
  * completion callback once the last of its transfers is gone.
  *
@@ -342,29 +388,16 @@ static int raw_preposition_files(prte_job_t *jdata,
             for (j = 0; NULL != files[j]; j++) {
                 fs = PMIX_NEW(prte_filem_base_file_set_t);
                 fs->local_target = strdup(files[j]);
-                /* check any suffix for file type */
-                if (NULL != (cptr = strchr(files[j], '.'))) {
-                    if (0 == strncmp(cptr, ".tar", 4)) {
-                        PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
-                                             "%s filem:raw: marking file %s as TAR",
-                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), files[j]));
-                        fs->target_flag = PRTE_FILEM_TYPE_TAR;
-                    } else if (0 == strncmp(cptr, ".bz", 3)) {
-                        PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
-                                             "%s filem:raw: marking file %s as BZIP",
-                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), files[j]));
-                        fs->target_flag = PRTE_FILEM_TYPE_BZIP;
-                    } else if (0 == strncmp(cptr, ".gz", 3)) {
-                        PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
-                                             "%s filem:raw: marking file %s as GZIP",
-                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), files[j]));
-                        fs->target_flag = PRTE_FILEM_TYPE_GZIP;
-                    } else {
-                        fs->target_flag = PRTE_FILEM_TYPE_FILE;
-                    }
-                } else {
-                    fs->target_flag = PRTE_FILEM_TYPE_FILE;
-                }
+                /* the archive suffix is at the END of the name, not after
+                 * its first dot - "run.v2.tar.gz" is every bit as much a
+                 * gzipped tarball as "run.tar.gz", and reading from the
+                 * first dot left it a plain file that was never unpacked
+                 */
+                fs->target_flag = suffix_type(files[j]);
+                PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
+                                     "%s filem:raw: marking file %s as %s",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), files[j],
+                                     type_name(fs->target_flag)));
                 /* if we are flattening directory trees, then the
                  * remote path is just the basename file name
                  */
@@ -1222,14 +1255,21 @@ static void send_complete(char *file, int status)
 static int link_archive(prte_filem_raw_incoming_t *inbnd)
 {
     FILE *fp;
-    char *cmd;
+    char *cmd, *quoted;
+    size_t len;
     char path[PRTE_PATH_MAX];
 
     PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                          "%s filem:raw: identifying links for archive %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), inbnd->fullpath));
 
-    pmix_asprintf(&cmd, "tar tf %s", inbnd->fullpath);
+    quoted = prte_filem_base_shell_quote(inbnd->fullpath);
+    if (NULL == quoted) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    pmix_asprintf(&cmd, "tar tf %s", quoted);
+    free(quoted);
     fp = popen(cmd, "r");
     free(cmd);
     if (NULL == fp) {
@@ -1243,14 +1283,21 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
     while (fgets(path, sizeof(path), fp) != NULL) {
         PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                              "%s filem:raw: path %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
-        /* protect against an empty result */
-        if (0 == strlen(path)) {
+        /* trim the trailing newline, if fgets gave us one - a final line
+         * with no newline keeps every character it has
+         */
+        len = strlen(path);
+        if (0 < len && '\n' == path[len - 1]) {
+            path[--len] = '\0';
+        }
+        /* protect against an empty result - a bare newline would otherwise
+         * send the directory test reading in front of the buffer
+         */
+        if (0 == len) {
             continue;
         }
-        /* trim the trailing cr */
-        path[strlen(path) - 1] = '\0';
         /* ignore directories */
-        if ('/' == path[strlen(path) - 1]) {
+        if ('/' == path[len - 1]) {
             PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: path %s is a directory - ignoring it",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
@@ -1278,8 +1325,13 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
         PMIx_Argv_append_nosize(&inbnd->link_pts, path);
     }
-    /* close */
-    pclose(fp);
+    /* a listing that failed leaves us with no link points and nothing to
+     * place - say so rather than acking a delivery that did not happen
+     */
+    if (0 != pclose(fp)) {
+        PRTE_ERROR_LOG(PRTE_ERR_FILE_READ_FAILURE);
+        return PRTE_ERR_FILE_READ_FAILURE;
+    }
     return PRTE_SUCCESS;
 }
 
@@ -1464,7 +1516,7 @@ static void write_handler(int fd, short event, void *cbdata)
     pmix_list_item_t *item;
     prte_filem_raw_output_t *output;
     int num_written;
-    char *dirname, *cmd;
+    char *dirname, *cmd, *quoted;
     char homedir[PRTE_PATH_MAX];
     int rc;
     PRTE_HIDE_UNUSED_PARAMS(fd, event);
@@ -1508,17 +1560,25 @@ static void write_handler(int fd, short event, void *cbdata)
                  * archive is therefore named by its full path, since we are
                  * about to chdir away from it.
                  */
+                quoted = prte_filem_base_shell_quote(sink->fullpath);
+                if (NULL == quoted) {
+                    PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                    send_complete(sink->file, PRTE_ERR_OUT_OF_RESOURCE);
+                    return;
+                }
                 if (PRTE_FILEM_TYPE_TAR == sink->type) {
-                    pmix_asprintf(&cmd, "tar xf %s", sink->fullpath);
+                    pmix_asprintf(&cmd, "tar xf %s", quoted);
                 } else if (PRTE_FILEM_TYPE_BZIP == sink->type) {
-                    pmix_asprintf(&cmd, "tar xjf %s", sink->fullpath);
+                    pmix_asprintf(&cmd, "tar xjf %s", quoted);
                 } else if (PRTE_FILEM_TYPE_GZIP == sink->type) {
-                    pmix_asprintf(&cmd, "tar xzf %s", sink->fullpath);
+                    pmix_asprintf(&cmd, "tar xzf %s", quoted);
                 } else {
                     PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                     send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
+                    free(quoted);
                     return;
                 }
+                free(quoted);
                 if (NULL == getcwd(homedir, sizeof(homedir))) {
                     PRTE_ERROR_LOG(PRTE_ERROR);
                     send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
