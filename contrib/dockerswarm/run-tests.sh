@@ -4572,6 +4572,29 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         docker exec "$NODE$n" sh -c 'rm -rf /root/pfarc /root/inner "/root/my run.v2.tar.gz"' >/dev/null 2>&1
     done
 
+    banner "filem: --preload-files refuses a name that steps out of the directory"
+    # Stripping the LEADING "./" and "../" does not make a name safe: a ".."
+    # further along ("a/../../f") still resolves above the session directory,
+    # where the receive path creates the file with O_TRUNC over whatever is
+    # sitting there -- on every node at once. The request has to be refused
+    # by name rather than resolved.
+    docker exec "${NODE}1" sh -c 'mkdir -p /root/pfesc/inner && echo ESCAPE-PAYLOAD > /root/pfesc/pf.dat' >/dev/null 2>&1
+    for n in 2 3; do docker exec "$NODE$n" sh -c 'rm -rf /root/pfesc' >/dev/null 2>&1; done
+    out=$(RUN 'cd /root && prterun --host node2:1,node3:1 -np 2 --map-by node \
+                 --preload-files pfesc/inner/../../pfesc/pf.dat -- hostname' 2>&1); rc=$?
+    [ "$rc" != 0 ] \
+        && ok "a '..' inside the delivered name was refused" \
+        || bad "a '..' inside the delivered name was accepted (rc=$rc): $(echo "$out" | tr '\n' ' ')"
+    echo "$out" | grep -q '\.\.' \
+        && ok "the refusal named the problem to the user" \
+        || bad "the refusal produced no diagnostic: $(echo "$out" | tr '\n' ' ')"
+    echo "$out" | grep -qi 'unknown error' \
+        && bad "the refusal came back as \"Unknown error\": $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+        || ok "the refusal was named, not reported as \"Unknown error\""
+    c=$(prted_settle 10 1 2 3 4 5 6 7 8 9 10)
+    [ "$c" = 0 ] && ok "no daemons linger after the refused path" || bad "$c stray prted after refused path"
+    for n in 1 2 3; do docker exec "$NODE$n" sh -c 'rm -rf /root/pfesc' >/dev/null 2>&1; done
+
     banner "iof: stdin forwarded to a REMOTE proc (HNP -> prted -> proc)"
     # Rank 0 is mapped onto node2, not the head node, so every stdin byte must
     # travel HNP -> RML(PRTE_RML_TAG_IOF_PROXY) -> prted -> the proc's stdin
