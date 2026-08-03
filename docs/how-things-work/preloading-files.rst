@@ -55,6 +55,9 @@ An archive |mdash| a file whose name ends in ``.tar``, ``.bz`` or ``.gz``
 |mdash| is unpacked, and it is the *contents* that are placed, at the paths
 the archive names them by, relative to the working directory.
 
+A preloaded file keeps its permissions, so a helper script staged
+alongside a job's data arrives executable.
+
 
 Names that would step outside the working directory are refused
 ---------------------------------------------------------------

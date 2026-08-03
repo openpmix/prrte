@@ -67,8 +67,8 @@ the working directory instead of recreating their directory tree.
 | Class | Lives on | Role |
 |-------|----------|------|
 | `prte_filem_raw_outbound_t` | HNP | One preposition request. Holds the list of `xfers`, the aggregate `status`, and the caller's `cbfunc`/`cbdata`. When its `xfers` list drains, the callback fires. |
-| `prte_filem_raw_xfer_t` | HNP | One file being sent. Carries the read `fd`, the libevent `ev` (the caddy field — **named `ev`** as required), `src` (local path, for dup detection), `file` (remote-relative path), `type`, `nchunk` (next chunk index), and `nrecvd` (how many daemons have acked). |
-| `prte_filem_raw_incoming_t` | daemon | One file being received. Carries the write `fd`, `ev`, `file`/`fullpath`, `type`, the `outputs` list of pending write buffers, and `link_pts` (the paths, relative to the session dir, to place). |
+| `prte_filem_raw_xfer_t` | HNP | One file being sent. Carries the read `fd`, the libevent `ev` (the caddy field — **named `ev`** as required), `src` (local path, for dup detection), `file` (remote-relative path), `type`, `mode` (the source file's permission bits), `nchunk` (next chunk index), and `nrecvd` (how many daemons have acked). |
+| `prte_filem_raw_incoming_t` | daemon | One file being received. Carries the write `fd`, `ev`, `file`/`fullpath`, `type`, `mode`, the `outputs` list of pending write buffers, and `link_pts` (the paths, relative to the session dir, to place). |
 | `prte_filem_raw_output_t` | daemon | One received chunk: `numbytes` + a `PRTE_FILEM_RAW_CHUNK_MAX` data buffer, queued on an incoming file's `outputs` list for the write handler. |
 
 `xfer` and `incoming` both embed `ev` and use `PRTE_PMIX_THREADSHIFT` /
@@ -164,8 +164,11 @@ Runs on the progress thread, re-arming itself until EOF:
    place that knows the bytes never left.
 2. If `prte_dvm_abort_ordered`, retire the xfer and stop.
 3. Pack a buffer `{file(string), nchunk(int32), data(numbytes bytes)}`;
-   on the **first chunk** (`nchunk == 0`) also append the `type` so the
-   receiver knows how to handle it.
+   on the **first chunk** (`nchunk == 0`) also append the `type` and the
+   source file's `mode`, which is everything the receiver is told about
+   the file. The mode matters: without it the receiver had to guess, and
+   it guessed `0600` for anything not flagged as the job's executable, so
+   `--preload-files helper.sh` delivered a script the ranks could not run.
 4. `prte_grpcomm.xcast(PRTE_RML_TAG_FILEM_BASE, &chunk)` — broadcast to
    **all daemons at once**. Increment `nchunk`.
 5. If `numbytes == 0` this was the EOF chunk: close the fd and stop.
@@ -216,17 +219,19 @@ walking freed memory.
 Fires on `PRTE_RML_TAG_FILEM_BASE` for each broadcast chunk:
 
 1. Unpack `{file, nchunk}`; if `nchunk < 0` treat as EOF (`nbytes = 0`),
-   else unpack the byte payload; on chunk 0 also unpack `type`. A name
-   carrying a `..` component is refused here too, even though the sender
-   is supposed to have refused it already — this is the side that would
-   do the `O_TRUNC`.
+   else unpack the byte payload; on chunk 0 also unpack `type` and `mode`.
+   A name carrying a `..` component is refused here too, even though the
+   sender is supposed to have refused it already — this is the side that
+   would do the `O_TRUNC`.
 2. Find or create the matching `prte_filem_raw_incoming_t` in
    `incoming_files`.
-3. **On chunk 0**: compute `top` (first path component), build `fullpath`
-   under `prte_process_info.top_session_dir`, create the parent
-   directory, and `open()` the target for writing — `O_RDWR|O_CREAT|
-   O_TRUNC`, mode `S_IRWXU` for an EXE (so it stays executable) else
-   `S_IRUSR|S_IWUSR`. Then threadshift the incoming to `write_handler`.
+3. **On chunk 0**: build `fullpath` under
+   `prte_process_info.top_session_dir`, create the parent directory, and
+   `open()` the target for writing — `O_RDWR|O_CREAT|O_TRUNC` with the
+   sender's `mode` (plus `S_IRUSR|S_IWUSR` so we can write what we are
+   about to write), followed by an `fchmod` because `open()` applies the
+   mode only on create and trims it by our umask. Then threadshift the
+   incoming to `write_handler`.
 4. Copy the payload into a fresh `prte_filem_raw_output_t`, append it to
    `incoming->outputs`, and (if not already pending) activate the write
    event.
@@ -408,15 +413,22 @@ travels back as the failing proc's exit code so
 `prte_render_launch_failure()` can say it again in the **tool's** voice —
 a daemon's stderr on a remote node usually reaches nobody.
 
+The placed copy carries the **staged file's permission bits**, `fchmod`'d
+after creation so the daemon's umask cannot trim a mode the user chose.
+Those bits are the source file's, carried across in chunk 0 — before they
+were sent, the staged copy was `0600` and a preloaded script arrived
+unrunnable.
+
 ### Never hand the user's directory to `pmix_os_dirpath_create`
 
 It **chmods a path that already exists** to the mode it was given. Calling
 it unconditionally on the working directory silently reduced the user's own
 cwd to `0700`. `place_file` therefore `stat`s first and only creates a
 directory that is missing, with `S_IRWXU|S_IRWXG|S_IRWXO` so the user's
-umask decides. The copied file's mode is likewise `0644`/`0755` before
-umask, carrying nothing across but whether the staged file was executable
-(which is all the staging path knows).
+umask decides. The copied *file* is the other way round — it takes the
+staged file's exact permission bits and is `fchmod`'d so the umask cannot
+touch them, because those bits are the user's own and were carried across
+the wire for exactly that reason.
 
 ## `create_link` returns SUCCESS only when it means it
 

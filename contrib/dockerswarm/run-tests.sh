@@ -4433,6 +4433,23 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
                           || bad "expected pf.dat placed as a regular file on node2+node3, got $placed"
     fi
 
+    banner "filem: --preload-files keeps a staged file executable"
+    # The chunk stream carries the source file's permissions, so a helper
+    # script staged alongside the job arrives runnable. Nothing else in the
+    # stream describes the file, so before the mode was sent the receiver
+    # had to guess -- and it guessed 0600 for anything not flagged as the
+    # job's own executable, which made "--preload-files helper.sh" deliver a
+    # script the ranks could not run.
+    docker exec "${NODE}1" sh -c 'printf "#!/bin/sh\necho SCRIPT-RAN-OK\n" > /root/helper.sh && chmod 755 /root/helper.sh' >/dev/null 2>&1
+    for n in 2 3; do docker exec "$NODE$n" sh -c 'rm -f /root/helper.sh' >/dev/null 2>&1; done
+    out=$(RUN 'cd /root && prterun --host node2:1,node3:1 -np 2 --map-by node \
+                 --preload-files /root/helper.sh -- ./helper.sh' 2>&1); rc=$?
+    hits=$(echo "$out" | grep -c 'SCRIPT-RAN-OK')
+    [ "$rc" = 0 ] && [ "$hits" = 2 ] \
+        && ok "a staged script arrived executable on both remote nodes" \
+        || bad "staged script not executable (rc=$rc, hits=$hits): $(echo "$out" | tr '\n' ' ')"
+    for n in 1 2 3; do docker exec "$NODE$n" sh -c 'rm -f /root/helper.sh' >/dev/null 2>&1; done
+
     banner "filem: --preload-files refuses to overwrite a different file"
     # The safety rule: a file of that name that is NOT what was to be staged
     # belongs to the user, so the launch is refused rather than clobbering it.
