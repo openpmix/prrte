@@ -155,12 +155,30 @@ PRRTE stores two *different* PMIx objects on hwloc `userdata` pointers:
 | the topology's **root** object | `prte_hwloc_topo_data_t` (the summary: `computed`, `numa_cutoff`) | `prte_hwloc_base_setup_summary()` |
 | any other object | `prte_hwloc_obj_data_t` (the per-object `nprocs` placement counter) | `rmaps/base/rmaps_base_binding.c` |
 
+**Who owns the local topology.** `prte_hwloc_topology` is the process's own
+topology, but it is **not** freed by the code that senses it. Its only two
+producers - `ess/hnp` and the shared daemon bring-up - each immediately wrap
+it in a `prte_topology_t` and add that to `prte_node_topologies`, and that
+object's destructor is what releases the userdata and calls
+`hwloc_topology_destroy()`. So **`prte_node_topologies` owns every topology
+it holds, the local one included, and the global is a borrowed alias of one
+of its entries.**
+
+That is what `prte_hwloc_base_close()` had got wrong. It destroyed the
+topology too, which is a double free whichever side of the array release it
+runs on — and so it ended up with **no callers anywhere in the tree** while
+still being documented, and tested, as if it ran. The consequence was not
+just dead code: `prte_init()` calls `prte_hwloc_base_open()`, so the base was
+opened and never closed, and `prte_hwloc_default_cpu_list` leaked on every
+run that used `--cpu-set`. `prte_hwloc_base_close()` now clears the alias
+rather than destroying it — correct in either order — and `prte_finalize()`
+calls it once the array is gone.
+
 hwloc does not know these pointers are ours, so:
 
 - **`prte_hwloc_base_release_userdata()` must run before
-  `hwloc_topology_destroy()`.** `prte_hwloc_base_close()` and
-  `prte_topology_t`'s destructor both do it. So does the XML-loading path,
-  which replaces the local topology.
+  `hwloc_topology_destroy()`.** `prte_topology_t`'s destructor does it, and
+  so does the XML-loading path, which replaces the local topology.
 - **`prte_hwloc_base_reset_counters()` starts at depth 1, not depth 0.**
   Depth 0 is the root, whose `userdata` is a `prte_hwloc_topo_data_t`;
   reinterpreting it as a counter would scribble on `numa_cutoff`. Release
@@ -451,8 +469,9 @@ same thread has cycled through the other 15 — never store one.
   topic.** Two call sites passed one argument to a two-`%s` message, and one
   passed a `char **` where the format wanted a `char *`.
 - **A failure path that has destroyed the topology must NULL
-  `prte_hwloc_topology`.** `prte_hwloc_base_close()` tests it for NULL and
-  destroys it again otherwise.
+  `prte_hwloc_topology`.** Anything that later reads the global - the
+  XML-loading path replaces whatever is there, and `prte_hwloc_base_close()`
+  clears it - has no way to tell a live handle from a freed one.
 - **An imported topology reports no binding support, and
   `hwloc_use_topo_file` has to say otherwise.** hwloc zeroes every bit of
   `hwloc_topology_get_support()` for a topology it read from XML — it has no

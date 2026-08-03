@@ -1086,7 +1086,7 @@ static int test_topo_file(void)
     }
 
     /* a file that is not a topology is refused, and leaves no handle behind
-     * for prte_hwloc_base_close() to destroy a second time */
+     * for a later reader to mistake for a live one */
     prte_hwloc_topology = NULL;
     fd = open(path, O_WRONLY | O_TRUNC);
     if (0 <= fd) {
@@ -1415,8 +1415,8 @@ static int test_userdata(void)
     depth = hwloc_get_type_depth(topo, HWLOC_OBJ_CORE);
     CHECK("core counters are released", 0 == count_userdata(topo, depth));
 
-    /* releasing twice is safe - prte_hwloc_base_close() and the topology
-     * destructor both reach for it */
+    /* releasing twice is safe - the topology destructor and the XML-loading
+     * path both reach for it */
     prte_hwloc_base_release_userdata(topo);
     prte_hwloc_base_release_userdata(NULL);
 
@@ -1571,6 +1571,72 @@ static int test_hwloc_print(void)
 
 /* ------------------------------------------------------------------ */
 
+
+/*
+ * prte_hwloc_base_close() releases the hwloc base's OWN state and nothing
+ * else.  In particular it must not destroy prte_hwloc_topology: the only two
+ * producers of that global immediately hand it to a prte_topology_t placed in
+ * prte_node_topologies, and that object's destructor is what frees it.  The
+ * function used to destroy it as well, which is a double free on whichever
+ * side of the array release it runs -- and is why it ended up with no callers
+ * at all while still being documented as live teardown.
+ *
+ * The property that makes it safe now is that clearing the alias is correct
+ * in EITHER order, so this drives both: close-then-release, and
+ * release-then-close.  Under a debug PMIx (which this suite builds against)
+ * a double free here is an abort, so surviving the sequence is the assertion.
+ */
+static int test_base_close(void)
+{
+    int failures = 0;
+    hwloc_topology_t topo;
+    prte_topology_t *t;
+
+    /* close-then-release: the base drops its alias first, and the array
+     * still owns a perfectly good topology to destroy afterwards */
+    if (0 != hwloc_topology_init(&topo) || 0 != hwloc_topology_load(topo)) {
+        fprintf(stderr, "FAIL [base_close]: could not build a topology\n");
+        return 1;
+    }
+    prte_hwloc_topology = topo;
+    prte_hwloc_base_inited = true;
+    prte_hwloc_default_cpu_list = strdup("0-1");
+
+    prte_hwloc_base_close();
+    CHECK("close drops its alias of the local topology", NULL == prte_hwloc_topology);
+    CHECK("close frees the DVM cpu-set", NULL == prte_hwloc_default_cpu_list);
+    CHECK("close marks the base uninitialized", !prte_hwloc_base_inited);
+
+    /* the topology it did NOT destroy is still ours to hand to the owner */
+    t = PMIX_NEW(prte_topology_t);
+    t->topo = topo;
+    PMIX_RELEASE(t);
+
+    /* a second close with nothing left to do must be a no-op, not a repeat */
+    prte_hwloc_base_close();
+    CHECK("closing twice is harmless", NULL == prte_hwloc_topology);
+
+    /* release-then-close: the array destroys the topology, leaving the global
+     * aliasing freed memory, and close must not touch it */
+    if (0 != hwloc_topology_init(&topo) || 0 != hwloc_topology_load(topo)) {
+        fprintf(stderr, "FAIL [base_close]: could not build a second topology\n");
+        return failures + 1;
+    }
+    prte_hwloc_topology = topo;
+    prte_hwloc_base_inited = true;
+    t = PMIX_NEW(prte_topology_t);
+    t->topo = topo;
+    PMIX_RELEASE(t);            /* destroys the topology */
+    prte_hwloc_base_close();    /* must only clear the now-stale alias */
+    CHECK("close after the owner released it clears the stale alias",
+          NULL == prte_hwloc_topology);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_base_close\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -1596,6 +1662,7 @@ int main(void)
     failures += test_userdata();
     failures += test_reset_counters();
     failures += test_hwloc_print();
+    failures += test_base_close();
 
     prte_finalize();
 
