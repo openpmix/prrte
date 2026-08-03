@@ -644,8 +644,23 @@ static void proc_errors(int fd, short args, void *cbdata)
     if (PRTE_PROC_STATE_FAILED_TO_START == state || PRTE_PROC_STATE_FAILED_TO_LAUNCH == state) {
         /* update the proc state */
         child->state = state;
-        /* count the proc as having "terminated" */
-        jdata->num_terminated++;
+        /* Count the proc as having "terminated" - and record that we have
+         * counted it.  Without the flag it gets counted twice: failed_start()
+         * drives each of these procs on to PRTE_PROC_STATE_TERMINATED, and
+         * state/prted's track_procs() counts any proc that is not yet
+         * RECORDED.  num_terminated then reaches 2 x num_local_procs, its
+         * "num_terminated == num_local_procs" test never fires, and the
+         * daemon-local completion work behind that test never runs for a job
+         * that failed to start: the children stay in prte_local_children, the
+         * IOF is never told the job is over, and the PMIx server is never told
+         * to release the nspace.  (The HNP still hears about the failure -
+         * job_errors sends its own consolidated report - which is why this
+         * only ever showed up as a leak.)  The two other places this handler
+         * counts a termination take the same guard. */
+        if (!PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_RECORDED)) {
+            PRTE_FLAG_SET(child, PRTE_PROC_FLAG_RECORDED);
+            jdata->num_terminated++;
+        }
         /* leave the error report in this case to the
          * state machine, which will receive notice
          * when all local procs have attempted to start
