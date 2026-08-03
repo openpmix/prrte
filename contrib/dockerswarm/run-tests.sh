@@ -3633,16 +3633,18 @@ test_errmgr() {
     # is the assertion here: the rank and the code in it are the daemon's
     # classification arriving intact at the HNP.
     #
-    # Note the tool's own exit status is NOT the rank's 7 -- prun exits with
-    # the job's PMIX_JOB_TERM_STATUS, which is an error constant, not an exit
-    # code (prterun, running the job itself, does return 7).  That difference
-    # is not errmgr's to fix, so this case only requires non-zero.
+    # The tool's exit status is the rank's own.  It did not use to be: the DVM
+    # put the application exit code into PMIX_JOB_TERM_STATUS, a field typed
+    # as a pmix_status_t, and prun ran it back through the status converter -
+    # which recognized nothing and answered PRTE_ERROR, so every failed job
+    # came back as 71.  The exit code now travels as PMIX_EXIT_CODE and prun
+    # reports it, the way prterun always has.
     cleanup_swarm
     if prted_dvm_start 'node1:1,node2:1,node3:1,node4:1'; then
         out=$(PRUN "--host node1:1,node2:1,node3:1,node4:1 -n 4 --map-by node $FLT exit 25" 2>&1)
         rc=$?
-        [ "$rc" != 0 ] && ok "a non-zero exit fails the job (rc=$rc)" \
-                       || bad "a rank exiting 7 was reported as success"
+        [ "$rc" = 7 ] && ok "the tool exits with the rank's own status (7)" \
+                      || bad "expected exit status 7 from the failing rank, got $rc"
         echo "$out" | grep -qi 'non-zero status' \
             && ok "...and the HNP reported it as a non-zero termination" \
             || bad "no non-zero-exit diagnostic: $(echo "$out" | tr '\n' ' ' | tail -c 250)"

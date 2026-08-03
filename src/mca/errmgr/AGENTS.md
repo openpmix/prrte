@@ -362,12 +362,15 @@ must report it, mark the procs that lived there, and keep the rest of
 the machine usable) and the consolidation of `FAILED_TO_START` into one
 report per daemon rather than one per process.
 
-Note what that phase deliberately does *not* assert: the tool's exit
-status is not the failing rank's. `prun` exits with the job's
-`PMIX_JOB_TERM_STATUS`, which is an error constant rather than an exit
-code (`prterun`, which runs the job itself, does return the rank's
-status). The errmgr's part — adopting the proc's exit code as the job's
-and naming the offending rank — is what the case checks.
+The phase also pins the tool's exit status to the failing rank's own.
+That used to be a caveat rather than an assertion: the DVM put the
+application exit code into `PMIX_JOB_TERM_STATUS`, a field typed as a
+`pmix_status_t`, and `prun` converted it back as one — recognizing
+nothing and answering `PRTE_ERROR`, whose low byte is 71. The exit code
+now travels beside the status as `PMIX_EXIT_CODE`
+(`state/dvm`'s `dvm_notify`), and `prun` reports it. The errmgr's part —
+adopting the proc's exit code as the job's and naming the offending
+rank — is what puts the right number there in the first place.
 
 ---
 
