@@ -69,7 +69,8 @@ static bool same_inaddr(const struct sockaddr_storage *a,
 static int parse_cidr(const char *token, int family, struct sockaddr_storage *net,
                       uint32_t *prefix)
 {
-    char *copy, *slash;
+    char *copy, *slash, *endp;
+    unsigned long plen;
     int rc = PRTE_ERR_BAD_PARAM;
 
     if (NULL == strchr(token, '/')) {
@@ -81,7 +82,20 @@ static int parse_cidr(const char *token, int family, struct sockaddr_storage *ne
     }
     slash = strchr(copy, '/');
     *slash = '\0';
-    *prefix = (uint32_t) strtoul(slash + 1, NULL, 10);
+    /* The prefix length comes out of the configuration file, so it is user
+     * input.  A bare strtoul answers 0 for anything unparsable, and 0 means
+     * "match every address" to the comparison below - so a typo would not
+     * fail, it would silently widen the network until it matched whatever
+     * came first.  Refuse the token instead; an unusable CIDR is then simply
+     * not one of the networks we disambiguate by. */
+    errno = 0;
+    plen = strtoul(slash + 1, &endp, 10);
+    if (0 != errno || endp == slash + 1 || '\0' != *endp
+        || plen > (unsigned long) ((AF_INET6 == family) ? 128 : 32)) {
+        free(copy);
+        return PRTE_ERR_BAD_PARAM;
+    }
+    *prefix = (uint32_t) plen;
     memset(net, 0, sizeof(*net));
     net->ss_family = family;
     if (AF_INET6 == family) {
@@ -309,6 +323,10 @@ int prte_ess_base_bootstrap_params(void)
 #else
         pmix_show_help("help-prte-runtime.txt", "bootstrap-ipv6-unavailable", true,
                        prte_process_info.nodename);
+        /* we are refusing this configuration, so do not leave it behind
+         * looking valid to the phases that reuse it */
+        prte_bootstrap_config_free(&bootstrap_cfg);
+        bootstrap_cfg_valid = false;
         return PRTE_ERR_SILENT;
 #endif
     } else {
