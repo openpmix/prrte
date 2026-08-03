@@ -310,6 +310,14 @@ void prte_grpcomm_direct_fence_release(int status, pmix_proc_t *sender,
 PRTE_MODULE_EXPORT extern
 void prte_grpcomm_direct_fence_fault_handler(const prte_rml_recovery_status_t* status);
 
+/* Find the tracker for this fence signature, optionally creating it. A new
+ * tracker resolves the signature to its participating daemons and sizes the
+ * rollup accordingly, and comes back NULL - with nothing left on the tracker
+ * list - if that cannot be done. Exported so the unit test can drive it. */
+PRTE_MODULE_EXPORT
+prte_grpcomm_fence_t *prte_grpcomm_direct_fence_get_tracker(prte_grpcomm_direct_fence_signature_t *sig,
+                                                            bool create);
+
 /* group functions */
 PRTE_MODULE_EXPORT extern
 int prte_grpcomm_direct_group(pmix_group_operation_t op, char *grpid,

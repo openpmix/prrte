@@ -229,6 +229,16 @@ the framework makes sense:
   field is packed and unpacked unguarded, so every daemon in a DVM agrees
   on the message layout no matter what its PMIx advertised. Guard the
   *behavior*, never the bytes.
+- **A collective's own state is copied, never borrowed.** The arrays a
+  caller hands an entry point — the fence's `procs`, the group's
+  `directives` and the proc arrays inside them — belong to the PMIx server
+  that delivered the upcall, which keeps them alive until the completion
+  callback fires and then frees them itself. The caddy may point at them
+  for the length of the handler, but anything that outlives it (a
+  signature, a tracker) has to hold a copy, because *those* free what they
+  hold. Both halves of that rule have been broken: a group signature
+  pointed at a directive's array and freed it under PMIx, and the fence's
+  signature copied the procs but was itself never freed.
 - **Every entry-point handler owns its caddy/op — release it on *all*
   paths.** `fence`/`group`/`xcast_nb` each allocate a heap object
   (`prte_pmix_fence_caddy_t`, `prte_pmix_grp_caddy_t`, or the xcast `op_t`),
@@ -266,7 +276,20 @@ constructs with the documented defaults (all rollup counters zero, the
 group tracker's info-lists opened) and destructs without leaking or
 crashing. Extend it when you add a class or change a constructor default.
 
-It also covers the **daemon-failure decisions**, which need no tree even
+It also covers the two decisions a collective makes before any message
+moves. **Building a fence tracker**: what a signature naming the daemon
+job, a signature naming nobody, and a signature that cannot be resolved
+each produce — the last of which must leave *nothing* on the tracker list,
+because a half-built tracker is found by the next fence of that signature.
+And **parsing a group's directives**: that the signature ends up owning
+copies of the proc arrays the directives carried, so the caller's arrays
+survive the signature's destructor intact (the test asserts on the
+pointers, which is the only way to see the difference before something
+double-frees). Both drive the real functions, exported for the purpose.
+Note that the deliberate-failure cases log `PRTE_ERROR_LOG` output as they
+run; that noise is expected.
+
+And it covers the **daemon-failure decisions**, which need no tree even
 though acting on them does: the departed-member predicate, and the fence
 fault handler's choice between re-converging a fence that merely lost a
 message path and ending one that lost a participant. Both read only the

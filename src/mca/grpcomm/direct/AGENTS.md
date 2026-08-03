@@ -193,8 +193,39 @@ Message flow:
 
 `nexpected` counts routing-tree child contributors
 (`prte_rml_get_num_contributors`) plus one if this daemon is itself a
-participant. The tracker lives on `component.fence_ops`, keyed by exact
+participant — `set_nexpected()`, which is also what the recovery restart
+re-runs. The tracker lives on `component.fence_ops`, keyed by exact
 proc-signature match.
+
+**`create_dmns()`'s answer is a pair, and NULL means two different
+things.** A signature naming the daemon job is "every daemon in the DVM",
+reported as a count with a **NULL array** — there is no array to walk, and
+`set_nexpected()` answers it as `n_children + 1`. A NULL array with a
+**zero** count is the opposite statement, "nothing resolved". Both readers
+used to index the array regardless, which dereferenced NULL for any fence
+naming the daemon job.
+
+**A signature that cannot be read is refused, and refusal leaves nothing
+behind.** `create_dmns()` returns `PRTE_ERR_BAD_PARAM` for an empty
+signature or one whose first entry has no nspace — both of which are what
+a truncated RML message unpacks to, and the second of which is worse than
+it looks, because `PMIX_CHECK_NSPACE` answers *yes* for an empty nspace
+against anything, so it would be taken for a daemon-job fence and sized to
+expect the whole DVM. `get_tracker()` then removes the half-built tracker
+from `fence_ops` before returning NULL. That removal is not tidiness: a
+tracker with no daemon set can never complete, and the next fence with the
+same signature would *find* it, see a rollup expecting nothing, and answer
+immediately with data it never gathered.
+
+**Every exit from the `fence()` handler destructs the signature it built
+and completes the caller.** The signature is a stack object with a malloc'd
+proc array that `get_tracker()` copies rather than adopts, so walking away
+from it leaks it once per `PMIx_Fence` — which was the state of the success
+path. And a failure there is invisible to everyone else: the entry point
+answered `PRTE_SUCCESS` the moment the request was queued, and the
+contribution never entered the rollup, so no release is coming. The handler
+completes its own participants with the reason, after clearing the
+tracker's `cbfunc` so a later abort cannot complete them twice.
 
 The fence `fault_handler` restarts what it can and ends what it cannot.
 A fence whose participants all survive lost only a message path and
@@ -236,10 +267,25 @@ much richer signature and payload.
   to the HNP via `request_group_cancel()` and returns.
 - Otherwise it builds the group signature from `grpid` + `procs` (a NULL
   `procs` marks a bootstrap **follower**), scans the directives
-  (`PMIX_GROUP_ASSIGN_CONTEXT_ID`, `PMIX_GROUP_BOOTSTRAP`, `PMIX_TIMEOUT`,
+  (`prte_grpcomm_direct_group_parse_directives()`:
+  `PMIX_GROUP_ASSIGN_CONTEXT_ID`, `PMIX_GROUP_BOOTSTRAP`, `PMIX_TIMEOUT`,
   `PMIX_GROUP_ADD_MEMBERS`, `PMIX_GROUP_INFO`, `PMIX_PROC_DATA` endpoints,
   `PMIX_GROUP_FINAL_MEMBERSHIP_ORDER`, `PMIX_LOCAL_COLLECTIVE_STATUS`),
   gets-or-creates the tracker, and relays.
+
+  **A signature owns its arrays — always.** Two directives carry a proc
+  array (`PMIX_GROUP_ADD_MEMBERS`, `PMIX_GROUP_FINAL_MEMBERSHIP_ORDER`),
+  and the array inside a directive belongs to the **PMIx server** that
+  delivered the upcall: PMIx frees the directives, arrays and all, once the
+  operation completes. The signature's destructor frees what the signature
+  holds, so the parse takes a *copy* of each. Pointing at the caller's
+  array instead is a double free of live heap, and it is not a theoretical
+  one — the destructor grew its `final_order` free before the third
+  populator was noticed, and the add-members pointer was being cleared only
+  after the pack, which covers no failure before it. If you add a directive
+  that carries an array, copy it in `copy_directive_procs()` like the other
+  two; do not add a "clear it again before the destructor runs" step
+  anywhere.
 - **Bootstrap** ops send **directly to the HNP** (there is no rollup tree —
   each daemon reports straight to the controller); non-bootstrap ops send
   to self on `PRTE_RML_TAG_GROUP`, entering the same up-tree rollup as
@@ -331,7 +377,12 @@ the *previous* assignment had put there, which on the ilist path was the
 `PMIx_server_register_resources` as `pmix_info_t` and then freed twice.
 
 Coverage is `test_grpcomm` in the dockerswarm harness — one host cannot
-exercise a daemon that merely *received* the release.
+exercise a daemon that merely *received* the release. That phase also runs
+the construct with a `PMIX_GROUP_FINAL_MEMBERSHIP_ORDER` directive
+(`groupcon --order`, the ranks reversed), which is the end-to-end check on
+the array-ownership rule above: the order it asks for is one the DVM would
+never arrive at by sorting, and a daemon that freed the caller's array
+dies of a double free rather than merely returning the wrong order.
 
 ### Group fault tolerance (`#if PRTE_PMIX_HAVE_GROUP_FT`)
 
