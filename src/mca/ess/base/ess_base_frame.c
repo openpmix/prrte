@@ -66,6 +66,7 @@ char *prte_ess_base_vpid = NULL;
 pmix_list_t prte_ess_base_signals = PMIX_LIST_STATIC_INIT;
 
 static char *forwarded_signals = "all";
+static bool signals_added = false;
 
 static int prte_ess_base_register(pmix_mca_base_register_flag_t flags)
 {
@@ -112,6 +113,9 @@ static int prte_ess_base_register(pmix_mca_base_register_flag_t flags)
 static int prte_ess_base_close(void)
 {
     PMIX_LIST_DESTRUCT(&prte_ess_base_signals);
+    /* the latch says "the list has been built"; it has just been torn down,
+     * so clear it with the thing it describes */
+    signals_added = false;
 
     return pmix_mca_base_framework_components_close(&prte_ess_base_framework, NULL);
 }
@@ -304,8 +308,6 @@ static struct known_signal known_signals[] = {
         _sig->signame = strdup((s));                            \
         pmix_list_append(&prte_ess_base_signals, &_sig->super); \
     } while (0)
-
-static bool signals_added = false;
 
 pmix_status_t prte_ess_base_setup_signals(char *input)
 {
