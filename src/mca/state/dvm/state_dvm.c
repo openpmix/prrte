@@ -1071,12 +1071,14 @@ static void dvm_notify(int sd, short args, void *cbdata)
     prte_job_t *jdata = caddy->jdata;
     prte_proc_t *pptr = NULL;
     int rc;
+    int xcode;
+    pmix_status_t jstatus;
     pmix_data_buffer_t *reply;
     prte_daemon_cmd_flag_t command;
     bool notify = true, flag;
     pmix_proc_t *proc, pnotify;
     pmix_info_t *info;
-    size_t ninfo;
+    size_t ninfo, n;
     pmix_proc_t pname;
     pmix_data_buffer_t pbkt;
     pmix_data_range_t range = PMIX_RANGE_SESSION;
@@ -1088,15 +1090,45 @@ static void dvm_notify(int sd, short args, void *cbdata)
                          "%s state:dvm:dvm_notify called",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    /* see if there was any problem */
+    /* See if there was any problem.  Two different things come out of this,
+     * and they used to be conflated into one:
+     *
+     *   jstatus - a pmix_status_t saying WHY the job ended.  This is what
+     *             goes on the wire as PMIX_JOB_TERM_STATUS, whose type is
+     *             pmix_status_t, and which any PMIx tool is entitled to read
+     *             as one.  What used to be put there was jdata->exit_code -
+     *             an application exit status, or on some paths a PRRTE error
+     *             constant - so a job whose rank exited 7 announced its
+     *             termination status as "7", which is not a PMIx status at
+     *             all.  prun then ran it through prte_pmix_convert_status(),
+     *             which recognized nothing and answered PRTE_ERROR, and that
+     *             is why every failed job made prun exit 71.
+     *
+     *   xcode   - the application's exit status, reported separately as
+     *             PMIX_EXIT_CODE so a launcher can pass it on the way
+     *             prterun does.  Only sent when it looks like one: on paths
+     *             where no process ever ran, jdata->exit_code carries a
+     *             (negative) PRRTE error constant instead, and handing that
+     *             to a tool as an exit status would be the same category
+     *             error one level down.
+     */
+    xcode = jdata->exit_code;
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, (void **) &pptr, PMIX_POINTER)
         && NULL != pptr) {
         rc = jdata->exit_code;
+        jstatus = prte_pmix_convert_job_state_to_error(jdata->state);
         /* or whether we got cancelled by the user */
     } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_CANCELLED, NULL, PMIX_BOOL)) {
         rc = PRTE_ERR_JOB_CANCELLED;
+        jstatus = PMIX_ERR_JOB_CANCELED;
     } else {
         rc = jdata->exit_code;
+        jstatus = (0 == rc) ? PMIX_SUCCESS
+                            : prte_pmix_convert_job_state_to_error(jdata->state);
+    }
+    /* a plausible process exit status, or nothing */
+    if (0 >= xcode || 255 < xcode) {
+        xcode = -1;
     }
 
     if (0 == rc &&
@@ -1121,17 +1153,20 @@ static void dvm_notify(int sd, short args, void *cbdata)
             errmsg = prte_dump_aborted_procs(jdata);
         }
         /* construct the info to be provided */
-        if (NULL == errmsg) {
-            ninfo = 3;
-        } else {
-            ninfo = 4;
+        ninfo = 3;
+        if (NULL != errmsg) {
+            ++ninfo;
+        }
+        if (0 < xcode) {
+            ++ninfo;
         }
         PMIX_INFO_CREATE(info, ninfo);
+        n = 0;
         /* ensure this only goes to the job terminated event handler */
         flag = true;
-        PMIX_INFO_LOAD(&info[0], PMIX_EVENT_NON_DEFAULT, &flag, PMIX_BOOL);
+        PMIX_INFO_LOAD(&info[n++], PMIX_EVENT_NON_DEFAULT, &flag, PMIX_BOOL);
         /* provide the status */
-        PMIX_INFO_LOAD(&info[1], PMIX_JOB_TERM_STATUS, &rc, PMIX_STATUS);
+        PMIX_INFO_LOAD(&info[n++], PMIX_JOB_TERM_STATUS, &jstatus, PMIX_STATUS);
         /* tell the requestor which job or proc  */
         PMIX_LOAD_NSPACE(pname.nspace, jdata->nspace);
         if (NULL != pptr) {
@@ -1139,9 +1174,13 @@ static void dvm_notify(int sd, short args, void *cbdata)
         } else {
             pname.rank = PMIX_RANK_WILDCARD;
         }
-        PMIX_INFO_LOAD(&info[2], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
+        PMIX_INFO_LOAD(&info[n++], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
+        /* and what the application exited with, when that is a thing */
+        if (0 < xcode) {
+            PMIX_INFO_LOAD(&info[n++], PMIX_EXIT_CODE, &xcode, PMIX_INT);
+        }
         if (NULL != errmsg) {
-            PMIX_INFO_LOAD(&info[3], PMIX_EVENT_TEXT_MESSAGE, errmsg, PMIX_STRING);
+            PMIX_INFO_LOAD(&info[n++], PMIX_EVENT_TEXT_MESSAGE, errmsg, PMIX_STRING);
             free(errmsg);
         }
 

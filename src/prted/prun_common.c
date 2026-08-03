@@ -105,6 +105,14 @@ typedef struct {
 
 static pmix_nspace_t spawnednspace;
 
+/* The application exit status the DVM reported for our job, or -1 if it
+ * reported none.  This is what we exit with when we have it, so that
+ * "prun ... false" answers 1 the way "prterun ... false" does.  The
+ * job-termination status cannot serve: it is a pmix_status_t naming the
+ * *reason* the job ended, and passing that to exit() is how every failed
+ * job used to come back as 71 - the low byte of PRTE_ERROR. */
+static int job_exit_code = -1;
+
 static size_t evid = INT_MAX;
 static pmix_proc_t myproc;
 static bool verbose = false;
@@ -225,6 +233,10 @@ static void evhandler(size_t evhdlr_registration_id, pmix_status_t status,
         for (n = 0; n < ninfo; n++) {
             if (0 == strncmp(info[n].key, PMIX_JOB_TERM_STATUS, PMIX_MAX_KEYLEN)) {
                 jobstatus = prte_pmix_convert_status(info[n].value.data.status);
+            } else if (0 == strncmp(info[n].key, PMIX_EXIT_CODE, PMIX_MAX_KEYLEN)) {
+                /* the application's own status - preferred over the
+                 * termination reason when we come to exit */
+                job_exit_code = info[n].value.data.integer;
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {
                 PMIX_LOAD_NSPACE(jobid, info[n].value.data.proc->nspace);
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
@@ -834,6 +846,17 @@ DONE:
         // now, let's preserve its return code and print
         // a warning here, if prte logging is on.
         pmix_output(0, "PMIx_tool_finalize() failed. Status = %d", ret);
+    }
+
+    /* Our caller makes this our exit status.  If the DVM told us what the
+     * application exited with, that is the answer - a launcher reports the
+     * status of what it launched, which is what prterun does and what any
+     * script driving prun expects.  Otherwise all we have is why the job
+     * ended, which is a status code, not an exit status: keep returning it
+     * (a caller only ever gets its low byte, but non-zero is non-zero) so
+     * that failures with no application status behind them still fail. */
+    if (0 < job_exit_code) {
+        return job_exit_code;
     }
     return rc;
 }

@@ -503,6 +503,9 @@ pmix_status_t prte_pmix_convert_job_state_to_error(int state)
         case PRTE_JOB_STATE_ABORTED_WO_SYNC:
             return PMIX_ERR_JOB_TERM_WO_SYNC;
 
+        case PRTE_JOB_STATE_NON_ZERO_TERM:
+            return PMIX_ERR_EXIT_NONZERO_TERM;
+
         case PRTE_JOB_STATE_TERMINATED:
             return PMIX_EVENT_JOB_END;
 
