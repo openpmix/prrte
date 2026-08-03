@@ -323,7 +323,12 @@ static void request_group_cancel(prte_pmix_grp_caddy_t *cd)
      * carries one even though nothing filters it against the epoch */
     rc = PMIx_Data_pack(NULL, relay, &prte_mca_grpcomm_direct_component.recovery_epoch, 1, PMIX_UINT32);
     if (PMIX_SUCCESS == rc) {
+        /* note this one answers in PRTE codes, and we acknowledge in PMIx
+         * statuses - the two agree only on success */
         rc = pack_signature(relay, &sig);
+        if (PRTE_SUCCESS != rc) {
+            rc = prte_pmix_convert_rc(rc);
+        }
     }
     PMIX_DESTRUCT(&sig);
     if (PMIX_SUCCESS != rc) {
@@ -606,6 +611,9 @@ static void group(int sd, short args, void *cbdata)
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(relay);
         PMIX_DESTRUCT(&sig);
+        /* the error label answers our caller, which reads PMIx statuses -
+         * and this one is a PRTE code */
+        rc = prte_pmix_convert_rc(rc);
         goto error;
     }
 
@@ -707,6 +715,7 @@ static void group(int sd, short args, void *cbdata)
     if (PRTE_SUCCESS != rc) {
         PMIX_DATA_BUFFER_RELEASE(framed);
         PMIX_DESTRUCT(&sig);
+        rc = prte_pmix_convert_rc(rc);
         goto error;
     }
     relay = framed;
