@@ -67,17 +67,23 @@ The only SLURM-specific logic. It differs from `env` by adding a
 **per-node vpid offset** so that each `srun`-placed daemon lands on a
 unique rank, and by correcting the nodename from SLURM's own value:
 
-1. Require `prte_ess_base_nspace`; load into `PRTE_PROC_MY_NAME->nspace`.
-2. Require `prte_ess_base_vpid`; `strtoul` it to a base `vpid`.
-3. **`PRTE_PROC_MY_NAME->rank = vpid + atoi(getenv("SLURM_NODEID"))`** —
-   the base vpid plus this node's SLURM node id. This is the crucial
-   difference from `env`: a single base vpid is broadcast to all
-   daemons, and each adds its `SLURM_NODEID` to get a distinct rank.
-4. Replace `prte_process_info.nodename` with `getenv("SLURMD_NODENAME")`
+1. **`prte_ess_base_set_identity("SLURM_NODEID", 0)`** — the base vpid
+   plus this node's SLURM node id. This is the crucial difference from
+   `env`: a single base vpid is broadcast to all daemons, and each adds
+   its `SLURM_NODEID` to get a distinct rank. The base helper does the
+   nspace load, both parses, the range check, and `num_daemons`; see the
+   [framework guide](../AGENTS.md#daemon-identity-is-established-in-one-place).
+2. Replace `prte_process_info.nodename` with `getenv("SLURMD_NODENAME")`
    so the daemon's hostname matches exactly what SLURM reports (missing
    → `PRTE_ERR_NOT_FOUND`). This keeps node matching consistent with the
    allocation the HNP saw.
-5. Set `prte_process_info.num_daemons = prte_ess_base_num_procs`.
+
+**Read `SLURMD_NODENAME` before freeing the old nodename.** Step 2 used
+to `free(prte_process_info.nodename)` first and *then* check the
+environment, so a missing `SLURMD_NODENAME` returned an error having left
+that global pointing at freed memory — which every later reader,
+including the error path being taken right then, would go on to use. The
+order in the file now is getenv, then free, then replace. Keep it.
 
 ---
 
@@ -87,12 +93,14 @@ unique rank, and by correcting the nodename from SLURM's own value:
   dropping it) collides daemon ranks — a silent, miserable failure. The
   base vpid is the same for every daemon; the node id is what
   disambiguates.
-- **`SLURM_NODEID` is `NULL`-guarded before `atoi`.** `slurm_set_name`
-  checks `getenv("SLURM_NODEID")` for `NULL` and returns
-  `PRTE_ERR_NOT_FOUND` if it is absent, rather than calling `atoi(NULL)`
-  (undefined behavior — a segfault on glibc). `srun` always sets the
-  variable, so this only triggers in a misconfigured launch, but the
-  guard keeps that case a clean error instead of a crash. Don't drop it.
+- **`SLURM_NODEID` is validated, not just `NULL`-guarded.**
+  `prte_ess_base_set_identity()` refuses a missing variable
+  (`PRTE_ERR_NOT_FOUND`) and also one holding anything that is not a
+  plain non-negative number — the old `atoi` read every such value as 0,
+  which silently gave this daemon the base vpid. `srun` always sets the
+  variable sanely, so this only fires in a misconfigured launch; the
+  point is that such a launch fails loudly rather than forming a DVM with
+  two daemons on the same rank.
 - **`SLURMD_NODENAME` correction matters for node matching.** The HNP's
   allocation (from `ras/slurm`) uses SLURM's node names; if the daemon
   reports a different hostname (e.g. an FQDN vs short name), node

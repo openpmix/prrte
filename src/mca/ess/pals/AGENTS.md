@@ -63,15 +63,19 @@ The standard three-step daemon shape:
 
 ## `pals_set_name` — identity with a PALS node offset
 
-1. Require `prte_ess_base_nspace`; load into `PRTE_PROC_MY_NAME->nspace`.
-2. Require `prte_ess_base_vpid`; `strtoul` it to a base `vpid`.
-3. **`PRTE_PROC_MY_NAME->rank = vpid + atoi(getenv("PALS_NODEID"))`**,
-   but only if `PALS_NODEID` is present — if it is **not** set,
-   `pals_set_name` returns `PRTE_ERR_NOT_FOUND` rather than defaulting
-   the offset to 0. (`slurm` and `lsf` now `NULL`-guard their node-id
-   env vars the same way, so all three RM modules fail cleanly on a
-   missing offset instead of calling `atoi(NULL)`.)
-4. Set `prte_process_info.num_daemons = prte_ess_base_num_procs`.
+The whole function is one call into the base:
+
+```c
+return prte_ess_base_set_identity("PALS_NODEID", 0);
+```
+
+`prte_ess_base_set_identity()` loads the nspace, parses the base vpid,
+adds `PALS_NODEID`, range-checks the sum, and sets
+`prte_process_info.num_daemons` — see the [framework
+guide](../AGENTS.md#daemon-identity-is-established-in-one-place). A
+missing `PALS_NODEID` is `PRTE_ERR_NOT_FOUND`; one holding a non-number
+is refused with a diagnostic rather than defaulting the offset to 0, the
+way the old `atoi` did.
 
 Unlike `slurm`, `pals` does **not** rewrite `prte_process_info.nodename`
 — it trusts the hostname already established during `prte_init`.

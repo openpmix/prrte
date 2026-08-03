@@ -69,13 +69,19 @@ All the environment-specific logic in this component is the ~25-line
 
 Unlike the RM modules, `env` takes the daemon's vpid **verbatim** — there
 is no per-node offset to add, because the ssh launcher assigns each
-daemon a distinct vpid directly:
+daemon a distinct vpid directly. The whole function is therefore one
+call into the base:
 
-1. Require `prte_ess_base_nspace` (from `ess_base_nspace`); load it into
-   `PRTE_PROC_MY_NAME->nspace`. Missing → `PRTE_ERR_NOT_FOUND`.
-2. Require `prte_ess_base_vpid` (from `ess_base_vpid`); `strtoul` it into
-   `PRTE_PROC_MY_NAME->rank`. Missing → `PRTE_ERR_NOT_FOUND`.
-3. Set `prte_process_info.num_daemons = prte_ess_base_num_procs`.
+```c
+return prte_ess_base_set_identity(NULL, 0);   /* no offset envar, no adjustment */
+```
+
+`prte_ess_base_set_identity()` (see the [framework
+guide](../AGENTS.md#daemon-identity-is-established-in-one-place)) loads
+`prte_ess_base_nspace` into `PRTE_PROC_MY_NAME->nspace`, parses
+`prte_ess_base_vpid` into the rank, validates both, and sets
+`prte_process_info.num_daemons = prte_ess_base_num_procs`. Passing `NULL`
+for the offset environment variable is what makes this the verbatim case.
 
 These three parameters (`ess_base_nspace`, `ess_base_vpid`,
 `ess_base_num_procs`) are the standard channel by which the HNP tells a
@@ -90,7 +96,9 @@ bootstrapped ordinary daemon also comes up through `env`.
 
 - **No vpid offset here — that is deliberate.** If you find yourself
   wanting to add `+ nodeid`, you are writing an RM module, not editing
-  `env`. Keep `env` the verbatim-identity default.
+  `env` — and the way to write one is to pass that RM's node-index
+  environment variable to `prte_ess_base_set_identity()`, not to
+  re-implement the parse. Keep `env` the verbatim-identity default.
 - **`set_name`'s return code is checked.** `rte_init` now aborts to its
   `error:` label if `env_set_name()` fails (a missing `nspace`/`vpid`
   yields `PRTE_ERR_NOT_FOUND`), rather than falling through into
