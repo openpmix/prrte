@@ -167,6 +167,26 @@ static void job_errors(int fd, short args, void *cbdata)
             || PRTE_JOB_STATE_NEVER_LAUNCHED == jdata->state
             || PRTE_JOB_STATE_FAILED_TO_LAUNCH == jdata->state
             || PRTE_JOB_STATE_CANNOT_LAUNCH == jdata->state) {
+            /* We tried to start daemons and they did not come up: say so.
+             * This is where the plm lands when it gives that verdict, and it
+             * used to exit in silence, leaving the user with a tool that
+             * returned non-zero and printed nothing.  (The
+             * "failed-daemon-launch" topic was emitted from proc_errors'
+             * application-proc switch, on a branch asking whether the proc
+             * was a daemon - which it never is there, because the daemon
+             * branch above that switch always exits first.  So the text has
+             * been unreachable.)
+             *
+             * Only the two "we tried" states get the message.  NEVER_LAUNCHED
+             * and CANNOT_LAUNCH mean we never got as far as launching, and
+             * whoever made that decision has already said why - plm/ssh's
+             * agent-not-found, for one - so a generic checklist of reasons
+             * daemons fail to start would only bury it. */
+            if (PRTE_JOB_STATE_FAILED_TO_START == jdata->state
+                || PRTE_JOB_STATE_FAILED_TO_LAUNCH == jdata->state) {
+                pmix_show_help("help-errmgr-base.txt", "failed-daemon-launch",
+                               true, prte_tool_basename);
+            }
             prte_routing_is_enabled = false;
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             PMIX_RELEASE(caddy);
@@ -418,10 +438,15 @@ static void proc_errors(int fd, short args, void *cbdata)
                 }
 
                 if (PRTE_SUCCESS == prte_rml_route_lost(proc->rank)) {
-                    if (0 != PRTE_PROC_MY_NAME->rank) {
-                        goto cleanup;
-                    }
-                    /* HNP marks all procs on the lost daemon's node as gone */
+                    /* Mark all procs on the lost daemon's node as gone.  This
+                     * used to be guarded by "am I rank 0", standing in for "am
+                     * I the HNP" - which this component always is, so the test
+                     * bought nothing, and it is not even a reliable spelling
+                     * of the question: prte_plm_base_set_hnp_name() takes the
+                     * HNP's rank from PMIX_SERVER_RANK when PRRTE comes up
+                     * under an existing PMIx server, and any value but 0 there
+                     * silently skipped this sweep - leaving the job waiting
+                     * forever on processes whose node was already gone. */
                     for (int ji = 0; ji < prte_job_data->size; ji++) {
                         prte_job_t *j = (prte_job_t *)
                             pmix_pointer_array_get_item(prte_job_data, ji);
@@ -584,8 +609,12 @@ keep_going:
                 PMIX_RETAIN(pptr);
                 PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
                 jdata->exit_code = pptr->exit_code;
-                /* send out a notification is one is requested */
-                check_send_notification(jdata, pptr, PMIX_ERR_PROC_TERM_WO_SYNC);
+                /* NOTE: no notification here.  This arm has just flagged the
+                 * job ABORTED, and check_send_notification() declines to say
+                 * anything about a proc in a job that is already aborting -
+                 * so the call that used to sit here could never send. The
+                 * notification for this state belongs to the recoverable arm
+                 * above, which is the one that keeps the job running. */
                 /* now treat a special case - if the proc exit'd without a required
                  * sync, it may have done so with a zero exit code. We want to ensure
                  * that the user realizes there was an error, so in this -one- case,
@@ -628,12 +657,10 @@ keep_going:
             _terminate_job(jdata->nspace);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FAILED_TO_START);
         }
-        /* if this was a daemon, report it */
-        if (PMIX_CHECK_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
-            /* output a message indicating we failed to launch a daemon */
-            pmix_show_help("help-errmgr-base.txt", "failed-daemon-launch",
-                           true, prte_tool_basename);
-        }
+        /* NOTE: there is no "and if this was a daemon, say so" arm here.
+         * A daemon proc never reaches this switch - the daemon-job branch
+         * at the top of this function handles FAILED_TO_START and exits.
+         * The daemon-launch diagnostic is emitted from job_errors instead. */
         break;
 
     case PRTE_PROC_STATE_CALLED_ABORT:
@@ -703,7 +730,11 @@ keep_going:
                              "%s errmgr:dvm: proc %s default error %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
                              prte_proc_state_to_str(state)));
-        if (jdata->num_terminated == jdata->num_procs) {
+        /* >=, not ==: this is the last chance an unrecognized state has to
+         * end a job whose procs are all gone, and an exact-equality test
+         * that the count has already stepped past never fires again.  The
+         * KILLED_BY_CMD arm above tests it the same way. */
+        if (jdata->num_terminated >= jdata->num_procs) {
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
         }
         break;

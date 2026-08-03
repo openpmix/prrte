@@ -62,8 +62,21 @@ Fires when a job is activated into an error state. Flow:
    **The daemon job itself** (`nspace == PRTE_PROC_MY_NAME->nspace`) —
    the DVM is in trouble:
    - `FAILED_TO_START` / `NEVER_LAUNCHED` / `FAILED_TO_LAUNCH` /
-     `CANNOT_LAUNCH`: disable routing (`prte_routing_is_enabled = false`)
-     and activate `PRTE_JOB_STATE_DAEMONS_TERMINATED` to exit.
+     `CANNOT_LAUNCH`: the DVM could not be formed — disable routing
+     (`prte_routing_is_enabled = false`) and activate
+     `PRTE_JOB_STATE_DAEMONS_TERMINATED` to exit. For the two states that
+     mean *we tried and they did not come up* — `FAILED_TO_START` and
+     `FAILED_TO_LAUNCH` — also show
+     `help-errmgr-base.txt: failed-daemon-launch`. That is the only place
+     the message is emitted; it used to be attempted from `proc_errors`'
+     *application*-proc switch, behind a test asking whether the proc was
+     a daemon — which it never is there, because the daemon branch above
+     that switch always exits first. So a user whose DVM failed to form
+     got a non-zero exit and silence.
+     `NEVER_LAUNCHED`/`CANNOT_LAUNCH` are deliberately excluded: they mean
+     we never got as far as launching, and whoever decided that has
+     already said why (plm/ssh's `agent-not-found`, for one), so a generic
+     checklist of reasons daemons fail would only bury the real message.
    - `ABORTED` while `num_procs != num_reported`: a daemon likely died
      without finding its way back — show `help-errmgr-base.txt:
      failed-daemon` and disable routing.
@@ -128,8 +141,14 @@ For the communication-loss family — `COMM_FAILED`, `HEARTBEAT_FAILED`,
    but never placed has no `node`, so the message names it "unknown"
    rather than dereferencing NULL), call `prte_rml_route_lost`.
    On success **the HNP walks every job** and marks each proc that lived
-   on the lost daemon's node `PRTE_PROC_STATE_TERM_WO_SYNC` (only rank 0
-   / the HNP does this sweep), then `goto cleanup`. Otherwise mark the
+   on the lost daemon's node `PRTE_PROC_STATE_TERM_WO_SYNC`, then
+   `goto cleanup`. (That sweep used to be gated on `PRTE_PROC_MY_NAME->rank
+   == 0` as a stand-in for "am I the HNP". This component only ever runs
+   on the HNP, so the test bought nothing — and it is not a reliable
+   spelling of the question either: `prte_plm_base_set_hnp_name()` takes
+   the HNP's rank from `PMIX_SERVER_RANK` when PRRTE comes up under an
+   existing PMIx server, and any non-zero value there skipped the sweep,
+   leaving the job waiting on processes whose node was already gone.) Otherwise mark the
    daemon job `PRTE_JOB_STATE_COMM_FAILED`, stash the offending proc in
    `PRTE_JOB_ABORTED_PROC`, set `PRTE_JOB_FLAG_ABORTED`, and set
    `exit_code` (defaulting to `PRTE_ERR_COMM_FAILURE`).
@@ -160,11 +179,11 @@ between "notify and keep going" and "abort the job":
 |------------|-------------------------------------|--------------|
 | `KILLED_BY_CMD` | notify `PMIX_ERR_PROC_KILLED_BY_CMD` + recover resources | if all procs terminated → `TERMINATED` |
 | `ABORTED_BY_SIG` | notify `PMIX_ERR_PROC_ABORTED_BY_SIG` + recover | set `JOB_STATE_ABORTED_BY_SIG`, record aborted proc, `_terminate_job` |
-| `TERM_WO_SYNC` | notify `PMIX_ERR_PROC_TERM_WO_SYNC` + recover | set `ABORTED_WO_SYNC`; if `exit_code == 0` force `PRTE_ERROR_DEFAULT_EXIT_CODE` so the user sees an error; `_terminate_job` |
-| `FAILED_TO_START` / `FAILED_TO_LAUNCH` | *(unconditional)* set `FAILED_TO_START`/`_LAUNCH`, `_terminate_job`, activate `FAILED_TO_START`; if it was a daemon, show `failed-daemon-launch` | same |
+| `TERM_WO_SYNC` | notify `PMIX_ERR_PROC_TERM_WO_SYNC` + recover | set `ABORTED_WO_SYNC`; if `exit_code == 0` force `PRTE_ERROR_DEFAULT_EXIT_CODE` so the user sees an error; `_terminate_job`. (No notification: this arm has just flagged the job ABORTED, and `check_send_notification` declines to speak about a proc in an aborting job, so the call that used to sit here could never send.) |
+| `FAILED_TO_START` / `FAILED_TO_LAUNCH` | *(unconditional)* set `FAILED_TO_START`/`_LAUNCH`, `_terminate_job`, activate `FAILED_TO_START` | same |
 | `CALLED_ABORT` | notify `PMIX_ERR_PROC_REQUESTED_ABORT` + recover | set `CALLED_ABORT`, `_terminate_job` |
 | `TERM_NON_ZERO` | if `PRTE_JOB_ERROR_NONZERO_EXIT` also set: notify `PMIX_ERR_EXIT_NONZERO_TERM` + recover | set `NON_ZERO_TERM`, `_terminate_job`; always bump `PRTE_JOB_NUM_NONZERO_EXIT` |
-| default | if `num_terminated == num_procs` → `TERMINATED` |
+| default | if `num_terminated >= num_procs` → `TERMINATED` (`>=`, not `==`: this is an unrecognized state's last chance to end a job whose procs are all gone, and an exact test the count has stepped past never fires again) |
 
 The abort branches all guard on `!PRTE_JOB_FLAG_ABORTED` so only the
 **first** offending proc drives the abort, `PMIX_RETAIN` the recorded

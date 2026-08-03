@@ -208,7 +208,14 @@ them, in `test/unit/plm`.
 ### `help-errmgr-base.txt`
 
 The user-facing messages the components emit via `pmix_show_help`:
-`failed-daemon-launch`, `failed-daemon`, `node-died`, `simple-message`.
+
+| Topic | Emitted from | When |
+|-------|--------------|------|
+| `failed-daemon-launch` | `dvm/job_errors` | the daemon job reached `FAILED_TO_START`/`NEVER_LAUNCHED`/`FAILED_TO_LAUNCH`/`CANNOT_LAUNCH` — the DVM could not be formed |
+| `failed-daemon` | `dvm/job_errors` | the daemon job `ABORTED` with `num_procs != num_reported` — someone died without ever reporting in |
+| `node-died` | `dvm/proc_errors` | an individual daemon was lost after having reported |
+| `simple-message` | `prted/prted_abort` | this daemon is dying of an internal fault and wants the user to see why |
+
 Per the top-level GOLDEN RULE, if you touch this file you must
 `rm src/util/prte_show_help_content.* && make` to force the generated
 show-help content to be rebuilt.
