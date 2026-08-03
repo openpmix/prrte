@@ -58,6 +58,23 @@ PRTE_EXPORT extern pmix_list_t prte_ess_base_signals;
  */
 PRTE_EXPORT int prte_ess_base_std_prolog(void);
 
+/* Establish this daemon's name from the identity its launcher published.
+ *
+ * The nspace is taken verbatim from prte_ess_base_nspace.  The rank is
+ * prte_ess_base_vpid plus a per-node offset: an RM hands every daemon it
+ * starts the same base vpid, and they tell themselves apart by the node index
+ * that RM exports (@c offset_envar - SLURM_NODEID, PALS_NODEID, ...).  Pass
+ * NULL for @c offset_envar when the launcher assigns each daemon its vpid
+ * directly, as ssh does.  @c offset_adjust is added to that index, because LSF
+ * numbers its tasks from one and everyone else from zero.
+ *
+ * Every input is validated and a bad one is refused with a diagnostic naming
+ * it.  That matters more than it looks: the natural shorthand here is
+ * strtoul/atoi with no check, which quietly turns any garbage into 0 - and
+ * rank 0 is the DVM controller, so the daemon adopts the HNP's identity and
+ * the DVM comes apart later in ways that point nowhere near the bad input. */
+PRTE_EXPORT int prte_ess_base_set_identity(const char *offset_envar, int offset_adjust);
+
 PRTE_EXPORT int prte_ess_base_prted_setup(void);
 PRTE_EXPORT int prte_ess_base_prted_finalize(void);
 
