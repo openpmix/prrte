@@ -125,11 +125,12 @@ during a very early failure would crash instead of reporting.
 ## The component struct
 
 `prte_errmgr_base_component_3_0_0_t` (in `errmgr.h`) is a standard MCA
-component wrapper plus three ints — `verbose`, `output_handle`,
-`priority`. Both real components only ever register `priority` as an MCA
-param; `verbose`/`output_handle` are unused in the current components
-(framework verbosity comes from `errmgr_base_verbose`, below). The
-version macro components must use is:
+component wrapper plus one int, `priority`, which is the only thing
+either component registers as an MCA param. It used to carry `verbose`
+and `output_handle` as well; nothing ever set or read either, because
+framework verbosity comes from `errmgr_base_verbose` and is reached
+through `prte_errmgr_base_framework.framework_output`. The version macro
+components must use is:
 
 ```c
 #define PRTE_ERRMGR_BASE_VERSION_3_0_0 PRTE_MCA_BASE_VERSION_3_0_0("errmgr", 3, 0, 0)

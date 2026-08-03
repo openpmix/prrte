@@ -121,13 +121,14 @@ struct prte_errmgr_base_component_3_0_0_t {
     /** MCA base component */
     pmix_mca_base_component_t base_version;
 
-    /** Verbosity Level */
-    int verbose;
-    /** Output Handle for pmix_output */
-    int output_handle;
     /** Default Priority */
     int priority;
 };
+/* NOTE: this used to carry "verbose" and "output_handle" as well.  Nothing
+ * ever set or read either one - framework verbosity comes from the
+ * auto-provided errmgr_base_verbose and is reached through
+ * prte_errmgr_base_framework.framework_output - so they were two ints of
+ * documentation for a facility that does not exist. */
 typedef struct prte_errmgr_base_component_3_0_0_t prte_errmgr_base_component_3_0_0_t;
 typedef prte_errmgr_base_component_3_0_0_t prte_errmgr_base_component_t;
 
