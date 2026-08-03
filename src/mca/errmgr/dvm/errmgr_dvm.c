@@ -142,6 +142,13 @@ static void job_errors(int fd, short args, void *cbdata)
     /* if the jdata is NULL, then it is referencing the daemon job */
     if (NULL == caddy->jdata) {
         caddy->jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+        if (NULL == caddy->jdata) {
+            /* we are too far gone to have a daemon job - there is nothing
+             * this handler can do, and every line below dereferences it */
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            PMIX_RELEASE(caddy);
+            return;
+        }
         PMIX_RETAIN(caddy->jdata);
     }
 
@@ -226,14 +233,21 @@ static void proc_errors(int fd, short args, void *cbdata)
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata;
     prte_proc_t *pptr, *proct;
-    pmix_proc_t *proc = &caddy->name;
-    prte_proc_state_t state = caddy->proc_state;
+    pmix_proc_t *proc;
+    prte_proc_state_t state;
     int i;
     int32_t i32, *i32ptr;
     bool flag;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
+    /* nothing in the caddy may be read before this: it is the barrier
+     * pairing with the PMIX_POST_OBJECT on whichever thread activated the
+     * state, and on a weakly-ordered machine a read hoisted above it can
+     * see the field as the constructor left it rather than as the activator
+     * set it */
     PMIX_ACQUIRE_OBJECT(caddy);
+    proc = &caddy->name;
+    state = caddy->proc_state;
 
     pmix_output_verbose(1, prte_errmgr_base_framework.framework_output,
                          "%s errmgr:dvm: for proc %s state %s",
@@ -393,10 +407,14 @@ static void proc_errors(int fd, short args, void *cbdata)
             /* record the first one to fail */
             if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
                 if (PRTE_PROC_STATE_FAILED_TO_START != state) {
-                    /* output an error message so the user knows what happened */
+                    /* output an error message so the user knows what happened.
+                     * A daemon we have never placed has no node, and this
+                     * message is the last thing that should turn a lost
+                     * daemon into a segfault in the HNP */
                     pmix_show_help("help-errmgr-base.txt", "node-died", true,
                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_process_info.nodename,
-                                   PRTE_NAME_PRINT(proc), pptr->node->name);
+                                   PRTE_NAME_PRINT(proc),
+                                   NULL == pptr->node ? "unknown" : pptr->node->name);
                 }
 
                 if (PRTE_SUCCESS == prte_rml_route_lost(proc->rank)) {
