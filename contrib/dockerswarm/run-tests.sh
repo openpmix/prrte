@@ -4433,6 +4433,22 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
                           || bad "expected pf.dat placed as a regular file on node2+node3, got $placed"
     fi
 
+    banner "filem: --preload-files keeps a relative subdirectory"
+    # A relative specification is the name the app will open the file by, so
+    # "sub/pf.dat" has to arrive as "sub/pf.dat" under each rank's working
+    # directory -- with the intermediate directory created for it. This is
+    # the only case that exercises place_file()'s dirpath creation, and the
+    # only one where the received name is not a bare basename.
+    docker exec "${NODE}1" sh -c 'mkdir -p /root/pfsub && echo SUBDIR-DATA-OK > /root/pfsub/pf.dat' >/dev/null 2>&1
+    for n in 2 3; do docker exec "$NODE$n" sh -c 'rm -rf /root/pfsub' >/dev/null 2>&1; done
+    out=$(RUN 'cd /root && prterun --host node2:1,node3:1 -np 2 --map-by node \
+                 --preload-files pfsub/pf.dat -- sh -c "cat pfsub/pf.dat"' 2>&1); rc=$?
+    hits=$(echo "$out" | grep -c 'SUBDIR-DATA-OK')
+    [ "$rc" = 0 ] && [ "$hits" = 2 ] \
+        && ok "a relative subdirectory was recreated in each rank's working directory" \
+        || bad "preload-files subdir failed (rc=$rc, hits=$hits): $(echo "$out" | tr '\n' ' ')"
+    for n in 1 2 3; do docker exec "$NODE$n" sh -c 'rm -rf /root/pfsub' >/dev/null 2>&1; done
+
     banner "filem: --preload-files keeps a staged file executable"
     # The chunk stream carries the source file's permissions, so a helper
     # script staged alongside the job arrives runnable. Nothing else in the
@@ -4477,6 +4493,49 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     c=$(prted_settle 10 1 2 3 4 5 6 7 8 9 10)
     [ "$c" = 0 ] && ok "no daemons linger after the refused preload" || bad "$c stray prted after refused preload"
     for n in 1 2 3; do docker exec "$NODE$n" sh -c 'rm -f /root/pf.dat' >/dev/null 2>&1; done
+
+    banner "filem: --preload-files reaches a node grown into the DVM later"
+    # positioned_files remembers what has already been broadcast so a second
+    # job in the same DVM does not resend it. That memory has to know how
+    # much of the DVM it covers: a file staged before a grow never reached
+    # the daemons that joined afterwards, and treating it as positioned
+    # launches procs there with the file simply absent -- no error anywhere,
+    # just an app that cannot open its input. Only an elastic DVM can show
+    # this, and only across two jobs: one job cannot outrun its own staging.
+    cleanup_swarm
+    docker exec "${NODE}1" sh -c 'echo REGROWN-DATA-OK > /root/pg.dat' >/dev/null 2>&1
+    for n in 2 3; do docker exec "$NODE$n" sh -c 'rm -f /root/pg.dat' >/dev/null 2>&1; done
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if ! RUN 'pgrep -x prte >/dev/null'; then
+        bad "could not start an elastic DVM for the preload-after-grow test"
+    elif ! pmix_cap PMIX_CAP_TOOL_FINALIZED; then
+        # without it the grown nodes stay reserved to the exited elastic
+        # tool, so a later prun cannot be placed on them by name
+        skp "preload after grow (PMIx predates PMIX_CAP_TOOL_FINALIZED)"
+    else
+        out=$(RUN 'timeout 90 elastic grow node2:1' 2>&1)
+        echo "$out" | grep -q PMIX_DVM_IS_READY \
+            && ok "grow node2 completed" || bad "grow node2 did not complete"
+        sleep 2
+        out=$(RUN 'cd /root && timeout 60 prun --host node2:1 -np 1 \
+                     --preload-files /root/pg.dat -- sh -c "cat pg.dat"' 2>&1)
+        echo "$out" | grep -q REGROWN-DATA-OK \
+            && ok "the file was staged to the DVM as it stood" \
+            || bad "first staging failed: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        # now widen the DVM and ask for the SAME file on the new node
+        out=$(RUN 'timeout 90 elastic grow node3:1' 2>&1)
+        echo "$out" | grep -q PMIX_DVM_IS_READY \
+            && ok "grow node3 completed" || bad "grow node3 did not complete"
+        sleep 2
+        out=$(RUN 'cd /root && timeout 60 prun --host node3:1 -np 1 \
+                     --preload-files /root/pg.dat -- sh -c "cat pg.dat"' 2>&1); rc=$?
+        echo "$out" | grep -q REGROWN-DATA-OK \
+            && ok "the same file was re-staged to the node grown in afterwards" \
+            || bad "preload did not reach the newly-grown node (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+    for n in 1 2 3; do docker exec "$NODE$n" sh -c 'rm -f /root/pg.dat' >/dev/null 2>&1; done
 
     banner "filem: --preload-files unpacks an archive whose name has a space"
     # Two things at once, both of which used to fail. The extract and the

@@ -47,3 +47,16 @@ Only one of them could be delivered, so the job has been aborted rather
 than silently choosing between them. Note that a file named by an absolute
 path is delivered under its basename; name the files by paths relative to a
 common directory, or rename one of them, and try again.
+#
+[preload-not-staged]
+A file requested for preloading never arrived on the node that was to run
+the processes using it:
+
+   File: %s
+   Node: %s
+
+The job has been aborted rather than started in a working directory that
+does not contain a file it was promised. This is an internal
+inconsistency - the job should not have been launched until every daemon
+acknowledged every file - so please report it, along with the output of
+"prte_info --all", at https://github.com/openpmix/prrte/issues.

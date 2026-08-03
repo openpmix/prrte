@@ -143,9 +143,15 @@ The framework entry point on the master. Steps:
 4. Create one `outbound` object, stash `cbfunc`/`cbdata`, append it to
    `outbound_files`.
 5. For each file set, **de-duplicate**: skip anything whose `src` already
-   appears in `positioned_files` (already sent) or in any in-flight
-   `outbound->xfers` (already queued). This is why the same file
-   referenced by multiple apps is broadcast only once.
+   appears in `positioned_files` **and reached at least as many daemons as
+   the DVM has now**, or appears in any in-flight `outbound->xfers`
+   (already queued). This is why the same file referenced by multiple apps
+   is broadcast only once — and why an **elastic** DVM that grew since the
+   last broadcast sends it again: the daemons that joined afterwards never
+   saw it, and skipping the resend would launch procs there with the file
+   simply absent, with no error anywhere. Any stale `positioned_files`
+   entry for a file being resent is dropped so the list cannot accumulate
+   one dead record per grow.
 6. `open()` the source `O_RDONLY`, set it `O_NONBLOCK`, build a
    `prte_filem_raw_xfer_t`, and `PRTE_PMIX_THREADSHIFT` it to
    `send_chunk`.
@@ -300,6 +306,13 @@ working directory:
 3. For each wanted file, find the matching `incoming` entry and, for each
    of its `link_pts`, `place_file()` it from `top_session_dir` into
    **`app->cwd`** (creating intermediate dirs as needed).
+4. Then check that every wanted file *had* an entry. It always should —
+   the HNP does not advance the job past pre-positioning until every daemon
+   has acked every file — but when the elastic dedup was wrong (see step 5
+   of `raw_preposition_files`) this is precisely where a job arrived with a
+   file that was never sent, and the only symptom was the app failing to
+   open it. It now names the missing file (`preload-not-staged`) and fails
+   the launch.
 
 `app->cwd` is the whole point: it is the directory every one of this app's
 procs will start in, whatever put them there — the user's cwd, `--wdir`, or
@@ -333,6 +346,11 @@ already resilient for the not-in-flight case.
   already-sent checks in `raw_preposition_files` compare against both
   `positioned_files` and in-flight `outbound->xfers`; keep both, or the
   same file gets broadcast repeatedly across successive jobs in a DVM.
+  The comparison is `same_source()` — `stat` identity, not `strcmp` —
+  because `./mesh.dat` and `mesh.dat` are the same file and two apps of one
+  job may name it each way. Read as different files they dedup as two
+  transfers *and*, worse, trip the clash check as "two different files
+  under one delivered name" and refuse a launch that was fine.
 - **Chunk-0 carries the metadata.** File `type` (and the fd-open
   decision) rides only on the first chunk; the zero-byte final chunk
   triggers finalize. Don't reorder or coalesce these.
@@ -467,10 +485,14 @@ real cross-daemon path is covered by the dockerswarm harness
 (`contrib/dockerswarm/run-tests.sh`): `--preload-binary` compiles a marker
 binary on node1 only and runs it on node2+node3; `--preload-files` writes a
 data file on node1 only and has the remote ranks read it back by its bare
-relative name out of their working directory; and the collision case plants
-a *different* file of that name on one node and requires the launch to be
-refused with that node's data intact. All three can only pass if the bytes
-were actually staged and placed. Run them (or an equivalent multi-node
-test) after touching the send/receive/placement paths — the
-`test/unit/filem` unit test only exercises the base classes and the "none"
-module, not delivery.
+relative name out of their working directory; a relative `sub/pf.dat`
+proves the directory component survives and is recreated; a `0755` script
+proves the mode crossed with the bytes; an archive named
+`"my run.v2.tar.gz"` proves both the shell quoting and the end-of-name
+suffix classification; the collision case plants a *different* file of that
+name on one node and requires the launch to be refused with that node's
+data intact; and a `..` inside the delivered name must be refused rather
+than resolved. None of them can pass unless the bytes were actually staged
+and placed. Run them (or an equivalent multi-node test) after touching the
+send/receive/placement paths — the `test/unit/filem` unit test covers the
+base classes, the "none" module, and the naming rules, but not delivery.
