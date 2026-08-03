@@ -3330,6 +3330,45 @@ test_grpcomm() {
         && ok "...and the DVM still launches an ordinary job afterwards" \
         || bad "the DVM did not run a plain job after the group tests ($n of 3)"
 
+    banner "grpcomm: a requested membership order is applied on every daemon"
+    # PMIX_GROUP_FINAL_MEMBERSHIP_ORDER is one of two construct directives
+    # that hand the DVM an array of procs, and that array belongs to the PMIx
+    # server which delivered the upcall -- PMIx frees it, arrays and all, once
+    # the operation completes.  The daemon has to COPY it into the group
+    # signature, whose destructor frees what it holds; pointing at it instead
+    # is a double free of live heap on every daemon that had a local
+    # participant.  So this case is as much about the DVM being alive
+    # afterwards as it is about the order.
+    #
+    # The order asked for is the ranks reversed, because that is the one
+    # answer the DVM cannot arrive at by accident: with no order given it
+    # sorts the membership itself, so a directive that was dropped on the
+    # floor is indistinguishable from the default unless the order is a
+    # permutation the sort would never produce.
+    out=$(PRUN "--host node1:2,node2:2,node3:2,node4:2 -n 8 --map-by node $GC --order g5" 2>&1)
+    n=$(echo "$out" | grep -c 'CONSTRUCT PMIX_SUCCESS')
+    [ "$n" = 8 ] \
+        && ok "all 8 ranks constructed a group with a final order" \
+        || bad "$n of 8 ranks constructed the ordered group: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    n=$(echo "$out" | awk '$1=="GRP" && $3=="ORDER" {print $4}' | sort -u | wc -l | tr -d ' ')
+    g=$(echo "$out" | awk '$1=="GRP" && $3=="ORDER" {print $4; exit}')
+    if [ "$n" != 1 ]; then
+        bad "daemons returned $n different membership orders"
+    elif [ "$g" = "7,6,5,4,3,2,1,0" ]; then
+        ok "...and every daemon returned the reversed order that was asked for"
+    else
+        bad "the requested order was not applied (got '${g:-nothing}')"
+    fi
+    ranks=$(echo "$out" | grep -c 'CID-OK 8')
+    [ "$ranks" = 8 ] \
+        && ok "...with the whole membership still readable from each rank" \
+        || bad "only $ranks of 8 ranks read back a full set after ordering"
+    out=$(PRUN "--host node1:1,node2:1,node3:1 -n 3 --map-by node hostname" 2>&1)
+    n=$(echo "$out" | grep -c '^node')
+    [ "$n" = 3 ] \
+        && ok "...and every daemon that carried the order is still running" \
+        || bad "the DVM lost a daemon to the ordered construct ($n of 3)"
+
     RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     cleanup_swarm
 

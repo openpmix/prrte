@@ -831,6 +831,15 @@ static prte_grpcomm_fence_t* get_tracker(prte_grpcomm_direct_fence_signature_t *
     return coll;
 }
 
+/* Same, for a caller outside this file. Exported only so the unit test can
+ * build a tracker and inspect what the rollup was sized to expect, which is
+ * where a fence goes wrong long before any message moves. */
+prte_grpcomm_fence_t *prte_grpcomm_direct_fence_get_tracker(prte_grpcomm_direct_fence_signature_t *sig,
+                                                            bool create)
+{
+    return get_tracker(sig, create);
+}
+
 static int create_dmns(prte_grpcomm_direct_fence_signature_t *sig,
                        pmix_rank_t **dmns, size_t *ndmns)
 {
@@ -860,14 +869,20 @@ static int create_dmns(prte_grpcomm_direct_fence_signature_t *sig,
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (NULL == sig->signature) ? "NULL" : "NON-NULL", sig->sz));
 
-    /* a signature naming nobody has no daemons behind it. This is not
-     * reachable from a local client, but the signature also arrives off the
-     * wire, where a truncated message unpacks to exactly this - and the
-     * nspace test below would read signature[0] of an array that is NULL */
-    if (0 == sig->sz || NULL == sig->signature) {
+    /* A signature has to name somebody. This is not reachable from a local
+     * client - the PMIx server hands us the participants it aggregated - but
+     * the signature also arrives off the wire, where a truncated message
+     * unpacks to an empty one. The test below would then read signature[0]
+     * of an array that is NULL; and an entry with no nspace is worse than
+     * that, because PMIX_CHECK_NSPACE answers "yes" for an empty nspace
+     * against anything, so it would be taken for a fence over the daemon job
+     * and sized to expect the whole DVM. Refuse it: the caller drops the
+     * message, which is the right answer for one we cannot read. */
+    if (0 == sig->sz || NULL == sig->signature ||
+        PMIX_NSPACE_INVALID(sig->signature[0].nspace)) {
         *dmns = NULL;
         *ndmns = 0;
-        return PRTE_SUCCESS;
+        return PRTE_ERR_BAD_PARAM;
     }
 
     /* if the target jobid is our own,
