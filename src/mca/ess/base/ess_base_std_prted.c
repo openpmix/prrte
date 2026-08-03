@@ -80,7 +80,6 @@ static bool signals_set = false;
 static prte_event_t term_handler;
 static prte_event_t int_handler;
 static prte_event_t epipe_handler;
-static char *log_path = NULL;
 static void shutdown_signal(int fd, short flags, void *arg);
 static void epipe_signal_callback(int fd, short flags, void *arg);
 
@@ -97,6 +96,7 @@ int prte_ess_base_prted_setup(void)
     char log_file[PRTE_PATH_MAX];
     char *error = NULL;
     char *tmp = NULL;
+    char *log_path = NULL;
     prte_job_t *jdata = NULL;
     prte_proc_t *proc;
     prte_app_context_t *app = NULL;
@@ -178,7 +178,12 @@ int prte_ess_base_prted_setup(void)
     /* create and store the job data object */
     jdata = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace);
-    prte_set_job_data_object(jdata);
+    ret = prte_set_job_data_object(jdata);
+    if (PRTE_SUCCESS != ret) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_set_job_data_object";
+        goto error;
+    }
     /* set the schizo personality to "prte" by default */
     jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy("prte");
     if (NULL == jdata->schizo) {
@@ -432,6 +437,9 @@ int prte_ess_base_prted_finalize(void)
         signals_set = false;
     }
 
+    /* first stage shutdown of the errmgr: deregister the handler but keep the
+     * required facilities until the rml and oob are offline - the framework
+     * itself is closed further down */
     if (NULL != prte_errmgr.finalize) {
         prte_errmgr.finalize();
     }
@@ -440,8 +448,6 @@ int prte_ess_base_prted_finalize(void)
     (void) pmix_mca_base_framework_close(&prte_filem_base_framework);
     (void) pmix_mca_base_framework_close(&prte_grpcomm_base_framework);
     (void) pmix_mca_base_framework_close(&prte_iof_base_framework);
-    /* first stage shutdown of the errmgr, deregister the handler but keep
-     * the required facilities until the rml and oob are offline */
     (void) pmix_mca_base_framework_close(&prte_plm_base_framework);
     /* make sure our local procs are dead */
     prte_odls.kill_local_procs(NULL);

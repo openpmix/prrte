@@ -3589,6 +3589,92 @@ test_grpcomm_ft() {
 # inherits the daemon PATH, which does not contain the install bindir.
 FLT=/opt/prte/prte/bin/faulty
 
+########################################################################
+# src/mca/ess -- daemon/HNP bring-up.  ess IS the bring-up, so nearly all
+# of it needs a live DVM by construction and the two pure parsers are
+# covered without one by test/unit/ess.  What lands here is what only a
+# real multi-node DVM can show.
+#
+# NOTE what is deliberately NOT here: forwarded signals.  That path is
+# tool-side -- prte/prun catch the signal and relay
+# PRTE_DAEMON_SIGNAL_LOCAL_PROCS over the RML -- and test_event already
+# covers the cross-node relay, with test_prted covering its job scoping.
+# A daemon installs no handlers of its own for those signals, so there is
+# nothing ess-specific left to assert here.
+########################################################################
+
+test_ess() {
+    local out rc n
+
+    banner "ess: every daemon derives a distinct identity"
+    # Each daemon's rank is ess_base_vpid plus a per-node index, summed in
+    # prte_ess_base_set_identity.  Get that sum wrong and two daemons claim
+    # the same rank, which is a silent failure: the DVM simply loses a node,
+    # with no error anywhere.  So the observable is that a job mapped
+    # one-per-node lands on as many DISTINCT hosts as there are nodes.
+    cleanup_swarm
+    if prted_dvm_start 'node1:1,node2:1,node3:1,node4:1'; then
+        out=$(PRUN '--host node1:1,node2:1,node3:1,node4:1 -n 4 --map-by node hostname' 2>&1)
+        n=$(echo "$out" | grep -cE '^node[0-9]+$')
+        [ "$n" = 4 ] && ok "all four daemons accepted work" \
+                     || bad "expected 4 procs, got $n: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        n=$(echo "$out" | grep -E '^node[0-9]+$' | sort -u | wc -l | tr -d ' ')
+        [ "$n" = 4 ] && ok "...on four distinct nodes, so no two daemons share a rank" \
+                     || bad "only $n distinct nodes -- daemon ranks collided"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the daemon-identity test"
+    fi
+    cleanup_swarm
+
+    banner "ess: a bad forward-signals request is refused, not ignored"
+    # prte_ess_base_setup_signals parses the list on the TOOL.  A signal
+    # number this platform cannot deliver used to be accepted silently: the
+    # handler install then failed with nothing said, so the user got no
+    # forwarding and no diagnostic.  It must be refused up front, and by
+    # NUMBER as well as by name -- those are separate parse branches and a
+    # check added to one is easy to leave off the other.
+    #
+    # This runs on one node by nature; it is here rather than only in the
+    # unit test because it is the end-to-end proof that the refusal actually
+    # reaches the user through a real tool invocation.
+    cleanup_swarm
+    out=$(RUN 'timeout -k 5 30 prterun --prtemca ess_base_forward_signals 999 --host node1:1 -n 1 hostname' 2>&1)
+    rc=$?
+    [ "$rc" != 0 ] && ok "an out-of-range signal number was refused (rc=$rc)" \
+                   || bad "signal number 999 was accepted"
+    echo "$out" | grep -q 'not a recognized signal' \
+        && ok "...with a diagnostic naming it" \
+        || bad "no diagnostic for the bad signal number: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    out=$(RUN 'timeout -k 5 30 prterun --prtemca ess_base_forward_signals SIGKILL --host node1:1 -n 1 hostname' 2>&1)
+    echo "$out" | grep -q 'does not support trapping' \
+        && ok "...and a non-forwardable signal is refused by name" \
+        || bad "SIGKILL was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    out=$(RUN 'timeout -k 5 30 prterun --prtemca ess_base_forward_signals 9 --host node1:1 -n 1 hostname' 2>&1)
+    echo "$out" | grep -q 'does not support trapping' \
+        && ok "...and by number, through the other parse branch" \
+        || bad "signal 9 was not refused the way SIGKILL is: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    cleanup_swarm
+
+    banner "ess: a daemon that cannot establish an identity fails cleanly"
+    # prte_ess_base_set_identity refuses a vpid that is not a plain number
+    # rather than letting strtoul read it as 0 -- which is the DVM
+    # controller's rank, so the daemon would adopt the HNP identity and the
+    # DVM would come apart later, nowhere near the cause.  A daemon started
+    # by hand with a bad vpid must die saying so, and must not join.
+    cleanup_swarm
+    out=$(ONT 2 'timeout -k 5 20 prted --prtemca ess_base_nspace bogus-dvm \
+                     --prtemca ess_base_vpid not-a-number \
+                     --prtemca prte_hnp_uri "bogus-dvm.0;tcp://127.0.0.1:1" 2>&1' 2>&1)
+    echo "$out" | grep -qi 'not a valid non-negative number' \
+        && ok "a non-numeric daemon vpid is refused with a diagnostic" \
+        || bad "no bad-identity diagnostic: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    ON 2 'pgrep -x prted' >/dev/null 2>&1 \
+        && bad "the daemon stayed up despite having no valid identity" \
+        || ok "...and the daemon did not come up"
+    cleanup_swarm
+}
+
 test_errmgr() {
     local out rc n c
 
@@ -5073,6 +5159,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_runtime
 
     test_rml
+
+    test_ess
 
     test_errmgr
 
