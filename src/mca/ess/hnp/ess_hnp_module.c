@@ -166,6 +166,11 @@ static int rte_init(int argc, char **argv)
     jdata = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace);
     ret = prte_set_job_data_object(jdata);
+    if (PRTE_SUCCESS != ret) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_set_job_data_object";
+        goto error;
+    }
 
     /* set the schizo personality to "prte" by default */
     jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy("prte");
@@ -437,7 +442,9 @@ static int rte_finalize(void)
 {
     /* first stage shutdown of the errmgr, deregister the handler but keep
      * the required facilities until the rml is offline */
-    prte_errmgr.finalize();
+    if (NULL != prte_errmgr.finalize) {
+        prte_errmgr.finalize();
+    }
 
     /* close frameworks */
     (void) pmix_mca_base_framework_close(&prte_filem_base_framework);

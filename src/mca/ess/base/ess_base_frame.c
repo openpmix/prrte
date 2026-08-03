@@ -212,8 +212,14 @@ int prte_ess_base_set_identity(const char *offset_envar, int offset_adjust)
     PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, prte_ess_base_nspace);
     PRTE_PROC_MY_NAME->rank = (pmix_rank_t) rank;
 
-    /* the number of daemons in the DVM came along with the identity */
-    prte_process_info.num_daemons = prte_ess_base_num_procs;
+    /* The number of daemons in the DVM normally comes along with the
+     * identity - every launcher passes ess_base_num_procs.  Take it only if
+     * it is really there: the parameter defaults to -1, and assigning that to
+     * a pmix_rank_t would replace proc_info's sane initial value with
+     * 4294967295, which is what nidmap would then size its span from. */
+    if (0 < prte_ess_base_num_procs) {
+        prte_process_info.num_daemons = (pmix_rank_t) prte_ess_base_num_procs;
+    }
 
     PMIX_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output,
                          "ess: set name to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
