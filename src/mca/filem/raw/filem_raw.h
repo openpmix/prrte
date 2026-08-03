@@ -53,7 +53,6 @@ typedef struct {
     prte_event_t ev;
     int fd;
     prte_filem_raw_outbound_t *outbound;
-    prte_app_idx_t app_idx;
     bool pending;
     char *src;
     char *file;
@@ -67,7 +66,6 @@ PMIX_CLASS_DECLARATION(prte_filem_raw_xfer_t);
 
 typedef struct {
     pmix_list_item_t super;
-    prte_app_idx_t app_idx;
     prte_event_t ev;
     bool pending;
     int fd;

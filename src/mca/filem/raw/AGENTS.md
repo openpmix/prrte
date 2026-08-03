@@ -84,8 +84,11 @@ RML recv** on `PRTE_RML_TAG_FILEM_BASE` bound to `recv_files` (this fires
 on every node — HNP and daemons — since the HNP is also a target of its
 own broadcast). If it is the HNP, it also constructs `outbound_files` and
 `positioned_files` and posts a second persistent recv on
-`PRTE_RML_TAG_FILEM_BASE_RESP` bound to `recv_ack`. `raw_finalize` drains
-and destructs those lists.
+`PRTE_RML_TAG_FILEM_BASE_RESP` bound to `recv_ack`. `raw_finalize`
+**cancels both recvs** and then drains and destructs those lists — in an
+`--enable-mca-dso` build the framework close that follows unloads this
+component, so a recv left posted is an RML callback pointing into memory
+that is about to be unmapped.
 
 Three file-scoped lists hold all state:
 `outbound_files`/`positioned_files` (HNP) and `incoming_files` (every
@@ -368,6 +371,23 @@ already resilient for the not-in-flight case.
   `raw_init`. The base used to carry a second, never-posted service on that
   same tag; it has been removed rather than left as a collision waiting to
   happen. If a future component needs its own receive, give it its own tag.
+- **`raw_fault_handler` runs on daemons too**, where `outbound_files` was
+  never constructed (`raw_init` only builds it on the master). Guard any
+  new use of the HNP-only lists with `PRTE_PROC_IS_MASTER` —
+  `raw_preposition_files` now refuses outright off the master for the same
+  reason: appending to a list that was never constructed is not a failure
+  that announces itself.
+- **A PMIx status is not a PRTE status.** The receive path acks failures
+  back to the HNP, where the value becomes the completion callback's
+  status and then a job state; convert with `prte_pmix_convert_status()`
+  before it goes on the wire.
+- **The archive path blocks the progress thread.** `write_handler` runs
+  `tar` through `system()` (and `link_archive` through `popen()`) while the
+  daemon's event loop waits. It also `chdir`s the whole process for the
+  duration. Nothing else can run meanwhile, which is exactly why nothing
+  else observes the changed cwd — but a very large archive stalls the
+  daemon. If that ever matters, move the extraction off the progress
+  thread rather than trying to make the `chdir` safe.
 - **On an error, unlink an object from its list *before* releasing it.**
   Several receive-side error paths add an `incoming` (or `xfer`) to a
   file-scoped list and, on a later failure, must both
