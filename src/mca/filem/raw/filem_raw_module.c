@@ -286,6 +286,7 @@ static int raw_preposition_files(prte_job_t *jdata,
     prte_filem_raw_outbound_t *outbound, *optr;
     char *cptr, *nxt, *filestring;
     pmix_list_t fsets;
+    struct stat sbuf;
     bool already_sent;
 
     PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
@@ -582,6 +583,16 @@ static int raw_preposition_files(prte_job_t *jdata,
         /* save the source so we can avoid duplicate transfers */
         xfer->src = strdup(fs->local_target);
         xfer->fd = fd;
+        /* carry the source file's permissions along with its bytes - a
+         * staged helper script that arrives unreadable or non-executable
+         * is not the file the user asked us to deliver. Nothing else in
+         * the chunk stream describes the file, so if this is not sent the
+         * receiver has to guess, and it used to guess "0600, unless the
+         * whole thing was flagged as the executable".
+         */
+        if (0 == fstat(fd, &sbuf)) {
+            xfer->mode = (uint32_t)(sbuf.st_mode & 0777);
+        }
         /* remote_target was normalized and validated above - it is already
          * the relative name the receiving daemon is to write it under
          */
@@ -803,15 +814,17 @@ static int place_file(char *my_dir, char *wdir, char *fname)
         rc = PRTE_ERR_FILE_OPEN_FAILURE;
         goto cleanup;
     }
-    /* the staging path knows only whether the file was executable, so that
-     * is all we carry across: give the copy the user's default permissions
-     * for a file of that kind by letting their umask trim it
+    /* the staged copy carries the source file's permissions (recv_files
+     * sets them from the sender), and those are what the user asked us to
+     * deliver - a helper script staged 0755 has to arrive executable. So
+     * give the placed copy the same, and chmod after the fact because
+     * open() would otherwise let this process's umask trim a mode the
+     * user chose deliberately.
      */
     mode = S_IRUSR | S_IWUSR;
-    if (0 == fstat(fsrc, &sbuf) && 0 != (sbuf.st_mode & S_IXUSR)) {
-        mode |= S_IXUSR;
+    if (0 == fstat(fsrc, &sbuf)) {
+        mode = (sbuf.st_mode & 0777) | S_IRUSR | S_IWUSR;
     }
-    mode |= (mode >> 3) | (mode >> 6);
     /* write a temporary alongside the target and rename it into place. The
      * rename is atomic, so a proc never sees a half-written file - which
      * matters when the working directory is shared and several daemons are
@@ -829,6 +842,11 @@ static int place_file(char *my_dir, char *wdir, char *fname)
         free(tmpname);
         tmpname = NULL;
         goto cleanup;
+    }
+    if (0 != fchmod(fdest, mode)) {
+        PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
+                             "%s filem:raw: could not set mode on %s",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), tmpname));
     }
     while (0 < (nb = read_bytes(fsrc, data, sizeof(data)))) {
         if (PRTE_SUCCESS != (rc = write_bytes(fdest, data, (size_t) nb))) {
@@ -1129,9 +1147,12 @@ static void send_chunk(int xxx, short argc, void *cbdata)
     if (PMIX_SUCCESS == rc) {
         rc = PMIx_Data_pack(NULL, &chunk, data, numbytes, PMIX_BYTE);
     }
-    /* if it is the first chunk, then add the file type */
+    /* if it is the first chunk, then add the file type and permissions */
     if (PMIX_SUCCESS == rc && 0 == rev->nchunk) {
         rc = PMIx_Data_pack(NULL, &chunk, &rev->type, 1, PMIX_INT32);
+        if (PMIX_SUCCESS == rc) {
+            rc = PMIx_Data_pack(NULL, &chunk, &rev->mode, 1, PMIX_UINT32);
+        }
     }
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
@@ -1273,6 +1294,7 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     prte_filem_raw_incoming_t *ptr, *incoming;
     pmix_list_item_t *item;
     int32_t type = PRTE_FILEM_TYPE_UNKNOWN;
+    uint32_t mode = 0;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
     /* unpack the data */
@@ -1319,6 +1341,10 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     if (0 == nchunk) {
         n = 1;
         rc = PMIx_Data_unpack(NULL, buffer, &type, &n, PMIX_INT32);
+        if (PMIX_SUCCESS == rc) {
+            n = 1;
+            rc = PMIx_Data_unpack(NULL, buffer, &mode, &n, PMIX_UINT32);
+        }
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             send_complete(file, rc);
@@ -1359,6 +1385,10 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
         session_dir = prte_process_info.top_session_dir;
 
         incoming->fullpath = pmix_os_path(false, session_dir, file, NULL);
+        /* the sender's permissions, less anything that would stop us
+         * writing the file we are about to write
+         */
+        incoming->mode = (mode & 0777) | S_IRUSR | S_IWUSR;
 
         PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                              "%s filem:raw: opening target file %s",
@@ -1379,30 +1409,26 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
             return;
         }
         /* open the file descriptor for writing */
-        if (PRTE_FILEM_TYPE_EXE == type) {
-            if (0
-                > (incoming->fd = open(incoming->fullpath, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU))) {
-                pmix_output(0, "%s CANNOT CREATE FILE %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            incoming->fullpath);
-                send_complete(file, PRTE_ERR_FILE_WRITE_FAILURE);
-                free(file);
-                free(tmp);
-                pmix_list_remove_item(&incoming_files, &incoming->super);
-                PMIX_RELEASE(incoming);
-                return;
-            }
-        } else {
-            if (0 > (incoming->fd = open(incoming->fullpath, O_RDWR | O_CREAT | O_TRUNC,
-                                         S_IRUSR | S_IWUSR))) {
-                pmix_output(0, "%s CANNOT CREATE FILE %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            incoming->fullpath);
-                send_complete(file, PRTE_ERR_FILE_WRITE_FAILURE);
-                free(file);
-                free(tmp);
-                pmix_list_remove_item(&incoming_files, &incoming->super);
-                PMIX_RELEASE(incoming);
-                return;
-            }
+        incoming->fd = open(incoming->fullpath, O_RDWR | O_CREAT | O_TRUNC,
+                            (mode_t) incoming->mode);
+        if (0 > incoming->fd) {
+            pmix_output(0, "%s CANNOT CREATE FILE %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        incoming->fullpath);
+            send_complete(file, PRTE_ERR_FILE_WRITE_FAILURE);
+            free(file);
+            free(tmp);
+            pmix_list_remove_item(&incoming_files, &incoming->super);
+            PMIX_RELEASE(incoming);
+            return;
+        }
+        /* open() only applies the mode when it creates the file, and it
+         * trims it by our umask; the staged copy is ours alone, so give
+         * it exactly what the sender had
+         */
+        if (0 != fchmod(incoming->fd, (mode_t) incoming->mode)) {
+            PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
+                                 "%s filem:raw: could not set mode on %s",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), incoming->fullpath));
         }
         free(tmp);
         incoming->pending = true;
@@ -1590,6 +1616,7 @@ static void xfer_construct(prte_filem_raw_xfer_t *ptr)
 {
     memset(&ptr->ev, 0, sizeof(prte_event_t));
     ptr->fd = -1;
+    ptr->mode = S_IRUSR | S_IWUSR;
     ptr->outbound = NULL;
     ptr->app_idx = 0;
     ptr->pending = false;
@@ -1637,6 +1664,7 @@ static void in_construct(prte_filem_raw_incoming_t *ptr)
     ptr->fd = -1;
     ptr->file = NULL;
     ptr->fullpath = NULL;
+    ptr->mode = S_IRUSR | S_IWUSR;
     ptr->link_pts = NULL;
     PMIX_CONSTRUCT(&ptr->outputs, pmix_list_t);
 }
