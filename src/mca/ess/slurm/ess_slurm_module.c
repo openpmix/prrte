@@ -117,13 +117,16 @@ static int slurm_set_name(void)
         return rc;
     }
 
-    /* fix up the system info nodename to match exactly what slurm returned */
-    if (NULL != prte_process_info.nodename) {
-        free(prte_process_info.nodename);
-    }
+    /* fix up the system info nodename to match exactly what slurm returned.
+     * Read the replacement BEFORE discarding what we have: releasing it first
+     * and then failing would leave prte_process_info.nodename dangling for
+     * every later reader - including the error path we are about to take. */
     if (NULL == (tmp = getenv("SLURMD_NODENAME"))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
+    }
+    if (NULL != prte_process_info.nodename) {
+        free(prte_process_info.nodename);
     }
     prte_process_info.nodename = strdup(tmp);
 
