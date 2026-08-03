@@ -37,6 +37,7 @@ int prte_grpcomm_base_select(void)
     prte_grpcomm_base_component_t *best_component = NULL;
     prte_grpcomm_base_module_t *best_module = NULL;
     pmix_status_t rc;
+    int ret;
 
     /*
      * Select the best component
@@ -52,9 +53,14 @@ int prte_grpcomm_base_select(void)
 
     /* Save the winner */
     prte_grpcomm = *best_module;
-    /* give it a chance to initialize */
+    /* give it a chance to initialize. A module that cannot initialize has
+     * no trackers and no RML receives, so every collective from here on
+     * would quietly do nothing - say so instead of reporting success */
     if (NULL != prte_grpcomm.init) {
-        prte_grpcomm.init();
+        ret = prte_grpcomm.init();
+        if (PRTE_SUCCESS != ret) {
+            return ret;
+        }
     }
 
     return PRTE_SUCCESS;
