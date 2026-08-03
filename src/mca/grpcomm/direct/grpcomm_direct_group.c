@@ -87,12 +87,23 @@ static int pack_epoch_frame(pmix_data_buffer_t *framed, pmix_data_buffer_t *body
 static pmix_status_t copy_directive_procs(const pmix_info_t *dir,
                                           pmix_proc_t **procs, size_t *nprocs)
 {
-    pmix_data_array_t *darray = dir->value.data.darray;
+    pmix_data_array_t *darray;
 
-    if (PMIX_DATA_ARRAY != dir->value.type || NULL == darray ||
-        NULL == darray->array || 0 == darray->size) {
+    if (PMIX_DATA_ARRAY != dir->value.type) {
         /* nothing usable was given - not an error, just no members */
         return PMIX_SUCCESS;
+    }
+    darray = dir->value.data.darray;
+    if (NULL == darray || NULL == darray->array || 0 == darray->size) {
+        return PMIX_SUCCESS;
+    }
+    /* The element type has to be checked, not assumed: this array reaches us
+     * from a client's info array, and the copy below is sized in
+     * pmix_proc_t. An array of anything smaller would have us read past the
+     * end of it - by a factor, not by a few bytes. */
+    if (PMIX_PROC != darray->type) {
+        PMIX_ERROR_LOG(PMIX_ERR_TYPE_MISMATCH);
+        return PMIX_ERR_TYPE_MISMATCH;
     }
     if (NULL != *procs) {
         /* a second directive of the same key - the PMIx server aggregates
