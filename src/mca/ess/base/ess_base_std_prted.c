@@ -419,8 +419,19 @@ int prte_ess_base_prted_setup(void)
     return PRTE_SUCCESS;
 
 error:
-    pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
-                   error, PRTE_ERROR_NAME(ret), ret);
+    /* Several steps above deliberately set PRTE_ERR_SILENT precisely because
+     * they have already shown their own, more specific diagnostic - honor
+     * that here rather than following it with this generic one, the same way
+     * every ess module's error path does. */
+    if (PRTE_ERR_SILENT != ret && !prte_report_silent_errors) {
+        pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
+                       error, PRTE_ERROR_NAME(ret), ret);
+    }
+    if (NULL != forward_signals_events) {
+        free(forward_signals_events);
+        forward_signals_events = NULL;
+        signals_set = false;
+    }
     if (NULL != jdata) {
         PMIX_RELEASE(jdata);
     }
