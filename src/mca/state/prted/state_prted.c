@@ -334,7 +334,7 @@ static void track_procs(int fd, short argc, void *cbdata)
     pmix_proc_t *proc;
     prte_proc_state_t state;
     prte_job_t *jdata;
-    prte_proc_t *pdata, *pptr;
+    prte_proc_t *pdata, *pptr, *proct;
     pmix_data_buffer_t *alert;
     int rc, i;
     prte_plm_cmd_flag_t cmd;
@@ -490,14 +490,20 @@ static void track_procs(int fd, short argc, void *cbdata)
          * remain (might be some from another job)
          */
         if (prte_prteds_term_ordered && 0 == prte_rml_base.n_children) {
+            /* NOTE: this scan gets its own variable.  "pdata" is the proc
+             * whose state we are handling, and every other statement in this
+             * arm reads it; using it as the loop variable here happens to be
+             * harmless only because both ways out of the loop leave the arm
+             * immediately.  The identical shortcut in errmgr/prted did not
+             * have that luxury and reported the wrong proc to the HNP. */
             for (i = 0; i < prte_local_children->size; i++) {
-                pdata = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
-                if (NULL != pdata && PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_ALIVE)) {
+                proct = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
+                if (NULL != proct && PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE)) {
                     /* at least one is still alive */
                     PMIX_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
                                          "%s state:prted all routes gone but proc %s still alive",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                         PRTE_NAME_PRINT(&pdata->name)));
+                                         PRTE_NAME_PRINT(&proct->name)));
                     goto cleanup;
                 }
             }
