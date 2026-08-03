@@ -2270,12 +2270,12 @@ static prte_grpcomm_group_t *get_tracker(prte_grpcomm_direct_group_signature_t *
     // save the participating procs
     coll->sig->nmembers = sig->nmembers;
     if (0 < sig->nmembers) {
-        coll->sig->members = (pmix_proc_t *) malloc(coll->sig->nmembers * sizeof(pmix_proc_t));
+        PMIX_PROC_CREATE(coll->sig->members, coll->sig->nmembers);
         memcpy(coll->sig->members, sig->members, coll->sig->nmembers * sizeof(pmix_proc_t));
     }
     coll->sig->naddmembers = sig->naddmembers;
     if (0 < sig->naddmembers) {
-        coll->sig->addmembers = (pmix_proc_t *) malloc(coll->sig->naddmembers * sizeof(pmix_proc_t));
+        PMIX_PROC_CREATE(coll->sig->addmembers, coll->sig->naddmembers);
         memcpy(coll->sig->addmembers, sig->addmembers, coll->sig->naddmembers * sizeof(pmix_proc_t));
     }
     // save any final membership order that was given - the match path

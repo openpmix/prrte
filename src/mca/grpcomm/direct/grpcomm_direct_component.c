@@ -62,8 +62,10 @@ static void scon(prte_grpcomm_direct_fence_signature_t *p)
 }
 static void sdes(prte_grpcomm_direct_fence_signature_t *p)
 {
+    /* PMIX_PROC_FREE, not free(): every populator of this array builds it
+     * with PMIX_PROC_CREATE, which allocates inside the PMIx library */
     if (NULL != p->signature) {
-        free(p->signature);
+        PMIX_PROC_FREE(p->signature, p->sz);
     }
 }
 PMIX_CLASS_INSTANCE(prte_grpcomm_direct_fence_signature_t,
@@ -92,11 +94,12 @@ static void sgdes(prte_grpcomm_direct_group_signature_t *p)
     if (NULL != p->groupID) {
         free(p->groupID);
     }
+    /* PMIX_PROC_FREE, not free(): see the note in sdes() above */
     if (NULL != p->members) {
-        free(p->members);
+        PMIX_PROC_FREE(p->members, p->nmembers);
     }
     if (NULL != p->addmembers) {
-        free(p->addmembers);
+        PMIX_PROC_FREE(p->addmembers, p->naddmembers);
     }
     if (NULL != p->final_order) {
         PMIX_PROC_FREE(p->final_order, p->nfinal);

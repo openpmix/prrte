@@ -341,8 +341,10 @@ static void fence(int sd, short args, void *cbdata)
     /* compute the signature of this collective */
     PMIX_CONSTRUCT(&sig, prte_grpcomm_direct_fence_signature_t);
     sig.sz = cd->nprocs;
-    sig.signature = (pmix_proc_t *) malloc(sig.sz * sizeof(pmix_proc_t));
-    memcpy(sig.signature, cd->procs, sig.sz * sizeof(pmix_proc_t));
+    if (0 < sig.sz) {
+        PMIX_PROC_CREATE(sig.signature, sig.sz);
+        memcpy(sig.signature, cd->procs, sig.sz * sizeof(pmix_proc_t));
+    }
 
     /* retrieve an existing tracker, create it if not
      * already found. The fence module is responsible
@@ -875,7 +877,7 @@ static prte_grpcomm_fence_t* get_tracker(prte_grpcomm_direct_fence_signature_t *
     coll->sig = PMIX_NEW(prte_grpcomm_direct_fence_signature_t);
     coll->sig->sz = sig->sz;
     if (0 < coll->sig->sz) {
-        coll->sig->signature = (pmix_proc_t *) malloc(coll->sig->sz * sizeof(pmix_proc_t));
+        PMIX_PROC_CREATE(coll->sig->signature, coll->sig->sz);
         memcpy(coll->sig->signature, sig->signature, coll->sig->sz * sizeof(pmix_proc_t));
     }
     pmix_list_append(&prte_mca_grpcomm_direct_component.fence_ops, &coll->super);
