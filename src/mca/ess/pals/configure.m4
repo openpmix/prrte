@@ -32,12 +32,18 @@ AC_DEFUN([MCA_prte_ess_pals_CONFIG],[
 
     # if check worked, set wrapper flags if so.
     # Evaluate succeed / fail
-    AS_IF([test "$ess_pals_good" = "1"],
+    #
+    # --enable-testbuild-launchers also builds this component where PALS is
+    # absent, so it is compiled somewhere.  Unlike the plm/ras launchers this
+    # needs no stub headers and carries no unresolved symbols: the module
+    # reads PALS_NODEID and the component reads PALS_APID, and that is the
+    # whole of its PALS dependency.  It had drifted into not compiling at all
+    # under -Wall -Wextra -Werror precisely because no ordinary build ever
+    # reaches it.
+    AS_IF([test "$ess_pals_good" = "1" || test "$prte_testbuild_launchers" = "1"],
           [$1],
           [$2])
 
-    # set build flags to use in makefile
-    AC_SUBST([ess_pals_CPPFLAGS])
-    AC_SUBST([ess_pals_LDFLAGS])
-    AC_SUBST([ess_pals_LIBS])
+    # No AC_SUBST of the wrapper flags: this component links nothing from
+    # PALS, so its Makefile.am never referenced them.
 ])dnl

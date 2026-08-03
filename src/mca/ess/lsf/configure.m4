@@ -30,12 +30,19 @@ AC_DEFUN([MCA_prte_ess_lsf_CONFIG],[
 
     # if check worked, set wrapper flags if so.
     # Evaluate succeed / fail
-    AS_IF([test "$ess_lsf_good" = "1"],
+    #
+    # --enable-testbuild-launchers also builds this component where LSF is
+    # absent, so it is compiled somewhere.  Unlike the plm/ras launchers this
+    # needs no stub headers and carries no unresolved symbols - as the
+    # Makefile.am says, the plugin calls no LSF library function at all: the
+    # module reads LSF_PM_TASKID and the component reads LSB_JOBID, and that
+    # is the whole of its LSF dependency.  It had drifted into not compiling
+    # at all under -Wall -Wextra -Werror precisely because no ordinary build
+    # ever reaches it.
+    AS_IF([test "$ess_lsf_good" = "1" || test "$prte_testbuild_launchers" = "1"],
           [$1],
           [$2])
 
-    # set build flags to use in makefile
-    AC_SUBST([ess_lsf_CPPFLAGS])
-    AC_SUBST([ess_lsf_LDFLAGS])
-    AC_SUBST([ess_lsf_LIBS])
+    # No AC_SUBST of the wrapper flags: this component links nothing from
+    # LSF, so its Makefile.am never referenced them.
 ])dnl
