@@ -63,11 +63,10 @@ it — that ordering is load-bearing.
 filem/
   filem.h                     # module/component vtable + the request/file-set/process-set classes
   base/
-    base.h                    # framework-global decls, the "none" no-op prototypes, base comm API
+    base.h                    # framework-global decls and the "none" no-op prototypes
     filem_base_frame.c        # framework open/close; the default "none" prte_filem module
     filem_base_select.c       # component selection — classic PICK-ONE (single winner)
     filem_base_fns.c          # the request/file-set/process-set PMIX_CLASS_INSTANCEs + all "none" no-ops
-    filem_base_receive.c      # dormant base RML service: remote-path / node-name query commands
     owner.txt                 # owner/status (INTEL, maintenance)
   raw/                        # the ONLY component (pri 0): xcast-based chunked staging
 ```
@@ -140,8 +139,8 @@ module is what you get only if `raw` is unbuilt/unselected.
 
 ## What `base/` provides
 
-The base is thin. It contributes the data classes, the no-op fallback
-module, and a (currently dormant) RML query service.
+The base is thin. It contributes the data classes and the no-op fallback
+module.
 
 ### Data structures (`filem.h` + `filem_base_fns.c`)
 
@@ -186,38 +185,17 @@ the DVM the first time a daemon failed while filem was unselected. If you
 add a field to the module vtable, give the none module a no-op for it and
 confirm no unconditional caller dereferences a NULL slot.
 
-### The dormant base RML service (`filem_base_receive.c`)
+### There is no base RML service
 
-`base.h` declares a small RML service — `prte_filem_base_comm_start()`,
-`prte_filem_base_comm_stop()`, and the `prte_filem_base_recv()` handler
-— that answers two commands on `PRTE_RML_TAG_FILEM_BASE`:
-
-- `PRTE_FILEM_GET_PROC_NODE_NAME_CMD` — given a `pmix_proc`, reply with
-  the name of the node that proc is on (looked up via
-  `prte_get_job_data_object` / the job's proc array).
-- `PRTE_FILEM_GET_REMOTE_PATH_CMD` — given a filename, resolve it to an
-  absolute path (prepending `getcwd` if relative), `stat` it, and reply
-  with the absolute path plus a file-type code
-  (`FILE`/`DIR`/`UNKNOWN`).
-
-This is scaffolding for a put/get-style component that needs to
-negotiate remote absolute paths before transferring. **No code in the
-tree currently calls `prte_filem_base_comm_start`, and the `raw`
-component runs its own receives instead**, so these handlers are
-effectively dead today — accurate to note, and a place to be careful:
-`raw` and this base service would both claim `PRTE_RML_TAG_FILEM_BASE`
-if the base service were ever started. The global
-`prte_filem_base_is_active` bool is likewise defined but currently
-unused.
-
-Because it is dead code it accumulated latent bugs; two were recently
-corrected and are worth knowing if you ever revive it. `comm_stop`'s
-"already stopped?" guard was inverted (`if (recv_issued)` instead of
-`if (!recv_issued)`), so it early-returned without ever cancelling the
-recv. And `filem_base_process_get_remote_path_cmd` leaked the unpacked
-`filename` on the `getcwd`-failure path (it `return`ed instead of
-`goto CLEANUP`). If you start posting this service for real, audit its
-error paths first.
+The base used to carry a `prte_filem_base_comm_start()` /
+`prte_filem_base_recv()` service answering remote-path and node-name
+queries on `PRTE_RML_TAG_FILEM_BASE` — scaffolding for a put/get-style
+component that would need to negotiate remote absolute paths. Nothing in
+the tree ever posted it, `raw` runs its own receive on that same tag, and
+the two would have collided the moment anybody started it. It has been
+removed along with `prte_filem_base_is_active` and the
+`PRTE_FILEM_*_CMD` command codes. If a future component needs that
+negotiation, write it in the component — and give it its own tag.
 
 ---
 
