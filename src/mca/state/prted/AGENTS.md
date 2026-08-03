@@ -23,7 +23,7 @@ Files:
 | File | Contents |
 |------|----------|
 | `state_prted_component.c` | Registration; `query` returns priority 100 + the module only when `PRTE_PROC_IS_DAEMON`. |
-| `state_prted.c` | The module vtable, the short job/proc state tables, `init`/`finalize`, and the daemon-side handlers (`track_jobs`, `track_procs`) plus the state-update packers. |
+| `state_prted.c` | The module vtable, the short job/proc state tables, `init`/`finalize`, and the daemon-side handlers (`track_jobs`, `track_procs`, `job_teardown`). The state-update packers it uses now live in `plm/base`. |
 | `state_prted.h` | Extern decls for `prte_mca_state_prted_component` and `prte_state_prted_module`. |
 
 Like the DVM component, `prte_state_prted_module` points all ten vtable
@@ -100,11 +100,21 @@ failed procs; `RUNNING` is packed for still-live procs to avoid a race),
 then reliable-sends the assembled buffer to `PRTE_PROC_MY_HNP`.
 
 ### Packers
-`pack_state_for_proc` (vpid/pid/state/exit-code for one proc) and
-`pack_state_update` (all not-yet-reported local children of a job,
-terminated with a `PMIX_RANK_INVALID` sentinel) build the
-`PRTE_PLM_UPDATE_PROC_STATE` payload; the latter sets
-`PRTE_PROC_FLAG_TERM_REPORTED` so a proc is reported exactly once.
+`PRTE_PLM_UPDATE_PROC_STATE` is built by
+`prte_plm_base_pack_state_for_proc` (vpid/pid/state/exit-code for one
+proc) and `prte_plm_base_pack_state_update` (a job's local children,
+terminated with a `PMIX_RANK_INVALID` sentinel). This component passes
+`skip_reported = true`, which packs only children not already flagged
+`PRTE_PROC_FLAG_TERM_REPORTED` and flags the ones it packs, so a proc is
+reported exactly once.
+
+Those two used to be statics here, and byte-identical statics in
+`errmgr/prted` as well. They now live in
+[`plm/base/plm_base_receive.c`](../../plm/base/plm_base_receive.c),
+beside `prte_plm_base_recv()` — the only thing that ever reads what they
+write. The wire has no format version, so writer and reader must change
+together; one writer next to the reader is what makes that reliable, and
+`test/unit/plm` pins the round trip.
 
 ---
 

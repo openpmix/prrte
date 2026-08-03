@@ -69,6 +69,33 @@ PRTE_EXPORT void prte_plm_base_registered(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_plm_base_wrap_args(char **args);
 PRTE_EXPORT int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata);
 
+/* Build the body of a PRTE_PLM_UPDATE_PROC_STATE message.
+ *
+ * These are the writers for the format prte_plm_base_receive() reads, and
+ * they live beside it deliberately: the wire carries no version (mixed-
+ * version DVMs are forbidden), so a field added, dropped or retyped has to
+ * change reader and writer in one commit, and that is only enforceable if
+ * there is one writer to find.  There used to be three - errmgr/prted,
+ * state/prted, and a hand-rolled copy in prted_abort() - so a reader change
+ * meant grepping for the pattern and hoping.
+ *
+ * The message is: the command (PMIX_UINT8), then for each job its nspace
+ * (PMIX_PROC_NSPACE), then {rank, pid, state, exit_code} per proc, then a
+ * PMIX_RANK_INVALID rank saying that job is complete.
+ *
+ * pack_state_update() packs one job's nspace, its local children, and the
+ * terminator.  With skip_reported set it packs only children not already
+ * flagged PRTE_PROC_FLAG_TERM_REPORTED, and flags the ones it packs - the
+ * normal-termination path needs that; an error report does not.
+ *
+ * Covered by the round-trip test in test/unit/plm.
+ */
+PRTE_EXPORT int prte_plm_base_pack_state_for_proc(pmix_data_buffer_t *alert,
+                                                  prte_proc_t *child);
+PRTE_EXPORT int prte_plm_base_pack_state_update(pmix_data_buffer_t *alert,
+                                                prte_job_t *jobdat,
+                                                bool skip_reported);
+
 END_C_DECLS
 
 #endif

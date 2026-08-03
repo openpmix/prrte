@@ -25,6 +25,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/base/base.h"
+#include "src/mca/plm/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml.h"
 #include "src/prted/pmix/pmix_server_internal.h"
@@ -63,7 +64,6 @@ prte_state_base_module_t prte_state_prted_module = {
 /* Local functions */
 static void track_jobs(int fd, short argc, void *cbdata);
 static void track_procs(int fd, short argc, void *cbdata);
-static int pack_state_update(pmix_data_buffer_t *buf, prte_job_t *jdata);
 
 /* defined default state machines */
 static prte_job_state_t job_states[] = {
@@ -521,7 +521,7 @@ static void track_procs(int fd, short argc, void *cbdata)
                 goto cleanup;
             }
             /* pack the job info */
-            if (PRTE_SUCCESS != (rc = pack_state_update(alert, jdata))) {
+            if (PRTE_SUCCESS != (rc = prte_plm_base_pack_state_update(alert, jdata, true))) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(alert);
                 goto cleanup;
@@ -659,71 +659,3 @@ static void job_teardown(int fd, short argc, void *cbdata)
     PMIX_RELEASE(caddy);
 }
 
-static int pack_state_for_proc(pmix_data_buffer_t *alert, prte_proc_t *child)
-{
-    int rc;
-
-    /* pack the child's vpid */
-    rc = PMIx_Data_pack(NULL, alert, &child->name.rank, 1, PMIX_PROC_RANK);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return rc;
-    }
-    /* pack the pid */
-    rc = PMIx_Data_pack(NULL, alert, &child->pid, 1, PMIX_PID);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return rc;
-    }
-    /* pack its state */
-    rc = PMIx_Data_pack(NULL, alert, &child->state, 1, PMIX_UINT32);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return rc;
-    }
-    /* pack its exit code */
-    rc = PMIx_Data_pack(NULL, alert, &child->exit_code, 1, PMIX_INT32);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return rc;
-    }
-
-    return PRTE_SUCCESS;
-}
-
-static int pack_state_update(pmix_data_buffer_t *alert, prte_job_t *jdata)
-{
-    int i, rc;
-    prte_proc_t *child;
-    pmix_rank_t null = PMIX_RANK_INVALID;
-
-    /* pack the jobid */
-    rc = PMIx_Data_pack(NULL, alert, &jdata->nspace, 1, PMIX_PROC_NSPACE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return rc;
-    }
-    for (i = 0; i < prte_local_children->size; i++) {
-        if (NULL == (child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i))) {
-            continue;
-        }
-        /* if this child is part of the job and has not been
-         * previously reported... */
-        if (PMIX_CHECK_NSPACE(child->name.nspace, jdata->nspace) &&
-            !PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_TERM_REPORTED)) {
-            if (PRTE_SUCCESS != (rc = pack_state_for_proc(alert, child))) {
-                PRTE_ERROR_LOG(rc);
-                return rc;
-            }
-            PRTE_FLAG_SET(child, PRTE_PROC_FLAG_TERM_REPORTED);
-        }
-    }
-    /* flag that this job is complete so the receiver can know */
-    rc = PMIx_Data_pack(NULL, alert, &null, 1, PMIX_PROC_RANK);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return rc;
-    }
-
-    return PRTE_SUCCESS;
-}

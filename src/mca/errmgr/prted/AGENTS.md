@@ -50,21 +50,24 @@ the HNP. The wire format built by the packing helpers is, in order:
 1. `PRTE_PLM_UPDATE_PROC_STATE` command (`PMIX_UINT8`).
 2. the job nspace (`PMIX_PROC_NSPACE`).
 3. for each relevant proc: **rank, pid, state, exit_code**
-   (`prte_errmgr_base_pack_state_for_proc`).
+   (`prte_plm_base_pack_state_for_proc`).
 4. a terminator rank `PMIX_RANK_INVALID` marking the end / job complete.
 
 The buffer is delivered with `PRTE_RML_RELIABLE_SEND(rc,
 PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM)`.
-`prte_errmgr_base_pack_state_update` packs *all* local children of a job
+`prte_plm_base_pack_state_update` packs *all* local children of a job
 (steps 2–4). The single-proc paths pack the nspace and then exactly one
-`prte_errmgr_base_pack_state_for_proc` and **no terminator** — the reader
+`prte_plm_base_pack_state_for_proc` and **no terminator** — the reader
 loop ends on `PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER`, which it treats
 as a clean end, so the terminator is only needed to say "and the job is
-complete". Both packers now live in the base
-([framework guide](../AGENTS.md)) so that this format and its only reader,
-`prte_plm_base_receive()`, can be pinned together by
-`test/unit/errmgr`; the wire has no version, so a change to one without
-the other silently desynchronizes a running DVM.
+complete". Both packers live in
+[`plm/base/plm_base_receive.c`](../../plm/base/plm_base_receive.c),
+beside their only reader `prte_plm_base_recv()`, and are pinned to it by
+a round-trip test in `test/unit/plm`; the wire has no version, so a
+change to one without the other silently desynchronizes a running DVM.
+This component is one of two callers — `state/prted` sends the same
+message for a *normal* termination, passing `skip_reported` so a proc
+already flagged `PRTE_PROC_FLAG_TERM_REPORTED` is not sent twice.
 
 A per-job **dedup flag**, `PRTE_JOB_FAIL_NOTIFIED`, ensures the daemon
 reports a given job's failure to the HNP only once — except for
@@ -87,7 +90,7 @@ After the standard acquire / `finalizing` / daemon-job back-fill and
 - default → fall through.
 
 The fall-through path packs `PRTE_PLM_UPDATE_PROC_STATE` +
-`prte_errmgr_base_pack_state_update(alert, jdata)` and reliable-sends it
+`prte_plm_base_pack_state_update(alert, jdata, false)` and reliable-sends it
 to the HNP.
 
 The daemon-job back-fill gives up (with a `PRTE_ERROR_LOG`) if
@@ -149,12 +152,16 @@ Then, per specific application-proc state:
   the HNP once, set `PRTE_PROC_FLAG_TERM_REPORTED` and the
   `PRTE_JOB_FAIL_NOTIFIED` dedup flag, and activate `TERMINATED` if the
   proc is fully done.
-- **plain `TERMINATED`** (the final `else`) → if no live children of the
-  job remain (`prte_errmgr_base_any_live_children`), pack a full job state
-  update, **remove
-  this job's children from `prte_local_children` and `PMIX_RELEASE` the
-  jdata locally** (the job is complete on this node), then reliable-send
-  the update to the HNP.
+- **plain `TERMINATED`** → cannot reach this handler at all, and no
+  longer has code here. The state machine only falls back on the `ERROR`
+  registration for states *above* `PRTE_PROC_STATE_ERROR` (50), all of
+  which are above `PRTE_PROC_STATE_TERMINATED` (20). A normal termination
+  goes to `state/prted`'s `track_procs`, which is where the "job is
+  complete on this node" bookkeeping lives — the `PRTE_JOB_TERM_NOTIFIED`
+  dedup, the local-children cleanup, the IOF completion and the PMIx
+  notification. This component used to carry an unreachable partial copy
+  of that, dedup and IOF missing and a bare `PMIX_RELEASE(jdata)`
+  included; it is gone.
 
 Note the `WAITPID`/`IOF_COMPLETE`/`RECORDED` flag triad gates the final
 `PRTE_PROC_STATE_TERMINATED` activation — a proc is only "done" once both

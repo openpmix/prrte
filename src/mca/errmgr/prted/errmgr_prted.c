@@ -41,6 +41,7 @@
 #include "src/mca/ess/ess.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/base/base.h"
+#include "src/mca/plm/base/base.h"
 #include "src/mca/plm/plm_types.h"
 #include "src/rml/rml.h"
 #include "src/mca/state/state.h"
@@ -308,7 +309,7 @@ static void job_errors(int fd, short args, void *cbdata)
         goto cleanup;
     }
     /* pack the job info */
-    if (PMIX_SUCCESS != (rc = prte_errmgr_base_pack_state_update(alert, jdata))) {
+    if (PMIX_SUCCESS != (rc = prte_plm_base_pack_state_update(alert, jdata, false))) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(alert);
         goto cleanup;
@@ -330,11 +331,10 @@ static void proc_errors(int fd, short args, void *cbdata)
     prte_job_t *jdata;
     pmix_proc_t *proc;
     prte_proc_state_t state;
-    prte_proc_t *child, *ptr;
+    prte_proc_t *child;
     pmix_data_buffer_t *alert;
     prte_plm_cmd_flag_t cmd;
     int rc = PRTE_SUCCESS;
-    int i;
     prte_wait_tracker_t *t2;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
@@ -543,7 +543,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             }
 
             /* now pack the child's info */
-            if (PMIX_SUCCESS != (rc = prte_errmgr_base_pack_state_for_proc(alert, child))) {
+            if (PMIX_SUCCESS != (rc = prte_plm_base_pack_state_for_proc(alert, child))) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(alert);
                 goto cleanup;
@@ -609,7 +609,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             }
 
             /* now pack the child's info */
-            if (PMIX_SUCCESS != (rc = prte_errmgr_base_pack_state_for_proc(alert, child))) {
+            if (PMIX_SUCCESS != (rc = prte_plm_base_pack_state_for_proc(alert, child))) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(alert);
                 goto cleanup;
@@ -725,7 +725,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             }
             child->state = state;
             /* now pack the child's info */
-            if (PMIX_SUCCESS != (rc = prte_errmgr_base_pack_state_for_proc(alert, child))) {
+            if (PMIX_SUCCESS != (rc = prte_plm_base_pack_state_for_proc(alert, child))) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(alert);
                 goto cleanup;
@@ -759,51 +759,18 @@ static void proc_errors(int fd, short args, void *cbdata)
         goto cleanup;
     }
 
-    /* only other state is terminated - see if anyone is left alive */
-    if (!prte_errmgr_base_any_live_children(proc->nspace)) {
-        PMIX_DATA_BUFFER_CREATE(alert);
-        /* pack update state command */
-        cmd = PRTE_PLM_UPDATE_PROC_STATE;
-        rc = PMIx_Data_pack(NULL, alert, &cmd, 1, PMIX_UINT8);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(alert);
-            goto cleanup;
-        }
-        /* pack the data for the job */
-        if (PMIX_SUCCESS != (rc = prte_errmgr_base_pack_state_update(alert, jdata))) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(alert);
-            goto cleanup;
-        }
-
-        PMIX_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "%s errmgr:prted reporting all procs in %s terminated",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace)));
-
-        /* remove all of this job's children from the global list */
-        for (i = 0; i < prte_local_children->size; i++) {
-            ptr = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
-            if (NULL == ptr) {
-                continue;
-            }
-            if (PMIX_CHECK_NSPACE(jdata->nspace, ptr->name.nspace)) {
-                pmix_pointer_array_set_item(prte_local_children, i, NULL);
-                PMIX_RELEASE(ptr);
-            }
-        }
-
-        /* remove this job from our local job data since it is complete */
-        PMIX_RELEASE(jdata);
-
-        /* send it */
-        PRTE_RML_RELIABLE_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM);
-        if (PRTE_SUCCESS != rc) {
-            PRTE_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(alert);
-        }
-        goto cleanup;
-    }
+    /* Nothing else can arrive here.  This handler is registered for
+     * PRTE_PROC_STATE_COMM_FAILED and PRTE_PROC_STATE_ERROR, and the state
+     * machine only falls back on the ERROR registration for states ABOVE
+     * PRTE_PROC_STATE_ERROR (50) - all of which are above
+     * PRTE_PROC_STATE_TERMINATED (20) and so were taken by the branch just
+     * above.  A plain TERMINATED is handled by state/prted's track_procs,
+     * which is where the "job is complete on this node" bookkeeping lives:
+     * the PRTE_JOB_TERM_NOTIFIED dedup, the local-children cleanup, the IOF
+     * completion, and the PMIx notification.  This function used to carry a
+     * partial copy of that - one with no dedup, no IOF, and a bare
+     * PMIX_RELEASE(jdata) - which had been unreachable for as long as the
+     * ERROR states have been numbered above TERMINATED. */
 
 cleanup:
     PMIX_RELEASE(caddy);

@@ -68,6 +68,91 @@
 
 static bool recv_issued = false;
 
+/* The writers for the PRTE_PLM_UPDATE_PROC_STATE body.  They sit here, in
+ * the same file as prte_plm_base_recv() which is their only reader, because
+ * the wire has no format version: the pair has to change together, and one
+ * writer next to the reader is what makes that a mechanical rather than an
+ * archaeological exercise.  See base.h for the format. */
+int prte_plm_base_pack_state_for_proc(pmix_data_buffer_t *alert, prte_proc_t *child)
+{
+    int rc;
+
+    /* pack the child's vpid */
+    rc = PMIx_Data_pack(NULL, alert, &child->name.rank, 1, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return rc;
+    }
+    /* pack the pid */
+    rc = PMIx_Data_pack(NULL, alert, &child->pid, 1, PMIX_PID);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return rc;
+    }
+    /* pack its state */
+    rc = PMIx_Data_pack(NULL, alert, &child->state, 1, PMIX_UINT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return rc;
+    }
+    /* pack its exit code */
+    rc = PMIx_Data_pack(NULL, alert, &child->exit_code, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return rc;
+    }
+
+    return PRTE_SUCCESS;
+}
+
+int prte_plm_base_pack_state_update(pmix_data_buffer_t *alert, prte_job_t *jobdat,
+                                    bool skip_reported)
+{
+    int rc, i;
+    prte_proc_t *child;
+    pmix_rank_t null = PMIX_RANK_INVALID;
+
+    /* pack the jobid */
+    rc = PMIx_Data_pack(NULL, alert, &jobdat->nspace, 1, PMIX_PROC_NSPACE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return rc;
+    }
+    if (NULL != prte_local_children) {
+        for (i = 0; i < prte_local_children->size; i++) {
+            child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
+            if (NULL == child) {
+                continue;
+            }
+            /* if this child is part of the job... */
+            if (!PMIX_CHECK_NSPACE(child->name.nspace, jobdat->nspace)) {
+                continue;
+            }
+            /* ...and, if the caller is reporting a normal termination,
+             * has not already been reported */
+            if (skip_reported && PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_TERM_REPORTED)) {
+                continue;
+            }
+            rc = prte_plm_base_pack_state_for_proc(alert, child);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                return rc;
+            }
+            if (skip_reported) {
+                PRTE_FLAG_SET(child, PRTE_PROC_FLAG_TERM_REPORTED);
+            }
+        }
+    }
+    /* flag that this job is complete so the receiver can know */
+    rc = PMIx_Data_pack(NULL, alert, &null, 1, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return rc;
+    }
+
+    return PRTE_SUCCESS;
+}
+
 /* Resolve the PRTE_JOB_SPAWN_TARGET list (a comma-delimited list of
  * PMIX_ALLOC_ID strings, with an empty token denoting the default session)
  * into the job's validated target_sessions set. The requester must own every
