@@ -11,7 +11,7 @@
  *                         All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -145,6 +145,71 @@ static void req_destruct(prte_filem_base_request_t *req)
 }
 
 PMIX_CLASS_INSTANCE(prte_filem_base_request_t, pmix_list_item_t, req_construct, req_destruct);
+
+
+/**********************
+ * Path safety helpers
+ *
+ * A preloaded file is always delivered *inside* a directory PRRTE chooses
+ * (the node's session directory on the way in, the app's working directory
+ * on the way out). Keeping it there is a property of the name, so the
+ * naming rules live here, next to the classes that carry those names,
+ * where they can be tested without a DVM.
+ **********************/
+/* Strip any leading "./" and "../" components so a staged file can never
+ * step above the directory it is to be placed in. A name that merely
+ * *starts* with a dot but is not a dot-directory (".bashrc") is left alone.
+ * Returns a pointer into the string it was given.
+ */
+const char *prte_filem_base_strip_leading_dots(const char *path)
+{
+    const char *cptr = path;
+    const char *nxt = path + 1;
+
+    while ('\0' != *cptr) {
+        if ('.' == *cptr) {
+            /* have to check the next character to see if this is a dot
+             * directory or just a dot-file
+             */
+            if ('.' == *nxt || '/' == *nxt) {
+                cptr = nxt;
+                nxt++;
+            } else {
+                break;
+            }
+        } else if ('/' == *cptr) {
+            cptr = nxt;
+            nxt++;
+        } else {
+            /* the character isn't a dot or a slash, so this is the
+             * beginning of the filename
+             */
+            break;
+        }
+    }
+    return cptr;
+}
+
+/* Does any component of this relative path step upward? Stripping the
+ * *leading* dot directories is not enough: "a/../../f" has none at the
+ * front and still lands two levels above where it was meant to go, on
+ * every node of the DVM.
+ */
+bool prte_filem_base_has_dotdot(const char *path)
+{
+    const char *p = path;
+
+    while (NULL != p) {
+        if ('.' == p[0] && '.' == p[1] && ('/' == p[2] || '\0' == p[2])) {
+            return true;
+        }
+        p = strchr(p, '/');
+        if (NULL != p) {
+            ++p;
+        }
+    }
+    return false;
+}
 
 /***********************
  * None component stuff

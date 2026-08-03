@@ -56,6 +56,33 @@ An archive |mdash| a file whose name ends in ``.tar``, ``.bz`` or ``.gz``
 the archive names them by, relative to the working directory.
 
 
+Names that would step outside the working directory are refused
+---------------------------------------------------------------
+
+Because a preloaded file is always placed *inside* the working directory,
+the name it is delivered under has to stay inside it.  A leading ``./`` or
+``../`` is simply removed |mdash| ``--preload-files ../inputs/mesh.dat``
+delivers ``inputs/mesh.dat``, which is the useful reading.  A ``..``
+anywhere else in the name has no such reading: ``a/../../mesh.dat`` names a
+file two levels *above* the directory the job asked for it in, on every
+node at once.  Such a request is refused before anything is staged:
+
+.. code:: sh
+
+   shell$ prun -n 4 --preload-files a/../../mesh.dat ./solver
+   --------------------------------------------------------------------------
+   A file requested for preloading cannot be delivered under the name it was
+   given:
+
+      File: a/../../mesh.dat
+   ...
+   --------------------------------------------------------------------------
+
+Name the file by a path relative to the directory it should appear in, or
+by an absolute path |mdash| in which case it is delivered under its
+basename.
+
+
 Existing files are never overwritten
 ------------------------------------
 

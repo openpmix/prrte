@@ -119,11 +119,23 @@ The framework entry point on the master. Steps:
      somewhere the app never asked for and scatters directories through the
      user's own directory. A relative specification is kept as-is because
      that is exactly the name the app will open.
-2. Check for two *different* files that would land under the same relative
-   name (`/data/a/mesh.dat` and `/data/b/mesh.dat` both basename to
-   `mesh.dat`). Only one could ever be delivered, so this fires the
-   callback with `PRTE_ERR_PRELOAD_CONFLICT` instead of silently letting
-   the second overwrite the first in the session dir.
+2. **Validate every delivered name**, then check for clashes:
+   - A name that is empty, `.`, or contains a `..` component anywhere is
+     refused (`preload-bad-path`, callback status `PRTE_ERR_BAD_PARAM`).
+     Stripping the *leading* dot directories does not make a name safe:
+     `a/../../f` has none at the front and still resolves two levels above
+     the session directory, where the receive path would create it with
+     `O_TRUNC` over whatever is there — on every node.
+   - Two *different* files that would land under the same relative name
+     (`/data/a/mesh.dat` and `/data/b/mesh.dat` both basename to
+     `mesh.dat`). Only one could ever be delivered, so this fires the
+     callback with `PRTE_ERR_PRELOAD_CONFLICT` instead of silently letting
+     the second overwrite the first in the session dir.
+
+   Both checks run over `fs->remote_target` **after** it has been
+   normalized, which is why normalization happens once when the file set is
+   built rather than later when the xfer is created: the clash check would
+   otherwise miss `./foo` against `foo`.
 3. If nothing was collected, fire the callback and return `PRTE_SUCCESS`.
 4. Create one `outbound` object, stash `cbfunc`/`cbdata`, append it to
    `outbound_files`.
@@ -179,7 +191,10 @@ and the outbound is released.
 Fires on `PRTE_RML_TAG_FILEM_BASE` for each broadcast chunk:
 
 1. Unpack `{file, nchunk}`; if `nchunk < 0` treat as EOF (`nbytes = 0`),
-   else unpack the byte payload; on chunk 0 also unpack `type`.
+   else unpack the byte payload; on chunk 0 also unpack `type`. A name
+   carrying a `..` component is refused here too, even though the sender
+   is supposed to have refused it already — this is the side that would
+   do the `O_TRUNC`.
 2. Find or create the matching `prte_filem_raw_incoming_t` in
    `incoming_files`.
 3. **On chunk 0**: compute `top` (first path component), build `fullpath`
@@ -218,8 +233,10 @@ level up from where the files actually were.)
 
 ### `link_archive` — enumerate archive contents
 
-Runs `tar tf <fullpath>` via `popen`, reads each path, skips directories
-and `.deps` trees, and appends every real file path to `inbnd->link_pts`.
+Runs `tar tf <fullpath>` via `popen`, reads each path, skips directories,
+`.deps` trees, and any member that is absolute or steps up through `..`
+(tar refuses to extract those, so there is nothing there to place), and
+appends every remaining file path to `inbnd->link_pts`.
 Because different apps may share a directory tree but need different
 files, each individual file becomes its own link point.
 
@@ -281,10 +298,15 @@ already resilient for the not-in-flight case.
   decision) rides only on the first chunk; the zero-byte final chunk
   triggers finalize. Don't reorder or coalesce these.
 - **Paths are forced relative** on both the send side (basename for an
-  absolute spec, leading `./`/`../` stripped from a relative one) and the
-  write side (rooted at `top_session_dir`, then at `app->cwd`). This is a
-  security property — staging must never let a user overwrite an absolute
-  path on a remote node. Preserve it.
+  absolute spec, leading `./`/`../` stripped from a relative one, a `..`
+  anywhere else refused) and the write side (rooted at `top_session_dir`,
+  then at `app->cwd`). This is a security property — staging must never
+  let a user overwrite an arbitrary path on a remote node. Preserve it,
+  and express it through the base helpers
+  (`prte_filem_base_strip_leading_dots` / `..._has_dotdot`) rather than
+  open-coding the walk: it was open-coded twice here and the copies had
+  drifted, which is how the clash check came to compare `./foo` against
+  `foo` and see two different files.
 - **`raw` owns `PRTE_RML_TAG_FILEM_BASE`.** It posts its own recv in
   `raw_init`. The base used to carry a second, never-posted service on that
   same tag; it has been removed rather than left as a collision waiting to
