@@ -109,9 +109,18 @@ meaningless (it's srun's, not the failed proc's). The callback:
 - Refuses to proceed against an `ancient` SLURM (`ancient-version`).
 - On non-zero exit → `srun-failed` help + activate
   `DAEMONS_TERMINATED`.
-- On clean exit of the **primary** srun → fire `DAEMONS_TERMINATED` (set
-  `num_terminated = num_procs` first to avoid a bogus error message) so
-  `prun`/the HNP can exit.
+- On clean exit of the **primary** srun, whether that means the DVM is
+  gone depends on whether the `prted`s daemonized. By default a `prted`
+  forks and detaches (see `src/tools/prted/AGENTS.md`), and its parent —
+  the process srun actually tracks as the task — exits as soon as the
+  real daemon signals it is up, long before the daemon itself does. So a
+  clean exit here is normally just that hand-off, not termination: it is
+  ignored, and real daemon loss is instead caught when the daemon's RML
+  connection to the HNP drops. Only with `--debug-daemons` or
+  `--leave-session-attached` (no forking, `prted` stays attached) does
+  srun genuinely track the daemon's own lifetime, so only then does a
+  clean exit fire `DAEMONS_TERMINATED` (set `num_terminated = num_procs`
+  first to avoid a bogus error message) so `prun`/the HNP can exit.
 
 `plm_slurm_terminate_prteds` similarly special-cases the "we never
 launched additional daemons" case (`primary_pid_set == false`) by firing
