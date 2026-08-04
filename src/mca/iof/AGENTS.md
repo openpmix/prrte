@@ -419,56 +419,98 @@ tree or an old commit is **retired**.
 
 ---
 
-## Flow control — read this before you trust it
+## Flow control
 
-stdin can outrun a slow reader, and the framework has the *shape* of
-XON/XOFF back-pressure keyed on `PRTE_IOF_MAX_INPUT_BUFFERS` (50 queued
-chunks). **It does not actually throttle anything today.** Know that
-before you reason about a stdin backlog, and do not "fix" a symptom by
-leaning on it.
+stdin can outrun a slow reader, so the framework applies XON/XOFF
+back-pressure keyed on `PRTE_IOF_MAX_INPUT_BUFFERS` (50 queued chunks).
+**It reaches all the way back to the producer, and it did not always** —
+until PMIx grew `PMIx_server_IOF_flow_control` the whole mechanism was a
+signal the HNP logged and discarded. If you are reading an older tree, or
+an older copy of this guide, that is what it is describing.
 
-What is really wired:
+The producer is never ours. stdin originates in a PMIx server's read of
+its own stdin, or in a tool's `PMIx_IOF_push`, so the only way to slow it
+is to ask PMIx to stop it at the source. That is what
+`PMIx_server_IOF_flow_control` does: it leaves the read un-armed, so the
+bytes stay in the producer's own input stream and the OS applies the
+back-pressure. **Nothing is buffered on behalf of a suspended stream and
+nothing is dropped** — an XOFF is not permission to lose data.
 
-- On a daemon, when `prte_iof_base_write_output` reports the stdin sink
-  backlog has crossed 50 (or a write errors out),
-  `prte_iof_prted_send_xonxoff(PRTE_IOF_XOFF)` sends the HNP a buffer
-  holding nothing but the tag, latched by
-  `prte_mca_iof_prted_component.xoff`; when the backlog drains below 50 it
-  sends `PRTE_IOF_XON`.
-- The HNP **recognizes** those messages (`prte_iof_hnp_recv` screens the
-  `PRTE_IOF_XON | PRTE_IOF_XOFF` mask ahead of everything else) and traces
-  them, but takes no action.
-- On the HNP, `push_stdin` to a *local* proc returns
-  `PRTE_ERR_OUT_OF_RESOURCE` when its own sink passes the same threshold.
+The two halves, which are separate mechanisms that happen to share a
+vocabulary:
 
-Why nothing happens, and why that is currently correct: stdin originates
-in the PMIx server's read of its own stdin, or in a tool's
-`PMIx_IOF_push`. Neither end honors a refusal. PRRTE's own glue
-(`pmix_server_stdin_push` in
-[`src/prted/pmix/pmix_server_gen.c`](../../prted/pmix/pmix_server_gen.c))
-discards whatever `prte_iof.push_stdin` returns and reports
-`PMIX_SUCCESS`; PMIx's completion handler for the server-side read
-(`opcbfn` in its `src/common/pmix_iof.c`) explicitly discards the status
-and re-arms the read regardless. So a refusal anywhere in this framework
-would not slow the producer — it would only **drop bytes**. Queueing is
-the only lossless behavior available, and queueing is what happens.
+- **A daemon** whose stdin sink crosses 50 (or whose write errors out)
+  calls `prte_iof_prted_send_xonxoff(PRTE_IOF_XOFF)`, latched by
+  `prte_mca_iof_prted_component.xoff`, and sends `PRTE_IOF_XON` when the
+  backlog drains. `prte_iof_hnp_recv` screens the
+  `PRTE_IOF_XON | PRTE_IOF_XOFF` mask ahead of everything else and turns
+  it into a wildcard `PMIx_server_IOF_flow_control` call. Wildcard because
+  the message says only *that* this daemon is behind, never which producer
+  filled it — so every process feeding us stdin is suspended, which is the
+  conservative reading.
+- **The HNP's own local procs** never involve the RML at all.
+  `push_stdin` returns `PRTE_ERR_OUT_OF_RESOURCE` when a local sink passes
+  the same threshold, latched by `prte_mca_iof_hnp_component.xoff`, and
+  the glue in
+  [`src/prted/pmix/pmix_server_gen.c`](../../prted/pmix/pmix_server_gen.c)
+  turns that into `PMIX_ERR_IOF_XOFF` on the `push_stdin` completion —
+  which PMIx reads as "I have the data, suspend the stream". The matching
+  release is `release_flow_control()` in
+  [`hnp/iof_hnp.c`](hnp/iof_hnp.c).
 
-The consequence worth knowing: a daemon's stdin sink is bounded only by
+**Every XOFF must be paired with an XON, and that is on us.** PMIx has no
+status meaning "resume": a suspension persists until somebody calls the
+API with `xoff` false. So a release has to run on *every* path a
+backed-up sink can leave that state by — not just the one where it
+drains, but the ones where it is torn down. `release_flow_control()` is
+called from the `check:` and `finish:` arms of `stdin_write_handler`
+**and** from `hnp_close`/`hnp_complete`, which release a stdin sink
+directly and never reach the write handler at all — which is exactly the
+case that matters, since a sink is backed up precisely when its proc
+stopped reading, and that is the proc a teardown is likely to be
+retiring. It is a no-op when no XOFF is outstanding, so it is safe to
+call from anywhere, which is what lets it be called from everywhere it
+must be.
+
+**The blast radius is the job, not the DVM** — know why, because it is
+not obvious and it is what makes the failure tolerable. PMIx keeps no
+sticky suspension state: `pmix_iof_flow_control` walks the peers that
+exist *at the moment of the call* and pushes the request to them, and
+the only durable state is the `xoff` flag on the read event inside the
+producer itself. The producer is `prun`, which is per-job, so a
+suspension it is still carrying dies when it does. A `prun` that
+connects afterwards has never been told anything and starts reading
+normally. So the worst an unreleased XOFF can do is hang **that** job;
+the next one is unaffected, and the first sink to drain clears the stale
+latch. Do not read that as license to skip a release — a hung job is
+still a bug, and the reasoning above is a property of PMIx's current
+design rather than a guarantee it owes us. The dockerswarm suite counts
+the two and fails on a mismatch rather than merely checking that flow
+control happened.
+
+The oscillation is expected. Several procs take stdin at different rates,
+so one draining proc can turn the producers back on while another is
+still behind; the one still behind asserts XOFF again on its next write.
+That is the intended failure mode — the alternative to oscillating is
+stalling, and nothing is dropped either way. The prted module's `CHECK`
+block carries the same caveat in its own comment.
+
 `prte_iof_base_output_limit` (MCA param `iof_base_output_limit`, default
-`INT_MAX`, i.e. unbounded). Pipe a very large file into a process that
-reads it very slowly and the daemon's backlog grows without limit. Set
-`iof_base_output_limit` to a finite value and the write handler declares
-IOF hopelessly behind and fires `PRTE_JOB_STATE_FORCED_EXIT` instead.
+`INT_MAX`) is still the harder ceiling underneath all of this: if a
+sink's backlog exceeds it, the write handler concludes something is
+permanently wedged and fires `PRTE_JOB_STATE_FORCED_EXIT`. With flow
+control working, reaching it means the producer ignored the suspension,
+not merely that the reader is slow.
 
-Making XOFF *mean* something requires a way to stop the read at the
-source, which is a PMIx-side change (honor the `push_stdin` completion
-status and hold the stdin read event until the host says go). Until that
-exists, leave the latch alone: it is a signal the HNP logs, not a control
-loop. What is **not** optional is that the HNP keep screening the tag
-first — a flow-control message carries no proc and no payload, so falling
-through to the output unpack reports the daemon's XOFF to the user as a
-corrupted message, which is exactly what used to happen every time a
-process read its stdin slowly.
+**Against a PMIx that predates the capability** (`PRTE_PMIX_IOF_FLOW_CONTROL`
+is 0, from `PRTE_CHECK_PMIX_CAP([IOF_FLOW_CONTROL])` in
+`config/prte_setup_pmix.m4`) every one of these paths compiles away and
+the old behavior returns: the message is consumed quietly, the sink
+queues, and `iof_base_output_limit` is the only bound. What is **not**
+conditional is that the HNP screen the tag first — a flow-control message
+carries no proc and no payload, so falling through to the output unpack
+reports the daemon's XOFF to the user as a corrupted message, which is
+what used to happen every time a process read its stdin slowly.
 
 ---
 

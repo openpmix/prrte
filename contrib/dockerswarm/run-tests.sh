@@ -5007,6 +5007,43 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
             || ok "no unpack error at the HNP while stdin was backed up"
         ON 2 'rm -f /tmp/iof_xoff_out.txt' >/dev/null 2>&1
 
+        # The same reader again, this time with the iof talking, to assert
+        # that flow control actually engaged AND that every XOFF was paired
+        # with an XON.
+        #
+        # The pairing is the part that matters. PMIx has no status meaning
+        # "resume", so a suspension the HNP asserts and forgets to release
+        # stalls the producer for the life of the job - a hang, not a
+        # slowdown. On the HNP side that release lives in
+        # release_flow_control(), called from every path a backed-up sink
+        # can leave that state by, including the ones where the sink is torn
+        # down rather than drained.
+        #
+        # Counting rather than merely grepping is deliberate: an
+        # implementation that asserts XOFF once and releases once looks
+        # identical to a correct one under a presence test, and so does one
+        # that asserts fifty times and releases once.
+        RUN 'cp /tmp/prte.out /tmp/prte.out.mark2 2>/dev/null || : ' >/dev/null 2>&1
+        out=$(RUN 'cd /tmp && timeout 300 prun --prtemca iof_base_verbose 1 -n 1 \
+                     '"$SC"' /tmp/iof_pair_out.txt 2048 3000 < iof_stdin_in.txt \
+                     2>iof_pair_err.txt; echo "rc=$?"')
+        rc=$(echo "$out" | sed -n 's/^rc=//p')
+        got=$(echo "$out" | sed -n 's/^SLOWCAT-BYTES //p')
+        pairlog=$(RUN 'diff /tmp/prte.out.mark2 /tmp/prte.out 2>/dev/null | grep "^>" \
+                       || cat /tmp/prte.out 2>/dev/null')
+        nxoff=$(echo "$pairlog" | grep -c 'buffer backed up - holding')
+        nxon=$(echo "$pairlog" | grep -c 'releasing stdin flow control')
+        [ "$nxoff" -gt 0 ] \
+            && ok "stdin flow control engaged ($nxoff XOFF)" \
+            || bad "stdin flow control never engaged - the reader was not slow enough, or the backlog never crossed PRTE_IOF_MAX_INPUT_BUFFERS"
+        [ "$nxoff" = "$nxon" ] \
+            && ok "every XOFF was paired with an XON ($nxon)" \
+            || bad "unpaired stdin flow control: $nxoff XOFF vs $nxon XON - a producer is left suspended"
+        [ "$rc" = 0 ] && [ "$got" = "$insz" ] \
+            && ok "delivery stayed exact across $nxoff suspensions" \
+            || bad "flow-controlled stdin lost data (rc=$rc, sent=$insz received=$got)"
+        RUN 'rm -f /tmp/iof_pair_out.txt' >/dev/null 2>&1
+
         # And the same slow reader on the HNP node, where push_stdin writes
         # into the proc sink directly instead of going out over the RML: the
         # HNP and the daemon carry separate copies of the write handler, so a

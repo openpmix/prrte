@@ -103,9 +103,11 @@ before the proc unpack.** The order in the handler is deliberate:
    `PMIx_Data_unpack(…PMIX_PROC)` fails and reports the daemon's XOFF to
    the user as a corrupted message, which is what happened every time a
    process read its stdin slowly. We recognize it by mask (the control
-   bits are disjoint from every stream bit), trace it, and return. We do
-   not act on it — see the framework guide's *Flow control* section for
-   why acting on it would drop bytes rather than slow the producer.
+   bits are disjoint from every stream bit), trace it, and hand it to
+   `PMIx_server_IOF_flow_control` — wildcard, because the message says
+   only *that* this daemon is behind and never which producer filled it.
+   See the framework guide's *Flow control* section, and note the pairing
+   obligation it describes: an XOFF we never release hangs the producer.
 2. **Relayed stdin.** A leading `PRTE_IOF_STDIN` is stdin a daemon is
    relaying on behalf of a tool attached to *it* rather than to us, and
    the proc that follows is the intended **recipient**, not a source. That

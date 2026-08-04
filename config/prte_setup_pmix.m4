@@ -309,6 +309,24 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                        [$prte_pmix_iof_deliver_local],
                        [Whether PMIx honors PMIX_IOF_LOCAL_OUTPUT on an IOF delivery])
 
+    dnl The iof has always had the shape of XON/XOFF back-pressure on stdin -
+    dnl a daemon whose stdin sink passes PRTE_IOF_MAX_INPUT_BUFFERS tells the
+    dnl HNP so - but the HNP could not act on it.  Stdin originates in a PMIx
+    dnl server's read of its own stdin or in a tool's PMIx_IOF_push, and until
+    dnl PMIx grew PMIx_server_IOF_flow_control there was no way to stop either
+    dnl at the source: a refusal anywhere would have dropped bytes rather than
+    dnl slowed the producer.  Without this the HNP consumes the message and
+    dnl the daemon's sink simply queues, bounded only by iof_base_output_limit.
+    AC_MSG_CHECKING([for PMIx IOF stdin flow control])
+    PRTE_CHECK_PMIX_CAP([IOF_FLOW_CONTROL],
+                        [AC_MSG_RESULT([yes])
+                         prte_pmix_iof_flow_control=1],
+                        [AC_MSG_RESULT([no])
+                         prte_pmix_iof_flow_control=0])
+    AC_DEFINE_UNQUOTED([PRTE_PMIX_IOF_FLOW_CONTROL],
+                       [$prte_pmix_iof_flow_control],
+                       [Whether PMIx supports PMIx_server_IOF_flow_control])
+
     AC_MSG_CHECKING([for LTO compatibility])
     PRTE_CHECK_PMIX_CAP([LTO],
                         [PRTE_PMIX_LTO_CAPABILITY=1

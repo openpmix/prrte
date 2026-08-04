@@ -63,7 +63,8 @@ prte_mca_iof_hnp_component_t prte_mca_iof_hnp_component = {
         .pmix_mca_open_component = prte_iof_hnp_open,
         .pmix_mca_close_component = prte_iof_hnp_close,
         .pmix_mca_query_component = prte_iof_hnp_query,
-    }
+    },
+    .xoff = false
 };
 PMIX_MCA_BASE_COMPONENT_INIT(prte, iof, hnp)
 

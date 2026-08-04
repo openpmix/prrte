@@ -418,6 +418,18 @@ unpack error. Do not weaken the reader's pace: at `cat` speed, or even at
 the pace the two cases above use, the backlog may never cross 50 and the
 case passes without having tested anything.
 
+A fourth pass runs the same reader with `--prtemca iof_base_verbose 1` and
+**counts** the two halves of the flow control in the HNP's log. That is
+the case that covers `PMIx_server_IOF_flow_control` actually being
+reached, and it is a count rather than a grep on purpose: PMIx has no
+status meaning "resume", so an implementation that asserts XOFF fifty
+times and releases once looks identical to a correct one under a presence
+test — and the job it produces is *hung*, not slow. The case fails if the
+counts differ, if flow control never engaged at all (which would mean the
+reader was too fast and the case proved nothing), or if a byte went
+missing across the suspensions. See the framework guide's *Flow control*
+section for where each half lives.
+
 **Grow** (`elastic grow node2:2,node3:2`): phase-1 `PMIX_SUCCESS`, then phase-2
 `PMIX_DVM_IS_READY`, and `prted` now running on node2 and node3.
 

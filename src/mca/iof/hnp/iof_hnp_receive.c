@@ -95,16 +95,26 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
      * unpack below reads off the end of the buffer and reports the daemon's
      * XOFF as a corrupted message.
      *
-     * We cannot act on it. Stdin originates in the PMIx server's read of its
-     * own stdin (or a tool's PMIx_IOF_push), and neither end honors a refusal:
-     * pmix_server_stdin_push discards what prte_iof.push_stdin returns, and
-     * PMIx's own completion handler discards the status and re-arms the read
-     * regardless. Returning an error here would therefore not slow the source
-     * down - it would only drop the bytes. So the daemon's sink queues, and
-     * iof_base_output_limit is the only ceiling. Making XOFF mean something
-     * requires a way to stop the read at the source; until there is one, the
-     * right behavior is to consume the message quietly rather than to log an
-     * unpack failure at the user every time a proc reads its stdin slowly.
+     * Acting on it means reaching the producer, and the producer is not ours:
+     * stdin originates in a PMIx server's read of its own stdin, or in a
+     * tool's PMIx_IOF_push. PMIx_server_IOF_flow_control is how we ask PMIx
+     * to stop them - it suspends any stdin the library is reading here and
+     * relays the request to every tool that has pushed stdin to us, leaving
+     * the unread bytes in the producer's own input stream where the OS
+     * applies the back-pressure. Nothing is buffered on behalf of a
+     * suspended stream and nothing is dropped; an XOFF is not permission to
+     * lose data.
+     *
+     * We do not know which producer a given daemon's backlog came from - the
+     * message says only that this daemon is behind - so the request is made
+     * wildcard, against every process feeding us stdin. That is the correct
+     * conservative reading: any of them may be the one filling that sink.
+     *
+     * Against a PMIx too old to have the API we do what we always did -
+     * consume the message quietly. The daemon's sink then queues, bounded
+     * only by iof_base_output_limit, which is the pre-existing behavior and
+     * is still better than logging an unpack failure at the user every time
+     * a proc reads its stdin slowly.
      */
     if ((PRTE_IOF_XON | PRTE_IOF_XOFF) & stream) {
         PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
@@ -112,6 +122,14 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              (PRTE_IOF_XON & stream) ? "xon" : "xoff",
                              PRTE_NAME_PRINT(sender)));
+#if PRTE_PMIX_IOF_FLOW_CONTROL
+        prc = PMIx_server_IOF_flow_control(NULL, PMIX_FWD_STDIN_CHANNEL,
+                                           (PRTE_IOF_XOFF & stream) ? true : false,
+                                           NULL, 0, NULL, NULL);
+        if (PMIX_SUCCESS != prc && PMIX_OPERATION_SUCCEEDED != prc) {
+            PMIX_ERROR_LOG(prc);
+        }
+#endif
         goto CLEAN_RETURN;
     }
 
