@@ -5290,6 +5290,50 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     fi
     cleanup_swarm
 
+    banner "plm: a second launch adds only the daemons that launch needs"
+    # setup_virtual_machine runs on EVERY launch, but the daemon job's map is
+    # persistent - it accumulates the DVM's nodes for the life of the session.
+    # num_new_daemons and daemon_vpid_start describe only the launch about to
+    # happen, so each pass has to recompute them from scratch; carried over,
+    # they make a launcher act on the previous launch's daemons. (ssh
+    # substitutes each node's own vpid per node, so the vpid half of that is
+    # only fatal under an RM launcher - see test/unit/plm - but the count is
+    # what every component keys its "anything to do?" test off.)
+    #
+    # So: form a DVM, then bring in a third node with --add-host and require
+    # that the second pass reports exactly ONE new daemon, not three.
+    # NOTE: the DVM runs in the FOREGROUND under RUN_BG rather than
+    # --daemonize, because a daemonized HNP detaches from its output and the
+    # trace this case reads would go nowhere.
+    cleanup_swarm
+    RUN_BG /tmp/prte.out 'prte --prtemca plm_base_verbose 5 --host node1:1,node2:1'
+    sleep 8
+    if RUN 'pgrep -x prte >/dev/null'; then
+        first=$(RUN 'grep -c "setup_vm add new daemon" /tmp/prte.out' | tr -d '\r')
+        [ "$first" = 1 ] && ok "DVM formation added one daemon (node2)" \
+                         || bad "DVM formation reported $first new daemons (expected 1)"
+        out=$(RUN 'timeout 90 prun --add-host node3:1 --host node1:1,node2:1,node3:1 \
+                     -n 3 --map-by node hostname' 2>&1)
+        n=$(echo "$out" | grep -cE '^node[1-3]$')
+        [ "$n" = 3 ] && ok "--add-host launch ran across all three nodes" \
+                     || bad "--add-host launch produced $n/3 procs: $(echo "$out" | tr '\n' ' ')"
+        [ "$(prted_count 3)" = 1 ] && ok "a daemon was started on the added node" \
+                                   || bad "no daemon on the added node"
+        total=$(RUN 'grep -c "setup_vm add new daemon" /tmp/prte.out' | tr -d '\r')
+        [ "$total" = 2 ] \
+            && ok "the second pass added exactly one daemon (count not carried over)" \
+            || bad "second pass brought the running total to $total new daemons (expected 2)"
+        # and the DVM still routes to everyone afterwards
+        out=$(RUN 'timeout 30 prun -n 3 --map-by node hostname' 2>&1)
+        n=$(echo "$out" | grep -cE '^node[1-3]$')
+        [ "$n" = 3 ] && ok "DVM still spans all three nodes after the grow" \
+                     || bad "post-grow job produced $n/3 procs: $(echo "$out" | tr '\n' ' ')"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the second-launch test"
+    fi
+    cleanup_swarm
+
     banner "elastic DVM: grow + shrink (radix 64, flat tree)"
     cleanup_swarm
     RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null

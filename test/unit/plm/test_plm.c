@@ -62,6 +62,8 @@
 #include "src/util/pmix_environ.h"
 #include "src/util/proc_info.h"
 
+#include "src/mca/rmaps/rmaps_types.h"
+
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
 #include "src/mca/plm/plm.h"
@@ -767,6 +769,191 @@ static int test_state_update_wire(void)
     return failures;
 }
 
+/*
+ * prte_init_util() stops short of building the global job/node arrays --
+ * that happens in prte_init(), which wants a live ESS, session directories
+ * and a network stack.  Stand up just the pieces setup_virtual_machine
+ * touches: the job pool with the daemon job in it, the node pool with the
+ * HNP's own node at index 0, and the topology array.
+ */
+/* create the array if this process has none yet, else empty the one it has -
+ * an earlier test in this binary may already have registered jobs, and they
+ * must not be visible to (or leaked by) this one */
+static void fresh_array(pmix_pointer_array_t **array)
+{
+    int i;
+    void *item;
+
+    if (NULL == *array) {
+        *array = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(*array, 8, INT_MAX, 8);
+        return;
+    }
+    for (i = 0; i < (*array)->size; i++) {
+        item = pmix_pointer_array_get_item(*array, i);
+        if (NULL != item) {
+            pmix_pointer_array_set_item(*array, i, NULL);
+            PMIX_RELEASE(item);
+        }
+    }
+}
+
+static int setup_vm_globals(const char *dvm_nspace)
+{
+    prte_job_t *djob;
+    prte_node_t *hnp;
+
+    fresh_array(&prte_job_data);
+    fresh_array(&prte_node_pool);
+    fresh_array(&prte_node_topologies);
+
+    djob = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(djob->nspace, dvm_nspace);
+    PMIX_LOAD_PROCID(PRTE_PROC_MY_NAME, dvm_nspace, 0);
+    /* the HNP is daemon 0 and is already "launched" */
+    djob->num_procs = 1;
+    prte_set_job_data_object(djob);
+
+    hnp = PMIX_NEW(prte_node_t);
+    hnp->name = strdup("plm-test-hnp");
+    hnp->state = PRTE_NODE_STATE_UP;
+    hnp->slots = 1;
+    hnp->index = pmix_pointer_array_add(prte_node_pool, hnp);
+    PRTE_FLAG_SET(hnp, PRTE_NODE_FLAG_DAEMON_LAUNCHED);
+
+    return (0 == hnp->index) ? PRTE_SUCCESS : PRTE_ERROR;
+}
+
+/* add a node to the pool in the given state */
+static prte_node_t *pool_node(const char *name, prte_node_state_t state)
+{
+    prte_node_t *nd = PMIX_NEW(prte_node_t);
+
+    nd->name = strdup(name);
+    nd->state = state;
+    nd->slots = 2;
+    nd->index = pmix_pointer_array_add(prte_node_pool, nd);
+    return nd;
+}
+
+/* a job that looks like a dynamic spawn: it has an originator, which is what
+ * routes setup_virtual_machine down the "only absorb nodes this request
+ * added" branch */
+static prte_job_t *spawn_job(const char *nspace)
+{
+    prte_job_t *jdata = PMIX_NEW(prte_job_t);
+
+    PMIX_LOAD_NSPACE(jdata->nspace, nspace);
+    PMIX_LOAD_PROCID(&jdata->originator, "some-tool", 0);
+    return jdata;
+}
+
+/*
+ * prte_plm_base_setup_virtual_machine builds the DAEMON job's map, and that
+ * map is persistent: it accumulates the DVM's nodes across every launch.
+ * Two of its fields are not cumulative, though - they describe the launch
+ * about to happen, and every component reads them the moment setup_vm
+ * returns:
+ *
+ *   num_new_daemons    - whether to launch anything at all;
+ *   daemon_vpid_start  - the base vpid slurm/lsf/pals substitute into the
+ *                        prted command line, from which each daemon the RM
+ *                        starts computes its own name.
+ *
+ * A stale daemon_vpid_start is invisible under ssh (which substitutes each
+ * node's real vpid per node) and fatal under any RM launcher: the daemons of
+ * a later add-host launch are told to claim vpids that already belong to
+ * live daemons.  So check that each pass reports ITS OWN daemons.
+ */
+static int test_setup_vm(void)
+{
+    int failures = 0;
+    prte_job_t *daemons, *jdata;
+    prte_job_map_t *map;
+    prte_node_t *n1, *n2, *n3;
+    pmix_proc_t save_me;
+    pmix_rank_t first_start;
+
+    memcpy(&save_me, PRTE_PROC_MY_NAME, sizeof(pmix_proc_t));
+
+    if (PRTE_SUCCESS != setup_vm_globals("plm-test-dvm")) {
+        fprintf(stderr, "FAIL [setup_vm]: could not build globals\n");
+        memcpy(PRTE_PROC_MY_NAME, &save_me, sizeof(pmix_proc_t));
+        return 1;
+    }
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+
+    /* two more nodes in the allocation.  The first pass through a dynamic
+     * spawn has no map yet, so it absorbs the whole pool - the same shape as
+     * initial DVM formation */
+    n1 = pool_node("plm-test-n1", PRTE_NODE_STATE_UP);
+    n2 = pool_node("plm-test-n2", PRTE_NODE_STATE_UP);
+
+    jdata = spawn_job("plm-test-job1");
+    CHECK("setup_vm first pass succeeds", PRTE_SUCCESS == prte_plm_base_setup_virtual_machine(jdata));
+    map = daemons->map;
+    CHECK("first pass has a map", NULL != map);
+    if (NULL == map) {
+        goto done;
+    }
+    CHECK("first pass launches both nodes", 2 == map->num_new_daemons);
+    CHECK("first pass daemons got vpids", NULL != n1->daemon && NULL != n2->daemon);
+    first_start = map->daemon_vpid_start;
+    CHECK("first pass start vpid is the first new daemon",
+          NULL != n1->daemon && first_start == n1->daemon->name.rank);
+    CHECK("first pass start vpid is not INVALID", PMIX_RANK_INVALID != first_start);
+    CHECK("daemon job spans the new vpids", 3 == daemons->num_procs);
+    PMIX_RELEASE(jdata);
+
+    /* Now a SECOND launch that brings in one more node - the add-host /
+     * elastic-grow shape.  Its daemon takes the next free vpid, and that is
+     * what the launcher must be told.  Before this was fixed, the map still
+     * carried the first pass's start vpid and an RM launcher would have
+     * started the new daemon as vpid 1 - a rank a live daemon already owns. */
+    n3 = pool_node("plm-test-n3", PRTE_NODE_STATE_ADDED);
+    jdata = spawn_job("plm-test-job2");
+    CHECK("setup_vm second pass succeeds",
+          PRTE_SUCCESS == prte_plm_base_setup_virtual_machine(jdata));
+    CHECK("second pass launches only the added node", 1 == map->num_new_daemons);
+    CHECK("second pass gave the new node a daemon", NULL != n3->daemon);
+    CHECK("second pass start vpid is the NEW daemon",
+          NULL != n3->daemon && map->daemon_vpid_start == n3->daemon->name.rank);
+    CHECK("second pass start vpid is not the first pass's",
+          map->daemon_vpid_start != first_start);
+    CHECK("daemon job spans the new vpid", 4 == daemons->num_procs);
+    PMIX_RELEASE(jdata);
+
+    /* A third pass with nothing new: the fast path every component keys off.
+     * num_new_daemons must be zero AND the start vpid must not be left
+     * pointing at the previous launch's daemons. */
+    jdata = spawn_job("plm-test-job3");
+    CHECK("setup_vm third pass succeeds",
+          PRTE_SUCCESS == prte_plm_base_setup_virtual_machine(jdata));
+    CHECK("third pass launches nothing", 0 == map->num_new_daemons);
+    CHECK("third pass start vpid is cleared", PMIX_RANK_INVALID == map->daemon_vpid_start);
+    CHECK("third pass marks the daemons reported",
+          PRTE_JOB_STATE_DAEMONS_REPORTED == daemons->state);
+    PMIX_RELEASE(jdata);
+
+    /* a job pinned to a fixed DVM never launches a daemon, whatever the pool
+     * looks like */
+    pool_node("plm-test-n4", PRTE_NODE_STATE_ADDED);
+    jdata = spawn_job("plm-test-job4");
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_FIXED_DVM, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+    CHECK("setup_vm fixed-dvm succeeds",
+          PRTE_SUCCESS == prte_plm_base_setup_virtual_machine(jdata));
+    CHECK("fixed dvm launches nothing", 0 == map->num_new_daemons);
+    CHECK("fixed dvm start vpid is cleared", PMIX_RANK_INVALID == map->daemon_vpid_start);
+    PMIX_RELEASE(jdata);
+
+done:
+    memcpy(PRTE_PROC_MY_NAME, &save_me, sizeof(pmix_proc_t));
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_setup_vm\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -805,6 +992,8 @@ int main(void)
     failures += test_append_basic_args();
     failures += test_naming();
     failures += test_state_update_wire();
+    /* leaves the global job/node pools populated, so run it last */
+    failures += test_setup_vm();
 
     (void) pmix_mca_base_framework_close(&prte_plm_base_framework);
     PMIx_server_finalize();
