@@ -178,13 +178,19 @@ rules are easy to get wrong and the failures are silent leaks.
   `pmix_pointer_array_t` frees the array, never its items — destructing
   it without releasing first leaks one reference per detached node on
   every partial shrink.
-- **`prte_slurm_session_stack` items hold a *borrowed* `prte_session_t
-  *`** (no retain). The stack is the authority for "is this allocation
-  still ours to manage": `release_allocation` consults it from the
-  session destructor to decide whether to `scancel`, which is why the
-  full-release path removes the stack item *before* releasing the
-  session. Keep those two operations in that order, and never leave a
-  stack item pointing at a session someone else may release.
+- **`prte_slurm_session_stack` retains a reference on each session it
+  holds** (released automatically by `prte_session_stack_item_t`'s
+  destructor), independent of the session's own creation reference —
+  removal sites just do `pmix_list_remove_item` + `PMIX_RELEASE(item)`.
+- The creation reference is separate: `rollback_session` and
+  `shrink_complete`'s full-release branch also release the session
+  itself, ending the allocation's lifecycle. `prte_ras_slurm_drain_session_stack`
+  (`finalize()`) releases only what the stack retained and leaves the
+  creation reference alone — releasing it too could double-free if
+  whatever else holds it releases its own copy later.
+- No more reactive `release_allocation` hook: the stack's own reference
+  means `session_des` can't run until the item is already removed, so
+  `scancel` is decided explicitly at each removal site instead.
 - `prte_ras_slurm_rollback_session` relies on `session_des` clearing
   `prte_sessions[index]`, so the released session leaves no dangling
   global entry. It deliberately does not `scancel` — the `complete:`

@@ -1122,8 +1122,11 @@ static void session_des(prte_session_t *s)
         PMIX_RELEASE(s->owner_job);
         s->owner_job = NULL;
     }
-    // remove this from the global array
-    if (0 <= s->index) {
+    // remove this from the global array, if it still exists - a session
+    // whose last reference is released after prte_sessions itself has
+    // already been torn down (e.g. a ras component's finalize, which
+    // runs after prte_finalize's own session sweep) has nothing to clear
+    if (0 <= s->index && NULL != prte_sessions) {
         pmix_pointer_array_set_item(prte_sessions, s->index, NULL);
     }
 }
