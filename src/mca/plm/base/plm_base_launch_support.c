@@ -1837,6 +1837,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             if (PMIX_SUCCESS != ret) {
                 PMIX_ERROR_LOG(ret);
                 prted_failed_launch = true;
+                PMIX_DATA_BUFFER_DESTRUCT(data);
                 goto CLEANUP;
             }
             /* cleanup */
@@ -1854,32 +1855,50 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                 if (NULL == t) {
                     continue;
                 }
-                /* compute the diff */
+                /* Compute the diff.  hwloc allocates a list whenever it has
+                 * anything to say - including the "too complex" entry it
+                 * returns 1 with when the two topologies are genuinely
+                 * different, which is the common case here: we are walking
+                 * every recorded topology looking for the one that matches.
+                 * That list is ours to free, so free the ones we do not adopt
+                 * or a heterogeneous DVM leaks a diff per node per recorded
+                 * topology. */
+                diff = NULL;
                 ret = hwloc_topology_diff_build(t->topo, ptopo.topology, 0, &diff);
-                if (0 == ret) {
-                    pmix_output_verbose(5, prte_plm_base_framework.framework_output,
-                                        "%s TOPOLOGY ALREADY RECORDED IN POSN %d - %s DIFFS FOUND",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), i,
-                                        (NULL == diff) ? "NO" : "SOME");
-                    /* the node holds a counted reference to its topology -
-                     * a daemon can report in more than once (bootstrap
-                     * unheal), so release any prior reference first */
-                    if (NULL != daemon->node->topology) {
-                        PMIX_RELEASE(daemon->node->topology);
+                if (0 != ret) {
+                    if (NULL != diff) {
+                        hwloc_topology_diff_destroy(diff);
+                        diff = NULL;
                     }
-                    PMIX_RETAIN(t);
-                    daemon->node->topology = t;
-                    found = true;
-                    /* update the node's available processors */
-                    if (NULL != daemon->node->available) {
-                        hwloc_bitmap_free(daemon->node->available);
-                    }
-                    daemon->node->available = prte_hwloc_base_filter_cpus(t->topo);
-                    daemon->node->topodiff = diff;
-                    // release the unpacked topology
-                    PMIX_TOPOLOGY_DESTRUCT(&ptopo);
-                    break;
+                    continue;
                 }
+                pmix_output_verbose(5, prte_plm_base_framework.framework_output,
+                                    "%s TOPOLOGY ALREADY RECORDED IN POSN %d - %s DIFFS FOUND",
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), i,
+                                    (NULL == diff) ? "NO" : "SOME");
+                /* the node holds a counted reference to its topology -
+                 * a daemon can report in more than once (bootstrap
+                 * unheal), so release any prior reference first */
+                if (NULL != daemon->node->topology) {
+                    PMIX_RELEASE(daemon->node->topology);
+                }
+                PMIX_RETAIN(t);
+                daemon->node->topology = t;
+                found = true;
+                /* update the node's available processors */
+                if (NULL != daemon->node->available) {
+                    hwloc_bitmap_free(daemon->node->available);
+                }
+                daemon->node->available = prte_hwloc_base_filter_cpus(t->topo);
+                /* likewise the diff: a repeat report would otherwise drop the
+                 * one recorded last time on the floor */
+                if (NULL != daemon->node->topodiff) {
+                    hwloc_topology_diff_destroy(daemon->node->topodiff);
+                }
+                daemon->node->topodiff = diff;
+                // release the unpacked topology
+                PMIX_TOPOLOGY_DESTRUCT(&ptopo);
+                break;
             }
             if (!found) {
                 // this is a new topology
