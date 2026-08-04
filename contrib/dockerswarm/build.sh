@@ -405,6 +405,19 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/faulty.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
+            # envspawn: a PMIx client that spawns a child job carrying one
+            # of every envar directive (SET/ADD/UNSET/PREPEND/APPEND) and
+            # pins it to a named host.  Those directives have no
+            # command-line surface at all -- they arrive only on a spawn
+            # request -- and they are applied by the odls on whichever
+            # daemon forks the process, so proving they survive the launch
+            # message needs the child on a node the parent is not on.
+            # (No apostrophes here: see the note further down.)
+            echo ">>>> envspawn (odls envar directives) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/envspawn \
+                /prrte-src/contrib/dockerswarm/envspawn.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
             # slowcat: a deliberately slow stdin reader (no PMIx at all).  The
             # stdin bugs in iof live in the back-pressure path, and a normal
             # "cat" drains its pipe as fast as the daemon fills it, so the

@@ -3957,6 +3957,260 @@ test_errmgr() {
     cleanup_swarm
 }
 
+########################################################################
+# src/mca/odls -- the daemon-side launch subsystem.  test/unit/odls covers
+# the structural contract and the pieces that are pure functions
+# (process_envars, the child->parent pipe record, the thread-pool sizing).
+# What lands here is what only exists once a REMOTE daemon has to decode
+# the launch message and fork against it: the environment the app actually
+# ends up with, the exec agent, and the failure paths whose whole purpose
+# is to keep a multi-app launch from stranding the job.
+########################################################################
+# Absolute path, deliberately -- see the note on DS above: an app launched
+# into the DVM inherits the daemon PATH, which does not contain the install
+# bindir.
+ES=/opt/prte/prte/bin/envspawn
+
+test_odls() {
+    local out rc n c
+
+    banner "odls: the envar directives reach the daemon that does the fork"
+    # SET/ADD/UNSET/PREPEND/APPEND have no command-line surface at all: they
+    # arrive on a PMIx_Spawn request, are attached to the job on the HNP,
+    # travel in the launch message, and are applied by
+    # prte_odls_base_process_envars() on whichever daemon forks the process.
+    # envspawn pins its child to node3 while running on node2, so what is
+    # under test is the REMOTE daemon's copy of the job.
+    #
+    # ADD is the one worth the whole apparatus.  It is defined - in
+    # pmix_common.h and again in src/util/attr.h - as "add envar, but do not
+    # overwrite any existing one", and it was being applied exactly like
+    # SET, silently discarding whatever value was already there.
+    cleanup_swarm
+    if prted_dvm_start 'node1:2,node2:2,node3:2,node4:2'; then
+        PRUN "--host node2:1 -n 1 $ES node3" >/dev/null 2>&1
+        # the child wrote its report on its own node; reading it from there
+        # is also how we know that is where the fork happened
+        out=$(ON 3 'cat /tmp/odls-envspawn.out' 2>&1)
+        echo "$out" | grep -q 'ODLS_SET=kept' \
+            && ok "ADD did not overwrite the value SET established" \
+            || bad "ADD overwrote a pre-existing value: $(echo "$out" | grep ODLS_SET)"
+        echo "$out" | grep -q 'ODLS_NEW=added' \
+            && ok "...but ADD does set a name nobody had claimed" \
+            || bad "ADD did not set an absent variable: $(echo "$out" | grep ODLS_NEW)"
+        echo "$out" | grep -q 'ODLS_PATH=front:middle:back' \
+            && ok "PREPEND and APPEND edited the value in list order" \
+            || bad "PREPEND/APPEND wrong: $(echo "$out" | grep ODLS_PATH)"
+        echo "$out" | grep -q 'ODLS_GONE=<unset>' \
+            && ok "UNSET removed the variable it named" \
+            || bad "UNSET did nothing: $(echo "$out" | grep ODLS_GONE)"
+        # ...and prove the fork really happened somewhere else
+        echo "$out" | grep -q 'ODLS_HOST=node3' \
+            && ok "...all of it applied by the daemon on the child's node" \
+            || bad "the child did not run on node3: $(echo "$out" | grep ODLS_HOST)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the envar-directive test"
+    fi
+    cleanup_swarm
+
+    banner "odls: the exec agent wraps every exec, on every node"
+    # odls_base_exec_agent replaces the command spawn_proc hands to the fork
+    # primitive, prepending the agent and pushing the app into its argv.  It
+    # is read from the DAEMON's MCA state, not the job's, so each daemon
+    # applies its own copy -- and a daemon that never picked the parameter
+    # up would launch the app bare, which looks like success.  Use "env" as
+    # the agent: it execs its argument, so the job still runs, and it stamps
+    # a variable we can see in the output to prove it was in the chain.
+    cleanup_swarm
+    out=$(RUN 'timeout -k 5 60 prterun --prtemca odls_base_exec_agent "/usr/bin/env ODLS_AGENT=yes" \
+                   --host node1:1,node2:1,node3:1 -n 3 --map-by node \
+                   sh -c "echo AGENT=\$ODLS_AGENT@\$(hostname)"' 2>&1)
+    n=$(echo "$out" | grep -c 'AGENT=yes@')
+    [ "$n" = 3 ] && ok "every one of the 3 procs was exec'd through the agent" \
+                 || bad "only $n/3 procs went through the exec agent: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    n=$(echo "$out" | grep -o 'AGENT=yes@node[0-9]*' | sort -u | wc -l | tr -d ' ')
+    [ "$n" = 3 ] && ok "...on three distinct nodes, so each daemon applied its own" \
+                 || bad "the agent only took effect on $n nodes"
+    cleanup_swarm
+
+    banner "odls: a bad exec is diagnosed by the daemon that tried it"
+    # The child cannot render its own diagnostic - it is in the
+    # async-signal-safe window between fork() and execve() - so it writes a
+    # fixed-size code+errno record up the pipe and the PARENT daemon renders
+    # it.  On one host that parent is the HNP and the message never crosses
+    # a wire.  Here the failing exec is on node4 and the text has to reach
+    # the tool on node1 through the IOF, which is the whole point.
+    cleanup_swarm
+    out=$(RUN 'timeout -k 5 60 prterun --host node4:1 -n 1 /no/such/executable' 2>&1)
+    rc=$?
+    [ "$rc" != 0 ] && ok "a missing executable fails the job (rc=$rc)" \
+                   || bad "a missing executable exited 0"
+    echo "$out" | grep -q '/no/such/executable' \
+        && ok "...naming the executable it could not run" \
+        || bad "no diagnostic naming the executable: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    c=$(prted_settle 10 1 2 3 4)
+    [ "$c" = 0 ] && ok "...and every daemon came down afterwards" \
+                 || bad "$c stray prted after a failed exec"
+    cleanup_swarm
+
+    # A directory is X_OK on most systems -- it means "searchable" -- so it
+    # sails through the base's check_context_app() and only fails at the
+    # execve, as a bare "Permission denied".  render_child_msg stats the app
+    # in the PARENT to turn that into something a user can act on.
+    #
+    # Deliberately on a REMOTE node, and deliberately checking that the
+    # message names that node.  A prted cannot deliver its own show_help --
+    # plog/stdfd, when the renderer is a PMIx server rather than a client or
+    # tool, hands the text to PMIx_server_IOF_deliver under the daemon's own
+    # identity, which nothing has a sink for -- so every one of these was
+    # silently dropped on every node but the head one.  prte_show_help()
+    # renders on the daemon and relays to the HNP, which is the only place
+    # the delivery machinery works.  "Local host: node4" is the proof that
+    # the round trip happened.
+    cleanup_swarm
+    out=$(RUN 'timeout -k 5 60 prterun --host node4:1 -n 1 /tmp' 2>&1)
+    echo "$out" | grep -qi 'is a directory' \
+        && ok "a directory given as the executable is named as such" \
+        || bad "no directory diagnostic: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    echo "$out" | grep -q 'Local host: *node4' \
+        && ok "...rendered on the remote daemon and relayed to the tool" \
+        || bad "the diagnostic did not come from node4: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    cleanup_swarm
+
+    # ...and the same relay for a message the base emits before the fork,
+    # so this is not just render_child_msg getting through
+    cleanup_swarm
+    out=$(RUN 'timeout -k 5 60 prterun --prtemca odls_base_exec_agent /no/such/agent \
+                   --host node4:1 -n 1 hostname' 2>&1)
+    echo "$out" | grep -q 'The specified fork agent was not found' \
+        && ok "a missing exec agent is reported from the daemon that looked for it" \
+        || bad "no fork-agent diagnostic: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    echo "$out" | grep -q 'Node: *node4' \
+        && ok "...naming that node" \
+        || bad "the fork-agent diagnostic did not name node4"
+    cleanup_swarm
+
+    banner "odls: one bad app in an MPMD launch takes the whole job down"
+    # Every fatal path in launch_local flags the affected app's procs AND
+    # activates PRTE_JOB_STATE_FAILED_TO_LAUNCH, because "goto GETOUT" skips
+    # every LATER app -- whose procs then sit in INIT forever.  A prted only
+    # reports FAILED_TO_LAUNCH once num_terminated == num_local_procs, so
+    # failing just the one app's procs does not fail the job, it HANGS it.
+    # Put the bad app FIRST so there is a later app to strand, and put the
+    # two apps on different nodes so the stranding would be a remote
+    # daemon's.  The observable is that this terminates at all.
+    cleanup_swarm
+    out=$(RUN 'timeout -k 5 45 prterun --host node2:1,node3:1 \
+                   -n 1 /no/such/executable : -n 1 hostname' 2>&1)
+    rc=$?
+    [ "$rc" != 124 ] && ok "the launch terminated rather than hanging (rc=$rc)" \
+                     || bad "an MPMD launch with a bad first app hung until the timeout"
+    [ "$rc" != 0 ] && ok "...and reported failure" \
+                   || bad "the failed MPMD launch exited 0"
+    c=$(prted_settle 10 1 2 3)
+    [ "$c" = 0 ] && ok "...and left no daemon behind" \
+                 || bad "$c stray prted after a failed MPMD launch"
+    cleanup_swarm
+
+    banner "odls: the waitpid decode survives the trip back from a remote node"
+    # wait_local_proc turns a raw wait status into a proc state on the
+    # daemon that owns the child, and the HNP only ever sees the result.  A
+    # signal death becomes signo+128 (shell convention) and a plain non-zero
+    # exit stays itself; both have to reach the tool from node4.
+    cleanup_swarm
+    RUN 'timeout -k 5 60 prterun --host node4:1 -n 1 sh -c "exit 3"' >/dev/null 2>&1
+    rc=$?
+    [ "$rc" = 3 ] && ok "a non-zero exit on a remote node is reported verbatim" \
+                  || bad "expected exit 3 from node4, got $rc"
+    RUN 'timeout -k 5 60 prterun --host node4:1 -n 1 sh -c "kill -TERM \$\$; sleep 5"' >/dev/null 2>&1
+    rc=$?
+    [ "$rc" = 143 ] && ok "...and a SIGTERM death comes back as signo+128 (143)" \
+                    || bad "expected 143 for a SIGTERM death on node4, got $rc"
+    cleanup_swarm
+
+    banner "odls: a signal aimed at a dead rank does not take out the daemon"
+    # prted_comm walks every local child of the named job and asks the odls
+    # to signal each one BY NAME.  The by-name branch had no aliveness gate,
+    # so a rank that was gone - pid reset to 0 - was signaled at pid 0.  The
+    # component turns a pid into a process GROUP, and kill(-0)/kill(0) is
+    # "every process in the DAEMON's own group": the daemon signals itself,
+    # its other children, and (under prterun) the launching tool.
+    #
+    # Set it up so the target job certainly has a dead rank: rank 1 on node3
+    # exits at once while rank 0 on node2 lives on.  Then signal the job.
+    # The observable is that the survivor and both daemons are still there.
+    cleanup_swarm
+    for n in 1 2 3; do docker exec "$NODE$n" sh -c 'pkill -9 -x sleep 2>/dev/null; true'; done
+    if prted_dvm_start 'node1:1,node2:1,node3:1'; then
+        # rank 1 (node3) exits at once; rank 0 (node2) sleeps on.  Once rank
+        # 1 is reaped its pid is 0, but it is still a local child of this job
+        # on node3 - which is exactly the proc prted_comm hands to the odls
+        # by name when the job is signalled.
+        PRUN_BG /tmp/odls-sig.out '--forward-signals SIGUSR1 --host node2:1,node3:1 \
+             -n 2 --map-by node sh -c "if [ \$PMIX_RANK -eq 1 ]; then exit 0; fi; exec sleep 120"'
+        sleep 8
+        n=$(ON 2 'pgrep -c -x sleep' 2>/dev/null | tr -d ' \r')
+        [ "${n:-0}" = 1 ] && ok "rank 0 is alive on node2 while rank 1 has exited" \
+                          || bad "expected 1 sleeping rank on node2, saw ${n:-0}"
+        # Relay a signal to the job.  prun turns this into a job-scoped
+        # PMIX_JOB_CTRL_SIGNAL, and every daemon then signals each of ITS
+        # local children of that job by name - including the dead one on
+        # node3.  SIGURG is ignored by default, so a proc that dies here
+        # died from a pid-0 broadcast, not from the signal itself.
+        bpid=$(RUN 'pgrep -x prun | head -1' 2>/dev/null | tr -d ' \r')
+        RUN "kill -URG $bpid" >/dev/null 2>&1
+        sleep 5
+        # node1 is the HNP and runs "prte", not "prted", so only the two
+        # compute-node daemons are counted here; the HNP is checked next
+        c=$(prted_count 2 3)
+        [ "$c" = 2 ] && ok "...and signaling that job left both compute daemons standing" \
+                     || bad "only $c/2 compute daemons survived signaling a job with a dead rank"
+        c=$(RUN 'pgrep -c -x prte' 2>/dev/null | tr -d ' \r')
+        [ "${c:-0}" = 1 ] && ok "...and the HNP too" \
+                          || bad "the HNP did not survive signaling a job with a dead rank"
+        n=$(ON 2 'pgrep -c -x sleep' 2>/dev/null | tr -d ' \r')
+        [ "${n:-0}" = 1 ] && ok "...and the surviving rank was not collateral either" \
+                          || bad "the live rank on node2 did not survive the signal"
+        RUN 'pkill -f "sleep 120"' >/dev/null 2>&1
+        RUN "timeout -k 5 40 pterm --dvm-uri file:$PRTED_URI" >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the dead-rank signal test"
+    fi
+    cleanup_swarm
+
+    banner "odls: kill escalates past an app that ignores SIGTERM"
+    # kill_local_procs walks SIGCONT -> SIGTERM -> SIGKILL with a pause
+    # between each, so an app that traps SIGTERM still dies.  Run one on
+    # node2 and node3, order the DVM down, and require both daemons to be
+    # gone: a daemon that could not kill its child waits for it forever.
+    cleanup_swarm
+    if prted_dvm_start 'node1:1,node2:1,node3:1'; then
+        # ODLSKILLPROBE is just a marker to find the child by.  Every pgrep
+        # below writes it as ODLSKILL[P]ROBE so the pattern cannot match the
+        # pgrep command line itself -- without that this counts 1 survivor
+        # on every node, including nodes that never ran a child.
+        PRUN_BG /tmp/odls-kill.out '--host node2:1,node3:1 -n 2 --map-by node \
+             sh -c "trap : TERM; while true; do sleep 1; done # ODLSKILLPROBE"'
+        sleep 6
+        n=$(ON 2 'pgrep -f "ODLSKILL[P]ROBE" | wc -l' | tr -d ' \r')
+        [ "${n:-0}" != 0 ] && ok "the SIGTERM-proof child is running on node2" \
+                           || bad "the test child never started on node2"
+        # pterm needs the URI: the backgrounded prun above is holding a
+        # rendezvous file of its own, so a bare pterm finds two and refuses
+        RUN "timeout -k 5 40 pterm --dvm-uri file:$PRTED_URI" >/dev/null 2>&1
+        c=$(prted_settle 20 1 2 3)
+        [ "$c" = 0 ] && ok "...and every daemon shut down anyway" \
+                     || bad "$c daemon(s) still up -- the kill escalation did not finish"
+        n=$(ON 2 'pgrep -f "ODLSKILL[P]ROBE" | wc -l' | tr -d ' \r')
+        [ "${n:-0}" = 0 ] && ok "...and the child itself is gone from node2" \
+                          || bad "the SIGTERM-proof child survived on node2"
+    else
+        bad "could not start a DVM for the kill-escalation test"
+    fi
+    cleanup_swarm
+}
+
 test_rml() {
     local out rc n c
 
@@ -5373,6 +5627,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_ess
 
     test_errmgr
+
+    test_odls
 
     test_grpcomm
 
