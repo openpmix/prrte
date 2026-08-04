@@ -320,8 +320,14 @@ much richer signature and payload.
   into the tracker and bumps the appropriate counter: bootstrap **leaders**
   (`nleaders_reported`), bootstrap **followers** (`nfollowers_reported`),
   or ordinary participants (`nreported`). Completion is
-  `nleaders_reported == nleaders && nfollowers_reported == nfollowers` for
-  bootstrap, else `nreported == nexpected`.
+  `nleaders_reported >= nleaders && nfollowers_reported >= nfollowers` for
+  bootstrap, else `nreported >= nexpected` — `>=` rather than `==` because a
+  fault can lower `nexpected` under a tracker that has already counted more
+  than it now needs; the `converged` latch is what keeps that from answering
+  twice. A bootstrap additionally requires `0 < nleaders`: both of its counts
+  are zero until the first *leader* arrives to supply them, so without that
+  guard a tracker created by a follower would satisfy `>= 0` on its own and
+  converge on one contribution with an empty membership.
   - **HNP at completion:** for a construct it assigns the context id (if
     requested, from the decrementing `prte_grpcomm_base.context_id`),
     assembles the **final membership** (union of members + add-members,

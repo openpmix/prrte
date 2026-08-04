@@ -1084,7 +1084,19 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
  * shrink underneath a tracker that has already counted more than it ends up
  * needing. The "converged" latch is what keeps that safe: without it a
  * straggler arriving after completion would drive a second release broadcast,
- * consuming another context id, or a second rollup to our parent. */
+ * consuming another context id, or a second rollup to our parent.
+ *
+ * A bootstrap needs one more guard than that. Its two expected counts are not
+ * known when the tracker is created - they are filled in from the first
+ * *leader* to arrive, which is the only contribution that carries the leader
+ * count (PMIX_GROUP_BOOTSTRAP) and the add-members that set nfollowers. A
+ * tracker created by a follower therefore starts with both counts at zero, and
+ * a ">=" test against zero is satisfied by that single follower: the operation
+ * would converge on one contribution, before any leader has been heard from,
+ * and answer with the empty membership it has assembled so far. nleaders is
+ * the discriminator because a bootstrap always has at least one leader by
+ * definition, whereas nfollowers is legitimately zero for a bootstrap with no
+ * add-members. */
 static void check_complete(prte_grpcomm_group_t *coll)
 {
     int rc;
@@ -1104,8 +1116,9 @@ static void check_complete(prte_grpcomm_group_t *coll)
     }
 
     /* see if everyone has reported */
-    if (!((coll->bootstrap && (coll->nleaders_reported >= coll->nleaders &&
-                               coll->nfollowers_reported >= coll->nfollowers)) ||
+    if (!((coll->bootstrap && 0 < coll->nleaders &&
+           (coll->nleaders_reported >= coll->nleaders &&
+            coll->nfollowers_reported >= coll->nfollowers)) ||
           (!coll->bootstrap && coll->nreported >= coll->nexpected))) {
         return;
     }
