@@ -387,7 +387,7 @@ void prte_grpcomm_direct_xcast_fault_handler(
         XCAST.op_id_completed_at_promotion =
             XCAST.op_id_completed;
     }
-    if(status->parent_changed || status->promoted){
+    if(status->parent_changed || status->promoted || status->demoted){
         // Avoid confusing new parent by accidentally acking with
         // the valid ack id. They'll tell us what id to use.
         op_t* op;
@@ -395,7 +395,7 @@ void prte_grpcomm_direct_xcast_fault_handler(
             op->ack_id_up = PMIX_RANK_INVALID;
         }
     }
-    if(status->children_changed || status->promoted){
+    if(status->children_changed || status->promoted || status->demoted){
         const pmix_rank_t* prev_children =
             (const pmix_rank_t*) status->prev_children.array;
         const pmix_rank_t* children =
@@ -417,9 +417,10 @@ void prte_grpcomm_direct_xcast_fault_handler(
             // If any children have reported back, we have no way of knowing if
             // it was the surviving children or a failed child. So we will need
             // to start a new ack round.
-            // If promoted, avoid late ack arrivals from old children causing
-            // confusion by also starting a new round.
-            bool new_ack_round = op->nreported > 0 || status->promoted;
+            // If promoted/demoted, avoid late ack arrivals from old children
+            // causing confusion by also starting a new round.
+            bool new_ack_round =
+                op->nreported > 0 || status->promoted || status->demoted;
             if(new_ack_round) op->ack_id_down++;
             op->nreported = 0;
 
@@ -435,7 +436,12 @@ void prte_grpcomm_direct_xcast_fault_handler(
             for(size_t i = 0; i < prte_rml_base.children.size; i++){
                 if(PMIX_RANK_INVALID == children[i]){
                     continue;
-                } else if(children[i] != prev_children[i]){
+                } else if(children[i] != prev_children[i] || status->demoted){
+                    // When demoted, we don't know if an old child that followed
+                    // us believed for some short window to have had a different
+                    // parent, which could have caused them to discard the
+                    // original forward. So always replay the op to every child
+                    // when demoted.
                     forward_op_to(op, children[i]);
                 } else if(new_ack_round){
                     request_ack(children[i], &op->sig, op->ack_id_down);
