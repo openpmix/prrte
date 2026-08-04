@@ -678,15 +678,31 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
     } else {
         /* otherwise, check to see if this is the primary pid */
         if (primary_srun_pid == proc->pid) {
-            /* in this case, we just want to fire the proper trigger so
-             * mpirun can exit
-             */
-            PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                                 "%s plm:slurm: primary daemons complete!",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-            /* need to set the #terminated value to avoid an incorrect error msg */
-            jdata->num_terminated = jdata->num_procs;
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
+            if (prte_debug_daemons_flag || prte_leave_session_attached) {
+                /* the prted stayed attached instead of forking off and
+                 * daemonizing, so the process srun is tracking really is
+                 * the persistent daemon - its clean exit means the DVM
+                 * is genuinely gone. Fire the proper trigger so mpirun
+                 * can exit.
+                 */
+                PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+                                     "%s plm:slurm: primary daemons complete!",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                /* need to set the #terminated value to avoid an incorrect error msg */
+                jdata->num_terminated = jdata->num_procs;
+                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
+            } else {
+                /* the prted forked and daemonized (the default): srun was
+                 * only ever tracking the fork's parent, which exits as
+                 * soon as the real daemon signals it is up and running.
+                 * A clean exit here is that hand-off, not termination -
+                 * daemon loss is instead caught when its RML connection
+                 * to the HNP actually drops. */
+                PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+                                     "%s plm:slurm: primary srun exited after "
+                                     "daemon hand-off",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+            }
         }
     }
 
