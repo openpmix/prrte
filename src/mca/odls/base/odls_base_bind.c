@@ -56,6 +56,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "src/mca/odls/base/base.h"
 
@@ -169,7 +170,7 @@ void prte_odls_base_prepare_binding(prte_odls_spawn_caddy_t *cd)
                available processors */
             root = hwloc_get_root_obj(prte_hwloc_topology);
             if (NULL == root->userdata) {
-                pmix_show_help("help-prte-odls-default.txt", "incorrectly bound", true,
+                prte_show_help("help-prte-odls-default.txt", "incorrectly bound", true,
                                prte_process_info.nodename, context->app);
             }
             cd->bind_cpuset = hwloc_bitmap_dup(
@@ -199,7 +200,7 @@ void prte_odls_base_prepare_binding(prte_odls_spawn_caddy_t *cd)
                 && PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding)) {
                 cd->bind_fatal = true;
             } else if (PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding)) {
-                pmix_show_help("help-prte-odls-default.txt", "not bound", true,
+                prte_show_help("help-prte-odls-default.txt", "not bound", true,
                                prte_process_info.nodename, context->app,
                                "unable to apply the requested binding");
             }

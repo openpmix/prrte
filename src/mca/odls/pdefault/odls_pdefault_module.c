@@ -121,6 +121,7 @@
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_getcwd.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 #include "src/util/sys_limits.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -166,6 +167,22 @@ prte_odls_base_module_t prte_odls_pdefault_module = {
 static int odls_default_kill_local(pid_t pid, int signum)
 {
     pid_t pgrp;
+
+    /* Refuse a non-positive pid. Both this function and send_signal() turn
+     * a pid into a process GROUP, and kill(0) / kill(-0) means "every
+     * process in the CALLER's group" - which is the daemon itself, its
+     * other children, and in a prterun the launching tool too. A child
+     * sits at pid 0 whenever it has not forked yet, failed to launch, or
+     * has already been reaped, so this is reachable rather than
+     * theoretical; the base layer gates on it, and so do we, because the
+     * consequence of getting it wrong once is the node's daemon killing
+     * itself. */
+    if (0 >= pid) {
+        PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
+                             "%s odls:pdefault:kill refused for pid %d",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) pid));
+        return PRTE_ERR_BAD_PARAM;
+    }
 
 #if HAVE_SETPGID
     pgrp = getpgid(pid);
@@ -220,7 +237,7 @@ static void set_handler_default(int sig)
 static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
 {
     int i;
-    long fd, fdmax = sysconf(_SC_OPEN_MAX);
+    long fd;
     sigset_t sigs;
 
 #if HAVE_SETPGID
@@ -286,15 +303,44 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     }
 
     /* Close all open file descriptors except stdin/stdout/stderr and the
-       pipe up to the parent.  We use a plain close() loop rather than
-       scanning /proc/self/fd with opendir/readdir (as
-       pmix_close_open_file_descriptors does): those allocate, and we are
-       in the async-signal-safe window between fork() and execve(). */
-    for (fd = 3; fd < fdmax; fd++) {
-        if (fd != write_fd) {
+       pipe up to the parent.  We cannot scan /proc/self/fd with
+       opendir/readdir (as pmix_close_open_file_descriptors does): that
+       allocates, and we are in the async-signal-safe window between fork()
+       and execve().
+
+       Prefer a bulk close syscall.  The portable fallback is a close()
+       loop bounded by sysconf(_SC_OPEN_MAX), and that bound is routinely
+       1048576 on a modern system, which makes the loop cost roughly 137ms
+       of pure syscall time for EVERY process launched - while the daemon
+       that forked us is blocked reading our pipe for the whole of it.
+       close_range()/closefrom() collapse that to a single syscall (~1us
+       measured), and both are async-signal-safe.
+
+       Either way we must keep write_fd, so close the few descriptors below
+       it one at a time and take everything above it in bulk. */
+    for (fd = 3; fd < write_fd; fd++) {
+        close((int) fd);
+    }
+#if defined(HAVE_CLOSE_RANGE) && HAVE_DECL_CLOSE_RANGE
+    if (0 != close_range((unsigned int) write_fd + 1, ~0U, 0)) {
+        /* the syscall can be missing at RUNTIME even when it was present
+           at build time (an older kernel, or a seccomp policy that denies
+           it) - fall back rather than leaving descriptors open */
+        long fdmax = sysconf(_SC_OPEN_MAX);
+        for (fd = write_fd + 1; fd < fdmax; fd++) {
             close((int) fd);
         }
     }
+#elif defined(HAVE_CLOSEFROM) && HAVE_DECL_CLOSEFROM
+    closefrom((int) write_fd + 1);
+#else
+    {
+        long fdmax = sysconf(_SC_OPEN_MAX);
+        for (fd = write_fd + 1; fd < fdmax; fd++) {
+            close((int) fd);
+        }
+    }
+#endif
 
     /* Set signal handlers back to the default.  Do this close to
        the exev() because the event library may (and likely will)
@@ -373,40 +419,40 @@ static void render_child_msg(prte_odls_spawn_caddy_t *cd, prte_odls_pipe_err_msg
 
     switch (msg->which) {
     case PRTE_ODLS_CHILD_ERR_IOF_SETUP:
-        pmix_show_help("help-prte-odls-default.txt", "iof setup failed", true,
+        prte_show_help("help-prte-odls-default.txt", "iof setup failed", true,
                        prte_process_info.nodename, cd->app->app);
         break;
     case PRTE_ODLS_CHILD_ERR_NEG_FD:
-        pmix_show_help("help-prte-odls-default.txt", "neg-fd", true,
+        prte_show_help("help-prte-odls-default.txt", "neg-fd", true,
                        prte_process_info.nodename, "/dev/null");
         break;
     case PRTE_ODLS_CHILD_ERR_WDIR:
-        pmix_show_help("help-prun.txt", "prun:wdir-not-found", true, "prted",
+        prte_show_help("help-prun.txt", "prun:wdir-not-found", true, "prted",
                        (NULL == cd->wdir) ? "<none>" : cd->wdir,
                        prte_process_info.nodename, rank);
         break;
     case PRTE_ODLS_CHILD_ERR_STOP_ON_EXEC:
-        pmix_show_help("help-prun.txt", "prun:stop-on-exec", true, "prted",
+        prte_show_help("help-prun.txt", "prun:stop-on-exec", true, "prted",
                        strerror(msg->errnum), prte_process_info.nodename, rank);
         break;
     case PRTE_ODLS_CHILD_ERR_BIND:
-        pmix_show_help("help-prte-odls-default.txt", "binding generic error", true,
+        prte_show_help("help-prte-odls-default.txt", "binding generic error", true,
                        prte_process_info.nodename, cd->app->app, bind_errmsg(msg->errnum));
         break;
     case PRTE_ODLS_CHILD_ERR_BIND_MEM:
-        pmix_show_help("help-prte-odls-default.txt", "memory binding error", true,
+        prte_show_help("help-prte-odls-default.txt", "memory binding error", true,
                        prte_process_info.nodename, cd->app->app, bind_errmsg(msg->errnum));
         break;
     case PRTE_ODLS_CHILD_WARN_NOT_BOUND:
-        pmix_show_help("help-prte-odls-default.txt", "not bound", true,
+        prte_show_help("help-prte-odls-default.txt", "not bound", true,
                        prte_process_info.nodename, cd->app->app, bind_errmsg(msg->errnum));
         break;
     case PRTE_ODLS_CHILD_WARN_MEM_NOT_BOUND:
-        pmix_show_help("help-prte-odls-default.txt", "memory not bound", true,
+        prte_show_help("help-prte-odls-default.txt", "memory not bound", true,
                        prte_process_info.nodename, cd->app->app, bind_errmsg(msg->errnum));
         break;
     case PRTE_ODLS_CHILD_WARN_INCORRECT:
-        pmix_show_help("help-prte-odls-default.txt", "incorrectly bound", true,
+        prte_show_help("help-prte-odls-default.txt", "incorrectly bound", true,
                        prte_process_info.nodename, cd->app->app);
         break;
     case PRTE_ODLS_CHILD_ERR_EXEC:
@@ -443,7 +489,7 @@ static void render_child_msg(prte_odls_spawn_caddy_t *cd, prte_odls_pipe_err_msg
         } else {
             errmsg = strerror(msg->errnum);
         }
-        pmix_show_help("help-prte-odls-default.txt", "execve error", true,
+        prte_show_help("help-prte-odls-default.txt", "execve error", true,
                        prte_process_info.nodename, wdir, cd->app->app, errmsg);
         break;
     }
@@ -625,6 +671,15 @@ static int send_signal(pid_t pd, int signal)
 {
     int rc = PRTE_SUCCESS;
     pid_t pid;
+
+    /* see the note in odls_default_kill_local(): kill(0) / kill(-0) is the
+     * daemon's own process group */
+    if (0 >= pd) {
+        PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
+                             "%s odls:pdefault:signal refused for pid %d",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) pd));
+        return PRTE_ERR_BAD_PARAM;
+    }
 
     if (prte_odls_globals.signal_direct_children_only) {
         pid = pd;

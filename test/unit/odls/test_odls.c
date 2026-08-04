@@ -47,9 +47,15 @@
  */
 
 #include "prte_config.h"
+#include <errno.h>
+#include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <unistd.h>
+#ifdef HAVE_SYS_WAIT_H
+#    include <sys/wait.h>
+#endif
 
 #include "constants.h"
 #include "src/mca/base/pmix_base.h"
@@ -367,6 +373,360 @@ static int test_attribute_order(void)
     return failures;
 }
 
+/* ------------------------------------------------------------------ *
+ * process_envars: the envar directives applied to an app's environment
+ * ------------------------------------------------------------------ */
+
+/* look up NAME in an environ-style array; NULL if absent */
+static const char *envget(char **env, const char *name)
+{
+    size_t len = strlen(name);
+    int n;
+
+    for (n = 0; NULL != env && NULL != env[n]; n++) {
+        if (0 == strncmp(env[n], name, len) && '=' == env[n][len]) {
+            return env[n] + len + 1;
+        }
+    }
+    return NULL;
+}
+
+static void add_envar(pmix_list_t *attrs, prte_attribute_key_t key,
+                      const char *name, const char *value)
+{
+    pmix_envar_t envt;
+
+    PMIX_ENVAR_CONSTRUCT(&envt);
+    envt.envar = (char *) name;
+    envt.value = (char *) value;
+    envt.separator = ':';
+    prte_append_attribute(attrs, key, PRTE_ATTR_GLOBAL, &envt, PMIX_ENVAR);
+}
+
+static int test_process_envars(void)
+{
+    int failures = 0;
+    prte_job_t *jdata;
+    prte_app_context_t *app;
+    const char *v;
+
+    jdata = PMIX_NEW(prte_job_t);
+    app = PMIX_NEW(prte_app_context_t);
+    app->env = PMIx_Argv_split("PATH=/bin PATHEXT=.EXE KEEP=orig SET_ME=old"
+                               " PFX_A=1 PFX_B=2 OTHER=3",
+                               ' ');
+
+    /* SET overwrites; ADD must NOT - attr.h defines it as "add envar, do
+     * not override pre-existing one" (it carries PMIX_ADD_ENVAR, whose
+     * definition says the same).  Treating ADD as SET silently threw away
+     * a value the user or the environment had already established. */
+    add_envar(&jdata->attributes, PRTE_JOB_SET_ENVAR, "SET_ME", "new");
+    add_envar(&jdata->attributes, PRTE_JOB_ADD_ENVAR, "KEEP", "clobbered");
+    add_envar(&jdata->attributes, PRTE_JOB_ADD_ENVAR, "FRESH", "added");
+
+    /* PREPEND/APPEND must match the name up to AND INCLUDING the '=', or
+     * they edit PATHEXT (which the environment above lists right after
+     * PATH) instead of PATH */
+    add_envar(&jdata->attributes, PRTE_JOB_PREPEND_ENVAR, "PATH", "/pre");
+    add_envar(&jdata->attributes, PRTE_JOB_APPEND_ENVAR, "PATH", "/post");
+
+    /* UNSET is carried as a STRING, not a pmix_envar_t; a trailing '*'
+     * makes it a prefix match */
+    prte_append_attribute(&jdata->attributes, PRTE_JOB_UNSET_ENVAR, PRTE_ATTR_GLOBAL,
+                          (void *) "OTHER", PMIX_STRING);
+    prte_append_attribute(&jdata->attributes, PRTE_JOB_UNSET_ENVAR, PRTE_ATTR_GLOBAL,
+                          (void *) "PFX_*", PMIX_STRING);
+
+    /* the app's directives are applied after the job's, so they win */
+    add_envar(&app->attributes, PRTE_APP_SET_ENVAR, "SET_ME", "app");
+
+    prte_odls_base_process_envars(jdata, app);
+
+    v = envget(app->env, "SET_ME");
+    CHECK("app SET trumps job SET", NULL != v && 0 == strcmp(v, "app"));
+
+    v = envget(app->env, "KEEP");
+    CHECK("ADD does not override an existing value",
+          NULL != v && 0 == strcmp(v, "orig"));
+
+    v = envget(app->env, "FRESH");
+    CHECK("ADD sets a variable that was absent",
+          NULL != v && 0 == strcmp(v, "added"));
+
+    v = envget(app->env, "PATH");
+    CHECK("PREPEND/APPEND edited PATH in order",
+          NULL != v && 0 == strcmp(v, "/pre:/bin:/post"));
+
+    v = envget(app->env, "PATHEXT");
+    CHECK("PATHEXT untouched by a PATH directive",
+          NULL != v && 0 == strcmp(v, ".EXE"));
+
+    CHECK("UNSET removed the named variable", NULL == envget(app->env, "OTHER"));
+    CHECK("UNSET prefix removed PFX_A", NULL == envget(app->env, "PFX_A"));
+    CHECK("UNSET prefix removed PFX_B", NULL == envget(app->env, "PFX_B"));
+
+    PMIX_RELEASE(app);
+    PMIX_RELEASE(jdata);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_process_envars\n");
+    }
+    return failures;
+}
+
+/*
+ * The child->parent pipe protocol.  The child half runs in the
+ * async-signal-safe window between fork() and execve(), so the only thing
+ * it can say is a fixed-size record; the parent half decodes it and
+ * renders the diagnostic.  Both halves must agree on that record, and
+ * child_fail must additionally terminate the child with the exit status it
+ * was handed.  Exercise both across a real pipe and a real fork.
+ */
+static int test_child_pipe_protocol(void)
+{
+    int failures = 0;
+    int p[2];
+    prte_odls_pipe_err_msg_t msg;
+    pid_t pid;
+    int status;
+    ssize_t n;
+
+    if (0 != pipe(p)) {
+        fprintf(stdout, "SKIPPED test_child_pipe_protocol (pipe failed)\n");
+        return 0;
+    }
+
+    /* a warning is written and the caller keeps going */
+    prte_odls_base_child_warn(p[1], PRTE_ODLS_CHILD_WARN_NOT_BOUND, EPERM);
+    memset(&msg, 0, sizeof(msg));
+    n = read(p[0], &msg, sizeof(msg));
+    CHECK("warn wrote one whole record", (ssize_t) sizeof(msg) == n);
+    CHECK("warn is not fatal", !msg.fatal);
+    CHECK("warn carried its code", PRTE_ODLS_CHILD_WARN_NOT_BOUND == msg.which);
+    CHECK("warn carried its errno", EPERM == msg.errnum);
+
+    /* a failure is written and the child dies with the given status */
+    pid = fork();
+    if (0 == pid) {
+        close(p[0]);
+        prte_odls_base_child_fail(p[1], 7, PRTE_ODLS_CHILD_ERR_EXEC, ENOENT);
+        /* does not return */
+    }
+    if (0 > pid) {
+        close(p[0]);
+        close(p[1]);
+        fprintf(stdout, "SKIPPED test_child_pipe_protocol fork half\n");
+        return failures;
+    }
+    memset(&msg, 0, sizeof(msg));
+    n = read(p[0], &msg, sizeof(msg));
+    CHECK("fail wrote one whole record", (ssize_t) sizeof(msg) == n);
+    CHECK("fail is fatal", msg.fatal);
+    CHECK("fail carried its code", PRTE_ODLS_CHILD_ERR_EXEC == msg.which);
+    CHECK("fail carried its errno", ENOENT == msg.errnum);
+    CHECK("fail carried its exit status", 7 == msg.exit_status);
+
+    while (pid != waitpid(pid, &status, 0) && EINTR == errno) {
+        continue;
+    }
+    CHECK("child exited rather than being signaled", WIFEXITED(status));
+    CHECK("child exited with the requested status",
+          WIFEXITED(status) && 7 == WEXITSTATUS(status));
+
+    close(p[0]);
+    close(p[1]);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_child_pipe_protocol\n");
+    }
+    return failures;
+}
+
+/*
+ * The spawn-thread pool.  start_threads sizes the pool from the job it is
+ * first handed, and writes its choice back into
+ * prte_odls_globals.num_threads.  That makes the "have we already built a
+ * pool?" test load-bearing: keying it off ev_threads (which stays NULL
+ * whenever the pool is "no dedicated threads at all") let the choice made
+ * for the first small job stand for the life of the daemon, so a later job
+ * with thousands of local procs still forked them one at a time on the
+ * progress thread.  Guard the guard, and the reset harvest_threads owes.
+ */
+static int test_thread_pool_sizing(void)
+{
+    int failures = 0;
+    prte_job_t *jdata;
+    bool save_persistent = prte_persistent;
+
+    /* Drive the from-the-job sizing branch.  prte_persistent defaults to
+     * true, and a persistent DVM short-circuits to max_threads and spins
+     * that many real progress threads - which this bare test process is in
+     * no position to start and stop. */
+    prte_persistent = false;
+
+    /* start from a known-clean pool */
+    prte_odls_base_harvest_threads();
+    CHECK("harvest clears the base array", NULL == prte_odls_globals.ev_bases);
+    CHECK("harvest leaves no threads behind", 0 == prte_odls_globals.num_threads);
+    /* the sizing sentinel is what register() established; harvest must NOT
+     * put it back (see below) */
+    prte_odls_globals.num_threads = -1;
+
+    /* a job below the cutoff gets no dedicated threads, and forks on the
+     * shared default base */
+    jdata = PMIX_NEW(prte_job_t);
+    jdata->num_local_procs = 1;
+    prte_odls_base_start_threads(jdata);
+    CHECK("small job uses no dedicated threads", 0 == prte_odls_globals.num_threads);
+    /* ...which means the one entry is the shared default base itself.  (In
+     * this bare test process prte_event_base has never been created, so
+     * compare against it rather than asserting non-NULL.) */
+    CHECK("small job dispatches on the default base",
+          NULL != prte_odls_globals.ev_bases
+          && prte_event_base == prte_odls_globals.ev_bases[0]);
+    /* launch_local indexes ev_bases with next_base after incrementing and
+     * wrapping at num_threads; with no dedicated threads that must land on
+     * the single element, not past it */
+    ++prte_odls_globals.next_base;
+    if (prte_odls_globals.num_threads <= prte_odls_globals.next_base) {
+        prte_odls_globals.next_base = 0;
+    }
+    CHECK("the dispatch index stays inside the one-element array",
+          0 == prte_odls_globals.next_base);
+
+    /* asking again for the same pool must be a no-op, not a rebuild */
+    prte_odls_base_start_threads(jdata);
+    CHECK("start_threads is idempotent", 0 == prte_odls_globals.num_threads);
+    PMIX_RELEASE(jdata);
+
+    /* Harvest tears the pool down and must leave it torn down.  It runs
+     * from framework CLOSE, so anything that reopens the sizing question
+     * here is an invitation to build a whole new pool on the way out: with
+     * the "-1 = you decide" sentinel restored, a later start_threads during
+     * teardown re-sized from the job and spun a second set of real threads
+     * (seen on a 40-proc node, which printed "START 5 LAUNCH THREADS"
+     * twice).  Record "no threads", not "undecided". */
+    prte_odls_base_harvest_threads();
+    CHECK("harvest released the base array", NULL == prte_odls_globals.ev_bases);
+    CHECK("harvest leaves the pool at zero, not undecided",
+          0 == prte_odls_globals.num_threads);
+
+    /* ...and a call that arrives while finalizing builds nothing at all */
+    prte_finalizing = true;
+    jdata = PMIX_NEW(prte_job_t);
+    jdata->num_local_procs = (int32_t) prte_odls_globals.cutoff + 8;
+    prte_odls_base_start_threads(jdata);
+    CHECK("start_threads builds nothing once finalizing",
+          NULL == prte_odls_globals.ev_bases && 0 == prte_odls_globals.num_threads);
+    PMIX_RELEASE(jdata);
+    prte_finalizing = false;
+
+    prte_persistent = save_persistent;
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_thread_pool_sizing\n");
+    }
+    return failures;
+}
+
+/*
+ * Signalling a proc that has no pid must not reach the daemon.
+ *
+ * Both component primitives turn a pid into a process GROUP (-pid) so a
+ * signal reaches whatever the app spawned.  That makes pid 0 catastrophic
+ * rather than merely useless: kill(0) and kill(-0) both mean "every
+ * process in the CALLER's group", so a daemon asked to signal a child at
+ * pid 0 signals itself, its other children, and - under prterun - the
+ * launching tool.  A child sits at pid 0 before its fork, after a
+ * failed launch, and once kill_local_procs has cleared it, and
+ * prted_comm.c asks for every local child of a job BY NAME, so this is
+ * reachable.
+ *
+ * Drive the base's signal fn with a recording stub in place of the real
+ * kill: the assertion is that no pid <= 0 is ever handed down.
+ */
+static pid_t signalled_pids[8];
+static int nsignalled = 0;
+
+static int recording_signal(pid_t pid, int signum)
+{
+    PRTE_HIDE_UNUSED_PARAMS(signum);
+    if (nsignalled < (int) (sizeof(signalled_pids) / sizeof(signalled_pids[0]))) {
+        signalled_pids[nsignalled++] = pid;
+    }
+    return PRTE_SUCCESS;
+}
+
+static int test_signal_skips_dead_procs(void)
+{
+    int failures = 0;
+    prte_proc_t *live, *dead, *unborn;
+    int i, bad = 0;
+
+    /* three local children of one job: one running, one that has been
+     * reaped (pid cleared), one that never forked */
+    live = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&live->name, "odls-sig-test", 0);
+    live->pid = getpid(); /* any positive pid - it is never really signaled */
+    PRTE_FLAG_SET(live, PRTE_PROC_FLAG_ALIVE);
+    pmix_pointer_array_add(prte_local_children, live);
+
+    dead = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&dead->name, "odls-sig-test", 1);
+    dead->pid = 0;
+    PRTE_FLAG_UNSET(dead, PRTE_PROC_FLAG_ALIVE);
+    pmix_pointer_array_add(prte_local_children, dead);
+
+    unborn = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&unborn->name, "odls-sig-test", 2);
+    unborn->pid = 0;
+    /* flagged ALIVE but not yet forked - launch_local sets the flag before
+     * the fork, so this state really occurs */
+    PRTE_FLAG_SET(unborn, PRTE_PROC_FLAG_ALIVE);
+    pmix_pointer_array_add(prte_local_children, unborn);
+
+    /* the all-procs branch */
+    nsignalled = 0;
+    prte_odls_base_default_signal_local_procs(NULL, SIGCONT, recording_signal);
+    CHECK("signal-all reached only the live proc", 1 == nsignalled);
+    for (i = 0; i < nsignalled; i++) {
+        if (0 >= signalled_pids[i]) {
+            bad++;
+        }
+    }
+    CHECK("signal-all never used a non-positive pid", 0 == bad);
+
+    /* ...and the by-name branch, which is the one prted_comm.c uses and
+     * the one that had no gate at all */
+    nsignalled = 0;
+    prte_odls_base_default_signal_local_procs(&dead->name, SIGCONT, recording_signal);
+    CHECK("a reaped proc is not signaled by name", 0 == nsignalled);
+
+    nsignalled = 0;
+    prte_odls_base_default_signal_local_procs(&unborn->name, SIGCONT, recording_signal);
+    CHECK("a not-yet-forked proc is not signaled by name", 0 == nsignalled);
+
+    nsignalled = 0;
+    prte_odls_base_default_signal_local_procs(&live->name, SIGCONT, recording_signal);
+    CHECK("...but the live one still is", 1 == nsignalled);
+    CHECK("...with its real pid",
+          1 == nsignalled && getpid() == signalled_pids[0]);
+
+    /* leave the global array as we found it */
+    for (i = 0; i < prte_local_children->size; i++) {
+        prte_proc_t *p = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
+        if (NULL != p) {
+            pmix_pointer_array_set_item(prte_local_children, i, NULL);
+            PMIX_RELEASE(p);
+        }
+    }
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_signal_skips_dead_procs\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -392,6 +752,10 @@ int main(void)
     failures += test_child_err_enum();
     failures += test_classes();
     failures += test_attribute_order();
+    failures += test_process_envars();
+    failures += test_child_pipe_protocol();
+    failures += test_thread_pool_sizing();
+    failures += test_signal_skips_dead_procs();
 
     (void) pmix_mca_base_framework_close(&prte_odls_base_framework);
     prte_finalize();

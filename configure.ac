@@ -568,6 +568,26 @@ PRTE_SEARCH_LIBS_CORE([ceil], [m])
 
 AC_CHECK_FUNCS([asprintf snprintf vasprintf vsnprintf fork setsid strsignal syslog setpgid fileno_unlocked isatty])
 
+# Bulk fd-closing for the odls forked child.  Between fork() and execve()
+# the child must close every inherited descriptor, and it may use only
+# async-signal-safe calls - which rules out scanning /proc/self/fd with
+# opendir/readdir.  The portable fallback is a close() loop bounded by
+# sysconf(_SC_OPEN_MAX), and on any modern system that bound is enormous
+# (1048576 is common), so the loop costs ~137ms of syscalls PER LAUNCHED
+# PROCESS - and the launching daemon is blocked on the child's pipe for
+# every one of them.  close_range() (Linux 5.9+) and closefrom()
+# (BSD/macOS/Solaris) each do the whole job in one async-signal-safe
+# syscall.  Require the DECLARATION as well as the symbol: a bare link
+# test can succeed against a libc that ships the symbol without a
+# prototype, and an implicit declaration is a hard error under
+# --enable-devel-check.
+AC_CHECK_FUNCS([close_range closefrom])
+AC_CHECK_DECLS([close_range, closefrom], [], [], [[
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+]])
+
 # On some hosts, htonl is a define, so the AC_CHECK_FUNC will get
 # confused.  On others, it's in the standard library, but stubbed with
 # the magic glibc foo as not implemented.  and on other systems, it's

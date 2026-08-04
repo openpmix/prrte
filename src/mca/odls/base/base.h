@@ -95,6 +95,12 @@ PRTE_EXPORT int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *
 
 PRTE_EXPORT void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata);
 
+/* Apply the job's, then the app's, envar directives (SET/ADD/UNSET/
+ * PREPEND/APPEND) to app->env. Called by the launch path once per app;
+ * exported so the unit tests can exercise the semantics directly. */
+PRTE_EXPORT void prte_odls_base_process_envars(prte_job_t *jdata,
+                                               prte_app_context_t *app);
+
 /* define an object for fork/exec the local proc */
 typedef struct {
     pmix_object_t super;
@@ -207,19 +213,26 @@ PRTE_EXPORT void prte_odls_base_child_warn(int write_fd, prte_odls_child_err_t w
                                            int errnum);
 
 
+/* Fail every local child of job "ns" belonging to app index "j" (UINT_MAX
+ * for "every app"), recording status "s" as the proc's exit code.
+ *
+ * NB: "s" is stored verbatim and may be a PMIx status or a PRRTE one -
+ * prte_render_launch_failure() switches on both. Do not convert it on the
+ * way in; see the note in this framework's AGENTS.md. */
 #define PRTE_ODLS_SET_ERROR(ns, s, j)                                                   \
 do {                                                                                    \
     int _idx;                                                                           \
     prte_proc_t *_cld;                                                                  \
-    unsigned int _j = (unsigned int)j;                                                  \
+    unsigned int _j = (unsigned int)(j);                                                \
+    int _s = (s);                                                                       \
     for (_idx = 0; _idx < prte_local_children->size; _idx++) {                          \
         _cld = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, _idx);  \
         if (NULL == _cld) {                                                             \
             continue;                                                                   \
         }                                                                               \
-        if (PMIX_CHECK_NSPACE(ns, _cld->name.nspace) &&                                 \
+        if (PMIX_CHECK_NSPACE((ns), _cld->name.nspace) &&                               \
             (UINT_MAX == _j || _j == _cld->app_idx)) {                                  \
-            _cld->exit_code = s;                                                        \
+            _cld->exit_code = _s;                                                       \
             PRTE_ACTIVATE_PROC_STATE(&_cld->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);    \
         }                                                                               \
     }                                                                                   \
