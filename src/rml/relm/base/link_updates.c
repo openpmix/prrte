@@ -129,8 +129,8 @@ void prte_relm_base_fault_handler(const prte_rml_recovery_status_t* status){
             // No information to exchange with invalid links
             pmix_bitmap_set_bit(upstream_updated, idx);
             pmix_bitmap_set_bit(downstream_updated, idx);
-        } else if(status->promoted){
-            // If promoted, all valid links need full exchanges
+        } else if(status->promoted || status->demoted){
+            // If tree position updated, all valid links need full exchanges
             pmix_bitmap_clear_bit(upstream_updated, idx);
             pmix_bitmap_clear_bit(downstream_updated, idx);
         } else if(!pmix_bitmap_is_set_bit(downstream_updated, idx)){
@@ -204,7 +204,7 @@ static size_t purge_rank(
     prte_relm_msg_t* msg;
     PMIX_HASH_TABLE_FOREACH(guid, uint64, msg, &rank->msgs){
         bool purge = !prte_rml_is_node_up(msg->src);
-        if(!purge && status->promoted){
+        if(!purge && (status->promoted || status->demoted)){
             //We may no longer be in the path for this message
             pmix_rank_t up = prte_relm_sm->upstream_rank(msg);
             pmix_rank_t down = prte_relm_sm->downstream_rank(msg);
