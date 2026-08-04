@@ -406,6 +406,17 @@ node2 and once on node1, because the HNP and the daemon carry **separate**
 copies of the write handler — the HNP copy was fixed upstream in 2025 and
 the daemon copy was missed.
 
+A third pass runs `slowcat` slower still (64 bytes every 4 ms), which is
+what pushes the daemon's stdin backlog past `PRTE_IOF_MAX_INPUT_BUFFERS`
+(50 chunks) and makes it send the HNP an **XON/XOFF** message. That message
+is nothing but the stream tag, on the same RML tag forwarded output uses,
+and the HNP used to unpack the tag and then reach straight for a proc — so
+an ordinary slow reader put a PMIx unpack error on the user's terminal. The
+case asserts delivery is still exact *and* that the HNP's log gained no
+unpack error. Do not weaken the reader's pace: at `cat` speed, or even at
+the pace the two cases above use, the backlog may never cross 50 and the
+case passes without having tested anything.
+
 **Grow** (`elastic grow node2:2,node3:2`): phase-1 `PMIX_SUCCESS`, then phase-2
 `PMIX_DVM_IS_READY`, and `prted` now running on node2 and node3.
 

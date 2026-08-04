@@ -130,14 +130,21 @@ preceding data and then closes the proc's stdin fd.
 The daemon's sink write callback drains `wev->outputs` to the local proc's
 stdin fd with the usual non-blocking handling (EAGAIN/EINTR → prepend +
 re-arm; partial write → `prte_iof_base_adjust_short_write` + prepend +
-re-arm; `numbytes == 0` → release the write event and null `sink->wev` to
-close). Its distinctive
+re-arm; `numbytes == 0` → release the sentinel chunk, release the write
+event, and null `sink->wev` to close — the chunk in hand came off the list,
+so releasing the write event does *not* free it, and it leaked here for
+years). Its distinctive
 behavior is **flow-control recovery**: on a fatal write error it sends
 `PRTE_IOF_XOFF`, and at the `CHECK` label, whenever `xoff` is latched and
 the backlog has fallen below `PRTE_IOF_MAX_INPUT_BUFFERS`, it clears the
 latch and sends `PRTE_IOF_XON` to resume stdin from the HNP. The inline
 `RHC:` comment flags the unsolved case of several procs fighting over
 XON/XOFF at different consumption rates.
+
+**Do not build on that recovery.** The HNP recognizes XON/XOFF but does not
+act on it, because nothing upstream of the HNP honors a refusal — see the
+framework guide's *Flow control* section. The latch is real, the message is
+real, and the throttle is not; a backed-up stdin sink here simply queues.
 
 ### Relaying a tool's stdin (`prted_push_stdin`)
 
