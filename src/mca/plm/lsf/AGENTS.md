@@ -56,7 +56,9 @@ and the module. There is no version probing.
 3. Build the **`prted` argv**: strip stray `PMIX_LAUNCHER_*` env vars,
    `prte_plm_base_setup_prted_cmd`, then
    `prte_plm_base_prted_append_basic_args(..., "lsf", &proc_vpid_index)`,
-   substitute `map->daemon_vpid_start` into the vpid slot,
+   substitute `map->daemon_vpid_start` into the vpid slot (recomputed by
+   `setup_virtual_machine` on every launch - a stale base would tell the
+   daemons of a later add-host launch to claim ranks live daemons own),
    `prte_plm_base_wrap_args`.
 4. Build the **environment** (`env`): copy `prte_launch_environ` (already
    stripped of `PRTE_`/`PMIX_` vars), then rewrite `PATH`/
