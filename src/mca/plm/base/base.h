@@ -55,12 +55,13 @@ PRTE_EXPORT int prte_plm_base_select(void);
  */
 PRTE_EXPORT void prte_plm_base_set_slots(prte_node_t *node);
 PRTE_EXPORT void prte_plm_base_setup_job(int fd, short args, void *cbdata);
-PRTE_EXPORT void prte_plm_base_setup_job_complete(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_plm_base_complete_setup(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_plm_base_daemons_reported(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_plm_base_allocation_complete(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_plm_base_daemons_launched(int fd, short args, void *cbdata);
-PRTE_EXPORT void prte_plm_base_vm_ready(int fd, short args, void *cbdata);
+/* NOTE: the INIT_COMPLETE and VM_READY handlers are state/dvm's
+ * init_complete() and vm_ready(); the copies that used to be declared here
+ * were unregistered duplicates and are gone */
 PRTE_EXPORT void prte_plm_base_mapping_complete(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_plm_base_launch_apps(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata);
