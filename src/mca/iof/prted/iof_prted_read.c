@@ -187,13 +187,24 @@ CLEAN_RETURN:
      * proc terminated this IOF channel - either way, release the
      * corresponding event. This deletes the read event and closes
      * the file descriptor */
+    /* Hold the proc across the release. The read event we are about to
+     * drop holds a reference on it (PRTE_IOF_READ_EVENT retained it), so
+     * if this is the last such reference - which it is once the proc has
+     * been taken off the component's list, as an abnormally terminated job
+     * leaves it - the release below runs the proc's destructor from inside
+     * the read event's own destructor, and everything after it reads freed
+     * memory. The HNP's copy of this handler has always taken that guard;
+     * this one had not. */
+    PMIX_RETAIN(proct);
     if (rev->tag & PRTE_IOF_STDOUT) {
         if (NULL != proct->revstdout) {
             PMIX_RELEASE(proct->revstdout);
+            proct->revstdout = NULL;
         }
     } else if (rev->tag & PRTE_IOF_STDERR) {
         if (NULL != proct->revstderr) {
             PMIX_RELEASE(proct->revstderr);
+            proct->revstderr = NULL;
         }
     }
     /* check to see if they are all done */
@@ -201,6 +212,7 @@ CLEAN_RETURN:
         /* this proc's iof is complete */
         PRTE_ACTIVATE_PROC_STATE(&proct->name, PRTE_PROC_STATE_IOF_COMPLETE);
     }
+    PMIX_RELEASE(proct);
     if (NULL != buf) {
         PMIX_DATA_BUFFER_RELEASE(buf);
     }

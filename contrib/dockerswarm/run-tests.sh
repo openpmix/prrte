@@ -4716,6 +4716,43 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
             || bad "slow-reader stdin corrupted (rc=$rc, sent=$insz received=$got, md5 $insum vs $outsum): $(RUN 'head -c 200 /tmp/iof_slow_err.txt')"
         ON 2 'rm -f /tmp/iof_slow_out.txt' >/dev/null 2>&1
 
+        # A reader slow enough to push the daemon's stdin backlog past
+        # PRTE_IOF_MAX_INPUT_BUFFERS (50 queued chunks), which is what makes
+        # the daemon send the HNP a flow-control message.
+        #
+        # That message consists of NOTHING but the stream tag -- no proc, no
+        # count, no payload -- and it travels on PRTE_RML_TAG_IOF_HNP, the same
+        # tag forwarded output uses.  The HNP used to unpack the tag and then
+        # reach straight for a proc, which on a tag-only buffer fails, so a
+        # perfectly ordinary slow reader produced a PMIx unpack error on the
+        # user's terminal.  The HNP now screens the XON/XOFF mask first.
+        #
+        # The assertion is on the HNP's own log, so the reader has to be slow
+        # enough for the backlog to actually cross 50: 64 bytes every 4 ms
+        # against a 256 KB payload the HNP hands over as fast as the RML will
+        # carry it.  Delivery must still be exact -- an XOFF is not permission
+        # to drop anything.
+        RUN 'cp /tmp/prte.out /tmp/prte.out.mark 2>/dev/null || : ' >/dev/null 2>&1
+        out=$(RUN 'cd /tmp && timeout 300 prun --host node2:1 -n 1 \
+                     '"$SC"' /tmp/iof_xoff_out.txt 64 4000 < iof_stdin_in.txt \
+                     2>iof_xoff_err.txt; echo "rc=$?"')
+        rc=$(echo "$out" | sed -n 's/^rc=//p')
+        got=$(echo "$out" | sed -n 's/^SLOWCAT-BYTES //p')
+        outsum=$(ON 2 'md5sum < /tmp/iof_xoff_out.txt 2>/dev/null' | awk '{print $1}')
+        [ "$rc" = 0 ] && [ -n "$got" ] && [ "$got" = "$insz" ] && [ "$insum" = "$outsum" ] \
+            && ok "stdin survived a reader slow enough to trigger XOFF" \
+            || bad "XOFF-triggering stdin corrupted (rc=$rc, sent=$insz received=$got, md5 $insum vs $outsum): $(RUN 'head -c 200 /tmp/iof_xoff_err.txt')"
+        # ...and the flow-control message did not come back at the user as a
+        # corrupted one.  "prte --daemonize" detaches from stdio, so this is
+        # what the HNP wrote before detaching plus anything pmix_output sent to
+        # the log; a PMIX_ERROR_LOG of an unpack failure names the file.
+        hnplog=$(RUN 'diff /tmp/prte.out.mark /tmp/prte.out 2>/dev/null | grep "^>" \
+                      || cat /tmp/prte.out 2>/dev/null')
+        echo "$hnplog" | grep -qiE 'UNPACK|iof_hnp_receive\.c' \
+            && bad "the HNP reported a flow-control message as corrupt: $(echo "$hnplog" | grep -iE 'UNPACK|iof_hnp_receive' | head -2 | tr '\n' ' ')" \
+            || ok "no unpack error at the HNP while stdin was backed up"
+        ON 2 'rm -f /tmp/iof_xoff_out.txt' >/dev/null 2>&1
+
         # And the same slow reader on the HNP node, where push_stdin writes
         # into the proc sink directly instead of going out over the RML: the
         # HNP and the daemon carry separate copies of the write handler, so a

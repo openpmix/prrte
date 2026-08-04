@@ -76,7 +76,6 @@ PRTE_EXPORT int prte_iof_base_select(void);
  * Maximum size of single msg
  */
 #define PRTE_IOF_BASE_MSG_MAX        4096
-#define PRTE_IOF_BASE_TAG_MAX        1024
 #define PRTE_IOF_BASE_TAGGED_OUT_MAX 8192
 #define PRTE_IOF_MAX_INPUT_BUFFERS   50
 
@@ -97,8 +96,9 @@ typedef struct {
     pmix_proc_t daemon;
     prte_iof_tag_t tag;
     prte_iof_write_event_t *wev;
-    bool xoff;
-    bool exclusive;
+    /* set by nobody today: the HNP's stdin_write_handler honors it by
+     * releasing the sink once the last queued byte is out, which is the
+     * graceful counterpart to the zero-byte close sentinel */
     bool closed;
 } prte_iof_sink_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_iof_sink_t);
@@ -111,10 +111,8 @@ typedef struct {
     struct timeval tv;
     int fd;
     prte_iof_tag_t tag;
-    bool active;
     bool activated;
     bool always_readable;
-    prte_iof_sink_t *sink;
 } prte_iof_read_event_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_iof_read_event_t);
 
@@ -203,7 +201,6 @@ static inline bool prte_iof_base_fd_always_ready(int fd)
 
 #define PRTE_IOF_READ_ACTIVATE(rev) \
     do {                            \
-        rev->active = true;         \
         PMIX_POST_OBJECT(rev);      \
         PRTE_IOF_READ_ADDEV(rev);   \
     } while (0);
@@ -267,7 +264,7 @@ PRTE_EXPORT void prte_iof_base_adjust_short_write(prte_iof_write_output_t *outpu
 /* Emit "string" as though it were output from "source" on the given channel.
  * NOTE: this takes ownership of "string" - it must be a heap allocation, and
  * it is free'd once the output has been delivered. Callers must not free it
- * themselves.
+ * themselves. A NULL string (a formatter that failed) is a no-op.
  */
 PRTE_EXPORT void prte_iof_base_output(const pmix_proc_t *source,
                                       pmix_iof_channel_t channel,

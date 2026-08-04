@@ -88,8 +88,9 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
      */
     fd = rev->fd;
 
-    /* read up to the fragment size */
-    memset(data, 0, PRTE_IOF_BASE_MSG_MAX);
+    /* read up to the fragment size - no need to clear the buffer first,
+     * only data[0..numbytes) is ever looked at, and this runs on every
+     * fragment of every proc's output */
     numbytes = read(fd, data, sizeof(data));
 
     PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,

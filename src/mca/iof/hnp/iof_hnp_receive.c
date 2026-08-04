@@ -73,7 +73,6 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     int32_t count, numbytes;
     int rc;
     unsigned char *stdindata = NULL;
-    prte_iof_proc_t *proct;
     pmix_iof_channel_t pchan;
     prte_iof_deliver_t *p;
     pmix_status_t prc;
@@ -88,6 +87,31 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     rc = PMIx_Data_unpack(NULL, buffer, &stream, &count, PMIX_UINT16);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
+        goto CLEAN_RETURN;
+    }
+
+    /* A flow-control message consists solely of the tag - there is no proc
+     * and no payload behind it, so it has to be recognized here, before the
+     * unpack below reads off the end of the buffer and reports the daemon's
+     * XOFF as a corrupted message.
+     *
+     * We cannot act on it. Stdin originates in the PMIx server's read of its
+     * own stdin (or a tool's PMIx_IOF_push), and neither end honors a refusal:
+     * pmix_server_stdin_push discards what prte_iof.push_stdin returns, and
+     * PMIx's own completion handler discards the status and re-arms the read
+     * regardless. Returning an error here would therefore not slow the source
+     * down - it would only drop the bytes. So the daemon's sink queues, and
+     * iof_base_output_limit is the only ceiling. Making XOFF mean something
+     * requires a way to stop the read at the source; until there is one, the
+     * right behavior is to consume the message quietly rather than to log an
+     * unpack failure at the user every time a proc reads its stdin slowly.
+     */
+    if ((PRTE_IOF_XON | PRTE_IOF_XOFF) & stream) {
+        PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                             "%s received %s from daemon %s",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             (PRTE_IOF_XON & stream) ? "xon" : "xoff",
+                             PRTE_NAME_PRINT(sender)));
         goto CLEAN_RETURN;
     }
 
@@ -189,21 +213,17 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
                          "%s unpacked %d bytes from remote proc %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes, PRTE_NAME_PRINT(&origin)));
 
-    /* do we already have this process in our list? */
-    PMIX_LIST_FOREACH(proct, &prte_mca_iof_hnp_component.procs, prte_iof_proc_t)
-    {
-        if (PMIX_CHECK_PROCID(&proct->name, &origin)) {
-            /* found it */
-            goto NSTEP;
-        }
-    }
-
-    /* if we get here, then we don't yet have this proc in our list */
-    proct = PMIX_NEW(prte_iof_proc_t);
-    PMIX_XFER_PROCID(&proct->name, &origin);
-    pmix_list_append(&prte_mca_iof_hnp_component.procs, &proct->super);
-
-NSTEP:
+    /* NOTE: we deliberately do NOT record "origin" in our procs list.
+     * That list holds endpoint bundles - a stdin sink and the read events
+     * for a proc WE forked - and a proc on some other node has none of
+     * those here: the entry this used to create carried a name and three
+     * NULL slots, and nothing ever read it. What it cost was one object
+     * and one list node on the DVM master for every remote process that
+     * ever produced output, retained until the job completed, and a linear
+     * walk of that list on every stdin fragment and every close. At the
+     * scales this runtime is built for that is the master's memory and the
+     * length of a hot-path scan, spent on bookkeeping with no reader.
+     */
     pchan = 0;
     if (PRTE_IOF_STDOUT & stream) {
         pchan |= PMIX_FWD_STDOUT_CHANNEL;

@@ -109,10 +109,17 @@ int prte_iof_hnp_send_data_to_endpoint(const pmix_proc_t *host,
     /* if the target is wildcard, then this needs to go to everyone - xcast it */
     if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, host->nspace)
         && PMIX_RANK_WILDCARD == host->rank) {
-        /* xcast this to everyone - the local daemons will know how to handle it */
-        (void) prte_grpcomm.xcast(PRTE_RML_TAG_IOF_PROXY, buf);
+        /* xcast this to everyone - the local daemons will know how to handle it.
+         * The xcast copies what it needs, so the buffer is ours either way. A
+         * failure here loses the fragment outright - nothing retries stdin -
+         * so report it rather than returning success over a silent drop
+         */
+        rc = prte_grpcomm.xcast(PRTE_RML_TAG_IOF_PROXY, buf);
         PMIX_DATA_BUFFER_RELEASE(buf);
-        return PRTE_SUCCESS;
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+        }
+        return rc;
     }
 
     /* send the buffer to the host - this is either a daemon or
