@@ -1993,7 +1993,11 @@ test_pmix() {
     else
         out=$(PRUN "--host node1:1 -n 1 $PT serveruri node2" 2>&1)
         u=$(echo "$out" | grep -m1 '^URI ' | awk '{print $2}' | tr -d '\r')
-        n2ip=$(docker exec prte-node2 hostname -i 2>/dev/null | awk '{print $1}' | tr -d '\r')
+        # ${NODE}2, not a hardcoded "prte-node2": every global name this
+        # harness claims is derived from $PRTE_SWARM (see docker-compose.yml),
+        # so a literal here asks a DIFFERENT swarm - or nothing at all - for
+        # the address, and the case fails against an unrelated container's IP
+        n2ip=$(docker exec "${NODE}2" hostname -i 2>/dev/null | awk '{print $1}' | tr -d '\r')
         if [ -z "$u" ]; then
             bad "no server URI for node2 with remote connections on: $(echo "$out" | grep -E '^ERR' | tr '\n' ' ' | tail -c 200)"
         elif echo "$u" | grep -q '127\.0\.0\.1'; then
