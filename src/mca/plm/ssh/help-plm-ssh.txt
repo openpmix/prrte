@@ -55,3 +55,12 @@ The cmd line to launch remote daemons is too long:
 Consider setting -mca plm_ssh_pass_environ_mca_params 0 to
 avoid including any environmentally set MCA parameters on the
 command line.
+
+[no-launch-agent]
+The launch agent to be used for starting daemons was set to an empty
+value, so there is no command to run on the remote nodes:
+
+  prte_launch_agent: <empty>
+
+Set prte_launch_agent to the daemon command you want started (the
+default is "prted"), or leave it unset to use that default.

@@ -698,6 +698,16 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
     } else {
         full_orted_cmd = orted_cmd;
     }
+    if (NULL == full_orted_cmd) {
+        /* prte_launch_agent named nothing to run - an empty
+         * --prtemca prte_launch_agent "" gets here. There is no command to
+         * ssh, so say so rather than strdup(NULL) */
+        prte_show_help("help-plm-ssh.txt", "no-launch-agent", true);
+        free(orted_prefix);
+        PMIx_Argv_free(final_argv);
+        PMIx_Argv_free(argv);
+        return PRTE_ERR_SILENT;
+    }
     if (NULL != orted_prefix) {
         pmix_asprintf(&tmp, "%s %s", orted_prefix, full_orted_cmd);
         free(orted_prefix);

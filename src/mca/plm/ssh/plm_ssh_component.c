@@ -261,6 +261,10 @@ static int ssh_component_query(pmix_mca_base_module_t **module, int *priority)
             *module = NULL;
             return PRTE_ERROR;
         }
+        /* the MCA var system handed us a heap copy of the default and will
+         * free whatever pointer it finds here at deregistration, so release
+         * the one we are replacing rather than dropping it */
+        free(prte_mca_plm_ssh_component.agent);
         prte_mca_plm_ssh_component.agent = tmp;
         prte_mca_plm_ssh_component.using_qrsh = true;
         goto success;
@@ -278,6 +282,7 @@ static int ssh_component_query(pmix_mca_base_module_t **module, int *priority)
             *module = NULL;
             return PRTE_ERROR;
         }
+        free(prte_mca_plm_ssh_component.agent);
         prte_mca_plm_ssh_component.agent = strdup("llspawn");
         prte_mca_plm_ssh_component.using_llspawn = true;
         goto success;
@@ -289,6 +294,7 @@ static int ssh_component_query(pmix_mca_base_module_t **module, int *priority)
         NULL != getenv("PBS_JOBID")) {
         /* we already found the absolute path to pbs_tmrsh */
         PMIx_Argv_append_nosize(&prte_mca_plm_ssh_component.agent_argv , PRTE_PBSTRMSH_PATH);
+        free(prte_mca_plm_ssh_component.agent);
         prte_mca_plm_ssh_component.agent = strdup("pbs_tmrsh");
         prte_mca_plm_ssh_component.using_tmrsh = true;
         goto success;
