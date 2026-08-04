@@ -120,7 +120,18 @@ static void grow_campaign_destruct(prte_grow_campaign_t *p)
 }
 PMIX_CLASS_INSTANCE(prte_grow_campaign_t, pmix_list_item_t,
                     grow_campaign_construct, grow_campaign_destruct);
-bool prte_persistent = true;
+/* "this DVM outlives any one job" - true for a DVM started by prte, false
+ * for the one prterun stands up around a single job.
+ *
+ * Every process establishes this for itself: the HNP works it out in
+ * prte(), and a daemon is TOLD by the HNP on its command line (registered
+ * as the prte_persistent MCA parameter, appended by
+ * prte_plm_base_prted_append_basic_args). It used to default to true and
+ * be assigned only in prte(), which a daemon never runs - so every daemon
+ * believed it was persistent no matter how the DVM was started. Default
+ * false so that a daemon which somehow learns nothing sizes itself for the
+ * job in front of it rather than for the largest case. */
+bool prte_persistent = false;
 bool prte_allow_run_as_root = false;
 bool prte_fwd_environment = false;
 bool prte_show_launch_progress = false;

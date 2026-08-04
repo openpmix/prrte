@@ -45,6 +45,7 @@
 #include "src/util/proc_info.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 #include "src/mca/errmgr/errmgr.h"
 
 #include "src/runtime/prte_globals.h"
@@ -205,7 +206,7 @@ int prte_register_params(void)
     if (NULL != prte_if_include && NULL != prte_if_exclude) {
         /* Return ERR_NOT_AVAILABLE so that a warning message about
          "open" failing is not printed */
-        pmix_show_help("help-oob-tcp.txt", "include-exclude", true,
+        prte_show_help("help-oob-tcp.txt", "include-exclude", true,
                        prte_if_include, prte_if_exclude);
         return PRTE_ERR_SILENT;
     }
@@ -315,7 +316,7 @@ int prte_register_params(void)
     prte_process_info.shared_fs = pmix_path_nfs(prte_process_info.tmpdir_base, &fstype);
     if (prte_process_info.shared_fs && !prte_silence_shared_fs) {
         // this is a shared file system - warn the user
-        pmix_show_help("help-prte-runtime.txt", "prte:session:dir:shared", true,
+        prte_show_help("help-prte-runtime.txt", "prte:session:dir:shared", true,
                        prte_process_info.tmpdir_base, fstype, prte_tool_basename);
     }
     if (NULL != fstype) {
@@ -572,6 +573,21 @@ int prte_register_params(void)
                                       "Self-construct the DVM based on a configuration file (default: false)",
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_bootstrap_setup);
+
+    /* How a DAEMON learns whether its DVM is persistent. The HNP decides
+     * this for itself in prte() - which runs long after this registration,
+     * so registering it here cannot clobber the HNP's answer - and then
+     * passes it down to every daemon it launches
+     * (prte_plm_base_prted_append_basic_args). A daemon has no other way
+     * to know: it never runs prte(), and before this parameter existed it
+     * simply inherited the global's initializer and believed every DVM was
+     * persistent. */
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "persistent",
+                                      "DVM is persistent - it outlives the job(s) run against it "
+                                      "(default: false). Set by the HNP on the daemon command "
+                                      "line; not intended to be set by users",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_persistent);
 
     (void) pmix_mca_base_var_register("prte", "prte", "elastic", "mode",
                                       "Allow DVM to expand and contract as directed (default: false)",
