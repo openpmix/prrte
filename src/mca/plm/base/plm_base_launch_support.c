@@ -74,6 +74,7 @@
 #include "src/util/pmix_environ.h"
 #include "src/util/session_dir.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
@@ -1789,7 +1790,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                         goto CLEANUP;
                     }
                 } else {
-                    pmix_show_help("help-prte-runtime.txt", "failed-to-uncompress",
+                    prte_show_help("help-prte-runtime.txt", "failed-to-uncompress",
                                    true, prte_process_info.nodename);
                     prted_failed_launch = true;
                     PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
@@ -2067,6 +2068,16 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
     pmix_argv_append(argc, argv, "--prtemca");
     pmix_argv_append(argc, argv, "prte_hnp_uri");
     pmix_argv_append(argc, argv, prte_process_info.my_hnp_uri);
+
+    /* Tell the daemon whether this DVM is persistent. Only the HNP knows -
+     * it is decided in prte(), which no daemon runs - and a daemon that is
+     * not told simply assumes the default. Pass it only when true, since
+     * false is that default. */
+    if (prte_persistent) {
+        pmix_argv_append(argc, argv, "--prtemca");
+        pmix_argv_append(argc, argv, "prte_persistent");
+        pmix_argv_append(argc, argv, "1");
+    }
 
     /* if --xterm was specified, pass that along */
     if (NULL != prte_xterm) {
@@ -2716,7 +2727,7 @@ process:
         }
         if (PMIX_RANK_VALID - 1 <= vpid) {
             /* no more daemons available */
-            pmix_show_help("help-prte-rmaps-base.txt", "out-of-vpids", true);
+            prte_show_help("help-prte-rmaps-base.txt", "out-of-vpids", true);
             PMIX_RELEASE(proc);
             PMIX_LIST_DESTRUCT(&nodes);
             return PRTE_ERR_OUT_OF_RESOURCE;

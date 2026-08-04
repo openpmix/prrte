@@ -85,6 +85,7 @@
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
@@ -238,6 +239,14 @@ int main(int argc, char *argv[])
     for (i = 0; NULL != pargv[i]; i++) {
         if (0 == strcmp(pargv[i], "--" PRTE_CLI_BOOTSTRAP)) {
             prte_bootstrap_setup = true;
+            /* A bootstrapped DVM is persistent by construction: its daemons
+             * are started independently and stand waiting for work.  There
+             * is also no launcher to tell us so - the HNP appends
+             * prte_persistent to the command lines it builds, and nobody
+             * built ours.  Set it here, ahead of prte_register_params(),
+             * which takes the current value as the parameter's default and
+             * so leaves this in place unless someone overrides it. */
+            prte_persistent = true;
             break;
         }
     }
@@ -275,7 +284,7 @@ int main(int argc, char *argv[])
     /* get our schizo module */
     schizo = prte_schizo_base_detect_proxy(personality);
     if (NULL == schizo) {
-        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
+        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
     }
 
@@ -307,7 +316,7 @@ int main(int argc, char *argv[])
     /* Register all global MCA Params */
     if (PRTE_SUCCESS != (ret = prte_register_params())) {
         if (PRTE_ERR_SILENT != ret) {
-            pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
+            prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
                            "prte register params",
                            PRTE_ERROR_NAME(ret), ret);
         }
@@ -412,7 +421,7 @@ int main(int argc, char *argv[])
                 core = strtoul(cores[i], NULL, 10);
                 if (NULL == (pu = prte_hwloc_base_get_pu(prte_hwloc_topology, false, core))) {
                     /* the message will now come out locally */
-                    pmix_show_help("help-prted.txt", "orted:cannot-bind", true,
+                    prte_show_help("help-prted.txt", "orted:cannot-bind", true,
                                    prte_process_info.nodename, prte_daemon_cores);
                     ret = PRTE_ERR_NOT_SUPPORTED;
                     hwloc_bitmap_free(ours);
