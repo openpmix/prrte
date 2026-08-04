@@ -274,6 +274,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
     uint32_t job_id = UINT32_MAX;
     prte_session_t *session = NULL;
+    int32_t num_session_nodes;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(state);
@@ -451,10 +452,17 @@ static void launch_daemons(int fd, short args, void *cbdata)
     pmix_argv_append(&argc, &argv, tmp);
     free(tmp);
 
+    num_session_nodes = 0;
+    for (n = 0; n < session->nodes->size; n++) {
+        if (NULL != pmix_pointer_array_get_item(session->nodes, n)) {
+            ++num_session_nodes;
+        }
+    }
+
     /* if we are using all nodes in the job, then srun doesn't
      * require any further arguments
      */
-    if (map->num_new_daemons < session->nodes->size) {
+    if (map->num_new_daemons < num_session_nodes) {
         pmix_asprintf(&tmp, "--nodes=%lu", (unsigned long) map->num_new_daemons);
         pmix_argv_append(&argc, &argv, tmp);
         free(tmp);
