@@ -34,6 +34,7 @@
 #include "src/util/nidmap.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "grpcomm_direct.h"
 #include "src/mca/grpcomm/base/base.h"
@@ -782,7 +783,7 @@ static void process_msg(op_t* op){
             (uint8_t**) &decomp_msg.bytes, &decomp_msg.size
         );
         if(!success){
-            pmix_show_help("help-prte-runtime.txt", "failed-to-uncompress",
+            prte_show_help("help-prte-runtime.txt", "failed-to-uncompress",
                            true, prte_process_info.nodename);
             PMIX_BYTE_OBJECT_DESTRUCT(&decomp_msg);
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);

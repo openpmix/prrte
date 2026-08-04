@@ -31,6 +31,7 @@
 #include "src/mca/mca.h"
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ras/base/base.h"
@@ -283,7 +284,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     // otherwise, this is an error
-    pmix_show_help("help-plm-base.txt", "no-available-pls", true);
+    prte_show_help("help-plm-base.txt", "no-available-pls", true);
     PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
     PMIX_RELEASE(state);
 }

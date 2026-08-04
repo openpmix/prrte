@@ -79,6 +79,7 @@
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_getcwd.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_progress_threads.h"
@@ -254,14 +255,14 @@ int main(int argc, char *argv[])
      * schizo module for this tool */
     schizo = prte_schizo_base_detect_proxy(personality);
     if (NULL == schizo) {
-        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
+        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
     }
 
     /* Register all global MCA Params */
     if (PRTE_SUCCESS != (rc = prte_register_params())) {
         if (PRTE_ERR_SILENT != rc) {
-            pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
+            prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
                            "prte register params",
                            PRTE_ERROR_NAME(rc), rc);
         }
@@ -338,17 +339,17 @@ int main(int argc, char *argv[])
             PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
             break;
         case PRTE_ERR_FILE_OPEN_FAILURE:
-            pmix_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
+            prte_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
                            "--" PRTE_CLI_PID, opt->values[0], ptr);
             PMIX_INFO_LIST_RELEASE(tinfo);
             return 1;
         case PRTE_ERR_FILE_READ_FAILURE:
-            pmix_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
+            prte_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
                            "--" PRTE_CLI_PID, opt->values[0], ptr);
             PMIX_INFO_LIST_RELEASE(tinfo);
             return 1;
         default:
-            pmix_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
+            prte_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
                            "--" PRTE_CLI_PID, opt->values[0], "file:path");
             PMIX_INFO_LIST_RELEASE(tinfo);
             return 1;

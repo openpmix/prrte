@@ -34,6 +34,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "rmaps_rr.h"
 #include "src/mca/rmaps/base/base.h"
@@ -62,7 +63,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
     /* check to see if we can map all the procs */
     if (num_slots < (int) app->num_procs) {
         if (!options->oversubscribe) {
-            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                            app->num_procs, app->app, prte_process_info.nodename);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
@@ -180,7 +181,7 @@ pass:
     if (second_pass) {
     errout:
         if (PRTE_ERR_SILENT != rc) {
-            pmix_show_help("help-prte-rmaps-base.txt",
+            prte_show_help("help-prte-rmaps-base.txt",
                            "failed-map", true,
                            PRTE_ERROR_NAME(rc),
                            (NULL == app) ? "N/A" : app->app,
@@ -240,7 +241,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
     /* quick check to see if we can map all the procs */
     if (num_slots < (int) app->num_procs) {
         if (!options->oversubscribe) {
-            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                            app->num_procs, app->app, prte_process_info.nodename);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
@@ -347,7 +348,7 @@ pass:
     errout:
         /* unable to do it */
         if (PRTE_ERR_SILENT != rc) {
-            pmix_show_help("help-prte-rmaps-base.txt",
+            prte_show_help("help-prte-rmaps-base.txt",
                            "failed-map", true,
                            PRTE_ERROR_NAME(rc),
                            (NULL == app) ? "N/A" : app->app,
@@ -396,7 +397,7 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
     /* check to see if we can map all the procs */
     if (num_slots < (int) app->num_procs) {
         if (!options->oversubscribe) {
-            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                            app->num_procs, app->app, prte_process_info.nodename);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
@@ -565,7 +566,7 @@ pass:
 errout:
     /* if we get here, then we were unable to map all the procs */
     if (PRTE_ERR_SILENT != rc) {
-        pmix_show_help("help-prte-rmaps-rr.txt",
+        prte_show_help("help-prte-rmaps-rr.txt",
                        "prte-rmaps-rr:not-enough-cpus", true,
                        app->app, app->num_procs, savecpuset);
     }
@@ -601,7 +602,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
     /* quick check to see if we can map all the procs */
     if (num_slots < app->num_procs) {
         if (!options->oversubscribe) {
-            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                            app->num_procs, app->app, prte_process_info.nodename);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
@@ -662,7 +663,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
                  * them, and quietly falling back to by-slot (which the
                  * caller used to do) placed the job by a rule they never
                  * asked for. */
-                pmix_show_help("help-prte-rmaps-base.txt", "rmaps:mapping-target-not-found",
+                prte_show_help("help-prte-rmaps-base.txt", "rmaps:mapping-target-not-found",
                                true, hwloc_obj_type_string(options->maptype), node->name);
                 return PRTE_ERR_SILENT;
             }
@@ -763,14 +764,14 @@ errout:
     }
     if (outofcpus) {
         /* ran out of cpus */
-        pmix_show_help("help-prte-rmaps-base.txt",
+        prte_show_help("help-prte-rmaps-base.txt",
                        "allocation-overload", true,
                        app->app, app->num_procs,
                        prte_rmaps_base_print_mapping(options->map),
                        prte_hwloc_base_print_binding(options->bind));
         return PRTE_ERR_SILENT;
     }
-    pmix_show_help("help-prte-rmaps-base.txt",
+    prte_show_help("help-prte-rmaps-base.txt",
                    "failed-map", true,
                    PRTE_ERROR_NAME(rc),
                    app->app, app->num_procs,

@@ -58,6 +58,7 @@
 #include "src/util/pmix_net.h"
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
@@ -65,7 +66,6 @@
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_parse_options.h"
-#include "src/util/pmix_show_help.h"
 
 #include "src/rml/oob/oob_tcp.h"
 #include "src/rml/oob/oob_tcp_common.h"
@@ -204,7 +204,7 @@ int prte_oob_open(void)
              * error out as we can't do what was requested
              */
             if (PRTE_ERR_NETWORK_NOT_PARSEABLE == rc) {
-                pmix_show_help("help-oob-tcp.txt", "not-parseable", true);
+                prte_show_help("help-oob-tcp.txt", "not-parseable", true);
                 PMIx_Argv_free(interfaces);
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -299,14 +299,14 @@ int prte_oob_open(void)
         /* say so: this is reachable straight from user input (an if_include or
          * if_exclude that leaves nothing), and the caller can only turn the
          * bare error code into an abort */
-        pmix_show_help("help-oob-tcp.txt", "no-interfaces", true,
+        prte_show_help("help-oob-tcp.txt", "no-interfaces", true,
                        prte_process_info.nodename);
         return PRTE_ERR_NOT_AVAILABLE;
     }
 
     // start the listeners
     if (PRTE_SUCCESS != (rc = prte_oob_tcp_start_listening())) {
-        pmix_show_help("help-oob-tcp.txt", "no-listeners", true);
+        prte_show_help("help-oob-tcp.txt", "no-listeners", true);
         PRTE_ERROR_LOG(rc);
     }
     return rc;
@@ -468,7 +468,7 @@ int prte_oob_register(void)
         /* can't have both static and dynamic ports! */
         if (prte_static_ports) {
             char *err = PMIx_Argv_join(prte_oob_base.tcp_static_ports, ',');
-            pmix_show_help("help-oob-tcp.txt", "static-and-dynamic", true, err, dyn_port_string);
+            prte_show_help("help-oob-tcp.txt", "static-and-dynamic", true, err, dyn_port_string);
             free(err);
             return PRTE_ERROR;
         }
@@ -498,7 +498,7 @@ int prte_oob_register(void)
             if (NULL != prte_oob_base.tcp6_static_ports) {
                 err6 = PMIx_Argv_join(prte_oob_base.tcp6_static_ports, ',');
             }
-            pmix_show_help("help-oob-tcp.txt", "static-and-dynamic-ipv6", true,
+            prte_show_help("help-oob-tcp.txt", "static-and-dynamic-ipv6", true,
                            (NULL == err4) ? "N/A" : err4, (NULL == err6) ? "N/A" : err6,
                            dyn_port_string6);
             if (NULL != err4) {
@@ -768,7 +768,7 @@ void prte_oob_split_and_resolve(char **orig_str, char *name,
         tmp = strdup(argv[i]);
         str = strchr(argv[i], '/');
         if (NULL == str) {
-            pmix_show_help("help-oob-tcp.txt", "invalid if_inexclude",
+            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude",
                            true, name, prte_process_info.nodename,
                            tmp, "Invalid specification (missing \"/\")");
             free(tmp);
@@ -783,7 +783,7 @@ void prte_oob_split_and_resolve(char **orig_str, char *name,
                         &((struct sockaddr_in*) &argv_inaddr)->sin_addr);
 
         if (1 != ret) {
-            pmix_show_help("help-oob-tcp.txt", "invalid if_inexclude",
+            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude",
                            true, name, prte_process_info.nodename, tmp,
                            "Invalid specification (inet_pton() failed)");
             free(tmp);
@@ -838,7 +838,7 @@ void prte_oob_split_and_resolve(char **orig_str, char *name,
         }
         /* If we didn't find a match, keep trying */
         if (0 == match_count) {
-            pmix_show_help("help-oob-tcp.txt", "invalid if_inexclude",
+            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude",
                            true, name, prte_process_info.nodename, tmp,
                            "Did not find interface matching this subnet");
             free(tmp);

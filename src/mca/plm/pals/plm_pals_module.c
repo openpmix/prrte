@@ -74,6 +74,7 @@
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "plm_pals.h"
 #include "src/mca/plm/base/base.h"
@@ -305,7 +306,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
             pmix_argv_append(&nodelist_argc, &nodelist_argv, node->name);
         }
         if (0 == PMIx_Argv_count(nodelist_argv)) {
-            pmix_show_help("help-plm-pals.txt", "no-hosts-in-list", true);
+            prte_show_help("help-plm-pals.txt", "no-hosts-in-list", true);
             rc = PRTE_ERR_FAILED_TO_START;
             goto cleanup;
         }

@@ -58,6 +58,7 @@
 #include "src/util/pmix_path.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "constants.h"
 #include "src/include/prte_frameworks.h"
@@ -70,7 +71,7 @@ static int register_framework_params(pmix_pointer_array_t *component_map)
 
     /* Register mca/base parameters */
     if (PMIX_SUCCESS != pmix_mca_base_open(NULL)) {
-        pmix_show_help("help-prte-info.txt", "lib-call-fail", true, "pmix_mca_base_open",
+        prte_show_help("help-prte-info.txt", "lib-call-fail", true, "pmix_mca_base_open",
                        __FILE__, __LINE__);
         return PMIX_ERROR;
     }
@@ -119,7 +120,7 @@ int main(int argc, char *argv[])
 
     /* Initialize the argv parsing stuff */
     if (PRTE_SUCCESS != (ret = prte_init_util(PRTE_PROC_MASTER))) {
-        pmix_show_help("help-prte-info.txt", "lib-call-fail", true, "prte_init_util", __FILE__,
+        prte_show_help("help-prte-info.txt", "lib-call-fail", true, "prte_init_util", __FILE__,
                        __LINE__, NULL);
         exit(ret);
     }
@@ -144,7 +145,7 @@ int main(int argc, char *argv[])
      * schizo module for this tool */
     schizo = prte_schizo_base_detect_proxy("prte");
     if (NULL == schizo) {
-        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "prte");
+        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "prte");
         return 1;
     }
 
@@ -266,7 +267,7 @@ int main(int argc, char *argv[])
     /* Register all global MCA Params */
     if (PRTE_SUCCESS != (ret = prte_register_params())) {
         if (PRTE_ERR_SILENT != ret) {
-            pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
+            prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
                            "prte register params",
                            PRTE_ERROR_NAME(ret), ret);
         }

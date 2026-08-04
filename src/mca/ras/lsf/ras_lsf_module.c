@@ -44,6 +44,7 @@
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "ras_lsf.h"
 #include "src/mca/ras/base/base.h"
@@ -72,7 +73,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
     /* get the list of allocated nodes */
     if ((num_nodes = lsb_getalloc(&nodelist)) < 0) {
-        pmix_show_help("help-ras-lsf.txt", "nodelist-failed", true);
+        prte_show_help("help-ras-lsf.txt", "nodelist-failed", true);
         return PRTE_ERR_NOT_AVAILABLE;
     }
     node = NULL;

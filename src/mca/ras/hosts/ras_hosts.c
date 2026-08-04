@@ -20,6 +20,7 @@
 
 #include "src/class/pmix_list.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 #include "src/util/pmix_string_copy.h"
 
 #include "src/mca/rmaps/rmaps_types.h"
@@ -231,7 +232,7 @@ static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
      * syntax here */
     fp = fopen(hostfile, "r");
     if (NULL == fp) {
-        pmix_show_help("help-ras-base.txt", "ras-base:addhost-not-found", true, hostfile);
+        prte_show_help("help-ras-base.txt", "ras-base:addhost-not-found", true, hostfile);
         return PMIX_ERR_SILENT;
     }
 
@@ -349,7 +350,7 @@ process:
             } else if (0 > slots && -1 != slots) {
                 // cannot have a new node with negative slots - the -1
                 // is a marker for a node without slots being specified
-                pmix_show_help("help-ras-base.txt", "negative-slots", true,
+                prte_show_help("help-ras-base.txt", "negative-slots", true,
                                hostfile, cptr);
                 PMIX_RELEASE(node);
                 free(line);

@@ -187,6 +187,10 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 #define PRTE_RML_TAG_DAEMON_RETURNED      80
 #define PRTE_RML_TAG_DAEMON_REVIVED       81
 
+/* a daemon's rendered show_help text, on its way to the HNP - see
+ * src/util/prte_show_help.c for why a prted cannot emit its own */
+#define PRTE_RML_TAG_SHOW_HELP            82
+
 #define PRTE_RML_TAG_MAX                 100
 
 #define PRTE_RML_TAG_NTOH(t) ntohl(t)

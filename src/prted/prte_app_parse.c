@@ -52,6 +52,7 @@
 #include "src/util/pmix_getcwd.h"
 #include "src/util/prte_cmd_line.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "src/runtime/prte_globals.h"
 
@@ -217,7 +218,7 @@ static int add_envar_directives(prte_pmix_app_t *app,
                     // given a unique name
                     value = getenv(param);
                     if (NULL == value) {
-                        pmix_show_help("help-schizo-base.txt", "missing-envar-param", true, param);
+                        prte_show_help("help-schizo-base.txt", "missing-envar-param", true, param);
                         free(param);
                     } else {
                         envt.envar = param;
@@ -236,7 +237,7 @@ static int add_envar_directives(prte_pmix_app_t *app,
             param = strdup(ordered[k].value);
             if (k + 1 >= nordered || 0 != strcmp(ordered[k + 1].key, key)) {
                 // the value it edits with is missing
-                pmix_show_help("help-prun.txt", "malformed-envar", true,
+                prte_show_help("help-prun.txt", "malformed-envar", true,
                                prepend ? "prepend" : "append", app->app.cmd, param);
                 rc = PRTE_ERR_SILENT;
                 free(param);
@@ -245,7 +246,7 @@ static int add_envar_directives(prte_pmix_app_t *app,
             // find the [] enclosing the separator
             i = strlen(param);
             if (3 > i || ']' != param[i-1] || '[' != param[i-3]) {
-                pmix_show_help("help-prun.txt", "malformed-envar", true,
+                prte_show_help("help-prun.txt", "malformed-envar", true,
                                prepend ? "prepend" : "append", app->app.cmd, param);
                 rc = PRTE_ERR_SILENT;
                 free(param);
@@ -269,7 +270,7 @@ static int add_envar_directives(prte_pmix_app_t *app,
             // find the '=' separating name from value
             tval = strchr(param, '=');
             if (NULL == tval) {
-                pmix_show_help("help-prun.txt", "malformed-envar", true,
+                prte_show_help("help-prun.txt", "malformed-envar", true,
                                "set", app->app.cmd, param);
                 rc = PRTE_ERR_SILENT;
                 free(param);
@@ -369,7 +370,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
 
     /* get the cwd - we may need it in several places */
     if (PRTE_SUCCESS != (rc = pmix_getcwd(cwd, sizeof(cwd)))) {
-        pmix_show_help("help-prun.txt", "prun:init-failure", true, "get the cwd", rc);
+        prte_show_help("help-prun.txt", "prun:init-failure", true, "get the cwd", rc);
         goto cleanup;
     }
 
@@ -483,7 +484,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
     if (NULL != opt) {
         count = strtol(opt->values[0], NULL, 10);
         if (0 > count) {
-            pmix_show_help("help-prun.txt", "prun:negative-nprocs", true,
+            prte_show_help("help-prun.txt", "prun:negative-nprocs", true,
                            prte_tool_basename,
                            app->app.argv[0], count, NULL);
             return PRTE_ERR_FATAL;
@@ -505,7 +506,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
                     if (NULL == param) {
                         param = opt->values[i];
                     } else if (0 != strcmp(param, opt->values[i])) {
-                        pmix_show_help("help-plm-base.txt", "multiple-prefixes", true,
+                        prte_show_help("help-plm-base.txt", "multiple-prefixes", true,
                                        prte_tool_basename, PRTE_CLI_PREFIX,
                                        PRTE_CLI_PREFIX, "PRRTE", PRTE_CLI_PREFIX,
                                        param, opt->values[i]);
@@ -527,7 +528,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
                     if (NULL == param) {
                         param = opt->values[i];
                     } else if (0 != strcmp(param, opt->values[i])) {
-                        pmix_show_help("help-plm-base.txt", "multiple-prefixes", true,
+                        prte_show_help("help-plm-base.txt", "multiple-prefixes", true,
                                        prte_tool_basename, PRTE_CLI_PMIX_PREFIX,
                                        PRTE_CLI_PMIX_PREFIX, "PMIx", PRTE_CLI_PMIX_PREFIX,
                                        param, opt->values[i]);
@@ -560,7 +561,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
 
     app->app.cmd = strdup(app->app.argv[0]);
     if (NULL == app->app.cmd) {
-        pmix_show_help("help-prun.txt", "prun:call-failed", true, "prun", "library",
+        prte_show_help("help-prun.txt", "prun:call-failed", true, "prun", "library",
                        "strdup returned NULL", errno);
         rc = PRTE_ERR_SILENT;
         goto cleanup;
@@ -599,7 +600,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
                 if (NULL == param) {
                     param = opt->values[i];
                 } else if (0 != strcmp(param, opt->values[i])) {
-                    pmix_show_help("help-plm-base.txt", "multiple-app-prefixes", true,
+                    prte_show_help("help-plm-base.txt", "multiple-app-prefixes", true,
                                    prte_tool_basename, PRTE_CLI_APP_PREFIX,
                                    PRTE_CLI_APP_PREFIX, param, opt->values[i]);
                     return PRTE_ERR_FATAL;
@@ -617,7 +618,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
     if (NULL != opt) {
         // cannot have a prefix as well as no-prefix
         if (NULL != (opt2 = pmix_cmd_line_get_param(&results, PRTE_CLI_APP_PREFIX))) {
-            pmix_show_help("help-plm-base.txt", "prefix-conflict", true,
+            prte_show_help("help-plm-base.txt", "prefix-conflict", true,
                            prte_tool_basename, PRTE_CLI_APP_PREFIX, opt2->values[0],
                            PRTE_CLI_NO_APP_PREFIX);
             return PRTE_ERR_FATAL;
@@ -626,7 +627,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
     } else if (NULL != getenv("PMIX_APP_NO_PREFIX")) {
         // cannot have a prefix as well as no-prefix
         if (NULL != (opt2 = pmix_cmd_line_get_param(&results, PRTE_CLI_APP_PREFIX))) {
-            pmix_show_help("help-plm-base.txt", "prefix-conflict", true,
+            prte_show_help("help-plm-base.txt", "prefix-conflict", true,
                            prte_tool_basename, PRTE_CLI_APP_PREFIX, opt2->values[0],
                            "PMIX_APP_NO_PREFIX");
             return PRTE_ERR_FATAL;

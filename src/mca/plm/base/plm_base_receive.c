@@ -57,6 +57,7 @@
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 #include "types.h"
 
 #include "src/mca/plm/base/base.h"
@@ -512,7 +513,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
         tmp = PMIx_Argv_join(jdata->personality, ',');
         jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(tmp);
         if (NULL == jdata->schizo) {
-            pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, tmp);
+            prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, tmp);
             free(tmp);
             rc = PRTE_ERR_NOT_FOUND;
             goto ANSWER_LAUNCH;

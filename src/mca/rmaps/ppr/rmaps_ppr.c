@@ -28,6 +28,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "rmaps_ppr.h"
 #include "src/mca/rmaps/base/base.h"
@@ -146,7 +147,7 @@ static int ppr_mapper(prte_job_t *jdata,
         PRTE_RANK_BY_FILL == options->rank) {
         if (options->map < PRTE_MAPPING_BYNUMA ||
             options->map > PRTE_MAPPING_BYHWTHREAD) {
-            pmix_show_help("help-prte-rmaps-base.txt", "must-map-by-obj",
+            prte_show_help("help-prte-rmaps-base.txt", "must-map-by-obj",
                            true, prte_rmaps_base_print_mapping(options->map),
                            prte_rmaps_base_print_ranking(options->rank));
             free(jobppr);
@@ -243,7 +244,7 @@ static int ppr_mapper(prte_job_t *jdata,
         if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
             num_slots < (int) app->num_procs) {
             if (!options->oversubscribe) {
-                pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+                prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                                app->num_procs, app->app, prte_process_info.nodename);
                 rc = PRTE_ERR_SILENT;
                 goto error;
@@ -335,7 +336,7 @@ static int ppr_mapper(prte_job_t *jdata,
                      * the pattern means: "2 per L3cache" over nodes that
                      * have no L3cache placed nothing there while reporting
                      * success. Same rule as round_robin's object mapper. */
-                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:mapping-target-not-found",
+                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:mapping-target-not-found",
                                    true, hwloc_obj_type_string(options->maptype), node->name);
                     rc = PRTE_ERR_SILENT;
                     goto error;
@@ -406,7 +407,7 @@ static int ppr_mapper(prte_job_t *jdata,
         }
         if (nprocs_mapped < app->num_procs) {
             /* couldn't map them all */
-            pmix_show_help("help-prte-rmaps-ppr.txt", "ppr-too-many-procs", true, app->app,
+            prte_show_help("help-prte-rmaps-ppr.txt", "ppr-too-many-procs", true, app->app,
                            app->num_procs, nprocs_mapped, options->nprocs, jobppr);
             rc = PRTE_ERR_SILENT;
             goto error;

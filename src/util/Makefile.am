@@ -55,6 +55,7 @@ headers = \
         nidmap.h \
         prte_bootstrap.h \
         proc_info.h \
+        prte_show_help.h \
         session_dir.h \
         stacktrace.h \
         sys_limits.h
@@ -71,6 +72,7 @@ sources = \
         prte_bootstrap.c \
         prte_cmd_line.c \
         proc_info.c \
+        prte_show_help.c \
         session_dir.c \
         stacktrace.c \
         sys_limits.c \

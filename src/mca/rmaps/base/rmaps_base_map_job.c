@@ -47,6 +47,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
@@ -293,7 +294,7 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
             char **pk = PMIx_Argv_split(str, ':');
             if (2 != PMIx_Argv_count(pk) ||
                 !ppr_object(pk[1], &opts->maptype, &opts->mapdepth)) {
-                pmix_show_help("help-prte-rmaps-ppr.txt", "invalid-ppr", true, str);
+                prte_show_help("help-prte-rmaps-ppr.txt", "invalid-ppr", true, str);
                 PMIx_Argv_free(pk);
                 free(str);
                 return PRTE_ERR_SILENT;
@@ -519,7 +520,7 @@ static void report_no_mapper(prte_job_t *jdata, prte_app_context_t *app,
     if (1 < pmix_list_get_size(&prte_rmaps_base.selected_modules)) {
         /* the full set is loaded, so the request is simply not one any of
          * them implements */
-        pmix_show_help("help-prte-rmaps-base.txt", "failed-map", true,
+        prte_show_help("help-prte-rmaps-base.txt", "failed-map", true,
                        PRTE_ERROR_NAME(rc),
                        (NULL == app) ? "N/A" : app->app, nprocs,
                        prte_rmaps_base_print_mapping(opts->map),
@@ -532,7 +533,7 @@ static void report_no_mapper(prte_job_t *jdata, prte_app_context_t *app,
         PMIx_Argv_append_nosize(&names, mod->component->pmix_mca_component_name);
     }
     loaded = (NULL == names) ? strdup("none") : PMIx_Argv_join(names, ',');
-    pmix_show_help("help-prte-rmaps-base.txt", "mapper-restricted", true,
+    prte_show_help("help-prte-rmaps-base.txt", "mapper-restricted", true,
                    prte_rmaps_base_print_mapping(opts->map),
                    prte_hwloc_base_print_binding(opts->bind),
                    (NULL == app) ? "N/A" : app->app, loaded);
@@ -587,7 +588,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     jdata = caddy->jdata;
     schizo = (prte_schizo_base_module_t*)jdata->schizo;
     if (NULL == schizo) {
-        pmix_show_help("help-prte-rmaps-base.txt", "missing-personality", true,
+        prte_show_help("help-prte-rmaps-base.txt", "missing-personality", true,
                        PRTE_JOBID_PRINT(jdata->nspace));
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
         goto cleanup;
@@ -1037,7 +1038,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         ck = PMIx_Argv_split(tmp, ':');
         if (2 != PMIx_Argv_count(ck)) {
             /* must provide a specification */
-            pmix_show_help("help-prte-rmaps-ppr.txt", "invalid-ppr", true, tmp);
+            prte_show_help("help-prte-rmaps-ppr.txt", "invalid-ppr", true, tmp);
             PMIx_Argv_free(ck);
             free(tmp);
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
@@ -1048,7 +1049,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         options.pprn = strtoul(ck[0], NULL, 10);
         if (!ppr_object(ck[1], &options.maptype, &options.mapdepth)) {
             /* unknown spec */
-            pmix_show_help("help-prte-rmaps-ppr.txt", "unrecognized-ppr-option", true,
+            prte_show_help("help-prte-rmaps-ppr.txt", "unrecognized-ppr-option", true,
                            ck[1], tmp);
             free(tmp);
             PMIx_Argv_free(ck);
@@ -1201,7 +1202,7 @@ ranking:
                 !options.use_hwthreads) {
                 /* we cannot support this operation as there is only one
                  * cpu in a core */
-                pmix_show_help("help-prte-rmaps-base.txt", "mapping-too-low", true,
+                prte_show_help("help-prte-rmaps-base.txt", "mapping-too-low", true,
                                options.cpus_per_rank, 1,
                                prte_rmaps_base_print_mapping(options.map));
                 jdata->exit_code = PRTE_ERR_SILENT;
@@ -1215,7 +1216,7 @@ ranking:
             if (1 < options.cpus_per_rank) {
                 /* we cannot support this operation as there is only one
                  * cpu in a core */
-                pmix_show_help("help-prte-rmaps-base.txt", "mapping-too-low", true,
+                prte_show_help("help-prte-rmaps-base.txt", "mapping-too-low", true,
                                options.cpus_per_rank, 1,
                                prte_rmaps_base_print_mapping(options.map));
                 jdata->exit_code = PRTE_ERR_SILENT;
@@ -1275,7 +1276,7 @@ ranking:
         PRTE_MAPPING_PPR != options.map) {
         if (options.map < PRTE_MAPPING_BYNUMA ||
             options.map > PRTE_MAPPING_BYHWTHREAD) {
-            pmix_show_help("help-prte-rmaps-base.txt", "must-map-by-obj",
+            prte_show_help("help-prte-rmaps-base.txt", "must-map-by-obj",
                            true, prte_rmaps_base_print_mapping(options.map),
                            prte_rmaps_base_print_ranking(options.rank));
             jdata->exit_code = PRTE_ERR_SILENT;
@@ -1322,7 +1323,7 @@ ranking:
         PRTE_BIND_TO_NONE != options.bind) {
         /* we cannot bind to objects higher in the
          * topology than where we mapped */
-        pmix_show_help("help-prte-hwloc-base.txt", "bind-upwards", true,
+        prte_show_help("help-prte-hwloc-base.txt", "bind-upwards", true,
                        prte_rmaps_base_print_mapping(options.map),
                        prte_hwloc_base_print_binding(options.bind));
         /* the message is out - rc still holds the SUCCESS of the last call
@@ -1368,7 +1369,7 @@ ranking:
         if (PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
             if (PRTE_BIND_TO_CORE != options.bind &&
                 PRTE_BIND_TO_HWTHREAD != options.bind) {
-                pmix_show_help("help-prte-rmaps-base.txt", "unsupported-combination", true,
+                prte_show_help("help-prte-rmaps-base.txt", "unsupported-combination", true,
                                "binding", prte_hwloc_base_print_binding(options.bind));
                 PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                 jdata->exit_code = PRTE_ERR_BAD_PARAM;
@@ -1580,7 +1581,7 @@ ranking:
         /* the map was done but nothing could be mapped
          * for launch as all the resources were busy
          */
-        pmix_show_help("help-prte-rmaps-base.txt", "cannot-launch", true);
+        prte_show_help("help-prte-rmaps-base.txt", "cannot-launch", true);
         jdata->exit_code = rc;
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
         goto cleanup;
@@ -1590,7 +1591,7 @@ ranking:
      * the map, then that's an error
      */
     if (!did_map || 0 == jdata->num_procs || 0 == jdata->map->num_nodes) {
-        pmix_show_help("help-prte-rmaps-base.txt", "failed-map", true,
+        prte_show_help("help-prte-rmaps-base.txt", "failed-map", true,
                        PRTE_ERROR_NAME(rc),
                        "N/A",
                        jdata->num_procs,
@@ -1839,7 +1840,7 @@ static int map_colocate(prte_job_t *jdata,
                     if (nptr->slots < cnt) {
                         // oversubscribed - we can still fit if they allow oversubscription
                         if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(map->mapping)) {
-                            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+                            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                                            app->num_procs, app->app, prte_process_info.nodename);
                             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                             ret = PRTE_ERR_SILENT;
@@ -1924,7 +1925,7 @@ static int map_colocate(prte_job_t *jdata,
                 if (nptr->slots < cnt) {
                     // oversubscribed - we can still fit if they allow oversubscription
                     if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(map->mapping)) {
-                        pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+                        prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                                        app->num_procs, app->app, prte_process_info.nodename);
                         PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                         ret = PRTE_ERR_SILENT;

@@ -44,6 +44,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 #include "src/util/pmix_string_copy.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -373,7 +374,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
     h = flux_open_ex(NULL, 0, &flux_error);
     if(NULL == h) {
-        pmix_show_help("help-ras-flux.txt", "flux-broker-not-found", 1, flux_error.text);
+        prte_show_help("help-ras-flux.txt", "flux-broker-not-found", 1, flux_error.text);
         ret = PRTE_ERR_NOT_FOUND;
         goto err;
     }
@@ -409,14 +410,14 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     f = flux_kvs_lookup(h, NULL, 0, "resource.R");
     if (NULL == f) {
         int errno_l = errno;
-        pmix_show_help("help-ras-flux.txt", "flux-kvs-lookup-failure", 1, strerror(errno_l));
+        prte_show_help("help-ras-flux.txt", "flux-kvs-lookup-failure", 1, strerror(errno_l));
         ret = PRTE_ERR_NOT_FOUND;
         goto err;
     }
 
     if(flux_kvs_lookup_get (f, (const char **)&return_str) < 0){
         int errno_l = errno;
-        pmix_show_help("help-ras-flux.txt", "flux-kvs-lookup-get-failure", 1, strerror(errno_l));
+        prte_show_help("help-ras-flux.txt", "flux-kvs-lookup-get-failure", 1, strerror(errno_l));
         ret = PRTE_ERR_NOT_FOUND;
         goto err;
     }
@@ -429,7 +430,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
      */
     root = json_loads(return_str, JSON_DECODE_ANY, &json_err);
     if (NULL == root) {
-        pmix_show_help("help-ras-flux.txt", "flux-json-parse-failure", 1, json_err.text);
+        prte_show_help("help-ras-flux.txt", "flux-json-parse-failure", 1, json_err.text);
         ret = PRTE_ERR_UNPACK_FAILURE;
         goto err;
     }

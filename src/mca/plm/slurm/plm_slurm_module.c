@@ -76,6 +76,7 @@
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 #include "types.h"
 
 #include "src/prted/prted.h"
@@ -397,7 +398,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         PMIx_Argv_append_nosize(&nodelist_argv, node->name);
     }
     if (0 == PMIx_Argv_count(nodelist_argv)) {
-        pmix_show_help("help-plm-slurm.txt", "no-hosts-in-list", true);
+        prte_show_help("help-plm-slurm.txt", "no-hosts-in-list", true);
         rc = PRTE_ERR_FAILED_TO_START;
         goto cleanup;
     }
@@ -624,7 +625,7 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
 
     /* need to check that we are at least version 17.11 */
     if (prte_mca_plm_slurm_component.ancient) {
-        pmix_show_help("help-plm-slurm.txt", "ancient-version", true,
+        prte_show_help("help-plm-slurm.txt", "ancient-version", true,
                        prte_mca_plm_slurm_component.major,
                        prte_mca_plm_slurm_component.minor);
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
@@ -672,7 +673,7 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
         /* an orted must have died unexpectedly - report
          * that the daemon has failed so we exit
          */
-        pmix_show_help("help-plm-slurm.txt", "srun-failed", true,
+        prte_show_help("help-plm-slurm.txt", "srun-failed", true,
                        proc->exit_code);
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
     } else {
@@ -726,7 +727,7 @@ static int plm_slurm_start_proc(int argc, char **argv,
     PRTE_HIDE_UNUSED_PARAMS(argc);
 
     if (NULL == exec_argv) {
-        pmix_show_help("help-plm-slurm.txt", "no-srun", true);
+        prte_show_help("help-plm-slurm.txt", "no-srun", true);
         return PRTE_ERR_SILENT;
     }
 

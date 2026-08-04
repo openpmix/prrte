@@ -46,6 +46,7 @@
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/grpcomm/base/base.h"
@@ -518,7 +519,7 @@ static int raw_preposition_files(prte_job_t *jdata,
         if (NULL == fs->remote_target || '\0' == fs->remote_target[0] ||
             0 == strcmp(fs->remote_target, ".") ||
             prte_filem_base_has_dotdot(fs->remote_target)) {
-            pmix_show_help("help-prte-filem-raw.txt", "preload-bad-path", true,
+            prte_show_help("help-prte-filem-raw.txt", "preload-bad-path", true,
                            fs->local_target);
             PMIX_LIST_DESTRUCT(&fsets);
             if (NULL != cbfunc) {
@@ -543,7 +544,7 @@ static int raw_preposition_files(prte_job_t *jdata,
             prte_filem_base_file_set_t *fs2 = (prte_filem_base_file_set_t *) itm;
             if (0 == strcmp(fs->remote_target, fs2->remote_target) &&
                 !same_source(fs->local_target, fs2->local_target)) {
-                pmix_show_help("help-prte-filem-raw.txt", "preload-name-clash", true,
+                prte_show_help("help-prte-filem-raw.txt", "preload-name-clash", true,
                                fs->local_target, fs2->local_target, fs->remote_target);
                 PMIX_LIST_DESTRUCT(&fsets);
                 if (NULL != cbfunc) {
@@ -894,7 +895,7 @@ static int place_file(char *my_dir, char *wdir, char *fname)
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fname, dest));
             goto cleanup;
         }
-        pmix_show_help("help-prte-filem-raw.txt", "preload-collision", true,
+        prte_show_help("help-prte-filem-raw.txt", "preload-collision", true,
                        fname, wdir, prte_process_info.nodename);
         rc = PRTE_ERR_PRELOAD_CONFLICT;
         goto cleanup;
@@ -1203,7 +1204,7 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
             }
         }
         if (!staged) {
-            pmix_show_help("help-prte-filem-raw.txt", "preload-not-staged", true,
+            prte_show_help("help-prte-filem-raw.txt", "preload-not-staged", true,
                            files[j], prte_process_info.nodename);
             PMIx_Argv_free(files);
             return PRTE_ERR_FILE_OPEN_FAILURE;
