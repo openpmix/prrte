@@ -53,6 +53,7 @@
 #include "src/util/pmix_os_path.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 #include "src/util/stacktrace.h"
 #include "src/util/sys_limits.h"
 
@@ -314,7 +315,7 @@ int prte_init_minimum(void)
     if (prte_bootstrap_setup) {
         if (PRTE_SUCCESS != (ret = prte_ess_base_bootstrap_params())) {
             if (PRTE_ERR_SILENT != ret) {
-                pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
+                prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
                                "prte bootstrap params", PRTE_ERROR_NAME(ret), ret);
             }
             return 1;
@@ -324,7 +325,7 @@ int prte_init_minimum(void)
     /* Register all global MCA Params */
     if (PRTE_SUCCESS != (ret = prte_register_params())) {
         if (PRTE_ERR_SILENT != ret) {
-            pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
+            prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
                            "prte register params",
                            PRTE_ERROR_NAME(ret), ret);
         }
@@ -339,7 +340,7 @@ int prte_init_minimum(void)
     ret = prte_preload_default_mca_params();
     if (PRTE_SUCCESS != ret) {
         if (PRTE_ERR_SILENT != ret) {
-            pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
+            prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
                            "prte preload mca params", PRTE_ERROR_NAME(ret), ret);
         }
         return ret;
@@ -383,7 +384,7 @@ int prte_init_util(prte_proc_type_t flags)
      * doing so twice in cases where the launch agent did it for us
      */
     if (PRTE_SUCCESS != (ret = prte_util_init_sys_limits(&error))) {
-        pmix_show_help("help-prte-runtime.txt", "prte_init:syslimit", false, error);
+        prte_show_help("help-prte-runtime.txt", "prte_init:syslimit", false, error);
         return PRTE_ERR_SILENT;
     }
 
@@ -398,7 +399,7 @@ int prte_init_util(prte_proc_type_t flags)
 
 error:
     if (PRTE_ERR_SILENT != ret) {
-        pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
+        prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
                        PRTE_ERROR_NAME(ret), ret);
     }
 
@@ -563,7 +564,7 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
 
 error:
     if (PRTE_ERR_SILENT != ret) {
-        pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
+        prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
                        PRTE_ERROR_NAME(ret), ret);
     }
 
@@ -699,7 +700,7 @@ int prte_preload_default_mca_params(void)
                 PMIX_LIST_FOREACH(fv2, &params, pmix_mca_base_var_file_value_t) {
                     if (0 == strcmp(fv->mbvfv_var, fv2->mbvfv_var)) {
                         if (!prte_suppress_override_warning) {
-                            pmix_show_help("help-pmix-mca-var.txt", "overridden-param-set", true, fv->mbvfv_var);
+                            prte_show_help("help-pmix-mca-var.txt", "overridden-param-set", true, fv->mbvfv_var);
                         }
                         free(fv->mbvfv_var);
                         fv->mbvfv_var = strdup(fv2->mbvfv_var);
@@ -714,7 +715,7 @@ int prte_preload_default_mca_params(void)
                 if (pmix_pmdl_base_check_pmix_param(fv->mbvfv_var)) {
                     pmix_asprintf(&tmp, "PMIX_MCA_%s", fv->mbvfv_var);
                     if (!prte_suppress_override_warning && NULL != getenv(tmp)) {
-                        pmix_show_help("help-pmix-mca-var.txt", "overridden-param-set", true, tmp);
+                        prte_show_help("help-pmix-mca-var.txt", "overridden-param-set", true, tmp);
                     }
                     // set it, and overwrite if they already
                     // have a value in our environment
@@ -723,7 +724,7 @@ int prte_preload_default_mca_params(void)
                 } else {
                     pmix_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
                     if (!prte_suppress_override_warning && NULL != getenv(tmp)) {
-                        pmix_show_help("help-pmix-mca-var.txt", "overridden-param-set", true, tmp);
+                        prte_show_help("help-pmix-mca-var.txt", "overridden-param-set", true, tmp);
                     }
                     // set it, and overwrite if they already
                     // have a value in our environment
@@ -734,7 +735,7 @@ int prte_preload_default_mca_params(void)
                     // the equivalent PMIx value
                     if (check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value, true) &&
                         !prte_suppress_override_warning) {
-                        pmix_show_help("help-pmix-mca-var.txt", "overridden-param-set", true, fv->mbvfv_var);
+                        prte_show_help("help-pmix-mca-var.txt", "overridden-param-set", true, fv->mbvfv_var);
                     }
                 }
             }

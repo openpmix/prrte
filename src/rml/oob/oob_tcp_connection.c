@@ -65,6 +65,7 @@
 #include "src/util/pmix_net.h"
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 #include "types.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -75,7 +76,6 @@
 #include "src/runtime/prte_wait.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
-#include "src/util/pmix_show_help.h"
 
 #include "src/rml/oob/oob_tcp.h"
 #include "src/rml/oob/oob_tcp_common.h"
@@ -942,7 +942,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
 
     /* get the authentication and version payload */
     if (hdr.nbytes > (uint32_t)(prte_oob_base.max_msg_size * 1024 * 1024)) {
-        pmix_show_help("help-oob-tcp.txt", "msg-too-big", true,
+        prte_show_help("help-oob-tcp.txt", "msg-too-big", true,
                         PRTE_NAME_PRINT(&peer->name), PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         hdr.nbytes, prte_oob_base.max_msg_size);
         peer->state = MCA_OOB_TCP_FAILED;
@@ -1020,7 +1020,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
 
     if (hdr.nbytes == offset) {
         // missing version string
-        pmix_show_help("help-oob-tcp.txt", "missing version", true,
+        prte_show_help("help-oob-tcp.txt", "missing version", true,
                        prte_process_info.nodename, PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                        pmix_fd_get_peer_name(peer->sd), PRTE_NAME_PRINT(&(peer->name)));
         peer->state = MCA_OOB_TCP_FAILED;
@@ -1041,7 +1041,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
     }
     offset += cnt + 1;
     if (0 != strcmp(version, prte_version_string)) {
-        pmix_show_help("help-oob-tcp.txt", "version mismatch", true, prte_process_info.nodename,
+        prte_show_help("help-oob-tcp.txt", "version mismatch", true, prte_process_info.nodename,
                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_version_string,
                        pmix_fd_get_peer_name(peer->sd), PRTE_NAME_PRINT(&(peer->name)), version);
 

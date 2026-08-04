@@ -35,6 +35,7 @@
 #include "src/runtime/prte_wait.h"
 #include "src/runtime/runtime_internals.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "src/mca/ess/base/base.h"
 
@@ -60,7 +61,7 @@ int prte_ess_base_std_prolog(void)
     return PRTE_SUCCESS;
 
 error:
-    pmix_show_help("help-prte-runtime.txt",
+    prte_show_help("help-prte-runtime.txt",
                    "prte_init:startup:internal-failure", true,
                    error, PRTE_ERROR_NAME(ret), ret);
 

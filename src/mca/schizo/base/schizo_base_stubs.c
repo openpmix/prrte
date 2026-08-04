@@ -30,6 +30,7 @@
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 #include "src/util/prte_cmd_line.h"
 
 prte_schizo_base_module_t *prte_schizo_base_detect_proxy(char *cmdpath)
@@ -360,7 +361,7 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
         if (0 == strcmp("--prtemca", argv[i])) {
             if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
-                pmix_show_help("help-schizo-base.txt", "missing-values", true,
+                prte_show_help("help-schizo-base.txt", "missing-values", true,
                                "--prtemca");
                 return PRTE_ERR_SILENT;
             }
@@ -387,7 +388,7 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
         if (0 == strcmp("--mca", argv[i])) {
             if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
-                pmix_show_help("help-schizo-base.txt", "missing-values", true,
+                prte_show_help("help-schizo-base.txt", "missing-values", true,
                                "--mca");
                 return PRTE_ERR_SILENT;
             }
@@ -455,7 +456,7 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
         if (0 == strcmp("--pmixmca", argv[i]) || 0 == strcmp("--gpmixmca", argv[i])) {
             if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
-                pmix_show_help("help-schizo-base.txt", "missing-values", true,
+                prte_show_help("help-schizo-base.txt", "missing-values", true,
                                "--pmixmca");
                 return PRTE_ERR_SILENT;
             }

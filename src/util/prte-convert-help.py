@@ -200,7 +200,7 @@ def parse_src_files(source_files, citations, verbose=False):
                             sys.stderr.write("ERROR: Missing end of filename")
                             continue
 
-                if "pmix_show_help(" in line or "pmix_show_help_string(" in line or "send_error_show_help" in line:
+                if "pmix_show_help(" in line or "prte_show_help(" in line or "pmix_show_help_string(" in line or "send_error_show_help" in line:
                     cont_topic = False
                     cont_filename = False
                     # line contains call to show-help - try to extract

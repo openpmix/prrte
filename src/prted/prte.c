@@ -86,6 +86,7 @@
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_getcwd.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 #include "src/util/pmix_string_copy.h"
 #include "src/util/session_dir.h"
 
@@ -464,7 +465,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
      * schizo module for this tool */
     schizo = prte_schizo_base_detect_proxy(personality);
     if (NULL == schizo) {
-        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
+        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
     }
     if (0 != strcmp(schizo->name, "prte")) {
@@ -490,7 +491,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     /* Register all global MCA Params */
     if (PRTE_SUCCESS != (rc = prte_register_params())) {
         if (PRTE_ERR_SILENT != rc) {
-            pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
+            prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
                            "prte register params",
                            PRTE_ERROR_NAME(rc), rc);
         }
@@ -520,14 +521,14 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     if (NULL != opt) {
         char cwd[PRTE_PATH_MAX];
         if (PRTE_SUCCESS != (rc = pmix_getcwd(cwd, sizeof(cwd)))) {
-            pmix_show_help("help-prun.txt", "prun:init-failure", true, "get the cwd", rc);
+            prte_show_help("help-prun.txt", "prun:init-failure", true, "get the cwd", rc);
             return 1;
         }
         // can only be one value
         if (1 < PMIx_Argv_count(opt->values)) {
             // report the error and abort
             param = PMIx_Argv_join(opt->values, ',');
-            pmix_show_help("help-prterun.txt", "multiple-default-hostfiles", true, param);
+            prte_show_help("help-prterun.txt", "multiple-default-hostfiles", true, param);
             return 1;
          }
         if (!pmix_path_is_absolute(opt->values[0])) {
@@ -556,7 +557,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
         // parse the file and add its context to the argv array
         fp = fopen(opt->values[0], "r");
         if (NULL == fp) {
-            pmix_show_help("help-prun.txt", "appfile-failure", true, opt->values[0]);
+            prte_show_help("help-prun.txt", "appfile-failure", true, opt->values[0]);
             return 1;
         }
         first = true;
@@ -627,7 +628,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
                  * However, if this is not "search", then this is an
                  * unknown option and must be reported to the user as
                  * an error */
-                pmix_show_help("help-prun.txt", "bad-dvm-option", true,
+                prte_show_help("help-prun.txt", "bad-dvm-option", true,
                                opt->values[0], prte_tool_basename);
                 return 1;
             }
@@ -738,7 +739,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
         pmix_nspace_t sgltn;
         pmix_rank_t sgrank;
         if (PRTE_SUCCESS != prte_parse_singleton_id(opt->values[0], sgltn, &sgrank)) {
-            pmix_show_help("help-prte.txt", "bad-singleton", true,
+            prte_show_help("help-prte.txt", "bad-singleton", true,
                            prte_tool_basename, opt->values[0]);
             return 1;
         }
@@ -761,7 +762,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
         /* did they provide an app? */
         if (PMIX_SUCCESS != rc || 0 == pmix_list_get_size(&apps)) {
             if (proxyrun) {
-                pmix_show_help("help-prun.txt", "prun:executable-not-specified", true,
+                prte_show_help("help-prun.txt", "prun:executable-not-specified", true,
                                prte_tool_basename, prte_tool_basename);
                 PRTE_UPDATE_EXIT_STATUS(rc);
                 goto DONE;
@@ -771,7 +772,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
             /* they did provide an app - this is only allowed
              * when running as a proxy! */
             if (!proxyrun) {
-                pmix_show_help("help-prun.txt", "prun:executable-incorrectly-given", true,
+                prte_show_help("help-prun.txt", "prun:executable-incorrectly-given", true,
                                prte_tool_basename, prte_tool_basename);
                 PRTE_UPDATE_EXIT_STATUS(rc);
                 goto DONE;
@@ -896,13 +897,13 @@ PRTE_EXPORT int prte(int argc, char *argv[])
 
     /* get the daemon job object - was created by ess/hnp component */
     if (NULL == (jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace))) {
-        pmix_show_help("help-prun.txt", "bad-job-object", true, prte_tool_basename);
+        prte_show_help("help-prun.txt", "bad-job-object", true, prte_tool_basename);
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
         goto DONE;
     }
     /* ess/hnp also should have created a daemon "app" */
     if (NULL == (dapp = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0))) {
-        pmix_show_help("help-prun.txt", "bad-app-object", true, prte_tool_basename);
+        prte_show_help("help-prun.txt", "bad-app-object", true, prte_tool_basename);
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
         goto DONE;
     }
@@ -918,7 +919,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
                 param = strdup(iprteinfo->info.value.data.string);
             } else if (0 != strcmp(param, iprteinfo->info.value.data.string)) {
                     // we have non-matching prefixes
-                    pmix_show_help("help-plm-base.txt", "multiple-prefixes", true,
+                    prte_show_help("help-plm-base.txt", "multiple-prefixes", true,
                                    prte_tool_basename, PRTE_CLI_PREFIX,
                                    PRTE_CLI_PREFIX, "PRRTE", PRTE_CLI_PREFIX,
                                    param, iprteinfo->info.value.data.string);
@@ -983,7 +984,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
         if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PREFIX, (void **) &cptr, PMIX_STRING)) {
             // already have a prefix directory entry - see if they are the same
             if (0 != strcmp(cptr, param)) {
-                pmix_show_help("help-plm-base.txt", "multiple-prrte-prefixes", true,
+                prte_show_help("help-plm-base.txt", "multiple-prrte-prefixes", true,
                                prte_tool_basename, prte_tool_basename,
                                prte_tool_basename, param, cptr);
                 free(param);
@@ -1011,7 +1012,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
                 param = strdup(iprteinfo->info.value.data.string);
             } else if (0 != strcmp(param, iprteinfo->info.value.data.string)) {
                     // we have non-matching prefixes
-                    pmix_show_help("help-plm-base.txt", "multiple-prefixes", true,
+                    prte_show_help("help-plm-base.txt", "multiple-prefixes", true,
                                    prte_tool_basename, PRTE_CLI_PMIX_PREFIX,
                                    PRTE_CLI_PMIX_PREFIX, "PMIx", PRTE_CLI_PMIX_PREFIX,
                                    param, iprteinfo->info.value.data.string);
@@ -1035,7 +1036,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
         if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PMIX_PREFIX, (void **) &cptr, PMIX_STRING)) {
             // already have a prefix directory entry - see if they are the same
             if (0 != strcmp(cptr, param)) {
-                pmix_show_help("help-plm-base.txt", "multiple-pmix-prefixes", true,
+                prte_show_help("help-plm-base.txt", "multiple-pmix-prefixes", true,
                                prte_tool_basename, prte_tool_basename,
                                param, cptr);
                 free(param);
@@ -1582,7 +1583,7 @@ static int prep_singleton(const char *name)
 
     rc = prte_parse_singleton_id(name, nspace, &rank);
     if (PRTE_SUCCESS != rc) {
-        pmix_show_help("help-prte.txt", "bad-singleton", true, prte_tool_basename, name);
+        prte_show_help("help-prte.txt", "bad-singleton", true, prte_tool_basename, name);
         return rc;
     }
     jdata = PMIX_NEW(prte_job_t);

@@ -34,6 +34,7 @@
 #include "src/util/nidmap.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "grpcomm_direct.h"
 #include "src/mca/grpcomm/base/base.h"
@@ -1252,7 +1253,7 @@ static void check_complete(prte_grpcomm_group_t *coll)
                 }
                 // did we lose anyone?
                 if (nfinal != pmix_list_get_size(&nmlist)) {
-                    pmix_show_help("help-prte-runtime.txt", "bad-final-order", true);
+                    prte_show_help("help-prte-runtime.txt", "bad-final-order", true);
                     coll->status = PMIX_ERR_BAD_PARAM;
                     PMIX_LIST_DESTRUCT(&nmlist);
                     goto answer;

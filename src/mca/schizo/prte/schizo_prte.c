@@ -47,6 +47,7 @@
 #include "src/util/prte_cmd_line.h"
 #include "src/util/session_dir.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
@@ -552,7 +553,7 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
          * above, so this is unreachable today - but handing
          * pmix_cmd_line_parse a NULL option table is a crash, not a
          * diagnosable error, so refuse rather than continue */
-        pmix_show_help("help-schizo-base.txt", "no-proxy", true,
+        prte_show_help("help-schizo-base.txt", "no-proxy", true,
                        prte_tool_basename, prte_tool_actual);
         return PRTE_ERR_NOT_FOUND;
     }
@@ -768,7 +769,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
         else if (0 == strcmp(option, "ppr")) {
             /* if they didn't specify a complete pattern, then this is an error */
             if (NULL == strchr(opt->values[0], ':')) {
-                pmix_show_help("help-schizo-base.txt", "bad-ppr", true, opt->values[0], true);
+                prte_show_help("help-schizo-base.txt", "bad-ppr", true, opt->values[0], true);
                 return PRTE_ERR_SILENT;
             }
             pmix_asprintf(&p2, "ppr:%s", opt->values[0]);
@@ -950,7 +951,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
          */
         else if (0 == strcmp(option, "debug")) {
             if (warn) {
-                pmix_show_help("help-schizo-base.txt", "deprecated-inform", true, option,
+                prte_show_help("help-schizo-base.txt", "deprecated-inform", true, option,
                                "This CLI option will be deprecated starting in Open MPI v5");
             }
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
@@ -1126,7 +1127,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
         // --hetero-nodes
         else if (0 == strcmp(option, "hetero-nodes")) {
             if (warn) {
-                pmix_show_help("help-schizo-base.txt", "deprecated-hetero-nodes", true);
+                prte_show_help("help-schizo-base.txt", "deprecated-hetero-nodes", true);
             }
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }

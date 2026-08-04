@@ -34,6 +34,7 @@ linked into `libprrte`. There are no MCA components here.
 | **Tool option values** | `prte_cmd_line.[ch]` | Value interpreters more than one tool needs (`--pid`, `--app`, the daemon umask). See [`src/tools/AGENTS.md`](../tools/AGENTS.md). |
 | **Bootstrap** | `prte_bootstrap.[ch]` | Reading `prte.conf` for a launcher-less DVM. |
 | **Process plumbing** | `daemon_init.c`, `sys_limits.[ch]`, `stacktrace.[ch]`, `ethtool.[ch]` | Daemonizing, `setrlimit`, the crash handler, and the Linux interface-speed ioctl. |
+| **Help delivery** | `prte_show_help.[ch]` | `prte_show_help()` — a drop-in for `pmix_show_help()` that works on a **daemon**. See below. |
 | **Generated** | `prte_show_help_content.c`, `prte-convert-help.py` | Every `help-*.txt` in the tree, compiled in. **Never edit the generated file.** |
 
 ---
@@ -197,6 +198,49 @@ the modex match the names found locally.
 Not unit-testable, and deliberately left to the live smoke test: `session_dir`
 (creates directories under the real `$TMPDIR`), `stacktrace` (installs signal
 handlers), `daemon_init` (forks), and `nidmap` (needs a populated DVM).
+
+---
+
+## `prte_show_help()` — because `pmix_show_help()` does not work on a daemon
+
+`pmix_show_help()` renders correctly everywhere and **delivers nowhere on
+a `prted`.** It hands the rendered text to PMIx's `plog` framework, and
+`plog/stdfd` writes its own `stderr` only when the caller is a PMIx
+*client or tool*. A daemon is a PMIx *server*, so it takes the other
+branch, which passes the text to `PMIx_server_IOF_deliver()` tagged with
+the daemon's own identity — and nothing has an IOF sink for a daemon's
+own output. The message is built and thrown away. The head node looks
+fine only because there the daemon's PMIx server is the one holding the
+tool connection (and under `prterun` it *is* the tool).
+
+`prte_show_help()` has the same signature and the same rendering, and:
+
+- on the **HNP**, on a **tool**, or in an **application**, delivers
+  locally, exactly as `pmix_show_help()` would;
+- on any **other daemon**, renders locally and ships the text to the HNP
+  over `PRTE_RML_TAG_SHOW_HELP`, where `prte_show_help_recv()` delivers
+  it. Aggregation and duplicate suppression then happen **once**, on the
+  HNP, keyed by the same filename/topic — which is what you want anyway
+  when 500 nodes hit the same error.
+- falls back to local delivery if there is no HNP to send to yet (early
+  startup, or teardown), so a message is never simply lost.
+
+**The whole tree is converted** — every one of the ~420 call sites that
+used to say `pmix_show_help(` now says `prte_show_help(`, so a plain
+`grep` for the PMIx spelling in a `.c` file should come back empty. A new
+`pmix_show_help()` is therefore a message that will be invisible off the
+head node, and nothing will tell you: no warning, no error, just silence
+on 999 nodes out of 1000. Use `prte_show_help()` everywhere. It is
+identical outside a daemon, so there is no case where the PMIx spelling
+is the better choice.
+
+(`pmix_show_help_string()` and `pmix_show_help_norender()` are different
+functions with different signatures and are untouched; `prte_show_help()`
+is built on top of them.)
+
+`prte-convert-help.py` recognizes both spellings when it scans for help
+citations, so converting a call site does not remove it from the
+help-file cross-check.
 
 ---
 

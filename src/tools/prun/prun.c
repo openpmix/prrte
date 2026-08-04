@@ -80,6 +80,7 @@
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 #include "src/util/pmix_string_copy.h"
 
 #include "src/class/pmix_pointer_array.h"
@@ -173,7 +174,7 @@ int prun(int argc, char *argv[])
      * schizo module for this tool */
     schizo = prte_schizo_base_detect_proxy(personality);
     if (NULL == schizo) {
-        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
+        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
     }
     if (NULL == personality) {
@@ -277,7 +278,7 @@ int prun(int argc, char *argv[])
         // parse the file and add its context to the argv array
         rc = prte_load_appfile(opt->values[0], &pargv);
         if (PRTE_SUCCESS != rc) {
-            pmix_show_help("help-prun.txt", "appfile-failure", true, opt->values[0]);
+            prte_show_help("help-prun.txt", "appfile-failure", true, opt->values[0]);
             PRTE_UPDATE_EXIT_STATUS(1);
             goto DONE;
         }

@@ -27,6 +27,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 #include "src/util/prte_cmd_line.h"
 
 /*
@@ -110,7 +111,7 @@ int prte_hwloc_base_register(void)
         } else if (0 == strcasecmp(mem_alloc_policy, "local_only")) {
             prte_hwloc_base_map = PRTE_HWLOC_BASE_MAP_LOCAL_ONLY;
         } else {
-            pmix_show_help("help-prte-hwloc-base.txt", "invalid binding_policy", true,
+            prte_show_help("help-prte-hwloc-base.txt", "invalid binding_policy", true,
                            "memory allocation", mem_alloc_policy);
             return PRTE_ERR_SILENT;
         }
@@ -139,7 +140,7 @@ int prte_hwloc_base_register(void)
         } else if (0 == strcasecmp(mem_bind_failure_action, "error")) {
             prte_hwloc_base_mbfa = PRTE_HWLOC_BASE_MBFA_ERROR;
         } else {
-            pmix_show_help("help-prte-hwloc-base.txt", "invalid binding_policy", true,
+            prte_show_help("help-prte-hwloc-base.txt", "invalid binding_policy", true,
                            "memory bind failure action", mem_bind_failure_action);
             return PRTE_ERR_SILENT;
         }
@@ -229,7 +230,7 @@ int prte_hwloc_base_register(void)
             } else if (0 == strcasecmp(ptr, "CORECPUS")) {
                 prte_hwloc_default_use_hwthread_cpus = false;
             } else {
-                pmix_show_help("help-prte-hwloc-base.txt", "bad-processor-type", true,
+                prte_show_help("help-prte-hwloc-base.txt", "bad-processor-type", true,
                                default_cpu_list, ptr);
                 free(prte_hwloc_default_cpu_list);
                 prte_hwloc_default_cpu_list = NULL;
@@ -608,7 +609,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
             PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_PACKAGE);
 
         } else {
-            pmix_show_help("help-prte-hwloc-base.txt", "invalid binding_policy", true, "binding",
+            prte_show_help("help-prte-hwloc-base.txt", "invalid binding_policy", true, "binding",
                            spec);
             free(myspec);
             return PRTE_ERR_BAD_PARAM;
@@ -630,7 +631,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
 
             } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_REPORT)) {
                 if (NULL == jdata) {
-                    pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
+                    prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                    "binding policy", quals[i]);
                     PMIx_Argv_free(quals);
                     free(myspec);
@@ -641,7 +642,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
 
             } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_LIMIT)) {
                 if (NULL == jdata) {
-                    pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
+                    prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                    "binding policy", quals[i]);
                     PMIx_Argv_free(quals);
                     free(myspec);
@@ -653,7 +654,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                 p2 = pmix_cli_qualifier_value(quals[i]);
                 if (NULL == p2) {
                     /* missing the value */
-                    pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                    prte_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
                                    "binding limit", "LIMIT", quals[i]);
                     PMIx_Argv_free(quals);
                     free(myspec);
@@ -668,7 +669,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                     0 >= lval || UINT16_MAX < lval) {
                     /* value is not a number, has trailing garbage, or is out
                      * of range (a limit of zero is meaningless) */
-                    pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                    prte_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
                                    "binding limit", "LIMIT", quals[i]);
                     PMIx_Argv_free(quals);
                     free(myspec);
@@ -680,7 +681,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
 
             } else {
                 /* unknown option */
-                pmix_show_help("help-prte-hwloc-base.txt", "unrecognized-modifier", true, spec);
+                prte_show_help("help-prte-hwloc-base.txt", "unrecognized-modifier", true, spec);
                 PMIx_Argv_free(quals);
                 free(myspec);
                 return PRTE_ERR_BAD_PARAM;

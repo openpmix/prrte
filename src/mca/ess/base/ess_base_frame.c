@@ -44,6 +44,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 #include "src/util/proc_info.h"
 
 #include "src/mca/ess/base/base.h"
@@ -150,7 +151,7 @@ static int get_env_index(const char *envar, unsigned long *val)
     errno = 0;
     *val = strtoul(str, &endp, 10);
     if (0 != errno || endp == str || '\0' != *endp || '-' == str[0]) {
-        pmix_show_help("help-ess-base.txt", "ess-base:bad-identity", true, envar, str);
+        prte_show_help("help-ess-base.txt", "ess-base:bad-identity", true, envar, str);
         return PRTE_ERR_SILENT;
     }
     return PRTE_SUCCESS;
@@ -177,7 +178,7 @@ int prte_ess_base_set_identity(const char *offset_envar, int offset_adjust)
     vpid = strtoul(prte_ess_base_vpid, &endp, 10);
     if (0 != errno || endp == prte_ess_base_vpid || '\0' != *endp
         || '-' == prte_ess_base_vpid[0]) {
-        pmix_show_help("help-ess-base.txt", "ess-base:bad-identity", true,
+        prte_show_help("help-ess-base.txt", "ess-base:bad-identity", true,
                        "ess_base_vpid", prte_ess_base_vpid);
         return PRTE_ERR_SILENT;
     }
@@ -206,7 +207,7 @@ int prte_ess_base_set_identity(const char *offset_envar, int offset_adjust)
     /* compare the sum as a long: PMIX_RANK_IS_VALID would take a pmix_rank_t
      * and the narrowing conversion is what we are trying to catch */
     if (0 > rank || (long) PMIX_RANK_VALID <= rank) {
-        pmix_show_help("help-ess-base.txt", "ess-base:rank-out-of-range", true,
+        prte_show_help("help-ess-base.txt", "ess-base:rank-out-of-range", true,
                        prte_ess_base_vpid,
                        (NULL == offset_envar) ? "none" : offset_envar,
                        offset, offset_adjust);
@@ -350,7 +351,7 @@ pmix_status_t prte_ess_base_setup_signals(char *input)
             errno = 0;
             sval = strtoul(signals[i], &tmp, 10);
             if (0 != errno || '\0' != *tmp) {
-                pmix_show_help("help-ess-base.txt", "ess-base:unknown-signal", true,
+                prte_show_help("help-ess-base.txt", "ess-base:unknown-signal", true,
                                signals[i], mysignals);
                 PMIx_Argv_free(signals);
                 return PMIX_ERR_SILENT;
@@ -361,7 +362,7 @@ pmix_status_t prte_ess_base_setup_signals(char *input)
              * follows fails silently on both - so the user's signal is never
              * forwarded and nothing ever says why. */
             if (0 >= sval || _NSIG <= sval) {
-                pmix_show_help("help-ess-base.txt", "ess-base:unknown-signal", true,
+                prte_show_help("help-ess-base.txt", "ess-base:unknown-signal", true,
                                signals[i], mysignals);
                 PMIx_Argv_free(signals);
                 return PMIX_ERR_SILENT;
@@ -374,7 +375,7 @@ pmix_status_t prte_ess_base_setup_signals(char *input)
                      * branch - a non-forwardable signal must be rejected
                      * whether it was given by name or by number */
                     if (!known_signals[j].can_forward) {
-                        pmix_show_help("help-ess-base.txt", "ess-base:cannot-forward", true,
+                        prte_show_help("help-ess-base.txt", "ess-base:cannot-forward", true,
                                        known_signals[j].signame, mysignals);
                         PMIx_Argv_free(signals);
                         return PMIX_ERR_SILENT;
@@ -395,7 +396,7 @@ pmix_status_t prte_ess_base_setup_signals(char *input)
                  * anything (no signal is 0) */
                 if (0 == strcasecmp(signals[i], known_signals[j].signame)) {
                     if (!known_signals[j].can_forward) {
-                        pmix_show_help("help-ess-base.txt", "ess-base:cannot-forward", true,
+                        prte_show_help("help-ess-base.txt", "ess-base:cannot-forward", true,
                                        known_signals[j].signame, mysignals);
                         PMIx_Argv_free(signals);
                         return PMIX_ERR_SILENT;
@@ -407,7 +408,7 @@ pmix_status_t prte_ess_base_setup_signals(char *input)
                 }
             }
             if (!found) {
-                pmix_show_help("help-ess-base.txt", "ess-base:unknown-signal", true,
+                prte_show_help("help-ess-base.txt", "ess-base:unknown-signal", true,
                                signals[i], mysignals);
                 PMIx_Argv_free(signals);
                 return PMIX_ERR_SILENT;

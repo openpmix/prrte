@@ -24,6 +24,7 @@
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 #include "src/util/pmix_string_copy.h"
 
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
@@ -136,7 +137,7 @@ int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
     path = pmix_os_path(false, prte_install_dirs.sysconfdir, "prte.conf", NULL);
     fp = fopen(path, "r");
     if (NULL == fp) {
-        pmix_show_help("help-prte-runtime.txt", "bootstrap-not-found", true,
+        prte_show_help("help-prte-runtime.txt", "bootstrap-not-found", true,
                        prte_process_info.nodename, path);
         free(path);
         return PRTE_ERR_SILENT;
@@ -150,7 +151,7 @@ int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
         }
         /* split on the '=' sign */
         if (NULL == (ptr = strchr(line, '='))) {
-            pmix_show_help("help-prte-runtime.txt", "bootstrap-bad-entry", true,
+            prte_show_help("help-prte-runtime.txt", "bootstrap-bad-entry", true,
                            prte_process_info.nodename, path, line);
             free(line);
             fclose(fp);
@@ -159,7 +160,7 @@ int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
         *ptr = '\0';
         if (0 == strlen(line)) { // missing the field name
             *ptr = '=';
-            pmix_show_help("help-prte-runtime.txt", "bootstrap-missing-field-name", true,
+            prte_show_help("help-prte-runtime.txt", "bootstrap-missing-field-name", true,
                            prte_process_info.nodename, path, ptr);
             free(line);
             fclose(fp);
@@ -167,7 +168,7 @@ int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
         }
         ++ptr;
         if ('\0' == *ptr) { // missing the value
-            pmix_show_help("help-prte-runtime.txt", "bootstrap-missing-value", true,
+            prte_show_help("help-prte-runtime.txt", "bootstrap-missing-value", true,
                            prte_process_info.nodename, path, line);
             free(line);
             fclose(fp);
@@ -264,26 +265,26 @@ int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
 
     /* we require the node list */
     if (NULL == dvmnodes) {
-        pmix_show_help("help-prte-runtime.txt", "bootstrap-missing-entry", true,
+        prte_show_help("help-prte-runtime.txt", "bootstrap-missing-entry", true,
                        prte_process_info.nodename, path, "DVMNodes");
         goto cleanup;
     }
     /* we must be able to parse that list */
     ret = regex_extract_nodes(dvmnodes, &cfg->nodes);
     if (PMIX_SUCCESS != ret) {
-        pmix_show_help("help-prte-runtime.txt", "bootstrap-bad-nodelist", true,
+        prte_show_help("help-prte-runtime.txt", "bootstrap-bad-nodelist", true,
                        prte_process_info.nodename, path, dvmnodes, PMIx_Error_string(ret));
         goto cleanup;
     }
     /* we must have the controller host so we can find it */
     if (NULL == cfg->ctrlhost) {
-        pmix_show_help("help-prte-runtime.txt", "bootstrap-missing-entry", true,
+        prte_show_help("help-prte-runtime.txt", "bootstrap-missing-entry", true,
                        prte_process_info.nodename, path, "DVMControllerHost");
         goto cleanup;
     }
     /* the IP version must be sane */
     if (4 != cfg->ip_version && 6 != cfg->ip_version) {
-        pmix_show_help("help-prte-runtime.txt", "bootstrap-bad-entry", true,
+        prte_show_help("help-prte-runtime.txt", "bootstrap-bad-entry", true,
                        prte_process_info.nodename, path, "DVMIPVersion");
         goto cleanup;
     }
@@ -303,7 +304,7 @@ int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
                 /* no nodename here: this runs before the hostname is
                  * established, which is why the sibling messages in this
                  * function report it as "(null)" */
-                pmix_show_help("help-prte-runtime.txt", "bootstrap-duplicate-node", true,
+                prte_show_help("help-prte-runtime.txt", "bootstrap-duplicate-node", true,
                                path, cfg->nodes[i]);
                 goto cleanup;
             }

@@ -62,6 +62,7 @@
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/grpcomm/grpcomm.h"
@@ -1061,7 +1062,7 @@ int pmix_server_init(void)
     if (PMIX_SUCCESS == prc) {
         // check the version
         if (val->data.uint32 < PRTE_PMIX_MINIMUM_VERSION) {
-            pmix_show_help("help-prted.txt", "min-pmix-violation", true,
+            prte_show_help("help-prted.txt", "min-pmix-violation", true,
                            PRTE_PMIX_MINIMUM_VERSION, val->data.uint32);
             PMIX_VALUE_RELEASE(val);
             return PRTE_ERR_SILENT;
@@ -1208,6 +1209,10 @@ void pmix_server_start(void)
         /* setup recv for logging requests */
         PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING,
                       PRTE_RML_PERSISTENT, pmix_server_log, NULL);
+        /* setup recv for help text relayed by a daemon - a prted cannot
+         * deliver its own show_help, so it renders and sends it here */
+        PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SHOW_HELP,
+                      PRTE_RML_PERSISTENT, prte_show_help_recv, NULL);
         /* setup recv for scheduler requests */
         PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED,
                       PRTE_RML_PERSISTENT, pmix_server_sched, NULL);
