@@ -158,14 +158,6 @@ the daemons, not srun).
 - **Environment purge in the child is mandatory** — SLURM forwards the
   full environment; leaving `PMIX_`/`PRTE_` vars in breaks tool
   connections and duplicates command-line settings.
-- **Known wart: the "are we using the whole allocation?" test compares a
-  count against a capacity.** `map->num_new_daemons < session->nodes->size`
-  reads `size` from a `pmix_pointer_array_t`, which is the *allocated*
-  slot count, not the number of nodes in the session. The effect today is
-  benign (the explicit `--nodes`/`--nodelist` is emitted more often than
-  intended, which srun accepts), but anyone fixing it must re-test the
-  elastic grow path on a real SLURM system — dropping the explicit node
-  list changes which nodes srun picks.
 - Multi-node behavior that does not need SLURM (tree-spawn, throttling,
   the prted command line) is covered by
   [`contrib/dockerswarm`](../../../../contrib/dockerswarm/); the
