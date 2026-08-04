@@ -705,8 +705,6 @@ static int prte_ras_slurm_add_reused_nodes_to_session(const char *slurm_jobid,
         return PRTE_ERR_BAD_PARAM;
     }
 
-    int err = PRTE_SUCCESS;
-    int pmix_err;
     int added = 0;
     prte_session_t *session;
     prte_session_stack_item_t *item;
@@ -724,11 +722,9 @@ static int prte_ras_slurm_add_reused_nodes_to_session(const char *slurm_jobid,
         }
 
         PMIX_RETAIN(node);
-        pmix_err = pmix_pointer_array_add(session->nodes, node);
-        if (0 > pmix_err) {
+        if (0 > pmix_pointer_array_add(session->nodes, node)) {
             PMIX_RELEASE(node);
-            err = prte_pmix_convert_status(pmix_err);
-            return err;
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
         added++;
     }
