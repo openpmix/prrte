@@ -178,6 +178,9 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
     free(tmp);
     if (prte_persistent) {
         fprintf(stdout, "%s", tmp2);
+        /* prte_iof_base_output would have taken ownership of the string;
+         * this branch does not hand it anywhere, so it has to free it */
+        free(tmp2);
     } else {
         prte_iof_base_output(&source, PMIX_FWD_STDOUT_CHANNEL, tmp2);
     }
