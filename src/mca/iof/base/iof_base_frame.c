@@ -66,7 +66,7 @@ static int prte_iof_base_register(pmix_mca_base_register_flag_t flags)
     PRTE_HIDE_UNUSED_PARAMS(flags);
 
     /* check for maximum number of pending output messages */
-    prte_iof_base_output_limit = (size_t) INT_MAX;
+    prte_iof_base_output_limit = INT_MAX;
     (void) pmix_mca_base_var_register("prte", "iof", "base", "output_limit",
                                       "Maximum backlog of output messages [default: unlimited]",
                                       PMIX_MCA_BASE_VAR_TYPE_INT,
@@ -121,6 +121,14 @@ void prte_iof_base_output(const pmix_proc_t *source,
     prte_iof_deliver_t *p;
     pmix_status_t rc;
 
+    /* every caller hands us the result of a formatter, and a formatter that
+     * failed hands back NULL - prte_map_print documents NULL as its default
+     * result. There is nothing to emit and nothing to free, so say so here
+     * rather than in strlen() */
+    if (NULL == string) {
+        return;
+    }
+
     p = PMIX_NEW(prte_iof_deliver_t);
     PMIX_XFER_PROCID(&p->source, source);
     p->bo.bytes = string;
@@ -160,8 +168,6 @@ static void prte_iof_base_sink_construct(prte_iof_sink_t *ptr)
 {
     PMIX_LOAD_PROCID(&ptr->daemon, NULL, PMIX_RANK_INVALID);
     ptr->wev = PMIX_NEW(prte_iof_write_event_t);
-    ptr->xoff = false;
-    ptr->exclusive = false;
     ptr->closed = false;
 }
 static void prte_iof_base_sink_destruct(prte_iof_sink_t *ptr)
@@ -182,11 +188,9 @@ static void prte_iof_base_read_event_construct(prte_iof_read_event_t *rev)
 {
     rev->proc = NULL;
     rev->fd = -1;
-    rev->active = false;
     rev->activated = false;
     rev->always_readable = false;
     rev->ev = prte_event_alloc();
-    rev->sink = NULL;
     rev->tv.tv_sec = 0;
     rev->tv.tv_usec = 0;
 }
@@ -204,9 +208,6 @@ static void prte_iof_base_read_event_destruct(prte_iof_read_event_t *rev)
         rev->fd = -1;
     } else {
         free(rev->ev);
-    }
-    if (NULL != rev->sink) {
-        PMIX_RELEASE(rev->sink);
     }
     if (NULL != proct) {
         PMIX_RELEASE(proct);

@@ -262,7 +262,7 @@ static int prted_close(const pmix_proc_t *peer, prte_iof_tag_t source_tag)
                 }
                 proct->stdinev = NULL;
             }
-            if ((PRTE_IOF_STDOUT & source_tag) || (PRTE_IOF_STDMERGE & source_tag)) {
+            if (PRTE_IOF_STDOUT & source_tag) {
                 if (NULL != proct->revstdout) {
                     PMIX_RELEASE(proct->revstdout);
                 }
@@ -295,6 +295,31 @@ static void prted_complete(const prte_job_t *jdata)
     {
         if (PMIX_CHECK_NSPACE(jdata->nspace, proct->name.nspace)) {
             pmix_list_remove_item(&prte_mca_iof_prted_component.procs, &proct->super);
+            /* The proc and its read events reference each other - the proc
+             * owns them, and PRTE_IOF_READ_EVENT retained the proc for each.
+             * So dropping the list's reference does NOT free a proc whose
+             * streams are still open: it orphans it, still holding its fds,
+             * with its read events still armed and pointing at a proc
+             * nothing else can reach. The next time one of those events
+             * fires it releases the last reference from inside its own
+             * destructor. Break the cycle explicitly, the way close() does,
+             * which is what "cleanout any lingering sinks" was always meant
+             * to mean. A job that reached IOF completion normally has all
+             * three slots empty already and this costs nothing; one that was
+             * killed does not, and that is the case this exists for.
+             */
+            if (NULL != proct->stdinev) {
+                PMIX_RELEASE(proct->stdinev);
+                proct->stdinev = NULL;
+            }
+            if (NULL != proct->revstdout) {
+                PMIX_RELEASE(proct->revstdout);
+                proct->revstdout = NULL;
+            }
+            if (NULL != proct->revstderr) {
+                PMIX_RELEASE(proct->revstderr);
+                proct->revstderr = NULL;
+            }
             PMIX_RELEASE(proct);
         }
     }
@@ -424,6 +449,9 @@ static void stdin_write_handler(int _fd, short event, void *cbdata)
                 (20, prte_iof_base_framework.framework_output,
                  "%s iof:prted closing fd %d on write event due to zero bytes output",
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wev->fd));
+            /* the sentinel is off the list, so releasing the write event
+             * will not free it for us */
+            PMIX_RELEASE(output);
             PMIX_RELEASE(wev);
             sink->wev = NULL;
             return;

@@ -148,7 +148,11 @@ void prte_iof_base_write_handler(int _fd, short event, void *cbdata)
     while (NULL != (item = pmix_list_remove_first(&wev->outputs))) {
         output = (prte_iof_write_output_t *) item;
         if (0 == output->numbytes) {
-            /* indicates we are to close this stream */
+            /* indicates we are to close this stream - the sentinel chunk
+             * is off the list now, so it is ours to free before we drop
+             * the sink that owned the list
+             */
+            PMIX_RELEASE(output);
             PMIX_RELEASE(sink);
             return;
         }

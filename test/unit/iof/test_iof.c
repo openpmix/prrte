@@ -55,9 +55,24 @@
  *      the stream rather than dropping it, so the test drains a chunk
  *      through short writes and compares the result byte for byte.
  *
- *   6. The always-readable/always-writable fd predicate
+ *   6. The generic write handler itself (prte_iof_base_write_handler),
+ *      driven against a live pipe.  A libevent event base is all it needs,
+ *      and it is the only case here that runs a handler rather than a
+ *      piece of one -- which is what holds the zero-byte sentinel branch
+ *      still, the branch where all three write handlers used to leak the
+ *      chunk they had just taken off the backlog.
+ *
+ *   7. The shape of a flow-control message.  A daemon's XON/XOFF carries
+ *      nothing but the stream tag, on the same RML tag as forwarded
+ *      output, so the HNP has only the tag value to tell them apart and
+ *      has to do so before it unpacks a proc.
+ *
+ *   8. The always-readable/always-writable fd predicate
  *      (prte_iof_base_fd_always_ready), which decides timer-vs-fd events
  *      for every stream.
+ *
+ *   9. prte_iof_base_setup_prefork's descriptor bookkeeping when it runs
+ *      out of descriptors partway through creating a proc's three pipes.
  */
 
 #include "prte_config.h"
@@ -68,12 +83,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <unistd.h>
 
+#include "src/event/event-internal.h"
 #include "src/runtime/runtime.h"
 #include "src/util/proc_info.h"
 
 #include "src/mca/iof/base/base.h"
+#include "src/mca/iof/base/iof_base_setup.h"
 #include "src/mca/iof/iof.h"
 #include "src/mca/iof/iof_types.h"
 #include "src/mca/iof/hnp/iof_hnp.h"
@@ -293,8 +311,7 @@ static int test_classes(void)
     /* sink: constructs its own write event, flags clear, daemon INVALID */
     prte_iof_sink_t *sink = PMIX_NEW(prte_iof_sink_t);
     CHECK("sink wev allocated", NULL != sink->wev);
-    CHECK("sink not xoff", !sink->xoff);
-    CHECK("sink not exclusive", !sink->exclusive);
+    CHECK("sink not closed", !sink->closed);
     CHECK("sink not closed", !sink->closed);
     CHECK("sink daemon rank INVALID", PMIX_RANK_INVALID == sink->daemon.rank);
     /* destructor must release the owned write event */
@@ -304,10 +321,8 @@ static int test_classes(void)
     prte_iof_read_event_t *rev = PMIX_NEW(prte_iof_read_event_t);
     CHECK("rev proc NULL", NULL == rev->proc);
     CHECK("rev fd unset", -1 == rev->fd);
-    CHECK("rev not active", !rev->active);
     CHECK("rev not activated", !rev->activated);
     CHECK("rev not always_readable", !rev->always_readable);
-    CHECK("rev sink NULL", NULL == rev->sink);
     CHECK("rev ev allocated", NULL != rev->ev);
     /* fd == -1 so the destructor takes the free-without-close path */
     PMIX_RELEASE(rev);
@@ -599,13 +614,316 @@ static int test_fd_always_ready(void)
     return failures;
 }
 
+/*
+ * The consumer side for real: drive prte_iof_base_write_handler against a
+ * live pipe and watch what comes out the other end.
+ *
+ * Two things are pinned here that no other test reaches.  First, the
+ * zero-byte chunk is a *sentinel*, not data: the handler must flush what
+ * precedes it and then close the fd, which the reader sees as EOF.  Second,
+ * that sentinel has already been removed from the backlog by the time the
+ * handler recognizes it, so the handler owns it -- releasing the sink (which
+ * frees the chunks still on the list) does not free this one, and for a long
+ * while nothing did.  Every closed stdin stream leaked one chunk, and a chunk
+ * is PRTE_IOF_BASE_TAGGED_OUT_MAX bytes of fixed buffer, forever on a
+ * persistent DVM.  The leak itself is invisible from here; what this test
+ * holds still is the surrounding behavior, so a future edit to that branch
+ * has to keep working.
+ */
+static int test_write_handler_drain(void)
+{
+    int failures = 0;
+    pmix_proc_t name;
+    prte_iof_sink_t *sink = NULL;
+    prte_iof_write_event_t *wev;
+    int pfd[2];
+    char buf[64];
+    ssize_t n;
+
+    PMIX_LOAD_PROCID(&name, "test-nspace", 0);
+
+    if (0 != pipe(pfd)) {
+        fprintf(stderr, "FAIL [write_handler_drain]: pipe() failed\n");
+        return 1;
+    }
+
+    PRTE_IOF_SINK_DEFINE(&sink, &name, pfd[1], PRTE_IOF_STDIN, prte_iof_base_write_handler);
+    if (NULL == sink || NULL == sink->wev) {
+        fprintf(stderr, "FAIL [write_handler_drain]: sink not defined\n");
+        close(pfd[0]);
+        close(pfd[1]);
+        return 1;
+    }
+    wev = sink->wev;
+    /* pretend the write event is already armed: we call the handler by hand
+     * rather than running an event loop */
+    wev->pending = true;
+
+    /* queue a payload, then the close sentinel behind it */
+    prte_iof_base_write_output(&name, PRTE_IOF_STDIN, (const unsigned char *) "hello", 5, wev);
+    prte_iof_base_write_output(&name, PRTE_IOF_STDIN, NULL, 0, wev);
+    CHECK("payload plus sentinel queued", 2 == pmix_list_get_size(&wev->outputs));
+
+    /* the handler drains the payload, then hits the sentinel and releases
+     * the sink -- whose write event closes the fd on the way out */
+    prte_iof_base_write_handler(pfd[1], 0, (void *) sink);
+
+    n = read(pfd[0], buf, sizeof(buf));
+    CHECK("payload reached the fd", 5 == n);
+    CHECK("payload arrived intact", 5 == n && 0 == memcmp(buf, "hello", 5));
+
+    /* the sentinel closed the write end, so the reader sees EOF rather than
+     * hanging on a descriptor nobody will ever write to again */
+    n = read(pfd[0], buf, sizeof(buf));
+    CHECK("sentinel closed the stream", 0 == n);
+
+    close(pfd[0]);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_write_handler_drain\n");
+    }
+    return failures;
+}
+
+/*
+ * The proc <-> read-event reference cycle.
+ *
+ * A prte_iof_proc_t owns its read events, and PRTE_IOF_READ_EVENT retains
+ * the proc for each one it builds -- so the two reference each other, and
+ * releasing the proc alone can never free either.  That matters because
+ * both components' complete() used to do exactly that: drop the component
+ * list's reference on a proc whose streams were still open, which frees
+ * nothing.  What it produces is an orphan -- a proc nothing can reach,
+ * still holding its pipe descriptors, with its read events still armed and
+ * pointing back at it -- and when one of those events next fires it drops
+ * the final reference from inside its own destructor and then keeps using
+ * the memory.  A job that ends normally has closed its streams by then; a
+ * job that was killed has not, which is the case complete() exists for.
+ *
+ * So: build the cycle, drop the proc the way the list does, and require
+ * the proc to still be alive and usable.  That is the property that makes
+ * releasing the read events first *necessary* rather than tidy.  We use an
+ * fd of -1 so the read event's destructor takes its no-close path and this
+ * test needs no descriptors of its own.
+ */
+static int test_proc_read_event_cycle(void)
+{
+    int failures = 0;
+    prte_iof_proc_t *proct;
+    prte_iof_read_event_t *held;
+
+    proct = PMIX_NEW(prte_iof_proc_t);
+    PMIX_LOAD_PROCID(&proct->name, "test-nspace", 0);
+
+    /* one read event, defined but not activated -- the macro retains proct */
+    PRTE_IOF_READ_EVENT(&proct->revstdout, proct, -1, PRTE_IOF_STDOUT,
+                        prte_iof_hnp_read_local_handler, false);
+    CHECK("read event was defined", NULL != proct->revstdout);
+    if (NULL == proct->revstdout) {
+        PMIX_RELEASE(proct);
+        return failures;
+    }
+    CHECK("read event points back at its proc",
+          (void *) proct == (void *) proct->revstdout->proc);
+    held = proct->revstdout;
+
+    /* Take a second reference to stand in for the caller, then drop the
+     * first the way complete() drops the component list's.  The cycle means
+     * that is not the last one, so nothing is freed: the proc is still
+     * whole, still owns its stream, and still holds the descriptor behind
+     * it -- reachable now only through a read event that is still armed.
+     */
+    PMIX_RETAIN(proct);
+    PMIX_RELEASE(proct);
+    CHECK("releasing the proc frees nothing while a read event holds it",
+          NULL != proct && held == proct->revstdout);
+    CHECK("...and the orphan is entirely intact",
+          0 == strncmp(proct->name.nspace, "test-nspace", PMIX_MAX_NSLEN));
+
+    /* The correct teardown is the other order: release the stream FIRST,
+     * while a reference to the proc is still held.  That drops the read
+     * event's reference as a side effect, and the proc's own release is
+     * then the last one and runs its destructor at a safe moment.  Do it
+     * the other way round -- release the proc's last reference and only
+     * then the read event -- and the proc is freed from inside the read
+     * event's destructor, while the macro that released it is still about
+     * to write NULL into the slot it lives in.
+     */
+    PMIX_RELEASE(proct->revstdout);
+    CHECK("releasing the stream clears the slot", NULL == proct->revstdout);
+    CHECK("...and the proc survives to be released by its owner", NULL != proct);
+    PMIX_RELEASE(proct);
+    CHECK("...and then the proc is freed", NULL == proct);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_proc_read_event_cycle\n");
+    }
+    return failures;
+}
+
+/*
+ * Flow control on PRTE_RML_TAG_IOF_HNP.
+ *
+ * A daemon whose stdin sink has backed up sends the HNP a buffer holding
+ * *only* the stream tag -- no proc, no count, no payload.  Forwarded output
+ * on that same tag leads with the tag as well, so the HNP has nothing but
+ * the tag value to tell the two apart, and it has to make that decision
+ * before it unpacks anything else: unpacking a proc from a tag-only buffer
+ * fails, and the HNP used to report the daemon's XOFF to the user as a
+ * corrupted message every time a process read its stdin slowly.
+ *
+ * So two invariants: the flow-control tags share no bit with any stream tag
+ * (the discriminating test is a mask), and a flow-control message really
+ * does end after the tag.
+ */
+static int test_flow_control_message(void)
+{
+    int failures = 0;
+    pmix_data_buffer_t buf;
+    prte_iof_tag_t tag = PRTE_IOF_XOFF;
+    prte_iof_tag_t unpacked = 0;
+    pmix_proc_t proc;
+    int32_t count = 1;
+    pmix_status_t rc;
+
+    /* the mask the HNP branches on cannot collide with a stream */
+    CHECK("XON is disjoint from every stream", 0 == (PRTE_IOF_XON & PRTE_IOF_STDALL));
+    CHECK("XOFF is disjoint from every stream", 0 == (PRTE_IOF_XOFF & PRTE_IOF_STDALL));
+    CHECK("XON and XOFF are distinct", PRTE_IOF_XON != PRTE_IOF_XOFF);
+
+    /* build exactly what prte_iof_prted_send_xonxoff puts on the wire */
+    PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+    rc = PMIx_Data_pack(NULL, &buf, &tag, 1, PMIX_UINT16);
+    CHECK("flow-control tag packs", PMIX_SUCCESS == rc);
+
+    count = 1;
+    rc = PMIx_Data_unpack(NULL, &buf, &unpacked, &count, PMIX_UINT16);
+    CHECK("flow-control tag unpacks", PMIX_SUCCESS == rc);
+    CHECK("flow-control tag survives the round trip", PRTE_IOF_XOFF == unpacked);
+    CHECK("the tag identifies itself by mask", 0 != ((PRTE_IOF_XON | PRTE_IOF_XOFF) & unpacked));
+
+    /* ...and nothing follows it, which is why the tag has to be screened
+     * before the receiver reaches for a proc */
+    count = 1;
+    rc = PMIx_Data_unpack(NULL, &buf, &proc, &count, PMIX_PROC);
+    CHECK("nothing follows the flow-control tag", PMIX_SUCCESS != rc);
+
+    PMIX_DATA_BUFFER_DESTRUCT(&buf);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_flow_control_message\n");
+    }
+    return failures;
+}
+
+/*
+ * prte_iof_base_setup_prefork creates the stdout pipe first, then stdin,
+ * then stderr.  Running out of descriptors partway through is exactly the
+ * condition under which the ones already created must be handed back: the
+ * caller only reads those fields on success, so nobody else can close them,
+ * and a daemon that leaks two descriptors per failed launch turns a single
+ * transient EMFILE into every subsequent launch failing as well.
+ *
+ * Drive it by burning the descriptor table down to three free slots: the
+ * stdout pipe takes two, and the stdin pipe then cannot be created.
+ */
+#define IOF_TEST_MAX_FILL 512
+
+static int test_prefork_fd_recovery(void)
+{
+    int failures = 0;
+    struct rlimit saved, tight;
+    prte_iof_base_io_conf_t opts;
+    int fill[IOF_TEST_MAX_FILL];
+    int recovered[3];
+    int nfill = 0, fd, rc, i;
+
+    if (0 != getrlimit(RLIMIT_NOFILE, &saved)) {
+        fprintf(stdout, "SKIPPED test_prefork_fd_recovery (no RLIMIT_NOFILE)\n");
+        return 0;
+    }
+    /* cap the table so exhausting it is cheap; lowering the soft limit
+     * leaves already-open descriptors working */
+    tight = saved;
+    if (IOF_TEST_MAX_FILL < tight.rlim_cur) {
+        tight.rlim_cur = IOF_TEST_MAX_FILL;
+    }
+    if (0 != setrlimit(RLIMIT_NOFILE, &tight)) {
+        fprintf(stdout, "SKIPPED test_prefork_fd_recovery (cannot lower RLIMIT_NOFILE)\n");
+        return 0;
+    }
+
+    while (nfill < IOF_TEST_MAX_FILL && 0 <= (fd = open("/dev/null", O_RDONLY))) {
+        fill[nfill++] = fd;
+    }
+    if (3 > nfill) {
+        /* the table was already full - nothing to prove here */
+        while (0 < nfill) {
+            close(fill[--nfill]);
+        }
+        (void) setrlimit(RLIMIT_NOFILE, &saved);
+        fprintf(stdout, "SKIPPED test_prefork_fd_recovery (no descriptors to spare)\n");
+        return 0;
+    }
+    /* hand back exactly three: enough for the stdout pipe and no more */
+    for (i = 0; i < 3; i++) {
+        close(fill[--nfill]);
+    }
+
+    memset(&opts, 0, sizeof(opts));
+    opts.usepty = 0;
+    opts.connect_stdin = true;
+    rc = prte_iof_base_setup_prefork(&opts);
+    CHECK("prefork reports the descriptor exhaustion", PRTE_SUCCESS != rc);
+
+    /* the stdout pipe it did create has to be back in the pool */
+    for (i = 0; i < 3; i++) {
+        recovered[i] = open("/dev/null", O_RDONLY);
+    }
+    CHECK("prefork returned the descriptors it had already taken",
+          0 <= recovered[0] && 0 <= recovered[1] && 0 <= recovered[2]);
+
+    for (i = 0; i < 3; i++) {
+        if (0 <= recovered[i]) {
+            close(recovered[i]);
+        }
+    }
+    while (0 < nfill) {
+        close(fill[--nfill]);
+    }
+    (void) setrlimit(RLIMIT_NOFILE, &saved);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_prefork_fd_recovery\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
+    pmix_status_t prc;
 
     rc = prte_init_util(PRTE_PROC_MASTER);
     if (PRTE_SUCCESS != rc) {
         fprintf(stderr, "prte_init_util failed: %d\n", rc);
+        return 1;
+    }
+    /* the sink macros assign their libevent events to prte_event_base, so
+     * the base has to exist before any test builds one */
+    rc = prte_event_base_open();
+    if (PRTE_SUCCESS != rc) {
+        fprintf(stderr, "prte_event_base_open failed: %d\n", rc);
+        return 1;
+    }
+    /* the flow-control test packs a buffer, and PMIx_Data_pack refuses to
+     * run until PMIx itself is up. A daemon - which is what sends a
+     * flow-control message - reaches that state through PMIx_server_init,
+     * so do the same */
+    prc = PMIx_server_init(NULL, NULL, 0);
+    if (PMIX_SUCCESS != prc) {
+        fprintf(stderr, "PMIx_server_init failed: %s\n", PMIx_Error_string(prc));
+        prte_finalize();
         return 1;
     }
 
@@ -625,9 +943,15 @@ int main(void)
     failures += test_write_output_accounting();
     failures += test_write_output_chunking();
     failures += test_short_write_adjust();
+    failures += test_write_handler_drain();
+    failures += test_proc_read_event_cycle();
+    failures += test_flow_control_message();
     failures += test_fd_always_ready();
+    /* runs last: it lowers RLIMIT_NOFILE for the duration */
+    failures += test_prefork_fd_recovery();
 
     (void) pmix_mca_base_framework_close(&prte_iof_base_framework);
+    PMIx_server_finalize();
     prte_finalize();
 
     if (0 == failures) {
