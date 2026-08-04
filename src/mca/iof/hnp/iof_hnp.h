@@ -64,6 +64,13 @@ BEGIN_C_DECLS
 struct prte_mca_iof_hnp_component_t {
     prte_iof_base_component_t super;
     pmix_list_t procs;
+    /* set when we have told PMIx to stop the processes feeding us stdin
+     * because one of OUR OWN local procs' stdin sinks passed
+     * PRTE_IOF_MAX_INPUT_BUFFERS. This is the HNP's counterpart to
+     * prte_mca_iof_prted_component.xoff - a daemon tells us over the RML,
+     * but we have no one above us to tell, so we tell PMIx directly. It
+     * latches so the XON is sent exactly once, when the sink drains */
+    bool xoff;
 };
 typedef struct prte_mca_iof_hnp_component_t prte_mca_iof_hnp_component_t;
 

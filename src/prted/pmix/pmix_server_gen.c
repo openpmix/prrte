@@ -1095,6 +1095,9 @@ static void pmix_server_stdin_push(int sd, short args, void *cbdata)
     pmix_byte_object_t *bo = (pmix_byte_object_t *) cd->server_object;
     uint8_t *bytes;
     size_t nbytes, n;
+#if PRTE_PMIX_IOF_FLOW_CONTROL
+    bool backed_up = false;
+#endif
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     /* a client that pushed no data at all leaves us no byte object - PMIx
@@ -1125,11 +1128,36 @@ static void pmix_server_stdin_push(int sd, short args, void *cbdata)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_NAME_PRINT(&cd->procs[n]),
                              nbytes));
+#if PRTE_PMIX_IOF_FLOW_CONTROL
+        if (PRTE_ERR_OUT_OF_RESOURCE == prte_iof.push_stdin(&cd->procs[n], bytes, nbytes)) {
+            /* a sink here has passed PRTE_IOF_MAX_INPUT_BUFFERS. The data
+             * was still queued - the module refuses nothing - so this is
+             * "taken, now slow down", not a failure. One backed-up target
+             * is enough to hold the whole push: we have no way to tell the
+             * producer to keep feeding the other targets and not this one,
+             * and the alternative is to keep taking data for a sink that is
+             * already unbounded. Keep pushing to the remaining targets
+             * first, so no target is starved by the order of this loop */
+            backed_up = true;
+        }
+#else
         prte_iof.push_stdin(&cd->procs[n], bytes, nbytes);
+#endif
     }
 
     if (NULL == bytes || 0 == nbytes) {
         cd->cbfunc(PMIX_ERR_IOF_COMPLETE, cd->cbdata);
+#if PRTE_PMIX_IOF_FLOW_CONTROL
+    } else if (backed_up) {
+        /* PMIx reads this as "I have the data, suspend the stream" and
+         * stops the producer at its source. It is not reported to the
+         * tool as an error, and nothing has been dropped. The XON that
+         * releases it comes from the hnp module's write handler when the
+         * sink drains - see release_flow_control() there. Against an older
+         * PMIx there is no such status, so we report success exactly as we
+         * always did and the sink simply queues */
+        cd->cbfunc(PMIX_ERR_IOF_XOFF, cd->cbdata);
+#endif
     } else {
         cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
     }
