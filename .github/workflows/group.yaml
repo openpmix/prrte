@@ -94,3 +94,13 @@ jobs:
          prterun -n 2 ./openpmix/master/examples/multi_nspace_group >& /dev/null
       if:   ${{ true }}
       timeout-minutes: 5
+
+    - name: Run group bootstrap
+      run: |
+         export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
+         export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
+         log=$RUNNER_TEMP/group_bootstrap.log
+         prterun -n 6 ./openpmix/master/examples/group_bootstrap > "$log" 2>&1 || \
+             { rc=$?; echo "=== example failed with exit status $rc - output follows ==="; cat "$log"; exit $rc; }
+      if:   ${{ true }}
+      timeout-minutes: 5
