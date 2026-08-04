@@ -154,7 +154,45 @@ message construction, parsing, wireup, environment assembly, threading,
   16); otherwise, below `cutoff` (default 32) local procs it uses **zero**
   dedicated threads (fork straight on `prte_event_base`), and above it
   scales to `num_local_procs / 8` capped at `max_threads`.
-  `prte_odls_base_harvest_threads()` tears them down.
+  `prte_odls_base_harvest_threads()` tears them down and resets the pool
+  state to "nothing built yet".
+
+  Two things about this that are easy to get wrong, because both failures
+  are invisible:
+  - **"Have we built a pool?" is `ev_bases != NULL`, not
+    `ev_threads != NULL`.** `ev_threads` holds the *names* of dedicated
+    threads and stays NULL whenever the answer was "no dedicated threads
+    at all", so keying the guard off it re-entered the sizing code on
+    every job.
+  - **`num_threads` is both the request and the answer**, which makes it
+    dangerous to reset. It is registered at `-1` ("you decide") and
+    `start_threads` *overwrites* it with the size it picked. So `-1` in
+    that variable is a standing invitation to size a pool from whatever
+    job comes next — and `harvest_threads` runs from framework **close**.
+    Putting the sentinel back there let a `start_threads` call arriving
+    during teardown build a whole new pool of real threads on the way out
+    (a 40-proc node printed `START 5 LAUNCH THREADS` twice, the second
+    time after `kill_local_procs`). Harvest records `0` — "no threads" —
+    and `start_threads` returns immediately once `prte_finalizing` is set.
+    Do not "restore" the sentinel there.
+
+  **`prte_persistent` is what makes the difference here, and a daemon has
+  to be *told* it.** `start_threads` short-circuits to `max_threads` (16)
+  when `prte_persistent` is set, on the reasoning that a persistent DVM
+  will service many jobs and should size for the worst of them. That flag
+  is decided in `prte()` (`src/prted/prte.c`) — which only the HNP runs.
+  It used to default to **true** and be assigned nowhere else, so every
+  daemon believed it was persistent no matter how the DVM had started: a
+  plain `prterun -n 1 hostname` spun 16 progress threads on each compute
+  node, and the cutoff/`num_local_procs / 8` scaling below was dead
+  everywhere but the head node. It is now an MCA parameter that the HNP
+  appends to each daemon's command line
+  (`prte_plm_base_prted_append_basic_args`), defaulting to false; a
+  bootstrapped daemon, which has no launcher to tell it anything, sets it
+  for itself because that DVM is persistent by construction. If you add
+  daemon-side code that reads `prte_persistent`, it now means what it
+  says — but check `--prtemca odls_base_verbose 5` for `START n LAUNCH
+  THREADS` if you are ever unsure which way a given daemon decided.
 - **`xterm_ranks` / `xtermcmd`** — support for `--xterm`: a list of ranks
   whose output should be shown in separate `xterm` windows, parsed at
   framework open from the `prte_xterm` global.
@@ -189,11 +227,16 @@ source warning about this):
    launching user's `uid`/`gid`, and — if envars have not yet been
    harvested — a `PMIX_SETUP_APP_ENVARS` directive.
 
-It then calls `PMIx_server_setup_application()` **asynchronously**. The
-completion callback `setup_cbfunc()` packs whatever setup blob PMIx
-returned (as a `PMIX_BYTE_OBJECT`) onto `jdata->launch_msg`, then activates
-`PRTE_JOB_STATE_SEND_LAUNCH_MSG` and wakes the waiting thread. The function
-blocks on a `prte_pmix_lock_t` until that callback fires.
+It then calls `PMIx_server_setup_application()` **asynchronously and does
+not wait**. It returns `PRTE_SUCCESS` immediately, having handed a
+`prte_odls_jcaddy_t` to PMIx; the completion callback `setup_cbfunc()`
+runs on the *PMIx* thread, so it only serializes the returned info into a
+byte object and thread-shifts. `_setup_complete()`, back on
+`prte_event_base`, packs that byte object onto `jdata->launch_msg` and
+activates `PRTE_JOB_STATE_SEND_LAUNCH_MSG` — which is what actually
+continues the launch. **Nothing blocks**: a `PRTE_SUCCESS` return here
+means "the callback will fire", and an error return means it never will
+(the caddy is released on the spot).
 
 ### 3. Parsing the message and wiring up — `prte_odls_base_default_construct_child_list()`
 
@@ -222,11 +265,33 @@ Runs **on every daemon** (including the HNP). This is the mirror image of
   `PRTE_PROC_FLAG_LOCAL`, counted into `jdata->num_local_procs`, and their
   app is flagged `PRTE_APP_FLAG_USED_ON_NODE`. Restart jobs get
   `PRTE_PROC_NOBARRIER` set.
-- Registers the nspace with the PMIx server (`prte_pmix_server_register_nspace`),
-  runs `PMIx_server_setup_local_support` if setup info was present, starts
-  the spawn threads, and blocks until local support is ready.
+- Registers the nspace — and any prior job it just learned about — with the
+  PMIx server (`prte_pmix_server_register_nspace`) and **returns**. Those
+  registrations complete asynchronously; a `prte_odls_jcaddy_t` carries the
+  launch across them, and `job_reg_join()` is the join point that counts
+  them in. It runs `PMIx_server_setup_local_support` if setup info was
+  present, starts the spawn threads, and fires
+  `PRTE_ACTIVATE_LOCAL_LAUNCH` once everything has reported. **Nothing
+  blocks here either.**
+  - The join is guarded by a **sentinel**: `cd->pending` starts at 1 and is
+    only decremented by the `job_reg_join()` call at the bottom of the
+    function, so the count cannot reach zero — and release the caddy —
+    part-way through issuing the registrations. Keep that shape if you add
+    another registration.
+  - Every registration callback (`_prior_reg_complete`, `_job_reg_complete`)
+    is invoked *on the PRRTE progress thread*:
+    `prte_pmix_server_register_nspace` thread-shifts before calling back.
+    That is what makes the unlocked `pending` bookkeeping safe.
 - On any failure it activates `PRTE_JOB_STATE_NEVER_LAUNCHED` so the HNP
   doesn't hang waiting for a daemon that silently died.
+- **The prior-jobs loop must not reuse `jdata`.** The other running jobs it
+  decodes are unpacked into their own variable, because `jdata` at the
+  `REPORT_ERROR` label has to be either the job we were told to launch or
+  NULL. Reusing it left `jdata` pointing at a prior job — or, on the "we
+  already have this one" branch, at a job that had just been released — so
+  a failure later in the loop drove the wrong (possibly freed) object to
+  `NEVER_LAUNCHED` and the job actually being launched was never reported
+  at all.
 
 ### 4. Kicking off the fork — `PRTE_ACTIVATE_LOCAL_LAUNCH` and `prte_odls_base_default_launch_local()`
 
@@ -419,9 +484,14 @@ computed proc state.
 - `SIGCHLD` must stay unblocked (done at framework open); child death is
   delivered through `src/runtime/prte_wait.c`, which fires the registered
   `wait_local_proc` callback on `prte_event_base`.
-- The two blocking base functions (`get_add_procs_data`,
-  `construct_child_list`) use a `prte_pmix_lock_t` to wait for the async
-  PMIx server callbacks, per the house caddy/lock pattern.
+- **No base function blocks.** `get_add_procs_data` and
+  `construct_child_list` both hand their work to PMIx and return; the
+  launch is carried across the gap by a `prte_odls_jcaddy_t` and resumed
+  by a thread-shifted completion handler. Neither uses a
+  `prte_pmix_lock_t`, and neither should grow one — they run on
+  `prte_event_base`, which is the only thread that can run the handler
+  they would be waiting for (see the top-level `AGENTS.md`, "thread-shift
+  every PMIx callback").
 
 ---
 
@@ -453,6 +523,14 @@ computed proc state.
   `PRTE_ACTIVATE_PROC_STATE(FAILED_TO_LAUNCH/FAILED_TO_START)` or
   `PRTE_ACTIVATE_JOB_STATE(NEVER_LAUNCHED)` so the HNP can react — don't
   just bubble an `rc` up into the event loop.
+- **Use `prte_show_help()`, not `pmix_show_help()`.** A `prted` cannot
+  deliver its own help text — PMIx's `plog/stdfd` only writes `stderr` for
+  a client or tool, and for a *server* it hands the message to an IOF sink
+  that does not exist — so every `show_help` a daemon rendered used to be
+  dropped on every node but the head one. `prte_show_help()`
+  ([`src/util/prte_show_help.h`](../../util/prte_show_help.h)) is a
+  drop-in that relays to the HNP. Every call site in this framework is
+  converted; keep new ones that way.
 - **The child cannot log normally — or render `show_help`.** Between
   `fork` and `execve` only async-signal-safe calls are permitted, so the
   child must not allocate, use stdio, scan `/proc/self/fd`, or call
@@ -497,13 +575,55 @@ computed proc state.
   `setup_path(jobdat, app, &app->cwd)`, so it overwrites (and must first
   free) the app's existing `cwd`; `restart_proc` instead passes a local
   temp. Don't assume `*wdir` starts NULL.
-- **Blocking base fns own their lock.** `get_add_procs_data` and
-  `construct_child_list` construct a `prte_pmix_lock_t` up front; **every**
-  exit must destruct it (and free any `pmix_info_t`/`PMIX_INFO_LIST` it
-  built). Prefer a single `goto REPORT_ERROR`/cleanup label over a bare
-  `return` in the middle — a stray `return` there both leaks the lock and,
-  on the daemon side, skips the `NEVER_LAUNCHED` activation that keeps the
-  HNP from hanging.
+- **One cleanup label, not scattered `return`s.** `get_add_procs_data` and
+  `construct_child_list` build `pmix_info_t` arrays and `PMIX_INFO_LIST`s
+  that every exit has to release. Prefer a single `goto REPORT_ERROR` over
+  a bare `return` in the middle — a stray `return` there both leaks and, on
+  the daemon side, skips the `NEVER_LAUNCHED` activation that keeps the HNP
+  from hanging.
+- **A launch that never forked owes a `prte_wait_cb_cancel`.**
+  `launch_local` flags a child `ALIVE` and registers its waitpid *before*
+  the IOF setup and the dispatch to `spawn_proc`, so anything that fails in
+  between leaves a wait tracker — holding a reference on the child —
+  waiting for a pid that will never exist. `spawn_proc`'s `errorout:` keys
+  the cancel off `0 == child->pid`, which is exactly the pre-fork case; a
+  *post*-fork failure keeps its registration, because that child does exist
+  and its `SIGCHLD` is still coming.
+- **Never hand a pid of 0 to the kill/signal primitives.** Both component
+  primitives turn a pid into a process *group* (`-pid`) so a signal reaches
+  whatever the app itself spawned — which makes `pid == 0` catastrophic
+  rather than merely useless: `kill(0)` and `kill(-0)` are both "every
+  process in the **caller's** group", i.e. the daemon signals *itself*, its
+  other children, and under `prterun` the launching tool. A child sits at
+  pid 0 for real windows — before its fork, after a failed launch, and once
+  `kill_local_procs` has cleared it — and `prted_comm.c` asks the odls for
+  **every local child of the named job, by name**, so those procs are
+  handed to us as a matter of course. Both branches of
+  `signal_local_procs` gate on `0 >= child->pid && ALIVE`, and both
+  primitives refuse a non-positive pid on their own. Keep both layers: the
+  cost of missing it once is a node's daemon killing itself.
+- **A failing proc's `exit_code` is deliberately a *union* of the PMIx and
+  PRRTE numbering schemes — do not "fix" it by converting.** Everything
+  that reaches `PRTE_ODLS_SET_ERROR` (or sets `child->exit_code` directly)
+  ends up switched on by `prte_render_launch_failure()` in
+  [`src/runtime/prte_quit.c`](../../../src/runtime/prte_quit.c), and that
+  switch has arms for **both**: `PMIX_ERR_JOB_EXE_NOT_FOUND`,
+  `PMIX_ERR_EXE_NOT_ACCESSIBLE`, `PMIX_ERR_JOB_WDIR_NOT_FOUND`,
+  `PMIX_ERR_SYS_LIMITS_*` sit next to `PRTE_ERR_FAILED_GET_TERM_ATTRS` and
+  friends. So the statuses `pmix_util_check_context_app()` and
+  `pmix_util_check_context_cwd()` return must be stored **as they are**.
+  Running them through `prte_pmix_convert_status()` is exactly the sort of
+  thing the boundary rule in the top-level `AGENTS.md` asks for, and here
+  it is wrong: it collapses them onto a generic `PRTE_ERROR` and the user
+  gets `Error code: -3001 / Error name: Error` instead of being told which
+  executable or directory was the problem. (Tried; the swarm's
+  `test_odls` caught it.)
+- **`ADD` is not `SET`.** `PRTE_JOB_ADD_ENVAR` / `PRTE_APP_ADD_ENVAR` mean
+  "set this envar **unless it already has a value**" — that is what
+  `src/util/attr.h` says and what the `PMIX_ADD_ENVAR` they are translated
+  from says. `prte_odls_base_process_envars` passes `overwrite = false` for
+  them and `true` for `SET`; the two lines look identical otherwise, which
+  is how they came to be the same.
 - Standard PRRTE rules apply: `prte_config.h` first, braces on every block,
   `NULL ==`/constant-on-left comparisons, `PRTE_ERROR_LOG` for unexpected
   errors, no new compiler warnings.
@@ -538,7 +658,33 @@ MPMD (`prterun -n 2 echo a : -n 2 hostname`, which walks the per-app
 `setup_path` loop), and a non-zero exit (`prterun -n 2 sh -c 'exit 3'`,
 which exercises `wait_local_proc`'s status decode).
 
-What runs without a DVM is the **structural** contract, in
+### Multi-node — `test_odls` in the swarm harness
+
+[`contrib/dockerswarm/run-tests.sh`](../../../contrib/dockerswarm/)
+carries a `test_odls` for the half that only exists once a **remote**
+daemon has to decode the launch message and fork against its own copy:
+
+- the envar directives (SET/ADD/UNSET/PREPEND/APPEND) end to end, via the
+  `envspawn` client — they have no command-line surface at all, so a
+  `PMIx_Spawn` is the only way to reach them, and `envspawn` pins its
+  child to a node its parent is not on so the fork happens elsewhere;
+- the **exec agent**, which each daemon reads from its own MCA state;
+- a bad `execve` on a remote node — the child cannot render its own
+  message, so this is the proof that the *parent daemon's*
+  `render_child_msg` reaches the tool (including the `stat`-based
+  "it is a directory" case);
+- an **MPMD launch whose first app is bad**, which is the regression
+  guard for the job-abort idiom below: the observable is that it
+  terminates rather than hanging;
+- the waitpid decode arriving from a remote node (`exit 3` stays 3, a
+  SIGTERM death becomes 143);
+- the SIGCONT→SIGTERM→SIGKILL escalation, against a child that traps
+  SIGTERM.
+
+### Without a DVM
+
+What runs without one is the **structural** contract plus the pieces that
+are pure functions, in
 [`test/unit/odls/test_odls.c`](../../../test/unit/odls/) (wired into
 `make check`): the pdefault module vtable is fully wired and reuses the
 base `get_add_procs_data`; the component names itself `"pdefault"`; the
@@ -547,9 +693,27 @@ base `get_add_procs_data`; the component names itself `"pdefault"`; the
 code sorts after every fatal code); and the two caddy classes
 (`prte_odls_spawn_caddy_t`, `prte_odls_launch_local_t`) construct with
 the documented NULL/zero defaults and destruct cleanly (both the
-all-NULL and the fully-populated paths). Add structural regression
-guards here; anything that needs a running launch belongs in the
-integration harness.
+all-NULL and the fully-populated paths).
+
+Three cases go further than structure, because the code under them is a
+pure function of its inputs:
+
+- **`prte_odls_base_process_envars`** — exported (rather than file-static)
+  precisely so this test can drive it: SET vs ADD, the front-to-back
+  ordering, `UNSET` with and without a trailing `*`, the "match up to and
+  including the `=`" rule (a directive on `PATH` must not edit `PATHEXT`),
+  and app-trumps-job.
+- **The child→parent pipe record** — `child_warn` across a real pipe, and
+  `child_fail` across a real `fork`, checking both the decoded record and
+  that the child died with the exit status it was handed.
+- **The spawn-thread pool sizing** — that the "already built?" guard and
+  the `-1` sentinel survive a `harvest_threads`. The persistent-DVM branch
+  is *not* exercised: it spins `max_threads` real progress threads, which a
+  bare test process cannot start and stop, so the test clears
+  `prte_persistent` first.
+
+Add structural regression guards here; anything that needs a running
+launch belongs in the swarm harness or the integration harness.
 
 ---
 

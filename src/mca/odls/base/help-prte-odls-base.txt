@@ -31,10 +31,17 @@ accordingly.
 The xterm option was asked to display a rank that is negative:
 
 Rank:      %d
-Num procs: %d
 
 Note that ranks start with 0, not 1, and must be specified
 accordingly.
+#
+[prte-odls-base:xterm-not-found]
+The xterm option was requested, but the "xterm" executable could not be
+found in your PATH:
+
+  Node:  %s
+
+Please install xterm, or add it to your PATH, and try again.
 #
 [prte-odls-base:fork-agent-not-found]
 The specified fork agent was not found:

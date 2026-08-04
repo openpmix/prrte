@@ -107,10 +107,30 @@ Runs in the forked child; `__prte_attribute_noreturn__`. In order:
    (`prte_odls_base_prepare_binding`, run pre-fork in `spawn_proc`) and
    proxies any binding error up the pipe. (If there is no child and no
    output forwarding, stdio is tied to `/dev/null`.)
-4. A plain `close()` loop over `[3, sysconf(_SC_OPEN_MAX))` — closes
-   everything except stdio and the pipe. (It deliberately does **not** call
-   `pmix_close_open_file_descriptors()`, which scans `/proc/self/fd` with
-   `opendir`/`readdir` and so allocates — unsafe in the post-fork child.)
+4. Close every inherited descriptor except stdio and the pipe. It
+   deliberately does **not** call `pmix_close_open_file_descriptors()`,
+   which scans `/proc/self/fd` with `opendir`/`readdir` and so allocates —
+   unsafe in the post-fork child.
+
+   It uses **`close_range()`** (Linux) or **`closefrom()`** (BSD/macOS/
+   Solaris) where configure found one, falling back to a `close()` loop
+   bounded by `sysconf(_SC_OPEN_MAX)`. That fallback is the historical
+   code and it is *expensive*: `_SC_OPEN_MAX` is routinely **1048576** on
+   a modern system (both the CI containers and a stock macOS report
+   exactly that), which makes the loop about **137 ms of pure syscall
+   time for every process launched** — measured — against roughly 1 µs
+   for the single-syscall form. And it is not merely the child's own
+   time: `do_parent` is blocked reading this child's pipe for the whole
+   of it, so for a job below the spawn-thread cutoff that cost lands
+   serially on the daemon's progress thread. If you touch this, keep the
+   bulk path.
+
+   Because both bulk calls take only a *lower* bound and `write_fd` must
+   survive, the code closes `[3, write_fd)` one at a time (a handful of
+   descriptors) and takes `(write_fd, ∞)` in bulk. The `close_range`
+   arm also falls back on a runtime failure: the syscall can be present
+   at build time and refused at run time by an older kernel or a seccomp
+   policy.
 5. Restore default signal handlers (`SIGTERM/INT/HUP/PIPE/CHLD`) and
    unblock all signals — the event library may have left them altered, and
    an app must not inherit a blocked SIGTERM.
@@ -183,6 +203,17 @@ the *mechanism* (the actual `kill`).
   agree on the fixed `prte_odls_pipe_err_msg_t` layout and the
   `prte_odls_child_err_t` code set. Adding a new failure point means adding
   a code to the enum **and** a case to `render_child_msg` in the parent.
+  [`test/unit/odls/test_odls.c`](../../../../test/unit/odls/) drives both
+  writers across a real pipe (and `child_fail` across a real `fork`) and
+  checks the decoded record, so a layout change that breaks the pair fails
+  `make check` rather than in production.
+- **`do_parent` blocks the event base it runs on.** The read on the pipe is
+  synchronous by design: the whole protocol is "the parent waits until the
+  child either exec's or explains itself," and the child's window is a
+  handful of syscalls. That is also why nothing slow may be added to
+  `do_child` — a child that stalls before `execve` stalls whichever base
+  the base layer dispatched this spawn to, which for a small job is
+  `prte_event_base` itself.
 - **`execve` is the point of no return.** Everything the app needs — cwd,
   env (`cd->env`), argv, binding, closed fds, restored handlers — must be
   in place *before* it. The base assembles env/argv/cmd in `spawn_proc`; the
@@ -198,3 +229,45 @@ the *mechanism* (the actual `kill`).
 - **`_exit`, not `exit`, in the child.** The child terminates via
   `prte_odls_base_child_fail` (which `_exit`s) so it never runs the parent's
   atexit handlers or flushes shared buffers.
+
+---
+
+## Use `prte_show_help()`, never `pmix_show_help()`
+
+Everything above exists so the *parent* can render a diagnostic the child
+could not — and for a long time that diagnostic was **silently dropped on
+every node but the head one**.
+
+`pmix_show_help()` routes through PMIx's `plog` framework, and
+`plog/stdfd` writes its own `stderr` only when the calling process is a
+PMIx **client or tool**. A `prted` is a PMIx **server**, so it takes the
+other branch, which hands the rendered text to
+`PMIx_server_IOF_deliver()` tagged with the *daemon's own* identity — for
+which nothing has an IOF sink. The head node appeared to work only
+because there the daemon's PMIx server is the one holding the tool
+connection.
+
+[`prte_show_help()`](../../../util/prte_show_help.h) is the drop-in
+replacement: identical signature and rendering, but on a non-master
+daemon it renders locally and relays the text to the HNP over
+`PRTE_RML_TAG_SHOW_HELP`, and the HNP delivers it. Duplicate suppression
+and aggregation then happen once, centrally, keyed by the same
+filename/topic pair — better than the per-node suppression it replaces.
+
+Every call site in this component and in the base is converted. **Keep it
+that way**: a new `pmix_show_help()` here is a message that will not be
+seen off the head node, and nothing will tell you.
+
+Verify with a directory as the executable — `access(2)` reports a
+directory as `X_OK` ("searchable"), so it clears the base's
+`check_context_app()` and only fails at the `execve`:
+
+```sh
+prterun --host <compute>:1 -n 1 /tmp
+#   ...
+#   Local host:        <compute>      <-- rendered there, delivered here
+#   Error:             it is a directory, not an executable
+```
+
+The swarm's `test_odls` asserts exactly that, including that the message
+names the remote node.

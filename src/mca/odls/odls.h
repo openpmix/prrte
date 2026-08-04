@@ -38,7 +38,6 @@
 #include "src/mca/mca.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/rml/rml_types.h"
-#include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 
 #include "src/mca/odls/odls_types.h"

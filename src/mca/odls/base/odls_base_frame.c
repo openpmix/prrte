@@ -46,8 +46,10 @@
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
+#include "src/util/proc_info.h"
 #include "src/util/pmix_parse_options.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_show_help.h"
 
 #include "src/mca/odls/base/base.h"
 
@@ -93,6 +95,8 @@ static int prte_odls_base_register(pmix_mca_base_register_flag_t flags)
                                       PMIX_MCA_BASE_VAR_TYPE_INT,
                                       &prte_odls_globals.max_threads);
 
+    /* -1 means "you decide" - start_threads then sizes the pool from the
+     * first job it is handed, and writes its choice back here */
     prte_odls_globals.num_threads = -1;
     (void) pmix_mca_base_var_register("prte", "odls", "base", "num_threads",
                                       "Specific number of threads to use for spawning local procs",
@@ -131,17 +135,29 @@ void prte_odls_base_harvest_threads(void)
             for (i = 0; NULL != prte_odls_globals.ev_threads[i]; i++) {
                 prte_progress_thread_finalize(prte_odls_globals.ev_threads[i]);
             }
-        }
-        free(prte_odls_globals.ev_bases);
-        prte_odls_globals.ev_bases = (prte_event_base_t **) malloc(sizeof(prte_event_base_t *));
-        /* use the default event base */
-        prte_odls_globals.ev_bases[0] = prte_event_base;
-        prte_odls_globals.num_threads = 0;
-        if (NULL != prte_odls_globals.ev_threads) {
             PMIx_Argv_free(prte_odls_globals.ev_threads);
             prte_odls_globals.ev_threads = NULL;
         }
+        /* this pool owned its array (the no-thread case borrows the shared
+         * prte_event_base_ptr instead, freed below) */
+        free(prte_odls_globals.ev_bases);
     }
+    /* release the shared one-element array used when no dedicated threads
+     * were spun up. Nothing freed it before, so a daemon that launched any
+     * job below the cutoff leaked it at teardown */
+    if (NULL != prte_event_base_ptr) {
+        free(prte_event_base_ptr);
+        prte_event_base_ptr = NULL;
+    }
+    /* the pool is gone. Record that as "no threads" rather than restoring
+     * the -1 "you decide" sentinel: harvest runs from framework close, and
+     * leaving the sizing question open there invites start_threads to
+     * build a WHOLE NEW POOL on the way out if anything calls it again
+     * during teardown - which is exactly what happened (a 40-proc job on
+     * one node spun its five threads a second time while finalizing). */
+    prte_odls_globals.ev_bases = NULL;
+    prte_odls_globals.next_base = 0;
+    prte_odls_globals.num_threads = 0;
 }
 
 void prte_odls_base_start_threads(prte_job_t *jdata)
@@ -149,8 +165,16 @@ void prte_odls_base_start_threads(prte_job_t *jdata)
     int i;
     char *tmp;
 
-    /* only do this once */
-    if (NULL != prte_odls_globals.ev_threads) {
+    /* nothing to build on the way out - and harvest_threads has already
+     * torn down whatever there was */
+    if (prte_finalizing) {
+        return;
+    }
+
+    /* only do this once. NB: test ev_bases, not ev_threads - the
+     * no-dedicated-thread case leaves ev_threads NULL, so keying off it
+     * re-entered here on every subsequent job. */
+    if (NULL != prte_odls_globals.ev_bases) {
         return;
     }
 
@@ -181,7 +205,11 @@ void prte_odls_base_start_threads(prte_job_t *jdata)
         }
     }
 startup:
-    if (0 == prte_odls_globals.num_threads) {
+    if (0 >= prte_odls_globals.num_threads) {
+        /* a negative num_threads only reaches here if the user asked for
+         * one; treat it as "no dedicated threads" rather than indexing
+         * ev_bases with it */
+        prte_odls_globals.num_threads = 0;
         if (NULL == prte_event_base_ptr) {
             prte_event_base_ptr = (prte_event_base_t **) malloc(sizeof(prte_event_base_t *));
             /* use the default event base */
@@ -276,8 +304,12 @@ static int prte_odls_base_open(pmix_mca_base_open_flag_t flags)
                 nm->name.rank = PMIX_RANK_WILDCARD;
             } else if (rank < 0) {
                 /* error out on bozo case */
-                pmix_show_help("help-prte-odls-base.txt", "prte-odls-base:xterm-neg-rank", true,
+                prte_show_help("help-prte-odls-base.txt", "prte-odls-base:xterm-neg-rank", true,
                                rank);
+                /* nm was never put on the list, and we still own the parsed
+                 * range - do not walk out holding either */
+                PMIX_RELEASE(nm);
+                PMIx_Argv_free(ranks);
                 return PRTE_ERROR;
             } else {
                 /* we can't check here if the rank is out of
@@ -293,6 +325,8 @@ static int prte_odls_base_open(pmix_mca_base_open_flag_t flags)
         prte_odls_globals.xtermcmd = NULL;
         tmp = pmix_find_absolute_path("xterm");
         if (NULL == tmp) {
+            prte_show_help("help-prte-odls-base.txt", "prte-odls-base:xterm-not-found", true,
+                           prte_process_info.nodename);
             return PRTE_ERROR;
         }
         PMIx_Argv_append_nosize(&prte_odls_globals.xtermcmd, tmp);
