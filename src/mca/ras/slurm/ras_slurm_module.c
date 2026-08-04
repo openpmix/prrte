@@ -80,7 +80,6 @@ prte_ras_base_module_t prte_ras_slurm_module = {
     .allocate = prte_ras_slurm_allocate,
     .modify = modify,
     .shrink_complete = prte_ras_slurm_shrink_complete,
-    .release_allocation = prte_ras_slurm_release_allocation,
     .finalize = prte_ras_slurm_finalize
 };
 
@@ -91,10 +90,16 @@ static int prte_ras_slurm_parse_range(char *base, char *range, char ***nodelist)
 
 pmix_list_t *prte_slurm_session_stack = NULL;
 
+static void session_stack_item_des(prte_session_stack_item_t *p)
+{
+    if (NULL != p->session) {
+        PMIX_RELEASE(p->session);
+    }
+}
 PMIX_CLASS_INSTANCE(prte_session_stack_item_t,
                     pmix_list_item_t,
                     NULL,
-                    NULL);
+                    session_stack_item_des);
 
 static bool check_taint(char *name, char *evar)
 {
@@ -327,6 +332,7 @@ static int prte_ras_slurm_finalize(void)
     prte_ras_slurm_modify_cancel_finalize();
     prte_ras_slurm_modify_release_finalize();
     if (NULL != prte_slurm_session_stack) {
+        prte_ras_slurm_drain_session_stack();
         PMIX_RELEASE(prte_slurm_session_stack);
         prte_slurm_session_stack = NULL;
     }
@@ -927,6 +933,7 @@ int prte_ras_slurm_assign_new_session(const char *slurm_jobid, const char *user_
         goto cleanup;
     }
 
+    PMIX_RETAIN(session);
     item->session = session;
     item->nodes_in_session = pmix_list_get_size(node_list);
 

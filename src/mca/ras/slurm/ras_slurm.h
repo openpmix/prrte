@@ -72,7 +72,7 @@ int prte_ras_slurm_modify_release_init(void);
 int prte_ras_slurm_modify_release_finalize(void);
 int prte_ras_slurm_serve_release_req(prte_pmix_server_req_t *req);
 void prte_ras_slurm_shrink_complete(prte_shrink_campaign_t *campaign);
-int prte_ras_slurm_release_allocation(prte_session_t *session);
+void prte_ras_slurm_drain_session_stack(void);
 
 /* Common modify extend/release features */
 int prte_ras_slurm_kill_job(const char *slurm_jobid, char *err_msg, size_t err_msg_size);
