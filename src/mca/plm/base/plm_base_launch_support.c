@@ -1235,9 +1235,20 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
         report_launch_failure(jdata);
     }
 
-    /* if the requestor was a tool, use PMIx to notify them of
-     * launch complete as they won't be listening on PRRTE oob */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DVM_JOB, NULL, PMIX_BOOL)) {
+    /* If the requestor was a tool, use PMIx to notify them of launch
+     * complete as they won't be listening on PRRTE oob.
+     *
+     * Only on SUCCESS, though.  PMIX_LAUNCH_COMPLETE says the job is running,
+     * and a tool is entitled to read it that way - so a job that never
+     * started must not raise it.  This path is reached with a failure status
+     * too (errmgr/dvm and state/dvm both answer a failed spawn through here,
+     * so a quick-failing job cannot leave its requestor unanswered), and the
+     * requestor learns of that failure by the two routes that exist for it:
+     * the PMIX_ERR_JOB_FAILED_TO_LAUNCH event raised just above, and the
+     * error status carried by the spawn response itself, which is what
+     * releases it from PMIx_Spawn. */
+    if (PMIX_SUCCESS == status &&
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DVM_JOB, NULL, PMIX_BOOL)) {
 
         /* dvm job => launch was requested by a TOOL, so we notify the launch proxy
          * and NOT the originator (as that would be us) */
