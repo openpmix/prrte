@@ -138,9 +138,14 @@ static int prte_mca_plm_slurm_component_query(pmix_mca_base_module_t **module, i
             return PRTE_ERROR;
         }
         ++ptr;
-        // parse on the dots
+        // parse on the dots. Step over the separator only if there IS one:
+        // "slurm 23" with no minor leaves ptr on the terminating NUL, and
+        // walking past that reads whatever the uninitialized tail of the
+        // fgets buffer happens to hold
         prte_mca_plm_slurm_component.major = strtol(ptr, &ptr, 10);
-        ++ptr;
+        if ('\0' != *ptr) {
+            ++ptr;
+        }
         prte_mca_plm_slurm_component.minor = strtol(ptr, NULL, 10);
 
         if (23 > prte_mca_plm_slurm_component.major) {

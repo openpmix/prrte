@@ -120,6 +120,7 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_topology_t *t;
     prte_node_t *node;
+    prte_session_t *session;
     int i;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
@@ -164,8 +165,20 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
      * even the nodes whose counts were given.
      */
     caddy->jdata->total_slots_alloc = 0;
-    for (i = 0; i < caddy->jdata->session->nodes->size; i++) {
-        node = (prte_node_t *) pmix_pointer_array_get_item(caddy->jdata->session->nodes, i);
+    /* every path that admits a job to the launch machinery gives it a session
+     * (the default one if nothing more specific), but this handler runs for
+     * the daemon job too and is reached from several states - so treat a
+     * missing session as "the default pool" rather than dereferencing NULL
+     * and taking the whole DVM down with it */
+    session = (NULL != caddy->jdata->session) ? caddy->jdata->session : prte_default_session;
+    if (NULL == session || NULL == session->nodes) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+        PMIX_RELEASE(caddy);
+        return;
+    }
+    for (i = 0; i < session->nodes->size; i++) {
+        node = (prte_node_t *) pmix_pointer_array_get_item(session->nodes, i);
         if (NULL == node) {
             continue;
         }
@@ -1596,6 +1609,16 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             prted_failed_launch = true;
             goto CLEANUP;
         }
+        /* everything below records what this daemon reports ONTO ITS NODE -
+         * the name, the aliases, the topology, the launched flag. setup_vm
+         * links the two when it creates the daemon, so a missing node means
+         * this is not a daemon we launched; say so rather than dereferencing
+         * NULL and taking the HNP down with it */
+        if (NULL == daemon->node) {
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            prted_failed_launch = true;
+            goto CLEANUP;
+        }
         /* A returning daemon (the bootstrap unheal path): its node rebooted and
          * it is reporting in again after we recorded it COMM_FAILED and
          * decremented num_daemons on its death. Restore the count so the nidmap
@@ -1939,6 +1962,14 @@ void prte_plm_base_daemon_failed(int st, pmix_proc_t *sender, pmix_data_buffer_t
 
     /* get the daemon job */
     jdatorted = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    if (NULL == jdatorted) {
+        /* nothing to record the failure against - but a daemon has still
+         * failed, so fail the DVM rather than returning as if nothing
+         * happened */
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FAILED_TO_START);
+        return;
+    }
 
     /* unpack the daemon that failed */
     n = 1;
