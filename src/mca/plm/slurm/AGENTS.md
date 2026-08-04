@@ -76,7 +76,12 @@ If `srun` can't be run or the version can't be parsed, it declines.
    `prte_plm_base_prted_append_basic_args(..., "slurm", &proc_vpid_index)`.
    Substitute `map->daemon_vpid_start` into the vpid slot — SLURM starts
    the tasks and each daemon offsets from this base to compute its own
-   vpid. `prte_plm_base_wrap_args` quotes multi-word args (in case srun is
+   vpid. That base is recomputed by `setup_virtual_machine` on **every**
+   launch, and this component is one of the three reasons it must be: a
+   stale base (left over from DVM formation) tells the daemons of a later
+   `--add-host` launch to claim ranks that live daemons already own. `ssh`
+   never sees it, so the invariant is pinned in `test/unit/plm`, not in
+   the swarm. `prte_plm_base_wrap_args` quotes multi-word args (in case srun is
    wrapped by a script).
 4. Read the prefix(es) from the daemon job object and exec via
    `plm_slurm_start_proc`. Set state `DAEMONS_LAUNCHED`. On any error jump
