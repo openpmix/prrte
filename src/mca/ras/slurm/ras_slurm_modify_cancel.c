@@ -135,13 +135,10 @@ int prte_ras_slurm_add_pending_req(const char *request_id, const char *slurm_job
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    int pmix_err = pmix_pointer_array_add(&pending_reqs, pending_req);
-
-    if (0 > pmix_err) {
+    if (0 > pmix_pointer_array_add(&pending_reqs, pending_req)) {
         prte_ras_slurm_pending_req_free(pending_req);
-        err = prte_pmix_convert_status(pmix_err);
-        PRTE_ERROR_LOG(err);
-        return err;
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
     return PRTE_SUCCESS;
