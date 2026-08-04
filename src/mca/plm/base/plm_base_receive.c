@@ -295,14 +295,13 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
     /* jdata MUST start NULL: the ANSWER_LAUNCH error path reads it, and we
      * can reach that path before (or without) it ever being assigned - e.g.,
      * when the job object fails to unpack */
-    prte_job_t *jdata = NULL, *parent;
+    prte_job_t *jdata = NULL, *parent, *daemons;
     /* true while the freshly unpacked job object belongs to nobody but us -
      * cleared once it has been handed to a session/parent/the job pool */
     bool own_jdata = false;
     pmix_data_buffer_t *answer;
     pmix_rank_t vpid;
-    prte_proc_t *proc;
-    prte_node_t *node;
+    prte_proc_t *proc, *dproc;
     prte_proc_state_t state;
     prte_exit_code_t exit_code;
     int32_t rc = PRTE_SUCCESS, ret;
@@ -431,6 +430,13 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             jdata->uid = tooluid;
             jdata->gid = toolgid;
             rc = prte_set_job_data_object(jdata);
+            if (PRTE_SUCCESS != rc) {
+                PRTE_ERROR_LOG(rc);
+                PMIX_RELEASE(jdata);
+                jdata = NULL;
+                free(tmp);
+                goto CLEANUP;
+            }
             app = PMIX_NEW(prte_app_context_t);
             if (NULL != tmp) {
                 app->argv = PMIx_Argv_split(tmp, ' ');
@@ -447,15 +453,35 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             proc->pid = pid;
             proc->state = PRTE_PROC_STATE_RUNNING;
             pmix_pointer_array_set_item(jdata->procs, name.rank, proc);
-            // find the node it is on
-            node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, sender->rank);
-            if (NULL == node) {
-                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                rc = PRTE_ERR_NOT_FOUND;
-                goto CLEANUP;
+            /* Find the node the tool is on: it connected through the daemon
+             * that is reporting it, so ask that DAEMON where it is.
+             *
+             * This used to index prte_node_pool by the reporting daemon's
+             * rank, which is only right while daemon vpids and node-pool
+             * indices happen to run in step. They need not: the pool holds
+             * every node the allocation named, including ones no daemon was
+             * ever launched on (filtered out by a -host/hostfile spec, marked
+             * DO_NOT_USE, or shrunk away), while vpids are handed out only to
+             * nodes that get a daemon. One such node ahead of the reporter is
+             * enough to name the wrong node - or, past the end of the pool,
+             * none at all.
+             *
+             * Not knowing where a tool sits is also not a reason to bring the
+             * DVM down, which is what the old NOT_FOUND did: it fell through
+             * to the master's CLEANUP, which activates FORCED_EXIT. Record
+             * what we know and carry on. */
+            daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+            dproc = (NULL == daemons) ? NULL
+                  : (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs, sender->rank);
+            if (NULL != dproc && NULL != dproc->node) {
+                /* the node backpointer is borrowed, not retained */
+                proc->node = dproc->node;
+            } else {
+                pmix_output_verbose(5, prte_plm_base_framework.framework_output,
+                                    "%s plm:base:receive tool %s attached via unknown daemon %s",
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&name),
+                                    PRTE_NAME_PRINT(sender));
             }
-            /* the node backpointer is borrowed, not retained */
-            proc->node = node;
             jdata->num_procs = 1;
         }
         /* setup the response */
