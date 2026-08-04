@@ -20,7 +20,6 @@
 #
 
 AM_CPPFLAGS = $(LTDLINCL)
-EXTRA_DIST = README.txt
 
 # main library setup
 noinst_LTLIBRARIES = libprtemca_iof.la

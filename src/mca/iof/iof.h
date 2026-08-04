@@ -25,92 +25,47 @@
  * @file
  *
  * I/O Forwarding Service
- * The I/O forwarding service (IOF) is used to connect stdin, stdout, and
- * stderr file descriptor streams from MPI processes to the user
  *
- * The design is fairly simple: when a proc is spawned, the IOF establishes
- * connections between its stdin, stdout, and stderr to a
- * corresponding IOF stream. In addition, the IOF designates a separate
- * stream for passing OMPI/PRTE internal diagnostic/help output to mpirun.
- * This is done specifically to separate such output from the user's
- * stdout/err - basically, it allows us to present it to the user in
- * a separate format for easier recognition. Data read from a source
- * on any stream (e.g., printed to stdout by the proc) is relayed
- * by the local daemon to the other end of the stream - i.e., stdin
- * is relayed to the local proc, while stdout/err is relayed to mpirun.
- * Thus, the eventual result is to connect ALL streams to/from
- * the application process and mpirun.
+ * The IOF connects an application process's stdin/stdout/stderr back to
+ * the user. An application proc runs on some node, forked by that node's
+ * prted, and its terminal is not the user's terminal - so the daemon that
+ * forked it captures its stdout/stderr from a pipe and forwards them, and
+ * receives stdin and writes it down a pipe.
  *
- * Note: By default, data read from stdin is forwarded -only- to rank=0.
- * Stdin for all other procs is tied to "/dev/null".
+ * Everything funnels through the DVM master (the HNP): a daemon never
+ * sends output to another daemon. The master collects all of it and hands
+ * it to the PMIx server library, which performs the actual emission -
+ * terminal writes, --output tagging, per-rank files, and copies to tools
+ * that asked for them are the PMIx server's job, not this framework's.
+ * Stdin travels the other way: it enters at the master, which resolves
+ * which daemon hosts the target (or xcasts a wildcard) and sends it down.
  *
- * External tools can "pull" copies of stdout/err and
- * the diagnostic stream from mpirun for any process. In this case,
- * mpirun will send a copy of the output to the "pulling" process. Note that external tools
- * cannot "push" something into stdin unless the user specifically directed
- * that stdin remain open, nor under any conditions "pull" a copy of the
- * stdin being sent to rank=0.
+ * Note: by default, stdin is forwarded only to rank 0. Stdin for every
+ * other proc is tied to /dev/null.
  *
- * Tools can exploit either of two mechanisms for this purpose:
+ * Exactly one component is selected per process, chosen by the process's
+ * role: "hnp" in the DVM master, "prted" in every other daemon. A tool is
+ * neither, gets no module, and reaches the IOF through the PMIx server.
  *
- * (a) call prte_init themselves and utilize the PRTE tool comm
- *     library to access the IOF. This also provides access to
- *     other tool library functions - e.g., to order that a job
- *     be spawned; or
+ * The two central API calls are named less helpfully than one would like,
+ * so state them plainly:
  *
- * (b) fork/exec the "prte-iof" tool and let it serve as the interface
- *     to mpirun. This lets the tool avoid calling prte_init, and means
- *     the tool will not have to compile against the PRTE/OMPI libraries.
- *     However, the prte-iof tool is limited solely to interfacing
- *     stdio and cannot be used for other functions included in
- *     the tool comm library
+ *   push: tie a local READ fd - the read end of a proc's stdout or stderr
+ *         pipe - to a read event, so whatever the proc writes is captured
+ *         and forwarded. This is the OUTPUT direction.
  *
- * Thus, mpirun acts as a "switchyard" for IO, taking input from stdin
- * and passing it to rank=0 of the job, and taking stdout/err/diag from all
- * ranks and passing it to its own stdout/err/diag plus any "pull"
- * requestors.
+ *   pull: tie a local WRITE fd - the write end of a proc's stdin pipe - to
+ *         a sink, so data addressed to that proc's stdin is written down
+ *         it. This is the STDIN direction, and stdin is the only stream
+ *         it accepts.
  *
- * Streams are identified by PRTE process name (to include wildcards,
- * such as "all processes in PRTE job X") and tag.  There are
- * currently only 4 allowed predefined tags:
+ * Streams are identified by a proc name (which may carry a wildcard rank)
+ * and a prte_iof_tag_t. The tags are BIT FLAGS, not an enumeration - see
+ * iof_types.h, which is authoritative - so a single call can name several
+ * streams at once and every test is a mask.
  *
- * - PRTE_IOF_STDIN (value 0)
- * - PRTE_IOF_STDOUT (value 1)
- * - PRTE_IOF_STDERR (value 2)
- * - PRTE_IOF_INTERNAL (value 3): for "internal" messages
- *   from the infrastructure, just to differentiate them from user job
- *   stdout/stderr
- *
- * Note that since streams are identified by PRTE process name, the
- * caller has no idea whether the stream is on the local node or a
- * remote node -- it's just a stream.
- *
- * IOF components are selected on a "one of many" basis, meaning that
- * only one IOF component will be selected for a given process.
- * Details for the various components are given in their source code
- * bases.
- *
- * Each IOF component must support the following API:
- *
- * push: Tie a local file descriptor (*not* a stream!) to the stdin
- * of the specified process. If the user has not specified that stdin
- * of the specified process is to remain open, this will return an error.
- *
- * pull: Tie a local file descriptor (*not* a stream!) to a stream.
- * Subsequent input that appears via the stream will
- * automatically be sent to the target file descriptor until the
- * stream is "closed" or an EOF is received on the local file descriptor.
- * Valid source values include PRTE_IOF_STDOUT, PRTE_IOF_STDERR, and
- * PRTE_IOF_INTERNAL
- *
- * close: Closes a stream, flushing any pending data down it and
- * terminating any "push/pull" connections against it. Unclear yet
- * if this needs to be blocking, or can be done non-blocking.
- *
- * flush: Block until all pending data on all open streams has been
- * written down local file descriptors and/or completed sending across
- * the OOB to remote process targets.
- *
+ * See src/mca/iof/AGENTS.md for the end-to-end picture, the ownership
+ * rules, and what the flow-control tags do and do not accomplish.
  */
 
 #ifndef PRTE_IOF_H
@@ -132,34 +87,54 @@ BEGIN_C_DECLS
 typedef int (*prte_iof_base_init_fn_t)(void);
 
 /**
- * Explicitly push data from the specified input file descriptor to
- * the stdin of the indicated peer(s). The provided peer name can
- * include wildcard values.
+ * Capture OUTPUT. Tie the read end of a local proc's stdout or stderr
+ * pipe to a read event, so whatever appears there is forwarded - to the
+ * PMIx server in the master, and to the master over the RML in a daemon.
  *
- * @param peer  Name of target peer(s)
- * @param fd    Local file descriptor for input.
+ * Both of a proc's streams must be pushed before either is activated, or
+ * an immediate EOF on one can declare the proc IOF-complete before the
+ * other is wired; the modules handle that internally.
+ *
+ * @param peer     Name of the proc whose output this is
+ * @param src_tag  PRTE_IOF_STDOUT or PRTE_IOF_STDERR - which stream "fd" is
+ * @param fd       Local file descriptor to read from
  */
 typedef int (*prte_iof_base_push_fn_t)(const pmix_proc_t *peer, prte_iof_tag_t src_tag, int fd);
 
 /**
- * Explicitly pull data from the specified set of SOURCE peers and
- * dump to the indicated output file descriptor. Any fragments that
- * arrive on the stream will automatically be written down the fd.
+ * Register a STDIN sink. Tie the write end of a local proc's stdin pipe
+ * to a sink, so stdin addressed to that proc is written down it.
  *
- * @param peer          Name used to qualify set of origin peers.
- * @param source_tag    Indicates the output streams to be forwarded
- * @param fd            Local file descriptor for output.
+ * Only PRTE_IOF_STDIN is accepted; anything else returns
+ * PRTE_ERR_NOT_SUPPORTED.
+ *
+ * @param peer          Name of the proc whose stdin this is
+ * @param source_tag    PRTE_IOF_STDIN
+ * @param fd            Local file descriptor to write to
  */
 typedef int (*prte_iof_base_pull_fn_t)(const pmix_proc_t *peer, prte_iof_tag_t source_tag, int fd);
 
 /**
- * Close the specified iof stream(s) from the indicated peer(s)
+ * Close the streams named by the bits in "source_tag" for the given proc,
+ * tearing down their read events and/or sink. Once all three are gone the
+ * proc is dropped from the module's list.
  */
 typedef int (*prte_iof_base_close_fn_t)(const pmix_proc_t *peer, prte_iof_tag_t source_tag);
 
+/**
+ * Inject stdin. Deliver a chunk to the named target, whose rank may be
+ * PMIX_RANK_WILDCARD. In the master this means routing it - to the daemon
+ * hosting the target over the RML, to every daemon for a wildcard, or
+ * straight into a local proc's sink. In a daemon it means relaying to the
+ * master, which is the only process that can do that routing.
+ *
+ * A zero-byte push is NOT a no-op: it is the sentinel that flushes what
+ * precedes it and then closes the target's stdin.
+ */
 typedef int (*prte_iof_base_push_stdin_fn_t)(const pmix_proc_t *dst_name, uint8_t *data, size_t sz);
 
-/* Flag that a job is complete */
+/* Flag that a job is complete: purge any endpoint bundles belonging to
+ * this job's nspace that outlived their procs */
 typedef void (*prte_iof_base_complete_fn_t)(const prte_job_t *jdata);
 
 /* finalize the selected module */

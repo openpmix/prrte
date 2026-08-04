@@ -80,20 +80,40 @@ the proc across the release to avoid a recursive free.
 `prte_iof_hnp_recv` is the persistent `PRTE_RML_TAG_IOF_HNP` receive posted
 by `init()`. A daemon forwards output as a packed buffer of
 `{ tag (uint16), origin proc, numbytes (int32), bytes }`. The handler
-unpacks those, finds-or-creates the `prte_iof_proc_t` for `origin`, maps
-the tag to PMIx channel bits, and calls `PMIx_server_IOF_deliver`. Same
-destination as Path 1 — the PMIx server — just sourced from a remote node.
-XON/XOFF flow-control messages arrive on this same tag (tag-only buffers);
-they are consumed here as part of the stdin back-pressure protocol.
+unpacks those, maps the tag to PMIx channel bits, and calls
+`PMIx_server_IOF_deliver`. Same destination as Path 1 — the PMIx server —
+just sourced from a remote node.
 
-**One message on this tag runs the other way.** A leading tag of
-`PRTE_IOF_STDIN` is not output at all: it is stdin that a daemon is relaying
-on behalf of a tool attached to *it* rather than to us, and the proc that
-follows is the intended **recipient**, not a source. That branch unpacks the
-same trailing count and bytes and hands them to `push_stdin` below. It is
-screened ahead of the "nothing to do" test on a zero-length payload, because
-a zero-byte stdin push is the sentinel that closes the target's stdin. See
-[`../prted/AGENTS.md`](../prted/AGENTS.md), "Relaying a tool's stdin".
+**It deliberately does not record `origin` in `procs`.** That list holds
+*endpoint bundles* — a stdin sink and the read events for a proc the HNP
+itself forked — and a proc on another node has none of those here. The
+find-or-create this path used to do produced an entry carrying a name and
+three `NULL` slots that no code ever read, at the cost of one object and
+one list node on the DVM master for **every remote process that ever
+produced output**, held until the job completed, plus a linear walk of that
+list on every stdin fragment and every close. Do not put it back to "keep
+track of" a remote proc; nothing here can use the entry.
+
+**Two message kinds on this tag are not output, and both must be screened
+before the proc unpack.** The order in the handler is deliberate:
+
+1. **Flow control.** `PRTE_IOF_XON` / `PRTE_IOF_XOFF` from a daemon whose
+   stdin sink has backed up. Such a buffer holds *nothing but the tag* —
+   no proc, no count, no payload — so falling through to
+   `PMIx_Data_unpack(…PMIX_PROC)` fails and reports the daemon's XOFF to
+   the user as a corrupted message, which is what happened every time a
+   process read its stdin slowly. We recognize it by mask (the control
+   bits are disjoint from every stream bit), trace it, and return. We do
+   not act on it — see the framework guide's *Flow control* section for
+   why acting on it would drop bytes rather than slow the producer.
+2. **Relayed stdin.** A leading `PRTE_IOF_STDIN` is stdin a daemon is
+   relaying on behalf of a tool attached to *it* rather than to us, and
+   the proc that follows is the intended **recipient**, not a source. That
+   branch unpacks the same trailing count and bytes and hands them to
+   `push_stdin` below. It is screened ahead of the "nothing to do" test on
+   a zero-length payload, because a zero-byte stdin push is the sentinel
+   that closes the target's stdin. See
+   [`../prted/AGENTS.md`](../prted/AGENTS.md), "Relaying a tool's stdin".
 
 ---
 
@@ -127,16 +147,29 @@ accepted; anything else returns `PRTE_ERR_NOT_SUPPORTED`.
 the HNP's own job family and `prte_dvm_abort_ordered` is set, it drops the
 send (but still forwards to non-daemon tools that may be watching an abort).
 
+The wildcard branch `xcast`s and then releases the buffer — `xcast` copies
+what it needs, so the buffer is the caller's either way. Its return is
+reported, not discarded: nothing retries stdin, so a failed broadcast loses
+that fragment outright and returning `PRTE_SUCCESS` over it would make the
+loss silent.
+
 ### `stdin_write_handler` (in `iof_hnp.c`)
 
 The HNP's own sink write callback drains `wev->outputs` to the proc's
 stdin fd with the standard non-blocking dance (EAGAIN/EINTR → prepend and
 re-arm; partial write → `prte_iof_base_adjust_short_write` + prepend +
-re-arm; `numbytes == 0` → close). It differs from the base
-`prte_iof_base_write_handler` in two
+re-arm; `numbytes == 0` → release the sentinel chunk and close). It differs
+from the base `prte_iof_base_write_handler` in two
 ways: it dumps pending data immediately if `prte_abnormal_term_ordered`
 (the DVM is aborting), and it honors the sink's `closed` flag, releasing
-the sink once the last queued byte is written.
+the sink once the last queued byte is written. (Nothing currently *sets*
+`closed`, so that second branch is dormant — see the framework guide's
+note on the sink's unused fields.)
+
+The chunk in hand is off the backlog list, so the sentinel branch owns it:
+releasing the write event frees only what is still queued. Forgetting that
+leaked one 8 KiB chunk per closed stdin stream here, in the daemon copy,
+and in the base handler alike.
 
 ---
 
