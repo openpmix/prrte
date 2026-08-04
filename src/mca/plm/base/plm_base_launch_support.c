@@ -762,6 +762,7 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_timer_t *timer = NULL;
     int time, *tp;
+    size_t n;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(caddy);
@@ -786,6 +787,27 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
             PMIX_RELEASE(caddy);
             return;
         }
+    }
+
+    /* Now - and only now - can the job be recorded as an owner of the
+     * reservation(s) it was cleared to run in.  That grant is what lets it
+     * spawn further jobs onto those nodes, and it belongs to the job's own
+     * namespace, which did not exist until the line above: a spawn request
+     * arrives with an empty nspace and the HNP names the job here.
+     *
+     * Granting it at request-vetting time therefore recorded an EMPTY
+     * namespace as an owner - and an empty namespace matches every other one
+     * (PMIx_Check_nspace treats it as a wildcard), so the first job spawned
+     * into a reservation quietly opened that reservation to every namespace
+     * in the DVM.  prte_session_add_owner now refuses an empty namespace
+     * outright; this is where the real one is recorded.  Both calls are
+     * no-ops for the default session, which everyone may use. */
+    if (NULL != caddy->jdata->target_sessions) {
+        for (n = 0; n < caddy->jdata->num_target_sessions; n++) {
+            prte_session_add_owner(caddy->jdata->target_sessions[n], caddy->jdata->nspace);
+        }
+    } else if (NULL != caddy->jdata->session) {
+        prte_session_add_owner(caddy->jdata->session, caddy->jdata->nspace);
     }
 
     /* if the spawn operation has a timeout assigned to it, setup the timer for it */

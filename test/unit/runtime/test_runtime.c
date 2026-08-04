@@ -275,7 +275,7 @@ static int test_session_registry(void)
 static int test_session_ownership(void)
 {
     int failures = 0;
-    prte_session_t *s;
+    prte_session_t *s, *s2;
     prte_session_t *saved_default;
 
     reset_globals();
@@ -310,6 +310,26 @@ static int test_session_ownership(void)
 
     /* a NULL session is the default pool */
     CHECK("owner: NULL session admits anyone", prte_session_is_owned_by(NULL, NS("nsZ")));
+
+    /* An EMPTY namespace must never be recorded as an owner, and the case
+     * that matters is a reservation whose owner list is still empty - with
+     * entries present, the wildcard below makes the empty one look like a
+     * duplicate and it is dropped by accident rather than on purpose.
+     *
+     * This is not hypothetical: a spawn request arrives with no namespace at
+     * all (the HNP names the job later, in prte_plm_base_setup_job), so the
+     * code that granted the spawned job ownership at request-vetting time
+     * handed in exactly this.  An empty entry does not merely fail to
+     * identify anybody - PMIx_Check_nspace treats an empty side as a
+     * wildcard, so it matches EVERY namespace and retires the reservation's
+     * ownership gate for good. */
+    s2 = PMIX_NEW(prte_session_t);
+    s2->session_id = 8;
+    CHECK("owner: second insert succeeds", PRTE_SUCCESS == prte_set_session_object(s2));
+    prte_session_add_owner(s2, NS(""));
+    CHECK("owner: an empty namespace is not recorded", 0 == PMIx_Argv_count(s2->owners));
+    CHECK("owner: an empty owner does not admit everybody",
+          !prte_session_is_owned_by(s2, NS("nsC")));
 
     reset_globals();
     return failures;

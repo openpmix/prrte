@@ -1204,6 +1204,14 @@ void prte_session_add_owner(prte_session_t *session,
     if (NULL == session || session == prte_default_session) {
         return;
     }
+    /* An EMPTY namespace must never enter the owner set. PMIx_Check_nspace
+     * answers "true" whenever either side is empty - that is its wildcard
+     * rule - so an empty entry here makes prte_session_is_owned_by() say yes
+     * to every namespace that ever asks, silently retiring the reservation's
+     * ownership gate. A caller with nothing to record has nothing to grant. */
+    if (PMIX_NSPACE_INVALID(nspace)) {
+        return;
+    }
     if (NULL != session->owners) {
         for (n = 0; NULL != session->owners[n]; n++) {
             if (PMIX_CHECK_NSPACE(session->owners[n], nspace)) {

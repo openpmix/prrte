@@ -218,10 +218,13 @@ static int resolve_spawn_targets(prte_job_t *jdata, pmix_proc_t *requestor,
                 }
             }
         }
-        /* the spawned job becomes an owner of the reservation it targets, so
-         * it may in turn spawn further jobs onto those nodes (no-op for the
-         * default session) */
-        prte_session_add_owner(s, jdata->nspace);
+        /* The spawned job becomes an owner of the reservation it targets, so
+         * it may in turn spawn further jobs onto those nodes - but NOT here:
+         * the job has no namespace yet (the HNP assigns it in
+         * prte_plm_base_setup_job, which is also where the grant is now
+         * made). Recording it at this point wrote an EMPTY namespace into the
+         * owner set, and an empty namespace matches every other one, so the
+         * first job spawned into a reservation opened it to everybody. */
         start = p + 1;
     }
 
@@ -628,16 +631,17 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
         }
 
 moveon:
-        /* from here on the job is referenced by the session (and shortly by
-         * the parent's child list and the global job pool), so the error
-         * paths below must NOT free it out from under them */
-        own_jdata = false;
-        jdata->session = session;
-        pmix_pointer_array_add(jdata->session->jobs, jdata);
-
-        /* a job reaching a reservation through the legacy single-session
+        /* A job reaching a reservation through the legacy single-session
          * attributes (no spawn-target list) must still pass the ownership
-         * check and become an owner of that reservation */
+         * check.  Vet it BEFORE the job is handed to the session below: a
+         * rejected request that has already been added to session->jobs
+         * stays there for the life of the session (that array borrows its
+         * entries, so nothing ever removes or releases it), leaving a
+         * phantom job the session teardown will walk.
+         *
+         * The matching GRANT - the spawned job becoming an owner itself, so
+         * it can spawn onto those nodes in turn - happens in
+         * prte_plm_base_setup_job, once the job has a namespace to record. */
         if (NULL == jdata->target_sessions && NULL != session &&
             session != prte_default_session &&
             (PRTE_SESSION_FLAG_RESERVED & session->flags)) {
@@ -645,8 +649,14 @@ moveon:
                 rc = PRTE_ERR_PERM;
                 goto ANSWER_LAUNCH;
             }
-            prte_session_add_owner(session, jdata->nspace);
         }
+
+        /* from here on the job is referenced by the session (and shortly by
+         * the parent's child list and the global job pool), so the error
+         * paths below must NOT free it out from under them */
+        own_jdata = false;
+        jdata->session = session;
+        pmix_pointer_array_add(jdata->session->jobs, jdata);
 
         /* get the parent's job object */
         if (NULL != (parent = prte_get_job_data_object(nptr->nspace)) &&
