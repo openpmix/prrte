@@ -20,8 +20,9 @@ dnl Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2020      Triad National Security, LLC. All rights
 dnl                         reserved.
 dnl Copyright (c) 2021      IBM Corporation.  All rights reserved.
+dnl Copyright (c) 2026      Jeffrey M. Squyres.  All rights reserved.
 dnl
-dnl Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+dnl Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -29,7 +30,25 @@ dnl
 dnl $HEADER$
 dnl
 
+dnl PRTE_CC_HELPER(check-message, cache-variable, prologue, body)
+dnl
+dnl Check whether a test program compiles and links, saving the result
+dnl (1 or 0) in the cache variable $2 (which must therefore be named
+dnl "prte_cv_...").
 AC_DEFUN([PRTE_CC_HELPER],[
+    AC_CACHE_CHECK([$1], [$2],
+                   [AC_LINK_IFELSE([AC_LANG_PROGRAM([$3],[$4])],
+                                   [$2=1],
+                                   [$2=0])])
+])
+
+
+dnl _PRTE_CC_HELPER(check-message, result-variable, prologue, body)
+dnl
+dnl Like PRTE_CC_HELPER, but does not cache the result.  Use this only
+dnl for checks whose results depend on transient CFLAGS values (e.g.,
+dnl testing candidate C11 flags) and therefore must not be cached.
+AC_DEFUN([_PRTE_CC_HELPER],[
     PRTE_VAR_SCOPE_PUSH([prte_cc_helper_result])
     AC_MSG_CHECKING([$1])
 
@@ -44,37 +63,27 @@ AC_DEFUN([PRTE_CC_HELPER],[
 ])
 
 
+dnl PRTE_PROG_CC_C11_HELPER(flag, action-if-supported, action-if-not)
+dnl
+dnl Check whether $CC supports the C11 features that PRRTE requires
+dnl when invoked with the extra compiler flag $1 (which may be empty).
+dnl These results are specific to the flag under test, so they are not
+dnl cached; the cached per-feature checks are in PRTE_SETUP_CC.
 AC_DEFUN([PRTE_PROG_CC_C11_HELPER],[
-    PRTE_VAR_SCOPE_PUSH([prte_prog_cc_c11_helper_CFLAGS_save])
+    PRTE_VAR_SCOPE_PUSH([prte_prog_cc_c11_helper_CFLAGS_save prte_prog_cc_c11_helper__Thread_local_available prte_prog_cc_c11_helper_atomic_var_available prte_prog_cc_c11_helper_atomic_fetch_xor_explicit_available])
 
     prte_prog_cc_c11_helper_CFLAGS_save=$CFLAGS
     CFLAGS="$CFLAGS $1"
 
-    PRTE_CC_HELPER([if $CC $1 supports C11 _Thread_local], [prte_prog_cc_c11_helper__Thread_local_available],
-                   [],[[static _Thread_local int  foo = 1;++foo;]])
+    _PRTE_CC_HELPER([if $CC $1 supports C11 _Thread_local], [prte_prog_cc_c11_helper__Thread_local_available],
+                    [],[[static _Thread_local int  foo = 1;++foo;]])
 
-    PRTE_CC_HELPER([if $CC $1 supports C11 atomic variables], [prte_prog_cc_c11_helper_atomic_var_available],
-                   [[#include <stdatomic.h>]], [[static atomic_long foo = 1;++foo;]])
+    _PRTE_CC_HELPER([if $CC $1 supports C11 atomic variables], [prte_prog_cc_c11_helper_atomic_var_available],
+                    [[#include <stdatomic.h>]], [[static atomic_long foo = 1;++foo;]])
 
-    PRTE_CC_HELPER([if $CC $1 supports C11 _Atomic keyword], [prte_prog_cc_c11_helper__Atomic_available],
-                   [[#include <stdatomic.h>]],[[static _Atomic long foo = 1;++foo;]])
-
-   PRTE_CC_HELPER([if $CC $1 supports C11 _c11_atomic functions], [prte_prog_cc_c11_atomic_function],
-                   [[#include <stdatomic.h>]],[[atomic_int acnt = 0; __c11_atomic_fetch_add(&acnt, 1, memory_order_relaxed);]])
-   if test $prte_prog_cc_c11_atomic_function -eq 1; then
-      AC_DEFINE_UNQUOTED([PRTE_HAVE_CLANG_BUILTIN_ATOMIC_C11_FUNC], [$prte_prog_cc_c11_atomic_function], [Whether we have Clang __c11 atomic functions])
-   fi;
-
-    PRTE_CC_HELPER([if $CC $1 supports C11 _Generic keyword], [prte_prog_cc_c11_helper__Generic_available],
-                   [[#define FOO(x) (_Generic (x, int: 1))]], [[static int x, y; y = FOO(x);]])
-
-    PRTE_CC_HELPER([if $CC $1 supports C11 _Static_assert], [prte_prog_cc_c11_helper__static_assert_available],
-                   [[#include <stdint.h>]],[[_Static_assert(sizeof(int64_t) == 8, "WTH");]])
-
-    PRTE_CC_HELPER([if $CC $1 supports C11 atomic_fetch_xor_explicit], [prte_prog_cc_c11_helper_atomic_fetch_xor_explicit_available],
-	           [[#include <stdatomic.h>
+    _PRTE_CC_HELPER([if $CC $1 supports C11 atomic_fetch_xor_explicit], [prte_prog_cc_c11_helper_atomic_fetch_xor_explicit_available],
+                    [[#include <stdatomic.h>
 #include <stdint.h>]],[[_Atomic uint32_t a; uint32_t b; atomic_fetch_xor_explicit(&a, b, memory_order_relaxed);]])
-
 
     AS_IF([test $prte_prog_cc_c11_helper__Thread_local_available -eq 1 && test $prte_prog_cc_c11_helper_atomic_var_available -eq 1 && test $prte_prog_cc_c11_helper_atomic_fetch_xor_explicit_available -eq 1],
           [$2],
@@ -115,8 +124,6 @@ AC_DEFUN([PRTE_PROG_CC_C11],[
             for flag in $(echo $prte_prog_cc_c11_flags | tr ' ' '\n') ; do
                 PRTE_PROG_CC_C11_HELPER([$flag],[prte_cv_c11_flag=$flag],[])
                 if test "x$prte_cv_c11_flag" != "x" ; then
-                    PRTE_APPEND_UNIQ([CFLAGS], ["$prte_cv_c11_flag"])
-                    AC_MSG_NOTICE([using $flag to enable C11 support])
                     prte_cv_c11_supported=yes
                     break
                 fi
@@ -125,6 +132,14 @@ AC_DEFUN([PRTE_PROG_CC_C11],[
             AC_MSG_NOTICE([no flag required for C11 support])
             prte_cv_c11_supported=yes
         fi
+    fi
+
+    dnl This must be outside the cache-check block above so that it
+    dnl also happens when all the results above were restored from a
+    dnl cache file.
+    if test "$prte_cv_c11_supported" = "yes" && test -n "$prte_cv_c11_flag" ; then
+        PRTE_APPEND_UNIQ([CFLAGS], ["$prte_cv_c11_flag"])
+        AC_MSG_NOTICE([using $prte_cv_c11_flag to enable C11 support])
     fi
 
     PRTE_VAR_SCOPE_POP
@@ -166,8 +181,6 @@ AC_DEFUN([PRTE_SETUP_CC],[
     AC_REQUIRE([_PRTE_PROG_CC])
     AC_REQUIRE([AM_PROG_CC_C_O])
 
-    PRTE_VAR_SCOPE_PUSH([prte_prog_cc_c11_helper__Thread_local_available prte_prog_cc_c11_helper_atomic_var_available prte_prog_cc_c11_helper__Atomic_available prte_prog_cc_c11_helper__static_assert_available prte_prog_cc_c11_helper__Generic_available prte_prog_cc__thread_available prte_prog_cc_c11_helper_atomic_fetch_xor_explicit_available prte_prog_cc_c11_atomic_function])
-
     PRTE_PROG_CC_C11
     PRTE_CHECK_CC_IQUOTE
 
@@ -195,33 +208,47 @@ AC_DEFUN([PRTE_SETUP_CC],[
         AC_MSG_ERROR([Aborting.])
     fi
 
-    # Check if compiler support __thread
-    PRTE_CC_HELPER([if $CC $1 supports __thread], [prte_prog_cc__thread_available],
-                    [],[[static __thread int  foo = 1;++foo;]])
+    dnl These checks must run on every invocation of configure --
+    dnl including when the C11 flag detection above was satisfied from
+    dnl a cache file -- because their results feed the AC_DEFINEs
+    dnl below.  They run after PRTE_PROG_CC_C11 so that CFLAGS already
+    dnl contains any flag required for C11 support.
+    PRTE_CC_HELPER([if $CC supports __thread], [prte_cv_c_have___thread],
+                   [],[[static __thread int  foo = 1;++foo;]])
+    AC_DEFINE_UNQUOTED([PRTE_C_HAVE___THREAD], [$prte_cv_c_have___thread],
+                       [Whether C compiler supports __thread])
 
-
-    PRTE_CC_HELPER([if $CC $1 supports C11 _Thread_local], [prte_prog_cc_c11_helper__Thread_local_available],
+    PRTE_CC_HELPER([if $CC supports C11 _Thread_local], [prte_cv_c_have__thread_local],
                    [],[[static _Thread_local int  foo = 1;++foo;]])
-
-    dnl At this time, PMIx only needs thread local and the atomic convenience tyes for C11 suport. These
-    dnl will likely be required in the future.
-    AC_DEFINE_UNQUOTED([PRTE_C_HAVE__THREAD_LOCAL], [$prte_prog_cc_c11_helper__Thread_local_available],
+    AC_DEFINE_UNQUOTED([PRTE_C_HAVE__THREAD_LOCAL], [$prte_cv_c_have__thread_local],
                        [Whether C compiler supports __Thread_local])
 
-    AC_DEFINE_UNQUOTED([PRTE_C_HAVE_ATOMIC_CONV_VAR], [$prte_prog_cc_c11_helper_atomic_var_available],
+    PRTE_CC_HELPER([if $CC supports C11 atomic variables], [prte_cv_c_have_atomic_conv_var],
+                   [[#include <stdatomic.h>]], [[static atomic_long foo = 1;++foo;]])
+    AC_DEFINE_UNQUOTED([PRTE_C_HAVE_ATOMIC_CONV_VAR], [$prte_cv_c_have_atomic_conv_var],
                        [Whether C compiler supports atomic convenience variables in stdatomic.h])
 
-    AC_DEFINE_UNQUOTED([PRTE_C_HAVE__ATOMIC], [$prte_prog_cc_c11_helper__Atomic_available],
+    PRTE_CC_HELPER([if $CC supports C11 _Atomic keyword], [prte_cv_c_have__atomic],
+                   [[#include <stdatomic.h>]],[[static _Atomic long foo = 1;++foo;]])
+    AC_DEFINE_UNQUOTED([PRTE_C_HAVE__ATOMIC], [$prte_cv_c_have__atomic],
                        [Whether C compiler supports __Atomic keyword])
 
-    AC_DEFINE_UNQUOTED([PRTE_C_HAVE__GENERIC], [$prte_prog_cc_c11_helper__Generic_available],
+    PRTE_CC_HELPER([if $CC supports C11 _Generic keyword], [prte_cv_c_have__generic],
+                   [[#define FOO(x) (_Generic (x, int: 1))]], [[static int x, y; y = FOO(x);]])
+    AC_DEFINE_UNQUOTED([PRTE_C_HAVE__GENERIC], [$prte_cv_c_have__generic],
                        [Whether C compiler supports __Generic keyword])
 
-    AC_DEFINE_UNQUOTED([PRTE_C_HAVE__STATIC_ASSERT], [$prte_prog_cc_c11_helper__static_assert_available],
+    PRTE_CC_HELPER([if $CC supports C11 _Static_assert], [prte_cv_c_have__static_assert],
+                   [[#include <stdint.h>]],[[_Static_assert(sizeof(int64_t) == 8, "WTH");]])
+    AC_DEFINE_UNQUOTED([PRTE_C_HAVE__STATIC_ASSERT], [$prte_cv_c_have__static_assert],
                        [Whether C compiler supports _Static_assert keyword])
 
-    AC_DEFINE_UNQUOTED([PRTE_C_HAVE___THREAD], [$prte_prog_cc__thread_available],
-                       [Whether C compiler supports __thread])
+    PRTE_CC_HELPER([if $CC supports C11 __c11_atomic functions], [prte_cv_c_have_c11_atomic_function],
+                   [[#include <stdatomic.h>]],[[atomic_int acnt = 0; __c11_atomic_fetch_add(&acnt, 1, memory_order_relaxed);]])
+    if test $prte_cv_c_have_c11_atomic_function -eq 1; then
+        AC_DEFINE_UNQUOTED([PRTE_HAVE_CLANG_BUILTIN_ATOMIC_C11_FUNC], [$prte_cv_c_have_c11_atomic_function],
+                           [Whether we have Clang __c11 atomic functions])
+    fi
 
     OAC_C_COMPILER_VENDOR([prte_c_vendor])
 
@@ -379,7 +406,6 @@ AC_DEFUN([PRTE_SETUP_CC],[
     PRTE_ENSURE_CONTAINS_OPTFLAGS(["$CFLAGS"])
     AC_MSG_RESULT([$co_result])
     CFLAGS="$co_result"
-    PRTE_VAR_SCOPE_POP
 ])
 
 
