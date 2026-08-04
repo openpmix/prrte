@@ -2244,6 +2244,10 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
     pmix_rank_t vpid;
     pmix_proc_t grow_requester;
     char *grow_alloc_id = NULL, *grow_req_id = NULL;
+    /* the vpids THIS pass assigned, recorded as they are handed out (elastic
+     * mode only - they are what a grow campaign must name) */
+    pmix_rank_t *new_vpids = NULL;
+    int n_new_vpids = 0;
 
     PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:setup_vm",
@@ -2258,12 +2262,33 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
     }
     map = daemons->map;
 
+    /* Reset the per-launch daemon accounting.  The daemon job's map is
+     * PERSISTENT - it accumulates the DVM's nodes across every launch - but
+     * these two fields describe only the launch we are about to compute, and
+     * every launcher reads them straight afterwards.  So they have to be
+     * cleared here, on every pass, rather than in the individual branches
+     * below (where two of the four forgot to, and the grow path had to
+     * rediscover the need for itself):
+     *
+     * - num_new_daemons is what tells a component whether to launch at all;
+     *   accumulated across passes it makes a launcher spawn daemons for nodes
+     *   an earlier launch already covered.
+     * - daemon_vpid_start is the base vpid slurm/lsf/pals substitute into the
+     *   prted command line - the RM starts N tasks and each computes its own
+     *   vpid by offsetting from it.  Left over from the initial DVM launch, a
+     *   later add-host launch would tell its new daemons to claim vpids that
+     *   already belong to live daemons.  ssh is immune (it substitutes each
+     *   node's real vpid per launch), which is why this went unnoticed.
+     */
+    map->num_new_daemons = 0;
+    map->daemon_vpid_start = PMIX_RANK_INVALID;
+
     /* if this job is being launched against a fixed DVM, then there is
      * nothing for us to do - the DVM will stand as is */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FIXED_DVM, NULL, PMIX_BOOL)) {
-        /* mark that the daemons have reported so we can proceed */
+        /* mark that the daemons have reported so we can proceed - the
+         * accounting above already says "nothing to launch" */
         daemons->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
-        map->num_new_daemons = 0;
         return PRTE_SUCCESS;
     }
 
@@ -2272,13 +2297,6 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_EXTEND_DVM, NULL, PMIX_BOOL)) {
         // nodes have been added, so extend the DVM
         prte_remove_attribute(&jdata->attributes, PRTE_JOB_EXTEND_DVM);
-        /* Reset the per-launch daemon accounting. The initial-VM path zeroes
-         * these further below, but the grow path skips that code and would
-         * otherwise accumulate num_new_daemons across successive grows and
-         * reuse a stale daemon_vpid_start - corrupting the grow campaign's
-         * target list and suppressing its completion event (#2491). */
-        map->num_new_daemons = 0;
-        map->daemon_vpid_start = PMIX_RANK_INVALID;
         /* A grow launches daemons on the nodes THIS request added, and only
          * those: an allocation request naming node4 must start a daemon on
          * node4 alone. Every producer of a grow (the no-scheduler
@@ -2395,7 +2413,6 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
             /* reset the state so it can be used for mapping */
             node->state = PRTE_NODE_STATE_UP;
         }
-        map->num_new_daemons = 0;
         /* if we didn't get anything, then there is nothing else to
          * do as no other daemons are to be launched
          */
@@ -2505,11 +2522,6 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
         /* maintain accounting */
         PMIX_RETAIN(node);
     }
-
-    /* zero-out the number of new daemons as we will compute this
-     * each time we are called
-     */
-    map->num_new_daemons = 0;
 
     /* Construct the list of nodes this launch may use: everything in the
      * node pool, filtered through the union of the app specs.  The pool is
@@ -2774,6 +2786,25 @@ process:
         if (PMIX_RANK_INVALID == map->daemon_vpid_start) {
             map->daemon_vpid_start = proc->name.rank;
         }
+        /* An elastic grow campaign has to name the exact ranks it launched,
+         * so remember them as they are assigned rather than reconstructing
+         * them afterwards as a run starting at daemon_vpid_start.  That
+         * reconstruction is right only while vpids are handed out
+         * consecutively, which is not the rule in a bootstrapped DVM (there
+         * a daemon takes its node's canonical rank), and a campaign naming
+         * ranks it did not launch never drains its fence. */
+        if (prte_elastic_mode) {
+            pmix_rank_t *tmpv = (pmix_rank_t *) realloc(new_vpids,
+                                                        (n_new_vpids + 1) * sizeof(pmix_rank_t));
+            if (NULL == tmpv) {
+                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                free(new_vpids);
+                PMIX_LIST_DESTRUCT(&nodes);
+                return PRTE_ERR_OUT_OF_RESOURCE;
+            }
+            new_vpids = tmpv;
+            new_vpids[n_new_vpids++] = proc->name.rank;
+        }
         /* loop across all app procs on this node and update their parent */
         for (i = 0; i < node->procs->size; i++) {
             if (NULL != (pptr = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, i))) {
@@ -2811,6 +2842,7 @@ process:
                                 NULL, PMIX_BOOL);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
+            free(new_vpids);
             return rc;
         }
     }
@@ -2826,6 +2858,7 @@ process:
             prte_plm_base_dvm_mod_notify(&grow_requester, grow_alloc_id,
                                          grow_req_id, true, PMIX_SUCCESS);
         }
+        free(new_vpids);
         return PRTE_SUCCESS;
     }
 
@@ -2835,23 +2868,21 @@ process:
      * normal daemon-failure handling, completely unchanged. */
     if (prte_elastic_mode && 0 < map->num_new_daemons) {
         prte_grow_campaign_t *gcamp;
-        pmix_rank_t gr;
-        int gk;
 
         /* Record this launch campaign so the launch fence can be resolved on
          * a per-daemon basis: each new daemon either reports home (success)
          * or its launch fails (comm-failure / failed-to-start), and only
          * those specific ranks affect this campaign.  This avoids an
          * unrelated daemon loss consuming the fence, and lets concurrent
-         * campaigns be tracked independently.  The new daemons were assigned
-         * consecutive vpids starting at map->daemon_vpid_start (see the
-         * daemon-creation loop above). */
+         * campaigns be tracked independently.  The targets are the vpids the
+         * daemon-creation loop above actually handed out, collected as it
+         * went - see the note there on why they are not reconstructed from
+         * map->daemon_vpid_start. */
         gcamp = PMIX_NEW(prte_grow_campaign_t);
-        gcamp->ntargets = map->num_new_daemons;
-        gcamp->targets = (pmix_rank_t *) malloc(gcamp->ntargets * sizeof(pmix_rank_t));
-        for (gk = 0, gr = map->daemon_vpid_start; gk < gcamp->ntargets; gk++, gr++) {
-            gcamp->targets[gk] = gr;
-        }
+        gcamp->ntargets = n_new_vpids;
+        gcamp->targets = new_vpids;
+        new_vpids = NULL;
+        n_new_vpids = 0;
         /* Record the requester for the spec's phase-two completion event.  The
          * RAS reservation machinery sets each reserved node's ->session
          * backpointer (add_nodes_to_session), and that session carries the
@@ -2887,7 +2918,8 @@ process:
             }
         }
         pmix_list_append(&prte_grow_campaigns, &gcamp->super);
-        prte_dvm_launch_fence += map->num_new_daemons;
+        /* raise the fence by exactly what this campaign will drain */
+        prte_dvm_launch_fence += gcamp->ntargets;
     }
 
     return PRTE_SUCCESS;
