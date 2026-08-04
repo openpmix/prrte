@@ -57,10 +57,6 @@ typedef struct {
     char *base_nspace;
     /* next jobid */
     uint32_t next_jobid;
-    /* time when daemons started launch */
-    struct timeval daemonlaunchstart;
-    /* tree spawn cmd */
-    pmix_data_buffer_t tree_spawn_cmd;
     /* daemon nodes assigned at launch */
     bool daemon_nodes_assigned_at_launch;
     /* include MCA params found in our environment on the prted cmd line.

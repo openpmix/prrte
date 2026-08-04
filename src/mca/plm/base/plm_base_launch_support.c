@@ -265,49 +265,13 @@ void prte_plm_base_daemons_launched(int fd, short args, void *cbdata)
     PMIX_RELEASE(caddy);
 }
 
-static void files_ready(int status, void *cbdata)
-{
-    prte_job_t *jdata = (prte_job_t *) cbdata;
-
-    if (PRTE_SUCCESS != status) {
-        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FILES_POSN_FAILED);
-    } else {
-        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP);
-    }
-}
-
-void prte_plm_base_vm_ready(int fd, short args, void *cbdata)
-{
-    prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
-    prte_node_t *node;
-    PRTE_HIDE_UNUSED_PARAMS(fd, args);
-
-    PMIX_ACQUIRE_OBJECT(caddy);
-
-    /* progress the job */
-    caddy->jdata->state = PRTE_JOB_STATE_VM_READY;
-
-    /* check the first daemon's node for topology
-     * limitations - or the HNP's node if we didn't
-     * launch any daemons */
-    node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, 1);
-    if (NULL == node) {
-        node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, 0);
-    }
-    if (NULL != node && NULL != node->topology &&
-        NULL != node->topology->topo) {
-        prte_rmaps_base.require_hwtcpus = !prte_hwloc_base_core_cpus(node->topology->topo);
-        prte_rmaps_base.have_cores = prte_hwloc_base_has_cores(node->topology->topo);
-    }
-
-    /* position any required files */
-    if (PRTE_SUCCESS != prte_filem.preposition_files(caddy->jdata, files_ready, caddy->jdata)) {
-        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_FILES_POSN_FAILED);
-    }
-
-    /* cleanup */
-    PMIX_RELEASE(caddy);
-}
+/* NOTE: there is no prte_plm_base_vm_ready() here, and there must not be
+ * one.  The VM_READY handler the DVM actually runs is vm_ready() in
+ * state/dvm - it builds and xcasts the WIREUP message, drains the elastic
+ * grow campaigns, and prepositions files.  This file carried a second,
+ * unregistered copy that only did the topology check and the
+ * prepositioning; nothing in the tree ever called it, so it drifted while
+ * looking authoritative.  Edit the live one. */
 
 void prte_plm_base_mapping_complete(int fd, short args, void *cbdata)
 {
@@ -856,16 +820,8 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
     PMIX_RELEASE(caddy);
 }
 
-void prte_plm_base_setup_job_complete(int fd, short args, void *cbdata)
-{
-    prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
-    PRTE_HIDE_UNUSED_PARAMS(fd, args);
-
-    PMIX_ACQUIRE_OBJECT(caddy);
-    /* nothing to do here but move along */
-    PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_ALLOCATE);
-    PMIX_RELEASE(caddy);
-}
+/* Likewise no prte_plm_base_setup_job_complete(): state/dvm registers its
+ * own init_complete() on PRTE_JOB_STATE_INIT_COMPLETE. */
 
 void prte_plm_base_complete_setup(int fd, short args, void *cbdata)
 {
