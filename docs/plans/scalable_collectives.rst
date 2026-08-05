@@ -22,11 +22,45 @@ both the launch message and a two-byte shutdown command, on the same tag.
 algorithm is near-optimal for one end of each pair and badly wrong for the
 other.
 
-The first half of the work is done: ``grpcomm`` has been collapsed out of MCA
-into ``src/grpcomm/`` as plain code, following the precedent of ``src/rml``
-(which had itself been three frameworks — ``rml``, ``routed`` and ``oob``).
-That change was deliberately behaviour-neutral. This document covers what it
-was preparation for.
+Status
+------
+
+Everything landed so far is either behaviour-neutral or inert: nothing yet
+sets ``direct`` on a send, and there is still only one data movement.  That is
+deliberate — each step was verifiable on its own, and the multi-node suite has
+not regressed at any point.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 18 62 20
+
+   * - Commit
+     - What
+     - State
+   * - ``404e553273``
+     - ``grpcomm`` collapsed out of MCA into ``src/grpcomm/`` (net −772 lines),
+       following the precedent of ``src/rml`` (itself once three frameworks)
+     - done
+   * - ``f46e0d4371``
+     - RML lateral links: the direct send and the fault gate
+     - done
+   * - ``25416cf534``
+     - Broadcast framing/movement split; ``tree_whole`` the only movement
+     - done
+   * - ``2e2a3c77ef``
+     - The Bruck allgather exchange schedule
+     - done
+   * - ``aa41998d39``
+     - The scatter's chunk partition
+     - done
+   * - —
+     - The bulk transport itself (Piece 2 below)
+     - **not started**
+
+Both halves of the bulk movement's *arithmetic* are therefore in and tested
+exhaustively, independently of any transport.  That ordering was chosen because
+an error in either would surface later as what looks like a transport or
+corruption bug rather than an arithmetic one.
 
 The operations
 --------------
@@ -159,8 +193,8 @@ other. Every bandwidth-optimal collective needs non-tree edges.
 Design
 ------
 
-Piece 1 — lateral links in the RML
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Piece 1 — lateral links in the RML *(landed:* ``f46e0d4371`` *)*
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The enabling mechanism for everything else. ``prte_oob_base_send_nb``
 (``src/rml/oob/oob_base_stubs.c``) resolves a *next hop* via
@@ -186,12 +220,16 @@ target, the existing code connects directly.
    lifeline" has bitten this code before. It lands with its own test, before
    anything uses it.
 
+Items 1 to 3 landed.  Three more were deliberately deferred until a collective
+actually opens a lateral link, because until then there is nothing to exercise
+them against:
+
 #. **Its own connect bound.** ``prte_connect_max_time`` exists so the tree can
    heal past a dead ancestor; a lateral link has no such fallback. Give
    registered links ``prte_lateral_connect_max_time`` and report a timeout to
    the registrant rather than abandoning silently.
 
-#. **Pre-warm.** The RD/Bruck partner set (``rank`` XOR ``2^k``) is fixed
+#. **Pre-warm.** The Bruck partner set (``rank`` XOR ``2^k``) is fixed
    and computable, as is a ring. Warm it from ``vm_ready()`` using the existing
    ``PRTE_RML_TAG_WARMUP_CONNECTION``.
 
@@ -248,6 +286,79 @@ path, rather than overloading ``PRTE_RML_TAG_DAEMON`` whose receiver dispatches
 on a command byte. But the *movement* choice is driven by measured size stamped
 on the wire, not by the tag — otherwise every future large payload needs a new
 tag to get the benefit.
+
+The framing/movement split has landed (``25416cf534``) with ``tree_whole`` as
+the only movement.  What follows is the bulk movement itself, which has not
+been written.
+
+Participants are named on the wire, never re-derived
+''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+Every daemon must agree on which exchange position is which rank.  Deriving
+that locally from the failed-daemon set would have daemons disagree in the
+window around a fault, and the exchange would then deadlock — each waiting on
+a partner the other does not believe exists.
+
+So the **originator stamps the participant rank list** into the scatter
+message, exactly as it stamps the movement id, and a daemon finds itself by
+searching that list.  At four bytes a rank this is 16 KB for a 4096-daemon
+DVM, carried once alongside a payload that is large by definition.  This rule
+is load-bearing: do not replace it with a locally-computed set.
+
+The two phases
+''''''''''''''
+
+**Scatter, down the existing tree.**  ``scatter_allgather``'s ``forward()``
+sends each routing-tree child only the chunks destined for that child's
+subtree (``radix_subtree_index`` partitions them), keeping its own.  No new
+connections and no new tag: this *is* the forward, so it inherits the ACK
+rollup, ``process_first`` and replay machinery unchanged.  Chunk boundaries
+come from ``prte_grpcomm_chunk_bounds()``.
+
+**Allgather, over lateral links.**  A new tag, driven by
+``prte_grpcomm_bruck_step()`` over positions, sending with
+``PRTE_RML_SEND_DIRECT`` and registering each partner through
+``prte_rml_lateral_register()``.  Blocks land **rotated**, so reassembly maps
+slots through ``prte_grpcomm_bruck_owner()`` — never assume natural order.
+Steps can arrive out of order, so blocks are stored by owner position rather
+than appended.
+
+The framing change: ``payload_complete``
+''''''''''''''''''''''''''''''''''''''''
+
+Today the framing treats "op received" as "payload held".  Under
+scatter+allgather it is not.  A ``payload_complete`` flag on the op is set by
+the movement — immediately for ``tree_whole``, and when the last block lands
+for the bulk movement — and both local delivery and the ACK to the parent gate
+on it.  ``nexpected`` stays the child count, because the rollup is still
+subtree-shaped; that is what keeps the reliability machinery single-copy.
+
+Faults degrade to ``tree_whole``
+''''''''''''''''''''''''''''''''
+
+A participant lost mid-scatter or mid-allgather cannot be recovered by the
+exchange itself.  The controller still holds the whole payload for its own op
+and the framing already has a replay path, so on any fault touching an
+in-flight bulk op the movement **flips to** ``tree_whole`` **and the op
+replays whole**.  Receivers holding partial chunks have not processed yet
+(``op->processed`` guards that), so they simply take the whole payload and
+complete.  Correctness over speed during recovery, and no second recovery
+mechanism to get wrong.
+
+Selection
+'''''''''
+
+At the originator only.  Bulk iff the tag is not ordering-critical, the
+payload is at least ``grpcomm_bcast_bulk_min_bytes``, and the participant
+count is at least ``grpcomm_bcast_bulk_min_daemons``.  A
+``grpcomm_bcast_movement`` parameter (``auto``/``tree``/``bulk``) forces
+either way, for testing and as an escape hatch.
+
+``PRTE_RML_TAG_WIREUP`` is excluded even though it is large and would
+otherwise qualify, because it is in the ``process_first`` set — it changes the
+child set, so it must be processed before forwarding.  That exclusion is
+deliberate and must stay commented in the code, or it will be "optimised"
+back in.
 
 Piece 3 — allgather: framing versus movement
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -337,6 +448,16 @@ Verification
 * **Bisectability** — each piece must pass the full suite on its own before the
   next lands.
 
+The multi-node baseline is **540 passed, 0 failed, 3 skipped**.  Two practical
+notes, both of which have cost time here:
+
+* ``check_PROGRAMS`` are built by ``make check``, **not** by ``make``.  Running
+  a unit-test binary straight after ``make`` silently runs a stale one, and a
+  newly added case simply does not appear in the output.
+* For anything that changes the wire format, the multi-node run is
+  load-bearing rather than a formality: it is what proves every daemon,
+  including pure relays, agrees on the new layout.
+
 Open questions
 --------------
 
@@ -348,7 +469,16 @@ Open questions
 #. **Descriptor budget at scale** for ``log2 N`` lateral links per
    daemon. The ring movement (two links) is the fallback.
 #. **A cheaper win exists and should be measured alongside.** Much of the
-   tree's cost is the ``dr`` release fanout. A payload-aware radix for the
+   tree's cost is the ``d*r`` release fanout. A payload-aware radix for the
    release, or a chunked/pipelined ``xcast``, recovers a large fraction of the
-   benefit with none of this risk. Worth measuring before committing to the
-   later pieces.
+   benefit with none of this risk.
+
+   This remains **unmeasured**, and it is the largest open risk in the plan.
+   The cost model above is standard (Thakur, van de Geijn), but PRRTE's own
+   constants are not: ``alpha`` here is a progress-thread hop rather than a
+   raw round trip, and ``xcast`` already compresses, which discounts the
+   tree's bandwidth term by an unknown factor.  A measurement needs real
+   multi-node hardware at realistic scale — ten containers on one host tell
+   you nothing useful about either constant.  The seam and both halves of the
+   arithmetic are already in place, so instrumenting an A/B of the two
+   movements is cheap once such a machine is available.
