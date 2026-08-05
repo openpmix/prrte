@@ -4920,6 +4920,17 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     RUN 'nohup prte --daemonize --host node1:1,node2:1,node3:1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
     if RUN 'pgrep -x prte >/dev/null'; then
         RUN 'head -c 262144 /dev/urandom | base64 > /tmp/iof_stdin_in.txt' >/dev/null 2>&1
+        # A second, deliberately larger input for the flow-control cases below.
+        # Back-pressure is keyed on PRTE_IOF_MAX_INPUT_BUFFERS (50) *queued
+        # chunks*, and the HNP hands stdin over in 8 KB chunks -- so an input
+        # has to exceed 50 * 8192 = 400 KB before the backlog can cross the
+        # threshold AT ALL, no matter how slowly the reader drains it.  The
+        # 256 KB input above is 43 chunks, which is why the XOFF assertions
+        # here used to be unfalsifiable.  1 MB of random, base64'd to ~1.4 MB,
+        # is ~172 chunks.  Do not shrink this without redoing that arithmetic.
+        RUN 'head -c 1048576 /dev/urandom | base64 > /tmp/iof_bulk_in.txt' >/dev/null 2>&1
+        bulksum=$(RUN 'md5sum < /tmp/iof_bulk_in.txt' | awk '{print $1}')
+        bulksz=$(RUN 'wc -c < /tmp/iof_bulk_in.txt' | tr -d ' ')
         out=$(RUN 'cd /tmp && timeout 90 prun --host node2:1 -n 1 \
                      cat < iof_stdin_in.txt > iof_stdin_out.txt 2>iof_stdin_err.txt; echo "rc=$?"')
         rc=$(echo "$out" | sed -n 's/^rc=//p')
@@ -4992,14 +5003,14 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         # to drop anything.
         RUN 'cp /tmp/prte.out /tmp/prte.out.mark 2>/dev/null || : ' >/dev/null 2>&1
         out=$(RUN 'cd /tmp && timeout 300 prun --host node2:1 -n 1 \
-                     '"$SC"' /tmp/iof_xoff_out.txt 64 4000 < iof_stdin_in.txt \
+                     '"$SC"' /tmp/iof_xoff_out.txt 512 2000 < iof_bulk_in.txt \
                      2>iof_xoff_err.txt; echo "rc=$?"')
         rc=$(echo "$out" | sed -n 's/^rc=//p')
         got=$(echo "$out" | sed -n 's/^SLOWCAT-BYTES //p')
         outsum=$(ON 2 'md5sum < /tmp/iof_xoff_out.txt 2>/dev/null' | awk '{print $1}')
-        [ "$rc" = 0 ] && [ -n "$got" ] && [ "$got" = "$insz" ] && [ "$insum" = "$outsum" ] \
+        [ "$rc" = 0 ] && [ -n "$got" ] && [ "$got" = "$bulksz" ] && [ "$bulksum" = "$outsum" ] \
             && ok "stdin survived a reader slow enough to trigger XOFF" \
-            || bad "XOFF-triggering stdin corrupted (rc=$rc, sent=$insz received=$got, md5 $insum vs $outsum): $(RUN 'head -c 200 /tmp/iof_xoff_err.txt')"
+            || bad "XOFF-triggering stdin corrupted (rc=$rc, sent=$bulksz received=$got, md5 $bulksum vs $outsum): $(RUN 'head -c 200 /tmp/iof_xoff_err.txt')"
         # ...and the flow-control message did not come back at the user as a
         # corrupted one.  "prte --daemonize" detaches from stdio, so this is
         # what the HNP wrote before detaching plus anything pmix_output sent to
@@ -5027,26 +5038,42 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         # implementation that asserts XOFF once and releases once looks
         # identical to a correct one under a presence test, and so does one
         # that asserts fifty times and releases once.
-        RUN 'cp /tmp/prte.out /tmp/prte.out.mark2 2>/dev/null || : ' >/dev/null 2>&1
-        out=$(RUN 'cd /tmp && timeout 300 prun --prtemca iof_base_verbose 1 -n 1 \
-                     '"$SC"' /tmp/iof_pair_out.txt 2048 3000 < iof_stdin_in.txt \
-                     2>iof_pair_err.txt; echo "rc=$?"')
-        rc=$(echo "$out" | sed -n 's/^rc=//p')
-        got=$(echo "$out" | sed -n 's/^SLOWCAT-BYTES //p')
-        pairlog=$(RUN 'diff /tmp/prte.out.mark2 /tmp/prte.out 2>/dev/null | grep "^>" \
-                       || cat /tmp/prte.out 2>/dev/null')
-        nxoff=$(echo "$pairlog" | grep -c 'buffer backed up - holding')
-        nxon=$(echo "$pairlog" | grep -c 'releasing stdin flow control')
-        [ "$nxoff" -gt 0 ] \
-            && ok "stdin flow control engaged ($nxoff XOFF)" \
-            || bad "stdin flow control never engaged - the reader was not slow enough, or the backlog never crossed PRTE_IOF_MAX_INPUT_BUFFERS"
-        [ "$nxoff" = "$nxon" ] \
-            && ok "every XOFF was paired with an XON ($nxon)" \
-            || bad "unpaired stdin flow control: $nxoff XOFF vs $nxon XON - a producer is left suspended"
-        [ "$rc" = 0 ] && [ "$got" = "$insz" ] \
-            && ok "delivery stayed exact across $nxoff suspensions" \
-            || bad "flow-controlled stdin lost data (rc=$rc, sent=$insz received=$got)"
-        RUN 'rm -f /tmp/iof_pair_out.txt' >/dev/null 2>&1
+        # Two things this case has to get right before it can assert anything.
+        #
+        # It needs the flow-control API at all: without PMIX_CAP_IOF_FLOW_CONTROL
+        # both the XOFF assert and its matching release are compiled out, and the
+        # HNP simply queues (bounded by iof_base_output_limit).  There is then no
+        # XOFF to pair and nothing to test, so skip rather than fail.
+        #
+        # And it needs to be able to SEE the HNP's log.  The DVM this phase runs
+        # against is started with "prte --daemonize", which detaches stdio before
+        # any of this is emitted -- /tmp/prte.out is empty by construction, so
+        # grepping it can only ever fail.  So this one case drives its own
+        # foreground DVM with prterun and reads that process's stderr directly.
+        # prterun takes its own session-dir prefix (prtrn.<pid>), so it coexists
+        # with the daemonized DVM the rest of the phase is using.
+        if ! pmix_cap PMIX_CAP_IOF_FLOW_CONTROL; then
+            skp "PMIx predates PMIX_CAP_IOF_FLOW_CONTROL -- no XOFF to pair"
+        else
+            out=$(RUN 'cd /tmp && timeout 300 prterun --prtemca iof_base_verbose 1 -n 1 \
+                         '"$SC"' /tmp/iof_pair_out.txt 2048 3000 < iof_bulk_in.txt \
+                         2>iof_pair_err.txt; echo "rc=$?"')
+            rc=$(echo "$out" | sed -n 's/^rc=//p')
+            got=$(echo "$out" | sed -n 's/^SLOWCAT-BYTES //p')
+            pairlog=$(RUN 'cat /tmp/iof_pair_err.txt 2>/dev/null')
+            nxoff=$(echo "$pairlog" | grep -c 'buffer backed up - holding')
+            nxon=$(echo "$pairlog" | grep -c 'releasing stdin flow control')
+            [ "$nxoff" -gt 0 ] \
+                && ok "stdin flow control engaged ($nxoff XOFF)" \
+                || bad "stdin flow control never engaged - reader too fast, or the backlog never crossed PRTE_IOF_MAX_INPUT_BUFFERS (50 chunks of 8K; input is $bulksz bytes)"
+            [ "$nxoff" = "$nxon" ] \
+                && ok "every XOFF was paired with an XON ($nxon)" \
+                || bad "unpaired stdin flow control: $nxoff XOFF vs $nxon XON - a producer is left suspended"
+            [ "$rc" = 0 ] && [ "$got" = "$bulksz" ] \
+                && ok "delivery stayed exact across $nxoff suspensions" \
+                || bad "flow-controlled stdin lost data (rc=$rc, sent=$bulksz received=$got)"
+            RUN 'rm -f /tmp/iof_pair_out.txt' >/dev/null 2>&1
+        fi
 
         # And the same slow reader on the HNP node, where push_stdin writes
         # into the proc sink directly instead of going out over the RML: the
