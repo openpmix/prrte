@@ -53,6 +53,16 @@ prte_grpcomm_release_bcast_fn_t prte_grpcomm_release_bcast = prte_grpcomm_xcast;
  * writes through it whenever the variable is set, so a stack slot would be
  * a dangling write the moment this function returns. */
 static int verbosity = 0;
+static char *bcast_movement = NULL;
+static int bcast_bulk_min_bytes = 0;
+static int bcast_bulk_min_daemons = 0;
+
+/* Defaults for the "auto" selection.  Both are deliberately conservative:
+ * below them the tree movement is either faster or indistinguishable, and the
+ * bulk movement's fixed costs (a participant list on the wire, log2(N) lateral
+ * connections per daemon) are pure loss. */
+#define PRTE_GRPCOMM_BULK_MIN_BYTES_DEFAULT   (256 * 1024)
+#define PRTE_GRPCOMM_BULK_MIN_DAEMONS_DEFAULT 8
 
 void prte_grpcomm_register(void)
 {
@@ -69,6 +79,68 @@ void prte_grpcomm_register(void)
         prte_grpcomm_globals.output = pmix_output_open(NULL);
         pmix_output_set_verbosity(prte_grpcomm_globals.output, verbosity);
     }
+
+    bcast_movement = NULL;
+    pmix_mca_base_var_register("prte", "grpcomm", NULL, "bcast_movement",
+                               "How a broadcast's payload travels: \"tree\" "
+                               "(whole payload to each routing-tree child), "
+                               "\"bulk\" (scatter down the tree then allgather "
+                               "across lateral links), or \"auto\" (by size). "
+                               "Only the daemon that originates a broadcast "
+                               "consults this; the choice it makes is carried "
+                               "on the wire.",
+                               PMIX_MCA_BASE_VAR_TYPE_STRING,
+                               &bcast_movement);
+
+    bcast_bulk_min_bytes = PRTE_GRPCOMM_BULK_MIN_BYTES_DEFAULT;
+    pmix_mca_base_var_register("prte", "grpcomm", NULL, "bcast_bulk_min_bytes",
+                               "Smallest payload \"auto\" will move with the "
+                               "bulk movement",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &bcast_bulk_min_bytes);
+
+    bcast_bulk_min_daemons = PRTE_GRPCOMM_BULK_MIN_DAEMONS_DEFAULT;
+    pmix_mca_base_var_register("prte", "grpcomm", NULL, "bcast_bulk_min_daemons",
+                               "Smallest DVM \"auto\" will move a payload "
+                               "across with the bulk movement",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &bcast_bulk_min_daemons);
+
+    /* Resolve the movement selection once, here, rather than re-parsing the
+     * string on every broadcast.  An unrecognized spelling falls back to the
+     * tree with a warning instead of being taken for "auto": the parameter is
+     * a deliberate override, so silently ignoring a typo in it would hide the
+     * very experiment the user is running.
+     *
+     * The default is "tree", not "auto", and that is a statement about
+     * evidence rather than about the code. Choosing by size is only worth
+     * doing once the crossover point has been measured, and measuring it needs
+     * real multi-node hardware: the cost model's constants are not the
+     * textbook ones here - alpha is a progress-thread hop rather than a
+     * round trip, and xcast already compresses, which discounts the tree's
+     * bandwidth term by an unknown factor. A container swarm on one host
+     * cannot supply either. So "auto" exists, is implemented, and is opt-in
+     * until somebody has that number. */
+    prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_TREE;
+    if (NULL != bcast_movement) {
+        if (0 == strcasecmp(bcast_movement, "auto")) {
+            prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_AUTO;
+        } else if (0 == strcasecmp(bcast_movement, "tree")) {
+            prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_TREE;
+        } else if (0 == strcasecmp(bcast_movement, "bulk")) {
+            prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_BULK;
+        } else {
+            pmix_output(0, "PRRTE: grpcomm_bcast_movement \"%s\" is not one of "
+                           "auto/tree/bulk - using tree", bcast_movement);
+            prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_TREE;
+        }
+    }
+    prte_grpcomm_globals.bcast_bulk_min_bytes =
+        (0 > bcast_bulk_min_bytes) ? 0 : (size_t) bcast_bulk_min_bytes;
+    /* An exchange needs at least two participants to be an exchange at all,
+     * so a configured floor below that would still be answered by the tree. */
+    prte_grpcomm_globals.bcast_bulk_min_daemons =
+        (2 > bcast_bulk_min_daemons) ? 2 : (size_t) bcast_bulk_min_daemons;
 }
 
 /**
@@ -88,6 +160,11 @@ int prte_grpcomm_init(void)
                   PRTE_RML_PERSISTENT, prte_grpcomm_xcast_recv, NULL);
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST_ACK,
                   PRTE_RML_PERSISTENT, prte_grpcomm_xcast_ack, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST_BULK,
+                  PRTE_RML_PERSISTENT, prte_grpcomm_xcast_bulk_recv, NULL);
+    /* A bulk broadcast's exchange partners are not routing-tree neighbours, so
+     * the RML hands their losses here instead of repairing the tree. */
+    prte_rml_lateral_set_lost_callback(prte_grpcomm_xcast_lateral_lost);
 
     /* fence receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE,
@@ -117,6 +194,8 @@ void prte_grpcomm_finalize(void)
 
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST_ACK);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST_BULK);
+    prte_rml_lateral_set_lost_callback(NULL);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_RELEASE);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP);

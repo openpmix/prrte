@@ -3616,6 +3616,128 @@ test_grpcomm_ft() {
     cleanup_swarm
 }
 
+test_grpcomm_bulk() {
+    local out n hosts
+
+    # The bulk broadcast (scatter down the routing tree, Bruck allgather across
+    # lateral links) cannot be exercised on one host at all: with a single
+    # daemon there are fewer than two participants and the movement declines
+    # itself, and even with two there is no tree DEPTH, so the scatter's
+    # subtree partition -- the part that decides which chunks go to which
+    # child -- is never asked a non-trivial question.
+    #
+    # So these cases run a DVM at radix 2 across eight nodes, which is three
+    # levels deep, and force the movement on.  The assertion is not subtle:
+    # PRRTE's launch message IS the payload, so if the scatter partitions it
+    # wrongly, a daemon reassembles it wrongly, or the Bruck rotation is
+    # misread, the reassembled buffer does not unpack and the job does not
+    # start.  A job that runs correctly on every node is a byte-exact
+    # round-trip of a real multi-kilobyte payload through both phases.
+    #
+    # What each case adds on top of that is a different way for the *framing*
+    # to go wrong, which is the half that mixed movement newly stresses.
+
+    banner "grpcomm: a forced bulk broadcast carries the DVM's own traffic"
+    cleanup_swarm
+    if ! prted_dvm_start_mca 'node1:2,node2:2,node3:2,node4:2,node5:2,node6:2,node7:2,node8:2' \
+            '--prtemca grpcomm_bcast_movement bulk --prtemca rml_base_radix 2'; then
+        bad "could not start a DVM with the bulk broadcast forced"
+        cleanup_swarm
+        return
+    fi
+    ok "a DVM forms with every broadcast scattered (radix 2, 8 nodes)"
+
+    out=$(PRUN "-n 8 --map-by node hostname" 2>&1)
+    hosts=$(echo "$out" | grep -c '^node')
+    [ "$hosts" = 8 ] \
+        && ok "all 8 ranks launched -- the launch message survived scatter+allgather" \
+        || bad "$hosts of 8 ranks reported: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    n=$(echo "$out" | grep '^node' | sort -u | wc -l | tr -d ' ')
+    [ "$n" -ge 4 ] \
+        && ok "...across $n distinct nodes, so the scatter really spanned the tree" \
+        || bad "the job did not span the DVM ($n nodes)"
+
+    # A payload that is large on purpose.  The launch message grows with the
+    # argv, so this pushes several times the size of the first case through
+    # the same path -- and a chunk boundary landing mid-string is exactly the
+    # kind of error that a short payload can hide.
+    # built inside the container, so the 4 KB never crosses this script's own
+    # quoting; the check is on the length of what came back, which is what a
+    # mis-stitched payload would get wrong
+    out=$(RUN "timeout -k 5 60 prun --dvm-uri file:$PRTED_URI -n 4 --map-by node \
+                   echo \$(printf 'x%.0s' \$(seq 1 4000))" 2>&1)
+    n=$(echo "$out" | awk 'length($0)==4000' | wc -l | tr -d ' ')
+    [ "$n" = 4 ] \
+        && ok "a 4 KB argument came back byte-exact from all 4 ranks" \
+        || bad "$n of 4 ranks echoed the argument intact"
+
+    # Three jobs in a row on one DVM.  Each is several broadcasts, so this is
+    # where an op-id sequencing mistake shows up: ops complete in op-id order,
+    # and a bulk op that finishes late must hold the tiny ops behind it rather
+    # than let them ack past it.  A daemon that got that wrong raises
+    # PRTE_ERR_OUT_OF_ORDER_MSG and force-exits, taking the DVM with it.
+    n=0
+    for _ in 1 2 3; do
+        PRUN "-n 4 --map-by node hostname" >/dev/null 2>&1 && n=$((n+1))
+    done
+    [ "$n" = 3 ] \
+        && ok "three consecutive jobs ran -- op-id ordering held across them" \
+        || bad "only $n of 3 consecutive jobs completed"
+
+    banner "grpcomm: a bulk-broadcast DVM survives losing a daemon"
+    # The exchange cannot be repaired once a participant is gone -- the block
+    # it owed is simply gone -- so any fault degrades the in-flight op back to
+    # the tree and the payload is replayed whole.  What this checks is that the
+    # degrade actually happens: get it wrong and the survivors sit waiting on a
+    # partner that will never send, which presents as a DVM that accepts jobs
+    # and never starts them.
+    ON 8 'pkill -9 -x prted' >/dev/null 2>&1
+    sleep 6
+    out=$(PRUN "-n 4 --host node1:1,node2:1,node3:1,node4:1 --map-by node hostname" 2>&1)
+    n=$(echo "$out" | grep -c '^node')
+    [ "$n" = 4 ] \
+        && ok "the DVM still launches after a participant died mid-flight" \
+        || bad "the DVM did not recover from the loss: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    cleanup_swarm
+
+    banner "grpcomm: auto selection mixes bulk and tree traffic"
+    # With the threshold on the floor, everything large enough goes bulk while
+    # the ordering-critical tags (WIREUP, DAEMON_DIED, DAEMON_REVIVED) stay on
+    # the tree by rule.  That mixture is the configuration the op-order hold
+    # exists for, and it is not reachable with either movement forced.
+    if ! prted_dvm_start_mca 'node1:2,node2:2,node3:2,node4:2,node5:2,node6:2' \
+            '--prtemca grpcomm_bcast_movement auto --prtemca grpcomm_bcast_bulk_min_bytes 1 --prtemca grpcomm_bcast_bulk_min_daemons 2 --prtemca rml_base_radix 2'; then
+        bad "could not start a DVM with auto selection"
+        cleanup_swarm
+        return
+    fi
+    out=$(PRUN "-n 6 --map-by node hostname" 2>&1)
+    n=$(echo "$out" | grep -c '^node')
+    [ "$n" = 6 ] \
+        && ok "a mixed-movement DVM launches correctly" \
+        || bad "$n of 6 ranks reported under mixed movement"
+    PRUN "-n 2 --map-by node hostname" >/dev/null 2>&1 \
+        && ok "...and keeps working for a second job" \
+        || bad "the second job failed under mixed movement"
+
+    banner "grpcomm: an unrecognized movement is refused, not ignored"
+    # The parameter is a deliberate override, so a typo in it must say so
+    # rather than silently leave the DVM on whatever the default was -- that
+    # would hide the very experiment the user is running.  This also happens to
+    # be the only assertion available on the parameter's plumbing: grpcomm is
+    # no longer an MCA framework, so prte_info's framework walk does not
+    # enumerate its parameters at all.
+    out=$(RUN "prterun --prtemca grpcomm_bcast_movement bogus -n 1 hostname" 2>&1)
+    echo "$out" | grep -q 'is not one of auto/tree/bulk' \
+        && ok "a bad movement name is diagnosed" \
+        || bad "a bad movement name passed unremarked: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    echo "$out" | grep -q '^node1' \
+        && ok "...and the job still ran, on the tree" \
+        || bad "the fallback did not run the job"
+
+    cleanup_swarm
+}
+
 ########################################################################
 # src/mca/errmgr -- what happens when a process or a daemon fails.
 #
@@ -5743,6 +5865,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_odls
 
     test_grpcomm
+
+    test_grpcomm_bulk
 
     test_slurm_alloc
     test_slurm

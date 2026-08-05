@@ -112,6 +112,11 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 
 #define PRTE_RML_TAG_XCAST         15
 #define PRTE_RML_TAG_XCAST_ACK     16
+/* The bulk broadcast's allgather phase, and the request to abandon it.  Kept
+ * off PRTE_RML_TAG_XCAST because these travel over lateral links between
+ * daemons that are not tree neighbours, while everything on the XCAST tag is
+ * from a parent and is discarded if it is not. */
+#define PRTE_RML_TAG_XCAST_BULK    17
 
 /* For FileM Base */
 #define PRTE_RML_TAG_FILEM_BASE      21
