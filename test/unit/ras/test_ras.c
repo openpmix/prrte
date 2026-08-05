@@ -790,13 +790,15 @@ static int test_slurm_allocation(void)
 
     mod = (prte_ras_base_module_t *) module;
     /* the vtable contract, on the module the component actually hands out.
-     * slurm is the only component implementing the elastic completion hooks
-     * today; if another grows them, the base cycles every module for both. */
+     * slurm is the only component implementing shrink_complete today; if
+     * another grows it, the base cycles every module for it. release_allocation
+     * is unset - the session stack now retains its own reference and drains
+     * itself at finalize, so the reactive hook is no longer needed. */
     CHECK("slurm contract: allocate", NULL != mod->allocate);
     CHECK("slurm contract: init", NULL != mod->init);
     CHECK("slurm contract: modify", NULL != mod->modify);
     CHECK("slurm contract: shrink_complete", NULL != mod->shrink_complete);
-    CHECK("slurm contract: release_allocation", NULL != mod->release_allocation);
+    CHECK("slurm contract: release_allocation unset", NULL == mod->release_allocation);
     if (NULL == mod->allocate) {
         return failures;
     }
