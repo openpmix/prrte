@@ -71,14 +71,23 @@ transport, and are tested exhaustively without one.  That ordering was chosen
 because an error in either would surface later as what looks like a transport
 or corruption bug rather than an arithmetic one.
 
-``scatter_allgather`` is implemented and reachable, but nothing selects it on
-its own: ``grpcomm_bcast_movement`` defaults to ``tree``, so every broadcast
-still travels exactly as it did before the movement existed.  ``auto`` — the
-size-based rule described under *Selection* below — is implemented and has to
-be asked for.  That is a statement about evidence rather than about the code,
-and the missing evidence is named under *Verification*: the crossover point
-has not been measured on hardware that could measure it.  Turning ``auto`` on
-by default is the next step, and it needs a number, not a patch.
+Both second movements are implemented and reachable, and neither is selected
+on its own: ``grpcomm_bcast_movement`` and ``grpcomm_fence_movement`` both
+default to the tree, so an unconfigured DVM behaves exactly as it did before
+either existed.  They are opt-in for *different* reasons, and the difference
+matters:
+
+* The **broadcast**'s ``auto`` rests on a byte threshold nobody has measured,
+  and the right resolution is to remove the threshold rather than tune it —
+  see *Selection* under Piece 2.  Give the launch message its own tag and the
+  choice becomes categorical.
+* The **fence**'s ``auto`` has no threshold at all.  It reads
+  ``PMIX_COLLECT_DATA``, so it is already categorical: a barrier keeps the
+  rollup because the cost model says the high-radix tree beats a dissemination
+  exchange at any scale, and a modex gets the exchange because the release
+  fanout is what dominates.  What is unverified there is not *where* to switch
+  but simply *whether the exchange wins in practice* — a yes/no on real
+  hardware, after which the default can flip with no constant to choose.
 
 The operations
 --------------
@@ -299,11 +308,51 @@ side.
 it holds the whole payload *and* its children have ACKed. The rollup itself is
 unchanged.
 
-New delivery tags are appropriate for the launch message and the ``FILEM`` bulk
-path, rather than overloading ``PRTE_RML_TAG_DAEMON`` whose receiver dispatches
-on a command byte. But the *movement* choice is driven by measured size stamped
-on the wire, not by the tag — otherwise every future large payload needs a new
-tag to get the benefit.
+**The tag should be the discriminator, not the size.** An earlier draft of
+this document argued the opposite — that selection should read a measured
+size, because otherwise "every future large payload needs a new tag to get the
+benefit". That reasoning treats PRRTE as though it carried arbitrary traffic.
+It does not: it carries a known, small set of things, and which of them a
+message is *is* the operation. A new tag for a new bulk payload is not a cost
+to be avoided, it is the declaration that makes the choice reasoned rather
+than guessed.
+
+The conflation is narrower than it looks, which is what makes this practical.
+``PRTE_RML_TAG_DAEMON`` is the only overloaded tag, and within it exactly
+**one** call site is large — ``plm_base_launch_support.c`` broadcasting
+``jdata->launch_msg``. Everything else on that tag is a command: job-control,
+halt/terminate, the allocation messages. Every other broadcast tag is already
+single-purpose:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 12 54
+
+   * - Tag
+     - Size
+     - Wanted
+   * - ``PRTE_RML_TAG_DAEMON`` (launch message)
+     - large
+     - **its own tag** — then: bulk
+   * - ``PRTE_RML_TAG_DAEMON`` (all other sites)
+     - ~0
+     - tree
+   * - ``PRTE_RML_TAG_FILEM_BASE``
+     - large
+     - bulk; already its own tag
+   * - ``PRTE_RML_TAG_WIREUP``
+     - large
+     - tree — ``process_first``, see below
+   * - ``DAEMON_DIED`` / ``DAEMON_REVIVED``
+     - ~0
+     - tree — ordering-critical
+   * - ``NOTIFICATION`` / ``MONITOR_REQUEST`` / ``IOF_PROXY``
+     - ~0
+     - tree
+
+So splitting one tag off removes the need for a byte threshold entirely, and
+the remaining selection is categorical: a small table of tag → movement, with
+no number in it to be wrong about.
 
 The framing/movement split landed first (``25416cf534``) with ``tree_whole`` as
 the only movement.  What follows is the bulk movement itself, which is now
@@ -383,11 +432,47 @@ mechanism to get wrong.
 Selection
 '''''''''
 
-At the originator only.  Bulk iff the tag is not ordering-critical, the
-payload is at least ``grpcomm_bcast_bulk_min_bytes``, and the participant
-count is at least ``grpcomm_bcast_bulk_min_daemons``.  A
+At the originator only.  As built, ``auto`` is bulk iff the tag is not
+ordering-critical, the payload is at least ``grpcomm_bcast_bulk_min_bytes``,
+and the participant count is at least ``grpcomm_bcast_bulk_min_daemons``.  A
 ``grpcomm_bcast_movement`` parameter (``auto``/``tree``/``bulk``) forces
 either way, for testing and as an escape hatch.
+
+**The byte threshold is scaffolding, and is the only genuine "crossover" in
+the whole design.**  It exists because the launch message and the shutdown
+command share ``PRTE_RML_TAG_DAEMON`` today, so the operation cannot be
+recovered from the call and size is the only signal left.  Once the launch
+message has its own tag (above), selection becomes a tag lookup and
+``grpcomm_bcast_bulk_min_bytes`` should go away rather than be tuned.
+
+That is worth stating plainly because the two selections in this design are
+*not* the same kind of thing, and describing them as though they were is how
+a made-up constant acquires an air of having been measured:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 26 44
+
+   * - Decision
+     - Discriminator
+     - What is unknown
+   * - broadcast: tiny vs large
+     - payload bytes (today)
+     - a real crossover — until the launch message gets its own tag, at which
+       point the question disappears rather than being answered
+   * - broadcast: ordering-critical
+     - tag
+     - nothing; a correctness exclusion, not tuning
+   * - fence: barrier
+     - ``PMIX_COLLECT_DATA`` absent
+     - nothing — the cost model says the high-radix tree wins at *any* scale
+   * - fence: modex
+     - ``PMIX_COLLECT_DATA`` present
+     - not a crossover; only "does the exchange beat the rollup here", a
+       yes/no with no number to tune
+
+A size test survives, if at all, only as a backstop for a programming model
+that pushes something unexpectedly large through a tag nobody classified.
 
 ``PRTE_RML_TAG_WIREUP`` is excluded even though it is large and would
 otherwise qualify, because it is in the ``process_first`` set — it changes the

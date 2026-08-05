@@ -269,12 +269,22 @@ untouched. The full design record is
 [`docs/plans/scalable_collectives.rst`](../../docs/plans/scalable_collectives.rst).
 
 **Nothing selects it on its own.** `grpcomm_bcast_movement` defaults to
-`tree`; `bulk` forces it and `auto` applies the size rule
-(`grpcomm_bcast_bulk_min_bytes`, `grpcomm_bcast_bulk_min_daemons`). The
-default is about evidence, not about the code: the crossover point has never
-been measured on hardware that could measure it, and a container swarm on one
-host cannot supply either constant. Do not flip the default without that
-number.
+`tree`; `bulk` forces it and `auto` applies a size rule
+(`grpcomm_bcast_bulk_min_bytes`, `grpcomm_bcast_bulk_min_daemons`).
+
+**That size rule is scaffolding, and is the only real "crossover" anywhere in
+this subsystem.** It exists only because `PRTE_RML_TAG_DAEMON` carries the
+launch message and the shutdown command alike, so the operation cannot be
+recovered from the call and size is the last signal available. That tag is the
+*only* overloaded broadcast tag, and exactly one call site on it is large
+(`plm_base_launch_support.c`, `jdata->launch_msg`); `FILEM` is already
+single-purpose, and everything else is tiny. Give the launch message its own
+tag and selection becomes a tag lookup with no constant in it.
+
+So do not tune `grpcomm_bcast_bulk_min_bytes` — remove the need for it. And do
+not describe the fence's default in these terms: it has no threshold at all
+(see below), and borrowing this paragraph's reasoning for it is how a made-up
+number acquires an air of having been measured.
 
 The parts that are load-bearing, and why:
 
@@ -455,6 +465,23 @@ point: for a modex it is the release fanout, not the gather, that dominates.
 Selected by `grpcomm_fence_movement` (`tree` / `allgather` / `auto`),
 defaulting to `tree`. `auto` reads `PMIX_COLLECT_DATA` out of the fence
 upcall's info array — a barrier keeps the rollup, a modex gets the exchange.
+
+**There is no size threshold here, and there should never be one.** The
+discriminator is categorical, and both arms are reasoned rather than tuned: a
+barrier keeps the rollup because a high-radix tree beats a dissemination
+exchange at *any* scale (`2*d*alpha` with `d`=2 at radix 64 over 4096 daemons,
+against `log2(N)*alpha` = 12·alpha), and a modex gets the exchange because the
+release fanout — not the gather — is what dominates it. What is unverified is
+therefore not *where* to switch but simply whether the exchange wins in
+practice; that is a yes/no on real hardware, after which this default flips
+with no constant to choose. Contrast the broadcast's `auto`, which is a byte
+threshold and is scaffolding.
+
+(`PMIX_COLLECT_DATA` does reach the fence upcall — the PMIx client packs the
+caller's info array verbatim and the server forwards it. PRRTE long believed
+otherwise. Note also that "is `ndata` zero" is *not* a substitute: a pure
+barrier arrives with eight bytes, so a size test would call every barrier a
+modex.)
 
 **A fence has no originator, and that changes everything about agreement.**
 A broadcast's movement is decided by one daemon and obeyed by the rest. Every

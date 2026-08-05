@@ -113,15 +113,21 @@ void prte_grpcomm_register(void)
      * a deliberate override, so silently ignoring a typo in it would hide the
      * very experiment the user is running.
      *
-     * The default is "tree", not "auto", and that is a statement about
-     * evidence rather than about the code. Choosing by size is only worth
-     * doing once the crossover point has been measured, and measuring it needs
-     * real multi-node hardware: the cost model's constants are not the
-     * textbook ones here - alpha is a progress-thread hop rather than a
-     * round trip, and xcast already compresses, which discounts the tree's
-     * bandwidth term by an unknown factor. A container swarm on one host
-     * cannot supply either. So "auto" exists, is implemented, and is opt-in
-     * until somebody has that number. */
+     * The default is "tree", not "auto", because "auto" here means a byte
+     * threshold and that threshold is a guess. Measuring it would need real
+     * multi-node hardware - the cost model's constants are not the textbook
+     * ones (alpha is a progress-thread hop rather than a round trip, and
+     * xcast already compresses, discounting the tree's bandwidth term by an
+     * unknown factor), and a container swarm on one host supplies neither.
+     *
+     * But the better answer is to delete the threshold rather than measure
+     * it. A size test is only needed because PRTE_RML_TAG_DAEMON carries the
+     * launch message and the shutdown command alike, so the operation cannot
+     * be recovered from the call. It is the ONLY overloaded broadcast tag,
+     * and exactly one site on it is large. Give the launch message its own
+     * tag and selection becomes a tag lookup with no constant in it - the
+     * shape the fence's selection already has. See
+     * docs/plans/scalable_collectives.rst, "Selection". */
     prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_TREE;
     if (NULL != bcast_movement) {
         if (0 == strcasecmp(bcast_movement, "auto")) {
@@ -159,16 +165,24 @@ void prte_grpcomm_register(void)
                                PMIX_MCA_BASE_VAR_TYPE_STRING,
                                &fence_movement);
 
-    /* Default to the rollup, for the same reason the broadcast defaults to
-     * the tree: the allgather's advantage is real but unmeasured here, and a
-     * fence is the one collective where a wrong guess is not merely slow.
+    /* Default to the rollup - but NOT for the reason the broadcast defaults to
+     * the tree, and the difference is worth keeping straight.
      *
-     * "auto" is safe to offer because PMIX_COLLECT_DATA reaches every
+     * The broadcast's "auto" rests on a byte threshold nobody has measured.
+     * This one has no threshold at all: it reads PMIX_COLLECT_DATA, which is
+     * categorical. A barrier keeps the rollup because a high-radix tree beats
+     * a dissemination exchange at any scale, not because it is under some
+     * size; a modex gets the exchange because the release fanout is what
+     * dominates it. So what is unverified here is not *where* to switch, it
+     * is simply whether the exchange wins in practice on real hardware -
+     * a yes/no, after which this default can flip with no constant to pick.
+     *
+     * "auto" is safe to offer at all because PMIX_COLLECT_DATA reaches every
      * participant's fence upcall identically - PMIx requires the directive to
      * be uniform across a fence and enforces that within a node - so every
      * daemon resolves it the same way. That is a stronger footing than the
-     * broadcast's "auto", which only works because a broadcast has a single
-     * originator. */
+     * broadcast's "auto", which works only because a broadcast has a single
+     * originator to decide for everyone. */
     prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_TREE_GATHER;
     if (NULL != fence_movement) {
         if (0 == strcasecmp(fence_movement, "tree")) {
