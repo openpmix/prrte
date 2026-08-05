@@ -54,13 +54,24 @@ not regressed at any point.
      - The scatter's chunk partition
      - done
    * - —
-     - The bulk transport itself (Piece 2 below)
-     - **not started**
+     - The bulk transport itself: ``scatter_allgather``, the
+       ``payload_complete`` gate, the op-order hold, and the degrade-to-tree
+       fault path
+     - done, **opt-in**
 
-Both halves of the bulk movement's *arithmetic* are therefore in and tested
-exhaustively, independently of any transport.  That ordering was chosen because
-an error in either would surface later as what looks like a transport or
-corruption bug rather than an arithmetic one.
+Both halves of the bulk movement's *arithmetic* went in before any of its
+transport, and are tested exhaustively without one.  That ordering was chosen
+because an error in either would surface later as what looks like a transport
+or corruption bug rather than an arithmetic one.
+
+``scatter_allgather`` is implemented and reachable, but nothing selects it on
+its own: ``grpcomm_bcast_movement`` defaults to ``tree``, so every broadcast
+still travels exactly as it did before the movement existed.  ``auto`` — the
+size-based rule described under *Selection* below — is implemented and has to
+be asked for.  That is a statement about evidence rather than about the code,
+and the missing evidence is named under *Verification*: the crossover point
+has not been measured on hardware that could measure it.  Turning ``auto`` on
+by default is the next step, and it needs a number, not a patch.
 
 The operations
 --------------
@@ -287,9 +298,10 @@ on a command byte. But the *movement* choice is driven by measured size stamped
 on the wire, not by the tag — otherwise every future large payload needs a new
 tag to get the benefit.
 
-The framing/movement split has landed (``25416cf534``) with ``tree_whole`` as
-the only movement.  What follows is the bulk movement itself, which has not
-been written.
+The framing/movement split landed first (``25416cf534``) with ``tree_whole`` as
+the only movement.  What follows is the bulk movement itself, which is now
+written; the notes below describe what was built and why, and call out the two
+places where the implementation went further than the sketch.
 
 Participants are named on the wire, never re-derived
 ''''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -315,13 +327,29 @@ connections and no new tag: this *is* the forward, so it inherits the ACK
 rollup, ``process_first`` and replay machinery unchanged.  Chunk boundaries
 come from ``prte_grpcomm_chunk_bounds()``.
 
-**Allgather, over lateral links.**  A new tag, driven by
-``prte_grpcomm_bruck_step()`` over positions, sending with
-``PRTE_RML_SEND_DIRECT`` and registering each partner through
-``prte_rml_lateral_register()``.  Blocks land **rotated**, so reassembly maps
-slots through ``prte_grpcomm_bruck_owner()`` — never assume natural order.
-Steps can arrive out of order, so blocks are stored by owner position rather
-than appended.
+**Allgather, over lateral links.**  A new tag
+(``PRTE_RML_TAG_XCAST_BULK``), driven by ``prte_grpcomm_bruck_step()`` over
+positions, sending with ``PRTE_RML_SEND_DIRECT`` and registering each partner
+through ``prte_rml_lateral_register()``.  Blocks land **rotated**, so
+reassembly maps slots through ``prte_grpcomm_bruck_owner()`` — never assume
+natural order.  Steps can arrive out of order, so blocks are stored by owner
+position rather than appended, and the driver loops on "do I hold the blocks
+this step must send" rather than advancing one step per message received.
+
+Two things fell out of building it that the sketch did not anticipate.
+
+*The exchange can outrun the scatter.*  The two phases travel different routes,
+so a partner nearer the root can start its exchange before our scatter has
+reached us — and its chunks name positions in a participant list we have not
+been given yet.  Those messages are parked whole, by op-id, and drained when
+the scatter arrives.  They cannot be decoded on arrival, and dropping them
+would deadlock the exchange.
+
+*Registered lateral links are never deregistered.*  Withdrawing the
+registration while the socket is still open would make a later drop read as a
+routing-tree fault, which is the one thing the registry exists to prevent.
+Retiring the link and the registration together is the idle-teardown work,
+which is still not done.
 
 The framing change: ``payload_complete``
 ''''''''''''''''''''''''''''''''''''''''
