@@ -56,6 +56,8 @@ prte_rml_base_t prte_rml_base = {
     .global_failed_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
     .dead_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
     .absent_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
+    .lateral_links = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
+    .lateral_lost_cb = NULL,
     .peer_epochs = NULL,
     .peer_epochs_size = 0,
 };
@@ -200,6 +202,7 @@ void prte_rml_close(void)
     PMIX_DESTRUCT(&prte_rml_base.global_failed_dmns);
     PMIX_DESTRUCT(&prte_rml_base.dead_dmns);
     PMIX_DESTRUCT(&prte_rml_base.absent_dmns);
+    PMIX_DESTRUCT(&prte_rml_base.lateral_links);
     if (NULL != prte_rml_base.peer_epochs) {
         free(prte_rml_base.peer_epochs);
         prte_rml_base.peer_epochs = NULL;
@@ -240,6 +243,12 @@ int prte_rml_open(void)
      * comes back (the unheal path). Initialized once here for the same reason. */
     PMIX_CONSTRUCT(&prte_rml_base.absent_dmns, pmix_bitmap_t);
     pmix_bitmap_init(&prte_rml_base.absent_dmns, prte_process_info.num_daemons);
+    /* lateral_links records the peers we hold a non-tree connection to. Like
+     * the two above it is constructed once and never re-initialized by a
+     * routing recompute: a grow reshapes the tree but does not dissolve the
+     * exchange partners a collective is midway through talking to. */
+    PMIX_CONSTRUCT(&prte_rml_base.lateral_links, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.lateral_links, prte_process_info.num_daemons);
 
     /* Capture this process's boot epoch (incarnation): a millisecond wall-clock
      * timestamp taken once here. A departed daemon that reboots into the same
@@ -383,6 +392,9 @@ static void send_cons(prte_rml_send_t *ptr)
      * here. The relay path overrides this with the origin's epoch carried in
      * the received wire header so a relayed message keeps its original stamp. */
     ptr->epoch = prte_rml_boot_epoch;
+    /* routed unless the caller asks otherwise - PMIX_NEW mallocs, it does
+     * not zero, so this field is heap garbage until it is set */
+    ptr->direct = false;
 }
 static void send_des(prte_rml_send_t *ptr)
 {

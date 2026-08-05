@@ -76,7 +76,17 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
 
     /* do we have a route to this peer (could be direct)? */
     PMIX_LOAD_NSPACE(hop.nspace, PRTE_PROC_MY_NAME->nspace);
-    hop.rank = prte_rml_get_route(msg->dst.rank);
+    if (msg->direct) {
+        /* The caller asked for the target itself rather than the next hop the
+         * tree would choose.  Everything below is unchanged: the peer lookup
+         * finds or builds a connection from the target's PMIX_PROC_URI exactly
+         * as it does for a tree neighbour, so a direct send costs nothing
+         * beyond the connection itself. */
+        hop.rank = msg->dst.rank;
+    } else {
+        hop.rank = prte_rml_get_route(msg->dst.rank);
+    }
+resolve_hop:
     if (PMIX_RANK_INVALID == hop.rank && PRTE_PROC_MY_HNP->rank != msg->dst.rank) {
         /* The routing tree has no next hop toward this target - it sits behind
          * a hole we cannot get any closer to.  Report that to the sender rather
@@ -143,6 +153,22 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
                 peer = process_uri(synth);
                 free(synth);
             }
+        }
+        if (NULL == peer && msg->direct) {
+            /* We could not reach the target directly - most likely its contact
+             * info has not propagated to us yet.  That is not a reason to fail
+             * the message: fall back to the routing tree, which is slower for a
+             * collective but always available.  Clearing the flag first means
+             * the retry cannot loop, and keeps the relay bookkeeping honest if
+             * this message ends up being forwarded by an intermediate hop. */
+            pmix_output_verbose(4, prte_oob_base.output,
+                                "%s oob:base:send no direct path to %s -"
+                                " falling back to the routed path",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                PRTE_NAME_PRINT(&msg->dst));
+            msg->direct = false;
+            hop.rank = prte_rml_get_route(msg->dst.rank);
+            goto resolve_hop;
         }
         if (NULL == peer) {
             // unable to send it - as above, complete rather than release so

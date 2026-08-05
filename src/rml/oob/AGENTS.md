@@ -23,7 +23,7 @@ transport actually exists; that abstraction is precisely what was removed.
 | File | Responsibility |
 |------|----------------|
 | `oob.h` | The `prte_oob_base` global (peers list, interfaces, listeners, TCP tuning params) and the `PRTE_OOB_SEND` entry macro that thread-shifts a send onto the progress thread. |
-| `oob_base_stubs.c` | `prte_oob_base_send_nb` — resolve the next hop via `prte_rml_get_route`, find or create its TCP peer, and queue the message (connecting first if needed). Also URI build (`get_addr`) and parse (`process_uri` / `set_addr`), including the bootstrap fallbacks. |
+| `oob_base_stubs.c` | `prte_oob_base_send_nb` — resolve the next hop (via `prte_rml_get_route`, or the target itself for a `direct` send), find or create its TCP peer, and queue the message (connecting first if needed). Also URI build (`get_addr`) and parse (`process_uri` / `set_addr`), including the bootstrap fallbacks. |
 | `oob_tcp.c` | OOB `open`/`close`/`register`: MCA parameter registration, local interface discovery, listener startup, the connection-handshake `recv_handler`, and `simulate_node_failure` (test hook). |
 | `oob_tcp_component.c` | Class instances for peers/addresses/messages, plus the `lost_connection` and `failed_to_connect` event handlers. |
 | `oob_tcp_connection.c` | The per-peer connection state machine: connect with retry/backoff, the IDENT ack/nack handshake, accept, and close. |
@@ -40,7 +40,9 @@ transport actually exists; that abstraction is precisely what was removed.
 (`oob_base_stubs.c`). It drops the message if the destination is down or the
 retry budget (`prte_rml_max_retries`) is exhausted, reporting failure through
 the send callback. Otherwise it computes the next hop with
-`prte_rml_get_route(dst)` and looks up that hop's `prte_oob_tcp_peer_t`. If no
+`prte_rml_get_route(dst)` — or, for a `direct` send, uses `dst` itself, falling
+back to the routed hop if that peer cannot be resolved — and looks up that
+hop's `prte_oob_tcp_peer_t`. If no
 peer exists it obtains the contact URI (directly for the HNP, from the PMIx
 store otherwise, or — in a bootstrapped DVM — synthesized via
 `prte_ess_base_bootstrap_peer_uri`) and builds one with `process_uri`. If the
@@ -142,6 +144,10 @@ In a launcher-less (bootstrapped) DVM daemons boot independently, so:
   frees `data`; the paths that hand the payload on (`PMIx_Data_load` for local
   delivery, the relay) null the pointer first. Add a third path and it has to
   do the same, or free it.
+- **A `direct` send is the one case where the hop is the destination.** It
+  exists so a bandwidth-efficient collective is not funnelled through the root;
+  see [`../AGENTS.md`](../AGENTS.md), *Lateral links*. Losing such a connection
+  must not be reported as a routing-tree fault.
 - **`prte_oob_base_send_nb` runs on a *hop*, and the hop can be
   `PMIX_RANK_INVALID`** when the target sits behind a hole the tree cannot
   reach past. Handle that before it reaches the peer lookup.

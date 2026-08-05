@@ -240,6 +240,13 @@ typedef struct {
      * original sender's epoch, copied from the received wire header. Lets a
      * hop drop traffic from a stale incarnation of a rebooted bootstrap rank. */
     uint64_t epoch;
+    /* Send straight to dst rather than to the next hop the routing tree would
+     * pick.  A bandwidth-efficient collective exchanges with partners that are
+     * not its tree neighbours, and routing those exchanges through the tree
+     * would funnel them via the root - which is exactly the bottleneck such a
+     * collective exists to avoid.  Only ever set for a peer whose contact info
+     * we can obtain; the send falls back to the routed path if we cannot. */
+    bool direct;
 } prte_rml_send_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rml_send_t);
 
