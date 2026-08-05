@@ -56,6 +56,7 @@ static int verbosity = 0;
 static char *bcast_movement = NULL;
 static int bcast_bulk_min_bytes = 0;
 static int bcast_bulk_min_daemons = 0;
+static char *fence_movement = NULL;
 
 /* Defaults for the "auto" selection.  Both are deliberately conservative:
  * below them the tree movement is either faster or indistinguishable, and the
@@ -141,6 +142,47 @@ void prte_grpcomm_register(void)
      * so a configured floor below that would still be answered by the tree. */
     prte_grpcomm_globals.bcast_bulk_min_daemons =
         (2 > bcast_bulk_min_daemons) ? 2 : (size_t) bcast_bulk_min_daemons;
+
+    fence_movement = NULL;
+    pmix_mca_base_var_register("prte", "grpcomm", NULL, "fence_movement",
+                               "How a fence's contributions travel: \"tree\" "
+                               "(roll up to the controller, which broadcasts "
+                               "the result back), \"allgather\" (a lateral "
+                               "exchange leaving every daemon holding the "
+                               "result, with no release), or \"auto\" (the "
+                               "allgather for a fence carrying "
+                               "PMIX_COLLECT_DATA, the rollup for a barrier). "
+                               "Unlike the broadcast this is NOT a per-daemon "
+                               "choice: every participant in a fence must be "
+                               "given the same value or the collective is "
+                               "refused.",
+                               PMIX_MCA_BASE_VAR_TYPE_STRING,
+                               &fence_movement);
+
+    /* Default to the rollup, for the same reason the broadcast defaults to
+     * the tree: the allgather's advantage is real but unmeasured here, and a
+     * fence is the one collective where a wrong guess is not merely slow.
+     *
+     * "auto" is safe to offer because PMIX_COLLECT_DATA reaches every
+     * participant's fence upcall identically - PMIx requires the directive to
+     * be uniform across a fence and enforces that within a node - so every
+     * daemon resolves it the same way. That is a stronger footing than the
+     * broadcast's "auto", which only works because a broadcast has a single
+     * originator. */
+    prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_TREE_GATHER;
+    if (NULL != fence_movement) {
+        if (0 == strcasecmp(fence_movement, "tree")) {
+            prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_TREE_GATHER;
+        } else if (0 == strcasecmp(fence_movement, "allgather")) {
+            prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_RD_ALLGATHER;
+        } else if (0 == strcasecmp(fence_movement, "auto")) {
+            prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_SELECT_AUTO;
+        } else {
+            pmix_output(0, "PRRTE: grpcomm_fence_movement \"%s\" is not one of "
+                           "tree/allgather/auto - using tree", fence_movement);
+            prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_TREE_GATHER;
+        }
+    }
 }
 
 /**
@@ -172,6 +214,10 @@ int prte_grpcomm_init(void)
     /* setup recv for barrier release */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_RELEASE,
                   PRTE_RML_PERSISTENT, prte_grpcomm_fence_release, NULL);
+    /* ...and for a fence's lateral allgather, which arrives from exchange
+     * partners rather than from a routing-tree child */
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_EXCHANGE,
+                  PRTE_RML_PERSISTENT, prte_grpcomm_fence_exchange_recv, NULL);
 
     /* group receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP,
@@ -198,6 +244,7 @@ void prte_grpcomm_finalize(void)
     prte_rml_lateral_set_lost_callback(NULL);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_RELEASE);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_EXCHANGE);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP_RELEASE);
     return;

@@ -21,6 +21,9 @@
 #
 
 # local files
+EXTRA_DIST += \
+    grpcomm/help-prte-grpcomm.txt
+
 headers += \
     grpcomm/grpcomm.h \
     grpcomm/grpcomm_internal.h

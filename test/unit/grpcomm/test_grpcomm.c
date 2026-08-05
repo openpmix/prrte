@@ -332,6 +332,24 @@ static int test_bcast_movement_contract(void)
     CHECK("the bulk daemon floor is at least two",
           2 <= prte_grpcomm_globals.bcast_bulk_min_daemons);
 
+    /* The fence's movement ids are on the wire for a different reason than
+     * the broadcast's - not to instruct a receiver, but so that two daemons
+     * that chose differently find out instead of hanging - but they are just
+     * as unrenumberable. */
+    CHECK("tree_gather_release is fence movement 0",
+          0u == PRTE_GRPCOMM_FENCE_TREE_GATHER);
+    CHECK("rd_allgather is fence movement 1",
+          1u == PRTE_GRPCOMM_FENCE_RD_ALLGATHER);
+    CHECK("the fence movement ids are distinct",
+          PRTE_GRPCOMM_FENCE_TREE_GATHER != PRTE_GRPCOMM_FENCE_RD_ALLGATHER);
+    CHECK("fences roll up unless the DVM was told otherwise",
+          PRTE_GRPCOMM_FENCE_TREE_GATHER == prte_grpcomm_globals.fence_select);
+    /* the auto sentinel is deliberately outside the movement id space, so it
+     * can never be mistaken for one on the wire */
+    CHECK("the auto sentinel is not a movement id",
+          PRTE_GRPCOMM_FENCE_SELECT_AUTO != PRTE_GRPCOMM_FENCE_TREE_GATHER &&
+          PRTE_GRPCOMM_FENCE_SELECT_AUTO != PRTE_GRPCOMM_FENCE_RD_ALLGATHER);
+
     if (0 == failures) {
         fprintf(stdout, "PASSED test_bcast_movement_contract\n");
     }
@@ -855,6 +873,16 @@ static int test_fence_tracker(void)
               NULL == coll->dmns && 4 == coll->ndmns);
         CHECK("tracker: expects our children plus ourselves",
               (size_t) prte_rml_base.n_children + 1 == coll->nexpected);
+        /* A tracker built locally takes the DVM's configured movement. One
+         * built by an arriving contribution instead adopts what that
+         * contribution asserts - it has no opinion of its own yet - which is
+         * what lets the interlock compare like with like. */
+        /* the rollup, whatever the selection is - "auto" is not a movement
+         * and must never be what a tracker starts out holding */
+        CHECK("tracker: starts on a real movement, never the auto sentinel",
+              PRTE_GRPCOMM_FENCE_TREE_GATHER == coll->movement);
+        CHECK("tracker: has no exchange state until an allgather needs it",
+              NULL == coll->xch);
     }
     /* the same signature must find that tracker rather than build a second */
     again = prte_grpcomm_fence_get_tracker(&sig, true);
