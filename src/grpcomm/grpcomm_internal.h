@@ -79,6 +79,28 @@ typedef struct {
     uint32_t recovery_epoch;
 } prte_grpcomm_globals_t;
 
+/* The allgather exchange schedule (grpcomm_exchange.c).  Bruck's algorithm:
+ * ceil(log2(n)) steps for ANY participant count, each block moved exactly
+ * once.  Recursive doubling is equivalent for powers of two and only works
+ * then, so this is used uniformly.  See the commentary in that file. */
+
+/* How many exchange steps an allgather over nprocs participants takes.
+ * 0 when there is nobody to exchange with. */
+PRTE_EXPORT size_t prte_grpcomm_bruck_nsteps(size_t nprocs);
+
+/* The partners and block count for one step, from the point of view of the
+ * participant at position pos.  Returns PRTE_ERR_BAD_PARAM for a position or
+ * step outside the exchange. */
+PRTE_EXPORT int prte_grpcomm_bruck_step(size_t pos, size_t nprocs, size_t step,
+                                        size_t *send_to, size_t *recv_from,
+                                        size_t *nblocks);
+
+/* Which participant's block ends up in local slot `slot`.  Bruck leaves the
+ * blocks rotated - slot 0 is always our own - so a caller that wants natural
+ * order has to undo that through this mapping rather than assume it.
+ * SIZE_MAX for a slot outside the exchange. */
+PRTE_EXPORT size_t prte_grpcomm_bruck_owner(size_t pos, size_t nprocs, size_t slot);
+
 #define PRTE_GRPCOMM_GROUP_MEMO_MAX 64
 
 /* How a broadcast's payload physically travels.  Stamped on the wire by the

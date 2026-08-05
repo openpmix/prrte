@@ -28,6 +28,7 @@ headers += \
 libprrte_la_SOURCES += \
     grpcomm/grpcomm.c \
     grpcomm/grpcomm_classes.c \
+    grpcomm/grpcomm_exchange.c \
     grpcomm/grpcomm_xcast.c \
     grpcomm/grpcomm_fence.c \
     grpcomm/grpcomm_group.c

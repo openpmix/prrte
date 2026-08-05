@@ -76,10 +76,21 @@ grpcomm/
   grpcomm_internal.h   # trackers, signatures, globals, cross-file prototypes
   grpcomm.c            # init/finalize/fault_handler, globals, MCA params
   grpcomm_classes.c    # PMIX_CLASS_INSTANCE for every signature/tracker/caddy
+  grpcomm_exchange.c   # the allgather exchange schedule (Bruck) - pure math
   grpcomm_xcast.c      # reliable, fault-tolerant broadcast
   grpcomm_fence.c      # allgather / barrier
   grpcomm_group.c      # PMIx group construct/destruct/cancel
 ```
+
+`grpcomm_exchange.c` is deliberately free of state and messaging: it answers
+"who do I exchange with, on which step, and how many blocks" and nothing else.
+Two collectives need that answer — an allgather fence, and the second phase of
+a bulk broadcast — so it is shared rather than written twice. It uses **Bruck's
+algorithm** rather than recursive doubling: RD is equivalent for powers of two
+and *only* works then, needing extra rounds costing up to a second full copy of
+the data for any other count. Bruck is `ceil(log2(n))` steps for every `n`. The
+price is that blocks land rotated, so `prte_grpcomm_bruck_owner()` maps a slot
+back to its owner and callers must not assume natural order.
 
 Read `grpcomm.h` first — it is the whole external contract. Then
 `grpcomm_internal.h` for the object model.

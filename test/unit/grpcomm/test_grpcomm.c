@@ -17,21 +17,21 @@
  * and cannot run without one; it is covered by the integration and
  * dockerswarm harnesses.
  *
- * What *can* be exercised in isolation is the framework's structural
- * contract and the constructor/destructor invariants that its collective
- * code relies on:
+ * What *can* be exercised in isolation is the structural contract and the
+ * constructor/destructor invariants that the collective code relies on:
  *
- *   1. The module contract.  grpcomm.h states that every function pointer
- *      in prte_grpcomm_base_module_t "MUST be provided"; the sole
- *      component, direct, is what the DVM always selects, so a regression
- *      that left one of its seven slots NULL would crash at first use
- *      (exactly the failure the errmgr logfn test guards against).  We
- *      confirm all seven are wired and that the public entry points are
- *      the ones the module advertises.
+ *   1. The release path.  grpcomm hands a completed collective back through
+ *      prte_grpcomm_release_bcast, which must default to the real broadcast.
+ *      Nothing else establishes that, and a NULL or wrongly-aimed default
+ *      would silently drop every release a controller emits -- a DVM-wide
+ *      hang with no diagnostic.
  *
- *   2. The component identity: name "direct", grpcomm v4 component.
+ *   2. The allgather exchange schedule.  Pure arithmetic, so the property
+ *      that matters is checkable exhaustively here: after ceil(log2(n))
+ *      steps every participant holds every block exactly once, for EVERY
+ *      participant count rather than only for powers of two.
  *
- *   3. The base globals: prte_grpcomm_globals.context_id must start at
+ *   3. The globals: prte_grpcomm_globals.context_id must start at
  *      UINT32_MAX -- group construct hands it out and *decrements*, so a
  *      wrong initial value would collide with bottom-up context ids.
  *
@@ -92,6 +92,130 @@ static int test_release_bcast_default(void)
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_release_bcast_default\n");
+    }
+    return failures;
+}
+
+/*
+ * The allgather exchange schedule (Bruck).
+ *
+ * The property worth testing is the whole point of the algorithm and is not
+ * obvious from the arithmetic: after ceil(log2(n)) steps every participant
+ * holds every block exactly once, for EVERY participant count - not just
+ * powers of two, which is where recursive doubling would have been adequate.
+ * So drive the real schedule through a simulated exchange and check the
+ * result, rather than asserting the partner formulas against themselves.
+ *
+ * A wrong nblocks clamp is the failure this catches: without it a participant
+ * sends blocks it does not hold on the last step, and the receiver ends up
+ * with duplicates and holes rather than an obvious crash.
+ */
+static int test_exchange_schedule(void)
+{
+    int failures = 0;
+    size_t n;
+
+    /* step counts: ceil(log2(n)), and nothing to do below two participants */
+    CHECK("no steps for an empty exchange", 0 == prte_grpcomm_bruck_nsteps(0));
+    CHECK("no steps for a lone participant", 0 == prte_grpcomm_bruck_nsteps(1));
+    CHECK("2 participants take 1 step", 1 == prte_grpcomm_bruck_nsteps(2));
+    CHECK("3 participants take 2 steps", 2 == prte_grpcomm_bruck_nsteps(3));
+    CHECK("8 participants take 3 steps", 3 == prte_grpcomm_bruck_nsteps(8));
+    CHECK("9 participants take 4 steps", 4 == prte_grpcomm_bruck_nsteps(9));
+    CHECK("64 participants take 6 steps", 6 == prte_grpcomm_bruck_nsteps(64));
+
+    /* nonsense is refused rather than answered */
+    {
+        size_t s = 0, r = 0, b = 0;
+        CHECK("step beyond the exchange is refused",
+              PRTE_SUCCESS != prte_grpcomm_bruck_step(0, 8, 3, &s, &r, &b));
+        CHECK("position outside the exchange is refused",
+              PRTE_SUCCESS != prte_grpcomm_bruck_step(8, 8, 0, &s, &r, &b));
+        CHECK("NULL out-parameter is refused",
+              PRTE_SUCCESS != prte_grpcomm_bruck_step(0, 8, 0, NULL, &r, &b));
+        CHECK("slot outside the exchange has no owner",
+              SIZE_MAX == prte_grpcomm_bruck_owner(0, 8, 8));
+    }
+
+    /* Now the real property, exhaustively over every count up to 64: run the
+     * exchange the schedule describes and confirm what everyone ends up with. */
+    for (n = 1; n <= 64; n++) {
+        /* have[p][i] = owner of the block in participant p's slot i */
+        static size_t have[64][64];
+        static size_t nhave[64];
+        static size_t sent[64][64];
+        size_t p, k, i, steps;
+        bool ok = true;
+
+        for (p = 0; p < n; p++) {
+            have[p][0] = p;   /* everyone starts holding its own block */
+            nhave[p] = 1;
+        }
+
+        steps = prte_grpcomm_bruck_nsteps(n);
+        for (k = 0; k < steps; k++) {
+            size_t nblocks = 0, sto = 0, rfrom = 0;
+
+            /* snapshot what each participant sends this step, so the exchange
+             * is simultaneous rather than order-dependent */
+            for (p = 0; p < n; p++) {
+                if (PRTE_SUCCESS != prte_grpcomm_bruck_step(p, n, k, &sto, &rfrom, &nblocks)) {
+                    ok = false;
+                    break;
+                }
+                if (nblocks > nhave[p]) {
+                    /* asked to send blocks we do not have - the clamp is wrong */
+                    ok = false;
+                    break;
+                }
+                for (i = 0; i < nblocks; i++) {
+                    sent[p][i] = have[p][i];
+                }
+            }
+            if (!ok) {
+                break;
+            }
+            for (p = 0; p < n; p++) {
+                (void) prte_grpcomm_bruck_step(p, n, k, &sto, &rfrom, &nblocks);
+                for (i = 0; i < nblocks; i++) {
+                    have[p][nhave[p]++] = sent[rfrom][i];
+                }
+            }
+        }
+        if (!ok) {
+            fprintf(stderr, "FAIL [exchange]: schedule broke down at n=%lu\n",
+                    (unsigned long) n);
+            failures++;
+            continue;
+        }
+
+        for (p = 0; p < n; p++) {
+            if (nhave[p] != n) {
+                fprintf(stderr, "FAIL [exchange]: n=%lu pos=%lu holds %lu blocks\n",
+                        (unsigned long) n, (unsigned long) p,
+                        (unsigned long) nhave[p]);
+                failures++;
+                break;
+            }
+            for (i = 0; i < n; i++) {
+                /* every slot must hold the owner the mapping promises, which
+                 * is also what proves no block is duplicated or missing */
+                if (have[p][i] != prte_grpcomm_bruck_owner(p, n, i)) {
+                    fprintf(stderr,
+                            "FAIL [exchange]: n=%lu pos=%lu slot=%lu holds %lu,"
+                            " mapping says %lu\n",
+                            (unsigned long) n, (unsigned long) p,
+                            (unsigned long) i, (unsigned long) have[p][i],
+                            (unsigned long) prte_grpcomm_bruck_owner(p, n, i));
+                    failures++;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_exchange_schedule\n");
     }
     return failures;
 }
@@ -777,6 +901,7 @@ int main(void)
     }
 
     failures += test_release_bcast_default();
+    failures += test_exchange_schedule();
     failures += test_base_context_id();
     failures += test_classes();
 #if PRTE_TEST_GRPCOMM_INTERNALS
