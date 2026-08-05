@@ -945,7 +945,7 @@ void prte_ras_base_teardown_reservation(prte_session_t *session,
             rc = PMIx_Data_pack(NULL, &msg, ranks, m, PMIX_PROC_RANK);
         }
         if (PMIX_SUCCESS == rc) {
-            if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &msg))) {
+            if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, &msg))) {
                 PRTE_ERROR_LOG(rc);
             }
         } else {
@@ -1541,10 +1541,10 @@ static int ras_base_send_dvm_shrink(prte_shrink_campaign_t *camp,
      * single routing-tree repair and one completion event, rather than
      * discovering the departures one daemon at a time. */
     if (NULL != camp) {
-        rc = prte_grpcomm.xcast_nb(PRTE_RML_TAG_DAEMON, &msg,
+        rc = prte_grpcomm_xcast_nb(PRTE_RML_TAG_DAEMON, &msg,
                                    shrink_xcast_complete, camp);
     } else {
-        rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &msg);
+        rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, &msg);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&msg);
 

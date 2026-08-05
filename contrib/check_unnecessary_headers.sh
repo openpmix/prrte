@@ -133,7 +133,7 @@ delete_unnessary_header .
 SEARCH_HEADER[0]="prte/mca/errmgr/errmgr.h PRTE_ERROR_NAME PRTE_ERROR_LOG prte_errmgr_base_log prte_errmgr"
 SEARCH_HEADER[1]="prte/mca/ess/ess.h prte_ess"
 SEARCH_HEADER[2]="prte/mca/filem/filem.h prte_filem PRTE_FILEM_TYPE_ PRTE_FILEM_MOVE_ prte_filem_base_process_set_1_0_0_t prte_filem_base_process_set_t prte_filem_base_file_set_1_0_0_t prte_filem_base_file_set_t prte_filem_base_request_1_0_0_t prte_filem_base_request_t prte_filem_base_component_2_0_0_t prte_filem_base_component_t prte_filem_base_module_1_0_0_t prte_filem_base_module_t"
-SEARCH_HEADER[3]="prte/mca/grpcomm/grpcomm.h prte_grpcomm"
+SEARCH_HEADER[3]="prte/grpcomm/grpcomm.h prte_grpcomm"
 SEARCH_HEADER[4]="prte/mca/iof/iof.h prte_iof"
 SEARCH_HEADER[5]="prte/mca/iof/iof_types.h prte_iof_tag_t PRTE_IOF_"
 SEARCH_HEADER[6]="prte/mca/notifier/notifier.h PRTE_NOTIFIER_MAX_BUF PRTE_NOTIFIER_INFRA PRTE_NOTIFIER_WARNING prte_notifier"

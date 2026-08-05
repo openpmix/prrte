@@ -50,8 +50,7 @@
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/filem/base/base.h"
-#include "src/mca/grpcomm/base/base.h"
-#include "src/mca/grpcomm/grpcomm.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/base/base.h"
 #include "src/mca/plm/base/base.h"
@@ -311,16 +310,9 @@ int prte_ess_base_prted_setup(void)
     /*
      * Group communications
      */
-    if (PRTE_SUCCESS
-        != (ret = pmix_mca_base_framework_open(&prte_grpcomm_base_framework,
-                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
+    if (PRTE_SUCCESS != (ret = prte_grpcomm_init())) {
         PRTE_ERROR_LOG(ret);
-        error = "prte_grpcomm_base_open";
-        goto error;
-    }
-    if (PRTE_SUCCESS != (ret = prte_grpcomm_base_select())) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_grpcomm_base_select";
+        error = "prte_grpcomm_init";
         goto error;
     }
     /* Open/select the odls */
@@ -447,7 +439,7 @@ int prte_ess_base_prted_finalize(void)
 
     /* close frameworks */
     (void) pmix_mca_base_framework_close(&prte_filem_base_framework);
-    (void) pmix_mca_base_framework_close(&prte_grpcomm_base_framework);
+    prte_grpcomm_finalize();
     (void) pmix_mca_base_framework_close(&prte_iof_base_framework);
     (void) pmix_mca_base_framework_close(&prte_plm_base_framework);
     /* make sure our local procs are dead */

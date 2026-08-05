@@ -43,7 +43,7 @@
 #include "src/util/pmix_getcwd.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/grpcomm/base/base.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/rml/rml.h"
 #include "src/mca/schizo/base/base.h"
@@ -1345,7 +1345,7 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
     cd->opcbfunc = cbfunc;
     cd->cbdata = cbdata;
 
-    rc = prte_grpcomm.fence(procs, nprocs, info, ninfo,
+    rc = prte_grpcomm_fence(procs, nprocs, info, ninfo,
                             cd->msg.unpack_ptr, cd->msg.bytes_used,
                             connect_release, cd);
     if (PRTE_SUCCESS != rc) {

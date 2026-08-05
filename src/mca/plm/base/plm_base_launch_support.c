@@ -47,7 +47,7 @@
 #include "src/mca/ess/ess.h"
 #include "src/mca/filem/base/base.h"
 #include "src/mca/filem/filem.h"
-#include "src/mca/grpcomm/base/base.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/base/base.h"
 #include "src/mca/odls/odls_types.h"
@@ -612,7 +612,7 @@ static int get_traces(prte_job_t *jdata)
         return PRTE_ERROR;
     }
     /* goes to all daemons */
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &buffer))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, &buffer))) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_DESTRUCT(&buffer);
         return PRTE_ERROR;
@@ -977,7 +977,7 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
     }
 
     /* goes to all daemons */
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &jdata->launch_msg))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, &jdata->launch_msg))) {
         PRTE_ERROR_LOG(rc);
         PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
         PMIX_RELEASE(caddy);
@@ -3278,7 +3278,7 @@ static void grow_rollback(prte_grow_campaign_t *camp, pmix_rank_t trigger)
             rc = PMIx_Data_pack(NULL, &msg, kill, nkill, PMIX_PROC_RANK);
         }
         if (PMIX_SUCCESS == rc) {
-            if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &msg))) {
+            if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, &msg))) {
                 PRTE_ERROR_LOG(rc);
             }
         } else {

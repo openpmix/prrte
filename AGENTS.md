@@ -89,6 +89,7 @@ src/
   mca/            # All MCA frameworks and their components
   runtime/        # Global state, init/finalize, job/node/proc data structures
   rml/            # Runtime Messaging Layer (point-to-point communication between daemons)
+  grpcomm/        # DVM-wide collectives: broadcast (xcast), allgather/barrier (fence), PMIx groups
   util/           # Internal utilities (hostfile parsing, name formatting, attributes, ...)
   include/        # Internal header files (types.h, constants.h, ...)
   pmix/           # Thin shim connecting PRRTE to its PMIx dependency
@@ -139,7 +140,6 @@ utility stubs) and one or more component subdirectories.
 | `rmaps` | `src/mca/rmaps/` | Resource Mapping — assigns processes to nodes/slots. Components: `round_robin`, `ppr`, `rank_file`, `seq`. |
 | `odls` | `src/mca/odls/` | PRRTE Daemon Local Launch Subsystem — the per-node daemon (prted) forks/execs application processes. |
 | `iof` | `src/mca/iof/` | I/O Forwarding — routes stdout/stderr/stdin between daemons and the HNP. |
-| `grpcomm` | `src/mca/grpcomm/` | Group Communication — collective operations among daemons (broadcast, barrier). |
 | `errmgr` | `src/mca/errmgr/` | Error Manager — handles process faults, abnormal exits, and propagation of errors. |
 | `state` | `src/mca/state/` | State Machine — drives the DVM and job lifecycle through defined states/transitions. |
 | `schizo` | `src/mca/schizo/` | Personality layer — parses CLI options and environment for specific launcher personalities (prte, ompi). |

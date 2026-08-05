@@ -37,6 +37,7 @@
 
 #include "src/mca/base/pmix_mca_base_var.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/rml/rml.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_output.h"
@@ -596,6 +597,10 @@ int prte_register_params(void)
 
     /* pickup the RML params */
     prte_rml_register();
+
+    /* and grpcomm's - it is no longer an MCA framework, so nothing
+     * registers its verbosity parameter on its behalf */
+    prte_grpcomm_register();
 
     return PRTE_SUCCESS;
 }

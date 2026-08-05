@@ -35,7 +35,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/filem/filem.h"
-#include "src/mca/grpcomm/grpcomm.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/odls_types.h"
 #include "src/mca/plm/base/base.h"
@@ -378,7 +378,7 @@ static void vm_ready(int fd, short args, void *cbdata)
             }
 
             /* goes to all daemons */
-            if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_WIREUP, &buf))) {
+            if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_WIREUP, &buf))) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_DESTRUCT(&buf);
                 /* the whole DVM is being torn down; held jobs will be
@@ -1257,7 +1257,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
 
         /* we have to send the notification to all daemons so that
          * anyone watching for it can receive it */
-        if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_NOTIFICATION, reply))) {
+        if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_NOTIFICATION, reply))) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
             PMIX_RELEASE(caddy);
@@ -1292,7 +1292,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
             PMIX_RELEASE(caddy);
             return;
         }
-        prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, reply);
+        prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, reply);
         PMIX_DATA_BUFFER_RELEASE(reply);
     }
 

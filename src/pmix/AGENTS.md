@@ -225,7 +225,7 @@ in each message — collect to the master, then hand the whole set back out:
    xcasts it on `PRTE_RML_TAG_WIREUP` —
    [`state_dvm.c`](../mca/state/dvm/state_dvm.c). Every daemon stores what
    it receives in `process_wireup()` —
-   [`grpcomm_direct_xcast.c`](../mca/grpcomm/direct/grpcomm_direct_xcast.c).
+   [`grpcomm_xcast.c`](../grpcomm/grpcomm_xcast.c).
 3. **Serve.** The query fetches it with a `PMIx_Get` keyed on exactly that
    name, which is what `PRTE_MODEX_RECV_VALUE_OPTIONAL` does — so the query
    code needed no change at all.

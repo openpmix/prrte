@@ -34,7 +34,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 
-#include "src/mca/grpcomm/grpcomm.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/filem/filem.h"
 #include "src/mca/state/state.h"
 #include "src/rml/relm/relm.h"
@@ -367,7 +367,7 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global){
     prte_rml_fault_handler(s);
     // TODO: Should this fn become the central point responsible for setting
     // failed procs to PRTE_PROC_STATE_COMM_FAILED?
-    prte_grpcomm.fault_handler(s);
+    prte_grpcomm_fault_handler(s);
     prte_filem  .fault_handler(s);
     prte_relm   .fault_handler(s);
 
@@ -498,7 +498,7 @@ void prte_rml_revive_routing_tree(pmix_rank_t rank){
     // that this ordering argument must still be confirmed on the harness, but no
     // change is expected.
     const prte_rml_recovery_status_t* s = &status;
-    prte_grpcomm.fault_handler(s);
+    prte_grpcomm_fault_handler(s);
     prte_filem  .fault_handler(s);
     prte_relm   .fault_handler(s);
 

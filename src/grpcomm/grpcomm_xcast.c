@@ -36,10 +36,10 @@
 #include "src/util/pmix_show_help.h"
 #include "src/util/prte_show_help.h"
 
-#include "grpcomm_direct.h"
-#include "src/mca/grpcomm/base/base.h"
+#include "grpcomm_internal.h"
+#include "src/grpcomm/grpcomm.h"
 
-#define XCAST prte_mca_grpcomm_direct_component.xcast_ops
+#define XCAST prte_grpcomm_globals.xcast_ops
 
 /* The initiating op created in xcast_nb() is consumed by begin_xcast() (it is
  * packed and relayed to the master, then discarded); the op the master actually
@@ -95,13 +95,13 @@ typedef struct {
     // tag for the underlying user message
     prte_rml_tag_t msg_tag;
     // optional completion callback, fired on the master when the whole DVM has
-    // received this op (see prte_grpcomm_direct_xcast_nb).  NULL when unused.
+    // received this op (see prte_grpcomm_xcast_nb).  NULL when unused.
     prte_grpcomm_xcast_complete_fn_t cbfunc;
     void *cbdata;
 } op_t;
 PMIX_CLASS_DECLARATION(op_t);
 
-// event handler for prte_grpcomm_direct_xcast to safely access global data
+// event handler for prte_grpcomm_xcast to safely access global data
 //   void* = a built op_t*
 static void begin_xcast(int, short, void*);
 // Returns NULL if not found
@@ -133,15 +133,15 @@ static int unpack_msg   (pmix_data_buffer_t* buffer, op_t* op);
 static int pack_bool    (pmix_data_buffer_t* buffer, bool* boolean);
 static int unpack_bool  (pmix_data_buffer_t* buffer, bool* boolean);
 
-int prte_grpcomm_direct_xcast(prte_rml_tag_t tag, pmix_data_buffer_t *msg){
-    return prte_grpcomm_direct_xcast_nb(tag, msg, NULL, NULL);
+int prte_grpcomm_xcast(prte_rml_tag_t tag, pmix_data_buffer_t *msg){
+    return prte_grpcomm_xcast_nb(tag, msg, NULL, NULL);
 }
 
-int prte_grpcomm_direct_xcast_nb(prte_rml_tag_t tag, pmix_data_buffer_t *msg,
+int prte_grpcomm_xcast_nb(prte_rml_tag_t tag, pmix_data_buffer_t *msg,
                                  prte_grpcomm_xcast_complete_fn_t cbfunc,
                                  void *cbdata){
-    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                         "%s grpcomm:direct:xcast: with %d bytes",
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                         "%s grpcomm:xcast: with %d bytes",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (int) msg->bytes_used));
 
@@ -187,7 +187,7 @@ int prte_grpcomm_direct_xcast_nb(prte_rml_tag_t tag, pmix_data_buffer_t *msg,
     return PMIX_SUCCESS;
 }
 
-void prte_grpcomm_direct_xcast_recv(
+void prte_grpcomm_xcast_recv(
     int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
     prte_rml_tag_t tag, void *cbdata
 ) {
@@ -196,8 +196,8 @@ void prte_grpcomm_direct_xcast_recv(
         // Ignore messages from old parents
         return;
     }
-    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                         "%s grpcomm:direct:xcast:recv: with %d bytes",
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_globals.output,
+                         "%s grpcomm:xcast:recv: with %d bytes",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (int) buffer->bytes_used));
 
@@ -299,8 +299,8 @@ void prte_grpcomm_direct_xcast_recv(
     if(op->processed) return;
 
     PMIX_OUTPUT_VERBOSE((
-        1, prte_grpcomm_base_framework.framework_output,
-        "%s grpcomm:direct:xcast:recv: new xcast of tag %u with op_id %lu",
+        1, prte_grpcomm_globals.output,
+        "%s grpcomm:xcast:recv: new xcast of tag %u with op_id %lu",
         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), op->msg_tag, sig.op_id
     ));
 
@@ -328,7 +328,7 @@ void prte_grpcomm_direct_xcast_recv(
     }
 }
 
-void prte_grpcomm_direct_xcast_ack(
+void prte_grpcomm_xcast_ack(
     int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
     prte_rml_tag_t tag, void *cbdata
 ) {
@@ -376,7 +376,7 @@ void prte_grpcomm_direct_xcast_ack(
     }
 }
 
-void prte_grpcomm_direct_xcast_fault_handler(
+void prte_grpcomm_xcast_fault_handler(
     const prte_rml_recovery_status_t* status
 ) {
     // We must do all xcast handling in the local scope, since reliable xcasts
@@ -470,7 +470,7 @@ static void begin_xcast(int sd, short args, void* cbdata){
     /* Record the completion callback for this broadcast now that it is about to
      * go out.  We enqueue one entry per master-originated broadcast, in send
      * order, so the master can pop it (FIFO) when this broadcast is relayed back
-     * to it and it builds the op it tracks (see prte_grpcomm_direct_xcast_recv).
+     * to it and it builds the op it tracks (see prte_grpcomm_xcast_recv).
      * Enqueuing here — immediately before the send, and unwinding on failure —
      * rather than in xcast_nb keeps the FIFO aligned with exactly the broadcasts
      * that were actually emitted, even if a send is abandoned.  This is a general
@@ -699,8 +699,8 @@ static void forward_op_to(op_t* op, pmix_rank_t dest){
     }
 
     PMIX_OUTPUT_VERBOSE((
-        5, prte_grpcomm_base_framework.framework_output,
-        "%s grpcomm:direct:send_relay sending relay msg of %d bytes to %s",
+        5, prte_grpcomm_globals.output,
+        "%s grpcomm:send_relay sending relay msg of %d bytes to %s",
         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) xcast_msg->bytes_used,
         PRTE_VPID_PRINT(dest)
     ));

@@ -69,7 +69,7 @@
 #include "src/mca/ess/base/base.h"
 #include "src/mca/ess/ess.h"
 #include "src/mca/filem/base/base.h"
-#include "src/mca/grpcomm/base/base.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/base/base.h"
 #include "src/mca/plm/base/base.h"

@@ -63,7 +63,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/filem/filem.h"
-#include "src/mca/grpcomm/base/base.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/iof/base/iof_base_setup.h"
 #include "src/mca/iof/iof.h"
 #include "src/mca/plm/base/base.h"

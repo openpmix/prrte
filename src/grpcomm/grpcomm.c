@@ -35,68 +35,85 @@
 #include "src/util/proc_info.h"
 #include "src/util/pmix_show_help.h"
 
-#include "grpcomm_direct.h"
-#include "src/mca/grpcomm/base/base.h"
+#include "src/mca/base/pmix_base.h"
+#include "src/util/pmix_output.h"
 
-/* Static API's */
-static int init(void);
-static void finalize(void);
-static void fault_handler(const prte_rml_recovery_status_t* status);
+#include "grpcomm_internal.h"
 
-/* Module def */
-prte_grpcomm_base_module_t prte_grpcomm_direct_module = {
-    .init = init,
-    .finalize = finalize,
-    .fault_handler = fault_handler,
-    .xcast = prte_grpcomm_direct_xcast,
-    .xcast_nb = prte_grpcomm_direct_xcast_nb,
-    .fence = prte_grpcomm_direct_fence,
-    .group = prte_grpcomm_direct_group
+prte_grpcomm_globals_t prte_grpcomm_globals = {
+    .output = -1,
+    .context_id = UINT32_MAX,
+    .fence_ops = PMIX_LIST_STATIC_INIT,
+    .group_ops = PMIX_LIST_STATIC_INIT
 };
 
+prte_grpcomm_release_bcast_fn_t prte_grpcomm_release_bcast = prte_grpcomm_xcast;
+
+/* File scope, not a local: the MCA layer keeps the pointer it is handed and
+ * writes through it whenever the variable is set, so a stack slot would be
+ * a dangling write the moment this function returns. */
+static int verbosity = 0;
+
+void prte_grpcomm_register(void)
+{
+    verbosity = 0;
+
+    /* keep the parameter spelled the way the framework spelled it -
+     * "--prtemca grpcomm_base_verbose N" is in every debugging recipe
+     * and in the guides, and nothing is gained by breaking it */
+    pmix_mca_base_var_register("prte", "grpcomm", "base", "verbose",
+                               "Debug verbosity of the grpcomm subsystem",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &verbosity);
+    if (0 < verbosity) {
+        prte_grpcomm_globals.output = pmix_output_open(NULL);
+        pmix_output_set_verbosity(prte_grpcomm_globals.output, verbosity);
+    }
+}
+
 /**
- * Initialize the module
+ * Stand grpcomm up
  */
-static int init(void)
+int prte_grpcomm_init(void)
 {
     /* setup the trackers */
-    PMIX_CONSTRUCT(&prte_mca_grpcomm_direct_component.xcast_ops,
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.xcast_ops,
                    prte_grpcomm_xcast_t);
-    PMIX_CONSTRUCT(&prte_mca_grpcomm_direct_component.fence_ops, pmix_list_t);
-    PMIX_CONSTRUCT(&prte_mca_grpcomm_direct_component.group_ops, pmix_list_t);
-    PMIX_CONSTRUCT(&prte_mca_grpcomm_direct_component.completed_group_ops, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_ops, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.group_ops, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.completed_group_ops, pmix_list_t);
 
     /* xcast receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST,
-                  PRTE_RML_PERSISTENT, prte_grpcomm_direct_xcast_recv, NULL);
+                  PRTE_RML_PERSISTENT, prte_grpcomm_xcast_recv, NULL);
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST_ACK,
-                  PRTE_RML_PERSISTENT, prte_grpcomm_direct_xcast_ack, NULL);
+                  PRTE_RML_PERSISTENT, prte_grpcomm_xcast_ack, NULL);
 
     /* fence receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE,
-                  PRTE_RML_PERSISTENT, prte_grpcomm_direct_fence_recv, NULL);
+                  PRTE_RML_PERSISTENT, prte_grpcomm_fence_recv, NULL);
     /* setup recv for barrier release */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_RELEASE,
-                  PRTE_RML_PERSISTENT, prte_grpcomm_direct_fence_release, NULL);
+                  PRTE_RML_PERSISTENT, prte_grpcomm_fence_release, NULL);
 
     /* group receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP,
-                  PRTE_RML_PERSISTENT, prte_grpcomm_direct_grp_recv, NULL);
+                  PRTE_RML_PERSISTENT, prte_grpcomm_grp_recv, NULL);
 
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP_RELEASE,
-                  PRTE_RML_PERSISTENT, prte_grpcomm_direct_grp_release, NULL);
+                  PRTE_RML_PERSISTENT, prte_grpcomm_grp_release, NULL);
     return PRTE_SUCCESS;
 }
 
 /**
- * Finalize the module
+ * Tear grpcomm down
  */
-static void finalize(void)
+void prte_grpcomm_finalize(void)
 {
-    PMIX_DESTRUCT(&prte_mca_grpcomm_direct_component.xcast_ops);
-    PMIX_LIST_DESTRUCT(&prte_mca_grpcomm_direct_component.fence_ops);
-    PMIX_LIST_DESTRUCT(&prte_mca_grpcomm_direct_component.group_ops);
-    PMIX_LIST_DESTRUCT(&prte_mca_grpcomm_direct_component.completed_group_ops);
+    PMIX_DESTRUCT(&prte_grpcomm_globals.xcast_ops);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.fence_ops);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.group_ops);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.completed_group_ops);
 
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST_ACK);
@@ -107,7 +124,7 @@ static void finalize(void)
     return;
 }
 
-bool prte_grpcomm_direct_proc_departed(const pmix_proc_t *proc)
+bool prte_grpcomm_proc_departed(const pmix_proc_t *proc)
 {
     prte_job_t *jdata;
     prte_proc_t *p;
@@ -134,7 +151,7 @@ bool prte_grpcomm_direct_proc_departed(const pmix_proc_t *proc)
                                   p->node->daemon->name.rank);
 }
 
-bool prte_grpcomm_direct_procs_lost(const pmix_proc_t *procs, size_t nprocs)
+bool prte_grpcomm_procs_lost(const pmix_proc_t *procs, size_t nprocs)
 {
     prte_job_t *jdata;
     prte_proc_t *p;
@@ -146,7 +163,7 @@ bool prte_grpcomm_direct_procs_lost(const pmix_proc_t *procs, size_t nprocs)
     }
     for (n = 0; n < nprocs; n++) {
         if (PMIX_RANK_WILDCARD != procs[n].rank) {
-            if (prte_grpcomm_direct_proc_departed(&procs[n])) {
+            if (prte_grpcomm_proc_departed(&procs[n])) {
                 return true;
             }
             continue;
@@ -173,29 +190,29 @@ bool prte_grpcomm_direct_procs_lost(const pmix_proc_t *procs, size_t nprocs)
     return false;
 }
 
-void prte_grpcomm_direct_advance_epoch(uint32_t to)
+void prte_grpcomm_advance_epoch(uint32_t to)
 {
-    if (to <= prte_mca_grpcomm_direct_component.recovery_epoch) {
+    if (to <= prte_grpcomm_globals.recovery_epoch) {
         return;
     }
-    prte_mca_grpcomm_direct_component.recovery_epoch = to;
+    prte_grpcomm_globals.recovery_epoch = to;
 
-    pmix_output_verbose(1, prte_grpcomm_base_framework.framework_output,
-                        "%s grpcomm:direct restarting collectives at epoch %u",
+    pmix_output_verbose(1, prte_grpcomm_globals.output,
+                        "%s grpcomm restarting collectives at epoch %u",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned) to);
 
-    prte_grpcomm_direct_fence_restart();
-    prte_grpcomm_direct_group_restart();
+    prte_grpcomm_fence_restart();
+    prte_grpcomm_group_restart();
 }
 
-static void fault_handler(const prte_rml_recovery_status_t* status)
+void prte_grpcomm_fault_handler(const prte_rml_recovery_status_t* status)
 {
-    prte_grpcomm_direct_xcast_fault_handler(status);
+    prte_grpcomm_xcast_fault_handler(status);
     /* Each collective first decides what it cannot recover and fails that
      * outright, marking those trackers so the restart below leaves them
      * alone... */
-    prte_grpcomm_direct_fence_fault_handler(status);
-    prte_grpcomm_direct_group_fault_handler(status);
+    prte_grpcomm_fence_fault_handler(status);
+    prte_grpcomm_group_fault_handler(status);
     /* ...then everything still in flight restarts together. The restart has
      * to be DVM-wide and simultaneous: a daemon that resets and re-sends into
      * a parent that did not would have its subtree counted twice and another
@@ -203,7 +220,7 @@ static void fault_handler(const prte_rml_recovery_status_t* status)
      * global scope is what provides that - one broadcast, same order
      * everywhere, after the routing tree has been repaired. */
     if (PRTE_RML_FAULT_SCOPE_GLOBAL == status->scope) {
-        prte_grpcomm_direct_advance_epoch(
-            prte_mca_grpcomm_direct_component.recovery_epoch + 1);
+        prte_grpcomm_advance_epoch(
+            prte_grpcomm_globals.recovery_epoch + 1);
     }
 }

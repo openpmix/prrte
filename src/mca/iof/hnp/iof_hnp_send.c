@@ -31,7 +31,7 @@
 #include <string.h>
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/grpcomm/grpcomm.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/rml/rml.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
@@ -114,7 +114,7 @@ int prte_iof_hnp_send_data_to_endpoint(const pmix_proc_t *host,
          * failure here loses the fragment outright - nothing retries stdin -
          * so report it rather than returning success over a silent drop
          */
-        rc = prte_grpcomm.xcast(PRTE_RML_TAG_IOF_PROXY, buf);
+        rc = prte_grpcomm_xcast(PRTE_RML_TAG_IOF_PROXY, buf);
         PMIX_DATA_BUFFER_RELEASE(buf);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
