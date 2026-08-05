@@ -10,8 +10,8 @@ elastic-coordination.c:
 A Slurm-specific PMIx client for exercising dynamic allocation changes. It
 accepts interactive requests to extend by node count and to shrink by node
 count, allocation ID, or node list. After every request it queries PRRTE's
-allocation state, displays the corresponding Slurm jobs, and uses prun to
-verify reachability across the active DVM.
+allocation state and displays the corresponding Slurm jobs; a separate `dvm`
+command uses prun to verify reachability across the active DVM.
 
 The client treats the PMIx allocation callback as request acceptance and uses
 allocation queries to observe the resulting state. It does not require the
@@ -31,8 +31,7 @@ Then run inside a Slurm allocation with one initial node:
 
     export PRTE_MCA_prte_elastic_mode=1
     salloc -N1
-    srun -N1 -n1 \
-        prterun -np 1 $HOME/slurm-elastic-coordination
+    prterun -np 1 $HOME/slurm-elastic-coordination
 
 At the coord prompt, available commands are:
 
@@ -41,8 +40,14 @@ At the coord prompt, available commands are:
     shrink alloc SLURM_JOB_ID
     shrink list NODE1,NODE2
     prun [ARGS...]
+    dvm
     refresh
     quit
+
+`refresh` re-queries and prints PRRTE's allocation state. `dvm` does the
+same and then also runs a `prun`-based reachability probe (one process
+per node, echoing back its hostname) to confirm every daemon in the DVM
+is actually reachable.
 
 The program invokes squeue and prun for diagnostics, so both commands must be
 available in PATH.
