@@ -1264,6 +1264,14 @@ static int prte_ras_slurm_remove_nodes_by_count(prte_pmix_server_req_t *req, uin
                 nodes_to_rem_from_session = removable_count;
             }
 
+            if (0 >= nodes_to_rem_from_session) {
+                /* Shouldn't happen: removable_count > 0 for any session
+                 * find_releasable_session returns. Guard anyway. */
+                err = PRTE_ERR_NOT_FOUND;
+                PRTE_ERROR_LOG(err);
+                goto cleanup;
+            }
+
             /* Case 2: keep the Slurm job alive and shrink it to its survivors. */
             char *protected_node = NULL;
 
