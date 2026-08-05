@@ -438,6 +438,62 @@ ends it with `PMIX_ERR_LOST_CONNECTION`. Note the difference from a group
 construct, which *can* complete on survivors when asked: a fence has no
 equivalent of `PMIX_GROUP_FT_COLLECTIVE`.
 
+### The fence's movements
+
+`fence` has the same split, but a narrower seam and one important asymmetry
+with the broadcast.
+
+`tree_gather_release` is today's behaviour: roll up the routing tree to the
+controller, which broadcasts the gathered result back down. Right for a
+barrier — nothing to gather, and the cost is the depth of the tree each way.
+
+`rd_allgather` replaces both halves with a single Bruck exchange across
+lateral links on `PRTE_RML_TAG_FENCE_EXCHANGE`, after which every daemon
+already holds the result and **there is no release at all**. That is the
+point: for a modex it is the release fanout, not the gather, that dominates.
+
+Selected by `grpcomm_fence_movement` (`tree` / `allgather` / `auto`),
+defaulting to `tree`. `auto` reads `PMIX_COLLECT_DATA` out of the fence
+upcall's info array — a barrier keeps the rollup, a modex gets the exchange.
+
+**A fence has no originator, and that changes everything about agreement.**
+A broadcast's movement is decided by one daemon and obeyed by the rest. Every
+participant in a fence decides independently, and if two of them decide
+differently the collective can never converge — half wait for a release the
+other half will never send. So:
+
+- The movement id is on the wire **to detect disagreement, not to instruct**.
+  A tracker with no contributions yet adopts what it is told; one that already
+  has contributions and is told something else aborts the fence with a named
+  `show_help` message (`help-prte-grpcomm.txt`). Turning the one catastrophic
+  failure mode into a report is the whole purpose.
+- Selection may only read things every participant sees identically — the
+  configured value, and the caller's directives. Anything computed from local
+  state (how many bytes *our* clients contributed) would be a way to hang the
+  collective. `select_fence_movement()` is where that rule lives.
+
+Three more things are load-bearing:
+
+- **The seam is `converged` + `contribute` + `answer`, not just `answer`.**
+  An allgather changes what "has it got everything" *means* — the rollup
+  counts child subtrees, the exchange counts blocks.
+- **The exchange opts out of the recovery restart.** The restart exists
+  because a rollup's shape is the routing tree's and the tree just changed; an
+  exchange's shape is the participant list, which a repaired tree does not
+  touch. Re-offering our block would only duplicate what partners hold. A
+  participant genuinely lost is handled by the local fault test instead, which
+  ends the fence — no controller, no epoch restart, and no "lost only a relay"
+  case, because relay-only daemons are not in an exchange.
+- **The deadline becomes local.** With no daemon that every contribution
+  reaches — and, for a subset fence, possibly no controller among the
+  participants — each participant arms its own timer and whoever fires first
+  aborts for everybody.
+
+The result is also *better ordered* than the rollup's: blocks are concatenated
+in ascending participant order, so every daemon produces byte-identical
+output, where the bucket's order was whatever the merges happened to reach the
+root in.
+
 ---
 
 ## `group` — PMIx group operations (`grpcomm_group.c`)

@@ -25,10 +25,10 @@ other.
 Status
 ------
 
-Everything landed so far is either behaviour-neutral or inert: nothing yet
-sets ``direct`` on a send, and there is still only one data movement.  That is
-deliberate — each step was verifiable on its own, and the multi-node suite has
-not regressed at any point.
+Every step was verifiable on its own, and the multi-node suite has not
+regressed at any point.  Both second movements are implemented and exercised
+across a real multi-node DVM, and both are **opt-in**: an unconfigured DVM
+moves every broadcast and every fence exactly as it did before this work.
 
 .. list-table::
    :header-rows: 1
@@ -58,6 +58,13 @@ not regressed at any point.
        ``payload_complete`` gate, the op-order hold, and the degrade-to-tree
        fault path
      - done, **opt-in**
+   * - —
+     - Fence framing/movement split, ``rd_allgather``, and the movement
+       interlock (Piece 3)
+     - done, **opt-in**
+   * - —
+     - Selecting a fence's movement from ``PMIX_COLLECT_DATA`` (Piece 4)
+     - done — **no PMIx change was needed**
 
 Both halves of the bulk movement's *arithmetic* went in before any of its
 transport, and are tested exhaustively without one.  That ordering was chosen
@@ -391,7 +398,26 @@ back in.
 Piece 3 — allgather: framing versus movement
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The same split. The shared framing is what ``grpcomm_fence.c`` already factors
+**Built.** ``tree_gather_release`` and ``rd_allgather``, selected by
+``grpcomm_fence_movement`` (``tree`` / ``allgather`` / ``auto``), defaulting to
+``tree``.  Two things about the built shape differ from the sketch below and
+are worth stating, because both were discovered by writing it:
+
+*The seam is wider than "how it is released."*  An allgather changes what
+*converged* means, not just what to do about it — the rollup is counting child
+subtrees while the exchange is counting blocks — so a movement supplies three
+things: ``converged``, ``contribute``, and ``answer``.  The framing keeps the
+converged latch, the deadline, and everything about the tracker's lifetime.
+
+*The exchange opts out of the recovery restart entirely.*  The restart exists
+because a rollup's shape is the routing tree's and the tree just changed; an
+exchange's shape is the participant list, which a repaired tree does not
+touch.  Blocks already collected are still exactly what their owners
+contributed, so re-offering our own would only duplicate what partners already
+hold.  A participant genuinely lost is handled instead by the local fault
+test, which ends the fence.
+
+The shared framing is what ``grpcomm_fence.c`` already factors
 out: the signature, the tracker, ``create_dmns()``, ``get_tracker()``,
 ``my_contribution``, the recovery epoch, ``abort_fence_op()``, and the
 completion callback into PMIx. Movement is pluggable:
@@ -431,27 +457,56 @@ design into a reportable error.
 Piece 4 — getting the collect-data directive from PMIx
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``PMIX_COLLECT_DATA`` appears **nowhere** in PRRTE: PMIx consumes it
-client-side and the host sees only ``data``/``ndata``. So the only local
-discriminator between a barrier and a modex is ``ndata == 0``, which is
-*realistically* equivalent to no-collect but not guaranteed — a collect fence
-could yield an empty blob on a daemon whose procs posted nothing.
+**This piece turned out not to exist.  The directive was already arriving.**
 
-The right fix is for PMIx to pass the directive up in the fence upcall's info
-array, and a major version change is the moment to do it. Following the
-established idiom:
+The premise recorded here — that ``PMIX_COLLECT_DATA`` is consumed
+client-side and the host sees only ``data``/``ndata``, so PMIx would have to
+be changed to pass it up — is false, and was checked rather than reasoned
+about.  The PMIx client packs the caller's ``info`` array onto the wire
+verbatim; the server unpacks it into ``trk->info`` and hands *that* array
+straight to ``pmix_host_server.fence_nb``.  So the directive reaches
+``pmix_server_fencenb_fn()`` like any other.
 
-* an openpmix change adding the directive to the upcall, plus a ``PMIX_CAP_*``
-  flag;
-* ``PRTE_CHECK_PMIX_CAP([FENCE_COLLECT_DIRECTIVE], …)`` in
-  ``config/prte_setup_pmix.m4``;
-* PRRTE guards the *behaviour* with
-  ``#if PRTE_PMIX_HAVE_FENCE_COLLECT_DIRECTIVE`` and falls back to the
-  ``ndata == 0`` heuristic against an older PMIx, accepting less optimal
-  selection there and relying on the wire interlock above.
+Measured on a three-node DVM, printing every key the upcall received:
 
-**Guard the behaviour, never the bytes**: the movement id is packed and
-unpacked unguarded, so every daemon in a build agrees on the message layout.
+.. list-table::
+   :header-rows: 1
+   :widths: 40 30 30
+
+   * - Fence
+     - ``pmix.collect`` present?
+     - ``ndata``
+   * - ``PMIx_Fence`` with ``PMIX_COLLECT_DATA``
+     - **yes**
+     - 8
+   * - ``PMIx_Fence`` with no directives (a barrier)
+     - no
+     - **8**
+
+The second row also disposes of the fallback this section proposed.
+``ndata == 0`` is not "realistically equivalent to no-collect": a pure
+barrier arrives with **eight bytes**, not none, so a size-based rule would
+have sent every barrier down the exchange — the opposite of what it was for.
+Do not reintroduce it as a heuristic anywhere.
+
+What was actually needed is therefore small, and entirely inside PRRTE: read
+``PMIX_COLLECT_DATA`` out of the info array in the fence entry point and let
+it choose the movement.  No openpmix change, no ``PMIX_CAP_*`` flag, no
+``PRTE_CHECK_PMIX_CAP`` in ``config/prte_setup_pmix.m4``, and nothing to
+guard with ``#if`` — there is no older PMIx to degrade against, because
+nothing about this is new.
+
+That also makes the fence's ``auto`` **better founded than the broadcast's**,
+rather than worse.  A broadcast's ``auto`` is safe only because a broadcast
+has one originator whose choice is authoritative.  A fence has none — but
+every participant's upcall carries the same directive, because PMIx requires
+it to be uniform across a fence and enforces that within a node.  So every
+daemon resolves ``auto`` identically from an input none of them had to
+agree on.
+
+The wire interlock still matters and is unchanged: it is what catches a
+genuinely non-uniform request, and it turns it into a named ``show_help``
+diagnostic rather than a DVM-wide hang.
 
 Verification
 ------------
