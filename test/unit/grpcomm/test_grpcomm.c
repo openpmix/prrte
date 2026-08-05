@@ -298,6 +298,165 @@ static int test_chunk_partition(void)
 }
 
 /*
+ * The broadcast movement ids and the selection default.
+ *
+ * The ids are a wire contract: the originator stamps one into every xcast and
+ * every other daemon dispatches on it.  Renumbering them would silently
+ * repoint an in-flight broadcast into a different movement, and the failure
+ * would present as a corrupt payload rather than as a bug in the numbering -
+ * so they are pinned here by value, not merely by name.
+ *
+ * The default selection is pinned for a different reason.  "auto" chooses the
+ * bulk movement by payload size, and the crossover point has not been measured
+ * on real multi-node hardware, so the default is deliberately "tree": every
+ * broadcast travels exactly as it did before this movement existed until
+ * somebody opts in.  A default that quietly became "auto" would change the
+ * behaviour of every DVM in the field, which is precisely the change that
+ * should not happen by accident.
+ */
+static int test_bcast_movement_contract(void)
+{
+    int failures = 0;
+
+    CHECK("tree_whole is movement 0",
+          0u == PRTE_GRPCOMM_BCAST_TREE_WHOLE);
+    CHECK("scatter_allgather is movement 1",
+          1u == PRTE_GRPCOMM_BCAST_SCATTER_ALLGATHER);
+    CHECK("the movement ids are distinct",
+          PRTE_GRPCOMM_BCAST_TREE_WHOLE != PRTE_GRPCOMM_BCAST_SCATTER_ALLGATHER);
+
+    CHECK("broadcasts travel the tree unless asked otherwise",
+          PRTE_GRPCOMM_BCAST_SELECT_TREE == prte_grpcomm_globals.bcast_select);
+    /* An exchange needs two participants to be an exchange, whatever the
+     * parameter was set to. */
+    CHECK("the bulk daemon floor is at least two",
+          2 <= prte_grpcomm_globals.bcast_bulk_min_daemons);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_bcast_movement_contract\n");
+    }
+    return failures;
+}
+
+/*
+ * The scatter's routing partition.
+ *
+ * The scatter sends each routing-tree child only the chunks its own subtree
+ * owns, and it works out which those are by comparing each owner's subtree
+ * index against the child's.  The property that has to hold is a covering
+ * one: across all of a daemon's children, every participant below it is
+ * accounted for exactly once, and the daemon's own chunk is sent to nobody.
+ *
+ * Get this wrong and the failure is silent and remote - a chunk sent down two
+ * subtrees is merely wasteful, but one sent down none leaves some daemon
+ * waiting on a block that no longer exists anywhere in its exchange, which
+ * surfaces as a hung broadcast on a machine far from the mistake.  It is
+ * checkable here because the partition reads only the routing tree, which
+ * stands up by hand.
+ */
+static int test_scatter_partition(void)
+{
+    int failures = 0;
+    const int radices[] = {2, 3, 8, 64};
+    size_t ri;
+
+    /* the tree computation reads all four failure bitmaps, which prte_rml_open
+     * would have constructed - and this test does not stand the RML up */
+    PMIX_CONSTRUCT(&prte_rml_base.failed_dmns, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.failed_dmns, 64);
+    PMIX_CONSTRUCT(&prte_rml_base.global_failed_dmns, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.global_failed_dmns, 64);
+    PMIX_CONSTRUCT(&prte_rml_base.dead_dmns, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.dead_dmns, 64);
+    PMIX_CONSTRUCT(&prte_rml_base.absent_dmns, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.absent_dmns, 64);
+
+    for (ri = 0; ri < sizeof(radices) / sizeof(radices[0]); ri++) {
+        pmix_rank_t ndmns;
+
+        for (ndmns = 1; ndmns <= 40; ndmns++) {
+            pmix_rank_t me;
+
+            for (me = 0; me < ndmns; me++) {
+                pmix_rank_t owner;
+                int sent_to;
+                bool ok = true;
+
+                prte_rml_base.radix = radices[ri];
+                prte_process_info.num_daemons = ndmns;
+                PRTE_PROC_MY_NAME->rank = me;
+                prte_rml_compute_routing_tree();
+
+                for (owner = 0; owner < ndmns && ok; owner++) {
+                    const pmix_rank_t *children =
+                        (const pmix_rank_t *) prte_rml_base.children.array;
+                    int owner_idx = prte_rml_get_subtree_index(owner);
+                    size_t c;
+
+                    sent_to = 0;
+                    for (c = 0; c < prte_rml_base.children.size; c++) {
+                        if (PMIX_RANK_INVALID == children[c]) {
+                            continue;
+                        }
+                        if (prte_rml_get_subtree_index(children[c]) == owner_idx) {
+                            sent_to++;
+                        }
+                    }
+                    if (owner == me) {
+                        /* our own chunk is kept, never forwarded */
+                        if (0 != sent_to) {
+                            fprintf(stderr,
+                                    "FAIL [scatter]: radix=%d n=%u me=%u keeps"
+                                    " its own chunk but sent it %d times\n",
+                                    radices[ri], (unsigned) ndmns,
+                                    (unsigned) me, sent_to);
+                            failures++;
+                            ok = false;
+                        }
+                        continue;
+                    }
+                    if (owner_idx < 0) {
+                        /* not below us at all - our parent never gave us this
+                         * chunk, so there is nothing to place */
+                        if (0 != sent_to) {
+                            fprintf(stderr,
+                                    "FAIL [scatter]: radix=%d n=%u me=%u sent a"
+                                    " chunk for %u, which is not in its subtree\n",
+                                    radices[ri], (unsigned) ndmns,
+                                    (unsigned) me, (unsigned) owner);
+                            failures++;
+                            ok = false;
+                        }
+                        continue;
+                    }
+                    if (1 != sent_to) {
+                        fprintf(stderr,
+                                "FAIL [scatter]: radix=%d n=%u me=%u sent the"
+                                " chunk for %u to %d children, want 1\n",
+                                radices[ri], (unsigned) ndmns, (unsigned) me,
+                                (unsigned) owner, sent_to);
+                        failures++;
+                        ok = false;
+                    }
+                }
+            }
+        }
+    }
+
+    /* leave the bitmaps as this test found them: the fence tests below
+     * construct failed_dmns for themselves */
+    PMIX_DESTRUCT(&prte_rml_base.failed_dmns);
+    PMIX_DESTRUCT(&prte_rml_base.global_failed_dmns);
+    PMIX_DESTRUCT(&prte_rml_base.dead_dmns);
+    PMIX_DESTRUCT(&prte_rml_base.absent_dmns);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_scatter_partition\n");
+    }
+    return failures;
+}
+
+/*
  * The group context-id pool counts DOWN from UINT32_MAX so DVM-assigned
  * ids never collide with ids handed out from the bottom of the range.
  * The static initializer in grpcomm_base_frame.c must establish that.
@@ -980,6 +1139,8 @@ int main(void)
     failures += test_release_bcast_default();
     failures += test_exchange_schedule();
     failures += test_chunk_partition();
+    failures += test_bcast_movement_contract();
+    failures += test_scatter_partition();
     failures += test_base_context_id();
     failures += test_classes();
 #if PRTE_TEST_GRPCOMM_INTERNALS

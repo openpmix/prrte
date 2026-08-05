@@ -24,6 +24,15 @@
 
 BEGIN_C_DECLS
 
+/* What the originator of a broadcast is allowed to choose.  A selection, not
+ * a movement id - it never goes on the wire, so unlike the movement ids below
+ * it may be renumbered freely. */
+typedef enum {
+    PRTE_GRPCOMM_BCAST_SELECT_AUTO = 0, /* by payload size and DVM size */
+    PRTE_GRPCOMM_BCAST_SELECT_TREE,     /* always tree_whole */
+    PRTE_GRPCOMM_BCAST_SELECT_BULK      /* always scatter_allgather, when legal */
+} prte_grpcomm_bcast_select_t;
+
 /* Tracks ongoing xcast operations to ensure all messages are delivered exactly
  * once to all daemons even in the presence of daemon failures */
 typedef struct {
@@ -33,6 +42,11 @@ typedef struct {
     // FIFO of completion callbacks for master-originated broadcasts awaiting
     // relay back to the master (see grpcomm_xcast.c)
     pmix_list_t pending_completions;
+    // Chunks from a bulk broadcast's exchange that arrived before the scatter
+    // that creates the op did. The two phases travel different routes - the
+    // scatter down the tree, the exchange straight across - so a partner that
+    // is nearer the root can be a step ahead of us. Defined in grpcomm_xcast.c.
+    pmix_list_t early_chunks;
     // ID of the last known completed (in our subtree) operation
     size_t op_id_completed;
     // op_id_completed when we were last promoted
@@ -77,6 +91,13 @@ typedef struct {
     // failure can be recognized as stale. Shared by fence and group: one
     // failure, one restart, one epoch.
     uint32_t recovery_epoch;
+    // How the originator of a broadcast picks its data movement, and the two
+    // thresholds "auto" applies. Read only by the originator: the choice is
+    // stamped on the wire, so a receiver never consults these and two daemons
+    // configured differently cannot disagree about a broadcast in flight.
+    prte_grpcomm_bcast_select_t bcast_select;
+    size_t bcast_bulk_min_bytes;
+    size_t bcast_bulk_min_daemons;
 } prte_grpcomm_globals_t;
 
 /* The allgather exchange schedule (grpcomm_exchange.c).  Bruck's algorithm:
@@ -121,6 +142,7 @@ PRTE_EXPORT size_t prte_grpcomm_bruck_owner(size_t pos, size_t nprocs, size_t sl
  * survive - but a renumber would still silently repoint an in-flight
  * broadcast, and the failure would look like corruption rather than a bug.) */
 #define PRTE_GRPCOMM_BCAST_TREE_WHOLE  0u   /* whole payload to each child */
+#define PRTE_GRPCOMM_BCAST_SCATTER_ALLGATHER 1u /* scatter down, allgather across */
 
 typedef struct {
     pmix_list_item_t super;
@@ -351,6 +373,19 @@ PRTE_EXPORT extern
 void prte_grpcomm_xcast_ack(int status, pmix_proc_t *sender,
                                    pmix_data_buffer_t *buffer,
                                    prte_rml_tag_t tg, void *cbdata);
+
+/* The bulk broadcast's second phase: chunks arriving over a lateral link from
+ * an exchange partner, and a participant's request that the controller give up
+ * on the exchange and replay the payload whole. */
+PRTE_EXPORT extern
+void prte_grpcomm_xcast_bulk_recv(int status, pmix_proc_t *sender,
+                                  pmix_data_buffer_t *buffer,
+                                  prte_rml_tag_t tg, void *cbdata);
+
+/* An exchange partner's link dropped.  The RML tells us rather than repairing
+ * the tree, because a lateral link is not part of it - see rml.h. */
+PRTE_EXPORT extern
+void prte_grpcomm_xcast_lateral_lost(pmix_rank_t rank);
 
 PRTE_EXPORT extern
 void prte_grpcomm_xcast_fault_handler(const prte_rml_recovery_status_t* status);
