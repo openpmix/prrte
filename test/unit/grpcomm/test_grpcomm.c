@@ -221,6 +221,83 @@ static int test_exchange_schedule(void)
 }
 
 /*
+ * The scatter's chunk partition.
+ *
+ * A scatter hands different pieces of one payload to different daemons, and
+ * they only reassemble correctly if every daemon computes the same seams from
+ * an index it can derive locally. So the property is exactly that: for any
+ * payload size and participant count, the chunks must tile [0, total) with no
+ * gap and no overlap, whichever order they are asked for.
+ *
+ * The degenerate shapes are the ones worth pinning. total < nparts leaves the
+ * high chunks empty and must still tile. total == 0 must yield all-empty
+ * rather than an error, because a zero-byte broadcast is a real thing PRRTE
+ * sends. And a remainder must be distributed rather than dropped - the bug
+ * this guards is computing (total/nparts) per chunk, which silently loses up
+ * to nparts-1 bytes off the end of every payload that does not divide evenly.
+ */
+static int test_chunk_partition(void)
+{
+    int failures = 0;
+    size_t total, nparts, i, off, len, expect;
+
+    /* refusals */
+    CHECK("zero participants is refused",
+          PRTE_SUCCESS != prte_grpcomm_chunk_bounds(100, 0, 0, &off, &len));
+    CHECK("index outside the split is refused",
+          PRTE_SUCCESS != prte_grpcomm_chunk_bounds(100, 4, 4, &off, &len));
+    CHECK("NULL out-parameter is refused",
+          PRTE_SUCCESS != prte_grpcomm_chunk_bounds(100, 4, 0, NULL, &len));
+
+    for (nparts = 1; nparts <= 33; nparts++) {
+        /* sizes chosen to cover even division, awkward remainders, fewer
+         * bytes than participants, and nothing at all */
+        size_t sizes[] = {0, 1, 7, 10, 64, 1000, 1048576, 5592409};
+        size_t s;
+
+        for (s = 0; s < sizeof(sizes)/sizeof(sizes[0]); s++) {
+            total = sizes[s];
+            expect = 0;
+            for (i = 0; i < nparts; i++) {
+                if (PRTE_SUCCESS != prte_grpcomm_chunk_bounds(total, nparts, i, &off, &len)) {
+                    fprintf(stderr, "FAIL [chunk]: refused total=%lu nparts=%lu idx=%lu\n",
+                            (unsigned long) total, (unsigned long) nparts,
+                            (unsigned long) i);
+                    failures++;
+                    break;
+                }
+                /* each chunk must start exactly where the previous ended --
+                 * that is "no gap and no overlap" stated as one test */
+                if (off != expect) {
+                    fprintf(stderr,
+                            "FAIL [chunk]: total=%lu nparts=%lu idx=%lu starts at"
+                            " %lu, expected %lu\n",
+                            (unsigned long) total, (unsigned long) nparts,
+                            (unsigned long) i, (unsigned long) off,
+                            (unsigned long) expect);
+                    failures++;
+                    break;
+                }
+                expect = off + len;
+            }
+            /* ...and together they must account for every byte */
+            if (expect != total) {
+                fprintf(stderr,
+                        "FAIL [chunk]: total=%lu nparts=%lu covered %lu bytes\n",
+                        (unsigned long) total, (unsigned long) nparts,
+                        (unsigned long) expect);
+                failures++;
+            }
+        }
+    }
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_chunk_partition\n");
+    }
+    return failures;
+}
+
+/*
  * The group context-id pool counts DOWN from UINT32_MAX so DVM-assigned
  * ids never collide with ids handed out from the bottom of the range.
  * The static initializer in grpcomm_base_frame.c must establish that.
@@ -902,6 +979,7 @@ int main(void)
 
     failures += test_release_bcast_default();
     failures += test_exchange_schedule();
+    failures += test_chunk_partition();
     failures += test_base_context_id();
     failures += test_classes();
 #if PRTE_TEST_GRPCOMM_INTERNALS
