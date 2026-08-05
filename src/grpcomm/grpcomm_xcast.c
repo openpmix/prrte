@@ -98,8 +98,26 @@ typedef struct {
     // received this op (see prte_grpcomm_xcast_nb).  NULL when unused.
     prte_grpcomm_xcast_complete_fn_t cbfunc;
     void *cbdata;
+    // How this broadcast's bytes physically travel. Chosen by the originator
+    // and carried on the wire, so every daemon moves the payload the same way.
+    // A broadcast has a single originator, so unlike an allgather there is
+    // nothing to agree on - whoever started it decides, and says so.
+    uint32_t movement;
 } op_t;
 PMIX_CLASS_DECLARATION(op_t);
+
+/* How a broadcast's payload reaches the daemons below us.
+ *
+ * Everything around this - op-id sequencing, the ACK rollup, the
+ * process_first ordering set, late-joiner catch-up, the promotion replay hold
+ * - is identical whichever movement is in use, and is the hard part. Keep it
+ * that way: a new movement supplies data transport, not a second copy of the
+ * reliability machinery. */
+typedef struct {
+    uint32_t id;                    /* stamped on the wire */
+    const char *name;
+    void (*forward)(op_t *op);      /* emit the payload to our subtree */
+} bcast_movement_t;
 
 // event handler for prte_grpcomm_xcast to safely access global data
 //   void* = a built op_t*
@@ -132,6 +150,8 @@ static int pack_msg     (pmix_data_buffer_t* buffer, op_t* op);
 static int unpack_msg   (pmix_data_buffer_t* buffer, op_t* op);
 static int pack_bool    (pmix_data_buffer_t* buffer, bool* boolean);
 static int unpack_bool  (pmix_data_buffer_t* buffer, bool* boolean);
+static int pack_movement  (pmix_data_buffer_t* buffer, uint32_t* movement);
+static int unpack_movement(pmix_data_buffer_t* buffer, uint32_t* movement);
 
 int prte_grpcomm_xcast(prte_rml_tag_t tag, pmix_data_buffer_t *msg){
     return prte_grpcomm_xcast_nb(tag, msg, NULL, NULL);
@@ -256,6 +276,12 @@ void prte_grpcomm_xcast_recv(
     pmix_rank_t ack_id;
     if(PMIX_SUCCESS != unpack_ack_id(buffer, &ack_id)) return;
 
+    /* The movement sits ahead of the payload on the wire, so it is read here
+     * rather than beside the unpack that consumes the payload - reading it
+     * later would take the movement's bytes as the start of the message. */
+    uint32_t movement;
+    if(PMIX_SUCCESS != unpack_movement(buffer, &movement)) return;
+
     if(complete) {
         send_ack(&sig, ack_id);
         return;
@@ -264,6 +290,7 @@ void prte_grpcomm_xcast_recv(
     op_t* op = find_op(&sig);
     if(NULL == op){
         op = insert_forwarded_op(&sig);
+        op->movement = movement;
         /* If we are the master and this is one of our own broadcasts, attach the
          * completion callback queued for it in begin_xcast (FIFO).  Remote-origin
          * broadcasts queue nothing, so they never consume an entry.  This has to
@@ -594,6 +621,16 @@ static int pack_msg(pmix_data_buffer_t* buffer, op_t* op){
     DIRECT_XCAST_PACK(buffer, &op->msg,            PMIX_BYTE_OBJECT);
     return PMIX_SUCCESS;
 }
+static int pack_movement(pmix_data_buffer_t* buffer, uint32_t* movement){
+    DIRECT_XCAST_PACK(buffer, movement, PMIX_UINT32);
+    return PMIX_SUCCESS;
+}
+
+static int unpack_movement(pmix_data_buffer_t* buffer, uint32_t* movement){
+    DIRECT_XCAST_UNPACK(buffer, movement, PMIX_UINT32);
+    return PMIX_SUCCESS;
+}
+
 static int pack_bool(pmix_data_buffer_t* buffer, bool* boolean){
     DIRECT_XCAST_PACK(buffer, boolean, PMIX_BOOL);
     return PMIX_SUCCESS;
@@ -621,6 +658,12 @@ static int unpack_bool(pmix_data_buffer_t* buffer, bool* boolean){
 static int pack_forward_msg(pmix_data_buffer_t* buffer, op_t* op){
     int rc = pack_sig(buffer, &op->sig);
     if(PMIX_SUCCESS == rc) rc = pack_ack_id(buffer, &op->ack_id_down);
+    /* The movement rides with the payload rather than being re-derived on each
+     * daemon: whoever originated the broadcast decided how it travels, and a
+     * receiver that re-decided could disagree and misparse. Packed unguarded -
+     * every daemon in a DVM runs the same build, so the bytes are never
+     * conditional even when behaviour is. */
+    if(PMIX_SUCCESS == rc) rc = pack_movement(buffer, &op->movement);
     if(PMIX_SUCCESS == rc) rc = pack_msg(buffer, op);
     return rc;
 }
@@ -659,6 +702,34 @@ static op_t* insert_forwarded_op(signature_t* sig) {
     return op;
 }
 
+/* MOVEMENT: send the whole payload to each routing-tree child.
+ *
+ * Right for a small message, where the cost is the depth of the tree and a
+ * high radix makes that 1 or 2 hops.  Wrong for a large one: a node with r
+ * children serializes r full copies of the payload on its outbound link, at
+ * every level, so the bandwidth term is d*r*M*beta - which is the entire cost
+ * of broadcasting a launch message or a preload chunk at scale. */
+static void tree_whole_forward(op_t* op){
+    pmix_rank_t* children = (pmix_rank_t*) prte_rml_base.children.array;
+    for(size_t i = 0; i < prte_rml_base.children.size; i++){
+        if(children[i] == PMIX_RANK_INVALID) continue;
+        forward_op_to(op, children[i]);
+    }
+}
+
+static const bcast_movement_t bcast_movements[] = {
+    { .id = PRTE_GRPCOMM_BCAST_TREE_WHOLE,
+      .name = "tree_whole",
+      .forward = tree_whole_forward },
+};
+
+static const bcast_movement_t* movement_by_id(uint32_t id){
+    for(size_t i = 0; i < sizeof(bcast_movements)/sizeof(bcast_movements[0]); i++){
+        if(bcast_movements[i].id == id) return &bcast_movements[i];
+    }
+    return NULL;
+}
+
 static void forward_op(op_t* op){
     /* The daemon job object can be gone by the time a broadcast is being
      * forwarded - teardown retires it while the last xcasts (the halt, the
@@ -673,18 +744,25 @@ static void forward_op(op_t* op){
         return;
     }
 
+    /* The ACK rollup is subtree-shaped whichever movement carries the bytes:
+     * a daemon reports its subtree complete once it holds the payload and all
+     * its children have reported. So this accounting is framing, not movement,
+     * and stays here. */
     op->replay_pending_parent = false;
     op->nexpected = prte_rml_base.n_children;
     op->nreported = 0;
 
-    /* send the message to each of our children */
-    pmix_rank_t* children = (pmix_rank_t*) prte_rml_base.children.array;
-    for(size_t i = 0; i < prte_rml_base.children.size; i++){
-        if(children[i] == PMIX_RANK_INVALID) continue;
-        forward_op_to(op, children[i]);
+    const bcast_movement_t* mv = movement_by_id(op->movement);
+    if(NULL == mv){
+        /* Unknown movement: the originator stamped something this build does
+         * not implement. Refuse rather than guess - guessing would deliver a
+         * misparsed payload. Every daemon in a DVM runs the same build, so
+         * this is a bug, not a version skew. */
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+        return;
     }
-
-    return;
+    mv->forward(op);
 }
 
 static void forward_op_to(op_t* op, pmix_rank_t dest){
@@ -842,6 +920,8 @@ static void op_con(op_t* p)
 
     p->cbfunc = NULL;
     p->cbdata = NULL;
+    /* the tree carries every broadcast until a movement is selected for it */
+    p->movement = PRTE_GRPCOMM_BCAST_TREE_WHOLE;
 }
 static void op_des(op_t* p)
 {

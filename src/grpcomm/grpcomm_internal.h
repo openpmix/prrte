@@ -81,6 +81,16 @@ typedef struct {
 
 #define PRTE_GRPCOMM_GROUP_MEMO_MAX 64
 
+/* How a broadcast's payload physically travels.  Stamped on the wire by the
+ * originator so every daemon moves it the same way - a broadcast has a single
+ * originator, so unlike an allgather there is nothing to agree on.
+ *
+ * Values are explicit and must never be renumbered: they are on the wire.
+ * (Every daemon in a DVM runs the same build, so there is no version skew to
+ * survive - but a renumber would still silently repoint an in-flight
+ * broadcast, and the failure would look like corruption rather than a bug.) */
+#define PRTE_GRPCOMM_BCAST_TREE_WHOLE  0u   /* whole payload to each child */
+
 typedef struct {
     pmix_list_item_t super;
     char *groupID;

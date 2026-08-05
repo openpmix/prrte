@@ -194,6 +194,55 @@ The most intricate file. `prte_grpcomm_xcast()` is just
    `op_id_completed`, fires the completion callback (master only), and
    releases the op.
 
+### Framing versus movement
+
+`xcast` is split in two, and the split is the point of the whole restructure.
+
+**The framing** — op-id assignment, the `XCAST_ACK` rollup with its
+`is_request` re-poll, the `process_first` ordering set, late-joiner catch-up,
+the promotion replay hold, the `pending_completions` FIFO, and the
+fault-handler reactions to parent/children changes — is the hard, correctness-
+critical part, and it is identical whichever way the bytes travel. There is one
+implementation and there should stay one.
+
+**The movement** is how the payload physically reaches the daemons below us.
+It is a small vtable (`bcast_movement_t`: an id, a name, and a `forward`), and
+`forward_op()` dispatches through it after doing the framing's own work:
+
+- the do-not-launch check, which is not about movement at all;
+- resetting `replay_pending_parent` / `nexpected` / `nreported`. **The ACK
+  rollup stays subtree-shaped whichever movement carries the bytes** — a daemon
+  reports its subtree complete once it holds the payload *and* all its children
+  have reported — so this accounting is framing, and `nexpected` remains
+  `n_children`.
+
+Today there is one movement, `tree_whole`: send the whole payload to each
+routing-tree child. It is right for a small message, where the cost is the
+depth of the tree and a high radix makes that one or two hops. It is wrong for
+a large one, because a node with `r` children serializes `r` full copies on its
+outbound link at every level — `d*r*M*beta`, which is essentially the entire
+cost of broadcasting a launch message or a preload chunk at scale.
+
+**The movement is stamped on the wire**, between the ack id and the payload, by
+whoever originated the broadcast. A broadcast has a single originator, so
+unlike an allgather there is nothing to agree on — the originator decides and
+says so. Two consequences to respect:
+
+- **Read it in wire order.** `xcast_recv` unpacks it immediately after the ack
+  id, *before* the "already complete, just ack" short-circuit, because reading
+  it later would take its bytes as the start of the message.
+- **An unknown movement is refused, not guessed.** Every daemon in a DVM runs
+  the same build, so an id this build does not implement is a bug rather than
+  version skew; guessing would deliver a misparsed payload.
+
+The ids are explicit and must never be renumbered — they are on the wire, and a
+renumber would silently repoint an in-flight broadcast into a different
+movement, failing as if the payload were corrupt.
+
+When a second movement lands, it supplies data transport only. If you find
+yourself copying any of the framing into it, stop: that is the mistake this
+split exists to prevent.
+
 ### Ordering and fault tolerance
 
 The in-file comments are the real spec — read them. The load-bearing ideas:
