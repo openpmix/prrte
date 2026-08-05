@@ -274,15 +274,26 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
                 if (PRTE_IOF_MAX_INPUT_BUFFERS < prte_iof_base_write_output(&proct->name,
                                                                             PRTE_IOF_STDIN, data, sz,
                                                                             proct->stdinev->wev)) {
+#if PRTE_PMIX_IOF_FLOW_CONTROL
                     /* getting too backed up - the data is queued, so this is
                      * "taken, now slow down" rather than a refusal. Latch it
                      * so stdin_write_handler knows to send the matching XON
                      * when this sink drains; without that pairing the
-                     * producer would stay suspended forever */
+                     * producer would stay suspended forever.
+                     *
+                     * Guarded exactly as release_flow_control() is, and that
+                     * symmetry is the point: the release is compiled out
+                     * against a PMIx with no flow-control API, so asserting
+                     * here regardless would set a latch nothing can ever
+                     * clear and log an XOFF no XON will ever answer. Without
+                     * the API the documented fallback is simply to queue,
+                     * bounded by iof_base_output_limit - which is what
+                     * falling through to PRTE_SUCCESS does. */
                     PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                          "buffer backed up - holding"));
                     prte_mca_iof_hnp_component.xoff = true;
                     return PRTE_ERR_OUT_OF_RESOURCE;
+#endif
                 }
             }
         }
