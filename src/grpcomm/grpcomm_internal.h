@@ -98,6 +98,12 @@ typedef struct {
     prte_grpcomm_bcast_select_t bcast_select;
     size_t bcast_bulk_min_bytes;
     size_t bcast_bulk_min_daemons;
+    // How a fence's contributions travel. A movement id rather than a
+    // selection enum, and there is deliberately no "auto": a broadcast's
+    // originator decides for everybody, but every participant in a fence
+    // decides for itself, so an input that could differ between daemons
+    // would be a way to hang the collective rather than to tune it.
+    uint32_t fence_select;
 } prte_grpcomm_globals_t;
 
 /* The allgather exchange schedule (grpcomm_exchange.c).  Bruck's algorithm:
@@ -143,6 +149,22 @@ PRTE_EXPORT size_t prte_grpcomm_bruck_owner(size_t pos, size_t nprocs, size_t sl
  * broadcast, and the failure would look like corruption rather than a bug.) */
 #define PRTE_GRPCOMM_BCAST_TREE_WHOLE  0u   /* whole payload to each child */
 #define PRTE_GRPCOMM_BCAST_SCATTER_ALLGATHER 1u /* scatter down, allgather across */
+
+/* How a fence's contributions physically travel.  Same rule as the broadcast
+ * ids above - on the wire, never renumbered - but with one difference that
+ * matters: a broadcast has a single originator who decides for everyone,
+ * while a fence has none. Every participant must reach the same answer
+ * independently or the collective hangs, so the id is carried not to tell a
+ * receiver what to do but so that a disagreement is caught and reported
+ * instead of hanging. */
+#define PRTE_GRPCOMM_FENCE_TREE_GATHER  0u  /* up-tree rollup, broadcast release */
+#define PRTE_GRPCOMM_FENCE_RD_ALLGATHER 1u  /* lateral exchange, no release */
+
+/* Not a movement: the value grpcomm_fence_movement=auto resolves to, meaning
+ * "decide per fence from PMIX_COLLECT_DATA". It is deliberately outside the
+ * movement id space, because it must never reach the wire - what travels is
+ * the movement a fence actually chose. */
+#define PRTE_GRPCOMM_FENCE_SELECT_AUTO  0xffffffffu
 
 typedef struct {
     pmix_list_item_t super;
@@ -247,6 +269,13 @@ typedef struct {
     bool aborting;
     // this daemon's own contribution, saved so a fault can replay it
     pmix_data_buffer_t *my_contribution;
+    // How this fence's contributions travel. Unlike a broadcast's movement
+    // this is not decided by anyone in particular - every participant picks
+    // it independently from the same inputs - so it is carried on the wire to
+    // catch a disagreement rather than to communicate a decision.
+    uint32_t movement;
+    // Exchange state, used only by rd_allgather. NULL under the rollup.
+    struct fence_exchange_t *xch;
     /* controls values */
     int timeout;
     // the controller arms a timer for "timeout" seconds once a participant
@@ -377,6 +406,17 @@ void prte_grpcomm_xcast_ack(int status, pmix_proc_t *sender,
 /* The bulk broadcast's second phase: chunks arriving over a lateral link from
  * an exchange partner, and a participant's request that the controller give up
  * on the exchange and replay the payload whole. */
+/* Release a fence tracker's exchange state. Exported only because the
+ * tracker's destructor lives in grpcomm_classes.c. */
+PRTE_EXPORT extern
+void prte_grpcomm_fence_xch_free(prte_grpcomm_fence_t *coll);
+
+/* A fence's lateral allgather: blocks from an exchange partner. */
+PRTE_EXPORT extern
+void prte_grpcomm_fence_exchange_recv(int status, pmix_proc_t *sender,
+                                      pmix_data_buffer_t *buffer,
+                                      prte_rml_tag_t tg, void *cbdata);
+
 PRTE_EXPORT extern
 void prte_grpcomm_xcast_bulk_recv(int status, pmix_proc_t *sender,
                                   pmix_data_buffer_t *buffer,

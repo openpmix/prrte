@@ -3228,6 +3228,7 @@ test_hwloc() {
 
 # Absolute path, deliberately -- see the note above DS.
 GC=/opt/prte/prte/bin/groupcon
+FENCER=/opt/prte/prte/bin/fencer
 
 test_grpcomm() {
     local out n g ranks hosts fails
@@ -3735,6 +3736,143 @@ test_grpcomm_bulk() {
         && ok "...and the job still ran, on the tree" \
         || bad "the fallback did not run the job"
 
+    cleanup_swarm
+}
+
+
+test_grpcomm_fence_allgather() {
+    local out n hosts
+
+    # The fence's second movement replaces a rollup-plus-release with a single
+    # lateral allgather, so every daemon ends holding the result and there is
+    # no release broadcast at all.  Like the bulk broadcast it cannot be
+    # exercised on one host - a single participant has nothing to exchange
+    # with - and unlike the bulk broadcast a wrong answer here does not
+    # degrade, it hangs: half the DVM would wait for a release the other half
+    # is never going to send.  So these cases are as much about the interlock
+    # as about the transport.
+    #
+    # groupcon drives real PMIx collectives from real clients, which is what
+    # puts a fence underneath this at all; a plain "hostname" job never fences.
+
+    banner "grpcomm: a fence completes as a lateral allgather"
+    cleanup_swarm
+    if ! RUN "test -x $GC"; then
+        skp "groupcon client not installed -- re-run ./build.sh"
+        return
+    fi
+    if ! prted_dvm_start_mca 'node1:2,node2:2,node3:2,node4:2,node5:2,node6:2' \
+            '--prtemca grpcomm_fence_movement allgather --prtemca rml_base_radix 2'; then
+        bad "could not start a DVM with the fence allgather forced"
+        cleanup_swarm
+        return
+    fi
+    ok "a DVM forms with every fence run as an allgather (radix 2, 6 nodes)"
+
+    # A job that runs at all has already fenced: PMIx_Init and PMIx_Finalize
+    # both do, so a broken exchange shows up here as a hang rather than as
+    # wrong output - which is why every one of these is bounded.
+    out=$(PRUN "-n 6 --map-by node $GC f1" 2>&1)
+    n=$(echo "$out" | grep -c 'CONSTRUCT PMIX_SUCCESS')
+    [ "$n" = 6 ] \
+        && ok "all 6 ranks completed their collectives over the allgather" \
+        || bad "$n of 6 ranks completed: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    hosts=$(echo "$out" | awk '$1=="GRP" && $3=="HOST" {print $4}' | sort -u | grep -c '^node')
+    [ "${hosts:-0}" -ge 3 ] \
+        && ok "...spread over $hosts nodes, so the exchange really crossed the DVM" \
+        || bad "the job did not span the DVM ($hosts)"
+    n=$(echo "$out" | grep -c 'CID-OK 6')
+    [ "$n" = 6 ] \
+        && ok "every rank read back all 6 peers - the assembled result is complete" \
+        || bad "only $n of 6 ranks read back a full set"
+
+    # Three in a row, because the exchange leaves per-tracker state behind and
+    # a leak or a stale block would show up on the second or third fence
+    # rather than the first.
+    n=0
+    for g in a1 a2 a3; do
+        PRUN "-n 4 --map-by node $GC $g" >/dev/null 2>&1 && n=$((n+1))
+    done
+    [ "$n" = 3 ] \
+        && ok "three consecutive collectives ran over the allgather" \
+        || bad "only $n of 3 consecutive collectives completed"
+    cleanup_swarm
+
+    banner "grpcomm: daemons that disagree about a fence's movement say so"
+    # This is the failure the movement id exists to catch.  A fence has no
+    # originator, so every participant chooses independently; if they differ,
+    # the collective can never converge.  Starting the DVM one way and running
+    # a tool that asks for the other is the only way to produce that
+    # deliberately, and what must come back is a diagnostic rather than a
+    # wedged DVM.
+    if ! prted_dvm_start_mca 'node1:1,node2:1,node3:1,node4:1' \
+            '--prtemca grpcomm_fence_movement tree'; then
+        bad "could not start a DVM for the movement-mismatch case"
+        cleanup_swarm
+        return
+    fi
+    out=$(RUN "prterun --prtemca grpcomm_fence_movement bogus -n 1 hostname" 2>&1)
+    echo "$out" | grep -q 'is not one of tree/allgather/auto' \
+        && ok "an unrecognized fence movement is diagnosed" \
+        || bad "a bad fence movement passed unremarked: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+    # ...and the DVM that was told "tree" is still perfectly usable.
+    PRUN "-n 4 --map-by node hostname" >/dev/null 2>&1 \
+        && ok "the DVM still launches after the refusal" \
+        || bad "the DVM did not survive the refused movement"
+    cleanup_swarm
+
+    banner "grpcomm: auto picks the allgather for a modex, the tree for a barrier"
+    # The point of reading PMIX_COLLECT_DATA rather than guessing from the
+    # payload size.  A barrier has nothing to gather, so the rollup is already
+    # optimal for it and the exchange would be pure overhead; a modex is the
+    # case the exchange exists for.
+    #
+    # Note what this ALSO guards: the obvious substitute for the directive -
+    # "is ndata zero" - is measurably wrong here.  A pure barrier reaches the
+    # host with eight bytes of payload, not none, so a size-based rule would
+    # send every barrier down the exchange.
+    #
+    # Driven with prterun, NOT a --daemonize'"'"'d DVM.  The evidence is the
+    # movement'"'"'s own verbose output, which is written by the HNP - and a
+    # daemonized HNP has detached its stderr, so those lines go nowhere the
+    # test can read.  Written that way first, both halves saw zero lateral
+    # sends and the barrier half "passed" having proved nothing.
+    if ! RUN "test -x $FENCER"; then
+        skp "fencer client not installed -- re-run ./build.sh"
+        return
+    fi
+    cleanup_swarm
+    FMCA="--prtemca grpcomm_fence_movement auto --prtemca rml_base_radix 2 --prtemca grpcomm_base_verbose 5"
+
+    out=$(RUN "cd /tmp && timeout -k 5 120 prterun $FMCA --host node1:1,node2:1,node3:1,node4:1 -n 4 --map-by node $FENCER collect" 2>&1)
+    n=$(echo "$out" | grep -c "FENCER collect .* rc PMIX_SUCCESS")
+    [ "$n" = 4 ] \
+        && ok "a collect fence completed on all 4 ranks" \
+        || bad "$n of 4 ranks completed the collect fence"
+    n=$(echo "$out" | grep -c "fence:allgather sending")
+    [ "${n:-0}" -ge 1 ] \
+        && ok "...and auto ran it as an allgather ($n lateral sends)" \
+        || bad "auto did not use the allgather for a modex"
+    # The assertion that actually reads the gathered bytes.  A fence whose
+    # payload was assembled wrongly still returns success; only something
+    # parsing the result sees the damage.  This caught the exchange copying
+    # each block from the START of the message buffer - framing bytes and
+    # all - rather than from the unpack cursor.
+    n=$(echo "$out" | grep -c "peers-bad 0 of 3")
+    [ "$n" = 4 ] \
+        && ok "...and every rank read back every peer contribution" \
+        || bad "the assembled modex data did not round-trip: $(echo "$out" | grep peers-ok | tr "\n" " " | tail -c 200)"
+
+    out=$(RUN "cd /tmp && timeout -k 5 120 prterun $FMCA --host node1:1,node2:1,node3:1,node4:1 -n 4 --map-by node $FENCER barrier" 2>&1)
+    n=$(echo "$out" | grep -c "FENCER barrier .* rc PMIX_SUCCESS")
+    [ "$n" = 4 ] \
+        && ok "a barrier completed on all 4 ranks" \
+        || bad "$n of 4 ranks completed the barrier"
+    n=$(echo "$out" | grep -c "fence:allgather sending")
+    [ "${n:-0}" = 0 ] \
+        && ok "...and auto left it on the rollup, where it belongs" \
+        || bad "auto sent a barrier down the exchange ($n lateral sends)"
     cleanup_swarm
 }
 
@@ -5867,6 +6005,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_grpcomm
 
     test_grpcomm_bulk
+
+    test_grpcomm_fence_allgather
 
     test_slurm_alloc
     test_slurm

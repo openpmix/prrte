@@ -134,6 +134,11 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 /* collectives */
 #define PRTE_RML_TAG_FENCE_RELEASE     31
 #define PRTE_RML_TAG_FENCE             33
+/* A fence's lateral allgather.  Separate from PRTE_RML_TAG_FENCE because
+ * these arrive from exchange partners rather than from a routing-tree child,
+ * and the rollup receiver rejects anything that is not in one of its
+ * subtrees. */
+#define PRTE_RML_TAG_FENCE_EXCHANGE    34
 
 /* debugger release */
 #define PRTE_RML_TAG_DEBUGGER_RELEASE 37

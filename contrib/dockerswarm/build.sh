@@ -407,6 +407,17 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/scaletest.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
+            # fencer: one fence, either a modex or a pure barrier.  The two
+            # differ only by PMIX_COLLECT_DATA, which is what the auto
+            # fence-movement selection reads -- and no other client here
+            # makes that distinction visible.
+            # NOTE: this whole block is inside bash -c ..., so an apostrophe
+            # anywhere in it (even in a comment) ends the script.
+            echo ">>>> fencer (modex vs barrier) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/fencer \
+                /prrte-src/contrib/dockerswarm/fencer.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
             # faulty: a PMIx client that fails on purpose, once per way the
             # errmgr has a policy branch for (abort, non-zero exit, signal,
             # exit without finalize).  Both errmgr components are involved in
