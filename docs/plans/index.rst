@@ -11,3 +11,4 @@ Detailed implementation plans for in-progress and upcoming features.
    elastic_dvm/index.rst
    bootstrap/index.rst
    ft_group.rst
+   collectives.rst
