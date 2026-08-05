@@ -672,13 +672,25 @@ static void show_state(void)
     if (0 == query_snapshot(&snap)) {
         trace_point("show_state: printing PRRTE snapshot");
         print_snapshot(&snap);
-        trace_point("show_state: running reachability probe");
-        run_prun_hostname(&snap);
         snapshot_free(&snap);
     } else {
         printf("\nPRRTE allocation query failed\n");
     }
     trace_point("show_state: end");
+}
+
+static void handle_dvm(void)
+{
+    alloc_snapshot_t snap;
+
+    trace_point("dvm: querying PRRTE snapshot");
+    if (0 == query_snapshot(&snap)) {
+        trace_point("dvm: running reachability probe");
+        run_prun_hostname(&snap);
+        snapshot_free(&snap);
+    } else {
+        printf("\nPRRTE allocation query failed\n");
+    }
 }
 
 static pmix_status_t submit_alloc_request(pmix_alloc_directive_t directive,
@@ -957,6 +969,7 @@ static void usage(const char *argv0)
     printf("  shrink alloc SLURM_JOB_ID\n");
     printf("  shrink list NODE1,NODE2\n");
     printf("  prun [ARGS...]\n");
+    printf("  dvm\n");
     printf("  refresh\n");
     printf("  quit\n");
 }
@@ -1040,6 +1053,10 @@ int main(int argc, char **argv)
         }
         if (0 == strcmp(cmd, "refresh")) {
             show_state();
+            continue;
+        }
+        if (0 == strcmp(cmd, "dvm")) {
+            handle_dvm();
             continue;
         }
         if (0 == strcmp(cmd, "extend")) {

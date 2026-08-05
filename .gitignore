@@ -190,6 +190,7 @@ examples/dynamic-dep
 examples/abort
 examples/elastic
 examples/sessionctrl
+examples/slurm/elastic-coordination
 
 src/sys/powerpc/atomic-32.s
 src/sys/powerpc/atomic-64.s
