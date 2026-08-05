@@ -19,8 +19,8 @@
 /*
  * Cancel a Slurm job using scancel.
  *
- * If scancel returns an error, the first line of stderr/stdout output is copied
- * into err_msg. On success, err_msg is cleared.
+ * If scancel returns an error, the stderr/stdout output is copied
+ * into err_msg (truncated to buffer size). On success, err_msg is cleared.
  *
  * @param[in]  slurm_jobid   Null-terminated Slurm job ID string to cancel.
  * @param[out] err_msg       Buffer for error message, or NULL.
