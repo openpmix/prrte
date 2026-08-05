@@ -40,7 +40,7 @@
 #include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/grpcomm/base/base.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/iof/iof.h"
 #include "src/mca/plm/base/plm_private.h"
@@ -379,7 +379,7 @@ static void _notify_event(int sd, short args, void *cbdata)
         }
     }
 
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_NOTIFICATION, &pbkt))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_NOTIFICATION, &pbkt))) {
         PRTE_ERROR_LOG(rc);
         ret = PMIX_ERROR;
     }

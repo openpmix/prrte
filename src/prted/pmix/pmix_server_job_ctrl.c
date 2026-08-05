@@ -40,7 +40,7 @@
 #include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/grpcomm/base/base.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/iof/iof.h"
 #include "src/mca/plm/base/plm_private.h"
@@ -130,7 +130,7 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
                     PMIX_DATA_BUFFER_RELEASE(cmd);
                     return rc;
                 }
-                if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, cmd))) {
+                if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, cmd))) {
                     PRTE_ERROR_LOG(rc);
                 }
                 PMIX_DATA_BUFFER_RELEASE(cmd);
@@ -176,7 +176,7 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
                 PMIX_DATA_BUFFER_RELEASE(cmd);
                 return rc;
             }
-            if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, cmd))) {
+            if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, cmd))) {
                 PRTE_ERROR_LOG(rc);
             }
             PMIX_DATA_BUFFER_RELEASE(cmd);
@@ -222,7 +222,7 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
                 PMIX_DATA_BUFFER_RELEASE(cmd);
                 return rc;
             }
-            if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, cmd))) {
+            if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, cmd))) {
                 PRTE_ERROR_LOG(rc);
             }
             PMIX_DATA_BUFFER_RELEASE(cmd);

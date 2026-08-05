@@ -33,7 +33,7 @@
 #include "src/util/pmix_argv.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/grpcomm/grpcomm.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/base/base.h"
 #include "src/mca/plm/plm.h"

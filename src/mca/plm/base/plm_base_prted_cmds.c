@@ -35,7 +35,7 @@
 #include "src/event/event-internal.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
-#include "src/mca/grpcomm/base/base.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/odls/odls_types.h"
 #include "src/rml/rml.h"
 #include "src/rml/rml_types.h"
@@ -89,7 +89,7 @@ int prte_plm_base_prted_exit(prte_daemon_cmd_flag_t command)
         return rc;
     }
     /* goes to all daemons */
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &cmd))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, &cmd))) {
         PRTE_ERROR_LOG(rc);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&cmd);
@@ -156,7 +156,7 @@ int prte_plm_base_prted_kill_local_procs(pmix_pointer_array_t *procs)
         }
     }
     /* goes to all daemons */
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &cmd))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, &cmd))) {
         PRTE_ERROR_LOG(rc);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&cmd);
@@ -211,7 +211,7 @@ int prte_plm_base_prted_signal_local_procs(pmix_nspace_t job, int32_t signal)
     }
 
     /* goes to all daemons */
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &cmd))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, &cmd))) {
         PRTE_ERROR_LOG(rc);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&cmd);

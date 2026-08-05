@@ -49,7 +49,7 @@
 #include "src/util/prte_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/grpcomm/base/base.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/rml/rml.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
@@ -1307,7 +1307,7 @@ static void send_chunk(int xxx, short argc, void *cbdata)
     }
 
     /* goes to all daemons */
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_FILEM_BASE, &chunk))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_FILEM_BASE, &chunk))) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_DESTRUCT(&chunk);
         close(fd);

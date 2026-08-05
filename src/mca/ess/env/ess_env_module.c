@@ -48,7 +48,7 @@
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/ess/ess.h"
-#include "src/mca/grpcomm/base/base.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/plm/base/base.h"
 #include "src/rml/rml.h"

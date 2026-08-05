@@ -50,7 +50,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/threads/pmix_threads.h"
 
-#include "src/mca/grpcomm/grpcomm.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/plm/plm_types.h"
 #include "src/rml/rml_types.h"
 #include "src/runtime/runtime.h"

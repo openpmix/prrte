@@ -40,7 +40,7 @@
 #include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/grpcomm/base/base.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/iof/iof.h"
 #include "src/mca/plm/base/plm_private.h"
@@ -75,7 +75,7 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
         return PMIX_ERR_BAD_PARAM;
     }
 
-    rc = prte_grpcomm.group(op, grpid, procs, nprocs,
+    rc = prte_grpcomm_group(op, grpid, procs, nprocs,
                             directives, ndirs, cbfunc, cbdata);
     if (PRTE_SUCCESS != rc) {
         rc = prte_pmix_convert_rc(rc);

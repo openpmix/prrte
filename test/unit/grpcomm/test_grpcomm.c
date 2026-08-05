@@ -31,7 +31,7 @@
  *
  *   2. The component identity: name "direct", grpcomm v4 component.
  *
- *   3. The base globals: prte_grpcomm_base.context_id must start at
+ *   3. The base globals: prte_grpcomm_globals.context_id must start at
  *      UINT32_MAX -- group construct hands it out and *decrements*, so a
  *      wrong initial value would collide with bottom-up context ids.
  *
@@ -66,9 +66,8 @@
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 
-#include "src/mca/grpcomm/grpcomm.h"
-#include "src/mca/grpcomm/base/base.h"
-#include "src/mca/grpcomm/direct/grpcomm_direct.h"
+#include "src/grpcomm/grpcomm.h"
+#include "src/grpcomm/grpcomm_internal.h"
 
 #define CHECK(label, cond)                                              \
     do {                                                                \
@@ -79,111 +78,20 @@
     } while (0)
 
 /*
- * Every slot of the direct module's vtable must be non-NULL, and the
- * collective entry points must be the public functions the rest of the
- * tree calls.  init/finalize/fault_handler are file-static in the
- * component, so we can only assert they are wired, not their identity.
+ * grpcomm releases a completed collective through prte_grpcomm_release_bcast,
+ * which must default to the real broadcast.  Nothing else establishes that,
+ * and a NULL or wrongly-aimed default would silently drop every release a
+ * controller emits - a DVM-wide hang with no diagnostic.
  */
-/*
- * Ask the framework for a component by name, and for the module that
- * component hands *this* process.
- *
- * These are two different questions.  A component is present whenever the
- * framework opened it; whether it yields a module is up to its query,
- * which is free to decline - iof/prted, for one, answers only a daemon.
- * Naming the component's module symbol instead would assume it was linked
- * into libprrte, which is false with --enable-mca-dso: there the component
- * is a separate DSO and the symbol is not there to link against.
- */
-static bool grpcomm_component_present(const char *name)
-{
-    pmix_mca_base_component_list_item_t *cli;
-
-    PMIX_LIST_FOREACH(cli, &prte_grpcomm_base_framework.framework_components,
-                      pmix_mca_base_component_list_item_t)
-    {
-        if (0 == strcmp(name, cli->cli_component->pmix_mca_component_name)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-static prte_grpcomm_base_module_t *grpcomm_module(const char *name)
-{
-    pmix_mca_base_component_list_item_t *cli;
-    pmix_mca_base_module_t *mod = NULL;
-    int pri = 0;
-
-    PMIX_LIST_FOREACH(cli, &prte_grpcomm_base_framework.framework_components,
-                      pmix_mca_base_component_list_item_t)
-    {
-        if (0 != strcmp(name, cli->cli_component->pmix_mca_component_name)) {
-            continue;
-        }
-        if (NULL == cli->cli_component->pmix_mca_query_component) {
-            return NULL;
-        }
-        if (PRTE_SUCCESS != cli->cli_component->pmix_mca_query_component(&mod, &pri)) {
-            return NULL;
-        }
-        return (prte_grpcomm_base_module_t *) mod;
-    }
-    return NULL;
-}
-
-static int test_module_contract(void)
+static int test_release_bcast_default(void)
 {
     int failures = 0;
-    prte_grpcomm_base_module_t *m = grpcomm_module("direct");
 
-    if (NULL == m) {
-        fprintf(stdout, "SKIPPED test_module_contract (grpcomm/direct absent)\n");
-        return 0;
-    }
-
-    CHECK("init set", NULL != m->init);
-    CHECK("finalize set", NULL != m->finalize);
-    CHECK("fault_handler set", NULL != m->fault_handler);
-    CHECK("xcast set", NULL != m->xcast);
-    CHECK("xcast_nb set", NULL != m->xcast_nb);
-    CHECK("fence set", NULL != m->fence);
-    CHECK("group set", NULL != m->group);
-
-    /* The identity of each entry point can only be checked where the
-     * component's own symbols are linkable - see PRTE_TEST_GRPCOMM_DIRECT
-     * in this directory's Makefile.am. */
-#if PRTE_TEST_GRPCOMM_DIRECT
-    CHECK("xcast identity", m->xcast == prte_grpcomm_direct_xcast);
-    CHECK("xcast_nb identity", m->xcast_nb == prte_grpcomm_direct_xcast_nb);
-    CHECK("fence identity", m->fence == prte_grpcomm_direct_fence);
-    CHECK("group identity", m->group == prte_grpcomm_direct_group);
-#endif
+    CHECK("release path defaults to xcast",
+          prte_grpcomm_release_bcast == prte_grpcomm_xcast);
 
     if (0 == failures) {
-        fprintf(stdout, "PASSED test_module_contract\n");
-    }
-    return failures;
-}
-
-/*
- * The direct component identifies itself as the grpcomm component named
- * "direct".  Selection depends on that name, so guard it.
- */
-static int test_component_identity(void)
-{
-    int failures = 0;
-    /* the framework must have opened a component by this name - asking it
-     * for one is the assertion */
-    if (!grpcomm_component_present("direct")) {
-        fprintf(stdout, "SKIPPED test_component_identity"
-                        " (grpcomm/direct not loadable from the build tree)\n");
-        return 0;
-    }
-    CHECK("component present", grpcomm_component_present("direct"));
-
-    if (0 == failures) {
-        fprintf(stdout, "PASSED test_component_identity\n");
+        fprintf(stdout, "PASSED test_release_bcast_default\n");
     }
     return failures;
 }
@@ -197,7 +105,7 @@ static int test_base_context_id(void)
 {
     int failures = 0;
 
-    CHECK("context_id pool start", UINT32_MAX == prte_grpcomm_base.context_id);
+    CHECK("context_id pool start", UINT32_MAX == prte_grpcomm_globals.context_id);
 
     if (0 == failures) {
         fprintf(stdout, "PASSED test_base_context_id\n");
@@ -220,10 +128,10 @@ static int test_classes(void)
      * component's symbols are linkable - not from a DSO build, and not
      * once the library hides its internals - so they are compiled in
      * only when this directory's Makefile.am says so. */
-#if PRTE_TEST_GRPCOMM_DIRECT
+#if PRTE_TEST_GRPCOMM_INTERNALS
     /* fence signature: empty proc set */
-    prte_grpcomm_direct_fence_signature_t *fsig =
-        PMIX_NEW(prte_grpcomm_direct_fence_signature_t);
+    prte_grpcomm_fence_signature_t *fsig =
+        PMIX_NEW(prte_grpcomm_fence_signature_t);
     CHECK("fence sig signature NULL", NULL == fsig->signature);
     CHECK("fence sig sz 0", 0 == fsig->sz);
     /* exercise the destructor's free(signature) path */
@@ -232,8 +140,8 @@ static int test_classes(void)
     PMIX_RELEASE(fsig);
 
     /* group signature: NONE op, no members, all flags clear */
-    prte_grpcomm_direct_group_signature_t *gsig =
-        PMIX_NEW(prte_grpcomm_direct_group_signature_t);
+    prte_grpcomm_group_signature_t *gsig =
+        PMIX_NEW(prte_grpcomm_group_signature_t);
     CHECK("grp sig op NONE", PMIX_GROUP_NONE == gsig->op);
     CHECK("grp sig groupID NULL", NULL == gsig->groupID);
     CHECK("grp sig assignID false", !gsig->assignID);
@@ -356,7 +264,7 @@ static int test_member_departed(void)
      * fault-free collective takes, so it must not even consult the job map */
     PMIX_LOAD_PROCID(&member, "no-such-nspace", 0);
     CHECK("departed: clean failed set says no",
-          !prte_grpcomm_direct_proc_departed(&member));
+          !prte_grpcomm_proc_departed(&member));
 
     /* mark daemon 1 as failed and hang a job off daemons 0 and 1 */
     pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, 1);
@@ -380,22 +288,22 @@ static int test_member_departed(void)
     /* rank 0 lives on the surviving daemon, rank 1 on the failed one */
     PMIX_LOAD_PROCID(&member, jdata->nspace, 0);
     CHECK("departed: member on a live daemon survives",
-          !prte_grpcomm_direct_proc_departed(&member));
+          !prte_grpcomm_proc_departed(&member));
     PMIX_LOAD_PROCID(&member, jdata->nspace, 1);
     CHECK("departed: member on a failed daemon departed",
-          prte_grpcomm_direct_proc_departed(&member));
+          prte_grpcomm_proc_departed(&member));
 
     /* a wildcard names a namespace, not a process, so it is never resolvable
      * to a single daemon and must not be reported as departed */
     PMIX_LOAD_PROCID(&member, jdata->nspace, PMIX_RANK_WILDCARD);
     CHECK("departed: wildcard is not a departed member",
-          !prte_grpcomm_direct_proc_departed(&member));
+          !prte_grpcomm_proc_departed(&member));
 
     /* an unresolvable member is treated as departed rather than as an error -
      * losing the mapping is what a node being torn down looks like */
     PMIX_LOAD_PROCID(&member, "ft-test-missing", 0);
     CHECK("departed: unresolvable member counts as departed",
-          prte_grpcomm_direct_proc_departed(&member));
+          prte_grpcomm_proc_departed(&member));
 
     PMIX_DESTRUCT(&prte_rml_base.failed_dmns);
     return failures;
@@ -414,8 +322,8 @@ static int test_member_departed(void)
 static int test_group_directives(void)
 {
     int failures = 0;
-#if PRTE_TEST_GRPCOMM_DIRECT
-    prte_grpcomm_direct_group_signature_t sig;
+#if PRTE_TEST_GRPCOMM_INTERNALS
+    prte_grpcomm_group_signature_t sig;
     pmix_info_t *dirs;
     pmix_data_array_t darray;
     pmix_proc_t *p, *dirmembers, *dirorder;
@@ -449,10 +357,10 @@ static int test_group_directives(void)
     dirmembers = (pmix_proc_t *) dirs[3].value.data.darray->array;
     dirorder = (pmix_proc_t *) dirs[4].value.data.darray->array;
 
-    PMIX_CONSTRUCT(&sig, prte_grpcomm_direct_group_signature_t);
+    PMIX_CONSTRUCT(&sig, prte_grpcomm_group_signature_t);
     grpinfo = PMIx_Info_list_start();
     endpts = PMIx_Info_list_start();
-    rc = prte_grpcomm_direct_group_parse_directives(&sig, dirs, ndirs,
+    rc = prte_grpcomm_group_parse_directives(&sig, dirs, ndirs,
                                                     &timeout, &st, grpinfo, endpts);
     CHECK("directives: parsed", PMIX_SUCCESS == rc);
     CHECK("directives: context id requested", sig.assignID);
@@ -492,10 +400,10 @@ static int test_group_directives(void)
      * something to reach into - these arrive off the wire too */
     PMIX_INFO_CREATE(dirs, 1);
     PMIX_INFO_LOAD(&dirs[0], PMIX_GROUP_ADD_MEMBERS, NULL, PMIX_BOOL);
-    PMIX_CONSTRUCT(&sig, prte_grpcomm_direct_group_signature_t);
+    PMIX_CONSTRUCT(&sig, prte_grpcomm_group_signature_t);
     grpinfo = PMIx_Info_list_start();
     endpts = PMIx_Info_list_start();
-    rc = prte_grpcomm_direct_group_parse_directives(&sig, dirs, 1,
+    rc = prte_grpcomm_group_parse_directives(&sig, dirs, 1,
                                                     &timeout, &st, grpinfo, endpts);
     CHECK("directives: an empty add-members is not an error", PMIX_SUCCESS == rc);
     CHECK("directives: an empty add-members adds nobody",
@@ -513,10 +421,10 @@ static int test_group_directives(void)
     PMIX_DATA_ARRAY_CONSTRUCT(&darray, 4, PMIX_BYTE);
     PMIX_INFO_LOAD(&dirs[0], PMIX_GROUP_ADD_MEMBERS, &darray, PMIX_DATA_ARRAY);
     PMIX_DATA_ARRAY_DESTRUCT(&darray);
-    PMIX_CONSTRUCT(&sig, prte_grpcomm_direct_group_signature_t);
+    PMIX_CONSTRUCT(&sig, prte_grpcomm_group_signature_t);
     grpinfo = PMIx_Info_list_start();
     endpts = PMIx_Info_list_start();
-    rc = prte_grpcomm_direct_group_parse_directives(&sig, dirs, 1,
+    rc = prte_grpcomm_group_parse_directives(&sig, dirs, 1,
                                                     &timeout, &st, grpinfo, endpts);
     CHECK("directives: an add-members array of the wrong type is refused",
           PMIX_SUCCESS != rc);
@@ -552,13 +460,13 @@ static int test_group_directives(void)
 static int test_fence_tracker(void)
 {
     int failures = 0;
-#if PRTE_TEST_GRPCOMM_DIRECT
-    prte_grpcomm_direct_fence_signature_t sig;
+#if PRTE_TEST_GRPCOMM_INTERNALS
+    prte_grpcomm_fence_signature_t sig;
     prte_grpcomm_fence_t *coll, *again;
     int32_t save_daemons;
     pmix_nspace_t save_nspace;
 
-    PMIX_CONSTRUCT(&prte_mca_grpcomm_direct_component.fence_ops, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_ops, pmix_list_t);
     PMIX_CONSTRUCT(&prte_rml_base.failed_dmns, pmix_bitmap_t);
     pmix_bitmap_init(&prte_rml_base.failed_dmns, 8);
     if (NULL == prte_job_data) {
@@ -576,11 +484,11 @@ static int test_fence_tracker(void)
 
     /* a fence over the daemon job itself: every daemon takes part, and we
      * are a leaf here, so our own contribution is the only one */
-    PMIX_CONSTRUCT(&sig, prte_grpcomm_direct_fence_signature_t);
+    PMIX_CONSTRUCT(&sig, prte_grpcomm_fence_signature_t);
     sig.sz = 1;
     PMIX_PROC_CREATE(sig.signature, 1);
     PMIX_LOAD_PROCID(&sig.signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-    coll = prte_grpcomm_direct_fence_get_tracker(&sig, true);
+    coll = prte_grpcomm_fence_get_tracker(&sig, true);
     CHECK("tracker: a daemon-job fence resolves", NULL != coll);
     if (NULL != coll) {
         CHECK("tracker: every daemon means all of them, with no array",
@@ -589,41 +497,41 @@ static int test_fence_tracker(void)
               (size_t) prte_rml_base.n_children + 1 == coll->nexpected);
     }
     /* the same signature must find that tracker rather than build a second */
-    again = prte_grpcomm_direct_fence_get_tracker(&sig, true);
+    again = prte_grpcomm_fence_get_tracker(&sig, true);
     CHECK("tracker: the same signature returns the same tracker", again == coll);
     CHECK("tracker: and does not add another",
-          1 == pmix_list_get_size(&prte_mca_grpcomm_direct_component.fence_ops));
+          1 == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
     PMIX_DESTRUCT(&sig);
 
     /* a signature naming nobody is refused rather than read as the "all
      * daemons" case above, which is what an empty nspace would otherwise
      * match */
-    PMIX_CONSTRUCT(&sig, prte_grpcomm_direct_fence_signature_t);
-    coll = prte_grpcomm_direct_fence_get_tracker(&sig, true);
+    PMIX_CONSTRUCT(&sig, prte_grpcomm_fence_signature_t);
+    coll = prte_grpcomm_fence_get_tracker(&sig, true);
     CHECK("tracker: an empty signature is refused", NULL == coll);
     CHECK("tracker: and builds nothing",
-          1 == pmix_list_get_size(&prte_mca_grpcomm_direct_component.fence_ops));
+          1 == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
     PMIX_DESTRUCT(&sig);
 
     /* a signature we cannot resolve at all - no such job, and nothing has
      * failed, so this is a genuine error rather than a torn-down node */
-    PMIX_CONSTRUCT(&sig, prte_grpcomm_direct_fence_signature_t);
+    PMIX_CONSTRUCT(&sig, prte_grpcomm_fence_signature_t);
     sig.sz = 1;
     PMIX_PROC_CREATE(sig.signature, 1);
     PMIX_LOAD_PROCID(&sig.signature[0], "fence-nosuchjob", 0);
-    coll = prte_grpcomm_direct_fence_get_tracker(&sig, true);
+    coll = prte_grpcomm_fence_get_tracker(&sig, true);
     CHECK("tracker: an unresolvable signature yields no tracker", NULL == coll);
     CHECK("tracker: and leaves no wreckage on the list",
-          1 == pmix_list_get_size(&prte_mca_grpcomm_direct_component.fence_ops));
+          1 == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
     /* ...so asking again is a fresh attempt, not a hand-back of the wreck */
-    coll = prte_grpcomm_direct_fence_get_tracker(&sig, false);
+    coll = prte_grpcomm_fence_get_tracker(&sig, false);
     CHECK("tracker: nothing to find on a second look", NULL == coll);
     PMIX_DESTRUCT(&sig);
 
     prte_process_info.num_daemons = save_daemons;
     PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, save_nspace);
-    PMIX_LIST_DESTRUCT(&prte_mca_grpcomm_direct_component.fence_ops);
-    PMIX_CONSTRUCT(&prte_mca_grpcomm_direct_component.fence_ops, pmix_list_t);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.fence_ops);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_ops, pmix_list_t);
     PMIX_DESTRUCT(&prte_rml_base.failed_dmns);
 #endif
 
@@ -633,7 +541,7 @@ static int test_fence_tracker(void)
     return failures;
 }
 
-#if PRTE_TEST_GRPCOMM_DIRECT
+#if PRTE_TEST_GRPCOMM_INTERNALS
 /* Stands in for the down-tree release the controller broadcasts to end a
  * fence.  There is no routing tree here to broadcast over, and the abort is
  * defined by what it puts on the wire anyway: the signature of the fence
@@ -708,13 +616,13 @@ static prte_grpcomm_fence_t *add_fence_op(const char *nspace)
 {
     prte_grpcomm_fence_t *coll = PMIX_NEW(prte_grpcomm_fence_t);
 
-    coll->sig = PMIX_NEW(prte_grpcomm_direct_fence_signature_t);
+    coll->sig = PMIX_NEW(prte_grpcomm_fence_signature_t);
     coll->sig->sz = 1;
     PMIX_PROC_CREATE(coll->sig->signature, 1);
     PMIX_LOAD_PROCID(&coll->sig->signature[0], nspace, PMIX_RANK_WILDCARD);
     coll->nexpected = 2;
     coll->nreported = 1;
-    pmix_list_append(&prte_mca_grpcomm_direct_component.fence_ops, &coll->super);
+    pmix_list_append(&prte_grpcomm_globals.fence_ops, &coll->super);
     return coll;
 }
 #endif
@@ -736,21 +644,21 @@ static prte_grpcomm_fence_t *add_fence_op(const char *nspace)
 static int test_fence_fault_handler(void)
 {
     int failures = 0;
-#if PRTE_TEST_GRPCOMM_DIRECT
+#if PRTE_TEST_GRPCOMM_INTERNALS
     prte_rml_recovery_status_t status;
     prte_grpcomm_fence_t *bystander, *doomed;
     prte_proc_type_t save_type;
 
     /* init() is what constructs the tracker list, and it takes a selected
      * module and a live RML - stand the list up by hand instead */
-    PMIX_CONSTRUCT(&prte_mca_grpcomm_direct_component.fence_ops, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_ops, pmix_list_t);
     PMIX_CONSTRUCT(&prte_rml_base.failed_dmns, pmix_bitmap_t);
     pmix_bitmap_init(&prte_rml_base.failed_dmns, 8);
     if (NULL == prte_job_data) {
         prte_job_data = PMIX_NEW(pmix_pointer_array_t);
         pmix_pointer_array_init(prte_job_data, 8, INT_MAX, 8);
     }
-    prte_grpcomm.xcast = stub_xcast;
+    prte_grpcomm_release_bcast = stub_xcast;
     fence_xcast_calls = 0;
 
     /* daemon 1 has failed; one job lives entirely on the survivor, the
@@ -762,7 +670,7 @@ static int test_fence_fault_handler(void)
     /* nothing in flight: the handler must not reach for anything */
     PMIX_CONSTRUCT(&status, prte_rml_recovery_status_t);
     status.scope = PRTE_RML_FAULT_SCOPE_GLOBAL;
-    prte_grpcomm_direct_fence_fault_handler(&status);
+    prte_grpcomm_fence_fault_handler(&status);
     PMIX_DESTRUCT(&status);
     CHECK("fault: no ops, nothing broadcast", 0 == fence_xcast_calls);
 
@@ -777,7 +685,7 @@ static int test_fence_fault_handler(void)
     status.scope = PRTE_RML_FAULT_SCOPE_LOCAL;
     PMIx_Data_array_construct(&status.failed_ranks, 1, PMIX_PROC_RANK);
     ((pmix_rank_t *) status.failed_ranks.array)[0] = 1;
-    prte_grpcomm_direct_fence_fault_handler(&status);
+    prte_grpcomm_fence_fault_handler(&status);
     PMIX_DESTRUCT(&status);
     CHECK("fault: local pass of a death broadcasts nothing", 0 == fence_xcast_calls);
     CHECK("fault: local pass leaves the doomed fence alone", !doomed->aborting);
@@ -789,7 +697,7 @@ static int test_fence_fault_handler(void)
     prte_process_info.proc_type = PRTE_PROC_DAEMON;
     PMIX_CONSTRUCT(&status, prte_rml_recovery_status_t);
     status.scope = PRTE_RML_FAULT_SCOPE_GLOBAL;
-    prte_grpcomm_direct_fence_fault_handler(&status);
+    prte_grpcomm_fence_fault_handler(&status);
     PMIX_DESTRUCT(&status);
     prte_process_info.proc_type = save_type;
     CHECK("fault: a non-controller broadcasts nothing", 0 == fence_xcast_calls);
@@ -799,7 +707,7 @@ static int test_fence_fault_handler(void)
      * participant is ended, and the bystander is left to re-converge */
     PMIX_CONSTRUCT(&status, prte_rml_recovery_status_t);
     status.scope = PRTE_RML_FAULT_SCOPE_GLOBAL;
-    prte_grpcomm_direct_fence_fault_handler(&status);
+    prte_grpcomm_fence_fault_handler(&status);
     PMIX_DESTRUCT(&status);
     CHECK("fault: exactly one release broadcast", 1 == fence_xcast_calls);
     CHECK("fault: released on the fence-release tag",
@@ -813,12 +721,12 @@ static int test_fence_fault_handler(void)
     /* the tracker is not dropped here - it goes when its own release comes
      * back around, which is also what completes the local participants */
     CHECK("fault: both trackers still in flight",
-          2 == pmix_list_get_size(&prte_mca_grpcomm_direct_component.fence_ops));
+          2 == pmix_list_get_size(&prte_grpcomm_globals.fence_ops));
 
     /* a second failure must not re-broadcast a release already sent */
     PMIX_CONSTRUCT(&status, prte_rml_recovery_status_t);
     status.scope = PRTE_RML_FAULT_SCOPE_GLOBAL;
-    prte_grpcomm_direct_fence_fault_handler(&status);
+    prte_grpcomm_fence_fault_handler(&status);
     PMIX_DESTRUCT(&status);
     CHECK("fault: an aborting fence is not ended twice", 1 == fence_xcast_calls);
 
@@ -828,16 +736,16 @@ static int test_fence_fault_handler(void)
      * included */
     PMIX_CONSTRUCT(&status, prte_rml_recovery_status_t);
     status.scope = PRTE_RML_FAULT_SCOPE_LOCAL;
-    prte_grpcomm_direct_fence_fault_handler(&status);
+    prte_grpcomm_fence_fault_handler(&status);
     PMIX_DESTRUCT(&status);
     CHECK("fault: a revival ends the bystander too", 2 == fence_xcast_calls);
     CHECK("fault: revival released the bystander",
           0 == strcmp("fence-live-nspace", fence_xcast_nspace));
     CHECK("fault: bystander now aborting", bystander->aborting);
 
-    prte_grpcomm.xcast = NULL;
-    PMIX_LIST_DESTRUCT(&prte_mca_grpcomm_direct_component.fence_ops);
-    PMIX_CONSTRUCT(&prte_mca_grpcomm_direct_component.fence_ops, pmix_list_t);
+    prte_grpcomm_release_bcast = prte_grpcomm_xcast;
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.fence_ops);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.fence_ops, pmix_list_t);
     PMIX_DESTRUCT(&prte_rml_base.failed_dmns);
 #endif
 
@@ -868,28 +776,16 @@ int main(void)
         return 1;
     }
 
-    /* the module and component tests ask the framework for their subject,
-     * so it has to be open before they run */
-    rc = pmix_mca_base_framework_open(&prte_grpcomm_base_framework,
-                                      PMIX_MCA_BASE_OPEN_DEFAULT);
-    if (PRTE_SUCCESS != rc) {
-        fprintf(stderr, "grpcomm framework open failed: %d\n", rc);
-        prte_finalize();
-        return 1;
-    }
-
-    failures += test_module_contract();
-    failures += test_component_identity();
+    failures += test_release_bcast_default();
     failures += test_base_context_id();
     failures += test_classes();
-#if PRTE_TEST_GRPCOMM_DIRECT
+#if PRTE_TEST_GRPCOMM_INTERNALS
     failures += test_member_departed();
 #endif
     failures += test_group_directives();
     failures += test_fence_tracker();
     failures += test_fence_fault_handler();
 
-    (void) pmix_mca_base_framework_close(&prte_grpcomm_base_framework);
     PMIx_server_finalize();
     prte_finalize();
 

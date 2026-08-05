@@ -65,7 +65,7 @@
 #include "src/util/prte_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/grpcomm/grpcomm.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/ras/base/base.h"
 #include "src/mca/state/state.h"
 #include "src/rml/rml_contact.h"

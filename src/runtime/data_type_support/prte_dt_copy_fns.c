@@ -29,7 +29,7 @@
 #include <string.h>
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/grpcomm/grpcomm.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"

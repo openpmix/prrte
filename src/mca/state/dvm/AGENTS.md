@@ -108,7 +108,7 @@ its `PMIX_SERVER_URI`** to that same buffer, and `xcast`s
 used by PRRTE at all — it is redistributed so that *any* daemon can answer
 a tool's hostname-qualified `PMIX_SERVER_URI` query, rather than only the
 master that collected it (see [`../../../pmix/AGENTS.md`](../../../pmix/AGENTS.md)).
-The receiving end is `process_wireup()` in `grpcomm/direct`, and the three
+The receiving end is `process_wireup()` in `src/grpcomm`, and the three
 fields are a **per-record group** — its skip-what-we-already-know
 `continue`s must not skip an unpack. Because this handler re-sends the
 whole set every time `VM_READY` fires, an elastic **grow** redistributes

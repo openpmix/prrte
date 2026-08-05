@@ -11,7 +11,8 @@
 #                         All rights reserved.
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
-# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2024 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -19,16 +20,14 @@
 # $HEADER$
 #
 
-# main library setup
-noinst_LTLIBRARIES = libprtemca_grpcomm.la
-libprtemca_grpcomm_la_SOURCES =
-
 # local files
-headers = grpcomm.h
+headers += \
+    grpcomm/grpcomm.h \
+    grpcomm/grpcomm_internal.h
 
-libprtemca_grpcomm_la_SOURCES += $(headers)
-
-include base/Makefile.am
-
-distclean-local:
-	rm -f base/static-components.h
+libprrte_la_SOURCES += \
+    grpcomm/grpcomm.c \
+    grpcomm/grpcomm_classes.c \
+    grpcomm/grpcomm_xcast.c \
+    grpcomm/grpcomm_fence.c \
+    grpcomm/grpcomm_group.c

@@ -335,7 +335,7 @@ static void send_failures_notice(const prte_rml_recovery_status_t* status){
 
     // HNP broadcasts new failure information down
     if(PRTE_PROC_IS_MASTER){
-        prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON_DIED, msg);
+        prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON_DIED, msg);
         PMIX_DATA_BUFFER_RELEASE(msg);
         return;
     }
@@ -496,7 +496,7 @@ void prte_rml_recv_return_request(
         PMIX_DATA_BUFFER_RELEASE(msg);
         return;
     }
-    prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON_REVIVED, msg);
+    prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON_REVIVED, msg);
     PMIX_DATA_BUFFER_RELEASE(msg);
 }
 

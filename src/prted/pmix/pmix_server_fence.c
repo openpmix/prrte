@@ -37,7 +37,7 @@
 #include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/grpcomm/base/base.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
@@ -64,7 +64,7 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
                         prte_process_info.nodename);
 
     // just pass this along
-    rc = prte_grpcomm.fence(procs, nprocs, info, ninfo,
+    rc = prte_grpcomm_fence(procs, nprocs, info, ninfo,
                             data, ndata, cbfunc, cbdata);
     /* grpcomm answers in PRTE codes and our caller reads PMIx ones - the two
      * agree only on success, so anything else has to be converted */

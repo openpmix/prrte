@@ -32,7 +32,7 @@
 #include "src/util/pmix_argv.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/grpcomm/grpcomm.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/runtime/prte_globals.h"

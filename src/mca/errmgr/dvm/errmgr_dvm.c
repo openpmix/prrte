@@ -39,7 +39,7 @@
 #include "src/util/pmix_printf.h"
 
 #include "src/mca/ess/ess.h"
-#include "src/mca/grpcomm/grpcomm.h"
+#include "src/grpcomm/grpcomm.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/base/base.h"
 #include "src/mca/plm/base/base.h"
@@ -852,7 +852,7 @@ static void check_send_notification(prte_job_t *jdata,
     PMIX_INFO_FREE(info, ninfo);
 
     /* xcast it to everyone */
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_NOTIFICATION, &pbkt))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_NOTIFICATION, &pbkt))) {
         PRTE_ERROR_LOG(rc);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
