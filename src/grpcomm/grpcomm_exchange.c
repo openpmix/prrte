@@ -86,6 +86,37 @@ int prte_grpcomm_bruck_step(size_t pos, size_t nprocs, size_t step,
     return PRTE_SUCCESS;
 }
 
+int prte_grpcomm_chunk_bounds(size_t total, size_t nparts, size_t idx,
+                              size_t *off, size_t *len)
+{
+    size_t start, end;
+
+    if (NULL == off || NULL == len) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    if (0 == nparts || idx >= nparts) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    /* Bounds are computed from the index rather than accumulated, so chunk i
+     * has the same answer on every daemon regardless of which chunks that
+     * daemon happens to hold - a scatter hands different pieces to different
+     * places, and they have to agree on where the seams are.
+     *
+     * The multiply is done before the divide so the remainder is spread over
+     * the low-numbered chunks instead of being lost: with total=10, nparts=4
+     * this gives 2,3,2,3 rather than 2,2,2,2 and four bytes unaccounted for.
+     * total is a message size and nparts a daemon count, so the product
+     * cannot realistically overflow a size_t; a payload large enough to do
+     * that could not have been assembled in the first place. */
+    start = (idx * total) / nparts;
+    end = ((idx + 1) * total) / nparts;
+
+    *off = start;
+    *len = end - start;
+    return PRTE_SUCCESS;
+}
+
 size_t prte_grpcomm_bruck_owner(size_t pos, size_t nprocs, size_t slot)
 {
     if (1 > nprocs || slot >= nprocs) {

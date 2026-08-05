@@ -95,6 +95,15 @@ PRTE_EXPORT int prte_grpcomm_bruck_step(size_t pos, size_t nprocs, size_t step,
                                         size_t *send_to, size_t *recv_from,
                                         size_t *nblocks);
 
+/* Where participant `idx`'s chunk sits in a payload of `total` bytes split
+ * `nparts` ways.  Derived from the index rather than accumulated, so every
+ * daemon agrees on the seams even though a scatter means each one holds a
+ * different subset.  A short payload simply yields zero-length chunks for the
+ * high indices rather than being an error.  PRTE_ERR_BAD_PARAM for nparts of
+ * zero or an index outside it. */
+PRTE_EXPORT int prte_grpcomm_chunk_bounds(size_t total, size_t nparts, size_t idx,
+                                          size_t *off, size_t *len);
+
 /* Which participant's block ends up in local slot `slot`.  Bruck leaves the
  * blocks rotated - slot 0 is always our own - so a caller that wants natural
  * order has to undo that through this mapping rather than assume it.
