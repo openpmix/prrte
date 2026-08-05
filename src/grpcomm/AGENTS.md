@@ -227,12 +227,17 @@ It is a small vtable (`bcast_movement_t`: an id, a name, and a `forward`), and
   have reported — so this accounting is framing, and `nexpected` remains
   `n_children`.
 
-Today there is one movement, `tree_whole`: send the whole payload to each
-routing-tree child. It is right for a small message, where the cost is the
-depth of the tree and a high radix makes that one or two hops. It is wrong for
-a large one, because a node with `r` children serializes `r` full copies on its
-outbound link at every level — `d*r*M*beta`, which is essentially the entire
-cost of broadcasting a launch message or a preload chunk at scale.
+There are two movements.
+
+`tree_whole` sends the whole payload to each routing-tree child. It is right
+for a small message, where the cost is the depth of the tree and a high radix
+makes that one or two hops. It is wrong for a large one, because a node with
+`r` children serializes `r` full copies on its outbound link at every level —
+`d*r*M*beta`, which is essentially the entire cost of broadcasting a launch
+message or a preload chunk at scale.
+
+`scatter_allgather` moves about `M` bytes per daemon instead — see
+[The bulk broadcast](#the-bulk-broadcast-scatter_allgather) below.
 
 **The movement is stamped on the wire**, between the ack id and the payload, by
 whoever originated the broadcast. A broadcast has a single originator, so
@@ -250,9 +255,73 @@ The ids are explicit and must never be renumbered — they are on the wire, and 
 renumber would silently repoint an in-flight broadcast into a different
 movement, failing as if the payload were corrupt.
 
-When a second movement lands, it supplies data transport only. If you find
-yourself copying any of the framing into it, stop: that is the mistake this
-split exists to prevent.
+A movement supplies data transport only. If you find yourself copying any of
+the framing into one, stop: that is the mistake this split exists to prevent.
+
+### The bulk broadcast (`scatter_allgather`)
+
+The controller splits the payload into one chunk per participant and scatters
+chunk *i* toward participant *i* **down the existing routing tree**; every
+daemon then reassembles the whole by a Bruck allgather across **lateral**
+links, on `PRTE_RML_TAG_XCAST_BULK`. The scatter *is* the forward, so it
+inherits the ACK rollup, the `process_first` set and the replay machinery
+untouched. The full design record is
+[`docs/plans/scalable_collectives.rst`](../../docs/plans/scalable_collectives.rst).
+
+**Nothing selects it on its own.** `grpcomm_bcast_movement` defaults to
+`tree`; `bulk` forces it and `auto` applies the size rule
+(`grpcomm_bcast_bulk_min_bytes`, `grpcomm_bcast_bulk_min_daemons`). The
+default is about evidence, not about the code: the crossover point has never
+been measured on hardware that could measure it, and a container swarm on one
+host cannot supply either constant. Do not flip the default without that
+number.
+
+The parts that are load-bearing, and why:
+
+- **The participant list is stamped on the wire, never re-derived.** Every
+  daemon must agree on which exchange position is which rank. Deriving that
+  locally from the failed-daemon set would have daemons disagree in the window
+  around a fault, and the exchange would deadlock with each waiting on a
+  partner the other does not believe exists. At four bytes a rank this is
+  16 KB for a 4096-daemon DVM, carried once beside a payload that is large by
+  definition. Do not replace it with a locally-computed set.
+- **`payload_complete`, not "the op exists".** Under `tree_whole` those are
+  the same statement; under a scatter the op exists long before the payload
+  does. `process_msg` gates on it — which is what makes every *existing*
+  caller correct without knowing the movement — and so does the ack to the
+  parent. `nexpected` stays the child count, because the rollup is still
+  subtree-shaped.
+- **The op-order hold.** A daemon completes ops in op-id order, and
+  `finish_op` enforces that with a hard error. Mixed movement can break it
+  honestly for the first time: a bulk op *N* is still assembling laterally
+  while a tiny op *N+1* behind it lands in one hop. `op_blocked()` holds
+  *N+1* until *N* has its payload, and `drive_completions()` releases it. The
+  test is deliberately "is an earlier op still short of its payload" rather
+  than "am I next in sequence", so a DVM using `tree_whole` throughout takes
+  exactly the path it always did — including the existing out-of-order
+  diagnostic, which this hold must not be able to mask.
+- **Faults degrade to `tree_whole`.** A lost participant cannot be recovered
+  by the exchange — the block it owed is gone — and a second recovery
+  mechanism beside the framing's replay would be one more thing to get wrong.
+  So `bulk_degrade()` flips the movement and the payload is re-sent whole:
+  any daemon holding all of it heals its own subtree, one that does not asks
+  the controller, which always can. Receivers holding partial chunks have
+  delivered nothing yet, so they simply take the whole payload instead.
+- **A degraded replay is the one case where an existing op re-reads its
+  payload.** `xcast_recv` normally does not — for every other replay there is
+  nothing new in it — so the fallback would silently deliver nothing without
+  that branch.
+
+Two traps specific to this movement:
+
+- **Degrading frees `op->bulk`.** Anything looping over that state must
+  degrade *after* it stops using it — `bulk_send_step()` returns a status
+  rather than degrading inline for exactly this reason.
+- **The exchange can outrun the scatter.** The two phases travel different
+  routes, so a partner nearer the root can send us chunks before our own
+  scatter arrives; their positions name a participant list we do not have
+  yet. They are parked whole by op-id (`early_chunks`) and drained when the
+  scatter lands. Dropping them instead deadlocks the exchange.
 
 ### Ordering and fault tolerance
 
