@@ -392,6 +392,21 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/groupcon.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
+            # scaletest: a PMIx client that times a full-data fence and a
+            # bare barrier over the whole job, so the cost of the DVM
+            # collectives can be plotted against DVM size, process count,
+            # routing radix and payload size.  A collective is the one thing
+            # whose cost IS the shape of the daemon tree, so there is nothing
+            # for a single host to measure -- with one daemon the routing
+            # radix has no effect at all and the allgather never touches a
+            # wire.  Driven by scaletest.sh, not by run-tests.sh: it is a
+            # measurement, not a pass/fail case.
+            # (No apostrophes here: see the note further down.)
+            echo ">>>> scaletest (collective scaling measurement) client"
+            gcc -O2 -g -o /opt/prte/prte/bin/scaletest \
+                /prrte-src/contrib/dockerswarm/scaletest.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
             # faulty: a PMIx client that fails on purpose, once per way the
             # errmgr has a policy branch for (abort, non-zero exit, signal,
             # exit without finalize).  Both errmgr components are involved in

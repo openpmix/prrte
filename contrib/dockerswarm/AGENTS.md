@@ -49,6 +49,8 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | `envspawn.c` | A PMIx client that spawns a child job carrying one of every **envar directive** (`envspawn` in the install): SET/ADD/UNSET/PREPEND/APPEND, pinned to a named host, with the child reporting the environment it actually got into a file on its own node. Those directives have no command-line surface — they arrive only on a spawn request — and `odls` applies them on whichever daemon forks the process, so the child has to land somewhere the parent is not. Drives `prte_odls_base_process_envars`. |
 | `slowcat.c` | A deliberately **slow** stdin reader (`slowcat` in the install, no PMIx dependency): copies stdin to a file in small reads with a pause between them, so the daemon feeding it keeps hitting *partial* writes. That is the only way to reach the iof short-write path. |
 | `fake-slurm.py` | A stand-in SLURM control plane (`sbatch`/`scontrol`/`scancel`) so `ras/slurm`'s elastic modify surface can be exercised. See §12. |
+| `scaletest.c` | A PMIx client that **times** a full-data fence and a bare barrier over the whole job (`scaletest` in the install). Not a pass/fail case — a measurement. See §18. |
+| `scaletest.sh` | The measurement driver: stands up a swarm of arbitrary size (default 40), sweeps DVM size × procs-per-node × routing radix × payload, and writes a CSV. See §18. |
 
 ## 2. How it works
 
@@ -1340,3 +1342,146 @@ installs no handlers of its own for those signals; the block in
 always empty in a `prted`, and has been removed. Do not write a case that
 signals a `prted` directly and expects delivery — it will simply kill the
 daemon.
+
+## 18. Measuring collective scaling (`scaletest`, `scaletest.sh`)
+
+Everything above this section answers *is it correct*. This one answers
+*what does it cost*, and it is the only part of the harness that is not a
+pass/fail suite: `scaletest.sh` writes a CSV meant to be opened in a
+spreadsheet and plotted.
+
+The subject is the DVM's collectives. A collective's cost **is** the shape
+of the daemon tree, so there is nothing here a single host can measure — at
+one daemon the routing radix has no effect whatsoever and the allgather
+never touches a wire. That is why this lives in the swarm.
+
+### The two numbers
+
+`scaletest` is a bare PMIx client. Each iteration it puts `--nkeys`
+uniquely-named values whose sizes cycle through `--sizes`, calls
+`PMIx_Commit`, and then runs two fences over the whole job:
+
+- **COLLECT** — `PMIx_Fence` with `PMIX_COLLECT_DATA` **true**. The
+  allgather: every rank's committed data goes up the routing tree to the
+  HNP and back down to every daemon. This is the one that should grow with
+  the payload.
+- **BARRIER** — `PMIx_Fence` with `PMIX_COLLECT_DATA` **false**. The same
+  collective carrying nothing, so it is the latency floor the tree imposes,
+  and `collect − barrier` is what the data itself cost. The summary CSV
+  reports that difference as `data_cost_us`.
+
+`PUT` (the put loop plus the commit) is timed too, and is deliberately
+*not* part of either fence: a commit only hands data to the local server,
+so it measures staging, not movement.
+
+Every phase is preceded by an **unmeasured** barrier. Without it a
+straggler's late arrival is charged to the next collective and what you
+measure is the skew of the previous one.
+
+### Why the timestamps are absolute, and what that buys
+
+Every "node" here is a container on one host sharing one kernel clock, so
+`CLOCK_REALTIME` is directly comparable across ranks. Each rank prints the
+absolute start and end of every phase and the driver computes
+
+```
+wall = max(end) − min(start)          over every rank
+```
+
+which is the real answer to *"how long until all procs cleared the fence"*.
+A per-rank elapsed time cannot answer it — a rank that entered late has a
+*short* elapsed time precisely because everyone else was already blocked
+waiting for it. The driver reports the max of the per-rank elapsed times in
+a `*_max_local_us` column alongside, because that is the only thing a real
+cluster (with genuinely separate clocks) could measure, and it is useful to
+see how far the two diverge.
+
+**Nothing is printed until the very end.** Output from a rank travels back
+over the IOF wire through the same daemons the next collective needs, so a
+client that printed as it went would be measuring I/O forwarding. Results
+are buffered and flushed after a final barrier.
+
+### Running it
+
+The driver keeps its own swarm — `PRTE_SWARM=scale`, containers
+`scale-node1..N`, volume `scale-build` — so a sweep and the functional
+ten-node swarm cannot disturb each other. `docker compose` cannot loop, so
+the compose file is generated:
+
+```sh
+./scaletest.sh build                  # PMIX_SRC=<checkout> to build PMIx too
+./scaletest.sh up 40                  # generate docker-compose.scale.yml, start 40
+./scaletest.sh run --nodes 1,2,4,8,16,32,40 --ppn 1,2 --radix 2,4,64
+./scaletest.sh down
+```
+
+Four independent knobs, each a comma-separated sweep list:
+
+| flag | varies |
+|------|--------|
+| `--nodes` | how many containers are in the DVM |
+| `--ppn` | application procs per node (`--map-by ppr:N:node`) |
+| `--radix` | the routing radix — `--prtemca rml_base_radix` |
+| `--nkeys`, `--sizes` | how much data each rank contributes |
+
+A `--sizes` element may itself be a list of sizes the keys cycle through,
+joined with `+` (`--sizes 128,1024,'64+4096+65536'` is three configurations,
+the last one mixing three sizes). Plus, not comma, because the sweep list is
+already comma-separated *and* because a CSV column cannot hold a comma.
+
+**The radix is a property of the DVM**, fixed when the daemons start, so the
+sweep restarts the DVM for every `(nodes, radix)` pair and runs the cheap
+knobs inside that. Restarting is also what keeps one configuration's
+collected data out of the next one's daemons.
+
+### Two things the driver refuses to do
+
+- **Measure a DVM that came up short.** `dvm_start` waits for the URI and
+  then runs one proc per node and counts *distinct* hostnames. A 40-node
+  request that only brought up 31 daemons would otherwise be silently
+  recorded as a 40-node measurement.
+- **Map a job into slots the previous job has not released.** Every DVM is
+  given `max(--ppn) + 1` slots a node, and the readiness probe is followed
+  by a settle. Both exist for one failure: `prun` returning is not the same
+  as every proc having been reaped on every daemon, and a job whose ppn
+  exactly equals the slot count is then refused outright with *"All nodes
+  which are allocated for this job are already filled"*
+  (`PMIX_ERR_JOB_FAILED_TO_MAP`). The spare slot is never filled — mapping
+  is `ppr:N:node` — so it cannot change what is measured. Do not "tidy" it
+  away: `--ppn 1` over 40 nodes failed **every** run without it, while a
+  sweep that happened to include a larger ppn passed, which makes the
+  failure look like a property of the node count rather than of the slots.
+- **Run a configuration that will not fit.** After a collect fence *every*
+  daemon holds *every* rank's data, and the iterations use distinct keys —
+  so each daemon ends up carrying `bytes_per_rank × nprocs × iterations`.
+  At 160 ranks, 32 keys of 64 KB and 5 iterations that is nearly a gigabyte
+  **per daemon**, which on a laptop's Docker VM is not a measurement, it is
+  an OOM. The driver computes that figure, puts it in the CSV as
+  `collected_bytes`, and skips anything above `--max-bytes` (256 MB by
+  default) with a message saying so.
+
+  **And here the per-daemon figure is not the one that binds.** Every "node"
+  of this swarm is a container on *one* host, so what has to fit is
+  `collected_bytes × nodes` — 128 MB a daemon across 40 nodes is 5 GB. That
+  is a property of the harness, not of PRRTE; on a real cluster only the
+  per-daemon number would matter. `--max-total-bytes` (2 GB by default)
+  guards it, and a skip on that ground says so explicitly.
+
+### Reading the output
+
+Two files. `scale-results-raw.csv` is one row per configuration **per
+iteration** — pivot it however you like. `scale-results.csv` is one row per
+configuration with the median, min and max over the iterations, and is what
+you plot. The median is used rather than the mean because a single
+scheduling hiccup on an oversubscribed host skews a mean badly and the run
+count is small.
+
+**Interpreting numbers from a laptop.** These containers share one host
+kernel and a handful of cores. Once `nodes × ppn` passes the core count,
+every daemon and every rank is time-slicing, and the absolute microseconds
+say more about the CPU scheduler than about PRRTE. What survives that is the
+*shape*: how the cost grows with node count, how a radix-2 tree compares
+with a flat one at the same size, and how much of the total is payload
+(`data_cost_us`) versus tree latency (`barrier_med_us`). Treat absolute
+values as meaningful only against another run on the same host with the same
+load.
