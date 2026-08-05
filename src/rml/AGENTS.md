@@ -32,7 +32,7 @@ TCP. If you find such comments, they are cruft — fix them.
 |------|----------------|
 | `rml.h`, `rml_types.h` | Public interface: `PRTE_RML_SEND`/`RECV` macros, RML tags, the `prte_rml_base` global, and the send/recv/posted-recv object types. |
 | `rml.c` | `prte_rml_open`/`close`/`register`; defines the `prte_rml_base` global and all RML class instances; `prte_rml_send_callback`; `prte_rml_is_node_up`. |
-| `rml_send.c` | `prte_rml_send_buffer_nb` (and the `_reliable_nb` variant). Short-circuits sends to self; otherwise hands the message to the OOB. |
+| `rml_send.c` | `prte_rml_send_buffer_nb` (plus the `_reliable_nb` and `_direct_nb` variants). Short-circuits sends to self; otherwise hands the message to the OOB. |
 | `rml_recv.c` | `prte_rml_recv_buffer_nb` / `prte_rml_recv_cancel`. Thread-shifts the request onto the progress thread. |
 | `rml_base_msg_handlers.c` | The heart of matching: `prte_rml_base_post_recv` (add/cancel a posted recv), `prte_rml_base_process_msg` (deliver an arrived message to a posted recv, or hold it in `unmatched_msgs`). |
 | `rml_base_contact.c`, `rml_contact.h` | `prte_rml_parse_uris` — split a contact URI into name + address list. |
@@ -157,6 +157,68 @@ is currently failed. Two consequences to keep in mind when editing that helper:
   `prte_rml_update_ancestors` only ever walks a dead ancestor *forward* to its
   inheritor, so it can shorten an ancestor list but never grow one — rebuilding
   from base is what makes a revival possible at all.
+
+## Lateral links — sends that deliberately bypass the tree
+
+Everything above describes routed traffic: `prte_rml_get_route` picks the next
+hop and the message walks the tree. That is right for control traffic and
+wrong for a bandwidth-efficient collective, whose exchange partners are chosen
+for their position in the *algorithm* rather than in the tree. At the default
+radix a DVM of ≤65 daemons is flat, so daemon `p` sending to `p+1` would go
+**through the HNP** — funnelling every byte through the one node such an
+algorithm exists to keep out of the path.
+
+`prte_rml_send_buffer_direct_nb()` (macro `PRTE_RML_SEND_DIRECT`) sets a
+`direct` flag on the `prte_rml_send_t`; `prte_oob_base_send_nb` then uses
+`msg->dst` as the hop instead of calling `prte_rml_get_route`. Nothing else
+changes — the peer lookup finds or builds a connection from the target's
+`PMIX_PROC_URI` exactly as it does for a tree neighbour, because the wireup
+xcast gave every daemon every other daemon's URI. If the target's contact info
+is not available the send **falls back to the routed path** rather than
+failing, so a caller never has to handle "no direct route".
+
+Three things about this are load-bearing:
+
+- **A relayed message is never direct.** The relay in
+  `oob_tcp_sendrecv.c` rebuilds the `prte_rml_send_t` field by field, so
+  `direct` stays at its constructor default of `false`. Keep it that way: a
+  message being forwarded by an intermediate hop is by definition being routed.
+- **`send_cons()` must initialise `direct`.** `PMIX_NEW` mallocs, it does not
+  zero, so a field the constructor forgets is heap garbage — here that would be
+  a random subset of messages bypassing the tree.
+- **The fallback clears the flag before retrying**, so it cannot loop, and so
+  the relay bookkeeping stays honest if the message is forwarded later.
+
+### Losing a lateral link is not a routing-tree fault
+
+This is the part that is expensive to get wrong, and it has a single
+choke point. `prte_rml_route_lost` is reached from both
+`prte_mca_oob_tcp_component_lost_connection` and `..._failed_to_connect`, and
+its default action is `prte_rml_repair_routing_tree()` — which marks the peer
+failed, reshapes the tree, and notifies the grpcomm, filem and relm fault
+handlers, ending every in-flight collective in the DVM. Doing that because a
+*lateral* link dropped would be badly wrong: the connection that just died is
+one some collective opened for bandwidth, not a lifeline.
+
+So `prte_rml_base.lateral_links` records the ranks we hold a non-tree link to,
+and `prte_rml_is_lateral_only()` is the single test the fault path uses:
+
+- **Being in the tree wins over being registered.** A collective's exchange
+  partner may happen to *be* our parent or one of our children; losing that
+  connection is a genuine tree fault and must take the repair path. So the
+  predicate answers false for any tree neighbour, registered or not.
+- **A lateral loss is not a death diagnosis.** The gate deregisters the link
+  and tells the registrant (`prte_rml_lateral_set_lost_callback`) so the
+  collective can end or re-plan — and does nothing else. If the peer really
+  died, the daemons for which it *is* a tree neighbour will detect that and the
+  global fault notice arrives the usual way. Declaring it from here would be
+  duplicative, and on a merely dropped socket simply wrong.
+- **`lateral_links` is not re-initialised by `compute_routing_tree`**, for the
+  same reason `dead_dmns` is not: a grow reshapes the tree but does not
+  dissolve the exchange partners a collective is midway through talking to.
+
+`test/unit/rml/test_rml_routing.c::test_lateral_links` pins all of that,
+including the overlap case and survival across a recompute.
 
 ## Elastic DVM and launcher-less bootstrap
 
@@ -289,7 +351,7 @@ There are two layers, and the split is dictated by what needs a live DVM.
 | Binary | Covers |
 |--------|--------|
 | `test_rml` | `prte_oob_split_and_resolve`: turning an if_include/if_exclude string into the interface list the transport binds to. Pure parsing, no socket. |
-| `test_rml_routing` | The radix math (`radix.h`), the routing tree (`compute_routing_tree`, `get_route`, `get_subtree_index`, `get_num_contributors`), the dead/absent-rank restoration across a recompute, the boot-epoch incarnation guard, `prte_rml_purge`, and `prte_rml_parse_uris`. |
+| `test_rml_routing` | The radix math (`radix.h`), the routing tree (`compute_routing_tree`, `get_route`, `get_subtree_index`, `get_num_contributors`), the dead/absent-rank restoration across a recompute, the lateral-link registry and its overlap-with-the-tree rule, the boot-epoch incarnation guard, `prte_rml_purge`, and `prte_rml_parse_uris`. |
 
 `test_rml_routing` stands `prte_rml_base` up by hand rather than calling
 `prte_rml_open` (which would also start listeners), so adding a case is just a

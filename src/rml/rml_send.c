@@ -39,16 +39,17 @@
 #include "src/rml/oob/oob.h"
 #include "src/rml/relm/relm.h"
 
-int prte_rml_send_buffer_nb(pmix_rank_t rank,
-                            pmix_data_buffer_t *buffer,
-                            prte_rml_tag_t tag)
+static int send_buffer(pmix_rank_t rank,
+                       pmix_data_buffer_t *buffer,
+                       prte_rml_tag_t tag,
+                       bool direct)
 {
     prte_rml_recv_t *rcv;
     prte_rml_send_t *snd;
 
     PMIX_OUTPUT_VERBOSE((1, prte_rml_base.rml_output,
-         "%s rml_send_buffer to peer %s at tag %d",
-         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+         "%s rml_send_buffer%s to peer %s at tag %d",
+         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), direct ? "_direct" : "",
          PMIX_RANK_PRINT(rank), tag));
 
     if (PRTE_RML_TAG_INVALID == tag) {
@@ -91,11 +92,26 @@ int prte_rml_send_buffer_nb(pmix_rank_t rank,
     snd->origin = *PRTE_PROC_MY_NAME;
     snd->tag = tag;
     snd->dbuf = buffer;
+    snd->direct = direct;
 
     /* activate the OOB send state */
     PRTE_OOB_SEND(snd);
 
     return PRTE_SUCCESS;
+}
+
+int prte_rml_send_buffer_nb(pmix_rank_t rank,
+                            pmix_data_buffer_t *buffer,
+                            prte_rml_tag_t tag)
+{
+    return send_buffer(rank, buffer, tag, false);
+}
+
+int prte_rml_send_buffer_direct_nb(pmix_rank_t rank,
+                                   pmix_data_buffer_t *buffer,
+                                   prte_rml_tag_t tag)
+{
+    return send_buffer(rank, buffer, tag, true);
 }
 
 int prte_rml_send_buffer_reliable_nb(pmix_rank_t rank,

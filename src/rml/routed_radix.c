@@ -505,6 +505,59 @@ void prte_rml_revive_routing_tree(pmix_rank_t rank){
     PMIX_DESTRUCT(&status);
 }
 
+/* Is this rank one of our routing-tree neighbours - our parent, or one of our
+ * children?  Those are the only connections whose loss says anything about the
+ * shape of the tree. */
+static bool is_tree_neighbor(pmix_rank_t rank)
+{
+    if (PMIX_RANK_INVALID == rank) {
+        return false;
+    }
+    if (rank == prte_rml_base.lifeline) {
+        return true;
+    }
+    pmix_rank_t idx = radix_subtree_index(&prte_rml_base.cur_node, rank);
+    if (idx < prte_rml_base.children.size) {
+        return rank == ((pmix_rank_t *) prte_rml_base.children.array)[idx];
+    }
+    return false;
+}
+
+void prte_rml_lateral_register(pmix_rank_t rank)
+{
+    if (PMIX_RANK_INVALID == rank || rank == PRTE_PROC_MY_NAME->rank) {
+        return;
+    }
+    pmix_bitmap_set_bit(&prte_rml_base.lateral_links, rank);
+}
+
+void prte_rml_lateral_deregister(pmix_rank_t rank)
+{
+    if (PMIX_RANK_INVALID == rank) {
+        return;
+    }
+    pmix_bitmap_clear_bit(&prte_rml_base.lateral_links, rank);
+}
+
+void prte_rml_lateral_set_lost_callback(prte_rml_lateral_lost_fn_t cbfunc)
+{
+    prte_rml_base.lateral_lost_cb = cbfunc;
+}
+
+bool prte_rml_is_lateral_only(pmix_rank_t rank)
+{
+    if (PMIX_RANK_INVALID == rank) {
+        return false;
+    }
+    if (!pmix_bitmap_is_set_bit(&prte_rml_base.lateral_links, rank)) {
+        return false;
+    }
+    /* A collective's exchange partner can happen to be our parent or one of
+     * our children.  Losing THAT connection is a genuine tree fault and has to
+     * take the normal path, so being in the tree wins over being registered. */
+    return !is_tree_neighbor(rank);
+}
+
 int prte_rml_route_lost(pmix_rank_t route){
     /* If we have been named as a shrink target, depart now on the first lost
      * connection rather than trying to recover: the DVM has removed us on
@@ -521,6 +574,31 @@ int prte_rml_route_lost(pmix_rank_t route){
      * (prted_comm.c) guarantees departure even if no connection ever drops. */
     if(prte_dvm_leaving){
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
+        return PRTE_SUCCESS;
+    }
+
+    /* A lateral link is not part of the routing tree, so losing one says
+     * nothing about the tree's shape and must not drive a repair.  Repairing
+     * on the strength of it would mark a live daemon failed and end every
+     * in-flight collective in the DVM - the connection we just lost is one
+     * some collective opened for bandwidth, not a lifeline.
+     *
+     * Note this deliberately does NOT diagnose the peer as dead.  If it really
+     * did die, the daemons for which it IS a tree neighbour will detect that
+     * and the global fault notice will reach us the usual way; declaring it
+     * from here would be both duplicative and, on a merely dropped socket,
+     * wrong.  The collective is told so it can end or re-plan rather than wait
+     * out a partner that is no longer answering. */
+    if(prte_rml_is_lateral_only(route)){
+        PMIX_OUTPUT_VERBOSE((2, prte_rml_base.routed_output,
+                             "%s routed:radix: lateral link to %s lost -"
+                             " not a routing-tree fault",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             PRTE_VPID_PRINT(route)));
+        prte_rml_lateral_deregister(route);
+        if(NULL != prte_rml_base.lateral_lost_cb){
+            prte_rml_base.lateral_lost_cb(route);
+        }
         return PRTE_SUCCESS;
     }
     if(prte_finalizing || prte_prteds_term_ordered || prte_abnormal_term_ordered){

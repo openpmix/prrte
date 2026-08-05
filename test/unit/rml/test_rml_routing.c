@@ -80,6 +80,96 @@ static void bitmaps_construct(void)
     pmix_bitmap_init(&prte_rml_base.dead_dmns, 64);
     PMIX_CONSTRUCT(&prte_rml_base.absent_dmns, pmix_bitmap_t);
     pmix_bitmap_init(&prte_rml_base.absent_dmns, 64);
+    PMIX_CONSTRUCT(&prte_rml_base.lateral_links, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.lateral_links, 64);
+}
+
+/*
+ * Lateral links: peers a bandwidth-efficient collective talks to directly,
+ * chosen for their position in the exchange rather than in the tree.
+ *
+ * The property under test is the one whose failure is expensive.  Losing a
+ * routing-tree connection means the tree changed shape and must be repaired;
+ * losing a lateral link means nothing of the sort, and repairing on the
+ * strength of it would mark a live daemon failed and end every in-flight
+ * collective in the DVM.  prte_rml_is_lateral_only() is the single test the
+ * fault path uses to tell them apart, so it has to be right about the overlap
+ * case too: an exchange partner may happen to BE our parent or one of our
+ * children, and losing that connection is a genuine tree fault.
+ */
+static int test_lateral_links(void)
+{
+    int failures = 0;
+    pmix_rank_t child, other;
+
+    /* radix 2 over 15 daemons from rank 1: a real parent and real children,
+     * and plenty of ranks that are neither */
+    build_dvm(2, 15, 1);
+
+    CHECK("we have a lifeline to test against",
+          PMIX_RANK_INVALID != prte_rml_base.lifeline);
+    CHECK("we have children to test against", 0 < prte_rml_base.n_children);
+    child = ((pmix_rank_t *) prte_rml_base.children.array)[0];
+
+    /* pick a rank that is neither our parent nor any of our children */
+    for (other = 0; other < 15; other++) {
+        if (other == PRTE_PROC_MY_NAME->rank || other == prte_rml_base.lifeline) {
+            continue;
+        }
+        pmix_rank_t idx = radix_subtree_index(&prte_rml_base.cur_node, other);
+        if (idx < prte_rml_base.children.size
+            && other == ((pmix_rank_t *) prte_rml_base.children.array)[idx]) {
+            continue;
+        }
+        break;
+    }
+    CHECK("found a non-neighbour rank", other < 15);
+
+    /* nothing is lateral until it is registered */
+    CHECK("unregistered rank is not lateral", !prte_rml_is_lateral_only(other));
+    CHECK("parent is not lateral", !prte_rml_is_lateral_only(prte_rml_base.lifeline));
+    CHECK("child is not lateral", !prte_rml_is_lateral_only(child));
+
+    /* a registered non-neighbour is lateral */
+    prte_rml_lateral_register(other);
+    CHECK("registered non-neighbour is lateral", prte_rml_is_lateral_only(other));
+
+    /* being in the tree wins over being registered - losing that link is a
+     * real fault and must take the repair path */
+    prte_rml_lateral_register(prte_rml_base.lifeline);
+    prte_rml_lateral_register(child);
+    CHECK("registered parent is still NOT lateral-only",
+          !prte_rml_is_lateral_only(prte_rml_base.lifeline));
+    CHECK("registered child is still NOT lateral-only",
+          !prte_rml_is_lateral_only(child));
+
+    /* deregistration takes effect */
+    prte_rml_lateral_deregister(other);
+    CHECK("deregistered rank is no longer lateral", !prte_rml_is_lateral_only(other));
+
+    /* nonsense ranks are answered, not dereferenced */
+    CHECK("invalid rank is not lateral", !prte_rml_is_lateral_only(PMIX_RANK_INVALID));
+    prte_rml_lateral_register(PMIX_RANK_INVALID);
+    prte_rml_lateral_register(PRTE_PROC_MY_NAME->rank);
+    CHECK("we are never lateral to ourselves",
+          !prte_rml_is_lateral_only(PRTE_PROC_MY_NAME->rank));
+
+    /* A grow recomputes the routing tree.  That must not dissolve the
+     * exchange partners a collective is midway through talking to, which is
+     * why lateral_links is not re-initialized by compute_routing_tree. */
+    prte_rml_lateral_register(other);
+    build_dvm(2, 31, 1);
+    CHECK("lateral registration survives a routing-tree recompute",
+          pmix_bitmap_is_set_bit(&prte_rml_base.lateral_links, other));
+
+    prte_rml_lateral_deregister(other);
+    prte_rml_lateral_deregister(child);
+    prte_rml_lateral_deregister(prte_rml_base.lifeline);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_lateral_links\n");
+    }
+    return failures;
 }
 
 static void bitmaps_destruct(void)
@@ -88,6 +178,7 @@ static void bitmaps_destruct(void)
     PMIX_DESTRUCT(&prte_rml_base.global_failed_dmns);
     PMIX_DESTRUCT(&prte_rml_base.dead_dmns);
     PMIX_DESTRUCT(&prte_rml_base.absent_dmns);
+    PMIX_DESTRUCT(&prte_rml_base.lateral_links);
 }
 
 /* forget every failure mark between cases */
@@ -627,6 +718,7 @@ int main(void)
     failures += test_routing_tree();
     failures += test_departed_ranks_survive_recompute();
     failures += test_num_contributors();
+    failures += test_lateral_links();
     failures += test_epoch_guard();
     failures += test_purge();
     failures += test_parse_uris();
