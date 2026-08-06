@@ -149,7 +149,7 @@ environment and either offers itself or bows out:
 | Component | Priority | Selected when… |
 |-----------|----------|----------------|
 | `pals` | 100 (MCA `plm_pals_priority`) | Always offers itself — **but only built where Cray PALS is detected** (`PRTE_CHECK_PALS`), so it is simply absent elsewhere. |
-| `slurm` | 75 | `SLURM_JOBID` is set in the environment (and `srun --version` runs). |
+| `slurm` | 75 | a Slurm job id is in the environment and Slurm answers `--version` — both via [`common/slurm`](../common/slurm/AGENTS.md), which probes once for every Slurm component. |
 | `lsf` | 75 | `LSB_JOBID` set, IBM CSM **not** enabled (`CSM_ALLOCATION_ID` unset), and `lsb_init()` succeeds. Only built when LSF headers/libs are found. |
 | `ssh` | 10 (MCA `plm_ssh_priority`) | Always available once a launch agent (`ssh`/`rsh`, or `qrsh`/`llspawn`/`pbs_tmrsh`) is found in PATH. The **default/fallback**. |
 

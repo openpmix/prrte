@@ -44,7 +44,13 @@ mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 prte_mca_plm_slurm_la_SOURCES = $(sources)
 prte_mca_plm_slurm_la_LDFLAGS = -module -avoid-version
-prte_mca_plm_slurm_la_LIBADD = $(top_builddir)/src/libprrte.la
+# NOTE: only the DSO build names the common library here.  In a static
+# build libprrte links it directly (configure puts it in
+# MCA_prte_common_STATIC_LTLIBS), and naming it in this convenience
+# library too puts a second copy of common_slurm.o on libprrte's link
+# line -- "multiple definition of prte_common_slurm_jobid".
+prte_mca_plm_slurm_la_LIBADD = $(top_builddir)/src/mca/common/slurm/libmca_common_slurm.la \
+        $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libprtemca_plm_slurm_la_SOURCES =$(sources)

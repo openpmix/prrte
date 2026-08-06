@@ -34,10 +34,6 @@ BEGIN_C_DECLS
 struct prte_mca_plm_slurm_component_t {
     prte_plm_base_component_t super;
     char *custom_args;
-    bool early;
-    bool ancient;
-    int major;
-    int minor;
 };
 typedef struct prte_mca_plm_slurm_component_t prte_mca_plm_slurm_component_t;
 

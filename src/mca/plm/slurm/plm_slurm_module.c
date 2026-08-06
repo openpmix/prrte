@@ -82,6 +82,7 @@
 #include "src/prted/prted.h"
 
 #include "plm_slurm.h"
+#include "src/mca/common/slurm/common_slurm.h"
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
 #include "src/mca/plm/plm.h"
@@ -339,8 +340,9 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* add the srun command */
     pmix_argv_append(&argc, &argv, "srun");
 
-    // add the external launcher flag if necessary
-    if (!prte_mca_plm_slurm_component.early) {
+    // add the external launcher flag if necessary -- srun only grew it in
+    // 23.11, and the version is the one src/mca/common/slurm probed once
+    if (!prte_common_slurm_version()->early) {
         pmix_argv_append(&argc, &argv, "--external-launcher");
     }
 
@@ -627,15 +629,16 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
     prte_proc_t *proc = t2->child;
     uint32_t *job_id = (uint32_t *) t2->cbdata;
     prte_job_t *jdata;
+    const prte_common_slurm_version_t *slurm;
     PRTE_HIDE_UNUSED_PARAMS(sd, fd);
 
     jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
 
     /* need to check that we are at least version 17.11 */
-    if (prte_mca_plm_slurm_component.ancient) {
+    slurm = prte_common_slurm_version();
+    if (slurm->ancient) {
         prte_show_help("help-plm-slurm.txt", "ancient-version", true,
-                       prte_mca_plm_slurm_component.major,
-                       prte_mca_plm_slurm_component.minor);
+                       slurm->major, slurm->minor);
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
         free(job_id);
         PMIX_RELEASE(t2);

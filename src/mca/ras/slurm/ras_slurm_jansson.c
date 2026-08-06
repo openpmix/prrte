@@ -36,6 +36,7 @@
 #include "src/util/name_fns.h"
 
 #include "ras_slurm.h"
+#include "src/mca/common/slurm/common_slurm.h"
 
 #define PRTE_SLURM_JOB_INFO_MAX_SIZE (1 * 1024 * 1024)
 #define PRTE_SLURM_MAX_THREADS_PER_CORE 32
@@ -373,7 +374,7 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table)
     json_t *job = NULL;
 
     char *slurm_jobid;
-    if (NULL == (slurm_jobid = getenv("SLURM_JOBID"))) {
+    if (NULL == (slurm_jobid = prte_common_slurm_jobid())) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
