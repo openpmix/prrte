@@ -163,6 +163,36 @@ up and PRRTE must not.
 
 ---
 
+## The nidmap
+
+`prte_util_nidmap_create()` packs, and `prte_util_decode_nidmap()` unpacks,
+four lockstep lists — node name, aliases, daemon vpid, and the node's slot in
+the sender's `prte_node_pool` — plus the *span* of the daemon vpid space. It
+is sent to every daemon whenever the DVM's membership changes, so a daemon
+decodes it **many times**, and each decode has to leave the daemon's view
+equal to the master's:
+
+- **The pool slot travels on the wire because it is the node's identity.**
+  It is the `PMIX_NODEID` a daemon hands its local clients, and the subscript
+  the `PMIX_SERVER_URI` query resolves a nodeid through. It is *not* the
+  position in the packed list: the sender skips nodes that have no daemon, so
+  after a shrink the packed sequence is compacted while the pool is not, and
+  a receiver that used the packed position renamed one node's entry into
+  another's and gave two machines one nodeid. It is not the daemon's vpid
+  either — a shrink retires a vpid permanently but leaves the node's slot.
+- **Every decode rebinds, it does not just fill gaps.** A node's daemon
+  changes (grow, shrink, re-grow), so `nd->daemon` and
+  `daemons->procs[vpid]` are (re)established on every pass, releasing the
+  reference the node held. Binding only newly-created entries made every
+  decode after the first a no-op, which is how a daemon that predated a grow
+  never learned the new daemon existed — and `odls` resolves the parent of
+  *every* proc in a job, not just its own, so that daemon launched nothing
+  and the master, which had no such gap, waited forever (#2616).
+- **A node the sender did not name has lost its daemon** and its backpointer
+  is cleared, mirroring what the master did to its own pool on the shrink.
+
+---
+
 ## `prte_process_info`
 
 A single global, filled in by `prte_setup_hostname()` and `prte_proc_info()`.
@@ -198,6 +228,11 @@ the modex match the names found locally.
 Not unit-testable, and deliberately left to the live smoke test: `session_dir`
 (creates directories under the real `$TMPDIR`), `stacktrace` (installs signal
 handlers), `daemon_init` (forks), and `nidmap` (needs a populated DVM).
+
+`nidmap` in particular needs a DVM that has **changed size**, and a job that
+**spans a daemon which predates the change** — a one-proc job lands on the
+master, whose copy of the map is authoritative and never decoded. That is the
+elastic grow/shrink/grow case in `contrib/dockerswarm/run-tests.sh`.
 
 ---
 
