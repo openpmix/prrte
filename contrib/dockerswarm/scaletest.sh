@@ -193,7 +193,8 @@ dvm_start() {
     RUN "rm -f $URI" >/dev/null 2>&1 || true
     docker exec -d "${DOCKER_ENV[@]}" "${NODE}1" bash -lc \
         ". /opt/prte/env.sh; prte --daemonize --report-uri $URI \
-             --prtemca rml_base_radix $radix --host $hosts > /tmp/scale-dvm.out 2>&1"
+             --prtemca rml_base_radix $radix ${SCALE_DVM_MCA:-} \
+             --host $hosts > /tmp/scale-dvm.out 2>&1"
 
     for ((tries = 0; tries < 120; tries++)); do
         if RUN "test -s $URI" >/dev/null 2>&1; then
