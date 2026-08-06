@@ -494,7 +494,8 @@ prototype here compiles and then mismatches the real library.
 | Live RM | PBS/LSF/Flux discovery still needs a real scheduler; there is no substitute. |
 
 **`ras/slurm`'s `modify` surface is covered in `contrib/dockerswarm`, not
-in the unit test.** Extend, release and cancel shell out to
+in the unit test.
+** Extend, release and cancel shell out to
 `sbatch`/`scontrol` and only mean anything across several nodes, and each
 of them returns `PRTE_ERR_NOT_AVAILABLE` outright unless the component's
 **extensions** were built — which needs jansson *and* SLURM 24.05 or later
@@ -507,7 +508,7 @@ multi-node, and its `build.sh` passes `--with-jansson` deliberately; it and
 builds anywhere that even compile `ras_slurm_jansson.c`. It supplies the
 scheduler with
 [`fake-slurm.py`](../../../contrib/dockerswarm/fake-slurm.py) — the
-`SLURM_*` environment plus `sbatch`/`scontrol`/`scancel` stubs on `PATH`
+`SLURM_*` environment plus `salloc`/`scontrol`/`scancel` stubs on `PATH`
 that hand out real container hostnames, so an extend genuinely launches
 daemons and a release genuinely removes them. `validate_hostname`,
 `prte_ras_slurm_drain_cmd_output` and the JSON parser live on that path
