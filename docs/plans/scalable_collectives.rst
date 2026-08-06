@@ -654,8 +654,23 @@ Verification
 * **Bisectability** — each piece must pass the full suite on its own before the
   next lands.
 
-The multi-node baseline is **540 passed, 0 failed, 3 skipped**.  Two practical
-notes, both of which have cost time here:
+The multi-node baseline is **562 passed, 0 failed, 3 skipped** once this
+work's own phases are counted.
+
+**The performance question now has a tool.**  Everything above establishes
+correctness; none of it says either movement is *faster*, and this document has
+until now described that measurement as needing hardware nobody had.
+``contrib/dockerswarm/scaletest.sh`` is that vehicle: it stands up its own
+larger swarm and times a full-data ``PMIx_Fence`` against a bare barrier while
+sweeping DVM size, procs per node, routing radix and payload size, writing a
+CSV.  Those are exactly the two arms of the fence's selection, so
+``grpcomm_fence_movement tree`` against ``allgather`` over the same sweep is a
+direct A/B; ``grpcomm_bcast_movement tree`` against the default does the same
+for the launch message.  What it still cannot supply is a real network — the
+containers share a host, so the bandwidth term is not a cluster's — but it can
+answer the shape question, which is what the defaults rest on.
+
+Two practical notes, both of which have cost time here:
 
 * ``check_PROGRAMS`` are built by ``make check``, **not** by ``make``.  Running
   a unit-test binary straight after ``make`` silently runs a stale one, and a
@@ -663,6 +678,11 @@ notes, both of which have cost time here:
 * For anything that changes the wire format, the multi-node run is
   load-bearing rather than a formality: it is what proves every daemon,
   including pure relays, agrees on the new layout.
+* A phase usually starts **one** DVM and runs several cases against it, and
+  ``cleanup_swarm`` ends it.  Inserting a self-contained case in the middle of
+  such a phase leaves the later cases with no DVM, which presents as
+  ``prun failed to initialize`` and reads like a collective failure.  New cases
+  go after the last one that needs the shared DVM.
 
 Open questions
 --------------
