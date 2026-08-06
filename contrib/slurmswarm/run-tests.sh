@@ -160,8 +160,19 @@ dvm_start() {
     # rather than sleeping a fixed amount, which is both slower and less
     # reliable on a loaded laptop.  Bounded on both axes -- a DVM that never
     # forms should cost one case a couple of minutes, not the suite an hour.
+    #
+    # Each failed probe has to take its own litter with it.  A `prun` killed
+    # by that timeout mid-init leaves its prun.<pid> session dir, and the
+    # pmix.* rendezvous file inside it, standing -- and the NEXT tool to run
+    # then finds two candidate servers and refuses with "PMIx has found
+    # multiple possible servers", which surfaces several cases later as
+    # "prun failed to initialize, likely due to no DVM being available".
+    # That is a harness artifact with a PRRTE-shaped error message, so it is
+    # swept here rather than left for a case to trip over.
     for _ in $(seq 20); do
         SA 'timeout 15 prun -n 1 hostname' >/dev/null 2>&1 && return 0
+        docker exec "${NODE}1" sh -c \
+            'rm -rf /tmp/prun.* 2>/dev/null; true' >/dev/null 2>&1
         sleep 1
     done
     return 1
@@ -212,9 +223,16 @@ preflight() {
     out=$(SQ 'sinfo --version' | tr -d '\r')
     [ -n "$out" ] && ok "SLURM answers: $out" \
                   || { bad "slurmctld is not answering on node1"; exit 2; }
+    # Sweep BEFORE asserting the cluster is idle.  Anything hand-driven leaves
+    # an allocation behind -- that is what `slurm-alloc new` is for -- and a
+    # suite that reported it as a failure would be red for a condition it is
+    # about to fix anyway, on its own first line.  What survives the sweep is
+    # a real problem: a drained or down node, which no phase here can repair
+    # and every phase here would blame on PRRTE.
+    cleanup_cluster
     n=$(cluster_idle_count)
     [ "$n" = 10 ] && ok "all ten nodes are idle in SLURM" \
-                  || bad "only $n/10 SLURM nodes are idle: $(SQ 'sinfo -h -N -o "%N=%t"' | tr '\n' ' ')"
+                  || bad "only $n/10 SLURM nodes are idle after a sweep: $(SQ 'sinfo -h -N -o "%N=%t"' | tr '\n' ' ')"
 
     # PRRTE parses `scontrol show job --json`, which is a build-time option of
     # SLURM's.  If this SLURM cannot serialize, the elastic phases are not
@@ -228,15 +246,20 @@ preflight() {
         HAVE_JSON=0
     fi
 
-    # Was PRRTE built with the JSON parser?  Without --with-jansson, ras/slurm
-    # compiles a stub and every extend is refused for a reason that has
-    # nothing to do with the scheduler.
-    if RUN 'grep -q "with-jansson" /opt/prte/vpath-linux/.configure-args 2>/dev/null'; then
-        ok "PRRTE was configured --with-jansson (the real ras/slurm parser)"
-    else
-        skp "PRRTE was built without jansson -- ras/slurm uses the stub parser"
-        HAVE_JSON=0
-    fi
+    # Were the extensions actually built?  Two independent things can switch
+    # them off -- no jansson, or a Slurm older than the JSON schema the parser
+    # reads -- and configure folds both into one flag.  Read the flag rather
+    # than the arguments that produced it: the arguments are a request, and
+    # this is the answer.
+    out=$(ON 1 'sed -n "s/^#define PRTE_HAVE_SLURM_EXTENSIONS \([01]\).*/\1/p" \
+                    /opt/prte/vpath-linux/src/include/prte_config.h 2>/dev/null' | tr -d ' \r')
+    case "$out" in
+        1) ok "PRRTE was built with the Slurm elastic extensions" ;;
+        0) skp "PRRTE was built WITHOUT the Slurm elastic extensions -- $(ON 1 'grep -m1 PRTE_SLURM_VERSION_STRING /opt/prte/vpath-linux/src/include/prte_config.h' | tr -d '\r')"
+           HAVE_JSON=0 ;;
+        *) skp "cannot tell whether the Slurm extensions were built (no prte_config.h in the build dir)"
+           HAVE_JSON=0 ;;
+    esac
 }
 
 ########################################################################

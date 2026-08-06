@@ -145,7 +145,7 @@ for a given process:
 | Component | Priority | Gate (all must hold) |
 |-----------|----------|----------------------|
 | `hnp`   | **100** | `PRTE_PROC_IS_MASTER` |
-| `slurm` | **50**  | `PRTE_PROC_IS_DAEMON` **and** `getenv("SLURM_JOBID")` **and** `prte_process_info.my_hnp_uri != NULL` |
+| `slurm` | **50**  | `PRTE_PROC_IS_DAEMON` **and** `prte_common_slurm_jobid()` (either spelling of the Slurm job-id envar — see [`common/slurm`](../common/slurm/AGENTS.md)) **and** `prte_process_info.my_hnp_uri != NULL` |
 | `pals`  | **50**  | `PRTE_PROC_IS_DAEMON` **and** `getenv("PALS_APID")` **and** `my_hnp_uri != NULL` |
 | `lsf`   | **40**  | `PRTE_PROC_IS_DAEMON` **and** `getenv("LSB_JOBID")` **and** `my_hnp_uri != NULL` |
 | `env`   | **1**   | `PRTE_PROC_IS_DAEMON` (always available to any daemon) |

@@ -99,3 +99,5 @@ libprrte_so_version=4:0:0
 # well.  Yuck; this somewhat breaks the
 # components-don't-affect-the-build-system abstraction.
 
+libmca_prte_common_slurm_so_version=0:0:0
+

@@ -14,6 +14,7 @@
 #include "types.h"
 
 #include "ras_slurm.h"
+#include "src/mca/common/slurm/common_slurm.h"
 #include "ras_slurm_modify_release_tracker.h"
 #include "src/mca/preg/preg.h"
 #include "src/mca/ras/base/base.h"
@@ -612,9 +613,7 @@ void prte_ras_slurm_shrink_complete(prte_shrink_campaign_t *campaign)
  */
 int prte_ras_slurm_serve_release_req(prte_pmix_server_req_t *req)
 {
-    if(!prte_ras_slurm_have_jansson()) {
-        pmix_output(0, "ras:slurm:modify: "
-            "Jansson support is required but not enabled in this build");
+    if (!prte_ras_slurm_have_extensions()) {
         return PRTE_ERR_NOT_AVAILABLE;
     }
 
@@ -917,7 +916,7 @@ static int prte_ras_slurm_remove_nodes_by_name(prte_pmix_server_req_t *req, char
         return PRTE_ERR_REQUEST;
     }
 
-    if (NULL == (launching_jobid = getenv("SLURM_JOBID"))) {
+    if (NULL == (launching_jobid = prte_common_slurm_jobid())) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
@@ -1107,7 +1106,7 @@ static int prte_ras_slurm_remove_allocation_by_id(prte_pmix_server_req_t *req, c
         return PRTE_ERR_RESOURCE_BUSY;
     }
 
-    if (NULL == (launching_jobid = getenv("SLURM_JOBID"))) {
+    if (NULL == (launching_jobid = prte_common_slurm_jobid())) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
@@ -1183,7 +1182,7 @@ static int prte_ras_slurm_remove_nodes_by_count(prte_pmix_server_req_t *req, uin
     }
 
     char *launching_jobid;
-    if (NULL == (launching_jobid = getenv("SLURM_JOBID"))) {
+    if (NULL == (launching_jobid = prte_common_slurm_jobid())) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }

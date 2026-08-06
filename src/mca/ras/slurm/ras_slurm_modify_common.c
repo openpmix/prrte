@@ -14,7 +14,77 @@
 #include "types.h"
 
 #include "ras_slurm.h"
+#include "src/mca/common/slurm/common_slurm.h"
 #include "src/mca/ras/base/base.h"
+
+/**
+ * @brief Can we serve an elastic allocation request?
+ *
+ * The whole modify surface -- extend, release and cancel -- rests on reading
+ * "scontrol show job <id> --json", and three independent things can stop it.
+ * Each of the three entry points asks here first, so a request is refused
+ * cleanly rather than half-served, and so the refusal names the actual
+ * reason.
+ *
+ * Two of the three are settled at configure time and folded into one flag by
+ * configure.m4: jansson, and whether the Slurm found there was new enough.
+ * The third is only knowable here: PRRTE is very often built somewhere other
+ * than where it runs -- a build node, a container image, a shared filesystem
+ * older than the cluster around it -- so the version that matters is the one
+ * on THIS machine, which src/mca/common/slurm probes once and both Slurm
+ * components read.
+ *
+ * The reasons are reported separately on purpose.  They used to share one
+ * message naming jansson, which is a plain falsehood on a machine that has
+ * jansson and a Slurm too old to emit the schema the parser reads -- and
+ * that machine is every stock Ubuntu 24.04, so it is not a corner case.
+ *
+ * @return true when the request can be served, false (having said why) when
+ *         it cannot.
+ */
+bool prte_ras_slurm_have_extensions(void)
+{
+    const prte_common_slurm_version_t *slurm;
+
+#if PRTE_HAVE_SLURM_EXTENSIONS
+    if (!prte_ras_slurm_have_jansson()) {
+        pmix_output(0, "ras:slurm:modify: "
+                    "Jansson support is required but not enabled in this build");
+        return false;
+    }
+
+    /* The build is capable; is the scheduler in front of us?  A Slurm we
+     * cannot interrogate is NOT treated as too old: this component only runs
+     * with SLURM_JOBID set, so something launched us, and refusing on a
+     * failed popen would turn a transient into a policy. */
+    slurm = prte_common_slurm_version();
+    if (slurm->available && !slurm->extended) {
+        pmix_output(0, "ras:slurm:modify: this Slurm (%s) is older than %s, "
+                    "whose JSON schema the allocation extensions read. The "
+                    "request cannot be served; extend/release/cancel need a "
+                    "newer Slurm.",
+                    slurm->version, PRTE_SLURM_MIN_EXT_VERSION);
+        return false;
+    }
+    return true;
+#else
+    /* Say what is true of the build, and let the reader draw the conclusion.
+     * Naming a single cause here would be wrong at least a third of the time:
+     * the extensions are switched off by an old Slurm, by a missing jansson,
+     * or by --disable-slurm-extensions, and configure folds all three into
+     * one flag. */
+    slurm = prte_common_slurm_version();
+    pmix_output(0, "ras:slurm:modify: the Slurm elastic allocation extensions "
+                "were not built into this PRRTE. They need jansson and Slurm "
+                "%s or later; this tree was configured against Slurm %s, and "
+                "is running under Slurm %s. Rebuild with "
+                "--enable-slurm-extensions (and --with-jansson) to enable "
+                "them.",
+                PRTE_SLURM_MIN_EXT_VERSION, PRTE_SLURM_VERSION_STRING,
+                slurm->version);
+    return false;
+#endif
+}
 
 /*
  * Cancel a Slurm job using scancel.

@@ -154,7 +154,8 @@ simulator 1000  =  testrm 1000  >  pbs 100  =  gridengine 100  =  flux 100
 available and is tried last, handling `--host`/`--hostfile`/default
 hostfile and (via the base) the ultimate fall-back to a 1-slot local
 node. The RM components make themselves available only when their
-environment is detected (e.g. `slurm` requires `SLURM_JOBID`), so on any
+environment is detected (e.g. `slurm` requires a Slurm job id in the
+environment — see [`common/slurm`](../common/slurm/AGENTS.md)), so on any
 given machine at most one RM answers, then `hosts` closes out the list.
 `simulator`/`testrm` sit at 1000 so that when explicitly configured they
 pre-empt everything.
@@ -495,11 +496,16 @@ prototype here compiles and then mismatches the real library.
 **`ras/slurm`'s `modify` surface is covered in `contrib/dockerswarm`, not
 in the unit test.** Extend, release and cancel shell out to
 `sbatch`/`scontrol` and only mean anything across several nodes, and each
-of them returns `PRTE_ERR_NOT_AVAILABLE` outright unless jansson was
-found — so a `make check` build, which by default has no jansson, cannot
-reach a line of it. The harness is multi-node, and its `build.sh` passes
-`--with-jansson` deliberately, so it is the only automated build anywhere
-that even compiles `ras_slurm_jansson.c`. It supplies the scheduler with
+of them returns `PRTE_ERR_NOT_AVAILABLE` outright unless the component's
+**extensions** were built — which needs jansson *and* SLURM 24.05 or later
+at configure time (`PRTE_HAVE_SLURM_EXTENSIONS`, see
+[`slurm/configure.m4`](slurm/configure.m4) and
+[`slurm/AGENTS.md`](slurm/AGENTS.md)). A `make check` build, which by
+default has no jansson, cannot reach a line of it. The harness is
+multi-node, and its `build.sh` passes `--with-jansson` deliberately; it and
+[`contrib/slurmswarm`](../../../contrib/slurmswarm/) are the only automated
+builds anywhere that even compile `ras_slurm_jansson.c`. It supplies the
+scheduler with
 [`fake-slurm.py`](../../../contrib/dockerswarm/fake-slurm.py) — the
 `SLURM_*` environment plus `sbatch`/`scontrol`/`scancel` stubs on `PATH`
 that hand out real container hostnames, so an extend genuinely launches
