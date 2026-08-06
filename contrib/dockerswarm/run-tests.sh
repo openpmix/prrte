@@ -5846,6 +5846,54 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     fi
     cleanup_swarm
 
+    banner "elastic DVM: a job spanning a surviving daemon runs after grow/shrink/grow"
+    # The daemon that was already up when the DVM grew has to learn the new
+    # daemon's vpid, because odls walks EVERY proc of a job -- not just its own
+    # -- to wire each one to its node, and one unresolvable parent throws away
+    # the whole child list, including the process that daemon was about to fork.
+    # prte_util_decode_nidmap() used to record the node->daemon binding only
+    # when it created a new node-pool entry, so on every wireup after its first
+    # a surviving daemon skipped the binding entirely and never heard of the new
+    # daemon; it launched nothing and the HNP, which had no such gap, waited
+    # forever (openpmix/prrte#2616). It also keyed the pool by packing position
+    # while the sender skips daemon-less nodes, so a shrink slid every later
+    # node onto the wrong slot -- which is why the grow does NOT have to reuse
+    # the node that was shrunk out for this to break.
+    #
+    # Only a job that SPANS the survivor shows this: the tests above launch
+    # "prun -n 1", which lands on the HNP alone and passes with the DVM in
+    # exactly this state. Grow, shrink a node, grow a different node, then run
+    # one proc per node and require every node to report.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        RUN 'timeout 90 elastic grow node2:2,node3:2' >/dev/null 2>&1
+        RUN 'timeout 90 elastic shrink node3' >/dev/null 2>&1; sleep 3
+        out=$(RUN 'timeout 90 elastic grow node4:2' 2>&1); sleep 3
+        echo "$out" | grep -q PMIX_DVM_IS_READY && ok "grow after the shrink completed" \
+                                               || bad "grow after the shrink did not complete"
+        # node2 survived both DVM changes; node4 arrived in the second grow
+        out=$(RUN 'timeout 60 prun -n 3 --map-by ppr:1:node hostname' 2>&1)
+        for n in node1 node2 node4; do
+            echo "$out" | grep -qw "$n" && ok "$n ran its proc after grow/shrink/grow" \
+                                        || bad "$n launched nothing after grow/shrink/grow (nidmap rebind)"
+        done
+        # Now re-grow the node that was shrunk OUT. It keeps the pool slot it
+        # always had, so this is the case that a slot-keyed decode cannot fix
+        # by placement alone: the survivor has the node, and only the daemon on
+        # it has changed. Nothing is rebound unless every decode rebinds.
+        RUN 'timeout 90 elastic grow node3:2' >/dev/null 2>&1; sleep 3
+        out=$(RUN 'timeout 60 prun -n 4 --map-by ppr:1:node hostname' 2>&1)
+        for n in node1 node2 node3 node4; do
+            echo "$out" | grep -qw "$n" && ok "$n ran its proc after the shrunk node was re-grown" \
+                                        || bad "$n launched nothing after the re-grow (nidmap rebind)"
+        done
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start an elastic DVM for the spanning-launch test"
+    fi
+    cleanup_swarm
+
     banner "elastic DVM: a grow launches ONLY on the nodes it was given"
     # An allocation request naming node4 must start a daemon on node4 and
     # nowhere else. Shrink node2 first so the DVM holds a node that is in the
