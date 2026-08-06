@@ -28,7 +28,8 @@ BEGIN_C_DECLS
  * a movement id - it never goes on the wire, so unlike the movement ids below
  * it may be renumbered freely. */
 typedef enum {
-    PRTE_GRPCOMM_BCAST_SELECT_AUTO = 0, /* by payload size and DVM size */
+    PRTE_GRPCOMM_BCAST_SELECT_TAG = 0,  /* by what the message IS - the default */
+    PRTE_GRPCOMM_BCAST_SELECT_SIZE,     /* by payload size and DVM size */
     PRTE_GRPCOMM_BCAST_SELECT_TREE,     /* always tree_whole */
     PRTE_GRPCOMM_BCAST_SELECT_BULK      /* always scatter_allgather, when legal */
 } prte_grpcomm_bcast_select_t;

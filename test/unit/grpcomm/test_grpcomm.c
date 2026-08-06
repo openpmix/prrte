@@ -325,12 +325,31 @@ static int test_bcast_movement_contract(void)
     CHECK("the movement ids are distinct",
           PRTE_GRPCOMM_BCAST_TREE_WHOLE != PRTE_GRPCOMM_BCAST_SCATTER_ALLGATHER);
 
-    CHECK("broadcasts travel the tree unless asked otherwise",
-          PRTE_GRPCOMM_BCAST_SELECT_TREE == prte_grpcomm_globals.bcast_select);
+    /* A broadcast's movement follows what the message IS. The size rule is
+     * still reachable, but only by asking for it - it holds an unmeasured
+     * constant, and a default that consulted it would give that constant the
+     * standing of a measurement. */
+    CHECK("a broadcast's movement follows its tag by default",
+          PRTE_GRPCOMM_BCAST_SELECT_TAG == prte_grpcomm_globals.bcast_select);
+    CHECK("...and the size rule is a distinct, opt-in selection",
+          PRTE_GRPCOMM_BCAST_SELECT_SIZE != PRTE_GRPCOMM_BCAST_SELECT_TAG);
     /* An exchange needs two participants to be an exchange, whatever the
      * parameter was set to. */
     CHECK("the bulk daemon floor is at least two",
           2 <= prte_grpcomm_globals.bcast_bulk_min_daemons);
+
+    /* The launch message is the reason the tag split exists: it was the only
+     * large payload on PRTE_RML_TAG_DAEMON, which was the only overloaded
+     * broadcast tag. Pinned by identity, because a tag that silently became
+     * an alias of the command tag would put selection back to guessing. */
+    CHECK("the launch message has a tag of its own",
+          PRTE_RML_TAG_DAEMON_LAUNCH != PRTE_RML_TAG_DAEMON);
+    CHECK("...that collides with nothing else it travels beside",
+          PRTE_RML_TAG_DAEMON_LAUNCH != PRTE_RML_TAG_XCAST &&
+          PRTE_RML_TAG_DAEMON_LAUNCH != PRTE_RML_TAG_XCAST_ACK &&
+          PRTE_RML_TAG_DAEMON_LAUNCH != PRTE_RML_TAG_XCAST_BULK &&
+          PRTE_RML_TAG_DAEMON_LAUNCH != PRTE_RML_TAG_WIREUP &&
+          PRTE_RML_TAG_DAEMON_LAUNCH != PRTE_RML_TAG_FILEM_BASE);
 
     /* The fence's movement ids are on the wire for a different reason than
      * the broadcast's - not to instruct a receiver, but so that two daemons

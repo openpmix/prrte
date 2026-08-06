@@ -110,6 +110,18 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 #define PRTE_RML_TAG_DAEMON_DIED    13
 #define PRTE_RML_TAG_DAEMON_ADOPTED 14
 
+/* The launch message, split off PRTE_RML_TAG_DAEMON so that what a broadcast
+ * IS can be read from its tag.
+ *
+ * It is delivered to the same handler as PRTE_RML_TAG_DAEMON and carries the
+ * same command byte - nothing about the receiving side changes. The tag exists
+ * to make the message's purpose declarable at the point it is sent, because
+ * that is what lets grpcomm choose a data movement by what the message is
+ * rather than by guessing from how big it happens to be. PRTE_RML_TAG_DAEMON
+ * was the only overloaded broadcast tag, and this was the only large thing
+ * on it. */
+#define PRTE_RML_TAG_DAEMON_LAUNCH 18
+
 #define PRTE_RML_TAG_XCAST         15
 #define PRTE_RML_TAG_XCAST_ACK     16
 /* The bulk broadcast's allgather phase, and the request to abandon it.  Kept
