@@ -71,23 +71,26 @@ transport, and are tested exhaustively without one.  That ordering was chosen
 because an error in either would surface later as what looks like a transport
 or corruption bug rather than an arithmetic one.
 
-Both second movements are implemented and reachable, and neither is selected
-on its own: ``grpcomm_bcast_movement`` and ``grpcomm_fence_movement`` both
-default to the tree, so an unconfigured DVM behaves exactly as it did before
-either existed.  They are opt-in for *different* reasons, and the difference
-matters:
+**Both second movements are now the default**, each chosen per operation:
 
-* The **broadcast**'s ``auto`` rests on a byte threshold nobody has measured,
-  and the right resolution is to remove the threshold rather than tune it —
-  see *Selection* under Piece 2.  Give the launch message its own tag and the
-  choice becomes categorical.
-* The **fence**'s ``auto`` has no threshold at all.  It reads
-  ``PMIX_COLLECT_DATA``, so it is already categorical: a barrier keeps the
-  rollup because the cost model says the high-radix tree beats a dissemination
-  exchange at any scale, and a modex gets the exchange because the release
-  fanout is what dominates.  What is unverified there is not *where* to switch
-  but simply *whether the exchange wins in practice* — a yes/no on real
-  hardware, after which the default can flip with no constant to choose.
+* The **broadcast** selects by tag.  The launch message — split onto
+  ``PRTE_RML_TAG_DAEMON_LAUNCH`` for exactly this purpose — scatters;
+  everything else takes the tree.  The byte threshold survives only as the
+  opt-in ``size`` selection.
+* The **fence** selects on ``PMIX_COLLECT_DATA``.  A modex gets the exchange
+  because the release fanout, not the gather, is what dominates it; a barrier
+  keeps the rollup because a high-radix tree beats a dissemination exchange at
+  *any* scale.
+
+Neither default rests on a measured constant, because neither has one left to
+rest on: both discriminators are categorical.  That is what made it reasonable
+to turn them on rather than leave them behind a parameter — and turning them on
+is the point, because a movement nobody selects is a movement nobody tests, and
+the failure modes here (a broadcast that misparses, a fence that cannot
+converge) are the kind that surface at scale and under fault rather than in a
+unit test.
+
+``tree`` on either parameter reverts to the previous behaviour in one flag.
 
 The operations
 --------------
@@ -111,11 +114,21 @@ The operations
      - ~0
      - **critical**
      - **unchanged**
-   * - launch message, ``WIREUP``, ``FILEM`` chunks
+   * - launch message
      - one-to-all
      - large
-     - partly
+     - no
      - scatter + allgather
+   * - ``WIREUP``
+     - one-to-all
+     - large
+     - **critical**
+     - **unchanged** — ``process_first``
+   * - ``FILEM`` chunks
+     - one-to-all
+     - 16 KB each
+     - no
+     - **unchanged** — see below
    * - barrier (``PMIx_Fence``, no collect)
      - all-to-all
      - 0
@@ -354,6 +367,20 @@ So splitting one tag off removes the need for a byte threshold entirely, and
 the remaining selection is categorical: a small table of tag → movement, with
 no number in it to be wrong about.
 
+**Done.** ``PRTE_RML_TAG_DAEMON_LAUNCH`` carries the launch message, delivered
+to the same handler on the same command stream — ``prte_daemon_recv`` ignores
+the tag it arrives on, so nothing about the receiving side changed. Selection
+is ``grpcomm_bcast_movement`` = ``tag`` (the default) / ``size`` / ``tree`` /
+``bulk``, and ``bulk_tag_prefers_bulk()`` is the whole table.
+
+``FILEM`` is **not** in that table, which corrects the operation list above.
+Its chunks are capped at ``PRTE_FILEM_RAW_CHUNK_MAX`` = 16 KB, and at that
+size the answer depends on the DVM: at a few hundred daemons the tree's
+``r*M*beta`` fanout dominates and the exchange wins, at ten the exchange's
+extra ``log2(N)`` latency steps cost more than the fanout saves. A knob-free
+table has no business holding a guess, so scattering ``FILEM`` needs either a
+larger chunk or a measurement first.
+
 The framing/movement split landed first (``25416cf534``) with ``tree_whole`` as
 the only movement.  What follows is the bulk movement itself, which is now
 written; the notes below describe what was built and why, and call out the two
@@ -432,18 +459,29 @@ mechanism to get wrong.
 Selection
 '''''''''
 
-At the originator only.  As built, ``auto`` is bulk iff the tag is not
-ordering-critical, the payload is at least ``grpcomm_bcast_bulk_min_bytes``,
-and the participant count is at least ``grpcomm_bcast_bulk_min_daemons``.  A
-``grpcomm_bcast_movement`` parameter (``auto``/``tree``/``bulk``) forces
-either way, for testing and as an escape hatch.
+At the originator only.  ``grpcomm_bcast_movement`` takes four values:
 
-**The byte threshold is scaffolding, and is the only genuine "crossover" in
-the whole design.**  It exists because the launch message and the shutdown
-command share ``PRTE_RML_TAG_DAEMON`` today, so the operation cannot be
-recovered from the call and size is the only signal left.  Once the launch
-message has its own tag (above), selection becomes a tag lookup and
-``grpcomm_bcast_bulk_min_bytes`` should go away rather than be tuned.
+``tag`` (default)
+   The movement follows what the message is — ``bulk_tag_prefers_bulk()``,
+   which today names only the launch message.  No constants.
+``size``
+   The old size rule: bulk iff the payload is at least
+   ``grpcomm_bcast_bulk_min_bytes`` and the DVM at least
+   ``grpcomm_bcast_bulk_min_daemons``.  Kept as an escape hatch for a
+   programming model that pushes something unexpectedly large through a tag
+   nobody classified — **not** the production path, because it holds a number
+   nobody has measured.
+``tree`` / ``bulk``
+   Force one movement everywhere, for testing.
+
+Ordering-critical tags are excluded before any of this, in every mode.
+
+**The byte threshold was the only genuine "crossover" in the design, and the
+tag split retired it rather than resolving it.**  It had existed only because
+the launch message and the shutdown command shared ``PRTE_RML_TAG_DAEMON``, so
+the operation could not be recovered from the call and size was the last
+signal available.  To opt a new payload in, give it a tag and add it to the
+table; do not reach for the threshold.
 
 That is worth stating plainly because the two selections in this design are
 *not* the same kind of thing, and describing them as though they were is how
