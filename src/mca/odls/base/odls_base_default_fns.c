@@ -989,12 +989,44 @@ REPORT_ERROR:
      * were told to launch) or that job - never one of the prior jobs
      * decoded above, which use their own variable. A NULL here is
      * survivable: the prted errmgr falls back to the daemon job. */
-    /* we have to report an error back to the HNP so we don't just
-     * hang. Although there shouldn't be any errors once this is
-     * all debugged, it is still good practice to have a way
-     * for it to happen - especially so developers don't have to
-     * deal with the hang!
-     */
+    /* We have to report an error back to the HNP so we don't just hang.
+     * Activating the job state is not enough on its own: what the errmgr
+     * sends the HNP is the state of this daemon's local children of that
+     * job, and a child list we failed to build has none - or has them in
+     * whatever state they were unpacked in, which the HNP reads as "nothing
+     * wrong here". The job then never completes and the tool that asked for
+     * it waits forever with nothing logged anywhere (that is what made
+     * #2616 present as a silent hang). So first fail every proc that was
+     * ours to launch, which is what gives the HNP something to act on.
+     * The master reports to nobody and already holds the authoritative
+     * job object, so this is for the daemons only. */
+    if (!PRTE_PROC_IS_MASTER && NULL != jdata && NULL != jdata->procs) {
+        int32_t nlocal = 0;
+        for (n = 0; n < jdata->procs->size; n++) {
+            pptr = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, n);
+            if (NULL == pptr || pptr->parent != PRTE_PROC_MY_NAME->rank) {
+                continue;
+            }
+            pptr->state = PRTE_PROC_STATE_FAILED_TO_START;
+            pptr->exit_code = rc;
+            /* nothing was forked and no stdio was ever opened for it, so the
+             * two things the lifecycle waits on are complete by definition */
+            PRTE_FLAG_SET(pptr, PRTE_PROC_FLAG_IOF_COMPLETE);
+            PRTE_FLAG_SET(pptr, PRTE_PROC_FLAG_WAITPID);
+            if (!PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_LOCAL)) {
+                /* the report walks prte_local_children, so a proc we never
+                 * got as far as adding would otherwise go unmentioned */
+                PMIX_RETAIN(pptr);
+                PRTE_FLAG_SET(pptr, PRTE_PROC_FLAG_LOCAL);
+                pmix_pointer_array_add(prte_local_children, pptr);
+            }
+            ++nlocal;
+        }
+        /* keep the count that the termination accounting compares against in
+         * step with the list we just completed - we abandoned the loop that
+         * normally maintains it */
+        jdata->num_local_procs = nlocal;
+    }
     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
     return rc;
 }
