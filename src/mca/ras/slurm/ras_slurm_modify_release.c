@@ -618,10 +618,12 @@ int prte_ras_slurm_serve_release_req(prte_pmix_server_req_t *req)
         return PRTE_ERR_NOT_AVAILABLE;
     }
 
+    /* Not NOT_SUPPORTED: the modify driver reads that as "ask the next
+     * module", and ras/hosts would then serve the release anyway. */
     if (!prte_elastic_mode) {
         pmix_output(0, "ras:slurm:modify: release requests require elastic DVM mode. "
                        "Set the prte_elastic_mode MCA parameter to 1.");
-        return PRTE_ERR_NOT_SUPPORTED;
+        return PRTE_ERR_NOT_AVAILABLE;
     }
 
     int err = PRTE_SUCCESS;
@@ -1095,7 +1097,7 @@ static int prte_ras_slurm_remove_allocation_by_id(prte_pmix_server_req_t *req, c
         pmix_output(0, "ras:slurm:remove_allocation_by_id: refusing to terminate job %s "
                        "because it was not dynamically added by PRRTE",
                     alloc_id);
-        return PRTE_ERR_NOT_SUPPORTED;
+        return PRTE_ERR_BAD_PARAM;
     }
 
     if (session_item->nodes_in_session >= prte_num_allocated_nodes) {
