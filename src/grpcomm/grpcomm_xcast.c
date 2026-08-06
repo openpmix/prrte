@@ -1646,6 +1646,30 @@ static bool bulk_tag_allowed(prte_rml_tag_t tag){
            PRTE_RML_TAG_DAEMON_REVIVED != tag;
 }
 
+/* Which broadcasts are worth scattering, by what they ARE.
+ *
+ * This is a table rather than a threshold because PRRTE does not carry
+ * arbitrary traffic - it carries a known, small set of things, and which of
+ * them a message is IS the operation. The launch message is the one large
+ * broadcast PRRTE makes routinely, and since it was split onto its own tag
+ * there is nothing left to infer.
+ *
+ * PRTE_RML_TAG_FILEM_BASE is deliberately NOT here despite being the other
+ * "large" entry in the design's operation table. Its chunks are capped at
+ * PRTE_FILEM_RAW_CHUNK_MAX, 16 KB, which is small enough that the answer
+ * depends on the DVM size rather than being clear: at a few hundred daemons
+ * the tree's r*M*beta fanout dominates and the exchange wins, at ten daemons
+ * the exchange's extra log2(N) latency steps cost more than the fanout saves.
+ * A knob-free table has no business containing a guess, so if FILEM is to be
+ * scattered, raise the chunk size or measure it first.
+ *
+ * Adding a tag here is the intended way to opt a new bulk payload in. That is
+ * not a cost to be designed around - it is the declaration that keeps the
+ * choice reasoned. */
+static bool bulk_tag_prefers_bulk(prte_rml_tag_t tag){
+    return PRTE_RML_TAG_DAEMON_LAUNCH == tag;
+}
+
 /* Choose how this broadcast will travel.  Runs on the originator only, and its
  * answer is stamped on the wire; nothing downstream re-decides. */
 static uint32_t select_movement(prte_rml_tag_t tag, size_t nbytes){
@@ -1660,13 +1684,19 @@ static uint32_t select_movement(prte_rml_tag_t tag, size_t nbytes){
         return PRTE_GRPCOMM_BCAST_TREE_WHOLE;
     case PRTE_GRPCOMM_BCAST_SELECT_BULK:
         return PRTE_GRPCOMM_BCAST_SCATTER_ALLGATHER;
-    case PRTE_GRPCOMM_BCAST_SELECT_AUTO:
-    default:
+    case PRTE_GRPCOMM_BCAST_SELECT_SIZE:
+        /* The escape hatch, not the production path: it holds a number
+         * nobody has measured. Kept because a programming model may push
+         * something unexpectedly large through a tag nobody classified. */
         if(nbytes >= prte_grpcomm_globals.bcast_bulk_min_bytes &&
            ndmns >= prte_grpcomm_globals.bcast_bulk_min_daemons){
             return PRTE_GRPCOMM_BCAST_SCATTER_ALLGATHER;
         }
         return PRTE_GRPCOMM_BCAST_TREE_WHOLE;
+    case PRTE_GRPCOMM_BCAST_SELECT_TAG:
+    default:
+        return bulk_tag_prefers_bulk(tag) ? PRTE_GRPCOMM_BCAST_SCATTER_ALLGATHER
+                                          : PRTE_GRPCOMM_BCAST_TREE_WHOLE;
     }
 }
 

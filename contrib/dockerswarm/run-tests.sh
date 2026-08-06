@@ -3701,6 +3701,34 @@ test_grpcomm_bulk() {
         || bad "the DVM did not recover from the loss: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
     cleanup_swarm
 
+    banner "grpcomm: the launch message scatters by default, commands do not"
+    # The point of giving the launch message its own RML tag.  Selection is a
+    # table keyed on what the message IS, so no MCA parameter is needed to get
+    # the bulk movement onto the one broadcast that wants it - and nothing
+    # else picks it up.
+    #
+    # The count is the evidence for the second half: six participants means
+    # ceil(log2 6) = 3 exchange steps for ONE broadcast.  A run that scattered
+    # the launch message and also the shutdown command would show six.  This is
+    # why the assertion is on an exact count rather than "greater than zero".
+    cleanup_swarm
+    out=$(RUN "cd /tmp && timeout -k 5 120 prterun --prtemca rml_base_radix 2 --prtemca grpcomm_base_verbose 5 --host node1:1,node2:1,node3:1,node4:1,node5:1,node6:1 -n 6 --map-by node hostname" 2>&1)
+    n=$(echo "$out" | grep -c "^node")
+    [ "$n" = 6 ] \
+        && ok "a stock DVM launches with no movement parameter set" \
+        || bad "$n of 6 ranks reported under the default selection"
+    n=$(echo "$out" | grep -c "bulk sending")
+    [ "${n:-0}" = 3 ] \
+        && ok "...and exactly one broadcast scattered - the launch message" \
+        || bad "expected 3 lateral sends (one broadcast over 6 daemons), saw ${n:-0}"
+
+    out=$(RUN "cd /tmp && timeout -k 5 120 prterun --prtemca grpcomm_bcast_movement tree --prtemca rml_base_radix 2 --prtemca grpcomm_base_verbose 5 --host node1:1,node2:1,node3:1,node4:1,node5:1,node6:1 -n 6 --map-by node hostname" 2>&1)
+    n=$(echo "$out" | grep -c "bulk sending")
+    [ "${n:-0}" = 0 ] \
+        && ok "...and \"tree\" still turns it all the way off" \
+        || bad "the tree selection still scattered ${n:-0} times"
+    cleanup_swarm
+
     banner "grpcomm: auto selection mixes bulk and tree traffic"
     # With the threshold on the floor, everything large enough goes bulk while
     # the ordering-critical tags (WIREUP, DAEMON_DIED, DAEMON_REVIVED) stay on
@@ -3729,7 +3757,7 @@ test_grpcomm_bulk() {
     # no longer an MCA framework, so prte_info's framework walk does not
     # enumerate its parameters at all.
     out=$(RUN "prterun --prtemca grpcomm_bcast_movement bogus -n 1 hostname" 2>&1)
-    echo "$out" | grep -q 'is not one of auto/tree/bulk' \
+    echo "$out" | grep -q 'is not one of tag/size/tree/bulk' \
         && ok "a bad movement name is diagnosed" \
         || bad "a bad movement name passed unremarked: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
     echo "$out" | grep -q '^node1' \

@@ -976,8 +976,12 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
         return;
     }
 
-    /* goes to all daemons */
-    if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, &jdata->launch_msg))) {
+    /* Goes to all daemons, on the launch message's own tag rather than the
+     * general daemon-command tag. This is the one large broadcast PRRTE makes
+     * on a regular basis, and naming it is what lets grpcomm move it by what
+     * it is instead of inferring that from its size. */
+    if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON_LAUNCH,
+                                                 &jdata->launch_msg))) {
         PRTE_ERROR_LOG(rc);
         PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
         PMIX_RELEASE(caddy);

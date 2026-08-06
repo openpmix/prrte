@@ -83,27 +83,33 @@ void prte_grpcomm_register(void)
 
     bcast_movement = NULL;
     pmix_mca_base_var_register("prte", "grpcomm", NULL, "bcast_movement",
-                               "How a broadcast's payload travels: \"tree\" "
-                               "(whole payload to each routing-tree child), "
-                               "\"bulk\" (scatter down the tree then allgather "
-                               "across lateral links), or \"auto\" (by size). "
-                               "Only the daemon that originates a broadcast "
-                               "consults this; the choice it makes is carried "
-                               "on the wire.",
+                               "How a broadcast's payload travels: \"tag\" "
+                               "(by what the message is - the default), "
+                               "\"tree\" (whole payload to each routing-tree "
+                               "child), \"bulk\" (scatter down the tree then "
+                               "allgather across lateral links), or \"size\" "
+                               "(by measured payload size, using "
+                               "grpcomm_bcast_bulk_min_bytes and "
+                               "grpcomm_bcast_bulk_min_daemons - an escape "
+                               "hatch, not the production path). Only the "
+                               "daemon that originates a broadcast consults "
+                               "this; the choice it makes is carried on the "
+                               "wire.",
                                PMIX_MCA_BASE_VAR_TYPE_STRING,
                                &bcast_movement);
 
     bcast_bulk_min_bytes = PRTE_GRPCOMM_BULK_MIN_BYTES_DEFAULT;
     pmix_mca_base_var_register("prte", "grpcomm", NULL, "bcast_bulk_min_bytes",
-                               "Smallest payload \"auto\" will move with the "
-                               "bulk movement",
+                               "Smallest payload \"size\" selection will move "
+                               "with the bulk movement (unused by default)",
                                PMIX_MCA_BASE_VAR_TYPE_INT,
                                &bcast_bulk_min_bytes);
 
     bcast_bulk_min_daemons = PRTE_GRPCOMM_BULK_MIN_DAEMONS_DEFAULT;
     pmix_mca_base_var_register("prte", "grpcomm", NULL, "bcast_bulk_min_daemons",
-                               "Smallest DVM \"auto\" will move a payload "
-                               "across with the bulk movement",
+                               "Smallest DVM \"size\" selection will move a "
+                               "payload across with the bulk movement "
+                               "(unused by default)",
                                PMIX_MCA_BASE_VAR_TYPE_INT,
                                &bcast_bulk_min_daemons);
 
@@ -113,33 +119,36 @@ void prte_grpcomm_register(void)
      * a deliberate override, so silently ignoring a typo in it would hide the
      * very experiment the user is running.
      *
-     * The default is "tree", not "auto", because "auto" here means a byte
-     * threshold and that threshold is a guess. Measuring it would need real
-     * multi-node hardware - the cost model's constants are not the textbook
-     * ones (alpha is a progress-thread hop rather than a round trip, and
-     * xcast already compresses, discounting the tree's bandwidth term by an
-     * unknown factor), and a container swarm on one host supplies neither.
+     * The default is "tag": the movement follows what the message IS. That is
+     * possible because the launch message now has its own RML tag, so the one
+     * genuinely large routine broadcast is nameable at the point it is sent.
+     * Before that split PRTE_RML_TAG_DAEMON carried the launch message and
+     * the shutdown command alike and size was the only signal left - which is
+     * why a byte threshold existed at all.
      *
-     * But the better answer is to delete the threshold rather than measure
-     * it. A size test is only needed because PRTE_RML_TAG_DAEMON carries the
-     * launch message and the shutdown command alike, so the operation cannot
-     * be recovered from the call. It is the ONLY overloaded broadcast tag,
-     * and exactly one site on it is large. Give the launch message its own
-     * tag and selection becomes a tag lookup with no constant in it - the
-     * shape the fence's selection already has. See
-     * docs/plans/scalable_collectives.rst, "Selection". */
-    prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_TREE;
+     * The threshold survives as "size", because a programming model may push
+     * something unexpectedly large through a tag nobody classified. It is not
+     * the production path and it should not become one: it holds a number
+     * nobody has measured, and measuring it would need real multi-node
+     * hardware - alpha here is a progress-thread hop rather than a round
+     * trip, and xcast already compresses, discounting the tree's bandwidth
+     * term by an unknown factor. To opt a new payload in, give it a tag and
+     * add it to bulk_tag_prefers_bulk(); do not reach for the threshold. */
+    prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_TAG;
     if (NULL != bcast_movement) {
-        if (0 == strcasecmp(bcast_movement, "auto")) {
-            prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_AUTO;
+        if (0 == strcasecmp(bcast_movement, "tag") ||
+            0 == strcasecmp(bcast_movement, "auto")) {
+            prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_TAG;
+        } else if (0 == strcasecmp(bcast_movement, "size")) {
+            prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_SIZE;
         } else if (0 == strcasecmp(bcast_movement, "tree")) {
             prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_TREE;
         } else if (0 == strcasecmp(bcast_movement, "bulk")) {
             prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_BULK;
         } else {
             pmix_output(0, "PRRTE: grpcomm_bcast_movement \"%s\" is not one of "
-                           "auto/tree/bulk - using tree", bcast_movement);
-            prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_TREE;
+                           "tag/size/tree/bulk - using tag", bcast_movement);
+            prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_TAG;
         }
     }
     prte_grpcomm_globals.bcast_bulk_min_bytes =
@@ -165,24 +174,7 @@ void prte_grpcomm_register(void)
                                PMIX_MCA_BASE_VAR_TYPE_STRING,
                                &fence_movement);
 
-    /* Default to the rollup - but NOT for the reason the broadcast defaults to
-     * the tree, and the difference is worth keeping straight.
-     *
-     * The broadcast's "auto" rests on a byte threshold nobody has measured.
-     * This one has no threshold at all: it reads PMIX_COLLECT_DATA, which is
-     * categorical. A barrier keeps the rollup because a high-radix tree beats
-     * a dissemination exchange at any scale, not because it is under some
-     * size; a modex gets the exchange because the release fanout is what
-     * dominates it. So what is unverified here is not *where* to switch, it
-     * is simply whether the exchange wins in practice on real hardware -
-     * a yes/no, after which this default can flip with no constant to pick.
-     *
-     * "auto" is safe to offer at all because PMIX_COLLECT_DATA reaches every
-     * participant's fence upcall identically - PMIx requires the directive to
-     * be uniform across a fence and enforces that within a node - so every
-     * daemon resolves it the same way. That is a stronger footing than the
-     * broadcast's "auto", which works only because a broadcast has a single
-     * originator to decide for everyone. */
+    /* the rollup, until the next commit makes this per-fence */
     prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_TREE_GATHER;
     if (NULL != fence_movement) {
         if (0 == strcasecmp(fence_movement, "tree")) {
