@@ -3133,6 +3133,14 @@ void prte_plm_base_grow_drain(bool success)
         }
         PMIX_RELEASE(camp);
     }
+    /* The grow has resolved either way, so any release parked behind it can
+     * now run.  This is the resume point the deferral was written against:
+     * grow_drain is called from exactly the two safe places (vm_ready, after
+     * the WIREUP xcast, and the daemon-launch failure path) and is where
+     * prte_grow_campaigns is emptied - so a replayed release re-evaluates
+     * against a DVM that is no longer in flux. */
+    prte_ras_base_replay_deferred_releases();
+
     if (success) {
         /* admit the held jobs only once the *global* fence is clear — a
          * concurrent shrink may still hold it nonzero */
