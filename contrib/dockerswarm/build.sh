@@ -259,7 +259,7 @@ build_linux() {
             #
             # $1 = build dir, $2 = argument string, $3 = srcdir
             #
-            # Three ways a persistent build dir can be stale:
+            # Four ways a persistent build dir can be stale:
             #   - never configured at all;
             #   - configured with different arguments (the PMIX_SRC trap
             #     above);
@@ -271,12 +271,45 @@ build_linux() {
             #     needs the exact aclocal/automake version the host used, and
             #     dies with "aclocal-N.NN: command not found", leaving the
             #     PREVIOUS install standing with no build stamp.
+            #   - configured against a source tree that has since LOST a
+            #     directory.  A framework that stops being a framework
+            #     (grpcomm) or a component that is deleted leaves its build
+            #     subdirectory here, and the parent Makefile -- also from that
+            #     old configure run -- still names it in SUBDIRS.  So make
+            #     recurses into a directory whose Makefile.am no longer exists
+            #     and stops with "No rule to make target
+            #     <srcdir>/src/mca/grpcomm/Makefile.am".  Neither the arguments
+            #     nor the configure timestamp changed, so nothing above sees
+            #     it, and the cost is a whole build cycle spent finding out.
+            orphan_dirs() {                     # $1 = build dir, $2 = srcdir
+                local d rel
+                find "$1" -mindepth 2 -name Makefile -printf "%h\n" |
+                    while IFS= read -r d; do
+                        rel=${d#"$1"/}
+                        [ -d "$2/$rel" ] || echo "$d"
+                    done
+            }
+
             reconfigure_needed() {
                 [ -f "$1/config.status" ] || return 0
                 [ -f "$1/.configure-args" ] || return 0
                 [ "$(cat "$1/.configure-args")" = "$2" ] || return 0
                 [ "$3/configure" -nt "$1/config.status" ] && return 0
+                [ -n "$(orphan_dirs "$1" "$3")" ] && return 0
                 return 1
+            }
+
+            # Reconfiguring regenerates the parent Makefile without the
+            # departed directory in SUBDIRS, so make would no longer enter it
+            # -- but leaving it behind means the NEXT run sees an orphan again
+            # and reconfigures forever.  Remove them as part of the same step.
+            drop_orphans() {                    # $1 = build dir, $2 = srcdir
+                local d
+                while IFS= read -r d; do
+                    [ -n "$d" ] || continue
+                    echo ">>>> dropping orphaned build dir $d (gone from $2)"
+                    rm -rf "$d"
+                done < <(orphan_dirs "$1" "$2")
             }
 
             if [ -d /pmix-src ]; then
@@ -286,6 +319,7 @@ build_linux() {
                 pmix_args="--prefix=$PMIX_PREFIX"
                 if reconfigure_needed . "$pmix_args" /pmix-src; then
                     echo ">>>> (re)configuring PMIx: $pmix_args"
+                    drop_orphans . /pmix-src
                     /pmix-src/configure $pmix_args
                     echo "$pmix_args" > .configure-args
                 fi
@@ -310,6 +344,7 @@ build_linux() {
             prte_args="--prefix=/opt/prte/prte --with-pmix=$PMIX_PREFIX --with-jansson --enable-debug"
             if reconfigure_needed . "$prte_args" /prrte-src; then
                 echo ">>>> (re)configuring PRRTE: $prte_args"
+                drop_orphans . /prrte-src
                 /prrte-src/configure $prte_args
                 echo "$prte_args" > .configure-args
             fi

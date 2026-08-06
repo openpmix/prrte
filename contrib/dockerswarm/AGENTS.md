@@ -797,6 +797,26 @@ stamp is gone — which at least makes `run-tests.sh` refuse to run rather than
 test it. `reconfigure_needed` now also reconfigures when `configure` is newer
 than `config.status`, which is the condition that matters.
 
+**And a source tree can go stale by *losing* a directory.** When a framework
+stops being a framework (`src/mca/grpcomm` became `src/grpcomm`) or a component
+is deleted, the persistent build dir keeps that subdirectory — and the parent
+`Makefile`, also written by the old `configure` run, still names it in
+`SUBDIRS`. So `make` recurses into a directory whose `Makefile.am` no longer
+exists:
+
+```
+make[2]: *** No rule to make target '/prrte-src/src/mca/grpcomm/Makefile.am',
+         needed by '/prrte-src/src/mca/grpcomm/Makefile.in'.  Stop.
+```
+
+Neither the configure arguments nor the `configure` timestamp changed, so
+neither test above sees it, and pulling `master` into a tree the volume was
+built from before the restructure is enough to hit it. `build.sh` now compares
+every build-tree directory that holds a `Makefile` against the source tree,
+reconfigures when one of them is gone, and removes the orphan as part of the
+same step (`orphan_dirs`/`drop_orphans`) — dropping it matters, or the next run
+finds an orphan again and reconfigures forever.
+
 ### Writing a case that asserts on an error message
 
 **`show_help` emits a given message once per HNP.** A test that probes with
