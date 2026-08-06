@@ -174,8 +174,27 @@ void prte_grpcomm_register(void)
                                PMIX_MCA_BASE_VAR_TYPE_STRING,
                                &fence_movement);
 
-    /* the rollup, until the next commit makes this per-fence */
-    prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_TREE_GATHER;
+    /* Default to "auto", which is to say: let each fence take the movement its
+     * own shape calls for. There is no threshold here to be wrong about - the
+     * discriminator is PMIX_COLLECT_DATA, which is categorical - so both arms
+     * are reasoned rather than tuned. A barrier keeps the rollup because a
+     * high-radix tree beats a dissemination exchange at *any* scale, not
+     * because it happens to be small; a modex gets the exchange because the
+     * release fanout, not the gather, is what dominates it.
+     *
+     * The scalable path is the default deliberately, so that it is the one
+     * being exercised. A movement nobody selects is a movement nobody tests,
+     * and the failure modes here (a fence that cannot converge) are exactly
+     * the kind that only appear at scale and under fault.
+     *
+     * "auto" is safe to offer at all because PMIX_COLLECT_DATA reaches every
+     * participant's fence upcall identically - PMIx requires the directive to
+     * be uniform across a fence and enforces that within a node - so every
+     * daemon resolves it the same way. That is a stronger footing than the
+     * broadcast's tag selection, which works because a broadcast has a single
+     * originator to decide for everyone; here nobody decides for anybody, and
+     * a disagreement is caught by the wire interlock rather than hung on. */
+    prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_SELECT_AUTO;
     if (NULL != fence_movement) {
         if (0 == strcasecmp(fence_movement, "tree")) {
             prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_TREE_GATHER;

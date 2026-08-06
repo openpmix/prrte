@@ -268,23 +268,28 @@ inherits the ACK rollup, the `process_first` set and the replay machinery
 untouched. The full design record is
 [`docs/plans/scalable_collectives.rst`](../../docs/plans/scalable_collectives.rst).
 
-**Nothing selects it on its own.** `grpcomm_bcast_movement` defaults to
-`tree`; `bulk` forces it and `auto` applies a size rule
-(`grpcomm_bcast_bulk_min_bytes`, `grpcomm_bcast_bulk_min_daemons`).
+**Selection is by tag, and that is the whole table.** `grpcomm_bcast_movement`
+defaults to `tag`: `bulk_tag_prefers_bulk()` names the broadcasts worth
+scattering, and today it names exactly one — the launch message, on
+`PRTE_RML_TAG_DAEMON_LAUNCH`. Everything else takes the tree. `tree` and
+`bulk` force one movement everywhere for testing.
 
-**That size rule is scaffolding, and is the only real "crossover" anywhere in
-this subsystem.** It exists only because `PRTE_RML_TAG_DAEMON` carries the
-launch message and the shutdown command alike, so the operation cannot be
-recovered from the call and size is the last signal available. That tag is the
-*only* overloaded broadcast tag, and exactly one call site on it is large
-(`plm_base_launch_support.c`, `jdata->launch_msg`); `FILEM` is already
-single-purpose, and everything else is tiny. Give the launch message its own
-tag and selection becomes a tag lookup with no constant in it.
+**Adding a tag to that table is the intended way to opt a payload in.** It is
+not a cost to design around — it is the declaration that keeps the choice
+reasoned. PRRTE does not carry arbitrary traffic; it carries a known, small
+set of things, and which of them a message is *is* the operation.
 
-So do not tune `grpcomm_bcast_bulk_min_bytes` — remove the need for it. And do
-not describe the fence's default in these terms: it has no threshold at all
-(see below), and borrowing this paragraph's reasoning for it is how a made-up
-number acquires an air of having been measured.
+`size` is the fourth value and the escape hatch: the old rule against
+`grpcomm_bcast_bulk_min_bytes` / `_min_daemons`, for a programming model that
+pushes something unexpectedly large through a tag nobody classified. **It is
+not the production path and should not become one** — it holds a number nobody
+has measured. Do not tune it; add a tag instead.
+
+`PRTE_RML_TAG_FILEM_BASE` is deliberately absent from the table even though
+the design's operation list once called its chunks "large". They are capped at
+`PRTE_FILEM_RAW_CHUNK_MAX` = 16 KB, and at that size the answer depends on the
+DVM — the exchange wins at a few hundred daemons and loses at ten. A knob-free
+table has no business holding a guess.
 
 The parts that are load-bearing, and why:
 
@@ -463,8 +468,13 @@ already holds the result and **there is no release at all**. That is the
 point: for a modex it is the release fanout, not the gather, that dominates.
 
 Selected by `grpcomm_fence_movement` (`tree` / `allgather` / `auto`),
-defaulting to `tree`. `auto` reads `PMIX_COLLECT_DATA` out of the fence
+defaulting to **`auto`**, which reads `PMIX_COLLECT_DATA` out of the fence
 upcall's info array — a barrier keeps the rollup, a modex gets the exchange.
+`tree` reverts to the old behaviour in one flag.
+
+The scalable path is the default deliberately: a movement nobody selects is a
+movement nobody tests, and what goes wrong here — a fence that cannot converge
+— shows up at scale and under fault rather than in a unit test.
 
 **There is no size threshold here, and there should never be one.** The
 discriminator is categorical, and both arms are reasoned rather than tuned: a

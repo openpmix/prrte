@@ -361,8 +361,11 @@ static int test_bcast_movement_contract(void)
           1u == PRTE_GRPCOMM_FENCE_RD_ALLGATHER);
     CHECK("the fence movement ids are distinct",
           PRTE_GRPCOMM_FENCE_TREE_GATHER != PRTE_GRPCOMM_FENCE_RD_ALLGATHER);
-    CHECK("fences roll up unless the DVM was told otherwise",
-          PRTE_GRPCOMM_FENCE_TREE_GATHER == prte_grpcomm_globals.fence_select);
+    /* The scalable path is the default so that it is the one being exercised.
+     * "auto" is not a movement - it resolves per fence from PMIX_COLLECT_DATA
+     * - so a barrier still takes the rollup, which is optimal for it. */
+    CHECK("a fence picks its movement per fence by default",
+          PRTE_GRPCOMM_FENCE_SELECT_AUTO == prte_grpcomm_globals.fence_select);
     /* the auto sentinel is deliberately outside the movement id space, so it
      * can never be mistaken for one on the wire */
     CHECK("the auto sentinel is not a movement id",
