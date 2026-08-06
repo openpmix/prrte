@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
@@ -42,7 +42,9 @@
 static int send_buffer(pmix_rank_t rank,
                        pmix_data_buffer_t *buffer,
                        prte_rml_tag_t tag,
-                       bool direct)
+                       bool direct,
+                       prte_rml_buffer_callback_fn_t cbfunc,
+                       void *cbdata)
 {
     prte_rml_recv_t *rcv;
     prte_rml_send_t *snd;
@@ -93,6 +95,12 @@ static int send_buffer(pmix_rank_t rank,
     snd->tag = tag;
     snd->dbuf = buffer;
     snd->direct = direct;
+    /* the constructor installs prte_rml_send_callback; only override it when
+     * the caller actually asked to be told how the send ended */
+    if (NULL != cbfunc) {
+        snd->cbfunc = cbfunc;
+        snd->cbdata = cbdata;
+    }
 
     /* activate the OOB send state */
     PRTE_OOB_SEND(snd);
@@ -104,14 +112,23 @@ int prte_rml_send_buffer_nb(pmix_rank_t rank,
                             pmix_data_buffer_t *buffer,
                             prte_rml_tag_t tag)
 {
-    return send_buffer(rank, buffer, tag, false);
+    return send_buffer(rank, buffer, tag, false, NULL, NULL);
+}
+
+int prte_rml_send_buffer_cb_nb(pmix_rank_t rank,
+                               pmix_data_buffer_t *buffer,
+                               prte_rml_tag_t tag,
+                               prte_rml_buffer_callback_fn_t cbfunc,
+                               void *cbdata)
+{
+    return send_buffer(rank, buffer, tag, false, cbfunc, cbdata);
 }
 
 int prte_rml_send_buffer_direct_nb(pmix_rank_t rank,
                                    pmix_data_buffer_t *buffer,
                                    prte_rml_tag_t tag)
 {
-    return send_buffer(rank, buffer, tag, true);
+    return send_buffer(rank, buffer, tag, true, NULL, NULL);
 }
 
 int prte_rml_send_buffer_reliable_nb(pmix_rank_t rank,
