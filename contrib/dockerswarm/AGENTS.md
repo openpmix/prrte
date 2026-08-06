@@ -8,6 +8,16 @@ running node, stop: `build.sh` below already does the right thing
 (bind-mounts your live working tree into a builder and compiles it
 out-of-tree into the shared volume the nodes read).
 
+> **The one exception: a real scheduler.** The SLURM in this harness is
+> [`fake-slurm.py`](fake-slurm.py) (§12) — a stand-in control plane, which
+> can show that PRRTE issues the right commands and can never show that
+> SLURM accepts them. It also supplies no `srun`, so `plm/slurm` is not
+> exercised here at all. For that,
+> [`contrib/slurmswarm`](../slurmswarm/) is the same harness with an actual
+> SLURM installation in the ten containers. Keep the division: anything
+> without a `SLURM_` in it belongs *here*, because this harness is faster
+> and needs no scheduler.
+
 A small, self-contained harness for exercising PRRTE across several container
 "nodes" — a persistent DVM, one-shot `prterun`, and the **elastic DVM**
 (grow/shrink) plus multi-hop routing/relay — plus a native single-host build on

@@ -160,5 +160,16 @@ the daemons, not srun).
   connections and duplicates command-line settings.
 - Multi-node behavior that does not need SLURM (tree-spawn, throttling,
   the prted command line) is covered by
-  [`contrib/dockerswarm`](../../../../contrib/dockerswarm/); the
-  SLURM-specific paths still require an allocation.
+  [`contrib/dockerswarm`](../../../../contrib/dockerswarm/) — note that
+  its fake scheduler supplies the *control plane* (`sbatch`, `scontrol`,
+  `scancel`) and not `srun`, so no DVM over there is launched by this
+  component at all.
+- The SLURM-specific paths need an allocation, and
+  [`contrib/slurmswarm`](../../../../contrib/slurmswarm/) is one: ten
+  containers running a real SLURM, where the daemons really do go out over
+  `srun --jobid=<the allocation>`. It asserts the three things only a live
+  scheduler shows — that the step joins the caller's job rather than
+  queueing a second one, that the srun exit after `prted` daemonizes is
+  read as a hand-off and not a launch failure (and leaves SLURM no dangling
+  step), and that `pterm` does not take the user's allocation down with the
+  DVM.
