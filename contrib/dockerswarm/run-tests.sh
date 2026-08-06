@@ -477,6 +477,60 @@ test_slurm() {
     FS jobs | grep -qx 1000 && ok "the DVM's own SLURM job was left alone" \
                             || bad "the release took out the base allocation"
 
+    banner "ras/slurm: a release issued while a grow is in flight does not wedge the DVM"
+    # Issue #2617.  Grow and shrink share one launch fence and one broadcast,
+    # and the shrink half had no notion of an in-flight grow: the shrink was
+    # xcast to every daemon INCLUDING ones still joining, which cannot be
+    # reached, so the campaign could neither complete nor abort.  It then sat
+    # on prte_shrink_campaigns forever and every later job parked at the
+    # LAUNCH_APPS hold -- a DVM wedged with no error reported to anyone.
+    #
+    # The interleaving is opportunistic, and deliberately so.  We start the
+    # extend in the background and issue the release without waiting for its
+    # daemons to join; if it happens to land outside the window the case still
+    # passes, correctly, having asserted a legal sequence.  When it lands
+    # inside -- which is the common outcome, since the fake scheduler answers
+    # in well under the time a daemon takes to report home -- an unfixed PRRTE
+    # wedges here and every assertion below fails.  Do not "stabilize" this by
+    # sleeping between the two requests: the sleep is the bug.
+    out=$(SL 'timeout 120 elastic extend 1' 2>&1)
+    settled=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
+    snode=$(FS "nodes $settled" | tr -d '\r')
+    sleep 10
+    # shellcheck disable=SC2086
+    [ -n "$snode" ] && [ "$(prted_count $(fs_idx "$snode"))" = 1 ] \
+        && ok "a settled node ($snode) is in place to be released" \
+        || bad "could not settle a node to release (job=$settled node=$snode)"
+    # now grow WITHOUT letting it settle, and release the settled node into
+    # that window.  The target is deliberately not one of the joining nodes --
+    # a per-target check would pass it, and the campaign would stall anyway on
+    # daemons the caller never selected.
+    SL 'nohup timeout 120 elastic extend 3 >/tmp/grow-race.out 2>&1 & sleep 1' \
+        >/dev/null 2>&1
+    out=$(SL "timeout 120 elastic shrink $snode" 2>&1)
+    sleep 20
+    echo "$out" | grep -q PMIX_DVM_IS_READY \
+        && ok "the release completed even though a grow was in flight" \
+        || bad "release never completed during a grow: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # shellcheck disable=SC2086
+    [ "$(prted_count $(fs_idx "$snode"))" = 0 ] \
+        && ok "the released node's daemon is gone" \
+        || bad "the daemon survived a release issued during a grow"
+    # the wedge's signature: every later job parks at LAUNCH_APPS and never
+    # launches, with no error reported anywhere
+    out=$(SL 'timeout 30 prun -n 1 hostname' 2>&1 | tail -1)
+    [ "$(echo "$out" | tr -d '\r')" = node1 ] \
+        && ok "a later job still launches (the DVM is not wedged)" \
+        || bad "DVM wedged after a release during a grow: $out"
+    # and the grow itself must still have been honored
+    SL 'grep -q "SUCCESS\|ALLOC_ID" /tmp/grow-race.out' \
+        && ok "the concurrent grow was answered too" \
+        || bad "the grow was lost: $(SL 'tr "\n" " " < /tmp/grow-race.out' | tail -c 200)"
+    for j in $(FS jobs | grep -v '^1000$' | tr -d '\r'); do
+        SL "timeout 120 elastic release-id $j" >/dev/null 2>&1
+    done
+    sleep 5
+
     banner "ras/slurm: a pending extend can be cancelled by request id"
     # PMIX_ALLOC_REQ_CANCEL is served while the extend's poll loop is still
     # waiting on a PENDING SLURM job: cancelling drops the pending record and

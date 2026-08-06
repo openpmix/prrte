@@ -585,12 +585,165 @@ void prte_ras_base_release_allocation(prte_session_t *session)
 }
 
 
+typedef struct {
+    pmix_list_item_t super;
+    prte_pmix_server_req_t *req;
+} deferred_release_t;
+static PMIX_CLASS_INSTANCE(deferred_release_t, pmix_list_item_t, NULL, NULL);
+
+/* Is any daemon still joining the DVM?
+ *
+ * A shrink cannot be started while one is.  The shrink is broadcast to the
+ * whole DVM and its campaign drains only when the broadcast has reached every
+ * daemon, and a daemon that has not reported home cannot be reached - so the
+ * campaign would neither complete nor abort, prte_shrink_campaigns would stay
+ * non-empty forever, and every later job would park at the LAUNCH_APPS hold
+ * (#2617).  The precondition is DVM-wide rather than per-target: what stalls
+ * the campaign is the reachability of daemons the caller never selected.
+ *
+ * Three terms, because the growing DVM passes through three states:
+ *
+ *  - PRTE_JOB_EXTEND_DVM on the daemon job covers the window between
+ *    prte_ras_base_activate_dvm_grow() - which only activates LAUNCH_DAEMONS -
+ *    and setup_virtual_machine actually running.  In that window there is no
+ *    campaign yet, and the new daemons have no proc objects to inspect.  The
+ *    attribute is consumed and removed inside setup_virtual_machine.
+ *  - a recorded grow campaign covers launch-in-progress, from
+ *    setup_virtual_machine to prte_plm_base_grow_drain() at VM_READY.  Only in
+ *    elastic mode, which is the only mode that records campaigns at all.
+ *  - a daemon we have recorded but never heard from is the exact statement of
+ *    the precondition, and catches any path that reaches neither of the above.
+ *    rml_uri is the right test and the only right one: it is written solely by
+ *    prte_plm_base_daemon_callback, i.e. only by the daemon itself reporting
+ *    in, whereas PRTE_PROC_FLAG_ALIVE and a RUNNING state are both set when the
+ *    launch is merely *recorded* (see the matching note in errmgr_dvm.c).  The
+ *    ALIVE test is still needed to exclude a daemon that failed to start, which
+ *    never reports a URI and must not park releases forever.
+ */
+bool prte_ras_base_dvm_is_growing(void)
+{
+    prte_job_t *daemons;
+    prte_proc_t *dproc;
+    int i;
+
+    if (!pmix_list_is_empty(&prte_grow_campaigns)) {
+        return true;
+    }
+
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    if (NULL == daemons) {
+        return false;
+    }
+    if (prte_get_attribute(&daemons->attributes, PRTE_JOB_EXTEND_DVM,
+                           NULL, PMIX_BOOL)) {
+        return true;
+    }
+    for (i = 0; i < daemons->procs->size; i++) {
+        dproc = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs, i);
+        if (NULL == dproc) {
+            continue;
+        }
+        if (PRTE_PROC_MY_NAME->rank == dproc->name.rank) {
+            continue;
+        }
+        if (PRTE_FLAG_TEST(dproc, PRTE_PROC_FLAG_ALIVE) &&
+            NULL == dproc->rml_uri) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void prte_ras_base_replay_deferred_releases(void)
+{
+    deferred_release_t *dr;
+
+    /* Replay from scratch rather than resuming mid-flight: everything a
+     * deferred request had done before it was parked is in-memory target
+     * selection, and no scheduler command runs until a campaign drains.
+     * Re-running it also re-selects against the post-grow state, which is what
+     * the requester meant in the first place.
+     *
+     * This is called from both of grow_drain's outcomes.  On the failure path
+     * the rolled-back nodes have had node->daemon cleared by
+     * prte_plm_base_reset_dvm_node, so a replayed request simply re-evaluates
+     * and fails through the ordinary error paths - no separate handling.
+     *
+     * Guard on the framework's open count, as prte_ras_base_release_allocation
+     * does: this is called from plm, whose grow_drain has no way to know
+     * whether ras is still open, and the list is only constructed when it
+     * is. */
+    if (0 == prte_ras_base_framework.framework_refcnt) {
+        return;
+    }
+
+    while (NULL != (dr = (deferred_release_t *)
+                             pmix_list_remove_first(&prte_ras_base.deferred_releases))) {
+        prte_pmix_server_req_t *req = dr->req;
+        PMIX_RELEASE(dr);
+        prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE,
+                       prte_ras_base_modify, req);
+        PMIX_POST_OBJECT(req);
+        prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
+    }
+}
+
+void prte_ras_base_flush_deferred_releases(pmix_status_t status)
+{
+    deferred_release_t *dr;
+
+    /* The DVM is going away with requests still parked.  Answer each one - a
+     * requester released nothing and must not be left waiting on an event that
+     * can no longer be raised. */
+    while (NULL != (dr = (deferred_release_t *)
+                             pmix_list_remove_first(&prte_ras_base.deferred_releases))) {
+        prte_pmix_server_req_t *req = dr->req;
+        PMIX_RELEASE(dr);
+        req->pstatus = status;
+        if (NULL != req->infocbfunc) {
+            req->infocbfunc(req->pstatus, req->info, req->ninfo, req->cbdata,
+                            prte_pmix_server_req_release, req);
+            continue;
+        }
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs,
+                                    req->local_index, NULL);
+        PMIX_RELEASE(req);
+    }
+}
+
 void prte_ras_base_modify(int fd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
     prte_ras_base_selected_module_t *mod;
+    deferred_release_t *dr;
     pmix_status_t rc;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
+
+    /* Hold a release while the DVM is still growing, and replay it once the
+     * grow resolves.  Deferring beats rejecting: a caller has no way to know a
+     * grow is in flight - ras/slurm's extend acknowledges phase one as soon as
+     * the scheduler answers, long before its daemons join - and a target that
+     * is still joining becomes removable seconds later, so parking is what
+     * keeps the semantics the caller expects.
+     *
+     * The guard sits here, at the driver's entry, rather than beside campaign
+     * creation, so it covers both routes into the shrink machinery at once:
+     * the component path (ras/slurm's modify) and the base's own
+     * ras_base_complete_release_request, which runs downstream of this. */
+    if (PMIX_ALLOC_RELEASE == req->allocdir && prte_ras_base_dvm_is_growing()) {
+        PMIX_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
+                             "%s ras:base:modify deferring release - the DVM is"
+                             " still growing",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        dr = PMIX_NEW(deferred_release_t);
+        if (NULL == dr) {
+            req->pstatus = PMIX_ERR_NOMEM;
+            goto respond;
+        }
+        dr->req = req;
+        pmix_list_append(&prte_ras_base.deferred_releases, &dr->super);
+        return;
+    }
 
     // set the default response
     req->pstatus = PMIX_ERR_NOT_SUPPORTED;
@@ -631,6 +784,7 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
         prte_ras_base_complete_request(req);
     }
 
+respond:
     // execute the callback
     if (NULL != req->infocbfunc) {
         req->infocbfunc(req->pstatus, req->info, req->ninfo, req->cbdata, prte_pmix_server_req_release, req);

@@ -51,6 +51,7 @@
  */
 prte_ras_base_t prte_ras_base = {
     .selected_modules = PMIX_LIST_STATIC_INIT,
+    .deferred_releases = PMIX_LIST_STATIC_INIT,
     .total_slots_alloc = 0,
     .multiplier = 0,
     .launch_orted_on_hn = false,
@@ -80,6 +81,11 @@ static int prte_ras_base_close(void)
 {
     prte_ras_base_selected_module_t *mod;
 
+    /* Answer anything still parked behind a grow that is never going to
+     * resolve now.  The requester released nothing, so it must be told rather
+     * than left waiting on a completion event the DVM can no longer raise. */
+    prte_ras_base_flush_deferred_releases(PMIX_ERR_UNREACH);
+
     /* Close selected components */
     PMIX_LIST_FOREACH(mod, &prte_ras_base.selected_modules, prte_ras_base_selected_module_t) {
         if (NULL != mod->module->finalize) {
@@ -87,6 +93,7 @@ static int prte_ras_base_close(void)
         }
     }
     PMIX_LIST_DESTRUCT(&prte_ras_base.selected_modules);
+    PMIX_LIST_DESTRUCT(&prte_ras_base.deferred_releases);
 
     return pmix_mca_base_framework_components_close(&prte_ras_base_framework, NULL);
 }
@@ -97,8 +104,11 @@ static int prte_ras_base_close(void)
  *    */
 static int prte_ras_base_open(pmix_mca_base_open_flag_t flags)
 {
-    /* init the globals */
+    /* init the globals.  The static initializers above leave each list's
+     * sentinel NULL-linked -- safe to read as empty, but NOT safe to append
+     * to -- so both have to be constructed here before anything uses them. */
     PMIX_CONSTRUCT(&prte_ras_base.selected_modules, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_ras_base.deferred_releases, pmix_list_t);
 
     /* Open up all available components */
     return pmix_mca_base_framework_components_open(&prte_ras_base_framework, flags);

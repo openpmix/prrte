@@ -164,6 +164,11 @@ static int setup_globals(void)
     prte_sessions = PMIX_NEW(pmix_pointer_array_t);
     pmix_pointer_array_init(prte_sessions, 8, INT_MAX, 8);
 
+    /* the elastic campaign lists -- constructed by prte_init(), which this
+     * test does not reach; prte_finalize() destructs them on the way out */
+    PMIX_CONSTRUCT(&prte_shrink_campaigns, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grow_campaigns, pmix_list_t);
+
     /* the daemon job -- node_insert looks it up to test DO_NOT_LAUNCH */
     djob = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(djob->nspace, "prte-unit-test-dvm");
@@ -890,6 +895,82 @@ static int test_slurm_allocation(void)
     return failures;
 }
 
+/*
+ * prte_ras_base_dvm_is_growing() -- the precondition that decides whether a
+ * PMIX_ALLOC_RELEASE may start a shrink campaign now or has to be parked until
+ * the DVM settles (#2617). It is a pure function of the daemon job and the grow
+ * campaign list, so it is exactly the sort of decision this test can pin; what
+ * it guards -- an unreachable daemon stalling the shrink broadcast -- needs the
+ * dockerswarm harness.
+ *
+ * The three states of a growing DVM each get a case, and so does the one that
+ * must NOT read as growing: a daemon that failed to start never reports a URI,
+ * and if that counted it would park every later release for the life of the
+ * DVM.
+ */
+static int test_dvm_growing(void)
+{
+    int failures = 0;
+    prte_job_t *djob;
+    prte_proc_t *d1;
+    prte_grow_campaign_t *camp;
+
+    djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+
+    /* a settled DVM: one daemon besides us, and it has reported home */
+    d1 = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&d1->name, PRTE_PROC_MY_NAME->nspace, 1);
+    d1->rml_uri = strdup("1;tcp://127.0.0.1:1234");
+    PRTE_FLAG_SET(d1, PRTE_PROC_FLAG_ALIVE);
+    pmix_pointer_array_set_item(djob->procs, 1, d1);
+    CHECK("dvm_is_growing: a settled DVM is not growing",
+          !prte_ras_base_dvm_is_growing());
+
+    /* state 1: the grow has been requested but setup_virtual_machine has not
+     * run yet -- no campaign exists and the new daemons have no procs */
+    prte_set_attribute(&djob->attributes, PRTE_JOB_EXTEND_DVM,
+                       PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+    CHECK("dvm_is_growing: a requested-but-unstarted grow is growing",
+          prte_ras_base_dvm_is_growing());
+    prte_remove_attribute(&djob->attributes, PRTE_JOB_EXTEND_DVM);
+    CHECK("dvm_is_growing: settled again once the attribute is consumed",
+          !prte_ras_base_dvm_is_growing());
+
+    /* state 2: launch in progress -- a campaign is recorded */
+    camp = PMIX_NEW(prte_grow_campaign_t);
+    camp->ntargets = 1;
+    camp->targets = (pmix_rank_t *) malloc(sizeof(pmix_rank_t));
+    camp->targets[0] = 2;
+    pmix_list_append(&prte_grow_campaigns, &camp->super);
+    CHECK("dvm_is_growing: a recorded grow campaign is growing",
+          prte_ras_base_dvm_is_growing());
+    pmix_list_remove_item(&prte_grow_campaigns, &camp->super);
+    PMIX_RELEASE(camp);
+    CHECK("dvm_is_growing: settled again once the campaign drains",
+          !prte_ras_base_dvm_is_growing());
+
+    /* state 3: a daemon recorded as launched that has never reported in.
+     * rml_uri is the test, and only rml_uri: ALIVE and RUNNING are both set
+     * when the launch is merely recorded. */
+    free(d1->rml_uri);
+    d1->rml_uri = NULL;
+    d1->state = PRTE_PROC_STATE_RUNNING;
+    CHECK("dvm_is_growing: a daemon that has not reported home is growing",
+          prte_ras_base_dvm_is_growing());
+
+    /* ...but a daemon that failed to start is not still joining, and must not
+     * park releases forever */
+    PRTE_FLAG_UNSET(d1, PRTE_PROC_FLAG_ALIVE);
+    d1->state = PRTE_PROC_STATE_FAILED_TO_START;
+    CHECK("dvm_is_growing: a daemon that failed to start is not growing",
+          !prte_ras_base_dvm_is_growing());
+
+    pmix_pointer_array_set_item(djob->procs, 1, NULL);
+    PMIX_RELEASE(d1);
+
+    return failures;
+}
+
 
 int main(void)
 {
@@ -925,6 +1006,7 @@ int main(void)
     failures += test_preassigned_index();
     failures += test_hnp_dedup();
     failures += test_flag_string();
+    failures += test_dvm_growing();
     /* after test_select(), which opens the framework and latches a
      * selection made with no SLURM allocation in the environment -- so
      * nothing has called slurm's init() before this does */

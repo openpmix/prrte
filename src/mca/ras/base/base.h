@@ -54,6 +54,10 @@ PRTE_EXPORT int prte_ras_base_select(void);
 typedef struct prte_ras_base_t {
     /* list of selected modules */
     pmix_list_t selected_modules;
+    /* PMIX_ALLOC_RELEASE requests parked because the DVM was still growing
+     * when they arrived, in arrival order. See prte_ras_base_dvm_is_growing()
+     * and prte_ras_base_replay_deferred_releases() below. */
+    pmix_list_t deferred_releases;
     int total_slots_alloc;
     int multiplier;
     bool launch_orted_on_hn;
@@ -87,6 +91,24 @@ PRTE_EXPORT void prte_ras_base_display_cpus(prte_job_t *jdata, char *nodelist);
 PRTE_EXPORT void prte_ras_base_allocate(int fd, short args, void *cbdata);
 
 PRTE_EXPORT void prte_ras_base_modify(int fd, short args, void *cbdata);
+
+/* Is any daemon still joining the DVM?  No shrink campaign may be created
+ * while one is: the shrink is broadcast DVM-wide and drains only when every
+ * daemon has received it, so a daemon that has not reported home leaves the
+ * campaign unable to either complete or abort.  See the definition for the
+ * three states of a growing DVM this has to answer for. */
+PRTE_EXPORT bool prte_ras_base_dvm_is_growing(void);
+
+/* Re-drive every PMIX_ALLOC_RELEASE that prte_ras_base_modify parked because
+ * the DVM was still growing when it arrived.  Called from
+ * prte_plm_base_grow_drain() on both of its outcomes: the requests are replayed
+ * from scratch, so a grow that failed simply lets them re-evaluate against the
+ * rolled-back DVM and fail through the ordinary error paths. */
+PRTE_EXPORT void prte_ras_base_replay_deferred_releases(void);
+
+/* Answer every parked release with the given status and drop it.  For teardown,
+ * where the grow that would have replayed them is never going to resolve. */
+PRTE_EXPORT void prte_ras_base_flush_deferred_releases(pmix_status_t status);
 
 /* Notify the active RAS modules that a shrink campaign has completed so they
  * can release the freed resources back to the scheduler. Cycles across every
