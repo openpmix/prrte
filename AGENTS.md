@@ -620,8 +620,22 @@ changes; `run-tests.sh` drives the multi-node suite (launch, IOF,
 preload, mapping/ranking across nodes, elastic grow/shrink, relay).  Do
 not invent an ad-hoc container flow — use the harness.
 
-For resource-manager integration (SLURM, PBS, LSF), test within an actual
-allocation on the relevant system.
+**Testing under a real SLURM.**  [`contrib/slurmswarm/`](contrib/slurmswarm/)
+is the same harness with an actual SLURM installation in the ten
+containers — a real `slurmctld`, ten `slurmd`s, real `salloc`/`srun`/
+`sbatch`/`scancel` — so `ras/slurm` and `plm/slurm` can be exercised
+against a scheduler that can say no.  It is the only place `plm/slurm`
+runs at all (the sibling harness's fake scheduler supplies the control
+plane, not the launcher), and the only place PRRTE's `scontrol show job
+--json` parser meets SLURM's own output.  See its
+[`AGENTS.md`](contrib/slurmswarm/AGENTS.md); note in particular that
+`ras/slurm`'s JSON parser requires **SLURM 24.05 or newer**, which is why
+that image builds SLURM from source rather than taking the distribution
+package.  Everything that is not about the scheduler belongs in
+`contrib/dockerswarm`, which is faster and needs no SLURM.
+
+For PBS and LSF integration, test within an actual allocation on the
+relevant system.
 
 **Never bend a test to accommodate a bug.** Do not weaken, skip, or
 rewrite an existing test — and do not craft a new one — merely to make

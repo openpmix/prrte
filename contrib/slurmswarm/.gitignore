@@ -1,0 +1,9 @@
+# Out-of-tree (VPATH) build directories.  This harness builds only into the
+# shared docker volume, so nothing of its own lands here -- but the sibling
+# harness's host build does, and both are driven from the same source tree.
+vpath-linux/
+vpath-macos/
+
+# Downloaded SLURM tarball, if you ever unpack one here to read the schema
+slurm-*.tar.bz2
+slurm-*/

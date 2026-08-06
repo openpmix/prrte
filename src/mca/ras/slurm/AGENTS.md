@@ -137,7 +137,18 @@ coverage follows that seam.
 | Half | Covered by |
 |------|------------|
 | `query` + `allocate` (nodelist expansion, taint refusal, `PRTE_EXISTS` on re-discovery) | `test/unit/ras/test_ras.c` — no scheduler needed, since both read only the environment |
-| `modify` (extend/release/cancel, the JSON parser, `validate_hostname`, `drain_cmd_output`) | [`contrib/dockerswarm`](../../../../contrib/dockerswarm/) — it shells out and is inherently multi-node, and it is the only automated build that configures `--with-jansson`, so it is the only place `ras_slurm_jansson.c` is even compiled |
+| `modify` (extend/release/cancel, the JSON parser, `validate_hostname`, `drain_cmd_output`) | [`contrib/dockerswarm`](../../../../contrib/dockerswarm/) — it shells out and is inherently multi-node, and it is one of the two automated builds that configure `--with-jansson`, so `ras_slurm_jansson.c` is compiled nowhere else |
+| the same surface against a scheduler that can refuse it | [`contrib/slurmswarm`](../../../../contrib/slurmswarm/) — ten containers running a real SLURM, so `sbatch` really queues, `scontrol update ... ReqNodeList=` really has to be a resize SLURM accepts on a RUNNING job, and the JSON is SLURM's own |
+
+**The JSON parser requires SLURM 24.05 or newer.**
+`prte_ras_slurm_get_jobinfo_json` reads
+`job_resources.nodes.{count,list,allocation}`, which is the shape SLURM
+adopted in data parser **v0.0.41**. Through 23.11 the same query answers with
+`job_resources.nodes` as a plain *string* alongside a flat `allocated_nodes`
+array, and every extend fails at once with *"Failed to parse input JSON"*.
+That floor was found by `contrib/slurmswarm` and is why its image builds
+SLURM from source rather than taking the distribution package; there is
+currently no configure-time or run-time check for it.
 
 The harness fakes the scheduler with
 [`fake-slurm.py`](../../../../contrib/dockerswarm/fake-slurm.py), installed
