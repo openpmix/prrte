@@ -258,23 +258,25 @@ parse_run() {
             }
         }
         {
-            it = ""; put = 0; col = 0; bar = 0
+            it = ""; put = 0; col = 0; bar = 0; nbr = 0
             for (i = 1; i <= NF; i++) {
                 if ($i == "ITER")    { it  = $(i + 1) }
                 if ($i == "PUT")     { put = i }
                 if ($i == "COLLECT") { col = i }
                 if ($i == "BARRIER") { bar = i }
+                if ($i == "NEIGHBORS") { nbr = i }
             }
             if ("" == it || 0 == put || 0 == col || 0 == bar) { next }
             record(1, it, $(put + 1), $(put + 2))
             record(2, it, $(col + 1), $(col + 2))
             record(3, it, $(bar + 1), $(bar + 2))
+            if (0 != nbr) { record(4, it, $(nbr + 1), $(nbr + 2)) }
         }
         END {
             for (i = 1; i <= ni; i++) {
                 it = order[i]
                 printf "%s,%s", prefix, it
-                for (p = 1; p <= 3; p++) {
+                for (p = 1; p <= 4; p++) {
                     printf ",%.1f,%.1f", (maxe[p, it] - mins[p, it]) / 1000.0, maxl[p, it] / 1000.0
                 }
                 printf "\n"
@@ -299,6 +301,7 @@ cmd_run() {
     # the per-daemon figure would matter.
     local max_total_bytes=$((2 * 1024 * 1024 * 1024))
     local scope=global
+    local neighbors=""
     local dry=0
     local swarm_n
 
@@ -315,6 +318,7 @@ cmd_run() {
             --out)       out=$2; shift 2 ;;
             --max-bytes)       max_bytes=$2; shift 2 ;;
             --max-total-bytes) max_total_bytes=$2; shift 2 ;;
+            --neighbors) neighbors=1; shift ;;
             --dry-run)   dry=1; shift ;;
             *) die "unknown option $1" ;;
         esac
@@ -325,7 +329,7 @@ cmd_run() {
 
     local raw="${out%.csv}-raw.csv"
     local hdr="nodes,radix,ppn,nprocs,nkeys,sizes,bytes_per_rank,collected_bytes"
-    echo "$hdr,iter,put_wall_us,put_max_local_us,collect_wall_us,collect_max_local_us,barrier_wall_us,barrier_max_local_us" > "$raw"
+    echo "$hdr,iter,put_wall_us,put_max_local_us,collect_wall_us,collect_max_local_us,barrier_wall_us,barrier_max_local_us,neighbors_wall_us,neighbors_max_local_us" > "$raw"
 
     # The largest ppn in the sweep is what every DVM is given as slots, so the
     # node pool does not change between the runs inside one DVM.
@@ -399,7 +403,8 @@ cmd_run() {
                         if ! RUN "timeout -k 10 600 prun --dvm-uri file:$URI \
                                     --map-by ppr:$ppn:node --bind-to none -n $nprocs \
                                     $BIN --tag $tag --nkeys $nkeys --sizes $cs \
-                                         --iters $iters --warmup $warmup --scope $scope" \
+                                         --iters $iters --warmup $warmup --scope $scope \
+                                         ${neighbors:+--neighbors}" \
                                  > "$capture" 2>&1; then
                             echo "    FAILED: $(tail -3 "$capture" | tr '\n' ' ')" >&2
                             rm -f "$capture"
@@ -450,6 +455,7 @@ summarize() {
         c[key, ++cn[key]] = $12
         b[key, ++bn[key]] = $14
         p[key, ++pn[key]] = $10
+        g[key, ++gn[key]] = $16
     }
     function med(arr, key, n,   v, i, j, t) {
         for (i = 1; i <= n; i++) { v[i] = arr[key, i] }
@@ -464,13 +470,14 @@ summarize() {
     END {
         print "nodes,radix,ppn,nprocs,nkeys,sizes,bytes_per_rank,collected_bytes,samples," \
               "put_med_us,collect_med_us,collect_min_us,collect_max_us," \
-              "barrier_med_us,barrier_min_us,barrier_max_us,data_cost_us"
+              "barrier_med_us,barrier_min_us,barrier_max_us,data_cost_us,neighbors_med_us"
         for (i = 1; i <= nk; i++) {
             key = order[i]; n = cn[key]
             cm = med(c, key, n); bm = med(b, key, n)
-            printf "%s,%d,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\n", key, n,
+            printf "%s,%d,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\n", key, n,
                    med(p, key, n), cm, mn(c, key, n), mx(c, key, n),
-                   bm, mn(b, key, n), mx(b, key, n), cm - bm
+                   bm, mn(b, key, n), mx(b, key, n), cm - bm,
+                   (0 < gn[key]) ? med(g, key, gn[key]) : 0
         }
     }' "$raw" > "$out"
 }

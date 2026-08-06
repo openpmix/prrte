@@ -13,7 +13,7 @@
  * against DVM size, process count, routing radix and payload size.
  *
  *   scaletest [--nkeys N] [--sizes A,B,C] [--iters N] [--warmup N]
- *             [--scope global|remote|local] [--tag STR] [--verify]
+ *             [--scope global|remote|local] [--tag STR] [--verify] [--neighbors]
  *
  * Each iteration is three timed phases:
  *
@@ -127,7 +127,8 @@ static void usage(const char *argv0)
 {
     fprintf(stderr,
             "usage: %s [--nkeys N] [--sizes A,B,C] [--iters N] [--warmup N]\n"
-            "          [--scope global|remote|local] [--tag STR] [--verify]\n",
+            "          [--scope global|remote|local] [--tag STR] [--verify]\n"
+            "          [--neighbors]\n",
             argv0);
 }
 
@@ -142,6 +143,7 @@ int main(int argc, char **argv)
     pmix_scope_t scope = PMIX_GLOBAL;
     const char *tag = "run";
     bool verify = false;
+    bool neighbors = false;
     char hostname[256];
     char key[PMIX_MAX_KEYLEN + 1];
     char *payload = NULL;
@@ -177,6 +179,8 @@ int main(int argc, char **argv)
             tag = argv[++a];
         } else if (0 == strcmp(argv[a], "--verify")) {
             verify = true;
+        } else if (0 == strcmp(argv[a], "--neighbors")) {
+            neighbors = true;
         } else if (0 == strcmp(argv[a], "--scope") && a + 1 < argc) {
             ++a;
             if (0 == strcmp(argv[a], "global")) {
@@ -245,11 +249,11 @@ int main(int argc, char **argv)
         }
     }
 
-    /* 6 marks per iteration: put start/end, collect start/end, barrier
-     * start/end.  Buffered, not printed, until every iteration is done --
-     * printing travels the IOF wire through the daemons the next collective
-     * is about to use. */
-    marks = calloc((warmup + iters) * 6, sizeof(uint64_t));
+    /* 8 marks per iteration: put start/end, collect start/end, barrier
+     * start/end, neighbors start/end.  Buffered, not printed, until every
+     * iteration is done -- printing travels the IOF wire through the daemons
+     * the next collective is about to use. */
+    marks = calloc((warmup + iters) * 8, sizeof(uint64_t));
     if (NULL == marks) {
         fprintf(stderr, "ERROR out of memory\n");
         free(payload);
@@ -258,7 +262,7 @@ int main(int argc, char **argv)
     }
 
     for (i = 0; i < warmup + iters; i++) {
-        uint64_t *m = &marks[i * 6];
+        uint64_t *m = &marks[i * 8];
 
         if (PMIX_SUCCESS != (rc = sync_ranks())) {
             fprintf(stderr, "ERROR sync before iter %zu: %s\n", i, PMIx_Error_string(rc));
@@ -336,6 +340,60 @@ int main(int argc, char **argv)
             fprintf(stderr, "ERROR barrier fence %zu: %s\n", i, PMIx_Error_string(rc));
             goto done;
         }
+
+        /* NEIGHBORS -- what a job pays for only the peers it actually needs.
+         *
+         * The collect fence above hands every rank the whole job's data; this
+         * phase asks instead for just two values, from a job that has
+         * barriered WITHOUT collecting.  Those gets are answered by direct
+         * modex: the local daemon does not hold the peer's data, so it
+         * fetches it from the daemon that does.  Both halves already exist
+         * here, so the comparison Slurm's PMIX_Ring is an argument for -
+         * O(1) per peer you actually need against O(N) to everybody - can be
+         * measured in PRRTE rather than inferred.  Nothing here implements a
+         * ring; this is the number that would have to justify one.
+         *
+         * OFF BY DEFAULT, and it must stay that way: a get perturbs the next
+         * iteration, which is why --verify is optional for the same reason.
+         * Measured - running this phase in the same loop as COLLECT dropped
+         * the collect time for an identical configuration from 8098us to
+         * 1390us while the barrier beside it did not move.  So compare a
+         * --neighbors run against a separate plain run; do not read the
+         * COLLECT column out of a run that also asked for neighbors.
+         *
+         * Left and right are fetched in that order and not overlapped, so
+         * this is the pessimistic serial reading of the pattern. */
+        if (neighbors && 1 < nprocs) {
+            uint32_t lrank = (myproc.rank + nprocs - 1) % nprocs;
+            uint32_t rrank = (myproc.rank + 1) % nprocs;
+            pmix_proc_t nbr;
+            pmix_value_t *nval;
+            size_t w;
+
+            if (PMIX_SUCCESS != (rc = sync_ranks())) {
+                fprintf(stderr, "ERROR sync before neighbors %zu: %s\n", i,
+                        PMIx_Error_string(rc));
+                goto done;
+            }
+            m[6] = now_ns();
+            for (w = 0; w < 2; w++) {
+                uint32_t peer_rank = (0 == w) ? lrank : rrank;
+
+                PMIX_LOAD_PROCID(&nbr, myproc.nspace, peer_rank);
+                snprintf(key, sizeof(key), "st-%u-%zu-%zu", peer_rank, i, (size_t) 0);
+                rc = PMIx_Get(&nbr, key, NULL, 0, &nval);
+                if (PMIX_SUCCESS != rc || NULL == nval) {
+                    fprintf(stderr, "ERROR neighbor get %s from %u: %s\n", key,
+                            peer_rank, PMIx_Error_string(rc));
+                    goto done;
+                }
+                PMIX_VALUE_RELEASE(nval);
+            }
+            m[7] = now_ns();
+        } else {
+            m[6] = now_ns();
+            m[7] = m[6];
+        }
     }
 
     /* Everything is done; now it is safe to talk. */
@@ -349,13 +407,14 @@ int main(int argc, char **argv)
                tag, nprocs, nkeys, total, iters, warmup);
     }
     for (i = warmup; i < warmup + iters; i++) {
-        uint64_t *m = &marks[i * 6];
+        uint64_t *m = &marks[i * 8];
 
         printf("SCALE %s RANK %u HOST %s ITER %zu PUT %llu %llu COLLECT %llu %llu "
-               "BARRIER %llu %llu\n",
+               "BARRIER %llu %llu NEIGHBORS %llu %llu\n",
                tag, myproc.rank, hostname, i - warmup, (unsigned long long) m[0],
                (unsigned long long) m[1], (unsigned long long) m[2], (unsigned long long) m[3],
-               (unsigned long long) m[4], (unsigned long long) m[5]);
+               (unsigned long long) m[4], (unsigned long long) m[5],
+               (unsigned long long) m[6], (unsigned long long) m[7]);
     }
     fflush(stdout);
 

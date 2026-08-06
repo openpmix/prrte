@@ -1528,3 +1528,26 @@ with a flat one at the same size, and how much of the total is payload
 (`data_cost_us`) versus tree latency (`barrier_med_us`). Treat absolute
 values as meaningful only against another run on the same host with the same
 load.
+
+### What only the peers you need would cost (`--neighbors`)
+
+The COLLECT column is the price of handing every rank the whole job's data.
+`scaletest --neighbors` measures the other end of that trade: after the
+barrier — a fence that collected **nothing** — each rank fetches just its two
+ring neighbours, serially, and the driver reports it as a fourth phase and a
+`neighbors_med_us` column.
+
+Those two gets are answered by **direct modex**: the local daemon does not
+hold the peer's data, so it fetches it from the daemon that does. Both halves
+of the comparison therefore already exist in PRRTE, which is the point — the
+argument Slurm's `PMIX_Ring` makes (pay O(1) for the peers you actually need,
+not O(N) for everybody) becomes something measurable here rather than
+something to reason about. Nothing in the tree implements a ring; this is the
+number that would have to justify building one.
+
+**A `--neighbors` run is for reading the NEIGHBORS column and nothing else.**
+The gets perturb the collective beside them badly: running this phase in the
+same loop moved an *identical* configuration's COLLECT from 8098 µs to
+1390 µs while the barrier next to it did not budge. Take the COLLECT column
+from a separate plain run. Left and right are fetched in that order and never
+overlapped, so the figure is the pessimistic serial reading of the pattern.
