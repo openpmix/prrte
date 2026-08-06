@@ -41,6 +41,7 @@
 #include "src/util/pmix_string_copy.h"
 
 #include "plm_slurm.h"
+#include "src/mca/common/slurm/common_slurm.h"
 #include "src/mca/plm/base/plm_private.h"
 #include "src/mca/plm/plm.h"
 
@@ -106,66 +107,28 @@ static int plm_slurm_open(void)
 
 static int prte_mca_plm_slurm_component_query(pmix_mca_base_module_t **module, int *priority)
 {
-    FILE *fp;
-    char version[1024], *ptr;
+    const prte_common_slurm_version_t *slurm;
 
     /* Are we running under a SLURM job? */
-    if (NULL != getenv("SLURM_JOBID")) {
+    if (NULL != prte_common_slurm_jobid()) {
         *priority = 75;
 
         PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:slurm: available for selection",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-        // check the version
-        fp = popen("srun --version", "r");
-        if (NULL == fp) {
-            // cannot run srun, so we cannot support this job
+        /* Check the version.  The probe used to live here as a popen of
+         * "srun --version"; it now lives in src/mca/common/slurm so that
+         * ras/slurm reads the same answer from the same probe instead of
+         * running its own -- see that library for why the thresholds are
+         * three separate questions. */
+        slurm = prte_common_slurm_version();
+        if (!slurm->available) {
+            /* cannot ask Slurm what it is, so we cannot support this job */
             *module = NULL;
             return PRTE_ERROR;
         }
-        if (NULL == fgets(version, sizeof(version), fp)) {
-            pclose(fp);
-            *module = NULL;
-            return PRTE_ERROR;
-        }
-        pclose(fp);
-        /* move cptr past the 1st space. if the line doesn't have a space, then ignore it */
-        ptr = strchr(version, ' ');
-        if (NULL == ptr) {
-            // play it safe
-            *module = NULL;
-            return PRTE_ERROR;
-        }
-        ++ptr;
-        // parse on the dots. Step over the separator only if there IS one:
-        // "slurm 23" with no minor leaves ptr on the terminating NUL, and
-        // walking past that reads whatever the uninitialized tail of the
-        // fgets buffer happens to hold
-        prte_mca_plm_slurm_component.major = strtol(ptr, &ptr, 10);
-        if ('\0' != *ptr) {
-            ++ptr;
-        }
-        prte_mca_plm_slurm_component.minor = strtol(ptr, NULL, 10);
 
-        if (23 > prte_mca_plm_slurm_component.major) {
-            prte_mca_plm_slurm_component.early = true;
-        } else if (23 < prte_mca_plm_slurm_component.major) {
-            prte_mca_plm_slurm_component.early = false;
-        } else if (11 > prte_mca_plm_slurm_component.minor) {
-            prte_mca_plm_slurm_component.early = true;
-        } else {
-            prte_mca_plm_slurm_component.early = false;
-        }
-        // check for ancient
-        if (prte_mca_plm_slurm_component.major < 17) {
-            prte_mca_plm_slurm_component.ancient = true;
-        } else if (17 == prte_mca_plm_slurm_component.major &&
-                   prte_mca_plm_slurm_component.minor < 11) {
-            prte_mca_plm_slurm_component.ancient = true;
-        } else {
-            prte_mca_plm_slurm_component.ancient = false;
-        }
         *module = (pmix_mca_base_module_t *) &prte_plm_slurm_module;
         return PRTE_SUCCESS;
     }

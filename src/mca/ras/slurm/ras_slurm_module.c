@@ -60,6 +60,7 @@
 #include "src/util/prte_show_help.h"
 
 #include "ras_slurm.h"
+#include "src/mca/common/slurm/common_slurm.h"
 #include "src/mca/ras/base/base.h"
 
 #define PRTE_SLURM_DYN_MAX_SIZE 256
@@ -168,7 +169,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
     prte_session_t *session;
     PRTE_HIDE_UNUSED_PARAMS(jdata);
 
-    if (NULL == (slurm_jobid = getenv("SLURM_JOBID"))) {
+    if (NULL == (slurm_jobid = prte_common_slurm_jobid())) {
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 

@@ -186,6 +186,7 @@ PRTE_SAVE_VERSION([PRTE], [PMIx Reference Run-Time Environment],
 
 AC_SUBST(libprrte_so_version)
 AC_SUBST(libprrte_common_alps_so_version)
+AC_SUBST(libmca_prte_common_slurm_so_version)
 
 #
 # Get the versions of the autotools that were used to bootstrap us

@@ -39,6 +39,7 @@
 #include "src/util/name_fns.h"
 
 #include "ras_slurm.h"
+#include "src/mca/common/slurm/common_slurm.h"
 #include "src/mca/ras/base/base.h"
 
 /*
@@ -153,7 +154,7 @@ static int prte_mca_ras_slurm_component_query(pmix_mca_base_module_t **module, i
      * I am not in a Slurm allocation, and dynamic alloc
      * is not enabled, then disqualify myself
      */
-    if (NULL == getenv("SLURM_JOBID")) {
+    if (NULL == prte_common_slurm_jobid()) {
         /* disqualify ourselves */
         *priority = 0;
         *module = NULL;

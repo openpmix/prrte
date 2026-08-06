@@ -126,10 +126,12 @@ either side of the request completing and shares no state with it.
 tracker; `finalize` tears them down. A successful atomic modify returns
 `PMIX_OPERATION_SUCCEEDED` so the base completes the request.
 
-The JSON helpers (`ras_slurm_jansson.c`) only compile meaningfully when
-Jansson is available; otherwise `ras_slurm_jansson_stub.c` provides
-`prte_ras_slurm_have_jansson()==false` and no-op stubs, so extend/release
-degrade gracefully.
+The JSON helpers (`ras_slurm_jansson.c`) are compiled only when the
+**extensions** are built — jansson available *and* a new enough SLURM, see
+the build gate below; otherwise `ras_slurm_jansson_stub.c` provides
+`prte_ras_slurm_have_jansson()==false` and no-op stubs. All three `modify`
+entry points ask `prte_ras_slurm_have_extensions()` before doing anything,
+so a build without them refuses the request and leaves the DVM running.
 
 ---
 
@@ -171,15 +173,53 @@ coverage follows that seam.
 | `modify` (extend/release/cancel, the JSON parser, `validate_hostname`, `drain_cmd_output`) | [`contrib/dockerswarm`](../../../../contrib/dockerswarm/) — it shells out and is inherently multi-node, and it is one of the two automated builds that configure `--with-jansson`, so `ras_slurm_jansson.c` is compiled nowhere else |
 | the same surface against a scheduler that can refuse it | [`contrib/slurmswarm`](../../../../contrib/slurmswarm/) — ten containers running a real SLURM, so `salloc` really allocates, `scontrol update ... ReqNodeList=` really has to be a resize SLURM accepts on a RUNNING job, and the JSON is SLURM's own |
 
-**The JSON parser requires SLURM 24.05 or newer.**
+### The extensions are a separate build gate: SLURM 24.05 or newer
+
 `prte_ras_slurm_get_jobinfo_json` reads
 `job_resources.nodes.{count,list,allocation}`, which is the shape SLURM
 adopted in data parser **v0.0.41**. Through 23.11 the same query answers with
 `job_resources.nodes` as a plain *string* alongside a flat `allocated_nodes`
-array, and every extend fails at once with *"Failed to parse input JSON"*.
-That floor was found by `contrib/slurmswarm` and is why its image builds
-SLURM from source rather than taking the distribution package; there is
-currently no configure-time or run-time check for it.
+array, and every extend fails with *"Failed to parse input JSON"* — a
+diagnostic that says nothing about versions and sends people looking at
+PRRTE. That floor was found by `contrib/slurmswarm`, and is why its image
+builds SLURM from source rather than taking the distribution package.
+
+[`configure.m4`](configure.m4) now decides this at build time.
+`PRTE_RAS_SLURM_CHECK_VERSION` asks the client tools (`scontrol`, then
+`srun`/`sbatch`/`sinfo`) what version they are, and
+`PRTE_RAS_SLURM_CHECK_EXTENSIONS` turns that into one flag:
+
+| Artifact | Use |
+|----------|-----|
+| `PRTE_HAVE_SLURM_EXTENSIONS` (0/1) | the C gate — test with `#if`, never `#ifdef` |
+| `PRTE_SLURM_VERSION_STRING`, `PRTE_SLURM_MIN_EXT_VERSION` | what the run-time diagnostic names |
+| `PRTE_WANT_SLURM_EXTENSIONS` (automake) | the **build** gate: `Makefile.am` compiles `ras_slurm_jansson.c` or `ras_slurm_jansson_stub.c`, and configure drops the jansson flags entirely when off |
+| `--enable`/`--disable-slurm-extensions` | the override, in both directions. A feature switch, not a package location: the component links no SLURM library, so there is nothing to point a `--with-` at |
+
+Three things about that decision are deliberate:
+
+- **Undetectable means enabled.** Every SLURM client establishes a
+  configuration source before it will print `--version`, so on a build node
+  with the binaries but no `slurm.conf` the command exits 1 saying
+  *"Could not establish a configuration source"* and reports no version at
+  all. Configuring somewhere that is not a SLURM client is entirely
+  ordinary, and defaulting off there would quietly remove a working feature
+  from builds that have always had it. Erring the other way costs exactly
+  the run-time failure this check exists to explain, and no more. Use
+  `--disable-slurm-extensions` to gate it off locally when you know the
+  target's SLURM is older than that.
+- **`--enable-testbuild-launchers` forces it on.** That flag exists to
+  *compile* what the machine cannot run, so the version of any SLURM sitting
+  next to it is beside the point.
+- **Only the parser is switched.** The `ras_slurm_modify_*.c` sources build
+  command lines and are not tied to any SLURM release, so they keep
+  compiling and there is no stub surface to drift. Each of their three entry
+  points calls `prte_ras_slurm_have_extensions()`
+  ([`ras_slurm_modify_common.c`](ras_slurm_modify_common.c)) first, which is
+  also where the two *distinct* reasons for refusal are reported. They used
+  to share one message naming jansson, which is a plain falsehood on a
+  machine that has jansson and a SLURM too old — and that machine is every
+  stock Ubuntu 24.04.
 
 The harness fakes the scheduler with
 [`fake-slurm.py`](../../../../contrib/dockerswarm/fake-slurm.py), installed

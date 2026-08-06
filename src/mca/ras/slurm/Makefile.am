@@ -38,12 +38,19 @@ sources = \
         ras_slurm_modify_release_tracker.c \
         ras_slurm_modify_release_tracker.h
 
-# PRTE_WANT_JANSSON_SOURCE is true when jansson was found OR when
-# --enable-testbuild-launchers was given.  In the latter case the real parser
-# compiles against the declarations in base/testbuild_jansson.h, so this ~1000
-# line file is at least syntax-checked on machines with no jansson; such a
-# build must not be run (see src/mca/ras/AGENTS.md).
-if PRTE_WANT_JANSSON_SOURCE
+# The build gate for the elastic extensions.  PRTE_WANT_SLURM_EXTENSIONS is
+# true when jansson was found (or --enable-testbuild-launchers was given, in
+# which case the real parser compiles against the declarations in
+# base/testbuild_jansson.h so this ~1000 line file is at least syntax-checked
+# on machines with no jansson -- such a build must not be run, see
+# src/mca/ras/AGENTS.md) AND the Slurm this tree was configured against is new
+# enough to emit the JSON the parser reads.  See configure.m4.
+#
+# Only the parser is switched.  The modify sources above are the request
+# plumbing -- they build command lines and are not tied to any Slurm release
+# -- and each of their three entry points refuses up front when the
+# extensions are not built, so there is no stub surface to keep in step here.
+if PRTE_WANT_SLURM_EXTENSIONS
 sources += \
         ras_slurm_jansson.c
 else
@@ -72,7 +79,13 @@ mcacomponent_LTLIBRARIES = $(component)
 prte_mca_ras_slurm_la_SOURCES = $(component_sources)
 prte_mca_ras_slurm_la_CPPFLAGS = $(ras_slurm_jansson_CPPFLAGS)
 prte_mca_ras_slurm_la_LDFLAGS = -module -avoid-version $(ras_slurm_jansson_LDFLAGS)
-prte_mca_ras_slurm_la_LIBADD = $(top_builddir)/src/libprrte.la $(ras_slurm_jansson_LIBS)
+# NOTE: only the DSO build names the common library here.  In a static
+# build libprrte links it directly (configure puts it in
+# MCA_prte_common_STATIC_LTLIBS), and naming it in this convenience
+# library too puts a second copy of common_slurm.o on libprrte's link
+# line -- "multiple definition of prte_common_slurm_jobid".
+prte_mca_ras_slurm_la_LIBADD = $(top_builddir)/src/mca/common/slurm/libmca_common_slurm.la \
+        $(top_builddir)/src/libprrte.la $(ras_slurm_jansson_LIBS)
 
 noinst_LTLIBRARIES = $(lib)
 libprtemca_ras_slurm_la_SOURCES = $(lib_sources)

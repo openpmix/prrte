@@ -33,7 +33,7 @@ gate in its `configure.m4` the way `lsf`/`pals` gate on their libraries.
 ## Selection (`prte_mca_ess_slurm_component_query`)
 
 ```c
-if (PRTE_PROC_IS_DAEMON && NULL != getenv("SLURM_JOBID")
+if (PRTE_PROC_IS_DAEMON && NULL != prte_common_slurm_jobid()
     && NULL != prte_process_info.my_hnp_uri) {
     *priority = 50;
     *module   = &prte_ess_slurm_module;
@@ -42,7 +42,10 @@ if (PRTE_PROC_IS_DAEMON && NULL != getenv("SLURM_JOBID")
 ```
 
 All three must hold: we are a daemon, we are inside a SLURM allocation
-(`SLURM_JOBID`), and we were given a path home to the HNP
+(a Slurm job id — `prte_common_slurm_jobid()` reads both `SLURM_JOB_ID`
+and the historical `SLURM_JOBID`; see
+[`common/slurm`](../../common/slurm/AGENTS.md)), and we were given a path
+home to the HNP
 (`my_hnp_uri`). The last condition is what distinguishes "launched by
 mpirun under SLURM" from merely "a SLURM allocation exists" — without a
 home URI there is nothing for this daemon to attach to.

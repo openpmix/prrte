@@ -1182,9 +1182,7 @@ static void slurm_wait_poll_cb(int fd, short args, void *cbdata)
  */
 int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
 {
-    if(!prte_ras_slurm_have_jansson()) {
-        pmix_output(0, "ras:slurm:modify: "
-            "Jansson support is required but not enabled in this build");
+    if (!prte_ras_slurm_have_extensions()) {
         return PRTE_ERR_NOT_AVAILABLE;
     }
 

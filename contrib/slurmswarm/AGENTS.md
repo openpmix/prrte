@@ -361,10 +361,25 @@ PRTE ERROR: Failed to parse input JSON in file .../ras_slurm_jansson.c at line 5
 
 and the elastic surface has no coverage at all. So: **PRRTE's `ras/slurm`
 requires SLURM 24.05 or newer**, and nothing in the tree said so before this
-harness existed. `run-tests.sh` checks the *schema* at preflight rather than
-the version number, because what matters is what the scheduler emits, and it
-skips the elastic phase rather than failing it when the schema is wrong — a
-red suite there would read as "your tree is broken" when it is not.
+harness existed.
+
+It says so now, at configure time.
+[`src/mca/ras/slurm/configure.m4`](../../src/mca/ras/slurm/configure.m4) asks
+the SLURM client tools their version and folds the answer, together with
+jansson availability, into `PRTE_HAVE_SLURM_EXTENSIONS` — which gates *which
+sources compile* (`ras_slurm_jansson.c` versus its stub) and what the run-time
+refusal says. `--enable`/`--disable-slurm-extensions` overrides it in either direction.
+A machine with no SLURM to interrogate — a build node, or this harness's
+sibling — defaults to **enabled**, so nothing that worked before stops
+working; see that component's `AGENTS.md` for why that is the right default.
+
+`run-tests.sh` therefore checks two different things at preflight, and they
+are genuinely independent: `PRTE_HAVE_SLURM_EXTENSIONS` in the build
+directory's `prte_config.h` says whether *this build* can parse, and the live
+schema probe says whether *this cluster* emits what the parser reads (the
+build may have been configured somewhere else entirely). Either one wrong
+skips the elastic phase rather than failing it — a red suite there would read
+as "your tree is broken" when it is not.
 
 The fields the parser needs, all present in v0.0.41 through v0.0.43
 (SLURM 24.05, 24.11, 25.05):
