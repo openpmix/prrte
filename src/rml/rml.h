@@ -17,7 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  *
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
@@ -78,6 +78,41 @@ PRTE_EXPORT int prte_rml_send_buffer_nb(pmix_rank_t rank,
                             PMIX_RANK_PRINT(r), t,              \
                             __FILE__, __func__, __LINE__);      \
         (_r) = prte_rml_send_buffer_nb(r, b, t);                \
+    } while(0)
+
+/**
+ * As prte_rml_send_buffer_nb, but tell the caller how the send ended.
+ *
+ * The return value of a plain send says only that the message was *queued*.
+ * The next hop is resolved on a later event, so an unreachable addressee, a
+ * peer that goes away mid-flight, or a connection that never completes are all
+ * discovered after the call has returned - and reported nowhere the caller can
+ * see.  A caller that is tracking whether the message arrived (a collective
+ * waiting on the subtree beneath this hop) needs to be told.
+ *
+ * cbfunc runs on the progress thread and OWNS the buffer, exactly as the
+ * default prte_rml_send_callback does - releasing it is the callback's job, and
+ * chaining to prte_rml_send_callback is the way to keep the RML's own failure
+ * reporting while adding to it.
+ *
+ * A message to *self* short-circuits into the local receive path and never
+ * reaches the OOB, so cbfunc does not fire for one (the receive owns the
+ * buffer).  There is nothing to report there - a self-send cannot fail - but a
+ * caller counting callbacks must not count on one.
+ */
+PRTE_EXPORT int prte_rml_send_buffer_cb_nb(pmix_rank_t rank,
+                                           pmix_data_buffer_t *buffer,
+                                           prte_rml_tag_t tag,
+                                           prte_rml_buffer_callback_fn_t cbfunc,
+                                           void *cbdata);
+
+#define PRTE_RML_SEND_CB(_r, r, b, t, cf, cd)                   \
+    do {                                                        \
+        pmix_output_verbose(2, prte_rml_base.rml_output,        \
+                            "RML-SEND-CB(%s:%d): %s:%s:%d",     \
+                            PMIX_RANK_PRINT(r), t,              \
+                            __FILE__, __func__, __LINE__);      \
+        (_r) = prte_rml_send_buffer_cb_nb(r, b, t, cf, cd);     \
     } while(0)
 
 /**

@@ -8,7 +8,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
@@ -176,6 +176,11 @@ static op_t* insert_forwarded_op(signature_t *sig);
 static void forward_op(op_t *op);
 // Forward to specific destination
 static void forward_op_to(op_t *op, pmix_rank_t dest);
+// Send-completion callback: a message to a child that never arrives means that
+// subtree's ack is never coming, so stop expecting it
+static void forward_lost(int status, pmix_proc_t *peer,
+                         pmix_data_buffer_t *buffer,
+                         prte_rml_tag_t tag, void *cbdata);
 // Locally process the message being broadcast, if not already done
 static void process_msg(op_t *op);
 // Ack that myself and my full subtree have received this message
@@ -807,7 +812,17 @@ static void send_ack_msg(
         return;
     }
 
-    PRTE_RML_SEND(ret, dest, msg, PRTE_RML_TAG_XCAST_ACK);
+    if(is_request){
+        /* A re-poll aimed at a child we cannot reach says exactly what an
+         * undeliverable forward says - no ack is ever coming from that subtree
+         * - so it is tracked the same way.  The upward direction is not: a
+         * failure there is our lifeline, which is the fault machinery's
+         * business and not this op's. */
+        PRTE_RML_SEND_CB(ret, dest, msg, PRTE_RML_TAG_XCAST_ACK,
+                         forward_lost, (void*)(intptr_t) sig->op_id);
+    } else {
+        PRTE_RML_SEND(ret, dest, msg, PRTE_RML_TAG_XCAST_ACK);
+    }
     if(PMIX_SUCCESS != ret){
         PMIX_ERROR_LOG(ret);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
@@ -1742,6 +1757,69 @@ static void forward_op(op_t* op){
     mv->forward(op);
 }
 
+/* A forward that never arrives is an ack that never comes.
+ *
+ * PRTE_RML_SEND reports only that the message was *queued*: the OOB resolves
+ * the next hop on a later event, and an unreachable one is discovered there
+ * (prte_oob_base_send_nb sets PRTE_ERR_ADDRESSEE_UNKNOWN and completes the
+ * send through this callback).  So the rc check in forward_op_to cannot see
+ * it, and without this the op waits forever on a subtree it never reached.
+ *
+ * That is not a hypothetical.  The routing tree holds daemons that have not
+ * yet reported home - setup_virtual_machine recomputes it at launch
+ * *initiation*, and must, because plm/ssh tree-spawn is driven from it - so
+ * every broadcast issued during a DVM grow forwards to a child there is as yet
+ * no way to reach.  errmgr/dvm deliberately swallows that send failure (it is
+ * not a daemon death), which is right for the daemon and left the op stuck:
+ * the master's op_id_completed stopped advancing, every later broadcast tripped
+ * PRTE_ERR_OUT_OF_ORDER_MSG in finish_op, and anything waiting on the
+ * completion callback - the elastic shrink campaign - waited forever (#2617).
+ *
+ * Dropping the expectation is the answer rather than failing the broadcast,
+ * because a daemon that joins after op N was never going to see op N anyway:
+ * the late-joiner catch-up in insert_forwarded_op has it adopt ops 1..N-1 as
+ * complete when it arrives.  This only makes the sender agree with that.  A
+ * child that genuinely died is a separate story and still takes the fault
+ * handler's path, which recomputes nexpected and starts a fresh ack round. */
+static void forward_lost(int status, pmix_proc_t *peer,
+                         pmix_data_buffer_t *buffer,
+                         prte_rml_tag_t tag, void *cbdata)
+{
+    signature_t sig;
+    op_t *op;
+
+    sig.op_id = (size_t) (intptr_t) cbdata;
+
+    /* keep the RML's own reporting: what a failed send means for the *daemon*
+     * is the errmgr's call, and unchanged.  We only decide what it means for
+     * this op. */
+    prte_rml_send_callback(status, peer, buffer, tag, NULL);
+
+    if (PRTE_SUCCESS == status) {
+        return;
+    }
+
+    op = find_op(&sig);
+    if (NULL == op) {
+        /* the op finished (or was abandoned) while this send was in flight */
+        return;
+    }
+
+    PMIX_OUTPUT_VERBOSE((
+        1, prte_grpcomm_globals.output,
+        "%s grpcomm:xcast op %lu never reached %s (%s) - dropping its subtree "
+        "from the ack rollup",
+        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned long) sig.op_id,
+        (NULL == peer) ? "someone" : PRTE_NAME_PRINT(peer),
+        PRTE_ERROR_NAME(status)
+    ));
+
+    if (0 < op->nexpected) {
+        op->nexpected--;
+    }
+    drive_completions();
+}
+
 static void forward_op_to(op_t* op, pmix_rank_t dest){
     pmix_data_buffer_t* xcast_msg = PMIx_Data_buffer_create();
 
@@ -1760,7 +1838,11 @@ static void forward_op_to(op_t* op, pmix_rank_t dest){
         PRTE_VPID_PRINT(dest)
     ));
 
-    PRTE_RML_SEND(rc, dest, xcast_msg, PRTE_RML_TAG_XCAST);
+    /* The op-id is carried by value rather than by pointer: the send outlives
+     * the op on precisely the paths that matter, so the callback has to be
+     * able to look the op up and find it gone. */
+    PRTE_RML_SEND_CB(rc, dest, xcast_msg, PRTE_RML_TAG_XCAST,
+                     forward_lost, (void *) (intptr_t) op->sig.op_id);
     if (PMIX_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
