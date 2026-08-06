@@ -490,7 +490,7 @@ build_linux() {
             mkdir -p /opt/prte/fakeslurm/bin
             install -m 0755 /prrte-src/contrib/dockerswarm/fake-slurm.py \
                 /opt/prte/fakeslurm/bin/fake-slurm
-            for t in sbatch scontrol scancel; do
+            for t in salloc scontrol scancel; do
                 ln -sf fake-slurm /opt/prte/fakeslurm/bin/$t
             done
 

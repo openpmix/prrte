@@ -494,14 +494,14 @@ prototype here compiles and then mismatches the real library.
 
 **`ras/slurm`'s `modify` surface is covered in `contrib/dockerswarm`, not
 in the unit test.** Extend, release and cancel shell out to
-`sbatch`/`scontrol` and only mean anything across several nodes, and each
+`salloc`/`scontrol` and only mean anything across several nodes, and each
 of them returns `PRTE_ERR_NOT_AVAILABLE` outright unless jansson was
 found — so a `make check` build, which by default has no jansson, cannot
 reach a line of it. The harness is multi-node, and its `build.sh` passes
 `--with-jansson` deliberately, so it is the only automated build anywhere
 that even compiles `ras_slurm_jansson.c`. It supplies the scheduler with
 [`fake-slurm.py`](../../../contrib/dockerswarm/fake-slurm.py) — the
-`SLURM_*` environment plus `sbatch`/`scontrol`/`scancel` stubs on `PATH`
+`SLURM_*` environment plus `salloc`/`scontrol`/`scancel` stubs on `PATH`
 that hand out real container hostnames, so an extend genuinely launches
 daemons and a release genuinely removes them. `validate_hostname`,
 `prte_ras_slurm_drain_cmd_output` and the JSON parser live on that path

@@ -12,7 +12,7 @@ session/pool model, and the node→session deviation summarized below.
 itself available (query priority **50**) only when `SLURM_JOBID` is set;
 otherwise it disqualifies. It is the richest ras component: besides
 initial discovery it implements the full **elastic modify** surface
-(extend / release / cancel) by driving `scontrol`/`sbatch` and parsing
+(extend / release / cancel) by driving `scontrol`/`salloc` and parsing
 SLURM's JSON.
 
 Files:
@@ -21,7 +21,7 @@ Files:
 |------|----------|
 | `ras_slurm_component.c` | Registration; `query` gates on `SLURM_JOBID`; many `propagate_*` MCA params. |
 | `ras_slurm_module.c` | `init`, `allocate`, `modify`, `finalize`; the `SLURM_NODELIST` regex parser; session/tagging helpers; jobid/hostname validation. |
-| `ras_slurm_modify_extend.c` | `PMIX_ALLOC_EXTEND`: build & launch an `sbatch` expander job, wait for it, absorb new nodes. |
+| `ras_slurm_modify_extend.c` | `PMIX_ALLOC_EXTEND`: build & launch a `salloc --no-shell` expander job, wait for it, absorb new nodes. |
 | `ras_slurm_modify_release.c` | `PMIX_ALLOC_RELEASE`: `scontrol update job` to shrink; remove nodes by count. |
 | `ras_slurm_modify_cancel.c` | `PMIX_ALLOC_REQ_CANCEL`: track and cancel pending extend requests. |
 | `ras_slurm_modify_common.c` | Shared helpers: `kill_job`, control-char checks, command-output draining. |
@@ -82,7 +82,7 @@ deviation* and the framework guide.
 - **`PMIX_ALLOC_EXTEND`** → `serve_extend_req`: propagates the original
   job's SLURM attributes (account, partition, qos, cwd, mem-per-cpu,
   mem-per-node, time, threads-per-core — each gated by a `propagate_*`
-  MCA param, all default true), builds `sbatch` args, launches an
+  MCA param, all default true), builds `salloc` args, launches an
   **expander job**, waits (event-driven wait tracker) for it, then adds
   the modified resources.
 - **`PMIX_ALLOC_RELEASE`** → `serve_release_req`: shrinks the SLURM job
@@ -90,6 +90,37 @@ deviation* and the framework guide.
   the launching node (`SLURMD_NODENAME`).
 - **`PMIX_ALLOC_REQ_CANCEL`** → `serve_cancel_req`: cancels a pending
   extend by request id.
+
+### The salloc child outlives the call that forked it
+
+`--no-shell` is what makes the expander job shrinkable. Allocating with
+`sbatch` meant a batch script, and **a batch script is the job** — the job
+lives exactly as long as the script runs, which is why it had to be `sleep
+infinity`. That script runs on the job's first node, so releasing that node
+would kill it and take the whole allocation down with it: the one node that
+could never be handed back on its own. `--no-shell` runs nothing at all, so no
+node anchors the job and any of them can go.
+
+The price is that `salloc` is the process holding the handshake with
+slurmctld, and it does not exit until the allocation is granted. Three
+consequences, all in `prte_ras_slurm_exec_salloc`:
+
+- **It is not waited on.** The job ID is read off the child's output — salloc
+  names the job as soon as slurmctld has it, pending or not — and the child is
+  then handed to `prte_wait_cb` and left running. Waiting inline would block
+  the progress thread for the whole queue wait, and PRRTE's own SIGCHLD
+  handler reaps every child anyway.
+- **Killing it while the job is pending revokes the allocation.** That is the
+  intended way out of a failed submit, and the reason nothing else may kill it.
+- **Its pipe stays open until it exits.** Closing the read end early would hand
+  salloc an `EPIPE` part way through the grant, so the descriptor belongs to
+  the reap callback. Nothing reads it in between, which is only safe because
+  salloc's remaining output is a few hundred bytes — do not add a verbosity
+  flag to the command line.
+
+`salloc_wait_cb` is deliberately diagnostic only. The `scontrol show job
+--json` poll drives the extend from submission onwards, so the reap can fire
+either side of the request completing and shares no state with it.
 
 `init` allocates `prte_slurm_session_stack` and the pending-request
 tracker; `finalize` tears them down. A successful atomic modify returns
@@ -109,7 +140,7 @@ degrade gracefully.
   session-exists check.
 - **Never set `node->session`** in `assign_new_session` (see above).
 - **Taint/validate before shelling out.** Every jobid/hostname that
-  reaches an `scontrol`/`sbatch`/`squeue` command line must pass the
+  reaches an `scontrol`/`salloc`/`squeue` command line must pass the
   validators; `check_taint` also bounds `SLURM_NODELIST` length.
 - **Guard JSON features behind `prte_ras_slurm_have_jansson()`** so the
   no-Jansson build path stays correct.
@@ -138,7 +169,7 @@ coverage follows that seam.
 |------|------------|
 | `query` + `allocate` (nodelist expansion, taint refusal, `PRTE_EXISTS` on re-discovery) | `test/unit/ras/test_ras.c` — no scheduler needed, since both read only the environment |
 | `modify` (extend/release/cancel, the JSON parser, `validate_hostname`, `drain_cmd_output`) | [`contrib/dockerswarm`](../../../../contrib/dockerswarm/) — it shells out and is inherently multi-node, and it is one of the two automated builds that configure `--with-jansson`, so `ras_slurm_jansson.c` is compiled nowhere else |
-| the same surface against a scheduler that can refuse it | [`contrib/slurmswarm`](../../../../contrib/slurmswarm/) — ten containers running a real SLURM, so `sbatch` really queues, `scontrol update ... ReqNodeList=` really has to be a resize SLURM accepts on a RUNNING job, and the JSON is SLURM's own |
+| the same surface against a scheduler that can refuse it | [`contrib/slurmswarm`](../../../../contrib/slurmswarm/) — ten containers running a real SLURM, so `salloc` really allocates, `scontrol update ... ReqNodeList=` really has to be a resize SLURM accepts on a RUNNING job, and the JSON is SLURM's own |
 
 **The JSON parser requires SLURM 24.05 or newer.**
 `prte_ras_slurm_get_jobinfo_json` reads
@@ -152,7 +183,7 @@ currently no configure-time or run-time check for it.
 
 The harness fakes the scheduler with
 [`fake-slurm.py`](../../../../contrib/dockerswarm/fake-slurm.py), installed
-into the swarm as `sbatch`/`scontrol`/`scancel` and handing out real
+into the swarm as `salloc`/`scontrol`/`scancel` and handing out real
 container hostnames — so an extend really launches daemons and a release
 really removes them. Read
 [its AGENTS.md §11](../../../../contrib/dockerswarm/AGENTS.md) before adding

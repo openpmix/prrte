@@ -58,7 +58,7 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | `groupcon.c` | A bare PMIx client that drives a **group construct/destruct** (`groupcon` in the install): every rank contributes a local cid, asks for a context id, constructs, reads every peer's contribution back, destructs. Drives grpcomm's `grp_release` on daemons that merely *received* the broadcast. See §15. |
 | `envspawn.c` | A PMIx client that spawns a child job carrying one of every **envar directive** (`envspawn` in the install): SET/ADD/UNSET/PREPEND/APPEND, pinned to a named host, with the child reporting the environment it actually got into a file on its own node. Those directives have no command-line surface — they arrive only on a spawn request — and `odls` applies them on whichever daemon forks the process, so the child has to land somewhere the parent is not. Drives `prte_odls_base_process_envars`. |
 | `slowcat.c` | A deliberately **slow** stdin reader (`slowcat` in the install, no PMIx dependency): copies stdin to a file in small reads with a pause between them, so the daemon feeding it keeps hitting *partial* writes. That is the only way to reach the iof short-write path. |
-| `fake-slurm.py` | A stand-in SLURM control plane (`sbatch`/`scontrol`/`scancel`) so `ras/slurm`'s elastic modify surface can be exercised. See §12. |
+| `fake-slurm.py` | A stand-in SLURM control plane (`salloc`/`scontrol`/`scancel`) so `ras/slurm`'s elastic modify surface can be exercised. See §12. |
 | `scaletest.c` | A PMIx client that **times** a full-data fence and a bare barrier over the whole job (`scaletest` in the install). Not a pass/fail case — a measurement. See §18. |
 | `scaletest.sh` | The measurement driver: stands up a swarm of arbitrary size (default 40), sweeps DVM size × procs-per-node × routing radix × payload, and writes a CSV. See §18. |
 
@@ -966,7 +966,7 @@ and would otherwise read as the child's.
 ## 12. Faking a SLURM environment (`ras/slurm`)
 
 `ras/slurm` is the only ras component with a full elastic **modify** surface,
-and everything past initial discovery is a shell-out: `sbatch` to grow,
+and everything past initial discovery is a shell-out: `salloc` to grow,
 `scontrol show job <id> --json` to learn what SLURM granted, `scontrol update
 job <id> ReqNodeList=…` to shrink one in place, `scancel` to give one back.
 None of that runs on a developer machine, so it had no automated coverage at
@@ -976,7 +976,7 @@ all — including the ~1000-line JSON parser, which this harness is also the
 
 [`fake-slurm.py`](fake-slurm.py) supplies the missing scheduler. `build.sh`
 installs it into the shared volume as
-`/opt/prte/fakeslurm/bin/{sbatch,scontrol,scancel}` (it dispatches on
+`/opt/prte/fakeslurm/bin/{salloc,scontrol,scancel}` (it dispatches on
 `argv[0]`), deliberately **not** into the install `bin/` that the node
 entrypoint puts on every node's default PATH — a test has to opt in by
 prepending that directory, so this cannot perturb anything else in the suite.
@@ -998,9 +998,9 @@ $RUN 'export PATH=/opt/prte/fakeslurm/bin:$PATH
       nohup prte --prtemca prte_elastic_mode 1 --prtemca ras_base_verbose 5 \
             >/tmp/prte.out 2>&1 &
       sleep 8
-      elastic extend 2             # PMIX_ALLOC_EXTEND: sbatch, poll, absorb
+      elastic extend 2             # PMIX_ALLOC_EXTEND: salloc, poll, absorb
       fake-slurm audit             # every command PRRTE issued
-      fake-slurm args 2001         # the sbatch argv it built
+      fake-slurm args 2001         # the salloc argv it built
       elastic shrink node3         # partial: scontrol update ReqNodeList=
       elastic release-id 2001'     # whole job: scancel
 ```
@@ -1025,7 +1025,7 @@ misbehaving (`fake-slurm set <key> <value>`):
 
 | key | effect |
 |-----|--------|
-| `pending_secs` | a new job sits in `PENDING` this long — lets a request be cancelled mid-poll |
+| `pending_secs` | a new job sits in `PENDING` this long — lets a request be cancelled mid-poll, and is what keeps the stub's `salloc` alive long enough to exercise PRRTE's deferred reap (below) |
 | `scancel_fail` | `scancel` exits non-zero with far more output than the 256-byte capture buffer holds |
 | `bad_json` | `scontrol show job --json` returns unparsable output with exit status 0 |
 
@@ -1034,6 +1034,17 @@ The suite uses all three: a cancelled pending extend, a failing `scancel`
 take the HNP down), and malformed JSON. It also asserts a release naming a
 hostname with a shell metacharacter is refused before it can reach a command
 line.
+
+**The stub's `salloc` blocks, and that is deliberate.** The real one is the
+process holding a pending allocation — it announces the job on stderr as soon
+as slurmctld has it and only then waits for resources, exiting once they are
+granted. PRRTE reads the job ID out of that first line and leaves the child
+running, reaping it asynchronously later, so a stub that returned immediately
+the way `sbatch` did would never exercise that. `pending_secs` is therefore
+the knob that opens the window: while it is non-zero a live `salloc` sits
+under the HNP for the whole poll, and a `scancel` during it makes the stub
+report the allocation revoked and exit non-zero, which is the reap callback's
+failure branch.
 
 **Some slot counts are asserted from `ras_base_verbose` output, not from
 the pool.** The verbose line is what the component itself computed, so it

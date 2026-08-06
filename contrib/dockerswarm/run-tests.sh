@@ -148,7 +148,7 @@ pmix_cap() {
 }
 
 # --- fake-SLURM helpers -----------------------------------------------------
-# ras/slurm reaches its scheduler by shelling out to sbatch/scontrol/scancel,
+# ras/slurm reaches its scheduler by shelling out to salloc/scontrol/scancel,
 # so the harness supplies them: build.sh installs fake-slurm.py into the shared
 # volume under its own prefix, and everything in that phase runs with that
 # prefix FIRST on PATH and the SLURM_* envars exported.  Nothing outside these
@@ -162,7 +162,7 @@ SL() { docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM
 FS() { docker exec "${NODE}1" bash -lc "export PATH=$FS_BIN:\$PATH; fake-slurm $*"; }
 # "node2,node4" -> "2 4", for prted_count
 fs_idx() { echo "$1" | tr ',' '\n' | sed 's/^node//' | tr '\n' ' '; }
-# the sbatch argv that created a given fake job
+# the salloc argv that created a given fake job
 fs_args() { FS "args $1" 2>/dev/null; }
 
 # --- bootstrap-DVM helpers --------------------------------------------------
@@ -202,7 +202,7 @@ bootstrap_start() {
 ########################################################################
 #
 # Everything ras/slurm does beyond reading SLURM_NODELIST is a shell-out --
-# sbatch to grow, "scontrol show job --json" to learn what it got, "scontrol
+# salloc to grow, "scontrol show job --json" to learn what it got, "scontrol
 # update job ReqNodeList=" to shrink one, scancel to give one back -- so none
 # of it can run on a developer machine and none of it had any coverage.  The
 # unit test covers the half that only reads the environment (query, allocate);
@@ -360,7 +360,7 @@ test_slurm() {
         && ok "SLURM_TASKS_PER_NODE '2(x1)' expanded to node1 with 2 slots" \
         || bad "nodelist/tasks-per-node expansion wrong: $(SL 'grep -m3 "adding node" /tmp/prte.out' | tr '\n' ' ')"
 
-    banner "ras/slurm: PMIX_ALLOC_EXTEND runs sbatch and grows the DVM"
+    banner "ras/slurm: PMIX_ALLOC_EXTEND runs salloc and grows the DVM"
     # PMIX_ALLOC_EXTEND + PMIX_ALLOC_NUM_NODES is the only extend shape this
     # component accepts: which nodes it gets back is the scheduler's choice,
     # so the request names a count and the answer comes from the job JSON.
@@ -394,20 +394,28 @@ test_slurm() {
         && ok "slots derived from ALLOCATED cores, capped by cpus.count" \
         || bad "wrong slot count from the job JSON: $(SL 'grep -m3 discovered.node /tmp/prte.out' | tr '\n' ' ')"
 
-    banner "ras/slurm: the parent job's attributes are propagated onto sbatch"
+    banner "ras/slurm: the parent job's attributes are propagated onto salloc"
     sargs=$(fs_args "$jid")
-    for want in --parsable --exclusive --nodes=2 --account=prrte-test \
+    for want in --no-shell --exclusive --nodes=2 --account=prrte-test \
                 --partition=debug --qos=normal --chdir=/root --mem=1024 \
                 --time=60 --threads-per-core=1; do
         echo "$sargs" | grep -qx -- "$want" \
-            && ok "sbatch carried $want" \
-            || bad "sbatch missing $want (got: $(echo "$sargs" | tr '\n' ' '))"
+            && ok "salloc carried $want" \
+            || bad "salloc missing $want (got: $(echo "$sargs" | tr '\n' ' '))"
     done
     # memory_per_cpu is unset in the parent job, and an unset numeric object
     # must be omitted rather than sent as a sentinel
     echo "$sargs" | grep -q -- '--mem-per-cpu' \
-        && bad "sbatch sent --mem-per-cpu for an unset memory_per_cpu" \
-        || ok "an unset numeric field is omitted from the sbatch line"
+        && bad "salloc sent --mem-per-cpu for an unset memory_per_cpu" \
+        || ok "an unset numeric field is omitted from the salloc line"
+    # A batch script IS the job -- the job lives exactly as long as it runs,
+    # which is why the sbatch expander job ran "sleep infinity".  It runs on
+    # the job's first node, so releasing that node would have killed the
+    # script and taken the whole allocation with it.  --no-shell runs nothing
+    # at all, which is what makes an arbitrary shrink possible.
+    echo "$sargs" | grep -q -- '--wrap' \
+        && bad "the expander job is still anchored to a script (--wrap present)" \
+        || ok "the expander job runs nothing, so all of its nodes are releasable"
 
     banner "ras/slurm: releasing one node shrinks the SLURM job in place"
     # Removing SOME of a job's nodes keeps the job and resizes it with
@@ -612,7 +620,7 @@ test_slurm() {
     SL 'timeout -k 5 30 pterm' >/dev/null 2>&1
     cleanup_swarm
 
-    banner "ras/slurm: propagate_* MCA params gate what reaches sbatch"
+    banner "ras/slurm: propagate_* MCA params gate what reaches salloc"
     # Each propagated attribute has its own switch; turning two off must drop
     # exactly those two arguments and leave the rest of the line intact.
     FS 'init --jobid 1000 --base node1 --tasks 2 --pool node2,node3' >/dev/null
@@ -628,8 +636,8 @@ test_slurm() {
         sargs=$(fs_args "$jid")
         if [ -n "$jid" ]; then
             { ! echo "$sargs" | grep -q -- '--qos'; } && { ! echo "$sargs" | grep -q -- '--time'; } \
-                && ok "propagate_qos/propagate_time=0 dropped their sbatch args" \
-                || bad "a disabled attribute still reached sbatch: $(echo "$sargs" | tr '\n' ' ')"
+                && ok "propagate_qos/propagate_time=0 dropped their salloc args" \
+                || bad "a disabled attribute still reached salloc: $(echo "$sargs" | tr '\n' ' ')"
             echo "$sargs" | grep -qx -- '--account=prrte-test' \
                 && ok "the attributes still enabled were unaffected" \
                 || bad "disabling two attributes disturbed the rest of the line"

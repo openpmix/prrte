@@ -212,7 +212,7 @@ def cmd_nodes(args):
 def cmd_free(args):
     if args.all:
         # Every job, not just the ones this script created.  A PRRTE *extend*
-        # submits its own expander job through sbatch, and that job is what
+        # submits its own expander job through salloc, and that job is what
         # holds the grown nodes -- so a teardown that spared it would leave
         # the pool short for every later case, which is the harness failure
         # that is hardest to read.  This is a dedicated single-purpose

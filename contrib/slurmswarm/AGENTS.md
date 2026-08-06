@@ -5,9 +5,9 @@ an actual SLURM installation without a cluster.
 
 Ten `ubuntu:24.04` containers on one bridge network, running a real
 `slurmctld` and ten real `slurmd`s, with PRRTE built from your **live**
-working tree into a volume they all mount. `salloc` grants real allocations,
-`srun` launches the daemons, `sbatch` queues real jobs, and `scancel` really
-takes them away.
+working tree into a volume they all mount. `salloc` grants real allocations —
+including the headless `--no-shell` ones PRRTE's elastic extend creates —
+`srun` launches the daemons, and `scancel` really takes them away.
 
 It is the sibling of [`contrib/dockerswarm`](../dockerswarm/) and is
 deliberately the same harness in every respect but one: **the ten containers
@@ -177,7 +177,7 @@ it. Two cases here cannot exist anywhere else:
   from a host that is not part of the job.
 
 **`test_plm`** — the launcher. This component is unreachable from the sibling
-harness at all: the fake scheduler supplies `sbatch`/`scontrol`/`scancel`, and
+harness at all: the fake scheduler supplies `salloc`/`scontrol`/`scancel`, and
 `plm/slurm` shells out to **`srun`**, so every DVM over there goes out over
 ssh no matter what the ras was told. The cases assert that `plm/slurm` won
 selection, that the command really is `srun`, that it carried
@@ -189,7 +189,7 @@ allocation, and — the other side of the gate — that with no allocation in th
 environment the ssh launcher runs instead and creates no SLURM job.
 
 **`test_elastic`** — the phase this harness exists for. Every command goes to
-a scheduler that can say no: `sbatch` really queues a job, `scontrol show job
+a scheduler that can say no: `salloc` really allocates a job, `scontrol show job
 --json` really emits SLURM's own schema, `scontrol update` really has to be a
 resize SLURM accepts **on a running job**, and `scancel` really removes an
 allocation. Note the request shapes differ from a plain elastic grow:

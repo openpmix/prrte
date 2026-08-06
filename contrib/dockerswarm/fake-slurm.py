@@ -12,7 +12,7 @@
 ``ras/slurm`` is the only ras component with a full elastic *modify* surface,
 and every bit of it talks to the scheduler by shelling out:
 
-    sbatch  --wrap=... --parsable --exclusive --nodes=N [propagated attrs]
+    salloc  --no-shell --exclusive --nodes=N [propagated attrs]
     scontrol show job <id> --json
     scontrol update job <id> ReqNodeList=<survivors>
     scancel <id>
@@ -21,9 +21,15 @@ None of that can run on a developer's laptop, so the whole extend/release/
 cancel path -- including the ~1000-line ``scontrol --json`` parser, the
 ``validate_hostname`` allowlist and ``prte_ras_slurm_drain_cmd_output`` -- had
 no automated coverage anywhere.  This script supplies the missing scheduler:
-it is installed into the swarm as ``sbatch``/``scontrol``/``scancel`` (it
+it is installed into the swarm as ``salloc``/``scontrol``/``scancel`` (it
 dispatches on argv[0]), keeps its state in a directory, and emits JSON in the
 shape ``ras_slurm_jansson.c`` expects.
+
+``salloc`` is modelled faithfully enough to matter: it announces the job on
+stderr as soon as it has one and then *blocks* for ``pending_secs`` holding
+the pending allocation, exactly as the real one does.  PRRTE reads the job ID
+out of that first line and leaves the child running, so a non-zero
+``pending_secs`` is what exercises its deferred reap.
 
 It is deliberately *not* a SLURM emulator.  It implements exactly the four
 command forms PRRTE issues, and it hands out real container hostnames, so a
@@ -36,7 +42,7 @@ Housekeeping subcommands (run the script by its own name):
     fake-slurm set <key> <value>       # pending_secs|scancel_fail|bad_json|...
     fake-slurm jobs                    # job ids, one per line
     fake-slurm nodes <jobid>           # that job's nodes, comma separated
-    fake-slurm args <jobid>            # the sbatch argv that created it
+    fake-slurm args <jobid>            # the salloc argv that created it
     fake-slurm pool                    # unallocated nodes
     fake-slurm audit                   # every command this stub was given
 
@@ -72,7 +78,7 @@ DEFAULT_CONFIG = {
     "partition": "debug",
     "qos": "normal",
     "cwd": "/root",
-    "memory_per_cpu": None,          # unset: the sbatch arg must be omitted
+    "memory_per_cpu": None,          # unset: the salloc arg must be omitted
     "memory_per_node": 1024,
     "time_limit": 60,
     "threads_per_core": 1,
@@ -237,12 +243,24 @@ def render_job(cfg, job):
 
 
 # --------------------------------------------------------------------------
-# sbatch
+# salloc
 # --------------------------------------------------------------------------
 
-def cmd_sbatch(args):
+def cmd_salloc(args):
     cfg = load_config()
-    audit(["sbatch"] + args)
+    audit(["salloc"] + args)
+
+    # sbatch-isms that must not survive the migration to salloc: neither is a
+    # salloc option, and either one means PRRTE built the wrong command line
+    for bad in ("--wrap", "--parsable"):
+        for arg in args:
+            if arg == bad or arg.startswith(bad + "="):
+                die("salloc: error: unrecognized option '%s'" % arg)
+
+    if "--no-shell" not in args:
+        # Without it salloc would run a shell in the allocation, which is the
+        # whole reason the old sbatch expander job pinned one of its nodes
+        die("salloc: error: no command given and --no-shell was not requested")
 
     nodes_req = None
     job = {
@@ -255,7 +273,7 @@ def cmd_sbatch(args):
             try:
                 nodes_req = int(arg.split("=", 1)[1])
             except ValueError:
-                die("sbatch: error: invalid node count '%s'" % arg)
+                die("salloc: error: invalid node count '%s'" % arg)
         elif arg.startswith("--account="):
             job["account"] = arg.split("=", 1)[1]
         elif arg.startswith("--partition="):
@@ -274,13 +292,13 @@ def cmd_sbatch(args):
             job["threads_per_core"] = arg.split("=", 1)[1]
 
     if nodes_req is None:
-        die("sbatch: error: --nodes was not requested")
+        die("salloc: error: --nodes was not requested")
     if nodes_req < 1:
-        die("sbatch: error: refusing to allocate %d nodes" % nodes_req)
+        die("salloc: error: refusing to allocate %d nodes" % nodes_req)
 
     pool = read_pool()
     if len(pool) < nodes_req:
-        die("sbatch: error: Node count specification invalid -- "
+        die("salloc: error: Node count specification invalid -- "
             "only %d node(s) available" % len(pool))
 
     job["job_id"] = next_jobid()
@@ -293,9 +311,34 @@ def cmd_sbatch(args):
     with open(os.path.join(JOBDIR, "%s.args" % job["job_id"]), "w") as fp:
         fp.write("".join(a + "\n" for a in args))
 
-    # --parsable output is "<jobid>[;<cluster>]"; PRRTE keeps the leading
-    # digits and stops at the separator, so print the cluster suffix too
-    sys.stdout.write("%s;swarm\n" % job["job_id"])
+    # The handshake PRRTE depends on, and the reason this blocks rather than
+    # returning like sbatch did.  salloc names the job on STDERR as soon as
+    # slurmctld has it -- which is what PRRTE reads the job ID out of -- and
+    # only then waits for the resources.  It stays alive for that whole
+    # window, because it is the process holding the pending allocation; it
+    # exits once the allocation is granted, leaving the job standing.  So a
+    # non-zero pending_secs is what exercises PRRTE's deferred reap.
+    pending = float(cfg["pending_secs"])
+    if pending > 0:
+        sys.stderr.write("salloc: Pending job allocation %s\n" % job["job_id"])
+        sys.stderr.write("salloc: job %s queued and waiting for resources\n"
+                         % job["job_id"])
+        sys.stderr.flush()
+        deadline = time.time() + pending
+        while time.time() < deadline:
+            # A scancel while the job is still pending revokes it, and the
+            # real salloc dies rather than granting anything.  That is the
+            # path PRRTE's reap callback reports on.
+            if load_job(job["job_id"]) is None:
+                sys.stderr.write("salloc: Job allocation %s has been revoked\n"
+                                 % job["job_id"])
+                sys.stderr.flush()
+                return 1
+            time.sleep(0.2)
+        sys.stderr.write("salloc: job %s has been allocated resources\n"
+                         % job["job_id"])
+    sys.stderr.write("salloc: Granted job allocation %s\n" % job["job_id"])
+    sys.stderr.flush()
     return 0
 
 
@@ -432,7 +475,7 @@ def cmd_init(args):
     save_config(cfg)
 
     # the job the DVM itself is running in: extend reads its attributes and
-    # propagates them onto the sbatch command line
+    # propagates them onto the salloc command line
     save_job({
         "job_id": cfg["jobid"],
         "name": "prte-dvm",
@@ -506,7 +549,7 @@ def cmd_args(args):
         with open(os.path.join(JOBDIR, "%s.args" % args[0])) as fp:
             sys.stdout.write(fp.read())
     except OSError:
-        die("fake-slurm args: no sbatch record for job %s" % args[0])
+        die("fake-slurm args: no salloc record for job %s" % args[0])
     return 0
 
 
@@ -533,8 +576,8 @@ HOUSEKEEPING = {
 
 def main():
     name = os.path.basename(sys.argv[0])
-    if name == "sbatch":
-        return cmd_sbatch(sys.argv[1:])
+    if name == "salloc":
+        return cmd_salloc(sys.argv[1:])
     if name == "scontrol":
         return cmd_scontrol(sys.argv[1:])
     if name == "scancel":

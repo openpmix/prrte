@@ -442,7 +442,7 @@ test_ras_alloc() {
 ########################################################################
 #
 # The fake scheduler cannot reach this component at all: it supplies
-# sbatch/scontrol/scancel, and plm/slurm shells out to *srun*, which is a
+# salloc/scontrol/scancel, and plm/slurm shells out to *srun*, which is a
 # launcher, not a control-plane query.  Every DVM in the sibling harness is
 # therefore launched over ssh no matter what the ras is told.  These cases are
 # the only place PRRTE's SLURM launcher is exercised.
@@ -545,7 +545,7 @@ test_plm() {
 ########################################################################
 #
 # This is the phase the harness exists for.  Every command here goes to a
-# scheduler that can say no: sbatch really queues a job, "scontrol show job
+# scheduler that can say no: salloc really allocates a job, "scontrol show job
 # --json" really emits SLURM's own schema (which is why the image pins 24.05
 # or newer -- see test_cluster), "scontrol update" really has to be a resize
 # SLURM accepts on a RUNNING job, and scancel really removes an allocation.
@@ -588,7 +588,7 @@ test_elastic() {
     fi
     ok "extend accepted and reported PMIX_ALLOC_ID=$ajid"
     SQ "squeue -h -j $ajid -o '%i'" | grep -q "$ajid" \
-        && ok "SLURM really has a job $ajid (sbatch reached the scheduler)" \
+        && ok "SLURM really has a job $ajid (salloc reached the scheduler)" \
         || bad "no SLURM job $ajid exists -- the id PRRTE reported is not a job"
     nodes=$(job_nodes "$ajid"); idx=$(idx_of "$nodes")
     sleep 8
@@ -611,9 +611,9 @@ test_elastic() {
         && ok "slots for the granted nodes were derived from the job JSON" \
         || bad "no slot derivation logged for ${nodes%%,*}: $(SA 'grep -m3 discovered.node /tmp/prte.out' | tr '\n' ' ')"
 
-    banner "ras/slurm: the parent job's attributes reach the sbatch SLURM ran"
+    banner "ras/slurm: the parent job's attributes reach the salloc SLURM ran"
     # The fake scheduler could only show that the arguments were *written*.
-    # Here they have to be arguments sbatch accepts -- one it does not is a
+    # Here they have to be arguments salloc accepts -- one it does not is a
     # submission failure, not a mis-formatted string -- and the scheduler's
     # own record of the new job is what is asserted.
     out=$(SQ "scontrol show job $ajid -o" | tr -d '\r')
@@ -623,9 +623,9 @@ test_elastic() {
     echo "$out" | grep -q 'Partition=debug' \
         && ok "the parent job's partition was propagated" \
         || bad "partition not propagated: $(echo "$out" | tr ' ' '\n' | grep -m1 Partition)"
-    # --exclusive is in the fixed part of the sbatch line, and SLURM records
-    # it as whole-node ownership.
-    # --exclusive is in the fixed part of the sbatch line, and what it buys is
+    # The reason the expander job is allocated with "salloc --no-shell" rather
+    # than submitted with sbatch, and something only a real scheduler records.
+    # --exclusive is in the fixed part of the salloc line, and what it buys is
     # WHOLE nodes: without it SLURM would hand back one CPU per node under
     # cons_tres, and PRRTE would then be sharing machines it believes it owns.
     # Assert the cpu count rather than OverSubscribe=, which is NO by default
@@ -641,22 +641,28 @@ test_elastic() {
     # accepts that on a RUNNING job is exactly the assumption a fake
     # scheduler cannot check, and it is the single most valuable assertion
     # in this file.
-    out=$(SA "timeout 180 elastic shrink ${nodes##*,}" 2>&1)
+    #
+    # Release the job's FIRST node deliberately.  That is the node an sbatch
+    # expander job ran its script on, and since the script IS the job, it was
+    # the one node that could never be released -- so this direction is what
+    # allocating with "salloc --no-shell" actually buys, and only a real
+    # scheduler can say whether the resize is accepted.
+    out=$(SA "timeout 180 elastic shrink ${nodes%%,*}" 2>&1)
     sleep 6
     echo "$out" | grep -q PMIX_DVM_IS_READY \
         && ok "partial release completed (PMIX_DVM_IS_READY)" \
         || bad "partial release never completed: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
     # shellcheck disable=SC2086
-    [ "$(prted_count $(idx_of "${nodes##*,}"))" = 0 ] \
-        && ok "daemon gone from the released node (${nodes##*,})" \
+    [ "$(prted_count $(idx_of "${nodes%%,*}"))" = 0 ] \
+        && ok "daemon gone from the released node (${nodes%%,*})" \
         || bad "daemon still running on the released node"
     n=$(SQ "squeue -h -j $ajid -o '%D'" | tr -d ' \r')
     [ "$n" = 1 ] \
         && ok "SLURM resized job $ajid down to its surviving node" \
         || bad "SLURM did not accept the in-place resize (job $ajid still has $n nodes): $(SA 'grep -iE "scontrol|resize|update" /tmp/prte.out | tail -2' | tr '\n' ' ')"
-    [ "$(job_nodes "$ajid")" = "${nodes%%,*}" ] \
+    [ "$(job_nodes "$ajid")" = "${nodes##*,}" ] \
         && ok "the job kept exactly the node PRRTE named as survivor" \
-        || bad "job $ajid holds $(job_nodes "$ajid"), expected ${nodes%%,*}"
+        || bad "job $ajid holds $(job_nodes "$ajid"), expected ${nodes##*,}"
     # SLURM writes slurm_job_<id>_resize.{sh,csh} into the caller's cwd on a
     # successful shrink for the user to source; PRRTE deletes them.  Their
     # absence only means anything because the resize above really happened.
