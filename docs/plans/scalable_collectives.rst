@@ -25,6 +25,44 @@ other.
 Status
 ------
 
+.. warning::
+
+   **The lateral movements have been removed.**  ``grpcomm`` moves every
+   broadcast and every fence on the routing tree, and only on the routing
+   tree.  ``scatter_allgather``, ``rd_allgather``, the Bruck exchange
+   schedule (``grpcomm_exchange.c``), the two lateral RML tags, the four
+   ``grpcomm_*_movement`` MCA parameters, and the framing each of them
+   required — the partial-payload gate, the out-of-order op hold, the
+   early-chunk parking, the degrade-to-tree fallback, the fence's movement
+   interlock and its per-participant deadline — are all gone.
+
+   The rest of this document is kept deliberately.  It is the record of what
+   was built, what was measured, and what the reasoning was, and anyone
+   reintroducing a lateral movement should read it before starting rather
+   than rediscover it.  Read the sections below as history, not as a
+   description of the code.
+
+   **Why.**  A fence over a lateral exchange could not survive consecutive
+   fences: measured on ten daemons at radix 2, five fences back to back, the
+   exchange hung or failed on three attempts out of three while the rollup
+   completed cleanly on three out of three.  A generation in the fence
+   signature closes that, but the mechanism it closes exists only because a
+   release travels the tree while exchange blocks travel across it — two
+   routes, and a participant legally starting fence *N+1* before a peer has
+   finished *N*.  On one route the window does not exist.  The two other
+   things the movements bought were also weaker than they looked by the time
+   they were withdrawn: the launch message, their main beneficiary, had
+   shrunk by roughly 3.5x (PRRTE #2628), so a one-proc launch is a few
+   hundred bytes wrapped in a 16 KB participant list, and the fence's own
+   win was
+   never confirmed on hardware where ``alpha`` and ``beta`` mean what the
+   cost model assumes.
+
+   What survives, and was worth the exercise: ``grpcomm`` is no longer an
+   MCA framework, the launch message is a great deal smaller, and the
+   framing/movement separation is documented well enough to be rebuilt.
+
+
 Every step was verifiable on its own, and the multi-node suite has not
 regressed at any point.  Both second movements are implemented and exercised
 across a real multi-node DVM, and both are **opt-in**: an unconfigured DVM

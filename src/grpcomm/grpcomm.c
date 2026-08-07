@@ -53,17 +53,6 @@ prte_grpcomm_release_bcast_fn_t prte_grpcomm_release_bcast = prte_grpcomm_xcast;
  * writes through it whenever the variable is set, so a stack slot would be
  * a dangling write the moment this function returns. */
 static int verbosity = 0;
-static char *bcast_movement = NULL;
-static int bcast_bulk_min_bytes = 0;
-static int bcast_bulk_min_daemons = 0;
-static char *fence_movement = NULL;
-
-/* Defaults for the "auto" selection.  Both are deliberately conservative:
- * below them the tree movement is either faster or indistinguishable, and the
- * bulk movement's fixed costs (a participant list on the wire, log2(N) lateral
- * connections per daemon) are pure loss. */
-#define PRTE_GRPCOMM_BULK_MIN_BYTES_DEFAULT   (256 * 1024)
-#define PRTE_GRPCOMM_BULK_MIN_DAEMONS_DEFAULT 8
 
 void prte_grpcomm_register(void)
 {
@@ -79,134 +68,6 @@ void prte_grpcomm_register(void)
     if (0 < verbosity) {
         prte_grpcomm_globals.output = pmix_output_open(NULL);
         pmix_output_set_verbosity(prte_grpcomm_globals.output, verbosity);
-    }
-
-    bcast_movement = NULL;
-    pmix_mca_base_var_register("prte", "grpcomm", NULL, "bcast_movement",
-                               "How a broadcast's payload travels: \"tag\" "
-                               "(by what the message is - the default), "
-                               "\"tree\" (whole payload to each routing-tree "
-                               "child), \"bulk\" (scatter down the tree then "
-                               "allgather across lateral links), or \"size\" "
-                               "(by measured payload size, using "
-                               "grpcomm_bcast_bulk_min_bytes and "
-                               "grpcomm_bcast_bulk_min_daemons - an escape "
-                               "hatch, not the production path). Only the "
-                               "daemon that originates a broadcast consults "
-                               "this; the choice it makes is carried on the "
-                               "wire.",
-                               PMIX_MCA_BASE_VAR_TYPE_STRING,
-                               &bcast_movement);
-
-    bcast_bulk_min_bytes = PRTE_GRPCOMM_BULK_MIN_BYTES_DEFAULT;
-    pmix_mca_base_var_register("prte", "grpcomm", NULL, "bcast_bulk_min_bytes",
-                               "Smallest payload \"size\" selection will move "
-                               "with the bulk movement (unused by default)",
-                               PMIX_MCA_BASE_VAR_TYPE_INT,
-                               &bcast_bulk_min_bytes);
-
-    bcast_bulk_min_daemons = PRTE_GRPCOMM_BULK_MIN_DAEMONS_DEFAULT;
-    pmix_mca_base_var_register("prte", "grpcomm", NULL, "bcast_bulk_min_daemons",
-                               "Smallest DVM \"size\" selection will move a "
-                               "payload across with the bulk movement "
-                               "(unused by default)",
-                               PMIX_MCA_BASE_VAR_TYPE_INT,
-                               &bcast_bulk_min_daemons);
-
-    /* Resolve the movement selection once, here, rather than re-parsing the
-     * string on every broadcast.  An unrecognized spelling falls back to the
-     * tree with a warning instead of being taken for "auto": the parameter is
-     * a deliberate override, so silently ignoring a typo in it would hide the
-     * very experiment the user is running.
-     *
-     * The default is "tag": the movement follows what the message IS. That is
-     * possible because the launch message now has its own RML tag, so the one
-     * genuinely large routine broadcast is nameable at the point it is sent.
-     * Before that split PRTE_RML_TAG_DAEMON carried the launch message and
-     * the shutdown command alike and size was the only signal left - which is
-     * why a byte threshold existed at all.
-     *
-     * The threshold survives as "size", because a programming model may push
-     * something unexpectedly large through a tag nobody classified. It is not
-     * the production path and it should not become one: it holds a number
-     * nobody has measured, and measuring it would need real multi-node
-     * hardware - alpha here is a progress-thread hop rather than a round
-     * trip, and xcast already compresses, discounting the tree's bandwidth
-     * term by an unknown factor. To opt a new payload in, give it a tag and
-     * add it to bulk_tag_prefers_bulk(); do not reach for the threshold. */
-    prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_TAG;
-    if (NULL != bcast_movement) {
-        if (0 == strcasecmp(bcast_movement, "tag") ||
-            0 == strcasecmp(bcast_movement, "auto")) {
-            prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_TAG;
-        } else if (0 == strcasecmp(bcast_movement, "size")) {
-            prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_SIZE;
-        } else if (0 == strcasecmp(bcast_movement, "tree")) {
-            prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_TREE;
-        } else if (0 == strcasecmp(bcast_movement, "bulk")) {
-            prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_BULK;
-        } else {
-            pmix_output(0, "PRRTE: grpcomm_bcast_movement \"%s\" is not one of "
-                           "tag/size/tree/bulk - using tag", bcast_movement);
-            prte_grpcomm_globals.bcast_select = PRTE_GRPCOMM_BCAST_SELECT_TAG;
-        }
-    }
-    prte_grpcomm_globals.bcast_bulk_min_bytes =
-        (0 > bcast_bulk_min_bytes) ? 0 : (size_t) bcast_bulk_min_bytes;
-    /* An exchange needs at least two participants to be an exchange at all,
-     * so a configured floor below that would still be answered by the tree. */
-    prte_grpcomm_globals.bcast_bulk_min_daemons =
-        (2 > bcast_bulk_min_daemons) ? 2 : (size_t) bcast_bulk_min_daemons;
-
-    fence_movement = NULL;
-    pmix_mca_base_var_register("prte", "grpcomm", NULL, "fence_movement",
-                               "How a fence's contributions travel: \"tree\" "
-                               "(roll up to the controller, which broadcasts "
-                               "the result back), \"allgather\" (a lateral "
-                               "exchange leaving every daemon holding the "
-                               "result, with no release), or \"auto\" (the "
-                               "allgather for a fence carrying "
-                               "PMIX_COLLECT_DATA, the rollup for a barrier). "
-                               "Unlike the broadcast this is NOT a per-daemon "
-                               "choice: every participant in a fence must be "
-                               "given the same value or the collective is "
-                               "refused.",
-                               PMIX_MCA_BASE_VAR_TYPE_STRING,
-                               &fence_movement);
-
-    /* Default to "auto", which is to say: let each fence take the movement its
-     * own shape calls for. There is no threshold here to be wrong about - the
-     * discriminator is PMIX_COLLECT_DATA, which is categorical - so both arms
-     * are reasoned rather than tuned. A barrier keeps the rollup because a
-     * high-radix tree beats a dissemination exchange at *any* scale, not
-     * because it happens to be small; a modex gets the exchange because the
-     * release fanout, not the gather, is what dominates it.
-     *
-     * The scalable path is the default deliberately, so that it is the one
-     * being exercised. A movement nobody selects is a movement nobody tests,
-     * and the failure modes here (a fence that cannot converge) are exactly
-     * the kind that only appear at scale and under fault.
-     *
-     * "auto" is safe to offer at all because PMIX_COLLECT_DATA reaches every
-     * participant's fence upcall identically - PMIx requires the directive to
-     * be uniform across a fence and enforces that within a node - so every
-     * daemon resolves it the same way. That is a stronger footing than the
-     * broadcast's tag selection, which works because a broadcast has a single
-     * originator to decide for everyone; here nobody decides for anybody, and
-     * a disagreement is caught by the wire interlock rather than hung on. */
-    prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_SELECT_AUTO;
-    if (NULL != fence_movement) {
-        if (0 == strcasecmp(fence_movement, "tree")) {
-            prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_TREE_GATHER;
-        } else if (0 == strcasecmp(fence_movement, "allgather")) {
-            prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_RD_ALLGATHER;
-        } else if (0 == strcasecmp(fence_movement, "auto")) {
-            prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_SELECT_AUTO;
-        } else {
-            pmix_output(0, "PRRTE: grpcomm_fence_movement \"%s\" is not one of "
-                           "tree/allgather/auto - using tree", fence_movement);
-            prte_grpcomm_globals.fence_select = PRTE_GRPCOMM_FENCE_TREE_GATHER;
-        }
     }
 }
 
@@ -227,11 +88,8 @@ int prte_grpcomm_init(void)
                   PRTE_RML_PERSISTENT, prte_grpcomm_xcast_recv, NULL);
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST_ACK,
                   PRTE_RML_PERSISTENT, prte_grpcomm_xcast_ack, NULL);
-    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST_BULK,
-                  PRTE_RML_PERSISTENT, prte_grpcomm_xcast_bulk_recv, NULL);
     /* A bulk broadcast's exchange partners are not routing-tree neighbours, so
      * the RML hands their losses here instead of repairing the tree. */
-    prte_rml_lateral_set_lost_callback(prte_grpcomm_xcast_lateral_lost);
 
     /* fence receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE,
@@ -241,8 +99,6 @@ int prte_grpcomm_init(void)
                   PRTE_RML_PERSISTENT, prte_grpcomm_fence_release, NULL);
     /* ...and for a fence's lateral allgather, which arrives from exchange
      * partners rather than from a routing-tree child */
-    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_EXCHANGE,
-                  PRTE_RML_PERSISTENT, prte_grpcomm_fence_exchange_recv, NULL);
 
     /* group receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP,
@@ -265,11 +121,9 @@ void prte_grpcomm_finalize(void)
 
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST_ACK);
-    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST_BULK);
     prte_rml_lateral_set_lost_callback(NULL);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_RELEASE);
-    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_EXCHANGE);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP_RELEASE);
     return;

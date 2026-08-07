@@ -24,16 +24,6 @@
 
 BEGIN_C_DECLS
 
-/* What the originator of a broadcast is allowed to choose.  A selection, not
- * a movement id - it never goes on the wire, so unlike the movement ids below
- * it may be renumbered freely. */
-typedef enum {
-    PRTE_GRPCOMM_BCAST_SELECT_TAG = 0,  /* by what the message IS - the default */
-    PRTE_GRPCOMM_BCAST_SELECT_SIZE,     /* by payload size and DVM size */
-    PRTE_GRPCOMM_BCAST_SELECT_TREE,     /* always tree_whole */
-    PRTE_GRPCOMM_BCAST_SELECT_BULK      /* always scatter_allgather, when legal */
-} prte_grpcomm_bcast_select_t;
-
 /* Tracks ongoing xcast operations to ensure all messages are delivered exactly
  * once to all daemons even in the presence of daemon failures */
 typedef struct {
@@ -43,11 +33,6 @@ typedef struct {
     // FIFO of completion callbacks for master-originated broadcasts awaiting
     // relay back to the master (see grpcomm_xcast.c)
     pmix_list_t pending_completions;
-    // Chunks from a bulk broadcast's exchange that arrived before the scatter
-    // that creates the op did. The two phases travel different routes - the
-    // scatter down the tree, the exchange straight across - so a partner that
-    // is nearer the root can be a step ahead of us. Defined in grpcomm_xcast.c.
-    pmix_list_t early_chunks;
     // ID of the last known completed (in our subtree) operation
     size_t op_id_completed;
     // op_id_completed when we were last promoted
@@ -92,80 +77,9 @@ typedef struct {
     // failure can be recognized as stale. Shared by fence and group: one
     // failure, one restart, one epoch.
     uint32_t recovery_epoch;
-    // How the originator of a broadcast picks its data movement, and the two
-    // thresholds "auto" applies. Read only by the originator: the choice is
-    // stamped on the wire, so a receiver never consults these and two daemons
-    // configured differently cannot disagree about a broadcast in flight.
-    prte_grpcomm_bcast_select_t bcast_select;
-    size_t bcast_bulk_min_bytes;
-    size_t bcast_bulk_min_daemons;
-    // How a fence's contributions travel. A movement id rather than a
-    // selection enum, and there is deliberately no "auto": a broadcast's
-    // originator decides for everybody, but every participant in a fence
-    // decides for itself, so an input that could differ between daemons
-    // would be a way to hang the collective rather than to tune it.
-    uint32_t fence_select;
 } prte_grpcomm_globals_t;
 
-/* The allgather exchange schedule (grpcomm_exchange.c).  Bruck's algorithm:
- * ceil(log2(n)) steps for ANY participant count, each block moved exactly
- * once.  Recursive doubling is equivalent for powers of two and only works
- * then, so this is used uniformly.  See the commentary in that file. */
-
-/* How many exchange steps an allgather over nprocs participants takes.
- * 0 when there is nobody to exchange with. */
-PRTE_EXPORT size_t prte_grpcomm_bruck_nsteps(size_t nprocs);
-
-/* The partners and block count for one step, from the point of view of the
- * participant at position pos.  Returns PRTE_ERR_BAD_PARAM for a position or
- * step outside the exchange. */
-PRTE_EXPORT int prte_grpcomm_bruck_step(size_t pos, size_t nprocs, size_t step,
-                                        size_t *send_to, size_t *recv_from,
-                                        size_t *nblocks);
-
-/* Where participant `idx`'s chunk sits in a payload of `total` bytes split
- * `nparts` ways.  Derived from the index rather than accumulated, so every
- * daemon agrees on the seams even though a scatter means each one holds a
- * different subset.  A short payload simply yields zero-length chunks for the
- * high indices rather than being an error.  PRTE_ERR_BAD_PARAM for nparts of
- * zero or an index outside it. */
-PRTE_EXPORT int prte_grpcomm_chunk_bounds(size_t total, size_t nparts, size_t idx,
-                                          size_t *off, size_t *len);
-
-/* Which participant's block ends up in local slot `slot`.  Bruck leaves the
- * blocks rotated - slot 0 is always our own - so a caller that wants natural
- * order has to undo that through this mapping rather than assume it.
- * SIZE_MAX for a slot outside the exchange. */
-PRTE_EXPORT size_t prte_grpcomm_bruck_owner(size_t pos, size_t nprocs, size_t slot);
-
 #define PRTE_GRPCOMM_GROUP_MEMO_MAX 64
-
-/* How a broadcast's payload physically travels.  Stamped on the wire by the
- * originator so every daemon moves it the same way - a broadcast has a single
- * originator, so unlike an allgather there is nothing to agree on.
- *
- * Values are explicit and must never be renumbered: they are on the wire.
- * (Every daemon in a DVM runs the same build, so there is no version skew to
- * survive - but a renumber would still silently repoint an in-flight
- * broadcast, and the failure would look like corruption rather than a bug.) */
-#define PRTE_GRPCOMM_BCAST_TREE_WHOLE  0u   /* whole payload to each child */
-#define PRTE_GRPCOMM_BCAST_SCATTER_ALLGATHER 1u /* scatter down, allgather across */
-
-/* How a fence's contributions physically travel.  Same rule as the broadcast
- * ids above - on the wire, never renumbered - but with one difference that
- * matters: a broadcast has a single originator who decides for everyone,
- * while a fence has none. Every participant must reach the same answer
- * independently or the collective hangs, so the id is carried not to tell a
- * receiver what to do but so that a disagreement is caught and reported
- * instead of hanging. */
-#define PRTE_GRPCOMM_FENCE_TREE_GATHER  0u  /* up-tree rollup, broadcast release */
-#define PRTE_GRPCOMM_FENCE_RD_ALLGATHER 1u  /* lateral exchange, no release */
-
-/* Not a movement: the value grpcomm_fence_movement=auto resolves to, meaning
- * "decide per fence from PMIX_COLLECT_DATA". It is deliberately outside the
- * movement id space, because it must never reach the wire - what travels is
- * the movement a fence actually chose. */
-#define PRTE_GRPCOMM_FENCE_SELECT_AUTO  0xffffffffu
 
 typedef struct {
     pmix_list_item_t super;
@@ -200,7 +114,7 @@ PRTE_EXPORT extern prte_grpcomm_globals_t prte_grpcomm_globals;
  * Today that is always a broadcast of the gathered result, because fence and
  * group both roll up to the controller and only the controller has the
  * answer.  It is indirected because that is precisely the part a different
- * data movement changes - an allgather leaves every daemon already holding
+ * release changes - an allgather would leave every daemon already holding
  * the result, with nothing to release - and because it is the only way the
  * unit test can see the release a controller would emit without standing up
  * an RML.  Production code sets this once, at startup, and never again. */
@@ -270,13 +184,6 @@ typedef struct {
     bool aborting;
     // this daemon's own contribution, saved so a fault can replay it
     pmix_data_buffer_t *my_contribution;
-    // How this fence's contributions travel. Unlike a broadcast's movement
-    // this is not decided by anyone in particular - every participant picks
-    // it independently from the same inputs - so it is carried on the wire to
-    // catch a disagreement rather than to communicate a decision.
-    uint32_t movement;
-    // Exchange state, used only by rd_allgather. NULL under the rollup.
-    struct fence_exchange_t *xch;
     /* controls values */
     int timeout;
     // the controller arms a timer for "timeout" seconds once a participant
@@ -400,42 +307,12 @@ void prte_grpcomm_xcast_recv(int status, pmix_proc_t *sender,
                                     prte_rml_tag_t tg, void *cbdata);
 
 PRTE_EXPORT extern
+void prte_grpcomm_xcast_fault_handler(const prte_rml_recovery_status_t* status);
+
+PRTE_EXPORT extern
 void prte_grpcomm_xcast_ack(int status, pmix_proc_t *sender,
                                    pmix_data_buffer_t *buffer,
                                    prte_rml_tag_t tg, void *cbdata);
-
-/* The bulk broadcast's second phase: chunks arriving over a lateral link from
- * an exchange partner, and a participant's request that the controller give up
- * on the exchange and replay the payload whole. */
-/* Release a fence tracker's exchange state. Exported only because the
- * tracker's destructor lives in grpcomm_classes.c. */
-PRTE_EXPORT extern
-void prte_grpcomm_fence_xch_free(prte_grpcomm_fence_t *coll);
-
-/* A fence's lateral allgather: blocks from an exchange partner. */
-PRTE_EXPORT extern
-void prte_grpcomm_fence_exchange_recv(int status, pmix_proc_t *sender,
-                                      pmix_data_buffer_t *buffer,
-                                      prte_rml_tag_t tg, void *cbdata);
-
-PRTE_EXPORT extern
-void prte_grpcomm_xcast_bulk_recv(int status, pmix_proc_t *sender,
-                                  pmix_data_buffer_t *buffer,
-                                  prte_rml_tag_t tg, void *cbdata);
-
-/* An exchange partner's link dropped.  The RML tells us rather than repairing
- * the tree, because a lateral link is not part of it - see rml.h. */
-PRTE_EXPORT extern
-void prte_grpcomm_xcast_lateral_lost(pmix_rank_t rank);
-
-PRTE_EXPORT extern
-void prte_grpcomm_xcast_fault_handler(const prte_rml_recovery_status_t* status);
-
-/* fence functions */
-PRTE_EXPORT extern
-int prte_grpcomm_fence(const pmix_proc_t procs[], size_t nprocs,
-                              const pmix_info_t info[], size_t ninfo, char *data,
-                              size_t ndata, pmix_modex_cbfunc_t cbfunc, void *cbdata);
 
 PRTE_EXPORT extern
 void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
