@@ -1,0 +1,3 @@
+nodes,radix,ppn,nprocs,nkeys,sizes,bytes_per_rank,collected_bytes,samples,put_med_us,collect_med_us,collect_min_us,collect_max_us,barrier_med_us,barrier_min_us,barrier_max_us,data_cost_us,neighbors_med_us
+8,2,1,8,8,1024,8192,196608,2,1625.3,602.0,293.1,910.8,384.5,0.0,769.0,217.5,1136.4
+8,2,1,8,8,65536,524288,12582912,2,13008.2,566.9,353.3,780.5,4734.4,0.0,9468.7,-4167.5,17732.1
