@@ -342,8 +342,16 @@ int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc)
     int32_t count;
     prte_attribute_t *kv;
 
-    /* pack the name */
-    rc = PMIx_Data_pack(NULL, bkt, &proc->name, 1, PMIX_PROC);
+    /* Pack the rank alone, not the full proc name.
+     *
+     * A PMIX_PROC carries the namespace as a string, and every proc in a job
+     * has the job's namespace by construction - so packing the name here put
+     * one copy of that string on the wire per process.  In the launch message
+     * that was over half of the whole thing: ~21 bytes of a ~41-byte proc
+     * record for an ordinary "prterun-<host>-<pid>@1".  The job packed its
+     * namespace as its very first field; the unpacker hands it back down to
+     * us from there. */
+    rc = PMIx_Data_pack(NULL, bkt, &proc->name.rank, 1, PMIX_PROC_RANK);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);

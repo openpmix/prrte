@@ -196,7 +196,7 @@ int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job)
     if (0 < jptr->num_procs) {
         prte_proc_t *proc;
         for (j = 0; j < jptr->num_procs; j++) {
-            rc = prte_proc_unpack(bkt, &proc);
+            rc = prte_proc_unpack(bkt, &proc, jptr->nspace);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_RELEASE(jptr);
@@ -372,12 +372,11 @@ int prte_node_unpack(pmix_data_buffer_t *bkt, prte_node_t **nd)
 /*
  * PROC
  */
-int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t **pc)
+int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t **pc, const pmix_nspace_t nspace)
 {
     pmix_status_t rc;
     int32_t n, count, k;
     prte_attribute_t *kv;
-    ;
     prte_proc_t *proc;
 
     /* create the prte_proc_t object */
@@ -387,9 +386,11 @@ int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t **pc)
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    /* unpack the name */
+    /* the rank is all that travels - the namespace is the job's, and the
+     * caller read it off the front of the same buffer (see prte_proc_pack) */
+    PMIX_LOAD_NSPACE(proc->name.nspace, nspace);
     n = 1;
-    rc = PMIx_Data_unpack(NULL, bkt, &proc->name, &n, PMIX_PROC);
+    rc = PMIx_Data_unpack(NULL, bkt, &proc->name.rank, &n, PMIX_PROC_RANK);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_RELEASE(proc);

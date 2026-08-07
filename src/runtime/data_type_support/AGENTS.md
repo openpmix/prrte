@@ -55,6 +55,26 @@ that will catch a mismatch for you: a type of the same width (`PMIX_INT32`
 against `PMIX_UINT32`) silently produces wrong values, and a type of a
 different width desynchronizes everything after it.
 
+### A proc packs its rank, not its name
+
+`prte_proc_pack` writes `proc->name.rank` and nothing else of the proc's
+identity; `prte_proc_unpack` takes the namespace as an argument and loads it
+onto every proc it builds. `prte_job_unpack` passes the job's own nspace,
+which it read off the front of the same buffer.
+
+That asymmetry is worth its awkwardness. A `PMIX_PROC` carries the namespace
+as a *string*, so packing the name put one copy of it on the wire per
+process — and since the launch message is essentially an array of proc
+records, that was **over half of the whole message**: about 21 bytes of a
+~41-byte record for an ordinary `prterun-<host>-<pid>@1`. Measured on a
+donotlaunch sweep, hoisting it took the launch message from ~46 to ~25 bytes
+a proc (5.9 MB to 3.2 MB at 131,072 procs). Every proc in a job has the
+job's namespace by construction, so nothing is lost.
+
+The consequence for anyone adding a caller: `prte_proc_unpack` is only
+correct when you can name the job the procs belong to. It has exactly one
+caller, inside `prte_job_unpack`, for that reason.
+
 ### The GLOBAL/LOCAL attribute split
 
 Only attributes marked `PRTE_ATTR_GLOBAL` are packed; the unpacker marks
