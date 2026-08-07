@@ -55,25 +55,51 @@ that will catch a mismatch for you: a type of the same width (`PMIX_INT32`
 against `PMIX_UINT32`) silently produces wrong values, and a type of a
 different width desynchronizes everything after it.
 
-### A proc packs its rank, not its name
+### The placement travels as maps, not as a per-proc array
 
-`prte_proc_pack` writes `proc->name.rank` and nothing else of the proc's
-identity; `prte_proc_unpack` takes the namespace as an argument and loads it
-onto every proc it builds. `prte_job_unpack` passes the job's own nspace,
-which it read off the front of the same buffer.
+`prte_job_pack` does **not** pack a record per process describing where it
+went. It packs the job's **node map** — the names of the nodes in
+`job->map`, in map order — and then **one proc map per app**: for each of
+those nodes, in the same order, the ranks of that app resident on it, with
+`"-"` where the app has none there so the two lists stay in step. Both go
+through `PMIx_generate_regex2`, so they compress with the number of *nodes*
+rather than growing with the number of *processes*.
 
-That asymmetry is worth its awkwardness. A `PMIX_PROC` carries the namespace
-as a *string*, so packing the name put one copy of it on the wire per
-process — and since the launch message is essentially an array of proc
-records, that was **over half of the whole message**: about 21 bytes of a
-~41-byte record for an ordinary `prterun-<host>-<pid>@1`. Measured on a
-donotlaunch sweep, hoisting it took the launch message from ~46 to ~25 bytes
-a proc (5.9 MB to 3.2 MB at 131,072 procs). Every proc in a job has the
-job's namespace by construction, so nothing is lost.
+Five fields are therefore derived by `prte_job_unpack` rather than
+transmitted, and each is derivable for a specific reason:
 
-The consequence for anyone adding a caller: `prte_proc_unpack` is only
-correct when you can name the job the procs belong to. It has exactly one
-caller, inside `prte_job_unpack`, for that reason.
+| field | why the maps already say it |
+|-------|------------------------------|
+| `name.rank` | it *is* the map — the proc maps list ranks by node |
+| `parent` | the node's daemon, which the node pool already holds |
+| `app_idx` | which app's proc map the rank appeared in |
+| `app_rank` | `compute_app_rank()` walks `jdata->procs`, which is indexed by rank, so an app's ranks take app ranks in ascending rank order. The decoder sees them in *node* order, so it sorts before numbering |
+| `local_rank` | `compute_local_rank()` walks each node's procs in array order, apps outermost — exactly the order the packer emits them in |
+
+That last one is only safe because nothing else ever assigns a local rank.
+`prte_rmaps_base_update_local_ranks()` did assign one by a different rule
+("lowest unused on the new node"), which would have broken the
+correspondence after a relocation — but it had no callers, and it has been
+removed rather than left as a trap.
+
+`prte_proc_pack` is what remains: **only what the maps cannot say.** The
+node rank counts procs of *every* job on that node, so one job's map cannot
+produce it. The cpuset is the binding the mapper computed. The state and
+the attributes are the proc's own. That is ~13 bytes a proc against the ~25
+the full record cost, on top of the ~46 it cost before the namespace was
+hoisted out of it.
+
+Two consequences to respect:
+
+- **`prte_proc_unpack` no longer creates the proc.** `prte_job_unpack` has
+  already built it from the maps and set its identity; the proc belongs to
+  the job, so an error there leaves it to be released with everything else.
+- **The decoder needs a populated `prte_node_pool`,** because that is what
+  it resolves node names against. Every caller has one: a daemon decodes
+  the nidmap out of the same wireup message first, and the HNP has the pool
+  natively. An **unmapped** job — a spawn request on its way to the HNP,
+  which has not been through `rmaps` — packs a zero node count and nothing
+  else, so that path needs nothing.
 
 ### The GLOBAL/LOCAL attribute split
 

@@ -683,6 +683,8 @@ static int test_pack_roundtrip(void)
 {
     int failures = 0;
     pmix_data_buffer_t buf;
+    prte_node_t *wnode;
+    prte_proc_t *wdmn;
     prte_job_t *src, *dst = NULL;
     prte_app_context_t *app, *app2;
     prte_proc_t *proc;
@@ -720,6 +722,18 @@ static int test_pack_roundtrip(void)
     pmix_pointer_array_set_item(src->apps, 0, app);
     src->num_apps = 1;
 
+    /* The placement no longer travels as a per-proc array: it travels as a
+     * node map plus a proc map per app, and the receiver rebuilds each
+     * proc's rank, hosting daemon, app, app rank and local rank from those.
+     * So this needs a real map - nodes that are in the global pool (that is
+     * what the far end resolves names against) and that carry a daemon (that
+     * is where "parent" comes from) - rather than a bare num_nodes. */
+    wnode = make_node("wire.node1");
+    wnode->index = pmix_pointer_array_add(prte_node_pool, wnode);
+    wdmn = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&wdmn->name, "wire.dvm", 1);
+    wnode->daemon = wdmn;   /* the node holds a counted reference */
+
     proc = PMIX_NEW(prte_proc_t);
     PMIX_LOAD_PROCID(&proc->name, "wire.job", 0);
     proc->parent = 1;
@@ -730,6 +744,8 @@ static int test_pack_roundtrip(void)
     proc->state = PRTE_PROC_STATE_RUNNING;
     proc->cpuset = strdup("0-3");
     pmix_pointer_array_set_item(src->procs, 0, proc);
+    PMIX_RETAIN(proc);
+    pmix_pointer_array_add(wnode->procs, proc);
 
     proc = PMIX_NEW(prte_proc_t);
     PMIX_LOAD_PROCID(&proc->name, "wire.job", 1);
@@ -740,12 +756,16 @@ static int test_pack_roundtrip(void)
     proc->app_idx = 0;
     proc->state = PRTE_PROC_STATE_RUNNING;
     pmix_pointer_array_set_item(src->procs, 1, proc);
+    PMIX_RETAIN(proc);
+    pmix_pointer_array_add(wnode->procs, proc);
 
     src->map = PMIX_NEW(prte_job_map_t);
     src->map->mapping = 9;
     src->map->ranking = 4;
     src->map->binding = 6;
-    src->map->num_nodes = 3;
+    PMIX_RETAIN(wnode);
+    pmix_pointer_array_add(src->map->nodes, wnode);
+    src->map->num_nodes = 1;
 
     PMIX_DATA_BUFFER_CONSTRUCT(&buf);
     rc = prte_job_pack(&buf, src);
@@ -809,17 +829,23 @@ static int test_pack_roundtrip(void)
         proc = (prte_proc_t *) pmix_pointer_array_get_item(dst->procs, 1);
         CHECK("wire: proc 1 crossed and has no cpuset",
               NULL != proc && NULL == proc->cpuset && 1 == proc->local_rank);
-        /* only the rank travels - every proc's namespace is reconstituted
-         * from the job's, so check a proc other than the first */
+        /* Nothing of proc 1's identity or placement was on the wire - all of
+         * it is rebuilt from the node map and the app's proc map. */
         CHECK("wire: proc 1 takes the job's nspace",
               NULL != proc && PMIX_CHECK_NSPACE(proc->name.nspace, "wire.job")
                   && 1 == proc->name.rank);
+        CHECK("wire: proc 1's daemon is derived from the node map",
+              NULL != proc && 1 == proc->parent);
+        CHECK("wire: proc 1's app and app rank are derived",
+              NULL != proc && 0 == proc->app_idx && 1 == proc->app_rank);
+        CHECK("wire: proc 1's node rank still travels",
+              NULL != proc && 1 == proc->node_rank);
 
         CHECK("wire: the map crossed", NULL != dst->map);
         if (NULL != dst->map) {
             CHECK("wire: map policies round-trip",
                   9 == dst->map->mapping && 4 == dst->map->ranking && 6 == dst->map->binding);
-            CHECK("wire: map num_nodes round-trips", 3 == dst->map->num_nodes);
+            CHECK("wire: map num_nodes round-trips", 1 == dst->map->num_nodes);
         }
         PMIX_RELEASE(dst);
     }

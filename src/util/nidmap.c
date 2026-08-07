@@ -737,9 +737,10 @@ int prte_util_pack_job_catchup(pmix_data_buffer_t *buffer, prte_job_t *exclude)
         if (!catchup_worthy(jptr, exclude)) {
             continue;
         }
-        /* prte_job_pack already carries each proc's parent daemon, which is
-         * all the receiver needs to put the proc back on its node - the
-         * launch message used to pack that vpid a second time alongside */
+        /* prte_job_pack carries the job's node and proc maps, from which the
+         * receiver rebuilds each proc's rank and hosting daemon - which is
+         * why this has to be decoded after the nidmap above, and why the
+         * launch message's second copy of the parent vpid was redundant */
         rc = prte_job_pack(buffer, jptr);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);

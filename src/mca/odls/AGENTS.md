@@ -234,11 +234,16 @@ jobs now ride with the nidmap at `VM_READY`
 (`prte_util_pack_job_catchup()` in [`src/util/nidmap.c`](../../util/nidmap.c)),
 which is sent precisely when the daemon set changes.
 
-**And note how little is left that scales.** What remains is essentially an
-array of proc records, so the message is linear in the job's **total process
-count** — about 25 bytes a proc, indifferent to how those procs divide among
-nodes. `plm_base_verbose 2` prints the size; `--rtos donotlaunch` will size a
-job of any shape without launching it.
+**And note what does the placement now.** The job no longer packs a record
+per process saying where it went: it packs a node map and one proc map per
+app, and the receiver rebuilds each proc's rank, hosting daemon, app, app
+rank and local rank from those — see
+[`src/runtime/data_type_support/AGENTS.md`](../../runtime/data_type_support/AGENTS.md).
+What is left per proc is only what the maps cannot say (node rank, cpuset,
+state, attributes), which is about 13 bytes a proc against the ~46 this
+message cost per proc before any of this. `plm_base_verbose 2` prints the
+size; `--rtos donotlaunch` will size a job of any shape without launching
+it.
 
 It then calls `PMIx_server_setup_application()` **asynchronously and does
 not wait**. It returns `PRTE_SUCCESS` immediately, having handed a
