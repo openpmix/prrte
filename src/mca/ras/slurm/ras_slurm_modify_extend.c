@@ -34,8 +34,12 @@
 #include "src/mca/ras/base/base.h"
 
 #define PRTE_SLURM_MAX_SALLOC_ARGS 32
-#define PRTE_SLURM_WAIT_MIN_USEC 1000        /* 1 ms */
-#define PRTE_SLURM_WAIT_MAX_USEC 5000000     /* 5 sec */
+
+/* Retry budget for a job whose salloc has exited but whose state slurmctld has
+ * not caught up with. Doubles from 1ms to a 1s cap, ~3s in total. */
+#define PRTE_SLURM_GRANT_RETRY_MIN_USEC 1000       /* 1 ms */
+#define PRTE_SLURM_GRANT_RETRY_MAX_USEC 1000000    /* 1 sec */
+#define PRTE_SLURM_GRANT_RETRY_MAX 12
 
 /* The token salloc puts in front of the job ID on both of the lines that can
  * carry it: "salloc: Pending job allocation <id>" when the request queues, and
@@ -59,18 +63,23 @@ typedef struct {
     bool user_request_id_provided;
     char *job_id;
     int err;
-    uint64_t poll_delay_usec;
+    uint64_t retry_delay_usec;
+    int attempts;
     int tracker_index;
+    /* Answered; the answer is posted but not yet delivered */
+    bool completing;
 } prte_slurm_wait_tracker_t;
 
-/* Everything the reap callback needs to finish with a salloc child. It is
- * deliberately disjoint from prte_slurm_wait_tracker_t: the child can exit
- * either side of the extend completing, so the two must not share state. */
+/* Everything the reap callback needs, plus the index of the extend this child
+ * belongs to. An index and not a reference, because either object can outlive
+ * the other: a stale index reads back NULL, and the job ID catches a slot the
+ * array has since reused. */
 typedef struct {
     pmix_list_item_t super;
     pid_t pid;
     int outfd;
     char *job_id;
+    int tracker_index;
 } prte_slurm_salloc_child_t;
 
 /* Bound on how long finalize waits for a killed salloc to become reapable */
@@ -101,6 +110,8 @@ static int prte_ras_slurm_add_reused_nodes_to_session(const char *slurm_jobid,
                                                       pmix_pointer_array_t *reused_nodes);
 static void prte_ras_slurm_rollback_session(const char *slurm_jobid);
 static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata);
+static void slurm_grant_check_cb(int fd, short args, void *cbdata);
+static prte_slurm_wait_tracker_t *prte_ras_slurm_tracker_for_child(const prte_slurm_salloc_child_t *child);
 
 PMIX_CLASS_INSTANCE(prte_slurm_wait_tracker_t, pmix_object_t, swt_con, swt_des);
 PMIX_CLASS_INSTANCE(prte_slurm_salloc_child_t, pmix_list_item_t, ssc_con, ssc_des);
@@ -159,7 +170,10 @@ static void swt_con(prte_slurm_wait_tracker_t *p)
     p->user_request_id_provided = false;
     p->job_id = NULL;
     p->err = PRTE_SUCCESS;
+    p->retry_delay_usec = PRTE_SLURM_GRANT_RETRY_MIN_USEC;
+    p->attempts = 0;
     p->tracker_index = -1;
+    p->completing = false;
 }
 
 /*
@@ -188,6 +202,7 @@ static void ssc_con(prte_slurm_salloc_child_t *p)
     p->pid = -1;
     p->outfd = -1;
     p->job_id = NULL;
+    p->tracker_index = -1;
 }
 
 /*
@@ -232,11 +247,53 @@ int prte_ras_slurm_modify_extend_init(void)
 }
 
 /*
+ * Find the extend a finished salloc child belongs to, or NULL if it has none.
+ */
+static prte_slurm_wait_tracker_t *prte_ras_slurm_tracker_for_child(const prte_slurm_salloc_child_t *child)
+{
+    prte_slurm_wait_tracker_t *trk;
+
+    if (0 > child->tracker_index || NULL == child->job_id) {
+        return NULL;
+    }
+
+    trk = (prte_slurm_wait_tracker_t *)
+              pmix_pointer_array_get_item(&prte_slurm_wait_trackers, child->tracker_index);
+
+    if (NULL == trk || NULL == trk->job_id || 0 != strcmp(trk->job_id, child->job_id)) {
+        return NULL;
+    }
+
+    if (trk->completing) {
+        return NULL;
+    }
+
+    return trk;
+}
+
+/*
+ * Point the salloc child that created a job at the extend waiting on it. Not
+ * done in exec_salloc: the tracker needs the job ID that call goes to get.
+ */
+static void prte_ras_slurm_link_child_to_tracker(const char *job_id, int tracker_index)
+{
+    prte_slurm_salloc_child_t *child;
+
+    PMIX_LIST_FOREACH(child, &prte_slurm_salloc_children, prte_slurm_salloc_child_t)
+    {
+        if (NULL != child->job_id && 0 == strcmp(child->job_id, job_id)) {
+            child->tracker_index = tracker_index;
+            return;
+        }
+    }
+}
+
+/*
  * Clean up any extend still in flight.
  *
- * Only the timers and the processes: the allocations behind them belong to
+ * Only the trackers and the processes: the allocations behind them belong to
  * the cancel half, which prte_ras_slurm_finalize runs first. Done inline
- * because the event base has stopped - neither the poll timer nor the SIGCHLD
+ * because the event base has stopped - neither a retry timer nor the SIGCHLD
  * that reaps a child will fire again.
  */
 int prte_ras_slurm_modify_extend_finalize(void)
@@ -258,7 +315,9 @@ int prte_ras_slurm_modify_extend_finalize(void)
         /* The requester is not told, because the only caller runs after
          * pmix_server_finalize(): the request has no other reference left and
          * nothing to answer through. Finalizing this component with the DVM
-         * still up would have to complete these instead of dropping them. */
+         * still up would have to complete these instead of dropping them.
+         * The timer only runs between retries, but serve_extend_req always sets
+         * it, so deleting it is safe either way. */
         prte_event_evtimer_del(&trk->ev);
         pmix_pointer_array_set_item(&prte_slurm_wait_trackers, i, NULL);
         PMIX_RELEASE(trk);
@@ -378,15 +437,11 @@ static int prte_ras_slurm_make_salloc_arg(pmix_hash_table_t *fields,
 }
 
 /*
- * Reap a salloc child once Slurm is done with it.
+ * Reap a salloc child, and check on the extend it belongs to.
  *
- * This runs when the child exits, which for "salloc --no-shell" is the moment
- * the allocation is granted - potentially long after the request that started
- * it was answered. It is deliberately diagnostic only: the "scontrol show job"
- * poll owns the extend from submission onwards, so nothing here can race it,
- * and an allocation that dies while pending is caught by that poll on its next
- * tick. All this does is give the pipe and the child object back, and say what
- * happened if salloc did not exit cleanly.
+ * "salloc --no-shell" exits when the job leaves PENDING, which is what the
+ * extend is waiting for. The exit status is diagnostic only - it does not say
+ * whether the job was granted or cancelled, so the check asks Slurm.
  *
  * @param[in] cbdata The prte_wait_tracker_t, NOT the data handed to
  *                   prte_wait_cb - that is at its cbdata member.
@@ -395,6 +450,7 @@ static void salloc_wait_cb(int fd, short args, void *cbdata)
 {
     prte_wait_tracker_t *t2 = (prte_wait_tracker_t *) cbdata;
     prte_slurm_salloc_child_t *child;
+    prte_slurm_wait_tracker_t *trk;
     char tail[PRTE_SLURM_ALLOC_TAIL_MAX + 1];
     size_t n = 0;
     int status;
@@ -454,11 +510,19 @@ static void salloc_wait_cb(int fd, short args, void *cbdata)
                              NULL == child->job_id ? "<unknown>" : child->job_id));
     }
 
+    /* Read before releasing the child */
+    trk = prte_ras_slurm_tracker_for_child(child);
+
     pmix_list_remove_item(&prte_slurm_salloc_children, &child->super);
     PMIX_RELEASE(child);
 
     /* The tracker owns the dummy proc; nothing owns cbdata but us */
     PMIX_RELEASE(t2);
+
+    /* No tracker: the extend was already answered, or never got one */
+    if (NULL != trk) {
+        slurm_grant_check_cb(-1, 0, trk);
+    }
 }
 
 /*
@@ -1275,14 +1339,12 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
 }
 
 /**
- * @brief Poll a pending Slurm resource request.
+ * @brief Ask Slurm what became of an expander job.
  *
- * Checks whether the tracked Slurm job allocation is ready. If resources are
- * still pending, the callback reschedules itself to retry after a delay.
- * Otherwise, the result is recorded and wait completion is triggered.
- * 
+ * Runs when the submitting salloc exits. Retries briefly and boundedly: this
+ * closes a gap of milliseconds, not a queue wait.
  */
-static void slurm_wait_poll_cb(int fd, short args, void *cbdata)
+static void slurm_grant_check_cb(int fd, short args, void *cbdata)
 {
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
@@ -1290,34 +1352,35 @@ static void slurm_wait_poll_cb(int fd, short args, void *cbdata)
 
     int err;
 
-    /* While waiting, this request was cancelled */
-    if (!prte_ras_slurm_pending_req_exists(trk->request_id)) {
-        trk->err = PRTE_ERR_JOB_CANCELLED;
-        prte_ras_slurm_extend_wait_complete(-1, 0, trk);
-        return;
-    }
-
     err = prte_ras_slurm_check_resources(trk->job_id);
 
-    if (PRTE_ERR_RESOURCE_BUSY == err) {
+    if (PRTE_ERR_RESOURCE_BUSY == err && PRTE_SLURM_GRANT_RETRY_MAX > trk->attempts) {
 
         struct timeval delay = {
-            .tv_sec = trk->poll_delay_usec / 1000000,
-            .tv_usec = trk->poll_delay_usec % 1000000
+            .tv_sec = trk->retry_delay_usec / 1000000,
+            .tv_usec = trk->retry_delay_usec % 1000000
         };
 
+        trk->attempts++;
         prte_event_evtimer_add(&trk->ev, &delay);
 
         /* double the waiting time with each failed attempt,
          * up to the defined maximum */
-        if (PRTE_SLURM_WAIT_MAX_USEC > trk->poll_delay_usec) {
-            trk->poll_delay_usec *= 2;
-            if (PRTE_SLURM_WAIT_MAX_USEC < trk->poll_delay_usec) {
-                trk->poll_delay_usec = PRTE_SLURM_WAIT_MAX_USEC;
+        if (PRTE_SLURM_GRANT_RETRY_MAX_USEC > trk->retry_delay_usec) {
+            trk->retry_delay_usec *= 2;
+            if (PRTE_SLURM_GRANT_RETRY_MAX_USEC < trk->retry_delay_usec) {
+                trk->retry_delay_usec = PRTE_SLURM_GRANT_RETRY_MAX_USEC;
             }
         }
 
         return;
+    }
+
+    if (PRTE_ERR_RESOURCE_BUSY == err) {
+        pmix_output(0, "ras:slurm:modify: job %s still has no resources after "
+                       "the salloc that requested them exited; giving up",
+                       trk->job_id);
+        err = PRTE_ERR_TIMEOUT;
     }
 
     if (PRTE_ERR_JOB_CANCELLED == err) {
@@ -1329,6 +1392,49 @@ static void slurm_wait_poll_cb(int fd, short args, void *cbdata)
     trk->err = err;
 
     prte_ras_slurm_extend_wait_complete(-1, 0, trk);
+}
+
+/**
+ * @brief Answer an extend whose Slurm job has just been cancelled.
+ *
+ * Call after cancelling the job and removing its pending record; the completion
+ * reads that record to decide whether the job needs cancelling.
+ *
+ * The answer is posted, not delivered here, so the cancel is answered before
+ * the extend it cancelled.
+ *
+ * @param[in] request_id PMIx request identifier of the extend to answer.
+ */
+void prte_ras_slurm_extend_abort_request(const char *request_id)
+{
+    struct timeval immediate = {0, 0};
+
+    if (!extend_initialized || NULL == request_id) {
+        return;
+    }
+
+    for (int i = 0; i < prte_slurm_wait_trackers.size; i++) {
+        prte_slurm_wait_tracker_t *trk =
+            (prte_slurm_wait_tracker_t *) pmix_pointer_array_get_item(&prte_slurm_wait_trackers, i);
+
+        if (NULL == trk || NULL == trk->request_id
+            || 0 != strcmp(trk->request_id, request_id)) {
+            continue;
+        }
+
+        /* Claim it before posting: the scancel kills this extend's salloc, and
+         * that reap could otherwise answer first and release the tracker. Left
+         * in the registry so a finalize in the same window still frees it. */
+        trk->completing = true;
+        trk->err = PRTE_ERR_JOB_CANCELLED;
+
+        /* Only pending if a retry was in flight */
+        prte_event_evtimer_del(&trk->ev);
+        prte_event_set(prte_event_base, &trk->ev, -1, 0,
+                       prte_ras_slurm_extend_wait_complete, trk);
+        prte_event_evtimer_add(&trk->ev, &immediate);
+        return;
+    }
 }
 
 /**
@@ -1455,8 +1561,9 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
 
     pending_req_added = true;
 
-    /* Wait for resources by polling intermittently,
-     * since this could take a long time */
+    /* Nothing is asked of Slurm here. salloc holds the handshake until the job
+     * leaves PENDING, so its exit is the notice that there is something to
+     * ask about. */
 
     prte_slurm_wait_tracker_t *trk;
     
@@ -1491,17 +1598,6 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
         goto cleanup;
     }
 
-    /* start by waiting just a few ms for resources
-    *  and progressively expand the wait if we fail
-    *  to secure them quickly */
-    struct timeval initial_delay = {
-        .tv_sec = PRTE_SLURM_WAIT_MIN_USEC / 1000000,
-        .tv_usec = PRTE_SLURM_WAIT_MIN_USEC % 1000000
-    };
-
-    trk->poll_delay_usec = PRTE_SLURM_WAIT_MIN_USEC;
-
-    /* Before arming, since the poll callback drops it again */
     trk->tracker_index = pmix_pointer_array_add(&prte_slurm_wait_trackers, trk);
 
     if(0 > trk->tracker_index) {
@@ -1511,9 +1607,12 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
         goto cleanup;
     }
 
-    prte_event_set(prte_event_base, &trk->ev, -1, 0, slurm_wait_poll_cb, trk);
-    prte_event_evtimer_add(&trk->ev, &initial_delay);
-        
+    /* Set but not added: the timer is only for retries. Setting it here lets
+     * finalize delete it without knowing whether it ever armed. */
+    prte_event_set(prte_event_base, &trk->ev, -1, 0, slurm_grant_check_cb, trk);
+
+    prte_ras_slurm_link_child_to_tracker(job_id, trk->tracker_index);
+
     /* Return control to application while we wait */
     err = PRTE_ERR_OP_IN_PROGRESS;
 
