@@ -318,7 +318,24 @@ int main(int argc, char **argv) {
         wait_phase2 = (1 == wait_opt);
     }
 
-    if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, NULL, 0))) {
+    /* Name the server explicitly when told to.  Rendezvous discovery finds
+     * every tool's handle as well as the DVM's, so a case that leaves a prun
+     * running while it grows or shrinks cannot connect at all - PMIx sees
+     * two candidates and refuses to guess.  PRTE_DVM_URI is this harness's
+     * spelling of what --dvm-uri does for a PRRTE tool; leave it unset and
+     * discovery works exactly as before. */
+    {
+        char *duri = getenv("PRTE_DVM_URI");
+        pmix_info_t tinfo;
+        if (NULL != duri) {
+            PMIX_INFO_LOAD(&tinfo, PMIX_SERVER_URI, duri, PMIX_STRING);
+            rc = PMIx_tool_init(&myproc, &tinfo, 1);
+            PMIX_INFO_DESTRUCT(&tinfo);
+        } else {
+            rc = PMIx_tool_init(&myproc, NULL, 0);
+        }
+    }
+    if (PMIX_SUCCESS != rc) {
         fprintf(stderr, "PMIx_tool_init failed: %s\n", PMIx_Error_string(rc));
         return 1;
     }

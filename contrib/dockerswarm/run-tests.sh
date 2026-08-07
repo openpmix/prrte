@@ -4326,7 +4326,7 @@ test_errmgr() {
 ES=/opt/prte/prte/bin/envspawn
 
 test_odls() {
-    local out rc n c
+    local out rc n c ns duri EL
 
     banner "odls: the envar directives reach the daemon that does the fork"
     # SET/ADD/UNSET/PREPEND/APPEND have no command-line surface at all: they
@@ -4561,6 +4561,67 @@ test_odls() {
                           || bad "the SIGTERM-proof child survived on node2"
     else
         bad "could not start a DVM for the kill-escalation test"
+    fi
+    cleanup_swarm
+
+    banner "odls/nidmap: a daemon grown into the DVM learns the jobs already running"
+    # What the launch message no longer carries, and where it went.
+    #
+    # A daemon joining a DVM has never seen the launch messages of the jobs
+    # already running in it, so it cannot resolve their namespaces.  That
+    # used to be patched by packing every other active job in FRONT of the
+    # launch message of whichever job brought the new daemons in -- which
+    # tied that message's size to the number of jobs resident in the DVM
+    # and, worse, did nothing at all for a daemon added by a bare elastic
+    # grow, because a grow launches no job and so sends no launch message.
+    # The jobs now travel with the nidmap at VM_READY, which is sent exactly
+    # when the daemon set changes.
+    #
+    # So the shape here is deliberate, and it is the case the old mechanism
+    # could not reach: grow a node with NO job launch of its own, then ask a
+    # proc on that node about a job that predates it.  The wireup is the
+    # only thing that can have told it.
+    cleanup_swarm
+    if ! RUN 'command -v jobinfo >/dev/null'; then
+        skp "jobinfo client not installed -- re-run ./build.sh"
+    else
+        RUN 'rm -f /tmp/dvm.uri; nohup prte --daemonize --report-uri /tmp/dvm.uri --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+        duri=$(RUN 'head -1 /tmp/dvm.uri' 2>/dev/null | tr -d '\r')
+        if [ -z "$duri" ]; then
+            bad "could not start an elastic DVM for the job-catchup test"
+        else
+            # every elastic call names the DVM: the long-running prun below
+            # leaves a rendezvous handle of its own, and bare discovery then
+            # finds two servers and refuses to choose
+            EL="PRTE_DVM_URI='$duri' timeout 90 elastic"
+            out=$(RUN "$EL grow node2:2" 2>&1)
+            if ! echo "$out" | grep -q PMIX_DVM_IS_READY; then
+                bad "could not grow node2 -- cannot set up the catchup test"
+            else
+                ok "grew node2, which will host the job that predates node3"
+                RUN_BG /tmp/cu-pub.out "prun --dvm-uri file:/tmp/dvm.uri --host node2:2 -n 2 jobinfo publish 240"
+                sleep 10
+                ns=$(RUN 'grep -m1 "^NSPACE " /tmp/cu-pub.out' 2>/dev/null | awk '{print $2}' | tr -d '\r')
+                if [ -z "$ns" ]; then
+                    bad "the pre-existing job never reported its nspace: $(RUN 'cat /tmp/cu-pub.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+                else
+                    ok "a job is running on node2 (nspace $ns)"
+                    # node3 joins now, with no job launched onto it
+                    out=$(RUN "$EL grow node3:2" 2>&1)
+                    if ! echo "$out" | grep -q PMIX_DVM_IS_READY; then
+                        bad "could not grow node3 -- cannot test the catchup: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+                    else
+                        ok "grew node3 into a DVM that already had a job running"
+                        out=$(RUN "timeout 60 prun --dvm-uri file:/tmp/dvm.uri --host node3:1 -n 1 jobinfo fetch $ns 20" 2>&1)
+                        n=$(echo "$out" | grep -m1 '^JOBSIZE ' | awk '{print $2}' | tr -d '\r')
+                        [ "$n" = 2 ] \
+                            && ok "a proc on the newly-grown node resolved the pre-existing job" \
+                            || bad "the grown node could not resolve a job that predates it (got '$n'): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+                    fi
+                fi
+            fi
+            RUN "timeout -k 5 30 pterm --dvm-uri file:/tmp/dvm.uri" >/dev/null 2>&1
+        fi
     fi
     cleanup_swarm
 }
