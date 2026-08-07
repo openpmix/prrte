@@ -1,0 +1,3 @@
+nodes,radix,ppn,nprocs,nkeys,sizes,bytes_per_rank,collected_bytes,iter,put_wall_us,put_max_local_us,collect_wall_us,collect_max_local_us,barrier_wall_us,barrier_max_local_us
+16,2,1,16,8,16384,131072,4194304,0,5052.4,4903.7,21902.8,21739.8,1062.7,975.9
+16,2,1,16,8,65536,524288,16777216,0,12799.7,12799.7,66865.7,66409.0,1186.6,973.1
