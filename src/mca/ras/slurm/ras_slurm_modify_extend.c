@@ -1214,7 +1214,12 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
 
     complete:
 
-    if(PRTE_SUCCESS != err && PRTE_ERR_JOB_CANCELLED != err && !resources_added) {
+    if(PRTE_ERR_JOB_CANCELLED == err) {
+        /* Gone already, whether we asked or Slurm did. Drop the record rather
+         * than cancel it, or the job id outlives the job and is scancelled
+         * again later. */
+        prte_ras_slurm_remove_pending_req(request_id);
+    } else if(PRTE_SUCCESS != err && !resources_added) {
         prte_ras_slurm_cancel_pending_req(request_id);
     }
 
