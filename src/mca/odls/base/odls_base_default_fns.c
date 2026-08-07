@@ -209,7 +209,10 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
     pmix_status_t ret;
     prte_node_t *node;
     int i, k;
-    char **list, **procs, **micro, *tmp, *regex;
+    char **list, **procs, **micro, *tmp;
+#if !PRTE_PMIX_HAVE_REGEX2
+    char *regex;
+#endif
     prte_odls_jcaddy_t *cd;
     prte_proc_t *pptr;
     uint32_t uid;
@@ -282,6 +285,21 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
         tmp = PMIx_Argv_join(list, ',');
         PMIx_Argv_free(list);
         list = NULL;
+#if PRTE_PMIX_HAVE_REGEX2
+        pmix_regex2_t nregex = PMIX_REGEX2_STATIC_INIT;
+        if (PMIX_SUCCESS != (ret = PMIx_generate_regex2(tmp, NULL, 0, &nregex))) {
+            PMIX_ERROR_LOG(ret);
+            free(tmp);
+            if (NULL != procs) {
+                PMIx_Argv_free(procs);
+            }
+            PMIX_INFO_LIST_RELEASE(ilist);
+            return prte_pmix_convert_status(ret);
+        }
+        free(tmp);
+        PMIX_INFO_LIST_ADD(ret, ilist, PMIX_NODE_MAP, &nregex, PMIX_REGEX2);
+        PMIx_Regex2_destruct(&nregex);
+#else
         if (PMIX_SUCCESS != (ret = PMIx_generate_regex(tmp, &regex))) {
             PMIX_ERROR_LOG(ret);
             free(tmp);
@@ -294,6 +312,7 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
         free(tmp);
         PMIX_INFO_LIST_ADD(ret, ilist, PMIX_NODE_MAP, regex, PMIX_REGEX);
         free(regex);
+#endif
     }
 
     /* let the PMIx server generate the procmap regex */
@@ -301,6 +320,24 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
         tmp = PMIx_Argv_join(procs, ';');
         PMIx_Argv_free(procs);
         procs = NULL;
+#if PRTE_PMIX_HAVE_REGEX2
+        /* the proc map goes through the same generator: PMIx_generate_ppn is
+         * deprecated with no replacement, because the per-node rank mapping
+         * is now carried by an ordinary pmix_regex2_t.  The receiving side
+         * (gds/hash) splits it on ';' rather than ',' - which is a property
+         * of the string, not of the encoding */
+        pmix_regex2_t pregex = PMIX_REGEX2_STATIC_INIT;
+        if (PMIX_SUCCESS != (ret = PMIx_generate_regex2(tmp, NULL, 0, &pregex))) {
+            PMIX_ERROR_LOG(ret);
+            free(tmp);
+            /* list and procs were already freed above */
+            PMIX_INFO_LIST_RELEASE(ilist);
+            return prte_pmix_convert_status(ret);
+        }
+        free(tmp);
+        PMIX_INFO_LIST_ADD(ret, ilist, PMIX_PROC_MAP, &pregex, PMIX_REGEX2);
+        PMIx_Regex2_destruct(&pregex);
+#else
         if (PMIX_SUCCESS != (ret = PMIx_generate_ppn(tmp, &regex))) {
             PMIX_ERROR_LOG(ret);
             free(tmp);
@@ -311,6 +348,7 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
         free(tmp);
         PMIX_INFO_LIST_ADD(ret, ilist, PMIX_PROC_MAP, regex, PMIX_REGEX);
         free(regex);
+#endif
     }
 
     /* add in the personality */
