@@ -961,6 +961,18 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
                          "%s plm:base:send launch msg for job %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace)));
 
+    /* Report how big the thing we are about to broadcast is.  This is the one
+     * large xcast PRRTE makes as a matter of course, so how its size scales
+     * with the job is worth being able to read off a run rather than reason
+     * about.  Reported ahead of the do-not-launch return below, so a
+     * mapping-only run can size a job without launching it. */
+    PMIX_OUTPUT_VERBOSE((2, prte_plm_base_framework.framework_output,
+                         "%s plm:base:launch_msg job %s size %lu bytes for %d nodes, %u procs",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace),
+                         (unsigned long) jdata->launch_msg.bytes_used,
+                         (NULL == jdata->map) ? 0 : jdata->map->num_nodes,
+                         jdata->num_procs));
+
     /* if we don't want to launch the apps, now is the time to leave */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
         /* go ahead and register the job - the completion callback

@@ -142,6 +142,11 @@ static void _setup_complete(int sd, short args, void *cbdata)
         PMIX_ERROR_LOG(rc);
     }
 
+    PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
+                         "%s odls:launch_msg setup blob %lu bytes",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         (unsigned long) cd->pbo.size));
+
     /* move to next stage */
     PRTE_ACTIVATE_JOB_STATE(cd->jdata, PRTE_JOB_STATE_SEND_LAUNCH_MSG);
 
@@ -215,6 +220,7 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
     pmix_byte_object_t pbo;
     void *ilist, *mlist;
     pmix_data_array_t darray;
+    size_t priormark;
 
     /* get the job data pointer */
     if (NULL == (jdata = prte_get_job_data_object(job))) {
@@ -312,12 +318,22 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
         }
     }
 
+    /* note where the prior-jobs section ended so the job struct that follows
+     * can be sized on its own - the two scale with entirely different things
+     * (the number of other jobs in the DVM, versus this job's proc count) */
+    priormark = buffer->bytes_used;
+
     /* pack the job struct */
     rc = prte_job_pack(buffer, jdata);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return rc;
     }
+
+    PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
+                         "%s odls:launch_msg priorjobs %lu bytes, jobdata %lu bytes (%u procs)",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned long) priormark,
+                         (unsigned long) (buffer->bytes_used - priormark), jdata->num_procs));
 
     /* assemble the node and proc map info */
     list = NULL;
