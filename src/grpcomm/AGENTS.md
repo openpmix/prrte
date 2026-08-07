@@ -64,10 +64,21 @@ called `direct`. It was collapsed into plain code for the same reasons
   orders of magnitude apart in size. A component is chosen once, for the
   whole interface, for the life of the process. Wrong axis.
 
-So: to vary an algorithm, add a **movement strategy inside the
-operation** — not a component. Do not reintroduce the component/module
-abstraction unless a genuine second implementation of the *whole*
-interface turns up; that abstraction is precisely what was removed.
+So: if an algorithm ever needs to vary, it varies **inside the
+operation** — not by adding a component. Do not reintroduce the
+component/module abstraction unless a genuine second implementation of
+the *whole* interface turns up; that abstraction is precisely what was
+removed.
+
+**Today nothing varies.** Both collectives use the tree and only the tree:
+`xcast` forwards the whole payload down the routing tree, `fence` rolls up
+to the controller which broadcasts the answer back. A lateral
+scatter/allgather pair for each was built and then removed — see
+[`docs/plans/scalable_collectives.rst`](../../docs/plans/scalable_collectives.rst)
+for what it was and why it went. If you are reintroducing one, read that
+first: the framing it needed (an out-of-order op hold, a partial-payload
+gate, a movement id on the wire and a disagreement interlock for the
+fence) went with it, and is the expensive part.
 
 ---
 
@@ -79,21 +90,11 @@ grpcomm/
   grpcomm_internal.h   # trackers, signatures, globals, cross-file prototypes
   grpcomm.c            # init/finalize/fault_handler, globals, MCA params
   grpcomm_classes.c    # PMIX_CLASS_INSTANCE for every signature/tracker/caddy
-  grpcomm_exchange.c   # the allgather exchange schedule (Bruck) - pure math
   grpcomm_xcast.c      # reliable, fault-tolerant broadcast
   grpcomm_fence.c      # allgather / barrier
   grpcomm_group.c      # PMIx group construct/destruct/cancel
 ```
 
-`grpcomm_exchange.c` is deliberately free of state and messaging: it answers
-"who do I exchange with, on which step, and how many blocks" and nothing else.
-Two collectives need that answer — an allgather fence, and the second phase of
-a bulk broadcast — so it is shared rather than written twice. It uses **Bruck's
-algorithm** rather than recursive doubling: RD is equivalent for powers of two
-and *only* works then, needing extra rounds costing up to a second full copy of
-the data for any other count. Bruck is `ceil(log2(n))` steps for every `n`. The
-price is that blocks land rotated, so `prte_grpcomm_bruck_owner()` maps a slot
-back to its owner and callers must not assume natural order.
 
 Read `grpcomm.h` first — it is the whole external contract. Then
 `grpcomm_internal.h` for the object model.
@@ -122,10 +123,11 @@ Plain functions, all `PRTE_EXPORT`, declared in `grpcomm.h`:
 broadcasts. It exists for two reasons, and neither of them is "keep the
 framework alive in spirit":
 
-- The release is precisely the part a different data movement changes. A
-  rollup-to-controller collective must broadcast the answer back; a true
-  allgather leaves every daemon already holding it, with nothing to
-  release at all.
+- The release is the part any different data movement would change: a
+  rollup-to-controller collective must broadcast the answer back, while an
+  allgather would leave every daemon already holding it with nothing to
+  release. Nothing exercises that today, but the seam is one line and it
+  is where such a change would land.
 - It is the only way the unit test can observe the release a controller
   would emit without standing up an RML.
 
@@ -208,138 +210,26 @@ The most intricate file. `prte_grpcomm_xcast()` is just
    `op_id_completed`, fires the completion callback (master only), and
    releases the op.
 
-### Framing versus movement
+### One movement: the tree
 
-`xcast` is split in two, and the split is the point of the whole restructure.
+`xcast` forwards the **whole payload to each routing-tree child**. That is
+the only way a broadcast travels, and `forward_op()` calls
+`tree_whole_forward()` directly — there is no selection, nothing on the wire
+saying how the payload moved, and no per-message decision to get wrong.
 
-**The framing** — op-id assignment, the `XCAST_ACK` rollup with its
-`is_request` re-poll, the `process_first` ordering set, late-joiner catch-up,
-the promotion replay hold, the `pending_completions` FIFO, and the
-fault-handler reactions to parent/children changes — is the hard, correctness-
-critical part, and it is identical whichever way the bytes travel. There is one
-implementation and there should stay one.
+Nothing else about the operation is about movement, and all of it is the hard
+part: op-id assignment, the `XCAST_ACK` rollup with its `is_request` re-poll,
+the `process_first` ordering set, late-joiner catch-up, the promotion replay
+hold, the `pending_completions` FIFO, and the fault-handler reactions to
+parent/children changes. Keep that separation in mind if a second movement is
+ever reintroduced — it is data transport that would be added, not a second
+copy of the reliability machinery.
 
-**The movement** is how the payload physically reaches the daemons below us.
-It is a small vtable (`bcast_movement_t`: an id, a name, and a `forward`), and
-`forward_op()` dispatches through it after doing the framing's own work:
-
-- the do-not-launch check, which is not about movement at all;
-- resetting `replay_pending_parent` / `nexpected` / `nreported`. **The ACK
-  rollup stays subtree-shaped whichever movement carries the bytes** — a daemon
-  reports its subtree complete once it holds the payload *and* all its children
-  have reported — so this accounting is framing, and `nexpected` remains
-  `n_children`.
-
-There are two movements.
-
-`tree_whole` sends the whole payload to each routing-tree child. It is right
-for a small message, where the cost is the depth of the tree and a high radix
-makes that one or two hops. It is wrong for a large one, because a node with
-`r` children serializes `r` full copies on its outbound link at every level —
-`d*r*M*beta`, which is essentially the entire cost of broadcasting a launch
-message or a preload chunk at scale.
-
-`scatter_allgather` moves about `M` bytes per daemon instead — see
-[The bulk broadcast](#the-bulk-broadcast-scatter_allgather) below.
-
-**The movement is stamped on the wire**, between the ack id and the payload, by
-whoever originated the broadcast. A broadcast has a single originator, so
-unlike an allgather there is nothing to agree on — the originator decides and
-says so. Two consequences to respect:
-
-- **Read it in wire order.** `xcast_recv` unpacks it immediately after the ack
-  id, *before* the "already complete, just ack" short-circuit, because reading
-  it later would take its bytes as the start of the message.
-- **An unknown movement is refused, not guessed.** Every daemon in a DVM runs
-  the same build, so an id this build does not implement is a bug rather than
-  version skew; guessing would deliver a misparsed payload.
-
-The ids are explicit and must never be renumbered — they are on the wire, and a
-renumber would silently repoint an in-flight broadcast into a different
-movement, failing as if the payload were corrupt.
-
-A movement supplies data transport only. If you find yourself copying any of
-the framing into one, stop: that is the mistake this split exists to prevent.
-
-### The bulk broadcast (`scatter_allgather`)
-
-The controller splits the payload into one chunk per participant and scatters
-chunk *i* toward participant *i* **down the existing routing tree**; every
-daemon then reassembles the whole by a Bruck allgather across **lateral**
-links, on `PRTE_RML_TAG_XCAST_BULK`. The scatter *is* the forward, so it
-inherits the ACK rollup, the `process_first` set and the replay machinery
-untouched. The full design record is
-[`docs/plans/scalable_collectives.rst`](../../docs/plans/scalable_collectives.rst).
-
-**Selection is by tag, and that is the whole table.** `grpcomm_bcast_movement`
-defaults to `tag`: `bulk_tag_prefers_bulk()` names the broadcasts worth
-scattering, and today it names exactly one — the launch message, on
-`PRTE_RML_TAG_DAEMON_LAUNCH`. Everything else takes the tree. `tree` and
-`bulk` force one movement everywhere for testing.
-
-**Adding a tag to that table is the intended way to opt a payload in.** It is
-not a cost to design around — it is the declaration that keeps the choice
-reasoned. PRRTE does not carry arbitrary traffic; it carries a known, small
-set of things, and which of them a message is *is* the operation.
-
-`size` is the fourth value and the escape hatch: the old rule against
-`grpcomm_bcast_bulk_min_bytes` / `_min_daemons`, for a programming model that
-pushes something unexpectedly large through a tag nobody classified. **It is
-not the production path and should not become one** — it holds a number nobody
-has measured. Do not tune it; add a tag instead.
-
-`PRTE_RML_TAG_FILEM_BASE` is deliberately absent from the table even though
-the design's operation list once called its chunks "large". They are capped at
-`PRTE_FILEM_RAW_CHUNK_MAX` = 16 KB, and at that size the answer depends on the
-DVM — the exchange wins at a few hundred daemons and loses at ten. A knob-free
-table has no business holding a guess.
-
-The parts that are load-bearing, and why:
-
-- **The participant list is stamped on the wire, never re-derived.** Every
-  daemon must agree on which exchange position is which rank. Deriving that
-  locally from the failed-daemon set would have daemons disagree in the window
-  around a fault, and the exchange would deadlock with each waiting on a
-  partner the other does not believe exists. At four bytes a rank this is
-  16 KB for a 4096-daemon DVM, carried once beside a payload that is large by
-  definition. Do not replace it with a locally-computed set.
-- **`payload_complete`, not "the op exists".** Under `tree_whole` those are
-  the same statement; under a scatter the op exists long before the payload
-  does. `process_msg` gates on it — which is what makes every *existing*
-  caller correct without knowing the movement — and so does the ack to the
-  parent. `nexpected` stays the child count, because the rollup is still
-  subtree-shaped.
-- **The op-order hold.** A daemon completes ops in op-id order, and
-  `finish_op` enforces that with a hard error. Mixed movement can break it
-  honestly for the first time: a bulk op *N* is still assembling laterally
-  while a tiny op *N+1* behind it lands in one hop. `op_blocked()` holds
-  *N+1* until *N* has its payload, and `drive_completions()` releases it. The
-  test is deliberately "is an earlier op still short of its payload" rather
-  than "am I next in sequence", so a DVM using `tree_whole` throughout takes
-  exactly the path it always did — including the existing out-of-order
-  diagnostic, which this hold must not be able to mask.
-- **Faults degrade to `tree_whole`.** A lost participant cannot be recovered
-  by the exchange — the block it owed is gone — and a second recovery
-  mechanism beside the framing's replay would be one more thing to get wrong.
-  So `bulk_degrade()` flips the movement and the payload is re-sent whole:
-  any daemon holding all of it heals its own subtree, one that does not asks
-  the controller, which always can. Receivers holding partial chunks have
-  delivered nothing yet, so they simply take the whole payload instead.
-- **A degraded replay is the one case where an existing op re-reads its
-  payload.** `xcast_recv` normally does not — for every other replay there is
-  nothing new in it — so the fallback would silently deliver nothing without
-  that branch.
-
-Two traps specific to this movement:
-
-- **Degrading frees `op->bulk`.** Anything looping over that state must
-  degrade *after* it stops using it — `bulk_send_step()` returns a status
-  rather than degrading inline for exactly this reason.
-- **The exchange can outrun the scatter.** The two phases travel different
-  routes, so a partner nearer the root can send us chunks before our own
-  scatter arrives; their positions name a participant list we do not have
-  yet. They are parked whole by op-id (`early_chunks`) and drained when the
-  scatter lands. Dropping them instead deadlocks the exchange.
+The cost of the tree is `d*r*M*beta`: a daemon with `r` children puts `r` full
+copies of the payload on its outbound link at every level. That is the term a
+lateral movement was built to remove, and
+[`docs/plans/scalable_collectives.rst`](../../docs/plans/scalable_collectives.rst)
+records both the attempt and why it was withdrawn.
 
 ### Ordering and fault tolerance
 
@@ -456,85 +346,27 @@ ends it with `PMIX_ERR_LOST_CONNECTION`. Note the difference from a group
 construct, which *can* complete on survivors when asked: a fence has no
 equivalent of `PMIX_GROUP_FT_COLLECTIVE`.
 
-### The fence's movements
+### One movement: rollup and release
 
-`fence` has the same split, but a narrower seam and one important asymmetry
-with the broadcast.
+A fence rolls its contributions **up the routing tree** to the controller,
+which broadcasts the gathered result back down. Barrier and modex travel the
+same way; nothing reads `PMIX_COLLECT_DATA` to decide, and no movement id is
+on the wire.
 
-`tree_gather_release` is today's behaviour: roll up the routing tree to the
-controller, which broadcasts the gathered result back down. Right for a
-barrier — nothing to gather, and the cost is the depth of the tree each way.
+The seam that a different movement would use is still visible in the shape of
+the code — `tree_gather_converged()` / `_contribute()` / `_answer()` are
+separate functions because "has it got everything" and "what to do once it
+has" are the two things an allgather would replace. They are called directly.
 
-`rd_allgather` replaces both halves with a single Bruck exchange across
-lateral links on `PRTE_RML_TAG_FENCE_EXCHANGE`, after which every daemon
-already holds the result and **there is no release at all**. That is the
-point: for a modex it is the release fanout, not the gather, that dominates.
+**If you reintroduce a lateral movement, the hard part is not the schedule.**
+A broadcast has one originator who decides for everybody; a fence has none,
+so every participant must reach the same answer independently or the
+collective hangs with half the daemons waiting for a release the other half
+will never send. That is why the withdrawn implementation carried a movement
+id purely to *detect disagreement*, and why its deadline had to become
+per-participant. It also could not use the recovery restart, because an
+exchange's shape is the participant list rather than the routing tree.
 
-Selected by `grpcomm_fence_movement` (`tree` / `allgather` / `auto`),
-defaulting to **`auto`**, which reads `PMIX_COLLECT_DATA` out of the fence
-upcall's info array — a barrier keeps the rollup, a modex gets the exchange.
-`tree` reverts to the old behaviour in one flag.
-
-The scalable path is the default deliberately: a movement nobody selects is a
-movement nobody tests, and what goes wrong here — a fence that cannot converge
-— shows up at scale and under fault rather than in a unit test.
-
-**There is no size threshold here, and there should never be one.** The
-discriminator is categorical, and both arms are reasoned rather than tuned: a
-barrier keeps the rollup because a high-radix tree beats a dissemination
-exchange at *any* scale (`2*d*alpha` with `d`=2 at radix 64 over 4096 daemons,
-against `log2(N)*alpha` = 12·alpha), and a modex gets the exchange because the
-release fanout — not the gather — is what dominates it. What is unverified is
-therefore not *where* to switch but simply whether the exchange wins in
-practice; that is a yes/no on real hardware, after which this default flips
-with no constant to choose. Contrast the broadcast's `auto`, which is a byte
-threshold and is scaffolding.
-
-(`PMIX_COLLECT_DATA` does reach the fence upcall — the PMIx client packs the
-caller's info array verbatim and the server forwards it. PRRTE long believed
-otherwise. Note also that "is `ndata` zero" is *not* a substitute: a pure
-barrier arrives with eight bytes, so a size test would call every barrier a
-modex.)
-
-**A fence has no originator, and that changes everything about agreement.**
-A broadcast's movement is decided by one daemon and obeyed by the rest. Every
-participant in a fence decides independently, and if two of them decide
-differently the collective can never converge — half wait for a release the
-other half will never send. So:
-
-- The movement id is on the wire **to detect disagreement, not to instruct**.
-  A tracker with no contributions yet adopts what it is told; one that already
-  has contributions and is told something else aborts the fence with a named
-  `show_help` message (`help-prte-grpcomm.txt`). Turning the one catastrophic
-  failure mode into a report is the whole purpose.
-- Selection may only read things every participant sees identically — the
-  configured value, and the caller's directives. Anything computed from local
-  state (how many bytes *our* clients contributed) would be a way to hang the
-  collective. `select_fence_movement()` is where that rule lives.
-
-Three more things are load-bearing:
-
-- **The seam is `converged` + `contribute` + `answer`, not just `answer`.**
-  An allgather changes what "has it got everything" *means* — the rollup
-  counts child subtrees, the exchange counts blocks.
-- **The exchange opts out of the recovery restart.** The restart exists
-  because a rollup's shape is the routing tree's and the tree just changed; an
-  exchange's shape is the participant list, which a repaired tree does not
-  touch. Re-offering our block would only duplicate what partners hold. A
-  participant genuinely lost is handled by the local fault test instead, which
-  ends the fence — no controller, no epoch restart, and no "lost only a relay"
-  case, because relay-only daemons are not in an exchange.
-- **The deadline becomes local.** With no daemon that every contribution
-  reaches — and, for a subset fence, possibly no controller among the
-  participants — each participant arms its own timer and whoever fires first
-  aborts for everybody.
-
-The result is also *better ordered* than the rollup's: blocks are concatenated
-in ascending participant order, so every daemon produces byte-identical
-output, where the bucket's order was whatever the merges happened to reach the
-root in.
-
----
 
 ## `group` — PMIx group operations (`grpcomm_group.c`)
 

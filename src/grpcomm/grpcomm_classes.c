@@ -122,13 +122,6 @@ static void ccon(prte_grpcomm_fence_t *p)
     p->converged = false;
     p->aborting = false;
     p->my_contribution = NULL;
-    /* The rollup, always. NOT prte_grpcomm_globals.fence_select: that may
-     * hold the "auto" sentinel, which is not a movement and must never reach
-     * the wire. fence() resolves the selection into a real movement for a
-     * tracker its own client is starting; a tracker built by an arriving
-     * contribution instead adopts whatever that contribution asserts. */
-    p->movement = PRTE_GRPCOMM_FENCE_TREE_GATHER;
-    p->xch = NULL;
     p->timeout = 0;
     p->tev_active = false;
     p->cbfunc = NULL;
@@ -148,7 +141,6 @@ static void cdes(prte_grpcomm_fence_t *p)
         PMIX_DATA_BUFFER_RELEASE(p->my_contribution);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&p->bucket);
-    prte_grpcomm_fence_xch_free(p);
     if (NULL != p->dmns) {
         free(p->dmns);
     }
