@@ -30,6 +30,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 
+#include "src/prted/pmix/pmix_server.h"
 #include "src/util/nidmap.h"
 
 int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buffer)
@@ -665,4 +666,181 @@ cleanup:
         PMIx_Argv_free(aliases);
     }
     return rc;
+}
+
+/* The jobs already running in the DVM.
+ *
+ * A daemon that has just joined the DVM has to be told about the jobs that
+ * were already running in it, or a proc of one of those jobs interacting with
+ * a proc of the new one lands on a daemon that cannot resolve its namespace.
+ * This used to be packed into the launch message - by definition the launch
+ * that brought the daemons in - which tied the size of every such launch
+ * message to the number of jobs resident in the DVM, and sent them to every
+ * daemon in it rather than to the ones that needed them.  It belongs beside
+ * the nidmap: the same message, sent on the same event, saying the same kind
+ * of thing.
+ *
+ * "exclude" is the job whose launch brought the new daemons in.  Packing it
+ * here would be worse than redundant: a daemon that has already recorded a
+ * namespace *drops* the copy in the launch message, so a catch-up entry for
+ * a job that has not been mapped yet would leave every daemon holding a
+ * procless version of it forever.
+ */
+/* Is this one of the jobs a daemon joining the DVM needs to be told about?
+ *
+ * A connected tool is carried in prte_job_data as a job, and it is not one:
+ * its proc runs on no daemon at all, so its "parent" is the
+ * PMIX_RANK_INVALID prte_proc_construct left there, and a receiver has
+ * nowhere to place it - it would fail the placement below and take the DVM
+ * down with it.  No daemon but the one the tool connected through has any
+ * use for it either.
+ */
+static bool catchup_worthy(prte_job_t *jptr, prte_job_t *exclude)
+{
+    if (NULL == jptr || jptr == exclude) {
+        return false;
+    }
+    if (PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_TOOL)) {
+        return false;
+    }
+    return true;
+}
+
+int prte_util_pack_job_catchup(pmix_data_buffer_t *buffer, prte_job_t *exclude)
+{
+    prte_job_t *jptr;
+    pmix_status_t rc;
+    int32_t njobs = 0;
+    int i;
+
+    /* count what we are about to send - the receiver reads a count rather
+     * than unpacking until the buffer runs out, because the per-daemon
+     * wireup records follow it in the same message */
+    for (i = 1; i < prte_job_data->size; i++) {
+        jptr = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, i);
+        if (!catchup_worthy(jptr, exclude)) {
+            continue;
+        }
+        ++njobs;
+    }
+    rc = PMIx_Data_pack(NULL, buffer, &njobs, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    if (0 == njobs) {
+        return PRTE_SUCCESS;
+    }
+
+    for (i = 1; i < prte_job_data->size; i++) {
+        jptr = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, i);
+        if (!catchup_worthy(jptr, exclude)) {
+            continue;
+        }
+        /* prte_job_pack already carries each proc's parent daemon, which is
+         * all the receiver needs to put the proc back on its node - the
+         * launch message used to pack that vpid a second time alongside */
+        rc = prte_job_pack(buffer, jptr);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            return rc;
+        }
+    }
+
+    return PRTE_SUCCESS;
+}
+
+int prte_util_decode_job_catchup(pmix_data_buffer_t *buffer)
+{
+    prte_job_t *jptr, *daemons;
+    prte_proc_t *pptr, *dmn;
+    prte_node_t *node;
+    pmix_status_t rc;
+    int32_t njobs, cnt;
+    int n, v;
+
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &njobs, &cnt, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    if (0 == njobs) {
+        return PRTE_SUCCESS;
+    }
+
+    /* the nidmap was decoded ahead of us, so every daemon named in it now has
+     * a proc object bound to its node - which is how we place these procs */
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    if (NULL == daemons) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    for (n = 0; n < njobs; n++) {
+        jptr = NULL;
+        rc = prte_job_unpack(buffer, &jptr);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            return rc;
+        }
+        /* we may already know this one - every daemon gets this message, not
+         * just the ones that just joined */
+        if (NULL != prte_get_job_data_object(jptr->nspace)) {
+            jptr->index = -1;
+            PMIX_RELEASE(jptr);
+            continue;
+        }
+        prte_set_job_data_object(jptr);
+        if (NULL == jptr->map) {
+            jptr->map = PMIX_NEW(prte_job_map_t);
+        }
+
+        for (v = 0; v < jptr->procs->size; v++) {
+            pptr = (prte_proc_t *) pmix_pointer_array_get_item(jptr->procs, v);
+            if (NULL == pptr) {
+                continue;
+            }
+            dmn = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs, pptr->parent);
+            if (NULL == dmn || NULL == dmn->node) {
+                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                return PRTE_ERR_NOT_FOUND;
+            }
+            /* the node backpointer is borrowed, not retained */
+            pptr->node = dmn->node;
+
+            /* add the node to the job map, if needed */
+            if (!PRTE_FLAG_TEST(pptr->node, PRTE_NODE_FLAG_MAPPED)) {
+                PMIX_RETAIN(pptr->node);
+                pmix_pointer_array_add(jptr->map->nodes, pptr->node);
+                jptr->map->num_nodes++;
+                PRTE_FLAG_SET(pptr->node, PRTE_NODE_FLAG_MAPPED);
+            }
+            /* add this proc to that node */
+            PMIX_RETAIN(pptr);
+            pmix_pointer_array_add(pptr->node->procs, pptr);
+            pptr->node->num_procs++;
+        }
+        /* reset the mapped flags */
+        for (v = 0; v < jptr->map->nodes->size; v++) {
+            node = (prte_node_t *) pmix_pointer_array_get_item(jptr->map->nodes, v);
+            if (NULL != node) {
+                PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
+            }
+        }
+
+        /* Tell our own PMIx server about it, and do not wait: nothing later
+         * in this message depends on the registration, and the launch message
+         * that could care about it cannot even have been built yet - the
+         * master sends this at VM_READY and the launch message several states
+         * later.  Registering here rather than at launch time is what lets
+         * the launch path stop carrying these jobs at all. */
+        rc = prte_pmix_server_register_nspace(jptr, NULL, NULL);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            return rc;
+        }
+    }
+
+    return PRTE_SUCCESS;
 }

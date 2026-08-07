@@ -101,16 +101,20 @@ so that a request to expand the DVM has a hook.
 
 ### `vm_ready`
 Runs when the DVM's daemons have all reported. For the daemon job it
-builds a nidmap, appends **per daemon: its name, its `PMIX_PROC_URI`, and
-its `PMIX_SERVER_URI`** to that same buffer, and `xcast`s
-`PRTE_RML_TAG_WIREUP` to all daemons (skipped for a single-daemon or
+builds a nidmap, appends the **job catch-up** (`prte_util_pack_job_catchup`
+— every job already running in the DVM except the one being launched, so a
+daemon that just joined can resolve their namespaces) and then **per daemon:
+its name, its `PMIX_PROC_URI`, and its `PMIX_SERVER_URI`** to that same
+buffer, and `xcast`s `PRTE_RML_TAG_WIREUP` to all daemons (skipped for a single-daemon or
 `DO_NOT_LAUNCH` DVM). The first two are the RML wireup; the third is not
 used by PRRTE at all — it is redistributed so that *any* daemon can answer
 a tool's hostname-qualified `PMIX_SERVER_URI` query, rather than only the
 master that collected it (see [`../../../pmix/AGENTS.md`](../../../pmix/AGENTS.md)).
 The receiving end is `process_wireup()` in `src/grpcomm`, and the three
 fields are a **per-record group** — its skip-what-we-already-know
-`continue`s must not skip an unpack. Because this handler re-sends the
+`continue`s must not skip an unpack. The catch-up sits *between* the nidmap
+and those records precisely because the record loop runs to the end of the
+buffer: anything appended after it would be read as another record. Because this handler re-sends the
 whole set every time `VM_READY` fires, an elastic **grow** redistributes
 with no code of its own. On any pack/get failure it drives
 `PRTE_JOB_STATE_FORCED_EXIT` with a `NULL` job (tearing the whole DVM

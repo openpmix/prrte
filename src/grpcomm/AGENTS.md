@@ -26,7 +26,10 @@ action:
 - `plm`/`state` broadcast launch messages, wireup (nidmap), and DAEMON
   commands with `prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, …)` /
   `PRTE_RML_TAG_WIREUP`. The receive side of the wireup lives here, in
-  `process_wireup()` (`grpcomm_xcast.c`): after the nidmap it reads a
+  `process_wireup()` (`grpcomm_xcast.c`): after the nidmap it reads the
+  **job catch-up** (`prte_util_decode_job_catchup` — the jobs already
+  running in the DVM, which a daemon that just joined has never heard of;
+  they used to lead the launch message instead), and then a
   **three-field record per daemon** — name, `PMIX_PROC_URI` (RML contact
   info), `PMIX_SERVER_URI` (that node's PMIx server rendezvous,
   redistributed only so any daemon can answer a tool's query; PRRTE never
