@@ -781,7 +781,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
                 PMIX_INFO_LIST_ADD(ret, pmap, PMIX_HOSTNAME, pptr->node->name, PMIX_STRING);
             }
             PMIX_INFO_LIST_CONVERT(ret, pmap, &darray);
-            PMIX_INFO_LIST_ADD(ret, info, PMIX_PROC_DATA, &darray, PMIX_DATA_ARRAY);
+            PMIX_INFO_LIST_ADD(ret, info, PMIX_PROC_INFO_ARRAY, &darray, PMIX_DATA_ARRAY);
             PMIX_DATA_ARRAY_DESTRUCT(&darray);
             PMIX_INFO_LIST_RELEASE(pmap);
         }
