@@ -122,9 +122,37 @@ consequences, all in `prte_ras_slurm_exec_salloc`:
 --json` poll drives the extend from submission onwards, so the reap can fire
 either side of the request completing and shares no state with it.
 
-`init` allocates `prte_slurm_session_stack` and the pending-request
-tracker; `finalize` tears them down. A successful atomic modify returns
-`PMIX_OPERATION_SUCCEEDED` so the base completes the request.
+### Finalize cleans up in flight extends itself
+
+An incomplete extend owns a pending-request record, an armed poll timer and a
+live `salloc`. Nothing cleans those up after `finalize` returns: the event
+base is stopped, so neither the timer nor the SIGCHLD reaper fires again. So
+each half keeps a registry and empties it inline — cancel `scancel`s every
+job still listed, then extend deletes the timers and kills and reaps the
+children. Cancel goes first: `scancel` is what gives the resources back, and
+killing a child is not.
+
+Four rules for that teardown:
+
+- **Do not answer the requester.** `pmix_server_finalize()` has already run,
+  so the tracker holds the last reference to its request.
+- **Blocking is fine here, and only here.** `kill_job` uses `popen`; with the
+  loop stopped nothing can race `pclose`'s `waitpid`.
+- **Kill outright.** Nothing is left to ask for: the allocation is handled
+  elsewhere — by the cancel half, or by the session drain — and a submission
+  that failed was already signalled by `exec_salloc`. `salloc` does not
+  reliably act on a `SIGTERM` anyway.
+- **Reap.** PID 1 is not always something that reaps — under the `slurmd`
+  that is PID 1 in the test containers, an unreaped child is a zombie for the
+  life of the machine.
+
+A completed extend needs none of this: its job belongs to a session, and
+`prte_ras_slurm_drain_session_stack` scancels those.
+
+`init` allocates `prte_slurm_session_stack`, the pending-request tracker and
+the in-flight extend registries; `finalize` tears them down. A successful
+atomic modify returns `PMIX_OPERATION_SUCCEEDED` so the base completes the
+request.
 
 The JSON helpers (`ras_slurm_jansson.c`) are compiled only when the
 **extensions** are built — jansson available *and* a new enough SLURM, see
