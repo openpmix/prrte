@@ -69,6 +69,8 @@ int prte_ras_slurm_modify_cancel_finalize(void);
 int prte_ras_slurm_serve_cancel_req(prte_pmix_server_req_t *req);
 
 /* Features to serve extension requests */
+int prte_ras_slurm_modify_extend_init(void);
+int prte_ras_slurm_modify_extend_finalize(void);
 int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req);
 
 /* Features to serve release requests */

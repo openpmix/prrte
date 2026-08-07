@@ -31,6 +31,7 @@ typedef struct {
 /* Local functions */
 static void prte_ras_slurm_pending_req_free(prte_ras_slurm_pending_req_t *pending_req);
 static int prte_ras_slurm_find_pending_req(const char *request_id, int *idx);
+static void prte_ras_slurm_cancel_req_at(int idx);
 
 /**
  * @brief Process a PMIx pending resource cancellation request.
@@ -211,15 +212,29 @@ int prte_ras_slurm_cancel_pending_req(const char *request_id)
         return err;
     }
 
+    prte_ras_slurm_cancel_req_at(idx);
+
+    return PRTE_SUCCESS;
+}
+
+/**
+ * @brief Cancel and drop the pending request held at an array index.
+ *
+ * @param[in] idx Array index containing the request.
+ */
+static void prte_ras_slurm_cancel_req_at(int idx)
+{
     prte_ras_slurm_pending_req_t *pending_req =
         (prte_ras_slurm_pending_req_t *) pmix_pointer_array_get_item(&pending_reqs, idx);
+
+    if (NULL == pending_req) {
+        return;
+    }
 
     prte_ras_slurm_kill_job(pending_req->slurm_job_id, NULL, 0);
 
     prte_ras_slurm_pending_req_free(pending_req);
     pmix_pointer_array_set_item(&pending_reqs, idx, NULL);
-
-    return PRTE_SUCCESS;
 }
 
 /**
@@ -295,6 +310,9 @@ int prte_ras_slurm_modify_cancel_init(void)
 
 /**
  * @brief Destroy required data structures for record keeping.
+ *
+ * Anything still listed is an extend that never completed. Cancel rather than
+ * forget: a job left behind holds its nodes until its time limit.
  */
 int prte_ras_slurm_modify_cancel_finalize(void)
 {
@@ -303,11 +321,7 @@ int prte_ras_slurm_modify_cancel_finalize(void)
     }
 
     for (int i = 0; i < pending_reqs.size; i++) {
-        void *ptr = pmix_pointer_array_get_item(&pending_reqs, i);
-        if (NULL != ptr) {
-            prte_ras_slurm_pending_req_free((prte_ras_slurm_pending_req_t *) ptr);
-            pmix_pointer_array_set_item(&pending_reqs, i, NULL);
-        }
+        prte_ras_slurm_cancel_req_at(i);
     }
 
     PMIX_DESTRUCT(&pending_reqs);

@@ -14,11 +14,13 @@
 #include "types.h"
 
 #include <ctype.h>
+#include <limits.h>
 #include <signal.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <time.h>
 #include <unistd.h>
 #include <stdlib.h>
 
@@ -58,22 +60,35 @@ typedef struct {
     char *job_id;
     int err;
     uint64_t poll_delay_usec;
+    int tracker_index;
 } prte_slurm_wait_tracker_t;
 
 /* Everything the reap callback needs to finish with a salloc child. It is
  * deliberately disjoint from prte_slurm_wait_tracker_t: the child can exit
  * either side of the extend completing, so the two must not share state. */
 typedef struct {
+    pmix_list_item_t super;
     pid_t pid;
     int outfd;
     char *job_id;
 } prte_slurm_salloc_child_t;
+
+/* Bound on how long finalize waits for a killed salloc to become reapable */
+#define PRTE_SLURM_REAP_WAIT_USEC 1000000    /* 1 sec */
+#define PRTE_SLURM_REAP_POLL_USEC 10000      /* 10 ms */
+
+/* Extends still in flight, for finalize to clean up */
+static pmix_list_t prte_slurm_salloc_children;
+static pmix_pointer_array_t prte_slurm_wait_trackers;
+static bool extend_initialized = false;
 
 /*
  * Local functions
  */
 static void swt_con(prte_slurm_wait_tracker_t *p);
 static void swt_des(prte_slurm_wait_tracker_t *p);
+static void ssc_con(prte_slurm_salloc_child_t *p);
+static void ssc_des(prte_slurm_salloc_child_t *p);
 static void salloc_wait_cb(int fd, short args, void *cbdata);
 static int prte_ras_slurm_make_salloc_arg(pmix_hash_table_t *fields, const char *field_name, const char *field_format, bool obj_num, int *argc, char **argv);
 static int prte_ras_slurm_exec_salloc(char * const *argv, char *job_id);
@@ -88,6 +103,7 @@ static void prte_ras_slurm_rollback_session(const char *slurm_jobid);
 static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata);
 
 PMIX_CLASS_INSTANCE(prte_slurm_wait_tracker_t, pmix_object_t, swt_con, swt_des);
+PMIX_CLASS_INSTANCE(prte_slurm_salloc_child_t, pmix_list_item_t, ssc_con, ssc_des);
 
 /* String fields to read from "parent" Slurm job JSON */
 const char *const str_fields[STR_FIELD_COUNT] = {
@@ -143,6 +159,7 @@ static void swt_con(prte_slurm_wait_tracker_t *p)
     p->user_request_id_provided = false;
     p->job_id = NULL;
     p->err = PRTE_SUCCESS;
+    p->tracker_index = -1;
 }
 
 /*
@@ -161,6 +178,129 @@ static void swt_des(prte_slurm_wait_tracker_t *p)
     if (NULL != p->req) {
         PMIX_RELEASE(p->req);
     }
+}
+
+/*
+ * Constructor for prte_slurm_salloc_child_t
+ */
+static void ssc_con(prte_slurm_salloc_child_t *p)
+{
+    p->pid = -1;
+    p->outfd = -1;
+    p->job_id = NULL;
+}
+
+/*
+ * Destructor for prte_slurm_salloc_child_t
+ */
+static void ssc_des(prte_slurm_salloc_child_t *p)
+{
+    if (0 <= p->outfd) {
+        close(p->outfd);
+    }
+
+    if (NULL != p->job_id) {
+        free(p->job_id);
+    }
+}
+
+/*
+ * Set up the records of work in flight.
+ */
+int prte_ras_slurm_modify_extend_init(void)
+{
+    if (extend_initialized || !prte_ras_slurm_have_extensions()) {
+        return PRTE_SUCCESS;
+    }
+
+    int err;
+
+    PMIX_CONSTRUCT(&prte_slurm_salloc_children, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_slurm_wait_trackers, pmix_pointer_array_t);
+
+    err = pmix_pointer_array_init(&prte_slurm_wait_trackers, 0, INT_MAX, 16);
+
+    if (PMIX_SUCCESS != err) {
+        PMIX_DESTRUCT(&prte_slurm_wait_trackers);
+        PMIX_DESTRUCT(&prte_slurm_salloc_children);
+        return prte_pmix_convert_status(err);
+    }
+
+    extend_initialized = true;
+
+    return PRTE_SUCCESS;
+}
+
+/*
+ * Clean up any extend still in flight.
+ *
+ * Only the timers and the processes: the allocations behind them belong to
+ * the cancel half, which prte_ras_slurm_finalize runs first. Done inline
+ * because the event base has stopped - neither the poll timer nor the SIGCHLD
+ * that reaps a child will fire again.
+ */
+int prte_ras_slurm_modify_extend_finalize(void)
+{
+    if (!extend_initialized) {
+        return PRTE_SUCCESS;
+    }
+
+    prte_slurm_salloc_child_t *child;
+
+    for (int i = 0; i < prte_slurm_wait_trackers.size; i++) {
+        prte_slurm_wait_tracker_t *trk = (prte_slurm_wait_tracker_t *)
+            pmix_pointer_array_get_item(&prte_slurm_wait_trackers, i);
+
+        if (NULL == trk) {
+            continue;
+        }
+
+        /* The requester is not told, because the only caller runs after
+         * pmix_server_finalize(): the request has no other reference left and
+         * nothing to answer through. Finalizing this component with the DVM
+         * still up would have to complete these instead of dropping them. */
+        prte_event_evtimer_del(&trk->ev);
+        pmix_pointer_array_set_item(&prte_slurm_wait_trackers, i, NULL);
+        PMIX_RELEASE(trk);
+    }
+
+    while (NULL != (child = (prte_slurm_salloc_child_t *)
+                                pmix_list_remove_first(&prte_slurm_salloc_children))) {
+        /* No SIGTERM first: nothing is left to ask for. Its allocation is
+         * somebody else's to give back - the cancel half, or the session
+         * drain - and a submission that failed was already signalled by
+         * exec_salloc. salloc does not reliably act on one anyway. */
+        kill(child->pid, SIGKILL);
+
+        /* Reap it. PID 1 is not always something that reaps, and an orphan
+         * nobody waits on is a zombie for the life of the machine. */
+        for (uint64_t waited = 0; PRTE_SLURM_REAP_WAIT_USEC > waited;
+             waited += PRTE_SLURM_REAP_POLL_USEC) {
+            struct timespec tp = {0, PRTE_SLURM_REAP_POLL_USEC * 1000};
+            pid_t reaped = waitpid(child->pid, NULL, WNOHANG);
+
+            if (0 > reaped && EINTR == errno) {
+                continue;
+            }
+
+            /* Reaped, or never ours to wait for */
+            if (0 != reaped) {
+                break;
+            }
+
+            nanosleep(&tp, NULL);
+        }
+
+        /* This child's prte_wait_tracker_t is left holding a dangling cbdata,
+         * which is what salloc_wait_cb's finalized check is for. */
+        PMIX_RELEASE(child);
+    }
+
+    PMIX_DESTRUCT(&prte_slurm_wait_trackers);
+    PMIX_DESTRUCT(&prte_slurm_salloc_children);
+    extend_initialized = false;
+
+    return PRTE_SUCCESS;
 }
 
 /*
@@ -254,11 +394,22 @@ static int prte_ras_slurm_make_salloc_arg(pmix_hash_table_t *fields,
 static void salloc_wait_cb(int fd, short args, void *cbdata)
 {
     prte_wait_tracker_t *t2 = (prte_wait_tracker_t *) cbdata;
-    prte_slurm_salloc_child_t *child = (prte_slurm_salloc_child_t *) t2->cbdata;
+    prte_slurm_salloc_child_t *child;
     char tail[PRTE_SLURM_ALLOC_TAIL_MAX + 1];
     size_t n = 0;
     int status;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
+
+    /* Past finalize, cbdata names a child this component has already killed,
+     * reaped and freed. Reaching here would mean the event base was dispatched
+     * after the module closed, which does not happen - but the alternative to
+     * checking is a use-after-free on a shutdown path. */
+    if (!extend_initialized) {
+        PMIX_RELEASE(t2);
+        return;
+    }
+
+    child = (prte_slurm_salloc_child_t *) t2->cbdata;
 
     /* Collect whatever salloc had left to say. The child is gone and we hold
      * the only remaining descriptor, so this reads to EOF without blocking -
@@ -281,6 +432,7 @@ static void salloc_wait_cb(int fd, short args, void *cbdata)
 
     tail[n] = '\0';
     close(child->outfd);
+    child->outfd = -1;
 
     /* prte_wait.c records the raw waitpid status here */
     status = t2->child->exit_code;
@@ -302,10 +454,8 @@ static void salloc_wait_cb(int fd, short args, void *cbdata)
                              NULL == child->job_id ? "<unknown>" : child->job_id));
     }
 
-    if (NULL != child->job_id) {
-        free(child->job_id);
-    }
-    free(child);
+    pmix_list_remove_item(&prte_slurm_salloc_children, &child->super);
+    PMIX_RELEASE(child);
 
     /* The tracker owns the dummy proc; nothing owns cbdata but us */
     PMIX_RELEASE(t2);
@@ -397,17 +547,13 @@ static int prte_ras_slurm_exec_salloc(char * const *argv, char *job_id)
 
     /* Everything the reap needs is allocated up front: once the child exists
      * there must be no failure path that cannot hand it over. */
-    child = malloc(sizeof(*child));
+    child = PMIX_NEW(prte_slurm_salloc_child_t);
 
     if(NULL == child) {
         err = PRTE_ERR_OUT_OF_RESOURCE;
         PRTE_ERROR_LOG(err);
         goto cleanup;
     }
-
-    child->pid = -1;
-    child->outfd = -1;
-    child->job_id = NULL;
 
     dummy = PMIX_NEW(prte_proc_t);
 
@@ -494,6 +640,9 @@ static int prte_ras_slurm_exec_salloc(char * const *argv, char *job_id)
     pipefd[0] = -1;
     child_adopted = true;
 
+    /* The list owns our reference from here */
+    pmix_list_append(&prte_slurm_salloc_children, &child->super);
+
     dummy->pid = pid;
     /* be sure to mark it as alive so we don't instantly fire */
     PRTE_FLAG_SET(dummy, PRTE_PROC_FLAG_ALIVE);
@@ -568,7 +717,7 @@ static int prte_ras_slurm_exec_salloc(char * const *argv, char *job_id)
     }
 
     if(!child_adopted && NULL != child) {
-        free(child);
+        PMIX_RELEASE(child);
     }
 
     if(NULL != dummy) {
@@ -975,6 +1124,12 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
 
     int err = trk->err;
 
+    /* The only place a tracker is released, so the only place it is dropped */
+    if (0 <= trk->tracker_index) {
+        pmix_pointer_array_set_item(&prte_slurm_wait_trackers, trk->tracker_index, NULL);
+        trk->tracker_index = -1;
+    }
+
     if(PRTE_SUCCESS != err) {
         goto complete;
     }
@@ -1340,6 +1495,16 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
     };
 
     trk->poll_delay_usec = PRTE_SLURM_WAIT_MIN_USEC;
+
+    /* Before arming, since the poll callback drops it again */
+    trk->tracker_index = pmix_pointer_array_add(&prte_slurm_wait_trackers, trk);
+
+    if(0 > trk->tracker_index) {
+        err = PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(err);
+        PMIX_RELEASE(trk);
+        goto cleanup;
+    }
 
     prte_event_set(prte_event_base, &trk->ev, -1, 0, slurm_wait_poll_cb, trk);
     prte_event_evtimer_add(&trk->ev, &initial_delay);
