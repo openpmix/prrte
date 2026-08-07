@@ -1861,6 +1861,17 @@ static void process_wireup(pmix_data_buffer_t *msg){
        return;
     }
 
+    /* the jobs already running in this DVM, which we may never have heard of
+     * if we only just joined it. Must be read here, after the nidmap (which
+     * is what binds each daemon to its node) and before the per-daemon
+     * records below, because that loop runs to the end of the buffer. */
+    ret = prte_util_decode_job_catchup(msg);
+    if(PRTE_SUCCESS != ret){
+       PRTE_ERROR_LOG(ret);
+       PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+       return;
+    }
+
     pmix_value_t val = PMIX_VALUE_STATIC_INIT;
     pmix_value_t sval = PMIX_VALUE_STATIC_INIT;
     pmix_proc_t dmn;

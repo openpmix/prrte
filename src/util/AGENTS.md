@@ -191,6 +191,32 @@ equal to the master's:
 - **A node the sender did not name has lost its daemon** and its backpointer
   is cleared, mirroring what the master did to its own pool on the shrink.
 
+`prte_util_pack_job_catchup()` / `prte_util_decode_job_catchup()` ride in the
+same message, immediately after the nidmap. They carry **the jobs already
+running in the DVM** — a daemon that has just joined never saw their launch
+messages and so cannot resolve their namespaces. They live beside the nidmap
+because they answer the same question, *what does the DVM currently consist
+of*, and because that message is sent on exactly the event that changes the
+answer. Three things about them:
+
+- **The job being launched is excluded.** A daemon that already holds a
+  namespace *drops* the copy in the launch message, so a catch-up entry for
+  a job that has not been mapped yet would leave every daemon holding a
+  procless version of it for good.
+- **Only the rank travels, not the parent vpid.** `prte_job_pack` already
+  carries each proc's parent daemon, which is all the receiver needs to put
+  the proc back on its node; the launch message used to pack that vpid a
+  second time alongside.
+- **The decode registers each new namespace with the local PMIx server and
+  does not wait.** Nothing later in the message depends on it, and the
+  launch message that might care cannot have been built yet — the master
+  sends this at `VM_READY` and the launch message several states later.
+
+This replaced a block at the head of the launch message, which tied that
+message's size to the number of jobs resident in the DVM and still left a
+daemon added by a bare elastic grow knowing nothing, since a grow launches no
+job and therefore sends no launch message.
+
 ---
 
 ## `prte_process_info`

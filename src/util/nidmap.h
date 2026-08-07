@@ -35,4 +35,14 @@ PRTE_EXPORT int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_bu
 
 PRTE_EXPORT int prte_util_decode_nidmap(pmix_data_buffer_t *buf);
 
+/* Catch-up payload: the jobs already running in this DVM, for the benefit of
+ * daemons that have only just joined it.  Rides in the same message as the
+ * nidmap because it answers the same question - what does the DVM currently
+ * consist of - and because that message is sent exactly when the answer
+ * changes.  "exclude" is the job whose launch brought the new daemons in; it
+ * is not running yet and travels in its own launch message. */
+PRTE_EXPORT int prte_util_pack_job_catchup(pmix_data_buffer_t *buf, prte_job_t *exclude);
+
+PRTE_EXPORT int prte_util_decode_job_catchup(pmix_data_buffer_t *buf);
+
 #endif /* PRTE_NIDMAP_H */

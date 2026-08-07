@@ -296,6 +296,24 @@ static void vm_ready(int fd, short args, void *cbdata)
                 PMIX_RELEASE(caddy);
                 return;
             }
+            /* Tell the daemons what jobs are already running in this DVM.
+             * A daemon that just joined has never heard of them, and needs
+             * to resolve their procs' namespaces the moment one of them
+             * talks to a proc of the job about to launch.  This used to ride
+             * in that job's launch message, which made every such launch
+             * message grow with the number of jobs resident in the DVM; it
+             * belongs here, where the DVM's membership is what is being
+             * described.  The job being launched is excluded - it is not
+             * running yet, and it travels in its own launch message. */
+            rc = prte_util_pack_job_catchup(&buf, caddy->jdata);
+            if (PRTE_SUCCESS != rc) {
+                PRTE_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_DESTRUCT(&buf);
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+                PMIX_RELEASE(caddy);
+                return;
+            }
+
             /* get wireup info for daemons */
             jptr = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
             for (v = 0; v < jptr->procs->size; v++) {
