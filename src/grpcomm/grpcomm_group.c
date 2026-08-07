@@ -173,7 +173,7 @@ pmix_status_t prte_grpcomm_group_parse_directives(prte_grpcomm_group_signature_t
                 PMIX_ERROR_LOG(rc);
             }
 
-        } else if (PMIX_CHECK_KEY(&directives[i], PMIX_PROC_DATA)) {
+        } else if (PMIX_CHECK_KEY(&directives[i], PMIX_PROC_INFO_ARRAY)) {
             rc = PMIx_Info_list_xfer(endpts, &directives[i]);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
