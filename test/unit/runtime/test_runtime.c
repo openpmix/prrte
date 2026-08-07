@@ -809,6 +809,11 @@ static int test_pack_roundtrip(void)
         proc = (prte_proc_t *) pmix_pointer_array_get_item(dst->procs, 1);
         CHECK("wire: proc 1 crossed and has no cpuset",
               NULL != proc && NULL == proc->cpuset && 1 == proc->local_rank);
+        /* only the rank travels - every proc's namespace is reconstituted
+         * from the job's, so check a proc other than the first */
+        CHECK("wire: proc 1 takes the job's nspace",
+              NULL != proc && PMIX_CHECK_NSPACE(proc->name.nspace, "wire.job")
+                  && 1 == proc->name.rank);
 
         CHECK("wire: the map crossed", NULL != dst->map);
         if (NULL != dst->map) {
