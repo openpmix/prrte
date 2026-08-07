@@ -62,7 +62,6 @@ int prte_ras_slurm_check_resources(const char *slurm_jobid);
 /* Features to serve cancel requests */
 int prte_ras_slurm_add_pending_req(const char *request_id, const char *slurm_job_id);
 int prte_ras_slurm_remove_pending_req(const char *request_id);
-bool prte_ras_slurm_pending_req_exists(const char *request_id);
 int prte_ras_slurm_cancel_pending_req(const char *request_id);
 int prte_ras_slurm_modify_cancel_init(void);
 int prte_ras_slurm_modify_cancel_finalize(void);
@@ -72,6 +71,7 @@ int prte_ras_slurm_serve_cancel_req(prte_pmix_server_req_t *req);
 int prte_ras_slurm_modify_extend_init(void);
 int prte_ras_slurm_modify_extend_finalize(void);
 int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req);
+void prte_ras_slurm_extend_abort_request(const char *request_id);
 
 /* Features to serve release requests */
 int prte_ras_slurm_modify_release_init(void);

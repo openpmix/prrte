@@ -998,7 +998,7 @@ $RUN 'export PATH=/opt/prte/fakeslurm/bin:$PATH
       nohup prte --prtemca prte_elastic_mode 1 --prtemca ras_base_verbose 5 \
             >/tmp/prte.out 2>&1 &
       sleep 8
-      elastic extend 2             # PMIX_ALLOC_EXTEND: salloc, poll, absorb
+      elastic extend 2             # PMIX_ALLOC_EXTEND: salloc, absorb
       fake-slurm audit             # every command PRRTE issued
       fake-slurm args 2001         # the salloc argv it built
       elastic shrink node3         # partial: scontrol update ReqNodeList=
@@ -1025,7 +1025,7 @@ misbehaving (`fake-slurm set <key> <value>`):
 
 | key | effect |
 |-----|--------|
-| `pending_secs` | a new job sits in `PENDING` this long — lets a request be cancelled mid-poll, and is what keeps the stub's `salloc` alive long enough to exercise PRRTE's deferred reap (below) |
+| `pending_secs` | a new job sits in `PENDING` this long — lets a request be cancelled while in flight, and is what keeps the stub's `salloc` alive long enough to exercise PRRTE's deferred reap (below) |
 | `scancel_fail` | `scancel` exits non-zero with far more output than the 256-byte capture buffer holds |
 | `bad_json` | `scontrol show job --json` returns unparsable output with exit status 0 |
 
@@ -1042,9 +1042,11 @@ granted. PRRTE reads the job ID out of that first line and leaves the child
 running, reaping it asynchronously later, so a stub that returned immediately
 the way `sbatch` did would never exercise that. `pending_secs` is therefore
 the knob that opens the window: while it is non-zero a live `salloc` sits
-under the HNP for the whole poll, and a `scancel` during it makes the stub
-report the allocation revoked and exit non-zero, which is the reap callback's
-failure branch.
+under the HNP for the whole pending period, and a `scancel` during it makes
+the stub report the allocation revoked and exit non-zero, which is the reap
+callback's failure branch. That callback also completes the extend — PRRTE does
+not poll a queued job — so a stub `salloc` that exits early makes an extend land
+before its nodes exist.
 
 **Some slot counts are asserted from `ras_base_verbose` output, not from
 the pool.** The verbose line is what the component itself computed, so it

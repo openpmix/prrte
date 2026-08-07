@@ -73,6 +73,13 @@ int prte_ras_slurm_serve_cancel_req(prte_pmix_server_req_t *req)
 
     err = prte_ras_slurm_cancel_pending_req(request_id);
 
+    if (PRTE_SUCCESS == err) {
+        /* Answering the extend belongs to the extend half. After
+         * cancel_pending_req, so the completion finds no record left and does
+         * not cancel the job twice. */
+        prte_ras_slurm_extend_abort_request(request_id);
+    }
+
 cleanup:
 
     return err;
@@ -172,18 +179,6 @@ int prte_ras_slurm_remove_pending_req(const char *request_id)
     pmix_pointer_array_set_item(&pending_reqs, idx, NULL);
 
     return PRTE_SUCCESS;
-}
-
-/**
- * @brief Check whether a request is still pending cancellation.
- *
- * @param[in] request_id PMIx request identifier.
- */
-bool prte_ras_slurm_pending_req_exists(const char *request_id)
-{
-    int idx;
-
-    return PRTE_SUCCESS == prte_ras_slurm_find_pending_req(request_id, &idx);
 }
 
 /**

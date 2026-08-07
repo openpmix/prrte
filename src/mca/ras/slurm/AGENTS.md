@@ -83,13 +83,13 @@ deviation* and the framework guide.
   job's SLURM attributes (account, partition, qos, cwd, mem-per-cpu,
   mem-per-node, time, threads-per-core — each gated by a `propagate_*`
   MCA param, all default true), builds `salloc` args, launches an
-  **expander job**, waits (event-driven wait tracker) for it, then adds
-  the modified resources.
+  **expander job**, waits for its `salloc` to exit, then adds the modified
+  resources.
 - **`PMIX_ALLOC_RELEASE`** → `serve_release_req`: shrinks the SLURM job
   with `scontrol update job`, removing nodes by count while protecting
   the launching node (`SLURMD_NODENAME`).
 - **`PMIX_ALLOC_REQ_CANCEL`** → `serve_cancel_req`: cancels a pending
-  extend by request id.
+  extend by request id, and answers it (see below).
 
 ### The salloc child outlives the call that forked it
 
@@ -118,15 +118,30 @@ consequences, all in `prte_ras_slurm_exec_salloc`:
   salloc's remaining output is a few hundred bytes — do not add a verbosity
   flag to the command line.
 
-`salloc_wait_cb` is deliberately diagnostic only. The `scontrol show job
---json` poll drives the extend from submission onwards, so the reap can fire
-either side of the request completing and shares no state with it.
+### The child's exit drives the extend
+
+`salloc --no-shell` exits when the job leaves `PENDING` — the same transition
+`prte_ras_slurm_check_resources` tests for. So `salloc_wait_cb` triggers the
+check, and **nothing polls a queued job**.
+
+- **The exit status is diagnostic, never the answer.** Slurm's job state decides
+  the outcome; the job may have been cancelled rather than granted.
+- **`slurm_grant_check_cb` retries, boundedly.** It closes a gap of
+  milliseconds before slurmctld reports the outcome, not a queue wait.
+  Exhausting the budget fails the request and `scancel`s the job.
+- **Child and extend are linked by an index and a job ID, never a reference.**
+  Either can outlive the other.
+- **A cancelled extend is answered by whoever cancelled it.** `serve_cancel_req`
+  calls `prte_ras_slurm_extend_abort_request` after `cancel_pending_req`, in
+  that order so the completion finds no record and does not `scancel` twice.
+  Not from `cancel_pending_req` — the completion path calls that, and it would
+  recurse.
 
 ### Finalize cleans up in flight extends itself
 
-An incomplete extend owns a pending-request record, an armed poll timer and a
-live `salloc`. Nothing cleans those up after `finalize` returns: the event
-base is stopped, so neither the timer nor the SIGCHLD reaper fires again. So
+An incomplete extend owns a pending-request record, a wait tracker and a live
+`salloc`. Nothing cleans those up after `finalize` returns: the event base is
+stopped, so neither a retry timer nor the SIGCHLD reaper fires again. So
 each half keeps a registry and empties it inline — cancel `scancel`s every
 job still listed, then extend deletes the timers and kills and reaps the
 children. Cancel goes first: `scancel` is what gives the resources back, and
