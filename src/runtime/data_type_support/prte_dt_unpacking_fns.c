@@ -42,6 +42,236 @@
  * spawn another job - so we only pack that limited set of required data.
  * Therefore, only unpack what was packed
  */
+
+/* Decode one map written by pack_map() back into its argv. */
+static int unpack_map(pmix_data_buffer_t *bkt, char delim, char ***list)
+{
+    pmix_status_t rc;
+    int32_t n = 1;
+    char *joined = NULL;
+
+#if PRTE_PMIX_HAVE_REGEX2
+    {
+        pmix_regex2_t regex = PMIX_REGEX2_STATIC_INIT;
+        rc = PMIx_Data_unpack(NULL, bkt, &regex, &n, PMIX_REGEX2);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
+        }
+        rc = PMIx_parse_regex2(&regex, NULL, 0, &joined);
+        PMIx_Regex2_destruct(&regex);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
+        }
+    }
+#else
+    rc = PMIx_Data_unpack(NULL, bkt, &joined, &n, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+#endif
+    if (NULL == joined) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
+    *list = PMIx_Argv_split(joined, delim);
+    free(joined);
+    if (NULL == *list) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
+    return PRTE_SUCCESS;
+}
+
+/* Get (creating if need be) the proc holding a given rank of this job. */
+static prte_proc_t *get_proc(prte_job_t *jptr, pmix_rank_t rank)
+{
+    prte_proc_t *proc;
+
+    proc = (prte_proc_t *) pmix_pointer_array_get_item(jptr->procs, (int) rank);
+    if (NULL == proc) {
+        proc = PMIX_NEW(prte_proc_t);
+        if (NULL == proc) {
+            return NULL;
+        }
+        PMIX_LOAD_PROCID(&proc->name, jptr->nspace, rank);
+        pmix_pointer_array_set_item(jptr->procs, (int) rank, proc);
+    }
+    return proc;
+}
+
+static int rank_cmp(const void *a, const void *b)
+{
+    pmix_rank_t x = *(const pmix_rank_t *) a;
+    pmix_rank_t y = *(const pmix_rank_t *) b;
+    return (x < y) ? -1 : ((x > y) ? 1 : 0);
+}
+
+static int unpack_layout(pmix_data_buffer_t *bkt, prte_job_t *jptr)
+{
+    int32_t nnodes, n, cnt = 1;
+    int rc, a, i, j;
+    char **nodenames = NULL, **fields = NULL, **ranks = NULL;
+    prte_node_t **nodes = NULL, *nd;
+    prte_local_rank_t *lranks = NULL;
+    pmix_rank_t *applist = NULL;
+    size_t napp;
+    prte_proc_t *proc;
+    prte_app_context_t *app;
+    pmix_status_t prc;
+
+    prc = PMIx_Data_unpack(NULL, bkt, &nnodes, &cnt, PMIX_INT32);
+    if (PMIX_SUCCESS != prc) {
+        PMIX_ERROR_LOG(prc);
+        return prte_pmix_convert_status(prc);
+    }
+    if (0 == nnodes) {
+        /* an unmapped job - a spawn request that has not been through
+         * rmaps yet - carries no placement at all */
+        return PRTE_SUCCESS;
+    }
+
+    rc = unpack_map(bkt, ',', &nodenames);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+    if (nnodes != PMIx_Argv_count(nodenames)) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        rc = PRTE_ERR_BAD_PARAM;
+        goto cleanup;
+    }
+    /* resolve each name against the node pool, which the nidmap filled in
+     * before any of this arrived */
+    nodes = (prte_node_t **) calloc(nnodes, sizeof(prte_node_t *));
+    lranks = (prte_local_rank_t *) calloc(nnodes, sizeof(prte_local_rank_t));
+    if (NULL == nodes || NULL == lranks) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        rc = PRTE_ERR_OUT_OF_RESOURCE;
+        goto cleanup;
+    }
+    for (n = 0; n < nnodes; n++) {
+        /* a NULL list means "search the global node pool" */
+        nodes[n] = prte_node_match(NULL, nodenames[n]);
+        if (NULL == nodes[n]) {
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            rc = PRTE_ERR_NOT_FOUND;
+            goto cleanup;
+        }
+    }
+
+    /* one proc map per app, in the order the apps were packed */
+    for (a = 0; a < jptr->apps->size; a++) {
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jptr->apps, a);
+        if (NULL == app) {
+            continue;
+        }
+        rc = unpack_map(bkt, ';', &fields);
+        if (PRTE_SUCCESS != rc) {
+            goto cleanup;
+        }
+        if (nnodes != PMIx_Argv_count(fields)) {
+            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+            rc = PRTE_ERR_BAD_PARAM;
+            goto cleanup;
+        }
+        napp = 0;
+        applist = (pmix_rank_t *) calloc(jptr->num_procs, sizeof(pmix_rank_t));
+        if (NULL == applist) {
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            rc = PRTE_ERR_OUT_OF_RESOURCE;
+            goto cleanup;
+        }
+        for (n = 0; n < nnodes; n++) {
+            if (0 == strcmp(fields[n], "-")) {
+                continue;
+            }
+            ranks = PMIx_Argv_split(fields[n], ',');
+            for (i = 0; NULL != ranks && NULL != ranks[i]; i++) {
+                pmix_rank_t rank = (pmix_rank_t) strtoul(ranks[i], NULL, 10);
+                if (jptr->num_procs <= rank) {
+                    PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+                    rc = PRTE_ERR_BAD_PARAM;
+                    goto cleanup;
+                }
+                proc = get_proc(jptr, rank);
+                if (NULL == proc) {
+                    PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                    rc = PRTE_ERR_OUT_OF_RESOURCE;
+                    goto cleanup;
+                }
+                proc->app_idx = app->idx;
+                nd = nodes[n];
+                if (NULL == nd->daemon) {
+                    PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                    rc = PRTE_ERR_NOT_FOUND;
+                    goto cleanup;
+                }
+                proc->parent = nd->daemon->name.rank;
+                /* apps outermost, node->procs order within: the same walk
+                 * compute_local_rank() makes */
+                proc->local_rank = lranks[n]++;
+                applist[napp++] = rank;
+            }
+            PMIx_Argv_free(ranks);
+            ranks = NULL;
+        }
+        PMIx_Argv_free(fields);
+        fields = NULL;
+        /* app ranks are assigned in ascending rank order */
+        if (0 < napp) {
+            qsort(applist, napp, sizeof(pmix_rank_t), rank_cmp);
+            for (i = 0; (size_t) i < napp; i++) {
+                proc = (prte_proc_t *) pmix_pointer_array_get_item(jptr->procs,
+                                                                   (int) applist[i]);
+                if (NULL != proc) {
+                    proc->app_rank = (pmix_rank_t) i;
+                }
+            }
+        }
+        free(applist);
+        applist = NULL;
+    }
+
+    /* and now what the maps could not say, in rank order */
+    for (j = 0; j < (int) jptr->num_procs; j++) {
+        proc = (prte_proc_t *) pmix_pointer_array_get_item(jptr->procs, j);
+        if (NULL == proc) {
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            rc = PRTE_ERR_NOT_FOUND;
+            goto cleanup;
+        }
+        rc = prte_proc_unpack(bkt, proc);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            goto cleanup;
+        }
+    }
+    rc = PRTE_SUCCESS;
+
+cleanup:
+    if (NULL != nodenames) {
+        PMIx_Argv_free(nodenames);
+    }
+    if (NULL != fields) {
+        PMIx_Argv_free(fields);
+    }
+    if (NULL != ranks) {
+        PMIx_Argv_free(ranks);
+    }
+    if (NULL != nodes) {
+        free(nodes);
+    }
+    if (NULL != lranks) {
+        free(lranks);
+    }
+    if (NULL != applist) {
+        free(applist);
+    }
+    return rc;
+}
+
 int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job)
 {
     int rc;
@@ -193,17 +423,27 @@ int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job)
         return prte_pmix_convert_status(rc);
     }
 
-    if (0 < jptr->num_procs) {
-        prte_proc_t *proc;
-        for (j = 0; j < jptr->num_procs; j++) {
-            rc = prte_proc_unpack(bkt, &proc, jptr->nspace);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_RELEASE(jptr);
-                return prte_pmix_convert_status(rc);
-            }
-            pmix_pointer_array_add(jptr->procs, proc);
-        }
+    /* Rebuild the placement from the maps.  See prte_job_pack for the
+     * format; what follows is why each derived field is derivable.
+     *
+     *  rank       - it IS the map: the proc maps list ranks by node.
+     *  parent     - the node's daemon, which the node pool already holds.
+     *  app_idx    - which app's proc map the rank appeared in.
+     *  app_rank   - compute_app_rank() walks jdata->procs, which is indexed
+     *               by rank, so an app's ranks take app ranks in ascending
+     *               rank order.  We see them in node order, so they are
+     *               sorted before being numbered.
+     *  local_rank - compute_local_rank() walks each node's procs in array
+     *               order, apps outermost, which is exactly the order the
+     *               packer emitted them in.  (The one function that could
+     *               have broken that correspondence, update_local_ranks(),
+     *               had no callers and is gone.)
+     */
+    rc = unpack_layout(bkt, jptr);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_RELEASE(jptr);
+        return rc;
     }
 
     /* unpack stdin target */
@@ -372,55 +612,24 @@ int prte_node_unpack(pmix_data_buffer_t *bkt, prte_node_t **nd)
 /*
  * PROC
  */
-int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t **pc, const pmix_nspace_t nspace)
+int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t *proc)
 {
     pmix_status_t rc;
     int32_t n, count, k;
     prte_attribute_t *kv;
-    prte_proc_t *proc;
 
-    /* create the prte_proc_t object */
-    proc = PMIX_NEW(prte_proc_t);
-    if (NULL == proc) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    /* the rank is all that travels - the namespace is the job's, and the
-     * caller read it off the front of the same buffer (see prte_proc_pack) */
-    PMIX_LOAD_NSPACE(proc->name.nspace, nspace);
-    n = 1;
-    rc = PMIx_Data_unpack(NULL, bkt, &proc->name.rank, &n, PMIX_PROC_RANK);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_RELEASE(proc);
-        return prte_pmix_convert_status(rc);
-    }
-
-    /* unpack the node it is on */
-    n = 1;
-    rc = PMIx_Data_unpack(NULL, bkt, &proc->parent, &n, PMIX_PROC_RANK);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_RELEASE(proc);
-        return prte_pmix_convert_status(rc);
-    }
-
-    /* unpack the local rank */
-    n = 1;
-    rc = PMIx_Data_unpack(NULL, bkt, &proc->local_rank, &n, PMIX_UINT16);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_RELEASE(proc);
-        return prte_pmix_convert_status(rc);
-    }
+    /* Everything the job's maps already say has been set on this proc by
+     * prte_job_unpack before we are called - its rank, its hosting daemon,
+     * its app, its app rank and its local rank.  What follows is only what
+     * the maps cannot say.  The proc belongs to the job, not to us: an
+     * error here leaves it for prte_job_unpack to release along with
+     * everything else it built. */
 
     /* unpack the node rank */
     n = 1;
     rc = PMIx_Data_unpack(NULL, bkt, &proc->node_rank, &n, PMIX_UINT16);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PMIX_RELEASE(proc);
         return prte_pmix_convert_status(rc);
     }
 
@@ -429,25 +638,6 @@ int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t **pc, const pmix_nspac
     rc = PMIx_Data_unpack(NULL, bkt, &proc->state, &n, PMIX_UINT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PMIX_RELEASE(proc);
-        return prte_pmix_convert_status(rc);
-    }
-
-    /* unpack the app context index */
-    n = 1;
-    rc = PMIx_Data_unpack(NULL, bkt, &proc->app_idx, &n, PMIX_UINT32);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_RELEASE(proc);
-        return prte_pmix_convert_status(rc);
-    }
-
-    /* unpack the app_rank */
-    n = 1;
-    rc = PMIx_Data_unpack(NULL, bkt, &proc->app_rank, &n, PMIX_PROC_RANK);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_RELEASE(proc);
         return prte_pmix_convert_status(rc);
     }
 
@@ -456,15 +646,14 @@ int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t **pc, const pmix_nspac
     rc = PMIx_Data_unpack(NULL, bkt, &proc->cpuset, &n, PMIX_STRING);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PMIX_RELEASE(proc);
         return prte_pmix_convert_status(rc);
     }
 
     /* unpack the attributes */
+    n = 1;
     rc = PMIx_Data_unpack(NULL, bkt, &count, &n, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PMIX_RELEASE(proc);
         return prte_pmix_convert_status(rc);
     }
     for (k = 0; k < count; k++) {
@@ -473,21 +662,18 @@ int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t **pc, const pmix_nspac
         rc = PMIx_Data_unpack(NULL, bkt, &kv->key, &n, PMIX_UINT16);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            PMIX_RELEASE(proc);
             PMIX_RELEASE(kv);
             return prte_pmix_convert_status(rc);
         }
         rc = PMIx_Data_unpack(NULL, bkt, &kv->data, &n, PMIX_VALUE);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            PMIX_RELEASE(proc);
             PMIX_RELEASE(kv);
             return prte_pmix_convert_status(rc);
         }
         kv->local = PRTE_ATTR_GLOBAL; // obviously not a local value
         pmix_list_append(&proc->attributes, &kv->super);
     }
-    *pc = proc;
     return PRTE_SUCCESS;
 }
 

@@ -203,10 +203,12 @@ answer. Three things about them:
   namespace *drops* the copy in the launch message, so a catch-up entry for
   a job that has not been mapped yet would leave every daemon holding a
   procless version of it for good.
-- **Only the rank travels, not the parent vpid.** `prte_job_pack` already
-  carries each proc's parent daemon, which is all the receiver needs to put
-  the proc back on its node; the launch message used to pack that vpid a
-  second time alongside.
+- **The procs' placement comes out of `prte_job_pack`'s own maps.** It
+  packs a node map and a proc map per app, from which the receiver rebuilds
+  each proc's rank and hosting daemon; the catch-up needs nothing of its own
+  for that, and the launch message used to pack the parent vpid a second
+  time alongside. It does mean this decode has to run **after** the nidmap
+  in the same message, since that is what puts the nodes in the pool.
 - **The decode registers each new namespace with the local PMIx server and
   does not wait.** Nothing later in the message depends on it, and the
   launch message that might care cannot have been built yet — the master

@@ -84,9 +84,6 @@ PRTE_EXPORT int prte_rmaps_base_bind_proc(prte_job_t *jdata,
                                           hwloc_obj_t obj,
                                           prte_rmaps_options_t *options);
 
-PRTE_EXPORT void prte_rmaps_base_update_local_ranks(prte_job_t *jdata, prte_node_t *oldnode,
-                                                    prte_node_t *newnode, prte_proc_t *newproc);
-
 END_C_DECLS
 
 #endif
