@@ -721,10 +721,11 @@ So the range worth testing is roughly 64 bytes to a few kilobytes a rank.
 Most of a modex fence's cost is not the bytes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This was a surprise, and it is the most useful thing measured here.  At 16
-nodes and 64 bytes a rank — OFI/TCP territory, about 7 KB of modex in the
-*entire job* — the tree fence still spent 933 µs over a bare barrier on the
-same tree.  There is no bandwidth story in that number at all.
+This was a surprise, and it is the most useful thing measured here.  At 8
+nodes and **64 bytes a rank** — OFI/TCP territory, 512 bytes of modex in the
+*entire job* — the tree fence spent 877 µs against a bare barrier's 398 µs on
+the same tree.  A 479 µs premium for half a kilobyte is not a bandwidth
+story.
 
 What it is paying for is the **release traversal**: a second trip down the
 tree carrying a payload.  That term is why the fence's cost does not collapse
@@ -733,14 +734,36 @@ the consequence for the open question at the end of this document: a
 payload-aware radix or a chunked release attacks exactly this term, and does
 so without lateral links.
 
-``scaletest --neighbors`` measures the other end of the same trade — a
-barrier that collects nothing, followed by direct-modex gets of just the two
-ring neighbours.  At radix 2, one proc per node, that pattern cost 0.34 of
-the modex fence at 8 nodes with 8 KB a rank and 0.05 at 16 nodes with 128 KB,
-and it barely moves with payload, because the number of gets does not depend
-on what anyone else contributed.  Nothing in the tree serves that pattern
-specially; the figure is what a proposal to do so would have to be argued
-from.
+And there *is* a crossover, which matters
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``scaletest --neighbors`` prices the other end of the trade: a fence that
+collects nothing, followed by direct-modex gets of just the two ring
+neighbours.  Measured on the tree-only build, 8 nodes, one proc per node,
+median of three to five iterations — ``NEIGHBORS`` against the ``COLLECT`` of
+a separate plain run at the same size:
+
+===============  ==========  ============  =======
+Bytes per rank   COLLECT     NEIGHBORS     ratio
+===============  ==========  ============  =======
+64 (1 key)       877 µs      1000 µs       1.14
+8 KB (8x1 KB)    2433 µs     1455 µs       0.60
+64 KB (8x8 KB)   5947 µs     3660 µs       0.62
+===============  ==========  ============  =======
+
+**At 64 bytes a rank, fetching two peers on demand is more expensive than
+collecting the whole job.**  Two client round trips cost more than the extra
+half-kilobyte on the tree did.  The advantage appears once the per-rank
+contribution is kilobytes rather than tens of bytes — which is exactly the
+OFI-versus-UCX split sized above, and it means the per-rank modex size is a
+real variable and not one to wave away.
+
+An earlier draft of this document asserted the opposite — that the on-demand
+side was already ahead at 64 bytes a rank, so no crossover existed.  That
+came from a configuration this tree no longer has, and the measurement above
+replaces it.  Nothing in the tree serves the neighbour pattern specially;
+these are the figures a proposal to do so would have to be argued from, and
+they say such a proposal has to name its payload regime.
 
 ``PMIX_COLLECT_DATA`` is a sufficient discriminator
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -756,9 +779,14 @@ carries the flag false.  Open MPI's own post-modex hard barrier sets it false
 explicitly, and ``MPI_Finalize`` passes no info array at all.
 
 The second claimed the flag says nothing about how much data there is,
-implying a size threshold was wanted.  The measurement above refutes it:
-most of the cost is the release traversal rather than the payload, so there
-is no crossover for a threshold to find.
+implying a size threshold was wanted.  That one is **not** refuted, and an
+earlier draft of this section wrongly said it was: the crossover measured
+above is real, so a design that changes what a fence delivers does have a
+payload regime where it loses.  What the flag settles is the
+barrier-versus-modex question, which is categorical and is all the current
+default asks of it.  Anything that also wants to decide *how much* data
+justifies a different treatment needs its own input, and would have to
+measure the constant rather than inherit one.
 
 It is also the only trustworthy signal available.  **"Is ``ndata`` zero" is
 not** — a bare barrier arrives at the upcall with eight bytes of info — so
@@ -790,16 +818,29 @@ recording.  Open MPI resolves a remote peer the first time it talks to it:
 runs, and ``ob1`` demands the whole world only when a BTL declares
 ``MCA_BTL_FLAGS_SINGLE_ADD_PROCS``, which TCP does only with more than one
 interface plus threads.  ``MPI_Init`` adds the node-local peers and nothing
-else.  So ``MPI_Init``/``MPI_Finalize`` with nothing in between issues *zero*
-direct-modex requests, and every configuration looks identical under it —
+else.  So ``MPI_Init``/``MPI_Finalize`` with nothing in between never touches
+a remote peer, and cannot tell two ways of distributing the modex apart —
 which is what a first attempt at this measurement duly reported, and the
 reading "the on-demand path costs nothing" was an artifact of measuring
 nothing.  ``mpinoop --ring``/``--all`` exist because of that; see the harness
 guide.
 
-Counting those requests needs ``--leave-session-attached``, or only the
-master daemon's traces arrive and the count is a fraction of the truth: 6
-requests became 80 for the same run once the other seven daemons were read.
+**On the tree-only DVM the direct-modex count does not move with the pattern,
+and should not be expected to.**  Measured at 8 ranks over 8 nodes, the
+``DMODX REQ FOR`` count is 7 under a bare run, under ``--ring`` and under
+``--all`` alike — and those seven are not first touch: they are one request
+per non-master daemon for **rank 0**'s ``pml.base.2.0``, issued by Open MPI's
+PML selection before the ``MPI_Init`` fence completes.  First touch is
+answered locally because that fence collects, so every daemon already holds
+every rank's data.  A configuration in which the count tracks the
+communication pattern is one where the fence withheld data — which is what
+the withdrawn movements did, and nothing in the tree does now.  Read these
+flags for their *timings*, not for modex traffic.
+
+Counting the requests at all needs ``--leave-session-attached``, or only the
+master daemon's traces arrive: the same run reports **0 without the flag and
+7 with it**.  Zero is the dangerous reading, since it is also exactly what a
+genuinely local answer looks like.
 
 What a client actually asks about a remote peer
 -----------------------------------------------

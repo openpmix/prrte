@@ -202,6 +202,14 @@ int main(int argc, char **argv)
         usage(argv[0]);
         return 1;
     }
+    /* --verify fetches rank+1, which is exactly one of the two peers the
+     * NEIGHBORS phase then times.  Run together, verify warms the cache the
+     * next phase is trying to measure a miss against. */
+    if (verify && neighbors) {
+        fprintf(stderr, "ERROR --verify and --neighbors are mutually exclusive:"
+                        " verify fetches rank+1, which is a peer NEIGHBORS times\n");
+        return 1;
+    }
 
     if (0 != gethostname(hostname, sizeof(hostname))) {
         strcpy(hostname, "unknown");
@@ -302,7 +310,15 @@ int main(int argc, char **argv)
             fprintf(stderr, "ERROR sync before collect %zu: %s\n", i, PMIx_Error_string(rc));
             goto done;
         }
-        if (PMIX_SUCCESS != (rc = timed_fence(true, &m[2], &m[3]))) {
+        /* Collecting, EXCEPT under --neighbors.  That phase exists to price
+         * fetching only the peers you need, and a collect fence here would
+         * have already put every rank's data on every daemon -- so the gets
+         * below would be local cache hits and would measure nothing.
+         * Measured: with the collect left in, a 4-node neighbors run issued
+         * ZERO direct-modex requests and reported ~6us.  In neighbors mode
+         * this fence therefore carries no payload, and the COLLECT column of
+         * such a run is a second barrier rather than a collect. */
+        if (PMIX_SUCCESS != (rc = timed_fence(!neighbors, &m[2], &m[3]))) {
             fprintf(stderr, "ERROR collect fence %zu: %s\n", i, PMIx_Error_string(rc));
             goto done;
         }
@@ -364,23 +380,27 @@ int main(int argc, char **argv)
 
         /* NEIGHBORS -- what a job pays for only the peers it actually needs.
          *
-         * The collect fence above hands every rank the whole job's data; this
-         * phase asks instead for just two values, from a job that has
-         * barriered WITHOUT collecting.  Those gets are answered by direct
-         * modex: the local daemon does not hold the peer's data, so it
-         * fetches it from the daemon that does.  Both halves already exist
-         * here, so the comparison Slurm's PMIX_Ring is an argument for -
-         * O(1) per peer you actually need against O(N) to everybody - can be
-         * measured in PRRTE rather than inferred.  Nothing here implements a
-         * ring; this is the number that would have to justify one.
+         * A plain run pays a collect fence to put every rank's data on every
+         * daemon.  This phase prices the other end of that trade: neither
+         * fence above has collected anything, so the two gets below MUST go
+         * out as direct modex - the local daemon does not hold the peer's
+         * data, so it fetches it from the daemon that does.  Both halves
+         * already exist here, so the comparison Slurm's PMIX_Ring is an
+         * argument for - O(1) per peer you actually need against O(N) to
+         * everybody - can be measured in PRRTE rather than inferred.  Nothing
+         * here implements a ring; this is the number that would have to
+         * justify one.
          *
-         * OFF BY DEFAULT, and it must stay that way: a get perturbs the next
-         * iteration, which is why --verify is optional for the same reason.
-         * Measured - running this phase in the same loop as COLLECT dropped
-         * the collect time for an identical configuration from 8098us to
-         * 1390us while the barrier beside it did not move.  So compare a
-         * --neighbors run against a separate plain run; do not read the
-         * COLLECT column out of a run that also asked for neighbors.
+         * Check that with `--prtemca pmix_server_verbose 2
+         * --leave-session-attached | grep -c "DMODX REQ FOR"'.  It must be
+         * non-zero, and it is the assertion this phase rests on: when the
+         * collect was still being run alongside, the count was ZERO and the
+         * phase reported ~6us of local cache hits.
+         *
+         * OFF BY DEFAULT, and it must stay that way: these gets perturb the
+         * next iteration, and the COLLECT column of a --neighbors run is a
+         * second barrier rather than a collect.  So read the NEIGHBORS column
+         * from this run and the COLLECT column from a separate plain one.
          *
          * Left and right are fetched in that order and not overlapped, so
          * this is the pessimistic serial reading of the pattern. */

@@ -1541,9 +1541,9 @@ a verify that checked only it would pass with the on-demand direct-modex path
 completely broken. The FAR peer is the one that can only come back through
 that path.
 
-It stays **off by default**, for the same reason `--neighbors` does: a get
-perturbs the collective beside it, and a run that measures and verifies at
-once measures neither cleanly.
+It stays **off by default**: a get perturbs the collective beside it, and a
+run that measures and verifies at once measures neither cleanly. It is also
+refused alongside `--neighbors` — see below for why.
 
 ### What only the peers you need would cost (`--neighbors`)
 
@@ -1561,12 +1561,44 @@ not O(N) for everybody) becomes something measurable here rather than
 something to reason about. Nothing in the tree implements a ring; this is the
 number that would have to justify building one.
 
-**A `--neighbors` run is for reading the NEIGHBORS column and nothing else.**
-The gets perturb the collective beside them badly: running this phase in the
-same loop moved an *identical* configuration's COLLECT from 8098 µs to
-1390 µs while the barrier next to it did not budge. Take the COLLECT column
-from a separate plain run. Left and right are fetched in that order and never
-overlapped, so the figure is the pessimistic serial reading of the pattern.
+**A `--neighbors` run collects nothing, and its COLLECT column is therefore a
+second barrier, not a collect.** That is deliberate and it is what makes the
+phase mean anything: with a collect fence left in the same iteration, every
+daemon already holds every rank's data, the two gets are local cache hits, and
+the phase reports microseconds of nothing. That was the original bug — a
+4-node run issued **zero** `DMODX REQ FOR` requests and reported ~6 µs.
+So read the NEIGHBORS column from this run and the COLLECT column from a
+separate plain run at the same size.
+
+`--verify` and `--neighbors` are **refused together**: verify fetches rank+1,
+which is one of the two peers NEIGHBORS times, so running both warms the very
+cache the next phase is trying to miss against.
+
+**Check the phase is live before believing a number**, because an inert one
+looks fast rather than broken:
+
+```sh
+prterun ... --prtemca pmix_server_verbose 2 --leave-session-attached \
+    scaletest --neighbors 2>&1 | grep -c "DMODX REQ FOR"
+```
+
+It must be `2 * nprocs` (4 ranks fetching two peers each is 8). Left and right
+are fetched in that order and never overlapped, so the figure is the
+pessimistic serial reading of the pattern.
+
+**What it measures, on 8 nodes at one proc per node** — NEIGHBORS against the
+COLLECT of a separate plain run:
+
+| Bytes per rank | COLLECT | NEIGHBORS | ratio |
+|---|---|---|---|
+| 64 (1 key) | 877 µs | 1000 µs | **1.14** |
+| 8 KB (8×1 KB) | 2433 µs | 1455 µs | 0.60 |
+| 64 KB (8×8 KB) | 5947 µs | 3660 µs | 0.62 |
+
+At 64 bytes a rank the on-demand path **loses** — two client round trips cost
+more than the extra half-kilobyte on the tree. The crossover is real, so any
+claim that fetching only what you need is cheaper has to say at what per-rank
+size.
 
 ## 19. Running a real MPI job (`OMPI_SRC`, `mpinoop`, `ring_c`)
 
@@ -1602,14 +1634,13 @@ Two probes land in `/opt/prte/ompi/bin`:
   `MPI_Wtime`, which may not be called before `MPI_Init` — the first version
   of this file did, and reported a negative init time.
 
-  **With no flag it measures nothing about the modex**, and knowing why is the
+  **With no flag it exercises no remote peer at all**, and knowing why is the
   whole point of the file. Open MPI resolves a remote peer the *first time it
   talks to it*: `mpi_add_procs_cutoff` defaults to 0 so the pre-add-everybody
   branch never runs, and `ob1` demands the whole world only when a BTL sets
   `MCA_BTL_FLAGS_SINGLE_ADD_PROCS` (TCP does that only with more than one
-  interface plus threads). So a program that calls `MPI_Init` and exits issues
-  **zero** direct-modex requests, and any two ways of distributing the modex
-  look identical — measured, and briefly believed to mean something.
+  interface plus threads). So a program that calls `MPI_Init` and exits never
+  touches a peer, and it cannot tell two ways of distributing the modex apart.
 
   `--ring` (exchange with the two neighbours) and `--all` (explicit
   point-to-point with **every** other rank) are what actually separate them,
@@ -1619,6 +1650,17 @@ Two probes land in `/opt/prte/ompi/bin`:
   Bruck and contacts about log2(N) partners, so it understates the case badly.
   Each phase is timed twice — first touch, then a repeat with every peer
   already resolved — so resolution cost is isolated rather than inferred.
+
+  **On a tree-only DVM, first touch generates no direct modex, and that is
+  the expected answer.** `MPI_Init`'s modex fence collects, so every daemon
+  already holds every rank's data and a get about any peer is a local hit.
+  Measured at 8 ranks over 8 nodes, the `DMODX REQ FOR` count is **7 under
+  all three modes** — and those seven are not first touch at all: they are one
+  request per non-master daemon for **rank 0**'s `pml.base.2.0`, issued by
+  Open MPI's PML selection before the fence completes. So use these flags to
+  compare *timings* (`touch` against `repeat`), not to count modex traffic.
+  A configuration where the count moves with the pattern is one where the
+  fence withheld data — which nothing in the tree does today.
 - **`ring_c`** — Open MPI's own example, compiled from the mounted checkout. A
   real neighbour exchange, and the honest version of what `--ring` simulates.
 
@@ -1639,8 +1681,9 @@ workload that reads exactly what a test told it to put.
 **Counting direct-modex requests needs `--leave-session-attached`.** The
 `DMODX REQ FOR` traces come out on each `prted`'s stderr, and without that
 flag only the master daemon's reach you — so the count is a fraction of the
-DVM's and looks reassuringly small. It was: 6 requests became 80 for the same
-run once the other seven daemons were being read.
+DVM's and looks reassuringly small. Measured on the same 8-node run: **0
+without the flag, 7 with it.** Zero is the dangerous reading, because it is
+also what a genuinely local answer looks like.
 
 ```sh
 prterun ... --prtemca pmix_server_verbose 2 --leave-session-attached \
