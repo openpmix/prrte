@@ -669,6 +669,138 @@ The wire interlock still matters and is unchanged: it is what catches a
 genuinely non-uniform request, and it turns it into a named ``show_help``
 diagnostic rather than a DVM-wide hang.
 
+What the numbers turned out to be
+---------------------------------
+
+Measurements taken while the movements were still in the tree, kept because
+they are about PRRTE rather than about the movements, and because two of them
+correct claims made earlier in this document.  Where a figure could only be
+produced by code that has since been removed, it says so.
+
+How big is a real transport's blob?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The whole cost model turns on the per-rank modex contribution, and this
+document quoted no figure for it.  Neither transport that matters on a real
+machine could be measured here — the containers have no fabric — so these are
+read out of the source.
+
+**OFI is tens of bytes, and fixed.**  ``mtl/ofi`` publishes exactly one
+endpoint address: ``opal_common_ofi_fi_getname()`` calls ``fi_getname()`` and
+the result *is* the modex value.  ``btl/ofi`` publishes a four-byte count
+plus one length-prefixed address per module.  The address sizes are provider
+constants: EFA is ``EFA_EP_ADDR_LEN`` — a 16-byte GID plus qpn, pad and qkey;
+tcp/sockets is ``FI_SOCKADDR``, i.e. a 16-byte ``sockaddr_in``.  So OFI sits
+in the same band as the TCP BTL, and it does not grow with anything.
+
+**UCX is the opposite, and is the interesting case.**  ``pml/ucx`` publishes
+the entire ``ucp_worker`` address — and publishes it *twice*, once at
+``PMIX_LOCAL`` with full flags and once at ``PMIX_GLOBAL`` with
+``UCP_WORKER_ADDRESS_FLAG_NET_ONLY``; only the second is what a remote peer
+fetches.  Its size comes from ``ucp_address_packed_size()``:
+
+* a 1-2 byte header, plus an 8-byte worker UUID and an 8-byte client id when
+  those flags are set;
+* **per device**: md index, the device address and its length, optionally a
+  path count and a system-device byte.  An IB device address is a base struct
+  plus a 2-byte LID (plus an 8-byte GUID and a 2- or 8-byte subnet prefix),
+  or a full 16-byte ``ibv_gid`` on RoCE;
+* **per transport lane on that device**: a 2-byte transport-name checksum,
+  the interface address and its length, a packed interface-attribute struct,
+  and ``ep_addr_len`` plus a lane byte for each lane.
+
+The property that matters: **it scales with devices times transports, not
+with job size**.  A single-rail node with two or three network transports is
+in the low hundreds of bytes; multi-rail, or a worker that also carries GPU
+transports, reaches a kilobyte and beyond.  That is one to two orders of
+magnitude above OFI, and it is per rank.
+
+So the range worth testing is roughly 64 bytes to a few kilobytes a rank.
+``scaletest --sizes`` sweeps exactly that.
+
+Most of a modex fence's cost is not the bytes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This was a surprise, and it is the most useful thing measured here.  At 16
+nodes and 64 bytes a rank — OFI/TCP territory, about 7 KB of modex in the
+*entire job* — the tree fence still spent 933 µs over a bare barrier on the
+same tree.  There is no bandwidth story in that number at all.
+
+What it is paying for is the **release traversal**: a second trip down the
+tree carrying a payload.  That term is why the fence's cost does not collapse
+as the payload shrinks, and it is where a future win has to come from.  Note
+the consequence for the open question at the end of this document: a
+payload-aware radix or a chunked release attacks exactly this term, and does
+so without lateral links.
+
+``scaletest --neighbors`` measures the other end of the same trade — a
+barrier that collects nothing, followed by direct-modex gets of just the two
+ring neighbours.  At radix 2, one proc per node, that pattern cost 0.34 of
+the modex fence at 8 nodes with 8 KB a rank and 0.05 at 16 nodes with 128 KB,
+and it barely moves with payload, because the number of gets does not depend
+on what anyone else contributed.  Nothing in the tree serves that pattern
+specially; the figure is what a proposal to do so would have to be argued
+from.
+
+``PMIX_COLLECT_DATA`` is a sufficient discriminator
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Two passages elsewhere in this document argued that the fence's selection
+needs something finer than ``PMIX_COLLECT_DATA``.  Both were wrong, and the
+correction matters because that flag is what the current default rests on.
+
+The first leaned on a barrier regression as if the selection would inherit
+it.  It would not: that number came from *forcing* a movement onto every
+fence, while a selection gives a barrier the rollup, because a barrier
+carries the flag false.  Open MPI's own post-modex hard barrier sets it false
+explicitly, and ``MPI_Finalize`` passes no info array at all.
+
+The second claimed the flag says nothing about how much data there is,
+implying a size threshold was wanted.  The measurement above refutes it:
+most of the cost is the release traversal rather than the payload, so there
+is no crossover for a threshold to find.
+
+It is also the only trustworthy signal available.  **"Is ``ndata`` zero" is
+not** — a bare barrier arrives at the upcall with eight bytes of info — so
+nothing here argues for a separate barrier entry point.  Do not reintroduce
+either heuristic.
+
+What a real MPI job says, and it is not what the benchmark says
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``scaletest`` contributes 8 KB to 512 KB a rank because it was written to
+make the collective visible.  Open MPI built into the same swarm
+(``OMPI_SRC``, see the harness guide) says something different, and it is
+worth stating plainly because it cuts against the benchmark.
+
+**At 16 ranks Open MPI's entire modex is 1319 bytes** — about 82 bytes a
+rank, measured with ``grpcomm_base_verbose 5``.  ``MPI_Init`` took 26-29 ms
+and ``MPI_Finalize`` 43-47 ms, indistinguishable across three runs.  At 64
+ranks over 16 nodes, 93-102 ms.  This Open MPI has no UCX and no OFI (the
+container has neither), and those are exactly the transports that publish a
+large per-rank blob — so the honest statement is that collective changes are
+invisible on a small TCP job, and any case for one rests on jobs whose
+per-rank contribution is large, whose rank count is large, or both.  The
+benchmark is not wrong; it is measuring a regime this particular MPI job is
+nowhere near.
+
+**And a bare MPI job measures none of this**, which is the trap worth
+recording.  Open MPI resolves a remote peer the first time it talks to it:
+``mpi_add_procs_cutoff`` defaults to 0 so the pre-add-everybody branch never
+runs, and ``ob1`` demands the whole world only when a BTL declares
+``MCA_BTL_FLAGS_SINGLE_ADD_PROCS``, which TCP does only with more than one
+interface plus threads.  ``MPI_Init`` adds the node-local peers and nothing
+else.  So ``MPI_Init``/``MPI_Finalize`` with nothing in between issues *zero*
+direct-modex requests, and every configuration looks identical under it —
+which is what a first attempt at this measurement duly reported, and the
+reading "the on-demand path costs nothing" was an artifact of measuring
+nothing.  ``mpinoop --ring``/``--all`` exist because of that; see the harness
+guide.
+
+Counting those requests needs ``--leave-session-attached``, or only the
+master daemon's traces arrive and the count is a fraction of the truth: 6
+requests became 80 for the same run once the other seven daemons were read.
+
 What a client actually asks about a remote peer
 -----------------------------------------------
 
