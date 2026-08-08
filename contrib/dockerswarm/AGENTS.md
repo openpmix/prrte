@@ -60,6 +60,7 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | `slowcat.c` | A deliberately **slow** stdin reader (`slowcat` in the install, no PMIx dependency): copies stdin to a file in small reads with a pause between them, so the daemon feeding it keeps hitting *partial* writes. That is the only way to reach the iof short-write path. |
 | `fake-slurm.py` | A stand-in SLURM control plane (`salloc`/`scontrol`/`scancel`) so `ras/slurm`'s elastic modify surface can be exercised. See §12. |
 | `scaletest.c` | A PMIx client that **times** a full-data fence and a bare barrier over the whole job (`scaletest` in the install). Not a pass/fail case — a measurement. See §18. |
+| `mpinoop.c` | `MPI_Init` and `MPI_Finalize` and nothing else, so the only thing timed is the modex fence and the barrier behind it. Built only when `OMPI_SRC` is set — see §19. |
 | `scaletest.sh` | The measurement driver: stands up a swarm of arbitrary size (default 40), sweeps DVM size × procs-per-node × routing radix × payload, and writes a CSV. See §18. |
 
 ## 2. How it works
@@ -1529,6 +1530,21 @@ with a flat one at the same size, and how much of the total is payload
 values as meaningful only against another run on the same host with the same
 load.
 
+### Checking a fence still *delivers*, not just that it is fast
+
+`scaletest --verify` reads one key back from two peers each iteration: a
+**NEAR** one (rank+1) and a **FAR** one (half the job away). Both, not one,
+and the reason is specific: the interesting way for a fence to be wrong is to
+deliver *some* of the modex rather than none. Under `--map-by ppr:1:node` the
+NEAR peer is the rank the local daemon is most likely to be holding anyway, so
+a verify that checked only it would pass with the on-demand direct-modex path
+completely broken. The FAR peer is the one that can only come back through
+that path.
+
+It stays **off by default**, for the same reason `--neighbors` does: a get
+perturbs the collective beside it, and a run that measures and verifies at
+once measures neither cleanly.
+
 ### What only the peers you need would cost (`--neighbors`)
 
 The COLLECT column is the price of handing every rank the whole job's data.
@@ -1551,3 +1567,82 @@ same loop moved an *identical* configuration's COLLECT from 8098 µs to
 1390 µs while the barrier next to it did not budge. Take the COLLECT column
 from a separate plain run. Left and right are fetched in that order and never
 overlapped, so the figure is the pessimistic serial reading of the pattern.
+
+## 19. Running a real MPI job (`OMPI_SRC`, `mpinoop`, `ring_c`)
+
+Every other client in this harness puts data because a test told it to. An
+**MPI** job publishes what its transports actually need and then reads back
+exactly the peers it talks to, which is the only workload here that can judge
+whether a fence delivers *enough* rather than merely quickly. That is what
+this is for, and it is the check any future change to what the fence
+distributes has to survive.
+
+```sh
+OMPI_SRC=/path/to/ompi ./build.sh          # or: OMPI_SRC=... ./scaletest.sh build
+```
+
+The checkout must be **autogen'd and not configured in-tree** — the same rule
+as `PMIX_SRC`, and for the same reason: `configure` runs VPATH over a
+read-only bind mount. Open MPI is built `--with-prrte=external` against the
+install this script just made, so `mpirun` **is** this PRRTE — an MPI job runs
+against whatever you just built rather than against a packaged runtime.
+Fortran, OpenSHMEM and sphinx
+are disabled: the first two dominate the build time and nothing here uses
+them, and the docs build needs python modules the image does not carry — it is
+the one part of an Open MPI build that fails for a reason having nothing to do
+with MPI.
+
+It is **off by default** because it roughly triples the build. Only the
+collective work needs it.
+
+Two probes land in `/opt/prte/ompi/bin`:
+
+- **`mpinoop`** — `MPI_Init`, `MPI_Finalize`, and optionally one phase of
+  actual communication. It times `MPI_Init` with `clock_gettime`, **not**
+  `MPI_Wtime`, which may not be called before `MPI_Init` — the first version
+  of this file did, and reported a negative init time.
+
+  **With no flag it measures nothing about the modex**, and knowing why is the
+  whole point of the file. Open MPI resolves a remote peer the *first time it
+  talks to it*: `mpi_add_procs_cutoff` defaults to 0 so the pre-add-everybody
+  branch never runs, and `ob1` demands the whole world only when a BTL sets
+  `MCA_BTL_FLAGS_SINGLE_ADD_PROCS` (TCP does that only with more than one
+  interface plus threads). So a program that calls `MPI_Init` and exits issues
+  **zero** direct-modex requests, and any two ways of distributing the modex
+  look identical — measured, and briefly believed to mean something.
+
+  `--ring` (exchange with the two neighbours) and `--all` (explicit
+  point-to-point with **every** other rank) are what actually separate them,
+  and they bracket the range: the cheap pattern a real application produces
+  and the adversarial one for on-demand retrieval.
+  `--all` is deliberately not `MPI_Alltoall`: a tuned alltoall on one int runs
+  Bruck and contacts about log2(N) partners, so it understates the case badly.
+  Each phase is timed twice — first touch, then a repeat with every peer
+  already resolved — so resolution cost is isolated rather than inferred.
+- **`ring_c`** — Open MPI's own example, compiled from the mounted checkout. A
+  real neighbour exchange, and the honest version of what `--ring` simulates.
+
+The Open MPI knobs worth knowing when driving these:
+
+| MCA parameter | effect |
+|---------------|--------|
+| `pmix_base_async_modex` | skip the modex fence in `MPI_Init` entirely; peers are resolved on first use |
+| `pmix_base_collect_data` | whether the `MPI_Init` fence sets `PMIX_COLLECT_DATA` |
+| `mpi_add_procs_cutoff` | above this job size, do not add every peer at init |
+
+Those three are the application-side half of the same argument — what the
+*client* is willing to defer — and any daemon-side change to what the fence
+distributes should be checked against at least `ring_c` before it is believed.
+A design that only looks good against `scaletest` has been measured against a
+workload that reads exactly what a test told it to put.
+
+**Counting direct-modex requests needs `--leave-session-attached`.** The
+`DMODX REQ FOR` traces come out on each `prted`'s stderr, and without that
+flag only the master daemon's reach you — so the count is a fraction of the
+DVM's and looks reassuringly small. It was: 6 requests became 80 for the same
+run once the other seven daemons were being read.
+
+```sh
+prterun ... --prtemca pmix_server_verbose 2 --leave-session-attached \
+    /opt/prte/ompi/bin/mpinoop --all 2>&1 | grep -c "DMODX REQ FOR"
+```
