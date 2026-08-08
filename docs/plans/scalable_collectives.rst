@@ -669,6 +669,143 @@ The wire interlock still matters and is unchanged: it is what catches a
 genuinely non-uniform request, and it turns it into a named ``show_help``
 diagnostic rather than a DVM-wide hang.
 
+What a client actually asks about a remote peer
+-----------------------------------------------
+
+This section is not about a movement, which is why it survives the reset
+above.  It is about a requirement every design in this document took as
+given, and which had never been checked.
+
+Every daemon ends up holding a *complete* copy of the launch payload because
+``prte_pmix_server_register_nspace`` publishes a ``PMIX_PROC_INFO_ARRAY`` for
+every proc on every daemon, so that any daemon can answer a ``PMIx_Get``
+about any rank.  That is an assumption about what clients ask for.  If it is
+wrong, the largest routine payload the DVM moves is mostly being delivered to
+daemons that will never be asked about it — and that is true whatever route
+it travels on.
+
+The launch message has just been made much smaller (PRRTE #2628): a job's
+placement travels as a node map plus one proc map per app rather than a
+record per process, taking it from ~46 to ~13 bytes a proc — 5.8 MB to 1.6 MB
+at 131,072 procs.  What is left divides cleanly in two, and only one half is
+broadcast-shaped:
+
+* **The job-level fields and the maps.**  O(nodes), compressed, and genuinely
+  identical for every daemon — rank-to-node is what any daemon answers a
+  ``PMIx_Get`` about any rank with.
+* **The per-proc residual array** — node rank, cpuset, state, attributes.
+  O(total procs), and now the only part that scales with the job.  But a
+  daemon needs a proc's cpuset and node rank in order to *fork* it, which is
+  only true of the procs it hosts.
+
+The scan
+~~~~~~~~
+
+Scanned across all of ``ompi/``, ``opal/`` and ``oshmem/`` in the Open MPI
+``main`` tree, excluding ``3rd-party/``, for any ``PMIx_Get`` of a
+``PMIX_``-prefixed key naming a proc that can be off-node.  Reserved keys
+only — user modex keys (``OMPI_ARCH``, the BTL endpoint blobs) are the
+direct-modex traffic that already works this way and are not in question.
+
+**Non-optional, and genuinely remote: exactly one.**
+``ompi/mca/topo/treematch/topo_treematch_dist_graph_create.c`` asks
+``PMIX_NODEID`` for every rank in the communicator, so it *would* issue a
+direct modex per peer if the answer were not held locally.
+
+**Optional, so they cannot issue one at all.**  ``PMIX_OPTIONAL`` tells the
+client library to answer from local data or fail; it never reaches the
+server.  That covers ``PMIX_HOSTNAME`` (``opal_get_proc_hostname()`` and
+``pml_base_select``) and the four ``PMIX_LOCALITY`` sites in
+``ompi/proc/proc.c`` and ``ompi/communicator/comm.c``.
+
+**And ``PMIX_LOCALITY`` never crosses the wire in either direction.**  Open
+MPI *computes* it from each local peer's ``PMIX_LOCALITY_STRING`` and stores
+it client-side with ``PMIx_Store_internal``.  A get naming a remote proc
+misses and falls back to ``OPAL_PROC_NON_LOCAL``, which is the right answer
+anyway.  Nothing in PMIx stores that key and nothing in PRRTE publishes it.
+
+**Sites that look remote and are not**, which is most of them:
+
+* ``btl/sm``'s ``PMIX_LOCAL_RANK`` — ``btl/sm`` only ever handles procs on
+  this node.
+* ``common_ofi``'s ``PMIX_LOCALITY_STRING`` and ``PMIX_PACKAGE_RANK`` — it
+  walks the ``PMIX_LOCAL_PEERS`` list, so local by construction.
+* The ~20 gets in ``ompi/runtime/ompi_rte.c``, and everything in
+  ``opal/mca/hwloc/base/hwloc_base_util.c``, ``comm_init.c`` and
+  ``btl/smcuda`` — all either self or a wildcard rank, i.e. job-level.
+* ``ompi/dpm/dpm.c`` asks ``PMIX_LOCAL_PEERS`` and ``PMIX_LOCALITY_STRING``
+  ``IMMEDIATE``, but about a *connected* namespace — a different job, which
+  arrived by connect/accept rather than by a launch message.
+
+The answers come from the maps, not from the per-proc array
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Every key on that list is derived by PMIx from the node map and the proc map.
+``pmix_gds_hash_store_map()`` walks the two together and stores, for each
+rank, ``PMIX_HOSTNAME`` (the node the rank appeared under), ``PMIX_NODEID``
+(that node's index in the map), ``PMIX_LOCAL_RANK`` (the rank's position in
+its node's list) and ``PMIX_NODE_RANK``.
+
+That third one is worth pausing on: it is the **same derivation** PRRTE's own
+``prte_job_unpack`` now performs, arrived at independently from
+``compute_local_rank()``.  PMIx has been computing local rank from the proc
+map all along.
+
+Two riders, both material:
+
+* **It is the fallback, and it is now a per-key one.**  PRRTE supplies a
+  per-proc array, so PRRTE's values win today.  That used to be
+  all-or-nothing — a single ``PMIX_PROC_INFO_ARRAY`` anywhere set
+  ``PMIX_HASH_PROC_DATA`` and suppressed the derivation for the *entire job*.
+  It is not any more: ``store_derived()`` asks, per rank and per key, whether
+  the host already said this, and fills in only what was left unsaid.  **That
+  removes the obstacle to splitting the payload**: a daemon could be sent
+  proc records for the procs it hosts and nothing else, and PMIx would derive
+  hostname, nodeid and local rank for every other rank from the maps, with no
+  direct modex and no loss.
+* **PMIx's node-rank fallback is wrong, and says so.**  It sets
+  ``node_rank`` equal to the local rank with the comment *"for now, we assume
+  only the one job is running"*, which breaks when two jobs share a node.
+  That is exactly the one field PRRTE found it could not derive either.  The
+  two analyses agree on which field is the exception.
+
+What this implies
+~~~~~~~~~~~~~~~~~
+
+**Nothing in Open MPI asks a remote proc for ``PMIX_CPUSET``, and nothing
+asks a remote proc for ``PMIX_NODE_RANK``** — the only node-rank get is about
+self.  Those two are the residual array.  On this evidence, broadcasting the
+residuals is moving data no MPI process asks for about a remote peer.
+
+The shape that follows is **broadcast the maps, scatter the residuals**: the
+job-level fields and maps go to everyone as they do now, and each daemon
+receives only the per-proc records for the procs it will fork.  Per-daemon
+launch cost becomes O(nodes) + O(ppn) — *constant in job size* — and what is
+left to broadcast is O(nodes), which is exactly what the tree is best at.
+
+Note this is a change to what is *addressed to whom*, not a movement: it does
+not need lateral links, and nothing in it revives what the reset removed.  A
+per-destination payload is a different contract from a single payload
+delivered identically to all, and that contract is the work.
+
+Limits of this evidence
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Stated rather than buried, because the conclusion is only as good as the
+scan:
+
+* **It is Open MPI.**  OpenSHMEM rides the same runtime layer
+  (``oshmem/proc/proc.c`` asks only a wildcard ``PMIX_LOCAL_PEERS``), but
+  other PMIx clients exist and were not scanned.
+* **The treematch ``PMIX_NODEID`` get is non-optional.**  Under the maps it
+  is answered locally, but it is the one site where being wrong shows up as a
+  round trip per peer per communicator rather than as a fallback.
+* **"Nothing asks" is weaker than "the answer would be right."**  If PRRTE
+  stops supplying ``PMIX_NODE_RANK`` for remote procs, a remote get falls
+  through to PMIx's one-job-per-node assumption and receives a *wrong* value
+  rather than nothing.  Node rank is two bytes; if that matters, keep sending
+  it to everyone on its own rather than relying on nobody asking.
+
 Verification
 ------------
 
