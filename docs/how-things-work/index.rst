@@ -15,3 +15,4 @@ find information on that subject here.
    schedulers/index.rst
    state_machine.rst
    rml/index.rst
+   pmix2_vs_pmix.rst
