@@ -825,22 +825,45 @@ reading "the on-demand path costs nothing" was an artifact of measuring
 nothing.  ``mpinoop --ring``/``--all`` exist because of that; see the harness
 guide.
 
-**On the tree-only DVM the direct-modex count does not move with the pattern,
-and should not be expected to.**  Measured at 8 ranks over 8 nodes, the
-``DMODX REQ FOR`` count is 7 under a bare run, under ``--ring`` and under
-``--all`` alike — and those seven are not first touch: they are one request
-per non-master daemon for **rank 0**'s ``pml.base.2.0``, issued by Open MPI's
-PML selection before the ``MPI_Init`` fence completes.  First touch is
-answered locally because that fence collects, so every daemon already holds
-every rank's data.  A configuration in which the count tracks the
-communication pattern is one where the fence withheld data — which is what
-the withdrawn movements did, and nothing in the tree does now.  Read these
-flags for their *timings*, not for modex traffic.
+**Measuring on-demand retrieval requires turning Open MPI's collecting fence
+off** — ``OMPI_MCA_pmix_base_collect_data=0`` — and this is the step that is
+easy to omit and impossible to detect from the result.  At the default the
+``MPI_Init`` fence collects, so every daemon already holds every rank's data,
+first touch is a local hit, and the ``DMODX REQ FOR`` count sits flat at 7
+across a bare run, ``--ring`` and ``--all`` alike.  Those seven are not first
+touch at all: they are one request per non-master daemon for **rank 0**'s
+``pml.base.2.0``, from PML selection.  A count that does not move with the
+communication pattern means the fence collected, not that resolution is free.
+
+With the fence off, the counts are exact, and they are the arithmetic the
+probe was built to expose — *distinct peers each rank touches × nprocs*, at
+8 ranks over 8 nodes:
+
+==========  =======  ==========  ==========
+Mode        DMODX    touch       repeat
+==========  =======  ==========  ==========
+baseline    0        0.000 ms    0.000 ms
+``--ring``  32       9.583 ms    0.027 ms
+``--all``   56       6.343 ms    0.019 ms
+==========  =======  ==========  ==========
+
+``--all`` is 7 peers × 8 = 56.  ``--ring`` is **4** per rank rather than 2:
+rank 1 fetches ``{0,2}`` for the ring itself **union** ``{0,3,5}`` for the
+lining-up barrier's recursive-doubling partners.  That confirms, in the
+counts, the caution recorded in ``mpinoop``'s own header — the barrier beside
+a phase resolves ``log2(N)`` partners of its own, and they are charged to the
+barrier rather than to the pattern under test.  The key fetched is
+``btl.tcp.6.1``, the BTL endpoint blob, so this is genuine peer resolution.
+
+Note what the timings then say: first touch costs 9.6 ms against a 0.03 ms
+repeat.  Resolution, not communication, is what the first exchange pays for.
 
 Counting the requests at all needs ``--leave-session-attached``, or only the
-master daemon's traces arrive: the same run reports **0 without the flag and
-7 with it**.  Zero is the dangerous reading, since it is also exactly what a
-genuinely local answer looks like.
+master daemon's traces arrive.  The ``--all`` run above reports **7 without
+the flag and 56 with it** — an eighth of the truth, and 7 is exactly the
+number a *collecting* fence produces, so the under-count does not even look
+wrong.  Both mistakes have to be ruled out before a number here means
+anything.
 
 What a client actually asks about a remote peer
 -----------------------------------------------

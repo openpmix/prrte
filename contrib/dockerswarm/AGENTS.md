@@ -1651,16 +1651,35 @@ Two probes land in `/opt/prte/ompi/bin`:
   Each phase is timed twice — first touch, then a repeat with every peer
   already resolved — so resolution cost is isolated rather than inferred.
 
-  **On a tree-only DVM, first touch generates no direct modex, and that is
-  the expected answer.** `MPI_Init`'s modex fence collects, so every daemon
-  already holds every rank's data and a get about any peer is a local hit.
-  Measured at 8 ranks over 8 nodes, the `DMODX REQ FOR` count is **7 under
-  all three modes** — and those seven are not first touch at all: they are one
-  request per non-master daemon for **rank 0**'s `pml.base.2.0`, issued by
-  Open MPI's PML selection before the fence completes. So use these flags to
-  compare *timings* (`touch` against `repeat`), not to count modex traffic.
-  A configuration where the count moves with the pattern is one where the
-  fence withheld data — which nothing in the tree does today.
+  **To count modex traffic you must turn Open MPI's collecting fence off
+  first**, or the probe cannot see anything:
+
+  ```sh
+  OMPI_MCA_pmix_base_collect_data=0 mpirun ... mpinoop --all
+  ```
+
+  With the default (`=1`), `MPI_Init`'s fence collects, every daemon already
+  holds every rank's data, and a get about any peer is a local hit. The
+  `DMODX REQ FOR` count is then flat at **7** across all three modes at 8
+  ranks over 8 nodes — and those seven are not first touch at all, they are
+  one request per non-master daemon for **rank 0**'s `pml.base.2.0` from PML
+  selection. A run that reports the same number under `--ring` and `--all` is
+  telling you the fence collected, not that first touch is free.
+
+  With `=0`, the on-demand path is live and the counts are exact:
+
+  | mode | DMODX | touch | repeat |
+  |---|---|---|---|
+  | baseline | 0 | 0.000 ms | 0.000 ms |
+  | `--ring` | 32 | 9.583 ms | 0.027 ms |
+  | `--all` | 56 | 6.343 ms | 0.019 ms |
+
+  The arithmetic is *distinct peers each rank touches × nprocs*, and it checks
+  out exactly. For `--all` that is 7 peers × 8 = 56. For `--ring` it is **4**,
+  not 2: rank 1 fetches `{0,2}` for the ring **union** `{0,3,5}` for the
+  barrier's recursive-doubling partners — 4 distinct peers × 8 = 32. That is
+  the barrier contribution the header comment warns about, visible in the
+  numbers. The key being fetched is `btl.tcp.6.1`, the BTL endpoint blob.
 - **`ring_c`** — Open MPI's own example, compiled from the mounted checkout. A
   real neighbour exchange, and the honest version of what `--ring` simulates.
 
@@ -1669,7 +1688,7 @@ The Open MPI knobs worth knowing when driving these:
 | MCA parameter | effect |
 |---------------|--------|
 | `pmix_base_async_modex` | skip the modex fence in `MPI_Init` entirely; peers are resolved on first use |
-| `pmix_base_collect_data` | whether the `MPI_Init` fence sets `PMIX_COLLECT_DATA` |
+| `pmix_base_collect_data` | whether the `MPI_Init` fence sets `PMIX_COLLECT_DATA`. **Set this to 0 for any measurement of on-demand retrieval** — at the default the fence hands every daemon everything and there is no on-demand path left to measure |
 | `mpi_add_procs_cutoff` | above this job size, do not add every peer at init |
 
 Those three are the application-side half of the same argument — what the
@@ -1681,9 +1700,11 @@ workload that reads exactly what a test told it to put.
 **Counting direct-modex requests needs `--leave-session-attached`.** The
 `DMODX REQ FOR` traces come out on each `prted`'s stderr, and without that
 flag only the master daemon's reach you — so the count is a fraction of the
-DVM's and looks reassuringly small. Measured on the same 8-node run: **0
-without the flag, 7 with it.** Zero is the dangerous reading, because it is
-also what a genuinely local answer looks like.
+DVM's and looks reassuringly small. Measured on the same 8-node `--all` run:
+**7 without the flag, 56 with it.** Note the trap doubles up — 7 is also
+exactly what a *collecting* fence reports, so an under-counted run is
+indistinguishable from a correctly-counted one that forgot
+`OMPI_MCA_pmix_base_collect_data=0`. Rule out both before trusting a figure.
 
 ```sh
 prterun ... --prtemca pmix_server_verbose 2 --leave-session-attached \
