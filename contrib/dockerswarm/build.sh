@@ -102,6 +102,13 @@ PMIX_REF="${PMIX_REF:-master}"          # baked-image PMIx branch
 PMIX_REPO="${PMIX_REPO:-https://github.com/openpmix/openpmix.git}"
 PMIX_SRC="${PMIX_SRC:-}"                # optional openpmix checkout to build
 PMIX_HOME="${PMIX_HOME:-}"              # optional installed PMIx prefix (macOS)
+# Optional Open MPI checkout to build against the PMIx and PRRTE this script
+# just installed.  Off by default because it roughly triples the build time,
+# and only the collective-movement work needs it: an MPI job is the only thing
+# in this harness that drives a modex an application actually reads back.  The
+# checkout must be autogen'd and NOT configured in-tree (same rule as
+# PMIX_SRC -- configure runs VPATH over a read-only bind mount).
+OMPI_SRC="${OMPI_SRC:-}"
 
 mode=linux
 distclean=auto                          # auto | always | never
@@ -241,12 +248,18 @@ build_linux() {
         gen_lex "$(cd "$PMIX_SRC" && pwd)"
         pmix_mount=(-v "$(cd "$PMIX_SRC" && pwd)":/pmix-src:ro)
     fi
+    local ompi_mount=()
+    if [ -n "$OMPI_SRC" ]; then
+        gen_lex "$(cd "$OMPI_SRC" && pwd)"
+        ompi_mount=(-v "$(cd "$OMPI_SRC" && pwd)":/ompi-src:ro)
+    fi
 
     echo ">>> building PRRTE (and PMIx if PMIX_SRC set) into volume $VOLUME"
     docker run --rm \
         -v "$root":/prrte-src:ro \
         -v "$VOLUME":/opt/prte \
         ${pmix_mount[@]+"${pmix_mount[@]}"} \
+        ${ompi_mount[@]+"${ompi_mount[@]}"} \
         "$IMAGE" bash -euo pipefail -c '
             jobs=$(nproc)
 
@@ -529,9 +542,56 @@ build_linux() {
                 ln -sf fake-slurm /opt/prte/fakeslurm/bin/$t
             done
 
+            # Open MPI, if a checkout was bind-mounted.  This is the only
+            # thing in the harness that produces a modex an application
+            # actually reads back: every other client here puts data because
+            # the test told it to.  An MPI job publishes what its transports
+            # need and then gets exactly the peers it talks to, which is the
+            # workload a fence movement has to be judged against.
+            #
+            # Built --with-prrte=external against the install above, so
+            # mpirun IS this PRRTE and an MPI job can be run under any
+            # grpcomm_fence_movement.  Fortran and OpenSHMEM are off (nothing
+            # here uses them and they dominate the build), and so is sphinx:
+            # the docs build needs python modules the image does not carry,
+            # and it is the only thing in an Open MPI build that fails for a
+            # reason having nothing to do with MPI.
+            if [ -d /ompi-src ]; then
+                echo ">>>> Open MPI VPATH build -> /opt/prte/ompi"
+                mkdir -p /opt/prte/vpath-linux-ompi && cd /opt/prte/vpath-linux-ompi
+                ompi_args="--prefix=/opt/prte/ompi --with-pmix=$PMIX_PREFIX \
+--with-prrte=/opt/prte/prte --disable-mpi-fortran --disable-oshmem --disable-sphinx"
+                if reconfigure_needed . "$ompi_args" /ompi-src; then
+                    echo ">>>> (re)configuring Open MPI: $ompi_args"
+                    drop_orphans . /ompi-src
+                    /ompi-src/configure $ompi_args
+                    echo "$ompi_args" > .configure-args
+                fi
+                make -j"$jobs"
+                make install
+
+                # mpinoop: MPI_Init and MPI_Finalize and nothing else, so the
+                # only thing timed is the modex fence and the barrier behind
+                # it.  ring_c is the tree own example: a real neighbour
+                # exchange, which is the pattern the ring share exists for.
+                echo ">>>> mpinoop + ring_c (MPI probes)"
+                /opt/prte/ompi/bin/mpicc -O0 -g -o /opt/prte/ompi/bin/mpinoop \
+                    /prrte-src/contrib/dockerswarm/mpinoop.c
+                /opt/prte/ompi/bin/mpicc -O0 -g -o /opt/prte/ompi/bin/ring_c \
+                    /ompi-src/examples/ring_c.c
+            fi
+
             # runtime env for login shells (node-entrypoint handles ld.so)
             printf "export PATH=/opt/prte/prte/bin:\$PATH\nexport LD_LIBRARY_PATH=/opt/prte/prte/lib:%s/lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}\n" \
                 "$PMIX_PREFIX" > /opt/prte/env.sh
+            if [ -d /ompi-src ]; then
+                # An app launched onto a non-head node inherits nothing, so
+                # the MPI libraries have to be findable from env.sh as well
+                # as from the wrapper rpath -- same trap as the PMIx one
+                # documented above the helper compiles.
+                printf "export PATH=/opt/prte/ompi/bin:\$PATH\nexport LD_LIBRARY_PATH=/opt/prte/ompi/lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}\n" \
+                    >> /opt/prte/env.sh
+            fi
 
             # Written LAST, and only on success.  The install lives in a
             # volume that outlives any one build, so a build that fails
