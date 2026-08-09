@@ -53,7 +53,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential gcc g++ make \
         autoconf automake libtool m4 flex \
         perl python3 git curl bzip2 \
-        libevent-dev libhwloc-dev zlib1g-dev \
+        libevent-dev libhwloc-dev zlib1g-dev libzstd-dev \
         libjansson-dev \
         munge libmunge-dev libjson-c-dev libyaml-dev \
         openssh-server openssh-client \
