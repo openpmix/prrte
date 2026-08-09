@@ -1530,6 +1530,42 @@ with a flat one at the same size, and how much of the total is payload
 values as meaningful only against another run on the same host with the same
 load.
 
+**A debug build measures itself, not PRRTE.** `build.sh` configures PRRTE with
+`--enable-debug`, which is right for the functional suites and wrong for any
+number you intend to quote. It configures PMIx with `--prefix` alone, and that
+distinction matters more than it looks: `PMIX_ENABLE_DEBUG` is what selects
+`PMIX_BFROP_BUFFER_FULLY_DESC`, under which every value packed into a buffer
+carries a type descriptor it would not carry in production. A debug PMIx
+therefore inflates every launch message, nidmap and fence bucket *and* flatters
+their compression ratio, because those descriptors are repetitive. So a
+measurement taken here is representative only while PMIx is built without debug
+— check with `grep PMIX_ENABLE_DEBUG <build>/src/include/pmix_config.h` before
+quoting a size, and remember `PMIX_SRC` builds PMIx from your checkout with
+whatever arguments `build.sh` passes.
+
+**And know the noise floor before you go looking for a small effect.** At 40
+nodes the collect fence's wall clock has a run-to-run coefficient of variation
+of 35–50% over five iterations. Anything under about a third is simply not
+measurable here, no matter how many arms the sweep has: an attempt to settle
+whether compressing the xcast payload helps (an effect of 1–7%) produced
+ON/OFF pairs whose ranges overlapped completely and whose *sign* flipped
+between radix 4 and radix 64. If what you are after is small, measure the
+mechanism directly — `--prtemca grpcomm_base_verbose 1` reports the size,
+ratio and microseconds of every broadcast — rather than hoping it will surface
+in an end-to-end fence.
+
+### The payload is a ramp, and that matters for anything about compression
+
+`scaletest`'s default fill is `payload[n] = (rank + n) & 0xff` — a repeating
+256-byte ramp. It is a fine stand-in for *moving* bytes, and a terrible one for
+*compressing* them: deflate squashes it by roughly 250:1, so any compression
+ratio measured on it is an upper bound that no real data approaches.
+`--entropy` (`./scaletest.sh run --entropy`) fills from an xorshift stream
+seeded per rank instead. That is the opposite extreme — deflate cannot shrink
+it at all — and a real modex, which is network endpoints, keys and addresses in
+a thin frame of repetitive text, sits much closer to that floor than to the
+ramp. Run both and the truth is bracketed.
+
 ### Checking a fence still *delivers*, not just that it is fast
 
 `scaletest --verify` reads one key back from two peers each iteration: a

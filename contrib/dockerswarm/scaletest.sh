@@ -302,6 +302,7 @@ cmd_run() {
     local max_total_bytes=$((2 * 1024 * 1024 * 1024))
     local scope=global
     local neighbors=""
+    local entropy=""
     local dry=0
     local swarm_n
 
@@ -319,6 +320,11 @@ cmd_run() {
             --max-bytes)       max_bytes=$2; shift 2 ;;
             --max-total-bytes) max_total_bytes=$2; shift 2 ;;
             --neighbors) neighbors=1; shift ;;
+            # Incompressible payload.  The client's default fill is a repeating
+            # 256-byte ramp, which deflate squashes by ~250:1 -- fine for
+            # measuring how a collective moves bytes, useless for measuring
+            # what compressing them is worth.  See scaletest.c.
+            --entropy)   entropy=1; shift ;;
             --dry-run)   dry=1; shift ;;
             *) die "unknown option $1" ;;
         esac
@@ -404,7 +410,8 @@ cmd_run() {
                                     --map-by ppr:$ppn:node --bind-to none -n $nprocs \
                                     $BIN --tag $tag --nkeys $nkeys --sizes $cs \
                                          --iters $iters --warmup $warmup --scope $scope \
-                                         ${neighbors:+--neighbors}" \
+                                         ${neighbors:+--neighbors} \
+                                         ${entropy:+--entropy}" \
                                  > "$capture" 2>&1; then
                             echo "    FAILED: $(tail -3 "$capture" | tr '\n' ' ')" >&2
                             rm -f "$capture"
