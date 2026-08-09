@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential gcc g++ make \
         autoconf automake libtool m4 flex \
         perl python3 git \
-        libevent-dev libhwloc-dev zlib1g-dev \
+        libevent-dev libhwloc-dev zlib1g-dev libzstd-dev \
         libjansson-dev \
         openssh-server openssh-client \
         iproute2 iputils-ping procps less vim ca-certificates \
