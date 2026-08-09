@@ -69,6 +69,19 @@ void prte_grpcomm_register(void)
         prte_grpcomm_globals.output = pmix_output_open(NULL);
         pmix_output_set_verbosity(prte_grpcomm_globals.output, verbosity);
     }
+
+    /* Timing is a measurement aid rather than production instrumentation, so
+     * it is off unless asked for: the clock reads it needs sit directly in the
+     * broadcast path.  Note that a timing run wants a NON-debug build - see
+     * src/grpcomm/AGENTS.md, "Timing runs want an optimized build". */
+    prte_grpcomm_globals.enable_timing = false;
+    pmix_mca_base_var_register("prte", "grpcomm", NULL, "enable_timing",
+                               "Measure and report how long the collectives spend "
+                               "in the operations worth timing (today, an xcast's "
+                               "compression of its payload). Reported at "
+                               "grpcomm_base_verbose 1.",
+                               PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                               &prte_grpcomm_globals.enable_timing);
 }
 
 /**

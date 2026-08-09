@@ -77,6 +77,12 @@ typedef struct {
     // failure can be recognized as stale. Shared by fence and group: one
     // failure, one restart, one epoch.
     uint32_t recovery_epoch;
+    // Measure and report how long the collectives spend in the operations
+    // worth timing - today, the deflate an xcast performs on its payload.
+    // Off by default: it is a measurement aid, not production instrumentation,
+    // and the clock reads it needs sit directly in the broadcast path.
+    // Set with the grpcomm_enable_timing MCA parameter.
+    bool enable_timing;
 } prte_grpcomm_globals_t;
 
 #define PRTE_GRPCOMM_GROUP_MEMO_MAX 64

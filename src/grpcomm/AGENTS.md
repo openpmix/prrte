@@ -231,6 +231,183 @@ lateral movement was built to remove, and
 [`docs/plans/scalable_collectives.rst`](../../docs/plans/scalable_collectives.rst)
 records both the attempt and why it was withdrawn.
 
+### Compression, and why the threshold is not a size
+
+`xcast_nb()` compresses the payload **once, at the originator**, via
+`PMIx_Data_compress`; the compressed bytes are what every hop forwards, and
+only the local delivery in `process_msg()` inflates. So the DVM pays one
+deflate and one inflate per daemon, the latter off the forwarding path. The
+`msg_compressed` bool travels beside the byte object so the receiver knows
+which it got.
+
+Whether that is worth doing is not a property of the payload's size alone.
+Five quantities decide it, and it is worth naming them before the arithmetic:
+
+| | meaning |
+|---|---|
+| `M` | the payload, in bytes |
+| `rho` | the fraction the compressor leaves — `rho = 0.5` means it halved it |
+| `B` | bandwidth of **one** link, in bytes/sec |
+| `d` | depth of the routing tree (levels below the HNP) |
+| `k` | radix of the tree — how many children a daemon forwards to (64 by default) |
+| `R` | the compressor's throughput, in bytes/sec |
+
+Shrinking the payload saves `(1 - rho) * M / B` on **every link the broadcast
+crosses**, and the critical path holds `d * k` of them, because each of the `d`
+levels serialises `k` full copies onto one outbound link. So the saving carries
+a `d * k` multiplier that the compressor knows nothing about. Deflate is linear
+in `M` above a few KB, so writing its cost as `M / R` makes `M` cancel from
+both sides:
+
+```
+compress iff   R  >  B / (d * k * (1 - rho))
+```
+
+A comparison of two rates, not a size. **This is why there is no
+PRRTE-side size threshold and should not be one.** A size limit buys only
+protection from the compressor's fixed start-up cost and from the poor ratios
+of tiny inputs — and that is the compressor's own business: every `pcompress`
+component already declines an input below its configured `pcompress_base_limit`
+and declines any result that is not actually smaller. There is nothing for this
+layer to add. Hand the payload over and let the component judge it.
+
+**Scale is what decides it, so do not calibrate this on a small DVM.** `d * k`
+is 39 on a 40-node DVM but 128 at 1000 nodes and 192 at 10000 (radix 64), and
+the payloads grow with the process count on top of that. The answer at 40 nodes
+is "barely, maybe not"; the answer at 10000 is "overwhelmingly yes".
+
+The launch message measures **8.1 bytes per process** (`grpcomm_base_verbose 1`
+against `prterun -n N`, slope taken at N = 800 to 1600), so 1.28M processes is a
+~10 MB broadcast. A full-data fence release carries the aggregated modex, which
+is the application's size rather than PRRTE's — at a modest 200 B/proc that is
+25 MB at 1000 nodes and 256 MB at 10000.
+
+At 10000 nodes and 128 processes per node (`d = 3`, `k = 64`, so `d * k = 192`),
+broadcasting that 256 MB release over 10 Gb/s (`B` = 1.25 GB/s), with zstd's
+measured `R` = 434 MB/s and `rho` = 0.63:
+
+| | deflate | wire raw | wire compressed | net |
+|---|---|---|---|---|
+| zstd | 0.6 s | 39.3 s | 24.8 s | **+13.9 s** |
+| zlib (`R` = 103 MB/s, `rho` = 0.65) | 2.5 s | 39.3 s | 25.5 s | **+11.3 s** |
+
+So compression is not marginal here — it is the difference between a
+40-second broadcast and a 25-second one. Two things that decision rests on:
+
+- **`B` is the assumption to check.** At 100 Gb/s (`B` = 12.5 GB/s) the same
+  broadcast needs `d * k > 78` with zstd to stay ahead — which 1000- and
+  10000-node DVMs still clear, but a small one does not. PRRTE's OOB is TCP and
+  on most clusters rides the management network rather than the compute fabric,
+  which is the case worth designing for.
+- **The deflate blocks the progress thread.** `xcast_nb()` compresses *before*
+  it thread-shifts to `begin_xcast`, and every caller (`fence_recv`, the plm
+  launch path, the state machine) is already on the progress thread. At 256 MB
+  that is a sub-second stall with zstd but several seconds with zlib at a high
+  level, during which the HNP services no RML message, no PMIx connection and no
+  tool request. The wire time it buys back is larger, so the trade is right, but
+  the cost lands as one stall rather than as evenly spread bandwidth.
+
+### The fence path compresses twice, and that is correct — do not "fix" it
+
+The collect blob is compressed **before** xcast ever sees it:
+`pmix_server_fence.c` deflates each daemon's bucket, PRRTE concatenates those
+opaque blocks up the tree, and the HNP deflates the concatenation again in
+`xcast_nb()`. That looks redundant and the obvious cleanup — drop the
+per-bucket pass and compress once over the whole aggregate, where all the
+cross-rank redundancy is — has been measured and it is a **regression on both
+axes**:
+
+| 1000 daemons x 128 ppn, 200 B/proc | broadcast | rollup |
+|---|---|---|
+| per-bucket + xcast (today) | 15.40 MB | 15.51 MB |
+| xcast only | 15.62 MB (**+1.4%**) | 25.60 MB (**+65%**) |
+
+The reason is mechanical: **deflate's sliding window is 32 KB**. A bucket of
+128 ranks at 200 B/proc is 25.6 KB — already inside one window — so the
+per-bucket pass finds essentially everything zlib is capable of finding, and
+compressing the aggregate in one shot gives it no matches it could not already
+see. Chunking only costs where a bucket is far *below* the window (at 8 ppn the
+single pass wins 1.5%, still against a 46% larger rollup).
+
+And there is no long-range redundancy waiting for a bigger window either. On
+the same corpus, `xz -9` with a 64 MB dictionary reaches 0.576 against `gzip
+-9`'s 0.600, and `zstd -19 --long=27` (128 MB window) manages only 0.591. The
+floor is set by the opaque per-rank value bytes — endpoints, keys, addresses —
+which do not compress at all. Roughly 60% of a modex is incompressible no
+matter how it is framed.
+
+So the per-bucket pass is free ratio-wise and buys a 65% smaller rollup. Leave
+it alone.
+
+**What does move the needle is the compressor, not the layering.** Measured on
+the same 25.6 MB aggregate, single-threaded: `zstd -1` matches `gzip -9`'s
+ratio (0.600) at **640 MB/s against 64 MB/s**, and `zstd -3` beats it (0.588)
+at 427 MB/s. That is the lever on the progress-thread stall above — the same
+256 MB release that costs 5.5 s of blocked HNP under `gzip -9` would cost
+around 0.4 s. PMIx's `pcompress` framework is where such a component would go;
+it already carries `zlib` and `zlibng`.
+
+### Measuring it
+
+`grpcomm_base_verbose 1` reports raw size, on-wire size and ratio for **every**
+broadcast, compressed or not, so the line is a complete census of what a DVM
+broadcasts. Adding `grpcomm_enable_timing 1` appends what the deflate cost the
+originator:
+
+```sh
+prterun --prtemca grpcomm_base_verbose 1 --prtemca grpcomm_enable_timing 1 ...
+```
+
+Timing is off by default because the clock reads it needs sit directly in the
+broadcast path. There is no separate size gate to sweep — the compressor's own
+`pcompress_base_limit` and `pcompress_*_level` are the knobs, so vary those:
+
+```sh
+--pmixmca pcompress zstd --pmixmca pcompress_zstd_level 1
+```
+
+### Timing runs want an optimized build — a debug build measures itself
+
+**Do not draw conclusions about sizes or times from a `--enable-debug` build.**
+The overhead is not a uniform tax that cancels out of a comparison; it changes
+the very quantities being measured.
+
+The one that matters most here is that **a debug PMIx describes its buffers**.
+`pmix_bfrops_globals.default_type` is `PMIX_BFROP_BUFFER_FULLY_DESC` under
+`PMIX_ENABLE_DEBUG` and `PMIX_BFROP_BUFFER_NON_DESC` otherwise, so every value
+packed into a buffer carries a type descriptor it would not carry in
+production. A launch message, a nidmap and a fence bucket are all built that
+way, so in a debug build they are **larger** — and their compression ratio is
+flattered too, because those descriptors are highly repetitive and deflate eats
+them. Both halves of `raw` and `wire` in the census line move, in opposite
+directions from the truth.
+
+Note this is **PMIx's** debug flag, not PRRTE's: the buffer type is compiled
+into `libpmix`. A PRRTE built `--enable-debug` against a PMIx built without it
+still packs production-sized buffers, which is the usual development setup and
+is fine to measure. Check what you actually have before trusting a number:
+
+```sh
+grep PMIX_ENABLE_DEBUG <pmix-build>/src/include/pmix_config.h
+```
+
+The rest of a debug build — assertions, `PRTE_ERROR_LOG` paths, unoptimized
+code — inflates times everywhere and is the ordinary reason not to benchmark
+one.
+
+**`scaletest` cannot resolve a small effect either**, whatever the build. At 40
+nodes the collect fence's wall clock has a run-to-run coefficient of variation
+of 35-50%; a four-arm sweep (compression on/off crossed with compressible and
+incompressible payloads) put every ON/OFF pair fully inside the other's range,
+with the *sign* flipping between radix 4 and radix 64. That is consistent with
+the model — the swarm's wire is loopback, so `B` is enormous and no `d * k` a
+40-container swarm can reach compensates — but it settles nothing on its own.
+
+`scaletest`'s default payload is a repeating 256-byte ramp that deflate squashes
+by ~250:1. Any compression number read off it is fiction; `--entropy` fills with
+an xorshift stream instead, which is the floor. Real modex data — endpoints,
+keys, addresses — sits much closer to the floor than to the ramp.
+
 ### Ordering and fault tolerance
 
 The in-file comments are the real spec — read them. The load-bearing ideas:
