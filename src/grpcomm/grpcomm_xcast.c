@@ -113,6 +113,13 @@ static op_t* insert_forwarded_op(signature_t *sig);
 static void forward_op(op_t *op);
 // Forward to specific destination
 static void forward_op_to(op_t *op, pmix_rank_t dest);
+// Pack the forward once, ready to be sent to any number of children.  NULL on
+// failure, already reported
+static prte_rml_payload_t* build_forward_payload(op_t *op);
+// Send an already-packed forward to one destination; the payload is shared,
+// so this takes no ownership of it
+static void forward_payload_to(op_t *op, prte_rml_payload_t *payload,
+                               pmix_rank_t dest);
 // Send-completion callback: a message to a child that never arrives means that
 // subtree's ack is never coming, so stop expecting it
 static void forward_lost(int status, pmix_proc_t *peer,
@@ -134,9 +141,10 @@ static void tree_whole_forward(op_t *op);
 // Is an op ahead of this one in op-id order still waiting on its payload?
 
 
-// Pack the xcast message forwarded to one of our children
-static int pack_forward_msg(pmix_data_buffer_t *buffer, op_t *op,
-                            pmix_rank_t dest);
+// Pack the xcast message forwarded to our children.  Takes no destination:
+// the forward is identical for all of them, which is what lets one packed
+// buffer be shared by every send (see tree_whole_forward)
+static int pack_forward_msg(pmix_data_buffer_t *buffer, op_t *op);
 // Pack the initiating relay from an originator to the controller
 static int pack_relay_msg(pmix_data_buffer_t *buffer, op_t *op);
 // (un)pack components
@@ -792,9 +800,7 @@ static int pack_relay_msg(pmix_data_buffer_t* buffer, op_t* op){
     return rc;
 }
 
-static int pack_forward_msg(pmix_data_buffer_t* buffer, op_t* op,
-                            pmix_rank_t dest){
-    PRTE_HIDE_UNUSED_PARAMS(dest);
+static int pack_forward_msg(pmix_data_buffer_t* buffer, op_t* op){
     int rc = pack_sig(buffer, &op->sig);
     if(PMIX_SUCCESS == rc) rc = pack_ack_id(buffer, &op->ack_id_down);
     if(PMIX_SUCCESS == rc) rc = pack_msg(buffer, op);
@@ -841,13 +847,50 @@ static op_t* insert_forwarded_op(signature_t* sig) {
  * high radix makes that 1 or 2 hops.  Wrong for a large one: a node with r
  * children serializes r full copies of the payload on its outbound link, at
  * every level, so the bandwidth term is d*r*M*beta - which is the entire cost
- * of broadcasting a launch message or a preload chunk at scale. */
+ * of broadcasting a launch message or a preload chunk at scale.
+ *
+ * The forward is byte-for-byte identical for every child - it carries the
+ * op-id, the ack-id and the payload, none of which depend on the destination -
+ * so it is packed once here and shared by every send.  Packing it per child
+ * cost a full copy of the payload per child, and all of those copies were made
+ * on the progress thread inside this one event callback, before any of them
+ * could reach the wire: at the default radix, 64 copies of a launch message
+ * made and held before the first byte moved.
+ *
+ * That is why pack_forward_msg takes no destination.  If a forward ever does
+ * need to differ per child, this is the loop that has to go back to packing
+ * inside it - the sharing is not an optimization the RML can make on its own. */
 static void tree_whole_forward(op_t* op){
     pmix_rank_t* children = (pmix_rank_t*) prte_rml_base.children.array;
-    for(size_t i = 0; i < prte_rml_base.children.size; i++){
-        if(children[i] == PMIX_RANK_INVALID) continue;
-        forward_op_to(op, children[i]);
+    prte_rml_payload_t* payload;
+    size_t i;
+    bool any = false;
+
+    for (i = 0; i < prte_rml_base.children.size; i++) {
+        if (PMIX_RANK_INVALID != children[i]) {
+            any = true;
+            break;
+        }
     }
+    if (!any) {
+        return;
+    }
+
+    payload = build_forward_payload(op);
+    if (NULL == payload) {
+        return;
+    }
+
+    for (i = 0; i < prte_rml_base.children.size; i++) {
+        if (PMIX_RANK_INVALID == children[i]) {
+            continue;
+        }
+        forward_payload_to(op, payload, children[i]);
+    }
+
+    /* every child that accepted the payload holds its own reference now; drop
+     * ours, so the buffer dies with the last send rather than with this loop */
+    PMIX_RELEASE(payload);
 }
 
 static void forward_op(op_t* op){
@@ -936,35 +979,58 @@ static void forward_lost(int status, pmix_proc_t *peer,
     drive_completions();
 }
 
-static void forward_op_to(op_t* op, pmix_rank_t dest){
+/* Pack the forward once.  Returns NULL having already reported the failure -
+ * a forward we cannot build is not something any caller can carry on past. */
+static prte_rml_payload_t* build_forward_payload(op_t* op){
     pmix_data_buffer_t* xcast_msg = PMIx_Data_buffer_create();
+    prte_rml_payload_t* payload;
 
-    int rc = pack_forward_msg(xcast_msg, op, dest);
-    if(PMIX_SUCCESS != rc){
+    int rc = pack_forward_msg(xcast_msg, op);
+    if (PMIX_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIX_DATA_BUFFER_RELEASE(xcast_msg);
-        return;
+        return NULL;
     }
+
+    payload = PMIX_NEW(prte_rml_payload_t);
+    payload->dbuf = xcast_msg;
+    return payload;
+}
+
+static void forward_payload_to(op_t* op, prte_rml_payload_t* payload,
+                               pmix_rank_t dest){
+    int rc;
 
     PMIX_OUTPUT_VERBOSE((
         5, prte_grpcomm_globals.output,
         "%s grpcomm:send_relay sending relay msg of %d bytes to %s",
-        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) xcast_msg->bytes_used,
+        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) payload->dbuf->bytes_used,
         PRTE_VPID_PRINT(dest)
     ));
 
     /* The op-id is carried by value rather than by pointer: the send outlives
      * the op on precisely the paths that matter, so the callback has to be
      * able to look the op up and find it gone. */
-    PRTE_RML_SEND_CB(rc, dest, xcast_msg, PRTE_RML_TAG_XCAST,
-                     forward_lost, (void *) (intptr_t) op->sig.op_id);
+    PRTE_RML_SEND_PAYLOAD_CB(rc, dest, payload, PRTE_RML_TAG_XCAST,
+                             forward_lost, (void *) (intptr_t) op->sig.op_id);
     if (PMIX_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-        PMIX_DATA_BUFFER_RELEASE(xcast_msg);
+        /* a refused send took no reference, so there is nothing to unwind -
+         * the payload is still the caller's to release */
         return;
     }
+}
+
+static void forward_op_to(op_t* op, pmix_rank_t dest){
+    prte_rml_payload_t* payload = build_forward_payload(op);
+
+    if (NULL == payload) {
+        return;
+    }
+    forward_payload_to(op, payload, dest);
+    PMIX_RELEASE(payload);
 }
 
 static void process_wireup(pmix_data_buffer_t *msg){
