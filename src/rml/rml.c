@@ -387,6 +387,10 @@ static void send_cons(prte_rml_send_t *ptr)
     ptr->cbfunc = prte_rml_send_callback;
     ptr->cbdata = NULL;
     ptr->dbuf = NULL;
+    /* an ordinary send owns its own buffer - PMIX_NEW mallocs rather than
+     * zeroing, so leaving this unset would have the destructor release a
+     * garbage pointer as if it were a shared payload */
+    ptr->payload = NULL;
     ptr->seq_num = 0xFFFFFFFF;
     /* Default to this process's own epoch: a message built here originates
      * here. The relay path overrides this with the origin's epoch carried in
@@ -398,10 +402,28 @@ static void send_cons(prte_rml_send_t *ptr)
 }
 static void send_des(prte_rml_send_t *ptr)
 {
-    if (ptr->dbuf != NULL)
+    if (NULL != ptr->payload) {
+        /* the buffer belongs to the payload, which may still be in flight to
+         * other destinations - drop our reference and let the last one out
+         * free it */
+        PMIX_RELEASE(ptr->payload);
+    } else if (NULL != ptr->dbuf) {
         PMIX_DATA_BUFFER_RELEASE(ptr->dbuf);
+    }
 }
 PMIX_CLASS_INSTANCE(prte_rml_send_t, pmix_list_item_t, send_cons, send_des);
+
+static void payload_cons(prte_rml_payload_t *ptr)
+{
+    ptr->dbuf = NULL;
+}
+static void payload_des(prte_rml_payload_t *ptr)
+{
+    if (NULL != ptr->dbuf) {
+        PMIX_DATA_BUFFER_RELEASE(ptr->dbuf);
+    }
+}
+PMIX_CLASS_INSTANCE(prte_rml_payload_t, pmix_object_t, payload_cons, payload_des);
 
 static void send_req_cons(prte_rml_send_request_t *ptr)
 {

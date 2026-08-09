@@ -238,6 +238,35 @@ typedef struct {
 } prte_rml_recv_cb_t;
 PMIX_CLASS_DECLARATION(prte_rml_recv_cb_t);
 
+/* A payload that several sends transmit without any of them owning it.
+ *
+ * The ordinary send owns its buffer: exactly one prte_rml_send_t points at a
+ * pmix_data_buffer_t and disposes of it when the send completes.  That is the
+ * right rule for point-to-point traffic and the wrong one for a broadcast,
+ * where the same bytes go to every routing-tree child.  Building one buffer
+ * per child costs a full copy of the payload per child, all of it on the
+ * progress thread and all of it ahead of the first byte reaching the wire -
+ * at the default radix that is 64 identical copies of a launch message the
+ * daemon then sends 64 times.
+ *
+ * A payload is a reference-counted wrapper around one such buffer.  Each send
+ * that accepts it takes its own reference and drops it on completion; the
+ * originator drops the reference it got from PMIX_NEW once it has handed the
+ * payload to everyone it means to.  The buffer dies with the last reference,
+ * whichever send that turns out to be.
+ *
+ * Nothing about the transport had to change to allow this: the OOB reads
+ * base_ptr/bytes_used and keeps all of its per-destination progress
+ * (sdptr/sdbytes/hdr_sent) in the send object, so several sends can read one
+ * buffer concurrently.  The one rule is the obvious one - a shared payload is
+ * immutable from the moment it is first handed to a send.
+ */
+typedef struct {
+    pmix_object_t super;
+    pmix_data_buffer_t *dbuf;
+} prte_rml_payload_t;
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rml_payload_t);
+
 /* structure to send RML messages - used internally */
 typedef struct {
     pmix_list_item_t super;
@@ -253,6 +282,11 @@ typedef struct {
 
     /* data buffer */
     pmix_data_buffer_t *dbuf;
+    /* When non-NULL, dbuf is this payload's buffer and is NOT owned by this
+     * send: the send holds a reference to the payload instead, dropped in the
+     * destructor, and completion hands the callback no buffer to dispose of.
+     * NULL for every ordinary send, which owns its dbuf outright. */
+    prte_rml_payload_t *payload;
     /* msg seq number */
     uint32_t seq_num;
     /* boot epoch (incarnation) of the origin. Defaults to this process's own
