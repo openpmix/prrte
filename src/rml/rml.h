@@ -116,6 +116,50 @@ PRTE_EXPORT int prte_rml_send_buffer_cb_nb(pmix_rank_t rank,
     } while(0)
 
 /**
+ * As prte_rml_send_buffer_cb_nb, but transmit a *shared* payload that the send
+ * does not own.
+ *
+ * This is what a broadcast wants.  The ordinary send owns its buffer, so
+ * sending identical bytes to every routing-tree child means building one
+ * buffer per child - a full copy of the payload each, all of them made on the
+ * progress thread before the first byte reaches the wire.  At the default
+ * radix that is 64 copies of a launch message, 64 allocations of it, and 64x
+ * its size resident on the sender at once.  A payload is packed once and
+ * handed to every child.
+ *
+ * Ownership: the caller holds the reference PMIX_NEW gave it and must release
+ * that reference once it has finished handing the payload out.  Each call that
+ * returns PRTE_SUCCESS takes a reference of its own, dropped when that send
+ * completes; a call that returns an error takes none.  So the buffer lives
+ * until the last destination is done with it, whether that is a send or the
+ * caller.
+ *
+ * The payload must not be modified once it has been handed to a send - several
+ * sends read it concurrently.
+ *
+ * A message to *self* cannot share: the local receive path takes ownership of
+ * the buffer it delivers.  Rather than making that a rule callers have to know,
+ * a self-send here copies the payload and proceeds normally.
+ *
+ * cbfunc is called with a NULL buffer (see PRTE_RML_SEND_COMPLETE) because
+ * there is nothing for it to dispose of.
+ */
+PRTE_EXPORT int prte_rml_send_payload_cb_nb(pmix_rank_t rank,
+                                            prte_rml_payload_t *payload,
+                                            prte_rml_tag_t tag,
+                                            prte_rml_buffer_callback_fn_t cbfunc,
+                                            void *cbdata);
+
+#define PRTE_RML_SEND_PAYLOAD_CB(_r, r, p, t, cf, cd)               \
+    do {                                                            \
+        pmix_output_verbose(2, prte_rml_base.rml_output,            \
+                            "RML-SEND-PAYLOAD-CB(%s:%d): %s:%s:%d", \
+                            PMIX_RANK_PRINT(r), t,                  \
+                            __FILE__, __func__, __LINE__);          \
+        (_r) = prte_rml_send_payload_cb_nb(r, p, t, cf, cd);        \
+    } while (0)
+
+/**
  * As prte_rml_send_buffer_nb, but bypass the routing tree and deliver straight
  * to the named peer.
  *
@@ -415,11 +459,18 @@ PRTE_EXPORT bool prte_rml_is_node_up(pmix_rank_t node);
  * buffer the callback has already released. Nobody else holds a reference
  * to the send object at this point, so the caller must not touch it after
  * completing it.
+ *
+ * A send carrying a *shared payload* is the exception: its buffer belongs to
+ * the payload and other destinations may still be transmitting it, so the
+ * callback is handed no buffer at all and the send's reference is dropped by
+ * the destructor below. A callback that wants to inspect the payload must
+ * therefore tolerate a NULL buffer - which the default one does, and which is
+ * the honest statement of the situation: this callback has nothing to free.
  */
 #define PRTE_RML_SEND_COMPLETE(m)                                                             \
     do {                                                                                      \
         prte_rml_send_t *_snd = (m);                                                          \
-        pmix_data_buffer_t *_dbuf = _snd->dbuf;                                               \
+        pmix_data_buffer_t *_dbuf = (NULL == _snd->payload) ? _snd->dbuf : NULL;              \
         pmix_output_verbose(5, prte_rml_base.rml_output,                                      \
                             "%s-%s Send message complete at %s:%d",                           \
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(_snd->dst)),\

@@ -39,8 +39,12 @@
 #include "src/rml/oob/oob.h"
 #include "src/rml/relm/relm.h"
 
+/* One send path for both the owned and the shared case.  When payload is
+ * non-NULL it supplies the buffer and buffer must be NULL; the send takes a
+ * reference to it rather than ownership of its bytes. */
 static int send_buffer(pmix_rank_t rank,
                        pmix_data_buffer_t *buffer,
+                       prte_rml_payload_t *payload,
                        prte_rml_tag_t tag,
                        bool direct,
                        prte_rml_buffer_callback_fn_t cbfunc,
@@ -48,6 +52,10 @@ static int send_buffer(pmix_rank_t rank,
 {
     prte_rml_recv_t *rcv;
     prte_rml_send_t *snd;
+
+    if (NULL != payload) {
+        buffer = payload->dbuf;
+    }
 
     PMIX_OUTPUT_VERBOSE((1, prte_rml_base.rml_output,
          "%s rml_send_buffer%s to peer %s at tag %d",
@@ -77,6 +85,25 @@ static int send_buffer(pmix_rank_t rank,
         PMIX_OUTPUT_VERBOSE((1, prte_rml_base.rml_output,
                              "%s rml_send_buffer_to_self at tag %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), tag));
+        if (NULL != payload) {
+            /* the receive takes ownership of what it is handed, and a shared
+             * payload has other destinations still to reach - so this one
+             * destination gets a copy of its own.  Making it a copy here rather
+             * than a rule the caller has to know keeps a self-send from being
+             * a special case anywhere else. */
+            pmix_data_buffer_t *copy;
+            int rc;
+
+            PMIX_DATA_BUFFER_CREATE(copy);
+            rc = PMIx_Data_copy_payload(copy, buffer);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(copy);
+                /* every other exit from this function reports a PRRTE code */
+                return prte_pmix_convert_status(rc);
+            }
+            buffer = copy;
+        }
         /* copy the message for the recv */
         rcv = PMIX_NEW(prte_rml_recv_t);
         PMIX_LOAD_PROCID(&rcv->sender, PRTE_PROC_MY_NAME->nspace, rank);
@@ -94,6 +121,13 @@ static int send_buffer(pmix_rank_t rank,
     snd->origin = *PRTE_PROC_MY_NAME;
     snd->tag = tag;
     snd->dbuf = buffer;
+    if (NULL != payload) {
+        /* our own reference, dropped when this send completes.  Taken here,
+         * after every way out above has already returned, so a refused send
+         * leaves the caller's reference count exactly as it found it. */
+        PMIX_RETAIN(payload);
+        snd->payload = payload;
+    }
     snd->direct = direct;
     /* the constructor installs prte_rml_send_callback; only override it when
      * the caller actually asked to be told how the send ended */
@@ -112,7 +146,7 @@ int prte_rml_send_buffer_nb(pmix_rank_t rank,
                             pmix_data_buffer_t *buffer,
                             prte_rml_tag_t tag)
 {
-    return send_buffer(rank, buffer, tag, false, NULL, NULL);
+    return send_buffer(rank, buffer, NULL, tag, false, NULL, NULL);
 }
 
 int prte_rml_send_buffer_cb_nb(pmix_rank_t rank,
@@ -121,14 +155,27 @@ int prte_rml_send_buffer_cb_nb(pmix_rank_t rank,
                                prte_rml_buffer_callback_fn_t cbfunc,
                                void *cbdata)
 {
-    return send_buffer(rank, buffer, tag, false, cbfunc, cbdata);
+    return send_buffer(rank, buffer, NULL, tag, false, cbfunc, cbdata);
+}
+
+int prte_rml_send_payload_cb_nb(pmix_rank_t rank,
+                                prte_rml_payload_t *payload,
+                                prte_rml_tag_t tag,
+                                prte_rml_buffer_callback_fn_t cbfunc,
+                                void *cbdata)
+{
+    if (NULL == payload || NULL == payload->dbuf) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
+    return send_buffer(rank, NULL, payload, tag, false, cbfunc, cbdata);
 }
 
 int prte_rml_send_buffer_direct_nb(pmix_rank_t rank,
                                    pmix_data_buffer_t *buffer,
                                    prte_rml_tag_t tag)
 {
-    return send_buffer(rank, buffer, tag, true, NULL, NULL);
+    return send_buffer(rank, buffer, NULL, tag, true, NULL, NULL);
 }
 
 int prte_rml_send_buffer_reliable_nb(pmix_rank_t rank,
