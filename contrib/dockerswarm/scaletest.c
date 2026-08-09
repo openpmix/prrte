@@ -14,6 +14,7 @@
  *
  *   scaletest [--nkeys N] [--sizes A,B,C] [--iters N] [--warmup N]
  *             [--scope global|remote|local] [--tag STR] [--verify] [--neighbors]
+ *             [--entropy]
  *
  * Each iteration is three timed phases:
  *
@@ -128,7 +129,7 @@ static void usage(const char *argv0)
     fprintf(stderr,
             "usage: %s [--nkeys N] [--sizes A,B,C] [--iters N] [--warmup N]\n"
             "          [--scope global|remote|local] [--tag STR] [--verify]\n"
-            "          [--neighbors]\n",
+            "          [--neighbors] [--entropy]\n",
             argv0);
 }
 
@@ -144,6 +145,7 @@ int main(int argc, char **argv)
     const char *tag = "run";
     bool verify = false;
     bool neighbors = false;
+    bool entropy = false;
     char hostname[256];
     char key[PMIX_MAX_KEYLEN + 1];
     char *payload = NULL;
@@ -181,6 +183,8 @@ int main(int argc, char **argv)
             verify = true;
         } else if (0 == strcmp(argv[a], "--neighbors")) {
             neighbors = true;
+        } else if (0 == strcmp(argv[a], "--entropy")) {
+            entropy = true;
         } else if (0 == strcmp(argv[a], "--scope") && a + 1 < argc) {
             ++a;
             if (0 == strcmp(argv[a], "global")) {
@@ -252,8 +256,31 @@ int main(int argc, char **argv)
             PMIx_Finalize(NULL, 0);
             return 1;
         }
-        for (n = 0; n < maxsize; n++) {
-            payload[n] = (char) ((myproc.rank + n) & 0xff);
+        if (entropy) {
+            /* Incompressible.  The default payload below is a 256-byte ramp
+             * repeated to length, which zlib squashes by roughly 250:1 - so
+             * any measurement of a compressed collective taken on it reports
+             * a saving that no real modex would ever see.  A real modex is
+             * network endpoints, keys and addresses: high-entropy bytes in a
+             * thin frame of repetitive text.  This fills with an xorshift
+             * stream, which is the floor - deflate cannot shrink it at all,
+             * and is left paying its own cost for nothing.  Run both and the
+             * truth about compression is bracketed between them.
+             *
+             * Seeded from the rank so no two ranks contribute the same bytes;
+             * a shared stream would be compressible across the gathered blob
+             * even though each rank's own slice was not. */
+            uint64_t s = 88172645463325252ULL + 0x9e3779b97f4a7c15ULL * (uint64_t) myproc.rank;
+            for (n = 0; n < maxsize; n++) {
+                s ^= s << 13;
+                s ^= s >> 7;
+                s ^= s << 17;
+                payload[n] = (char) s;
+            }
+        } else {
+            for (n = 0; n < maxsize; n++) {
+                payload[n] = (char) ((myproc.rank + n) & 0xff);
+            }
         }
     }
 
