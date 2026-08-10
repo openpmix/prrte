@@ -18,6 +18,8 @@
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+ *                         All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -675,17 +677,23 @@ PRTE_EXPORT extern pmix_list_t prte_shrink_campaigns;
  * the WIREUP xcast, or on failure when one of the targets dies — so that
  * jobs held at the VM_READY → MAP boundary are not admitted before the new
  * daemons are wired up. */
+/* One recipient of a grow's phase-two completion event, with the ids naming
+ * which of its requests completed. */
+typedef struct {
+    pmix_proc_t      requester;
+    char            *alloc_id;       /* PMIX_ALLOC_ID of the allocation, or NULL */
+    char            *req_id;         /* requester's PMIX_ALLOC_REQ_ID, or NULL */
+} prte_grow_requester_t;
+
 typedef struct {
     pmix_list_item_t super;
     pmix_rank_t     *targets;   /* daemon ranks being launched */
     int              ntargets;  /* count, == this campaign's fence contribution */
-    /* requester recorded so the spec's phase-two completion event can be
-     * directed at the process that drove the grow; left unset
-     * (have_requester == false) for a scheduler-driven push */
-    pmix_proc_t      requester;
-    char            *alloc_id;       /* PMIX_ALLOC_ID of the allocation, or NULL */
-    char            *req_id;         /* requester's PMIX_ALLOC_REQ_ID, or NULL */
-    bool             have_requester;
+    /* Everyone this campaign answers for. A campaign covers whatever awaited
+     * a daemon when setup_virtual_machine ran, which can be several grows.
+     * Empty for the initial bring-up or a scheduler-driven push. */
+    prte_grow_requester_t *requesters;
+    int              nrequesters;
 } prte_grow_campaign_t;
 PMIX_CLASS_DECLARATION(prte_grow_campaign_t);
 

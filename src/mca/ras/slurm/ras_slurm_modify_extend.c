@@ -1249,6 +1249,17 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
         goto complete;
     }
 
+    /* Record who asked. The grow campaign resolves its requesters through the
+     * node's PRTE_NODE_ALLOC_ID to this session, so without it neither the
+     * completion nor a launch failure reaches anyone. Only for an extend: an
+     * allocation discovered at startup was requested by no one. */
+    {
+        prte_session_t *session = prte_get_session_object_from_id(job_id);
+        if (NULL != session) {
+            PMIX_XFER_PROCID(&session->requestor, &req->tproc);
+        }
+    }
+
     err = prte_ras_slurm_add_reused_nodes_to_session(job_id, &reused_nodes);
 
     if (PRTE_SUCCESS != err) {

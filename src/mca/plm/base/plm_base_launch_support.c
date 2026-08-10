@@ -19,6 +19,8 @@
  * Copyright (c) 2016-2020 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+ *                         All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -2280,6 +2282,95 @@ void prte_plm_base_wrap_args(char **args)
     }
 }
 
+/* True if the session still holds this node. PRTE_NODE_ALLOC_ID outlives the
+ * membership it records - a node shrunk out of an allocation keeps the tag -
+ * so the session's own list is what says whether the tag is still current. */
+static bool session_holds_node(prte_session_t *sess, prte_node_t *node)
+{
+    int i;
+
+    if (NULL == sess->nodes) {
+        return false;
+    }
+    for (i = 0; i < sess->nodes->size; i++) {
+        if (node == (prte_node_t *) pmix_pointer_array_get_item(sess->nodes, i)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* The allocation this node arrived in, if it was tagged with one. */
+static bool node_alloc_id(prte_node_t *node, uint32_t *alloc_id)
+{
+    void *data = alloc_id;
+
+    return prte_get_attribute(&node->attributes, PRTE_NODE_ALLOC_ID, &data, PMIX_UINT32);
+}
+
+/* The session naming who asked for the grow that brought this node in.
+ *
+ * A reserved node points at its session directly. A node an RM added to the
+ * general pool does not - ras/slurm's extend leaves node->session NULL by
+ * design - but still carries the allocation it arrived in, whose session
+ * records the requestor. Resolving through the node is what keeps concurrent
+ * grows correct: each node names its own request. */
+static prte_session_t *grow_requester_session(prte_node_t *node)
+{
+    prte_session_t *sess;
+    uint32_t alloc_id;
+
+    if (NULL == node) {
+        return NULL;
+    }
+    sess = node->session;
+    if (NULL == sess && node_alloc_id(node, &alloc_id)) {
+        sess = prte_get_session_object(alloc_id);
+        if (NULL != sess && !session_holds_node(sess, node)) {
+            return NULL;
+        }
+    }
+    if (NULL == sess || PMIX_RANK_INVALID == sess->requestor.rank) {
+        return NULL;
+    }
+    return sess;
+}
+
+/* Add a requester to a campaign unless already listed. On failure the campaign
+ * keeps what it had, costing one requester its event rather than the launch. */
+static int campaign_add_requester(prte_grow_campaign_t *camp, prte_session_t *sess)
+{
+    prte_grow_requester_t *tmp;
+    int r;
+
+    for (r = 0; r < camp->nrequesters; r++) {
+        const char *a = camp->requesters[r].alloc_id, *b = sess->alloc_refid;
+
+        if (!PMIX_CHECK_PROCID(&camp->requesters[r].requester, &sess->requestor)) {
+            continue;
+        }
+        /* one process may have several grows here, so the allocation
+         * distinguishes them */
+        if ((NULL == a && NULL == b) || (NULL != a && NULL != b && 0 == strcmp(a, b))) {
+            return PRTE_SUCCESS;
+        }
+    }
+
+    tmp = (prte_grow_requester_t *) realloc(camp->requesters,
+                                            (camp->nrequesters + 1) * sizeof(*tmp));
+    if (NULL == tmp) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    camp->requesters = tmp;
+    tmp = &camp->requesters[camp->nrequesters];
+    PMIX_XFER_PROCID(&tmp->requester, &sess->requestor);
+    tmp->alloc_id = (NULL != sess->alloc_refid) ? strdup(sess->alloc_refid) : NULL;
+    tmp->req_id = (NULL != sess->user_refid) ? strdup(sess->user_refid) : NULL;
+    camp->nrequesters++;
+
+    return PRTE_SUCCESS;
+}
+
 int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
 {
     prte_node_t *node, *nptr;
@@ -2298,7 +2389,7 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
     bool have_grow_requester = false;
     pmix_rank_t vpid;
     pmix_proc_t grow_requester;
-    char *grow_alloc_id = NULL, *grow_req_id = NULL;
+    const char *grow_alloc_id = NULL, *grow_req_id = NULL;
     /* the vpids THIS pass assigned, recorded as they are handed out (elastic
      * mode only - they are what a grow campaign must name) */
     pmix_rank_t *new_vpids = NULL;
@@ -2397,11 +2488,11 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
          * timeout on an operation that had in fact already succeeded. */
         grow_request = true;
         PMIX_LIST_FOREACH(nptr, &nodes, prte_node_t) {
-            if (NULL != nptr->session &&
-                PMIX_RANK_INVALID != nptr->session->requestor.rank) {
-                PMIX_XFER_PROCID(&grow_requester, &nptr->session->requestor);
-                grow_alloc_id = nptr->session->alloc_refid;
-                grow_req_id = nptr->session->user_refid;
+            prte_session_t *sess = grow_requester_session(nptr);
+            if (NULL != sess) {
+                PMIX_XFER_PROCID(&grow_requester, &sess->requestor);
+                grow_alloc_id = sess->alloc_refid;
+                grow_req_id = sess->user_refid;
                 have_grow_requester = true;
                 break;
             }
@@ -2938,37 +3029,52 @@ process:
         gcamp->targets = new_vpids;
         new_vpids = NULL;
         n_new_vpids = 0;
-        /* Record the requester for the spec's phase-two completion event.  The
-         * RAS reservation machinery sets each reserved node's ->session
-         * backpointer (add_nodes_to_session), and that session carries the
-         * requestor and the allocation ids.
+        /* Every requester this campaign answers for, from ALL the targets.
          *
-         * Scan ALL the targets for the first one carrying a requestor rather
-         * than trusting the first: a grow launches a daemon onto every node
-         * that lacks one, which is not necessarily limited to the nodes this
-         * request reserved.  In particular a node that was shrunk out of the
-         * DVM reverts to the default pool with its ->session cleared, and the
-         * next grow re-absorbs it - taking the lowest new vpid, and hence the
-         * daemon_vpid_start slot.  Reading only that node left the campaign
-         * with no requester, so a perfectly successful grow emitted no
-         * completion event at all and the requester waited forever.
+         * Not just the first: a grow launches onto every node lacking a daemon,
+         * which need not be limited to the nodes one request brought in, and a
+         * campaign can cover several grows outright - activating a grow only
+         * posts LAUNCH_DAEMONS, so two requests granted in the same breath are
+         * swept into one campaign and both must be answered.
          *
-         * The initial DVM bring-up and a scheduler-driven push have no
-         * requestor on any node (the default session, or an invalid requestor
-         * rank), so have_requester stays false and grow_drain() emits no event
-         * for them - which is correct, as nobody asked for those. */
+         * The initial bring-up and a scheduler-driven push name no requestor,
+         * so the list stays empty and grow_drain() emits nothing. */
         {
-            int gt;
-            for (gt = 0; gt < gcamp->ntargets && !gcamp->have_requester; gt++) {
+            int gt, arc;
+            uint32_t alloc_id, answered_alloc_id = 0;
+            bool have_answered_alloc_id = false;
+
+            for (gt = 0; gt < gcamp->ntargets; gt++) {
                 prte_proc_t *dproc = (prte_proc_t *)
                     pmix_pointer_array_get_item(daemons->procs, gcamp->targets[gt]);
-                prte_session_t *sess =
-                    (NULL != dproc && NULL != dproc->node) ? dproc->node->session : NULL;
-                if (NULL != sess && PMIX_RANK_INVALID != sess->requestor.rank) {
-                    PMIX_XFER_PROCID(&gcamp->requester, &sess->requestor);
-                    gcamp->alloc_id = (NULL != sess->alloc_refid) ? strdup(sess->alloc_refid) : NULL;
-                    gcamp->req_id = (NULL != sess->user_refid) ? strdup(sess->user_refid) : NULL;
-                    gcamp->have_requester = true;
+                prte_node_t *tnode = (NULL != dproc) ? dproc->node : NULL;
+                prte_session_t *sess;
+
+                if (NULL == tnode) {
+                    continue;
+                }
+                /* The targets of one grow share an allocation, and the campaign
+                 * holds one entry per requester, so a target naming an
+                 * allocation already answered for cannot change the outcome.
+                 * Skipping it keeps this off a per-target walk of that session's
+                 * node array, which is quadratic in the size of the grow. */
+                if (NULL == tnode->session && have_answered_alloc_id
+                    && node_alloc_id(tnode, &alloc_id)
+                    && alloc_id == answered_alloc_id) {
+                    continue;
+                }
+                sess = grow_requester_session(tnode);
+                if (NULL == sess) {
+                    continue;
+                }
+                arc = campaign_add_requester(gcamp, sess);
+                if (PRTE_SUCCESS != arc) {
+                    PRTE_ERROR_LOG(arc);
+                    continue;
+                }
+                if (NULL == tnode->session && node_alloc_id(tnode, &alloc_id)) {
+                    answered_alloc_id = alloc_id;
+                    have_answered_alloc_id = true;
                 }
             }
         }
@@ -3124,6 +3230,7 @@ void prte_plm_base_abort_premap_held(void)
 void prte_plm_base_grow_drain(bool success)
 {
     prte_grow_campaign_t *camp;
+    int r;
 
     /* Resolve all in-progress grow campaigns at once and drop their entire
      * contribution from the launch fence.  This is called from exactly the
@@ -3135,12 +3242,13 @@ void prte_plm_base_grow_drain(bool success)
     while (NULL != (camp = (prte_grow_campaign_t *)
                                pmix_list_remove_first(&prte_grow_campaigns))) {
         prte_dvm_launch_fence -= camp->ntargets;
-        if (camp->have_requester) {
+        for (r = 0; r < camp->nrequesters; r++) {
             /* the specific daemon-failure status is not threaded down to this
              * layer yet, so report a generic cause on failure (reconcile by
              * passing the dying daemon's status as a follow-up) */
-            prte_plm_base_dvm_mod_notify(&camp->requester, camp->alloc_id,
-                                         camp->req_id, success,
+            prte_plm_base_dvm_mod_notify(&camp->requesters[r].requester,
+                                         camp->requesters[r].alloc_id,
+                                         camp->requesters[r].req_id, success,
                                          success ? PMIX_SUCCESS : PMIX_ERROR);
         }
         PMIX_RELEASE(camp);
@@ -3316,7 +3424,7 @@ static void grow_rollback(prte_grow_campaign_t *camp, pmix_rank_t trigger)
 bool prte_plm_base_grow_target_failed(pmix_rank_t rank)
 {
     prte_grow_campaign_t *camp;
-    int t;
+    int t, r;
 
     /* Outside elastic mode there are no grow campaigns and the daemon loss is
      * the errmgr's to handle exactly as it always has — never report it as
@@ -3341,11 +3449,13 @@ bool prte_plm_base_grow_target_failed(pmix_rank_t rank)
             pmix_list_remove_item(&prte_grow_campaigns, &camp->super);
             prte_dvm_launch_fence -= camp->ntargets;
             grow_rollback(camp, rank);
-            if (camp->have_requester) {
+            for (r = 0; r < camp->nrequesters; r++) {
                 /* the specific daemon-failure status is not threaded down to
                  * this layer yet, so report a generic cause */
-                prte_plm_base_dvm_mod_notify(&camp->requester, camp->alloc_id,
-                                             camp->req_id, false, PMIX_ERROR);
+                prte_plm_base_dvm_mod_notify(&camp->requesters[r].requester,
+                                             camp->requesters[r].alloc_id,
+                                             camp->requesters[r].req_id,
+                                             false, PMIX_ERROR);
             }
             PMIX_RELEASE(camp);
             /* any grow failure fails the whole pre-map held-job set */
