@@ -39,6 +39,15 @@ PRTE_EXPORT int prte_dt_init(void);
 
 PRTE_EXPORT int prte_preload_default_mca_params(void);
 
+/**
+ * Register the parameters that locate PRRTE's MCA parameter files.
+ *
+ * Must run before prte_preload_default_mca_params(), which reads them;
+ * prte_register_params() registers everything else afterwards.  See the
+ * comment on the implementation in prte_mca_params.c.
+ */
+PRTE_EXPORT int prte_register_paramfile_params(void);
+
 END_C_DECLS
 
 #endif /* PRTE_RUNTIME_INTERNALS_H */

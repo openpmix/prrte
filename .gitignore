@@ -58,6 +58,8 @@ test/unit/rmaps/Makefile
 test/unit/rmaps/test_rmaps
 test/unit/runtime/Makefile
 test/unit/runtime/test_runtime
+# written and removed by test_runtime; left behind only if it dies partway
+test/unit/runtime/test_runtime_mca_params.conf
 test/unit/errmgr/Makefile
 test/unit/errmgr/test_errmgr
 test/unit/ess/Makefile

@@ -21,7 +21,7 @@ Five separable things share the directory:
 |------|-------|------------|
 | **Object model & globals** | `prte_globals.[ch]` | The three central data structures (`prte_job_t`, `prte_node_t`, `prte_proc_t`), plus `prte_session_t`, `prte_app_context_t`, `prte_topology_t`, the launch-fence campaign objects — their class instances, and the global registries (`prte_job_data`, `prte_node_pool`, `prte_sessions`, ...) with the lookup functions over them. |
 | **Lifecycle** | `prte_init.c`, `prte_finalize.c`, `prte_quit.[ch]`, `prte_locks.[ch]` | The three-stage startup (`prte_init_minimum` → `prte_init_util` → `prte_init`), teardown, the "stop looping the event base" path, and the one-shot mutexes that keep re-entrant shutdown from bouncing. |
-| **MCA parameters** | `prte_mca_params.c` | `prte_register_params()` — every `prte_*` MCA variable, registered once. |
+| **MCA parameters** | `prte_mca_params.c` | `prte_register_paramfile_params()` — the parameters naming the MCA parameter files, registered ahead of those files being read — and `prte_register_params()`, every other `prte_*` MCA variable, registered once afterwards. |
 | **Threads & timers** | `prte_progress_threads.[ch]`, `prte_wait.[ch]` | Named progress threads (event base + engine thread + refcount), the SIGCHLD/waitpid plumbing, and the `PRTE_DETECT_TIMEOUT`/`PRTE_TIMER_EVENT` macros. |
 | **Sub-directories** | [`data_server/`](data_server/AGENTS.md), [`data_type_support/`](data_type_support/AGENTS.md) | The PMIx publish/lookup service, and the pack/unpack/copy/print functions for the objects above. Each has its own AGENTS.md. |
 
@@ -34,7 +34,8 @@ Tools do not all need the same amount of runtime, and some of them need a
 
 ```
 prte_init_minimum()   PMIx version check, installdirs, MCA var system,
-                      prte_register_params(), MCA param files preloaded.
+                      prte_register_paramfile_params(), MCA param files
+                      preloaded, bootstrap params, prte_register_params().
                       No event base, no frameworks, no globals.
         │
         ▼
@@ -61,6 +62,23 @@ own `passed_thru` guard because `mpirun` reaches it twice.
   That is why the bootstrap daemon has to publish the DVM-wide parameters it
   reads out of `prte.conf` (`prte_ess_base_bootstrap_params()`) *before*
   `prte_register_params()` runs, and why that call sits where it does.
+- **Registration is in two phases, and the order is load-bearing.** The MCA
+  parameter files are applied by publishing their contents into the
+  environment (`prte_preload_default_mca_params()` — it never touches the
+  variable system directly), so by the rule above, anything registered
+  *before* the preload reads an environment that does not yet hold the files'
+  values and ignores the file entirely. Every `prte_*` parameter used to do
+  exactly that, along with all of RML, OOB and grpcomm — the same file could
+  set `plm_ssh_num_concurrent` (registered later, at framework open) and be
+  obeyed, and set `rml_base_radix` and be ignored. Swapping the two calls is
+  not the fix, because `prte_param_files` and `prte_override_param_file` are
+  themselves MCA parameters and say which files to read. So
+  `prte_register_paramfile_params()` registers just those (plus
+  `prte_suppress_override_warning` and `prte_bootstrap`, which
+  `prte_init_minimum` acts on before phase two), the files are preloaded, and
+  `prte_register_params()` registers everything else afterwards. **Register a
+  new parameter in phase two** unless it is needed to find the files — a
+  parameter registered in phase one cannot be set from a parameter file.
 - The global arrays (`prte_job_data`, `prte_node_pool`, `prte_sessions`,
   `prte_node_topologies`) are **NULL** until `prte_init()`. Any function
   reachable from a tool or a parser has to tolerate that.
@@ -278,7 +296,11 @@ map with more nodes than one array block, and the refcount arithmetic when
 both maps are released), the pack/unpack round trips for job/app/proc/node/map
 and the GLOBAL-vs-LOCAL attribute split, object lifetimes and the borrowed
 backpointer contract, the exit-status macros, the data server's range checks
-and object construction, and the progress-thread cpu parser and lifecycle.
+and object construction, the progress-thread cpu parser and lifecycle, and
+the two-phase parameter registration (it writes a parameter file and points
+`prte_param_files` at it *before* calling `prte_init_util`, then checks that
+a core `prte_*` parameter and an RML one came back carrying the file's
+values).
 
 It builds the global arrays by hand (`prte_init_util` does not) and calls
 `PMIx_server_init` because `PMIx_Data_pack` refuses to run until PMIx is up.

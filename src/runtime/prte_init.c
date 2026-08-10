@@ -306,12 +306,48 @@ int prte_init_minimum(void)
         return ret;
     }
 
+    /* Registration happens in two phases, and the order below is the whole
+     * point of splitting it: an MCA variable evaluates its environment exactly
+     * once, when it is first registered, and the parameter files are applied
+     * by publishing their contents into the environment.  So anything
+     * registered before that publication would ignore the files entirely -
+     * which is precisely what every prte_* parameter used to do.
+     *
+     * Phase one therefore registers only the parameters that say where the
+     * files are (they cannot come from the files they locate); the files are
+     * then read; and everything else is registered afterwards, so it sees an
+     * environment that already carries the files' values.  The install
+     * directories - and thus the default config-file path - are known by now,
+     * so this is the earliest point at which any of it can run. */
+    ret = prte_register_paramfile_params();
+    if (PRTE_SUCCESS != ret) {
+        if (PRTE_ERR_SILENT != ret) {
+            prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
+                           "prte register paramfile params", PRTE_ERROR_NAME(ret), ret);
+        }
+        return 1;
+    }
+
+    /* pre-load any default mca param files. A malformed file has to be
+     * fatal: the values in it steer component selection and launch, so
+     * silently carrying on with a partial set - which is what discarding
+     * this return did - starts a DVM configured differently from what the
+     * files say. */
+    ret = prte_preload_default_mca_params();
+    if (PRTE_SUCCESS != ret) {
+        if (PRTE_ERR_SILENT != ret) {
+            prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
+                           "prte preload mca params", PRTE_ERROR_NAME(ret), ret);
+        }
+        return ret;
+    }
+
     /* A bootstrapping daemon must publish the DVM-wide MCA parameters it reads
-     * from prte.conf before those parameters are first registered below (an
-     * MCA variable evaluates its environment only on first registration).  The
-     * install directories - and thus the config-file path - are known by now,
-     * so this is the earliest correct point.  prte_bootstrap_setup is set from
-     * the argument vector in prted before prte_init_util was called. */
+     * from prte.conf before those parameters are first registered below.  It
+     * runs after the param files so that its own overwrite=true settings win
+     * over them, as a DVM-wide configuration must.  prte_bootstrap_setup comes
+     * either from the argument vector (prted sets it before prte_init_util was
+     * called) or from the parameter registered in phase one above. */
     if (prte_bootstrap_setup) {
         if (PRTE_SUCCESS != (ret = prte_ess_base_bootstrap_params())) {
             if (PRTE_ERR_SILENT != ret) {
@@ -330,20 +366,6 @@ int prte_init_minimum(void)
                            PRTE_ERROR_NAME(ret), ret);
         }
         return 1;
-    }
-
-    /* pre-load any default mca param files. A malformed file has to be
-     * fatal: the values in it steer component selection and launch, so
-     * silently carrying on with a partial set - which is what discarding
-     * this return did - starts a DVM configured differently from what the
-     * files say. */
-    ret = prte_preload_default_mca_params();
-    if (PRTE_SUCCESS != ret) {
-        if (PRTE_ERR_SILENT != ret) {
-            prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
-                           "prte preload mca params", PRTE_ERROR_NAME(ret), ret);
-        }
-        return ret;
     }
 
     return PRTE_SUCCESS;

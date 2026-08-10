@@ -57,7 +57,9 @@
 
 #include "prte_config.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "constants.h"
 #include "types.h"
@@ -67,6 +69,8 @@
 #include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/pmix/pmix-internal.h"
+#include "src/rml/oob/oob.h"
+#include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_progress_threads.h"
 #include "src/runtime/runtime.h"
@@ -1257,6 +1261,70 @@ static int test_progress_thread_cpus(void)
     return failures;
 }
 
+/* ------------------------------------------------------------------ */
+/* MCA parameter files                                                */
+/* ------------------------------------------------------------------ */
+
+/* The parameter files are applied by publishing their contents into the
+ * environment, and an MCA variable reads its environment exactly once, when
+ * it is first registered.  So the registration of everything that is not
+ * itself needed to *find* the files has to happen after they are read.  It
+ * did not: prte_init_minimum() registered every prte_* parameter - plus all
+ * of RML, OOB and grpcomm - before preloading the files, so a value set in
+ * mca-params.conf was read, published, and then ignored by the variable it
+ * named.  The same line in the same file was honored or not depending only
+ * on whether the variable behind it happened to be registered here or later,
+ * at framework open.
+ *
+ * setup_paramfile() below runs before prte_init_util(), so the whole
+ * ordering is what is under test.
+ */
+static const char *paramfile = "test_runtime_mca_params.conf";
+static bool paramfile_written = false;
+
+static void setup_paramfile(void)
+{
+    FILE *fp;
+
+    fp = fopen(paramfile, "w");
+    if (NULL == fp) {
+        /* nothing to test against, and not worth failing the suite over -
+         * test_paramfile_ordering reports the skip */
+        return;
+    }
+    /* one core prte_* parameter, and one from each of the two subsystems
+     * prte_register_params() registers on its way out */
+    fprintf(fp, "# written by test_runtime\n");
+    fprintf(fp, "prte_max_msg_size = 55\n");
+    fprintf(fp, "rml_base_radix = 3\n");
+    fprintf(fp, "prte_uniform_nodes = 1\n");
+    fclose(fp);
+    paramfile_written = true;
+
+    /* replace the default list (the developer's own ~/.prte/mca-params.conf
+     * must not be able to influence this) */
+    setenv("PRTE_MCA_prte_param_files", paramfile, 1);
+}
+
+static int test_paramfile_ordering(void)
+{
+    int failures = 0;
+
+    if (!paramfile_written) {
+        fprintf(stderr, "SKIP [paramfile]: could not write %s\n", paramfile);
+        return 0;
+    }
+
+    /* registered in prte_register_params() itself */
+    CHECK("paramfile: a core prte_* param takes the file's value",
+          55 == prte_oob_base.max_msg_size);
+    CHECK("paramfile: a bool param takes the file's value", prte_homo_nodes);
+    /* registered by prte_rml_register(), on the way out of the same call */
+    CHECK("paramfile: an rml param takes the file's value", 3 == prte_rml_base.radix);
+
+    return failures;
+}
+
 static int test_progress_thread_lifecycle(void)
 {
     int failures = 0;
@@ -1305,6 +1373,10 @@ int main(void)
 {
     int rc, failures = 0;
     pmix_status_t prc;
+
+    /* must precede prte_init_util: it is the parameter-file handling inside
+     * prte_init_minimum() that is under test */
+    setup_paramfile();
 
     rc = prte_init_util(PRTE_PROC_MASTER);
     if (PRTE_SUCCESS != rc) {
@@ -1355,6 +1427,11 @@ int main(void)
     failures += test_data_server_range();
     failures += test_progress_thread_cpus();
     failures += test_progress_thread_lifecycle();
+    failures += test_paramfile_ordering();
+
+    if (paramfile_written) {
+        unlink(paramfile);
+    }
 
     (void) pmix_mca_base_framework_close(&prte_ras_base_framework);
     prte_event_base_close();
