@@ -1177,6 +1177,7 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
     bool have_added_nodes = false;
     bool have_reused_nodes = false;
     bool resources_added = false;
+    bool requester_recorded = false;
     int added_node_count = 0;
     int reused_node_count = 0;
     
@@ -1257,6 +1258,7 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
         prte_session_t *session = prte_get_session_object_from_id(job_id);
         if (NULL != session) {
             PMIX_XFER_PROCID(&session->requestor, &req->tproc);
+            requester_recorded = true;
         }
     }
 
@@ -1332,6 +1334,17 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
     /* Launch daemons on the newly secured resources */
     if (PMIX_SUCCESS == req->pstatus) {
         prte_ras_base_activate_dvm_grow();
+
+        /* A grant is not usable nodes, so the campaign's PMIX_DVM_IS_READY is
+         * the answer, as it is for a release. Only where that event can
+         * arrive: outside elastic mode no campaign is recorded, so the grant
+         * stays the answer. Unlike serve_release_req the extend does not
+         * refuse there - it has already done what was asked of Slurm. */
+#if PRTE_HAVE_DVM_MOD_EVENTS
+        if (prte_elastic_mode && requester_recorded) {
+            req->pstatus = PMIX_OPERATION_IN_PROGRESS;
+        }
+#endif
     }
 
     /* Execute callback if necessary */
