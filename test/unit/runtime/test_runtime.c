@@ -963,8 +963,8 @@ static int test_object_lifetimes(void)
               NULL == sc->targets && NULL == sc->alloc_id && NULL == sc->req_id
                   && 0 == sc->ntargets && !sc->have_requester);
         CHECK("lifetime: grow campaign starts empty",
-              NULL == gc->targets && NULL == gc->alloc_id && NULL == gc->req_id
-                  && 0 == gc->ntargets && !gc->have_requester);
+              NULL == gc->targets && NULL == gc->requesters
+                  && 0 == gc->ntargets && 0 == gc->nrequesters);
         /* destructing an untouched campaign must not free garbage */
         PMIX_RELEASE(sc);
         PMIX_RELEASE(gc);

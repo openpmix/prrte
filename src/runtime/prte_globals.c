@@ -107,16 +107,19 @@ static void grow_campaign_construct(prte_grow_campaign_t *p)
 {
     p->targets = NULL;
     p->ntargets = 0;
-    PMIX_PROC_LOAD(&p->requester, NULL, PMIX_RANK_INVALID);
-    p->alloc_id = NULL;
-    p->req_id = NULL;
-    p->have_requester = false;
+    p->requesters = NULL;
+    p->nrequesters = 0;
 }
 static void grow_campaign_destruct(prte_grow_campaign_t *p)
 {
+    int r;
+
     free(p->targets);
-    free(p->alloc_id);
-    free(p->req_id);
+    for (r = 0; r < p->nrequesters; r++) {
+        free(p->requesters[r].alloc_id);
+        free(p->requesters[r].req_id);
+    }
+    free(p->requesters);
 }
 PMIX_CLASS_INSTANCE(prte_grow_campaign_t, pmix_list_item_t,
                     grow_campaign_construct, grow_campaign_destruct);
