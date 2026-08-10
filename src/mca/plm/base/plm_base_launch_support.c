@@ -2067,9 +2067,6 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
     };
 
     /* check for debug flags */
-    if (prte_debug_flag) {
-        pmix_argv_append(argc, argv, "--debug");
-    }
     if (prte_debug_daemons_flag) {
         pmix_argv_append(argc, argv, "--debug-daemons");
     }

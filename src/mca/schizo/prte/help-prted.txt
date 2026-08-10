@@ -41,10 +41,6 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | Option               | Description                                   |
 |======================|===============================================|
-| "--debug"            | Top-level PRTE debug switch (default: false). |
-|                      | This option will be deprecated, use "--debug- |
-|                      | devel" instead.                               |
-+----------------------+-----------------------------------------------+
 | "--debug-daemons-    | Enable debugging of any PRTE daemons used by  |
 | file"                | this application, storing output in files     |
 +----------------------+-----------------------------------------------+

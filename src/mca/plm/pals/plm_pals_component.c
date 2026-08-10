@@ -92,9 +92,6 @@ static int plm_pals_register(void)
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_mca_plm_pals_component.debug);
 
-    if (prte_mca_plm_pals_component.debug == 0) {
-        prte_mca_plm_pals_component.debug = prte_debug_flag;
-    }
 
     prte_mca_plm_pals_component.priority = 100;
     (void) pmix_mca_base_component_var_register(comp, "priority", "Default selection priority",

@@ -96,7 +96,7 @@ exit command; `plm_pals_signal_job` signals `palsrun` directly via
 | `priority` (100) | Selection priority (`plm_pals_priority`). |
 | `aprun_cmd` (`"aprun"`) | Launcher command (`plm_pals_aprun`) — override for wrappers. |
 | `custom_args` | Extra aprun args (`plm_pals_args`). |
-| `debug` | Verbose launcher debugging (`plm_pals_debug`); defaults to `prte_debug_flag`. |
+| `debug` | Verbose launcher debugging (`plm_pals_debug`). |
 
 ---
 

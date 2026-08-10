@@ -47,7 +47,6 @@ PRTE_EXPORT extern const char prte_version_string[];
 PRTE_EXPORT extern bool prte_initialized;
 PRTE_EXPORT extern bool prte_finalizing;
 PRTE_EXPORT extern int prte_debug_output;
-PRTE_EXPORT extern bool prte_debug_flag;
 PRTE_EXPORT extern int prte_cache_line_size;
 
 /**

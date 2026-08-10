@@ -265,7 +265,7 @@ int prte_session_dir(pmix_proc_t *proc)
         }
     }
 
-    if (prte_debug_flag) {
+    if (prte_debug_daemons_flag) {
         pmix_output(0, "jobdir: %s", PRTE_PRINTF_FIX_STRING(jdata->session_dir));
         pmix_output(0, "top: %s", PRTE_PRINTF_FIX_STRING(prte_process_info.top_session_dir));
         pmix_output(0, "tmp: %s", PRTE_PRINTF_FIX_STRING(prte_process_info.tmpdir_base));

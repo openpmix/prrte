@@ -243,7 +243,7 @@ int prte_dt_init(void)
     prte_debug_output = pmix_output_open(NULL);
 
     /* open up the verbose output for PRTE debugging */
-    if (prte_debug_flag || 0 < prte_debug_verbosity
+    if (0 < prte_debug_verbosity
         || (prte_debug_daemons_flag && (PRTE_PROC_IS_DAEMON || PRTE_PROC_IS_MASTER))) {
         if (0 < prte_debug_verbosity) {
             pmix_output_set_verbosity(prte_debug_output, prte_debug_verbosity);

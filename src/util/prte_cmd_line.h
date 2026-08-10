@@ -81,7 +81,11 @@ BEGIN_C_DECLS
 #define PRTE_CLI_KEEPALIVE              "keepalive"                 // required
 #define PRTE_CLI_LAUNCH_AGENT           "launch-agent"              // required
 #define PRTE_CLI_MAX_VM_SIZE            "max-vm-size"               // required
-#define PRTE_CLI_DEBUG                  "debug"                     // none
+/* NOTE: "--debug" is accepted only as a deprecated no-op (the option
+ * tables carry it as a literal in their deprecated sections, and
+ * convert_deprecated_cli warns and drops it).  There is deliberately no
+ * PRTE_CLI_DEBUG here: a canonical name would invite a new consumer for
+ * an option no tool acts on. */
 #define PRTE_CLI_DEBUG_DAEMONS          "debug-daemons"             // none
 #define PRTE_CLI_DEBUG_DAEMONS_FILE     "debug-daemons-file"        // none
 #define PRTE_CLI_LEAVE_SESSION_ATTACHED "leave-session-attached"    // none

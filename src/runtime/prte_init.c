@@ -92,7 +92,6 @@
  */
 bool prte_initialized = false;
 bool prte_finalizing = false;
-bool prte_debug_flag = false;
 int prte_debug_verbosity = -1;
 char *prte_prohibited_session_dirs = NULL;
 bool prte_create_session_dirs = true;
