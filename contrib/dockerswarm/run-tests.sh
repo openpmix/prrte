@@ -4505,6 +4505,91 @@ test_rml() {
         bad "could not start a DVM for the lost-daemon test"
     fi
     cleanup_swarm
+
+    banner "rml/oob: peer sockets serviced by dedicated OOB progress threads"
+    # prte_oob_progress_threads (default 0) moves each peer's send/recv socket
+    # events off the main progress thread onto one of N worker bases, chosen
+    # round-robin at peer construction.  The connection state machine, routing,
+    # message delivery and every send completion stay on the main thread.  This
+    # is the only place that threaded path runs at all, so all four things it
+    # could break are checked here rather than assumed.
+    cleanup_swarm
+
+    # (a) the parameter has to reach the *daemons*, not just the HNP -- the
+    # whole point is remote sockets.  oob_base_verbose 5 makes each daemon
+    # announce the pool it built; --leave-session-attached is what gets a
+    # prted's stderr back to us.
+    out=$(RUN 'timeout -k 5 90 prterun --prtemca prte_oob_progress_threads 4 \
+                  --prtemca oob_base_verbose 5 --leave-session-attached \
+                  --host node1:1,node2:1,node3:1 -np 3 --map-by node hostname' 2>&1)
+    n=$(echo "$out" | grep -c 'starting 4 OOB progress threads')
+    [ "$n" -ge 2 ] \
+        && ok "the daemons started their OOB progress-thread pools ($n reported)" \
+        || bad "the thread pool was not built on the daemons: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    cleanup_swarm
+
+    # (b) a relayed tree still delivers.  radix 2 over 7 nodes means every leaf
+    # is reached through an interior daemon, so a message crosses a worker base
+    # on the way in (recv handler) and again on the way out (relay -> send).
+    out=$(RUN 'timeout -k 5 120 prterun --prtemca rml_base_radix 2 \
+                  --prtemca prte_oob_progress_threads 4 \
+                  --host node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1 \
+                  -np 7 --map-by node hostname' 2>&1); rc=$?
+    n=$(echo "$out" | grep -cE '^node[1-7]$')
+    [ "$rc" = 0 ] && [ "$n" = 7 ] \
+        && ok "7 procs relayed across a radix-2 tree with worker bases" \
+        || bad "worker bases broke the relay (rc=$rc, lines=$n): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    cleanup_swarm
+
+    # (c) the partial-write/partial-read bookkeeping is per-peer state that a
+    # second thread is exactly what could corrupt, and a byte count is the only
+    # check that catches a corrupted one -- a truncated relay still "runs".
+    out=$(RUN 'timeout -k 5 120 prterun --prtemca rml_base_radix 2 \
+                  --prtemca prte_oob_progress_threads 4 \
+                  --host node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1 \
+                  -np 7 --map-by node \
+                  sh -c "head -c 500000 /dev/zero | tr \"\\0\" \"x\""' 2>&1)
+    n=$(echo "$out" | tr -cd 'x' | wc -c | tr -d ' ')
+    [ "$n" = 3500000 ] \
+        && ok "3.5 MB relayed intact with the sockets on worker bases" \
+        || bad "worker bases truncated the payload (got $n bytes of 3500000)"
+    cleanup_swarm
+
+    # (d) the race the design is actually exposed to: prte_oob_tcp_peer_close
+    # runs on the main thread while a worker may be inside that peer's send or
+    # recv handler.  Killing a daemon under a live job is what drives it.  A
+    # missed handshake there is a hang, a use-after-free, or a leaked send --
+    # so the observable is that the job is released and the HNP lives.
+    # Deliberately at the default radix, matching the non-threaded case above:
+    # a *small* radix does not release the job on a daemon loss even with no
+    # worker threads at all, so adding one here would only re-report that.
+    if prted_dvm_start_mca 'node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1' \
+           '--prtemca prte_oob_progress_threads 4'; then
+        PRUN_BG /tmp/rml-thr-longrun.out '--host node7:1 -n 1 sleep 120'
+        sleep 6
+        if ! RUN 'pgrep -x prun' >/dev/null 2>&1; then
+            bad "the long-running job never started under worker bases: $(RUN 'cat /tmp/rml-thr-longrun.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+        elif ! ON 7 'pgrep -x prted' >/dev/null 2>&1; then
+            bad "node7 has no daemon to kill -- the job did not land where expected"
+        else
+            ON 7 'pkill -9 -x prted' >/dev/null 2>&1
+            n=0
+            while [ "$n" -lt 45 ]; do
+                RUN 'pgrep -x prun' >/dev/null 2>&1 || break
+                sleep 1; n=$((n+1))
+            done
+            [ "$n" -lt 45 ] \
+                && ok "peer_close raced a worker handler and still released the job (${n}s)" \
+                || bad "prun never returned after its daemon died with worker bases on"
+            RUN 'pgrep -x prte' >/dev/null 2>&1 \
+                && ok "...and the HNP survived" \
+                || bad "the HNP died along with the lost daemon"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM with OOB progress threads"
+    fi
+    cleanup_swarm
 }
 
 ########################################################################
