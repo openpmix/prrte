@@ -62,8 +62,8 @@ this file exist.
 
 ```
 prte_tool_basename / prte_tool_actual     <- identity, before anything can report an error
-prte_init_minimum()                       <- installdirs; NEEDED to find help files
 prte_schizo_base_parse_prte/_pmix()       <- pre-scan argv for --prtemca/--pmixmca
+prte_init_minimum()                       <- installdirs, MCA infrastructure, prte_register_params()
 prte_init_util(<proc type>)               <- output system, hostname, backtrace
 schizo framework open + select
 prte_schizo_base_detect_proxy(personality)<- which personality parses our CLI
@@ -71,12 +71,24 @@ schizo->parse_cli(argv, &results, ...)    <- everything else reads `results`
 ... tool-specific work ...
 ```
 
-- **MCA parameters must be pre-scanned before `prte_init_util`.** An MCA
-  variable reads its environment exactly once, at first registration, and
-  that happens inside `prte_init_util`. This is why every tool calls
-  `prte_schizo_base_parse_prte()`/`_pmix()` on the raw argv *first* —
-  and why `prted` additionally hunts for `--bootstrap` by hand before the
-  CLI is parsed at all (see [`prted/AGENTS.md`](prted/AGENTS.md)).
+- **MCA parameters must be pre-scanned before anything registers them.**
+  An MCA variable reads its environment exactly once, at first
+  registration, and that happens in `prte_register_params()` — which
+  runs inside **`prte_init_minimum()`**, not `prte_init_util()`
+  (`prte_init_util()` merely calls `prte_init_minimum()` if nobody has
+  yet). So `prte_schizo_base_parse_prte()`/`_pmix()`, which are what
+  turn `--prtemca`/`--pmixmca` into environment variables, must run on
+  the raw argv *before* either init call — and `prted` additionally
+  hunts for `--bootstrap` by hand before the CLI is parsed at all (see
+  [`prted/AGENTS.md`](prted/AGENTS.md)).
+
+  A tool that calls `prte_init_minimum()` early "just for the install
+  dirs" silently loses every global `prte_*` parameter the user set on
+  the command line: they are registered against an environment that
+  does not have them yet. `prun` did exactly that, so
+  `prun --prtemca prte_keep_fqdn_hostnames 1` was accepted and ignored
+  while `--prtemca schizo_base_verbose 5` worked, because framework
+  parameters are registered later, when the framework opens.
 - **`detect_proxy` can return NULL** and every tool checks it. It also
   must fall back to the default personality — see
   [`../mca/schizo/AGENTS.md`](../mca/schizo/AGENTS.md).

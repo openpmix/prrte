@@ -121,19 +121,26 @@ int prun(int argc, char *argv[])
     /* every failure from here to the end of setup exits with 1: a PRRTE
      * error code is negative, and main() can only hand the shell the low
      * eight bits of whatever it returns */
-    rc = prte_init_minimum();
-    if (PRTE_SUCCESS != rc) {
-        return 1;
-    }
 
     /* because we have to use the schizo framework and init our hostname
      * prior to parsing the incoming argv for cmd line options, do a hacky
-     * search to support passing of impacted options (e.g., verbosity for schizo) */
+     * search to support passing of impacted options (e.g., verbosity for schizo).
+     *
+     * This MUST precede prte_init_minimum(): that is where
+     * prte_register_params() runs, and an MCA variable evaluates its
+     * environment only on its first registration - so a "--prtemca" value
+     * pushed into the environment after it has run is simply never seen.
+     * prte and prted order it this way for the same reason. */
     rc = prte_schizo_base_parse_prte(pargc, 0, pargv, NULL);
     if (PRTE_SUCCESS != rc) {
         return 1;
     }
     rc = prte_schizo_base_parse_pmix(pargc, 0, pargv, NULL);
+    if (PRTE_SUCCESS != rc) {
+        return 1;
+    }
+
+    rc = prte_init_minimum();
     if (PRTE_SUCCESS != rc) {
         return 1;
     }

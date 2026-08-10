@@ -26,7 +26,7 @@ What has to happen here:
 
 | Step | Why here |
 |------|----------|
-| identity, `prte_init_minimum`, MCA pre-scan, `prte_init_util(PRTE_PROC_TYPE_NONE)` | the standard tool startup; see [`../AGENTS.md`](../AGENTS.md) |
+| identity, MCA pre-scan, `prte_init_minimum`, `prte_init_util(PRTE_PROC_TYPE_NONE)` | the standard tool startup; see [`../AGENTS.md`](../AGENTS.md). The pre-scan comes **first**: `prte_init_minimum()` is where `prte_register_params()` runs, and a `--prtemca` value pushed into the environment after that is never seen. |
 | open an event base | `prun_common` needs one to exist |
 | schizo open/select, `normalize_argv`, `detect_proxy`, `parse_cli` | picks the personality and produces `results` |
 | the no-arguments case | `prun` alone prints usage and exits 1 |
