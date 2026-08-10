@@ -100,6 +100,11 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | "--daemonize"        | Daemonize the DVM daemons into the background |
 +----------------------+-----------------------------------------------+
+| "--exec-agent        | Executable to be used to start an application |
+| <path>"              | process. The resulting command will be        |
+|                      | "<path> app <app-argv>"; the path may contain |
+|                      | its own command line arguments                |
++----------------------+-----------------------------------------------+
 | "--forward-signals   | Comma-delimited list of the signals (names or |
 | <signals>"           | integers) to be forwarded, replacing the      |
 |                      | default set                                   |
@@ -187,6 +192,16 @@ Syntax in the file is:
 with one parameter and its associated value per line. Empty lines and
 lines beginning with the "#" character are ignored, as is any
 whitespace around the "=" character.
+#
+[exec-agent]
+
+Executable to be used to start an application process. The resulting
+command for starting an application process will be "<path> app
+<app-argv>". The path may contain its own command line arguments.
+
+Note that this can also be given as a runtime option (see "--help
+runtime-options"), and that "--runtime-options default-exec-agent"
+returns the job to the system default agent.
 #
 [uniform-nodes]
 

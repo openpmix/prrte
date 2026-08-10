@@ -41,6 +41,9 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | Option               | Description                                   |
 |======================|===============================================|
+| "--debug-daemons"    | Enable debug output from this daemon; also    |
+|                      | leaves the daemon's output streams open       |
++----------------------+-----------------------------------------------+
 | "--debug-daemons-    | Enable debugging of any PRTE daemons used by  |
 | file"                | this application, storing output in files     |
 +----------------------+-----------------------------------------------+
@@ -76,6 +79,13 @@ option to the help request as "--help <option>".
 | "--bootstrap"        | Self-construct the DVM based on a             |
 |                      | configuration file                            |
 +----------------------+-----------------------------------------------+
+| "--uniform-nodes"    | The allocation contains only one topology, so |
+|                      | optimize the launch for that scenario. This   |
+|                      | includes ensuring that all CPU allocations    |
+|                      | are the same on each node, that each node     |
+|                      | contains the same number of devices and       |
+|                      | topological layers, etc.                      |
++----------------------+-----------------------------------------------+
 | "--hetero-nodes"     | The allocation contains multiple topologies,  |
 |                      | so optimize the launch for that scenario. For |
 |                      | example, the scheduler could be allocating    |
@@ -90,6 +100,11 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | Option               | Description                                   |
 |======================|===============================================|
+| "--allow-run-as-     | Allow execution as root (**STRONGLY           |
+| root"                | DISCOURAGED**)                                |
++----------------------+-----------------------------------------------+
+| "--daemonize"        | Daemonize this "prted" into the background    |
++----------------------+-----------------------------------------------+
 | "--set-sid"          | Direct the DVM daemons to separate from the   |
 |                      | current session                               |
 +----------------------+-----------------------------------------------+
@@ -111,6 +126,52 @@ option to the help request as "--help <option>".
 
 Specify the URI of the DVM master, or the name of the file (specified
 as "file:filename") that contains that info
+#
+[allow-run-as-root]
+
+Allow execution as root **(STRONGLY DISCOURAGED)**.
+
+Running as root exposes the user to potentially catastrophic file
+system corruption and damage — e.g., if the user accidentally points
+the root of the session directory to a system required point, this
+directory and all underlying elements will be deleted upon job
+completion, thereby rendering the system inoperable.
+
+It is recognized that some environments (e.g., containers) may require
+operation as root, and that the user accepts the risks in those
+scenarios. Accordingly, one can override PRRTE's run-as-root
+protection by providing one of the following:
+
+* The "--allow-run-as-root" command line directive
+
+* Adding **BOTH** of the following environmental parameters:
+
+     * "PRTE_ALLOW_RUN_AS_ROOT=1"
+
+     * "PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1"
+
+Again, we recommend this only be done if absolutely necessary.
+#
+[daemonize]
+
+Daemonize this "prted" into the background, detaching it from the
+terminal that started it and closing its output streams. This is what
+the DVM controller normally directs a remotely-launched daemon to do;
+see "--help leave-session-attached" for the way to keep those streams
+open instead.
+#
+[debug-daemons]
+
+Debug daemon output enabled. This is a somewhat limited stream of
+information normally used to simply confirm that the daemons started.
+Includes leaving the output streams open.
+#
+[uniform-nodes]
+
+The allocation contains only one topology, so optimize the launch for
+that scenario. This includes ensuring that all CPU allocations are the
+same on each node, that each node contains the same number of devices
+and topological layers, etc.
 #
 [hetero-nodes]
 The allocation contains multiple topologies, so optimize the launch for

@@ -73,6 +73,10 @@ option to the help request as "--help <option>".
 | "--stop-in-app"      | Direct the specified processes to stop at an  |
 |                      | application-controlled location               |
 +----------------------+-----------------------------------------------+
+| "--no-aggregate-     | Do not aggregate help messages issued by      |
+| help"                | multiple processes - report each one as it is |
+|                      | received                                      |
++----------------------+-----------------------------------------------+
 
 +----------------------+-----------------------------------------------+
 |                      | Output Options                                |
@@ -146,14 +150,24 @@ option to the help request as "--help <option>".
 | "-H" | "--host       | List of hosts to invoke processes on          |
 | <hosts>"             |                                               |
 +----------------------+-----------------------------------------------+
+| "--add-host <hosts>" | List of hosts to add to the DVM prior to      |
+|                      | launching the given app                       |
++----------------------+-----------------------------------------------+
 | "--hostfile          | Provide a hostfile                            |
 | <filename>"          |                                               |
 +----------------------+-----------------------------------------------+
 | "--machinefile       | Provide a hostfile (synonym for "--hostfile") |
 | <filename>"          |                                               |
 +----------------------+-----------------------------------------------+
+| "--add-hostfile      | Provide a hostfile listing hosts to add to    |
+| <filename>"          | the DVM prior to launching the given app      |
++----------------------+-----------------------------------------------+
 | "--path <path>"      | PATH to be used to look for executables to    |
 |                      | start processes                               |
++----------------------+-----------------------------------------------+
+| "--prtemca <key>     | Pass context-specific PRRTE MCA parameters    |
+| <value>"             | ("key" is the parameter name; "value" is the  |
+|                      | parameter value)                              |
 +----------------------+-----------------------------------------------+
 | "--pmixmca <key>     | Pass context-specific PMIx MCA parameters;    |
 | <value>"             | they are considered global if only one        |
@@ -230,6 +244,10 @@ option to the help request as "--help <option>".
 |                      | disable (false) its internal library's GPU    |
 |                      | support                                       |
 +----------------------+-----------------------------------------------+
+| "--memory-alloc-     | Comma-delimited list of memory allocation     |
+| kinds <kinds>"       | kinds the application requires (passed to the |
+|                      | application's library via PMIx)               |
++----------------------+-----------------------------------------------+
 | "--alloc-id <val>"   | ID assigned by the host environment to the    |
 |                      | allocation to be used for mapping the job     |
 +----------------------+-----------------------------------------------+
@@ -239,6 +257,20 @@ option to the help request as "--help <option>".
 +----------------------+-----------------------------------------------+
 | "--session-id <val>" | ID of the session whose allocation is to      |
 |                      | be used for mapping the job                   |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | Fault Tolerance Options                       |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--enable-recovery"  | Enable recovery from process failure          |
+|                      | (default: disabled)                           |
++----------------------+-----------------------------------------------+
+| "--max-restarts      | Maximum number of times to restart a failed   |
+| <num>"               | process                                       |
++----------------------+-----------------------------------------------+
+| "--continuous"       | Job is to run until explicitly terminated     |
 +----------------------+-----------------------------------------------+
 
 +----------------------+-----------------------------------------------+
@@ -400,6 +432,16 @@ mapping the job.
 #include#help-hostfile.txt#host
 
 #
+[add-hostfile]
+
+#include#help-hostfile.txt#add-hostfile
+
+#
+[add-host]
+
+#include#help-dash-host.txt#add-host
+
+#
 [np]
 
 Specify number of application processes to be started
@@ -524,6 +566,51 @@ Pass a PMIx MCA parameter
 
 Syntax: "--pmixmca <key> <value>", where "key" is the parameter name
 and "value" is the parameter value.
+
+#
+[prtemca]
+
+Pass a PRRTE MCA parameter.
+
+Syntax: "--prtemca <key> <value>", where "key" is the parameter name
+and "value" is the parameter value.
+
+#
+[memory-alloc-kinds]
+
+Comma-delimited list of the memory allocation kinds the application
+requires. The list is passed through to the application's library (for
+example, an MPI implementation) via PMIx; PRRTE itself does not
+interpret the individual kinds.
+
+#
+[no-aggregate-help]
+
+Do not aggregate help messages issued by the application processes.
+
+By default, identical help output generated by many processes is
+combined into a single report naming the number of processes that hit
+it. This option turns that off, so every process's message is reported
+as it is received.
+
+#
+[enable-recovery]
+
+Enable recovery of failed processes in this job (default: disabled).
+A process that fails is restarted, up to the limit given by
+"--max-restarts", instead of terminating the job.
+
+#
+[max-restarts]
+
+Maximum number of times a failed process in this job is to be
+restarted. Only meaningful in combination with "--enable-recovery".
+
+#
+[continuous]
+
+The job is to run until explicitly terminated - the runtime is not to
+consider it complete when its processes exit.
 
 #
 [prun:executable-not-specified]
