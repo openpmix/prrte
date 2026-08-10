@@ -37,10 +37,15 @@ static void trace_point(const char *msg)
     fflush(stdout);
 }
 
+/* Reference counted because a timeout does not withdraw the request: PMIx
+ * keeps the cbdata pointer and still runs the callback whenever the scheduler
+ * answers, which may be long after the submitting call has given up. The
+ * submitter and the callback each hold a reference; the last one out frees. */
 typedef struct {
     pthread_mutex_t lock;
     pthread_cond_t cond;
     int done;
+    int refs;
     pmix_status_t status;
 } wait_t;
 
@@ -56,18 +61,34 @@ typedef struct {
     size_t size;
 } alloc_snapshot_t;
 
-static void wait_init(wait_t *w)
+static wait_t *wait_new(void)
 {
+    wait_t *w = calloc(1, sizeof(*w));
+
+    if (NULL == w) {
+        return NULL;
+    }
     pthread_mutex_init(&w->lock, NULL);
     pthread_cond_init(&w->cond, NULL);
     w->done = 0;
+    w->refs = 2;
     w->status = PMIX_SUCCESS;
+    return w;
 }
 
-static void wait_destroy(wait_t *w)
+static void wait_release(wait_t *w)
 {
+    int last;
+
+    pthread_mutex_lock(&w->lock);
+    last = (0 == --w->refs);
+    pthread_mutex_unlock(&w->lock);
+    if (!last) {
+        return;
+    }
     pthread_cond_destroy(&w->cond);
     pthread_mutex_destroy(&w->lock);
+    free(w);
 }
 
 static int wait_for_callback(wait_t *w, int seconds)
@@ -142,6 +163,8 @@ static void alloc_cbfunc(pmix_status_t status, pmix_info_t *results,
     w->done = 1;
     pthread_cond_signal(&w->cond);
     pthread_mutex_unlock(&w->lock);
+
+    wait_release(w);
 }
 
 static void snapshot_init(alloc_snapshot_t *snap)
@@ -698,29 +721,36 @@ static pmix_status_t submit_alloc_request(pmix_alloc_directive_t directive,
                                           const char *description)
 {
     pmix_status_t rc;
-    wait_t w;
+    wait_t *w;
 
-    wait_init(&w);
+    w = wait_new();
+    if (NULL == w) {
+        return PMIX_ERR_NOMEM;
+    }
+
     record_message("\nSubmitting %s\n", description);
     trace_point("allocation request: submit");
-    rc = PMIx_Allocation_request_nb(directive, info, ninfo, alloc_cbfunc, &w);
+    rc = PMIx_Allocation_request_nb(directive, info, ninfo, alloc_cbfunc, w);
     if (PMIX_SUCCESS != rc) {
         fprintf(stderr, "PMIx_Allocation_request_nb failed immediately: %s\n",
                 PMIx_Error_string(rc));
-        wait_destroy(&w);
+        /* The callback will not run, so drop its reference here too. */
+        wait_release(w);
+        wait_release(w);
         return rc;
     }
 
     trace_point("allocation request: waiting for callback");
-    if (0 != wait_for_callback(&w, REQUEST_TIMEOUT)) {
+    if (0 != wait_for_callback(w, REQUEST_TIMEOUT)) {
+        /* Still live: the wait object stays alive for the late callback. */
         fprintf(stderr, "timed out waiting for PMIx allocation callback\n");
-        wait_destroy(&w);
+        wait_release(w);
         return PMIX_ERR_TIMEOUT;
     }
     trace_point("allocation request: callback received");
 
-    rc = w.status;
-    wait_destroy(&w);
+    rc = w->status;
+    wait_release(w);
     return rc;
 }
 
