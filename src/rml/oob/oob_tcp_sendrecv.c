@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
@@ -85,11 +85,13 @@ void prte_oob_tcp_queue_msg(int sd, short args, void *cbdata)
 {
     prte_oob_tcp_send_t *snd = (prte_oob_tcp_send_t *) cbdata;
     prte_oob_tcp_peer_t *peer;
+    bool connect_needed = false;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(snd);
     peer = (prte_oob_tcp_peer_t *) snd->peer;
 
+    pmix_mutex_lock(&peer->lock);
     /* if there is no message on-deck, put this one there */
     if (NULL == peer->send_msg) {
         peer->send_msg = snd;
@@ -97,19 +99,43 @@ void prte_oob_tcp_queue_msg(int sd, short args, void *cbdata)
         /* add it to the queue */
         pmix_list_append(&peer->send_queue, &snd->super);
     }
-    if (snd->activate) {
-        /* if we aren't connected, then start connecting */
-        if (MCA_OOB_TCP_CONNECTED != peer->state) {
-            peer->state = MCA_OOB_TCP_CONNECTING;
-            PRTE_ACTIVATE_TCP_CONN_STATE(peer, prte_oob_tcp_peer_try_connect);
-        } else {
-            /* ensure the send event is active */
-            if (!peer->send_ev_active) {
-                peer->send_ev_active = true;
-                PMIX_POST_OBJECT(peer);
-                prte_event_add(&peer->send_event, 0);
-            }
+
+    /* Whether or not the caller asked us to activate, a CONNECTED peer must
+     * have its send event running - the last of us to observe the connection
+     * is the one that has to start it.
+     *
+     * This is not the same test as `snd->activate`, and the difference is a
+     * hang.  A message queued as *pending* (activate false) is one the send
+     * path found unconnected, and the connection is being driven for it
+     * already.  That used to mean "somebody else will start the send", which
+     * was true while this ran on the same thread as the connection state
+     * machine: tcp_peer_connected() pulled the pending message off the queue
+     * and armed the event.  Now that we run on the peer's own base the two
+     * interleave, and if tcp_peer_connected() gets there FIRST it finds an
+     * empty queue, arms nothing, and publishes CONNECTED - after which we
+     * arrive, park the message on deck, and, seeing activate false, arm
+     * nothing either.  The message then sits on a connected peer with a dead
+     * send event forever, which is exactly how an 8-node radix-2 launch was
+     * observed to wedge with every thread idle in epoll_wait.
+     */
+    if (MCA_OOB_TCP_CONNECTED == peer->state) {
+        if (NULL != peer->send_msg && !peer->send_ev_active) {
+            peer->send_ev_active = true;
+            PMIX_POST_OBJECT(peer);
+            prte_event_add(&peer->send_event, 0);
         }
+    } else if (snd->activate) {
+        /* the peer went away between the time the send path found it
+         * connected and the time we got here.  The connection state
+         * machine belongs to the main progress thread, so ask for it
+         * there rather than reaching into the peer's state word from
+         * whichever thread is servicing this socket. */
+        connect_needed = true;
+    }
+    pmix_mutex_unlock(&peer->lock);
+
+    if (connect_needed) {
+        PRTE_ACTIVATE_TCP_CONN_STATE(peer, prte_oob_tcp_peer_start_connect);
     }
 }
 
@@ -207,7 +233,11 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
     PRTE_HIDE_UNUSED_PARAMS(sd, flags);
 
     PMIX_ACQUIRE_OBJECT(peer);
+    /* the on-deck message can be swapped out from under us by a close running
+     * on the main progress thread, so take a guarded look at it */
+    pmix_mutex_lock(&peer->lock);
     msg = peer->send_msg;
+    pmix_mutex_unlock(&peer->lock);
 
     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                         "%s tcp:send_handler called to send to peer %s",
@@ -216,6 +246,9 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
     switch (peer->state) {
     case MCA_OOB_TCP_CONNECTING:
     case MCA_OOB_TCP_CLOSED:
+        /* the socket is still being connected, so its events are still bound
+         * to prte_event_base - the connection state machine never runs on a
+         * worker base */
         pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                             "%s tcp:send_handler %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             prte_oob_tcp_state_print(peer->state));
@@ -244,20 +277,27 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                         PRTE_NAME_PRINT(&(peer->name)),
                                         (int) ntohl(msg->hdr.nbytes), peer->sd);
-                    PMIX_RELEASE(msg);
+                    pmix_mutex_lock(&peer->lock);
                     peer->send_msg = NULL;
+                    pmix_mutex_unlock(&peer->lock);
+                    PMIX_RELEASE(msg);
                 } else {
                     /* we are done - notify the RML */
+                    prte_rml_send_t *snd = msg->msg;
                     pmix_output_verbose(2, prte_oob_base.output,
                                         "%s MESSAGE SEND COMPLETE TO %s OF %d BYTES ON SOCKET %d",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                         PRTE_NAME_PRINT(&(peer->name)),
                                         (int) ntohl(msg->hdr.nbytes), peer->sd);
-                    msg->msg->status = PRTE_SUCCESS;
-                    PRTE_RML_SEND_COMPLETE(msg->msg);
-                    msg->msg = NULL; // completion released it
-                    PMIX_RELEASE(msg);
+                    snd->status = PRTE_SUCCESS;
+                    msg->msg = NULL; // the completion owns it now
+                    pmix_mutex_lock(&peer->lock);
                     peer->send_msg = NULL;
+                    pmix_mutex_unlock(&peer->lock);
+                    PMIX_RELEASE(msg);
+                    /* the callback runs on the main progress thread - never
+                     * under the peer lock, and never on a worker base */
+                    PRTE_OOB_COMPLETE_SEND(peer, snd);
                 }
                 /* fall thru to queue the next message */
             } else if (PRTE_ERR_RESOURCE_BUSY == rc || PRTE_ERR_WOULD_BLOCK == rc) {
@@ -282,24 +322,32 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
              * wait for another send_event to fire before doing so. This gives
              * us a chance to service any pending recvs.
              */
-            peer->send_msg = (prte_oob_tcp_send_t *) pmix_list_remove_first(&peer->send_queue);
+            pmix_mutex_lock(&peer->lock);
+            if (NULL == peer->send_msg) {
+                peer->send_msg = (prte_oob_tcp_send_t *) pmix_list_remove_first(&peer->send_queue);
+            }
+            pmix_mutex_unlock(&peer->lock);
         }
 
         /* if nothing else to do unregister for send event notifications */
+        pmix_mutex_lock(&peer->lock);
         if (NULL == peer->send_msg && peer->send_ev_active) {
             prte_event_del(&peer->send_event);
             peer->send_ev_active = false;
         }
+        pmix_mutex_unlock(&peer->lock);
         break;
     default:
         pmix_output(
             0, "%s-%s prte_oob_tcp_peer_send_handler: invalid connection state (%d) on socket %d",
             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)), peer->state,
             peer->sd);
+        pmix_mutex_lock(&peer->lock);
         if (peer->send_ev_active) {
             prte_event_del(&peer->send_event);
             peer->send_ev_active = false;
         }
+        pmix_mutex_unlock(&peer->lock);
         break;
     }
 }
@@ -385,7 +433,13 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
             pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                                 "%s:tcp:recv:handler starting send/recv events",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-            /* we connected! Start the send/recv events */
+            /* we connected! Start the send/recv events.
+             *
+             * tcp_peer_connected() has already run beneath the ack: the peer
+             * is CONNECTED, its socket events now live on peer->evbase, and a
+             * worker may already be queueing onto it.  So everything below
+             * that touches the send queue or the send event has to be guarded
+             * - it is no longer this thread's alone. */
             if (!peer->recv_ev_active) {
                 peer->recv_ev_active = true;
                 PMIX_POST_OBJECT(peer);
@@ -396,6 +450,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                 peer->timer_ev_active = false;
             }
             /* if there is a message waiting to be sent, queue it */
+            pmix_mutex_lock(&peer->lock);
             if (NULL == peer->send_msg) {
                 peer->send_msg = (prte_oob_tcp_send_t *) pmix_list_remove_first(&peer->send_queue);
             }
@@ -406,6 +461,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
             }
             /* update our state */
             peer->state = MCA_OOB_TCP_CONNECTED;
+            pmix_mutex_unlock(&peer->lock);
         } else if (PRTE_ERR_UNREACH != rc) {
             /* we get an unreachable error returned if a connection
              * completes but is rejected - otherwise, we don't want

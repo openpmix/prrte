@@ -312,10 +312,21 @@ worth stating rather than re-deriving:
 
 ## Gotchas before you edit
 
-- **Single progress thread.** All RML/OOB state is owned by the progress
-  thread. Cross-thread work uses a *caddy* + `PRTE_PMIX_THREADSHIFT` (see
-  `PRTE_OOB_SEND`, `prte_rml_recv_buffer_nb`). Never read or write shared RML
-  state off that thread, and never block on it.
+- **RML state is owned by the progress thread.** Cross-thread work uses a
+  *caddy* + `PRTE_PMIX_THREADSHIFT` (see `PRTE_OOB_SEND`,
+  `prte_rml_recv_buffer_nb`). Never read or write shared RML state off that
+  thread, and never block on it. The one exception is deliberate and bounded:
+  a peer's *socket* send/recv handlers can be put on a worker progress thread
+  (`prte_oob_progress_threads`, default 0 — off), so that the wire keeps moving
+  while the main thread computes. Everything those handlers hand upward —
+  message delivery, relaying, send completions, the connection state machine —
+  still comes back to `prte_event_base`. See [`oob/AGENTS.md`](oob/AGENTS.md),
+  *Which thread services a peer's socket*, before adding anything to those
+  handlers' reach.
+- **`prte_rml_epoch_ok` runs off the progress thread.** It is called straight
+  from the OOB recv handler, so it - alone in this directory - takes a mutex
+  around the `peer_epochs` table it reallocates. Anything else a socket handler
+  is made to call has to be safe the same way, or has to be thread-shifted.
 - **The wire header is not an ABI.** `prte_oob_tcp_hdr_t` is exchanged only
   among daemons of the *same* DVM, which all run the same build. You may change
   its layout, but every daemon must agree — there is no versioning. It *is*

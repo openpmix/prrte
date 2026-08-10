@@ -21,7 +21,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -163,6 +163,21 @@ static void peer_cons(prte_oob_tcp_peer_t *peer)
 {
     peer->auth_method = NULL;
     peer->sd = -1;
+    /* claim the next base in the pool.  Peers are only ever built on the main
+     * progress thread (the send path, the URI parser, the accept handler), so
+     * the cursor needs no protection.  prte_oob_open always leaves ev_bases
+     * holding at least one entry, but a peer built before it ran - or after
+     * prte_oob_close harvested the pool - has to land somewhere. */
+    if (NULL == prte_oob_base.ev_bases) {
+        peer->evbase = prte_event_base;
+    } else {
+        peer->evbase = prte_oob_base.ev_bases[prte_oob_base.next_base];
+        if (0 < prte_oob_base.num_progress_threads) {
+            prte_oob_base.next_base = (prte_oob_base.next_base + 1)
+                                      % prte_oob_base.num_progress_threads;
+        }
+    }
+    PMIX_CONSTRUCT(&peer->lock, pmix_mutex_t);
     PMIX_CONSTRUCT(&peer->addrs, pmix_list_t);
     peer->active_addr = NULL;
     peer->state = MCA_OOB_TCP_UNCONNECTED;
@@ -203,6 +218,7 @@ static void peer_des(prte_oob_tcp_peer_t *peer)
         PMIX_RELEASE(peer->send_msg);
     }
     PMIX_LIST_DESTRUCT(&peer->send_queue);
+    PMIX_DESTRUCT(&peer->lock);
 }
 PMIX_CLASS_INSTANCE(prte_oob_tcp_peer_t, pmix_list_item_t, peer_cons, peer_des);
 

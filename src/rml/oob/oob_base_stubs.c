@@ -34,6 +34,28 @@
 
 static prte_oob_tcp_peer_t* process_uri(char *uri);
 
+/* Run a send's completion callback on the main progress thread.
+ *
+ * Reached only when a peer's socket is being serviced by one of the OOB
+ * worker progress threads (see PRTE_OOB_COMPLETE_SEND): the callback belongs
+ * to whoever originated the message and touches PRRTE state that only
+ * prte_event_base may touch.  Posting them all through this one handler also
+ * keeps a peer's completions in the order its socket produced them, since
+ * libevent runs a base's active events first-in first-out.
+ */
+void prte_oob_base_complete_send(int fd, short args, void *cbdata)
+{
+    prte_oob_send_t *cd = (prte_oob_send_t *) cbdata;
+    prte_rml_send_t *msg;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
+
+    PMIX_ACQUIRE_OBJECT(cd);
+    msg = cd->msg;
+    PMIX_RELEASE(cd);
+
+    PRTE_RML_SEND_COMPLETE(msg);
+}
+
 void prte_oob_base_send_nb(int fd, short args, void *cbdata)
 {
     prte_oob_send_t *cd = (prte_oob_send_t *) cbdata;

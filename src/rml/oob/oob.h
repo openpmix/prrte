@@ -15,7 +15,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
@@ -104,6 +104,18 @@ typedef struct {
                                delay backs off exponentially up to this value (0 => fixed delay) */
     int connect_max_time;   /**< max seconds to keep retrying a non-lifeline peer before giving up
                                and letting the routing tree heal to an ancestor (0 => forever) */
+
+    /* Worker progress threads servicing peer socket events.  Each peer's
+     * send/recv events are bound to one of these bases (round-robin), so the
+     * wire keeps moving while the main progress thread is busy computing.
+     * num_progress_threads == 0 (the default) means "no worker threads": the
+     * array still exists, holding exactly one entry - prte_event_base - so
+     * every call site can index it unconditionally and the code path is
+     * bit-for-bit the one that ran before any of this existed. */
+    int num_progress_threads;      /**< number of dedicated worker progress threads */
+    prte_event_base_t **ev_bases;  /**< the bases peers are assigned to */
+    char **ev_threads;             /**< names of the threads we started (NULL when none) */
+    int next_base;                 /**< round-robin cursor into ev_bases */
 } prte_oob_base_t;
 PRTE_EXPORT extern prte_oob_base_t prte_oob_base;
 
@@ -111,6 +123,13 @@ PRTE_EXPORT extern prte_oob_base_t prte_oob_base;
 PRTE_EXPORT int prte_oob_open(void);
 PRTE_EXPORT void prte_oob_close(void);
 PRTE_EXPORT int prte_oob_register(void);
+
+/* Build and tear down the pool of bases that peer sockets are serviced on.
+ * Called by prte_oob_open/prte_oob_close; exported (rather than left static)
+ * so the unit test can drive the sizing and the round-robin assignment
+ * without standing up listeners. */
+PRTE_EXPORT int prte_oob_start_progress_threads(void);
+PRTE_EXPORT void prte_oob_harvest_progress_threads(void);
 
 /* Simulate this node's failure better than simply killing the process */
 PRTE_EXPORT void prte_oob_simulate_node_failure(void);
@@ -147,6 +166,34 @@ PRTE_EXPORT void prte_oob_base_send_nb(int fd, short args, void *cbdata);
         prte_oob_send_cd = PMIX_NEW(prte_oob_send_t);                                             \
         prte_oob_send_cd->msg = (m);                                                              \
         PRTE_PMIX_THREADSHIFT(prte_oob_send_cd, prte_event_base, prte_oob_base_send_nb);          \
+    } while (0)
+
+/* Complete a send that a peer's socket handler has finished with.
+ *
+ * PRTE_RML_SEND_COMPLETE runs the originator's callback, and those callbacks
+ * reach well beyond the transport - proc-state activation, the collectives'
+ * forward_lost handling, RELM's completion tracking - all of which is PRRTE
+ * state owned by the main progress thread.  So a send that was serviced on a
+ * worker base posts the completion back to prte_event_base instead of running
+ * it there.  With no worker threads the peer's base IS prte_event_base and the
+ * completion runs inline, exactly as it always did - no extra event hop on the
+ * default path.
+ *
+ * p => pointer to prte_oob_tcp_peer_t
+ * m => the prte_rml_send_t to complete (its status must already be set)
+ */
+PRTE_EXPORT void prte_oob_base_complete_send(int fd, short args, void *cbdata);
+#define PRTE_OOB_COMPLETE_SEND(p, m)                                                      \
+    do {                                                                                  \
+        if (prte_event_base == (p)->evbase) {                                             \
+            PRTE_RML_SEND_COMPLETE((m));                                                  \
+        } else {                                                                          \
+            prte_oob_send_t *prte_oob_cmp_cd;                                             \
+            prte_oob_cmp_cd = PMIX_NEW(prte_oob_send_t);                                  \
+            prte_oob_cmp_cd->msg = (m);                                                   \
+            PRTE_PMIX_THREADSHIFT(prte_oob_cmp_cd, prte_event_base,                       \
+                                  prte_oob_base_complete_send);                           \
+        }                                                                                 \
     } while (0)
 
 /* Build this process's contact URI: our name followed by the TCP

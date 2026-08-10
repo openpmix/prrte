@@ -17,7 +17,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -62,6 +62,16 @@ typedef struct {
                                retry sequence; 0 until the first retry is scheduled.  Used to
                                bound how long we chase a non-lifeline peer before healing to an
                                ancestor (see prte_oob_base.connect_max_time). */
+    prte_event_base_t *evbase; /**< the base servicing this peer's socket once connected.
+                                    Assigned round-robin at construction from
+                                    prte_oob_base.ev_bases; equal to prte_event_base when no
+                                    worker progress threads were requested.  The connection
+                                    state machine and the handshake always run on
+                                    prte_event_base - the events move here at CONNECTED. */
+    pmix_mutex_t lock;         /**< guards send_msg/send_queue/send_ev_active, and the
+                                    once-only state transition in prte_oob_tcp_peer_close.
+                                    Held across queue manipulation only - never across a
+                                    writev, and never across a callback. */
     prte_event_t send_event; /**< registration with event thread for send events */
     bool send_ev_active;
     prte_event_t recv_event; /**< registration with event thread for recv events */

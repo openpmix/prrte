@@ -122,6 +122,33 @@ Connection loss.  When a socket drops, ``oob_tcp_component.c`` fires its
 event into a routing event: the RML is told to treat the peer as lost so the
 tree can be repaired (see :ref:`rml-label`).
 
+Which thread moves the bytes
+----------------------------
+
+By default every part of the transport runs on the one PRRTE progress thread,
+and this section describes something you can turn on rather than something that
+is already happening.
+
+``prte_oob_progress_threads`` (default ``0``) starts that many additional
+progress threads and assigns each peer one of them, round-robin, when the peer
+is created.  Only the peer's **send and recv socket handlers** move there, and
+only once the connection is established.  Everything those handlers hand
+onwards — delivering a message to the RML, relaying one on, running a send's
+completion callback, reacting to a lost connection — comes back to the main
+progress thread, as does the whole connection state machine.
+
+The reason to want this is not raw bandwidth.  A single thread copies into the
+kernel several times faster than a 10-25 GbE link drains, so the transport is
+not thread-starved for throughput.  What it is short of is *occupancy*: while
+the main thread is compressing a broadcast, registering a namespace, or forking
+local processes, no socket is being serviced at all, and the link simply idles
+for that fraction of the launch.  Giving the sockets their own threads keeps
+them busy across those stalls.  It also lifts a real ceiling on 100 GbE and on
+nodes with several NICs, where one thread's copy rate *is* the limit.
+
+Start with ``0`` (the default, and identical to the behavior that predates the
+option) and raise it only where a launch is demonstrably stalling the wire.
+
 Bootstrap specifics
 -------------------
 
