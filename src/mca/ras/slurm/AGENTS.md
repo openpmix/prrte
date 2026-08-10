@@ -84,12 +84,32 @@ deviation* and the framework guide.
   mem-per-node, time, threads-per-core — each gated by a `propagate_*`
   MCA param, all default true), builds `salloc` args, launches an
   **expander job**, waits for its `salloc` to exit, then adds the modified
-  resources.
+  resources. Answers in two phases — see below.
 - **`PMIX_ALLOC_RELEASE`** → `serve_release_req`: shrinks the SLURM job
   with `scontrol update job`, removing nodes by count while protecting
   the launching node (`SLURMD_NODENAME`).
 - **`PMIX_ALLOC_REQ_CANCEL`** → `serve_cancel_req`: cancels a pending
   extend by request id, and answers it (see below).
+
+### An extend is answered when the DVM has grown, not when Slurm has granted
+
+No daemon runs on the new nodes until the grow campaign drains, so phase one
+reports `PMIX_OPERATION_IN_PROGRESS` with the allocation id and
+`PMIX_DVM_IS_READY` is the answer — the shape a release already has.
+
+- **The campaign finds its requester through the nodes.** `extend_wait_complete`
+  records `session->requestor` on the per-jobid tracking session, and
+  `setup_virtual_machine` resolves it from the node's `PRTE_NODE_ALLOC_ID`
+  because `node->session` is NULL by design. Keeping the association on the node
+  is what makes concurrent extends correct: each node names its own request, and
+  one campaign can cover several.
+- **Without a requester a failed grow is silent.** `grow_target_failed` notifies
+  only a campaign that has one.
+- **Outside `prte_elastic_mode` phase one stays terminal.** No campaign is
+  recorded, so no event can come. Unlike `serve_release_req` the extend does not
+  refuse there — it has already done what was asked of Slurm.
+- **Both phase-one statuses are `#if PRTE_HAVE_DVM_MOD_EVENTS`.**
+  `prte_plm_base_dvm_mod_notify` compiles away without the event codes.
 
 ### The salloc child outlives the call that forked it
 
@@ -277,11 +297,11 @@ a case. Two things that trip people up:
   `NODE_LIST`/`NUM_NODES`/`ALLOC_ID`, and `PMIX_ALLOC_REQ_CANCEL`. A
   node-naming `PMIX_ALLOC_NEW` never reaches this component — the base
   serves it.
-- **An extend emits no phase-two completion event.** Its nodes go into the
-  general pool (`node->session` stays NULL, by design — see above), and the
-  directed event is addressed to the requestor recorded on a *reservation*.
-  Phase one carries the result. A release does go through a shrink campaign,
-  so it does emit `PMIX_DVM_IS_READY`.
+- **An extend answers in two phases, like a release.** Phase one reports
+  `PMIX_OPERATION_IN_PROGRESS` with the allocation id once Slurm grants;
+  `PMIX_DVM_IS_READY` (or `PMIX_ERR_DVM_MOD`) follows when the grow campaign
+  drains and the daemons are wired up. A case asserting on the phase-one
+  status has to expect that, not `PMIX_SUCCESS`.
 
 Some slot counts are asserted from `ras_base_verbose` output rather than
 from the node pool: the verbose line is what *this component* computed,
