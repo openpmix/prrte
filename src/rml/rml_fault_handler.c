@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
+ * Copyright (c) 2026      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -78,7 +79,57 @@ void prte_rml_recv_failures_notice(
         return;
     }
 
+    /* Note which of these we did not already know about, BEFORE the repair
+     * records them - see the errmgr hand-off below. */
+    pmix_rank_t* incoming = (pmix_rank_t*) failed_ranks.array;
+    size_t n_incoming = failed_ranks.size;
+    bool* newly = NULL;
+    if (0 < n_incoming) {
+        newly = (bool*) calloc(n_incoming, sizeof(bool));
+    }
+    if (NULL != newly) {
+        for (size_t i = 0; i < n_incoming; i++) {
+            newly[i] = (PMIX_RANK_INVALID != incoming[i]) &&
+                       !pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, incoming[i]);
+        }
+    }
+
     prte_rml_repair_routing_tree(&failed_ranks, global);
+
+    /* Hand the departure to the errmgr.
+     *
+     * PRTE_PROC_STATE_COMM_FAILED is otherwise raised only by
+     * prte_mca_oob_tcp_component_lost_connection, i.e. only on the daemon that
+     * was holding the socket.  At the default radix that is always the HNP -
+     * a ten-node DVM at radix 64 is flat, so the HNP is every daemon's parent -
+     * and the DVM therefore looked correct.  Give the routing tree any depth
+     * and it stops being true: an interior daemon detects the loss, the notice
+     * walks up and correctly marks the rank failed everywhere including the
+     * HNP, and the HNP - never having lost a socket - never runs the errmgr.
+     * The procs that were on the dead node are never marked terminated, so the
+     * job never completes and its tool waits forever.  A `prun` against a
+     * radix-2 DVM whose job's node was killed hung indefinitely, where the same
+     * DVM at radix 64 released it at once.
+     *
+     * Only ranks this daemon had not already recorded are reported, so the
+     * daemon that detected the loss itself (and already raised COMM_FAILED from
+     * the OOB) does not raise it twice when the HNP's global broadcast comes
+     * back around, and a duplicate notice is a no-op.  The guard mirrors the
+     * OOB's: while finalizing there is nobody left to tell. */
+    if (NULL != newly) {
+        if (!prte_finalizing) {
+            for (size_t i = 0; i < n_incoming; i++) {
+                pmix_proc_t dmn;
+                if (!newly[i]) {
+                    continue;
+                }
+                PMIX_LOAD_PROCID(&dmn, PRTE_PROC_MY_NAME->nspace, incoming[i]);
+                PRTE_ACTIVATE_PROC_STATE(&dmn, PRTE_PROC_STATE_COMM_FAILED);
+            }
+        }
+        free(newly);
+    }
+
     /* repair takes a copy of what it needs, so the unpacked array is ours */
     PMIx_Data_array_destruct(&failed_ranks);
 }
