@@ -232,15 +232,45 @@ wider by mistake:
   then follow the GOLDEN RULE (`rm src/util/prte_show_help_content.*`
   and rebuild) or the binary serves stale help.
 - **An option whose only consumer is a runtime option converts, it does
-  not get its own consumer.** `--show-progress` and
-  `--report-child-jobs-separately` are deprecated standalone spellings
-  of runtime options: they belong in the **deprecated** section of the
-  option tables, are converted to `--rtos <directive>` by
+  not get its own consumer.** `--show-progress`,
+  `--report-child-jobs-separately`, `--fwd-environment` and
+  `--disable-recovery` are deprecated standalone spellings of runtime
+  options: they belong in the **deprecated** section of the option
+  tables, are converted to `--rtos <directive>` by
   `convert_deprecated_cli` with the component's `warn` flag, and are
   **not** listed in the `help-*.txt` usage tables — a deprecated option
   is accepted for compatibility, not advertised. (`--runtime-options
   show-progress` is what the docs point users to.) The same pair lives
   in ompi's deprecated section, documented under "Deprecated command
   line options" in `schizo-ompi-cli.rstxt`.
+
+  The negative answer to a boolean runtime option is that option given
+  as `false`, not a second option: `--disable-recovery` becomes
+  `--rtos recoverable=false`. It sat in `prunoptions`' *live* section
+  with no consumer anywhere, so it parsed and was dropped on the floor.
+- **`--debug` is a deprecated no-op for every tool.**
+  `convert_deprecated_cli` warns and removes it, and that runs inside
+  `parse_cli` — i.e. *before* any tool reads `results` — so the
+  `prte_debug_flag` it used to set could never be true. The flag is
+  gone, along with the `PRTE_CLI_DEBUG` macro; the diagnostics it gated
+  in `prted`, `prte` and `session_dir` now answer to
+  `prte_debug_daemons_flag`. The option itself survives only as a
+  literal `"debug"` in each table's deprecated section, so an old script
+  gets a warning rather than "unrecognized option".
+- **`parseable`/`parsable` are `--display` qualifiers, not options.**
+  Only `prte_info` takes them as tool-level options (PMIx's own
+  `PMIX_CLI_PARSABLE`, which it acts on). `prunoptions` had them, and
+  the short `-p`, in its *live* section with nothing anywhere to read
+  the result. They are now deprecated entries converted to
+  `--display :parseable`, which `add_qualifier` folds into a `--display`
+  the user already gave; `--display map:parseable` is the spelling to
+  document. `parse_display` supports the qualifier-only form explicitly
+  ("only qualifiers were given"), which is what makes the bare
+  conversion legal.
+- **A short option with no entry in the table is a lie to the user.**
+  `ptermshorts` carried a `p` that `ptermoptions` never defined, so
+  `pterm -p` was silently swallowed by `getopt` instead of being
+  refused. A letter belongs in the shorts string only when some
+  `PMIX_OPTION_SHORT_DEFINE` in that tool's table claims it.
 - **`warned` is one-shot per process.** Deprecation warnings fire once;
   don't rely on repeated warnings in a single tool invocation.

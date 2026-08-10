@@ -659,9 +659,6 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     }
 
     /* check for debug options */
-    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DEBUG)) {
-        prte_debug_flag = true;
-    }
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DEBUG_DAEMONS)) {
         prte_debug_daemons_flag = true;
     }
@@ -1456,7 +1453,7 @@ DONE:
         unlink(mypidfile);
     }
 
-    if (prte_debug_flag) {
+    if (prte_debug_daemons_flag) {
         fprintf(stderr, "exiting with status %d\n", prte_exit_status);
     }
     exit(prte_exit_status);

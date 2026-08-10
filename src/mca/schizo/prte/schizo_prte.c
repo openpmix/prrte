@@ -106,7 +106,6 @@ static struct option prteoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_KEEPALIVE, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_LAUNCH_AGENT, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_MAX_VM_SIZE, PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE(PRTE_CLI_DEBUG, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_DEBUG_DAEMONS, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_DEBUG_DAEMONS_FILE, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_LEAVE_SESSION_ATTACHED, PMIX_ARG_NONE),
@@ -137,6 +136,7 @@ static struct option prteoptions[] = {
     PMIX_OPTION_DEFINE("machinefile", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("hetero-nodes", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_SHOW_PROGRESS, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("debug", PMIX_ARG_NONE),
 
     PMIX_OPTION_END
 };
@@ -162,7 +162,6 @@ static struct option prterunoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_KEEPALIVE, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_LAUNCH_AGENT, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_MAX_VM_SIZE, PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE(PRTE_CLI_DEBUG, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_DEBUG_DAEMONS, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_DEBUG_DAEMONS_FILE, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_LEAVE_SESSION_ATTACHED, PMIX_ARG_NONE),
@@ -206,7 +205,6 @@ static struct option prterunoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_PRELOAD_FILES, PMIX_ARG_REQD),
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_PRELOAD_BIN, PMIX_ARG_NONE, 's'),
     PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_AGG_HELP, PMIX_ARG_NONE),
-    PMIX_OPTION_DEFINE(PRTE_CLI_FWD_ENVIRON, PMIX_ARG_OPTIONAL),
     PMIX_OPTION_DEFINE(PRTE_CLI_MEM_ALLOC_KIND, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_GPU_SUPPORT, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_APP_PREFIX, PMIX_ARG_REQD),
@@ -239,6 +237,7 @@ static struct option prterunoptions[] = {
     // deprecated options
     PMIX_OPTION_DEFINE("mca", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("n", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_FWD_ENVIRON, PMIX_ARG_OPTIONAL),
     PMIX_OPTION_DEFINE(PRTE_CLI_SHOW_PROGRESS, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_CHILD_SEP, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("xml", PMIX_ARG_NONE),
@@ -284,8 +283,6 @@ static struct option prunoptions[] = {
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_HELP, PMIX_ARG_OPTIONAL, 'h'),
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_VERSION, PMIX_ARG_NONE, 'V'),
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_VERBOSE, PMIX_ARG_NONE, 'v'),
-    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_PARSEABLE, PMIX_ARG_NONE, 'p'),
-    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_PARSABLE, PMIX_ARG_NONE, 'p'), // synonym for parseable
 
     // MCA parameters
     PMIX_OPTION_DEFINE(PRTE_CLI_PRTEMCA, PMIX_ARG_REQD),
@@ -337,7 +334,6 @@ static struct option prunoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_PRELOAD_FILES, PMIX_ARG_REQD),
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_PRELOAD_BIN, PMIX_ARG_NONE, 's'),
     PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_AGG_HELP, PMIX_ARG_NONE),
-    PMIX_OPTION_DEFINE(PRTE_CLI_FWD_ENVIRON, PMIX_ARG_OPTIONAL),
     PMIX_OPTION_DEFINE(PRTE_CLI_MEM_ALLOC_KIND, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_GPU_SUPPORT, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_APP_PREFIX, PMIX_ARG_REQD),
@@ -369,12 +365,19 @@ static struct option prunoptions[] = {
 
     PMIX_OPTION_DEFINE(PRTE_CLI_ENABLE_RECOVERY, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_MAX_RESTARTS, PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE(PRTE_CLI_DISABLE_RECOVERY, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_CONTINUOUS, PMIX_ARG_NONE),
 
     // deprecated options
     PMIX_OPTION_DEFINE("mca", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("n", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_DISABLE_RECOVERY, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_FWD_ENVIRON, PMIX_ARG_OPTIONAL),
+    /* "parseable"/"parsable" are qualifiers on "--display", not options
+     * of their own - see convert_deprecated_cli.  The short "-p" is kept
+     * alongside them so an old command line still converts instead of
+     * being refused. */
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_PARSEABLE, PMIX_ARG_NONE, 'p'),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_PARSABLE, PMIX_ARG_NONE, 'p'),
     PMIX_OPTION_DEFINE(PRTE_CLI_SHOW_PROGRESS, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_CHILD_SEP, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("xml", PMIX_ARG_NONE),
@@ -432,7 +435,6 @@ static struct option prtedoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_TREE_SPAWN, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_SYSTEM_SERVER, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_SET_SID, PMIX_ARG_NONE),
-    PMIX_OPTION_DEFINE(PRTE_CLI_DEBUG, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_DEBUG_DAEMONS, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_DEBUG_DAEMONS_FILE, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_LEAVE_SESSION_ATTACHED, PMIX_ARG_NONE),
@@ -442,6 +444,7 @@ static struct option prtedoptions[] = {
 
     // deprecated options
     PMIX_OPTION_DEFINE("hetero-nodes", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("debug", PMIX_ARG_NONE),
 
     PMIX_OPTION_END
 };
@@ -470,7 +473,7 @@ static struct option ptermoptions[] = {
 
     PMIX_OPTION_END
 };
-static char *ptermshorts = "hvVp";
+static char *ptermshorts = "hvV";
 
 static struct option pinfooptions[] = {
     PMIX_OPTION_SHORT_DEFINE(PMIX_CLI_HELP, PMIX_ARG_OPTIONAL, 'h'),
@@ -970,6 +973,36 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_RTOS, PRTE_CLI_FWD_ENVIRON,
                                                 warn);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+        }
+
+        /* --parseable/--parsable (and the short "-p")  ->  --display :parseable
+         *
+         * These name a *qualifier* on --display, which is the only thing
+         * that reads them - so the standalone flag becomes that qualifier.
+         * add_qualifier folds it into a --display the user already gave
+         * ("--display map" plus "-p" becomes "--display map:parseable"),
+         * and otherwise stands it up on its own. */
+        else if (0 == strcmp(option, PRTE_CLI_PARSEABLE) ||
+                 0 == strcmp(option, PRTE_CLI_PARSABLE)) {
+            rc = prte_schizo_base_add_qualifier(results, option,
+                                                PRTE_CLI_DISPLAY, PRTE_CLI_PARSEABLE,
+                                                warn);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+        }
+
+        /* --disable-recovery  ->  --runtime-options recoverable=false
+         *
+         * "recoverable" is a boolean runtime option, so the negative answer
+         * is that option given as false - there is no separate consumer for
+         * a standalone --disable-recovery, and there never was: it parsed
+         * and was then dropped on the floor. */
+        else if (0 == strcmp(option, PRTE_CLI_DISABLE_RECOVERY)) {
+            pmix_asprintf(&p2, "%s=false", PRTE_CLI_RECOVERABLE);
+            rc = prte_schizo_base_add_directive(results, option,
+                                                PRTE_CLI_RTOS, p2,
+                                                warn);
+            free(p2);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
 

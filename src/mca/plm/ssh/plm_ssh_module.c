@@ -728,7 +728,7 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
      * to daemonize so we can launch the next group
      */
     if (prte_mca_plm_ssh_component.no_tree_spawn &&
-        !prte_debug_flag && !prte_debug_daemons_flag &&
+        !prte_debug_daemons_flag &&
         !prte_debug_daemons_file_flag && !prte_leave_session_attached &&
         /* Daemonize when not using qrsh.  Or, if using qrsh, only
          * daemonize if told to by user with daemonize_qrsh flag. */

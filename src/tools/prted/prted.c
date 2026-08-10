@@ -331,9 +331,6 @@ int main(int argc, char *argv[])
     }
 
     /* check for debug options */
-    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DEBUG)) {
-        prte_debug_flag = true;
-    }
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DEBUG_DAEMONS)) {
         prte_debug_daemons_flag = true;
     }
@@ -488,7 +485,7 @@ int main(int argc, char *argv[])
     /* output a message indicating we are alive, our name, and our pid
      * for debugging purposes
      */
-    if (prte_debug_flag) {
+    if (prte_debug_daemons_flag) {
         fprintf(stderr, "Daemon %s checking in as pid %ld on host %s\n",
                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (long) prte_process_info.pid,
                 prte_process_info.nodename);
@@ -827,7 +824,7 @@ int main(int argc, char *argv[])
     }
 
 bootstrap_wait:
-    if (prte_debug_flag) {
+    if (prte_debug_daemons_flag) {
         pmix_output(0, "%s prted: up and running - waiting for commands!",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
     }
@@ -871,7 +868,7 @@ DONE:
     /* cleanup the process info */
     prte_proc_info_finalize();
 
-    if (prte_debug_flag) {
+    if (prte_debug_daemons_flag) {
         fprintf(stderr, "exiting with status %d\n", prte_exit_status);
     }
     exit(prte_exit_status);
