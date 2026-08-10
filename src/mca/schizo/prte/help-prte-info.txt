@@ -65,6 +65,16 @@ option to the help request as "--help <option>".
 |                      | "<framework>" is given, then all components   |
 |                      | will be reported).                            |
 +----------------------+-----------------------------------------------+
+| "--params <framework | Synonym for "--param"                         |
+| >:<component1>,<com  |                                               |
+| ponent2>"            |                                               |
++----------------------+-----------------------------------------------+
+| "-t" | "--type       | Show MCA parameters of the specified type.    |
+| <type>"              | Accepts the following parameters:             |
+|                      | "unsigned_int", "unsigned_long",              |
+|                      | "unsigned_long_long", "size_t", "string",     |
+|                      | "version_string", "bool", and "double".       |
++----------------------+-----------------------------------------------+
 | "--path <type>"      | Show paths with which PRRTE was configured.   |
 |                      | Accepts the following parameters: "prefix",   |
 |                      | "bindir", "libdir", "incdir", "mandir",       |
@@ -80,6 +90,25 @@ option to the help request as "--help <option>".
 |                      | "release", "greek", "git".                    |
 +----------------------+-----------------------------------------------+
 | "--include-pmix"     | Include PMIx params and build info in output  |
++----------------------+-----------------------------------------------+
+| "--pretty-print"     | When used in conjunction with other           |
+|                      | parameters, display the output in "pretty-    |
+|                      | print" format (default)                       |
++----------------------+-----------------------------------------------+
+| "--parsable"         | When used in conjunction with other           |
+|                      | parameters, display the output in a machine-  |
+|                      | parsable format                               |
++----------------------+-----------------------------------------------+
+| "--parseable"        | Synonym for "--parsable"                      |
++----------------------+-----------------------------------------------+
+| "--color <hue>"      | Control color coding: "auto" (default),       |
+|                      | "never", "always"                             |
++----------------------+-----------------------------------------------+
+| "--show-failed"      | Show the components that failed to load,      |
+|                      | along with the reason why they failed         |
++----------------------+-----------------------------------------------+
+| "--selected-only"    | Show only variables from selected (active)    |
+|                      | components                                    |
 +----------------------+-----------------------------------------------+
 
 %s
@@ -105,6 +134,61 @@ Syntax: "--param <arg0> <arg1>"
 Show MCA parameters.  The first parameter is the framework (or the
 keyword "all"); the second parameter is the specific component name
 (or the keyword "all").
+#
+[params]
+
+Syntax: "--params <arg0> <arg1>"
+
+Synonym for "--param".
+#
+[type]
+
+Syntax: "--type <arg0>"
+
+Show MCA parameters of the type specified in the parameter. Accepts
+the following parameters: "unsigned_int", "unsigned_long",
+"unsigned_long_long", "size_t", "string", "version_string", "bool",
+and "double".
+#
+[pretty-print]
+
+Syntax: "--pretty-print"
+
+When used in conjunction with other parameters, the output is
+displayed in "pretty-print" format (default)
+#
+[parsable]
+
+Syntax: "--parsable"
+
+When used in conjunction with other parameters, the output is
+displayed in a machine-parsable format
+#
+[parseable]
+
+Syntax: "--parseable"
+
+Synonym for "--parsable"
+#
+[color]
+
+Syntax: "--color <hue>"
+
+Control color coding of the output: "auto" (the default - color only
+when stdout is a terminal), "never", or "always"
+#
+[show-failed]
+
+Syntax: "--show-failed"
+
+Show the components that failed to load, along with the reason why
+they failed
+#
+[selected-only]
+
+Syntax: "--selected-only"
+
+Show only variables from selected (active) components
 #
 [internal]
 
