@@ -15,7 +15,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -78,6 +78,11 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_recv_t);
  * it as "pending" for later transmission - e.g., after the
  * connection procedure is completed
  *
+ * The queue lives with the thread that services the peer's socket, so this
+ * shifts onto the peer's own base rather than prte_event_base.  With no OOB
+ * worker threads the two are the same object and this is the shift it always
+ * was.
+ *
  * p => pointer to prte_oob_tcp_peer_t
  * s => pointer to prte_oob_tcp_send_t
  * f => true if send event is to be activated
@@ -86,7 +91,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_recv_t);
     do {                                                                        \
         (s)->peer = (struct prte_oob_tcp_peer_t *) (p);                         \
         (s)->activate = (f);                                                    \
-        PRTE_PMIX_THREADSHIFT((s), prte_event_base, prte_oob_tcp_queue_msg);    \
+        PRTE_PMIX_THREADSHIFT((s), (p)->evbase, prte_oob_tcp_queue_msg);        \
     } while (0)
 
 /* queue a message for transmission to a connected peer - must

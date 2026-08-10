@@ -8,7 +8,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
@@ -66,9 +66,18 @@ uint64_t prte_rml_boot_epoch = 0;
 
 static int verbosity = 0;
 
+/* The incarnation table is the one piece of RML state a peer's socket handler
+ * reaches directly, and that handler runs on whichever base is servicing the
+ * peer - one of the OOB progress threads when any were configured (see
+ * prte_oob_base.num_progress_threads).  Two of them arriving at once would
+ * both realloc the array.  The lock is taken only on the bootstrap incarnation
+ * check, which is a handful of instructions per message and uncontended
+ * whenever the OOB is running on the main thread alone. */
+static pmix_mutex_t epoch_lock = PMIX_MUTEX_STATIC_INIT;
+
 /* Grow the per-rank epoch table so index rank is valid, zero-filling new slots
  * (0 = unknown). Ranks are dense and small, so a flat array indexed by rank is
- * ample. Runs only on the progress thread, like all RML state. */
+ * ample. Caller must hold epoch_lock. */
 static void ensure_epoch_slot(pmix_rank_t rank)
 {
     if ((size_t) rank < prte_rml_base.peer_epochs_size) {
@@ -89,27 +98,34 @@ static void ensure_epoch_slot(pmix_rank_t rank)
 
 bool prte_rml_epoch_ok(pmix_rank_t rank, uint64_t epoch)
 {
+    uint64_t known;
+    bool ok = true;
+
     /* an unstamped message (epoch 0) carries no incarnation claim - accept */
     if (0 == epoch) {
         return true;
     }
+    pmix_mutex_lock(&epoch_lock);
     ensure_epoch_slot(rank);
     if ((size_t) rank >= prte_rml_base.peer_epochs_size) {
         /* allocation failed - fail open rather than drop live traffic */
-        return true;
+        goto done;
     }
-    uint64_t known = prte_rml_base.peer_epochs[rank];
+    known = prte_rml_base.peer_epochs[rank];
     if (0 == known) {
         /* first time we have seen this rank - learn its epoch */
         prte_rml_base.peer_epochs[rank] = epoch;
-        return true;
+        goto done;
     }
     if (epoch < known) {
         /* stale incarnation - drop. A newer epoch passes but does not advance
          * the table here; the arbitrated revival advances it authoritatively. */
-        return false;
+        ok = false;
     }
-    return true;
+
+done:
+    pmix_mutex_unlock(&epoch_lock);
+    return ok;
 }
 
 void prte_rml_record_epoch(pmix_rank_t rank, uint64_t epoch)
@@ -117,10 +133,12 @@ void prte_rml_record_epoch(pmix_rank_t rank, uint64_t epoch)
     if (0 == epoch) {
         return;
     }
+    pmix_mutex_lock(&epoch_lock);
     ensure_epoch_slot(rank);
     if ((size_t) rank < prte_rml_base.peer_epochs_size) {
         prte_rml_base.peer_epochs[rank] = epoch;
     }
+    pmix_mutex_unlock(&epoch_lock);
 }
 
 uint64_t prte_rml_get_epoch(pmix_rank_t rank)

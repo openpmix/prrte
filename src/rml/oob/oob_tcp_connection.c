@@ -19,7 +19,7 @@
  * Copyright (c) 2016      Mellanox Technologies Ltd. All rights reserved.
  * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
@@ -154,6 +154,8 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
     prte_socklen_t addrlen = 0;
     prte_oob_tcp_peer_t *peer;
     prte_oob_tcp_addr_t *addr;
+    prte_oob_tcp_send_t *snd;
+    pmix_list_t doomed;
     bool connected = false;
     pmix_pif_t *intf;
     char *host;
@@ -466,13 +468,32 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
          * from us if we are in our own progress thread
          */
         PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_mca_oob_tcp_component_failed_to_connect);
-        /* FIXME: post any messages in the send queue back to the OOB
-         * level for reassignment
-         */
+        /* Nothing queued for this peer can ever go out, so finish each of
+         * those sends as unreachable.  Completing them - rather than dropping
+         * them on the floor, which is what this used to do - is what lets the
+         * originator learn the message died; RELM in particular is waiting on
+         * exactly that callback.  Lift them off the peer under its lock, then
+         * complete them outside it. */
+        PMIX_CONSTRUCT(&doomed, pmix_list_t);
+        pmix_mutex_lock(&peer->lock);
         if (NULL != peer->send_msg) {
+            pmix_list_append(&doomed, &peer->send_msg->super);
+            peer->send_msg = NULL;
         }
-        while (NULL != pmix_list_remove_first(&peer->send_queue)) {
+        while (NULL != (snd = (prte_oob_tcp_send_t *) pmix_list_remove_first(&peer->send_queue))) {
+            pmix_list_append(&doomed, &snd->super);
         }
+        pmix_mutex_unlock(&peer->lock);
+        while (NULL != (snd = (prte_oob_tcp_send_t *) pmix_list_remove_first(&doomed))) {
+            if (NULL != snd->msg) {
+                prte_rml_send_t *m = snd->msg;
+                m->status = PRTE_ERR_UNREACH;
+                snd->msg = NULL; // the completion owns it now
+                PRTE_OOB_COMPLETE_SEND(peer, m);
+            }
+            PMIX_RELEASE(snd);
+        }
+        PMIX_DESTRUCT(&doomed);
         goto cleanup;
     }
 
@@ -646,6 +667,12 @@ static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name)
 
 /*
  * Initialize events to be used by the peer instance for TCP select/poll callbacks.
+ *
+ * These start out on prte_event_base whatever base the peer was assigned:
+ * connect completion and the IDENT handshake run the connection state machine,
+ * which owns the peer table and the routing tree and therefore belongs to the
+ * main progress thread.  Once the handshake succeeds, tcp_peer_connected()
+ * moves both events onto peer->evbase for the life of the connection.
  */
 static void tcp_peer_event_init(prte_oob_tcp_peer_t *peer)
 {
@@ -665,6 +692,84 @@ static void tcp_peer_event_init(prte_oob_tcp_peer_t *peer)
             peer->send_ev_active = false;
         }
     }
+}
+
+/*
+ * Hand this peer's socket over to the base that will service it for the rest
+ * of the connection's life.
+ *
+ * Called from tcp_peer_connected() - i.e. on the main progress thread, at the
+ * one moment when the handshake is finished and no data event has yet fired.
+ * Both events are deleted first: libevent will not re-target a pending event,
+ * and deleting the event whose callback we are inside (the recv event, on the
+ * connect-ack path) is explicitly allowed.  The caller re-adds whichever
+ * events it wants live, which is why the active flags are cleared here.
+ *
+ * When no OOB worker threads were requested peer->evbase IS prte_event_base
+ * and this is a delete/re-set onto the base the events were already on - a few
+ * instructions once per connection, and nothing else changes.
+ */
+static void tcp_peer_rebind_events(prte_oob_tcp_peer_t *peer)
+{
+    if (0 > peer->sd) {
+        return;
+    }
+    if (peer->recv_ev_active) {
+        prte_event_del(&peer->recv_event);
+        peer->recv_ev_active = false;
+    }
+    if (peer->send_ev_active) {
+        prte_event_del(&peer->send_event);
+        peer->send_ev_active = false;
+    }
+    prte_event_set(peer->evbase, &peer->recv_event, peer->sd, PRTE_EV_READ | PRTE_EV_PERSIST,
+                   prte_oob_tcp_recv_handler, peer);
+    prte_event_set(peer->evbase, &peer->send_event, peer->sd, PRTE_EV_WRITE | PRTE_EV_PERSIST,
+                   prte_oob_tcp_send_handler, peer);
+}
+
+/*
+ * Start the connection state machine for a peer that a socket-servicing thread
+ * found unconnected.
+ *
+ * The state word, the address list and the retry bookkeeping all belong to the
+ * main progress thread, so a worker that has a message to send but no live
+ * connection posts here rather than driving the machine itself.  Runs on
+ * prte_event_base and consumes the conn op it was handed.
+ */
+void prte_oob_tcp_peer_start_connect(int fd, short args, void *cbdata)
+{
+    prte_oob_tcp_conn_op_t *op = (prte_oob_tcp_conn_op_t *) cbdata;
+    prte_oob_tcp_peer_t *peer;
+
+    PMIX_ACQUIRE_OBJECT(op);
+    peer = op->peer;
+
+    if (MCA_OOB_TCP_CONNECTING == peer->state || MCA_OOB_TCP_CONNECT_ACK == peer->state) {
+        /* somebody beat us to it */
+        PMIX_RELEASE(op);
+        return;
+    }
+    if (MCA_OOB_TCP_CONNECTED == peer->state) {
+        /* it came up while we were in flight - just make sure the queued
+         * message will actually go out */
+        pmix_mutex_lock(&peer->lock);
+        if (NULL == peer->send_msg) {
+            peer->send_msg = (prte_oob_tcp_send_t *) pmix_list_remove_first(&peer->send_queue);
+        }
+        if (NULL != peer->send_msg && !peer->send_ev_active) {
+            peer->send_ev_active = true;
+            PMIX_POST_OBJECT(peer);
+            prte_event_add(&peer->send_event, 0);
+        }
+        pmix_mutex_unlock(&peer->lock);
+        PMIX_RELEASE(op);
+        return;
+    }
+
+    peer->state = MCA_OOB_TCP_CONNECTING;
+    /* hand the op straight on - try_connect owns it from here */
+    prte_oob_tcp_peer_try_connect(fd, args, op);
 }
 
 /*
@@ -1086,10 +1191,27 @@ static void tcp_peer_connected(prte_oob_tcp_peer_t *peer)
         prte_event_del(&peer->timer_event);
         peer->timer_ev_active = false;
     }
-    peer->state = MCA_OOB_TCP_CONNECTED;
     if (NULL != peer->active_addr) {
         peer->active_addr->retries = 0;
     }
+
+    /* Publishing CONNECTED is what makes this peer reachable from a worker
+     * base: prte_oob_base_send_nb tests the state and MCA_OOB_TCP_QUEUE_MSG
+     * then posts to peer->evbase, where prte_oob_tcp_queue_msg adds the send
+     * event.  So the events must already BE on that base before the state is
+     * published, and nothing may be re-targeting them while a worker adds
+     * one - libevent's event_assign on an event another thread is adding is
+     * undefined, and what it produced here was an event registered on nothing:
+     * the send never fired and every thread in the DVM parked in epoll_wait.
+     *
+     * Hence: rebind, publish, and start the pending sends as one step under
+     * the peer lock.  Taking the lock across the rebind is safe precisely
+     * because the events are still on prte_event_base at this point and we
+     * are on it, so those event_del calls cannot block waiting for another
+     * thread's callback (which is the deadlock peer_close has to avoid). */
+    pmix_mutex_lock(&peer->lock);
+    tcp_peer_rebind_events(peer);
+    peer->state = MCA_OOB_TCP_CONNECTED;
 
     /* initiate send of first message on queue */
     if (NULL == peer->send_msg) {
@@ -1100,6 +1222,7 @@ static void tcp_peer_connected(prte_oob_tcp_peer_t *peer)
         PMIX_POST_OBJECT(peer);
         prte_event_add(&peer->send_event, 0);
     }
+    pmix_mutex_unlock(&peer->lock);
 }
 
 /*
@@ -1109,7 +1232,19 @@ static void tcp_peer_connected(prte_oob_tcp_peer_t *peer)
  */
 void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
 {
+    prte_oob_tcp_state_t old_state;
+    prte_oob_tcp_send_t *send;
+    pmix_list_t doomed;
+    int err;
+
+    /* Take the state transition under the peer lock so exactly one caller
+     * performs the teardown.  Reachable from both the main progress thread
+     * (the connection state machine) and, once the socket has been handed to
+     * a worker base, from that worker's send/recv handler - and an unguarded
+     * read-then-write of the state word lets both through. */
+    pmix_mutex_lock(&peer->lock);
     if (MCA_OOB_TCP_CLOSED == peer->state) {
+        pmix_mutex_unlock(&peer->lock);
         return;
     }
 
@@ -1121,6 +1256,7 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
     /* if we were CONNECTING, then we need to mark the address as
      * failed and cycle back to try the next address */
     if (MCA_OOB_TCP_CONNECTING == peer->state) {
+        pmix_mutex_unlock(&peer->lock);
         close(peer->sd);
         peer->sd = -1;
         if (NULL != peer->active_addr) {
@@ -1130,13 +1266,20 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
         return;
     }
 
-    prte_oob_tcp_state_t old_state = peer->state;
+    old_state = peer->state;
     peer->state = MCA_OOB_TCP_CLOSED;
+    pmix_mutex_unlock(&peer->lock);
+
     if (NULL != peer->active_addr) {
         peer->active_addr->state = MCA_OOB_TCP_CLOSED;
     }
 
-    /* unregister active events */
+    /* Unregister active events.  This must not be done holding the peer lock:
+     * deleting an event whose handler is running on another thread blocks
+     * until that handler returns, and the handler may be waiting for this very
+     * lock.  It is also what makes the rest of this function safe - once both
+     * socket events are gone, no handler for this peer can be in flight, so
+     * the partial send/recv state below is ours alone. */
     if (peer->recv_ev_active) {
         prte_event_del(&peer->recv_event);
         peer->recv_ev_active = false;
@@ -1158,28 +1301,40 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
         PMIX_RELEASE(peer->recv_msg);
         peer->recv_msg = NULL;
     }
+
+    /* Lift everything still queued off the peer in one guarded step - a
+     * message can still be queued onto it from another thread - and complete
+     * it outside the lock, since completion runs the originator's callback. */
+    PMIX_CONSTRUCT(&doomed, pmix_list_t);
+    pmix_mutex_lock(&peer->lock);
     if (NULL != peer->send_msg) {
-        /* Just add to send_queue to handle w/ the rest */
-        pmix_list_prepend(&peer->send_queue, &peer->send_msg->super);
+        /* Just add to the doomed list to handle w/ the rest */
+        pmix_list_append(&doomed, &peer->send_msg->super);
         peer->send_msg = NULL;
     }
+    while (NULL != (send = (prte_oob_tcp_send_t *) pmix_list_remove_first(&peer->send_queue))) {
+        pmix_list_append(&doomed, &send->super);
+    }
+    pmix_mutex_unlock(&peer->lock);
 
     /* inform rml of all queued sends' completion (as failures)
      * do not try to re-queue messages at this level - risking message loss is
      * unavoidable when a node in the communication tree dies, so safely
      * replaying messages must be handled at a higher level.
      */
-    int err = prte_rml_is_node_up(peer->name.rank) ?
+    err = prte_rml_is_node_up(peer->name.rank) ?
         PRTE_ERR_UNREACH : PRTE_ERR_NODE_DOWN;
-    prte_oob_tcp_send_t *send, *next;
-    PMIX_LIST_FOREACH_SAFE(send, next, &peer->send_queue, prte_oob_tcp_send_t){
-        send->msg->status = err;
-        PRTE_RML_SEND_COMPLETE(send->msg);
-        send->msg = NULL; // completion released it
-        pmix_list_remove_item(&peer->send_queue, &send->super);
+    while (NULL != (send = (prte_oob_tcp_send_t *) pmix_list_remove_first(&doomed))) {
+        if (NULL != send->msg) {
+            prte_rml_send_t *snd = send->msg;
+            snd->status = err;
+            send->msg = NULL; // the completion owns it now
+            PRTE_OOB_COMPLETE_SEND(peer, snd);
+        }
         PMIX_RELEASE(send);
     }
-    
+    PMIX_DESTRUCT(&doomed);
+
     /* inform the component-level that we have lost a connection so
      * it can decide what to do about it.
      */

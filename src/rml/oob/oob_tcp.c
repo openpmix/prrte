@@ -108,8 +108,80 @@ prte_oob_base_t prte_oob_base = {
     .keepalive_time = 0,
     .keepalive_intvl = 0,
     .retry_delay = 0,
-    .max_recon_attempts = 0
+    .max_recon_attempts = 0,
+    .num_progress_threads = 0,
+    .ev_bases = NULL,
+    .ev_threads = NULL,
+    .next_base = 0
 };
+
+/* Stand up the pool of event bases that peer sockets are serviced on.
+ *
+ * The zero case deliberately still allocates a one-element array holding
+ * prte_event_base, so every call site can index ev_bases unconditionally and
+ * a peer assigned "worker 0" with no workers configured is simply a peer on
+ * the main progress thread - the behavior that predates this pool.
+ */
+int prte_oob_start_progress_threads(void)
+{
+    int i;
+    char *tmp;
+
+    prte_oob_base.next_base = 0;
+    if (0 >= prte_oob_base.num_progress_threads) {
+        /* a negative value only reaches here if the user asked for one;
+         * treat it as "no worker threads" rather than sizing an array with it */
+        prte_oob_base.num_progress_threads = 0;
+        prte_oob_base.ev_bases = (prte_event_base_t **) malloc(sizeof(prte_event_base_t *));
+        if (NULL == prte_oob_base.ev_bases) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        prte_oob_base.ev_bases[0] = prte_event_base;
+        return PRTE_SUCCESS;
+    }
+
+    pmix_output_verbose(5, prte_oob_base.output,
+                        "%s oob:tcp: starting %d OOB progress threads",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_oob_base.num_progress_threads);
+    prte_oob_base.ev_bases = (prte_event_base_t **)
+        malloc(prte_oob_base.num_progress_threads * sizeof(prte_event_base_t *));
+    if (NULL == prte_oob_base.ev_bases) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    for (i = 0; i < prte_oob_base.num_progress_threads; i++) {
+        pmix_asprintf(&tmp, "PRTE-OOB-%d", i);
+        prte_oob_base.ev_bases[i] = prte_progress_thread_init(tmp);
+        if (NULL == prte_oob_base.ev_bases[i]) {
+            /* fall back to the main base for this slot rather than leaving a
+             * NULL that every peer assigned to it would dereference */
+            prte_oob_base.ev_bases[i] = prte_event_base;
+            free(tmp);
+            continue;
+        }
+        PMIx_Argv_append_nosize(&prte_oob_base.ev_threads, tmp);
+        free(tmp);
+    }
+    return PRTE_SUCCESS;
+}
+
+void prte_oob_harvest_progress_threads(void)
+{
+    int i;
+
+    if (NULL != prte_oob_base.ev_threads) {
+        for (i = 0; NULL != prte_oob_base.ev_threads[i]; i++) {
+            prte_progress_thread_finalize(prte_oob_base.ev_threads[i]);
+        }
+        PMIx_Argv_free(prte_oob_base.ev_threads);
+        prte_oob_base.ev_threads = NULL;
+    }
+    if (NULL != prte_oob_base.ev_bases) {
+        free(prte_oob_base.ev_bases);
+        prte_oob_base.ev_bases = NULL;
+    }
+    prte_oob_base.num_progress_threads = 0;
+    prte_oob_base.next_base = 0;
+}
 
 int prte_oob_open(void)
 {
@@ -304,6 +376,14 @@ int prte_oob_open(void)
         return PRTE_ERR_NOT_AVAILABLE;
     }
 
+    /* stand up the pool of bases peer sockets will be serviced on.  This has
+     * to precede the listeners: the first thing an accepted connection does is
+     * build a peer, and peer construction assigns it a base from this pool. */
+    if (PRTE_SUCCESS != (rc = prte_oob_start_progress_threads())) {
+        PRTE_ERROR_LOG(rc);
+        return rc;
+    }
+
     // start the listeners
     if (PRTE_SUCCESS != (rc = prte_oob_tcp_start_listening())) {
         prte_show_help("help-oob-tcp.txt", "no-listeners", true);
@@ -328,6 +408,11 @@ void prte_oob_close(void)
         close(prte_oob_base.stop_thread[1]);
 
     }
+
+    /* stop servicing peer sockets before the peers themselves go away - a
+     * worker still in a send handler would be reading a peer we are about to
+     * destruct */
+    prte_oob_harvest_progress_threads();
 
     PMIX_LIST_DESTRUCT(&prte_oob_base.local_ifs);
     PMIX_LIST_DESTRUCT(&prte_oob_base.peers);
@@ -580,6 +665,12 @@ int prte_oob_register(void)
                                         "Maximum time (in sec) to keep retrying a connection to a non-lifeline peer before giving up so the routing tree can heal to an ancestor; 0 means retry forever",
                                         PMIX_MCA_BASE_VAR_TYPE_INT,
                                         &prte_oob_base.connect_max_time);
+
+    prte_oob_base.num_progress_threads = 0;
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "oob_progress_threads",
+                                        "Number of dedicated progress threads to service peer socket send/recv events (0 = service them on the main progress thread, as before)",
+                                        PMIX_MCA_BASE_VAR_TYPE_INT,
+                                        &prte_oob_base.num_progress_threads);
 
     prte_oob_base.max_msg_size = 100;
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "max_msg_size",

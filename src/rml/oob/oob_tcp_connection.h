@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -89,6 +89,11 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_conn_op_t);
     } while (0);
 
 PRTE_EXPORT void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata);
+/* Ask the main progress thread to (re)start the connection to a peer. Use
+ * this rather than try_connect when the caller may not be on that thread:
+ * it makes the "is it already coming up?" test and the state transition
+ * where the state word lives. */
+PRTE_EXPORT void prte_oob_tcp_peer_start_connect(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_oob_tcp_peer_dump(prte_oob_tcp_peer_t *peer, const char *msg);
 PRTE_EXPORT bool prte_oob_tcp_peer_accept(prte_oob_tcp_peer_t *peer);
 PRTE_EXPORT void prte_oob_tcp_peer_complete_connect(prte_oob_tcp_peer_t *peer);

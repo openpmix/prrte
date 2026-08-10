@@ -127,19 +127,88 @@ In a launcher-less (bootstrapped) DVM daemons boot independently, so:
   `prte_rml_route_lost` (promoting to the next ancestor, a `COMM_FAILED`
   recovery) rather than raising `FAILED_TO_CONNECT`.
 
+## Which thread services a peer's socket
+
+By default, all of it runs on `prte_event_base` — one progress thread, exactly
+as it always did. `prte_oob_progress_threads` (`prte_oob_base.num_progress_threads`,
+default **0**) starts N worker progress threads and hands each peer one of them,
+round-robin, at construction (`peer->evbase`). The point is not extra bandwidth —
+one thread's `writev` copy rate is several times a 10-25 GbE link — it is
+**occupancy**: while the main thread is deflating an xcast, registering a
+namespace, or running the odls fork path, nothing services a socket at all.
+
+The split is deliberate and narrow:
+
+| Runs on `prte_event_base`, always | Runs on `peer->evbase` |
+|---|---|
+| the connection state machine (`try_connect`, `complete_connect`, the IDENT handshake, `accept`) | the send handler and the recv handler, once **CONNECTED** |
+| routing (`prte_rml_get_route`), the peer table, `prte_oob_base_send_nb` | `MCA_OOB_TCP_QUEUE_MSG` and the send queue |
+| every send **completion** callback, and the `lost_connection` notice | the `writev`/`read` themselves |
+
+Four rules keep that safe, and all four are load-bearing:
+
+- **Events start on the main base and move at CONNECTED.** `tcp_peer_event_init`
+  binds to `prte_event_base`; `tcp_peer_connected` calls `tcp_peer_rebind_events`,
+  which deletes both events and re-`event_set`s them on `peer->evbase`. libevent
+  will not re-target a *pending* event, so the delete is not optional — and it
+  clears the `*_ev_active` flags, which is why every caller re-adds afterwards.
+- **`peer->lock` guards `send_msg`/`send_queue`/`send_ev_active`**, and the
+  once-only state transition at the top of `prte_oob_tcp_peer_close`. It is held
+  across queue manipulation only — **never** across a `writev` and never across a
+  callback. The lock is always the *outer* lock: a holder may take a libevent
+  base lock (`event_add`/`event_del`), never the reverse.
+- **`prte_event_del` is the synchronization with a running handler.** Deleting an
+  event whose callback is executing on another thread blocks until that callback
+  returns. That is what makes the rest of `peer_close` safe — once both socket
+  events are gone, no handler for that peer can be in flight, so `recv_msg` and
+  the socket are the closer's alone. It is also why `peer_close` must release
+  `peer->lock` *before* those deletes: the handler it is waiting for may be
+  waiting for the lock.
+- **A worker never writes the peer's connection state.** `prte_oob_tcp_queue_msg`
+  finding the peer unconnected posts `prte_oob_tcp_peer_start_connect` to the
+  main base rather than setting `MCA_OOB_TCP_CONNECTING` itself.
+- **Whoever observes CONNECTED last arms the send event.** Both
+  `prte_oob_tcp_queue_msg` and `tcp_peer_connected` end by checking "peer is
+  CONNECTED and has a message on deck with no send event running — arm it",
+  and *both* checks are required because they now race. `MCA_OOB_TCP_QUEUE_PENDING`
+  passes `activate = false`, which used to mean "the connection machinery will
+  start this send" — true only while the queueing ran on the same thread. If
+  `tcp_peer_connected` wins the race it finds an empty queue and arms nothing;
+  the pending `queue_msg` then arrives, parks the message on deck, and, seeing
+  `activate` false, arms nothing either. The message sits on a live connection
+  behind a dead event forever. That is not a slow path — it wedged an 8-node
+  radix-2 launch roughly one run in three, with every thread idle in
+  `epoll_wait` and a single peer showing `send_msg != NULL, send_ev_active ==
+  false`. If you add a third place that queues onto a peer, it needs the same
+  tail.
+
+With `num_progress_threads == 0`, `peer->evbase` **is** `prte_event_base`:
+`PRTE_OOB_COMPLETE_SEND` completes inline instead of posting, the rebind is a
+delete/re-set onto the base the events were already on, and the mutex is
+uncontended. `prte_oob_base.ev_bases` still exists and still holds one entry, so
+every call site indexes it unconditionally — do not "optimize" that array away.
+
+The one piece of state outside this directory that a worker touches directly is
+the RML's incarnation table (`prte_rml_epoch_ok`, bootstrap only), which
+reallocates; it carries its own mutex in `src/rml/rml.c`. Anything else you make
+a socket handler call has to be safe off the main thread or has to be shifted.
+
 ## Gotchas before you edit
 
-- **Single progress thread.** All OOB state — peers, sockets, send queues — is
-  owned by the progress thread. Cross-thread entry goes through `PRTE_OOB_SEND`
-  (a caddy + `PRTE_PMIX_THREADSHIFT`). Never touch peer/socket state off that
-  thread, and never block on it.
+- **Peer/socket state belongs to one thread at a time.** Cross-thread entry into
+  the OOB goes through `PRTE_OOB_SEND` (a caddy + `PRTE_PMIX_THREADSHIFT`), which
+  always lands on `prte_event_base`. Never touch peer state from an arbitrary
+  thread, and never block on any of these threads. See the section above for
+  what the worker bases are allowed to touch.
 - **The header is not an ABI.** See above; do not add versioning, but do keep
   every daemon in a build in sync.
 - **Finish a send, never just free it.** A `prte_rml_send_t` that is abandoned
   — no route, no peer, the connection torn down — must go through
   `PRTE_RML_SEND_COMPLETE` so the caller's callback runs with a status.
   `PMIX_RELEASE` frees the buffer and tells nobody, which is invisible for the
-  default callback and a lost message for RELM.
+  default callback and a lost message for RELM. From inside the transport, use
+  `PRTE_OOB_COMPLETE_SEND(peer, msg)` instead: it completes inline when the peer
+  is on the main base and posts the completion there when it is not.
 - **The recv object owns its payload.** `prte_oob_tcp_recv_t`'s destructor
   frees `data`; the paths that hand the payload on (`PMIx_Data_load` for local
   delivery, the relay) null the pointer first. Add a third path and it has to
