@@ -4506,6 +4506,50 @@ test_rml() {
     fi
     cleanup_swarm
 
+    banner "rml: a daemon lost BELOW an interior daemon still ends the job"
+    # The case above kills a daemon the HNP is the parent of, which at the
+    # default radix is every daemon -- a ten-node DVM at radix 64 is flat, so
+    # the HNP is always the one that loses the socket and the errmgr always
+    # runs.  Give the tree depth and that stops being true: at radix 2 over
+    # seven nodes, node7 (rank 6) hangs off rank 2, so rank 2 detects the loss
+    # and the HNP only ever hears about it second-hand, through the RML failure
+    # notice.  The notice used to update the routing bitmaps and nothing else,
+    # so the HNP never marked the dead node's procs terminated and prun waited
+    # forever -- a hang that did not exist one radix higher, which is precisely
+    # why nothing caught it.
+    #
+    # The observable is the same as its flat sibling, and it has to be a real
+    # timeout rather than "did it print something": the failure mode is a hang.
+    cleanup_swarm
+    if prted_dvm_start_mca 'node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1' \
+           '--prtemca rml_base_radix 2'; then
+        PRUN_BG /tmp/rml-deep-longrun.out '--host node7:1 -n 1 sleep 120'
+        sleep 6
+        if ! RUN 'pgrep -x prun' >/dev/null 2>&1; then
+            bad "the long-running job never started on the deep tree: $(RUN 'cat /tmp/rml-deep-longrun.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+        elif ! ON 7 'pgrep -x prted' >/dev/null 2>&1; then
+            bad "node7 has no daemon to kill -- the job did not land where expected"
+        else
+            ok "a job is running on node7, two levels down a radix-2 tree"
+            ON 7 'pkill -9 -x prted' >/dev/null 2>&1
+            n=0
+            while [ "$n" -lt 45 ]; do
+                RUN 'pgrep -x prun' >/dev/null 2>&1 || break
+                sleep 1; n=$((n+1))
+            done
+            [ "$n" -lt 45 ] \
+                && ok "a loss detected by an interior daemon reached the HNP (${n}s)" \
+                || bad "prun never returned: the HNP never acted on a death it only heard about"
+            RUN 'pgrep -x prte' >/dev/null 2>&1 \
+                && ok "...and the HNP survived it" \
+                || bad "the HNP died along with the lost daemon"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a radix-2 DVM for the deep lost-daemon test"
+    fi
+    cleanup_swarm
+
     banner "rml/oob: peer sockets serviced by dedicated OOB progress threads"
     # prte_oob_progress_threads (default 0) moves each peer's send/recv socket
     # events off the main progress thread onto one of N worker bases, chosen
@@ -4560,9 +4604,9 @@ test_rml() {
     # recv handler.  Killing a daemon under a live job is what drives it.  A
     # missed handshake there is a hang, a use-after-free, or a leaked send --
     # so the observable is that the job is released and the HNP lives.
-    # Deliberately at the default radix, matching the non-threaded case above:
-    # a *small* radix does not release the job on a daemon loss even with no
-    # worker threads at all, so adding one here would only re-report that.
+    # At the default radix, so that what this case reports is the threading and
+    # nothing else; the deep-tree half of the same scenario is the case above,
+    # which runs it at radix 2 with the threads off.
     if prted_dvm_start_mca 'node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1' \
            '--prtemca prte_oob_progress_threads 4'; then
         PRUN_BG /tmp/rml-thr-longrun.out '--host node7:1 -n 1 sleep 120'

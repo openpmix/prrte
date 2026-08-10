@@ -100,6 +100,34 @@ recomputes ancestors, children, and possible self-promotion, packages the delta
 into a `prte_rml_recovery_status_t`, and notifies the RML, grpcomm, filem, and
 relm fault handlers.
 
+### Who tells the errmgr a daemon died — and why depth changes the answer
+
+`PRTE_PROC_STATE_COMM_FAILED` is what makes the HNP act on a departure: mark the
+daemon not-alive, decrement `num_daemons`, print `node-died`, and fail the jobs
+that had procs on it. It is raised in **two** places, and both are needed:
+
+- `prte_mca_oob_tcp_component_lost_connection` — the daemon that actually lost
+  the socket. This is also what drives the HNP's countdown to
+  `DAEMONS_TERMINATED` during a *normal* teardown (the errmgr's
+  `prte_prteds_term_ordered` branch), so it cannot be removed.
+- `prte_rml_recv_failures_notice` — a daemon that only *heard* about the death,
+  for the ranks it had not already recorded.
+
+The second one is easy to think unnecessary, and its absence was a real hang.
+At the default radix a ten-node DVM is **flat**, so the HNP is every daemon's
+parent and is always the one that loses the socket; the first path alone looks
+sufficient. Give the tree any depth and an interior daemon becomes the detector:
+the notice walks up, every daemon (HNP included) correctly marks the rank
+failed — and the HNP, never having lost a socket, never runs the errmgr. The
+dead node's procs are never marked terminated, the job never completes, and its
+tool waits forever. `prun` against a radix-2 DVM hung indefinitely where the
+same DVM at radix 64 released instantly.
+
+Two properties keep the pair from double-reporting: the notice path reports only
+ranks not already in `failed_dmns` (so the detector's own rank, echoed back by
+the HNP's global broadcast, is skipped), and the errmgr independently ignores a
+comm failure for a daemon it has already torn out.
+
 ### The tree layout, precisely
 
 `radix.h` is the whole of the math, and it is worth writing down because the
