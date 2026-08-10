@@ -434,11 +434,19 @@ cleanup:
 /**
  * @brief Return phase-one release acceptance to the requester.
  *
+ * IN_PROGRESS promises a phase two, so only say it where one can be sent:
+ * prte_plm_base_dvm_mod_notify compiles away when the PMIx in use defines
+ * neither DVM modification event code.
+ *
  * @param[in] req PMIx release request.
  */
 static int prte_ras_slurm_complete_release_request(prte_pmix_server_req_t *req)
 {
+#if PRTE_HAVE_DVM_MOD_EVENTS
     req->pstatus = PMIX_OPERATION_IN_PROGRESS;
+#else
+    req->pstatus = PMIX_SUCCESS;
+#endif
     if (NULL != req->infocbfunc) {
         req->infocbfunc(req->pstatus, req->info, req->ninfo, req->cbdata,
                         prte_pmix_server_req_release, req);
