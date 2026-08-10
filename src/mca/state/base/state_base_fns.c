@@ -514,13 +514,35 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
             PRTE_ACTIVATE_PROC_STATE(proc, PRTE_PROC_STATE_TERMINATED);
         }
     } else if (PRTE_PROC_STATE_TERMINATED == state) {
-        if (pdata->state == state) {
+        /* Have we already counted this proc?  Ask the flag, not the state
+         * word.  Testing "pdata->state == state" looks equivalent and is not,
+         * for exactly the procs this matters most for: every failure state is
+         * PRTE_PROC_STATE_ERROR (50) + n, i.e. GREATER than
+         * PRTE_PROC_STATE_TERMINATED (20), so the assignment below - guarded
+         * by "< TERMINATED" so a terminal diagnosis is never overwritten by
+         * the generic one - deliberately leaves such a proc's state above
+         * TERMINATED.  The comparison therefore never matches for a proc that
+         * failed, and every repeat activation counted it again.
+         *
+         * A repeat is not hypothetical on the HNP: for a *remote* failed proc
+         * errmgr/dvm force-marks WAITPID_FIRED and IOF_COMPLETE ("we won't
+         * hear anything more about it"), and its daemon then relays the real
+         * pair as well - two completions, two counts, for one proc.
+         * num_terminated then reaches num_procs while a survivor is still
+         * running, the job is declared NORMALLY TERMINATED, and the DVM is
+         * torn down under that survivor: its final output is discarded and it
+         * never terminates properly.  Seen as an intermittently missing last
+         * line from a random rank whenever a job had a failure in it.
+         *
+         * state/prted has always used the flag here; this is the same test. */
+        if (PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_RECORDED)) {
             pmix_output_verbose(5, prte_state_base_framework.framework_output,
-                                "%s state:base:track_procs proc %s already in state %s. Skip transition.",
+                                "%s state:base:track_procs proc %s already recorded as %s. Skip transition.",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
                                 prte_proc_state_to_str(state));
             goto cleanup;
         }
+        PRTE_FLAG_SET(pdata, PRTE_PROC_FLAG_RECORDED);
 
         /* update the proc state */
         PRTE_FLAG_UNSET(pdata, PRTE_PROC_FLAG_ALIVE);
