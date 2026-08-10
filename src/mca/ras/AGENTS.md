@@ -130,6 +130,15 @@ The `modify()` path has its own protocol (`prte_ras_base_modify`):
 `modify` requests can be keyed to a single component via `req->key`
 (matched case-insensitively against the component name).
 
+A module that grows the DVM answers `OPERATION_IN_PROGRESS` and lets the grow
+campaign's `PMIX_DVM_IS_READY` be the result, since the nodes are unusable until
+daemons are up on them. `setup_virtual_machine` resolves that event's recipients
+**from the new nodes** — `node->session`, else the session named by the node's
+`PRTE_NODE_ALLOC_ID` — so a module whose nodes join the general pool must record
+`session->requestor` on whatever session tracks the allocation, or neither the
+completion nor a launch failure reaches anyone. A campaign collects every
+distinct requester among its targets: one campaign can cover several grows.
+
 ---
 
 ## Component selection is not "pick one"
