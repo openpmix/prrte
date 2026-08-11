@@ -56,6 +56,7 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | `dataserver.c` | A bare PMIx client for the publish/lookup service (`dataserver` in the install): publish/lookup/lookupwait/lookup2/unpublish. Drives `src/runtime/data_server`. See §13. |
 | `jobinfo.c` | A bare PMIx client for the **direct-modex** paths (`jobinfo` in the install): `publish`/`fetch`/`fetchkey`. Drives `src/prted/pmix/pmix_server_fence.c` from a daemon that hosts none of the target job's procs. |
 | `proctable.c` | A bare PMIx client for the **proc-table and server-URI queries** (`proctable` in the install): `procs`/`localprocs`/`serveruri`. Those are the only callers of `prte_pmix_convert_state()`, and the local-vs-global proc-table split has no meaning on one host. Drives `src/pmix`. |
+| `peerinfo.c` | A bare PMIx client in which every rank asks **every other rank of its own job** where it is (`peerinfo` in the install): rank, app rank, local/node rank, node id, hostname, cpuset, locality string. The only client here that reads a *peer's* reserved keys, and so the only one that reaches the daemon's derive-on-demand path — everything else either reads back what it put itself or asks about the job. Drives `derive_proc_data()` in `src/prted/pmix/pmix_server_fence.c`. See §20. |
 | `groupcon.c` | A bare PMIx client that drives a **group construct/destruct** (`groupcon` in the install): every rank contributes a local cid, asks for a context id, constructs, reads every peer's contribution back, destructs. Drives grpcomm's `grp_release` on daemons that merely *received* the broadcast. See §15. |
 | `envspawn.c` | A PMIx client that spawns a child job carrying one of every **envar directive** (`envspawn` in the install): SET/ADD/UNSET/PREPEND/APPEND, pinned to a named host, with the child reporting the environment it actually got into a file on its own node. Those directives have no command-line surface — they arrive only on a spawn request — and `odls` applies them on whichever daemon forks the process, so the child has to land somewhere the parent is not. Drives `prte_odls_base_process_envars`. |
 | `slowcat.c` | A deliberately **slow** stdin reader (`slowcat` in the install, no PMIx dependency): copies stdin to a file in small reads with a pause between them, so the daemon feeding it keeps hitting *partial* writes. That is the only way to reach the iof short-write path. |
@@ -1697,3 +1698,72 @@ indistinguishable from a correctly-counted one that forgot
 prterun ... --prtemca pmix_server_verbose 2 --leave-session-attached \
     /opt/prte/ompi/bin/mpinoop --all 2>&1 | grep -c "DMODX REQ FOR"
 ```
+
+## 20. Asking a peer where it is (`peerinfo`, `test_pmix`)
+
+A daemon does not have to publish, to its local PMIx server, everything it
+knows about every proc of a job. `prte_pmix_lazy_procdata` publishes only
+the procs that daemon hosts and derives the rest out of its own job object
+when PMIx brings it a request — see
+[`src/prted/pmix/AGENTS.md`](../../src/prted/pmix/AGENTS.md), *What a daemon
+publishes, and what it derives*.
+
+**Nothing else in this harness asks one rank about another rank.** Every
+other client either puts its own data and reads it back, or asks about the
+job rather than about a peer, and both are answered out of the local
+server's cache without the daemon ever being consulted. So the derivation
+could be switched on, the whole suite run green, and the path never once
+have executed — which is exactly what happened the first time it was
+written, and why the change sat unproven.
+
+Read that as a hole in the coverage and not as a finding about workloads.
+PRRTE is not one MPI's runtime; several programming libraries build on it,
+and what any of them asks a peer for is not something this tree can know.
+The harness can show the derived answer is right and that it is what
+answered — it cannot say how often anything wants it.
+
+`peerinfo` is the missing shape: an MPI initialization, in which every rank
+looks up where its peers are. Each rank prints one `SELF` line about itself
+and one `PEER` line about each of the others, in the same field order:
+
+```
+SELF <rank> <fields...>
+PEER <myrank> <peerrank> <fields...>
+```
+
+so the assertion is a string compare — what rank *r* was told about rank
+*p* must be what *p* says about itself. Three things about that:
+
+- **It is the A/B, inside one job.** A `SELF` line is what a proc's own
+  daemon published about it, which a daemon does for its own procs either
+  way; the `PEER` lines about it are what other daemons derived. Comparing
+  two separate *runs* would not work — a second job has a different
+  `PMIX_GLOBAL_RANK` offset, so the tables legitimately differ.
+- **Run it `--map-by node`, across at least two nodes.** On one node every
+  proc is local, nothing is derived, and the case is vacuous. The test
+  asserts the span rather than assuming it.
+- **`PMIX_RANK` is deliberately not in the compared set.** A process does
+  not hold its own rank in its datastore, so a rank asking about itself
+  gets `NOT_FOUND` where a rank asking about a peer gets the value. That is
+  PMIx, not PRRTE. It is checked separately against the one thing that
+  makes it worth checking: the answer has to be the rank that was asked
+  about — which is what catches a derivation that walked to the wrong
+  entry and produced a whole line of plausible values.
+
+A consistent table still cannot tell the two implementations apart, so a
+second case watches the daemon say it did the work:
+
+```sh
+prterun --host node1:2,node2:2,node3:2,node4:2 -n 8 --map-by node \
+    --leave-session-attached --prtemca prte_pmix_server_verbose 2 \
+    /opt/prte/prte/bin/peerinfo 2>&1 | grep -c "ANSWERED LOCALLY"
+```
+
+It must be **one per remote proc per daemon** — 24 for that command (four
+daemons, six remote procs each), *not* one per lookup: PMIx caches the
+modex reply, so the second rank on a node asking about the same peer never
+reaches the daemon at all. A count equal to the number of lookups would
+mean the caching is not working; a count of zero means the path did not
+run and everything above it proved nothing. `--leave-session-attached` is
+required, and for the same reason it is in §19: a daemonized `prted` has no
+stderr to read, so without it only the master's traces come back.

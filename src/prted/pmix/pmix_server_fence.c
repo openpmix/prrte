@@ -33,6 +33,7 @@
 #    include <unistd.h>
 #endif
 
+#include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_output.h"
 
@@ -87,6 +88,13 @@ static void wildcard_reg_complete(pmix_status_t status, void *cbdata)
     }
     PMIX_RELEASE(req);
 }
+
+/* answering a dmodex from the job object rather than from the hosting
+ * daemon - defined below, next to the key set they cover */
+static bool derivable_key(const char *key);
+static pmix_status_t derive_proc_data(prte_job_t *jdata, prte_proc_t *proct,
+                                      pmix_data_buffer_t *buf);
+static void derived_relfn(void *cbdata);
 
 static void dmodex_req(int sd, short args, void *cbdata)
 {
@@ -202,11 +210,65 @@ static void dmodex_req(int sd, short args, void *cbdata)
     }
 
     /* A proc object exists from the moment the job is created, and it is the
-     * mapper that gives it a node - so a request arriving for a job whose
+     * mapper that gives it a node - so a request that arrives for a job whose
      * mapping has not finished finds one with nothing to say about where it
-     * is.  That is the same answer as a proc whose node has no daemon, and it
-     * has to be reached the same way rather than by dereferencing NULL. */
-    if (NULL == proct->node || NULL == (dmn = proct->node->daemon)) {
+     * is.  Nothing below can be answered without that, derived or fetched. */
+    if (NULL == proct->node) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        prc = PMIX_ERR_NOT_FOUND;
+        goto callback;
+    }
+
+    /* If what they want is something we decided when we mapped this job, we
+     * already know it - asking the daemon that hosts the proc would be asking
+     * it to read back our own answer.  This is the other half of the lazy
+     * registration in prte_pmix_server_register_nspace(): that one declines to
+     * publish what nobody may ever want, and this one produces it the moment
+     * somebody does.  A refresh is the caller telling us our copy may be
+     * stale, which is exactly when we must not answer from it.
+     *
+     * This is deliberately ahead of resolving the hosting daemon, because it
+     * does not need one.  A proc whose daemon has gone - a lost node, a
+     * shrink - can still be said to have been placed where it was placed, and
+     * that is an answer eager publication would have had in hand.  Requiring
+     * a live daemon here would turn it into a failure. */
+    if (prte_pmix_server_globals.lazy_procdata && !refresh_cache &&
+        derivable_key(req->key)) {
+        pmix_data_buffer_t dbuf;
+        pmix_byte_object_t bo;
+
+        PMIX_DATA_BUFFER_CONSTRUCT(&dbuf);
+        prc = derive_proc_data(jdata, proct, &dbuf);
+        if (PMIX_SUCCESS == prc) {
+            PMIX_DATA_BUFFER_UNLOAD(&dbuf, bo.bytes, bo.size);
+            PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
+            pmix_output_verbose(2, prte_pmix_server_globals.output,
+                                "%s DMODX REQ FOR %s:%u KEY %s ANSWERED LOCALLY (%lu bytes)",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                req->tproc.nspace, req->tproc.rank, req->key,
+                                (unsigned long) bo.size);
+            if (NULL != req->mdxcbfunc) {
+                req->mdxcbfunc(PMIX_SUCCESS, bo.bytes, bo.size, req->cbdata,
+                               derived_relfn, bo.bytes);
+            } else {
+                free(bo.bytes);
+            }
+            /* we answered before ever being tracked, so there is usually
+             * nothing to clear - the constructor leaves local_index at -1 */
+            if (0 <= req->local_index) {
+                pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs,
+                                            req->local_index, NULL);
+            }
+            PMIX_RELEASE(req);
+            return;
+        }
+        /* we could not build it - fall through and ask the host daemon, which
+         * is what we would have done anyway */
+        PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
+        prc = PMIX_ERROR;
+    }
+
+    if (NULL == (dmn = proct->node->daemon)) {
         /* we don't know where this proc is located - since we already
          * found the job, and therefore know about its locations, this
          * must be an error */
@@ -214,6 +276,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
         prc = PMIX_ERR_NOT_FOUND;
         goto callback;
     }
+
     /* point the request to the daemon that is hosting the
      * target process */
     req->proxy = dmn->name;
@@ -278,6 +341,173 @@ callback:
         req->mdxcbfunc(prc, NULL, 0, req->cbdata, NULL, NULL);
     }
     PMIX_RELEASE(req);
+}
+
+/* ---- deriving a remote proc's data instead of fetching it -------------
+ *
+ * With prte_pmix_server_globals.lazy_procdata set, register_nspace publishes
+ * per-proc data only for the procs this daemon hosts.  Everything it would
+ * have published about the others is still right here, in the job object the
+ * launch message built, so a request for one of them is answered from local
+ * memory rather than by asking the daemon that hosts it.
+ *
+ * These are exactly the keys PRRTE is the *authority* for - the placement and
+ * binding it decided when it mapped the job.  Anything else a proc holds was
+ * put there by the application, which PRRTE knows nothing about, so those
+ * requests still go out on the wire as they always did.  That is what makes
+ * the split safe without knowing anything about who is asking or why: we are
+ * not guessing which keys matter, only answering for the ones we own.
+ *
+ * The answer goes back as a packed blob of pmix_kval_t, byte-identical in
+ * shape to what a real direct modex returns, because PMIx stores the reply
+ * itself and the scope it stores it in has to match what the re-satisfy after
+ * a dmodex reply then looks in (PMIX_REMOTE, for a specific rank).  Storing
+ * the values ourselves with PMIx_Data_store_internal would put them in the
+ * INTERNAL scope, which that lookup does not reach.
+ */
+static bool derivable_key(const char *key)
+{
+    if (NULL == key) {
+        /* no key named means "everything you have", and we do not have the
+         * application's half of it */
+        return false;
+    }
+    return PMIx_Check_key(key, PMIX_RANK) ||
+           PMIx_Check_key(key, PMIX_GLOBAL_RANK) ||
+           PMIx_Check_key(key, PMIX_APP_RANK) ||
+           PMIx_Check_key(key, PMIX_APPNUM) ||
+           PMIx_Check_key(key, PMIX_LOCAL_RANK) ||
+           PMIx_Check_key(key, PMIX_NODE_RANK) ||
+           PMIx_Check_key(key, PMIX_NODEID) ||
+           PMIx_Check_key(key, PMIX_HOSTNAME) ||
+           PMIx_Check_key(key, PMIX_CPUSET) ||
+           PMIx_Check_key(key, PMIX_LOCALITY_STRING) ||
+           PMIx_Check_key(key, PMIX_REINCARNATION);
+}
+
+static pmix_status_t pack_derived(pmix_data_buffer_t *buf, const char *key,
+                                  pmix_value_t *val)
+{
+    pmix_kval_t kv;
+    pmix_status_t rc;
+
+    /* a stack kval is fine here: the packer reads only key and value, and the
+     * value's storage belongs to our caller either way */
+    kv.key = (char *) key;
+    kv.value = val;
+    rc = PMIx_Data_pack(NULL, buf, &kv, 1, PMIX_KVAL);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+    }
+    return rc;
+}
+
+#define PACK_DERIVED(r, b, k, t, d)                     \
+    do {                                                \
+        pmix_value_t _v = PMIX_VALUE_STATIC_INIT;       \
+        _v.type = (t);                                  \
+        _v.d;                                           \
+        (r) = pack_derived((b), (k), &_v);              \
+    } while (0)
+
+/* Build the blob describing one proc.  Mirrors the per-proc section of
+ * prte_pmix_server_register_nspace() - if a key is added there and a peer can
+ * ask for it, it belongs here too, or that key becomes a wire round trip. */
+static pmix_status_t derive_proc_data(prte_job_t *jdata, prte_proc_t *proct,
+                                      pmix_data_buffer_t *buf)
+{
+    pmix_status_t rc;
+    pmix_rank_t vpid;
+    uint32_t ui32;
+
+    PACK_DERIVED(rc, buf, PMIX_RANK, PMIX_PROC_RANK, data.rank = proct->name.rank);
+    if (PMIX_SUCCESS != rc) {
+        return rc;
+    }
+    vpid = proct->name.rank + jdata->offset;
+    PACK_DERIVED(rc, buf, PMIX_GLOBAL_RANK, PMIX_PROC_RANK, data.rank = vpid);
+    if (PMIX_SUCCESS != rc) {
+        return rc;
+    }
+    PACK_DERIVED(rc, buf, PMIX_APP_RANK, PMIX_PROC_RANK, data.rank = proct->app_rank);
+    if (PMIX_SUCCESS != rc) {
+        return rc;
+    }
+    PACK_DERIVED(rc, buf, PMIX_APPNUM, PMIX_UINT32, data.uint32 = proct->app_idx);
+    if (PMIX_SUCCESS != rc) {
+        return rc;
+    }
+    if (PRTE_LOCAL_RANK_INVALID != proct->local_rank) {
+        PACK_DERIVED(rc, buf, PMIX_LOCAL_RANK, PMIX_UINT16, data.uint16 = proct->local_rank);
+        if (PMIX_SUCCESS != rc) {
+            return rc;
+        }
+    }
+    if (PRTE_NODE_RANK_INVALID != proct->node_rank) {
+        PACK_DERIVED(rc, buf, PMIX_NODE_RANK, PMIX_UINT16, data.uint16 = proct->node_rank);
+        if (PMIX_SUCCESS != rc) {
+            return rc;
+        }
+    }
+    PACK_DERIVED(rc, buf, PMIX_NODEID, PMIX_UINT32, data.uint32 = proct->node->index);
+    if (PMIX_SUCCESS != rc) {
+        return rc;
+    }
+    /* the hostname is gated by prte_hostname_cutoff in the eager registration,
+     * because there it is paid for every proc in the job whether or not anyone
+     * wants it.  Here it is paid only when somebody asks, so there is nothing
+     * to ration. */
+    PACK_DERIVED(rc, buf, PMIX_HOSTNAME, PMIX_STRING, data.string = proct->node->name);
+    if (PMIX_SUCCESS != rc) {
+        return rc;
+    }
+    ui32 = 0;
+    PACK_DERIVED(rc, buf, PMIX_REINCARNATION, PMIX_UINT32, data.uint32 = ui32);
+    if (PMIX_SUCCESS != rc) {
+        return rc;
+    }
+    if (NULL != proct->cpuset) {
+        char *locality = NULL;
+        pmix_cpuset_t cpuset;
+
+        PACK_DERIVED(rc, buf, PMIX_CPUSET, PMIX_STRING, data.string = proct->cpuset);
+        if (PMIX_SUCCESS != rc) {
+            return rc;
+        }
+        PMIX_CPUSET_CONSTRUCT(&cpuset);
+        cpuset.source = "hwloc";
+        cpuset.bitmap = hwloc_bitmap_alloc();
+        hwloc_bitmap_list_sscanf(cpuset.bitmap, proct->cpuset);
+        rc = PMIx_server_generate_locality_string(&cpuset, &locality);
+        hwloc_bitmap_free(cpuset.bitmap);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return rc;
+        }
+        PACK_DERIVED(rc, buf, PMIX_LOCALITY_STRING, PMIX_STRING, data.string = locality);
+        if (NULL != locality) {
+            free(locality);
+        }
+        if (PMIX_SUCCESS != rc) {
+            return rc;
+        }
+    } else {
+        /* an unbound proc still has to answer the locality question, and the
+         * answer is "nothing to say" - the eager path registers a NULL for
+         * exactly this case */
+        PACK_DERIVED(rc, buf, PMIX_LOCALITY_STRING, PMIX_STRING, data.string = NULL);
+        if (PMIX_SUCCESS != rc) {
+            return rc;
+        }
+    }
+
+    return PMIX_SUCCESS;
+}
+
+/* PMIx is done with the blob we synthesized */
+static void derived_relfn(void *cbdata)
+{
+    free(cbdata);
 }
 
 /* the local PMIx embedded server will use this function to call

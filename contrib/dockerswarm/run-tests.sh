@@ -1440,9 +1440,34 @@ test_runtime() {
 # Absolute path -- an app launched into the DVM inherits the daemon PATH,
 # which does not contain the install bindir.  See the note on $DS.
 PT=/opt/prte/prte/bin/proctable
+# ...and the client that asks a peer where it is, for the same reason.
+PI=/opt/prte/prte/bin/peerinfo
+
+# Cross-check one peerinfo run.  Every rank prints a SELF line about itself
+# and a PEER line about each of the others, in the same field order, so the
+# assertion is a string compare: what rank r was told about rank p must be
+# what rank p says about itself.  Prints nothing when the run is consistent,
+# and one line per disagreement otherwise.
+peerinfo_mismatches() {
+    echo "$1" | tr -d '\r' | awk '
+        $1 == "SELF" { r = $2; s = ""; for (i = 3; i <= NF; i++) { s = s " " $i }
+                       self[r] = s; next }
+        $1 == "PEER" { n++; who[n] = $2 " about " $3; tgt[n] = $3;
+                       s = ""; for (i = 4; i <= NF; i++) { s = s " " $i }
+                       got[n] = s; next }
+        END {
+            for (k = 1; k <= n; k++) {
+                if (!(tgt[k] in self)) {
+                    print "rank " who[k] ": that rank printed no SELF line"
+                } else if (got[k] != self[tgt[k]]) {
+                    print "rank " who[k] ": got [" got[k] " ] but it says [" self[tgt[k]] " ]"
+                }
+            }
+        }'
+}
 
 test_pmix() {
-    local out rc n hosts undef
+    local out rc n hosts undef peers lazyout eagerout mism a b vrb
 
     banner "pmix: the queried proc table carries a real state for every proc"
     # PMIX_QUERY_PROC_TABLE is the only caller of prte_pmix_convert_state(),
@@ -1644,6 +1669,113 @@ test_pmix() {
             fi
         fi
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
+    banner "pmix: a rank can locate every peer in its job, on any node"
+    # This is the one case in the suite where a process asks about ANOTHER
+    # process's reserved keys.  Everything else either puts its own data and
+    # reads it back, or asks about the job rather than about a peer -- and
+    # both of those are satisfied without the request ever reaching a daemon.
+    #
+    # It matters because of what the daemon may legitimately not have
+    # published.  Registering a PMIx entry for every proc in the job, on every
+    # daemon, builds a table that grows with the whole job on a node that runs
+    # a fixed slice of it, so prte_pmix_lazy_procdata publishes only the procs
+    # this daemon hosts and derives the rest from its own job object when
+    # somebody asks.  The derivation is reached through the direct-modex
+    # up-call, which is a path no single-host run has: on one node every proc
+    # is local and there is nothing to derive.
+    #
+    # The assertion is a cross-check rather than a spot value, because the
+    # interesting failure is not "no answer" but "a plausible wrong answer" --
+    # a derived field taken from the wrong proc still prints.  Every rank says
+    # what it thinks about itself and about each of its peers, and the two
+    # accounts of any given rank must agree word for word.
+    cleanup_swarm
+    if ! RUN "test -x $PI"; then
+        skp "peerinfo client not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start 'node1:2,node2:2,node3:2,node4:2'; then
+        bad "could not start a DVM for the peer-lookup tests"
+        cleanup_swarm
+    else
+        peers="--host node1:2,node2:2,node3:2,node4:2 -n 8 --map-by node"
+        lazyout=$(PRUN "$peers $PI" 2>&1)
+        n=$(echo "$lazyout" | grep -c '^PEERINFO-DONE')
+        [ "$n" = 8 ] \
+            && ok "all 8 ranks completed their peer lookups" \
+            || bad "$n of 8 ranks finished: $(echo "$lazyout" | tr '\n' ' ' | tail -c 400)"
+        n=$(echo "$lazyout" | grep -c '^PEERFAIL')
+        [ "$n" = 0 ] \
+            && ok "...with no lookup failing" \
+            || bad "$n peer lookups failed: $(echo "$lazyout" | grep '^PEERFAIL' | tr '\n' ' ' | tail -c 400)"
+        # 8 ranks each describing the other 7
+        n=$(echo "$lazyout" | grep -c '^PEER ')
+        [ "$n" = 56 ] \
+            && ok "...and all 56 peer descriptions were produced" \
+            || bad "got $n of 56 peer descriptions"
+        # ...and the run has to actually span nodes, or a green result here
+        # says nothing: every answer would have come from local publication.
+        hosts=$(echo "$lazyout" | awk '$1=="SELF"' | tr -d '\r' | awk '{print $(NF-2)}' | sort -u | grep -c '^node')
+        [ "${hosts:-0}" -ge 2 ] \
+            && ok "...across $hosts nodes (so the peers really are remote)" \
+            || bad "the job did not span nodes -- this case would be vacuous"
+        mism=$(peerinfo_mismatches "$lazyout")
+        [ -z "$mism" ] \
+            && ok "...and every rank's account of a peer matches that peer's own" \
+            || bad "peer descriptions disagree: $(echo "$mism" | head -3 | tr '\n' ' ' | tail -c 500)"
+
+        # Note what that comparison already is: a SELF line is what the
+        # proc's OWN daemon published about it -- which a daemon does for
+        # its own procs either way -- while the PEER lines about it are what
+        # other daemons derived.  So the check above is the A/B, run inside
+        # one job where the offsets and the mapping are fixed.  Comparing
+        # two separate runs would not be: a second job has a different
+        # PMIX_GLOBAL_RANK offset, so the tables legitimately differ.
+        #
+        # The same job with the derivation off is therefore a control on the
+        # client rather than a second reading: it must pass here too, or a
+        # failure above says nothing about the derivation.
+        eagerout=$(PRUN "$peers --prtemca prte_pmix_lazy_procdata 0 $PI" 2>&1)
+        mism=$(peerinfo_mismatches "$eagerout")
+        n=$(echo "$eagerout" | grep -c '^PEERFAIL')
+        if [ -z "$mism" ] && [ "$n" = 0 ]; then
+            ok "eager publication (prte_pmix_lazy_procdata 0) passes the same check"
+        else
+            bad "the check fails with the derivation off, so it is not testing the derivation: $(echo "$mism" | head -2 | tr '\n' ' ' | tail -c 400)"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
+    banner "pmix: the derivation is actually what answered"
+    # Consistency alone cannot tell the two implementations apart -- a
+    # derivation that never ran would leave the eager publication answering
+    # and every check above would still pass.  So watch the daemon say it.
+    # This has to be prterun rather than a prun into a standing DVM: the
+    # verbosity is a daemon-side setting, and only the launch that starts the
+    # daemons can carry it.  --leave-session-attached because a daemonized
+    # prted has no stderr to read.
+    if ! RUN "test -x $PI"; then
+        skp "peerinfo client not installed -- re-run ./build.sh"
+    else
+        vrb="--leave-session-attached --prtemca prte_pmix_server_verbose 2"
+        out=$(RUN "timeout -k 5 150 prterun --host node1:2,node2:2,node3:2,node4:2 \
+                     -n 8 --map-by node $vrb $PI" 2>&1)
+        n=$(echo "$out" | grep -c 'ANSWERED LOCALLY')
+        [ "${n:-0}" -gt 0 ] \
+            && ok "a daemon answered $n peer lookups out of its own job object" \
+            || bad "no lookup was answered by the derivation -- the path did not run: $(echo "$out" | grep -c 'DMODX REQ') dmodex requests seen"
+        n=$(echo "$out" | grep -c '^PEERFAIL')
+        [ "$n" = 0 ] \
+            && ok "...and none of the lookups failed" \
+            || bad "$n lookups failed while the derivation was in use"
+        # ...and with it off, nothing may claim to have derived anything.
+        out=$(RUN "timeout -k 5 150 prterun --host node1:2,node2:2,node3:2,node4:2 \
+                     -n 8 --map-by node $vrb --prtemca prte_pmix_lazy_procdata 0 $PI" 2>&1)
+        echo "$out" | grep -q 'ANSWERED LOCALLY' \
+            && bad "the derivation ran even though prte_pmix_lazy_procdata was 0" \
+            || ok "prte_pmix_lazy_procdata 0 turns the derivation off completely"
     fi
     cleanup_swarm
 }

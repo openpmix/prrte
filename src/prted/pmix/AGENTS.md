@@ -189,6 +189,76 @@ client hangs forever.
 
 ---
 
+## What a daemon publishes, and what it derives
+
+`prte_pmix_server_register_nspace()` used to hand its local PMIx server a
+`PMIX_PROC_INFO_ARRAY` for **every** proc of a job — rank, global rank,
+app rank, appnum, local and node rank, node id, hostname, cpuset and the
+locality string generated from it. Every daemon, for the whole job. That
+is a table proportional to the job on a node that will only ever run its
+own slice of it, and `prte_hostname_cutoff` — which drops one field of it
+above a thousand nodes — is the record of that wall having been met once
+already.
+
+With `prte_pmix_lazy_procdata` (the default where PMIx allows it) a daemon
+publishes only the procs it hosts. Everything it withheld is still in its
+own job object, so when PMIx asks for one of those procs through the
+`direct_modex` upcall, `dmodex_req()` answers out of `jdata->procs[rank]`
+instead of going to the hosting daemon. Four things about that are load
+bearing:
+
+- **The key set is what PRRTE is the authority for, not what an app wants.**
+  `derivable_key()` lists the placement and binding this DVM computed —
+  a closed set. Everything else on a proc was put there by the application,
+  and PRRTE knows nothing about it, so those requests go out on the wire
+  exactly as before. Do not extend the list by guessing at what some MPI
+  asks for.
+- **`derive_proc_data()` mirrors the per-proc section of
+  `register_nspace()`.** A key added to one and not the other is a key
+  that becomes a wire round trip (harmless, but a silent loss of the
+  point), or worse, one whose two spellings disagree. `PMIX_PARENT_ID` and
+  `PMIX_DEVICE_DISTANCES` are deliberately *not* derived: they are still
+  published by the daemon that hosts the proc, so a request for one falls
+  through to that daemon and is answered there.
+- **The answer is a packed blob of `pmix_kval_t`, not a bare success.**
+  PMIx stores a modex reply itself, and for a specific rank it stores it
+  under `PMIX_REMOTE` — which is where the re-satisfy after a reply then
+  looks. Storing the values here with `PMIx_Data_store_internal` would put
+  them in `PMIX_INTERNAL`, which that lookup does not reach, and the
+  request would fail with the data sitting in memory. (The empty-blob
+  answer is correct only for `PMIX_RANK_WILDCARD`, where PMIx assumes
+  `register_nspace` supplied it.)
+- **A refresh must not be answered from here.** `PMIX_GET_REFRESH_CACHE` is
+  the caller saying our copy may be stale, which is exactly when we must
+  go and ask.
+
+**This depends on a PMIx that surfaces the request at all**, which is why
+it could not have been written earlier: a client's get for a reserved key
+its server did not hold used to have `PMIX_IMMEDIATE` forced onto it,
+confining the search to that server and answering `PMIX_ERR_NOT_FOUND`
+without ever up-calling. Not a live concern — PRRTE requires PMIx 7.0 at
+configure *and* at runtime (`pmix_server.c`, `PRTE_PMIX_MINIMUM_VERSION`),
+and every PMIx that clears that bar surfaces the request.
+
+**What a peer may ask for is not knowable from this tree.** PRRTE is not
+one MPI's runtime; several programming libraries build on it, and any of
+them may read a reserved key of a proc on another node. That is the whole
+reason the split is drawn at *what PRRTE is the authority for* rather than
+at what anything has been observed to want, and it is why the wire path
+below the derivation has to stay correct rather than becoming vestigial.
+In particular, do not read the test coverage below as evidence that these
+keys are rarely wanted — it says what the harness does, and nothing about
+what an application does.
+
+Nothing on one node exercises any of this — every proc is local and there
+is nothing to derive. `contrib/dockerswarm`'s `peerinfo` client is what
+does: each rank asks every other rank in its job where it is, and the
+harness asserts that what a rank was told about a peer is what that peer
+says about itself. That comparison *is* the A/B, because a proc's own
+daemon publishes its data either way.
+
+---
+
 ## Info-array expansion
 
 Several relays add an entry (usually `PMIX_REQUESTOR`) to an info array
