@@ -2123,6 +2123,25 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
     pmix_argv_append(argc, argv, "prte_hnp_uri");
     pmix_argv_append(argc, argv, prte_process_info.my_hnp_uri);
 
+    /* Pass the ranks that have permanently departed this DVM, if any. The vpid
+     * span above says how big the DVM is, but not which vpids inside it are
+     * holes, and a daemon we are launching into a DVM that has already shrunk
+     * needs both to compute its first routing tree correctly. It cannot be told
+     * afterwards: with the wrong tree its every message upward - including the
+     * warm-up that asks for the nidmap - is addressed to a retired vpid that
+     * nothing can contact, so it never hears the correction and never reports
+     * in. The daemon whose raw-radix parent happens to BE the retired vpid is
+     * the one this strands, which is why it stays invisible at the default
+     * radix, where every daemon's parent is rank 0 (#2491). */
+    param = prte_rml_render_dead_dmns();
+    if (NULL != param) {
+        pmix_argv_append(argc, argv, "--prtemca");
+        pmix_argv_append(argc, argv, "rml_base_dead_dmns");
+        pmix_argv_append(argc, argv, param);
+        free(param);
+        param = NULL;
+    }
+
     /* Tell the daemon whether this DVM is persistent. Only the HNP knows -
      * it is decided in prte(), which no daemon runs - and a daemon that is
      * not told simply assumes the default. Pass it only when true, since

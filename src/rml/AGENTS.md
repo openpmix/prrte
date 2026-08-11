@@ -267,6 +267,28 @@ connection path.
   (#2491). The DVM never reuses a daemon vpid, so a hole in `[0, num_daemons)`
   is permanent.
 
+- **A daemon we LAUNCH is told the departure set on its command line**, by
+  `prte_plm_base_prted_append_basic_args` (`rml_base_dead_dmns`, a
+  range-collapsed list such as `2,7:9` — colon-separated, because every
+  released PMIx refuses an MCA value whose second character is a dash), and
+  adopts it in `prte_rml_open` **before** the first
+  `compute_routing_tree`. That ordering is the whole point and is not a
+  convenience: a newcomer with an empty set computes its lifeline from raw
+  radix math, and if that lands on a retired vpid then everything it sends
+  upward — including the warm-up that requests the nidmap that would correct
+  the set — is addressed to a rank nothing can contact. It never learns, never
+  reports in, and every job placed on it hangs. **So do not "simplify" this
+  into a message.** There is no message early enough; the correction would have
+  to travel over the tree it is meant to correct. `ess_base_num_procs` travels
+  the same way for the same reason — the span and the holes in it are both
+  needed to build the first tree, and both can only arrive at launch.
+
+  Only the daemon whose fault-free parent *is* a retired vpid is stranded, so
+  at the default radix (every daemon's parent is rank 0) nothing goes wrong and
+  the whole class of bug is invisible. The swarm case that covers it therefore
+  forces `rml_base_radix 2` explicitly; a suite run at the default radix does
+  not exercise this at all.
+
 - **A leaving daemon exits on the first lost route.** `prte_rml_route_lost`
   checks `prte_dvm_leaving` first: if this daemon has been named as a shrink
   target, it activates `PRTE_JOB_STATE_DAEMONS_TERMINATED` on *any* dropped

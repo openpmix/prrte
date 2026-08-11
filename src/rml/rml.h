@@ -386,6 +386,13 @@ PRTE_EXPORT uint64_t prte_rml_get_epoch(pmix_rank_t rank);
 PRTE_EXPORT void prte_rml_register(void);
 PRTE_EXPORT void prte_rml_close(void);
 PRTE_EXPORT int prte_rml_open(void);
+/* Render dead_dmns as a compact, range-collapsed list ("2,7:9") for the prted
+ * command line, or NULL when nothing has departed. The caller frees it. The
+ * partner routine loads such a list back into dead_dmns; it is what a daemon
+ * launched into a DVM that has already lost ranks uses to build its FIRST
+ * routing tree, since nothing it could receive would arrive in time. */
+PRTE_EXPORT char *prte_rml_render_dead_dmns(void);
+PRTE_EXPORT void prte_rml_load_dead_dmns(const char *spec);
 /* common implementations */
 PRTE_EXPORT void prte_rml_base_post_recv(int sd, short args, void *cbdata);
 PRTE_EXPORT void prte_rml_base_process_msg(int fd, short flags, void *cbdata);
