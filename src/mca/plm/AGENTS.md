@@ -597,8 +597,8 @@ daemon to actually come up belongs in the dockerswarm suite.
 Note what the swarm **cannot** reach: it has only `ssh`, so anything
 specific to an RM launcher — `daemon_vpid_start`'s only consumers among
 them — is covered by the unit test and, ultimately, by a real allocation.
-There is no fake `srun`; `contrib/dockerswarm/fake-slurm.py` stands in for
-the SLURM *control plane* (`ras/slurm`), not for its launcher.
+There is no SLURM there at all: `contrib/slurmswarm` is where a real
+`srun` launches the daemons.
 
 ---
 

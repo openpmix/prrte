@@ -511,20 +511,18 @@ of them returns `PRTE_ERR_NOT_AVAILABLE` outright unless the component's
 at configure time (`PRTE_HAVE_SLURM_EXTENSIONS`, see
 [`slurm/configure.m4`](slurm/configure.m4) and
 [`slurm/AGENTS.md`](slurm/AGENTS.md)). A `make check` build, which by
-default has no jansson, cannot reach a line of it. The harness is
-multi-node, and its `build.sh` passes `--with-jansson` deliberately; it and
-[`contrib/slurmswarm`](../../../contrib/slurmswarm/) are the only automated
-builds anywhere that even compile `ras_slurm_jansson.c`. It supplies the
-scheduler with
-[`fake-slurm.py`](../../../contrib/dockerswarm/fake-slurm.py) — the
-`SLURM_*` environment plus `salloc`/`scontrol`/`scancel` stubs on `PATH`
-that hand out real container hostnames, so an extend genuinely launches
-daemons and a release genuinely removes them. `validate_hostname`,
-`prte_ras_slurm_drain_cmd_output` and the JSON parser live on that path
-only and come along with it, as do the paths that exist purely to survive
-a misbehaving scheduler (a failing `scancel`, unparsable JSON, a request
-cancelled while its job is still `PENDING`). See
-[dockerswarm AGENTS.md §11](../../../contrib/dockerswarm/AGENTS.md).
+default has no jansson, cannot reach a line of it. Both container
+harnesses pass `--with-jansson` deliberately and are the only automated
+builds anywhere that even compile `ras_slurm_jansson.c` — but only
+[`contrib/slurmswarm`](../../../contrib/slurmswarm/) *runs* it, against ten
+containers holding a real `slurmctld`. `validate_hostname`,
+`prte_ras_slurm_drain_cmd_output` and the JSON parser live on that path only
+and are exercised there, as are the paths that exist purely to survive a
+misbehaving scheduler (a failing `scancel`, unparsable JSON, a request
+cancelled while its job is still `PENDING`) — the last of which a live
+scheduler produces by itself when asked for more nodes than exist, while the
+first two are armed by the wrapper described in
+[slurmswarm AGENTS.md §14](../../../contrib/slurmswarm/AGENTS.md).
 
 The unit test builds the global job/node/session arrays by hand (the
 real ones come from `prte_init()`, which wants a live ESS) — follow that

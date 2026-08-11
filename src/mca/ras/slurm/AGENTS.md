@@ -284,13 +284,17 @@ Three things about that decision are deliberate:
   machine that has jansson and a SLURM too old — and that machine is every
   stock Ubuntu 24.04.
 
-The harness fakes the scheduler with
-[`fake-slurm.py`](../../../../contrib/dockerswarm/fake-slurm.py), installed
-into the swarm as `salloc`/`scontrol`/`scancel` and handing out real
-container hostnames — so an extend really launches daemons and a release
-really removes them. Read
-[its AGENTS.md §11](../../../../contrib/dockerswarm/AGENTS.md) before adding
-a case. Two things that trip people up:
+The harness is [`contrib/slurmswarm`](../../../../contrib/slurmswarm/) —
+ten containers running a real `slurmctld`, so an extend really submits a job,
+a resize really has to be one SLURM accepts on a running job, and a release
+really removes an allocation. The two things a live scheduler will not do on
+request are supplied by
+[`slurm-shim.py`](../../../../contrib/slurmswarm/slurm-shim.py), which
+*wraps* `salloc`/`scontrol`/`scancel` rather than replacing them: it records
+the argv PRRTE built (a job record cannot show that an argument was correctly
+omitted) and can arm unparsable JSON or a failing `scancel`. Read
+[its AGENTS.md](../../../../contrib/slurmswarm/AGENTS.md), §6 and §14, before
+adding a case. Two things that trip people up:
 
 - **The request shapes are not a plain grow.** `modify()` accepts only
   `PMIX_ALLOC_EXTEND`+`NUM_NODES`, `PMIX_ALLOC_RELEASE` with one of

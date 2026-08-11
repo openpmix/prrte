@@ -15,15 +15,16 @@
 # Prints PASS/FAIL per test and a summary; exits non-zero if anything failed.
 #
 # What this suite is for, and what it is NOT for.  contrib/dockerswarm covers
-# PRRTE across ten nodes -- launch, IOF, collectives, elastic, the lot -- with
-# a fake SLURM control plane standing in for the scheduler.  That fake
-# implements exactly the four command forms PRRTE issues, which makes it a
-# good regression test for PRRTE's side of the conversation and no test at all
-# of the assumption underneath it: that those four forms are what SLURM
-# actually accepts, and that what SLURM says back is what the parser expects.
-# Every case here exists because it can only be answered by a real scheduler.
-# Everything that is not about SLURM belongs in the sibling harness and is
-# deliberately absent here.
+# PRRTE across ten nodes -- launch, IOF, collectives, elastic by hostname, the
+# lot -- and has no SLURM in it at all.  Everything SLURM is here, because the
+# assumptions that matter can only be answered by a scheduler that can say no:
+# that the commands PRRTE issues are ones SLURM accepts, and that what SLURM
+# says back is what the parser expects.  Everything that is not about SLURM
+# belongs in the sibling harness and is deliberately absent here.
+#
+# Two things a live slurmctld will not do on request -- record the argv PRRTE
+# built, and misbehave -- are supplied by slurm-shim.py, which wraps the real
+# commands rather than replacing them.  See AGENTS.md section 14.
 #
 # Two clones on one host can each run a cluster: set PRTE_SLURM_SWARM (below).
 
@@ -90,6 +91,17 @@ ALLOC() { docker exec "${NODE}1" slurm-alloc "$@" 2>&1; }
 # the scheduler's own view
 SQ()    { docker exec "${NODE}1" bash -lc "$*" 2>&1; }
 
+# --- the recording wrapper around salloc/scontrol/scancel -------------------
+# See slurm-shim.py.  It answers the two questions a live slurmctld cannot:
+# what PRRTE *asked* for (a job record cannot show an argument's absence), and
+# what PRRTE does when the scheduler misbehaves (which slurmctld will not do
+# on request).  Everything it does not fault passes through to the real
+# command, so the scheduler under test stays real.
+SHIM_BIN=/opt/prte/slurmshim/bin
+SHIM() { docker exec "${NODE}1" "$SHIM_BIN/slurm-shim" "$@" 2>/dev/null; }
+# the argv of the most recent salloc, one argument per line
+shim_argv() { SHIM argv | tr -d '\r'; }
+
 ########################################################################
 # cleanup
 ########################################################################
@@ -148,9 +160,18 @@ idx_of() { echo "$1" | tr ',' '\n' | sed 's/^node//' | tr '\n' ' '; }
 # --daemonize because several cases assert on what the HNP printed -- a
 # scheduler error PRRTE captured and reported -- and a daemonized HNP has
 # detached from stdio.
+# Set to 1 to give the HNP the recording shim (above) ahead of the real SLURM
+# commands on its PATH.  It is the HNP that shells out -- the tools never do --
+# so this is the only process that needs it.  Always put it back afterwards:
+# leaving it on would have every later phase recording, and one of the faults
+# possibly still armed.
+DVM_SHIM=0
+
 dvm_start() {
+    local pre=""
+    [ "$DVM_SHIM" = 1 ] && pre="export PATH=$SHIM_BIN:\$PATH; "
     SA 'rm -f /tmp/prte.out' >/dev/null 2>&1
-    SA_BG /tmp/prte.out "cd /root && prte $*"
+    SA_BG /tmp/prte.out "${pre}cd /root && prte $*"
     for _ in $(seq 25); do
         SA 'pgrep -x prte >/dev/null' && break
         sleep 1
@@ -400,13 +421,20 @@ test_ras_alloc() {
     echo "$out" | grep -q 'Missing requested host: node9' \
         && ok "--host outside the allocation is refused, naming the host" \
         || bad "--host node9 was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    # A bare integer is never a hostname: it names the launch id, so "3" has
+    # to resolve to the third node of the allocation.  The allocation here is
+    # node1-3, so that is node3.
+    out=$(SA 'timeout 30 prun --host 3 -n 1 hostname' 2>&1 | tail -1)
+    [ "$(echo "$out" | tr -d '\r')" = node3 ] \
+        && ok "--host 3 resolved to node3 by launch id" \
+        || bad "launch-id shorthand did not resolve: $out"
     dvm_stop
     cleanup_cluster
 
     banner "ras/slurm: SLURM's compressed node list expands to exactly those nodes"
-    # The one thing the fake scheduler structurally cannot test.  It hands out
-    # comma-separated names; SLURM hands out "node[2,4,6]", and ras/slurm has
-    # its own parser for that notation.  A non-contiguous list is used on
+    # SLURM hands out "node[2,4,6]" and ras/slurm has its own parser for that
+    # notation -- a scheduler handing out comma-separated names never reaches
+    # it, which is why this case can only live here.  A non-contiguous list is used on
     # purpose: a parser that reads "node[2,4,6]" as the range 2..6 gets five
     # nodes, three of which it was never given.
     ALLOC new --tag dvm --nodelist node2,node4,node6 --tasks-per-node 2 >/dev/null 2>&1
@@ -453,6 +481,22 @@ test_ras_alloc() {
         echo "$out" | grep -q 'Missing requested host: node1' \
             && ok "--host naming the unallocated head node is refused" \
             || bad "the unallocated head node was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        # "+n#" counts the ALLOCATION from zero, so with the head node left
+        # out of it, +n0 is the first node the job was actually given.  A
+        # hostfile has to agree with --host about that: the head node still
+        # occupies pool slot 0, and the hostfile filter was the one relative
+        # -index implementation that did not skip it, so every index it
+        # resolved was one node adrift of the same index on the command line.
+        # This is why the case wants an allocation that excludes the head
+        # node -- with node1 in it, both readings give the same answer.
+        out=$(SA 'timeout 30 prun --host +n0 -n 1 hostname 2>&1 | tr -d "\0"' \
+                  | grep -E '^node[0-9]+$' | head -1)
+        SA 'printf "+n0\n" > /tmp/relhosts.txt'
+        n=$(SA 'timeout 30 prun --hostfile /tmp/relhosts.txt -n 1 hostname 2>&1 | tr -d "\0"' \
+                  | grep -E '^node[0-9]+$' | head -1)
+        { [ "$out" = node2 ] && [ "$n" = node2 ]; } \
+            && ok "+n0 is the allocation's first node for both --host and a hostfile" \
+            || bad "relative index disagrees across entry points (--host=$out hostfile=$n, want node2 for both)"
         dvm_stop
     else
         bad "no DVM came up on an allocation excluding the head node"
@@ -464,11 +508,9 @@ test_ras_alloc() {
 # 3. plm/slurm: the daemons go out over srun
 ########################################################################
 #
-# The fake scheduler cannot reach this component at all: it supplies
-# salloc/scontrol/scancel, and plm/slurm shells out to *srun*, which is a
-# launcher, not a control-plane query.  Every DVM in the sibling harness is
-# therefore launched over ssh no matter what the ras is told.  These cases are
-# the only place PRRTE's SLURM launcher is exercised.
+# The sibling harness cannot reach this component at all: it has no SLURM, so
+# every DVM over there goes out over ssh no matter what the ras is told.
+# These cases are the only place PRRTE's SLURM launcher is exercised.
 test_plm() {
     local out n
 
@@ -585,8 +627,30 @@ job_nodes() {   # $1 = slurm job id -> comma-separated hostnames
     SQ "scontrol show hostnames $nl" | tr -d '\r' | paste -sd, -
 }
 
+# Give the scheduler back everything except the allocation the DVM is living
+# in.  A group that leaves an extend standing starves the next group of the
+# pool it needs, and that is reported as "the grow did not happen" several
+# cases later.
+drop_extra_jobs() {   # $1 = the job id to keep
+    local j
+    for j in $(SQ "squeue -h -o '%i'" | tr -d ' \r'); do
+        [ "$j" = "$1" ] && continue
+        SQ "scancel $j" >/dev/null 2>&1
+    done
+}
+
+# THE PHASE IS A SEQUENCE OF INDEPENDENT GROUPS, AND THAT IS DELIBERATE.
+#
+# Each group below is its own function so that a group which cannot proceed
+# can `return` without taking the others with it.  The shape this replaced did
+# exactly that: an extend that came back refused returned out of the whole
+# phase, and five later groups -- the counted release, the release during a
+# grow, the cancellable pending extend, the malformed JSON, the tainted
+# hostname -- silently did not run.  Nothing said so; the suite total simply
+# dropped by about fifty checks.  So: a group that gives up says what it gave
+# up on, and the caller runs the next one regardless.
 test_elastic() {
-    local out jid ajid nodes idx n
+    local jid
 
     if [ "$HAVE_JSON" != 1 ]; then
         banner "ras/slurm: elastic modify surface"
@@ -594,22 +658,54 @@ test_elastic() {
         return
     fi
 
-    banner "ras/slurm: PMIX_ALLOC_EXTEND submits a real job and absorbs it"
     cleanup_cluster
     ALLOC new --tag dvm --nodes 3 --tasks-per-node 2 >/dev/null 2>&1
     jid=$(ALLOC jobid --tag dvm | tr -d ' \r')
     if ! dvm_start --prtemca prte_elastic_mode 1 --prtemca ras_base_verbose 5; then
+        banner "ras/slurm: elastic modify surface"
         bad "no DVM came up for the elastic phase: $(SA 'tail -5 /tmp/prte.out' | tr '\n' ' ')"
-        cleanup_cluster; return
+        skp "the five groups that need a live DVM did not run"
+        cleanup_cluster
+        return
     fi
+
+    elastic_grant_group "$jid"
+    elastic_count_release_group "$jid"
+    elastic_release_during_grow_group "$jid"
+    elastic_pending_cancel_group "$jid"
+    elastic_tainted_hostname_group
+    dvm_stop
+    cleanup_cluster
+
+    # The last two groups need the recording shim in front of the real SLURM
+    # commands, and one of them needs different MCA parameters, so each brings
+    # up a DVM of its own.
+    elastic_argv_group
+    elastic_fault_group
+}
+
+# The first extend, and everything that can only be asserted about a grant
+# that actually happened.
+elastic_grant_group() {
+    local jid=$1 out ajid nodes idx n
+
+    banner "ras/slurm: PMIX_ALLOC_EXTEND submits a real job and absorbs it"
     out=$(SA 'timeout 180 elastic extend 2' 2>&1)
     ajid=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
     if [ -z "$ajid" ]; then
         bad "extend was refused: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
         printf '    HNP: %s\n' "$(SA 'grep -iE "json|error|slurm" /tmp/prte.out | tail -3' | tr '\n' ' ')"
-        dvm_stop; cleanup_cluster; return
+        skp "the attribute, in-place resize and release-id cases need a granted allocation"
+        drop_extra_jobs "$jid"
+        return
     fi
     ok "extend accepted and reported PMIX_ALLOC_ID=$ajid"
+    # An extend is answered in two phases now -- phase one carries the id when
+    # Slurm grants, PMIX_DVM_IS_READY follows when the daemons are up -- so the
+    # completion event is part of the contract, not an optional extra.
+    echo "$out" | grep -q PMIX_DVM_IS_READY \
+        && ok "the extend completed with PMIX_DVM_IS_READY (phase two)" \
+        || bad "no phase-two completion for the extend: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
     SQ "squeue -h -j $ajid -o '%i'" | grep -q "$ajid" \
         && ok "SLURM really has a job $ajid (salloc reached the scheduler)" \
         || bad "no SLURM job $ajid exists -- the id PRRTE reported is not a job"
@@ -635,10 +731,9 @@ test_elastic() {
         || bad "no slot derivation logged for ${nodes%%,*}: $(SA 'grep -m3 discovered.node /tmp/prte.out' | tr '\n' ' ')"
 
     banner "ras/slurm: the parent job's attributes reach the salloc SLURM ran"
-    # The fake scheduler could only show that the arguments were *written*.
-    # Here they have to be arguments salloc accepts -- one it does not is a
-    # submission failure, not a mis-formatted string -- and the scheduler's
-    # own record of the new job is what is asserted.
+    # What the scheduler RECORDED.  The argv that produced it is asserted
+    # separately, under the recording shim -- a job record cannot show that an
+    # argument was correctly omitted.
     out=$(SQ "scontrol show job $ajid -o" | tr -d '\r')
     echo "$out" | grep -q 'NumNodes=2' \
         && ok "the expander job was submitted for exactly 2 nodes" \
@@ -714,32 +809,109 @@ test_elastic() {
     [ "$(echo "$out" | tr -d '\r')" = node1 ] \
         && ok "DVM still responsive after the release" \
         || bad "DVM wedged after the release: $out"
+    drop_extra_jobs "$jid"
+}
+
+elastic_count_release_group() {
+    local jid=$1 out ajid nodes idx
 
     banner "ras/slurm: release by node COUNT cancels the newest allocation"
     out=$(SA 'timeout 180 elastic extend 2' 2>&1)
     ajid=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
-    if [ -n "$ajid" ]; then
-        nodes=$(job_nodes "$ajid"); idx=$(idx_of "$nodes")
-        sleep 8
-        # shellcheck disable=SC2086
-        [ "$(prted_count $idx)" = 2 ] \
-            && ok "re-extend brought two more nodes in ($nodes)" \
-            || bad "re-extend did not launch daemons on $nodes"
-        out=$(SA 'timeout 180 elastic release 2' 2>&1)
-        sleep 6
-        echo "$out" | grep -q PMIX_DVM_IS_READY \
-            && ok "release by count completed" \
-            || bad "release by count never completed: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
-        # shellcheck disable=SC2086
-        [ "$(prted_count $idx)" = 0 ] \
-            && ok "the counted release emptied the newest allocation" \
-            || bad "a daemon survived the counted release"
-        SQ "squeue -h -j $ajid -o '%i'" | grep -q "$ajid" \
-            && bad "count release did not cancel job $ajid" \
-            || ok "the whole SLURM job was cancelled rather than resized"
-    else
+    if [ -z "$ajid" ]; then
         bad "could not re-extend: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        skp "the counted release needs an allocation to release"
+        drop_extra_jobs "$jid"
+        return
     fi
+    nodes=$(job_nodes "$ajid"); idx=$(idx_of "$nodes")
+    sleep 8
+    # shellcheck disable=SC2086
+    [ "$(prted_count $idx)" = 2 ] \
+        && ok "re-extend brought two more nodes in ($nodes)" \
+        || bad "re-extend did not launch daemons on $nodes"
+    out=$(SA 'timeout 180 elastic release 2' 2>&1)
+    sleep 6
+    echo "$out" | grep -q PMIX_DVM_IS_READY \
+        && ok "release by count completed" \
+        || bad "release by count never completed: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # shellcheck disable=SC2086
+    [ "$(prted_count $idx)" = 0 ] \
+        && ok "the counted release emptied the newest allocation" \
+        || bad "a daemon survived the counted release"
+    SQ "squeue -h -j $ajid -o '%i'" | grep -q "$ajid" \
+        && bad "count release did not cancel job $ajid" \
+        || ok "the whole SLURM job was cancelled rather than resized"
+    drop_extra_jobs "$jid"
+}
+
+elastic_release_during_grow_group() {
+    local jid=$1 out settled snode
+
+    banner "ras/slurm: a release issued while a grow is in flight does not wedge the DVM"
+    # Issue #2617.  Grow and shrink share one launch fence and one broadcast,
+    # and the shrink half had no notion of an in-flight grow: the shrink was
+    # xcast to every daemon INCLUDING ones still joining, which cannot be
+    # reached, so the campaign could neither complete nor abort.  It then sat
+    # on prte_shrink_campaigns forever and every later job parked at the
+    # LAUNCH_APPS hold -- a DVM wedged with no error reported to anyone.
+    #
+    # The interleaving is opportunistic, and deliberately so.  The extend runs
+    # in the background and the release is issued without waiting for its
+    # daemons to join; if it lands outside the window the case still passes,
+    # correctly, having asserted a legal sequence.  Do not "stabilize" this
+    # with a sleep between the two requests: the sleep is the bug.  The window
+    # here is a wide one, since salloc has to reach slurmctld and wait for the
+    # job to start before any daemon can be launched into it.
+    out=$(SA 'timeout 180 elastic extend 1' 2>&1)
+    settled=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
+    if [ -z "$settled" ]; then
+        bad "could not settle a node to release: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        skp "the release-during-grow case needs a settled node to release"
+        drop_extra_jobs "$jid"
+        return
+    fi
+    snode=$(job_nodes "$settled")
+    sleep 8
+    # shellcheck disable=SC2086
+    [ -n "$snode" ] && [ "$(prted_count $(idx_of "$snode"))" = 1 ] \
+        && ok "a settled node ($snode) is in place to be released" \
+        || bad "the settled node never got a daemon (job=$settled node=$snode)"
+    # Now grow WITHOUT letting it settle, and release the settled node into
+    # that window.  The target is deliberately not one of the joining nodes --
+    # a per-target check would pass it, and the campaign would stall anyway on
+    # daemons the caller never selected.
+    SA 'nohup timeout 240 elastic extend 2 >/tmp/grow-race.out 2>&1 & sleep 1' \
+        >/dev/null 2>&1
+    out=$(SA "timeout 180 elastic shrink $snode" 2>&1)
+    sleep 25
+    echo "$out" | grep -q PMIX_DVM_IS_READY \
+        && ok "the release completed even though a grow was in flight" \
+        || bad "release never completed during a grow: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # shellcheck disable=SC2086
+    [ "$(prted_count $(idx_of "$snode"))" = 0 ] \
+        && ok "the released node's daemon is gone" \
+        || bad "the daemon survived a release issued during a grow"
+    # the wedge's signature: every later job parks at LAUNCH_APPS and never
+    # launches, with no error reported anywhere
+    out=$(SA 'timeout 30 prun -n 1 hostname' 2>&1 | tail -1)
+    [ "$(echo "$out" | tr -d '\r')" = node1 ] \
+        && ok "a later job still launches (the DVM is not wedged)" \
+        || bad "DVM wedged after a release during a grow: $out"
+    SA 'grep -q "SUCCESS\|ALLOC_ID" /tmp/grow-race.out' \
+        && ok "the concurrent grow was answered too" \
+        || bad "the grow was lost: $(SA 'tr "\n" " " < /tmp/grow-race.out' | tail -c 200)"
+    drop_extra_jobs "$jid"
+    # a cancelled job does not free its nodes at once, and the next group asks
+    # for the whole idle pool
+    for _ in $(seq 30); do
+        [ "$(cluster_idle_count)" -ge 6 ] && break
+        sleep 1
+    done
+}
+
+elastic_pending_cancel_group() {
+    local jid=$1 ajid n
 
     banner "ras/slurm: an extend SLURM cannot satisfy pends, and can be cancelled"
     # No fault injection needed: ask for more nodes than the cluster has free
@@ -752,21 +924,28 @@ test_elastic() {
             >/tmp/extend.out 2>&1 & sleep 2" >/dev/null 2>&1
     sleep 8
     ajid=$(SQ "squeue -h -t PENDING -o '%i'" | tr -d ' \r' | head -1)
-    if [ -n "$ajid" ]; then
-        ok "the oversized extend queued SLURM job $ajid as PENDING"
-        SA 'timeout 90 elastic cancel slow-req' >/dev/null 2>&1
-        sleep 8
-        SQ "squeue -h -j $ajid -o '%i'" | grep -q "$ajid" \
-            && bad "the cancelled request left its pending job queued" \
-            || ok "the cancelled request scancelled its pending SLURM job"
-        SA 'grep -q "REJECTED\|FAILURE" /tmp/extend.out' \
-            && ok "the waiting extend reported failure to its requester" \
-            || bad "the cancelled extend never answered: $(SA 'tr "\n" " " < /tmp/extend.out' | tail -c 200)"
-    else
+    if [ -z "$ajid" ]; then
         bad "the oversized extend never queued a job: $(SA 'tr "\n" " " < /tmp/extend.out' | tail -c 200)"
+        skp "the cancel cases need a pending job to cancel"
+        drop_extra_jobs "$jid"
+        return
     fi
+    ok "the oversized extend queued SLURM job $ajid as PENDING"
+    SA 'timeout 90 elastic cancel slow-req' >/dev/null 2>&1
+    sleep 8
+    SQ "squeue -h -j $ajid -o '%i'" | grep -q "$ajid" \
+        && bad "the cancelled request left its pending job queued" \
+        || ok "the cancelled request scancelled its pending SLURM job"
+    SA 'grep -q "REJECTED\|FAILURE" /tmp/extend.out' \
+        && ok "the waiting extend reported failure to its requester" \
+        || bad "the cancelled extend never answered: $(SA 'tr "\n" " " < /tmp/extend.out' | tail -c 200)"
     SA 'pgrep -x prte >/dev/null' && ok "HNP survived the cancellation" \
                                   || bad "HNP died during the cancellation"
+    drop_extra_jobs "$jid"
+}
+
+elastic_tainted_hostname_group() {
+    local out
 
     banner "ras/slurm: a node name that is not a hostname never reaches a shell"
     # Every hostname bound for an scontrol/scancel command line goes through
@@ -784,7 +963,166 @@ test_elastic() {
         || ok "the injected command never ran"
     SA 'pgrep -x prte >/dev/null' && ok "HNP survived the tainted request" \
                                   || bad "HNP died on a tainted hostname"
+}
+
+# What PRRTE ASKED the scheduler for.
+#
+# The scheduler records the job it created, not the command line that created
+# it, so three behaviors have no other witness: an argument that must be
+# absent (--wrap), an attribute that must be OMITTED rather than sent empty
+# when its source is unset, and a propagate_* MCA parameter that must drop
+# exactly its own argument and disturb nothing else.  The shim records the
+# argv and then becomes the real salloc, so the allocation these assertions
+# are about is a real one.
+elastic_argv_group() {
+    local out ajid args
+
+    banner "ras/slurm: what PRRTE puts on the salloc command line"
+    cleanup_cluster
+    if ! ON 1 "test -x $SHIM_BIN/slurm-shim"; then
+        skp "the recording shim is not in the volume -- rerun ./build.sh"
+        return
+    fi
+    SHIM reset >/dev/null 2>&1
+    ALLOC new --tag dvm --nodes 2 --tasks-per-node 2 >/dev/null 2>&1
+    DVM_SHIM=1
+    if ! dvm_start --prtemca prte_elastic_mode 1; then
+        DVM_SHIM=0
+        bad "no DVM came up under the recording shim"
+        skp "the salloc argv cases need a DVM"
+        cleanup_cluster
+        return
+    fi
+    out=$(SA 'timeout 180 elastic extend 2' 2>&1)
+    ajid=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
+    args=$(shim_argv)
+    if [ -z "$args" ]; then
+        bad "no salloc was recorded (extend said: $(echo "$out" | tr '\n' ' ' | tail -c 200))"
+        skp "every argv assertion needs a recorded salloc"
+    else
+        for want in --no-shell --exclusive --nodes=2; do
+            echo "$args" | grep -qx -- "$want" \
+                && ok "salloc carried $want" \
+                || bad "salloc missing $want (got: $(echo "$args" | tr '\n' ' '))"
+        done
+        echo "$args" | grep -qx -- '--partition=debug' \
+            && ok "the parent job's partition reached the salloc line" \
+            || bad "partition not on the salloc line: $(echo "$args" | tr '\n' ' ')"
+        # A batch script IS the job -- it lives exactly as long as it runs --
+        # so an sbatch expander job could never release the node its script
+        # ran on.  --no-shell runs nothing at all, which is what makes an
+        # arbitrary shrink possible; --wrap would undo that.
+        echo "$args" | grep -q -- '--wrap' \
+            && bad "the expander job is still anchored to a script (--wrap present)" \
+            || ok "the expander job runs nothing, so all of its nodes are releasable"
+        # An attribute whose source is unset must be dropped, not sent as an
+        # empty value.  Stated as "no argument ends in =", which holds however
+        # this cluster happens to be configured -- naming a particular field
+        # would make the case a fact about slurm.conf.
+        echo "$args" | grep -q -- '=$' \
+            && bad "an unset attribute was sent with an empty value: $(echo "$args" | grep -- '=$' | tr '\n' ' ')" \
+            || ok "an unset attribute is omitted from the salloc line, not sent empty"
+    fi
+    [ -n "$ajid" ] && SA "timeout 120 elastic release-id $ajid" >/dev/null 2>&1
     dvm_stop
+    DVM_SHIM=0
+    cleanup_cluster
+
+    banner "ras/slurm: propagate_* MCA params gate what reaches salloc"
+    # Each propagated attribute has its own switch; turning one off must drop
+    # exactly that argument and leave the rest of the line intact.
+    SHIM reset >/dev/null 2>&1
+    ALLOC new --tag dvm --nodes 2 --tasks-per-node 2 >/dev/null 2>&1
+    DVM_SHIM=1
+    if ! dvm_start --prtemca prte_elastic_mode 1 \
+                   --prtemca ras_slurm_propagate_partition 0; then
+        DVM_SHIM=0
+        bad "no DVM came up with the propagate_* overrides"
+        cleanup_cluster
+        return
+    fi
+    out=$(SA 'timeout 180 elastic extend 2' 2>&1)
+    ajid=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
+    args=$(shim_argv)
+    if [ -z "$args" ]; then
+        bad "no salloc recorded under the propagate_* overrides: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    else
+        echo "$args" | grep -q -- '--partition' \
+            && bad "propagate_partition=0 still put --partition on the line" \
+            || ok "propagate_partition=0 dropped its salloc argument"
+        echo "$args" | grep -qx -- '--no-shell' \
+            && ok "disabling one attribute left the rest of the line intact" \
+            || bad "disabling one attribute disturbed the rest: $(echo "$args" | tr '\n' ' ')"
+    fi
+    [ -n "$ajid" ] && SA "timeout 120 elastic release-id $ajid" >/dev/null 2>&1
+    dvm_stop
+    DVM_SHIM=0
+    cleanup_cluster
+}
+
+# What PRRTE does when the scheduler misbehaves.
+#
+# A live slurmctld will not emit unparsable JSON or fail a scancel on request,
+# and those paths exist precisely for it doing so.  The shim arms exactly one
+# fault at a time and passes everything else through, so the rest of the
+# conversation is still with the real scheduler.
+elastic_fault_group() {
+    local out ajid seg
+
+    banner "ras/slurm: unparsable scheduler JSON fails the request, not the DVM"
+    cleanup_cluster
+    if ! ON 1 "test -x $SHIM_BIN/slurm-shim"; then
+        skp "the recording shim is not in the volume -- rerun ./build.sh"
+        return
+    fi
+    SHIM reset >/dev/null 2>&1
+    ALLOC new --tag dvm --nodes 2 --tasks-per-node 2 >/dev/null 2>&1
+    DVM_SHIM=1
+    if ! dvm_start --prtemca prte_elastic_mode 1; then
+        DVM_SHIM=0
+        bad "no DVM came up under the recording shim"
+        skp "the malformed-JSON and scancel-failure cases need a DVM"
+        cleanup_cluster
+        return
+    fi
+    # The HNP runs this parser, so a malformed scontrol response must come
+    # back as a refused request rather than a dead DVM.
+    SHIM set bad_json 1 >/dev/null 2>&1
+    out=$(SA 'timeout 120 elastic extend 1' 2>&1)
+    SHIM set bad_json 0 >/dev/null 2>&1
+    echo "$out" | grep -q 'REJECTED' \
+        && ok "an extend on unparsable JSON was refused" \
+        || bad "malformed scheduler JSON was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    SA 'pgrep -x prte >/dev/null' && ok "HNP survived the malformed JSON" \
+                                  || bad "HNP died parsing malformed JSON"
+    drop_extra_jobs "$(ALLOC jobid --tag dvm | tr -d ' \r')"
+
+    banner "ras/slurm: a failing scancel is reported, truncated, and survived"
+    # prte_ras_slurm_drain_cmd_output() captures the scheduler's complaint
+    # into a fixed buffer and marks it "..." when it does not fit.  The shim's
+    # scancel fails with far more output than that buffer holds.
+    out=$(SA 'timeout 180 elastic extend 1' 2>&1)
+    ajid=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
+    if [ -z "$ajid" ]; then
+        bad "could not submit the job for the scancel-failure case: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        skp "the scancel-failure assertions need an allocation to release"
+    else
+        SHIM set scancel_fail 1 >/dev/null 2>&1
+        SA "timeout 180 elastic release-id $ajid" >/dev/null 2>&1
+        sleep 6
+        SHIM set scancel_fail 0 >/dev/null 2>&1
+        seg=$(SA "awk '/failed to kill job/,0' /tmp/prte.out")
+        echo "$seg" | grep -q "failed to kill job $ajid" \
+            && ok "the scancel failure was reported with the scheduler's text" \
+            || bad "a failing scancel went unreported: $(SA 'tail -3 /tmp/prte.out' | tr '\n' ' ')"
+        { echo "$seg" | grep -q '\.\.\.' && ! echo "$seg" | grep -q '(line 20)'; } \
+            && ok "the oversized scheduler message was truncated with '...'" \
+            || bad "scheduler output was not truncated: $(echo "$seg" | tr '\n' ' ' | tail -c 200)"
+        SA 'pgrep -x prte >/dev/null' && ok "HNP survived a scancel failure" \
+                                      || bad "HNP died when scancel failed"
+    fi
+    dvm_stop
+    DVM_SHIM=0
     cleanup_cluster
 }
 
