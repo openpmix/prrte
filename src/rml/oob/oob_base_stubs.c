@@ -56,6 +56,25 @@ void prte_oob_base_complete_send(int fd, short args, void *cbdata)
     PRTE_RML_SEND_COMPLETE(msg);
 }
 
+/* Has this target been launched but not yet said anything?
+ *
+ * rml_uri is written only by prte_plm_base_daemon_callback, i.e. only by the
+ * daemon itself reporting in, which is what makes it the exact test.  Neither
+ * PRTE_PROC_FLAG_ALIVE nor a RUNNING state can serve: plm/ssh sets both when
+ * it *records* the launch, long before the daemon says anything.  errmgr/dvm
+ * decides whether to act on the failure on this same test.
+ */
+static bool daemon_not_yet_reported(const pmix_proc_t *hop)
+{
+    prte_proc_t *dmn;
+
+    if (!PMIX_CHECK_NSPACE(hop->nspace, PRTE_PROC_MY_NAME->nspace)) {
+        return false;
+    }
+    dmn = prte_get_proc_object(hop);
+    return (NULL != dmn && NULL == dmn->rml_uri);
+}
+
 void prte_oob_base_send_nb(int fd, short args, void *cbdata)
 {
     prte_oob_send_t *cd = (prte_oob_send_t *) cbdata;
@@ -197,7 +216,20 @@ resolve_hop:
             // the originator's callback runs with a status
             if (!prte_prteds_term_ordered && !prte_finalizing
                 && !prte_abnormal_term_ordered) {
-                PMIX_ERROR_LOG(rc);
+                /* Not knowing where a daemon is that has not yet reported for
+                 * duty is the expected state, not an error: the routing tree
+                 * is built from the daemon count the moment a grow records
+                 * them, precisely so wireup can route to them, so anything
+                 * broadcast while a launch is in flight is addressed to
+                 * daemons that have no contact info yet.  errmgr/dvm knows
+                 * this and swallows the state below on the same test - see
+                 * the comment there - so logging it here put four PMIX ERROR
+                 * lines on the user's terminal for a grow that was working.
+                 * A daemon that has reported, or anything that is not a
+                 * daemon, still logs. */
+                if (!daemon_not_yet_reported(&hop)) {
+                    PMIX_ERROR_LOG(rc);
+                }
                 PRTE_ACTIVATE_PROC_STATE(&hop, PRTE_PROC_STATE_UNABLE_TO_SEND_MSG);
             }
             msg->status = PRTE_ERR_ADDRESSEE_UNKNOWN;
