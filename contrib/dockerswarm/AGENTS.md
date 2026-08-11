@@ -386,10 +386,17 @@ the executable does not exist on the target nodes, a successful run proves
 `write_handler`) and linked them into the job session dir that
 `--preload-binary`'s session-cwd points at. This is the one path a single-host
 build can't validate — locally the source file is already present, so the app
-would run even if staging did nothing. (Data-file preload, `--preload-files`,
-is **not** asserted here: staged data files land in the per-proc session dir but
-the default cwd is elsewhere, so they are not reachable by a bare relative path —
-a separate, pre-existing gap.)
+would run even if staging did nothing.
+
+**Data-file preload** (`--preload-files`) is asserted too, and used not to be:
+staged data files landed in the per-proc session dir while the job's cwd was
+elsewhere, so nothing could open one by a bare relative name
+([#2525](https://github.com/openpmix/prrte/issues/2525)). They now go to
+`app->cwd`, and the cases cover a plain file read by both remote ranks, a
+relative subdirectory being recreated, an executable staying executable, an
+archive whose name contains a space, a collision with a *different* file being
+refused rather than overwriting the user's copy, a `..` in the delivered name
+being refused, and a file reaching a node grown into the DVM afterwards.
 
 **Remote stdin (`iof`)**: a large base64 payload is piped into `prterun` on
 node1 for a job whose rank 0 is mapped onto **node2**, running `cat`. Because
