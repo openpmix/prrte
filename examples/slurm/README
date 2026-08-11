@@ -13,10 +13,21 @@ count, allocation ID, or node list. After every request it queries PRRTE's
 allocation state and displays the corresponding Slurm jobs; a separate `dvm`
 command uses prun to verify reachability across the active DVM.
 
-The client treats the PMIx allocation callback as request acceptance and uses
-allocation queries to observe the resulting state. It does not require the
-application to wait for a PMIX_DVM_IS_READY event because PRRTE coordinates
-launches internally with the DVM launch fence.
+Extend and shrink are answered in two phases. The allocation callback reports
+PMIX_OPERATION_IN_PROGRESS with the allocation id once the scheduler has acted;
+PMIX_DVM_IS_READY (or PMIX_ERR_DVM_MOD) follows when the DVM itself has been
+resized and the nodes can carry work. The client registers a handler for both
+and correlates them with the request by PMIX_ALLOC_REQ_ID. Built against a PMIx
+that does not define those codes, it falls back to treating the grant as the
+answer.
+
+Only an extend can be cancelled, and only while the scheduler still has it
+queued; after the grant the resources are held and giving them back is a
+shrink. A shrink is never cancellable: ras/slurm records a cancellable request
+on the extend path alone.
+
+Requests are submitted and watched in the background, so the prompt returns at
+once and `cancel` can be typed during that window.
 
 Build from the examples directory with:
 
@@ -35,10 +46,12 @@ Then run inside a Slurm allocation with one initial node:
 
 At the coord prompt, available commands are:
 
-    extend count N
+    extend count N [as REQUEST_NAME]
     shrink count N
     shrink alloc SLURM_JOB_ID
     shrink list NODE1,NODE2
+    cancel [REQUEST_NAME]
+    pending
     prun [ARGS...]
     dvm
     refresh
@@ -49,9 +62,27 @@ same and then also runs a `prun`-based reachability probe (one process
 per node, echoing back its hostname) to confirm every daemon in the DVM
 is actually reachable.
 
+Every request carries a name, which is what `cancel` takes. An extend accepts
+`as REQUEST_NAME`; otherwise the name is generated, counting requests in the
+session: `extend-1`, `shrink-2`. Only an extend accepts a name, because only an
+extend can be cancelled. `pending` lists what is in flight and whether it can
+still be cancelled; `cancel` with no argument withdraws the only cancellable
+request.
+
+`cancel` reports PMIX_ERR_NOT_FOUND both for a name that was never submitted
+and for one the scheduler has already granted; ras/slurm does not distinguish
+them.
+
+The program refuses to start outside a Slurm job, or when PRRTE does not know
+that job's allocation. It cannot check elastic mode - the parameter has no PMIx
+query, and PRRTE strips PRTE_* from a launched process's environment - so a
+note at startup reminds you. Without elastic mode an extend still adds nodes
+but answers in one phase and raises no completion event.
+
 The program invokes squeue and prun for diagnostics, so both commands must be
 available in PATH.
 
-The program may not tolerate delays while acquiring additional resources. It
-is therefore best run in a containerized Slurm environment where requested
-resources are available immediately.
+A request the scheduler has not answered within five minutes is abandoned by
+its watcher; the request itself stays live with PRRTE. The program is easiest
+to follow in a containerized Slurm environment where requested resources are
+available immediately.
