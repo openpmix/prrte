@@ -842,6 +842,7 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
     const char * const initial_args[] = {"salloc",
                                 "--no-shell",
                                 "--exclusive",
+                                "--job-name=prrte",
                                 NULL };
 
     for (int i = 0; initial_args[i] != NULL; i++) {
