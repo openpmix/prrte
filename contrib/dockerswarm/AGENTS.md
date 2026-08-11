@@ -8,15 +8,16 @@ running node, stop: `build.sh` below already does the right thing
 (bind-mounts your live working tree into a builder and compiles it
 out-of-tree into the shared volume the nodes read).
 
-> **The one exception: a real scheduler.** The SLURM in this harness is
-> [`fake-slurm.py`](fake-slurm.py) (§12) — a stand-in control plane, which
-> can show that PRRTE issues the right commands and can never show that
-> SLURM accepts them. It also supplies no `srun`, so `plm/slurm` is not
-> exercised here at all. For that,
-> [`contrib/slurmswarm`](../slurmswarm/) is the same harness with an actual
-> SLURM installation in the ten containers. Keep the division: anything
-> without a `SLURM_` in it belongs *here*, because this harness is faster
-> and needs no scheduler.
+> **The one exception: SLURM.** There is none here — no scheduler, real or
+> stood-in. All of it lives in [`contrib/slurmswarm`](../slurmswarm/), the
+> same harness with an actual SLURM installation in the ten containers (§12).
+> This harness used to carry a fake control plane (`fake-slurm.py`), which
+> could show that PRRTE issued the right commands and could never show that
+> SLURM accepts them; once the real thing existed, keeping the fake meant two
+> suites asserting the same behavior with the weaker one able to disagree.
+> Keep the division: anything with a `SLURM_` in it belongs *there*, and
+> everything else belongs here, because this harness is faster and needs no
+> scheduler.
 
 A small, self-contained harness for exercising PRRTE across several container
 "nodes" — a persistent DVM, one-shot `prterun`, and the **elastic DVM**
@@ -58,7 +59,6 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | `groupcon.c` | A bare PMIx client that drives a **group construct/destruct** (`groupcon` in the install): every rank contributes a local cid, asks for a context id, constructs, reads every peer's contribution back, destructs. Drives grpcomm's `grp_release` on daemons that merely *received* the broadcast. See §15. |
 | `envspawn.c` | A PMIx client that spawns a child job carrying one of every **envar directive** (`envspawn` in the install): SET/ADD/UNSET/PREPEND/APPEND, pinned to a named host, with the child reporting the environment it actually got into a file on its own node. Those directives have no command-line surface — they arrive only on a spawn request — and `odls` applies them on whichever daemon forks the process, so the child has to land somewhere the parent is not. Drives `prte_odls_base_process_envars`. |
 | `slowcat.c` | A deliberately **slow** stdin reader (`slowcat` in the install, no PMIx dependency): copies stdin to a file in small reads with a pause between them, so the daemon feeding it keeps hitting *partial* writes. That is the only way to reach the iof short-write path. |
-| `fake-slurm.py` | A stand-in SLURM control plane (`salloc`/`scontrol`/`scancel`) so `ras/slurm`'s elastic modify surface can be exercised. See §12. |
 | `scaletest.c` | A PMIx client that **times** a full-data fence and a bare barrier over the whole job (`scaletest` in the install). Not a pass/fail case — a measurement. See §18. |
 | `mpinoop.c` | `MPI_Init` and `MPI_Finalize` and nothing else, so the only thing timed is the modex fence and the barrier behind it. Built only when `OMPI_SRC` is set — see §19. |
 | `scaletest.sh` | The measurement driver: stands up a swarm of arbitrary size (default 40), sweeps DVM size × procs-per-node × routing radix × payload, and writes a CSV. See §18. |
@@ -991,97 +991,41 @@ Always assert that `Spawn success` appears before asserting on the exit
 code: a spawn that failed to map or launch also produces a non-zero status,
 and would otherwise read as the child's.
 
-## 12. Faking a SLURM environment (`ras/slurm`)
+## 12. SLURM is not here — it is in `contrib/slurmswarm`
 
 `ras/slurm` is the only ras component with a full elastic **modify** surface,
 and everything past initial discovery is a shell-out: `salloc` to grow,
 `scontrol show job <id> --json` to learn what SLURM granted, `scontrol update
 job <id> ReqNodeList=…` to shrink one in place, `scancel` to give one back.
-None of that runs on a developer machine, so it had no automated coverage at
-all — including the ~1000-line JSON parser, which this harness is also the
-**only** automated build that even compiles (jansson defaults to off; see
-`--with-jansson` in `build.sh`).
+None of that runs on a developer machine, so this harness used to carry a
+stand-in control plane, `fake-slurm.py`, and a phase that drove it.
 
-[`fake-slurm.py`](fake-slurm.py) supplies the missing scheduler. `build.sh`
-installs it into the shared volume as
-`/opt/prte/fakeslurm/bin/{salloc,scontrol,scancel}` (it dispatches on
-`argv[0]`), deliberately **not** into the install `bin/` that the node
-entrypoint puts on every node's default PATH — a test has to opt in by
-prepending that directory, so this cannot perturb anything else in the suite.
+**Both are gone.** [`contrib/slurmswarm`](../slurmswarm/) is the same harness
+with a real `slurmctld`, ten real `slurmd`s and SLURM built from source, and
+it now carries every one of those cases. A fake scheduler can show that PRRTE
+issued the right command; only a real one can show that SLURM accepts it, and
+keeping both meant two suites asserting the same behavior with the weaker one
+free to disagree.
 
-It is not a SLURM emulator. It implements exactly the four command forms
-PRRTE issues, keeps its state under `/tmp/fake-slurm`, and hands out **real
-container hostnames** — so a grow driven through it launches real daemons on
-real nodes and a release really removes them.
+Two things survived the move rather than being dropped, because a live
+`slurmctld` cannot produce them on demand — see
+[`slurm-shim.py`](../slurmswarm/slurm-shim.py), which *wraps* the real
+commands rather than replacing them:
 
-Driving it by hand:
+- **what PRRTE asked for.** The scheduler records the job it created, not the
+  argv that created it, and several behaviors are only visible there: an
+  attribute that must be omitted when its source is unset, a `propagate_*`
+  MCA parameter that must drop exactly its own argument, the absence of
+  `--wrap`.
+- **what PRRTE does when the scheduler misbehaves.** Unparsable JSON and a
+  failing `scancel` are armed one at a time; everything else passes through
+  to the real command.
 
-```sh
-RUN='docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 prte-node1 bash -lc'
+What is left here is the **compile** coverage: `build.sh` still passes
+`--with-jansson`, so `ras_slurm_jansson.c` (the ~1000-line parser) is
+compiled by the harness that gets built on every change, rather than only by
+the slower sibling. Nothing in this suite runs it.
 
-$RUN 'export PATH=/opt/prte/fakeslurm/bin:$PATH
-      fake-slurm init --jobid 1000 --base node1 --tasks 2 --pool node2,node3,node4
-      eval "$(fake-slurm env)"     # SLURM_JOBID, SLURM_NODELIST, SLURMD_NODENAME, ...
-      . /opt/prte/env.sh
-      nohup prte --prtemca prte_elastic_mode 1 --prtemca ras_base_verbose 5 \
-            >/tmp/prte.out 2>&1 &
-      sleep 8
-      elastic extend 2             # PMIX_ALLOC_EXTEND: salloc, absorb
-      fake-slurm audit             # every command PRRTE issued
-      fake-slurm args 2001         # the salloc argv it built
-      elastic shrink node3         # partial: scontrol update ReqNodeList=
-      elastic release-id 2001'     # whole job: scancel
-```
-
-Two things to know:
-
-- **The request shapes differ from a plain grow.** `elastic grow <nodes>` is
-  `PMIX_ALLOC_NEW` naming hosts, which the *base* serves. `ras/slurm`'s
-  `modify()` accepts only `PMIX_ALLOC_EXTEND`+`NUM_NODES`,
-  `PMIX_ALLOC_RELEASE`+(`NODE_LIST`|`NUM_NODES`|`ALLOC_ID`), and
-  `PMIX_ALLOC_REQ_CANCEL` — which nodes an extend lands on is the
-  scheduler's choice. Hence `elastic extend|release|release-id|cancel`.
-- **An extend emits no phase-two event.** Its nodes join the general pool
-  (the component deliberately leaves `node->session` NULL), and the directed
-  completion event is addressed to the requestor recorded on a *reservation*.
-  Phase one carries the real result, which is why `elastic extend` does not
-  wait for phase two. A **release** does go through a shrink campaign and
-  does emit `PMIX_DVM_IS_READY`.
-
-Fault injection, for the paths that only exist to handle a scheduler
-misbehaving (`fake-slurm set <key> <value>`):
-
-| key | effect |
-|-----|--------|
-| `pending_secs` | a new job sits in `PENDING` this long — lets a request be cancelled while in flight, and is what keeps the stub's `salloc` alive long enough to exercise PRRTE's deferred reap (below) |
-| `scancel_fail` | `scancel` exits non-zero with far more output than the 256-byte capture buffer holds |
-| `bad_json` | `scontrol show job --json` returns unparsable output with exit status 0 |
-
-The suite uses all three: a cancelled pending extend, a failing `scancel`
-(whose message must come back truncated and `...`-terminated, and must not
-take the HNP down), and malformed JSON. It also asserts a release naming a
-hostname with a shell metacharacter is refused before it can reach a command
-line.
-
-**The stub's `salloc` blocks, and that is deliberate.** The real one is the
-process holding a pending allocation — it announces the job on stderr as soon
-as slurmctld has it and only then waits for resources, exiting once they are
-granted. PRRTE reads the job ID out of that first line and leaves the child
-running, reaping it asynchronously later, so a stub that returned immediately
-the way `sbatch` did would never exercise that. `pending_secs` is therefore
-the knob that opens the window: while it is non-zero a live `salloc` sits
-under the HNP for the whole pending period, and a `scancel` during it makes
-the stub report the allocation revoked and exit non-zero, which is the reap
-callback's failure branch. That callback also completes the extend — PRRTE does
-not poll a queued job — so a stub `salloc` that exits early makes an extend land
-before its nodes exist.
-
-**Some slot counts are asserted from `ras_base_verbose` output, not from
-the pool.** The verbose line is what the component itself computed, so it
-separates a parser error from whatever the launch path later does with the
-number. The pool is asserted too, separately — a node whose count came
-from the scheduler must still carry that count at mapping time
-(`PRTE_NODE_FLAG_SLOTS_GIVEN`).
 
 ## 13. The data server (`dataserver`, `test_runtime`)
 

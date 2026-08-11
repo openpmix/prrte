@@ -34,6 +34,7 @@ differences are in §3, §9 and §10 and nowhere else.
 | `slurm.conf` | The cluster configuration, one copy baked into the image. Every container-specific choice is commented in the file; see §9. |
 | `cgroup.conf` | `CgroupPlugin=disabled`. Two lines, and the reason the containers can stay unprivileged; see §9. |
 | `slurm-alloc.py` | Creates and holds a real allocation across many `docker exec` calls, and replays the environment SLURM put in it. See §11. |
+| `slurm-shim.py` | A recording, optionally misbehaving, **wrapper** around the real `salloc`/`scontrol`/`scancel`. Answers the two questions slurmctld cannot: what PRRTE *asked* for, and what PRRTE does when the scheduler misbehaves. See §14. |
 | `docker-compose.yml` | The ten nodes `prteslurm-node1..prteslurm-node10`. Every name derives from `$PRTE_SLURM_SWARM`, so two clones can each run a cluster. |
 | *(no file here)* | The `elastic` test client is compiled from [`../dockerswarm/elastic.c`](../dockerswarm/elastic.c) rather than copied — it is the same program, and two copies would drift. |
 
@@ -166,9 +167,9 @@ across the whole allocation with no `--host`; the slot count is SLURM's, not
 the core count; `--host` selects within the allocation and refuses outside
 it. Two cases here cannot exist anywhere else:
 
-- **SLURM's compressed node list.** The fake scheduler hands out comma
-  separated names; SLURM hands out `node[2,4,6]`, and `ras/slurm` has its own
-  parser for that notation. The allocation is deliberately non-contiguous: a
+- **SLURM's compressed node list.** SLURM hands out `node[2,4,6]`, and
+  `ras/slurm` has its own parser for that notation — a fake scheduler handing
+  out comma-separated names never reaches it. The allocation is deliberately non-contiguous: a
   parser that reads `node[2,4,6]` as the range 2..6 gets five nodes, three of
   which it was never given, and the case asserts that neither node3 nor node5
   was invented.
@@ -177,9 +178,9 @@ it. Two cases here cannot exist anywhere else:
   from a host that is not part of the job.
 
 **`test_plm`** — the launcher. This component is unreachable from the sibling
-harness at all: the fake scheduler supplies `salloc`/`scontrol`/`scancel`, and
-`plm/slurm` shells out to **`srun`**, so every DVM over there goes out over
-ssh no matter what the ras was told. The cases assert that `plm/slurm` won
+harness at all: `plm/slurm` shells out to **`srun`**, and there is no SLURM of
+any kind over there, so every DVM it builds goes out over ssh no matter what
+the ras was told. The cases assert that `plm/slurm` won
 selection, that the command really is `srun`, that it carried
 `--jobid=<the allocation>` (a launcher that omitted it would work on an idle
 cluster and queue a second job on a busy one), that PRRTE read the srun exit
@@ -205,16 +206,40 @@ Two cases are worth calling out:
 - **The in-place resize.** A partial release keeps the SLURM job and shrinks
   it with `scontrol update job <id> ReqNodeList=<survivors>`. Whether SLURM
   accepts that on a RUNNING job is precisely the assumption a fake scheduler
-  cannot check, and the case asserts the scheduler's own node count came
+  could never check, and the case asserts the scheduler's own node count came
   down — not merely that PRRTE issued a command.
-- **A pending extend, with no fault injection.** The sibling harness has to
-  *make* a job pend (`fake-slurm set pending_secs`). Here the case asks for
-  more nodes than the cluster has free and SLURM queues it PENDING by itself,
-  which is the state `PMIX_ALLOC_REQ_CANCEL` exists for.
+- **A pending extend, with no fault injection.** A fake scheduler has to be
+  *told* to make a job pend. Here the case asks for more nodes than the
+  cluster has free and SLURM queues it PENDING by itself, which is the state
+  `PMIX_ALLOC_REQ_CANCEL` exists for.
 
 The tainted-hostname case is carried over from the sibling harness because
 the stakes are different here: the command that would be built is one a live
 `slurmctld` would act on.
+
+Three more groups came over when the fake scheduler was retired:
+
+- **A release issued while a grow is in flight** ([#2617]). Grow and shrink
+  share one launch fence and one broadcast, and the shrink half had no notion
+  of an in-flight grow: it was xcast to daemons that were still joining and
+  could not be reached, so the campaign neither completed nor aborted and
+  every later job parked at the `LAUNCH_APPS` hold. The interleaving is
+  opportunistic on purpose — do not "stabilize" it with a sleep between the
+  two requests, because the sleep is the bug.
+- **What PRRTE put on the `salloc` command line**, and the `propagate_*`
+  parameters that gate it. §14.
+- **Malformed JSON and a failing `scancel`.** §14.
+
+**The phase is a sequence of independent groups, and that is load-bearing.**
+Each group is its own shell function so that one which cannot proceed can
+`return` without taking the others with it. The shape this replaced did
+exactly that: an extend that came back refused returned out of the *whole*
+phase, so five later groups — none of which depended on it — silently did not
+run, and the only visible symptom was a suite total about fifty checks lower
+than the run before. A group that gives up now says what it gave up on, and
+the caller runs the next one regardless.
+
+[#2617]: https://github.com/openpmix/prrte/issues/2617
 
 **`test_launch`** — a deliberately short smoke test. Ranks spread over the
 allocated nodes, output forwarded back, a failing job reported as failing,
@@ -427,17 +452,22 @@ Everything that is not about the scheduler. Do not add it here.
 `contrib/dockerswarm` covers PRRTE across ten nodes — the launch paths, IOF
 and its flow control, `grpcomm` collectives and group construct, the data
 server, direct modex, `errmgr`, `odls` envars, `rml` routing, `hwloc`,
-sessions, the elastic grow/shrink surface driven by *hostname*, and the
-`ras/slurm` **fault injection** cases (malformed JSON, a failing `scancel`,
-an oversized error message) that a real scheduler will not produce on demand.
-It is faster, it needs no scheduler, and it is where a regression in any of
-that will be found.
+sessions, and the elastic grow/shrink surface driven by *hostname*. It is
+faster, it needs no scheduler, and it is where a regression in any of that
+will be found.
+
+**Everything `SLURM_` is now here, including what used to need a fake.** That
+harness once carried a stand-in control plane and a `ras/slurm` phase driven
+by it; both are gone. The cases that genuinely needed something a live
+`slurmctld` will not do — malformed JSON, a failing `scancel`, and the argv
+assertions — moved here and are served by `slurm-shim.py` (§14), which wraps
+the real commands rather than replacing the scheduler.
 
 The division to hold to:
 
 | Question | Harness |
 |----------|---------|
-| Does PRRTE issue the right command? | `dockerswarm` (fake-slurm records the argv) |
+| Does PRRTE issue the right command? | **here** (the shim records the argv — §14) |
 | Does SLURM accept that command? | **here** |
 | Does PRRTE parse what SLURM said? | **here** (against SLURM's real output) |
 | Does PRRTE do the right thing with the answer? | either — prefer `dockerswarm` |
@@ -465,3 +495,55 @@ Kept as a list because each one cost an afternoon.
 - **A cancelled job does not free its nodes at once.** Anything that cancels
   and then immediately allocates must wait for the cluster to go idle, or it
   pends — and a pending allocation looks exactly like a hang.
+
+## 14. Recording the argv, and making the scheduler misbehave
+([`slurm-shim.py`](slurm-shim.py))
+
+A real scheduler answers most questions better than a fake one. It does not
+answer these two:
+
+- **What PRRTE asked for.** slurmctld records the job it created, not the
+  command line that created it. Several behaviors are visible *only* in the
+  argv: an attribute that must be **omitted** when its source is unset rather
+  than sent with an empty value, a `propagate_*` MCA parameter that must drop
+  exactly its own argument and disturb nothing else, and the absence of
+  `--wrap` (an sbatch expander job's script *is* the job, so the node it runs
+  on could never be released — `salloc --no-shell` is what makes an arbitrary
+  shrink possible). No job record can show that an argument is absent.
+- **What PRRTE does when the scheduler misbehaves.** A live `slurmctld` will
+  not emit unparsable JSON or fail a `scancel` on request, and those paths
+  exist for precisely that.
+
+`slurm-shim.py` is installed by `build.sh` as
+`/opt/prte/slurmshim/bin/{salloc,scontrol,scancel}` — dispatching on
+`argv[0]`, and deliberately **not** into the install `bin/` that the node
+entrypoint puts on every PATH. A case opts in by starting its DVM with that
+directory first (`DVM_SHIM=1` in `run-tests.sh`), so nothing else in the
+suite can be perturbed by it. It is the **HNP** that needs it: the HNP is
+what shells out, the tools never do.
+
+```sh
+slurm-shim reset                 # clear argv records and faults
+slurm-shim argv                  # argv of the most recent salloc
+slurm-shim audit                 # every wrapped command, in order
+slurm-shim set bad_json 1        # scontrol --json prints garbage, exits 0
+slurm-shim set scancel_fail 1    # scancel fails, verbosely
+```
+
+Three properties of it are deliberate:
+
+- **It wraps; it does not replace.** Anything not explicitly faulted is
+  passed through to the real command, so the scheduler under test stays real.
+- **It `exec`s rather than forks.** PRRTE forks `salloc` itself, reads the
+  job id off its output, and reaps it by pid much later. A wrapper sitting in
+  the middle would have to reproduce all of that faithfully; becoming the
+  command means there is nothing to reproduce. The cost is that the shim
+  never sees the job id, so an argv record cannot be keyed by job — `argv`
+  reports the most recent one, and every case that asserts on an argv issues
+  exactly one extend.
+- **`bad_json` exits 0.** A non-zero status would be caught by the caller's
+  status check and never reach the parser, which is the code under test.
+
+Fault flags are armed one at a time and cleared by the case that armed them;
+`DVM_SHIM` is put back to 0 after each group, or every later phase would be
+recording — and possibly still faulting.

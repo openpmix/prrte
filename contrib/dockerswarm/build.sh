@@ -349,11 +349,14 @@ build_linux() {
 
             echo ">>>> PRRTE VPATH build -> /opt/prte/prte"
             mkdir -p /opt/prte/vpath-linux && cd /opt/prte/vpath-linux
-            # --with-jansson is deliberate: it is off by default, and without
-            # it ras/slurm compiles ras_slurm_jansson_stub.c instead of the
-            # real ras_slurm_jansson.c -- so the ~1000 lines that parse
-            # "scontrol --json" (the whole elastic extend/release surface) are
-            # never even compiled.  libjansson-dev is baked into the image.
+            # --with-jansson is COMPILE coverage, and nothing more: no test in
+            # this harness runs ras/slurm any more (contrib/slurmswarm has a
+            # real scheduler and owns all of that).  It stays because jansson
+            # is off by default, so without it ras/slurm compiles
+            # ras_slurm_jansson_stub.c instead of the ~1000-line real parser --
+            # and this is the harness that gets built on every change, so a
+            # break in those lines surfaces here rather than in the slower
+            # sibling.  libjansson-dev is baked into the image.
             prte_args="--prefix=/opt/prte/prte --with-pmix=$PMIX_PREFIX --with-jansson --enable-debug"
             if reconfigure_needed . "$prte_args" /prrte-src; then
                 echo ">>>> (re)configuring PRRTE: $prte_args"
@@ -527,20 +530,6 @@ build_linux() {
             gcc -O0 -g -o /opt/prte/prte/bin/sessionctrl \
                 /prrte-src/examples/sessionctrl.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
-
-            # The fake SLURM control plane, installed under its own prefix --
-            # NOT into the install bin/, which the node entrypoint symlinks
-            # onto the default PATH of every node. ras/slurm gates on SLURM_JOBID,
-            # so a stray scontrol on PATH is harmless, but a test that has to
-            # opt in by prepending this directory is the one that cannot
-            # perturb any other test in the suite.
-            echo ">>>> fake SLURM stubs -> /opt/prte/fakeslurm/bin"
-            mkdir -p /opt/prte/fakeslurm/bin
-            install -m 0755 /prrte-src/contrib/dockerswarm/fake-slurm.py \
-                /opt/prte/fakeslurm/bin/fake-slurm
-            for t in salloc scontrol scancel; do
-                ln -sf fake-slurm /opt/prte/fakeslurm/bin/$t
-            done
 
             # Open MPI, if a checkout was bind-mounted.  This is the only
             # thing in the harness that produces a modex an application

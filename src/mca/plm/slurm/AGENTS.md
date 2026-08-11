@@ -170,10 +170,9 @@ not srun).
   connections and duplicates command-line settings.
 - Multi-node behavior that does not need SLURM (tree-spawn, throttling,
   the prted command line) is covered by
-  [`contrib/dockerswarm`](../../../../contrib/dockerswarm/) — note that
-  its fake scheduler supplies the *control plane* (`sbatch`, `scontrol`,
-  `scancel`) and not `srun`, so no DVM over there is launched by this
-  component at all.
+  [`contrib/dockerswarm`](../../../../contrib/dockerswarm/) — which has no
+  SLURM of any kind, so no DVM over there is launched by this component at
+  all.
 - The SLURM-specific paths need an allocation, and
   [`contrib/slurmswarm`](../../../../contrib/slurmswarm/) is one: ten
   containers running a real SLURM, where the daemons really do go out over
