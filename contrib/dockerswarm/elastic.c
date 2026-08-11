@@ -33,12 +33,19 @@
  * shapes its modify() accepts.  Which nodes such a request lands on is the
  * scheduler's choice, not the caller's.
  *
- * Phase two is waited for by default, but not for "extend" or "cancel".  The
- * directed completion event is emitted to the requestor recorded on the
- * *reservation* a grow created; an RM extend puts its new nodes in the
- * general pool instead (ras/slurm deliberately leaves node->session NULL),
- * so no such event is coming and waiting for one only burns the timeout.
- * Phase one carries that path's real result.
+ * Phase two is waited for by default, but not for "cancel", which is answered
+ * in full by phase one.
+ *
+ * An extend is waited for like the rest.  It did not used to be: its nodes
+ * join the general pool rather than a reservation (ras/slurm deliberately
+ * leaves node->session NULL), and the directed event is addressed to the
+ * requestor recorded on a *session*, so there was nothing to wait for.
+ * ras/slurm now records the requestor on the session that tracks the
+ * allocation and answers phase one with PMIX_OPERATION_IN_PROGRESS, because
+ * a grant is not usable nodes until daemons are up on them -- so the
+ * PMIX_DVM_IS_READY is the answer, exactly as it is for a grow.  Outside
+ * elastic mode no campaign is recorded and phase one stays terminal; use
+ * --no-wait there rather than burning the timeout.
  *
  * A grow may be followed by "-- <cmd> [args...]", in which case the tool
  * spawns that command INTO THE RESERVATION the grow just created, using the
@@ -243,7 +250,10 @@ static void usage(const char *me) {
             "  extend     <num-nodes>          PMIX_ALLOC_EXTEND  + NUM_NODES\n"
             "  release    <num-nodes>          PMIX_ALLOC_RELEASE + NUM_NODES\n"
             "  release-id <alloc-id>           PMIX_ALLOC_RELEASE + ALLOC_ID\n"
-            "  cancel     <req-id>             PMIX_ALLOC_REQ_CANCEL\n", me);
+            "  cancel     <req-id>             PMIX_ALLOC_REQ_CANCEL\n"
+            "\n"
+            "Every op but 'cancel' waits for the phase-two completion event;\n"
+            "--no-wait is what a DVM outside elastic mode needs.\n", me);
 }
 
 int main(int argc, char **argv) {
@@ -298,7 +308,6 @@ int main(int argc, char **argv) {
     } else if (0 == strcmp(op, "extend")) {
         directive = PMIX_ALLOC_EXTEND;
         num_nodes = strtoull(arg, NULL, 10);
-        wait_phase2 = false;    /* see the note at the top of this file */
     } else if (0 == strcmp(op, "release")) {
         directive = PMIX_ALLOC_RELEASE;
         num_nodes = strtoull(arg, NULL, 10);
