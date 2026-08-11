@@ -531,6 +531,21 @@ build_linux() {
                 /prrte-src/examples/sessionctrl.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
+            # peerinfo: every rank asks every other rank in its own job where
+            # it is.  Nothing else here does that.  The other clients either
+            # put their own data and read it back, or ask about the job rather
+            # than about a peer, and both of those are answered without the
+            # request ever reaching the daemon -- so the daemon path that
+            # answers for a proc it does not host can be switched on, run the
+            # whole suite green, and never once have executed.  This is the
+            # shape of an MPI initialization, and it needs the peers to be on
+            # other nodes to mean anything.
+            # (No apostrophes here: see the note further down.)
+            echo ">>>> peerinfo (peer reserved-key lookup) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/peerinfo \
+                /prrte-src/contrib/dockerswarm/peerinfo.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
             # Open MPI, if a checkout was bind-mounted.  This is the only
             # thing in the harness that produces a modex an application
             # actually reads back: every other client here puts data because

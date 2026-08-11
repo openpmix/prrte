@@ -480,6 +480,12 @@ typedef struct {
     char *report_uri;
     char *singleton;
     pmix_device_type_t generate_dist;
+    /* Publish per-proc data to the local PMIx server only for the procs this
+     * daemon actually hosts, and derive the rest on demand when PMIx asks for
+     * them through the direct-modex upcall.  Registering every proc in the job
+     * on every daemon costs a table that grows with the total process count on
+     * a node that will run a fixed slice of it. */
+    bool lazy_procdata;
     pmix_list_t psets;
     pmix_list_t groups;
 } prte_pmix_server_globals_t;
