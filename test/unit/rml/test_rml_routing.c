@@ -465,6 +465,110 @@ static int test_departed_ranks_survive_recompute(void)
 }
 
 /*
+ * The departed set has to reach a daemon we are LAUNCHING, on its command
+ * line, because nothing it could receive would arrive in time: with an empty
+ * dead set the raw radix math can make a retired vpid its parent, and then
+ * every message it sends upward -- including the warm-up that asks for the
+ * nidmap that would correct the set -- is addressed to a rank nothing can
+ * contact.  prte_rml_render_dead_dmns() writes the list, and
+ * prte_rml_load_dead_dmns() reads it back before the first tree computation.
+ */
+static int test_dead_dmns_round_trip(void)
+{
+    int failures = 0;
+    char *spec;
+
+    /* nothing departed renders as nothing at all, so the launcher adds no
+     * argument to the ordinary case */
+    bitmaps_reset();
+    prte_process_info.num_daemons = 8;
+    spec = prte_rml_render_dead_dmns();
+    CHECK("an intact DVM renders no departed list", NULL == spec);
+    free(spec);
+
+    /* isolated ranks and runs, collapsed -- a repeatedly-shrunk DVM must not
+     * put hundreds of numbers on a command line measured against _SC_ARG_MAX */
+    pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, 2);
+    pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, 7);
+    pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, 8);
+    pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, 9);
+    prte_process_info.num_daemons = 16;
+    spec = prte_rml_render_dead_dmns();
+    CHECK("a departed list is rendered", NULL != spec);
+    if (NULL != spec) {
+        CHECK("runs are collapsed into ranges", 0 == strcmp(spec, "2,7:9"));
+        /* This value goes on a command line, and every RELEASED PMIx that
+         * PRRTE accepts refuses an MCA value whose second character is a dash
+         * -- it reads it as a missing argument -- so a range written "2-3"
+         * would fail to launch.  Guard the separator, not just the shape. */
+        CHECK("no dash is used as the range separator", NULL == strchr(spec, '-'));
+    }
+
+    /* and reading it back into a fresh daemon reproduces the set exactly */
+    bitmaps_reset();
+    prte_rml_load_dead_dmns(spec);
+    free(spec);
+    CHECK("a single departed rank round-trips",
+          pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, 2));
+    CHECK("a range round-trips at its start",
+          pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, 7));
+    CHECK("a range round-trips in its middle",
+          pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, 8));
+    CHECK("a range round-trips at its end",
+          pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, 9));
+    CHECK("a live rank is not marked departed",
+          !pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, 3));
+
+    /* garbage must not take the daemon down, and must not be believed */
+    bitmaps_reset();
+    prte_rml_load_dead_dmns(NULL);
+    prte_rml_load_dead_dmns("");
+    prte_rml_load_dead_dmns("bogus,3x,9:4,,-2,4:");
+    CHECK("a malformed list marks nothing",
+          pmix_bitmap_is_clear(&prte_rml_base.dead_dmns));
+    /* a rank outside the DVM's vpid span is not a hole in it */
+    prte_process_info.num_daemons = 4;
+    prte_rml_load_dead_dmns("9");
+    CHECK("a rank beyond the vpid span is refused",
+          pmix_bitmap_is_clear(&prte_rml_base.dead_dmns));
+
+    /*
+     * The case the whole mechanism exists for: a daemon launched as rank 4
+     * into a radix-2 DVM of 5 whose rank 2 was shrunk out.  Told nothing, it
+     * parents onto the retired vpid; told the list, it does not.  At the
+     * default radix every daemon's parent is rank 0, which is why this stayed
+     * invisible for so long -- so assert the default-radix case is unaffected
+     * too, rather than only that the fix fires.
+     */
+    bitmaps_reset();
+    build_dvm(2, 5, 4);
+    CHECK("without the departed list a newcomer parents onto the retired vpid",
+          2 == prte_rml_base.lifeline);
+
+    bitmaps_reset();
+    prte_process_info.num_daemons = 5;
+    prte_rml_load_dead_dmns("2");
+    build_dvm(2, 5, 4);
+    CHECK("with the departed list it does not",
+          2 != prte_rml_base.lifeline);
+    CHECK("and its lifeline is a live rank",
+          prte_rml_is_node_up(prte_rml_base.lifeline));
+
+    bitmaps_reset();
+    prte_process_info.num_daemons = 5;
+    prte_rml_load_dead_dmns("2");
+    build_dvm(64, 5, 4);
+    CHECK("at the default radix the newcomer still parents onto the HNP",
+          0 == prte_rml_base.lifeline);
+
+    bitmaps_reset();
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_dead_dmns_round_trip\n");
+    }
+    return failures;
+}
+
+/*
  * get_num_contributors counts how many of my child subtrees a set of daemons
  * falls into -- what a collective uses to know how many reports to expect.
  * Failed ranks contribute nothing.
@@ -717,6 +821,7 @@ int main(void)
     failures += test_radix_traversal();
     failures += test_routing_tree();
     failures += test_departed_ranks_survive_recompute();
+    failures += test_dead_dmns_round_trip();
     failures += test_num_contributors();
     failures += test_lateral_links();
     failures += test_epoch_guard();

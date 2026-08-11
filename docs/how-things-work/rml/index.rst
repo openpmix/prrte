@@ -210,6 +210,21 @@ transport layers:
   routes around the hole instead of addressing a reused-looking but dead vpid.
   (The DVM never reuses a daemon vpid.)
 
+* **The departure set reaches a new daemon at launch, not by message.**  A
+  daemon started into a DVM that has already shrunk needs those holes *before*
+  it computes its first routing tree, and no message can deliver them: with the
+  wrong tree, everything it sends upward — including the warm-up that asks for
+  the nidmap that would correct it — is addressed to a retired vpid nothing can
+  contact, so it never learns, never reports in, and every job placed on it
+  hangs.  The launcher therefore renders the set onto the ``prted`` command
+  line as ``rml_base_dead_dmns`` — a range-collapsed list such as ``2,7:9``,
+  colon-separated because a released PMIx refuses an MCA value whose second
+  character is a dash — and the daemon adopts it in ``prte_rml_open`` before
+  the first tree is built.  The daemon this strands is the one whose
+  fault-free radix parent *is* a retired vpid, so at the default radix, where
+  every daemon's parent is the HNP, the problem does not arise; it needs a
+  tree with depth.
+
 * **A leaving daemon departs on the first lost route.**  When
   ``prte_dvm_leaving`` is set — this daemon was named as a shrink target —
   ``prte_rml_route_lost`` terminates immediately on *any* dropped connection

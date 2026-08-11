@@ -5861,6 +5861,59 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     fi
     cleanup_swarm
 
+    banner "elastic DVM: a daemon re-grown into a vpid hole gets a live parent"
+    # The same shape as the case above, but at a radix small enough for the
+    # daemon tree to have depth -- which is the only way this defect is
+    # visible. A daemon launched into a DVM that has already shrunk starts with
+    # an EMPTY departed-rank set, so it computes its first routing tree from
+    # raw radix math and can pick a retired vpid as its parent. Everything it
+    # then sends upward is addressed to a rank nothing can contact, including
+    # the warm-up that asks for the nidmap that would have corrected the set --
+    # so it never learns, never reports in, and every job touching that node
+    # hangs. The launcher therefore carries the departed set on the prted
+    # command line (rml_base_dead_dmns), which is the only moment early enough.
+    #
+    # At the DEFAULT radix every daemon's parent is rank 0, which is always
+    # alive, so the whole thing is invisible -- the case above passes with the
+    # DVM in exactly this state. Hence the explicit radix here: without it this
+    # suite never exercises the fix at all.
+    #
+    # The vpids matter. grow node2,node3 -> shrink node3 -> grow node4 ->
+    # re-grow node3 gives node1=0, node2=1, node3(old)=2 (retired), node4=3,
+    # node3(new)=4 -- and at radix 2 the raw parent of rank 4 is rank 2.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 \
+                    --prtemca rml_base_radix 2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        RUN 'timeout 90 elastic grow node2:2,node3:2' >/dev/null 2>&1
+        RUN 'timeout 90 elastic shrink node3' >/dev/null 2>&1; sleep 3
+        RUN 'timeout 90 elastic grow node4:2' >/dev/null 2>&1; sleep 3
+        out=$(RUN 'timeout 90 elastic grow node3:2' 2>&1); sleep 3
+        echo "$out" | grep -q "SUCCESS\|PMIX_DVM_IS_READY" \
+            && ok "the re-grow into the vpid hole completed at radix 2" \
+            || bad "re-grow into the vpid hole did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        [ "$(prted_count 3)" = 1 ] && ok "a daemon is running on the re-grown node" \
+                                   || bad "no daemon on the re-grown node"
+        # The proof: a job spanning every node. The re-grown daemon can only
+        # report its procs launched if its lifeline is a rank that still
+        # exists, so a node missing from this output is the stranded daemon.
+        out=$(RUN 'timeout 60 prun -n 4 --map-by ppr:1:node hostname' 2>&1)
+        for n in node1 node2 node3 node4; do
+            echo "$out" | grep -qw "$n" \
+                && ok "$n ran its proc after the deep-tree re-grow" \
+                || bad "$n launched nothing after the deep-tree re-grow (departed set not carried at launch)"
+        done
+        # ...and the DVM is still usable afterwards, so a wedged daemon cannot
+        # pass the above by having merely delayed
+        out=$(RUN 'timeout 60 prun --host node3 -n 1 hostname' 2>&1 | tr -d '\r')
+        [ "$out" = node3 ] && ok "the re-grown node serves a job of its own" \
+                           || bad "the re-grown node is wedged: $out"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start an elastic DVM for the deep-tree re-grow test"
+    fi
+    cleanup_swarm
+
     banner "elastic DVM: a grow launches ONLY on the nodes it was given"
     # An allocation request naming node4 must start a daemon on node4 and
     # nowhere else. Shrink node2 first so the DVM holds a node that is in the

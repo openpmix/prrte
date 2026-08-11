@@ -65,6 +65,9 @@ prte_rml_base_t prte_rml_base = {
 uint64_t prte_rml_boot_epoch = 0;
 
 static int verbosity = 0;
+/* the departed-rank list handed to us on the command line, if any - owned by
+ * the MCA variable system, not by us */
+static char *dead_dmns_spec = NULL;
 
 /* The incarnation table is the one piece of RML state a peer's socket handler
  * reaches directly, and that handler runs on whichever base is servicing the
@@ -149,6 +152,95 @@ uint64_t prte_rml_get_epoch(pmix_rank_t rank)
     return 0;
 }
 
+char *prte_rml_render_dead_dmns(void)
+{
+    char **entries = NULL;
+    char *result, *tmp;
+    int n, sz, start;
+
+    sz = pmix_bitmap_size(&prte_rml_base.dead_dmns);
+    for (n = 0; n < sz; n++) {
+        if (!pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, n)) {
+            continue;
+        }
+        /* Collapse a run into "first:last". A DVM that has shrunk repeatedly
+         * can otherwise put hundreds of numbers onto a command line that is
+         * already measured against _SC_ARG_MAX by every launcher.
+         *
+         * The separator is a colon rather than the dash such a range is
+         * usually written with, because this value goes on a command line:
+         * every released PMIx that PRRTE accepts (>= 6.1.0) refuses an MCA
+         * value whose second character is a dash, reading it as a missing
+         * argument, so "2-3" would fail to launch. The fix for that is on PMIx
+         * master only and in no tag. */
+        start = n;
+        while (n + 1 < sz && pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, n + 1)) {
+            ++n;
+        }
+        if (start == n) {
+            pmix_asprintf(&tmp, "%d", start);
+        } else {
+            pmix_asprintf(&tmp, "%d:%d", start, n);
+        }
+        PMIx_Argv_append_nosize(&entries, tmp);
+        free(tmp);
+    }
+
+    if (NULL == entries) {
+        return NULL;
+    }
+    result = PMIx_Argv_join(entries, ',');
+    PMIx_Argv_free(entries);
+    return result;
+}
+
+void prte_rml_load_dead_dmns(const char *spec)
+{
+    char **entries;
+    int n;
+    long r, first, last;
+    char *end;
+    bool ok;
+
+    if (NULL == spec || '\0' == spec[0]) {
+        return;
+    }
+
+    entries = PMIx_Argv_split(spec, ',');
+    if (NULL == entries) {
+        return;
+    }
+    for (n = 0; NULL != entries[n]; n++) {
+        ok = false;
+        end = NULL;
+        first = strtol(entries[n], &end, 10);
+        if (end != entries[n] && 0 <= first) {
+            if (':' == *end) {
+                char *p = end + 1;
+                last = strtol(p, &end, 10);
+                ok = (end != p && last >= first);
+            } else {
+                last = first;
+                ok = true;
+            }
+            /* the whole entry has to be consumed, and a rank outside the DVM's
+             * vpid span is not a hole in it */
+            if (ok && ('\0' != *end || (long) prte_process_info.num_daemons <= last)) {
+                ok = false;
+            }
+        }
+        if (!ok) {
+            pmix_output(0, "PRRTE: ignoring malformed departed-daemon rank \"%s\"",
+                        entries[n]);
+            continue;
+        }
+        for (r = first; r <= last; r++) {
+            pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, (int) r);
+        }
+    }
+    PMIx_Argv_free(entries);
+}
+
 void prte_rml_register(void)
 {
     int ret;
@@ -194,6 +286,19 @@ void prte_rml_register(void)
                        " - using 2", prte_rml_base.radix);
         prte_rml_base.radix = 2;
     }
+
+    /* The ranks that had already departed the DVM when we were launched. Only
+     * a launcher sets this, on the prted command line: a daemon started into a
+     * DVM that has lost ranks has to know which they are BEFORE it computes its
+     * first routing tree, and no message can tell it - the request would have
+     * to travel over the very tree it has not got right. See prte_rml_open. */
+    dead_dmns_spec = NULL;
+    pmix_mca_base_var_register("prte", "rml", "base", "dead_dmns",
+                               "Comma-separated daemon vpids (ranges as first:last, e.g. \"2,7:9\")"
+                               " that had permanently departed the DVM when this daemon was"
+                               " launched. Set by the launcher; not intended for users",
+                               PMIX_MCA_BASE_VAR_TYPE_STRING,
+                               &dead_dmns_spec);
 
     prte_oob_register();
 
@@ -289,6 +394,16 @@ int prte_rml_open(void)
                   prte_rml_recv_return_request, NULL);
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON_REVIVED, true,
                   prte_rml_recv_revival_notice, NULL);
+
+    /* Adopt the departed ranks our launcher told us about, BEFORE the first
+     * tree computation below. A daemon launched into a DVM that has already
+     * shrunk starts with an empty dead set, so the raw radix math can hand it a
+     * retired vpid as its parent - and then every message it sends upward,
+     * including the warm-up that asks for the nidmap that would have corrected
+     * the set, is addressed to a rank nothing can contact. The DVM never reuses
+     * a daemon vpid, so the hole is permanent and this is the only moment the
+     * newcomer can learn of it (#2491). */
+    prte_rml_load_dead_dmns(dead_dmns_spec);
 
     /* compute the routing tree - only thing we need to know is the
      * number of daemons in the DVM */
