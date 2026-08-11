@@ -201,7 +201,12 @@ static void dmodex_req(int sd, short args, void *cbdata)
         goto callback;
     }
 
-    if (NULL == (dmn = proct->node->daemon)) {
+    /* A proc object exists from the moment the job is created, and it is the
+     * mapper that gives it a node - so a request arriving for a job whose
+     * mapping has not finished finds one with nothing to say about where it
+     * is.  That is the same answer as a proc whose node has no daemon, and it
+     * has to be reached the same way rather than by dereferencing NULL. */
+    if (NULL == proct->node || NULL == (dmn = proct->node->daemon)) {
         /* we don't know where this proc is located - since we already
          * found the job, and therefore know about its locations, this
          * must be an error */
