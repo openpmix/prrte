@@ -1312,11 +1312,14 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
 
     req->pstatus = prte_pmix_convert_rc(err);
 
-    /* Report back: job ID and resource manager used */
+    /* Report back the job ID. Only a phase one that stays PMIX_SUCCESS
+     * delivers it: a client stops unpacking a reply whose status is anything
+     * else, so nothing sent with PMIX_OPERATION_IN_PROGRESS arrives. Where
+     * that happens the completion event carries the id instead. */
     if (PMIX_SUCCESS == req->pstatus) {
         pmix_info_t *result_info = NULL;
 
-        PMIX_INFO_CREATE(result_info, 2);
+        PMIX_INFO_CREATE(result_info, 1);
         if (NULL == result_info) {
             req->pstatus = PMIX_ERR_NOMEM;
         } else {
@@ -1324,9 +1327,8 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
                 PMIX_INFO_FREE(req->info, req->ninfo);
             }
             PMIX_INFO_LOAD(&result_info[0], PMIX_ALLOC_ID, job_id, PMIX_STRING);
-            PMIX_INFO_LOAD(&result_info[1], PMIX_RM_NAME, "slurm", PMIX_STRING);
             req->info = result_info;
-            req->ninfo = 2;
+            req->ninfo = 1;
             req->copy = true;
         }
     }
