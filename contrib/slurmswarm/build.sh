@@ -173,7 +173,28 @@ prep_srcdir() {
         exit 2
     fi
 
-    if [ ! -x "$root/configure" ] || [ "$root/configure.ac" -nt "$root/configure" ]; then
+    # configure.ac is not the only input.  Every config/*.m4 is one too, and so
+    # is config/oac -- a submodule, so an ordinary `git submodule update` (or a
+    # merge that moves the pointer) rewrites m4 files with no other trace.  A
+    # source tree stale that way is not a slow build, it is a dead one: PRRTE
+    # builds in maintainer mode, so `make` inside the container tries to
+    # regenerate aclocal.m4 itself and dies on
+    #
+    #     config/missing: line 85: aclocal-1.18: command not found
+    #
+    # because the container does not have the exact autotools the host used.
+    # build.sh then stops with the previous install still in the volume, and
+    # nothing in that message mentions a submodule.  Regenerate on the host,
+    # where the right autotools are, whenever any input is newer.
+    autogen_needed() {
+        [ -x "$root/configure" ] || return 0
+        [ "$root/configure.ac" -nt "$root/configure" ] && return 0
+        [ -n "$(find "$root/config" -name '*.m4' -newer "$root/configure" \
+                     -print -quit 2>/dev/null)" ] && return 0
+        return 1
+    }
+
+    if autogen_needed; then
         echo ">>> autogen.pl"
         ( cd "$root" && ./autogen.pl )
     fi
