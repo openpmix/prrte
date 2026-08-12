@@ -83,7 +83,7 @@ static void _query(int sd, short args, void *cbdata)
     prte_node_t *node, *ndptr;
     int j, k, rc;
     size_t m, n, p;
-    uint32_t key, nodeid, sessionid = UINT32_MAX;
+    uint32_t key, nodeid, sessionid = UINT32_MAX, nslots;
     char **nspaces, *hostname, *uri;
     char *cmdline;
     const char *allocid;
@@ -771,6 +771,9 @@ static void _query(int sd, short args, void *cbdata)
                         PMIX_INFO_LIST_ADD(rc, nodeinfolist, PMIX_HOSTNAME_ALIASES, str, PMIX_STRING);
                         free(str);
                     }
+                    /* add the number of slots allocated on this node */
+                    nslots = (uint32_t) node->slots;
+                    PMIX_INFO_LIST_ADD(rc, nodeinfolist, PMIX_NUM_SLOTS, &nslots, PMIX_UINT32);
                     /* add topology index */
                     if (NULL != node->topology) {
                         PMIX_INFO_LIST_ADD(rc, nodeinfolist, PMIX_TOPOLOGY_INDEX,
@@ -883,6 +886,50 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 #endif
+
+            } else if (PMIx_Check_key(q->keys[n], PMIX_NUM_SLOTS)) {
+                /* the slots allocated to a specific node, if one was named,
+                 * otherwise the total across the allocation
+                 */
+                if (NULL != hostname) {
+                    node = prte_node_match(NULL, hostname);
+                    if (NULL == node) {
+                        ret = PMIX_ERR_NOT_FOUND;
+                        goto done;
+                    }
+                    nslots = (uint32_t) node->slots;
+                } else if (UINT32_MAX != nodeid) {
+                    node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, nodeid);
+                    if (NULL == node) {
+                        ret = PMIX_ERR_NOT_FOUND;
+                        goto done;
+                    }
+                    nslots = (uint32_t) node->slots;
+                } else {
+                    if (NULL == allocid) {
+                        alloc_nodes = prte_node_pool;
+                    } else {
+                        session = prte_get_session_object_from_id(allocid);
+                        if (NULL == session) {
+                            ret = PMIX_ERR_NOT_FOUND;
+                            goto done;
+                        }
+                        alloc_nodes = session->nodes;
+                    }
+                    nslots = 0;
+                    for (k = 0; k < alloc_nodes->size; k++) {
+                        node = (prte_node_t *) pmix_pointer_array_get_item(alloc_nodes, k);
+                        if (NULL == node) {
+                            continue;
+                        }
+                        nslots += (uint32_t) node->slots;
+                    }
+                }
+                PMIX_INFO_LIST_ADD(rc, results, PMIX_NUM_SLOTS, &nslots, PMIX_UINT32);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    goto done;
+                }
 
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_AVAILABLE_SLOTS)) {
                 /* compute the slots currently available for assignment. Note that
