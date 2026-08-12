@@ -1002,6 +1002,115 @@ scan:
   rather than nothing.  Node rank is two bytes; if that matters, keep sending
   it to everyone on its own rather than relying on nobody asking.
 
+What Slurm's PMI2 does, and what it tells us
+--------------------------------------------
+
+Slurm's ``src/plugins/mpi/pmi2`` is an independent implementation of the same
+problem that runs at production scale, so it is worth being precise about what
+it does differently.
+
+**Its KVS fence is our tree fence, with the same asymptotics.**  ``kvs.c``
+merges up the stepd tree and the root then does one
+``slurm_forward_data(step_nodelist, ...)`` of the whole merged KVS to every
+node — O(N·b) delivered per node, which is ``tree_gather_release``.  Slurm did
+not make the allgather scale.
+
+**What scales is that MPI stops asking for one.**  ``ring.c`` implements
+``PMIX_Ring``, which hands each process only its left and right neighbour
+values: O(1) per process at any N.  It is an up-sweep/down-sweep scan —
+RING_IN carries (count, left, right) up, and the root sends each child a
+*different* RING_OUT giving that subtree's starting rank and its own
+neighbours.  The argument for it is "PMI Extensions for Scalable MPI Startup"
+(Chakraborty et al., EuroMPI/ASIA 2014): with a ring plus on-demand connection
+establishment, the business-card allgather is not needed at startup at all.
+PRRTE's equivalent lever is the direct modex, not a faster ``rd_allgather``.
+
+Three things transfer.
+
+**A fence sequence number, which they derive locally.**  ``kvs_seq`` starts at
+1, is incremented in ``temp_kvs_send()`` ("expecting new kvs after now"),
+travels on the wire in both directions, and is checked on arrival.  Our fence
+signature carries no such number: a fence is identified by its participant
+list alone, and a job fences over the same list repeatedly.  What we have
+instead is ``reported_slots``, a bitmap of which child subtrees have reported,
+which makes a *duplicate* harmless but cannot tell a duplicate of the current
+round from a straggler of an older one.
+
+They treat any mismatch as fatal, and can afford to because their rollup has
+no traffic that arrives out of turn.  That is our position too, today: with
+the release travelling down the tree and nothing travelling across it, a
+contribution cannot overtake the release that ended the previous fence.  The
+gap is worth writing down anyway, because it is latent rather than absent.  A
+contribution naming a generation we had already retired would match no
+tracker, and ``get_tracker(sig, true)`` would build one — a tracker nothing
+will ever complete or delete.  Nothing can produce that arrival on one route.
+Anything that introduces a second one has to add the sequence number first.
+
+**A scan is a shape we do not have.**  Every message in ``ring.c`` is O(1) no
+matter how large the job, because each child is sent only what its own subtree
+needs.  Our release broadcasts the whole result to everyone.  For any
+operation where a participant needs a slice rather than the aggregate — rank
+assignment, neighbour exchange, or the per-daemon half of a launch message —
+that is the difference between O(1) and O(N) per daemon.
+
+**Their state reset is synchronous with the send.**  ``pmix_ring_out()`` sends
+to its children and then clears the per-child slots and the count inside the
+same handler, so no next-round message can attach to the previous round's
+state.  That is the same rule as retiring a tracker before delivering its
+release, reached from the other direction.
+
+Two things not to copy: every error path calls
+``slurm_kill_job_step(SIGKILL)`` — there is no fault tolerance in the
+collective at all, which is most of why their code is smaller than ours — and
+only one ring may be in flight, with state in a fixed per-child array indexed
+arithmetically, because they have no notion of a collective over a subset.
+Our tracker identity machinery is the price of semantics they do not offer,
+not accidental complexity.
+
+Scattering the fence release: measured, and not worth it as a tag
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``ring.c``'s per-child down messages prompt an obvious question about ours.
+The release broadcast is the one routinely large message a fence sends, and it
+goes out whole to every child at every level.  ``PRTE_RML_TAG_DAEMON_LAUNCH``
+exists so that a broadcast's *purpose* is declarable where it is sent, rather
+than guessed at from how big it happens to be; giving the fence release the
+same treatment was tried.
+
+The numbers below were taken while the movements were still in the tree, and
+the barrier column in particular reflects code that has since been removed.
+They are kept for the structural finding, which does not depend on any of it.
+Ratios are with the release preferring a per-child send, against the same run
+without:
+
+===================  ==================  ==================
+payload              collect (modex)     barrier
+===================  ==================  ==================
+8 KB/rank, N=8       0.93x               1.18x
+8 KB/rank, N=16      1.17x               1.39x
+512 KB/rank, N=16    0.94x               1.50x
+===================  ==================  ==================
+
+The modex gained at most 6% and was not reliably better at all below a
+megabyte, while the barrier — which shares the tag — lost 18–50%, and the loss
+grew with N because it was paying a large message's fixed costs to move 157
+bytes.
+
+The structural finding is the useful part, and it survives the movements being
+gone: **the fence release is the one broadcast whose tag does not determine
+its size.**  The premise that a tag declares a purpose holds for the launch
+message and fails here, because a barrier's release and a modex's release
+travel the same tag six orders of magnitude apart.  That is precisely the
+situation that splitting the launch message onto its own tag was meant to
+remove.  So if this is ever worth doing, the *fence* must say so — it knows
+which kind of release it is emitting — by plumbing a preference through
+``prte_grpcomm_release_bcast``, rather than by a table inferring one from the
+tag.
+
+Read the 6% as a lower bound rather than a verdict: the measurement is
+loopback between containers on one host, which is precisely the environment
+where a bandwidth optimisation shows least.
+
 Verification
 ------------
 
