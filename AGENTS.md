@@ -163,7 +163,7 @@ component that successfully opens wins selection.
 
 ## PRRTE's Relationship with PMIx
 
-PRRTE depends on PMIx (minimum version `6.1.0`) and uses PMIx internals
+PRRTE depends on PMIx (minimum version `7.0.0`) and uses PMIx internals
 extensively.  This is not the same as calling the PMIx public library API.
 
 **What PRRTE takes from PMIx:**
@@ -460,7 +460,15 @@ Common configure options:
 | `--enable-devel-check` | Enable strict compiler warnings (treat warnings as errors); on by default when `--enable-debug` is used in a git repo build |
 | `--enable-testbuild-launchers` | **Compile-only.** Build the `plm`/`ras`/`ess` components that an ordinary developer machine cannot, so they are compiled somewhere. Two shapes: the `plm`/`ras` launchers that need third-party headers (LSF, Flux, jansson) are built against declaration-only stubs, and must be run-time loadable plugins (the default `--enable-mca-dso` list) because a stub's unresolved symbols only fail to `dlopen`, whereas in `libprrte` they break the link of every tool. `ess/lsf` and `ess/pals` need no stubs and link nothing — their entire dependency on that RM is a `getenv` — so they build straight into `libprrte`; the gate is all that was keeping them from being compiled, which is exactly why they had drifted into not compiling at all. Such a tree builds and runs, but the stubbed components can do no actual work; don't install one over a good installation. See [`src/mca/ras/AGENTS.md`](src/mca/ras/AGENTS.md). |
 
-Version requirements: PMIx ≥ 6.1.0, hwloc ≥ 2.1.0, libevent ≥ 2.0.21.
+Version requirements: PMIx ≥ 7.0.0, hwloc ≥ 2.1.0, libevent ≥ 2.0.21.
+The PMIx floor is `pmix_min_version` in [`VERSION`](VERSION), and it is
+enforced twice — `configure` refuses an older library, and the daemon
+re-checks `PMIX_VERSION_NUMERIC` against `PRTE_PMIX_MINIMUM_VERSION` at
+startup.  So a PMIx capability flag introduced in the 7.0 development
+series tells you nothing a PRRTE build can act on: every PMIx that gets
+this far defines it.  The `PRTE_CHECK_PMIX_CAP` machinery below is for
+flags that genuinely straddle a supported range, not for recording which
+PMIx commit added a feature.
 
 ### GOLDEN RULE: build with `make` from the top of your build tree — never try to short-circuit the build
 
