@@ -279,6 +279,14 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_REPORT_CHILD_SEP           (PRTE_JOB_START_KEY + 126) // bool - report the exit status of child jobs separately: return the
                                                                        // primary job's status only, rather than the first non-zero status
                                                                        // returned by the primary job or any job it spawned
+#define PRTE_JOB_NO_IOF_INHERIT             (PRTE_JOB_START_KEY + 127) // bool - this job is NOT to inherit the output forwarding of the job
+                                                                       // that spawned it. Recorded by the mapper, which is where the
+                                                                       // inherit question is resolved, and read where the job's PMIx
+                                                                       // information is built, which is where it has to be told to PMIx.
+                                                                       // Deliberately NOT PRTE_JOB_NOINHERIT: that one is consulted when
+                                                                       // this job later becomes a parent itself, so reusing it would make
+                                                                       // a non-inheriting child silently refuse to pass mapping,
+                                                                       // ranking and binding on to a grandchild
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 
