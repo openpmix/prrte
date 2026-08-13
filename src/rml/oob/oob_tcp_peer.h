@@ -57,6 +57,11 @@ typedef struct {
     pmix_list_t addrs;
     prte_oob_tcp_addr_t *active_addr;
     prte_oob_tcp_state_t state;
+    bool established;          /**< did the connection currently held ever reach CONNECTED?
+                                    Cleared by prte_oob_tcp_peer_close, so it always describes
+                                    the connection being closed.  Separates a connection that
+                                    died while still being established, whose untried addresses
+                                    must still be tried, from the loss of a working one. */
     int num_retries;
     time_t first_attempt; /**< wall-clock time of the first connection attempt in the current
                                retry sequence; 0 until the first retry is scheduled.  Used to

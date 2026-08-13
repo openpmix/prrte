@@ -1212,6 +1212,7 @@ static void tcp_peer_connected(prte_oob_tcp_peer_t *peer)
     pmix_mutex_lock(&peer->lock);
     tcp_peer_rebind_events(peer);
     peer->state = MCA_OOB_TCP_CONNECTED;
+    peer->established = true;
 
     /* initiate send of first message on queue */
     if (NULL == peer->send_msg) {
@@ -1253,13 +1254,55 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)),
                         peer->sd, prte_oob_tcp_state_print(peer->state));
 
-    /* if we were CONNECTING, then we need to mark the address as
-     * failed and cycle back to try the next address */
-    if (MCA_OOB_TCP_CONNECTING == peer->state) {
+    /* If this connection was still being established, mark the address as
+     * failed and cycle back to try the next one.  A peer is handed a list of
+     * addresses so that a bad one is not fatal, and an attempt can die three
+     * ways before the connection is usable: connect() itself failed
+     * (CONNECTING), something answered but the IDENT handshake did not
+     * complete (CONNECT_ACK), or a caller set FAILED on the way in.  Only
+     * CONNECTING used to rotate, so a peer that failed the handshake was
+     * closed with its remaining addresses untried and its queued messages
+     * dropped, reporting nothing to anyone.  With no follow-up traffic to
+     * trigger a fresh connect, as with a daemon's first report to the HNP,
+     * the DVM never finished coming up and the job hung.
+     *
+     * Rotating above the queued-send flush below is deliberate: the messages
+     * waiting on this peer must survive to go out over the next address.  The
+     * established flag keeps the paths that close a *working* connection out
+     * of this branch, so those still report a lost connection instead of
+     * silently reconnecting.  It also guarantees the socket events are still
+     * on prte_event_base, since they move to peer->evbase only at CONNECTED,
+     * so deleting them here cannot block on a worker's callback. */
+    if (!peer->established
+        && (MCA_OOB_TCP_CONNECTING == peer->state || MCA_OOB_TCP_CONNECT_ACK == peer->state
+            || MCA_OOB_TCP_FAILED == peer->state)) {
+        /* try_connect never sets the peer state; every caller does it first,
+         * so leaving CLOSED here would advertise a dead peer while a
+         * connection attempt was in flight */
+        peer->state = MCA_OOB_TCP_CONNECTING;
         pmix_mutex_unlock(&peer->lock);
+        /* drop any registration on the socket we are about to discard:
+         * tcp_peer_event_init asserts that neither event is active, and
+         * try_connect always reaches it once peer->sd is reset below */
+        if (peer->recv_ev_active) {
+            prte_event_del(&peer->recv_event);
+            peer->recv_ev_active = false;
+        }
+        if (peer->send_ev_active) {
+            prte_event_del(&peer->send_event);
+            peer->send_ev_active = false;
+        }
+        if (peer->timer_ev_active) {
+            prte_event_del(&peer->timer_event);
+            peer->timer_ev_active = false;
+        }
         close(peer->sd);
         peer->sd = -1;
         if (NULL != peer->active_addr) {
+            /* FAILED stops try_connect from picking this address again, so
+             * the candidate set shrinks and the rotation terminates.  With
+             * nothing untried left, try_connect reports the failure and
+             * activates failed_to_connect, so we never give up silently. */
             peer->active_addr->state = MCA_OOB_TCP_FAILED;
         }
         PRTE_ACTIVATE_TCP_CONN_STATE(peer, prte_oob_tcp_peer_try_connect);
@@ -1268,6 +1311,7 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
 
     old_state = peer->state;
     peer->state = MCA_OOB_TCP_CLOSED;
+    peer->established = false;
     pmix_mutex_unlock(&peer->lock);
 
     if (NULL != peer->active_addr) {
