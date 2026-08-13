@@ -242,6 +242,16 @@ static void mddes(prte_pmix_fence_caddy_t *p)
     if (NULL != p->buf) {
         PMIX_DATA_BUFFER_RELEASE(p->buf);
     }
+    /* The modex bucket PMIx handed up with the fence.  Ownership transfers on
+     * that call and cannot not: PMIx unloads the buffer into a bare pointer
+     * and returns, while we park it here and read it later from another
+     * thread, so PMIx has nothing left it could free it from.  Nothing copies
+     * it out on our side either - PMIx_Data_embed() copies the bytes into the
+     * relay and says in its own comment that it deliberately does not free
+     * the source - so this is the only place it can go. */
+    if (NULL != p->data) {
+        free(p->data);
+    }
 }
 PMIX_CLASS_INSTANCE(prte_pmix_fence_caddy_t,
                     pmix_object_t,
