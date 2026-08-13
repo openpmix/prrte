@@ -615,8 +615,7 @@ int prte_node_unpack(pmix_data_buffer_t *bkt, prte_node_t **nd)
 int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t *proc)
 {
     pmix_status_t rc;
-    int32_t n, count, k;
-    prte_attribute_t *kv;
+    int32_t n;
 
     /* Everything the job's maps already say has been set on this proc by
      * prte_job_unpack before we are called - its rank, its hosting daemon,
@@ -649,31 +648,12 @@ int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t *proc)
         return prte_pmix_convert_status(rc);
     }
 
-    /* unpack the attributes */
-    n = 1;
-    rc = PMIx_Data_unpack(NULL, bkt, &count, &n, PMIX_INT32);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return prte_pmix_convert_status(rc);
-    }
-    for (k = 0; k < count; k++) {
-        kv = PMIX_NEW(prte_attribute_t);
-        n = 1;
-        rc = PMIx_Data_unpack(NULL, bkt, &kv->key, &n, PMIX_UINT16);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_RELEASE(kv);
-            return prte_pmix_convert_status(rc);
-        }
-        rc = PMIx_Data_unpack(NULL, bkt, &kv->data, &n, PMIX_VALUE);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_RELEASE(kv);
-            return prte_pmix_convert_status(rc);
-        }
-        kv->local = PRTE_ATTR_GLOBAL; // obviously not a local value
-        pmix_list_append(&proc->attributes, &kv->super);
-    }
+    /* No attribute list is on the wire - see the comment in prte_proc_pack.
+     * The proc's list stays as its constructor left it, empty, which is what
+     * every job has ever put on the wire anyway. If you restore the packing,
+     * restore the unpacking in the same commit: these two are hand-written
+     * mirrors with no version and nothing that catches a half-done edit. */
+
     return PRTE_SUCCESS;
 }
 
