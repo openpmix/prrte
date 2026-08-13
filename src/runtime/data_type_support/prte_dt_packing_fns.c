@@ -485,8 +485,6 @@ int prte_node_pack(pmix_data_buffer_t *bkt, prte_node_t *node)
 int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc)
 {
     pmix_status_t rc;
-    int32_t count;
-    prte_attribute_t *kv;
 
     /* Only what the job's node and proc maps cannot say.
      *
@@ -519,36 +517,33 @@ int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc)
         return prte_pmix_convert_status(rc);
     }
 
-    /* pack the attributes that will go */
-    count = 0;
+    /* NO ATTRIBUTE LIST GOES ON THE WIRE.
+     *
+     * Exactly one proc attribute exists anywhere in this tree -
+     * PRTE_PROC_NOBARRIER - and it is PRTE_ATTR_LOCAL, which this filter
+     * excluded; it is also set by the odls on the daemon that forks the
+     * proc, which is after this packing and on the far side of it. So the
+     * count was 4 bytes per proc introducing a list that has been empty in
+     * every job ever launched - 512 KB of a 1.9 MB launch message at
+     * 1000 nodes x 128 ppn, buying nothing at any scale.
+     *
+     * If you add a PRTE_ATTR_GLOBAL proc attribute, it has to come back
+     * here and in prte_proc_unpack, together. The check below is what will
+     * tell you, because nothing else would: the attribute would simply not
+     * arrive, and the receiving daemon would read a default. */
+#if PRTE_ENABLE_DEBUG
+    prte_attribute_t *kv;
     PMIX_LIST_FOREACH(kv, &proc->attributes, prte_attribute_t)
     {
         if (PRTE_ATTR_GLOBAL == kv->local) {
-            ++count;
+            pmix_output(0, "%s prte_proc_pack: proc %s carries global attribute %d, "
+                        "which is NOT packed - see the comment here",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&proc->name), (int) kv->key);
+            break;
         }
     }
-    rc = PMIx_Data_pack(NULL, bkt, &count, 1, PMIX_INT32);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return prte_pmix_convert_status(rc);
-    }
-    if (0 < count) {
-        PMIX_LIST_FOREACH(kv, &proc->attributes, prte_attribute_t)
-        {
-            if (PRTE_ATTR_GLOBAL == kv->local) {
-                rc = PMIx_Data_pack(NULL, bkt, (void *) &kv->key, 1, PMIX_UINT16);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
-                    return prte_pmix_convert_status(rc);
-                }
-                rc = PMIx_Data_pack(NULL, bkt, (void *) &kv->data, 1, PMIX_VALUE);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
-                    return prte_pmix_convert_status(rc);
-                }
-            }
-        }
-    }
+#endif
 
     return PRTE_SUCCESS;
 }
