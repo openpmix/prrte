@@ -257,6 +257,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
     prte_pmix_server_pset_t *pset;
     pmix_cpuset_t cpuset;
     uint32_t ui32, *ui32_ptr;
+    uint32_t nodesize;
     prte_job_t *parent = NULL;
     pmix_device_distance_t *distances;
     size_t ndist;
@@ -385,8 +386,15 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
             }
             /* pass the node ID */
             PMIX_INFO_LIST_ADD(ret, iarray, PMIX_NODEID, &node->index, PMIX_UINT32);
-            /* add node size */
-            PMIX_INFO_LIST_ADD(ret, iarray, PMIX_NODE_SIZE, &node->num_procs, PMIX_UINT32);
+            /* Add node size. Widen it first: node->num_procs is a
+             * prte_node_rank_t (uint16_t), so handing its address over as
+             * PMIX_UINT32 makes PMIx read four bytes out of a two-byte
+             * field. The extra two are the padding before node->procs -
+             * PMIX_NEW does not zero its allocation - so the value the
+             * client is told is num_procs with heap garbage in its upper
+             * half. */
+            nodesize = node->num_procs;
+            PMIX_INFO_LIST_ADD(ret, iarray, PMIX_NODE_SIZE, &nodesize, PMIX_UINT32);
             /* add local size for this job */
             PMIX_INFO_LIST_ADD(ret, iarray, PMIX_LOCAL_SIZE, &ui32, PMIX_UINT32);
             /* pass the local ldr */
