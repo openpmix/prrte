@@ -240,7 +240,14 @@ static void prte_iof_base_write_event_destruct(prte_iof_write_event_t *wev)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wev->fd));
         close(wev->fd);
     }
-    PMIX_DESTRUCT(&wev->outputs);
+    /* Anything still queued here was never written - the sink closed with a
+     * backlog, or carried the zero-byte marker that only asks for the fd to
+     * be closed.  It has to be RELEASED, not merely destructed:
+     * pmix_list_destruct() re-initializes the list and frees nothing on it,
+     * so the plain PMIX_DESTRUCT this used to do looked like a drain and was
+     * not one.  Each chunk carries its buffer inline, so a release of the
+     * item is the whole of it. */
+    PMIX_LIST_DESTRUCT(&wev->outputs);
 }
 PMIX_CLASS_INSTANCE(prte_iof_write_event_t, pmix_list_item_t,
                     prte_iof_base_write_event_construct,
