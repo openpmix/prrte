@@ -39,17 +39,22 @@
  * jansson and a Slurm too old to emit the schema the parser reads -- and
  * that machine is every stock Ubuntu 24.04, so it is not a corner case.
  *
- * @return true when the request can be served, false (having said why) when
- *         it cannot.
+ * @param[in] quiet  Suppress the diagnostic on refusal (e.g. when the caller
+ *                   just wants the answer, not a report to the user).
+ *
+ * @return true when the request can be served, false (having said why,
+ *         unless quiet) when it cannot.
  */
-bool prte_ras_slurm_have_extensions(void)
+bool prte_ras_slurm_have_extensions(bool quiet)
 {
     const prte_common_slurm_version_t *slurm;
 
 #if PRTE_HAVE_SLURM_EXTENSIONS
     if (!prte_ras_slurm_have_jansson()) {
-        pmix_output(0, "ras:slurm:modify: "
-                    "Jansson support is required but not enabled in this build");
+        if (!quiet) {
+            pmix_output(0, "ras:slurm:modify: "
+                        "Jansson support is required but not enabled in this build");
+        }
         return false;
     }
 
@@ -59,11 +64,13 @@ bool prte_ras_slurm_have_extensions(void)
      * failed popen would turn a transient into a policy. */
     slurm = prte_common_slurm_version();
     if (slurm->available && !slurm->extended) {
-        pmix_output(0, "ras:slurm:modify: this Slurm (%s) is older than %s, "
-                    "whose JSON schema the allocation extensions read. The "
-                    "request cannot be served; extend/release/cancel need a "
-                    "newer Slurm.",
-                    slurm->version, PRTE_SLURM_MIN_EXT_VERSION);
+        if (!quiet) {
+            pmix_output(0, "ras:slurm:modify: this Slurm (%s) is older than %s, "
+                        "whose JSON schema the allocation extensions read. The "
+                        "request cannot be served; extend/release/cancel need a "
+                        "newer Slurm.",
+                        slurm->version, PRTE_SLURM_MIN_EXT_VERSION);
+        }
         return false;
     }
     return true;
@@ -74,14 +81,16 @@ bool prte_ras_slurm_have_extensions(void)
      * or by --disable-slurm-extensions, and configure folds all three into
      * one flag. */
     slurm = prte_common_slurm_version();
-    pmix_output(0, "ras:slurm:modify: the Slurm elastic allocation extensions "
-                "were not built into this PRRTE. They need jansson and Slurm "
-                "%s or later; this tree was configured against Slurm %s, and "
-                "is running under Slurm %s. Rebuild with "
-                "--enable-slurm-extensions (and --with-jansson) to enable "
-                "them.",
-                PRTE_SLURM_MIN_EXT_VERSION, PRTE_SLURM_VERSION_STRING,
-                slurm->version);
+    if (!quiet) {
+        pmix_output(0, "ras:slurm:modify: the Slurm elastic allocation extensions "
+                    "were not built into this PRRTE. They need jansson and Slurm "
+                    "%s or later; this tree was configured against Slurm %s, and "
+                    "is running under Slurm %s. Rebuild with "
+                    "--enable-slurm-extensions (and --with-jansson) to enable "
+                    "them.",
+                    PRTE_SLURM_MIN_EXT_VERSION, PRTE_SLURM_VERSION_STRING,
+                    slurm->version);
+    }
     return false;
 #endif
 }
