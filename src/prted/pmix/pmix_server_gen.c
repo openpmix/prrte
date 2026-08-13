@@ -1015,6 +1015,64 @@ pmix_status_t pmix_server_log2_fn(const pmix_proc_t *client, const pmix_info_t d
 }
 #endif
 
+/* Tell the HNP that somebody attached to US wants this job's output.
+ *
+ * A tool's IOF subscription is held by the PMIx server of the daemon it
+ * attached to, and only that server can deliver to it - so for output
+ * produced anywhere else to reach that tool, the HNP has to relay a copy
+ * here. It cannot know to do that unless we say so: this up-call is the
+ * only notice anyone gets, and it arrives HERE, at the daemon the tool
+ * attached to, which is precisely the daemon that needs recording. The
+ * requesting tool's own identity is not needed and is not supplied.
+ *
+ * The counterpart is the PRTE_IOF_PULL arm of prte_iof_hnp_recv().
+ */
+static void record_interest(const pmix_proc_t *proc)
+{
+    prte_job_t *jdata;
+    pmix_data_buffer_t *buf;
+    prte_iof_tag_t stream = PRTE_IOF_PULL;
+    pmix_proc_t job;
+    int rc;
+
+    /* name the job, not the rank: what gets relayed is a job's output */
+    PMIX_LOAD_PROCID(&job, proc->nspace, PMIX_RANK_WILDCARD);
+
+    if (PRTE_PROC_IS_MASTER) {
+        /* we are the HNP - record it directly */
+        jdata = prte_get_job_data_object(job.nspace);
+        if (NULL != jdata) {
+            pmix_bitmap_set_bit(&jdata->iof_daemons, (int) PRTE_PROC_MY_NAME->rank);
+        }
+        return;
+    }
+
+    PMIX_DATA_BUFFER_CREATE(buf);
+    rc = PMIx_Data_pack(NULL, buf, &stream, 1, PMIX_UINT16);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return;
+    }
+    rc = PMIx_Data_pack(NULL, buf, &job, 1, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return;
+    }
+    /* PRTE_RML_TAG_IOF_HNP is the UPSTREAM tag - the one prte_iof_hnp_recv
+     * is registered on, and the one a prted forwards its own output to the
+     * HNP with. PRTE_RML_TAG_IOF_PROXY is the other direction: the HNP
+     * relaying down to a daemon. Sending this upstream on the downstream
+     * tag delivers it to the HNP and then drops it, with the reliable send
+     * still reporting success. */
+    PRTE_RML_RELIABLE_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_IOF_HNP);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+    }
+}
+
 static void _iof_pull(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
@@ -1027,6 +1085,12 @@ static void _iof_pull(int sd, short args, void *cbdata)
     /* Set up I/O forwarding sinks and handlers for stdout and stderr for each proc
      * requesting I/O forwarding */
     for (i = 0; i < cd->nprocs; i++) {
+        /* whoever asked is attached to us, so record us as interested in
+         * this job before setting the sinks up - a stop request is the
+         * one case that must not, since it is asking for the opposite */
+        if (!cd->flag) {
+            record_interest(&cd->procs[i]);
+        }
         if (cd->channels & PMIX_FWD_STDOUT_CHANNEL) {
             if (cd->flag) {
                 /* ask the IOF to stop forwarding this channel */

@@ -75,6 +75,7 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     unsigned char *stdindata = NULL;
     pmix_iof_channel_t pchan;
     prte_iof_deliver_t *p;
+    prte_job_t *jdata;
     pmix_status_t prc;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
@@ -144,6 +145,32 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s received IOF cmd for source %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_NAME_PRINT(&origin)));
+
+    /* A daemon telling us that somebody attached to IT wants this job's
+     * output. That tool's IOF subscription is held by that daemon's PMIx
+     * server and only that server can deliver to it, so we have to relay
+     * a copy of this job's output there - which we will not do unless the
+     * daemon is in the job's interested set. Record it and we are done;
+     * the message carries no payload. Sent by record_interest() in
+     * src/prted/pmix/pmix_server_gen.c, on PRTE_RML_TAG_IOF_HNP - the
+     * upstream tag this handler is registered on. */
+    if (PRTE_IOF_PULL & stream) {
+        jdata = prte_get_job_data_object(origin.nspace);
+        if (NULL == jdata) {
+            /* a job we have never heard of, or one already gone */
+            PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                                 "%s iof:hnp interest from daemon %s in unknown job %s",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 PRTE_NAME_PRINT(sender), origin.nspace));
+            goto CLEAN_RETURN;
+        }
+        PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                             "%s iof:hnp daemon %s is interested in job %s output",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             PRTE_NAME_PRINT(sender), origin.nspace));
+        pmix_bitmap_set_bit(&jdata->iof_daemons, (int) sender->rank);
+        goto CLEAN_RETURN;
+    }
 
     /* a daemon that is hosting a tool cannot route the tool's stdin - only
      * we know which daemon hosts the target proc - so it relays the push to
