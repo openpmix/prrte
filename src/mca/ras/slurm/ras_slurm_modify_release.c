@@ -621,7 +621,7 @@ void prte_ras_slurm_shrink_complete(prte_shrink_campaign_t *campaign)
  */
 int prte_ras_slurm_serve_release_req(prte_pmix_server_req_t *req)
 {
-    if (!prte_ras_slurm_have_extensions()) {
+    if (!prte_ras_slurm_have_extensions(false)) {
         return PRTE_ERR_NOT_AVAILABLE;
     }
 

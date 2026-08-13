@@ -224,7 +224,7 @@ static void ssc_des(prte_slurm_salloc_child_t *p)
  */
 int prte_ras_slurm_modify_extend_init(void)
 {
-    if (extend_initialized || !prte_ras_slurm_have_extensions()) {
+    if (extend_initialized || !prte_ras_slurm_have_extensions(true)) {
         return PRTE_SUCCESS;
     }
 
@@ -1473,7 +1473,7 @@ void prte_ras_slurm_extend_abort_request(const char *request_id)
  */
 int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
 {
-    if (!prte_ras_slurm_have_extensions()) {
+    if (!prte_ras_slurm_have_extensions(false)) {
         return PRTE_ERR_NOT_AVAILABLE;
     }
 

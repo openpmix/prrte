@@ -49,9 +49,11 @@ BEGIN_C_DECLS
 /* To check if Jansson is available in compilation */
 bool prte_ras_slurm_have_jansson(void);
 
-/* Whether this build can serve the elastic modify surface at all, reporting
- * why not when it cannot.  Every entry point of that surface asks first. */
-bool prte_ras_slurm_have_extensions(void);
+/* Whether this build can serve the elastic modify surface at all.  Every
+ * entry point of that surface asks first, with quiet=false, so the refusal
+ * is reported.  Callers that just need the answer (e.g. deciding whether to
+ * set up bookkeeping at init time) pass quiet=true to suppress that. */
+bool prte_ras_slurm_have_extensions(bool quiet);
 
 /* Features requiring JSON parser */
 int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table);

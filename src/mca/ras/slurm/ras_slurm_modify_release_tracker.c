@@ -65,8 +65,17 @@ static void shrink_tracker_des(prte_ras_slurm_shrink_tracker_t *p)
     PMIX_DESTRUCT(&p->actions);
 }
 
+/*
+ * Only needed when extensions are built: nothing populates this list
+ * otherwise, since serve_release_req refuses before ever attaching a
+ * tracker.
+ */
 int prte_ras_slurm_modify_release_init(void)
 {
+    if (!prte_ras_slurm_have_extensions(true)) {
+        return PRTE_SUCCESS;
+    }
+
     prte_slurm_shrink_trackers = PMIX_NEW(pmix_list_t);
     if (NULL == prte_slurm_shrink_trackers) {
         return PRTE_ERR_OUT_OF_RESOURCE;

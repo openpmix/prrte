@@ -43,7 +43,7 @@ static void prte_ras_slurm_cancel_req_at(int idx);
  */
 int prte_ras_slurm_serve_cancel_req(prte_pmix_server_req_t *req)
 {
-    if (!prte_ras_slurm_have_extensions()) {
+    if (!prte_ras_slurm_have_extensions(false)) {
         return PRTE_ERR_NOT_AVAILABLE;
     }
 
@@ -283,7 +283,7 @@ static int prte_ras_slurm_find_pending_req(const char *request_id, int *idx)
  */
 int prte_ras_slurm_modify_cancel_init(void)
 {
-    if(initialized || !prte_ras_slurm_have_jansson()) {
+    if(initialized || !prte_ras_slurm_have_extensions(true)) {
         return PRTE_SUCCESS;
     }
 
