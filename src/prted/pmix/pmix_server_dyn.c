@@ -1315,6 +1315,7 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
                                      pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
     prte_pmix_server_req_t *cd;
+    pmix_byte_object_t bo;
     size_t n;
     pmix_status_t rc;
 
@@ -1345,10 +1346,31 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
     cd->opcbfunc = cbfunc;
     cd->cbdata = cbdata;
 
+    /* prte_grpcomm_fence() takes OWNERSHIP of the blob it is handed - the
+     * fence caddy's destructor frees it, which is right for its other
+     * caller, where the blob is the modex bucket PMIx transferred to us on
+     * the fence_nb up-call. So this one must hand its bytes over rather
+     * than lend them: passing cd->msg's own pointer left the buffer still
+     * owning them, and rqdes destructed it after the fence caddy had
+     * already freed it. Unloading empties the buffer, so the destruct
+     * becomes the no-op it needs to be. An empty buffer unloads to
+     * (NULL, 0), which is what a connect carrying no endpoint data
+     * passed before. */
+    PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
+    rc = PMIx_Data_unload(&cd->msg, &bo);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_RELEASE(cd);
+        return rc;
+    }
+
     rc = prte_grpcomm_fence(procs, nprocs, info, ninfo,
-                            cd->msg.unpack_ptr, cd->msg.bytes_used,
+                            bo.bytes, bo.size,
                             connect_release, cd);
     if (PRTE_SUCCESS != rc) {
+        /* it refused before taking the blob, so it is still ours */
+        if (NULL != bo.bytes) {
+            free(bo.bytes);
+        }
         /* the release callback will never fire */
         PMIX_RELEASE(cd);
         /* grpcomm answers in PRTE codes, our caller reads PMIx ones */
