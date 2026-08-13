@@ -63,6 +63,7 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | `scaletest.c` | A PMIx client that **times** a full-data fence and a bare barrier over the whole job (`scaletest` in the install). Not a pass/fail case — a measurement. See §18. |
 | `mpinoop.c` | `MPI_Init` and `MPI_Finalize` and nothing else, so the only thing timed is the modex fence and the barrier behind it. Built only when `OMPI_SRC` is set — see §19. |
 | `scaletest.sh` | The measurement driver: stands up a swarm of arbitrary size (default 40), sweeps DVM size × procs-per-node × routing radix × payload, and writes a CSV. See §18. |
+| `pmixloop.c` | The client-churn probe (`pmixloop` in the install): cycles `PMIx_Init` / collecting fence / bare fence / `PMIx_Finalize` with a per-rank skew, so one rank opens its next cycle while its peers are still finalizing the last. The reproducer from openpmix#4113 and #4112, and the only client here that connects to its server more than once. See §21. |
 
 ## 2. How it works
 
@@ -825,6 +826,47 @@ every build-tree directory that holds a `Makefile` against the source tree,
 reconfigures when one of them is gone, and removes the orphan as part of the
 same step (`orphan_dirs`/`drop_orphans`) — dropping it matters, or the next run
 finds an orphan again and reconfigures forever.
+
+### Swapping `PMIX_SRC` between two trees rebuilds nothing
+
+The nastiest member of this family, because every guard above is working as
+designed and none of them applies. Both trees are bind-mounted at the **same**
+container path, `/pmix-src`, so switching `PMIX_SRC` from one host checkout to
+another changes the configure arguments not at all — `reconfigure_needed` has
+nothing to see. What is left is an ordinary incremental `make`, which decides
+by timestamp. So if the tree you switch **to** has older mtimes than the
+objects built from the tree you switched **from**, make declares every object
+up to date and the volume keeps serving the *other* tree's library.
+
+This is exactly the shape an A/B against a `git worktree` produces. A fresh
+worktree is stamped today; a long-lived clone is stamped whenever its files
+were last written. Going clone → worktree rebuilds (the worktree is newer) and
+looks fine. Going worktree → clone recompiles **zero** files, prints
+`Linux build complete`, rewrites `.build-stamp` — the build really did succeed,
+it just did nothing — and the next suite silently measures the library you were
+trying to get away from. That was first hit while A/B-ing openpmix
+[#4113](https://github.com/openpmix/openpmix/issues/4113): the "back to master"
+build reported success and the reproducer went on failing, which reads as a
+fix that does not work.
+
+So when a run is meant to turn on a specific source change, **verify the object
+carrying it was compiled**, rather than trusting the build to have noticed:
+
+```sh
+grep -cE "server/pmix_server_(fence|group)\.lo" build.log   # must be non-zero
+```
+
+To force it, wipe the PMIx build dir and install — a `touch` over the source
+tree also works, but it mutates a clone other worktrees and sessions may share:
+
+```sh
+docker run --rm -v prte-build:/opt/prte prte-swarm:latest \
+    rm -rf /opt/prte/vpath-linux-pmix /opt/prte/pmix /opt/prte/.build-stamp
+PMIX_SRC=/path/to/openpmix ./build.sh
+```
+
+The same reasoning applies to `OMPI_SRC`, and to `PRTE_SRC` if you ever point
+the builder at a second PRRTE tree.
 
 ### Writing a case that asserts on an error message
 
@@ -1767,3 +1809,74 @@ mean the caching is not working; a count of zero means the path did not
 run and everything above it proved nothing. `--leave-session-attached` is
 required, and for the same reason it is in §19: a daemonized `prted` has no
 stderr to read, so without it only the master's traces come back.
+
+## 21. Client churn against the PMIx server (`pmixloop`, `test_pmix_cycling`, `test_pmix_server_teardown`)
+
+Every other client here connects to its PMIx server once. `pmixloop` cycles
+**`PMIx_Init` → collecting fence → bare fence → `PMIx_Finalize`**, hundreds of
+times, with a per-rank sleep before the first fence so the ranks are
+deliberately skewed — one rank opens cycle N+1 while its peers are still
+finalizing cycle N. That is what an MPI Sessions application does, one cycle
+per `MPI_Session_init`, and it is the shape that found two distinct bugs:
+
+- **openpmix#4113** — a rank that dropped its socket through `PMIx_Finalize`
+  was recorded on the fence tracker's `departed` list even though it had not
+  left the accounting, so the next cycle's fence completed without it. The
+  ranks drift apart by whole cycles: fences return `PMIX_ERR_PARTIAL_SUCCESS`
+  / `LOST_CONNECTION` / `INVALID_ARG`, and eventually a run hangs.
+- **openpmix#4112** — a strictly local fence's completion, which only
+  thread-shifts, leaves the tracker on `pmix_server_globals.collectives` still
+  looking complete and unclaimed, so a second driver completes it again. Two
+  handlers release the same tracker and unlink through freed links; the
+  corrupted list outlives the event and the abort lands far away, typically as
+  an invalid free in `PMIx_server_finalize`.
+
+The two phases assert opposite ends of that: `test_pmix_cycling` reads the
+**clients'** tallies, `test_pmix_server_teardown` reads the **server's** exit
+status and stderr (under `prterun` the HNP hosts these ranks itself, so it is
+the process that aborts).
+
+### Three constraints, each of which silently empties a case
+
+**The machine must be loaded.** This is not a way to make the test faster or
+more likely — it is the experiment. Measured against a library with both
+fixes removed:
+
+| | 100 iters | 400 iters | 800 iters |
+|---|---|---|---|
+| idle | passes | passes | passes |
+| 3× oversubscribed | **aborts** | aborts | aborts |
+
+Iterations cannot substitute for load. `load_on()` raises `3 × nproc` burners
+on node1 — every container shares the one host kernel, so that loads the whole
+swarm — and `SWARM_CLEAN` reaps them as a backstop. Delete them to speed the
+suite up and both phases keep passing while testing nothing.
+
+**At least two ranks must share a daemon** (`test_pmix_cycling`). The #4113
+defect is in one server's own tracker accounting: it takes *two* ranks
+finalizing cycle N to satisfy, between them, the expected count of a fence a
+faster peer already opened for N+1. At one rank per node there is no such
+pair, and the unfixed library passes 5 runs out of 5. Do not rewrite these as
+`--map-by node` one-per-host — that is why the second case is 8 ranks over
+*two* nodes rather than eight.
+
+**The job must NOT be spread** (`test_pmix_server_teardown`). The #4112 window
+exists only for a collective the host never sees — a strictly local fence, the
+ordinary case under `fence_localonly_opt`. Give that job a second node and the
+fence goes up to PRRTE, `host_called` is set, and the case tests nothing. Note
+this is the opposite of the constraint above, which is why the two live in
+separate phases rather than sharing a job.
+
+### Confirming they still bite
+
+Both phases were verified by removing the fixes and re-running, which is the
+only way to know a passing case is a passing case. Build a PMIx worktree with
+the two `if (peer->finalized) return;` guards deleted from
+`pmix_server_trk_peer_lost` / `pmix_server_grp_peer_lost` **and** the three
+`tracker->completion_fired = true;` assignments deleted from
+`pmix_server_op_replies.c`, then `PMIX_SRC=<that tree> ./build.sh`. All six
+assertions go red. Both fixes have to come out together: #4124's guard removes
+the lost-connection sweep for finalized peers, and that sweep is #4127's second
+driver, so with #4124 in place this workload cannot reach #4112 at all.
+
+Mind the `PMIX_SRC` staleness trap when doing that A/B — see §2.

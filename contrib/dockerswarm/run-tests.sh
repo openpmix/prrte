@@ -103,6 +103,9 @@ ONT() { docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIR
 # rendezvous file of its own, and killing it is the point of a teardown.
 SWARM_CLEAN='
     for t in prted prte prterun prun pterm; do pkill -9 -x $t 2>/dev/null; done
+    # the CPU burners the PMIx-churn phases raise (see load_on): harmless if
+    # none are running, and leaving one behind would slow every later phase
+    pkill -9 -x yes 2>/dev/null
     rm -rf /tmp/prte.* /tmp/prted.* /tmp/prtrn.* /tmp/prun.* /tmp/ompi.* \
            /tmp/pmix.* 2>/dev/null
     find /tmp -maxdepth 2 -name "pmix.*" -prune -exec rm -rf {} + 2>/dev/null
@@ -3371,6 +3374,157 @@ FLT=/opt/prte/prte/bin/faulty
 # nothing ess-specific left to assert here.
 ########################################################################
 
+PMIXLOOP=/opt/prte/prte/bin/pmixloop
+
+# LOAD IS NOT AN OPTIMIZATION FOR THE TWO PHASES BELOW, IT IS THE EXPERIMENT.
+# Both of them chase a race between one rank opening its next collective and
+# its peers finalizing the last one, and on an idle machine that race simply
+# does not run: measured against a library with BOTH fixes removed, an idle
+# host is clean at 100, 400 and even 800 iterations -- 4 of 4 ranks done, not
+# one bad return, no abort -- while the same library under 3x oversubscription
+# aborts at 100. So iterations cannot substitute for load, and a phase that
+# quietly lost these burners would keep passing while testing nothing.
+#
+# 3x the core count is what the macOS investigation needed too. The burners
+# live on node1 but every container shares the one host kernel, so this loads
+# the whole swarm; SWARM_CLEAN reaps them as a backstop if a phase dies early.
+load_on()  { docker exec -d "${NODE}1" sh -c \
+                 'n=$(nproc); i=0; while [ "$i" -lt $((n*3)) ]; do yes > /dev/null & i=$((i+1)); done'; }
+load_off() { docker exec "${NODE}1" sh -c 'pkill -9 -x yes; true' >/dev/null 2>&1; }
+
+test_pmix_cycling() {
+    local out n bad_n
+
+    banner "PMIx cycling: repeated Init/fence/Finalize stays in step (openpmix#4113)"
+    # A client that cycles PMIx_Init / fence / PMIx_Finalize -- which is what
+    # an MPI Sessions application does, one cycle per MPI_Session_init -- used
+    # to drift apart by whole cycles and eventually wedge.  A rank that
+    # dropped its socket through PMIx_Finalize was recorded on the fence
+    # tracker's "departed" list even though it had NOT left the accounting
+    # (nlocalprocs is deliberately not decremented for it and its peer object
+    # is tombstoned, precisely so it can Init again and contribute).  Counting
+    # it twice let the NEXT cycle's fence complete without it, and from there
+    # the ranks are out of step: mid-run fences return PMIX_ERR_PARTIAL_SUCCESS
+    # / PMIX_ERR_LOST_CONNECTION / PMIX_ERR_INVALID_ARG and the run eventually
+    # hangs outright.  openpmix#4113, fixed by openpmix PR #4124.
+    #
+    # TWO THINGS DECIDE WHETHER THIS CASE HAS TEETH, and both are easy to
+    # "simplify" away:
+    #
+    #  - AT LEAST TWO RANKS MUST SHARE A DAEMON.  The defect is in one PMIx
+    #    server's own tracker accounting: it takes two ranks finalizing cycle N
+    #    to satisfy, between them, the expected count of a fence that a faster
+    #    peer has already opened for cycle N+1.  At one rank per node there is
+    #    no such pair, and the unfixed library passes this case 5 times out of
+    #    5 -- measured, not assumed.  So do NOT rewrite these as --map-by node
+    #    one-per-host.
+    #  - THE MACHINE MUST BE LOADED.  See load_on(): idle, the unfixed library
+    #    passes this at 100, 400 and 800 iterations alike.  Under load it
+    #    fails at 100.  Dropping the burners to speed the suite up would leave
+    #    both phases passing and testing nothing.
+    #
+    # Against the unfixed library and under load, the first shape aborts or
+    # hangs every time, with hundreds of non-success returns -- so this is a
+    # real regression guard rather than a smoke test.
+    cleanup_swarm
+    if ! RUN "test -x $PMIXLOOP"; then
+        skp "pmixloop client not installed -- re-run ./build.sh"
+        return
+    fi
+    load_on
+
+    # 4 ranks on ONE node: every rank is local to one PMIx server, which is
+    # the arrangement the issue was reported against (its own harness runs
+    # under simptest, where that is the only arrangement there is).
+    out=$(RUN "timeout -k 10 240 prterun --host node1:4 -n 4 $PMIXLOOP 100" 2>&1)
+    n=$(echo "$out" | grep -c ALLDONE)
+    [ "$n" = 4 ] \
+        && ok "4 ranks on one node each completed 100 Init/fence/Finalize cycles" \
+        || bad "$n of 4 ranks finished cycling (a hang is the classic symptom): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # Assert on the tally rather than on the absence of an error line: a run
+    # that hung produces no error lines either, and would otherwise pass.
+    bad_n=$(echo "$out" | grep -oE '(fence1_bad|fence2_bad|init_bad|fini_bad)=[0-9]+' \
+            | cut -d= -f2 | awk '{s+=$1} END {print s+0}')
+    [ "$bad_n" = 0 ] \
+        && ok "...with no fence returning a non-success status" \
+        || bad "$bad_n non-success returns from the fences: $(echo "$out" | grep -m3 'rc=-' | tr '\n' ' ')"
+
+    # 8 ranks over two nodes, 4 per node: still two ranks per server, so the
+    # local accounting is exercised exactly as above, but now the fence is a
+    # real PRRTE collective between daemons rather than one PMIx server
+    # talking to itself.  That combination is what no single host can test.
+    out=$(RUN "timeout -k 10 240 prterun --host node1:4,node2:4 -n 8 --map-by node $PMIXLOOP 100" 2>&1)
+    n=$(echo "$out" | grep -c ALLDONE)
+    [ "$n" = 8 ] \
+        && ok "8 ranks over 2 nodes completed cycling with a host-mediated fence" \
+        || bad "$n of 8 ranks finished cycling across nodes: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    bad_n=$(echo "$out" | grep -oE '(fence1_bad|fence2_bad|init_bad|fini_bad)=[0-9]+' \
+            | cut -d= -f2 | awk '{s+=$1} END {print s+0}')
+    [ "$bad_n" = 0 ] \
+        && ok "...with no fence returning a non-success status" \
+        || bad "$bad_n non-success returns from the fences: $(echo "$out" | grep -m3 'rc=-' | tr '\n' ' ')"
+    load_off
+    cleanup_swarm
+}
+
+test_pmix_server_teardown() {
+    local out rc
+
+    banner "PMIx server teardown: heavy client churn leaves a sane heap (openpmix#4112)"
+    # The subject here is the SERVER, not the client.  A collective the host
+    # never sees is finished by calling the tracker's own completion function,
+    # which only thread-shifts -- so on return the tracker is still on
+    # pmix_server_globals.collectives and still satisfies trk_complete(), and
+    # for that window anything walking the list sees a collective that looks
+    # complete and unclaimed.  A second driver (in practice the
+    # lost-connection sweep, firing as ranks finalize right after a fence)
+    # completes it again: two handlers unlink and release the same tracker,
+    # the second reading and re-releasing what the first freed.  The corrupted
+    # list outlives the event, so the abort surfaces far away -- typically as
+    # an invalid free inside PMIX_LIST_DESTRUCT(&collectives) in
+    # PMIx_server_finalize, which is why openpmix#4112 reads as a teardown bug
+    # and only reproduces after heavy connect/disconnect churn.  Fixed by
+    # openpmix PR #4127.
+    #
+    # THE JOB MUST NOT BE SPREAD ACROSS NODES.  The window exists only for a
+    # collective the host never sees -- a strictly local fence, the ordinary
+    # case under fence_localonly_opt.  Give the job two nodes and the fence
+    # goes up to PRRTE, host_called is set, and the case tests nothing.  That
+    # is the opposite constraint from most of this file, so it is stated here
+    # rather than left to be rediscovered.
+    #
+    # AND THE MACHINE MUST BE LOADED, for the same reason as the phase above
+    # and to the same degree -- see load_on().  Idle, the unfixed library is
+    # clean here however many iterations it is given.
+    #
+    # What is asserted is prterun's own exit and output: the HNP hosts these
+    # ranks itself and finalizes its PMIx server on the way out, so it is the
+    # process that aborts.  Measured against a library with the fix removed
+    # (and under load): 10 of 10 runs abort with "malloc(): unsorted double
+    # linked list corrupted", and under valgrind the invalid free lands in
+    # PMIx_server_finalize at an address inside pmix_server_globals.
+    cleanup_swarm
+    if ! RUN "test -x $PMIXLOOP"; then
+        skp "pmixloop client not installed -- re-run ./build.sh"
+        return
+    fi
+    load_on
+
+    out=$(RUN "timeout -k 10 300 prterun --host node1:4 -n 4 $PMIXLOOP 200" 2>&1)
+    rc=$?
+    [ "$rc" = 0 ] \
+        && ok "prterun survived 800 client connect/disconnect cycles and exited 0" \
+        || bad "prterun exited $rc after heavy client churn (134 = SIGABRT): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # The heap diagnostic is worth asserting separately: glibc aborts only
+    # when its own heuristics happen to catch the bad free, so a corrupted
+    # heap can also surface as a message without a non-zero exit.
+    echo "$out" | grep -qiE 'pointer being freed|free\(\): |double free|corrupted|malloc\(\): ' \
+        && bad "the heap complained during teardown: $(echo "$out" | grep -iEm2 'pointer being freed|free\(\): |double free|corrupted|malloc\(\): ' | tr '\n' ' ')" \
+        || ok "...with no invalid-free or heap-corruption diagnostic"
+    load_off
+    cleanup_swarm
+}
+
 test_ess() {
     local out rc n
 
@@ -5759,6 +5913,10 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_odls
 
     test_grpcomm
+
+    test_pmix_cycling
+
+    test_pmix_server_teardown
 
 
 

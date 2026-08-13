@@ -490,6 +490,20 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/fencer.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
+            # pmixloop: the reproducer from openpmix issue #4113 -- ranks
+            # cycling Init / collecting fence / bare fence / Finalize with a
+            # per-rank skew, so one rank opens the next cycle while its peers
+            # are still finalizing the last one.  The issue drives it under
+            # PMIx simptest, where every rank is local to one server and the
+            # fence never reaches the host; run here across nodes it is a
+            # real PRRTE collective, which is the half a single host cannot
+            # test.
+            # (No apostrophes here: see the note further down.)
+            echo ">>>> pmixloop (init/fence/finalize cycling) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/pmixloop \
+                /prrte-src/contrib/dockerswarm/pmixloop.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
             # faulty: a PMIx client that fails on purpose, once per way the
             # errmgr has a policy branch for (abort, non-zero exit, signal,
             # exit without finalize).  Both errmgr components are involved in
