@@ -181,6 +181,7 @@ static void peer_cons(prte_oob_tcp_peer_t *peer)
     PMIX_CONSTRUCT(&peer->addrs, pmix_list_t);
     peer->active_addr = NULL;
     peer->state = MCA_OOB_TCP_UNCONNECTED;
+    peer->established = false;
     peer->num_retries = 0;
     peer->first_attempt = 0;
     PMIX_CONSTRUCT(&peer->send_queue, pmix_list_t);
