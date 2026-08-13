@@ -553,6 +553,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     bool bind_inherited = false;
     prte_rmaps_base_selected_module_t *mod;
     prte_job_t *parent = NULL;
+    prte_job_t *iof_parent = NULL;
+    bool iof_declined = false;
     prte_app_context_t *app;
     bool inherit = false;
     pmix_proc_t *nptr = NULL, *target_proc;
@@ -755,6 +757,22 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             /* we do allow inheritance of the defaults */
             inherit = true;
         } else if (NULL != (parent = prte_get_job_data_object(nptr->nspace))) {
+            /* Output forwarding asks the same question with a DIFFERENT
+             * default, so it cannot key off the `inherit` the arms below
+             * resolve. prte_rmaps_base.inherit is false unless the user
+             * says otherwise - a spawned job does not pick up mapping,
+             * ranking and binding unless asked - whereas output
+             * forwarding inherits unless it is REFUSED, on both sides of
+             * the PMIx interface. Keying off the resolved value silenced
+             * every spawned job.
+             *
+             * So capture the explicit refusal, and the parent, here:
+             * two of the arms below null the parent out. */
+            iof_parent = parent;
+            iof_declined = prte_get_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT,
+                                              NULL, PMIX_BOOL) ||
+                           prte_get_attribute(&parent->attributes, PRTE_JOB_NOINHERIT,
+                                              NULL, PMIX_BOOL);
             if (PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
                 // we don't inherit anything from tools as they were not
                 // mapped by us
@@ -779,6 +797,34 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                                 "mca:rmaps: dynamic job %s %s inherit launch directives - parent %s",
                                 PRTE_JOBID_PRINT(jdata->nspace), inherit ? "will" : "will not",
                                 (NULL == parent) ? "N/A" : PRTE_JOBID_PRINT((parent->nspace)));
+
+            /* Who receives this job's output. A spawned job is treated
+             * the way its parent is being treated, so the daemons
+             * interested in the parent's output are interested in this
+             * one's - unless inheritance was explicitly refused.
+             *
+             * This is the routing half of that behavior; PMIx supplies
+             * the matching half, deciding that a subscription covering
+             * the parent job also covers its children. Both are needed:
+             * this puts the bytes in front of the right PMIx server, and
+             * that gets them from there to the tool. */
+            if (iof_declined) {
+                /* PMIx asks this again on the server the child's output
+                 * ARRIVES at, which need not be this one, and it cannot
+                 * reach the answer itself - so record it where the job's
+                 * PMIx information is built and can carry it there. Set
+                 * only to say NO: absence of the attribute, like absence
+                 * of PMIX_IOF_INHERIT, means the job inherits. */
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_NO_IOF_INHERIT,
+                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+            } else if (NULL != iof_parent) {
+                rc = pmix_bitmap_copy(&jdata->iof_daemons, &iof_parent->iof_daemons);
+                if (PMIX_SUCCESS != rc) {
+                    /* not fatal to the launch - the job simply starts with
+                     * no inherited watchers, which is what it had before */
+                    PMIX_ERROR_LOG(rc);
+                }
+            }
         } else {
             inherit = true;
         }

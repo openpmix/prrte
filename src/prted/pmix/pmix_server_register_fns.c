@@ -545,6 +545,21 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, (void**)&fptr, PMIX_BOOL)) {
         PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_XML_OUTPUT, &flag, PMIX_BOOL);
     }
+#ifdef PMIX_IOF_INHERIT
+    /* Whether this job is to inherit the output forwarding of the job that
+     * spawned it. PMIx asks this on the server the child's output ARRIVES
+     * at, which need not be the one that processed the spawn, so the answer
+     * has to travel with the job rather than with the spawn request - and
+     * this is what carries it there. The mapper resolved it, subject to the
+     * same inherit rule that governs mapping, ranking and binding.
+     *
+     * Sent only to say NO: absence means inherit, on both sides of the
+     * interface, so a job with no opinion adds nothing to the wire. */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NO_IOF_INHERIT, NULL, PMIX_BOOL)) {
+        bool noinherit = false;
+        PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_INHERIT, &noinherit, PMIX_BOOL);
+    }
+#endif
     tmp = NULL;
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_TO_FILE, (void **) &tmp, PMIX_STRING)
         && NULL != tmp) {
