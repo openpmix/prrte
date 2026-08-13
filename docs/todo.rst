@@ -117,6 +117,83 @@ before it can even be measured.  The rule it must keep to: switch on what
 PRRTE is the *authority* for (the placement and binding it decided, a closed
 set), never on what an application is expected to ask for.
 
+**Scatter the launch message's per-proc cpuset.**  Placement already travels
+as a node map plus a proc map per app, and lazy proc-data registration has
+landed, so what still goes to every daemon is a per-proc record of what the
+maps cannot say: node rank, state and the cpuset.  The remaining idea is to
+send that residual only to the daemon that will fork the proc — common part
+broadcast as now, per-destination slice routed point to point.  It needs no
+new broadcast movement: ``prte_rml_get_route`` aggregates N routed sends in
+the tree, so the bytes leaving the controller are the sum of the slices
+rather than the sum replicated.
+
+**Judge it on wire bytes, not on the raw message size.**  That distinction is
+the whole reason this entry is worth reading.  ``--rtos donotlaunch`` reports
+the *raw* buffer, and the xcast compresses before it forwards, so a raw
+figure can overstate the prize by a factor of three — and a field that holds
+the same value in every record can compress away to nothing while looking
+enormous raw.  Measured on a live 32-node broadcast at 8 ppn
+(``grpcomm_base_verbose 1``, tag 18 is the launch message):
+
+=====================  ===========  ============  =====
+what                   raw          wire          ratio
+=====================  ===========  ============  =====
+whole message          3,790 B      1,280 B       0.34
+per proc (slope)       13.0 B       --            --
+cpuset (core vs none)  2.0 B/proc   0.77 B/proc   0.40
+=====================  ===========  ============  =====
+
+**The cpuset does not compress away, and more repetition does not help it.**
+Its marginal wire cost held flat — 0.766, 0.742, 0.797 B/proc — across 8, 16
+and 32 nodes, i.e. a fourfold increase in how often the same handful of
+cpuset strings recur.  The overall ratio improves with scale (0.42 → 0.34)
+only because the fixed job-level part amortizes.  So the marginal ratio of
+~0.4 is the number to extrapolate with, and at 1000 x 128 — where the cpuset
+is 5.97 B/proc raw on a 176-core, 5-NUMA node — that is roughly 2.3 B/proc,
+or **~295 KB of an estimated ~535 KB wire launch message.**  About half.
+That is what makes the change worth its cost, and the cost is real: the
+message stops being one payload delivered identically, the receiver handles
+two pieces with an ordering constraint, an elastic grow needs the joining
+daemon's slice, and ``prte_job_pack``/``_unpack`` are hand-written mirrors
+with no version and nothing that catches a half-done edit.
+
+**Do not model this instead of measuring it.**  A synthetic model of the
+per-proc region — the right fields, the right varint encoding, a faithful
+cpuset distribution — predicted the region would deflate ~180:1 and the
+cpuset would cost 0.05 B/proc on the wire.  The real answer is 0.77, a factor
+of fifteen out, and the conclusion drawn from the model ("the compressor
+already solves this, drop the idea") was the opposite of the one the
+measurement supports.  The model is not salvageable by refining it; the
+per-proc region does not exist in isolation on the wire.
+
+**Two things settled along the way, so they need not be re-derived:**
+
+* *The state is not worth scattering.*  Nothing in the tree ever sets a proc
+  state to ``PRTE_PROC_STATE_RESTART`` — the only occurrence is
+  ``prte_pmix_convert_pstate()`` translating an incoming PMIx state — and
+  nothing sets ``PRTE_JOB_FLAG_RESTARTED`` either.  Both consumers
+  (``odls_base_default_fns.c`` and ``filem_raw_module.c``) treat ``INIT`` and
+  ``RESTART`` identically, so the wire never needs to tell them apart.  It is
+  ~2 B/proc raw and varint-squashed, and it genuinely varies for the *job
+  catchup* caller, which packs already-running jobs whose proc states feed
+  ``PMIX_QUERY_PROC_TABLE``.  Leave it alone.
+* *An optional trailing field per proc does not work.*  ``prte_proc_pack``
+  runs in a loop and more job fields follow the array, so an absent flag is
+  ambiguous both against the next proc's first field and against
+  ``stdin_target``; ``PMIX_ERR_UNPACK_PAST_END`` never fires because there is
+  always more buffer.  Any conditional field needs a discriminator the
+  decoder has already read — the job flags are packed first and are the
+  obvious candidate.
+
+**Measuring the launch message at all takes three settings**, and each one
+silently gives a wrong answer if omitted: ``--prtemca hwloc_use_topo_file``
+with a NUMA-bearing topology (a dev box and the swarm containers have no NUMA
+node, so the default ``NUMA:IF-SUPPORTED`` binds nothing and you measure the
+unbound shape while believing otherwise); a PMIx built *without* debug (see
+below); and, for a wire number, a payload above the compressor's
+``pcompress_base_limit`` — below it ``wire`` simply equals ``raw`` and the
+census tells you nothing about the ratio.
+
 **Small effects cannot be measured end-to-end on the container swarm.**  At
 40 nodes the collect fence's wall clock has a run-to-run coefficient of
 variation of 35–50%, so anything under about a third is not resolvable there
