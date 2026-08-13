@@ -76,15 +76,41 @@ bounded() {
 # Linux: the full 10-node swarm
 ########################################################################
 
+# THE SUITE RUNS WITH OOB PROGRESS THREADS ON, AND THAT IS DELIBERATE.
+#
+# prte_oob_base.num_progress_threads defaults to 0 in the library: every
+# peer's socket send/recv events are serviced on the main progress thread, so
+# the OOB is effectively single-threaded and the ordering between a send
+# completing and anything else the daemon does is fixed. With workers, each
+# peer is assigned to a worker base and its handlers run on that thread,
+# posting completions back to prte_event_base -- which is the arrangement
+# where a missing lock, a peer touched from two threads, or a completion that
+# assumes it runs on the main thread actually has consequences.
+#
+# At the default of 0 this suite could never reach any of that: not one case
+# would exercise the threaded path, and a race introduced there would ship.
+# So the suite opts in, for every tool and (via the PRTE_MCA_ forwarding in
+# prte_plm_base_setup_virtual_machine) every daemon it launches.
+#
+# Two is the smallest number that is genuinely multi-threaded -- one worker
+# plus the main thread is already two threads touching the OOB, and two
+# workers means two peers can be serviced concurrently. Override with
+# PRTE_SWARM_OOB_THREADS to sweep it, or set it to 0 to reproduce the old
+# single-threaded behavior when bisecting a failure.
+OOB_THREADS="${PRTE_SWARM_OOB_THREADS:-2}"
+OOBENV=(-e "PRTE_MCA_oob_progress_threads=$OOB_THREADS")
+
 # run a command on the head node (login env so PATH/LD_LIBRARY_PATH are set)
 RUN() { docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+            "${OOBENV[@]}" \
             "${NODE}1" bash -lc ". /opt/prte/env.sh; $*"; }
-ON()  { docker exec "$NODE$1" bash -lc ". /opt/prte/env.sh 2>/dev/null; ${*:2}"; }
+ON()  { docker exec "${OOBENV[@]}" "$NODE$1" bash -lc ". /opt/prte/env.sh 2>/dev/null; ${*:2}"; }
 # ...and the same for a case that drives a TOOL from a node other than the
 # head. ON alone is enough for shell housekeeping, but every PRRTE tool
 # refuses to run as root without these two, and the refusal text is long
 # enough to bury whatever the case was actually asserting.
 ONT() { docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+            "${OOBENV[@]}" \
             "$NODE$1" bash -lc ". /opt/prte/env.sh; ${*:2}"; }
 
 # What must not survive into the next test, on one node.  Each tool has its
@@ -4699,6 +4725,16 @@ test_linux() {
     stamp=$(RUN 'cat /opt/prte/.build-stamp 2>/dev/null' | tr -d '\r')
     if [ -n "$stamp" ]; then
         ok "install built $stamp"
+        # Say which OOB threading the whole run used. The library defaults to
+        # 0 (everything on the main progress thread); this suite opts in to
+        # workers so the threaded send/recv path is covered at all. A failure
+        # that only appears here is the first thing to re-check with
+        # PRTE_SWARM_OOB_THREADS=0, which is why the number is in the log.
+        if [ "$OOB_THREADS" = 0 ]; then
+            ok "...running with OOB progress threads OFF (single-threaded OOB)"
+        else
+            ok "...running with $OOB_THREADS OOB progress threads (library default is 0)"
+        fi
     else
         bad "no build stamp in the volume -- the last ./build.sh did not complete."
         echo "     Re-run ./build.sh and check its exit status; the install now" >&2
