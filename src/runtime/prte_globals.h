@@ -446,6 +446,21 @@ typedef struct prte_job_t {
     pmix_rank_t num_ready_for_debug;
     /* originator of a dynamic spawn */
     pmix_proc_t originator;
+    /* Daemons that have someone interested in this job's output, by rank
+     * within our own namespace. A tool's IOF subscription is held by the
+     * PMIx server of the daemon that tool attached to, and only that
+     * server can deliver to it - so the HNP has to relay a copy of this
+     * job's output to every daemon in this set.
+     *
+     * It is a SET rather than the single "originator" it replaces because
+     * there can legitimately be several: the daemon hosting the tool that
+     * launched the job, plus any daemon whose tool later asked for this
+     * job's output through PMIx_IOF_pull, plus - for a spawned job - the
+     * ones its parent had.
+     *
+     * HNP-local; never packed. Nothing below the HNP relays, so no other
+     * daemon has any use for it. */
+    pmix_bitmap_t iof_daemons;
     /* number of local procs */
     pmix_rank_t num_local_procs;
     /* flags */

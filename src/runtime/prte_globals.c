@@ -705,6 +705,10 @@ static void prte_job_construct(prte_job_t *job)
     job->num_ready_for_debug = 0;
 
     PMIX_LOAD_PROCID(&job->originator, NULL, PMIX_RANK_INVALID);
+    /* Left unsized: the constructor uncaps max_size and set_bit grows the
+     * map from nothing, so a job with no interested daemon - which is
+     * most of them - carries no allocation at all. */
+    PMIX_CONSTRUCT(&job->iof_daemons, pmix_bitmap_t);
     job->num_local_procs = 0;
 
     job->flags = 0;
@@ -739,6 +743,8 @@ static void prte_job_destruct(prte_job_t *job)
     if (NULL != job->personality) {
         PMIx_Argv_free(job->personality);
     }
+
+    PMIX_DESTRUCT(&job->iof_daemons);
 
     for (n = 0; n < job->apps->size; n++) {
         if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(job->apps, n))) {

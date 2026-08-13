@@ -161,6 +161,37 @@ int prte_iof_hnp_send_data_to_endpoint(const pmix_proc_t *host,
  *     duplicate it. Same for output from our own children when the tool is
  *     attached to us.
  */
+#if PRTE_PMIX_IOF_DELIVER_LOCAL
+/* Relay one job's output to one daemon, skipping the two destinations
+ * that would duplicate what has already been written: ourselves, and
+ * whichever daemon the caller says already delivered it. */
+static void relay_one(pmix_rank_t dmn,
+                      const pmix_proc_t *source,
+                      prte_iof_tag_t stream,
+                      unsigned char *data, int numbytes,
+                      pmix_rank_t already_delivered)
+{
+    pmix_proc_t host;
+    int rc;
+
+    if (dmn == PRTE_PROC_MY_NAME->rank || dmn == already_delivered ||
+        PMIX_RANK_INVALID == dmn) {
+        return;
+    }
+
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                         "%s iof:hnp relaying %d bytes of %s output to the tool on daemon %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
+                         PRTE_NAME_PRINT(source), PMIX_RANK_PRINT(dmn)));
+
+    PMIX_LOAD_PROCID(&host, PRTE_PROC_MY_NAME->nspace, dmn);
+    rc = prte_iof_hnp_send_data_to_endpoint(&host, source, stream, data, numbytes);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+    }
+}
+#endif
+
 void prte_iof_hnp_relay_to_tool(const pmix_proc_t *source,
                                 prte_iof_tag_t stream,
                                 unsigned char *data, int numbytes,
@@ -168,32 +199,44 @@ void prte_iof_hnp_relay_to_tool(const pmix_proc_t *source,
 {
 #if PRTE_PMIX_IOF_DELIVER_LOCAL
     prte_job_t *jdata;
-    pmix_proc_t host;
-    int rc;
+    pmix_rank_t dmn;
+    int n, last;
 
     jdata = prte_get_job_data_object(source->nspace);
-    if (NULL == jdata || PMIX_NSPACE_INVALID(jdata->originator.nspace)) {
-        return;
-    }
-    /* an originator outside the daemon namespace is a tool attached to us */
-    if (!PMIX_CHECK_NSPACE(jdata->originator.nspace, PRTE_PROC_MY_NAME->nspace)) {
-        return;
-    }
-    if (jdata->originator.rank == PRTE_PROC_MY_NAME->rank ||
-        jdata->originator.rank == already_delivered) {
+    if (NULL == jdata) {
         return;
     }
 
-    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
-                         "%s iof:hnp relaying %d bytes of %s output to the tool on daemon %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
-                         PRTE_NAME_PRINT(source),
-                         PMIX_RANK_PRINT(jdata->originator.rank)));
+    /* The daemon hosting the tool that LAUNCHED this job, which is what
+     * jdata->originator names once the HNP has resolved it. Kept as the
+     * seed of the set below rather than as a second mechanism: a job that
+     * nobody has since subscribed to has exactly this one destination,
+     * which is the behavior this function has always had. */
+    if (!PMIX_NSPACE_INVALID(jdata->originator.nspace) &&
+        /* an originator outside the daemon namespace is a tool attached
+         * to us, so there is nothing to relay anywhere */
+        PMIX_CHECK_NSPACE(jdata->originator.nspace, PRTE_PROC_MY_NAME->nspace)) {
+        relay_one(jdata->originator.rank, source, stream, data, numbytes,
+                  already_delivered);
+    }
 
-    PMIX_LOAD_PROCID(&host, PRTE_PROC_MY_NAME->nspace, jdata->originator.rank);
-    rc = prte_iof_hnp_send_data_to_endpoint(&host, source, stream, data, numbytes);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
+    /* ...and every daemon that has since acquired an interest in this
+     * job's output: a tool that attached to it and called PMIx_IOF_pull,
+     * or - for a spawned job - whatever its parent had. Relaying to a
+     * daemon is what puts the bytes in front of the PMIx server that
+     * holds that tool's subscription; no other server can deliver to it. */
+    last = pmix_bitmap_size(&jdata->iof_daemons);
+    for (n = 0; n < last; n++) {
+        if (!pmix_bitmap_is_set_bit(&jdata->iof_daemons, n)) {
+            continue;
+        }
+        dmn = (pmix_rank_t) n;
+        if (!PMIX_NSPACE_INVALID(jdata->originator.nspace) &&
+            PMIX_CHECK_NSPACE(jdata->originator.nspace, PRTE_PROC_MY_NAME->nspace) &&
+            dmn == jdata->originator.rank) {
+            continue;   // already served as the seed above
+        }
+        relay_one(dmn, source, stream, data, numbytes, already_delivered);
     }
 #else
     /* without a PMIx that can be told not to emit a delivery, relaying would
