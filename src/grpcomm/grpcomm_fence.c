@@ -893,6 +893,21 @@ void prte_grpcomm_fence_release(int status, pmix_proc_t *sender,
         ret = rc;
     }
 
+    /* Retire the tracker BEFORE delivering, not after. This fence is over the
+     * moment we have its result; everything below is delivery, and delivery is
+     * exactly when the next fence can start. The callback completes the local
+     * clients' PMIx_Fence, and a client is free to fence again over the same
+     * participants as soon as it returns - a signature is only its participant
+     * list, so that next fence looks up the very tracker we are about to free
+     * and would join a collective that has already been answered.
+     *
+     * Taking it off the list first costs nothing: we still hold the reference
+     * that keeps `coll` alive for the callback below, and nothing between here
+     * and the release needs to find it by lookup. The abort path above does
+     * the same thing for the same reason, by clearing cbfunc rather than by
+     * unlinking. */
+    pmix_list_remove_item(&prte_grpcomm_globals.fence_ops, &coll->super);
+
     /* execute the callback */
     if (NULL != coll->cbfunc) {
         coll->cbfunc(ret, bo.bytes, bo.size, coll->cbdata, relcb, bo.bytes);
@@ -904,7 +919,6 @@ void prte_grpcomm_fence_release(int status, pmix_proc_t *sender,
          * callback above was handed it. */
         PMIX_BYTE_OBJECT_DESTRUCT(&bo);
     }
-    pmix_list_remove_item(&prte_grpcomm_globals.fence_ops, &coll->super);
     PMIX_RELEASE(coll);
     PMIX_RELEASE(sig);
 }

@@ -147,7 +147,7 @@ always one thing.
 | `output` | Verbosity stream. `-1` until the `grpcomm_base_verbose` MCA parameter opens it. The parameter deliberately **keeps its old framework spelling**, because it is in every debugging recipe and in the guides. |
 | `context_id` | The group context-id pool. A construct asking for `PMIX_GROUP_ASSIGN_CONTEXT_ID` gets this value, and it **decrements** — it counts *down* from `UINT32_MAX` so DVM-assigned ids cannot collide with ids assigned from the bottom of the range elsewhere. |
 | `xcast_ops` | In-flight broadcasts, the `pending_completions` FIFO, and the three op-id sequence counters. |
-| `fence_ops` | List of `prte_grpcomm_fence_t`. |
+| `fence_ops` | List of `prte_grpcomm_fence_t`. A tracker is found here by its signature alone, so it must come **off** this list before its result is delivered — see *Retire before you deliver* below. |
 | `group_ops` | List of `prte_grpcomm_group_t`. |
 | `completed_group_ops` | Bounded memo of already-released group ops (see below). |
 | `recovery_epoch` | The collective recovery epoch, shared by fence and group: one failure, one restart, one epoch. |
@@ -156,6 +156,33 @@ Note the verbosity variable that backs the MCA parameter is at **file
 scope** in `grpcomm.c`, not a local: the MCA layer keeps the pointer it is
 handed and writes through it whenever the variable is set, so a stack slot
 would be a dangling write the moment registration returns.
+
+### Retire before you deliver
+
+**A fence tracker comes off `fence_ops` before its completion callback runs,
+not after.** The fence is over the moment its result is in hand; everything
+after that is delivery, and delivery is precisely when the next fence can
+start.
+
+The reason is that a fence signature is *only its participant list*. It
+carries nothing to distinguish one fence over a set of procs from the next
+fence over that same set. So when `fence_release()` runs the callback, the
+local clients' `PMIx_Fence` completes, and any of them may call `PMIx_Fence`
+again over the same participants immediately — and that lookup would find the
+tracker that has just been answered and is about to be released, joining a
+collective that is already finished.
+
+Both completion paths honor this, by different means:
+
+- `fence_release()` unlinks the tracker first, then delivers. It still holds
+  the reference that keeps the object alive across the callback.
+- the entry point's failure path leaves the tracker in place deliberately (a
+  later release from the controller still has to find it) and instead clears
+  `cbfunc`/`cbdata` so the participants cannot be completed twice.
+
+Do not "tidy" the unlink back down next to `PMIX_RELEASE(coll)`. It reads like
+teardown belonging together and it is not: one of those two is the end of the
+collective and the other is just freeing memory.
 
 ---
 
