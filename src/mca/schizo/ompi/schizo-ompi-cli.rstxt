@@ -549,7 +549,7 @@ The ``--report-bindings`` option
 .. include:: /prrte-rst-content/deprecated-report-bindings.rst
 
 The ``--report-child-jobs-separately`` option
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. include:: /prrte-rst-content/deprecated-report-child-jobs-separately.rst
 
