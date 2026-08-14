@@ -143,7 +143,6 @@ typedef struct {
      * gave two apps the same ranks, and the second app's procs then replaced
      * the first's in jdata->procs. */
     uint32_t start_vpid;
-    char *dist_device;  /* device name for dist mapping, from PRTE_APP_DIST_DEVICE */
 
 } prte_rmaps_options_t;
 
@@ -187,7 +186,6 @@ typedef struct {
 #define PRTE_MAPPING_BYHWTHREAD  8
 /* now take the other round-robin options */
 #define PRTE_MAPPING_BYSLOT      9
-#define PRTE_MAPPING_BYDIST     10
 #define PRTE_MAPPING_PELIST     11
 /* convenience - declare anything <= 15 to be round-robin*/
 #define PRTE_MAPPING_RR         16

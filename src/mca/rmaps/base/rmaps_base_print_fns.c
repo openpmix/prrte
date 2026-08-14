@@ -158,9 +158,6 @@ char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
     case PRTE_MAPPING_BYUSER:
         map = "BYUSER";
         break;
-    case PRTE_MAPPING_BYDIST:
-        map = "MINDIST";
-        break;
     case PRTE_MAPPING_PELIST:
         map = "PE-LIST";
         break;

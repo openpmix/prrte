@@ -67,8 +67,6 @@ typedef struct {
     prte_ranking_policy_t ranking;
     // default ppr setting
     char *ppr;
-    /* default device for dist mapping */
-    char *device;
     /* whether or not child jobs should inherit mapping/ranking/binding directives from their parent
      * by default */
     bool inherit;
