@@ -238,7 +238,6 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
         switch (opts->map) {
             case PRTE_MAPPING_BYNODE:
             case PRTE_MAPPING_BYSLOT:
-            case PRTE_MAPPING_BYDIST:
             case PRTE_MAPPING_PELIST:
             case PRTE_MAPPING_COLOCATE:
                 opts->maptype = HWLOC_OBJ_MACHINE;
@@ -330,16 +329,7 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
 
     /* 6. PRTE_APP_MAP_FILE — read directly by seq/rank_file components via app->attributes */
 
-    /* 7. PRTE_APP_DIST_DEVICE → opts->dist_device */
-    str = NULL;
-    if (prte_get_attribute(&app->attributes, PRTE_APP_DIST_DEVICE, (void **)&str, PMIX_STRING)) {
-        if (NULL != opts->dist_device) {
-            free(opts->dist_device);
-        }
-        opts->dist_device = str;
-    }
-
-    /* 8. PRTE_APP_BINDING_LIMIT → opts->limit */
+    /* 7. PRTE_APP_BINDING_LIMIT → opts->limit */
     if (prte_get_attribute(&app->attributes, PRTE_APP_BINDING_LIMIT, (void **)&u16ptr, PMIX_UINT16)) {
         opts->limit = u16;
     }
@@ -411,10 +401,6 @@ static void free_strings(prte_rmaps_options_t *opts)
     if (NULL != opts->cpuset) {
         free(opts->cpuset);
         opts->cpuset = NULL;
-    }
-    if (NULL != opts->dist_device) {
-        free(opts->dist_device);
-        opts->dist_device = NULL;
     }
 }
 
@@ -1211,7 +1197,6 @@ ranking:
     switch (options.map) {
         case PRTE_MAPPING_BYNODE:
         case PRTE_MAPPING_BYSLOT:
-        case PRTE_MAPPING_BYDIST:
         case PRTE_MAPPING_PELIST:
         case PRTE_MAPPING_COLOCATE:
             options.mapdepth = PRTE_BIND_TO_NONE;
@@ -1559,12 +1544,10 @@ ranking:
              * the mappers compute their own per node */
             app_options.job_cpuset = NULL;
             app_options.target = NULL;
-            /* nor of the job-level strings: a pe-list mapper frees and
+            /* nor of the job-level string: a pe-list mapper frees and
              * rewrites "cpuset" as it places procs, so each app needs its
              * own copy rather than a second pointer to the job's */
             app_options.cpuset = (NULL == options.cpuset) ? NULL : strdup(options.cpuset);
-            app_options.dist_device = (NULL == options.dist_device) ? NULL
-                                                                   : strdup(options.dist_device);
             app_options.app_idx = n;
             /* where this app's ranks start: the mappers that number their
              * own procs need the cursor the base is threading, or every app

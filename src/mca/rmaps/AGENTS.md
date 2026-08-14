@@ -41,7 +41,7 @@ Three concepts govern the whole framework, and they are **orthogonal**:
 | **Binding** | Which CPUs is each proc restricted to? | `--bind-to` | `jdata->map->binding` |
 
 `--map-by slot`/`node`/`core`/`l3cache`/`numa`/`package`/`hwthread`/
-`seq`/`ppr`/`rankfile`/`pe-list=…`/`dist` plus colon modifiers
+`seq`/`ppr`/`rankfile`/`pe-list=…` plus colon modifiers
 (`PE=n`, `SPAN`, `OVERSUBSCRIBE`, `NOLOCAL`, `HWTCPUS`, `INHERIT`,
 `ORDERED`, `FILE=…`, …). `--rank-by slot`/`node`/`fill`/`span`.
 
@@ -337,12 +337,12 @@ offers nothing and is reported unusable through the normal path, and
 [`src/hwloc/AGENTS.md`](../../hwloc/AGENTS.md).
 
 `job_cpuset` and `target` are hwloc bitmaps the mappers recycle per node;
-`cpuset` and `dist_device` are strings the *struct* owns (they come out of an
-attribute, which returns a copy). `bind_to_cpuset` consumes `cpuset` one
+`cpuset` is a string the *struct* owns (it comes out of an attribute, which
+returns a copy). `bind_to_cpuset` consumes `cpuset` one
 entry at a time and rewrites it, so the pointer at the end of a map is
 whatever the mapper left, not what was read in. `prte_rmaps_base_map_job()`
-frees all four at `cleanup`, and the per-app copy gets its own `strdup` of
-the strings so two structs never share one allocation.
+frees all three at `cleanup`, and the per-app copy gets its own `strdup` of
+the string so two structs never share one allocation.
 
 ---
 

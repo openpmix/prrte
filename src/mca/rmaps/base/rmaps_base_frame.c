@@ -62,7 +62,6 @@ prte_rmaps_base_t prte_rmaps_base = {
     .mapping = 0,
     .ranking = 0,
     .ppr = NULL,
-    .device = NULL,
     .inherit = false,
     .hwthread_cpus = false,
     .file = NULL,
@@ -84,11 +83,11 @@ static int prte_rmaps_base_register(pmix_mca_base_register_flag_t flags)
     prte_rmaps_base.default_mapping_policy = NULL;
     ret = pmix_mca_base_var_register("prte", NULL, NULL, "mapby",
                                      "Default mapping Policy [slot | hwthread | core | l1cache | "
-                                      "l2cache | l3cache | numa | package | node | seq | dist | ppr | "
+                                      "l2cache | l3cache | numa | package | node | seq | ppr | "
                                       "rankfile | pe-list=a,b (comma-delimited ranges of cpus to use for this job)],"
                                       " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
                                       "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
-                                      "DEVICE=dev (for dist policy), INHERIT, NOINHERIT, ORDERED, FILE=%s (path to file containing sequential "
+                                      "INHERIT, NOINHERIT, ORDERED, FILE=%s (path to file containing sequential "
                                       "or rankfile entries). For more details, see \"prterun --help map-by\". "
                                       "The full directive need not be provided — "
                                       "only enough characters are required to uniquely identify the "
