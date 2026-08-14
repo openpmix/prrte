@@ -110,6 +110,20 @@ typedef struct {
 } prte_pmix_server_req_t;
 PMIX_CLASS_DECLARATION(prte_pmix_server_req_t);
 
+/* Answering for a proc out of the job object rather than out of the local
+ * PMIx server's store.  prte_pmix_server_derivable_key() is the closed set
+ * of keys this DVM is itself the authority for - the placement and binding
+ * it computed when it mapped the job - and
+ * prte_pmix_server_derive_proc_data() builds the blob a direct modex would
+ * have returned for them.  Both live in pmix_server_fence.c; the dmodex
+ * receiver in pmix_server.c uses them too, so that a request that does
+ * reach the hosting daemon is answered from what PRRTE knows rather than
+ * from what the process has published.  See src/prted/pmix/AGENTS.md. */
+PRTE_EXPORT bool prte_pmix_server_derivable_key(const char *key);
+PRTE_EXPORT pmix_status_t prte_pmix_server_derive_proc_data(prte_job_t *jdata,
+                                                            prte_proc_t *proct,
+                                                            pmix_data_buffer_t *buf);
+
 /* object for thread-shifting server operations */
 typedef struct {
     pmix_object_t super;
@@ -488,6 +502,10 @@ typedef struct {
     bool lazy_procdata;
     pmix_list_t psets;
     pmix_list_t groups;
+    /* jobs whose local procs have all departed, so that a direct modex for
+     * one of them can be told "not found" instead of waiting for a job
+     * object that is never coming back - see prte_pmix_server_job_departed() */
+    pmix_list_t departed_jobs;
 } prte_pmix_server_globals_t;
 
 PRTE_EXPORT extern prte_pmix_server_globals_t prte_pmix_server_globals;

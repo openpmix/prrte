@@ -748,10 +748,19 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
                     }
                 }
                 hwloc_bitmap_free(cpuset.bitmap);
-            } else {
-                /* the proc is not bound */
+            } else if (PRTE_PROC_MY_NAME->rank == node->daemon->name.rank) {
+                /* the proc is not bound, and we are the daemon that will
+                 * fork it, so we know that rather than merely not having
+                 * been told */
                 PMIX_INFO_LIST_ADD(ret, pmap, PMIX_LOCALITY_STRING, NULL, PMIX_STRING);
             }
+            /* Nothing published for a remote proc with no cpuset: the launch
+             * message scatters the bindings, so what we hold for a proc some
+             * other daemon forks is nothing at all - and a NULL locality here
+             * is a positive claim that it is unbound, which the receiver
+             * cannot tell from silence.  A get for it falls through to
+             * dmodex_req, which declines it for the same reason and asks the
+             * daemon that does know. */
             if (PRTE_PROC_MY_NAME->rank == node->daemon->name.rank) {
                 /* create and pass a proc-level session directory */
                 rc = prte_session_dir(&pptr->name);
