@@ -569,6 +569,14 @@ void prte_pmix_server_clear(pmix_proc_t *pname)
     for (n = 0; n < prte_pmix_server_globals.remote_reqs.size; n++) {
         req = (prte_pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.remote_reqs, n);
         if (NULL != req) {
+            /* Only requests that name a target proc are ours to clear.
+             * A monitor request does not set tproc at all, and an empty
+             * nspace is PMIx's wildcard - it matches everything - so
+             * without this guard every job that ended took the outstanding
+             * monitor requests with it. */
+            if (PMIX_NSPACE_INVALID(req->tproc.nspace)) {
+                continue;
+            }
             if (!PMIX_CHECK_NSPACE(req->tproc.nspace, pname->nspace) ||
                 !PMIX_CHECK_RANK(req->tproc.rank, pname->rank)) {
                 continue;
@@ -583,6 +591,14 @@ void prte_pmix_server_clear(pmix_proc_t *pname)
             }
             pmix_pointer_array_set_item(&prte_pmix_server_globals.remote_reqs, n, NULL);
             if (!req->inprogress) {
+                /* Somebody is still waiting on the other end of this, and
+                 * dropping it in silence leaves them waiting forever.  The
+                 * proc it asked about is gone and its data with it, which is
+                 * not an error - it is a question that no longer has an
+                 * answer, so say exactly that.  A request that IS in progress
+                 * is answered by whoever holds it. */
+                send_error(PRTE_ERR_NOT_FOUND, &req->tproc, &req->proxy,
+                           req->remote_index);
                 /* if the request is in progress, then someone (host or PMIx server
                  * library) has the req object - so we cannot release it yet.
                  * We'll take care of it once the current holder returns.

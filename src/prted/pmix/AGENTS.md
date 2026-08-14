@@ -156,6 +156,22 @@ asked us to service. `prte_pmix_server_clear()` sweeps only
 `remote_reqs`, because the local ones belong to callbacks that will still
 fire.
 
+Two things about that sweep, both of which it got wrong:
+
+- **Discarding a request is not answering it.** Every entry it drops is a
+  peer daemon waiting for a reply, and dropping it in silence leaves that
+  peer waiting for the life of the DVM. The sweep runs when a job is done,
+  so the honest reply is `PRTE_ERR_NOT_FOUND` — the proc it asked about is
+  gone and its data with it, which is a question that no longer has an
+  answer rather than a failure. Only for requests not marked `inprogress`:
+  those are held by somebody who will answer them.
+- **It has to skip the entries that name no target.** The match is on
+  `req->tproc`, and a *monitor* request never sets one — so its nspace is
+  empty, which is PMIx's wildcard and matches every job. Every job that
+  ended was quietly taking the outstanding monitor requests with it. Guard
+  with `PMIX_NSPACE_INVALID()` first; this is the same trap described above
+  for `tproc` versus `target`, in a second place.
+
 ---
 
 ## The relay pattern
