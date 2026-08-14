@@ -1477,6 +1477,15 @@ PI=/opt/prte/prte/bin/peerinfo
 # assertion is a string compare: what rank r was told about rank p must be
 # what rank p says about itself.  Prints nothing when the run is consistent,
 # and one line per disagreement otherwise.
+#
+# The last two fields - the cpuset and the locality string - are the ones
+# with two different ways of being answered now.  A daemon holds them only
+# for the procs it forks (the launch message sends each daemon its own
+# bindings and broadcasts nobody's, see src/mca/odls/AGENTS.md), so for an
+# off-node peer they come back from a direct modex to the daemon that does
+# hold them.  They still have to agree, and that is the point: this compare
+# is what says the referral produced the same answer the local derivation
+# used to, rather than nothing or somebody else's binding.
 peerinfo_mismatches() {
     echo "$1" | tr -d '\r' | awk '
         $1 == "SELF" { r = $2; s = ""; for (i = 3; i <= NF; i++) { s = s " " $i }
@@ -1753,6 +1762,15 @@ test_pmix() {
         [ -z "$mism" ] \
             && ok "...and every rank's account of a peer matches that peer's own" \
             || bad "peer descriptions disagree: $(echo "$mism" | head -3 | tr '\n' ' ' | tail -c 500)"
+        # The binding is the one field a daemon no longer holds for a proc it
+        # does not fork, so for an off-node peer the comparison above is
+        # covering a direct modex to the hosting daemon rather than a local
+        # derivation. Assert the bindings are actually populated, or that
+        # half of the compare passes on two empty strings.
+        n=$(echo "$lazyout" | tr -d '\r' | awk '$1 == "PEER" && $NF != "-" {c++} END {print c+0}')
+        [ "$n" = 56 ] \
+            && ok "...including every peer's binding, which off-node had to be fetched" \
+            || bad "$n of 56 peer lookups came back with a binding"
 
         # Note what that comparison already is: a SELF line is what the
         # proc's OWN daemon published about it -- which a daemon does for
@@ -4177,6 +4195,77 @@ test_odls() {
             fi
             RUN "timeout -k 5 30 pterm --dvm-uri file:/tmp/dvm.uri" >/dev/null 2>&1
         fi
+    fi
+    cleanup_swarm
+
+    banner "odls: the launch message's cpuset slice reaches the daemon that forks"
+    # The launch message no longer carries anybody's binding: it is packed
+    # PRTE_JOB_PACK_NO_CPUSETS and each daemon is sent the bindings of the
+    # procs it will fork, point to point, arriving in either order relative
+    # to the broadcast (prte_odls_base_send_cpuset_slices).
+    #
+    # This has to be read from the PROCESS, not from "--display map": the map
+    # is rendered on the master, which holds every proc's cpuset either way,
+    # so it would show a correct binding for a slice that never arrived.
+    # /proc/self/status is what the daemon actually applied.
+    cleanup_swarm
+    out=$(RUN 'timeout 90 prterun --host node2:8,node3:8,node4:8 -n 12 \
+                   --map-by ppr:4:node --bind-to core --output tag \
+                   grep Cpus_allowed_list /proc/self/status' 2>&1)
+    rc=$?
+    if [ "$rc" != 0 ]; then
+        bad "the bound multi-node launch failed (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    else
+        n=$(echo "$out" | grep -ac 'Cpus_allowed_list:[[:space:]]*[0-9]*$')
+        [ "$n" = 12 ] \
+            && ok "all 12 procs on three remote nodes were bound to a single cpu" \
+            || bad "$n/12 procs came back bound to one cpu -- a slice that never arrived leaves the proc unbound, i.e. allowed every cpu: $(echo "$out" | grep -a Cpus_allowed | tr '\n' ' ' | tail -c 300)"
+        # ...and to the RIGHT cpu.  ppr:4:node over 8 cores puts local ranks
+        # 0-3 on cpus 0-3 of each node, so each node's four procs must hold
+        # four DIFFERENT cpus.  A slice applied to the wrong ranks - the
+        # failure that carrying the rank explicitly is there to prevent -
+        # keeps the count above and fails here.
+        c=$(echo "$out" | sed -n 's/.*Cpus_allowed_list:[[:space:]]*\([0-9]*\)$/\1/p' | sort | uniq -c \
+            | awk '$1 != 3 {n++} END {print n+0}')
+        [ "$c" = 0 ] \
+            && ok "each of cpus 0-3 was used by exactly one proc per node" \
+            || bad "the bindings are not one proc per cpu per node: $(echo "$out" | grep -a Cpus_allowed | tr '\n' ' ' | tail -c 300)"
+    fi
+
+    # The same run with the scatter turned off must give the same answer -
+    # that is the A/B, and it is also what keeps the off switch honest.
+    out=$(RUN 'timeout 90 prterun --prtemca odls_base_scatter_cpusets 0 \
+                   --host node2:8,node3:8,node4:8 -n 12 \
+                   --map-by ppr:4:node --bind-to core --output tag \
+                   grep Cpus_allowed_list /proc/self/status' 2>&1)
+    n=$(echo "$out" | grep -ac 'Cpus_allowed_list:[[:space:]]*[0-9]*$')
+    [ "$n" = 12 ] \
+        && ok "broadcasting the bindings instead gives the same 12" \
+        || bad "$n/12 procs bound with odls_base_scatter_cpusets 0: $(echo "$out" | grep -a Cpus_allowed | tr '\n' ' ' | tail -c 300)"
+    cleanup_swarm
+
+    banner "odls: a daemon hosting none of a job's procs does not wait for a slice"
+    # The launch message goes to EVERY daemon; the slices go only to the
+    # daemons in the job's map.  A daemon with no procs of the job must
+    # therefore not park waiting for one - if it does, the launch never
+    # completes on it and the job hangs with nothing logged.
+    cleanup_swarm
+    if ! prted_dvm_start "node1:8,node2:8,node3:8,node4:8"; then
+        bad "could not start a DVM for the empty-slice test"
+    else
+        out=$(PRUN "--host node2:4 -n 4 --bind-to core --output tag \
+                    grep Cpus_allowed_list /proc/self/status" 2>&1)
+        rc=$?
+        n=$(echo "$out" | grep -ac 'Cpus_allowed_list:[[:space:]]*[0-9]*$')
+        [ "$rc" = 0 ] && [ "$n" = 4 ] \
+            && ok "a job on one node of a four-node DVM launched and bound" \
+            || bad "the job did not complete on a DVM with idle daemons (rc=$rc, $n/4 bound): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        # and the DVM is still usable afterwards - a daemon that parked a
+        # launch would still be holding it
+        out=$(PRUN "--host node3:2 -n 2 hostname" 2>&1)
+        [ $? = 0 ] && ok "a second job onto a different node still runs" \
+                   || bad "the DVM was left wedged: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        RUN "timeout -k 5 30 pterm --dvm-uri file:$PRTED_URI" >/dev/null 2>&1
     fi
     cleanup_swarm
 }

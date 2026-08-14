@@ -134,7 +134,7 @@ static int pack_proc_map(pmix_data_buffer_t *bkt, prte_job_t *job, prte_app_idx_
     return rc;
 }
 
-int prte_job_pack(pmix_data_buffer_t *bkt, prte_job_t *job)
+int prte_job_pack(pmix_data_buffer_t *bkt, prte_job_t *job, prte_job_pack_mode_t mode)
 {
     pmix_status_t rc;
     int32_t j, count, bookmark;
@@ -144,6 +144,16 @@ int prte_job_pack(pmix_data_buffer_t *bkt, prte_job_t *job)
     pmix_list_t *cache;
     prte_info_item_t *val;
     prte_node_t *nptr;
+
+    /* Lead with what this buffer contains.  The per-proc records are not
+     * always the same shape - the launch path scatters the cpusets - and the
+     * decoder has to know which one it is looking at before it reads the
+     * first of them.  One byte, once per job, ahead of everything else. */
+    rc = PMIx_Data_pack(NULL, bkt, &mode, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
 
     /* pack the nspace */
     rc = PMIx_Data_pack(NULL, bkt, (void *) &job->nspace, 1, PMIX_PROC_NSPACE);
@@ -324,7 +334,7 @@ int prte_job_pack(pmix_data_buffer_t *bkt, prte_job_t *job)
             if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(job->procs, j))) {
                 continue;
             }
-            rc = prte_proc_pack(bkt, proc);
+            rc = prte_proc_pack(bkt, proc, mode);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 return prte_pmix_convert_status(rc);
@@ -482,7 +492,7 @@ int prte_node_pack(pmix_data_buffer_t *bkt, prte_node_t *node)
 /*
  * PROC
  */
-int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc)
+int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc, prte_job_pack_mode_t mode)
 {
     pmix_status_t rc;
 
@@ -510,11 +520,19 @@ int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc)
         return prte_pmix_convert_status(rc);
     }
 
-    /* pack the cpuset */
-    rc = PMIx_Data_pack(NULL, bkt, (void *) &proc->cpuset, 1, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return prte_pmix_convert_status(rc);
+    /* The cpuset, unless it is being scattered.
+     *
+     * It is the largest of the three and the only one that is of no use to
+     * anybody but the daemon that forks the proc: node rank and state are
+     * read for procs this daemon does not host, the binding is not.  In
+     * PRTE_JOB_PACK_NO_CPUSETS mode it therefore travels to that daemon
+     * alone - see prte_odls_base_send_cpuset_slices(). */
+    if (PRTE_JOB_PACK_NO_CPUSETS != mode) {
+        rc = PMIx_Data_pack(NULL, bkt, (void *) &proc->cpuset, 1, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
+        }
     }
 
     /* NO ATTRIBUTE LIST GOES ON THE WIRE.

@@ -990,6 +990,21 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
         return;
     }
 
+    /* Send each daemon the part of the message addressed to it alone - the
+     * bindings of the procs it will fork.  Ahead of the broadcast, but only
+     * for tidiness: the two are independent messages on independent paths,
+     * the receiving daemon waits for whichever arrives second, and nothing
+     * here depends on which that is. */
+    if (prte_odls_globals.scatter_cpusets) {
+        rc = prte_odls_base_send_cpuset_slices(jdata);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
+            PMIX_RELEASE(caddy);
+            return;
+        }
+    }
+
     /* Goes to all daemons, on the launch message's own tag rather than the
      * general daemon-command tag. This is the one large broadcast PRRTE makes
      * on a regular basis, and naming it is what lets grpcomm move it by what

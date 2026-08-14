@@ -95,6 +95,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
+#include "src/mca/odls/base/base.h"
 #include "src/mca/odls/odls.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/base/base.h"
@@ -1120,6 +1121,10 @@ PRTE_EXPORT int prte(int argc, char *argv[])
      * prte_daemon_recv ignores the tag it was delivered on. */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON_LAUNCH,
                   PRTE_RML_PERSISTENT, prte_daemon_recv, NULL);
+    /* The half of the launch message addressed to us alone: the bindings
+     * of the procs we are about to fork. */
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LAUNCH_SLICE,
+                  PRTE_RML_PERSISTENT, prte_odls_base_recv_cpuset_slice, NULL);
 
     /* setup to capture job-level info */
     PMIX_INFO_LIST_START(jinfo);

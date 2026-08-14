@@ -590,9 +590,28 @@ PRTE_EXPORT prte_job_t *prte_get_job_data_object(const pmix_nspace_t job);
  */
 PRTE_EXPORT int prte_set_job_data_object(prte_job_t *jdata);
 
-/** Pack/unpack a job object */
-PRTE_EXPORT int prte_job_pack(pmix_data_buffer_t *bkt, prte_job_t *job);
-PRTE_EXPORT int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job);
+/** What a packed job carries.
+ *
+ * The launch message is broadcast to every daemon, but a proc's cpuset is
+ * of interest only to the daemon that will fork it - so the launch path
+ * leaves the cpusets out and sends each daemon its own slice point to
+ * point (prte_odls_base_send_cpuset_slices). Every other caller packs
+ * everything.
+ *
+ * The mode is packed at the head of the buffer so the decoder reads what
+ * is there rather than being told out of band; prte_job_unpack hands it
+ * back so the caller can tell "not sent" from "not bound".
+ */
+typedef uint8_t prte_job_pack_mode_t;
+#define PRTE_JOB_PACK_ALL        0 // everything, including each proc's cpuset
+#define PRTE_JOB_PACK_NO_CPUSETS 1 // cpusets are being scattered separately
+
+/** Pack/unpack a job object. "mode" may be NULL on the unpack if the
+ * caller does not care which shape arrived. */
+PRTE_EXPORT int prte_job_pack(pmix_data_buffer_t *bkt, prte_job_t *job,
+                              prte_job_pack_mode_t mode);
+PRTE_EXPORT int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job,
+                                prte_job_pack_mode_t *mode);
 PRTE_EXPORT int prte_job_copy(prte_job_t **dest, prte_job_t *src);
 PRTE_EXPORT void prte_job_print(char **output, prte_job_t *jdata);
 
@@ -603,8 +622,10 @@ PRTE_EXPORT int prte_app_copy(prte_app_context_t **dest, prte_app_context_t *src
 PRTE_EXPORT void prte_app_print(char **output, prte_job_t *jdata, prte_app_context_t *src);
 
 /** Pack/unpack a proc*/
-PRTE_EXPORT int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc);
-PRTE_EXPORT int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t *proc);
+PRTE_EXPORT int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc,
+                               prte_job_pack_mode_t mode);
+PRTE_EXPORT int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t *proc,
+                                 prte_job_pack_mode_t mode);
 PRTE_EXPORT int prte_proc_copy(prte_proc_t **dest, prte_proc_t *src);
 PRTE_EXPORT void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src);
 
