@@ -65,6 +65,7 @@
 #include "src/util/prte_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
+#include "src/mca/odls/base/base.h"
 #include "src/grpcomm/grpcomm.h"
 #include "src/mca/ras/base/base.h"
 #include "src/mca/state/state.h"
@@ -1541,6 +1542,15 @@ static bool answer_from_job(prte_job_t *jdata, prte_proc_t *proc,
     pmix_status_t prc;
 
     if (NULL == key || !prte_pmix_server_derivable_key(key)) {
+        return false;
+    }
+    /* The bindings arrive separately from the rest of the launch message,
+     * and until ours land we cannot say where our own procs are bound -
+     * deriving now would answer "nowhere", which is a different thing.
+     * Returning false parks the request on the retry cycle, which comes
+     * back through here once the slice has been applied. */
+    if ((PMIx_Check_key(key, PMIX_CPUSET) || PMIx_Check_key(key, PMIX_LOCALITY_STRING)) &&
+        NULL == proc->cpuset && prte_odls_base_awaiting_cpusets(jdata->nspace)) {
         return false;
     }
     PMIX_DATA_BUFFER_CONSTRUCT(&dbuf);

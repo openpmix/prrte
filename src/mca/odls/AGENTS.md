@@ -245,6 +245,8 @@ message cost per proc before any of this. `plm_base_verbose 2` prints the
 size; `--rtos donotlaunch` will size a job of any shape without launching
 it.
 
+**And the cpuset does not go in this message at all** — see 2a below.
+
 It then calls `PMIx_server_setup_application()` **asynchronously and does
 not wait**. It returns `PRTE_SUCCESS` immediately, having handed a
 `prte_odls_jcaddy_t` to PMIx; the completion callback `setup_cbfunc()`
@@ -255,6 +257,68 @@ activates `PRTE_JOB_STATE_SEND_LAUNCH_MSG` — which is what actually
 continues the launch. **Nothing blocks**: a `PRTE_SUCCESS` return here
 means "the callback will fire", and an error return means it never will
 (the caddy is released on the spot).
+
+### 2a. The half addressed to one daemon — `prte_odls_base_send_cpuset_slices()`
+
+A proc's binding is read by exactly one daemon, the one that forks it, and
+it is the largest of the three things a proc still costs the launch message
+(~6 B/proc raw on a 176-core node, ~40% of the message). Broadcasting it
+put every daemon's bindings on every link of the tree. So the launch message
+is packed `PRTE_JOB_PACK_NO_CPUSETS` and each daemon is sent its own
+bindings point to point, from `prte_plm_base_send_launch_msg()` immediately
+before the broadcast. No new data movement was needed: `prte_rml_get_route()`
+sends each one toward its target, so the bytes leaving the master are the
+*sum* of the slices rather than the sum replicated per daemon.
+
+The slice is `nspace`, a count, and then `(rank, cpuset)` per proc. **The
+rank is carried, not implied by position** — the receiver would otherwise
+have to reproduce the order the sender's loop happened to walk in, and
+getting that wrong binds processes to each other's cpus without failing
+anywhere.
+
+**The two halves are independent messages and arrive in either order.**
+Neither order is the rare one — the broadcast takes more hops, the slices
+are sent one at a time — so both are handled the same way, by a rendezvous
+on `prte_odls_globals.pending_slices`: whichever arrives first parks, and
+whichever arrives second finds it and completes the launch.
+`construct_child_list` therefore does **not** always register the nspace
+before it returns; when it parks, `prte_odls_base_recv_cpuset_slice()` is
+what calls `start_registration()` later. Both run on `prte_event_base`, so
+the list needs no lock.
+
+Three cases that must not wait, and each is a hang if you get it wrong:
+
+- **the master**, which keeps its own fully populated job object and is
+  never sent a slice;
+- **a daemon hosting none of the job's procs** — the broadcast reaches every
+  daemon, the slices only the ones in the map. It has nothing to bind, so
+  it waits for nothing (and discards anything parked for that job);
+- **`PRTE_JOB_PACK_ALL`**, the shape a spawn request and the job catchup
+  use, where the cpusets were in the buffer all along. The receiver keys off
+  the mode byte it unpacked, not off its own MCA parameter, so a daemon can
+  never wait for a slice the master did not send.
+
+`--prtemca odls_base_scatter_cpusets 0` turns it off and broadcasts the
+bindings as before; it is an A/B switch, not a supported difference in
+behavior.
+
+**What this costs:** a daemon no longer *holds* the binding of a proc it
+does not host, so a `PMIx_Get` for a remote proc's `PMIX_CPUSET` or
+`PMIX_LOCALITY_STRING` becomes a direct modex to the daemon that does -
+which answers it out of its own job object without waiting on the process.
+The value is unchanged; what it costs is one round trip, once, since PMIx
+caches the reply. Nothing else on a proc is affected, and a proc on the
+asker's own node - the only place a locality string means anything - is
+held locally as before.
+
+**Three states that had to be told apart** to make that referral safe, and
+the whole of [`src/prted/pmix/AGENTS.md`](../../prted/pmix/AGENTS.md)'s
+dmodex section is about them. The hosting daemon may not have the answer
+*yet* (its own slice is still in flight - `prte_odls_base_awaiting_cpusets()`
+says so, and the request waits); it may never have it *again* (its share of
+the job finished and it released the job object - it answers NOT_FOUND);
+or it may simply not have been reached by the launch message yet (it waits).
+Confusing the second with the third is a hang with nothing logged.
 
 ### 3. Parsing the message and wiring up — `prte_odls_base_default_construct_child_list()`
 

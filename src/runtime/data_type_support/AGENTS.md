@@ -89,6 +89,40 @@ the attributes are the proc's own. That is ~13 bytes a proc against the ~25
 the full record cost, on top of the ~46 it cost before the namespace was
 hoisted out of it.
 
+### The buffer says which shape it is: `prte_job_pack_mode_t`
+
+Not every caller packs the same record. The launch message is broadcast to
+every daemon, but a proc's **cpuset** is read only by the daemon that forks
+it, so the launch path packs `PRTE_JOB_PACK_NO_CPUSETS` and sends each
+daemon its own bindings point to point
+(`prte_odls_base_send_cpuset_slices()`, see
+[`src/mca/odls/AGENTS.md`](../../mca/odls/AGENTS.md)). Everything else packs
+`PRTE_JOB_PACK_ALL`.
+
+The mode is **one byte at the head of the buffer**, ahead of the nspace, and
+`prte_job_unpack` hands it back through an out parameter. Two reasons it is
+on the wire rather than agreed out of band:
+
+- The decoder must know before it reads the first per-proc record. Getting
+  it wrong does not fail — it reads the next proc's node rank as this one's
+  cpuset and desynchronizes everything after.
+- The receiver has to tell **"not sent" from "not bound"**. A NULL cpuset
+  means the mapper bound nothing when the mode is `ALL`, and means "this is
+  not my proc" when it is `NO_CPUSETS`, and the two have different right
+  answers everywhere downstream — see
+  [`src/prted/pmix/AGENTS.md`](../../prted/pmix/AGENTS.md).
+
+A *conditional trailing field* was tried instead and does not work:
+`prte_proc_pack` runs in a loop and more job-level fields follow the array,
+so an absent field is ambiguous against both, and `PMIX_ERR_UNPACK_PAST_END`
+never fires because there is always more buffer. Any optional field needs a
+discriminator the decoder has already read.
+
+**`prte_util_pack_job_catchup` also packs `NO_CPUSETS`,** and that is not an
+optimization by analogy: the catchup decoder *discards* a job it already
+knows, so the only daemon that keeps what that message says is one that was
+not in the DVM when the job launched — which hosts none of its procs.
+
 Two consequences to respect:
 
 - **`prte_proc_unpack` no longer creates the proc.** `prte_job_unpack` has

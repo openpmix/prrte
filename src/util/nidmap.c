@@ -740,8 +740,14 @@ int prte_util_pack_job_catchup(pmix_data_buffer_t *buffer, prte_job_t *exclude)
         /* prte_job_pack carries the job's node and proc maps, from which the
          * receiver rebuilds each proc's rank and hosting daemon - which is
          * why this has to be decoded after the nidmap above, and why the
-         * launch message's second copy of the parent vpid was redundant */
-        rc = prte_job_pack(buffer, jptr);
+         * launch message's second copy of the parent vpid was redundant.
+         *
+         * No cpusets: the only daemon that keeps what this message says is
+         * one that did not already know the job (the decoder discards a job
+         * it has), and a daemon that was not in the DVM when the job was
+         * launched hosts none of its procs.  So the bindings would be
+         * carried to the one place that cannot use them. */
+        rc = prte_job_pack(buffer, jptr, PRTE_JOB_PACK_NO_CPUSETS);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             return rc;
@@ -780,7 +786,7 @@ int prte_util_decode_job_catchup(pmix_data_buffer_t *buffer)
 
     for (n = 0; n < njobs; n++) {
         jptr = NULL;
-        rc = prte_job_unpack(buffer, &jptr);
+        rc = prte_job_unpack(buffer, &jptr, NULL);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             return rc;

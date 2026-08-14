@@ -523,7 +523,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
 
         /* unpack the job object */
         count = 1;
-        rc = prte_job_unpack(buffer, &jdata);
+        rc = prte_job_unpack(buffer, &jdata, NULL);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             goto ANSWER_LAUNCH;

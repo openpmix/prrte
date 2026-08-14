@@ -106,32 +106,51 @@ goes through the same parser and is not separately covered.
 Performance work not landed
 ---------------------------
 
-**Lazy proc-data registration.**
-``prte_pmix_server_register_nspace`` publishes a PMIx proc-data entry for
-*every* proc in the job on *every* daemon — a table that grows with the whole
-job on a node running a fixed slice of it.  An experimental branch registers
-only the procs a daemon hosts and derives the rest on demand in
-``dmodex_req``.  It is **written but unproven**, and it is stacked on the
-xcast-shared-payload work rather than on a clean master, so it needs a rebase
-before it can even be measured.  The rule it must keep to: switch on what
-PRRTE is the *authority* for (the placement and binding it decided, a closed
-set), never on what an application is expected to ask for.
+**Lazy proc-data registration is only half landed.**  The *deriving* half is
+in: ``dmodex_req`` answers a request for one of the placement keys out of
+``jdata->procs[rank]`` rather than going to the hosting daemon
+(``prte_pmix_lazy_procdata``, on by default).  The *withholding* half is not.
+``prte_pmix_server_register_nspace`` still publishes a PMIx proc-data entry
+for **every** proc in the job on **every** daemon — a table that grows with
+the whole job on a node running a fixed slice of it, and
+``prte_hostname_cutoff`` is the record of that wall having been met once
+already.  Only the two location keys are now withheld, and for a different
+reason (see below).  Narrowing the rest is what the commit message claims
+and the code does not do.
 
-**Scatter the launch message's per-proc cpuset.**  Placement already travels
-as a node map plus a proc map per app, and lazy proc-data registration has
-landed, so what still goes to every daemon is a per-proc record of what the
-maps cannot say: node rank, state and the cpuset.  The remaining idea is to
-send that residual only to the daemon that will fork the proc — common part
-broadcast as now, per-destination slice routed point to point.  It needs no
-new broadcast movement: ``prte_rml_get_route`` aggregates N routed sends in
-the tree, so the bytes leaving the controller are the sum of the slices
-rather than the sum replicated.
+The rule it must keep to: switch on what PRRTE is the *authority* for (the
+placement and binding it decided, a closed set), never on what an
+application is expected to ask for.  And the thing to measure first is
+whether a **partial** entry is even usable — whether a get for a key absent
+from a published proc-data array still reaches the host, or whether PMIx
+treats the array as the complete answer for that rank.  Nothing here
+currently depends on that (the two location keys are withheld from *remote*
+procs only, and a remote proc's locality is a question almost nobody asks),
+but withholding the rest would.  ``contrib/dockerswarm/peerinfo.c`` is the
+probe: every rank asks every other rank in its job where it is.
 
-**Judge it on wire bytes, not on the raw message size.**  That distinction is
-the whole reason this entry is worth reading.  ``--rtos donotlaunch`` reports
-the *raw* buffer, and the xcast compresses before it forwards, so a raw
-figure can overstate the prize by a factor of three — and a field that holds
-the same value in every record can compress away to nothing while looking
+**Aggregate the launch-message cpuset slices per next hop.**  The scatter
+itself has landed: the launch message is packed ``PRTE_JOB_PACK_NO_CPUSETS``
+and each daemon is sent the bindings of the procs it will fork, point to
+point (``prte_odls_base_send_cpuset_slices``).  Measured with ``--rtos
+donotlaunch`` at 1000 x 128 on a 176-core, 5-NUMA topology, that takes the
+raw launch message from **1,622,647 to 602,647 bytes** — 8 B/proc, 63% of
+what was left after the maps and the empty attribute list came out.
+
+What is left to do is how those slices leave the master.  Today it is one
+routed send per daemon: the *bytes* aggregate, because
+``prte_rml_get_route`` sends each toward its target and the tree carries a
+subtree's slices over one link, but the *messages* do not — a 1000-node job
+posts 1000 sends from the master on the launch path.  Sending one message
+per next hop, each carrying the slices for that child's whole subtree, and
+having the relay split it, makes that O(radix) per daemon instead.  It needs
+a relay step the point-to-point form does not.
+
+**Judge this kind of change on wire bytes, not on the raw message size.**
+The figures above are raw, which is the right unit for "how much buffer does
+the master build and deflate" and the wrong one for "how much crosses the
+network": the xcast compresses before it forwards, and a field holding the
+same value in every record can compress away to nothing while looking
 enormous raw.  Measured on a live 32-node broadcast at 8 ppn
 (``grpcomm_base_verbose 1``, tag 18 is the launch message):
 
@@ -146,16 +165,10 @@ cpuset (core vs none)  2.0 B/proc   0.77 B/proc   0.40
 **The cpuset does not compress away, and more repetition does not help it.**
 Its marginal wire cost held flat — 0.766, 0.742, 0.797 B/proc — across 8, 16
 and 32 nodes, i.e. a fourfold increase in how often the same handful of
-cpuset strings recur.  The overall ratio improves with scale (0.42 → 0.34)
-only because the fixed job-level part amortizes.  So the marginal ratio of
-~0.4 is the number to extrapolate with, and at 1000 x 128 — where the cpuset
-is 5.97 B/proc raw on a 176-core, 5-NUMA node — that is roughly 2.3 B/proc,
-or **~295 KB of an estimated ~535 KB wire launch message.**  About half.
-That is what makes the change worth its cost, and the cost is real: the
-message stops being one payload delivered identically, the receiver handles
-two pieces with an ordering constraint, an elastic grow needs the joining
-daemon's slice, and ``prte_job_pack``/``_unpack`` are hand-written mirrors
-with no version and nothing that catches a half-done edit.
+cpuset strings recur.  The overall ratio improves with scale (0.42 -> 0.34)
+only because the fixed job-level part amortizes.  So ~0.4 is the marginal
+ratio to extrapolate with, and it is what said the scatter was worth
+building before it was built.
 
 **Do not model this instead of measuring it.**  A synthetic model of the
 per-proc region — the right fields, the right varint encoding, a faithful
@@ -176,14 +189,17 @@ per-proc region does not exist in isolation on the wire.
   ``RESTART`` identically, so the wire never needs to tell them apart.  It is
   ~2 B/proc raw and varint-squashed, and it genuinely varies for the *job
   catchup* caller, which packs already-running jobs whose proc states feed
-  ``PMIX_QUERY_PROC_TABLE``.  Leave it alone.
+  ``PMIX_QUERY_PROC_TABLE``.  Leave it alone.  The **node rank** is likewise
+  staying in the broadcast: a remote node-rank get that falls through to
+  PMIx's one-job-per-node assumption returns a *wrong* value rather than
+  nothing.
 * *An optional trailing field per proc does not work.*  ``prte_proc_pack``
   runs in a loop and more job fields follow the array, so an absent flag is
   ambiguous both against the next proc's first field and against
   ``stdin_target``; ``PMIX_ERR_UNPACK_PAST_END`` never fires because there is
   always more buffer.  Any conditional field needs a discriminator the
-  decoder has already read — the job flags are packed first and are the
-  obvious candidate.
+  decoder has already read — which is why the shape is now declared by a
+  mode byte at the head of the buffer.
 
 **Measuring the launch message at all takes three settings**, and each one
 silently gives a wrong answer if omitted: ``--prtemca hwloc_use_topo_file``

@@ -242,8 +242,15 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
      * message the master sends at VM_READY - see prte_util_pack_job_catchup.
      */
 
-    /* pack the job struct */
-    rc = prte_job_pack(buffer, jdata);
+    /* Pack the job struct.
+     *
+     * Without the cpusets, if we are scattering them: this buffer is
+     * broadcast to every daemon, and a proc's binding is read only by the
+     * daemon that forks it.  Each daemon's own bindings follow separately
+     * from prte_odls_base_send_cpuset_slices() below. */
+    rc = prte_job_pack(buffer, jdata,
+                       prte_odls_globals.scatter_cpusets ? PRTE_JOB_PACK_NO_CPUSETS
+                                                         : PRTE_JOB_PACK_ALL);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return rc;
@@ -495,6 +502,350 @@ static void _job_reg_complete(pmix_status_t status, void *cbdata)
     job_reg_join(cd);
 }
 
+/* Register the nspace and start the launch.  Reached either straight from
+ * construct_child_list or, when this daemon's cpuset slice had not arrived
+ * by then, from the receiver that completes it. */
+static void start_registration(prte_odls_jcaddy_t *cd)
+{
+    int rc;
+
+    /* register this job with the PMIx server. We have to wait until
+     * after we computed the #local_procs before registering it. The
+     * registration completes asynchronously, and the launch proceeds
+     * once it has reported. Hold a sentinel on the join so it cannot
+     * fire before we finish initiating the registration */
+    cd->pending = 1;
+    rc = prte_pmix_server_register_nspace(cd->jdata, _job_reg_complete, cd);
+    if (PRTE_SUCCESS == rc) {
+        cd->pending++;
+    } else {
+        PRTE_ERROR_LOG(rc);
+        cd->rstatus = PMIX_ERROR;
+    }
+    /* release our sentinel - if everything already reported,
+     * this progresses the launch */
+    job_reg_join(cd);
+}
+
+/*
+ * The launch message's cpuset slice.
+ *
+ * A proc's binding is read by exactly one daemon - the one that forks it -
+ * and it is the largest of the three things a proc costs the launch
+ * message.  Broadcasting it put every daemon's bindings on every link of
+ * the tree; sending each daemon its own costs the tree the sum of the
+ * slices instead of the sum times the number of daemons they pass.
+ *
+ * The two halves are independent messages, so they arrive in either order,
+ * and neither order is the rare one: the broadcast has more hops but the
+ * slices are sent one at a time from the master.  Whichever comes second
+ * finds the other waiting on this list and completes the launch.  A daemon
+ * that hosts none of the job's procs is sent no slice and waits for none.
+ */
+typedef struct {
+    pmix_list_item_t super;
+    pmix_nspace_t nspace;
+    /* exactly one of these is set: the slice arrived first, or the
+     * launch did */
+    pmix_data_buffer_t *slice;
+    prte_odls_jcaddy_t *cd;
+} prte_odls_slice_t;
+static void slcon(prte_odls_slice_t *p)
+{
+    PMIX_LOAD_NSPACE(p->nspace, NULL);
+    p->slice = NULL;
+    p->cd = NULL;
+}
+static void sldes(prte_odls_slice_t *p)
+{
+    if (NULL != p->slice) {
+        PMIX_DATA_BUFFER_RELEASE(p->slice);
+    }
+}
+static PMIX_CLASS_INSTANCE(prte_odls_slice_t, pmix_list_item_t, slcon, sldes);
+
+static prte_odls_slice_t *slice_find(const pmix_nspace_t nspace)
+{
+    prte_odls_slice_t *sl;
+
+    PMIX_LIST_FOREACH(sl, &prte_odls_globals.pending_slices, prte_odls_slice_t)
+    {
+        if (PMIX_CHECK_NSPACE(sl->nspace, nspace)) {
+            return sl;
+        }
+    }
+    return NULL;
+}
+
+/* drop anything parked for a job we are not going to launch after all */
+static void slice_discard(const pmix_nspace_t nspace)
+{
+    prte_odls_slice_t *sl;
+
+    sl = slice_find(nspace);
+    if (NULL != sl) {
+        pmix_list_remove_item(&prte_odls_globals.pending_slices, &sl->super);
+        PMIX_RELEASE(sl);
+    }
+}
+
+/* read one slice into the job's procs */
+static int apply_cpuset_slice(prte_job_t *jdata, pmix_data_buffer_t *buffer)
+{
+    pmix_status_t rc;
+    int32_t cnt, n, nprocs;
+    pmix_rank_t rank;
+    char *cpuset;
+    prte_proc_t *proc;
+
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &nprocs, &cnt, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    for (n = 0; n < nprocs; n++) {
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, buffer, &rank, &cnt, PMIX_PROC_RANK);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
+        }
+        cpuset = NULL;
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, buffer, &cpuset, &cnt, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
+        }
+        proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, (int) rank);
+        if (NULL == proc) {
+            /* the slice and the job it belongs to disagree about which
+             * procs exist - the two are packed from the same job object on
+             * the same daemon, so this cannot be a routine race */
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            if (NULL != cpuset) {
+                free(cpuset);
+            }
+            return PRTE_ERR_NOT_FOUND;
+        }
+        if (NULL != proc->cpuset) {
+            free(proc->cpuset);
+        }
+        proc->cpuset = cpuset; // the proc owns it now
+    }
+
+    return PRTE_SUCCESS;
+}
+
+int prte_odls_base_send_cpuset_slices(prte_job_t *jdata)
+{
+    prte_node_t *node;
+    prte_proc_t *pptr;
+    pmix_data_buffer_t *buf;
+    pmix_status_t rc;
+    int i, k;
+    int32_t nprocs;
+
+    if (NULL == jdata->map) {
+        return PRTE_SUCCESS;
+    }
+
+    for (i = 0; i < jdata->map->nodes->size; i++) {
+        node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, i);
+        if (NULL == node) {
+            continue;
+        }
+        if (NULL == node->daemon) {
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            return PRTE_ERR_NOT_FOUND;
+        }
+        if (node->daemon->name.rank == PRTE_PROC_MY_NAME->rank) {
+            /* our own procs are already bound in our own job object -
+             * construct_child_list keeps that copy and discards the
+             * unpacked one */
+            continue;
+        }
+
+        /* count first: the receiver reads a count rather than unpacking
+         * until the buffer runs out, because it has no way to tell the end
+         * of the slice from a short read */
+        nprocs = 0;
+        for (k = 0; k < node->procs->size; k++) {
+            pptr = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, k);
+            if (NULL == pptr || !PMIX_CHECK_NSPACE(jdata->nspace, pptr->name.nspace)) {
+                continue;
+            }
+            ++nprocs;
+        }
+
+        PMIX_DATA_BUFFER_CREATE(buf);
+        rc = PMIx_Data_pack(NULL, buf, &jdata->nspace, 1, PMIX_PROC_NSPACE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            return prte_pmix_convert_status(rc);
+        }
+        rc = PMIx_Data_pack(NULL, buf, &nprocs, 1, PMIX_INT32);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            return prte_pmix_convert_status(rc);
+        }
+        for (k = 0; k < node->procs->size; k++) {
+            pptr = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, k);
+            if (NULL == pptr || !PMIX_CHECK_NSPACE(jdata->nspace, pptr->name.nspace)) {
+                continue;
+            }
+            /* the rank is carried rather than implied by position: the
+             * receiver would otherwise have to reproduce the order this
+             * loop happens to walk in, and getting that wrong would bind
+             * procs to each other's cpus without failing anywhere */
+            rc = PMIx_Data_pack(NULL, buf, &pptr->name.rank, 1, PMIX_PROC_RANK);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(buf);
+                return prte_pmix_convert_status(rc);
+            }
+            rc = PMIx_Data_pack(NULL, buf, &pptr->cpuset, 1, PMIX_STRING);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(buf);
+                return prte_pmix_convert_status(rc);
+            }
+        }
+
+        PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
+                             "%s odls:launch_msg slice %lu bytes (%d procs) to %s",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             (unsigned long) buf->bytes_used, nprocs,
+                             PRTE_NAME_PRINT(&node->daemon->name)));
+
+        PRTE_RML_SEND(rc, node->daemon->name.rank, buf, PRTE_RML_TAG_LAUNCH_SLICE);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            return rc;
+        }
+    }
+
+    return PRTE_SUCCESS;
+}
+
+void prte_odls_base_recv_cpuset_slice(int status, pmix_proc_t *sender,
+                                      pmix_data_buffer_t *buffer,
+                                      prte_rml_tag_t tag, void *cbdata)
+{
+    pmix_nspace_t nspace;
+    pmix_status_t rc;
+    int32_t cnt;
+    prte_odls_slice_t *sl;
+    prte_odls_jcaddy_t *cd;
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
+
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &nspace, &cnt, PMIX_PROC_NSPACE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+
+    sl = slice_find(nspace);
+    if (NULL == sl || NULL == sl->cd) {
+        /* we are first - park the payload for the launch to collect.
+         * PMIx_Data_copy_payload takes what has not been unpacked yet,
+         * which is the slice proper */
+        if (NULL == sl) {
+            sl = PMIX_NEW(prte_odls_slice_t);
+            PMIX_LOAD_NSPACE(sl->nspace, nspace);
+            pmix_list_append(&prte_odls_globals.pending_slices, &sl->super);
+        } else {
+            /* a second slice for a job whose first is still parked - the
+             * master sends one per daemon per job, so this is a bug
+             * somewhere, not a race.  Keep the first. */
+            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+            return;
+        }
+        PMIX_DATA_BUFFER_CREATE(sl->slice);
+        rc = PMIx_Data_copy_payload(sl->slice, buffer);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            pmix_list_remove_item(&prte_odls_globals.pending_slices, &sl->super);
+            PMIX_RELEASE(sl);
+        }
+        return;
+    }
+
+    /* the launch got here first and is parked on this entry */
+    cd = sl->cd;
+    pmix_list_remove_item(&prte_odls_globals.pending_slices, &sl->super);
+    PMIX_RELEASE(sl);
+
+    rc = apply_cpuset_slice(cd->jdata, buffer);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        /* the procs would launch unbound, or bound to somebody else's
+         * cpus - report rather than proceed */
+        PRTE_ACTIVATE_JOB_STATE(cd->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
+        PMIX_RELEASE(cd);
+        return;
+    }
+    start_registration(cd);
+}
+
+bool prte_odls_base_awaiting_cpusets(const pmix_nspace_t nspace)
+{
+    prte_odls_slice_t *sl;
+
+    sl = slice_find(nspace);
+    /* an entry holding a parked launch is one waiting for its slice; an
+     * entry holding a slice is the other way round, and that daemon has no
+     * job object yet, so nobody can be asking it anything */
+    return (NULL != sl && NULL != sl->cd);
+}
+
+/* Returns true if this daemon's bindings are in hand and the launch can go
+ * on, false if the caddy has been parked to await them. */
+static bool slice_rendezvous(prte_odls_jcaddy_t *cd)
+{
+    prte_odls_slice_t *sl;
+    int rc;
+
+    sl = slice_find(cd->jdata->nspace);
+    if (NULL == sl) {
+        /* we are first */
+        sl = PMIX_NEW(prte_odls_slice_t);
+        PMIX_LOAD_NSPACE(sl->nspace, cd->jdata->nspace);
+        sl->cd = cd;
+        pmix_list_append(&prte_odls_globals.pending_slices, &sl->super);
+        PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+                             "%s odls:construct_child_list awaiting cpuset slice for %s",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             PRTE_JOBID_PRINT(cd->jdata->nspace)));
+        return false;
+    }
+
+    /* the slice beat us here - unless what is parked is another launch of
+     * this same job, which the master does not do and which would leave us
+     * dereferencing a slice that was never stored */
+    pmix_list_remove_item(&prte_odls_globals.pending_slices, &sl->super);
+    if (NULL == sl->slice) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        rc = PRTE_ERR_BAD_PARAM;
+    } else {
+        rc = apply_cpuset_slice(cd->jdata, sl->slice);
+    }
+    PMIX_RELEASE(sl);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PRTE_ACTIVATE_JOB_STATE(cd->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
+        PMIX_RELEASE(cd);
+        return false;
+    }
+    return true;
+}
+
 int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix_nspace_t *job,
                                                 prte_odls_base_fork_local_proc_fn_t fork_local)
 {
@@ -514,6 +865,7 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
     size_t m;
     pmix_envar_t envt;
     char *tmp;
+    prte_job_pack_mode_t mode = PRTE_JOB_PACK_ALL;
 
     PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                          "%s odls:constructing child list", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -531,7 +883,7 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
      * prte_util_decode_job_catchup. */
 
     /* unpack the job we are to launch */
-    rc = prte_job_unpack(buffer, &jdata);
+    rc = prte_job_unpack(buffer, &jdata, &mode);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         goto REPORT_ERROR;
@@ -768,27 +1120,35 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
     cd->fork_local = fork_local;
     info = NULL; // the caddy now owns the info array
 
-    /* register this job with the PMIx server. We have to wait until
-     * after we computed the #local_procs before registering it. The
-     * registration completes asynchronously, and the launch proceeds
-     * once it has reported. Hold a sentinel on the join so it cannot
-     * fire before we finish initiating the registration */
-    cd->pending = 1;
-    rc = prte_pmix_server_register_nspace(jdata, _job_reg_complete, cd);
-    if (PRTE_SUCCESS == rc) {
-        cd->pending++;
-    } else {
-        PRTE_ERROR_LOG(rc);
-        cd->rstatus = PMIX_ERROR;
+    /* Our procs' bindings came separately, and may not be here yet.
+     *
+     * The master is never sent one - it kept its own fully-populated job
+     * object above - and neither is a daemon hosting none of this job's
+     * procs, which has nothing to bind and nothing to wait for.  Anything
+     * parked for such a daemon is a slice for a job it will not launch;
+     * drop it rather than leave it on the list. */
+    if (PRTE_JOB_PACK_NO_CPUSETS == mode && !PRTE_PROC_IS_MASTER) {
+        if (0 < jdata->num_local_procs) {
+            if (!slice_rendezvous(cd)) {
+                /* parked - the slice's receiver takes it from here, and
+                 * has released the caddy if it failed */
+                return PRTE_SUCCESS;
+            }
+        } else {
+            slice_discard(jdata->nspace);
+        }
     }
-    /* release our sentinel - if everything already reported,
-     * this progresses the launch */
-    job_reg_join(cd);
+
+    start_registration(cd);
     return PRTE_SUCCESS;
 
 REPORT_ERROR:
     if (NULL != info) {
         PMIX_INFO_FREE(info, ninfo);
+    }
+    if (NULL != jdata) {
+        /* nobody is going to collect a slice for a job we are failing */
+        slice_discard(jdata->nspace);
     }
     /* NB: "jdata" is either NULL (we failed before unpacking the job we
      * were told to launch) or that job - never one of the prior jobs

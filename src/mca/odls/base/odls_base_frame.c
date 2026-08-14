@@ -80,7 +80,9 @@ prte_odls_globals_t prte_odls_globals = {
     .ev_threads = NULL,
     .next_base = 0,
     .signal_direct_children_only = false,
-    .exec_agent = NULL
+    .exec_agent = NULL,
+    .scatter_cpusets = true,
+    .pending_slices = PMIX_LIST_STATIC_INIT
 };
 
 static prte_event_base_t **prte_event_base_ptr = NULL;
@@ -121,6 +123,13 @@ static int prte_odls_base_register(pmix_mca_base_register_flag_t flags)
                                       "Command used to exec application processes [default: NULL]",
                                       PMIX_MCA_BASE_VAR_TYPE_STRING,
                                       &prte_odls_globals.exec_agent);
+
+    prte_odls_globals.scatter_cpusets = true;
+    (void) pmix_mca_base_var_register("prte", "odls", "base", "scatter_cpusets",
+                                      "Send each daemon the bindings of the procs it will launch, "
+                                      "rather than broadcasting every proc's binding to every daemon",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_odls_globals.scatter_cpusets);
 
     return PRTE_SUCCESS;
 }
@@ -242,6 +251,10 @@ static int prte_odls_base_close(void)
     }
     PMIX_DESTRUCT(&prte_odls_globals.xterm_ranks);
 
+    /* anything still here is a launch that never completed, or a slice for
+     * one - PMIX_DESTRUCT would leave the items themselves behind */
+    PMIX_LIST_DESTRUCT(&prte_odls_globals.pending_slices);
+
     /* cleanup the global list of local children and job data */
     for (i = 0; i < prte_local_children->size; i++) {
         if (NULL != (proc = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i))) {
@@ -277,6 +290,7 @@ static int prte_odls_base_open(pmix_mca_base_open_flag_t flags)
 
     /* initialize ODLS globals */
     PMIX_CONSTRUCT(&prte_odls_globals.xterm_ranks, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_odls_globals.pending_slices, pmix_list_t);
     prte_odls_globals.xtermcmd = NULL;
 
     /* ensure that SIGCHLD is unblocked as we need to capture it */

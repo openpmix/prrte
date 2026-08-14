@@ -168,7 +168,7 @@ static void spawn(int sd, short args, void *cbdata)
     }
 
     /* pack the jdata object */
-    rc = prte_job_pack(buf, req->jdata);
+    rc = prte_job_pack(buf, req->jdata, PRTE_JOB_PACK_ALL);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);

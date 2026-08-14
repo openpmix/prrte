@@ -65,6 +65,11 @@ typedef struct {
     int next_base;                // counter to load-level thread use
     bool signal_direct_children_only;
     char *exec_agent;
+    /* send each daemon its own procs' bindings instead of broadcasting
+     * everybody's to everybody */
+    bool scatter_cpusets;
+    /* launches and cpuset slices that are waiting for each other */
+    pmix_list_t pending_slices;
 } prte_odls_globals_t;
 
 PRTE_EXPORT extern prte_odls_globals_t prte_odls_globals;
@@ -92,6 +97,24 @@ PRTE_EXPORT int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *da
 PRTE_EXPORT int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *data,
                                                             pmix_nspace_t *job,
                                                             prte_odls_base_fork_local_proc_fn_t fork_local);
+
+/* Send each daemon in the job's map the bindings of the procs it is about
+ * to fork - the part of the launch message that is of no use to anybody
+ * else.  Called on the master, immediately before the launch message is
+ * broadcast; the two arrive in either order and the receiver waits for
+ * whichever is second. */
+PRTE_EXPORT int prte_odls_base_send_cpuset_slices(prte_job_t *jdata);
+
+/* True while this daemon holds the job but has not yet been sent the
+ * bindings of the procs it will fork.  A binding question about one of them
+ * has no answer yet - and "no cpuset" would be the wrong one. */
+PRTE_EXPORT bool prte_odls_base_awaiting_cpusets(const pmix_nspace_t nspace);
+
+/* Receive one - registered on PRTE_RML_TAG_LAUNCH_SLICE by every daemon,
+ * including the master (which never receives one). */
+PRTE_EXPORT void prte_odls_base_recv_cpuset_slice(int status, pmix_proc_t *sender,
+                                                  pmix_data_buffer_t *buffer,
+                                                  prte_rml_tag_t tag, void *cbdata);
 
 PRTE_EXPORT void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata);
 

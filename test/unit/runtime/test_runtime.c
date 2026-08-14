@@ -692,6 +692,8 @@ static int test_pack_roundtrip(void)
     prte_job_t *src, *dst = NULL;
     prte_app_context_t *app, *app2;
     prte_proc_t *proc;
+    prte_job_map_t *saved_map;
+    prte_job_pack_mode_t mode = PRTE_JOB_PACK_NO_CPUSETS;
     char *sval = NULL;
     int rc;
 
@@ -772,11 +774,12 @@ static int test_pack_roundtrip(void)
     src->map->num_nodes = 1;
 
     PMIX_DATA_BUFFER_CONSTRUCT(&buf);
-    rc = prte_job_pack(&buf, src);
+    rc = prte_job_pack(&buf, src, PRTE_JOB_PACK_ALL);
     CHECK("wire: job packs", PRTE_SUCCESS == rc);
     if (PRTE_SUCCESS == rc) {
-        rc = prte_job_unpack(&buf, &dst);
+        rc = prte_job_unpack(&buf, &dst, &mode);
         CHECK("wire: job unpacks", PRTE_SUCCESS == rc && NULL != dst);
+        CHECK("wire: the pack mode round-trips", PRTE_JOB_PACK_ALL == mode);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&buf);
 
@@ -855,12 +858,14 @@ static int test_pack_roundtrip(void)
     }
 
     /* a job with no map packs a flag instead, and unpacks with map == NULL */
+    saved_map = src->map;
+    PMIX_RETAIN(saved_map);
     PMIX_RELEASE(src->map);
     src->map = NULL;
     dst = NULL;
     PMIX_DATA_BUFFER_CONSTRUCT(&buf);
-    if (PRTE_SUCCESS == prte_job_pack(&buf, src)) {
-        rc = prte_job_unpack(&buf, &dst);
+    if (PRTE_SUCCESS == prte_job_pack(&buf, src, PRTE_JOB_PACK_ALL)) {
+        rc = prte_job_unpack(&buf, &dst, NULL);
         CHECK("wire: a mapless job round-trips", PRTE_SUCCESS == rc && NULL != dst);
         if (NULL != dst) {
             CHECK("wire: ...and still has no map", NULL == dst->map);
@@ -868,6 +873,34 @@ static int test_pack_roundtrip(void)
         }
     }
     PMIX_DATA_BUFFER_DESTRUCT(&buf);
+
+    /* The launch path's shape: the same job with the cpusets left out for
+     * the scatter.  Everything else has to arrive exactly as before, and
+     * the mode has to say so - a decoder that guessed wrong here would
+     * read the next proc's node rank as this one's cpuset. */
+    PMIX_RETAIN(saved_map);
+    src->map = saved_map;
+    dst = NULL;
+    mode = PRTE_JOB_PACK_ALL;
+    PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+    if (PRTE_SUCCESS == prte_job_pack(&buf, src, PRTE_JOB_PACK_NO_CPUSETS)) {
+        rc = prte_job_unpack(&buf, &dst, &mode);
+        CHECK("wire: a cpuset-less job round-trips", PRTE_SUCCESS == rc && NULL != dst);
+        CHECK("wire: ...and says so", PRTE_JOB_PACK_NO_CPUSETS == mode);
+        if (NULL != dst) {
+            proc = (prte_proc_t *) pmix_pointer_array_get_item(dst->procs, 0);
+            CHECK("wire: ...the bound proc arrives with no cpuset",
+                  NULL != proc && NULL == proc->cpuset);
+            CHECK("wire: ...and the fields after it are still intact",
+                  NULL != proc && PRTE_PROC_STATE_RUNNING == proc->state
+                      && 2 == dst->num_procs && 1 == dst->stdin_target
+                      && PRTE_JOB_STATE_RUNNING == dst->state
+                      && PMIX_CHECK_NSPACE(dst->launcher, "the.launcher"));
+            PMIX_RELEASE(dst);
+        }
+    }
+    PMIX_DATA_BUFFER_DESTRUCT(&buf);
+    PMIX_RELEASE(saved_map);
 
     PMIX_RELEASE(src);
     reset_globals();

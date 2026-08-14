@@ -122,6 +122,13 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
  * on it. */
 #define PRTE_RML_TAG_DAEMON_LAUNCH 18
 
+/* The part of the launch message that is addressed to one daemon: the
+ * bindings of the procs that daemon is about to fork.  Sent point to point
+ * while the rest of the message is broadcast, so the cpusets cost the tree
+ * their own size once instead of once per daemon they reach.  See
+ * prte_odls_base_send_cpuset_slices(). */
+#define PRTE_RML_TAG_LAUNCH_SLICE 19
+
 #define PRTE_RML_TAG_XCAST         15
 #define PRTE_RML_TAG_XCAST_ACK     16
 /* The bulk broadcast's allgather phase, and the request to abandon it.  Kept

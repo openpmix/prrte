@@ -109,7 +109,8 @@ static int rank_cmp(const void *a, const void *b)
     return (x < y) ? -1 : ((x > y) ? 1 : 0);
 }
 
-static int unpack_layout(pmix_data_buffer_t *bkt, prte_job_t *jptr)
+static int unpack_layout(pmix_data_buffer_t *bkt, prte_job_t *jptr,
+                         prte_job_pack_mode_t mode)
 {
     int32_t nnodes, n, cnt = 1;
     int rc, a, i, j;
@@ -242,7 +243,7 @@ static int unpack_layout(pmix_data_buffer_t *bkt, prte_job_t *jptr)
             rc = PRTE_ERR_NOT_FOUND;
             goto cleanup;
         }
-        rc = prte_proc_unpack(bkt, proc);
+        rc = prte_proc_unpack(bkt, proc, mode);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             goto cleanup;
@@ -272,7 +273,8 @@ cleanup:
     return rc;
 }
 
-int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job)
+int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job,
+                    prte_job_pack_mode_t *mode)
 {
     int rc;
     int32_t k, n, count, bookmark;
@@ -283,12 +285,25 @@ int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job)
     prte_info_item_t *val;
     pmix_info_t pval;
     pmix_list_t *cache;
+    prte_job_pack_mode_t md;
 
     /* create the prte_job_t object */
     jptr = PMIX_NEW(prte_job_t);
     if (NULL == jptr) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    /* what this buffer contains - see prte_job_pack */
+    n = 1;
+    rc = PMIx_Data_unpack(NULL, bkt, &md, &n, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(jptr);
+        return prte_pmix_convert_status(rc);
+    }
+    if (NULL != mode) {
+        *mode = md;
     }
 
     /* unpack the nspace */
@@ -439,7 +454,7 @@ int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job)
      *               have broken that correspondence, update_local_ranks(),
      *               had no callers and is gone.)
      */
-    rc = unpack_layout(bkt, jptr);
+    rc = unpack_layout(bkt, jptr, md);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_RELEASE(jptr);
@@ -612,7 +627,8 @@ int prte_node_unpack(pmix_data_buffer_t *bkt, prte_node_t **nd)
 /*
  * PROC
  */
-int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t *proc)
+int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t *proc,
+                     prte_job_pack_mode_t mode)
 {
     pmix_status_t rc;
     int32_t n;
@@ -640,12 +656,16 @@ int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t *proc)
         return prte_pmix_convert_status(rc);
     }
 
-    /* unpack the cpuset */
-    n = 1;
-    rc = PMIx_Data_unpack(NULL, bkt, &proc->cpuset, &n, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return prte_pmix_convert_status(rc);
+    /* The cpuset, if this buffer is carrying it.  When it is not, the proc
+     * keeps the NULL its constructor gave it and the daemon that forks it
+     * fills it in from the slice it is sent - see prte_proc_pack. */
+    if (PRTE_JOB_PACK_NO_CPUSETS != mode) {
+        n = 1;
+        rc = PMIx_Data_unpack(NULL, bkt, &proc->cpuset, &n, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
+        }
     }
 
     /* No attribute list is on the wire - see the comment in prte_proc_pack.
