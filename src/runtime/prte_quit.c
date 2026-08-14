@@ -392,14 +392,22 @@ char *prte_dump_aborted_procs(prte_job_t *jdata)
     }
     PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ERR_REPORTED);
 
-    /* if this job is not a launcher itself, then get the launcher for this job */
+    /* The launcher is only wanted so we can search its children for the job
+     * that failed; if it is gone, fall back to the job we were handed. Its
+     * absence is routine - a spawned job outlives its parent by default, and
+     * the parent's job object is released as soon as the parent completes. */
     if (PMIX_NSPACE_INVALID(jdata->launcher)) {
         launcher = jdata;
     } else {
         launcher = prte_get_job_data_object(jdata->launcher);
         if (NULL == launcher) {
-            output = strdup("LAUNCHER JOB OBJECT NOT FOUND");
-            return output;
+            PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+                                 "%s prte_dump_aborted_procs: launcher %s of job %s is gone - "
+                                 "reporting on that job directly",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 PRTE_JOBID_PRINT(jdata->launcher),
+                                 PRTE_JOBID_PRINT(jdata->nspace)));
+            launcher = jdata;
         }
     }
 
