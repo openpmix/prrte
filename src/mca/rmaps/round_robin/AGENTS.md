@@ -23,8 +23,8 @@ Files:
 |------|----------|
 | `rmaps_rr_component.c` | Registration, `priority` MCA param (default 10), `query` returning the module. |
 | `rmaps_rr.c` | `prte_rmaps_rr_map()` — the module entry: gate checks + per-app dispatch to the four algorithms. |
-| `rmaps_rr_mappers.c` | The four algorithms: `byslot`, `bynode`, `bycpu`, `byobj`. |
-| `rmaps_rr.h` | Prototypes for the four algorithm functions. |
+| `rmaps_rr_mappers.c` | The four algorithms: `byslot`, `bynode`, `bycpu`, `byobj` — the last of which is a wrapper around the shared `map_targets` loop. |
+| `rmaps_rr.h` | Prototypes for the four algorithm functions, plus `prte_rmaps_target_enum_t` — the vtable that says how a node's placement targets are listed. |
 
 ---
 
@@ -100,7 +100,21 @@ overflow handling as byslot.
 
 ### `prte_rmaps_rr_byobj` — spread across hwloc objects
 Maps by an object type (`options->maptype`: package/numa/cache/core/
-hwthread). Two sub-modes:
+hwthread). It is a thin wrapper: it builds a `prte_rmaps_target_enum_t`
+naming the hwloc objects of that type and hands it to
+`prte_rmaps_rr_map_targets()`, which is the loop described below.
+
+**Add a new kind of target by writing an enumerator, not by copying the
+loop.** The enumerator answers three questions about one node — how many
+targets, give me the *j*-th, and (optionally) set up and tear down per-node
+state — and `map_targets` does everything else. That split exists because
+the loop is the subtlest code in this component: the `redo:`/`check_avail`
+interplay and the oversubscribe accounting have each been the source of a
+real bug, and a second copy would acquire them again. `.name` is what the
+diagnostics call a target, so an enumerator that is not an hwloc type still
+produces a message that names what the user asked for.
+
+Two sub-modes:
 - **non-span** (default): fill all objects on a node before the next node
   (the `redo:` loop keeps working a node's objects until full) —
   byslot-like, front-loaded.
@@ -166,6 +180,8 @@ struct must be left holding a pointer its owner can free.
 - **Don't skip the base vpid call except in per-app mode.** The
   `if (options->app_idx < 0)` guard around `compute_vpids` is what keeps
   MPMD ranks from colliding.
-- **The byobj → byslot fallback rewrites the policy** on `jdata->map`
-  and `options->map`; downstream code (ranking, display) reads those, so
-  the rewrite is intentional, not a shortcut.
+- **`map_targets` is shared; keep it that way.** Anything that needs a
+  different set of placement targets belongs in a `prte_rmaps_target_enum_t`,
+  not in a second copy of the loop. If the enumerator allocates per-node
+  state in `begin`, every exit from the node body has to reach `end` — the
+  normal "move to the next node" tail and the `errout` label both do.
