@@ -1111,6 +1111,776 @@ Read the 6% as a lower bound rather than a verdict: the measurement is
 loopback between containers on one host, which is precisely the environment
 where a bandwidth optimisation shows least.
 
+Reassessing the allgather, after the reset
+------------------------------------------
+
+Everything above is a record of what was built and why it came back out.  This
+section is a fresh look at the underlying question — *is there a better
+allgather for the modex, and is it worth building* — taken on tree-only
+master.  It reaches a different ordering than the plan did, it corrects one
+thing said about Slurm, and it names the one measurement that has to happen
+before any of the rest is worth arguing about.
+
+Two Slurm collectives, and only one of them is an allgather
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+It is easy to remember Slurm as "a modified ring for PMI-2 and a pure ring for
+PMIx" and take both as allgather algorithms to compare against.  Only the
+second is one, and the distinction is the most useful thing in the comparison.
+
+``src/plugins/mpi/pmi2/ring.c`` implements ``PMIX_Ring``, and **it is not an
+allgather at all**.  It is an up-sweep/down-sweep *scan*: RING_IN carries
+(count, left, right) up the stepd tree, and the root sends each child a
+*different* RING_OUT giving that subtree's starting rank and its own two
+neighbour values.  Every message is O(1) no matter how large the job, because
+each child is sent only what its own subtree needs.  The argument for it is
+"PMI Extensions for Scalable MPI Startup" (Chakraborty et al., EuroMPI/ASIA
+2014): given a ring plus on-demand connection establishment, the business-card
+allgather is not needed at startup at all.  Slurm's PMI-2 *fence* — ``kvs.c``
+— is still a tree gather plus a whole-KVS ``slurm_forward_data`` to every
+node, which is exactly ``tree_gather_release`` with exactly our asymptotics.
+
+So Slurm's scalable answer at the PMI-2 layer was **to change the interface so
+that MPI stops asking for an allgather**, not to make the allgather faster.
+
+Their PMIx plugin is the case that *is* a genuine ring allgather —
+``pmixp_coll_ring.c``, a contribution ring in which each node forwards blocks
+around the ring over N-1 steps, added alongside the existing tree collective
+rather than replacing it.  The detail worth chasing, if this is ever revisited,
+is that it carries explicit per-collective *ring contexts* keyed by a sequence
+number so that consecutive and overlapping collectives cannot be confused —
+which, if so, means Slurm hit precisely the defect that killed the movements
+here and answered it with a context id rather than by abandoning laterals.
+
+.. note::
+
+   The ``pmixp_coll_ring.c`` description is from recollection and has **not**
+   been read against Slurm's source in this tree.  ``contrib/slurmswarm``
+   builds Slurm from source, so it is checkable; verify before leaning on it.
+
+Level 0 — the wall that no algorithm moves
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Before comparing schedules it is worth being blunt about what none of them
+change.  A full modex moves ``Θ(N²n)`` bytes across the DVM and delivers
+``D = N*n`` bytes **into every daemon**.  That is a property of the operation,
+not of the algorithm: an allgather's output is the concatenation of its
+inputs, and every participant is required to hold all of it.
+
+Put the numbers in.  Ten thousand nodes, 128 procs a node, a UCX-sized 1 KB a
+rank: ``n`` is 128 KB a daemon and ``D`` is **1.28 GB**, which every daemon
+must receive.  At 10 GbE that is a floor of about **one second**, with a
+perfect algorithm and an idle network.  Today's tree at radix 64 is depth 3,
+so its release term ``d*r*D*beta`` is around **200 seconds** — two orders of
+magnitude above the floor, discounted by whatever ``xcast``'s single
+compression pass buys on real modex data, which sits near the incompressible
+floor and so is not much.
+
+Two conclusions follow, and they pull in opposite directions.  A
+bandwidth-optimal allgather is worth roughly 100x here, which is the
+difference between impossible and merely expensive — that is a real prize.
+And it still leaves a second of unavoidable startup cost that grows linearly
+in the job, which no schedule will ever remove.  **Bruck buys a constant.
+Only not doing the allgather buys an exponent.**
+
+Level 1 — the constants, and they may not need new topology
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The tree fence's cost is dominated by the release, and the release is a
+broadcast of ``D`` bytes costing ``d*(alpha + r*D*beta)``.  Two separate
+factors inflate it, and they come off independently.
+
+**Pipelining removes the depth factor.**  Chunk the payload and the levels
+overlap: filling the pipeline costs ``d*(alpha + r*c*beta)`` for a chunk size
+``c``, and steady state costs ``r*D*beta``, so for ``D >> c``
+
+.. code-block:: text
+
+    T  ~=  d*alpha  +  r*D*beta
+
+The ``d`` is gone from the bandwidth term entirely.  ``xcast`` does not chunk
+today — it compresses once at the originator and forwards whole buckets — so
+this factor is available and unclaimed.
+
+**The radix is then the whole game, and this is the part worth stating
+loudly.**  At ``r = 2`` the pipelined tree costs ``log2(N)*alpha + 2*D*beta``.
+Scatter-plus-RD-allgather — the algorithm Piece 2 built and the reset removed
+— costs ``2*log2(N)*alpha + 2*D*beta``.  **They have the same bandwidth term,
+and the pipelined binary tree has half the latency.**  The lateral machinery,
+the Bruck schedule, the partner sets and the exchange's whole fault model buy
+nothing over a chunked broadcast on a radix-2 routing tree.
+
+Why a low radix cannot be arranged locally
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The obvious next thought is to keep the routing radix high for control traffic
+and use a low one just for the release.  It does not work, and the reason is
+the same one recorded under "Lateral links cannot be avoided", reached from a
+new direction.
+
+``prte_oob_base_send_nb`` resolves a next hop through ``prte_rml_get_route``,
+so a daemon can reach its children and its parent and nothing else without a
+lateral link.  To broadcast at radix 2 inside a radix-64 routing tree, a
+daemon would have to send to nodes that are its routing *siblings* or nephews
+— and every one of those routes back through the parent, so the message
+crosses the parent's uplink anyway and the fanout is not reduced.  Chaining
+children to each other fails identically.  There is no local rearrangement:
+the ``r`` in ``r*D*beta`` is the routing radix, full stop.
+
+So the fork is real and it is only two-way:
+
+* **Lower ``prte_rml_base.radix`` globally** and pipeline the large messages.
+  Costs nothing in new topology and no new failure modes.  What it spends is
+  ``d*alpha`` on every *small* message: at 10 000 nodes, radix 2 is depth 14
+  against radix 64's depth 3, so a shutdown command or a ``DAEMON_DIED``
+  notice pays roughly 700 µs instead of 150 µs at a 50 µs progress-thread hop.
+  Whether that is acceptable is a judgement about control-plane latency, and
+  it is the real trade this option asks us to make.
+* **Build the lateral overlay** and pay for the links, the pre-warm, the
+  descriptor budget, the fault model and the collective-identity problem.
+
+``rml_base_radix`` is already an MCA parameter with a floor of 2
+(``src/rml/rml.c:284``), and ``scaletest.sh`` already sweeps it and already
+reports ``collect_med_us - barrier_med_us`` as the payload's own cost.  **So
+the first option is measurable today, with no new code at all.**  That is
+open question #4 below, and it has been the largest unmeasured risk in this
+plan since the plan was written.
+
+If we do go lateral: ring against Bruck, for PRRTE specifically
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Assume the measurement says the radix route is not enough.  The choice of
+exchange schedule is then live again, and the instinct to pick a ring "because
+it is simpler and it is what Slurm's PMIx plugin does" deserves examination.
+
+**It does not de-risk what actually failed.**  What broke the movements was
+collective *identity* across consecutive fences, and that defect is identical
+under a ring: two routes exist the moment any traffic goes across rather than
+down, and a participant may legally begin fence *N+1* before a peer has
+finished *N*.  Choosing a ring changes nothing about it.
+
+A ring does have three real advantages here that the earlier comparison —
+which judged it purely on ``N-1`` against ``log2 N`` — did not weigh:
+
+#. **Variable-size contributions are native.**  PRRTE's per-daemon
+   contribution varies with procs-per-node and with which keys each rank
+   published.  Bruck and recursive doubling want equal blocks, so unequal ones
+   need a size allgather first or an extra indexing pass; a ring just forwards
+   whatever it was handed.
+#. **Two descriptors instead of ``log2 N``**, constant in DVM size, which
+   retires open question #3 and most of the pre-warm and idle-teardown work
+   deferred out of Piece 1.
+#. **Fault handling is legible.**  A ring node has exactly one predecessor and
+   one successor and healing is "splice past the dead node".  Bruck's partner
+   set changes globally when a participant dies, which is why the exchange had
+   to opt out of the recovery restart and grow a local deadline instead.
+
+Against all of that: ``(N-1)*alpha``.  At 10 000 daemons and a 50 µs hop that
+is **half a second of pure latency**, which eats the entire bandwidth win the
+ring was chosen for.  The scale where any of this matters is exactly the scale
+where a ring stops working, so **Bruck remains the endpoint** and a ring is
+worth building only as a hierarchical component — a ring inside a group,
+recursive doubling between group leaders — which is more machinery than either
+alone.
+
+The ordering matters more than the choice.  **The sequence number should land
+first, on tree-only code, as standalone hygiene**, before any movement exists
+to need it.  The section above already records the gap as latent rather than
+absent: a contribution naming a retired generation would match no tracker and
+``get_tracker(sig, true)`` would build one that nothing ever completes.
+Nothing can produce that arrival on one route, which is precisely why it is
+safe and cheap to close now, in isolation, where it can be reviewed on its own
+terms rather than as one part of a 3000-line movement.
+
+The *other* half of that fix has already landed: ``0d9dde1c8a`` retires a
+tracker before delivering its result, at both sites, because "a client is free
+to fence again over the same participants as soon as [the callback] returns".
+That was the part described as necessary but not sufficient, so one third of
+the identity work is in place on tree-only master.
+
+Level 2 — the only change that moves the exponent
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Slurm's real answer was to stop performing the allgather, and PRRTE's
+equivalent lever is the direct modex.  Three things that were not all true
+when the movements were written are true now:
+
+* The daemon-to-daemon path can actually answer.  It used to park a request
+  until the target process committed something, which for PRRTE's own
+  placement and binding keys is a deadlock, since nothing requires those to be
+  ``PMIx_Put`` at all.  ``answer_from_job()`` fixed it, and the three distinct
+  "I cannot answer" states are now told apart.
+* Open MPI does not want the data.  ``mpi_add_procs_cutoff`` is 0, ``ob1``
+  demands the whole world only for a BTL declaring
+  ``MCA_BTL_FLAGS_SINGLE_ADD_PROCS``, and remote procs materialise on first
+  use.  Exactly one non-optional reserved key names an off-node proc, and
+  PMIx derives it and its neighbours from the node and proc maps.
+* The crossover has been measured, and it favours on-demand once the per-rank
+  contribution is kilobytes rather than tens of bytes — and the win grows with
+  ``N``, because collecting is ``O(N)`` a daemon while resolving is
+  ``O(peers touched)``.
+
+What has always blocked it is semantic: ``PMIX_COLLECT_DATA`` says the caller
+asked for the data, and a fence that does not deliver it reinterprets a
+directive.
+
+**There is a reading that does not reinterpret anything, and it is worth
+putting on the table.**  What a caller actually buys with ``COLLECT_DATA`` is
+not a *transfer*; it is the guarantee that a later ``PMIx_Get`` for a
+participant's key will complete rather than block forever on a peer that never
+published.  A transfer is one way to provide that guarantee.  A *certification*
+is another: the fence rolls up the fact that every participant has committed,
+and the release carries that fact — O(1) — instead of the bytes.  ``PMIx_Get``
+then falls back to a direct modex which is now known to be answerable, which
+is exactly the failure class that ``answer_from_job()`` closed.  The
+post-fence semantics a caller can observe are unchanged; the delivery is lazy.
+
+That costs barrier time plus one resolution per peer actually touched, and it
+loses precisely where the crossover says it loses — small ``n``, small ``N``,
+every peer touched anyway — so it wants a threshold rather than being
+unconditional.  It is a policy decision, not a measurement, and it is the only
+item here with an order-of-magnitude story rather than a constant-factor one.
+
+The radix sweep, and what it actually answered
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Open question #4 was measured on 2026-08-14, on a 32-container ``scale`` swarm
+built from PRRTE ``4bef237d92`` and PMIx ``101a8fc0`` — both at ``master``
+head.  ``rml_base_radix`` 2/4/8/64 crossed with 8/16/32 daemons and 512 B /
+8 KB / 64 KB a rank, incompressible payload (``--entropy``), one proc a node.
+
+**Read the first iteration, not the median.**  This is the trap the sweep
+walked into and it invalidates any summary taken over the run.  Each iteration
+publishes *distinct* keys, so a daemon's store grows monotonically through the
+run and every fence is over a larger store than the last.  The effect is not
+subtle and it is not noise: **the minimum was iteration 1 in all 36 configs**,
+without a single exception, and by iteration 10 the same fence cost 5-20x what
+it cost on iteration 1.  A median over ten iterations is therefore not a
+steady-state estimate of anything — it is the sixth iteration's value, which
+depends on the iteration count.  Later analysis should use iteration 1 or a
+fresh DVM per point.  (This also means a *repeated* modex gets steadily more
+expensive as the store fills, which is worth knowing on its own.)
+
+On iteration 1, the payload's own cost — ``COLLECT`` minus ``BARRIER``, in
+microseconds:
+
+==========  ============  ======  ======  ======  ======  ==========
+daemons     bytes/rank    r=2     r=4     r=8     r=64    r2 / r64
+==========  ============  ======  ======  ======  ======  ==========
+8           512 B          1201     873     951     848      1.42
+8           8 KB           1604    1225    1229    1022      1.57
+8           64 KB          5523    4838    4586    4482      1.23
+16          512 B          2762    2956    2720    2547      1.08
+16          8 KB           4051    4506    4263    4227      0.96
+16          64 KB         11068   10665   10526    9681      1.14
+32          512 B          9425    9466   10111    9944      0.95
+32          8 KB          12708   13070   14365   13377      0.95
+32          64 KB         32440   32880   40594   33819      0.96
+==========  ============  ======  ======  ======  ======  ==========
+
+**Lowering the radix does not help.**  There is a faint trend in the predicted
+direction — radix 2 loses 23-57% at 8 daemons, breaks even at 16, and is 4-5%
+ahead at 32 — but nowhere near the 3-30x the cost model predicts, and the one
+place it leads is the one place the host is most saturated.
+
+**And the swarm cannot decide this question, for two structural reasons that
+will not go away with more samples.**  Both are worth stating because they
+retire the measurement rather than deferring it.
+
+#. **There are no per-node uplinks for ``r`` to contend on.**  The ``r*D*beta``
+   term is per-node-per-level *NIC* contention.  Total bytes crossing the wire
+   in a broadcast are ``(N-1)*D`` at **any** radix; only the critical path
+   changes, and a critical path needs independent links to shorten.  Thirty-two
+   containers sharing one host kernel have one loopback path, so lowering the
+   radix cannot reduce the bytes and can only add depth — which is exactly the
+   sign of the result.
+#. **The Docker VM has 8 CPUs and 8 GB for 32 containers.**  Aggregate
+   per-rank work is ``O(N^2)`` across the DVM, and on a fixed core count that
+   lands in the wall clock as ``N^2``, swamping any algorithmic difference.
+   The observed scaling at fixed payload is ~``N^2`` (512 B a rank: 848 ->
+   2547 -> 9944 µs at radix 64), which is the host, not the collective.
+
+So open question #4 is **not answered by this harness and cannot be** — the
+existing note that it "needs real multi-node hardware" is now specific rather
+than cautionary.  What the sweep does establish is network-independent and
+more useful than the radix answer:
+
+**The fence's cost is dominated by per-rank work, not by bytes.**  At 8
+daemons, going from 4 KB of modex in the entire job to 512 KB — 128x the bytes
+— costs 5.3x (848 -> 4482 µs).  At 16 daemons, 3.8x; at 32, 3.4x.  A term that
+large and that insensitive to payload is not bandwidth.  This confirms across
+three node counts and three payload sizes what "Most of a modex fence's cost
+is not the bytes" saw at one point.
+
+A second sweep pins that down, and it is worth stating as a model rather than
+as a direction.  Eight daemons, radix 64, iteration 1, holding total modex
+bytes constant while varying rank count and key count independently:
+
+============  ==========  =======  ==========  =============
+total modex   ranks       keys     bytes/rank  data cost
+============  ==========  =======  ==========  =============
+8 KB          8           1        1 KB           875 µs
+16 KB         8           1        2 KB          1041 µs
+64 KB         8           1        8 KB          1192 µs
+64 KB         8           8        8 KB          1334 µs
+128 KB        8           8        16 KB         1944 µs
+512 KB        8           8        64 KB         4642 µs
+512 KB        8           1        64 KB         5365 µs
+512 KB        32          8        16 KB         4420 µs
+4 MB          8           8        512 KB       20885 µs
+============  ==========  =======  ==========  =============
+
+Three things fall out.  **Key count does not matter** — 8x1 KB against
+1x8 KB moves by 12%, and the sign flips at the larger size, so there is no
+per-key term worth naming.  **Rank count matters only through a modest fixed
+term** — at 512 KB total, 32 ranks cost *less* than 8 (4420 against 4642), so
+there is no per-rank cost in the byte-dominated regime; at near-zero payload,
+4x the ranks costs 1.8x, so the floor is sublinear in ranks and closer to
+per-daemon.  And the whole series fits a two-term model:
+
+.. code-block:: text
+
+    8 daemons, 8 ranks:    cost ~=  850 us  +  ~6 ns/byte of total modex
+    8 daemons, 32 ranks:   cost ~= 1600 us  +  ~3 ns/byte
+
+So there is a **fixed per-fence cost** — 850 µs at 8 daemons, and from the
+radix table roughly 2.5 ms at 16 and 10 ms at 32 — plus a byte term running at
+an effective 150-300 MB/s (a debug build, packing, unpacking and hash-storing
+on loopback).  The two are equal at about **140 KB of total modex**.
+
+That crossover is the number to carry away.  **Open MPI's entire modex at 16
+ranks is 1319 bytes** — a hundredfold below it.  A real job is wholly inside
+the fixed-cost regime, where the payload is free and the cost is the fence
+machinery itself: the rollup, the release traversal, the tracker.
+
+This corrects a reading taken from the first sweep alone, where 128x the bytes
+cost only 5.3x and that looked like evidence of per-rank work.  It was not —
+it was the fixed term dominating at both ends of too narrow a range.
+
+The consequence for the algorithm question is sharper than either reading.  A
+bandwidth-optimal allgather optimises the byte term, and the byte term does
+not become the larger half until a job's *total* modex passes ~140 KB.  At
+10 000 nodes and 128 procs a node that threshold is passed by four orders of
+magnitude, so the prize at extreme scale is real and Level 0's arithmetic
+stands.  But everything below roughly a thousand ranks is spending its time in
+a fixed cost that Bruck, a ring, a lower radix and a pipelined release all
+leave exactly where it is.  **Level 2 is the only item on the list that
+attacks the term that dominates the jobs people actually run**, because not
+collecting is the only option that removes the fence's payload path rather
+than accelerating it.
+
+The fixed term is ``gds/shmem3``, and it is not ours
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The fixed term was chased down on 2026-08-14 and it is not in PRRTE at all.
+
+**The isolating experiment.**  ``scaletest --nkeys 0`` runs a fence with
+``PMIX_COLLECT_DATA`` true and no ``PMIx_Put``, no ``PMIx_Commit`` and no
+payload — the whole collect path, over nothing.  It costs **the same as a
+barrier**: −63 to +82 µs at 8 ranks and −210 to −121 µs at 32.  So the collect
+*machinery* is free.  One key of **one byte** — eight bytes of modex in the
+entire job — costs **948 µs** at 8 ranks and 1458 µs at 32.  The step needs
+data to exist and does not care how much there is.
+
+**What switches on.**  PMIx's ``gds`` framework has two components here:
+``hash`` at priority 10 and ``shmem3`` at priority 20, so ``shmem3`` wins by
+default.  Forcing the other collapses the step (8 daemons, one proc a node,
+one-byte values, iteration 1, ``COLLECT`` minus ``BARRIER`` of the largest
+local duration):
+
+=====================  =========  =========  =========
+gds component          keys = 0   keys = 1   keys = 8
+=====================  =========  =========  =========
+``shmem3`` (default)      +27 µs   +1326 µs   +1624 µs
+``hash`` (forced)         −36 µs    +108 µs     +82 µs
+=====================  =========  =========  =========
+
+Module selection was confirmed directly rather than inferred — under
+``--pmixmca gds hash`` with ``gds_base_verbose``, ``hash`` is the only
+component queried.
+
+**Why, from the source.**  ``server_store_modex()`` in
+``src/mca/gds/shmem3/gds_shmem3.c`` will not write into a modex segment it has
+already finished: local clients have it mapped, storing into it can rehash the
+table and reallocate the key index underneath a reader, and the segment was
+sized for the first modex so a larger second one overruns the allocator.  So a
+second fence **releases the segment, bumps** ``modex_generation`` **and calls**
+``shmem3_segment_create_and_attach()`` — a fresh shared-memory segment, built
+and populated from scratch, on every collecting fence that carries data.
+``server_mark_modex_complete()`` then advertises it into the reply of **each
+local client**, which maps it.  The code cites openpmix#4087 and points at
+``examples/modex_twice.c`` as the canary.
+
+**It is not a fixed tax — its share grows with the DVM.**  At 8 KB a rank,
+one proc a node, iteration 1:
+
+=========  ==================  ============  =================
+daemons    ``shmem3``          ``hash``      shmem3 premium
+=========  ==================  ============  =================
+8              1320 µs            688 µs        +632 µs
+16             6424 µs           1679 µs       +4745 µs
+32            16435 µs           3799 µs      +12636 µs (77%)
+=========  ==================  ============  =================
+
+The segment holds the whole modex, so it grows as ``N*n`` and so does the cost
+of building it and of every client mapping it.  **At 32 daemons three quarters
+of the modex fence's payload cost is the GDS rather than the collective.**
+
+**And it is not the container's filesystem**, which was the obvious way for
+this number to be an artifact.  The backing file goes in the session dir
+(``PMIX_NSDIR``, else ``PMIX_TMPDIR``) and ``/tmp`` in these containers is
+overlayfs.  Re-run with ``--prtemca prte_tmpdir_base /dev/shm`` — tmpfs, and
+verified in use — at 32 daemons: **14781 µs to 13074 µs, a 12% change.**  The
+cost is the work inside the segment, not the file creation.
+
+**This is a trade, not a defect.**  ``shmem3`` exists so that ``PMIx_Get``
+after the fence is a shared-memory read rather than a lookup or a wire round
+trip; it buys cheap gets with expensive fences.  But it means the term that
+dominates a realistically-sized modex is on the PMIx side of the boundary, and
+**every collective option in this document leaves it exactly where it is** —
+Bruck, a ring, a lower radix and a pipelined release all optimise a byte term
+that, at 32 daemons, is a quarter of the cost.
+
+Two consequences.  It **strengthens Level 2 again**: not collecting skips the
+segment build as well as the transfer, so it removes the dominant term and the
+byte term together.  And it **cuts the other way on gets**, which the crossover
+measurement already hinted at — the on-demand path gives up exactly the cheap
+``PMIx_Get`` that ``shmem3`` is paying for in advance.  That is the real
+tension in the ``COLLECT_DATA`` decision, and it is sharper than "does the
+directive permit it".
+
+The follow-up work belongs in openpmix, not here: rebuilding the segment from
+scratch on every collecting fence is what costs, and sizing it with headroom,
+appending a generation, or deferring construction are all PMIx-side questions.
+
+Delta segments and a delta commit
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The proposal, and it is the one the ``shmem3`` comment itself anticipates:
+instead of rebuilding a segment holding the whole modex to date, have each
+generation's segment hold **only the new information**, and have a retrieval
+search the segments newest-to-oldest and return the first hit — which is by
+construction the newest value for that key.
+
+**Measured, at 32 daemons and 8 KB a rank, over eight consecutive collecting
+fences.**  Least-squares fit of the cost of fence *k* (``COLLECT`` minus
+``BARRIER``, max local duration, µs):
+
+.. code-block:: text
+
+    shmem3 (today):   11719  +  4801*k
+    hash:              4355  +   474*k
+
+The slope is the whole story.  Rebuilding the cumulative modex makes fence *k*
+cost ``O(k)``, so a run of *K* fences costs ``O(K^2)``; ``shmem3``'s slope is
+**ten times** ``hash``'s.  Delta segments attack exactly that term:
+
+=========  ==========  =================  =========
+fences     today       delta segments     saving
+=========  ==========  =================  =========
+1           11.7 ms         11.7 ms        **none**
+8            228 ms          107 ms          2.1x
+20          1147 ms          324 ms          3.5x
+=========  ==========  =================  =========
+
+**The first row is the important caveat.**  At the first fence the delta *is*
+the whole modex, so nothing changes — and the 77% figure above was a single
+fence.  A job whose only collecting fence is at ``MPI_Init`` gains nothing.
+The win is for repeated collecting fences: MPI Sessions, ``PMIx_Group``
+construct/destruct, connect/accept, dynamic spawn.
+
+**Two things recommend it beyond the slope.**  The fixed per-segment overhead
+is only ~2456 µs of the 7660 µs ``shmem3`` premium at 32 daemons — measured
+with a one-byte payload — so 68% of the premium is content-proportional and
+therefore is what shrinking the segment reaches.  And search-back **preserves
+the immutability invariant** ``pmix_gds_shmem3_fetch`` relies on for
+``is_tsafe = true`` — "a segment a client can see is never written again" —
+arguably more cleanly than release-and-rebuild, which is precisely the
+operation the current code has to keep away from a live reader.
+
+**Three costs to design against.**  Retrieval becomes ``O(number of
+generations)``, and a *miss* searches all of them — which matters because
+``PMIX_OPTIONAL`` gets and the fall-through-to-direct-modex path are both
+misses, so the get side pays for the fence side's win.  Each client
+accumulates a mapping per generation, so descriptor and VMA pressure need a
+compaction policy — fold into one segment after N generations, which
+reintroduces the rebuild but amortised over N.  And the fixed ~2456 µs is paid
+once per fence either way, so it is a floor this idea cannot go below.
+
+**Decision: the commit becomes a true delta.**  There is no valid reason to
+re-ship data that has already been delivered.  Today's payload is cumulative —
+"a commit ships the process's whole local store and a server contributes each
+local proc's full set from its own" — and that is why ``hash``'s slope is 474
+µs a fence rather than zero: every participant re-receives everything it
+already has, every time.  A delta commit flattens *both* arms and cuts the
+transfer as well as the storage, and it is the exact trigger condition the
+``shmem3`` comment names for needing search-back, so the two changes are one
+piece of work rather than two.
+
+Two implementation points that follow, and the second is easy to miss.
+
+#. **No tombstones are needed.**  Nothing in this path deletes a key, and a
+   re-``PMIx_Put`` of an existing key is an overwrite whose new value ships in
+   the newer generation — which search-back returns first.  So "newest hit
+   wins" is a complete rule, not an approximation.
+#. **There are two different deltas, and only one of them is well defined
+   locally.**  A *client to its server* delta is unambiguous: the client knows
+   what it has already sent.  A *server's contribution to a fence* is a delta
+   relative to what the other participants already hold, which is a property
+   of the collective's history rather than of the proc — and in an elastic DVM
+   a newly added daemon holds none of it.  The cumulative payload gives that
+   daemon its catch-up for free today; a delta design has to provide one
+   deliberately, either by handing a joiner every generation or by compacting
+   for it.  This is a requirement on the design, not an objection to it.
+
+**And it is not the lever for the first fence**, which is where a
+single-collective job spends everything.  There the cost is the rate at which
+the in-segment hash is built: ``shmem3`` runs at roughly 35 ns a byte against
+``hash``'s 14 for the same data, so what that case wants is a cheaper
+construction, not a smaller segment.  The two optimisations are independent
+and both are worth having.
+
+.. note::
+
+   These figures are single runs on a host with 8 cores serving 32
+   containers, and each per-iteration series has a visible non-monotone step.
+   The two slopes differ by 10x, comfortably outside that noise, but the
+   absolute values are indicative rather than precise.
+
+Separating the barrier from the modex
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The two operations that share the fence want different things, and treating
+them as one collective is what makes the radix a compromise that serves
+neither.  Taking them apart, on 2026-08-14:
+
+**The barrier is not where the time is, and this harness cannot rank its
+options anyway.**  Three things about it are solid.  Its cost has a fixed
+floor of about **165 µs** at any DVM size — the client-to-server-to-daemon
+round trip that no topology touches — rising to 1.4 ms at 32 daemons
+(``T ~= 165 + 40*(N-1)`` µs at radix 64, where every one of N = 2..32 is depth
+1).  A ``--nkeys 0`` fence, which is the whole collect path over no data,
+costs the **same as a barrier** at every scale measured (+1.6, −4.4, +12.2,
++10.5, −7.0 µs at N = 2..32).  And at 32 daemons the barrier is 1.4 ms against
+the modex's 16 ms.
+
+What is *not* solid is any ranking of its radices.  A repeat of one identical
+configuration (16 daemons, radix 4) measured 686 µs in the morning and 1521 µs
+in the afternoon — **2.2x apart on the same build and the same swarm**.  Across
+six overlapping configurations the ratios were 0.88, 1.17, 2.22, 1.07, 0.97,
+0.86.  Every radix effect and every worker-thread effect observed here is
+inside that spread, so the apparent ordering is not evidence.
+
+.. warning::
+
+   An earlier draft of this section proposed that a barrier's cost is
+   ``2*d*alpha + 2*d*r*c`` for a per-message cost ``c``, and predicted that
+   radix 4 would beat radix 64 by ~1.9x at 32 daemons.  **That prediction was
+   measured and failed** — radix 64 was fastest at every node count — and the
+   follow-up did not rescue it.  The framing is not supported and should not
+   be carried forward without cluster data.  What survives is only the
+   observation that a root's child count appears in the cost at all, which the
+   depth-1 series does show.
+
+**The OOB worker bases were measured, and made the barrier worse here.**
+``prte_oob_progress_threads`` defaults to 0, so every other number in this
+document was taken with each daemon servicing all its peer sockets on one
+event base.  Forced to 4 — verified by thread count, +4 on both the HNP and
+remote daemons — the barrier was 1.2-1.9x *worse* at five of six points.  That
+is not evidence against the feature: its stated win is link **occupancy**,
+which needs spare cores, and 32 daemons times 4 extra threads on an 8-core VM
+have none.  It is evidence that this harness cannot evaluate it.
+
+Two things the worker bases do **not** change, and the distinction is the
+useful one.  They divide the per-message *servicing* term by the number of
+bases.  They cannot touch the *byte* term, because the bytes still cross one
+NIC — the same finding that came out of the send-thread proposal earlier
+(~10-13%, and no change to scaling).  So they land almost entirely on the
+barrier and almost not at all on the modex.
+
+**The modex argument needs none of those constants**, which is why it survives
+the failed prediction: it is byte-counting.  A radix-``r`` forwarder transmits
+``r`` copies of the release; an allgather node transmits one.
+
+**The gather and the broadcast are asymmetric, and that settles the rollup.**
+A broadcasting daemon receives one copy of ``D`` and sends ``r`` copies, so its
+egress is ``r*D``.  A gathering daemon receives ``r`` messages and sends
+**one** aggregate, so fanout costs it nothing at all.  Every axis therefore
+favours a *high* radix for the rollup — smaller per-node egress (``D/64``
+against ``D/3`` for a child of the root), fewer hops, and ``d`` times fewer
+total byte-hops — and only the release wants a low one.  Writing the cost of
+the pair as ``(1 + r_release) * D/B``:
+
+====================================  ==============  ==========
+configuration                         cost            vs today
+====================================  ==============  ==========
+radix 64 both (today)                 ``65 * D/B``      1x
+gather 64, release 3                  ``4 * D/B``     **16x**
+Bruck allgather                       ``1 * D/B``       65x
+====================================  ==============  ==========
+
+So a two-radix tree — a high radix for command traffic, barriers and the
+rollup, a low one for the release — captures 16x of an available 65x with no
+exchange schedule and no new fault model.  Its ceiling is the gather's own
+``D/B``, which is irreducible because the HNP must receive the entire modex;
+that is why gather-then-broadcast can never reach an allgather, and why Bruck
+remains worth another 4x on top.
+
+**The enabling mechanism is already in the tree.**  A radix-3 release edge is a
+*sibling* edge in a radix-64 routing tree, so the two-radix scheme needs
+direct sends to non-children — which is exactly Piece 1, and Piece 1 survived
+the reset.  ``prte_rml_send_buffer_direct_nb``, ``PRTE_RML_SEND_DIRECT``,
+``prte_rml_base.lateral_links`` and ``prte_rml_is_lateral_only`` are all on
+master and currently unused.  This gives them a purpose without reviving the
+exchange that was withdrawn.
+
+What a second topology costs in identity and in tracking
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Two radices, or a Bruck allgather, means more than one path between daemons.
+That reopens the defect that withdrew the movements, and it raises a second
+question about reliability accounting.  Both have concrete answers.
+
+**The consecutive-fence race does come back, and it was already solved.**  A
+signature is only a participant list, so consecutive fences over it are
+indistinguishable; with a release down one path and blocks across another, a
+peer may legally begin fence *N+1* and reach a daemon still in *N*.  The fix
+was three parts, and the demonstration is on record: the 16-daemon reproducer
+went from failing on the first attempt to **8 of 8 passing**.
+
+* **Retire the tracker before delivering** — merged as ``0d9dde1c8a``.
+  Necessary, not sufficient.
+* **A generation on the signature**, packed on the wire and part of
+  ``get_tracker``'s key.  It needs no exchange: every participant takes part in
+  every fence over the set, and two identical fences may never be in flight at
+  once, so the *k*-th fence over a signature is the *k*-th one on every daemon
+  by construction, and each derives the same number by counting what it has
+  retired.
+* An intermediate hold-on-converged step, superseded by the generation.
+
+Three things must be settled before that is trusted at a second topology, and
+the first is a genuine hole rather than a detail.
+
+#. **An elastic grow breaks the local derivation.**  The generation is derived
+   by counting retirements, and a daemon added by a grow has counted none.
+   The signature of a job-wide fence does not change when the job grows —
+   ``{nspace, WILDCARD}`` — but ``create_dmns`` now resolves it to a larger
+   daemon set that includes a daemon at generation 0 while every other
+   participant is at *k*.  It originates 0, its parent looks up *(sig, 0)*,
+   nothing matches, and that is precisely the hang the generation exists to
+   prevent.  It needs a deliberate rule — adopt the highest generation seen
+   for a signature, have the HNP stamp it, or seed a joiner at grow time.
+   Note that Slurm's ``kvs_seq`` is **carried on the wire in both directions
+   and checked on arrival** rather than only derived, which is exactly the
+   robustness this case wants.
+#. **A lateral collective needs three levels of identity, not two.**  A tree
+   message is identified by its signature.  A generation makes that *(signature,
+   generation)*.  But a Bruck allgather has ``log2 N`` **steps** within one
+   collective, each carrying a different block, so the identity is
+   *(signature, generation, step)*.  Each level is an independent way to
+   alias, and the tree never needed any of them.
+#. **More partners is more exposure.**  A ring has two; Bruck has ``log2 N``.
+   The mechanism is identical and the generation closes it, but the number of
+   windows scales, which argues for making a mismatch **loud** — the rule
+   already established for the movement id, where a disagreement produces a
+   named ``show_help`` rather than a hang.
+
+**And yes, the patterns need separate trackers.  The current code says why.**
+
+* **A completion tracker is a statement about one topology.**  ``op_t`` holds
+  ``nexpected`` — "# children at time of (re)start" — plus ``ack_id_up``,
+  ``ack_id_down`` and ``replay_pending_parent``, whose comment is that "our
+  completion information for older ops is invalid when our subtree grows".
+  Acks roll up the routing tree.  You cannot account for coverage of a message
+  that traversed tree *B* by rolling up acks on tree *A*, so each movement
+  needs its own completion accounting.
+* **``op_id`` is a single global space** — "HNP's assigned collective ID,
+  globally unique".  Two patterns allocating from it will alias.  They need
+  separate spaces, or the topology in the key.
+* **The fence receive path would drop lateral traffic today.**
+  ``prte_grpcomm_fence_recv`` computes ``prte_rml_get_subtree_index(sender)``
+  and, on a negative result, logs ``PRTE_ERR_NOT_FOUND`` and returns — "we are
+  not this daemon's parent, so this contribution is not ours to aggregate".  A
+  Bruck block, or a radix-3 release arriving from what the routing tree calls a
+  sibling, is not in any of this daemon's subtrees and is discarded.  Each
+  pattern therefore needs its own tag and its own receive path, which is what
+  the deleted ``PRTE_RML_TAG_XCAST_BULK`` and ``_FENCE_EXCHANGE`` were.
+
+**Ordering between patterns is mostly a non-issue**, and the operations table
+at the top of this document is why: the modex is marked as needing no
+ordering, and command traffic only "some".  The one pair that matters is a
+fault notice racing collective traffic on a *different* topology, and
+``recovery_epoch`` already stamps every message on the fence tag for it.  But
+note that ``fence_recv`` currently treats a **newer** epoch as "should be
+unreachable" and adopts it defensively.  With two topologies in play that
+branch stops being unreachable and becomes routine, so it has to be made
+correct rather than merely defensive.
+
+Measuring it needs a cluster
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Both sweeps above ended at the same place: the container harness cannot decide
+any of this, for reasons that are structural rather than statistical.  It has
+no per-node uplinks for the ``r`` factor to contend on, and too few cores, so
+its wall clock reports the CPU scheduler.
+
+``contrib/scaling/cluster-sweep.sh`` is the answer to that — one script, run
+inside a real allocation, that sweeps radix against DVM size against payload
+and also prices the GDS component and the OOB worker bases, then tars up the
+results.  It detects SLURM, PBS or a hostfile; it needs only PRRTE on ``PATH``
+and a compiler.  ``contrib/scaling/README.md`` is written for someone outside
+this project who has been handed the script and nothing else.
+
+It is built around the three traps that produced wrong answers here: it runs
+**one** measured fence per job and repeats the *job* rather than the iteration
+(because the client publishes new keys each iteration, so iteration *k* is a
+fence over *k* rounds of data); it verifies every DVM came up with all its
+daemons before measuring; and it records a manifest of the machine and the
+build, because twice now a number has been hard to interpret afterwards for
+want of one.
+
+What to do, and in what order
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Revised after the sweep, which moved two items and deleted one.
+
+#. **Make the commit a true delta, and give ``shmem3`` delta segments with
+   search-back.**  One piece of work in openpmix, against openpmix#4087: the
+   delta commit is the trigger condition the ``shmem3`` comment already names
+   for needing search-back, and it is what flattens the transfer as well as
+   the storage.  It turns a run of repeated modex fences from ``O(K^2)`` into
+   ``O(K)`` — 2.1x at eight fences, 3.5x at twenty.  It does **not** reduce
+   the cost of a single collecting fence; see the caveat above.
+#. **Make the first fence cheaper**, which is a separate lever and reaches the
+   case a single-collective job actually pays.  ``shmem3`` builds its
+   in-segment hash at ~35 ns a byte against ``hash``'s ~14 for the same data;
+   the segment rebuild is 77% of the payload cost at 32 daemons and grows with
+   DVM size.  This is construction rate, not segment size.
+
+   The immediately available lever while both are open: ``--pmixmca gds hash``
+   is a one-parameter change that cuts the fence cost 4.3x at 32 daemons.  It
+   is not free — it gives up the cheap post-fence ``PMIx_Get`` that ``shmem3``
+   is buying — so it is a knob to characterise, not a default to change.
+#. **Decide the ``COLLECT_DATA``-as-commit-barrier question.**  The only item
+   that attacks the dominant term for jobs below roughly a thousand ranks, and
+   the only one with an order-of-magnitude story rather than a constant-factor
+   one.  It is a policy call, not a measurement.
+#. **Land the fence sequence number standalone**, on tree-only code, and
+   settle its elastic-join rule (see below).  The retire-before-deliver half
+   is already merged as ``0d9dde1c8a``.  Cheap, reviewable in isolation, and it
+   takes the defect that killed the movements off the critical path of
+   anything that comes later.
+#. **Hold the radix and the pipelined release.**  Both target the byte term,
+   which does not dominate until ~140 KB of total modex, and the radix half is
+   now measured as neutral-to-harmful.  Chunking ``xcast`` is still right for
+   the *launch* message and ``FILEM``, which are large by construction — but
+   that is a broadcast argument, not a fence one, and it should be made on
+   those operations' own numbers.
+#. **Hold Bruck until there is real hardware.**  Its entire case rests on
+   ``alpha`` and ``beta`` constants that a single-host container swarm cannot
+   supply — now demonstrated rather than asserted — and 2847 lines have
+   already been spent on that bet once.
+
 Verification
 ------------
 
@@ -1178,6 +1948,18 @@ Open questions
    tree's cost is the ``d*r`` release fanout. A payload-aware radix for the
    release, or a chunked/pipelined ``xcast``, recovers a large fraction of the
    benefit with none of this risk.
+
+   **Measured 2026-08-14, and retired as unanswerable on this harness** — see
+   "The radix sweep, and what it actually answered" above.  A lower radix does
+   not help (radix 2 loses 23-57% at 8 daemons and is within noise at 32), and
+   the container swarm cannot decide the question in principle, because the
+   ``r*D*beta`` term needs independent per-node uplinks that 32 containers on
+   one host do not have.  What the sweep did establish is that the fence's
+   cost is ~850 µs of fixed overhead at 8 daemons plus ~6 ns a byte, equal at
+   about 140 KB of total modex — so a real job is nowhere near the regime any
+   bandwidth optimisation improves.
+
+   The original text of this question follows, and its caveats still hold.
 
    This remains **unmeasured**, and it is the largest open risk in the plan.
    The cost model above is standard (Thakur, van de Geijn), but PRRTE's own
