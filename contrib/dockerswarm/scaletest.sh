@@ -24,7 +24,7 @@
 #
 # For every combination it runs the scaletest client, which times a full-data
 # PMIx_Fence (PMIX_COLLECT_DATA true -- the allgather) and a bare barrier
-# (PMIX_COLLECT_DATA false) over the whole job.  See scaletest.c for what
+# (PMIX_COLLECT_DATA false) over the whole job.  See ../scaling/scaletest.c for what
 # each phase is and why the timestamps are absolute.
 #
 # Usage:
@@ -323,7 +323,7 @@ cmd_run() {
             # Incompressible payload.  The client's default fill is a repeating
             # 256-byte ramp, which deflate squashes by ~250:1 -- fine for
             # measuring how a collective moves bytes, useless for measuring
-            # what compressing them is worth.  See scaletest.c.
+            # what compressing them is worth.  See ../scaling/scaletest.c.
             --entropy)   entropy=1; shift ;;
             --dry-run)   dry=1; shift ;;
             *) die "unknown option $1" ;;
