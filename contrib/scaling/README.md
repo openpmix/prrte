@@ -119,6 +119,6 @@ radix question is about. Running both (`--ppn 1,16`) gives each.
 
 ## The design record
 
-`docs/plans/scalable_collectives.rst` is the reasoning these measurements feed:
+`docs/plans/scalable_collectives/` is the reasoning these measurements feed:
 the cost model, what has already been measured and refuted, and what the
 options are. Read it before changing what this sweep collects.

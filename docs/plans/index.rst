@@ -10,5 +10,5 @@ Detailed implementation plans for in-progress and upcoming features.
    node_reservation/index.rst
    elastic_dvm/index.rst
    bootstrap/index.rst
-   ft_group.rst
-   scalable_collectives.rst
+   ft_group/index.rst
+   scalable_collectives/index.rst
