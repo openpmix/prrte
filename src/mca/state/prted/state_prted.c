@@ -658,19 +658,19 @@ static void job_teardown(int fd, short argc, void *cbdata)
         prte_state_base_notify_data_server(&target);
     }
 
-    /* Remember that this job was here and has gone.  We are dropping the only
-     * copy of what we knew about it, while the job itself goes on running on
-     * other daemons - so a peer can still ask us about one of the procs we
-     * hosted.  Without this record that request cannot be told apart from one
-     * that arrived before the launch message did, and the two want opposite
-     * answers: wait for the one, refuse the other. */
-    prte_pmix_server_job_departed(jdata->nspace);
-
-    /* cleanup the job info.  The caddy still holds a reference of its own,
-     * so the object survives until it is released below. */
-    pmix_pointer_array_set_item(prte_job_data, jdata->index, NULL);
-    PMIX_RELEASE(jdata);
-
+    /* The resources are back, but the JOB OBJECT STAYS until the DVM says
+     * the job is over everywhere - prted_comm.c's DVM_CLEANUP_JOB.
+     *
+     * What we hold about a proc we hosted is the only copy of it: its
+     * placement and, since the launch message started scattering them, its
+     * binding.  This daemon finishing its own share says nothing about the
+     * rest of the job, and a peer still running on another node can ask us
+     * about one of these procs at any time until it does.  Releasing here
+     * answered those questions with silence - measured on peerinfo, 50 of
+     * 56 peer bindings when two daemons happened to finish early.
+     *
+     * Only the caddy's reference is dropped here; the one the job array
+     * holds is what keeps the object alive. */
     PMIX_RELEASE(caddy);
 }
 

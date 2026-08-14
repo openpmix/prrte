@@ -1344,12 +1344,22 @@ static void send_error(int status, pmix_proc_t *idreq, pmix_proc_t *remote, int 
 }
 
 
+/* How many departed jobs to remember.  A request can only arrive for one of
+ * these if it was already in flight when the job ended, so the window is
+ * short; the bound is here because a persistent DVM runs jobs without end
+ * and this list would otherwise grow with all of them. */
+#define PRTE_MAX_DEPARTED_JOBS 32
+
 void prte_pmix_server_job_departed(const pmix_nspace_t nspace)
 {
     prte_namelist_t *nm;
 
     if (prte_pmix_server_job_has_departed(nspace)) {
         return;
+    }
+    while (PRTE_MAX_DEPARTED_JOBS <= pmix_list_get_size(&prte_pmix_server_globals.departed_jobs)) {
+        nm = (prte_namelist_t *) pmix_list_remove_first(&prte_pmix_server_globals.departed_jobs);
+        PMIX_RELEASE(nm);
     }
     nm = PMIX_NEW(prte_namelist_t);
     PMIX_LOAD_PROCID(&nm->name, nspace, PMIX_RANK_WILDCARD);
@@ -1367,20 +1377,6 @@ bool prte_pmix_server_job_has_departed(const pmix_nspace_t nspace)
         }
     }
     return false;
-}
-
-void prte_pmix_server_forget_departed(const pmix_nspace_t nspace)
-{
-    prte_namelist_t *nm;
-
-    PMIX_LIST_FOREACH(nm, &prte_pmix_server_globals.departed_jobs, prte_namelist_t)
-    {
-        if (PMIX_CHECK_NSPACE(nm->name.nspace, nspace)) {
-            pmix_list_remove_item(&prte_pmix_server_globals.departed_jobs, &nm->super);
-            PMIX_RELEASE(nm);
-            return;
-        }
-    }
 }
 
 static void _mdxresp(int sd, short args, void *cbdata)

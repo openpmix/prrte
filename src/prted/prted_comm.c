@@ -187,6 +187,7 @@ static void _daemon_continue(int sd, short args, void *cbdata)
 {
     prte_daemon_caddy_t *cd = (prte_daemon_caddy_t *) cbdata;
     pmix_proc_t pname;
+    prte_job_t *jdata;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
@@ -240,6 +241,21 @@ static void _daemon_continue(int sd, short args, void *cbdata)
          * holding a reference to it */
         PMIX_LOAD_PROCID(&pname, cd->job, PMIX_RANK_WILDCARD);
         prte_pmix_server_clear(&pname);
+        /* ...and now, finally, let the job object go.  A daemon holds it
+         * from the launch message until here, through its own procs
+         * finishing, because until the DVM says the job is over somebody
+         * may still ask it where one of those procs was placed and how it
+         * was bound - it is the only copy of that.  The master runs its own
+         * job lifecycle and is not part of this. */
+        if (!PRTE_PROC_IS_MASTER) {
+            jdata = prte_get_job_data_object(cd->job);
+            if (NULL != jdata) {
+                /* from here on the answer to a question about it is "not
+                 * found" rather than "wait" - the difference is a hang */
+                prte_pmix_server_job_departed(cd->job);
+                PMIX_RELEASE(jdata);
+            }
+        }
         break;
     }
 
@@ -732,10 +748,6 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
             PMIX_ERROR_LOG(ret);
             goto CLEANUP;
         }
-
-        /* the job is over everywhere, so nobody can ask us about it again -
-         * drop the note we made when our own share of it finished */
-        prte_pmix_server_forget_departed(job);
 
         /* look up job data object */
         if (NULL == (jdata = prte_get_job_data_object(job))) {
