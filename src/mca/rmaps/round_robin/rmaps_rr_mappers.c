@@ -580,10 +580,47 @@ errout:
  * but has the added complication of possibly having different
  * numbers of objects on each node
  */
+/* The hwloc-object enumerator: the targets are every object of
+ * options->maptype on the node.  Stateless - no begin/end needed. */
+static unsigned hwloc_targets_count(prte_node_t *node,
+                                    prte_rmaps_options_t *opts,
+                                    void *ctx)
+{
+    PRTE_HIDE_UNUSED_PARAMS(ctx);
+    return prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, opts->maptype);
+}
+
+static hwloc_obj_t hwloc_targets_item(prte_node_t *node,
+                                      prte_rmaps_options_t *opts,
+                                      void *ctx, unsigned j)
+{
+    PRTE_HIDE_UNUSED_PARAMS(ctx);
+    return prte_hwloc_base_get_obj_by_type(node->topology->topo, opts->maptype, j);
+}
+
 int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
                         pmix_list_t *node_list, int32_t num_slots,
                         pmix_rank_t num_procs,
                         prte_rmaps_options_t *options)
+{
+    prte_rmaps_target_enum_t tgts = {
+        .begin = NULL,
+        .count = hwloc_targets_count,
+        .item = hwloc_targets_item,
+        .end = NULL,
+        /* hwloc_obj_type_string() returns a static string */
+        .name = hwloc_obj_type_string(options->maptype)
+    };
+
+    return prte_rmaps_rr_map_targets(jdata, app, node_list, num_slots,
+                                     num_procs, options, &tgts);
+}
+
+int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
+                              pmix_list_t *node_list, int32_t num_slots,
+                              pmix_rank_t num_procs,
+                              prte_rmaps_options_t *options,
+                              prte_rmaps_target_enum_t *tgts)
 {
     int rc=PRTE_SUCCESS, nprocs_mapped;
     prte_node_t *node, *nnext;
@@ -592,10 +629,12 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
     bool nodefull, allfull, outofcpus=false;
     hwloc_obj_t obj = NULL;
     unsigned j, nobjs;
+    void *ctx = NULL;
+    bool began = false;
 
     pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr:byobj mapping by %s for job %s slots %d num_procs %lu",
-                        hwloc_obj_type_string(options->maptype),
+                        tgts->name,
                         PRTE_JOBID_PRINT(jdata->nspace),
                         (int) num_slots, (unsigned long) num_procs);
 
@@ -652,9 +691,17 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
             options->nobjs = 0;
             /* have to delay checking for availability until we have the object */
 
-            /* get the number of objects of this type on this node */
-            nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                             options->maptype);
+            /* let the enumerator set up whatever it needs for this node */
+            if (NULL != tgts->begin) {
+                rc = tgts->begin(node, options, &ctx);
+                if (PRTE_SUCCESS != rc) {
+                    goto errout;
+                }
+                began = true;
+            }
+
+            /* get the number of targets on this node */
+            nobjs = tgts->count(node, options, ctx);
             if (0 == nobjs) {
                 /* We only ever map by an object because the user asked us
                  * to, so a node that has no such object is a request we
@@ -664,22 +711,21 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
                  * caller used to do) placed the job by a rule they never
                  * asked for. */
                 prte_show_help("help-prte-rmaps-base.txt", "rmaps:mapping-target-not-found",
-                               true, hwloc_obj_type_string(options->maptype), node->name);
-                return PRTE_ERR_SILENT;
+                               true, tgts->name, node->name);
+                rc = PRTE_ERR_SILENT;
+                goto errout;
             }
             pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:rr: found %u %s objects on node %s",
-                                nobjs, hwloc_obj_type_string(options->maptype),
-                                node->name);
+                                nobjs, tgts->name, node->name);
 
             nodefull = false;
         redo:
             for (j=0; j < nobjs && nprocs_mapped < app->num_procs && !nodefull; j++) {
                 pmix_output_verbose(10, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps:rr: assigning proc to object %d", j);
-                /* get the hwloc object */
-                obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
-                                            options->maptype, j);
+                /* get the target object */
+                obj = tgts->item(node, options, ctx, j);
                 if (NULL == obj) {
                     /* out of objects on this node */
                     break;
@@ -747,6 +793,13 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
                 goto redo;
             }
             // move to the next node
+            if (began) {
+                if (NULL != tgts->end) {
+                    tgts->end(ctx);
+                }
+                ctx = NULL;
+                began = false;
+            }
             if (NULL != options->target) {
                 hwloc_bitmap_free(options->target);
                 options->target = NULL;
@@ -759,6 +812,10 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
     }
 
 errout:
+    /* an early exit can leave the enumerator holding this node's state */
+    if (began && NULL != tgts->end) {
+        tgts->end(ctx);
+    }
     if (PRTE_ERR_SILENT == rc) {
         return rc;
     }
