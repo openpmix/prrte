@@ -44,15 +44,14 @@ PRTE_EXPORT void prte_pmix_server_clear(pmix_proc_t *pname);
 /* Record that every local proc of this job has gone and its job object has
  * been released here, and ask whether that has happened.
  *
- * A daemon retires a job as soon as its own share of it finishes, while the
- * job goes on running elsewhere - so "I have no job object for this" has two
- * meanings, and a direct modex has to tell them apart. Not yet arrived means
- * wait; already gone means answer NOT_FOUND, because nothing will ever make
- * it answerable again. The record is dropped when the DVM declares the job
+ * A daemon holds a job object from the launch message until the DVM declares
+ * the job complete - so "I have no job object for this" has two meanings, and
+ * a direct modex has to tell them apart. Not yet arrived means wait; already
+ * gone means answer NOT_FOUND, because nothing will ever make it answerable
+ * again. The record is dropped when the DVM declares the job
  * complete, so the list holds at most the jobs currently running. */
 PRTE_EXPORT void prte_pmix_server_job_departed(const pmix_nspace_t nspace);
 PRTE_EXPORT bool prte_pmix_server_job_has_departed(const pmix_nspace_t nspace);
-PRTE_EXPORT void prte_pmix_server_forget_departed(const pmix_nspace_t nspace);
 
 PRTE_EXPORT void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret);
 
