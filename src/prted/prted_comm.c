@@ -733,6 +733,10 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
             goto CLEANUP;
         }
 
+        /* the job is over everywhere, so nobody can ask us about it again -
+         * drop the note we made when our own share of it finished */
+        prte_pmix_server_forget_departed(job);
+
         /* look up job data object */
         if (NULL == (jdata = prte_get_job_data_object(job))) {
             /* we can safely ignore this request as the job

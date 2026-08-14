@@ -787,6 +787,7 @@ int pmix_server_init(void)
 
     /* setup the server's state variables */
     PMIX_CONSTRUCT(&prte_pmix_server_globals.psets, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.departed_jobs, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.groups, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.local_reqs, pmix_pointer_array_t);
     pmix_pointer_array_init(&prte_pmix_server_globals.local_reqs, 128, INT_MAX, 2);
@@ -1283,6 +1284,7 @@ void pmix_server_finalize(void)
     PMIX_DESTRUCT(&prte_pmix_server_globals.local_reqs);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.notifications);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.psets);
+    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.departed_jobs);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.groups);
 
     /* shutdown the local server */
@@ -1321,6 +1323,46 @@ static void send_error(int status, pmix_proc_t *idreq, pmix_proc_t *remote, int 
     if (PRTE_SUCCESS != prc) {
         PRTE_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(reply);
+    }
+}
+
+
+void prte_pmix_server_job_departed(const pmix_nspace_t nspace)
+{
+    prte_namelist_t *nm;
+
+    if (prte_pmix_server_job_has_departed(nspace)) {
+        return;
+    }
+    nm = PMIX_NEW(prte_namelist_t);
+    PMIX_LOAD_PROCID(&nm->name, nspace, PMIX_RANK_WILDCARD);
+    pmix_list_append(&prte_pmix_server_globals.departed_jobs, &nm->super);
+}
+
+bool prte_pmix_server_job_has_departed(const pmix_nspace_t nspace)
+{
+    prte_namelist_t *nm;
+
+    PMIX_LIST_FOREACH(nm, &prte_pmix_server_globals.departed_jobs, prte_namelist_t)
+    {
+        if (PMIX_CHECK_NSPACE(nm->name.nspace, nspace)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void prte_pmix_server_forget_departed(const pmix_nspace_t nspace)
+{
+    prte_namelist_t *nm;
+
+    PMIX_LIST_FOREACH(nm, &prte_pmix_server_globals.departed_jobs, prte_namelist_t)
+    {
+        if (PMIX_CHECK_NSPACE(nm->name.nspace, nspace)) {
+            pmix_list_remove_item(&prte_pmix_server_globals.departed_jobs, &nm->super);
+            PMIX_RELEASE(nm);
+            return;
+        }
     }
 }
 
@@ -1478,6 +1520,57 @@ static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata
     prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
 }
 
+/* Answer a direct modex out of the job object.
+ *
+ * The keys this covers are the ones the DVM itself decided when it mapped
+ * the job - see prte_pmix_server_derivable_key() - and none of them is data
+ * the process publishes.  Asking our own PMIx server for them instead is
+ * what used to hang the requester: that path parks the request until the
+ * proc commits something, and a proc that only ever calls PMIx_Get commits
+ * nothing, ever.  Both entry points into this file's dmodex service - the
+ * receive and the retry it can defer to - therefore try this first.
+ *
+ * Returns true if the request has been answered and disposed of. */
+static bool answer_from_job(prte_job_t *jdata, prte_proc_t *proc,
+                            pmix_proc_t *pproc, const char *key,
+                            pmix_proc_t *sender, int remote_index)
+{
+    prte_pmix_server_req_t *rq;
+    pmix_data_buffer_t dbuf;
+    pmix_byte_object_t bo;
+    pmix_status_t prc;
+
+    if (NULL == key || !prte_pmix_server_derivable_key(key)) {
+        return false;
+    }
+    PMIX_DATA_BUFFER_CONSTRUCT(&dbuf);
+    prc = prte_pmix_server_derive_proc_data(jdata, proc, &dbuf);
+    if (PMIX_SUCCESS != prc) {
+        /* we could not build it - let the caller do this the ordinary way,
+         * which at worst leaves the asker where it was before */
+        PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
+        return false;
+    }
+    PMIX_DATA_BUFFER_UNLOAD(&dbuf, bo.bytes, bo.size);
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s dmdx: key %s for %s:%u ANSWERED FROM THE JOB (%lu bytes)",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), key,
+                        pproc->nspace, pproc->rank, (unsigned long) bo.size);
+
+    rq = PMIX_NEW(prte_pmix_server_req_t);
+    pmix_asprintf(&rq->operation, "DMDX: %s:%d", __FILE__, __LINE__);
+    rq->proxy = *sender;
+    memcpy(&rq->tproc, pproc, sizeof(pmix_proc_t));
+    rq->remote_index = remote_index;
+    rq->pstatus = PMIX_SUCCESS;
+    rq->data = (char *) bo.bytes;
+    rq->sz = bo.size;
+    /* _mdxresp clears our slot as it sends, so we must occupy one */
+    rq->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.remote_reqs, rq);
+    _mdxresp(0, 0, rq);
+    return true;
+}
+
 static void dmdx_check(int sd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
@@ -1491,6 +1584,18 @@ static void dmdx_check(int sd, short args, void *cbdata)
     /* do we know about this job? */
     jdata = prte_get_job_data_object(req->tproc.nspace);
     if (NULL == jdata) {
+        /* it may have arrived and departed while we were waiting for it -
+         * see the same test in dmdx_recv */
+        if (prte_pmix_server_job_has_departed(req->tproc.nspace)) {
+            send_error(PRTE_ERR_NOT_FOUND, &req->tproc, &req->proxy, req->remote_index);
+            if (req->event_active) {
+                prte_event_del(&req->ev);
+            }
+            pmix_pointer_array_set_item(&prte_pmix_server_globals.remote_reqs,
+                                        req->local_index, NULL);
+            PMIX_RELEASE(req);
+            return;
+        }
         /* wait some more */
         pmix_output_verbose(2, prte_pmix_server_globals.output,
                             "%s dmdx:recv dmdx_check cannot find job object - delaying",
@@ -1521,6 +1626,19 @@ static void dmdx_check(int sd, short args, void *cbdata)
             prte_event_del(&req->ev);
         }
         pmix_pointer_array_set_item(&prte_pmix_server_globals.remote_reqs, req->local_index, NULL);
+        PMIX_RELEASE(req);
+        return;
+    }
+
+    /* a placement key is ours to answer, and nothing about the process will
+     * ever make the check below succeed for one - see answer_from_job() */
+    if (answer_from_job(jdata, proc, &req->tproc, req->key,
+                        &req->proxy, req->remote_index)) {
+        if (req->event_active) {
+            prte_event_del(&req->ev);
+        }
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.remote_reqs,
+                                    req->local_index, NULL);
         PMIX_RELEASE(req);
         return;
     }
@@ -1668,6 +1786,23 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
     /* do we know about this job? */
     jdata = prte_get_job_data_object(pproc.nspace);
     if (NULL == jdata) {
+        /* Two things look like this, and they want opposite answers.  If the
+         * job has already been and gone from here - our share of it finished
+         * and we released it - then nothing will ever make this answerable,
+         * and waiting means the asker waits forever. */
+        if (prte_pmix_server_job_has_departed(pproc.nspace)) {
+            pmix_output_verbose(2, prte_pmix_server_globals.output,
+                                "%s dmdx:recv request for departed job %s - not found",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), pproc.nspace);
+            send_error(PRTE_ERR_NOT_FOUND, &pproc, sender, index);
+            if (NULL != info) {
+                PMIX_INFO_FREE(info, ninfo);
+            }
+            if (NULL != key) {
+                free(key);
+            }
+            return;
+        }
         /* not having the jdata means that we haven't unpacked the
          * the launch message for this job yet - this is a race
          * condition, so just log the request and we will fill
@@ -1729,6 +1864,19 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
         if (NULL != key) {
           free(key);
         }
+        return;
+    }
+
+    /* If what they are asking for is something this DVM decided when it
+     * mapped the job, answer it out of the job object and do not go near our
+     * PMIx server.  We host this proc - the check above says so - so we hold
+     * the placement and the binding, and neither of them is data the process
+     * publishes. */
+    if (answer_from_job(jdata, proc, &pproc, key, sender, index)) {
+        if (NULL != info) {
+            PMIX_INFO_FREE(info, ninfo);
+        }
+        free(key);
         return;
     }
 

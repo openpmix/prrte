@@ -89,11 +89,6 @@ static void wildcard_reg_complete(pmix_status_t status, void *cbdata)
     PMIX_RELEASE(req);
 }
 
-/* answering a dmodex from the job object rather than from the hosting
- * daemon - defined below, next to the key set they cover */
-static bool derivable_key(const char *key);
-static pmix_status_t derive_proc_data(prte_job_t *jdata, prte_proc_t *proct,
-                                      pmix_data_buffer_t *buf);
 static void derived_relfn(void *cbdata);
 
 static void dmodex_req(int sd, short args, void *cbdata)
@@ -233,12 +228,22 @@ static void dmodex_req(int sd, short args, void *cbdata)
      * that is an answer eager publication would have had in hand.  Requiring
      * a live daemon here would turn it into a failure. */
     if (prte_pmix_server_globals.lazy_procdata && !refresh_cache &&
-        derivable_key(req->key)) {
+        prte_pmix_server_derivable_key(req->key) &&
+        /* ...but not a binding we do not hold.  The launch message scatters
+         * the cpusets, so a NULL one on a proc we do not host means "never
+         * sent", not "not bound", and answering either way would be a
+         * guess.  Send it to the daemon that forks the proc, which answers
+         * this same closed set of keys straight out of its job object
+         * (pmix_server_dmdx_recv) rather than out of anything the process
+         * has to have published. */
+        (NULL != proct->cpuset || proct->parent == PRTE_PROC_MY_NAME->rank ||
+         (!PMIx_Check_key(req->key, PMIX_CPUSET) &&
+          !PMIx_Check_key(req->key, PMIX_LOCALITY_STRING)))) {
         pmix_data_buffer_t dbuf;
         pmix_byte_object_t bo;
 
         PMIX_DATA_BUFFER_CONSTRUCT(&dbuf);
-        prc = derive_proc_data(jdata, proct, &dbuf);
+        prc = prte_pmix_server_derive_proc_data(jdata, proct, &dbuf);
         if (PMIX_SUCCESS == prc) {
             PMIX_DATA_BUFFER_UNLOAD(&dbuf, bo.bytes, bo.size);
             PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
@@ -365,7 +370,7 @@ callback:
  * the values ourselves with PMIx_Data_store_internal would put them in the
  * INTERNAL scope, which that lookup does not reach.
  */
-static bool derivable_key(const char *key)
+bool prte_pmix_server_derivable_key(const char *key)
 {
     if (NULL == key) {
         /* no key named means "everything you have", and we do not have the
@@ -413,8 +418,8 @@ static pmix_status_t pack_derived(pmix_data_buffer_t *buf, const char *key,
 /* Build the blob describing one proc.  Mirrors the per-proc section of
  * prte_pmix_server_register_nspace() - if a key is added there and a peer can
  * ask for it, it belongs here too, or that key becomes a wire round trip. */
-static pmix_status_t derive_proc_data(prte_job_t *jdata, prte_proc_t *proct,
-                                      pmix_data_buffer_t *buf)
+pmix_status_t prte_pmix_server_derive_proc_data(prte_job_t *jdata, prte_proc_t *proct,
+                                               pmix_data_buffer_t *buf)
 {
     pmix_status_t rc;
     pmix_rank_t vpid;
@@ -491,10 +496,15 @@ static pmix_status_t derive_proc_data(prte_job_t *jdata, prte_proc_t *proct,
         if (PMIX_SUCCESS != rc) {
             return rc;
         }
-    } else {
-        /* an unbound proc still has to answer the locality question, and the
+    } else if (proct->parent == PRTE_PROC_MY_NAME->rank) {
+        /* An unbound proc still has to answer the locality question, and the
          * answer is "nothing to say" - the eager path registers a NULL for
-         * exactly this case */
+         * exactly this case.  Only for a proc we HOST, though: for any other,
+         * a NULL cpuset means the launch message scattered the bindings and
+         * we were not sent this one, which is a different statement.  The
+         * caller above has already refused to derive those two keys in that
+         * case, so what is left here is a request for some other key on a
+         * proc whose binding we cannot speak to - leave both out. */
         PACK_DERIVED(rc, buf, PMIX_LOCALITY_STRING, PMIX_STRING, data.string = NULL);
         if (PMIX_SUCCESS != rc) {
             return rc;

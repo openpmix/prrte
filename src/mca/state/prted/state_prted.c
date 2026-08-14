@@ -37,6 +37,7 @@
 #include "src/util/session_dir.h"
 
 #include "src/mca/state/base/base.h"
+#include "src/prted/pmix/pmix_server.h"
 #include "state_prted.h"
 
 /*
@@ -656,6 +657,14 @@ static void job_teardown(int fd, short argc, void *cbdata)
         PMIX_LOAD_PROCID(&target, jdata->nspace, PMIX_RANK_WILDCARD);
         prte_state_base_notify_data_server(&target);
     }
+
+    /* Remember that this job was here and has gone.  We are dropping the only
+     * copy of what we knew about it, while the job itself goes on running on
+     * other daemons - so a peer can still ask us about one of the procs we
+     * hosted.  Without this record that request cannot be told apart from one
+     * that arrived before the launch message did, and the two want opposite
+     * answers: wait for the one, refuse the other. */
+    prte_pmix_server_job_departed(jdata->nspace);
 
     /* cleanup the job info.  The caddy still holds a reference of its own,
      * so the object survives until it is released below. */

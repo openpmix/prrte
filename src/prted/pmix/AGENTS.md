@@ -232,6 +232,60 @@ bearing:
   the caller saying our copy may be stale, which is exactly when we must
   go and ask.
 
+### A binding we were not sent is not a binding of "none"
+
+`prte_proc_t.cpuset` is NULL in two completely different situations, and
+since the launch message started **scattering** the cpusets — each daemon
+is sent only the bindings of the procs it will fork, see
+[`src/mca/odls/AGENTS.md`](../../mca/odls/AGENTS.md) — both are ordinary:
+
+| NULL cpuset on | means |
+|----------------|-------|
+| a proc we host | the mapper bound nothing (`--bind-to none`, or it could not) |
+| any other proc | we were never told, and are not the authority |
+
+Everything that reads a cpuset therefore has to ask *whose proc it is*
+first, because the answer to "where is it bound" differs and neither
+answer is an error:
+
+- **`register_nspace()`** publishes `PMIX_CPUSET` and the locality string
+  when it has a cpuset, publishes a **NULL** `PMIX_LOCALITY_STRING` — which
+  positively asserts "unbound" — only for a proc *it hosts*, and publishes
+  nothing at all for any other. Silence is what makes a get fall through to
+  somebody who knows; a NULL locality is an answer, and the wrong one.
+- **`derive_proc_data()`** does the same, and `dmodex_req()` goes further:
+  when the key asked for is `PMIX_CPUSET` or `PMIX_LOCALITY_STRING` and we
+  hold neither the cpuset nor the proc, it declines to derive at all and
+  sends the request to the daemon that forks the proc.
+
+The failure this prevents is silent — a peer told that a bound process is
+unbound, on a path where nothing returns an error.
+
+### The hosting daemon answers a placement key from the job, not from the process
+
+That referral only works because of the other half, in
+`pmix_server_dmdx_recv()` (`pmix_server.c`): a direct modex whose
+`PMIX_REQUIRED_KEY` is one of the `derivable_key()` set is answered
+**straight out of `jdata->procs[rank]`**, by the same
+`prte_pmix_server_derive_proc_data()`, before the handler goes anywhere near
+its own PMIx server.
+
+That ordering is load bearing, and getting it wrong is a hang rather than a
+wrong answer. The ordinary path below it asks the local server for the key
+and, not finding it, parks the request on a two-second retry until the
+process publishes something. For application data that is exactly right —
+the asker wants a value the process has not produced yet. For **PRRTE's own**
+placement and binding it is a deadlock: those keys have never required a
+`PMIx_Put` from the proc being asked about, and a process that only ever
+*gets* never commits anything, so the request is never satisfied. Seen
+outright with `contrib/dockerswarm/peerinfo.c`, which does nothing but get:
+every rank hung.
+
+So the rule for anything added to `derivable_key()`: **this daemon must be
+able to answer it from what PRRTE knows, on both sides.** The asking daemon
+derives it when it holds the facts; the hosting daemon derives it when asked;
+neither waits on the process.
+
 **This depends on a PMIx that surfaces the request at all**, which is why
 it could not have been written earlier: a client's get for a reserved key
 its server did not hold used to have `PMIX_IMMEDIATE` forced onto it,
