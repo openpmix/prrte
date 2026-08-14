@@ -476,7 +476,7 @@ build_linux() {
             # (No apostrophes here: see the note further down.)
             echo ">>>> scaletest (collective scaling measurement) client"
             gcc -O2 -g -o /opt/prte/prte/bin/scaletest \
-                /prrte-src/contrib/dockerswarm/scaletest.c \
+                /prrte-src/contrib/scaling/scaletest.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
             # fencer: one fence, either a modex or a pure barrier.  The two
