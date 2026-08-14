@@ -74,7 +74,7 @@ removed.
 `xcast` forwards the whole payload down the routing tree, `fence` rolls up
 to the controller which broadcasts the answer back. A lateral
 scatter/allgather pair for each was built and then removed — see
-[`docs/plans/scalable_collectives.rst`](../../docs/plans/scalable_collectives.rst)
+[`docs/plans/scalable_collectives/`](../../docs/plans/scalable_collectives/)
 for what it was and why it went. If you are reintroducing one, read that
 first: the framing it needed (an out-of-order op hold, a partial-payload
 gate, a movement id on the wire and a disagreement interlock for the
@@ -255,7 +255,7 @@ copy of the reliability machinery.
 The cost of the tree is `d*r*M*beta`: a daemon with `r` children puts `r` full
 copies of the payload on its outbound link at every level. That is the term a
 lateral movement was built to remove, and
-[`docs/plans/scalable_collectives.rst`](../../docs/plans/scalable_collectives.rst)
+[`docs/plans/scalable_collectives/`](../../docs/plans/scalable_collectives/)
 records both the attempt and why it was withdrawn.
 
 ### Compression, and why the threshold is not a size
