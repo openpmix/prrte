@@ -4,7 +4,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020-2021 IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -352,6 +352,7 @@ static void track_procs(int fd, short argc, void *cbdata)
 
     /* get the job object for this proc */
     if (NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
+        prte_state_base_orphaned_proc(proc, state);
         goto cleanup;
     }
     if (PRTE_PROC_STATE_READY_FOR_DEBUG == state) {

@@ -73,6 +73,7 @@
 #include "src/rml/rml_contact.h"
 #include "src/rml/rml.h"
 #include "src/mca/schizo/base/base.h"
+#include "src/mca/state/base/base.h"
 #include "src/mca/state/state.h"
 
 #include "src/prted/pmix/pmix_server.h"
@@ -2266,10 +2267,16 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         goto MOVEON;
     }
 
-    /* get the jobdat for this child */
+    /* Get the jobdat for this child.  Not having it is an error worth
+     * recording, but it is NOT a reason to stop: a process we forked has
+     * died, and what it died of is knowable from the wait status alone.
+     * Bailing out here jumped over the entire decode below, so the proc was
+     * reported as a clean WAITPID_FIRED however it had actually gone - a
+     * signal death, a non-zero exit - carrying the raw wait status as its
+     * exit code (256 for exit(1)).  The only two things the job object is
+     * read for below both have a defensible answer without it. */
     if (NULL == (jobdat = prte_get_job_data_object(proc->name.nspace))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        goto MOVEON;
     }
 
     /* if this child was ordered to die, then just pass that along
@@ -2335,7 +2342,15 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
 
         /* provide a default state */
         state = PRTE_PROC_STATE_WAITPID_FIRED;
-        flag = prte_get_attribute(&jobdat->attributes, PRTE_JOB_ERROR_NONZERO_EXIT, NULL, PMIX_BOOL);
+        /* the job object is the authority on whether a non-zero exit is to be
+         * treated as an error; with no job object, fall back to the framework
+         * default that would have put the attribute there in the first place */
+        if (NULL == jobdat) {
+            flag = prte_state_base.error_non_zero_exit;
+        } else {
+            flag = prte_get_attribute(&jobdat->attributes, PRTE_JOB_ERROR_NONZERO_EXIT, NULL,
+                                      PMIX_BOOL);
+        }
 
         /* check to see if a sync was required and if it was received */
         if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_REG)) {

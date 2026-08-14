@@ -10,7 +10,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
@@ -45,6 +45,7 @@
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/plm_types.h"
 #include "src/rml/rml.h"
+#include "src/mca/state/base/base.h"
 #include "src/mca/state/state.h"
 
 #include "src/runtime/prte_globals.h"
@@ -452,10 +453,15 @@ static void proc_errors(int fd, short args, void *cbdata)
 
     /* get the job object */
     if (NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
-        /* must already be complete */
+        /* We hold nothing to account this against, so nothing below can run.
+         * "Must already be complete" is the benign reading and it is not the
+         * only one - a job object released while its procs were still running
+         * arrives here identically, and dropping it leaves this daemon
+         * believing the proc is alive forever. */
         PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:prted:proc_errors NULL jdata - ignoring error",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        prte_state_base_orphaned_proc(proc, state);
         goto cleanup;
     }
 

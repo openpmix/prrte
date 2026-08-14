@@ -88,6 +88,11 @@ PRTE_EXPORT void prte_state_base_track_procs(int fd, short argc, void *cbdata);
 PRTE_EXPORT void prte_state_base_check_fds(prte_job_t *jdata);
 PRTE_EXPORT void prte_state_base_notify_data_server(pmix_proc_t *target);
 
+/* A proc reported a state and we hold no job object to account it against.
+ * Both track_procs implementations call this instead of dropping the
+ * report on the floor - see the comment on the definition. */
+PRTE_EXPORT void prte_state_base_orphaned_proc(pmix_proc_t *proc, prte_proc_state_t state);
+
 // resource recovery
 PRTE_EXPORT void prte_state_base_recover_resources(prte_job_t *jdata, prte_proc_t *pptr);
 

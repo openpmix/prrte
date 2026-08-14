@@ -277,8 +277,18 @@ static void proc_errors(int fd, short args, void *cbdata)
                          PRTE_NAME_PRINT(proc), prte_proc_state_to_str(state));
 
     /* get the job object */
-    if (prte_finalizing || NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
-        /* could be a race condition */
+    if (prte_finalizing) {
+        PMIX_RELEASE(caddy);
+        return;
+    }
+    if (NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
+        /* This proc has died and we hold nothing to account it against, so
+         * nothing below can run.  Dropping it silently - which is what "could
+         * be a race condition" amounted to - is what leaves the DVM waiting
+         * forever on a job it can no longer see.  Note the error states land
+         * HERE rather than in track_procs, so this is the arrival point for a
+         * proc that exited non-zero or died on a signal. */
+        prte_state_base_orphaned_proc(proc, state);
         PMIX_RELEASE(caddy);
         return;
     }

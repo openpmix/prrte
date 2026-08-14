@@ -64,3 +64,20 @@ exit status returned for the primary job, because the
 option (or set it to "false") if you want the first non-zero status
 returned by the primary job or any job it spawned to be reported as the
 overall exit status.
+#
+[orphaned-proc]
+%s: a process has terminated, but the runtime holds no record of the job
+it belonged to:
+
+  Process: %s
+
+This is an internal inconsistency - the job object was released while the
+job was still running, so this process's termination cannot be accounted
+for and the job can never be declared complete.  Rather than wait forever
+for a job it can no longer see, the runtime is bringing the DVM down once
+nothing it can still account for is running.  The exit status will be
+non-zero.
+
+Please report this, with the command line that produced it, at:
+
+  https://github.com/openpmix/prrte/issues
