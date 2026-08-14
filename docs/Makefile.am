@@ -37,6 +37,13 @@ MARKDOWN_SOURCE_FILES = \
 # Note: it is significantly more convenient to list all the source
 # files here using wildcards (vs. listing every single .rst file).
 # However, it is necessary to list $(srcdir) when using wildcards.
+#
+# plans/ is the one two-level entry.  Every plan lives in its own
+# subdirectory carrying an index.rst, so a per-directory line would have to
+# be added here each time a plan is written - and until it was, an edit to
+# that plan would not rebuild the docs (Sphinx picks the file up through the
+# toctree regardless, so the omission is silent).  The plans/*/*.rst glob
+# covers them all.
 RST_SOURCE_FILES = \
         $(srcdir)/*.rst \
         $(srcdir)/prrte-rst-content/*.rst \
@@ -47,6 +54,8 @@ RST_SOURCE_FILES = \
         $(srcdir)/how-things-work/schedulers/*.rst \
         $(srcdir)/how-things-work/rml/*.rst \
         $(srcdir)/developers/*.rst \
+        $(srcdir)/plans/*.rst \
+        $(srcdir)/plans/*/*.rst \
         $(srcdir)/man/*.rst \
         $(srcdir)/man/man1/*.rst \
         $(srcdir)/man/man5/*.rst \
