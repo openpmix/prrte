@@ -1904,6 +1904,13 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
     req->key = strdup("hosts");
     req->operation = strdup("ADDHOSTS");
     req->allocdir = PMIX_ALLOC_EXTEND;
+    /* the request OWNS whatever job object it carries - its destructor
+     * releases it - and this one is not ours to give away: the job is
+     * still on its way to launch, and the parent's child list is holding
+     * the only other reference to it.  Every other producer of a request
+     * hands over a job it just created (PRTE_SPN_REQ); we are borrowing a
+     * live one, so take a reference of our own for the request to drop. */
+    PMIX_RETAIN(jdata);
     req->jdata = jdata;
     if (NULL != hostfiles) {
         req->ninfo++;
