@@ -1,0 +1,4 @@
+# Results written by cluster-sweep.sh
+scaling-results-*/
+scaling-results-*.tar.gz
+scaletest
