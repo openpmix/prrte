@@ -1,0 +1,639 @@
+Device mapping: implementation plan
+===================================
+
+This is the build order for the design in
+:doc:`per-device-mapping`.  That document says *what* ``--map-by
+device=<class>`` means and why; this one says what to change, in what order,
+and how each step is proved before the next one starts.  Where the two
+disagree the design document wins — except for the two places noted below as
+**refinements**, which correct it.
+
+Read it alongside `src/mca/rmaps/AGENTS.md
+<https://github.com/openpmix/prrte/blob/master/src/mca/rmaps/AGENTS.md>`_ and
+`src/hwloc/AGENTS.md
+<https://github.com/openpmix/prrte/blob/master/src/hwloc/AGENTS.md>`_; the
+rules in those files are assumed here rather than repeated.
+
+
+Two refinements to the design
+-----------------------------
+
+Both came out of reading the topologies already in the tree.
+
+**1. The GPU filter is a union, not a priority ladder.**  The design says:
+prefer backend-tagged OS devices (``cuda0``, ``rsmi0``, ``ze0``,
+``HWLOC_OBJ_OSDEV_COPROC``) and *fall back* to the DRM render-node rule if
+the topology has none.  Topology-wide fallback is wrong on a mixed-vendor
+node: one CUDA GPU with its backend loaded and one AMD GPU without would make
+rule 1 fire and the AMD card disappear.  Apply both rules **per PCI function**
+and take the union — a function is a GPU if it carries a backend/COPROC OS
+device **or** it is PCI class ``03xx`` carrying a ``renderD*`` OS device.
+The two rules agree on every topology in hand, so this costs nothing now and
+removes a whole class of future bug report.
+
+**2. ``prte_rmaps_options_t`` changes, so the rmaps version bumps.**  The
+design does not mention it.  Precedent is
+``docs/plans/per_app_mapping/rmaps-impl-plan.rst``, which bumped 4.0.0 → 5.0.0
+for exactly this reason (it added ``app_idx`` and ``dist_device`` to that
+struct).  Add ``PRTE_RMAPS_BASE_VERSION_6_0_0`` and redefine the ``5_0_0``
+alias to it, following the pattern already in ``rmaps_types.h``.
+
+
+Current state
+-------------
+
+Facts the plan depends on, all verified against the tree at
+``topic/cluster-scaling-sweep``:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 42 58
+
+   * - Item
+     - Current value
+   * - Last used ``PRTE_PROC_*`` attribute offset
+     - ``PRTE_PROC_NBEATS`` = ``+14``; next free is **+15**
+       (``+2``/``+3``/``+4`` are holes — do not reuse)
+   * - ``PRTE_JOB_DIST_DEVICE`` / ``PRTE_APP_DIST_DEVICE``
+     - job key ``+78`` / app key ``30``; both dead, rename in place
+   * - rmaps framework version
+     - ``PRTE_RMAPS_BASE_VERSION_5_0_0`` (``4_0_0`` aliased to it)
+   * - ``prte_rmaps_base.device``
+     - declared, initialized to ``NULL``, never read or written
+   * - ``mappers[]`` / ``mapquals[]``
+     - ``schizo_base_frame.c`` ~line 725 / ~line 740
+   * - Job-level ``--map-by`` parser
+     - ``prte_rmaps_base_set_mapping_policy()``, ``rmaps_base_frame.c`` ~800
+   * - Per-app ``--map-by`` parser
+     - ``prte_rmaps_base_set_app_mapping_policy()``, same file ~1135
+   * - Qualifier chain order
+     - SPAN, OVERSUB, NOOVER, NOLOCAL, ORDERED, PE, **INHERIT**, NOINHERIT,
+       HWTCPUS, CORECPUS, QFILE
+   * - ``test/topologies/``
+     - ``test-topo.xml``, ``test-topo2.xml``; ``EXTRA_DIST`` lists them by
+       name; ``test/offline`` auto-discovers every ``*.xml`` there
+   * - PMIx floor
+     - ``pmix_min_version = 7.0.0`` in ``VERSION``
+
+**The test material already exists.**  This is the single biggest
+risk-reducer in the plan and it was not obvious: both shipped topologies
+already carry I/O devices, and ``test-topo2.xml`` carries precisely the
+shapes this feature has to get right.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - Topology
+     - What it pins
+   * - ``test-topo2.xml``
+     - One AMD GPU at ``0000:63:00.0`` (class ``0380``) exposing **three**
+       OS devices — ``renderD128``, ``card0`` **and** ``rsmi0`` — so it
+       tests dedup-by-PCI-function *and* the backend-tagged path in one
+       object.  Plus ``card1`` at ``0000:02:00.0``: class ``0300``, no
+       render node, no backend — **the decoy, already in the tree**.
+       ``device=gpu`` on this topology must return **exactly one** device.
+       It also has one OFA device (``mlx5_0``) and one network device
+       (``enp67s0``) on *different* NUMA groups.
+   * - ``test-topo.xml``
+     - Every device sits under the **same** ``Group`` (cpus 0-43) of a
+       four-group machine — the degenerate-locality case, free.  Four of its
+       OS devices (``eth0``, ``sda``, ``sdb``, ``sr0``) have **no PCI
+       ancestor**, which is the "sort last, by osname" rule.
+
+So the enumerator can be written and fully unit-tested before the
+requester's topology is added to the tree at all, and before any PRRTE
+plumbing exists.
+
+
+Dependency graph
+----------------
+
+.. code-block:: text
+
+   PR A  remove dead dist remnants        (prrte)   -- independent
+   PR B  parameterize byobj               (prrte)   -- independent, no behavior change
+   PR C  device enumerator + cap flag     (openpmix)
+                    |
+                    v
+   PR D  wrapper + directive + mapper     (prrte)   needs C, B
+                    |
+                    v
+   PR E  interleave qualifier             (prrte)   needs D
+                    |
+                    v
+   PR F  report the assignment            (prrte)   needs D
+                    |
+                    v
+   PR G  requester's topology + swarm     (prrte)   needs D, E
+
+A and B can start immediately and in parallel with C.  D is the only place
+the feature becomes visible to a user, and it deliberately lands the
+directive **and** the mapper together — a directive that parses and does
+nothing is the exact failure this whole feature is repairing, and shipping
+one for even a single release would repeat it.
+
+
+Phase A — remove the dead ``dist`` remnants
+--------------------------------------------
+
+Standalone PR, no dependencies, reviewable on its own.  The project asks for
+incidental cleanup as its own commit; this one also shrinks the diff of
+every phase after it.
+
+Delete, in one commit:
+
+* ``PRTE_CLI_DIST`` from ``src/util/prte_cmd_line.h``
+* ``prte_rmaps_base.device`` (field, initializer in ``rmaps_base_frame.c``,
+  and the ``device`` entry in ``base.h``'s struct)
+* ``case PRTE_MAPPING_BYDIST`` from the policy switch in
+  ``rmaps_base_map_job.c``
+* the ``"MINDIST"`` arm in ``rmaps_base_print_fns.c``
+* ``dist`` and ``DEVICE=dev (for dist policy)`` from the ``mapby`` MCA
+  parameter help string in ``rmaps_base_frame.c``
+
+Keep — they are reused in phase D, renamed rather than deleted:
+``PRTE_MAPPING_BYDIST`` (the value ``10``),
+``PRTE_JOB_DIST_DEVICE`` / ``PRTE_APP_DIST_DEVICE``, and
+``options->dist_device`` with its ``resolve_app_options()`` plumbing and its
+``free()`` at ``cleanup``.
+
+**Commit message** must say why: the MCA parameter has been advertising a
+policy no command line can reach, which is what sent the reporter of
+OMPI #14169 looking for it.  That is the bug being fixed here, independent
+of whether device mapping ever lands.
+
+*Verify:* top-level ``make`` warning-free with ``--enable-debug``;
+``make check``; ``prte_info --all | grep -i dist`` no longer offers it.
+
+
+Phase B — parameterize ``byobj`` over its object enumerator
+------------------------------------------------------------
+
+Standalone PR.  Pure refactor, **no behavior change**, and that is the
+point: it is provable by the existing offline harness, so the risky
+restructuring lands separately from the new feature and cannot be confused
+with it.
+
+In ``src/mca/rmaps/round_robin/rmaps_rr_mappers.c``, replace the two direct
+calls in ``prte_rmaps_rr_byobj()``:
+
+.. code-block:: c
+
+   /* today */
+   nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                              options->maptype);
+   obj   = prte_hwloc_base_get_obj_by_type(node->topology->topo,
+                                           options->maptype, j);
+
+with a small vtable supplied by the caller:
+
+.. code-block:: c
+
+   typedef struct {
+       /* how many placement targets does this node offer? */
+       unsigned    (*count)(prte_node_t *node, prte_rmaps_options_t *opts,
+                            void *ctx);
+       /* the j-th target, or NULL */
+       hwloc_obj_t (*item)(prte_node_t *node, prte_rmaps_options_t *opts,
+                           void *ctx, unsigned j);
+       /* per-node setup/teardown; NULL when not needed */
+       int         (*begin)(prte_node_t *node, prte_rmaps_options_t *opts,
+                            void **ctx);
+       void        (*end)(void *ctx);
+       const char *name;      /* for diagnostics: "core", "device=gpu", ... */
+   } prte_rmaps_target_enum_t;
+
+``prte_rmaps_rr_byobj()`` becomes a thin wrapper that calls the shared body
+with the hwloc-type enumerator.  Everything else in that function is
+untouched — in particular the ``redo:`` loop, the ``nodefull`` guard around
+``check_avail`` (whose absence segfaulted the HNP on a ``max_slots``
+hostfile), and the oversubscribe second pass.  Do **not** take the
+opportunity to tidy those.
+
+The ``name`` field replaces ``hwloc_obj_type_string(options->maptype)`` in
+the two verbose messages and in the ``rmaps:mapping-target-not-found``
+show_help call, so the device case gets a message that names the device spec
+rather than an hwloc type.
+
+*Verify:* ``make check``; then the decisive one —
+``make -C test/offline check-offline`` must produce **byte-identical** golden
+maps to the pre-refactor run across all ~1200 cases.  Capture the goldens
+before the change and diff.  Anything that differs is a bug in the refactor,
+not a golden to update.
+
+
+Phase C — the PMIx device enumerator
+-------------------------------------
+
+openpmix PR.  Gates phase D.
+
+New in ``src/hwloc/pmix_hwloc.[ch]``:
+
+.. code-block:: c
+
+   /* devs is allocated here and freed by PMIx_Device_free();
+    * ordering is PCI bus id ascending, no-PCI devices last by osname */
+   PMIX_EXPORT pmix_status_t
+   pmix_hwloc_get_devices(pmix_topology_t *topo,
+                          pmix_device_type_t type,
+                          const char *devid,      /* NULL = all of type */
+                          pmix_device_t **devs,
+                          size_t *ndevs,
+                          pmix_cpuset_t **localities);  /* parallel array */
+
+Behavior:
+
+* **Dedup by parent ``PCIDev``.**  Today PMIx emits one entry per OS device
+  in hwloc traversal order.  ``test-topo2.xml``'s single GPU with three OS
+  devices is the test.
+* **Order by PCI bus id** (domain, bus, device, function).
+* **GPU selection by the union rule** (refinement 1 above), replacing the
+  current ``strncasecmp(device->name, "card", 4)`` skip.  That skip drops the
+  auxiliary DRM card node, which happens to give the right answer on the
+  topologies at hand and gives *no GPU at all* on a machine whose GPU has a
+  ``card*`` node and no render node.
+* **Stop unconditionally skipping ``HWLOC_OBJ_OSDEV_COPROC``** — that is
+  where ``cuda0`` and ``ze0`` live.
+* **Locality** = nearest ancestor with a non-NULL cpuset
+  (``hwloc_get_non_io_ancestor_obj()``).  Return the ``Machine`` root rather
+  than failing when that is all there is; the caller decides what a
+  node-wide locality means.
+* **UUID grammar unchanged** — ``gpu://<host>::<osname>``,
+  ``fab://<NodeGUID>::<SysImageGUID>``, ``ipv4://<mac>``.  This is the whole
+  reason the enumerator is here: the name PRRTE reports as a process's
+  assigned device and the name PMIx reports through
+  ``PMIX_DEVICE_DISTANCES`` must be the same string.
+
+Add ``PMIX_CAP_DEVICE_ENUM`` (or whatever the maintainer prefers) to
+``pmix_version.h.in``.
+
+*Verify:* PMIx's own unit tests against both PRRTE topologies (copy them, or
+point at the PRRTE tree); ``make check`` in PMIx.
+
+
+Phase D — wrapper, directive, mapper, bind ceiling
+---------------------------------------------------
+
+The main PR.  Needs C and B.  Four commits, landing together.
+
+**D1 — configure gate.**  In ``config/prte_setup_pmix.m4``, add a
+``PRTE_CHECK_PMIX_CAP([DEVICE_ENUM], …)`` block defining
+``PRTE_PMIX_DEVICE_ENUM`` to 0/1, following the ``IOF_FILE_PATTERN``
+pattern.  Bump ``pmix_min_version`` only if the maintainer prefers a hard
+floor to a capability gate.
+
+.. warning::
+
+   This edits an ``m4`` file, so ``make`` alone will not pick it up and may
+   wedge the tree in a half-regenerated state.  Run ``./autogen.pl``, then
+   re-run ``configure`` from the build directory with the same options
+   (``./config.status --config`` recovers them).  There is no shortcut.
+
+**D2 — the PRRTE wrapper**, in ``src/hwloc/hwloc-internal.h`` and
+``hwloc_base_util.c``:
+
+.. code-block:: c
+
+   typedef struct {
+       pmix_object_t       super;
+       hwloc_obj_t         locality;  /* borrowed - do not release */
+       char               *osname;
+       char               *uuid;
+       char               *busid;
+       pmix_device_type_t  type;
+   } prte_hwloc_device_t;
+
+   PRTE_EXPORT int prte_hwloc_base_get_devices(hwloc_topology_t topo,
+                                               pmix_device_type_t type,
+                                               const char *name,
+                                               pmix_list_t *devs);
+   PRTE_EXPORT pmix_device_type_t prte_hwloc_base_device_type(const char *spec);
+
+Rules this file already enforces and that apply here: take the topology as
+an argument and never consult ``prte_hwloc_topology``; an empty result is
+not an error; ``PMIX_NEW`` does not zero, so the constructor sets every
+field the destructor frees.
+
+**D3 — grammar and plumbing:**
+
+* ``src/util/prte_cmd_line.h``: ``PRTE_CLI_DEVICE`` = ``"device="``.
+* ``schizo_base_frame.c``: add ``PRTE_CLI_DEVICE`` to ``mappers[]``.
+* ``rmaps_types.h``: rename ``PRTE_MAPPING_BYDIST`` →
+  ``PRTE_MAPPING_BYDEVICE`` (value ``10`` unchanged, which keeps it
+  ``<= PRTE_MAPPING_RR`` so round_robin still claims it); rename
+  ``options->dist_device`` → ``options->map_device``; add
+  ``PRTE_RMAPS_BASE_VERSION_6_0_0`` and alias ``5_0_0`` to it.
+* ``attr.[ch]``: rename the two ``DIST_DEVICE`` keys to ``MAP_DEVICE``,
+  values unchanged, **and their strings in ``prte_attr_key_to_str()``** — a
+  key with no name renders as ``UNKNOWN-KEY: <n>`` in every attribute
+  diagnostic, and ``test/unit/util`` requires the names to be unique.
+* ``rmaps_base_frame.c``: both parsers.  Read the value with
+  ``qualifier_value()``.  **Refuse a bare ``--map-by gpu``** — no synonym.
+  Update the ``mapby`` MCA help string.
+* ``rmaps_base_map_job.c``: ``case PRTE_MAPPING_BYDEVICE`` leaves
+  ``mapdepth = PRTE_BIND_TO_NONE`` and ``maptype = HWLOC_OBJ_MACHINE``, so
+  the job-level bind-upwards check does not fire on a basis not yet known.
+
+**D4 — the mapper**, in ``rmaps_rr_mappers.c``: the device enumerator
+instance for phase B's vtable, plus the per-node bind ceiling.  Its
+``begin()`` builds the node's device list, ``end()`` frees it — the list is
+per node, and must **not** become file-static: ``rank_file`` and ``lsf``
+both carry static state that outlived a job and handed a stale value to the
+next one.
+
+The ceiling check runs in ``begin()``, once the list exists and before any
+proc is placed:
+
+.. code-block:: c
+
+   /* binding coarser than the device's locality cannot be honored: the
+    * request is "near this device", and an object that strictly contains
+    * the locality is not near it. Compare cpusets, not PRTE_BIND_TO_*
+    * levels - the locality is frequently an hwloc Group, which has no
+    * position in that ladder at all. */
+   if (PRTE_BIND_TO_NONE != options->bind) {
+       /* first candidate object of the binding type that covers the
+        * locality; if its cpuset strictly contains the locality's, refuse */
+   }
+
+Failure paths use ``prte_show_help`` + ``PRTE_ERR_SILENT`` and must reach
+``jdata->exit_code``; a node offering zero devices of the requested class is
+a hard error via ``rmaps:mapping-target-not-found`` naming the spec, exactly
+as a missing hwloc object type already is.
+
+New help topics in ``help-prte-rmaps-base.txt``:
+``rmaps:no-such-device-class``, ``rmaps:bind-above-device``,
+``rmaps:degenerate-device-locality`` (a warning, not an error — see the
+design document).
+
+.. warning::
+
+   After touching any ``help-*.txt``::
+
+      rm src/util/prte_show_help_content.*
+      make
+
+   An ordinary ``make`` does **not** regenerate it, and the binary keeps
+   serving the old (or missing) message while the ``.txt`` looks right.
+
+**Tests in this PR:**
+
+* ``test/unit/hwloc/test_hwloc.c`` — the enumerator against both existing
+  topologies: ``device=gpu`` on ``test-topo2`` returns exactly one device
+  (not two, not three); its osname/uuid/busid; ``device=openfabrics``
+  returns one and ``device=network`` one, on different groups;
+  ``device=mlx5_0`` by name returns one; a name that does not exist returns
+  none; on ``test-topo``, every device shares a locality (the degenerate
+  case) and the four PCI-less OS devices sort last.
+* ``test/unit/rmaps/test_policy_parse.c`` + ``test_job_policy.c`` —
+  ``device=gpu`` parses identically at job and app level; ``dev=gpu`` works;
+  the value is read after the ``=`` and not at a fixed offset; a bare
+  ``--map-by gpu`` is **refused**.
+* ``test/unit/rmaps/test_dispatch.c`` — round_robin claims
+  ``PRTE_MAPPING_BYDEVICE``; the specialized mappers defer.
+
+*Verify:* warning-free debug build; ``make check``;
+``make -C test/offline check-offline`` still byte-identical for every
+pre-existing case; live smoke test (``prte --daemonize`` →
+``prun -n 2 --map-by device=network --bind-to core hostname`` → ``pterm``).
+
+
+Phase E — the ``interleave`` qualifier
+---------------------------------------
+
+Needs D.
+
+* ``prte_cmd_line.h``: ``PRTE_CLI_INTERLEAVE`` = ``"interleave"``.
+* ``schizo_base_frame.c``: add to ``mapquals[]``.
+* ``rmaps_base_frame.c``: an ``interleave`` arm **appended at the end of
+  both qualifier chains**, after ``INHERIT``.
+
+.. warning::
+
+   ``pmix_check_cli_option()`` is ``strncasecmp`` over
+   ``min(strlen(given), strlen(defined))`` and has **no view of the other
+   options** — it answers one comparison at a time, and the first arm of the
+   caller's ``if``/``else if`` chain that prefix-matches wins.  ``interleave``
+   and ``inherit`` share a first letter, and ``:i`` means ``INHERIT``
+   today.  Placing the new arm earlier silently changes the meaning of a
+   working command line: no error, no warning, a different mapping.  Append
+   it, and add the regression test below.
+
+* The reordering itself lives beside the enumerator, not in the mapper:
+  group the device list by the ``<level>`` object containing each device's
+  locality, then take one device per group in turn, dropping a group when it
+  is exhausted.  Default ``level=package``.  Refuse ``node`` as a level —
+  that is what ``SPAN`` expresses — via ``invalid-value``.  Refuse
+  ``interleave`` on a non-``device=`` map by name, as the per-app
+  ``--bind-to`` parser already refuses ``report``.
+
+**Tests:** in ``test/unit/hwloc`` (the reordering is pure):
+``interleave=package`` on the requester's topology yields GPU0, GPU2, GPU1,
+GPU3; ``interleave=numa`` there yields the unchanged PCI-bus order (graceful
+degradation); an uneven split drops the exhausted group.  In
+``test/unit/rmaps``: the default is ``package``; ``=numa`` is honored;
+``node`` is refused; a non-device map is refused with its own message; and
+**``:i`` and ``:in`` still resolve to ``INHERIT``**.  That last assertion is
+the entire guard against the ordering hazard and is invisible to every other
+kind of test.
+
+Note the uneven-split and requester's-topology cases need phase G's XML, so
+either land E after G or embed a cut-down topology in the test file.  hwloc's
+synthetic generator cannot produce I/O devices at all, so there is no third
+option — say so in the test file's header, since every other topology there
+is synthetic.
+
+
+Phase F — report the assignment
+--------------------------------
+
+Needs D.  Small, and separable because nothing in the placement depends on
+it.
+
+* ``attr.h``: ``PRTE_PROC_DEVICE_ID = PRTE_PROC_START_KEY + 15`` (next free;
+  ``+2``/``+3``/``+4`` are holes and stay holes), holding the assigned
+  device's UUID.  Add its name to ``prte_attr_key_to_str()``.
+* ``rmaps_rr_mappers.c``: set it on the proc as it is placed.  It must be
+  ``PRTE_ATTR_GLOBAL`` — a spawn request is always packed, so a local
+  attribute never reaches the daemon that forks the process.
+* ``pmix_server_register_fns.c``: publish it per proc as ``PMIX_DEVICE_ID``.
+  The process reads it with ``PMIx_Get(&myproc, PMIX_DEVICE_ID, …)`` and can
+  correlate it against ``PMIX_DEVICE_DISTANCES`` for the full distance
+  vector.
+* ``prte_dt_print_fns.c``: add it to the ``--display map`` proc line beside
+  ``Bound:``.  A placement the user cannot see is a placement they will not
+  trust, and this is the first thing they will check.
+
+A UUID, never an ordinal: CUDA's default ``CUDA_DEVICE_ORDER`` is
+``FASTEST_FIRST``, not ``PCI_BUS_ID``, so an index PRRTE hands out is not
+the index the runtime will use.
+
+*Verify:* ``make check``; live smoke test reading the key back from a
+process; ``--display map`` shows the device.
+
+
+Phase G — the requester's topology, the harness, the swarm
+-----------------------------------------------------------
+
+Needs D and E.  This is the confirmation phase: nothing new is designed
+here, the requested table is simply run.
+
+* Add the issue's ``hwloc_topology.xml`` to ``test/topologies/`` as
+  ``turin-4gpu.xml``, and to ``EXTRA_DIST`` in that directory's
+  ``Makefile.am``.
+
+  .. note::
+
+     ``test/offline`` auto-discovers **every** ``*.xml`` in that directory,
+     so adding a 256-PU topology multiplies the harness by another full
+     matrix.  Measure ``make -C test/offline check-offline`` before and
+     after.  If the cost is unacceptable, produce a reduced-core variant
+     with the same Group/NUMA/GPU structure for the harness and keep the
+     full file for the unit test — but measure first rather than
+     pre-emptively trimming, and never trim in a way that changes the
+     device-to-NUMA relationships, which are the whole point of the file.
+
+* Offline cases for every row of the requester's table, in both orderings
+  (plain and ``:interleave``), with golden maps.  Teach the harness's
+  invariant checker the new directive, including that ``--bind-to package``
+  under it is an expected *rejection* — the harness already models that for
+  ``must-map-by-obj``.
+* ``contrib/dockerswarm/run-tests.sh``, ``test_rmaps()``: the containers
+  have no GPUs, so what runs there is what only a live multi-node DVM can
+  show — that the HNP maps against each node's *own* topology.  Two cases:
+  a job asking for a device class no node has must fail the job and **leave
+  the DVM standing**; and ``--map-by device=network`` must place procs
+  against the containers' actual interfaces.  GPU cases stay offline.
+* Docs: the ``--map-by`` reference under ``docs/placement/`` and the
+  ``prterun --help map-by`` text, which today does not mention ``dist`` at
+  all even though the MCA parameter does.
+
+
+Verification checklist
+----------------------
+
+Per phase, in this order — the project's "did I break it?" list, with the
+items this work actually touches:
+
+1. Warning-free build from the **top** of an out-of-tree build directory
+   configured ``--enable-debug`` (which implies ``--enable-devel-check``, so
+   warnings are errors).  Never compile a single file by hand.
+2. ``make check``.
+3. ``make -C test/offline check-offline`` — for **every** phase, not just
+   the mapper ones.  Phase B's whole proof is that this output does not
+   change.
+4. Live smoke test for D and F: ``prte --daemonize`` → ``prun`` → ``pterm``,
+   including a failure path (a bad device spec must exit non-zero and leave
+   the DVM running).
+5. ``contrib/dockerswarm/run-tests.sh linux`` for G.
+6. ``make`` in ``docs/`` — Sphinx runs with ``-W``, so a docs warning is a
+   build failure.
+7. After any ``help-*.txt`` edit: ``rm src/util/prte_show_help_content.*``
+   then ``make``.
+8. After any ``m4``/``configure.ac`` edit (phase D1 only): ``./autogen.pl``
+   plus a fresh ``configure``.
+9. ``git status`` after a clean build — nothing generated left untracked.
+
+Commits are signed off (``git commit -s``), one logical change each, prose
+messages saying *why*.  Branches go to a personal fork, never to ``origin``.
+
+
+Risks and open items
+--------------------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 66
+
+   * - Risk
+     - Handling
+   * - Phase B changes placement by accident
+     - The golden-map diff is the gate.  Land B alone so a later placement
+       bug cannot be blamed on it, or hidden by it.
+   * - PMIx cap flag is unavailable
+     - ``--map-by device=`` is refused **with a diagnostic**, never silently
+       absent.  A knob that does nothing is worse than no knob.
+   * - ``:i`` silently becomes ``INTERLEAVE``
+     - Chain ordering + the explicit regression test in phase E.
+   * - Adding the big topology slows the offline harness
+     - Measure; reduced-core variant only if needed (phase G).
+   * - Mixed-vendor node hides a GPU
+     - The union rule (refinement 1).  **No topology in hand tests this** —
+       one CUDA GPU with a backend beside an AMD GPU without.  Worth
+       constructing by hand if a mixed node is ever available.
+   * - ``prte_uniform_nodes`` maps against another node's topology
+     - Documented, not detected.  Nothing else in the tree detects it
+       either.
+
+Still undecided, and neither blocks phase C:
+
+1. **More processes than devices.**  ``byobj``'s ``redo:`` loop wraps and
+   puts a second process on each object in turn — two per GPU for ``-n 8``
+   on a four-GPU node.  Almost certainly right, but it is a policy choice
+   and belongs in the docs explicitly rather than inherited by accident.
+2. **A per-app MPMD swarm case.**  The unit test covers the two parsers
+   agreeing; an MPMD line with a different device class per app is the shape
+   that would catch a plumbing error in ``resolve_app_options()``.
+
+
+Task checklist
+--------------
+
+**Phase A — dist removal**
+
+- [ ] Delete ``PRTE_CLI_DIST``, ``prte_rmaps_base.device``, the ``BYDIST``
+      switch case, the ``"MINDIST"`` printer arm
+- [ ] Strip ``dist`` / ``DEVICE=dev`` from the ``mapby`` help string
+- [ ] Build, ``make check``, ``check-offline``
+
+**Phase B — enumerator vtable**
+
+- [ ] Capture pre-change offline goldens
+- [ ] Add ``prte_rmaps_target_enum_t``; split ``byobj`` into body + wrapper
+- [ ] Route the two verbose messages and ``mapping-target-not-found``
+      through ``->name``
+- [ ] Goldens byte-identical
+
+**Phase C — PMIx (openpmix)**
+
+- [ ] ``pmix_hwloc_get_devices()`` with dedup, PCI ordering, localities
+- [ ] Union GPU rule; drop the ``card*`` skip; stop skipping ``COPROC``
+- [ ] ``PMIX_CAP_DEVICE_ENUM``
+- [ ] PMIx unit tests against both PRRTE topologies
+
+**Phase D — directive and mapper**
+
+- [ ] ``PRTE_CHECK_PMIX_CAP([DEVICE_ENUM])`` + ``autogen.pl`` + reconfigure
+- [ ] ``prte_hwloc_device_t`` + ``prte_hwloc_base_get_devices()``
+- [ ] ``PRTE_CLI_DEVICE``; ``mappers[]``; both ``--map-by`` parsers; bare
+      ``gpu`` refused
+- [ ] Rename ``BYDIST``→``BYDEVICE``, ``dist_device``→``map_device``, the
+      two attribute keys **and their strings**; rmaps version → 6.0.0
+- [ ] Device enumerator instance + per-node bind ceiling
+- [ ] Three new help topics; regenerate show_help content
+- [ ] Unit tests: hwloc enumerator, both parsers, dispatch gate
+- [ ] Build / check / check-offline / smoke test
+
+**Phase E — interleave**
+
+- [ ] ``PRTE_CLI_INTERLEAVE``; ``mapquals[]``; arm appended **after**
+      ``inherit`` in both chains
+- [ ] Grouping + round-robin reorder; default ``package``; ``node`` refused;
+      non-device map refused by name
+- [ ] Tests incl. **``:i`` → ``INHERIT``** regression
+
+**Phase F — reporting**
+
+- [ ] ``PRTE_PROC_DEVICE_ID`` (+15), ``PRTE_ATTR_GLOBAL``, key string
+- [ ] Set in the mapper; publish as ``PMIX_DEVICE_ID``; show in
+      ``--display map``
+
+**Phase G — confirmation**
+
+- [ ] ``turin-4gpu.xml`` + ``EXTRA_DIST``; measure harness cost
+- [ ] Offline cases for the full requested table, both orderings
+- [ ] Swarm: no-such-device fails the job and leaves the DVM up;
+      ``device=network`` places correctly
+- [ ] ``docs/placement/`` and ``--help map-by``
+- [ ] Reply on OMPI #14169 with the resulting table
