@@ -316,7 +316,7 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     char *tmp2;
     hwloc_cpuset_t mycpus;
     char *str;
-    char *devid;
+    pmix_data_array_t *devarray;
     bool use_hwthread_cpus;
     int npus;
     int npkgs;
@@ -410,13 +410,36 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
         /* When the job was mapped by device, say which device this proc got.
          * A placement the user cannot see is a placement they will not
          * trust, and --display map is the first thing they will check. */
-        devid = NULL;
+        devarray = NULL;
         if (prte_get_attribute(&src->attributes, PRTE_PROC_DEVICE_ID,
-                               (void **) &devid, PMIX_STRING)) {
-            pmix_asprintf(&tmp2, "%s Device: %s", tmp, devid);
-            free(tmp);
-            free(devid);
-            tmp = tmp2;
+                               (void **) &devarray, PMIX_DATA_ARRAY)
+            && NULL != devarray) {
+            pmix_device_t *dv = (pmix_device_t *) devarray->array;
+            char *dlist = NULL, *dt;
+            size_t dn;
+            /* the assignment is always an array, so render every entry -
+             * showing only the first would misreport a job using "ndev" */
+            for (dn = 0; dn < devarray->size; dn++) {
+                const char *nm = (NULL != dv[dn].osname) ? dv[dn].osname
+                                                         : dv[dn].uuid;
+                if (NULL == nm) {
+                    continue;
+                }
+                if (NULL == dlist) {
+                    dlist = strdup(nm);
+                } else {
+                    pmix_asprintf(&dt, "%s,%s", dlist, nm);
+                    free(dlist);
+                    dlist = dt;
+                }
+            }
+            if (NULL != dlist) {
+                pmix_asprintf(&tmp2, "%s Device: %s", tmp, dlist);
+                free(tmp);
+                free(dlist);
+                tmp = tmp2;
+            }
+            PMIX_DATA_ARRAY_FREE(devarray);
         }
 
         /* set the return */

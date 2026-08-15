@@ -1103,13 +1103,19 @@ Two consequences follow, and both are deliberate:
 PRRTE cannot restrict a process to a device the way it restricts one to
 a set of CPUs - no such mechanism exists - so the assignment is only
 useful if the process can find out about it. Each process is therefore
-told which device it was mapped against, as the PMIX_DEVICE_ID key of
+told which devices it was mapped against, as the PMIX_DEVICE_ID key of
 its own proc info, which it can retrieve with:
 
    PMIx_Get(&myproc, PMIX_DEVICE_ID, NULL, 0, &value);
 
-The value is the device's UUID rather than an index, because a runtime's
-own device numbering need not match the topology's - CUDA, for example,
+The value is ALWAYS a pmix_data_array_t of pmix_device_t, even when it
+holds a single device: a process given two devices and one given a
+single device are the same kind of answer differing in length, so there
+is no separate single-device form to special-case.
+
+Each entry carries the device UUID, its OS name and its type. The UUID
+rather than an index is what identifies it, because a runtime's own
+device numbering need not match the topology's - CUDA, for example,
 orders devices by speed rather than by bus by default - so an index
 would name a different device than the one PRRTE chose. The same UUID
 appears in the PMIX_DEVICE_DISTANCES a process can query, which is what

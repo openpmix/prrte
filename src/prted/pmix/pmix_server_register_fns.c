@@ -257,7 +257,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
     prte_pmix_server_pset_t *pset;
     pmix_cpuset_t cpuset;
     uint32_t ui32, *ui32_ptr;
-    char *devid;
+    pmix_data_array_t *devarray;
     uint32_t nodesize;
     prte_job_t *parent = NULL;
     pmix_device_distance_t *distances;
@@ -824,11 +824,11 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
              * device than the one we chose. The same UUID appears in the
              * PMIX_DEVICE_DISTANCES this process can query, which is what
              * lets it correlate the two. */
-            devid = NULL;
+            devarray = NULL;
             if (prte_get_attribute(&pptr->attributes, PRTE_PROC_DEVICE_ID,
-                                   (void **) &devid, PMIX_STRING)) {
-                PMIX_INFO_LIST_ADD(ret, pmap, PMIX_DEVICE_ID, devid, PMIX_STRING);
-                free(devid);
+                                   (void **) &devarray, PMIX_DATA_ARRAY)) {
+                PMIX_INFO_LIST_ADD(ret, pmap, PMIX_DEVICE_ID, devarray, PMIX_DATA_ARRAY);
+                PMIX_DATA_ARRAY_FREE(devarray);
             }
             PMIX_INFO_LIST_CONVERT(ret, pmap, &darray);
             PMIX_INFO_LIST_ADD(ret, info, PMIX_PROC_INFO_ARRAY, &darray, PMIX_DATA_ARRAY);

@@ -110,7 +110,7 @@ static int rank_cmp(const void *a, const void *b)
 }
 
 static int unpack_layout(pmix_data_buffer_t *bkt, prte_job_t *jptr,
-                         prte_job_pack_mode_t mode)
+                         bool devices, prte_job_pack_mode_t mode)
 {
     int32_t nnodes, n, cnt = 1;
     int rc, a, i, j;
@@ -243,7 +243,7 @@ static int unpack_layout(pmix_data_buffer_t *bkt, prte_job_t *jptr,
             rc = PRTE_ERR_NOT_FOUND;
             goto cleanup;
         }
-        rc = prte_proc_unpack(bkt, proc, jptr, mode);
+        rc = prte_proc_unpack(bkt, proc, devices, mode);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             goto cleanup;
@@ -286,6 +286,7 @@ int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job,
     pmix_info_t pval;
     pmix_list_t *cache;
     prte_job_pack_mode_t md;
+    bool devices;
 
     /* create the prte_job_t object */
     jptr = PMIX_NEW(prte_job_t);
@@ -304,6 +305,14 @@ int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job,
     }
     if (NULL != mode) {
         *mode = md;
+    }
+    /* whether the procs carry a device assignment - see prte_job_pack */
+    n = 1;
+    rc = PMIx_Data_unpack(NULL, bkt, &devices, &n, PMIX_BOOL);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(jptr);
+        return prte_pmix_convert_status(rc);
     }
 
     /* unpack the nspace */
@@ -454,7 +463,7 @@ int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job,
      *               have broken that correspondence, update_local_ranks(),
      *               had no callers and is gone.)
      */
-    rc = unpack_layout(bkt, jptr, md);
+    rc = unpack_layout(bkt, jptr, devices, md);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_RELEASE(jptr);
@@ -627,7 +636,7 @@ int prte_node_unpack(pmix_data_buffer_t *bkt, prte_node_t **nd)
 /*
  * PROC
  */
-int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t *proc, prte_job_t *jdata,
+int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t *proc, bool devices,
                      prte_job_pack_mode_t mode)
 {
     pmix_status_t rc;
@@ -671,21 +680,32 @@ int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t *proc, prte_job_t *jda
     /* The device this proc was mapped against, present only for a job that
      * was mapped by device - the same condition prte_proc_pack tests, read
      * from the job's mapping policy, which arrived before this. */
-    if (NULL != jdata && NULL != jdata->map
-        && PRTE_MAPPING_BYDEVICE == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
-        char *devid = NULL;
+    if (devices) {
+        pmix_data_array_t *darray;
+        uint16_t ndevs = 0;
         n = 1;
-        rc = PMIx_Data_unpack(NULL, bkt, &devid, &n, PMIX_STRING);
+        rc = PMIx_Data_unpack(NULL, bkt, &ndevs, &n, PMIX_UINT16);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             return prte_pmix_convert_status(rc);
         }
-        if (NULL != devid) {
+        if (0 < ndevs) {
+            PMIX_DATA_ARRAY_CREATE(darray, ndevs, PMIX_DEVICE);
+            if (NULL == darray) {
+                return PRTE_ERR_OUT_OF_RESOURCE;
+            }
+            n = ndevs;
+            rc = PMIx_Data_unpack(NULL, bkt, darray->array, &n, PMIX_DEVICE);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_DATA_ARRAY_FREE(darray);
+                PMIX_ERROR_LOG(rc);
+                return prte_pmix_convert_status(rc);
+            }
             /* LOCAL: it has arrived, and must not be re-packed by a daemon
              * that forwards this job onward */
             prte_set_attribute(&proc->attributes, PRTE_PROC_DEVICE_ID,
-                               PRTE_ATTR_LOCAL, devid, PMIX_STRING);
-            free(devid);
+                               PRTE_ATTR_LOCAL, darray, PMIX_DATA_ARRAY);
+            PMIX_DATA_ARRAY_FREE(darray);
         }
     }
 

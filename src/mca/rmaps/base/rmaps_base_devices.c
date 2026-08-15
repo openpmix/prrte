@@ -386,7 +386,8 @@ void prte_rmaps_base_devices_record(prte_proc_t *proc, prte_rmaps_options_t *opt
                                   void *ctx, unsigned j)
 {
     prte_rmaps_device_map_t *dc = (prte_rmaps_device_map_t *) ctx;
-    char *ids = NULL;
+    pmix_data_array_t *darray;
+    pmix_device_t *dev;
     size_t m;
 
     PRTE_HIDE_UNUSED_PARAMS(opts);
@@ -398,29 +399,34 @@ void prte_rmaps_base_devices_record(prte_proc_t *proc, prte_rmaps_options_t *opt
      * value travels as its own field, packed only for a job that was mapped
      * by device. Marking it global would put it in a list nothing packs and
      * trip the guard that exists to catch exactly that. */
-    /* several devices come back as a comma-delimited list, which keeps the
-     * single-device case - overwhelmingly the common one - exactly a plain
-     * uuid */
-    for (m = 0; m < dc->per; m++) {
-        char *u = dc->devs[j * dc->per + m].dev.uuid;
-        if (NULL == u) {
-            continue;
-        }
-        if (NULL == ids) {
-            ids = strdup(u);
-        } else {
-            char *t;
-            pmix_asprintf(&t, "%s,%s", ids, u);
-            free(ids);
-            ids = t;
-        }
-    }
-    if (NULL == ids) {
+    /* Always an array of pmix_device_t, even when it holds one entry.
+     *
+     * A process assigned two devices and a process assigned one are the same
+     * kind of answer differing in length, and flattening the common case
+     * into a bare string would make them different kinds - so every reader
+     * would need both paths, and the one-device path would be the only one
+     * anybody tested.  The array also carries what a bare uuid cannot: each
+     * device's OS name and type, which is what PMIx reports for a device
+     * everywhere else. */
+    PMIX_DATA_ARRAY_CREATE(darray, dc->per, PMIX_DEVICE);
+    if (NULL == darray) {
         return;
     }
+    dev = (pmix_device_t *) darray->array;
+    for (m = 0; m < dc->per; m++) {
+        pmix_device_t *src = &dc->devs[j * dc->per + m].dev;
+        PMIx_Device_construct(&dev[m]);
+        if (NULL != src->uuid) {
+            dev[m].uuid = strdup(src->uuid);
+        }
+        if (NULL != src->osname) {
+            dev[m].osname = strdup(src->osname);
+        }
+        dev[m].type = src->type;
+    }
     prte_set_attribute(&proc->attributes, PRTE_PROC_DEVICE_ID, PRTE_ATTR_LOCAL,
-                       ids, PMIX_STRING);
-    free(ids);
+                       darray, PMIX_DATA_ARRAY);
+    PMIX_DATA_ARRAY_FREE(darray);
 }
 
 void prte_rmaps_base_devices_end(void *ctx)

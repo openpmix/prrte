@@ -667,14 +667,18 @@ test_rmaps() {
             if [ "$rc" != 0 ]; then
                 skp "devinfo under device=network (no network device here)"
             else
-                n=$(echo "$out" | grep -c '^DEV ')
+                n=$(echo "$out" | grep -c '^DEVN ')
                 [ "$n" = 2 ] && ok "both procs read back their own device assignment" \
                              || bad "only $n of 2 procs could read PMIX_DEVICE_ID: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+                # the value is always an array, even holding one device
+                n=$(echo "$out" | grep '^DEVN ' | awk '{print $3}' | sort -u | tr -d '\n')
+                [ "$n" = "1" ] && ok "the assignment is an array (of one, here)" \
+                               || bad "unexpected device counts per proc: '$n'"
                 echo "$out" | grep -q '^NODEV ' \
                     && bad "a proc of a device-mapped job reported no device" \
                     || ok "no proc reported a missing assignment"
                 # two procs on two devices must not be told the same one
-                n=$(echo "$out" | grep '^DEV ' | awk '{print $3}' | sort -u | wc -l | tr -d ' ')
+                n=$(echo "$out" | grep '^DEV ' | awk '{print $4}' | sort -u | wc -l | tr -d ' ')
                 [ "$n" = 2 ] && ok "the two procs were given different devices" \
                              || bad "both procs were told the same device"
                 # and the id must name something the proc can actually see

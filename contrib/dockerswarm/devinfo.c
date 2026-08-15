@@ -53,7 +53,8 @@ int main(int argc, char **argv)
     pmix_value_t *val = NULL;
     pmix_status_t rc;
     pmix_info_t *dinfo = NULL;
-    size_t ndinfo = 0, n;
+    size_t ndinfo = 0, n, ndev;
+    pmix_device_t *dv;
     char *devid = NULL;
     int found = 0;
 
@@ -74,16 +75,33 @@ int main(int argc, char **argv)
         PMIx_Finalize(NULL, 0);
         return 0;
     }
-    if (PMIX_STRING != val->type || NULL == val->data.string) {
+    /* The assignment is ALWAYS an array of pmix_device_t, even when it holds
+     * a single device.  A reader that special-cased one device would have a
+     * path nobody exercised until someone used "ndev". */
+    if (PMIX_DATA_ARRAY != val->type || NULL == val->data.darray
+        || PMIX_DEVICE != val->data.darray->type) {
         fprintf(stderr, "DEVFAIL %u type %d\n", myproc.rank, (int) val->type);
         PMIX_VALUE_RELEASE(val);
         PMIx_Finalize(NULL, 0);
         return 1;
     }
-    devid = strdup(val->data.string);
+    dv = (pmix_device_t *) val->data.darray->array;
+    ndev = val->data.darray->size;
+    if (0 == ndev || NULL == dv[0].uuid) {
+        fprintf(stderr, "DEVFAIL %u empty array\n", myproc.rank);
+        PMIX_VALUE_RELEASE(val);
+        PMIx_Finalize(NULL, 0);
+        return 1;
+    }
+    devid = strdup(dv[0].uuid);
+    /* one line per device, so the harness can count them */
+    for (n = 0; n < ndev; n++) {
+        fprintf(stdout, "DEV %u %zu %s %s\n", myproc.rank, n,
+                (NULL == dv[n].uuid) ? "-" : dv[n].uuid,
+                (NULL == dv[n].osname) ? "-" : dv[n].osname);
+    }
+    fprintf(stdout, "DEVN %u %zu\n", myproc.rank, ndev);
     PMIX_VALUE_RELEASE(val);
-
-    fprintf(stdout, "DEV %u %s\n", myproc.rank, devid);
 
     /* the assignment has to be findable among the devices this process can
      * see, or it names something the process cannot act on */
