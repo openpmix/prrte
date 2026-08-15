@@ -949,7 +949,7 @@ can assert the failure code without triggering the state machine.
 Coverage required per test file
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**``test_policy_parse.c``** — ``prte_rmaps_base_set_app_mapping_policy()``,
+``test_policy_parse.c`` — ``prte_rmaps_base_set_app_mapping_policy()``,
 ``prte_rmaps_base_set_app_ranking_policy()``, ``prte_rmaps_base_set_app_binding_policy()``:
 
 *Mapping* (``set_app_mapping_policy``):
@@ -971,7 +971,7 @@ Coverage required per test file
 - ``LIMIT=N`` stores ``N`` as ``PRTE_APP_BINDING_LIMIT``; a non-numeric ``LIMIT`` value returns ``PRTE_ERR_SILENT``.
 - An unrecognized object or modifier returns ``PRTE_ERR_BAD_PARAM``.
 
-**``test_resolve_options.c``** — ``prte_rmaps_base_resolve_app_options()``:
+``test_resolve_options.c`` — ``prte_rmaps_base_resolve_app_options()``:
 
 - App with no per-app attributes: ``app_options`` is identical to the job-level ``options``.
 - App with ``PRTE_APP_MAPBY`` set: ``opts->map`` reflects the app value, not the job value.
@@ -979,16 +979,16 @@ Coverage required per test file
 - App with ``PRTE_APP_PES_PER_PROC`` / ``PRTE_APP_HWT_CPUS`` / ``PRTE_APP_CPUSET``: correct override.
 - Fallback chain: ``PRTE_APP_PPR`` absent → ``PRTE_JOB_PPR`` used.
 
-**``test_dispatch.c``** — the per-app detection and dispatch loop in ``prte_rmaps_base_map_job()``:
+``test_dispatch.c`` — the per-app detection and dispatch loop in ``prte_rmaps_base_map_job()``:
 
 - Job with no per-app directives: single-dispatch path taken (verified by mock component call count = 1).
 - Job with at least one app carrying ``PRTE_APP_MAPBY``: per-app path taken; mock component called once per app.
 - ``OVERSUBSCRIBE`` in a per-app ``--map-by`` string: mapping aborts with ``PRTE_JOB_STATE_MAP_FAILED``.
 - Conflicting ``INHERIT``/``NOINHERIT`` across apps: mapping aborts.
 - Any app with display-map directive: ``PRTE_JOB_DISPLAY_MAP`` promoted to job level.
-- **``NOLOCAL`` on app[0], not on app[1], shared HNP node** (see below).
+- ``NOLOCAL`` **on app[0], not on app[1], shared HNP node** (see below).
 
-**``test_round_robin.c``**, **``test_ppr.c``**, **``test_seq.c``**, **``test_rank_file.c``**:
+``test_round_robin.c``, ``test_ppr.c``, ``test_seq.c``, ``test_rank_file.c``:
 
 Each file tests its component with the ``app_idx`` field in both modes:
 

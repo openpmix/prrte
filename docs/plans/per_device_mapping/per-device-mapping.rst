@@ -275,7 +275,7 @@ directive instead of two, and it needs no second policy value, no
 ``DEVICE=`` qualifier, and no MCA parameter.  ``PRTE_CLI_DIST`` and the
 ``DEVICE=`` qualifier text are then deleted, not resurrected.
 
-**There is deliberately no bare ``--map-by gpu`` form.**  The requester's
+**There is deliberately no bare --map-by gpu form.**  The requester's
 examples mostly use that shorthand, but ``device=`` is the directive and the
 device class is its *value* — which is exactly what lets a new class be
 supported later by adding a value rather than a directive.  Promoting one
@@ -350,7 +350,7 @@ put in a site's default ``mapby`` parameter.
 **Uneven groups need no special case.**  Three GPUs on package 0 and one on
 package 1 gives ``G0, G3, G1, G2`` — the exhausted group simply drops out.
 
-**``<level>`` is restricted to objects within a node** (``package``,
+``<level>`` **is restricted to objects within a node** (``package``,
 ``numa``, ``l3cache``, …).  ``node`` is deliberately **not** an accepted
 level: interleaving across nodes is what ``SPAN`` already expresses, and
 allowing both spellings would give one behavior two names that compose into
@@ -366,7 +366,7 @@ own Cascade Lake AP example (two NUMA domains per socket) is a case where
 
 .. warning::
 
-   **``interleave`` must be tested *after* ``inherit`` in the qualifier
+   **interleave must be tested *after* inherit in the qualifier
    chain.**  They share a first letter, and because the matcher does not
    detect ambiguity, whichever is tested first claims ``:i`` and ``:in``.
    ``:i`` means ``INHERIT`` today.  Placing ``interleave`` earlier would
@@ -743,14 +743,14 @@ Every row is answerable, but none of them is spelled the way it is written in
 the issue, and one is answered differently from either of the requester's
 guesses.  Stated here rather than resolved silently.
 
-**The directive is ``device=gpu``, not ``gpu``.**  Every row of the table
+**The directive is device=gpu, not gpu.**  Every row of the table
 uses the bare shorthand; it is not accepted, deliberately — see the grammar
 discussion under `Grammar`_.  ``--map-by dev=gpu`` is the short form in
 practice.  This is the one deviation that touches every line the requester
 wrote, so it is worth saying plainly in the issue reply rather than leaving
 them to infer it from an example.
 
-**``:span`` will not spread across sockets.**  The requester expects
+``:span`` **will not spread across sockets.**  The requester expects
 
 .. code-block:: text
 
@@ -788,12 +788,12 @@ where the NIC hangs off one particular NUMA domain and processes must reach
 orderings are wanted, which is why this is a qualifier and not a change to
 the default.
 
-**``--bind-to package`` is an error, not "cores 0-63".**  The requester
+``--bind-to package`` **is an error, not "cores 0-63".**  The requester
 offered both.  Erroring is what the rest of PRRTE does when asked to bind
 above the map, and silently handing back the whole package is precisely the
 locality loss they filed the issue about.
 
-**``--map-by device=gpu:PE=2 --bind-to core`` gives rank 0 cores 16-17.**  The
+``--map-by device=gpu:PE=2 --bind-to core`` **gives rank 0 cores 16-17.**  The
 requester guessed "error or core 16 or core 0".  ``PE=n`` already means "n
 cpus per process", and there is no reason for it to mean anything else here;
 their worry that a GPU has nothing "beneath" it does not arise, because
@@ -812,7 +812,7 @@ first one that exercises the I/O half of the topology import.
 
 Four layers, each answering something the others cannot:
 
-**1. Unit — ``test/unit/hwloc/test_hwloc.c``.**  The enumerator is a pure
+**1. Unit — test/unit/hwloc/test_hwloc.c.**  The enumerator is a pure
 function of a topology plus a string, which is this directory's whole design
 rule.  Drive it from the embedded XML: that ``device=gpu`` finds four devices
 and not five or nine; that they come out in PCI-bus order; that their
@@ -830,7 +830,7 @@ hand-written XML — hwloc's synthetic generator cannot produce I/O devices at
 all, which is worth stating in the file, since every other topology in that
 test is synthetic.
 
-**2. Unit — ``test/unit/rmaps/``.**  ``test_policy_parse.c`` and
+**2. Unit — test/unit/rmaps/.**  ``test_policy_parse.c`` and
 ``test_job_policy.c``: that ``device=gpu`` parses at both levels and to the
 same result, that the abbreviated ``dev=gpu`` works, that the value is read
 after the ``=`` and not at a fixed offset, and that a bare ``--map-by gpu``
@@ -840,12 +840,12 @@ For the new qualifier: that ``:interleave`` defaults to ``package``, that
 ``:interleave=numa`` is honored, that ``node`` as a level is refused, that
 ``interleave`` on a non-``device=`` map is refused *with its own message*
 rather than as an unknown qualifier — and, the regression that matters,
-**that ``:i`` and ``:in`` still resolve to ``INHERIT``**.  That last one is
+**that :i and :in still resolve to INHERIT**.  That last one is
 the whole guard against the chain-ordering hazard, and it is invisible to
 every other kind of test.  ``test_dispatch.c``: that ``round_robin`` claims
 the policy and the specialized mappers defer on it.
 
-**3. Offline harness — ``make -C test/offline check-offline``.**  This is the
+**3. Offline harness — make -C test/offline check-offline.**  This is the
 cheapest place to check the *whole* requested table, because it drives
 ``prterun --rtos donotlaunch --display map --prtemca hwloc_use_topo_file``
 against exactly this kind of XML.  Every row above becomes a case with a
@@ -855,7 +855,7 @@ invariant checker will need to learn the new directive, including that
 ``--bind-to package`` under it is an expected *rejection*, which the harness
 already models for ``must-map-by-obj``.
 
-**4. Multi-node — ``contrib/dockerswarm``, ``test_rmaps()``.**  What the
+**4. Multi-node — contrib/dockerswarm, test_rmaps().**  What the
 first three cannot show: that the HNP maps against each node's *own*
 topology.  The containers have no GPUs, so the case that runs there is the
 negative one and the ``device=network`` one — a job asking for a device class
@@ -881,7 +881,7 @@ Decisions already taken
   ``interleave[=<level>]`` with ``level=package`` as the default, restricted
   to within-node levels, and tested *after* ``inherit`` in the qualifier
   chain.  See `The interleave qualifier`_.
-* **``device=<class>`` is the only spelling** — no bare ``--map-by gpu``.
+* ``device=<class>`` **is the only spelling** — no bare ``--map-by gpu``.
   The device class is a *value*, so a future class is a new value rather
   than a new directive, and no later device type has to choose between an
   inconsistent second spelling and a bare name of its own.
@@ -907,7 +907,7 @@ Decisions already taken
 Decisions still to make
 -----------------------
 
-1. **Does ``device=`` need a per-app spelling test in the swarm?**  Per-app
+1. **Does device= need a per-app spelling test in the swarm?**  Per-app
    and job-level ``--map-by`` parsers disagreeing is the single most
    repeated bug in ``rmaps_base_frame.c``; the unit test covers it, but an
    MPMD line with a different device class per app is the shape that would
@@ -917,8 +917,8 @@ Decisions still to make
 Out of scope
 ------------
 
-* **Setting ``CUDA_VISIBLE_DEVICES`` / ``ROCR_VISIBLE_DEVICES`` /
-  ``ZE_AFFINITY_MASK``.**  These are vendor conventions with different
+* **Setting CUDA_VISIBLE_DEVICES / ROCR_VISIBLE_DEVICES /
+  ZE_AFFINITY_MASK.**  These are vendor conventions with different
   semantics (AMD's own documentation warns about the interaction between
   ``ROCR_VISIBLE_DEVICES`` and ``CUDA_VISIBLE_DEVICES``), and injecting them
   makes PRRTE responsible for a vendor's device-ordering rules.  PRRTE

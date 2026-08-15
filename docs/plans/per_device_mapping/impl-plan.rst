@@ -31,7 +31,7 @@ device **or** it is PCI class ``03xx`` carrying a ``renderD*`` OS device.
 The two rules agree on every topology in hand, so this costs nothing now and
 removes a whole class of future bug report.
 
-**2. ``prte_rmaps_options_t`` changes, so the rmaps version bumps.**  The
+**2. prte_rmaps_options_t changes, so the rmaps version bumps.**  The
 design does not mention it.  Precedent is
 ``docs/plans/per_app_mapping/rmaps-impl-plan.rst``, which bumped 4.0.0 → 5.0.0
 for exactly this reason (it added ``app_idx`` and ``dist_device`` to that
@@ -244,7 +244,7 @@ New in ``src/hwloc/pmix_hwloc.[ch]``:
 
 Behavior:
 
-* **Dedup by parent ``PCIDev``.**  Today PMIx emits one entry per OS device
+* **Dedup by parent PCIDev.**  Today PMIx emits one entry per OS device
   in hwloc traversal order.  ``test-topo2.xml``'s single GPU with three OS
   devices is the test.
 * **Order by PCI bus id** (domain, bus, device, function).
@@ -253,7 +253,7 @@ Behavior:
   auxiliary DRM card node, which happens to give the right answer on the
   topologies at hand and gives *no GPU at all* on a machine whose GPU has a
   ``card*`` node and no render node.
-* **Stop unconditionally skipping ``HWLOC_OBJ_OSDEV_COPROC``** — that is
+* **Stop unconditionally skipping** ``HWLOC_OBJ_OSDEV_COPROC`` — that is
   where ``cuda0`` and ``ze0`` live.
 * **Locality** = nearest ancestor with a non-NULL cpuset
   (``hwloc_get_non_io_ancestor_obj()``).  Return the ``Machine`` root rather
@@ -325,11 +325,11 @@ field the destructor frees.
   ``options->dist_device`` → ``options->map_device``; add
   ``PRTE_RMAPS_BASE_VERSION_6_0_0`` and alias ``5_0_0`` to it.
 * ``attr.[ch]``: rename the two ``DIST_DEVICE`` keys to ``MAP_DEVICE``,
-  values unchanged, **and their strings in ``prte_attr_key_to_str()``** — a
+  values unchanged, **and their strings in** ``prte_attr_key_to_str()`` — a
   key with no name renders as ``UNKNOWN-KEY: <n>`` in every attribute
   diagnostic, and ``test/unit/util`` requires the names to be unique.
 * ``rmaps_base_frame.c``: both parsers.  Read the value with
-  ``qualifier_value()``.  **Refuse a bare ``--map-by gpu``** — no synonym.
+  ``qualifier_value()``.  **Refuse a bare** ``--map-by gpu`` — no synonym.
   Update the ``mapby`` MCA help string.
 * ``rmaps_base_map_job.c``: ``case PRTE_MAPPING_BYDEVICE`` leaves
   ``mapdepth = PRTE_BIND_TO_NONE`` and ``maptype = HWLOC_OBJ_MACHINE``, so
@@ -505,7 +505,7 @@ GPU3; ``interleave=numa`` there yields the unchanged PCI-bus order (graceful
 degradation); an uneven split drops the exhausted group.  In
 ``test/unit/rmaps``: the default is ``package``; ``=numa`` is honored;
 ``node`` is refused; a non-device map is refused with its own message; and
-**``:i`` and ``:in`` still resolve to ``INHERIT``**.  That last assertion is
+**:i and :in still resolve to INHERIT**.  That last assertion is
 the entire guard against the ordering hazard and is invisible to every other
 kind of test.
 
@@ -730,7 +730,7 @@ Task checklist
       ``inherit`` in both chains
 - [ ] Grouping + round-robin reorder; default ``package``; ``node`` refused;
       non-device map refused by name
-- [ ] Tests incl. **``:i`` → ``INHERIT``** regression
+- [ ] Tests incl. **:i → INHERIT** regression
 
 **Phase F — reporting**
 

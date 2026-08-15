@@ -109,7 +109,7 @@ Phase 3a — per-app attribute plumbing (CLI → attributes)
 plumbing largely already exists, but two things are required for it to work:
 
 1. The ``prte_rmaps_base_set_app_*_policy()`` helpers must store every ``PRTE_APP_*``
-   attribute with **``PRTE_ATTR_GLOBAL``**, not ``PRTE_ATTR_LOCAL``.  ``LOCAL``
+   attribute with ``PRTE_ATTR_GLOBAL``, not ``PRTE_ATTR_LOCAL``.  ``LOCAL``
    attributes are not packed and are silently dropped when the spawn request is relayed
    to the DVM master, so per-app directives stored as ``LOCAL`` never reach ``map_job``
    and ``any_per_app`` is always false.  This is the single most important correctness
@@ -351,12 +351,12 @@ be defined but left wired-up-later; ``resolve_app_options()`` reads it and sets 
 Risk Areas
 ----------
 
-1. **``compute_vpids`` signature change** — every call site must be updated.  Search for
+1. ``compute_vpids`` **signature change** — every call site must be updated.  Search for
    all callers before changing the signature.
-2. **``app_idx`` init to ``-1`` vs zero** — ``memset`` zeroes the struct, so ``app_idx = 0``
+2. **app_idx init to -1 vs zero** — ``memset`` zeroes the struct, so ``app_idx = 0``
    without the explicit assignment would silently map only app[0].  The explicit
    ``options.app_idx = -1`` assignment is mandatory and easy to miss.
-3. **Node list statefulness with ``NOLOCAL``** — the dedicated unit test (see spec
+3. **Node list statefulness with** ``NOLOCAL`` — the dedicated unit test (see spec
    §"NOLOCAL on app[0] with shared HNP node") must pass before the branch is
    considered correct.  If ``prte_rmaps_base_get_target_nodes()`` modifies shared
    node state, the per-app loop will produce incorrect results for subsequent apps.
@@ -369,14 +369,14 @@ Risk Areas
    ``src/prted/prte_app_parse.c`` (each app segment is parsed in its own ``create_app()``
    call), so no schizo MPMD bookkeeping is needed — but the spawn-assembly loops must
    convert each ``pmix_app_t.info`` from that app's own ``app->info``.
-6. **``PRTE_ATTR_LOCAL`` vs ``GLOBAL`` (highest-risk, silent failure)** — the
+6. **PRTE_ATTR_LOCAL vs GLOBAL (highest-risk, silent failure)** — the
    ``set_app_*_policy`` helpers must store every ``PRTE_APP_*`` attribute as
    ``PRTE_ATTR_GLOBAL``.  ``LOCAL`` attributes are dropped when the spawn request is
    packed and relayed to the DVM master, so per-app directives stored as ``LOCAL`` never
    reach ``map_job``; ``any_per_app`` stays false and every app falls back to the
    job-level policy with **no error**.  A single-app test masks this (its directive
    equals the job policy); always verify with a multi-app MPMD case.
-7. **Directive-bit masking in ``resolve_app_options``** — the ``PRTE_APP_*`` attributes
+7. **Directive-bit masking in** ``resolve_app_options`` — the ``PRTE_APP_*`` attributes
    carry directive bits (``GIVEN``, overload, ``IS_SET``) in their high bits.  Assigning
    the raw value to ``opts->map``/``rank``/``bind`` breaks the bare-enum comparisons in
    the components and ``compute_vpids``.  Mask with ``PRTE_GET_*_POLICY`` and route the

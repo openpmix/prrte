@@ -199,8 +199,8 @@ a daemon that finds its own rank in the target list, fires the
   redundant global failure notice for ranks the whole DVM already knows are
   leaving.
 * A daemon that finds **its own** rank among the targets records that it is
-  leaving by entering **leaving mode** — a flag set as it *processes the
-  ``PRTE_DAEMON_SHRINK_CMD`` itself*, not in response to any separate order (see
+  leaving by entering **leaving mode** — a flag set as it processes the
+  ``PRTE_DAEMON_SHRINK_CMD`` *itself*, not in response to any separate order (see
   the design decision below) — fires its ``JOB_END`` notification, and then
   **waits for its lifeline to disconnect** rather than self-exiting.  Entering
   this mode is what changes the daemon's response to lifeline loss from
