@@ -1,8 +1,16 @@
+--------------------------------------------------------------------------
+A deprecated MCA variable value was specified in the environment or
+on the command line.  Deprecated MCA variables should be avoided;
+they may disappear in future releases.
+
+Deprecated variable: rmaps_default_mapping_policy
+New variable:        mapby
+--------------------------------------------------------------------------
 
 ========================   JOB MAP   ========================
 Data for JOB prterun-JOBID@N offset 0 Total slots allocated N
-    App 0: Mapping policy: BYNUMA:NOOVERSUBSCRIBE  Ranking policy: FILL  Binding policy: NUMA
-    App 1: Mapping policy: BYCORE:NOOVERSUBSCRIBE  Ranking policy: FILL  Binding policy: CORE
+    App 0: Mapper: round_robin  Mapping policy: BYNUMA:NOOVERSUBSCRIBE  Ranking policy: FILL  Binding policy: NUMA
+    App 1: Mapper: round_robin  Mapping policy: BYCORE:NOOVERSUBSCRIBE  Ranking policy: FILL  Binding policy: CORE
     Cpu set: N/A  PPR: N/A  Cpus-per-rank: N/A  Cpu Type: CORE
 
 

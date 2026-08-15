@@ -580,6 +580,33 @@ here, the requested table is simply run.
   directive rather than here.
 
 
+Phases as landed
+----------------
+
+Two things came out differently from the plan and are recorded here so the
+document matches the tree.
+
+**No capability macro.**  Phase D1 called for ``PRTE_CHECK_PMIX_CAP`` to
+define a 0/1 macro with the C code conditional on it.  PMIx master *is*
+7.0.0 and PRRTE's floor is 7.0.0, so that gate could never fail.  configure
+errors out with a diagnostic instead, following the ``CLI_QUAL_VALUE``
+precedent, and no conditional path exists in the C at all.
+
+**A proc attribute cannot carry the device id.**  Phase F assumed marking
+``PRTE_PROC_DEVICE_ID`` as ``PRTE_ATTR_GLOBAL`` would deliver it to the
+daemon that forks the proc.  It does not: **no proc attribute list goes on
+the wire**, deliberately - it was 512 KB of a 1.9 MB launch message at
+1000 nodes x 128 ppn, carrying a list that has been empty in every job ever
+launched.  ``prte_proc_pack`` carries a debug-build guard that says so, and
+it is what caught this.  The id therefore travels as its own packed field,
+and only for a job whose mapping policy is ``BYDEVICE``, so every other job
+pays nothing.  The attribute stays ``PRTE_ATTR_LOCAL``.
+
+That guard is worth knowing about before adding anything to a proc: it only
+fires in a debug build, and its output goes to stdout, so on a release build
+the attribute would simply never arrive and the daemon would read a default.
+
+
 Verification checklist
 ----------------------
 

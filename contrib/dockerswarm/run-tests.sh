@@ -618,6 +618,47 @@ test_rmaps() {
         bad "could not start a DVM for the per-app mapper-selection test"
     fi
     cleanup_swarm
+
+    banner "rmaps: mapping by device"
+    # These containers have no GPUs, so what can be checked here is what only
+    # a live multi-node DVM can show: that the HNP maps against each node's
+    # OWN topology rather than its own.  Two cases - a device class no node
+    # has must fail the job and leave the DVM standing, and a class every
+    # node does have must actually place procs.
+    RUN 'nohup prte --daemonize --host node1:2,node2:2,node3:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        out=$(RUN 'timeout 60 prun --map-by device=gpu -n 2 hostname' 2>&1)
+        rc=$?
+        [ "$rc" != 0 ] && ok "a device class no node has was refused (rc=$rc)" \
+                       || bad "--map-by device=gpu ran on nodes with no GPU"
+        echo "$out" | grep -qE '^node[0-9]+$' \
+            && bad "--map-by device=gpu silently placed the job anyway" \
+            || ok "no job was placed by some other rule instead"
+        RUN 'pgrep -x prte >/dev/null' && ok "DVM survived the device refusal" \
+                                       || bad "DVM died on an unavailable device class"
+
+        # a network interface is the one device class a container reliably
+        # has.  If this host's topology exposes none, skip rather than fail:
+        # the point is the mapping, not the container's device inventory.
+        out=$(RUN 'timeout 60 prun --display map --map-by device=network -n 2 hostname' 2>&1)
+        rc=$?
+        if [ "$rc" != 0 ]; then
+            skp "map-by device=network (no network device in these topologies)"
+        else
+            n=$(echo "$out" | grep -cE '^node[0-9]+$')
+            [ "$n" = 2 ] && ok "--map-by device=network placed both procs" \
+                         || bad "--map-by device=network placed $n of 2 procs"
+            # each proc is told which device it got - the assignment is
+            # worthless if it cannot be read back
+            echo "$out" | grep -q 'Device: ' \
+                && ok "each proc was told which device it was mapped against" \
+                || bad "no device assignment was reported to the procs"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the device mapping test"
+    fi
+    cleanup_swarm
 }
 
 ########################################################################

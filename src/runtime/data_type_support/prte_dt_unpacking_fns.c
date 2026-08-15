@@ -243,7 +243,7 @@ static int unpack_layout(pmix_data_buffer_t *bkt, prte_job_t *jptr,
             rc = PRTE_ERR_NOT_FOUND;
             goto cleanup;
         }
-        rc = prte_proc_unpack(bkt, proc, mode);
+        rc = prte_proc_unpack(bkt, proc, jptr, mode);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             goto cleanup;
@@ -627,7 +627,7 @@ int prte_node_unpack(pmix_data_buffer_t *bkt, prte_node_t **nd)
 /*
  * PROC
  */
-int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t *proc,
+int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t *proc, prte_job_t *jdata,
                      prte_job_pack_mode_t mode)
 {
     pmix_status_t rc;
@@ -665,6 +665,27 @@ int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t *proc,
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             return prte_pmix_convert_status(rc);
+        }
+    }
+
+    /* The device this proc was mapped against, present only for a job that
+     * was mapped by device - the same condition prte_proc_pack tests, read
+     * from the job's mapping policy, which arrived before this. */
+    if (NULL != jdata && NULL != jdata->map
+        && PRTE_MAPPING_BYDEVICE == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+        char *devid = NULL;
+        n = 1;
+        rc = PMIx_Data_unpack(NULL, bkt, &devid, &n, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
+        }
+        if (NULL != devid) {
+            /* LOCAL: it has arrived, and must not be re-packed by a daemon
+             * that forwards this job onward */
+            prte_set_attribute(&proc->attributes, PRTE_PROC_DEVICE_ID,
+                               PRTE_ATTR_LOCAL, devid, PMIX_STRING);
+            free(devid);
         }
     }
 

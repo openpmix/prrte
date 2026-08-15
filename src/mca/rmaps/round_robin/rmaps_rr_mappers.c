@@ -678,9 +678,12 @@ static void device_targets_placed(prte_proc_t *proc, prte_rmaps_options_t *opts,
     if (NULL == dc || (size_t) j >= dc->ndevs || NULL == dc->devs[j].dev.uuid) {
         return;
     }
-    /* GLOBAL: the daemon that forks this proc reads it out of an unpacked
-     * copy of the job, so a local attribute would never arrive */
-    prte_set_attribute(&proc->attributes, PRTE_PROC_DEVICE_ID, PRTE_ATTR_GLOBAL,
+    /* LOCAL, even though the daemon that forks this proc needs it: no proc
+     * attribute list goes on the wire at all (see prte_proc_pack), so the
+     * value travels as its own field, packed only for a job that was mapped
+     * by device. Marking it global would put it in a list nothing packs and
+     * trip the guard that exists to catch exactly that. */
+    prte_set_attribute(&proc->attributes, PRTE_PROC_DEVICE_ID, PRTE_ATTR_LOCAL,
                        dc->devs[j].dev.uuid, PMIX_STRING);
 }
 
