@@ -1162,11 +1162,15 @@ static void check_complete(prte_grpcomm_group_t *coll)
                 goto answer;
 #endif
             }
-            /* if we were asked to provide a context id, do so */
+            /* if we were asked to provide a context id, do so. This runs
+             * only on the master (see the guard above), which is what
+             * prte_grpcomm_assign_context_id() requires - it is shared with
+             * the job-control path an invited group's leader uses, so that
+             * the two cannot hand out the same number */
             if (coll->sig->assignID) {
-                coll->sig->ctxid = prte_grpcomm_globals.context_id;
-                --prte_grpcomm_globals.context_id;
-                coll->sig->ctxid_assigned = true;
+                if (PRTE_SUCCESS == prte_grpcomm_assign_context_id(&coll->sig->ctxid)) {
+                    coll->sig->ctxid_assigned = true;
+                }
             }
 
             // construct the final membership

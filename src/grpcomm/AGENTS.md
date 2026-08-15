@@ -145,7 +145,7 @@ always one thing.
 | Field | Meaning |
 |-------|---------|
 | `output` | Verbosity stream. `-1` until the `grpcomm_base_verbose` MCA parameter opens it. The parameter deliberately **keeps its old framework spelling**, because it is in every debugging recipe and in the guides. |
-| `context_id` | The group context-id pool. A construct asking for `PMIX_GROUP_ASSIGN_CONTEXT_ID` gets this value, and it **decrements** — it counts *down* from `UINT32_MAX` so DVM-assigned ids cannot collide with ids assigned from the bottom of the range elsewhere. |
+| `context_id` | The group context-id pool. A construct asking for `PMIX_GROUP_ASSIGN_CONTEXT_ID` gets this value, and it **decrements** — it counts *down* from `UINT32_MAX` so DVM-assigned ids cannot collide with ids assigned from the bottom of the range elsewhere. Spend it only through `prte_grpcomm_assign_context_id()`, which refuses a non-master caller: the group collective is no longer its only consumer (see below), and two doors onto one counter is how two callers end up with one id. |
 | `xcast_ops` | In-flight broadcasts, the `pending_completions` FIFO, and the three op-id sequence counters. |
 | `fence_ops` | List of `prte_grpcomm_fence_t`. A tracker is found here by its signature alone, so it must come **off** this list before its result is delivered — see *Retire before you deliver* below. |
 | `group_ops` | List of `prte_grpcomm_group_t`. |
@@ -787,6 +787,25 @@ live DVM) but it guards the invariants that hold with no DVM:
 - `prte_grpcomm_globals.context_id` starts at `UINT32_MAX`, and every
   signature/tracker/caddy class constructs with the documented defaults
   and destructs without leaking or crashing.
+
+### The pool has a second consumer, and it is not in this directory
+
+A group formed by `PMIx_Group_invite` runs **no collective at all** — it is
+realized entirely through PMIx event notification, so nothing ever reaches
+`prte_grpcomm_group()` and there is no signature to carry an `assignID`. Its
+leader asks for a context id through `PMIx_Job_control` instead, which lands
+on whichever daemon hosts that leader; see `assign_group_ctxid()` in
+[`src/prted/pmix/pmix_server_job_ctrl.c`](../prted/pmix/pmix_server_job_ctrl.c)
+and the `PRTE_PMIX_GROUP_CTXID` relay beside it.
+
+That is why the pool is now reached through `prte_grpcomm_assign_context_id()`
+rather than touched directly: the two paths spend from one counter, and the
+accessor is where "only the master may mint" is enforced once instead of at
+each caller. A leader is an application process and sits wherever it was
+mapped, so the job-control path is usually *not* on the master and has to
+relay — which is the half a single-host run cannot reach.
+`contrib/dockerswarm/groupinv.c` makes the highest rank the leader for exactly
+that reason.
 - **Building a fence tracker**: what a signature naming the daemon job, a
   signature naming nobody, and an unresolvable signature each produce —
   the last of which must leave *nothing* on the tracker list.

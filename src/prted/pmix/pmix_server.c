@@ -2473,6 +2473,14 @@ static void send_alloc_resp(pmix_status_t status,
     PRTE_PMIX_THREADSHIFT(cd, prte_event_base, _send_alloc_resp);
 }
 
+/* release the one-element context-id result once it has been packed */
+static void ctxid_relfn(void *cbdata)
+{
+    pmix_info_t *results = (pmix_info_t *) cbdata;
+
+    PMIX_INFO_FREE(results, 1);
+}
+
 static void pmix_server_sched(int status, pmix_proc_t *sender,
                               pmix_data_buffer_t *buffer,
                               prte_rml_tag_t tg, void *cbdata)
@@ -2483,9 +2491,10 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
     size_t ninfo = 0;
     pmix_alloc_directive_t allocdir;
     uint32_t sessionID;
-    pmix_info_t *info = NULL;
+    pmix_info_t *info = NULL, *ctxinfo;
     pmix_proc_t source;
     prte_pmix_server_req_t *req = NULL;
+    size_t ctxid;
     int refid;
     PRTE_HIDE_UNUSED_PARAMS(status, tg, cbdata);
 
@@ -2523,7 +2532,7 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
             PMIX_ERROR_LOG(rc);
             goto reply;
         }
-    } else {
+    } else if (PRTE_PMIX_SESSION_CTRL == cmd) {
         /* session control request */
         cnt = 1;
         rc = PMIx_Data_unpack(NULL, buffer, &sessionID, &cnt, PMIX_UINT32);
@@ -2532,6 +2541,8 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
             goto reply;
         }
     }
+    /* a group context-id request carries no field of its own - see the
+     * matching pack in prte_server_send_request() */
 
    /* unpack the number of info */
    cnt = 1;
@@ -2560,6 +2571,43 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
     }
     PMIX_INFO_LOAD(&info[ninfo], PMIX_REQUESTOR, &source, PMIX_PROC);
     ++ninfo;
+
+    if (PRTE_PMIX_GROUP_CTXID == cmd) {
+        /* A group formed by PMIx_Group_invite has no collective through which
+         * to ask for a context id, so its leader asks through job control -
+         * which lands on whichever daemon hosts the leader. The pool lives
+         * only here on the master, so that daemon relayed it to us. Mint one
+         * and answer; there is nothing asynchronous about it. */
+        req = PMIX_NEW(prte_pmix_server_req_t);
+        pmix_asprintf(&req->operation, "GROUPCTXID");
+        req->remote_index = refid;
+        req->copy = true;
+        req->info = info;
+        req->ninfo = ninfo;
+        PMIX_PROC_LOAD(&req->proxy, sender->nspace, sender->rank);
+        PMIX_PROC_LOAD(&req->tproc, source.nspace, source.rank);
+        /* as on the session-control branch below, being on the tracker array
+         * is not a reference - send_alloc_resp takes the second one that its
+         * two releases consume */
+        req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+        req->infocbfunc = send_alloc_resp;
+        req->cbdata = req;
+        rc = prte_grpcomm_assign_context_id(&ctxid);
+        if (PRTE_SUCCESS != rc) {
+            send_alloc_resp(prte_pmix_convert_rc(rc), NULL, 0, req, NULL, NULL);
+            return;
+        }
+        PMIX_INFO_CREATE(ctxinfo, 1);
+        if (NULL == ctxinfo) {
+            send_alloc_resp(PMIX_ERR_NOMEM, NULL, 0, req, NULL, NULL);
+            return;
+        }
+        PMIX_INFO_LOAD(&ctxinfo[0], PMIX_GROUP_CONTEXT_ID, &ctxid, PMIX_SIZE);
+        /* the reply is packed after a thread shift, so the array is handed
+         * over with a release function rather than freed here */
+        send_alloc_resp(PMIX_SUCCESS, ctxinfo, 1, req, ctxid_relfn, ctxinfo);
+        return;
+    }
 
     if (PRTE_PMIX_ALLOC_REQ == cmd) {
         req = PMIX_NEW(prte_pmix_server_req_t);
