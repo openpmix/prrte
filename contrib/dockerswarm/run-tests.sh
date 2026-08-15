@@ -3114,6 +3114,7 @@ test_hwloc() {
 
 # Absolute path, deliberately -- see the note above DS.
 GC=/opt/prte/prte/bin/groupcon
+GINV=/opt/prte/prte/bin/groupinv
 FENCER=/opt/prte/prte/bin/fencer
 
 test_grpcomm() {
@@ -3263,7 +3264,73 @@ test_grpcomm() {
     RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     cleanup_swarm
 
+    test_grpcomm_invite
     test_grpcomm_ft
+}
+
+# A group formed by INVITATION, asking for a context id.
+#
+# This is the one group path with no server collective: PMIx_Group_invite is
+# realized entirely through event notification, so there is no group up-call
+# through which its leader could ask the host for a context id.  The leader
+# asks through PMIx_Job_control instead, and that lands on whichever daemon
+# hosts the leader -- but only the HNP holds the id pool, so a leader anywhere
+# else has to have its request relayed (PRTE_PMIX_GROUP_CTXID) and the answer
+# handed back.
+#
+# groupinv makes the HIGHEST rank the leader for exactly that reason: mapped
+# by node, that rank is on the last node of the DVM and never on the HNP.  Run
+# with the leader on node1 and the relay is skipped and the case proves
+# nothing, which is why this cannot be a single-host test.
+#
+# The endpoint read-back is the second half.  Every rank posts one value and
+# never commits or fences it, so nothing but the group exchange can carry it;
+# the gets are OPTIONAL, so they cannot leave the process to find it.
+test_grpcomm_invite() {
+    local out n
+
+    banner "grpcomm: an invited group gets a context id from the HNP"
+    cleanup_swarm
+    if ! RUN "test -x $GINV"; then
+        skp "groupinv client not installed -- re-run ./build.sh"
+        return
+    fi
+    if ! prted_dvm_start 'node1:1,node2:1,node3:1,node4:1'; then
+        bad "could not start a DVM for the invited-group test"
+        cleanup_swarm
+        return
+    fi
+
+    out=$(PRUN "--host node1:1,node2:1,node3:1,node4:1 -n 4 --map-by node $GINV inv1" 2>&1)
+
+    # the leader must NOT be on the HNP, or the relay was never exercised
+    n=$(echo "$out" | awk '$1=="GINV" && $3=="ROLE" && $4=="LEADER" {print $2}')
+    if [ -z "$n" ]; then
+        bad "no rank declared itself the leader: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    else
+        echo "$out" | awk -v r="$n" '$1=="GINV" && $2==r && $3=="HOST" {print $4}' \
+            | grep -qv '^node1$' \
+            && ok "the leader (rank $n) is not on the HNP -- the request was relayed" \
+            || bad "the leader landed on node1, so nothing was relayed"
+    fi
+
+    n=$(echo "$out" | grep -c 'ASSIGNED T')
+    [ "$n" = 4 ] \
+        && ok "all 4 members were given a group context id" \
+        || bad "$n of 4 members got a context id: $(echo "$out" | grep -E 'COMPLETE|INVITE' | tr '\n' ' ' | tail -c 300)"
+
+    n=$(echo "$out" | grep -c 'ENDPT-OK 3')
+    [ "$n" = 4 ] \
+        && ok "...and every member read back all 3 peers' endpoint data" \
+        || bad "$n of 4 members read a full peer set: $(echo "$out" | grep -E 'ENDPT' | tr '\n' ' ' | tail -c 300)"
+
+    n=$(echo "$out" | grep -c 'DONE PMIX_SUCCESS')
+    [ "$n" = 4 ] \
+        && ok "...and all 4 finished cleanly" \
+        || bad "$n of 4 finished cleanly: $(echo "$out" | grep DONE | tr '\n' ' ' | tail -c 300)"
+
+    RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    cleanup_swarm
 }
 
 # Losing a whole daemon mid-construct.  This is the daemon-death analog of the

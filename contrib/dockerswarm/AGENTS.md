@@ -58,6 +58,7 @@ It is **not** a Docker Swarm in the orchestration sense — just ten plain
 | `proctable.c` | A bare PMIx client for the **proc-table and server-URI queries** (`proctable` in the install): `procs`/`localprocs`/`serveruri`. Those are the only callers of `prte_pmix_convert_state()`, and the local-vs-global proc-table split has no meaning on one host. Drives `src/pmix`. |
 | `peerinfo.c` | A bare PMIx client in which every rank asks **every other rank of its own job** where it is (`peerinfo` in the install): rank, app rank, local/node rank, node id, hostname, cpuset, locality string. The only client here that reads a *peer's* reserved keys, and so the only one that reaches the daemon's derive-on-demand path — everything else either reads back what it put itself or asks about the job. Drives `derive_proc_data()` in `src/prted/pmix/pmix_server_fence.c`. See §20. |
 | `groupcon.c` | A bare PMIx client that drives a **group construct/destruct** (`groupcon` in the install): every rank contributes a local cid, asks for a context id, constructs, reads every peer's contribution back, destructs. Drives grpcomm's `grp_release` on daemons that merely *received* the broadcast. See §15. |
+| `groupinv.c` | A bare PMIx client that forms a group by **invitation** and asks for a context id (`groupinv` in the install). The highest rank leads, so mapped by node the leader is never the HNP - which is the point: that method runs no collective, so its leader asks for the id through job control and only the HNP holds the pool, so the request has to be relayed. Drives `PRTE_PMIX_GROUP_CTXID` in `src/prted/pmix`. See §15. |
 | `envspawn.c` | A PMIx client that spawns a child job carrying one of every **envar directive** (`envspawn` in the install): SET/ADD/UNSET/PREPEND/APPEND, pinned to a named host, with the child reporting the environment it actually got into a file on its own node. Those directives have no command-line surface — they arrive only on a spawn request — and `odls` applies them on whichever daemon forks the process, so the child has to land somewhere the parent is not. Drives `prte_odls_base_process_envars`. |
 | `slowcat.c` | A deliberately **slow** stdin reader (`slowcat` in the install, no PMIx dependency): copies stdin to a file in small reads with a pause between them, so the daemon feeding it keeps hitting *partial* writes. That is the only way to reach the iof short-write path. |
 | `../scaling/scaletest.c` | A PMIx client that **times** a full-data fence and a bare barrier over the whole job (`scaletest` in the install). Not a pass/fail case — a measurement. See §18. It lives in [`contrib/scaling/`](../scaling/) because it is not container-specific: the same client is driven across a real allocation by `contrib/scaling/cluster-sweep.sh`, which is where the questions this harness *cannot* answer get measured. |
@@ -1227,6 +1228,33 @@ the local participants are never released — the construct does not fail,
 it *hangs*, on every daemon at once. Deleting the thread-shift and
 re-running turns 7 of the phase's 10 assertions red, which is how the
 teeth were confirmed rather than assumed.
+
+### ...and the invited group, which has no collective at all
+
+`PMIx_Group_invite` forms a group purely through event notification, so
+nothing about it reaches grpcomm. That leaves its leader with no way to ask
+the host for a `PMIX_GROUP_ASSIGN_CONTEXT_ID`, and until August 2026 the
+directive was simply dropped. It now goes out as a `PMIx_Job_control`
+request, which arrives at whichever daemon hosts the leader - and only the
+HNP holds the id pool, so any other daemon has to relay it to the HNP and
+hand the answer back.
+
+`groupinv` is the probe, and **it makes the highest rank the leader on
+purpose**: mapped by node that rank is on the last node of the DVM and never
+on the HNP. Run it with the leader on node1 and the relay is skipped and the
+case passes having tested nothing, which is why this cannot live in a
+single-host suite.
+
+```sh
+groupinv <groupID>
+```
+
+Every rank also posts one `PMIx_Put` value at `PMIX_REMOTE` scope and never
+commits or fences it, then reads every peer's back once the group has formed
+- with `PMIX_OPTIONAL` gets, so they cannot leave the process to find it, and
+with the context id as a *qualifier*, because that is how a contribution to a
+group holding one is stored. Nothing but the group exchange can have carried
+those values.
 
 The probe is `groupcon`, compiled by `build.sh` the same way as
 `elastic`/`dataserver`/`proctable`:
