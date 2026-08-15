@@ -167,6 +167,36 @@ PRTE_EXPORT void prte_rmaps_base_get_cpuset(prte_job_t *jdata,
                                             prte_node_t *node,
                                             prte_rmaps_options_t *options);
 
+/* Enumerating the devices a node offers - see rmaps_base_devices.c.
+ *
+ * "begin" builds the per-node picture and hands back an opaque context;
+ * "count" is how many processes that node can take, "locale" the object the
+ * j-th of them is placed against, "record" notes on a proc which devices it
+ * was given, and "end" releases the context.  A caller that places more than
+ * one process per device calls "locale" repeatedly with the same index.
+ *
+ * "begin" also performs the two checks that must happen before any process
+ * is placed on the node: that the requested binding is not coarser than the
+ * devices are local to, and whether every device shares one locality (which
+ * is a warning, not an error). */
+PRTE_EXPORT int prte_rmaps_base_devices_begin(prte_node_t *node,
+                                              prte_rmaps_options_t *opts,
+                                              void **ctx);
+PRTE_EXPORT unsigned prte_rmaps_base_devices_count(prte_node_t *node,
+                                                   prte_rmaps_options_t *opts,
+                                                   void *ctx);
+PRTE_EXPORT hwloc_obj_t prte_rmaps_base_devices_locale(prte_node_t *node,
+                                                       prte_rmaps_options_t *opts,
+                                                       void *ctx, unsigned j);
+PRTE_EXPORT void prte_rmaps_base_devices_record(prte_proc_t *proc,
+                                                prte_rmaps_options_t *opts,
+                                                void *ctx, unsigned j);
+PRTE_EXPORT void prte_rmaps_base_devices_end(void *ctx);
+/* How many processes the whole node list can take, for the "are there
+ * enough?" check a mapper makes before placing any of them. */
+PRTE_EXPORT size_t prte_rmaps_base_devices_total(pmix_list_t *node_list,
+                                                 prte_rmaps_options_t *opts);
+
 PRTE_EXPORT int prte_rmaps_base_check_support(prte_job_t *jdata,
                                               prte_node_t *node,
                                               prte_rmaps_options_t *options);
