@@ -143,6 +143,10 @@ typedef struct {
      * gave two apps the same ranks, and the second app's procs then replaced
      * the first's in jdata->procs. */
     uint32_t start_vpid;
+    /* the --map-by device= spec: a device class ("gpu") or the name or
+     * uuid of one device. Owned by the struct - it comes out of an
+     * attribute, which returns a copy. */
+    char *map_device;
 
 } prte_rmaps_options_t;
 
@@ -186,6 +190,7 @@ typedef struct {
 #define PRTE_MAPPING_BYHWTHREAD  8
 /* now take the other round-robin options */
 #define PRTE_MAPPING_BYSLOT      9
+#define PRTE_MAPPING_BYDEVICE   10
 #define PRTE_MAPPING_PELIST     11
 /* convenience - declare anything <= 15 to be round-robin*/
 #define PRTE_MAPPING_RR         16

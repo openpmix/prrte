@@ -35,6 +35,8 @@
 #include "src/util/name_fns.h"
 #include "src/util/pmix_show_help.h"
 #include "src/util/prte_show_help.h"
+#include "src/pmix/pmix-internal.h"
+#include "src/hwloc/pmix_hwloc.h"
 
 #include "rmaps_rr.h"
 #include "src/mca/rmaps/base/base.h"
@@ -373,6 +375,227 @@ pass:
 }
 
 /* mapping by cpu */
+/* ---------------------------------------------------------------------
+ * Mapping by device
+ *
+ * The targets are the devices in the node's topology, and the object a proc
+ * is placed against is the device's *locality* - the nearest ancestor with a
+ * cpuset.  Everything after that is the shared loop: the proc is set up
+ * against that object and bound within it exactly as it would be against a
+ * package or a core.
+ *
+ * Enumerating the devices is PMIx's job, deliberately.  PMIx already reports
+ * devices to applications through PMIX_DEVICE_DISTANCES, and the name PRRTE
+ * tells a process it was assigned has to be the name that process will see
+ * there - a second enumerator here could differ, and an assignment nobody
+ * can correlate is worth nothing.
+ * --------------------------------------------------------------------- */
+
+/* per-node state: the device list, held for the life of one node's
+ * placement and released when we move on */
+typedef struct {
+    pmix_hwloc_device_t *devs;
+    size_t ndevs;
+} prte_rmaps_devctx_t;
+
+/* Map a --map-by device= value to a device class.  Returns
+ * PMIX_DEVTYPE_UNKNOWN when the value is not a class, in which case it is
+ * taken as the name or uuid of one particular device. */
+static pmix_device_type_t device_class(const char *spec)
+{
+    char *s = (char *) spec;
+
+    if (PMIX_CHECK_CLI_OPTION(s, "gpu")) {
+        /* a coprocessor is a GPU that hwloc happened to learn about through
+         * a vendor backend rather than through DRM */
+        return PMIX_DEVTYPE_GPU | PMIX_DEVTYPE_COPROC;
+    }
+    if (PMIX_CHECK_CLI_OPTION(s, "openfabrics")) {
+        return PMIX_DEVTYPE_OPENFABRICS;
+    }
+    if (PMIX_CHECK_CLI_OPTION(s, "network")) {
+        return PMIX_DEVTYPE_NETWORK;
+    }
+    if (PMIX_CHECK_CLI_OPTION(s, "nic")) {
+        return PMIX_DEVTYPE_NETWORK | PMIX_DEVTYPE_OPENFABRICS;
+    }
+    if (PMIX_CHECK_CLI_OPTION(s, "block")) {
+        return PMIX_DEVTYPE_BLOCK;
+    }
+    return PMIX_DEVTYPE_UNKNOWN;
+}
+
+/* Can we bind where we were asked to, given where the device is?
+ *
+ * "Near this device" is the whole request, and an object that strictly
+ * contains the device's locality is not near it - binding there would hand
+ * the proc cpus the device is not local to, which is the locality loss the
+ * directive exists to avoid.  Compare cpusets rather than PRTE_BIND_TO_*
+ * levels: the locality is frequently an hwloc Group, which has no position
+ * in that ladder, so there is no level to compare against.
+ */
+static bool binding_fits(prte_node_t *node, hwloc_obj_t locality,
+                         prte_rmaps_options_t *options)
+{
+    hwloc_obj_t obj;
+    int nobjs, n;
+
+    if (PRTE_BIND_TO_NONE == options->bind || NULL == locality
+        || NULL == locality->cpuset) {
+        return true;
+    }
+    nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, options->hwb);
+    for (n = 0; n < nobjs; n++) {
+        obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, options->hwb, n);
+        if (NULL == obj || NULL == obj->cpuset) {
+            continue;
+        }
+        if (!hwloc_bitmap_intersects(obj->cpuset, locality->cpuset)) {
+            continue;
+        }
+        /* a binding target that covers the locality and more is above it */
+        if (hwloc_bitmap_isincluded(locality->cpuset, obj->cpuset)
+            && !hwloc_bitmap_isequal(locality->cpuset, obj->cpuset)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static int device_targets_begin(prte_node_t *node, prte_rmaps_options_t *opts,
+                                void **ctx)
+{
+    prte_rmaps_devctx_t *dc;
+    pmix_device_type_t type;
+    const char *byname = NULL;
+    pmix_topology_t topo;
+    pmix_status_t prc;
+    size_t n;
+    bool degenerate = true;
+
+    *ctx = NULL;
+
+    type = device_class(opts->map_device);
+    if (PMIX_DEVTYPE_UNKNOWN == type) {
+        /* not a class, so it names one particular device: every proc is
+         * placed near that one */
+        byname = opts->map_device;
+    }
+
+    dc = (prte_rmaps_devctx_t *) calloc(1, sizeof(prte_rmaps_devctx_t));
+    if (NULL == dc) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    topo.source = "hwloc";
+    topo.topology = node->topology->topo;
+    prc = pmix_hwloc_get_devices(&topo, type, byname, &dc->devs, &dc->ndevs);
+    if (PMIX_SUCCESS != prc) {
+        free(dc);
+        return prte_pmix_convert_status(prc);
+    }
+
+    /* A node with none of the requested devices cannot answer the request.
+     * Say so rather than dropping the node, which would shrink the
+     * allocation the user gave us without telling them - the shared loop
+     * reports this when the count comes back zero, so just hand it over. */
+    if (0 == dc->ndevs) {
+        *ctx = dc;
+        return PRTE_SUCCESS;
+    }
+
+    /* Refuse a binding coarser than the devices are local to, before any
+     * proc is placed on this node. */
+    for (n = 0; n < dc->ndevs; n++) {
+        if (!binding_fits(node, dc->devs[n].locality, opts)) {
+            prte_show_help("help-prte-rmaps-base.txt", "rmaps:bind-above-device", true,
+                           prte_hwloc_base_print_binding(opts->bind),
+                           opts->map_device, node->name);
+            pmix_hwloc_release_devices(dc->devs, dc->ndevs);
+            free(dc);
+            return PRTE_ERR_SILENT;
+        }
+    }
+
+    /* If every device resolves to the same place, "near this device" is
+     * saying nothing about cpus - each proc still gets a distinct device,
+     * which is half of what was asked for, so proceed and say so. */
+    for (n = 1; n < dc->ndevs; n++) {
+        if (dc->devs[n].locality != dc->devs[0].locality) {
+            degenerate = false;
+            break;
+        }
+    }
+    if (degenerate && 1 < dc->ndevs) {
+        prte_show_help("help-prte-rmaps-base.txt", "rmaps:degenerate-device-locality",
+                       true, opts->map_device, node->name, (int) dc->ndevs);
+    }
+
+    *ctx = dc;
+    return PRTE_SUCCESS;
+}
+
+static unsigned device_targets_count(prte_node_t *node, prte_rmaps_options_t *opts,
+                                     void *ctx)
+{
+    prte_rmaps_devctx_t *dc = (prte_rmaps_devctx_t *) ctx;
+
+    PRTE_HIDE_UNUSED_PARAMS(node, opts);
+    if (NULL == dc) {
+        return 0;
+    }
+    return (unsigned) dc->ndevs;
+}
+
+static hwloc_obj_t device_targets_item(prte_node_t *node, prte_rmaps_options_t *opts,
+                                       void *ctx, unsigned j)
+{
+    prte_rmaps_devctx_t *dc = (prte_rmaps_devctx_t *) ctx;
+
+    PRTE_HIDE_UNUSED_PARAMS(node, opts);
+    if (NULL == dc || (size_t) j >= dc->ndevs) {
+        return NULL;
+    }
+    return dc->devs[j].locality;
+}
+
+static void device_targets_end(void *ctx)
+{
+    prte_rmaps_devctx_t *dc = (prte_rmaps_devctx_t *) ctx;
+
+    if (NULL == dc) {
+        return;
+    }
+    if (NULL != dc->devs) {
+        pmix_hwloc_release_devices(dc->devs, dc->ndevs);
+    }
+    free(dc);
+}
+
+int prte_rmaps_rr_bydevice(prte_job_t *jdata, prte_app_context_t *app,
+                           pmix_list_t *node_list, int32_t num_slots,
+                           pmix_rank_t num_procs,
+                           prte_rmaps_options_t *options)
+{
+    prte_rmaps_target_enum_t tgts = {
+        .begin = device_targets_begin,
+        .count = device_targets_count,
+        .item = device_targets_item,
+        .end = device_targets_end,
+        .name = options->map_device
+    };
+
+    if (NULL == options->map_device) {
+        /* the policy cannot be set without a value - see the two --map-by
+         * parsers - so this is a programming error, not user input */
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    return prte_rmaps_rr_map_targets(jdata, app, node_list, num_slots,
+                                     num_procs, options, &tgts);
+}
+
 int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
                         pmix_list_t *node_list, int32_t num_slots,
                         pmix_rank_t num_procs, prte_rmaps_options_t *options)

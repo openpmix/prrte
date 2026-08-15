@@ -201,6 +201,48 @@ int test_job_policy(void)
     CHECK("job pe-list bad range: refused", PRTE_SUCCESS != rc);
     PMIX_RELEASE(jdata);
 
+    /* === device=: must parse to the same result as the per-app parser in
+     * test_policy_parse.c.  A directive accepted at one level and refused at
+     * the other is the recurring bug in rmaps_base_frame.c === */
+    jdata = newjob();
+    rc = prte_rmaps_base_set_mapping_policy(jdata, "device=gpu");
+    CHECK("job device=gpu: rc", PRTE_SUCCESS == rc);
+    CHECK("job device=gpu: policy",
+          PRTE_MAPPING_BYDEVICE == PRTE_GET_MAPPING_POLICY(jdata->map->mapping));
+    CHECK("job device=gpu: marked as the user's",
+          0 != (PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)));
+    sval = get_str(&jdata->attributes, PRTE_JOB_MAP_DEVICE);
+    CHECK("job device=gpu: spec", NULL != sval && 0 == strcmp(sval, "gpu"));
+    free(sval);
+    PMIX_RELEASE(jdata);
+
+    /* abbreviated, and the value read after the "=" rather than at a fixed
+     * offset past the full spelling */
+    jdata = newjob();
+    rc = prte_rmaps_base_set_mapping_policy(jdata, "dev=mlx5_0");
+    CHECK("job dev=mlx5_0: rc", PRTE_SUCCESS == rc);
+    sval = get_str(&jdata->attributes, PRTE_JOB_MAP_DEVICE);
+    CHECK("job dev=mlx5_0: spec read after the =",
+          NULL != sval && 0 == strcmp(sval, "mlx5_0"));
+    free(sval);
+    PMIX_RELEASE(jdata);
+
+    jdata = newjob();
+    rc = prte_rmaps_base_set_mapping_policy(jdata, "device=");
+    CHECK("job device= with no value: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(jdata);
+
+    /* no bare "gpu" spelling - the class is the directive's value */
+    jdata = newjob();
+    rc = prte_rmaps_base_set_mapping_policy(jdata, "gpu");
+    CHECK("job bare gpu: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(jdata);
+
+    /* the printer has to name it, or every device-mapping diagnostic and the
+     * map display report the policy as UNKNOWN */
+    CHECK("printer names BYDEVICE",
+          NULL != strstr(prte_rmaps_base_print_mapping(PRTE_MAPPING_BYDEVICE), "BYDEVICE"));
+
     jdata = newjob();
     rc = prte_rmaps_base_set_mapping_policy(jdata, "pe-list=zero");
     CHECK("job pe-list non-numeric: refused", PRTE_SUCCESS != rc);

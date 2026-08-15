@@ -283,6 +283,45 @@ int test_policy_parse(void)
     free(sval);
     PMIX_RELEASE(app);
 
+    /* --- device= is per-app for the same reason: which devices one app of
+     * an MPMD job is placed against is its own business --- */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu");
+    CHECK("mapby device=gpu: rc", PRTE_SUCCESS == rc);
+    u16 = get_u16(&app->attributes, PRTE_APP_MAPBY);
+    CHECK("mapby device=gpu: policy", PRTE_MAPPING_BYDEVICE == PRTE_GET_MAPPING_POLICY(u16));
+    sval = get_str(&app->attributes, PRTE_APP_MAP_DEVICE);
+    CHECK("mapby device=gpu: spec", NULL != sval && 0 == strcmp(sval, "gpu"));
+    free(sval);
+    PMIX_RELEASE(app);
+
+    /* the value is read after the "=", not at a fixed offset past the full
+     * spelling - the directive may be abbreviated to any unambiguous prefix */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "dev=mlx5_0");
+    CHECK("mapby dev=mlx5_0: rc", PRTE_SUCCESS == rc);
+    u16 = get_u16(&app->attributes, PRTE_APP_MAPBY);
+    CHECK("mapby dev=mlx5_0: policy", PRTE_MAPPING_BYDEVICE == PRTE_GET_MAPPING_POLICY(u16));
+    sval = get_str(&app->attributes, PRTE_APP_MAP_DEVICE);
+    CHECK("mapby dev=mlx5_0: spec read after the =",
+          NULL != sval && 0 == strcmp(sval, "mlx5_0"));
+    free(sval);
+    PMIX_RELEASE(app);
+
+    /* "device" with nothing after the "=" names no device at all */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=");
+    CHECK("mapby device= with no value: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    /* there is deliberately no bare "gpu" spelling: the class is the
+     * directive's VALUE, which is what lets a new class be supported by
+     * adding a value rather than a directive */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "gpu");
+    CHECK("mapby bare gpu: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
     /* the value is validated here, not left for the mapper to trip over */
     app = PMIX_NEW(prte_app_context_t);
     rc = prte_rmaps_base_set_app_mapping_policy(app, "pe-list=0-3-5");

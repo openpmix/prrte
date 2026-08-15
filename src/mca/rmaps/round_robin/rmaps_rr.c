@@ -131,6 +131,10 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
             rc = prte_rmaps_rr_byslot(jdata, app, &node_list,
                                       num_slots, app->num_procs,
                                       options);
+        } else if (PRTE_MAPPING_BYDEVICE == options->map) {
+            rc = prte_rmaps_rr_bydevice(jdata, app, &node_list,
+                                        num_slots, app->num_procs,
+                                        options);
         } else if (PRTE_MAPPING_PELIST == options->map) {
             rc = prte_rmaps_rr_bycpu(jdata, app, &node_list,
                                      num_slots, app->num_procs,

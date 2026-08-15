@@ -84,6 +84,8 @@ static int prte_rmaps_base_register(pmix_mca_base_register_flag_t flags)
     ret = pmix_mca_base_var_register("prte", NULL, NULL, "mapby",
                                      "Default mapping Policy [slot | hwthread | core | l1cache | "
                                       "l2cache | l3cache | numa | package | node | seq | ppr | "
+                                      "device=<class|name> (gpu, network, openfabrics, nic, block, or a\n"
+                                      " device name such as mlx5_0) | "
                                       "rankfile | pe-list=a,b (comma-delimited ranges of cpus to use for this job)],"
                                       " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
                                       "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
@@ -909,6 +911,41 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_PELIST);
         PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
 
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_DEVICE)) {
+        /* place procs against the devices in each node's topology. The value
+         * is either a device class ("gpu", "network", ...) or the name or
+         * uuid of one particular device, in which case every proc is placed
+         * near that one - which is what the removed "dist" policy did, said
+         * with one directive instead of a policy plus an MCA parameter.
+         * There is deliberately no bare "--map-by gpu": the class is the
+         * directive's value, which is what lets a new class be supported by
+         * adding a value rather than a directive. */
+        if (NULL == jdata) {
+            prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-policy", true,
+                           "mapping", cptr);
+            PMIx_Argv_free(ck);
+            free(cptr);
+            if (NULL != val) {
+                free(val);
+            }
+            return PRTE_ERR_SILENT;
+        }
+        if (NULL == val || 0 == strlen(val)) {
+            /* "device" with nothing after the "=" names no device at all */
+            prte_show_help("help-prte-rmaps-base.txt", "missing-value",
+                           true, "mapping", ck[0]);
+            PMIx_Argv_free(ck);
+            free(cptr);
+            if (NULL != val) {
+                free(val);
+            }
+            return PRTE_ERR_SILENT;
+        }
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_MAP_DEVICE, PRTE_ATTR_GLOBAL,
+                           val, PMIX_STRING);
+        PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYDEVICE);
+        PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
+
     } else {
         prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
                        true, "mapping", cptr);
@@ -1182,6 +1219,24 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
         prte_set_attribute(&app->attributes, PRTE_APP_CPUSET, PRTE_ATTR_GLOBAL,
                            val, PMIX_STRING);
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_PELIST);
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_DEVICE)) {
+        /* the devices this app is to be placed against - as much its own
+         * business as the object it maps by. Must stay in step with the
+         * job-level arm above: a directive accepted at one level and refused
+         * at the other is the recurring bug in this file */
+        if (NULL == val || 0 == strlen(val)) {
+            prte_show_help("help-prte-rmaps-base.txt", "missing-value",
+                           true, "mapping", ck[0]);
+            PMIx_Argv_free(ck);
+            free(cptr);
+            if (NULL != val) {
+                free(val);
+            }
+            return PRTE_ERR_SILENT;
+        }
+        prte_set_attribute(&app->attributes, PRTE_APP_MAP_DEVICE, PRTE_ATTR_GLOBAL,
+                           val, PMIX_STRING);
+        PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYDEVICE);
     } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_RANKFILE)) {
         /* the file naming this app's rank->host+cpuset assignments. The
          * FILE= qualifier was parsed above onto PRTE_APP_MAP_FILE; without

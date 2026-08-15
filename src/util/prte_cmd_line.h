@@ -180,6 +180,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_PACKAGE    "package"
 #define PRTE_CLI_NODE       "node"
 #define PRTE_CLI_SEQ        "seq"
+#define PRTE_CLI_DEVICE     "device="
 #define PRTE_CLI_PPR        "ppr"
 #define PRTE_CLI_RANKFILE   "rankfile"
 #define PRTE_CLI_NONE       "none"

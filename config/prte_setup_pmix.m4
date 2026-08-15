@@ -253,6 +253,26 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                          AC_MSG_WARN([accepts any unambiguous prefix of a qualifier's name.])
                          AC_MSG_ERROR([Please update PMIx and configure again])])
 
+    dnl "--map-by device=<class>" places processes against the devices in a
+    dnl node's topology, which means first knowing what devices it has.  PMIx
+    dnl owns that answer: it already reports devices to applications through
+    dnl PMIX_DEVICE_DISTANCES, and a second enumerator here would let PRRTE
+    dnl and PMIx disagree about the same device's name - which is exactly the
+    dnl string an application correlates its assignment against.  So there is
+    dnl no local fallback to select: without the enumerator the directive
+    dnl cannot be honored at all.
+    AC_MSG_CHECKING([for PMIx device enumeration support])
+    PRTE_CHECK_PMIX_CAP([DEVICE_ENUM],
+                        [AC_MSG_RESULT([yes])],
+                        [AC_MSG_RESULT([no])
+                         AC_MSG_WARN([PRRTE requires pmix_hwloc_get_devices(), which this])
+                         AC_MSG_WARN([PMIx does not provide. It lists the devices in a])
+                         AC_MSG_WARN([topology, which is what "--map-by device=" maps])
+                         AC_MSG_WARN([against. PRRTE deliberately does not carry its own])
+                         AC_MSG_WARN([copy: the device names it hands to a process have to])
+                         AC_MSG_WARN([be the ones PMIx reports to that same process.])
+                         AC_MSG_ERROR([Please update PMIx and configure again])])
+
     dnl The "pattern" qualifier on "--output file=NAME" hands the naming of
     dnl the output files to the user.  Expanding the pattern is PMIx's job -
     dnl PMIx owns the IOF sinks and is the only place that knows the rank and
