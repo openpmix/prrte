@@ -464,6 +464,20 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/groupcon.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
+            # groupinv: a bare PMIx client that forms a group by INVITATION
+            # and asks for a context id.  That method runs no server
+            # collective, so its leader requests the id through job control,
+            # which lands on the daemon hosting the leader -- and only the HNP
+            # holds the id pool, so that daemon has to relay it.  The client
+            # makes the HIGHEST rank the leader precisely so that, mapped by
+            # node, the leader is never the HNP.  On one host the relay is
+            # skipped entirely and the test proves nothing.
+            # (No apostrophes here: see the note further down.)
+            echo ">>>> groupinv (group invite/join context id) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/groupinv \
+                /prrte-src/contrib/dockerswarm/groupinv.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
             # scaletest: a PMIx client that times a full-data fence and a
             # bare barrier over the whole job, so the cost of the DVM
             # collectives can be plotted against DVM size, process count,
