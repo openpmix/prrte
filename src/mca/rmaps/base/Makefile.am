@@ -39,4 +39,5 @@ libprtemca_rmaps_la_SOURCES += \
         base/rmaps_base_support_fns.c \
         base/rmaps_base_ranking.c \
         base/rmaps_base_print_fns.c \
-        base/rmaps_base_binding.c
+        base/rmaps_base_binding.c \
+        base/rmaps_base_devices.c
