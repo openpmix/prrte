@@ -213,6 +213,44 @@ PMIX_CLASS_INSTANCE(prte_rmaps_base_selected_module_t,
  * message) for an app.
  */
 /*
+ * The levels a device list may be interleaved across.
+ *
+ * "node" is deliberately absent: interleaving across nodes is what SPAN
+ * already expresses, and giving one behavior two names that then compose
+ * with each other produces nonsense.  SPAN owns the cross-node dimension,
+ * interleave the within-node one.
+ */
+static struct {
+    const char *name;
+    hwloc_obj_type_t type;
+} interleave_levels[] = {
+    {.name = "package", .type = HWLOC_OBJ_PACKAGE},
+    {.name = "numa", .type = HWLOC_OBJ_NUMANODE},
+    {.name = "l3cache", .type = HWLOC_OBJ_L3CACHE},
+    {.name = "l2cache", .type = HWLOC_OBJ_L2CACHE},
+    {.name = "l1cache", .type = HWLOC_OBJ_L1CACHE},
+    {.name = NULL, .type = HWLOC_OBJ_MACHINE}
+};
+
+bool prte_rmaps_base_interleave_level(const char *name, hwloc_obj_type_t *type)
+{
+    size_t n;
+
+    if (NULL == name || 0 == strlen(name)) {
+        return false;
+    }
+    for (n = 0; NULL != interleave_levels[n].name; n++) {
+        if (PMIX_CHECK_CLI_OPTION((char *) name, (char *) interleave_levels[n].name)) {
+            if (NULL != type) {
+                *type = interleave_levels[n].type;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+/*
  * Validate a pe-list value: a comma-delimited list of cpu ids and id ranges,
  * "0-3,6".
  *
@@ -459,6 +497,36 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 prte_set_attribute(attrs, (NULL != app) ? PRTE_APP_MAP_FILE : PRTE_JOB_FILE,
                                    PRTE_ATTR_GLOBAL, val, PMIX_STRING);
             }
+
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_INTERLEAVE)) {
+            /* NOTE: this arm must stay AFTER the INHERIT arm above.  The
+             * option matcher compares only as far as the shorter of its two
+             * arguments and has no view of the other options, so the first
+             * arm that prefix-matches wins - and ":i" has meant INHERIT for
+             * as long as there has been one.  Tested earlier, this arm would
+             * silently change what an existing command line does. */
+            val = pmix_cli_qualifier_value(ck2[i]);
+            if (NULL == val) {
+                /* the level defaults to the package: it is the only one that
+                 * does anything interesting on a conventional two-socket
+                 * node, and the one whose crossing costs the most */
+                val = "package";
+            }
+            if (!prte_rmaps_base_interleave_level(val, NULL)) {
+                prte_show_help("help-prte-rmaps-base.txt", "rmaps:bad-interleave-level",
+                               true, val);
+                PMIx_Argv_free(ck2);
+                return PRTE_ERR_SILENT;
+            }
+            if (NULL == attrs) {
+                prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier",
+                               true, "mapping policy", PRTE_CLI_INTERLEAVE);
+                PMIx_Argv_free(ck2);
+                return PRTE_ERR_SILENT;
+            }
+            prte_set_attribute(attrs,
+                               (NULL != app) ? PRTE_APP_MAP_INTERLEAVE : PRTE_JOB_MAP_INTERLEAVE,
+                               PRTE_ATTR_GLOBAL, val, PMIX_STRING);
 
         } else {
             /* unrecognized modifier */
@@ -964,6 +1032,18 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
     PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
 
 setpolicy:
+    /* interleave reorders a device list, so it means nothing anywhere else.
+     * Refuse it by name rather than as an unknown qualifier - the spelling
+     * is legal, just not here. The check waits until now because the
+     * qualifiers are parsed before the directive they belong to. */
+    if (NULL != jdata
+        && prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_INTERLEAVE, NULL, PMIX_STRING)
+        && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
+        prte_show_help("help-prte-rmaps-base.txt", "rmaps:interleave-needs-device", true,
+                       prte_rmaps_base_print_mapping(tmp));
+        return PRTE_ERR_SILENT;
+    }
+
     if (NULL == jdata) {
         prte_rmaps_base.mapping = tmp;
     } else {
@@ -1277,6 +1357,14 @@ int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app, char *inspec
     PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
 
 setpolicy:
+    /* interleave reorders a device list, so it means nothing anywhere else -
+     * see the job-level parser, which refuses it the same way */
+    if (prte_get_attribute(&app->attributes, PRTE_APP_MAP_INTERLEAVE, NULL, PMIX_STRING)
+        && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
+        prte_show_help("help-prte-rmaps-base.txt", "rmaps:interleave-needs-device", true,
+                       prte_rmaps_base_print_mapping(tmp));
+        return PRTE_ERR_SILENT;
+    }
     prte_set_attribute(&app->attributes, PRTE_APP_MAPBY, PRTE_ATTR_GLOBAL, &tmp, PMIX_UINT16);
     return PRTE_SUCCESS;
 }

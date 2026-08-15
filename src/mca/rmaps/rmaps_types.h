@@ -147,6 +147,10 @@ typedef struct {
      * uuid of one device. Owned by the struct - it comes out of an
      * attribute, which returns a copy. */
     char *map_device;
+    /* the level the device list is interleaved across, from
+     * --map-by device=X:interleave[=level]; NULL when not asked for.
+     * Owned by the struct. */
+    char *map_interleave;
 
 } prte_rmaps_options_t;
 

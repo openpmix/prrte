@@ -119,6 +119,12 @@ PRTE_EXPORT int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_
 PRTE_EXPORT int prte_rmaps_base_set_default_mapping(prte_job_t *jdata,
                                                     prte_rmaps_options_t *options);
 PRTE_EXPORT int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *spec);
+
+/* Resolve an interleave level name to its hwloc object type.  Returns
+ * false for a name that is not an accepted level - which includes "node",
+ * deliberately: SPAN owns the cross-node dimension. */
+PRTE_EXPORT bool prte_rmaps_base_interleave_level(const char *name,
+                                                 hwloc_obj_type_t *type);
 PRTE_EXPORT int prte_rmaps_base_set_app_mapping_policy(prte_app_context_t *app,
                                                         char *spec);
 PRTE_EXPORT int prte_rmaps_base_set_app_ranking_policy(prte_app_context_t *app,

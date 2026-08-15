@@ -151,6 +151,17 @@ the "--mapby" option (except where noted):
 * "FILE=<path>" (path to file containing sequential or rankfile
   entries).
 
+* "INTERLEAVE[=<level>]" only applies to the "DEVICE" directive. It
+  reorders the device list so that consecutive processes land on
+  different objects of the given level - "package" (the default),
+  "numa", "l3cache", "l2cache" or "l1cache". On a node with two GPUs
+  per socket, "device=gpu:interleave" places the first two processes on
+  different sockets rather than filling the first socket. Note that
+  "node" is not an accepted level: interleaving across nodes is what
+  the "SPAN" qualifier already expresses. A level that does not divide
+  the devices into groups leaves the order unchanged, so the qualifier
+  is safe to leave in a default mapping policy.
+
 * "ORDERED" only applies to the "PE-LIST" option to indicate that
   procs are to be bound to each of the specified CPUs in the order in
   which they are assigned (i.e., the first proc on a node shall be
