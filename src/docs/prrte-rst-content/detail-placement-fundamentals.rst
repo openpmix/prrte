@@ -29,6 +29,40 @@ command line via the ``--mapby`` option, include:
   assigns one process to the node/resource specified in each entry of
   the file, one per line of the file.
 
+* ``DEVICE=<class|name>``: assigns one process to each device in the
+  node's topology, in PCI bus order.
+
+Mapping by device is unlike the other directives in one respect worth
+understanding, because it governs what binding can then do.
+
+Every other mapping target is an object the user names directly --- a
+core, a NUMA domain, a package --- and binding descends within it. A
+device is not such an object: it hangs off the I/O side of the topology
+and has no CPUs of its own. What a process is actually placed against
+is the device's **locality**, meaning the nearest object in the topology
+that both contains the device and has CPUs. On one machine that may be
+a NUMA domain, on another a whole package, depending on where the
+hardware attaches the device.
+
+Two consequences follow, and both are deliberate:
+
+#. Binding descends from the locality, not from the device. So
+   ``--mapby device=gpu --bindto core`` binds each process to one core
+   within the CPUs local to its GPU.
+
+#. Asking to bind to an object larger than the locality is an error,
+   not a silent widening. Such a binding is not "near the device" at
+   all, which is the whole of what was asked for. Note this cannot be
+   known from the command line alone: whether ``--bindto package`` is
+   legal depends on where that machine attaches its devices.
+
+Where every device on a node is equally close to every CPU --- which
+happens when they all hang off one PCI complex rather than off
+individual NUMA domains --- the job still runs and each process is
+still assigned its own device, but a warning is printed: the binding
+cannot be made any more specific than it would have been without the
+directive.
+
 For example, using the hostfile below:
 
 .. code::

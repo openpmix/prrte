@@ -315,6 +315,8 @@ Process Mapping / Ranking / Binding Options
 
   * "pe-list"
 
+  * "device=<class|name>"
+
   Any object can include qualifiers by adding a colon (":") and any
   colon-delimited combination of one or more of the following to the "
   --mapby" options:
@@ -621,6 +623,44 @@ And here is a MIMD example:
 This will launch process 0 running "hostname" on node "aa" and
 processes 1 and 2 each running "uptime" on nodes "bb" and "cc",
 respectively.
+
+
+Mapping to Devices
+==================
+
+Consider a two-socket node with eight NUMA domains and four GPUs,
+where the GPUs are attached to NUMA domains 1 and 2 on the first
+socket but 6 and 7 on the second. This asymmetry is the case device
+mapping exists for: no "--mapby numa" or "--mapby package" expression
+selects those four domains, because they are not at the same position
+within each socket.
+
+   $ prun -n 4 --mapby device=gpu --bindto core ./a.out
+
+places one process per GPU, in PCI bus order, each bound to the first
+available core in the CPUs local to its own GPU - on the machine
+described above, cores 16, 32, 96, and 112.
+
+Binding may be any object at or below the device's locality:
+
+   $ prun -n 1 --mapby device=gpu --bindto numa ./a.out
+
+binds the process to the whole NUMA domain its GPU is attached to,
+while "--bindto l3cache" binds it to one L3 cache within that domain,
+and "--bindto core" to a single core. Asking for "--bindto package"
+on this machine is an error: a package contains the GPU's NUMA domain
+and three others, so binding there would place the process on CPUs the
+GPU is not local to.
+
+Naming a single device instead of a class places every process near
+that one device, which is useful for a job whose performance depends
+on one particular fabric interface:
+
+   $ prun -n 8 --mapby device=mlx5_0 --bindto core ./a.out
+
+Other classes are selected the same way - "device=openfabrics" for
+fabric interfaces, "device=network" for network interfaces,
+"device=nic" for both, and "device=block" for block devices.
 
 
 Per-App-Context Mapping Example
@@ -970,6 +1010,41 @@ command line via the "--mapby" option, include:
 * "RANKFILE": (often accompanied by the "file=<path>" qualifier)
   assigns one process to the node/resource specified in each entry of
   the file, one per line of the file.
+
+* "DEVICE=<class|name>": assigns one process to each device in the
+  node's topology, in PCI bus order.
+
+Mapping by device is unlike the other directives in one respect worth
+understanding, because it governs what binding can then do.
+
+Every other mapping target is an object the user names directly - a
+core, a NUMA domain, a package - and binding descends within it. A
+device is not such an object: it hangs off the I/O side of the
+topology and has no CPUs of its own. What a process is actually
+placed against is the device's *locality*, meaning the nearest object
+in the topology that both contains the device and has CPUs. On one
+machine that may be a NUMA domain, on another a whole package,
+depending on where the hardware attaches the device.
+
+Two consequences follow, and both are deliberate:
+
+1. Binding descends from the locality, not from the device. So
+   "--mapby device=gpu --bindto core" binds each process to one core
+   within the CPUs local to its GPU.
+
+2. Asking to bind to an object larger than the locality is an error,
+   not a silent widening. A binding that covers more than the device's
+   locality is not "near the device" at all, which is the whole of what
+   was asked for. Note this cannot be known from the command line
+   alone: whether "--bindto package" is legal depends on where that
+   machine attaches its devices.
+
+Where every device on a node is equally close to every CPU - which
+happens when they all hang off one PCI complex rather than off
+individual NUMA domains - the job still runs and each process is still
+assigned its own device, but a warning is printed: the binding cannot
+be made any more specific than it would have been without the
+directive.
 
 For example, using the hostfile below:
 

@@ -78,6 +78,27 @@ applied at the job level:
   OVERLOAD qualifier to the "bind-to" option removes the check on
   availability of the CPU in both cases.
 
+* ``DEVICE=<class|name>`` assigns one proc to each device in the node's
+  topology, in PCI bus order, placing it on the CPUs local to that
+  device. The value is either a class of device -- ``gpu``, ``network``,
+  ``openfabrics``, ``nic`` (network and openfabrics together), or
+  ``block`` -- or the name or UUID of one particular device such as
+  ``mlx5_0``, in which case every proc is placed near that one device.
+
+  Note there is no bare ``--mapby gpu``: the class is the *value* of the
+  ``device`` directive, which is what allows other classes of device to
+  be supported later without adding a directive for each.
+
+  Binding descends from the device's *locality*: the nearest object in
+  the topology that both contains the device and has CPUs. Asking to
+  bind to an object larger than that locality is an error rather than a
+  silent widening, since such a binding is not "near the device" at all.
+  Whether a given ``--bindto`` is legal therefore depends on the machine,
+  not on the command line alone. Where every device on a node is equally
+  close to every CPU, the job runs and each proc is still assigned its
+  own device, but a warning reports that the binding could not be made
+  any more specific.
+
 Any directive can include qualifiers by adding a colon (``:``) and any
 combination of one or more of the following (delimited by colons) to
 the ``--mapby`` option (except where noted):
