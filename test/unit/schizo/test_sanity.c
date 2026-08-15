@@ -140,5 +140,35 @@ int test_sanity(void)
     CHECK("sanity:pe-bind-core-ok", PRTE_SUCCESS == rc);
     PMIX_DESTRUCT(&results);
 
+    /* pe-list= is a directive rather than a qualifier, and dictates the
+     * binding the same way */
+    PMIX_CONSTRUCT(&results, pmix_cli_result_t);
+    schizo_test_add(&results, PRTE_CLI_MAPBY, "pe-list=0-3", NULL);
+    schizo_test_add(&results, PRTE_CLI_BINDTO, "package", NULL);
+    fprintf(stderr, "--- expected error output follows (pe-list/bind conflict) ---\n");
+    rc = prte_schizo_base_sanity(&results);
+    CHECK("sanity:pelist-bind-conflict", PRTE_SUCCESS != rc);
+    PMIX_DESTRUCT(&results);
+
+    /*** ...but the conflict is a PE *request*, not the letters "pe" ***/
+    /* This used to be a strcasestr() over the whole --map-by value, so any
+     * spelling containing "pe" anywhere was refused as a PE request.
+     * "openfabrics" contains one, and so does a rankfile living under
+     * /home/pete. Neither asks for a cpu list, and neither conflicts with
+     * binding to a numa domain. */
+    PMIX_CONSTRUCT(&results, pmix_cli_result_t);
+    schizo_test_add(&results, PRTE_CLI_MAPBY, "device=openfabrics", NULL);
+    schizo_test_add(&results, PRTE_CLI_BINDTO, "numa", NULL);
+    rc = prte_schizo_base_sanity(&results);
+    CHECK("sanity:pe-substring-not-a-conflict", PRTE_SUCCESS == rc);
+    PMIX_DESTRUCT(&results);
+
+    PMIX_CONSTRUCT(&results, pmix_cli_result_t);
+    schizo_test_add(&results, PRTE_CLI_MAPBY, "rankfile:file=/home/pete/rf", NULL);
+    schizo_test_add(&results, PRTE_CLI_BINDTO, "package", NULL);
+    rc = prte_schizo_base_sanity(&results);
+    CHECK("sanity:pe-in-a-path-not-a-conflict", PRTE_SUCCESS == rc);
+    PMIX_DESTRUCT(&results);
+
     return failures;
 }
