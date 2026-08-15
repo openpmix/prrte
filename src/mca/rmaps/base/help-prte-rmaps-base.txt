@@ -532,3 +532,24 @@ specific than it would have been without the directive.
 This is a property of the machine, not of the request: it happens when
 every device hangs off one PCI complex rather than off individual NUMA
 domains or packages.
+#
+[rmaps:bad-interleave-level]
+The "interleave" qualifier was given a level that is not recognized:
+
+  Level: %s
+
+Accepted levels are "package", "numa", "l3cache", "l2cache" and
+"l1cache". The level defaults to "package" when none is given.
+
+Note that "node" is deliberately not accepted. Interleaving across nodes
+is what the "SPAN" qualifier already expresses; "interleave" reorders the
+devices within each node.
+#
+[rmaps:interleave-needs-device]
+The "interleave" qualifier was given with a mapping policy it cannot
+apply to:
+
+  Mapping policy: %s
+
+"interleave" reorders the list of devices a job is mapped against, so it
+is meaningful only in combination with "--map-by device=<class|name>".

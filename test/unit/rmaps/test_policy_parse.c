@@ -314,6 +314,71 @@ int test_policy_parse(void)
     CHECK("mapby device= with no value: refused", PRTE_SUCCESS != rc);
     PMIX_RELEASE(app);
 
+    /* --- the interleave qualifier reorders a device list --- */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:interleave");
+    CHECK("mapby interleave: rc", PRTE_SUCCESS == rc);
+    sval = get_str(&app->attributes, PRTE_APP_MAP_INTERLEAVE);
+    CHECK("mapby interleave: defaults to package",
+          NULL != sval && 0 == strcmp(sval, "package"));
+    free(sval);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:interleave=numa");
+    CHECK("mapby interleave=numa: rc", PRTE_SUCCESS == rc);
+    sval = get_str(&app->attributes, PRTE_APP_MAP_INTERLEAVE);
+    CHECK("mapby interleave=numa: level honored",
+          NULL != sval && 0 == strcmp(sval, "numa"));
+    free(sval);
+    PMIX_RELEASE(app);
+
+    /* "node" is refused: interleaving across nodes is what SPAN expresses,
+     * and one behavior with two names composes into nonsense */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:interleave=node");
+    CHECK("mapby interleave=node: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:interleave=bogus");
+    CHECK("mapby interleave=bogus: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    /* it reorders a DEVICE list, so it means nothing on any other map */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "numa:interleave");
+    CHECK("mapby numa:interleave: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    /* THE regression that matters: "interleave" and "inherit" share a first
+     * letter, and the option matcher has no view of the other options - the
+     * first arm of the chain that prefix-matches wins. ":i" has meant
+     * INHERIT for as long as there has been one, so an interleave arm tested
+     * before the inherit arm would silently change what a working command
+     * line does. No error, no warning, a different mapping. */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:i");
+    CHECK("mapby device=gpu:i : rc", PRTE_SUCCESS == rc);
+    CHECK("mapby ':i' still means INHERIT, not interleave",
+          !prte_get_attribute(&app->attributes, PRTE_APP_MAP_INTERLEAVE, NULL, PMIX_STRING));
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:in");
+    CHECK("mapby device=gpu:in : rc", PRTE_SUCCESS == rc);
+    CHECK("mapby ':in' still means INHERIT",
+          !prte_get_attribute(&app->attributes, PRTE_APP_MAP_INTERLEAVE, NULL, PMIX_STRING));
+    PMIX_RELEASE(app);
+
+    /* ...while ":int" is unambiguously interleave */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:int");
+    CHECK("mapby ':int' is interleave",
+          PRTE_SUCCESS == rc
+          && prte_get_attribute(&app->attributes, PRTE_APP_MAP_INTERLEAVE, NULL, PMIX_STRING));
+    PMIX_RELEASE(app);
+
     /* there is deliberately no bare "gpu" spelling: the class is the
      * directive's VALUE, which is what lets a new class be supported by
      * adding a value rather than a directive */

@@ -353,6 +353,10 @@ Process Mapping / Ranking / Binding Options
   * "FILE=<path>" (path to file containing sequential or rankfile
     entries).
 
+  * "INTERLEAVE[=<level>]" only applies to the "device" directive;
+    reorders the device list so consecutive procs land on different
+    objects of the given level (default "package")
+
   * "ORDERED" only applies to the PE-LIST option to indicate that
     procs are to be bound to each of the specified CPUs in the order
     in which they are assigned (i.e., the first proc on a node shall
@@ -651,6 +655,16 @@ and "--bindto core" to a single core. Asking for "--bindto package"
 on this machine is an error: a package contains the GPU's NUMA domain
 and three others, so binding there would place the process on CPUs the
 GPU is not local to.
+
+Where a job wants its processes spread across sockets rather than
+filling the first, add the "interleave" qualifier:
+
+   $ prun -n 2 --mapby device=gpu:interleave --bindto core ./a.out
+
+This reorders the device list so consecutive processes land on
+different packages - on the machine above, cores 16 and 96 rather than
+16 and 32. The level may be given explicitly ("interleave=numa", for
+instance); it defaults to "package".
 
 Naming a single device instead of a class places every process near
 that one device, which is useful for a job whose performance depends

@@ -333,6 +333,18 @@ on this machine is an error: a package contains the GPU's NUMA domain
 and three others, so binding there would place the process on CPUs the
 GPU is not local to.
 
+Where a job wants its processes spread across sockets rather than filling
+the first, add the ``interleave`` qualifier:
+
+.. code::
+
+   $ prun -n 2 --mapby device=gpu:interleave --bindto core ./a.out
+
+This reorders the device list so that consecutive processes land on
+different packages --- on the machine above, cores 16 and 96 rather than
+16 and 32. The level may be given explicitly (``interleave=numa``, for
+instance); it defaults to ``package``.
+
 Naming a single device rather than a class places every process near
 that one device, which suits a job whose performance depends on one
 particular fabric interface:

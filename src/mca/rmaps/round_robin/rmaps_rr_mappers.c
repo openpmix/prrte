@@ -462,6 +462,102 @@ static bool binding_fits(prte_node_t *node, hwloc_obj_t locality,
     return true;
 }
 
+/* Reorder the device list so that consecutive processes land on different
+ * objects of the given level.
+ *
+ * Group the devices by the <level> object containing each one's locality,
+ * then take one device from each group in turn, dropping a group when it is
+ * exhausted.  On a node whose GPUs are two per socket, interleaving across
+ * packages turns 0,1,2,3 into 0,2,1,3 - so -n 2 lands on different sockets
+ * rather than filling the first.
+ *
+ * This never invents an ordering, it only redistributes across groups: a
+ * level that does not partition the devices (one group, or one device per
+ * group) reproduces the input order exactly.  That is what makes the
+ * qualifier safe to leave in a site's default mapping policy.
+ */
+static void interleave_devices(hwloc_topology_t topo, hwloc_obj_type_t level,
+                               pmix_hwloc_device_t *devs, size_t ndevs)
+{
+    pmix_hwloc_device_t *out;
+    hwloc_obj_t *keys;
+    size_t *headof;     /* next index to take from each group */
+    size_t *counts;
+    size_t ngroups = 0, n, g, o = 0;
+    hwloc_obj_t key;
+
+    if (2 > ndevs) {
+        return;
+    }
+    out = (pmix_hwloc_device_t *) malloc(ndevs * sizeof(pmix_hwloc_device_t));
+    keys = (hwloc_obj_t *) calloc(ndevs, sizeof(hwloc_obj_t));
+    headof = (size_t *) calloc(ndevs, sizeof(size_t));
+    counts = (size_t *) calloc(ndevs, sizeof(size_t));
+    if (NULL == out || NULL == keys || NULL == headof || NULL == counts) {
+        free(out);
+        free(keys);
+        free(headof);
+        free(counts);
+        return;     /* the plain order is a valid answer */
+    }
+
+    /* group key: the <level> object containing this device's locality.  A
+     * device with no such ancestor gets a NULL key and forms its own group,
+     * which keeps it in the rotation rather than dropping it */
+    for (n = 0; n < ndevs; n++) {
+        key = NULL;
+        if (NULL != devs[n].locality) {
+            if (level == devs[n].locality->type) {
+                key = devs[n].locality;
+            } else {
+                key = hwloc_get_ancestor_obj_by_type(topo, level, devs[n].locality);
+            }
+        }
+        for (g = 0; g < ngroups; g++) {
+            if (keys[g] == key) {
+                break;
+            }
+        }
+        if (g == ngroups) {
+            keys[ngroups] = key;
+            ++ngroups;
+        }
+        ++counts[g];
+    }
+
+    /* round-robin across the groups, in order of first appearance */
+    while (o < ndevs) {
+        for (g = 0; g < ngroups; g++) {
+            if (0 == counts[g]) {
+                continue;   /* this group is exhausted */
+            }
+            /* the next device belonging to group g */
+            for (n = headof[g]; n < ndevs; n++) {
+                key = NULL;
+                if (NULL != devs[n].locality) {
+                    if (level == devs[n].locality->type) {
+                        key = devs[n].locality;
+                    } else {
+                        key = hwloc_get_ancestor_obj_by_type(topo, level, devs[n].locality);
+                    }
+                }
+                if (key == keys[g]) {
+                    out[o++] = devs[n];
+                    headof[g] = n + 1;
+                    --counts[g];
+                    break;
+                }
+            }
+        }
+    }
+
+    memcpy(devs, out, ndevs * sizeof(pmix_hwloc_device_t));
+    free(out);
+    free(keys);
+    free(headof);
+    free(counts);
+}
+
 static int device_targets_begin(prte_node_t *node, prte_rmaps_options_t *opts,
                                 void **ctx)
 {
@@ -502,6 +598,14 @@ static int device_targets_begin(prte_node_t *node, prte_rmaps_options_t *opts,
     if (0 == dc->ndevs) {
         *ctx = dc;
         return PRTE_SUCCESS;
+    }
+
+    /* reorder before anything reads the list */
+    if (NULL != opts->map_interleave) {
+        hwloc_obj_type_t level = HWLOC_OBJ_PACKAGE;
+        if (prte_rmaps_base_interleave_level(opts->map_interleave, &level)) {
+            interleave_devices(node->topology->topo, level, dc->devs, dc->ndevs);
+        }
     }
 
     /* Refuse a binding coarser than the devices are local to, before any
