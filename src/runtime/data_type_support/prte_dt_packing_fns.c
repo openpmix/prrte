@@ -334,7 +334,7 @@ int prte_job_pack(pmix_data_buffer_t *bkt, prte_job_t *job, prte_job_pack_mode_t
             if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(job->procs, j))) {
                 continue;
             }
-            rc = prte_proc_pack(bkt, proc, mode);
+            rc = prte_proc_pack(bkt, proc, job, mode);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 return prte_pmix_convert_status(rc);
@@ -492,7 +492,8 @@ int prte_node_pack(pmix_data_buffer_t *bkt, prte_node_t *node)
 /*
  * PROC
  */
-int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc, prte_job_pack_mode_t mode)
+int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc, prte_job_t *jdata,
+                   prte_job_pack_mode_t mode)
 {
     pmix_status_t rc;
 
@@ -529,6 +530,28 @@ int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc, prte_job_pack_mod
      * alone - see prte_odls_base_send_cpuset_slices(). */
     if (PRTE_JOB_PACK_NO_CPUSETS != mode) {
         rc = PMIx_Data_pack(NULL, bkt, (void *) &proc->cpuset, 1, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
+        }
+    }
+
+    /* The device this proc was mapped against, when the job was mapped by
+     * one.  Packed as its own field rather than as an attribute, because no
+     * attribute list goes on the wire (see below), and packed only for a
+     * job that asked for a device map, so that every other job pays nothing
+     * for it - the size discipline the comment below describes applies here
+     * too. Both ends test the same condition, and the job's mapping policy
+     * has already been packed by the time this runs. */
+    if (NULL != jdata && NULL != jdata->map
+        && PRTE_MAPPING_BYDEVICE == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+        char *devid = NULL;
+        prte_get_attribute(&proc->attributes, PRTE_PROC_DEVICE_ID,
+                           (void **) &devid, PMIX_STRING);
+        rc = PMIx_Data_pack(NULL, bkt, (void *) &devid, 1, PMIX_STRING);
+        if (NULL != devid) {
+            free(devid);
+        }
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             return prte_pmix_convert_status(rc);

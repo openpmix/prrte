@@ -1,3 +1,11 @@
+--------------------------------------------------------------------------
+A deprecated MCA variable value was specified in the environment or
+on the command line.  Deprecated MCA variables should be avoided;
+they may disappear in future releases.
+
+Deprecated variable: rmaps_default_mapping_policy
+New variable:        mapby
+--------------------------------------------------------------------------
 
 ========================   JOB MAP   ========================
 Data for JOB prterun-JOBID@N offset 0 Total slots allocated N

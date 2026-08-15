@@ -134,6 +134,43 @@ class Obj:
     core_logical: frozenset = field(default_factory=frozenset)
 
 
+def _count_gpus(root):
+    """How many compute GPUs this topology holds.
+
+    Mirrors the two rules pmix_hwloc_get_devices() applies, because the
+    interesting number here is the one the runtime will arrive at: the unit
+    is the PCI *function* (a GPU commonly exposes a card node, a render node
+    and a vendor compute node, and they are one device), and a display-class
+    function counts only if it carries a vendor backend or a DRM render node
+    -- which is what separates a real GPU from a management controller's VGA
+    adapter.
+    """
+    backends = ("cuda", "nvml", "rsmi", "levelzero", "opencl")
+    ngpu = 0
+    for pci in root.iter("object"):
+        if pci.get("type") != "PCIDev":
+            continue
+        osdevs = [c for c in pci if c.tag == "object" and c.get("type") == "OSDev"]
+        if not osdevs:
+            continue
+        compute = False
+        render = False
+        for od in osdevs:
+            if od.get("osdev_type") == "5":          # COPROC
+                compute = True
+            for inf in od.findall("info"):
+                if (inf.get("name", "").lower() == "backend"
+                        and inf.get("value", "").lower() in backends):
+                    compute = True
+            if (od.get("name") or "").lower().startswith("renderd"):
+                render = True
+        cls_id = (pci.get("pci_type") or "").split()
+        is_display = bool(cls_id) and cls_id[0].startswith("03")
+        if compute or (render and is_display):
+            ngpu += 1
+    return ngpu
+
+
 class TopoModel:
     """Per-topology model derived entirely from the XML -- no hardcoded
     dimensions."""
@@ -186,7 +223,9 @@ class TopoModel:
                     o.core_logical = frozenset(
                         cl for (cb, cl) in cores
                         if cb and (cb & o.cpuset) != 0)
-        return cls(os.path.splitext(os.path.basename(path))[0], by_level)
+        model = cls(os.path.splitext(os.path.basename(path))[0], by_level)
+        model.ngpus = _count_gpus(root)
+        return model
 
     def objects_at(self, level):
         return self.by_level.get(level, [])
@@ -579,6 +618,36 @@ def group_cases(topo):
                apps=[AppSpec(2), AppSpec(3)], expect="map")
 
 
+def device_cases(topo):
+    """--map-by device=, whose placement is pinned by golden snapshots.
+
+    Only emitted for a topology that actually has GPUs: on one without any,
+    the directive is correctly an error, and that negative is covered
+    separately.  The plain and interleaved orders are both pinned because the
+    difference between them IS the feature - one fills a package before
+    moving on, the other alternates.
+    """
+    if getattr(topo, "ngpus", 0) < 2:
+        return
+    hostspec, pool = LAYOUTS["single"]
+    n = topo.ngpus
+    yield Case("device.%s.gpu" % topo.name, "device", topo, "single",
+               hostspec, pool, map_by="device=gpu", rank_by="slot",
+               bind_to="core", n=n, expect="map")
+    yield Case("device.%s.gpu-interleave" % topo.name, "device", topo,
+               "single", hostspec, pool, map_by="device=gpu:interleave",
+               rank_by="slot", bind_to="core", n=n, expect="map")
+    # fewer procs than devices is where the two orders visibly differ
+    if 2 <= n // 2:
+        yield Case("device.%s.gpu-half" % topo.name, "device", topo, "single",
+                   hostspec, pool, map_by="device=gpu", rank_by="slot",
+                   bind_to="core", n=n // 2, expect="map")
+        yield Case("device.%s.gpu-half-interleave" % topo.name, "device", topo,
+                   "single", hostspec, pool,
+                   map_by="device=gpu:interleave", rank_by="slot",
+                   bind_to="core", n=n // 2, expect="map")
+
+
 def perapp_cases(topo):
     """MPMD lines carrying distinct per-app --map-by/--rank-by/--bind-to
     directives - the rmaps per-app dispatch path.  Placement/ranking/binding
@@ -646,6 +715,7 @@ def generate_cases(topos, layouts, ns, full):
         cases.extend(matrix_cases(topo, layouts, ns))
         cases.extend(negative_cases(topo))
         cases.extend(group_cases(topo))
+        cases.extend(device_cases(topo))
         cases.extend(perapp_cases(topo))
     return cases
 
@@ -916,7 +986,7 @@ def golden_path(golden_dir, case):
 
 def is_curated_golden(c):
     """A small, human-reviewable subset pinned by golden snapshots."""
-    if c.group in ("oversubscribe", "ppr", "multiapp", "perapp"):
+    if c.group in ("oversubscribe", "ppr", "multiapp", "perapp", "device"):
         return True
     if c.group == "matrix" and c.expect == "map":
         # one representative per map-by (even layout, rank slot, bind none)

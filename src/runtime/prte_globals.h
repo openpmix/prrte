@@ -623,9 +623,9 @@ PRTE_EXPORT void prte_app_print(char **output, prte_job_t *jdata, prte_app_conte
 
 /** Pack/unpack a proc*/
 PRTE_EXPORT int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc,
-                               prte_job_pack_mode_t mode);
+                               prte_job_t *jdata, prte_job_pack_mode_t mode);
 PRTE_EXPORT int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t *proc,
-                                 prte_job_pack_mode_t mode);
+                                 prte_job_t *jdata, prte_job_pack_mode_t mode);
 PRTE_EXPORT int prte_proc_copy(prte_proc_t **dest, prte_proc_t *src);
 PRTE_EXPORT void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src);
 
