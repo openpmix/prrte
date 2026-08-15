@@ -560,7 +560,11 @@ against:
 
   Processes requested: %d
   Device:              %s
-  Devices available:   %d
+  Processes placeable: %d
+
+("Processes placeable" counts assignments, not devices: with the "ndev"
+qualifier each process takes several devices, so the number of processes
+that fit is smaller than the number of devices present.)
 
 A device is assigned to a process rather than subdivided between
 processes, so by default each device takes one process and a job asking
@@ -591,3 +595,11 @@ it is meaningful only in combination with
 
 If you meant to run more processes than there are CPUs, that is the
 "overload-allowed" qualifier on "--bind-to" instead.
+#
+[rmaps:ndev-needs-device]
+The "ndev" qualifier was given with a mapping policy it cannot apply to:
+
+  Mapping policy: %s
+
+"ndev" says how many devices each process is to be assigned, so it is
+meaningful only in combination with "--map-by device=<class|name>".

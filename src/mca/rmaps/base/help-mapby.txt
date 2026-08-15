@@ -174,6 +174,12 @@ the "--mapby" option (except where noted):
   question from the "overload-allowed" qualifier to "--bindto", which
   concerns running more processes than there are CPUs.
 
+* "NDEV=<n>" only applies to the "DEVICE" directive. It assigns n
+  devices to each process rather than one. The process is then local to
+  whatever object contains all of its devices - two GPUs on different
+  NUMA domains make their package the locality - so binding descends
+  from there.
+
 * "ORDERED" only applies to the "PE-LIST" option to indicate that
   procs are to be bound to each of the specified CPUs in the order in
   which they are assigned (i.e., the first proc on a node shall be

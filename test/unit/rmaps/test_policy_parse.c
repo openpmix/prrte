@@ -405,6 +405,34 @@ int test_policy_parse(void)
           && prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED, NULL, PMIX_BOOL));
     PMIX_RELEASE(app);
 
+    /* --- ndev: several devices to each proc --- */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:ndev=2");
+    CHECK("mapby ndev=2: rc", PRTE_SUCCESS == rc);
+    u16 = get_u16(&app->attributes, PRTE_APP_MAP_NDEV);
+    CHECK("mapby ndev=2: value", 2 == u16);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:ndev");
+    CHECK("mapby ndev with no value: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:ndev=0");
+    CHECK("mapby ndev=0: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:ndev=two");
+    CHECK("mapby ndev=two: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "numa:ndev=2");
+    CHECK("mapby numa:ndev: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
     /* THE regression that matters: "interleave" and "inherit" share a first
      * letter, and the option matcher has no view of the other options - the
      * first arm of the chain that prefix-matches wins. ":i" has meant

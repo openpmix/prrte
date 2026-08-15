@@ -754,6 +754,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         PRTE_CLI_ORDERED,
         PRTE_CLI_INTERLEAVE,
         PRTE_CLI_SHARED,
+        PRTE_CLI_NDEV,
         NULL
     };
 

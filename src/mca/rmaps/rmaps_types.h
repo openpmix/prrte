@@ -155,6 +155,9 @@ typedef struct {
      * --map-by device=X:shared. False by default: a device is assigned to
      * a proc rather than subdivided between them. */
     bool map_shared;
+    /* how many devices each proc is assigned, from
+     * --map-by device=X:ndev=N. Zero means the default of one. */
+    uint16_t map_ndev;
 
 } prte_rmaps_options_t;
 

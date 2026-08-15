@@ -311,6 +311,9 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
     bool oversubscribe_given = false;
     bool nooversubscribe_given = false;
     bool shared = false;
+    long ndev;
+    char *eptr;
+    uint16_t ndev16;
 
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "%s rmaps:base check modifiers with %s",
@@ -528,6 +531,35 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
             prte_set_attribute(attrs,
                                (NULL != app) ? PRTE_APP_MAP_INTERLEAVE : PRTE_JOB_MAP_INTERLEAVE,
                                PRTE_ATTR_GLOBAL, val, PMIX_STRING);
+
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NDEV)) {
+            /* how many devices each proc is given.  Tested before SHARED
+             * only because they share no prefix; both sit after SPAN for
+             * the reason given below. */
+            val = pmix_cli_qualifier_value(ck2[i]);
+            if (NULL == val) {
+                prte_show_help("help-prte-rmaps-base.txt", "missing-value", true,
+                               "mapping policy", "NDEV", ck2[i]);
+                PMIx_Argv_free(ck2);
+                return PRTE_ERR_SILENT;
+            }
+            ndev = strtol(val, &eptr, 10);
+            if ('\0' != *eptr || 0 >= ndev || UINT16_MAX < ndev) {
+                prte_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                               "mapping policy", "NDEV", ck2[i]);
+                PMIx_Argv_free(ck2);
+                return PRTE_ERR_SILENT;
+            }
+            if (NULL == attrs) {
+                prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier",
+                               true, "mapping policy", PRTE_CLI_NDEV);
+                PMIx_Argv_free(ck2);
+                return PRTE_ERR_SILENT;
+            }
+            ndev16 = (uint16_t) ndev;
+            prte_set_attribute(attrs,
+                               (NULL != app) ? PRTE_APP_MAP_NDEV : PRTE_JOB_MAP_NDEV,
+                               PRTE_ATTR_GLOBAL, &ndev16, PMIX_UINT16);
 
         } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_SHARED)) {
             /* NOTE: like the interleave arm above, this must stay near the
@@ -1092,6 +1124,13 @@ setpolicy:
                        prte_rmaps_base_print_mapping(tmp));
         return PRTE_ERR_SILENT;
     }
+    if (NULL != jdata
+        && prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_NDEV, NULL, PMIX_UINT16)
+        && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
+        prte_show_help("help-prte-rmaps-base.txt", "rmaps:ndev-needs-device", true,
+                       prte_rmaps_base_print_mapping(tmp));
+        return PRTE_ERR_SILENT;
+    }
 
     if (NULL == jdata) {
         prte_rmaps_base.mapping = tmp;
@@ -1417,6 +1456,12 @@ setpolicy:
     if (prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED, NULL, PMIX_BOOL)
         && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
         prte_show_help("help-prte-rmaps-base.txt", "rmaps:shared-needs-device", true,
+                       prte_rmaps_base_print_mapping(tmp));
+        return PRTE_ERR_SILENT;
+    }
+    if (prte_get_attribute(&app->attributes, PRTE_APP_MAP_NDEV, NULL, PMIX_UINT16)
+        && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
+        prte_show_help("help-prte-rmaps-base.txt", "rmaps:ndev-needs-device", true,
                        prte_rmaps_base_print_mapping(tmp));
         return PRTE_ERR_SILENT;
     }

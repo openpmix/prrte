@@ -642,10 +642,18 @@ def device_cases(topo):
     yield Case("device.%s.gpu-toomany" % topo.name, "device", topo, "single",
                hostspec, pool, map_by="device=gpu", rank_by="slot",
                bind_to="core", n=2 * n, expect="reject",
-               expect_banner="Devices available")
+               expect_banner="Processes placeable")
     yield Case("device.%s.gpu-shared" % topo.name, "device", topo, "single",
                hostspec, pool, map_by="device=gpu:shared", rank_by="slot",
                bind_to="core", n=2 * n, expect="map")
+
+    # several devices to each proc: the locality widens to whatever
+    # contains them all, so a binding that would be refused with one device
+    # per proc becomes legitimate
+    if 0 == n % 2:
+        yield Case("device.%s.gpu-ndev2" % topo.name, "device", topo, "single",
+                   hostspec, pool, map_by="device=gpu:ndev=2", rank_by="slot",
+                   bind_to="package", n=n // 2, expect="map")
 
     # fewer procs than devices is where the two orders visibly differ
     if 2 <= n // 2:
