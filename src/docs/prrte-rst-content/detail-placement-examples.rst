@@ -302,6 +302,50 @@ since the ``-np`` option indicated that only 6 processes should be
 launched.
 
 
+Mapping Processes to Devices
+----------------------------
+
+Consider a two-socket node with eight NUMA domains and four GPUs, where
+the GPUs are attached to NUMA domains 1 and 2 on the first socket but 6
+and 7 on the second. That asymmetry is the case device mapping exists
+for: no ``--mapby numa`` or ``--mapby package`` expression selects those
+four domains, because they are not at the same position within each
+socket.
+
+.. code::
+
+   $ prun -n 4 --mapby device=gpu --bindto core ./a.out
+
+places one process per GPU, in PCI bus order, each bound to the first
+available core in the CPUs local to its own GPU --- on the machine
+described above, cores 16, 32, 96 and 112.
+
+Binding may be to any object at or below the device's locality:
+
+.. code::
+
+   $ prun -n 1 --mapby device=gpu --bindto numa ./a.out
+
+binds the process to the whole NUMA domain its GPU is attached to,
+while ``--bindto l3cache`` binds it to one L3 cache within that domain
+and ``--bindto core`` to a single core. Asking for ``--bindto package``
+on this machine is an error: a package contains the GPU's NUMA domain
+and three others, so binding there would place the process on CPUs the
+GPU is not local to.
+
+Naming a single device rather than a class places every process near
+that one device, which suits a job whose performance depends on one
+particular fabric interface:
+
+.. code::
+
+   $ prun -n 8 --mapby device=mlx5_0 --bindto core ./a.out
+
+Other classes are selected the same way: ``device=openfabrics`` for
+fabric interfaces, ``device=network`` for network interfaces,
+``device=nic`` for both, and ``device=block`` for block devices.
+
+
 Mapping Processes to Nodes Using Policies
 -----------------------------------------
 

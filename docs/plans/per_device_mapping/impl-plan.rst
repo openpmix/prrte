@@ -424,11 +424,14 @@ levels of detail rather than written once and cross-referenced.
        the "or a device name" form.  This is the one the reporter of
        #14169 checked and found silent about ``dist``.
    * - ``src/mca/rmaps/base/help-placement.txt``
-     - Several topics, and they are separate audiences: ``[placement]``
-       (the overview list of policies), ``[placement-examples]``, and
-       ``[placement-fundamentals]``.  Add the directive to the first; a
-       worked example to the second; and to the third what a device's
-       *locality* is, since that concept exists nowhere else in placement.
+     - Two topics, and they are separate audiences.  ``[placement-examples]``
+       carries both the option list its examples draw on and the examples
+       themselves; ``[placement-fundamentals]`` carries the model, and is
+       where a device's *locality* has to be explained, since that concept
+       exists nowhere else in placement.  ``[placement]`` needs nothing: it
+       is conceptual (mapping vs ranking vs binding, slots, PEs) and
+       enumerates no directives — easy to assume otherwise, since its prose
+       resembles the examples topic's option list.
    * - ``src/docs/prrte-rst-content/cli-map-by.rst``
      - The rendered ``--map-by`` reference, whose bullet list of directives
        (``SLOT``, ``HWTHREAD``, … ``PE-LIST=a,b``) is the canonical
@@ -685,8 +688,8 @@ Task checklist
 **Phase D2 — user documentation**
 
 - [ ] ``help-mapby.txt`` ``[map-by]`` directive list
-- [ ] ``help-placement.txt``: ``[placement]``, ``[placement-examples]``,
-      ``[placement-fundamentals]``
+- [ ] ``help-placement.txt``: ``[placement-examples]`` (option list +
+      worked example) and ``[placement-fundamentals]`` (the model)
 - [ ] ``cli-map-by.rst`` directive + qualifier lists
 - [ ] ``detail-placement-fundamentals.rst`` — what a device's locality is
 - [ ] ``detail-placement-examples.rst`` — the reporter's machine, worked

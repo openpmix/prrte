@@ -79,6 +79,25 @@ applied at the job level:
   one process to the node/resource specified in each entry of the
   file, one per line of the file.
 
+* "DEVICE=<class|name>" assigns one proc to each device in the node's
+  topology, in PCI bus order, placing it on the CPUs local to that
+  device. The value is either a class of device - "gpu", "network",
+  "openfabrics", "nic" (network and openfabrics together), or "block" -
+  or the name or UUID of one particular device, such as "mlx5_0", in
+  which case every proc is placed near that one device.
+  Note there is no bare "--mapby gpu": the class is the value of the
+  "device" directive, which is what allows other classes of device to
+  be supported later without adding a directive for each.
+  Binding descends from the device's locality - the nearest object in
+  the topology that both contains the device and has CPUs. Asking to
+  bind to something larger than that locality is an error rather than a
+  silent widening, because a binding that covers more than the device's
+  locality is not "near the device" at all. On a machine where every
+  device is equally close to every CPU, the job still runs and each
+  proc is still assigned its own device, but a warning is printed
+  because the binding cannot be made any more specific than it would
+  have been without the directive.
+
 * "PE-LIST=a,b" assigns procs to each node in the allocation based on
   the ORDERED qualifier. The list is comprised of comma-delimited
   ranges of CPUs to use for this job. If the ORDERED qualifier is not
