@@ -420,6 +420,10 @@ PRTE_EXPORT extern void pmix_server_monitor_resp(int status, pmix_proc_t *sender
 
 #define PRTE_PMIX_ALLOC_REQ      0
 #define PRTE_PMIX_SESSION_CTRL   1
+/* Ask the DVM master for a group context id. Unlike its two siblings this
+ * command carries nothing of its own - the id does not depend on anything the
+ * requestor knows - so the relay packs only the common header. */
+#define PRTE_PMIX_GROUP_CTXID    2
 
 PRTE_EXPORT extern pmix_status_t
 pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,

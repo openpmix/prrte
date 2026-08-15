@@ -208,7 +208,7 @@ pmix_status_t prte_server_send_request(uint8_t cmd, prte_pmix_server_req_t *req)
             PMIX_DATA_BUFFER_RELEASE(buf);
             return rc;
         }
-    } else {
+    } else if (PRTE_PMIX_SESSION_CTRL == cmd) {
         /* pack the sessionID */
         rc = PMIx_Data_pack(NULL, buf, &req->sessionID, 1, PMIX_UINT32);
         if (PMIX_SUCCESS != rc) {
@@ -217,6 +217,9 @@ pmix_status_t prte_server_send_request(uint8_t cmd, prte_pmix_server_req_t *req)
             return rc;
         }
     }
+    /* PRTE_PMIX_GROUP_CTXID has no field of its own - it asks for a number
+     * and nothing about that number depends on the requestor. Keep this in
+     * step with the matching unpack in pmix_server_sched(). */
 
     /* pack the number of info */
     rc = PMIx_Data_pack(NULL, buf, &req->ninfo, 1, PMIX_SIZE);

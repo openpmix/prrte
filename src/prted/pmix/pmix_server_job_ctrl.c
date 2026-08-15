@@ -236,13 +236,112 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
     return PMIX_ERR_NOT_SUPPORTED;
 }
 
+/* release the one-element context-id result once it has been packed */
+static void ctxid_relfn(void *cbdata)
+{
+    pmix_info_t *results = (pmix_info_t *) cbdata;
+
+    PMIX_INFO_FREE(results, 1);
+}
+
+/* Answer a PMIX_GROUP_ASSIGN_CONTEXT_ID directive.
+ *
+ * This arrives as a job-control request because the group it is for is being
+ * formed by PMIx_Group_invite, which runs no server collective - so unlike
+ * PMIx_Group_construct there is no group up-call to carry the request, and
+ * the PMIx library asks this way instead.
+ *
+ * Only the DVM master holds the id pool, and the leader of an invited group
+ * is an application process that may sit anywhere, so this usually has to be
+ * relayed. Nothing about the id depends on the directives, so the relay
+ * carries none of them.
+ *
+ * On PMIX_SUCCESS this has taken over the caddy and answered (or will
+ * answer) the request; the caller must do neither. Any other return means it
+ * did neither and the caller still owns both. */
+static pmix_status_t assign_group_ctxid(prte_pmix_server_op_caddy_t *cd)
+{
+    prte_pmix_server_req_t *req;
+    pmix_info_t *results;
+    size_t ctxid;
+    int rc;
+
+    if (PRTE_PROC_IS_MASTER) {
+        rc = prte_grpcomm_assign_context_id(&ctxid);
+        if (PRTE_SUCCESS != rc) {
+            return prte_pmix_convert_rc(rc);
+        }
+        PMIX_INFO_CREATE(results, 1);
+        if (NULL == results) {
+            return PMIX_ERR_NOMEM;
+        }
+        PMIX_INFO_LOAD(&results[0], PMIX_GROUP_CONTEXT_ID, &ctxid, PMIX_SIZE);
+        /* the reply is packed after a thread shift, so hand the array over
+         * with a release function rather than freeing it here */
+        cd->infocbfunc(PMIX_SUCCESS, results, 1, cd->cbdata, ctxid_relfn, results);
+        PMIX_RELEASE(cd);
+        return PMIX_SUCCESS;
+    }
+
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    if (NULL == req) {
+        return PMIX_ERR_NOMEM;
+    }
+    pmix_asprintf(&req->operation, "GROUPCTXID");
+    PMIX_PROC_LOAD(&req->tproc, cd->proc.nspace, cd->proc.rank);
+    req->infocbfunc = cd->infocbfunc;
+    req->cbdata = cd->cbdata;
+    req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+    rc = prte_server_send_request(PRTE_PMIX_GROUP_CTXID, req);
+    if (PRTE_SUCCESS != rc) {
+        /* nothing will answer it, so take it back off the tracker and let the
+         * caller report the failure */
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs,
+                                    req->local_index, NULL);
+        PMIX_RELEASE(req);
+        return prte_pmix_convert_rc(rc);
+    }
+    PMIX_RELEASE(cd);
+    return PMIX_SUCCESS;
+}
+
 static void _job_ctrl(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
     pmix_status_t rc;
+    size_t n;
+    bool ctxid_req = false;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
+
+    /* A context-id request is the one directive here that produces a result
+     * rather than a status, and it may have to be relayed to the master, so
+     * it is handled ahead of process_job_ctrl() - which can express neither.
+     * It takes over the caddy when it succeeds. */
+    for (n = 0; n < cd->ndirs; n++) {
+        if (PMIX_CHECK_KEY(&cd->directives[n], PMIX_GROUP_ASSIGN_CONTEXT_ID) &&
+            PMIX_INFO_TRUE(&cd->directives[n])) {
+            ctxid_req = true;
+            break;
+        }
+    }
+    if (ctxid_req) {
+        if (NULL == cd->infocbfunc) {
+            /* there would be nowhere to put the answer */
+            rc = PMIX_ERR_NOT_SUPPORTED;
+        } else {
+            rc = assign_group_ctxid(cd);
+            if (PMIX_SUCCESS == rc) {
+                return;
+            }
+        }
+        if (NULL != cd->infocbfunc) {
+            cd->infocbfunc(rc, NULL, 0, cd->cbdata, NULL, NULL);
+        }
+        PMIX_RELEASE(cd);
+        return;
+    }
 
     rc = process_job_ctrl(&cd->proc, cd->procs, cd->nprocs, cd->directives, cd->ndirs);
     if (PMIX_OPERATION_SUCCEEDED == rc) {

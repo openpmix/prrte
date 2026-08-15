@@ -138,6 +138,21 @@ PRTE_EXPORT int prte_grpcomm_group(pmix_group_operation_t op, char *grpid,
                                    const pmix_info_t directives[], size_t ndirs,
                                    pmix_info_cbfunc_t cbfunc, void *cbdata);
 
+/* Take the next group context id from the DVM's pool.
+ *
+ * The pool lives here because the group collective is what has always spent
+ * from it, but a group formed by PMIx_Group_invite has no collective - its
+ * leader asks for an id through job control instead - so the two callers need
+ * a common way in rather than a second pool that could hand out the same
+ * number.
+ *
+ * **Only the DVM master may call this.** The pool is per-daemon state and
+ * nothing reconciles two of them, so an id minted anywhere else is unique to
+ * the daemon that minted it and to nobody else. A non-master caller is
+ * refused with PRTE_ERR_NOT_SUPPORTED rather than quietly served; relay the
+ * request to the master instead. */
+PRTE_EXPORT int prte_grpcomm_assign_context_id(size_t *ctxid);
+
 END_C_DECLS
 
 #endif

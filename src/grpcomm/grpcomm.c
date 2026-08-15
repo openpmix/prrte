@@ -142,6 +142,22 @@ void prte_grpcomm_finalize(void)
     return;
 }
 
+int prte_grpcomm_assign_context_id(size_t *ctxid)
+{
+    if (NULL == ctxid) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    /* The pool is this daemon's own counter, and nothing reconciles two of
+     * them - see the header. Refusing here is what keeps the "only the master
+     * assigns" rule in one place, rather than repeated at each caller. */
+    if (!PRTE_PROC_IS_MASTER) {
+        return PRTE_ERR_NOT_SUPPORTED;
+    }
+    *ctxid = (size_t) prte_grpcomm_globals.context_id;
+    --prte_grpcomm_globals.context_id;
+    return PRTE_SUCCESS;
+}
+
 bool prte_grpcomm_proc_departed(const pmix_proc_t *proc)
 {
     prte_job_t *jdata;
