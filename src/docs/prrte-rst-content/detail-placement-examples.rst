@@ -371,6 +371,22 @@ different NUMA domains is local to neither of them alone, so its locality
 becomes whatever contains them both --- here the package, which is why
 binding to a package is legal in this case and an error without ``ndev``.
 
+Because the devices are handed out in groups taken in order from the device
+list, ``interleave`` composes with ``ndev``: the interleaving decides the
+order, and the grouping then takes contiguous runs of it.
+
+The reverse ratio --- several processes on each device rather than several
+devices for each process --- is a ``ppr`` pattern, spelled the same way as
+every other:
+
+.. code::
+
+   $ prun --mapby ppr:2:device=gpu --bindto core ./a.out
+
+places two processes on each GPU, each bound to its own core within that
+GPU's locality. As with any ``ppr`` pattern the process count follows from
+the pattern when ``-n`` is not given: four GPUs yield eight processes.
+
 Naming a single device rather than a class places every process near
 that one device, which suits a job whose performance depends on one
 particular fabric interface:

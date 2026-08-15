@@ -238,6 +238,18 @@ int test_job_policy(void)
     CHECK("job bare gpu: refused", PRTE_SUCCESS != rc);
     PMIX_RELEASE(jdata);
 
+    /* === ppr:N:device= - the reverse ratio, N procs per device === */
+    jdata = newjob();
+    rc = prte_rmaps_base_set_mapping_policy(jdata, "ppr:2:device=gpu");
+    CHECK("job ppr:2:device=gpu: rc", PRTE_SUCCESS == rc);
+    CHECK("job ppr:2:device=gpu: policy is PPR",
+          PRTE_MAPPING_PPR == PRTE_GET_MAPPING_POLICY(jdata->map->mapping));
+    sval = get_str(&jdata->attributes, PRTE_JOB_PPR);
+    CHECK("job ppr:2:device=gpu: pattern kept whole",
+          NULL != sval && 0 == strcmp(sval, "2:device=gpu"));
+    free(sval);
+    PMIX_RELEASE(jdata);
+
     /* the printer has to name it, or every device-mapping diagnostic and the
      * map display report the policy as UNKNOWN */
     CHECK("printer names BYDEVICE",

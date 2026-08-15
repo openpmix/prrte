@@ -73,7 +73,9 @@ applied at the job level:
   file.
 
 * "PPR:N":resource maps N procs to each instance of the specified
-  resource type in the allocation
+  resource type in the allocation. The resource may be an hwloc object
+  ("ppr:2:package") or a class of device ("ppr:2:device=gpu"), which
+  places N procs on each such device.
 
 * "RANKFILE" (often accompanied by the file=<path> qualifier) assigns
   one process to the node/resource specified in each entry of the
@@ -175,10 +177,18 @@ the "--mapby" option (except where noted):
   concerns running more processes than there are CPUs.
 
 * "NDEV=<n>" only applies to the "DEVICE" directive. It assigns n
-  devices to each process rather than one. The process is then local to
-  whatever object contains all of its devices - two GPUs on different
-  NUMA domains make their package the locality - so binding descends
-  from there.
+  devices to each process rather than one.
+  This changes what a process is placed against, and that is worth
+  understanding. A process holding two GPUs attached to different NUMA
+  domains is local to neither of them alone - it is local to whatever
+  contains them both. So the locality of a process becomes the common
+  ancestor of its devices' localities, and binding descends from there.
+  On a node with two GPUs per socket, "ndev=2" therefore makes each
+  process package-local, which means "--bindto package" is legitimate in
+  that case and remains an error without "ndev".
+  Devices are handed out in groups taken in order from the device list,
+  so a group is a contiguous run of that order and the "INTERLEAVE"
+  qualifier composes with this one.
 
 * "ORDERED" only applies to the "PE-LIST" option to indicate that
   procs are to be bound to each of the specified CPUs in the order in
