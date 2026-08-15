@@ -399,6 +399,74 @@ pre-existing case; live smoke test (``prte --daemonize`` →
 ``prun -n 2 --map-by device=network --bind-to core hostname`` → ``pterm``).
 
 
+Phase D2 — the user documentation
+----------------------------------
+
+Lands **with** phase D, not after it.  ``--map-by device=`` is a user-visible
+option, and the project requires documentation with a user-visible change;
+a release in which the directive works but nothing documents it is the same
+shape of defect this whole plan started from — the ``dist`` policy that the
+MCA parameter advertised and no command line could reach.
+
+Five files, and they are not interchangeable.  Each is read by someone in a
+different situation, so the same fact has to be stated five times at five
+levels of detail rather than written once and cross-referenced.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 42 58
+
+   * - File
+     - What it needs
+   * - ``src/mca/rmaps/base/help-mapby.txt``
+     - The ``[map-by]`` topic — what ``prterun --help map-by`` prints.  Add
+       ``device=<class|name>`` to the directive list, with the classes and
+       the "or a device name" form.  This is the one the reporter of
+       #14169 checked and found silent about ``dist``.
+   * - ``src/mca/rmaps/base/help-placement.txt``
+     - Several topics, and they are separate audiences: ``[placement]``
+       (the overview list of policies), ``[placement-examples]``, and
+       ``[placement-fundamentals]``.  Add the directive to the first; a
+       worked example to the second; and to the third what a device's
+       *locality* is, since that concept exists nowhere else in placement.
+   * - ``src/docs/prrte-rst-content/cli-map-by.rst``
+     - The rendered ``--map-by`` reference, whose bullet list of directives
+       (``SLOT``, ``HWTHREAD``, … ``PE-LIST=a,b``) is the canonical
+       enumeration.  Add ``DEVICE=<class|name>``, and note in the qualifier
+       list that a binding coarser than the device's locality is refused.
+   * - ``src/docs/prrte-rst-content/detail-placement-fundamentals.rst``
+     - Where the *model* is explained.  Mapping by a device is the first
+       policy whose target is not an hwloc object the user can name, so say
+       what it maps to: the nearest ancestor of the device that has a
+       cpuset, and why binding descends from there.
+   * - ``src/docs/prrte-rst-content/detail-placement-examples.rst``
+     - Worked examples with output.  The reporter's machine is the example
+       worth using — GPUs on NUMA 1 and 2 of one socket and 6 and 7 of the
+       other is exactly the shape no other directive can express, and it
+       shows why the feature exists rather than just how to spell it.
+
+Three things the text must say, because each is a decision a reader would
+otherwise take for a bug:
+
+* there is no bare ``--map-by gpu``; the class is the directive's value;
+* a binding coarser than the device's locality is **refused**, not silently
+  widened;
+* on a machine where every device is equally close to every cpu the job
+  still runs, with a warning, and each process still gets its own device.
+
+Remember the ``show_help`` golden rule for the two ``.txt`` files: the
+generated content is not rebuilt by an ordinary ``make``.  In a VPATH build
+the generated file lives in the **build** tree, so it is
+``rm <builddir>/src/util/prte_show_help_content.*`` that matters — deleting
+the source tree's copy does nothing, because there isn't one.
+
+Then ``make`` in ``docs/`` (Sphinx runs with ``-W``) and the help/option
+cross-check::
+
+   python3 src/util/prte-convert-help.py --root . --check-only \
+       --cppflags="$(pkg-config --cflags-only-I pmix)"
+
+
 Phase E — the ``interleave`` qualifier
 ---------------------------------------
 
@@ -505,9 +573,8 @@ here, the requested table is simply run.
   a job asking for a device class no node has must fail the job and **leave
   the DVM standing**; and ``--map-by device=network`` must place procs
   against the containers' actual interfaces.  GPU cases stay offline.
-* Docs: the ``--map-by`` reference under ``docs/placement/`` and the
-  ``prterun --help map-by`` text, which today does not mention ``dist`` at
-  all even though the MCA parameter does.
+* Docs: see `Phase D2 — the user documentation`_, which lands with the
+  directive rather than here.
 
 
 Verification checklist
@@ -615,6 +682,18 @@ Task checklist
 - [ ] Unit tests: hwloc enumerator, both parsers, dispatch gate
 - [ ] Build / check / check-offline / smoke test
 
+**Phase D2 — user documentation**
+
+- [ ] ``help-mapby.txt`` ``[map-by]`` directive list
+- [ ] ``help-placement.txt``: ``[placement]``, ``[placement-examples]``,
+      ``[placement-fundamentals]``
+- [ ] ``cli-map-by.rst`` directive + qualifier lists
+- [ ] ``detail-placement-fundamentals.rst`` — what a device's locality is
+- [ ] ``detail-placement-examples.rst`` — the reporter's machine, worked
+- [ ] no bare ``gpu`` / refused coarse binding / degenerate case all stated
+- [ ] regenerate show_help content in the **build** tree; docs build ``-W``;
+      ``prte-convert-help.py --check-only``
+
 **Phase E — interleave**
 
 - [ ] ``PRTE_CLI_INTERLEAVE``; ``mapquals[]``; arm appended **after**
@@ -635,5 +714,5 @@ Task checklist
 - [ ] Offline cases for the full requested table, both orderings
 - [ ] Swarm: no-such-device fails the job and leaves the DVM up;
       ``device=network`` places correctly
-- [ ] ``docs/placement/`` and ``--help map-by``
+- [ ] (docs moved to phase D2)
 - [ ] Reply on OMPI #14169 with the resulting table
