@@ -88,6 +88,10 @@ applied at the job level:
   Note there is no bare "--mapby gpu": the class is the value of the
   "device" directive, which is what allows other classes of device to
   be supported later without adding a directive for each.
+  A device is assigned to a process rather than subdivided between
+  them, so each device takes one process and asking for more processes
+  than there are devices is an error unless the "SHARED" qualifier is
+  given.
   Binding descends from the device's locality - the nearest object in
   the topology that both contains the device and has CPUs. Asking to
   bind to something larger than that locality is an error rather than a
@@ -161,6 +165,14 @@ the "--mapby" option (except where noted):
   the "SPAN" qualifier already expresses. A level that does not divide
   the devices into groups leaves the order unchanged, so the qualifier
   is safe to leave in a default mapping policy.
+
+* "SHARED[=true|false]" only applies to the "DEVICE" directive. It
+  permits several processes to be assigned the same device. The default
+  is false: a device is assigned to a process rather than subdivided
+  between them, so a job asking for more processes than there are
+  devices is an error unless this is given. Note this is a separate
+  question from the "overload-allowed" qualifier to "--bindto", which
+  concerns running more processes than there are CPUs.
 
 * "ORDERED" only applies to the "PE-LIST" option to indicate that
   procs are to be bound to each of the specified CPUs in the order in

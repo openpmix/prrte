@@ -351,6 +351,60 @@ int test_policy_parse(void)
     CHECK("mapby numa:interleave: refused", PRTE_SUCCESS != rc);
     PMIX_RELEASE(app);
 
+    /* --- shared: a device may be given to more than one proc --- */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:shared");
+    CHECK("mapby shared: rc", PRTE_SUCCESS == rc);
+    CHECK("mapby shared: recorded",
+          prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED, NULL, PMIX_BOOL));
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:shared=true");
+    CHECK("mapby shared=true: recorded",
+          PRTE_SUCCESS == rc
+          && prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED, NULL, PMIX_BOOL));
+    PMIX_RELEASE(app);
+
+    /* false is the default, so it records nothing - and must not be an error */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:shared=false");
+    CHECK("mapby shared=false: accepted", PRTE_SUCCESS == rc);
+    CHECK("mapby shared=false: not recorded",
+          !prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED, NULL, PMIX_BOOL));
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:shared=maybe");
+    CHECK("mapby shared=maybe: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    /* it says devices may be shared, so it means nothing without devices */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "numa:shared");
+    CHECK("mapby numa:shared: refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(app);
+
+    /* The same prefix hazard as interleave, against a different neighbour:
+     * "shared" and "span" both begin with 's', and ":s" has meant SPAN for
+     * as long as there has been one.  The shared arm sits after it. */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:s");
+    CHECK("mapby ':s' : rc", PRTE_SUCCESS == rc);
+    CHECK("mapby ':s' still means SPAN, not shared",
+          !prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED, NULL, PMIX_BOOL));
+    u16 = get_u16(&app->attributes, PRTE_APP_MAPBY);
+    CHECK("mapby ':s' set the SPAN directive",
+          0 != (PRTE_MAPPING_SPAN & PRTE_GET_MAPPING_DIRECTIVE(u16)));
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=gpu:sh");
+    CHECK("mapby ':sh' is shared",
+          PRTE_SUCCESS == rc
+          && prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED, NULL, PMIX_BOOL));
+    PMIX_RELEASE(app);
+
     /* THE regression that matters: "interleave" and "inherit" share a first
      * letter, and the option matcher has no view of the other options - the
      * first arm of the chain that prefix-matches wins. ":i" has meant

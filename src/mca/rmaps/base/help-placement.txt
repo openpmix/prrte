@@ -357,6 +357,10 @@ Process Mapping / Ranking / Binding Options
     reorders the device list so consecutive procs land on different
     objects of the given level (default "package")
 
+  * "SHARED[=true|false]" only applies to the "device" directive;
+    permits several procs to be assigned the same device (default
+    false)
+
   * "ORDERED" only applies to the PE-LIST option to indicate that
     procs are to be bound to each of the specified CPUs in the order
     in which they are assigned (i.e., the first proc on a node shall
@@ -655,6 +659,19 @@ and "--bindto core" to a single core. Asking for "--bindto package"
 on this machine is an error: a package contains the GPU's NUMA domain
 and three others, so binding there would place the process on CPUs the
 GPU is not local to.
+
+A device is assigned to a process rather than subdivided between
+processes, so by default each device takes one process: asking for more
+processes than there are devices is an error. Where sharing the devices
+is intended, say so with the "shared" qualifier:
+
+   $ prun -n 8 --mapby device=gpu:shared --bindto core ./a.out
+
+On the four-GPU machine above that runs two processes per GPU. Note the
+processes still get separate cores: sharing a device and overloading a
+CPU are different resources and different decisions, which is why they
+have different qualifiers - "shared" here, and "overload-allowed" on
+"--bindto" for the CPUs.
 
 Where a job wants its processes spread across sockets rather than
 filling the first, add the "interleave" qualifier:

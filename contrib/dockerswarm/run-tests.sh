@@ -697,11 +697,12 @@ test_rmaps() {
     fi
     cleanup_swarm
 
-    banner "rmaps: a device is assigned, not shared, unless overload is given"
+    banner "rmaps: a device is assigned, not shared, unless shared is given"
     # More procs than devices is an error by default: a device is assigned to
     # a process rather than subdivided between them, which is not true of a
-    # core.  "overload-allowed" is the existing way to say "more procs here
-    # than there are things to put them on, and I know".
+    # core.  It has its own qualifier rather than riding on the binding
+    # "overload-allowed", which is about CPUs - a different resource and a
+    # different decision, and the two must not be confusable.
     RUN 'nohup prte --daemonize --host node1:4,node2:4 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
     if RUN 'pgrep -x prte >/dev/null'; then
         out=$(RUN 'timeout 60 prun --map-by device=network -n 64 hostname' 2>&1)
@@ -711,13 +712,19 @@ test_rmaps() {
         else
             [ "$rc" != 0 ] && ok "more procs than devices was refused" \
                            || bad "more procs than devices was allowed without overload"
-            echo "$out" | grep -q 'overload-allowed' \
+            echo "$out" | grep -q 'shared' \
                 && ok "the refusal names the qualifier that permits it" \
                 || bad "the refusal did not say how to permit sharing"
-            out=$(RUN 'timeout 60 prun --map-by device=network --bind-to core:overload-allowed -n 64 hostname' 2>&1)
+            out=$(RUN 'timeout 60 prun --map-by device=network:shared -n 64 hostname' 2>&1)
             n=$(echo "$out" | grep -cE '^node[0-9]+$')
-            [ "$n" = 64 ] && ok "overload-allowed permits sharing the devices" \
-                          || bad "overload-allowed placed $n of 64 procs"
+            [ "$n" = 64 ] && ok "the shared qualifier permits sharing the devices" \
+                          || bad "device=network:shared placed $n of 64 procs"
+            # "shared" is about devices; "overload-allowed" is about CPUs.
+            # The CPU qualifier must NOT quietly permit sharing a device.
+            out=$(RUN 'timeout 60 prun --map-by device=network --bind-to core:overload-allowed -n 64 hostname' 2>&1)
+            rc=$?
+            [ "$rc" != 0 ] && ok "binding overload does not permit sharing a device" \
+                           || bad "overload-allowed on --bind-to shared the devices"
         fi
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else

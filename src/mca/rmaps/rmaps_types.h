@@ -151,6 +151,10 @@ typedef struct {
      * --map-by device=X:interleave[=level]; NULL when not asked for.
      * Owned by the struct. */
     char *map_interleave;
+    /* whether several procs may be assigned the same device, from
+     * --map-by device=X:shared. False by default: a device is assigned to
+     * a proc rather than subdivided between them. */
+    bool map_shared;
 
 } prte_rmaps_options_t;
 

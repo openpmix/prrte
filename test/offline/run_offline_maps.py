@@ -637,6 +637,16 @@ def device_cases(topo):
     yield Case("device.%s.gpu-interleave" % topo.name, "device", topo,
                "single", hostspec, pool, map_by="device=gpu:interleave",
                rank_by="slot", bind_to="core", n=n, expect="map")
+    # a device is assigned, not subdivided: more procs than devices is an
+    # error unless the user says they meant it
+    yield Case("device.%s.gpu-toomany" % topo.name, "device", topo, "single",
+               hostspec, pool, map_by="device=gpu", rank_by="slot",
+               bind_to="core", n=2 * n, expect="reject",
+               expect_banner="Devices available")
+    yield Case("device.%s.gpu-shared" % topo.name, "device", topo, "single",
+               hostspec, pool, map_by="device=gpu:shared", rank_by="slot",
+               bind_to="core", n=2 * n, expect="map")
+
     # fewer procs than devices is where the two orders visibly differ
     if 2 <= n // 2:
         yield Case("device.%s.gpu-half" % topo.name, "device", topo, "single",
@@ -799,10 +809,13 @@ def check_universal(case, pmap):
         if pmap.rank_policy != case.rank_by.upper():
             v.append(("U1", "rank policy %s != %s"
                       % (pmap.rank_policy, case.rank_by.upper())))
-    if case.bind_to and case.bind_to in BIND_DISPLAY:
-        if pmap.bind_policy not in BIND_DISPLAY[case.bind_to]:
+    if case.bind_to and bind_object(case.bind_to) in BIND_DISPLAY:
+        # the display carries the qualifiers too ("CORE:OVERLOAD-ALLOWED"),
+        # so compare the object each side names, not the whole word
+        shown = (pmap.bind_policy or "").split(":", 1)[0]
+        if shown not in BIND_DISPLAY[bind_object(case.bind_to)]:
             v.append(("U1", "bind policy %s not in %s"
-                      % (pmap.bind_policy, BIND_DISPLAY[case.bind_to])))
+                      % (pmap.bind_policy, BIND_DISPLAY[bind_object(case.bind_to)])))
 
     # U2 total procs
     total = len(flat)
@@ -904,19 +917,32 @@ def check_ranking(case, pmap):
     return v
 
 
+def bind_object(bind_to):
+    """The object named by a --bind-to spec, with any qualifiers dropped.
+
+    "core:overload-allowed" binds to a core; the qualifier says what may
+    happen when the cores run out, not what is bound to.  Looking the whole
+    string up in BIND_LEVEL raised a KeyError and failed the case as a
+    checker error - which reads like a defect in the mapper rather than a
+    gap in the harness."""
+    if not bind_to:
+        return bind_to
+    return bind_to.split(":", 1)[0]
+
+
 def check_binding(case, pmap):
     v = []
     if not case.bind_to:
         return v
     flat = _flat_procs(pmap)
-    if case.bind_to == "none":
+    if bind_object(case.bind_to) == "none":
         for _, p in flat:
             if p.bound is not None:
                 v.append(("B-none", "rank %d is bound but bind-to none"
                           % p.rank))
                 break
         return v
-    level = BIND_LEVEL[case.bind_to]
+    level = BIND_LEVEL[bind_object(case.bind_to)]
     spans = case.topo.spans_at(level)
     for _, p in flat:
         if p.bound is None:
@@ -949,7 +975,7 @@ def check_perapp_binding(case, pmap):
                               % (idx, p.rank)))
                     break
             continue
-        level = BIND_LEVEL[app.bind_to]
+        level = BIND_LEVEL[bind_object(app.bind_to)]
         spans = case.topo.spans_at(level)
         for _, p in flat:
             if p.app != idx:

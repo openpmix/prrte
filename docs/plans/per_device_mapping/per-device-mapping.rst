@@ -885,19 +885,29 @@ Decisions already taken
   The device class is a *value*, so a future class is a new value rather
   than a new directive, and no later device type has to choose between an
   inconsistent second spelling and a bare name of its own.
+* **A device is assigned, not shared**, and sharing has its own qualifier.
+  Left to ``byobj``'s wrap, ``-n 8`` on a four-GPU node would have put two
+  processes on each GPU by inheritance rather than by decision.  A device is
+  assigned to a process rather than subdivided between them — which is not
+  true of a core — so more processes than devices is an error, and
+  ``--map-by device=<class>:shared`` is what permits it.  ``shared``
+  defaults to false, pending user feedback.
+
+  It deliberately does **not** ride on ``--bind-to``'s
+  ``overload-allowed``.  That qualifier is about running more processes
+  than there are CPUs; this one is about handing one device to several
+  processes.  Different resource, different decision — and answering both
+  with one word would leave neither sayable on its own, so a job that wants
+  to share GPUs while still refusing to overload its cores could not say
+  so.  ``shared`` is tested *after* ``span`` in the qualifier chain for the
+  same reason ``interleave`` is tested after ``inherit``: ``:s`` has meant
+  ``SPAN`` for as long as there has been one.
 
 
 Decisions still to make
 -----------------------
 
-Neither of these blocks writing the enumerator.
-
-1. **What happens with more processes than devices?**  ``byobj``'s ``redo:``
-   loop wraps and puts a second process on each object in turn, which gives
-   two processes per GPU for ``-n 8`` on a 4-GPU node.  That is almost
-   certainly right, but it is a policy choice and should be stated in the
-   docs rather than inherited by accident.
-2. **Does ``device=`` need a per-app spelling test in the swarm?**  Per-app
+1. **Does ``device=`` need a per-app spelling test in the swarm?**  Per-app
    and job-level ``--map-by`` parsers disagreeing is the single most
    repeated bug in ``rmaps_base_frame.c``; the unit test covers it, but an
    MPMD line with a different device class per app is the shape that would
