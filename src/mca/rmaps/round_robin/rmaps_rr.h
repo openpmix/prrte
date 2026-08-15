@@ -92,6 +92,11 @@ PRTE_MODULE_EXPORT int prte_rmaps_rr_map_targets(prte_job_t *jdata,
                                                  prte_rmaps_options_t *options,
                                                  prte_rmaps_target_enum_t *tgts);
 
+PRTE_MODULE_EXPORT int prte_rmaps_rr_bydevice(prte_job_t *jdata, prte_app_context_t *app,
+                                              pmix_list_t *node_list, int32_t num_slots,
+                                              pmix_rank_t num_procs,
+                                              prte_rmaps_options_t *options);
+
 PRTE_MODULE_EXPORT int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
                                            pmix_list_t *node_list, int32_t num_slots,
                                            pmix_rank_t num_procs, prte_rmaps_options_t *options);

@@ -306,6 +306,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PRTE_APP_BINDTO";
         case PRTE_APP_MAP_FILE:
             return "PRTE_APP_MAP_FILE";
+        case PRTE_APP_MAP_DEVICE:
+            return "PRTE_APP_MAP_DEVICE";
         case PRTE_APP_HWT_CPUS:
             return "PRTE_APP_HWT_CPUS";
         case PRTE_APP_CORE_CPUS:
@@ -484,6 +486,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "JOB_INHERIT";
         case PRTE_JOB_PES_PER_PROC:
             return "JOB_PES_PER_PROC";
+        case PRTE_JOB_MAP_DEVICE:
+            return "JOB_MAP_DEVICE";
         case PRTE_JOB_HWT_CPUS:
             return "JOB_HWT_CPUS";
         case PRTE_JOB_CORE_CPUS:

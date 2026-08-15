@@ -240,6 +240,7 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
             case PRTE_MAPPING_BYSLOT:
             case PRTE_MAPPING_PELIST:
             case PRTE_MAPPING_COLOCATE:
+            case PRTE_MAPPING_BYDEVICE:
                 opts->maptype = HWLOC_OBJ_MACHINE;
                 opts->mapdepth = PRTE_BIND_TO_NONE;
                 break;
@@ -329,7 +330,16 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
 
     /* 6. PRTE_APP_MAP_FILE — read directly by seq/rank_file components via app->attributes */
 
-    /* 7. PRTE_APP_BINDING_LIMIT → opts->limit */
+    /* 7. PRTE_APP_MAP_DEVICE → opts->map_device */
+    str = NULL;
+    if (prte_get_attribute(&app->attributes, PRTE_APP_MAP_DEVICE, (void **) &str, PMIX_STRING)) {
+        if (NULL != opts->map_device) {
+            free(opts->map_device);
+        }
+        opts->map_device = str;
+    }
+
+    /* 8. PRTE_APP_BINDING_LIMIT → opts->limit */
     if (prte_get_attribute(&app->attributes, PRTE_APP_BINDING_LIMIT, (void **)&u16ptr, PMIX_UINT16)) {
         opts->limit = u16;
     }
@@ -401,6 +411,10 @@ static void free_strings(prte_rmaps_options_t *opts)
     if (NULL != opts->cpuset) {
         free(opts->cpuset);
         opts->cpuset = NULL;
+    }
+    if (NULL != opts->map_device) {
+        free(opts->map_device);
+        opts->map_device = NULL;
     }
 }
 
@@ -1052,6 +1066,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 
     /* set some convenience params */
     prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&options.cpuset, PMIX_STRING);
+    prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_DEVICE, (void**)&options.map_device, PMIX_STRING);
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void **) &u16ptr, PMIX_UINT16)) {
         options.cpus_per_rank = u16;
     } else {
@@ -1199,6 +1214,19 @@ ranking:
         case PRTE_MAPPING_BYSLOT:
         case PRTE_MAPPING_PELIST:
         case PRTE_MAPPING_COLOCATE:
+            options.mapdepth = PRTE_BIND_TO_NONE;
+            options.maptype = HWLOC_OBJ_MACHINE;
+            break;
+        case PRTE_MAPPING_BYDEVICE:
+            /* A device's locality is not known until the node is - it is
+             * NUMA-sized on one machine and package-sized on another, and is
+             * frequently an hwloc Group, which has no position in the
+             * PRTE_BIND_TO_* ladder at all. So there is no value mapdepth
+             * could take that would make the fixed "cannot bind above the
+             * map" check below mean the right thing. Leave it at NONE so
+             * that check does not fire on a basis nobody knows yet; the
+             * device mapper applies the real ceiling per node, against the
+             * locality it actually found. */
             options.mapdepth = PRTE_BIND_TO_NONE;
             options.maptype = HWLOC_OBJ_MACHINE;
             break;
@@ -1548,6 +1576,8 @@ ranking:
              * rewrites "cpuset" as it places procs, so each app needs its
              * own copy rather than a second pointer to the job's */
             app_options.cpuset = (NULL == options.cpuset) ? NULL : strdup(options.cpuset);
+            app_options.map_device = (NULL == options.map_device) ? NULL
+                                                                  : strdup(options.map_device);
             app_options.app_idx = n;
             /* where this app's ranks start: the mappers that number their
              * own procs need the cursor the base is threading, or every app

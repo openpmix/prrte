@@ -498,3 +498,37 @@ requirements:
   cpus/proc:    %d
 
 Please adjust the request and try again.
+#
+[rmaps:bind-above-device]
+A binding was requested that is coarser than the devices the job was
+mapped against:
+
+  Binding:  %s
+  Device:   %s
+  Node:     %s
+
+Mapping by a device means placing each process near that device, and an
+object that contains the device's locality - and more besides - is not
+near it. Binding there would hand the process cpus the device is not
+local to, which is the thing mapping by device is meant to avoid.
+
+Please either bind to an object at or below the device's locality (numa,
+l3cache, core, hwthread are the usual choices), or map by something other
+than a device.
+#
+[rmaps:degenerate-device-locality]
+All of the requested devices on a node are equally close to every cpu on
+it, so binding cannot express "near this device":
+
+  Device:   %s
+  Node:     %s
+  Found:    %d devices sharing one locality
+
+The job will run, and each process is still assigned its own device - on
+this node that assignment is the whole of what mapping by device buys
+you, and it is reported to each process. But the binding will be no more
+specific than it would have been without the directive.
+
+This is a property of the machine, not of the request: it happens when
+every device hangs off one PCI complex rather than off individual NUMA
+domains or packages.
