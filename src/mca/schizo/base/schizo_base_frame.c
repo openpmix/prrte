@@ -720,6 +720,8 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     int n, rc;
     const char *tgt;
     char **vtmp;
+    char **tmp;
+    bool haspe = false;
 
     char *mappers[] = {
         PRTE_CLI_SLOT,
@@ -735,6 +737,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         PRTE_CLI_PPR,
         PRTE_CLI_RANKFILE,
         PRTE_CLI_PELIST,
+        PRTE_CLI_DEVICE,
         NULL
     };
     char *mapquals[] = {
@@ -902,7 +905,29 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_MAPBY);
     newopt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_BINDTO);
     if (NULL != opt && NULL != newopt) {
-        if (NULL != strcasestr(opt->values[0], "PE")) {
+        /* Asking for specific cpus and then binding to something coarser is
+         * a conflict. Find that request by parsing the directive, not by
+         * searching the whole --map-by value for the letters "PE": that
+         * matched any spelling containing them, so "device=openfabrics" or
+         * a rankfile under /home/pete were refused as PE requests. Split
+         * off the directive, which is what "pe-list=" is, and test the
+         * qualifiers, which is what "PE=n" is. */
+        tmp = PMIx_Argv_split(opt->values[0], ':');
+        if (NULL != tmp) {
+            if (NULL != tmp[0] && 0 < strlen(tmp[0])
+                && PMIX_CHECK_CLI_OPTION(tmp[0], PRTE_CLI_PELIST)) {
+                haspe = true;
+            }
+            for (n = 1; !haspe && NULL != tmp[n]; n++) {
+                /* an empty token matches whatever it is tested against
+                 * first, so skip it rather than let it claim PE */
+                if (0 < strlen(tmp[n]) && PMIX_CHECK_CLI_OPTION(tmp[n], PRTE_CLI_PE)) {
+                    haspe = true;
+                }
+            }
+            PMIx_Argv_free(tmp);
+        }
+        if (haspe) {
             /* if we are binding to a PE, then there is no conflict */
             if (NULL != strcasestr(newopt->values[0], "core") ||
                 NULL != strcasestr(newopt->values[0], "hwt")) {
