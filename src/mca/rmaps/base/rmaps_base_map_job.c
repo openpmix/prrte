@@ -70,12 +70,31 @@ static void inherit_env_directives(prte_job_t *jdata,
  * the length of what the user actually wrote. */
 static bool ppr_object(const char *obj,
                        hwloc_obj_type_t *maptype,
-                       prte_binding_policy_t *mapdepth)
+                       prte_binding_policy_t *mapdepth,
+                       char **device)
 {
     size_t len = strlen(obj);
 
     if (0 == len) {
         return false;
+    }
+    /* "device=<class>" names the devices rather than an hwloc level, so the
+     * pattern reads "N procs per device of this class".  It is spelled the
+     * same way as the --map-by directive deliberately: it is the same
+     * resource, asked about a different way round. */
+    if (0 == strncasecmp(obj, "device=", 7)) {
+        if ('\0' == obj[7]) {
+            return false;
+        }
+        if (NULL != device) {
+            if (NULL != *device) {
+                free(*device);
+            }
+            *device = strdup(&obj[7]);
+        }
+        *maptype = HWLOC_OBJ_OS_DEVICE;
+        *mapdepth = PRTE_BIND_TO_NONE;
+        return true;
     }
     if (0 == strncasecmp(obj, "node", len)) {
         *maptype = HWLOC_OBJ_MACHINE;
@@ -293,7 +312,7 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
             NULL != str) {
             char **pk = PMIx_Argv_split(str, ':');
             if (2 != PMIx_Argv_count(pk) ||
-                !ppr_object(pk[1], &opts->maptype, &opts->mapdepth)) {
+                !ppr_object(pk[1], &opts->maptype, &opts->mapdepth, &opts->map_device)) {
                 prte_show_help("help-prte-rmaps-ppr.txt", "invalid-ppr", true, str);
                 PMIx_Argv_free(pk);
                 free(str);
@@ -1125,7 +1144,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
         /* compute the #procs per resource */
         options.pprn = strtoul(ck[0], NULL, 10);
-        if (!ppr_object(ck[1], &options.maptype, &options.mapdepth)) {
+        if (!ppr_object(ck[1], &options.maptype, &options.mapdepth, &options.map_device)) {
             /* unknown spec */
             prte_show_help("help-prte-rmaps-ppr.txt", "unrecognized-ppr-option", true,
                            ck[1], tmp);

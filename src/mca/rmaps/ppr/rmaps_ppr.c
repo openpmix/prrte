@@ -56,6 +56,12 @@ static int ppr_mapper(prte_job_t *jdata,
     pmix_list_t node_list;
     int32_t num_slots;
     char *jobppr = NULL;
+    /* "ppr:N:device=<class>" places N procs on each device rather than on
+     * each object of an hwloc level.  The device list is the base's - the
+     * same one --map-by device= uses, deliberately: the two differ only in
+     * how many procs a device takes. */
+    bool bydev;
+    void *devctx = NULL;
     /* see rmaps_rr.c: reset the per-node "mapped" flags only on the genuine
      * first mapping pass so per-app dispatch (one entry per app) does not
      * re-add nodes a previous app already placed in the job map */
@@ -105,6 +111,8 @@ static int ppr_mapper(prte_job_t *jdata,
                         "mca:rmaps:ppr: mapping job %s with ppr %s",
                         PRTE_JOBID_PRINT(jdata->nspace), jobppr);
 
+    bydev = (HWLOC_OBJ_OS_DEVICE == options->maptype);
+
     ranking = PRTE_RANK_BY_SLOT;
     if (HWLOC_OBJ_MACHINE == options->maptype) {
         mapping = PRTE_MAPPING_BYNODE;
@@ -123,6 +131,8 @@ static int ppr_mapper(prte_job_t *jdata,
         mapping = PRTE_MAPPING_BYCORE;
     } else if (HWLOC_OBJ_PU == options->maptype) {
         mapping = PRTE_MAPPING_BYHWTHREAD;
+    } else if (HWLOC_OBJ_OS_DEVICE == options->maptype) {
+        mapping = PRTE_MAPPING_BYDEVICE;
     }
 
     /* record the results. A ppr by an object is recorded as the equivalent
@@ -237,6 +247,10 @@ static int ppr_mapper(prte_job_t *jdata,
                                                                HWLOC_OBJ_PU);
                     app->num_procs += options->pprn * nobjs;
                 }
+            } else if (HWLOC_OBJ_OS_DEVICE == options->maptype) {
+                /* add in #devices for each node */
+                app->num_procs = options->pprn
+                                 * (int) prte_rmaps_base_devices_total(&node_list, options);
             }
         }
 
@@ -326,8 +340,16 @@ static int ppr_mapper(prte_job_t *jdata,
                 }
             } else {
                 /* get the number of resources on this node */
-                nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                 options->maptype);
+                if (bydev) {
+                    rc = prte_rmaps_base_devices_begin(node, options, &devctx);
+                    if (PRTE_SUCCESS != rc) {
+                        goto error;
+                    }
+                    nobjs = prte_rmaps_base_devices_count(node, options, devctx);
+                } else {
+                    nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                     options->maptype);
+                }
                 if (0 == nobjs) {
                     /* The pattern names the resource to place procs on, and
                      * a node that has none of it cannot answer the request.
@@ -337,7 +359,10 @@ static int ppr_mapper(prte_job_t *jdata,
                      * have no L3cache placed nothing there while reporting
                      * success. Same rule as round_robin's object mapper. */
                     prte_show_help("help-prte-rmaps-base.txt", "rmaps:mapping-target-not-found",
-                                   true, hwloc_obj_type_string(options->maptype), node->name);
+                                   true,
+                                   bydev ? options->map_device
+                                         : hwloc_obj_type_string(options->maptype),
+                                   node->name);
                     rc = PRTE_ERR_SILENT;
                     goto error;
                 }
@@ -366,8 +391,12 @@ static int ppr_mapper(prte_job_t *jdata,
                 }
                 /* map the specified number of procs to each such resource on this node */
                 for (i = 0; i < nobjs && nprocs_mapped < app->num_procs; i++) {
-                    obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
-                                                options->maptype, i);
+                    if (bydev) {
+                        obj = prte_rmaps_base_devices_locale(node, options, devctx, i);
+                    } else {
+                        obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
+                                                    options->maptype, i);
+                    }
                     // are there enough cpus on this obj to meet the request?
                     if (!prte_rmaps_base_check_avail(jdata, app, node, &node_list, obj, options)) {
                         continue;
@@ -377,6 +406,12 @@ static int ppr_mapper(prte_job_t *jdata,
                         if (NULL == proc) {
                             rc = PRTE_ERR_OUT_OF_RESOURCE;
                             goto error;
+                        }
+                        if (bydev) {
+                            /* every proc on this device is told which one it
+                             * is - sharing a device does not make the
+                             * assignment less worth knowing */
+                            prte_rmaps_base_devices_record(proc, options, devctx, i);
                         }
                         nprocs_mapped++;
                         rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
@@ -392,6 +427,12 @@ static int ppr_mapper(prte_job_t *jdata,
                         PMIX_RELEASE(proc);
                     }
                 }
+            }
+            /* release this node's device list before moving on - the next
+             * node has its own */
+            if (NULL != devctx) {
+                prte_rmaps_base_devices_end(devctx);
+                devctx = NULL;
             }
             options->bind = savebind;
 
@@ -433,6 +474,10 @@ static int ppr_mapper(prte_job_t *jdata,
     return rc;
 
 error:
+    /* an early exit can leave a node's device list held */
+    if (NULL != devctx) {
+        prte_rmaps_base_devices_end(devctx);
+    }
     PMIX_LIST_DESTRUCT(&node_list);
     free(jobppr);
     return rc;

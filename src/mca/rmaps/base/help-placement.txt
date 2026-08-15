@@ -362,7 +362,10 @@ Process Mapping / Ranking / Binding Options
     false)
 
   * "NDEV=<n>" only applies to the "device" directive; assigns n
-    devices to each proc rather than one
+    devices to each proc rather than one. The proc is then local to
+    whatever contains all of them - two GPUs on different NUMA domains
+    make their package the locality - so a binding refused with one
+    device per proc may be legitimate with several
 
   * "ORDERED" only applies to the PE-LIST option to indicate that
     procs are to be bound to each of the specified CPUs in the order
@@ -695,6 +698,20 @@ different NUMA domains is local to neither of them alone, so its
 locality becomes whatever contains them both - here the package, which
 is why binding to a package is legal in this case and an error without
 "ndev".
+
+Because the devices are handed out in groups taken in order from the
+device list, "interleave" composes with "ndev": the interleaving decides
+the order, and the grouping then takes contiguous runs of it.
+
+The reverse ratio - several processes on each device rather than several
+devices for each process - is a "ppr" pattern, spelled the same way as
+every other:
+
+   $ prun --mapby ppr:2:device=gpu --bindto core ./a.out
+
+places two processes on each GPU, each bound to its own core within that
+GPU's locality. As with any ppr pattern, the process count follows from
+the pattern when "-n" is not given: four GPUs yield eight processes.
 
 Naming a single device instead of a class places every process near
 that one device, which is useful for a job whose performance depends

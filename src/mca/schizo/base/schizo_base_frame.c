@@ -211,6 +211,7 @@ bool prte_schizo_base_check_directives(char *directive,
         "socket",  // dealt with elsewhere
         "skt",     // dealt with elsewhere
         PRTE_CLI_NODE,
+        PRTE_CLI_DEVICE,
         NULL
     };
     bool found;
@@ -276,7 +277,19 @@ bool prte_schizo_base_check_directives(char *directive,
                     }
                     found = false;
                     for (m=0; NULL != pproptions[m]; m++) {
-                        if (0 == strncasecmp(args[2], pproptions[m], strlen(args[2]))) {
+                        size_t olen = strlen(pproptions[m]);
+                        /* An option ending in "=" carries its value with it
+                         * ("device=gpu"), so match only the name: comparing
+                         * strlen(given) characters can never match, since
+                         * the given string is the longer of the two.  Every
+                         * other option is matched by any unambiguous prefix
+                         * of it, as before. */
+                        if ('=' == pproptions[m][olen - 1]) {
+                            if (0 == strncasecmp(args[2], pproptions[m], olen)) {
+                                found = true;
+                                break;
+                            }
+                        } else if (0 == strncasecmp(args[2], pproptions[m], strlen(args[2]))) {
                             found = true;
                             break;
                         }

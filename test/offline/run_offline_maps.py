@@ -647,6 +647,11 @@ def device_cases(topo):
                hostspec, pool, map_by="device=gpu:shared", rank_by="slot",
                bind_to="core", n=2 * n, expect="map")
 
+    # the reverse ratio: N procs on each device
+    yield Case("device.%s.ppr2" % topo.name, "device", topo, "single",
+               hostspec, pool, map_by="ppr:2:device=gpu", rank_by="slot",
+               bind_to="core", n=2 * n, expect="map")
+
     # several devices to each proc: the locality widens to whatever
     # contains them all, so a binding that would be refused with one device
     # per proc becomes legitimate
