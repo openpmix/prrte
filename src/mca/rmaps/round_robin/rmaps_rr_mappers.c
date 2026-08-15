@@ -663,6 +663,27 @@ static hwloc_obj_t device_targets_item(prte_node_t *node, prte_rmaps_options_t *
     return dc->devs[j].locality;
 }
 
+/* Record which device this proc was placed against.  PRRTE cannot bind a
+ * process to a device - no such mechanism exists - so telling the process
+ * which one it got is the whole of what the assignment is worth.  The UUID
+ * is what travels, not an index: it is the same string PMIx reports for that
+ * device through PMIX_DEVICE_DISTANCES, so the process can correlate the
+ * two, whereas an ordinal would depend on whose numbering was meant. */
+static void device_targets_placed(prte_proc_t *proc, prte_rmaps_options_t *opts,
+                                  void *ctx, unsigned j)
+{
+    prte_rmaps_devctx_t *dc = (prte_rmaps_devctx_t *) ctx;
+
+    PRTE_HIDE_UNUSED_PARAMS(opts);
+    if (NULL == dc || (size_t) j >= dc->ndevs || NULL == dc->devs[j].dev.uuid) {
+        return;
+    }
+    /* GLOBAL: the daemon that forks this proc reads it out of an unpacked
+     * copy of the job, so a local attribute would never arrive */
+    prte_set_attribute(&proc->attributes, PRTE_PROC_DEVICE_ID, PRTE_ATTR_GLOBAL,
+                       dc->devs[j].dev.uuid, PMIX_STRING);
+}
+
 static void device_targets_end(void *ctx)
 {
     prte_rmaps_devctx_t *dc = (prte_rmaps_devctx_t *) ctx;
@@ -685,6 +706,7 @@ int prte_rmaps_rr_bydevice(prte_job_t *jdata, prte_app_context_t *app,
         .begin = device_targets_begin,
         .count = device_targets_count,
         .item = device_targets_item,
+        .placed = device_targets_placed,
         .end = device_targets_end,
         .name = options->map_device
     };
@@ -934,6 +956,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
         .begin = NULL,
         .count = hwloc_targets_count,
         .item = hwloc_targets_item,
+        .placed = NULL,
         .end = NULL,
         /* hwloc_obj_type_string() returns a static string */
         .name = hwloc_obj_type_string(options->maptype)
@@ -1096,6 +1119,12 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
                 if (NULL == proc) {
                     rc = PRTE_ERR_OUT_OF_RESOURCE;
                     goto errout;
+                }
+                /* let the enumerator record whatever the target means to it -
+                 * a device map notes which device this proc was placed
+                 * against, which the proc has no other way to learn */
+                if (NULL != tgts->placed) {
+                    tgts->placed(proc, options, ctx, j);
                 }
                 nprocs_mapped++;
                 rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);

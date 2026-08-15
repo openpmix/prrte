@@ -257,6 +257,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
     prte_pmix_server_pset_t *pset;
     pmix_cpuset_t cpuset;
     uint32_t ui32, *ui32_ptr;
+    char *devid;
     uint32_t nodesize;
     prte_job_t *parent = NULL;
     pmix_device_distance_t *distances;
@@ -811,6 +812,23 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
 
             if (map->num_nodes < prte_hostname_cutoff) {
                 PMIX_INFO_LIST_ADD(ret, pmap, PMIX_HOSTNAME, pptr->node->name, PMIX_STRING);
+            }
+
+            /* the device this proc was mapped against, when it was mapped by
+             * one. PRRTE cannot bind a process to a device the way it binds
+             * to cpus - no such mechanism exists - so the assignment is only
+             * worth making if the process can be told about it. The value is
+             * the device's UUID rather than an index: a runtime's own device
+             * numbering need not be the topology's (CUDA orders by speed
+             * before bus by default), so an ordinal would name a different
+             * device than the one we chose. The same UUID appears in the
+             * PMIX_DEVICE_DISTANCES this process can query, which is what
+             * lets it correlate the two. */
+            devid = NULL;
+            if (prte_get_attribute(&pptr->attributes, PRTE_PROC_DEVICE_ID,
+                                   (void **) &devid, PMIX_STRING)) {
+                PMIX_INFO_LIST_ADD(ret, pmap, PMIX_DEVICE_ID, devid, PMIX_STRING);
+                free(devid);
             }
             PMIX_INFO_LIST_CONVERT(ret, pmap, &darray);
             PMIX_INFO_LIST_ADD(ret, info, PMIX_PROC_INFO_ARRAY, &darray, PMIX_DATA_ARRAY);

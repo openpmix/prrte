@@ -70,6 +70,10 @@ typedef struct {
     /* The j-th target, or NULL if there is no such target. */
     hwloc_obj_t (*item)(prte_node_t *node, prte_rmaps_options_t *opts, void *ctx,
                         unsigned j);
+    /* Called after a proc has been placed against the j-th target, so the
+     * enumerator can record what that target was.  May be NULL. */
+    void (*placed)(prte_proc_t *proc, prte_rmaps_options_t *opts, void *ctx,
+                   unsigned j);
     /* Release whatever "begin" allocated.  May be NULL. */
     void (*end)(void *ctx);
     /* What a target is called, for diagnostics ("core", "numa", ...). */

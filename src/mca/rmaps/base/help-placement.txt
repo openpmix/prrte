@@ -1053,6 +1053,24 @@ Two consequences follow, and both are deliberate:
    alone: whether "--bindto package" is legal depends on where that
    machine attaches its devices.
 
+PRRTE cannot restrict a process to a device the way it restricts one to
+a set of CPUs - no such mechanism exists - so the assignment is only
+useful if the process can find out about it. Each process is therefore
+told which device it was mapped against, as the PMIX_DEVICE_ID key of
+its own proc info, which it can retrieve with:
+
+   PMIx_Get(&myproc, PMIX_DEVICE_ID, NULL, 0, &value);
+
+The value is the device's UUID rather than an index, because a runtime's
+own device numbering need not match the topology's - CUDA, for example,
+orders devices by speed rather than by bus by default - so an index
+would name a different device than the one PRRTE chose. The same UUID
+appears in the PMIX_DEVICE_DISTANCES a process can query, which is what
+lets the two be matched up.
+
+"--display map" reports it too, as a "Device:" field on each process
+line.
+
 Where every device on a node is equally close to every CPU - which
 happens when they all hang off one PCI complex rather than off
 individual NUMA domains - the job still runs and each process is still
