@@ -274,7 +274,7 @@ The pre-launch branch of the shared ``prte_plm_base_fence_release()`` (parent
 plan, Step 4) calls two shrink-specific helpers, both defined in
 ``plm_base_launch_support.c`` and declared in ``src/mca/plm/base/plm_private.h``.
 
-**``prte_plm_base_job_needs_remap(jdata)``** iterates over ``jdata->procs``
+``prte_plm_base_job_needs_remap(jdata)`` iterates over ``jdata->procs``
 and returns ``true`` if any proc's assigned node has a daemon rank appearing
 in any active campaign:
 
@@ -302,7 +302,7 @@ in any active campaign:
        return false;
    }
 
-**``prte_plm_base_reset_proc_map(jdata)``** un-claims all slot assignments
+``prte_plm_base_reset_proc_map(jdata)`` un-claims all slot assignments
 made during the previous MAP pass so that the job can be remapped cleanly.
 Mirror the mapper's ``prte_rmaps_base_claim_slot()`` accounting, which does
 ``node->num_procs++`` and ``++node->slots_inuse`` for each non-tool proc:

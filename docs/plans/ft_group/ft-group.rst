@@ -32,14 +32,14 @@ Reading the code turned up four further problems the fix depends on:
   participants all survive but whose relaying child died was not "affected" by
   the handler's test, which only inspected ``coll->dmns``, so it was never
   aborted — and its stale ``nexpected`` never completed.
-* **``nreported`` was an identity-free counter**, safe only while each child
+* ``nreported`` **was an identity-free counter**, safe only while each child
   contributes exactly once. Recovery makes duplicates normal, and two messages
   from one child plus zero from another satisfy ``nreported == nexpected`` just
   as well as one from each.
 * **Nothing bounded a group operation in time.** ``coll->timeout`` was parsed,
   max-merged and forwarded to the parent — and never armed. The unconditional
   abort was the de-facto liveness guarantee.
-* **``create_dmns`` failure was a silent hang path.** Recovery must not depend
+* ``create_dmns`` **failure was a silent hang path.** Recovery must not depend
   on resolving a process whose node is being torn down.
 
 Corrections to earlier premises
@@ -64,7 +64,7 @@ because each one changes the design:
    libevent dispatches active events before the next I/O poll. The design
    handles a newer stamp anyway rather than assuming it away.
 
-#. **``prte_grpcomm.xcast()`` copies its buffer.** Three callers dropped the
+#. ``prte_grpcomm.xcast()`` **copies its buffer.** Three callers dropped the
    pointer afterwards and leaked the entire release payload on every group and
    fence operation.
 
@@ -295,7 +295,7 @@ Out of scope
   it cannot give the parent-before-child ordering an epoch advance needs. This
   path previously did nothing at all, i.e. hung, so aborting is an improvement
   rather than a fix.
-* **``prte_grpcomm_direct_fence_fault_handler`` has no scope guard at all**, so
+* ``prte_grpcomm_direct_fence_fault_handler`` **has no scope guard at all**, so
   it activates ``PRTE_JOB_STATE_COMM_FAILED`` twice per fault *and once on every
   revival* — killing a job on a legitimate unheal. A real bug, but not this
   one; report it separately rather than widening this work.

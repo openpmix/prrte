@@ -788,7 +788,7 @@ default asks of it.  Anything that also wants to decide *how much* data
 justifies a different treatment needs its own input, and would have to
 measure the constant rather than inherit one.
 
-It is also the only trustworthy signal available.  **"Is ``ndata`` zero" is
+It is also the only trustworthy signal available.  **"Is ndata zero" is
 not** — a bare barrier arrives at the upcall with eight bytes of info — so
 nothing here argues for a separate barrier entry point.  Do not reintroduce
 either heuristic.
@@ -914,7 +914,7 @@ server.  That covers ``PMIX_HOSTNAME`` (``opal_get_proc_hostname()`` and
 ``pml_base_select``) and the four ``PMIX_LOCALITY`` sites in
 ``ompi/proc/proc.c`` and ``ompi/communicator/comm.c``.
 
-**And ``PMIX_LOCALITY`` never crosses the wire in either direction.**  Open
+**And PMIX_LOCALITY never crosses the wire in either direction.**  Open
 MPI *computes* it from each local peer's ``PMIX_LOCALITY_STRING`` and stores
 it client-side with ``PMIx_Store_internal``.  A get naming a remote proc
 misses and falls back to ``OPAL_PROC_NON_LOCAL``, which is the right answer
@@ -968,8 +968,8 @@ Two riders, both material:
 What this implies
 ~~~~~~~~~~~~~~~~~
 
-**Nothing in Open MPI asks a remote proc for ``PMIX_CPUSET``, and nothing
-asks a remote proc for ``PMIX_NODE_RANK``** — the only node-rank get is about
+**Nothing in Open MPI asks a remote proc for PMIX_CPUSET, and nothing
+asks a remote proc for PMIX_NODE_RANK** — the only node-rank get is about
 self.  Those two are the residual array.  On this evidence, broadcasting the
 residuals is moving data no MPI process asks for about a remote peer.
 
@@ -993,7 +993,7 @@ scan:
 * **It is Open MPI.**  OpenSHMEM rides the same runtime layer
   (``oshmem/proc/proc.c`` asks only a wildcard ``PMIX_LOCAL_PEERS``), but
   other PMIx clients exist and were not scanned.
-* **The treematch ``PMIX_NODEID`` get is non-optional.**  Under the maps it
+* **The treematch PMIX_NODEID get is non-optional.**  Under the maps it
   is answered locally, but it is the one site where being wrong shows up as a
   round trip per peer per communicator rather than as a fallback.
 * **"Nothing asks" is weaker than "the answer would be right."**  If PRRTE
@@ -1229,7 +1229,7 @@ the ``r`` in ``r*D*beta`` is the routing radix, full stop.
 
 So the fork is real and it is only two-way:
 
-* **Lower ``prte_rml_base.radix`` globally** and pipeline the large messages.
+* **Lower prte_rml_base.radix globally** and pipeline the large messages.
   Costs nothing in new topology and no new failure modes.  What it spends is
   ``d*alpha`` on every *small* message: at 10 000 nodes, radix 2 is depth 14
   against radix 64's depth 3, so a shutdown command or a ``DAEMON_DIED``
@@ -1267,7 +1267,7 @@ which judged it purely on ``N-1`` against ``log2 N`` — did not weigh:
    published.  Bruck and recursive doubling want equal blocks, so unequal ones
    need a size allgather first or an extra indexing pass; a ring just forwards
    whatever it was handed.
-#. **Two descriptors instead of ``log2 N``**, constant in DVM size, which
+#. **Two descriptors instead of** ``log2 N``, constant in DVM size, which
    retires open question #3 and most of the pre-warm and idle-teardown work
    deferred out of Piece 1.
 #. **Fault handling is legible.**  A ring node has exactly one predecessor and
@@ -1387,7 +1387,7 @@ place it leads is the one place the host is most saturated.
 will not go away with more samples.**  Both are worth stating because they
 retire the measurement rather than deferring it.
 
-#. **There are no per-node uplinks for ``r`` to contend on.**  The ``r*D*beta``
+#. **There are no per-node uplinks for r to contend on.**  The ``r*D*beta``
    term is per-node-per-level *NIC* contention.  Total bytes crossing the wire
    in a broadcast are ``(N-1)*D`` at **any** radix; only the critical path
    changes, and a critical path needs independent links to shorten.  Thirty-two
@@ -1397,7 +1397,7 @@ retire the measurement rather than deferring it.
 #. **The Docker VM has 8 CPUs and 8 GB for 32 containers.**  Aggregate
    per-rank work is ``O(N^2)`` across the DVM, and on a fixed core count that
    lands in the wall clock as ``N^2``, swamping any algorithmic difference.
-   The observed scaling at fixed payload is ~``N^2`` (512 B a rank: 848 ->
+   The observed scaling at fixed payload is about ``N^2`` (512 B a rank: 848 ->
    2547 -> 9944 µs at radix 64), which is the host, not the collective.
 
 So open question #4 is **not answered by this harness and cannot be** — the
@@ -1794,7 +1794,7 @@ the first is a genuine hole rather than a detail.
   Acks roll up the routing tree.  You cannot account for coverage of a message
   that traversed tree *B* by rolling up acks on tree *A*, so each movement
   needs its own completion accounting.
-* **``op_id`` is a single global space** — "HNP's assigned collective ID,
+* ``op_id`` **is a single global space** — "HNP's assigned collective ID,
   globally unique".  Two patterns allocating from it will alias.  They need
   separate spaces, or the topology in the key.
 * **The fence receive path would drop lateral traffic today.**
@@ -1844,7 +1844,7 @@ What to do, and in what order
 
 Revised after the sweep, which moved two items and deleted one.
 
-#. **Make the commit a true delta, and give ``shmem3`` delta segments with
+#. **Make the commit a true delta, and give shmem3 delta segments with
    search-back.**  One piece of work in openpmix, against openpmix#4087: the
    delta commit is the trigger condition the ``shmem3`` comment already names
    for needing search-back, and it is what flattens the transfer as well as
@@ -1861,7 +1861,7 @@ Revised after the sweep, which moved two items and deleted one.
    is a one-parameter change that cuts the fence cost 4.3x at 32 daemons.  It
    is not free — it gives up the cheap post-fence ``PMIx_Get`` that ``shmem3``
    is buying — so it is a knob to characterise, not a default to change.
-#. **Decide the ``COLLECT_DATA``-as-commit-barrier question.**  The only item
+#. **Decide the COLLECT_DATA-as-commit-barrier question.**  The only item
    that attacks the dominant term for jobs below roughly a thousand ranks, and
    the only one with an order-of-magnitude story rather than a constant-factor
    one.  It is a policy call, not a measurement.

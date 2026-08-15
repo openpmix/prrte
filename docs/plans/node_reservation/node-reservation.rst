@@ -1006,11 +1006,11 @@ Resolved decisions
   allocation path does.  This is a hard invariant of the reference-based model,
   not an optional cleanup.
 
-* **Default (``PMIX_ALLOC_SHARE`` absent) means "reserve."**  An
+* **Default (PMIX_ALLOC_SHARE absent) means "reserve."**  An
   ``ALLOC_SHARE``-absent dynamic request reserves the nodes to the
   requester's (or target's) namespace; only an explicit
   ``PMIX_ALLOC_SHARE == true`` routes nodes to the default pool.
-* **``PMIX_SPAWN_TARGET`` is limited by an ownership check.**  A requester may
+* ``PMIX_SPAWN_TARGET`` **is limited by an ownership check.**  A requester may
   target only the default session and reservations its namespace owns (the
   scheduler excepted).  See *Ownership check* above.
 * **Ownership is a set, conferred by spawning-into, and not inherited.**  Every
@@ -1025,7 +1025,7 @@ Resolved decisions
   namespace exits, ``CHILD``/``CHILD_DEFAULT`` when the last derived child
   exits; the ``*_DEFAULT`` variants unreserve into the session rather than
   returning nodes to the scheduler.  See *Session Lifecycle*.
-* **``CHILD`` tracking is strict transitive-descendant tracking, via the
+* ``CHILD`` **tracking is strict transitive-descendant tracking, via the
   existing parentage system.**  A derived child is *any* transitive spawn
   descendant of the owning namespace, per the spec and the PMIx inheritance
   overview — including descendants that run in another session.  The drain
@@ -1044,7 +1044,7 @@ Resolved decisions
   releases job objects for the session's lifetime, and adds no new tracking
   machinery.  ``prte_session_t`` therefore also carries a
   ``prte_job_t *owner_job`` alongside the ``owner`` nspace.
-* **The default disposition is ``PMIX_ALLOC_INHERIT_DEFAULT``.**  When
+* **The default disposition is PMIX_ALLOC_INHERIT_DEFAULT.**  When
   ``PMIX_ALLOC_INHERITANCE`` is absent, a reservation becomes unreserved within
   the session when its owning namespace terminates; the legacy "release to the
   scheduler on termination" behavior requires an explicit

@@ -99,7 +99,7 @@ Several of the keys above (``DVMNetworks``, ``KeepFQDNHostnames``, ``DVMPort``)
 duplicate values an administrator could otherwise set as MCA parameters.
 They are included in ``prte.conf`` deliberately, so a site can manage all DVM
 behavior in **one place**.  The required precedence is that **a value set in
-``prte.conf`` overrides the same value in an MCA parameter file**.
+prte.conf overrides the same value in an MCA parameter file**.
 
 This falls out naturally from setting the values as *environment* MCA
 parameters: PMIx MCA precedence already ranks an environment variable above a
