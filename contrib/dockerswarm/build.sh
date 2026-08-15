@@ -429,6 +429,18 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/jobinfo.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
+            # devinfo: reads back the device this proc was mapped against.
+            # The point is that it asks the PROCESS, not the head node: the
+            # assignment is computed on the HNP, packed into the launch
+            # message, unpacked by the daemon that forks the proc, and then
+            # published by the PMIx server in that daemon, whereas
+            # "--display map" shows only the first of those steps.
+            # (No apostrophes here: see the note further down.)
+            echo ">>>> devinfo (device assignment) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/devinfo \
+                /prrte-src/contrib/dockerswarm/devinfo.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
             # dataserver: a bare PMIx client for the publish/lookup service
             # in src/runtime/data_server.  The store is a single array on
             # the HNP and every client reaches it through its own daemon, so
