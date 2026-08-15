@@ -700,18 +700,47 @@ static void device_targets_end(void *ctx)
     free(dc);
 }
 
+/* How many devices of the requested class the whole node list offers.  Used
+ * only to answer "are there enough?" before any proc is placed; the mapper
+ * enumerates each node again as it reaches it. */
+static size_t count_devices(pmix_list_t *node_list, prte_rmaps_options_t *options)
+{
+    prte_node_t *node;
+    void *ctx = NULL;
+    size_t total = 0;
+
+    PMIX_LIST_FOREACH(node, node_list, prte_node_t) {
+        if (PRTE_SUCCESS != device_targets_begin(node, options, &ctx)) {
+            continue;
+        }
+        total += device_targets_count(node, options, ctx);
+        device_targets_end(ctx);
+        ctx = NULL;
+    }
+    return total;
+}
+
 int prte_rmaps_rr_bydevice(prte_job_t *jdata, prte_app_context_t *app,
                            pmix_list_t *node_list, int32_t num_slots,
                            pmix_rank_t num_procs,
                            prte_rmaps_options_t *options)
 {
+    size_t ndevs;
     prte_rmaps_target_enum_t tgts = {
         .begin = device_targets_begin,
         .count = device_targets_count,
         .item = device_targets_item,
         .placed = device_targets_placed,
         .end = device_targets_end,
-        .name = options->map_device
+        .name = options->map_device,
+        /* A device is assigned to a process, not subdivided between them:
+         * two procs sharing a GPU is a different thing from two procs
+         * sharing a core.  So it has its own qualifier rather than riding on
+         * binding's "overload-allowed", which is about running more procs
+         * than there are CPUs - a different resource, a different question,
+         * and answering both with one word would leave neither sayable on
+         * its own. */
+        .nowrap = !options->map_shared
     };
 
     if (NULL == options->map_device) {
@@ -719,6 +748,18 @@ int prte_rmaps_rr_bydevice(prte_job_t *jdata, prte_app_context_t *app,
          * parsers - so this is a programming error, not user input */
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
+    }
+
+    /* Say up front when there are not enough devices to go round, rather
+     * than letting the placement run out partway and report a generic
+     * failure. */
+    if (!options->map_shared) {
+        ndevs = count_devices(node_list, options);
+        if (0 < ndevs && ndevs < (size_t) app->num_procs) {
+            prte_show_help("help-prte-rmaps-base.txt", "rmaps:too-few-devices", true,
+                           (int) app->num_procs, options->map_device, (int) ndevs);
+            return PRTE_ERR_SILENT;
+        }
     }
 
     return prte_rmaps_rr_map_targets(jdata, app, node_list, num_slots,
@@ -1147,7 +1188,8 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
                 allfull = false;
             }
             if (nprocs_mapped < app->num_procs && !allfull &&
-                !nodefull && !outofcpus && !options->mapspan) {
+                !nodefull && !outofcpus && !options->mapspan &&
+                !tgts->nowrap) {
                 // keep working these objects until full
                 goto redo;
             }
@@ -1163,6 +1205,11 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
                 hwloc_bitmap_free(options->target);
                 options->target = NULL;
             }
+        }
+        /* one pass is all an unshareable target gets: coming round again
+         * would put a second proc on a target already assigned */
+        if (tgts->nowrap) {
+            break;
         }
     } while (nprocs_mapped < app->num_procs && !allfull);
 

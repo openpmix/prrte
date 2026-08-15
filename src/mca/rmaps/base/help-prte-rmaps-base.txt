@@ -553,3 +553,41 @@ apply to:
 
 "interleave" reorders the list of devices a job is mapped against, so it
 is meaningful only in combination with "--map-by device=<class|name>".
+#
+[rmaps:too-few-devices]
+More processes were requested than there are devices to map them
+against:
+
+  Processes requested: %d
+  Device:              %s
+  Devices available:   %d
+
+A device is assigned to a process rather than subdivided between
+processes, so by default each device takes one process and a job asking
+for more than there are devices cannot be mapped.
+
+If sharing the devices is what you intended, say so with the "shared"
+qualifier:
+
+  --map-by device=<class>:shared
+
+Otherwise reduce the number of processes, or map by something other than
+a device.
+
+Note this is a separate question from the "overload-allowed" qualifier
+on "--bind-to", which concerns running more processes than there are
+CPUs. Sharing a device and overloading a CPU are different resources and
+different decisions.
+#
+[rmaps:shared-needs-device]
+The "shared" qualifier was given with a mapping policy it cannot apply
+to:
+
+  Mapping policy: %s
+
+"shared" says that several processes may be assigned the same device, so
+it is meaningful only in combination with
+"--map-by device=<class|name>".
+
+If you meant to run more processes than there are CPUs, that is the
+"overload-allowed" qualifier on "--bind-to" instead.

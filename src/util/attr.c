@@ -310,6 +310,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PRTE_APP_MAP_DEVICE";
         case PRTE_APP_MAP_INTERLEAVE:
             return "PRTE_APP_MAP_INTERLEAVE";
+        case PRTE_APP_MAP_SHARED:
+            return "PRTE_APP_MAP_SHARED";
         case PRTE_APP_HWT_CPUS:
             return "PRTE_APP_HWT_CPUS";
         case PRTE_APP_CORE_CPUS:
@@ -492,6 +494,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "JOB_MAP_DEVICE";
         case PRTE_JOB_MAP_INTERLEAVE:
             return "JOB_MAP_INTERLEAVE";
+        case PRTE_JOB_MAP_SHARED:
+            return "JOB_MAP_SHARED";
         case PRTE_JOB_HWT_CPUS:
             return "JOB_HWT_CPUS";
         case PRTE_JOB_CORE_CPUS:

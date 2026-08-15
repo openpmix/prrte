@@ -310,6 +310,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
     bool core_cpus_given = false;
     bool oversubscribe_given = false;
     bool nooversubscribe_given = false;
+    bool shared = false;
 
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "%s rmaps:base check modifiers with %s",
@@ -527,6 +528,44 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
             prte_set_attribute(attrs,
                                (NULL != app) ? PRTE_APP_MAP_INTERLEAVE : PRTE_JOB_MAP_INTERLEAVE,
                                PRTE_ATTR_GLOBAL, val, PMIX_STRING);
+
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_SHARED)) {
+            /* NOTE: like the interleave arm above, this must stay near the
+             * END of the chain - and in particular after SPAN.  The option
+             * matcher compares only as far as the shorter of its two
+             * arguments and has no view of the other options, so the first
+             * arm that prefix-matches wins, and ":s" has meant SPAN for as
+             * long as there has been one. */
+            val = pmix_cli_qualifier_value(ck2[i]);
+            if (NULL == val) {
+                /* the bare qualifier asks for it */
+                shared = true;
+            } else if (0 == strcasecmp(val, "true") || 0 == strcasecmp(val, "1")
+                       || 0 == strcasecmp(val, "yes")) {
+                shared = true;
+            } else if (0 == strcasecmp(val, "false") || 0 == strcasecmp(val, "0")
+                       || 0 == strcasecmp(val, "no")) {
+                shared = false;
+            } else {
+                prte_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                               "mapping policy", "SHARED", ck2[i]);
+                PMIx_Argv_free(ck2);
+                return PRTE_ERR_SILENT;
+            }
+            if (NULL == attrs) {
+                prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier",
+                               true, "mapping policy", PRTE_CLI_SHARED);
+                PMIx_Argv_free(ck2);
+                return PRTE_ERR_SILENT;
+            }
+            /* a bool attribute means "true" by its presence, and setting it
+             * false removes it - which is exactly the default, so nothing
+             * needs recording for shared=false */
+            if (shared) {
+                prte_set_attribute(attrs,
+                                   (NULL != app) ? PRTE_APP_MAP_SHARED : PRTE_JOB_MAP_SHARED,
+                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+            }
 
         } else {
             /* unrecognized modifier */
@@ -1043,6 +1082,16 @@ setpolicy:
                        prte_rmaps_base_print_mapping(tmp));
         return PRTE_ERR_SILENT;
     }
+    /* "shared" says devices may be shared, so it means nothing where there
+     * are no devices - refuse it by name rather than as an unknown
+     * qualifier, since the spelling is legal, just not here */
+    if (NULL != jdata
+        && prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_SHARED, NULL, PMIX_BOOL)
+        && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
+        prte_show_help("help-prte-rmaps-base.txt", "rmaps:shared-needs-device", true,
+                       prte_rmaps_base_print_mapping(tmp));
+        return PRTE_ERR_SILENT;
+    }
 
     if (NULL == jdata) {
         prte_rmaps_base.mapping = tmp;
@@ -1362,6 +1411,12 @@ setpolicy:
     if (prte_get_attribute(&app->attributes, PRTE_APP_MAP_INTERLEAVE, NULL, PMIX_STRING)
         && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
         prte_show_help("help-prte-rmaps-base.txt", "rmaps:interleave-needs-device", true,
+                       prte_rmaps_base_print_mapping(tmp));
+        return PRTE_ERR_SILENT;
+    }
+    if (prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED, NULL, PMIX_BOOL)
+        && PRTE_MAPPING_BYDEVICE != PRTE_GET_MAPPING_POLICY(tmp)) {
+        prte_show_help("help-prte-rmaps-base.txt", "rmaps:shared-needs-device", true,
                        prte_rmaps_base_print_mapping(tmp));
         return PRTE_ERR_SILENT;
     }

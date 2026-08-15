@@ -78,6 +78,11 @@ typedef struct {
     void (*end)(void *ctx);
     /* What a target is called, for diagnostics ("core", "numa", ...). */
     const char *name;
+    /* When true, a target takes at most one proc: the loop lays one proc on
+     * each target and stops rather than coming round again.  A target that
+     * cannot be shared - a device, which is assigned rather than subdivided
+     * - sets this unless the user has allowed overloading. */
+    bool nowrap;
 } prte_rmaps_target_enum_t;
 
 PRTE_MODULE_EXPORT int prte_rmaps_rr_byobj(prte_job_t *jdata,

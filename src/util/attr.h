@@ -78,6 +78,7 @@ typedef uint8_t prte_app_context_flags_t;
 #define PRTE_APP_MAP_FILE           29 /* char* path to seq or rankfile */
 #define PRTE_APP_MAP_DEVICE         30 /* char* device class or name for --map-by device= */
 #define PRTE_APP_MAP_INTERLEAVE     39 /* char* level to interleave the device list across */
+#define PRTE_APP_MAP_SHARED         40 /* bool: devices may be shared by several procs */
 #define PRTE_APP_HWT_CPUS           31 /* bool: use hwthreads as CPUs */
 #define PRTE_APP_CORE_CPUS          32 /* bool: use cores as CPUs */
 #define PRTE_APP_CPUSET             33 /* char* comma-delimited CPU ranges */
@@ -220,6 +221,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_PES_PER_PROC               (PRTE_JOB_START_KEY +  77) // uint16_t - number of cpus to be assigned to each process
 #define PRTE_JOB_MAP_DEVICE                 (PRTE_JOB_START_KEY +  78) // char* - device class or name for --map-by device=
 #define PRTE_JOB_MAP_INTERLEAVE             (PRTE_JOB_START_KEY + 128) // char* - level to interleave the device list across
+#define PRTE_JOB_MAP_SHARED                 (PRTE_JOB_START_KEY + 129) // bool - devices may be shared by several procs
 #define PRTE_JOB_HWT_CPUS                   (PRTE_JOB_START_KEY +  79) // bool - job requests hwthread cpus
 #define PRTE_JOB_CORE_CPUS                  (PRTE_JOB_START_KEY +  80) // bool - job requests core cpus
 #define PRTE_JOB_PPR                        (PRTE_JOB_START_KEY +  81) // char* - string specifying the procs-per-resource pattern
