@@ -144,12 +144,25 @@ int prte_job_pack(pmix_data_buffer_t *bkt, prte_job_t *job, prte_job_pack_mode_t
     pmix_list_t *cache;
     prte_info_item_t *val;
     prte_node_t *nptr;
+    bool devices;
+
+    /* Whether the procs carry a device assignment is a property of the whole
+     * job, so it travels once, here - ahead of the proc array.  It cannot be
+     * derived while reading a proc: the map is packed after them, so at that
+     * point the decoder has not yet seen the mapping policy. */
+    devices = (NULL != job->map
+               && PRTE_MAPPING_BYDEVICE == PRTE_GET_MAPPING_POLICY(job->map->mapping));
 
     /* Lead with what this buffer contains.  The per-proc records are not
      * always the same shape - the launch path scatters the cpusets - and the
      * decoder has to know which one it is looking at before it reads the
      * first of them.  One byte, once per job, ahead of everything else. */
     rc = PMIx_Data_pack(NULL, bkt, &mode, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    rc = PMIx_Data_pack(NULL, bkt, &devices, 1, PMIX_BOOL);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
@@ -334,7 +347,7 @@ int prte_job_pack(pmix_data_buffer_t *bkt, prte_job_t *job, prte_job_pack_mode_t
             if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(job->procs, j))) {
                 continue;
             }
-            rc = prte_proc_pack(bkt, proc, job, mode);
+            rc = prte_proc_pack(bkt, proc, devices, mode);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 return prte_pmix_convert_status(rc);
@@ -492,7 +505,7 @@ int prte_node_pack(pmix_data_buffer_t *bkt, prte_node_t *node)
 /*
  * PROC
  */
-int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc, prte_job_t *jdata,
+int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc, bool devices,
                    prte_job_pack_mode_t mode)
 {
     pmix_status_t rc;
@@ -543,14 +556,18 @@ int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc, prte_job_t *jdata
      * for it - the size discipline the comment below describes applies here
      * too. Both ends test the same condition, and the job's mapping policy
      * has already been packed by the time this runs. */
-    if (NULL != jdata && NULL != jdata->map
-        && PRTE_MAPPING_BYDEVICE == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
-        char *devid = NULL;
+    if (devices) {
+        pmix_data_array_t *devs = NULL;
+        uint16_t ndevs;
         prte_get_attribute(&proc->attributes, PRTE_PROC_DEVICE_ID,
-                           (void **) &devid, PMIX_STRING);
-        rc = PMIx_Data_pack(NULL, bkt, (void *) &devid, 1, PMIX_STRING);
-        if (NULL != devid) {
-            free(devid);
+                           (void **) &devs, PMIX_DATA_ARRAY);
+        ndevs = (NULL == devs) ? 0 : (uint16_t) devs->size;
+        rc = PMIx_Data_pack(NULL, bkt, &ndevs, 1, PMIX_UINT16);
+        if (PMIX_SUCCESS == rc && 0 < ndevs) {
+            rc = PMIx_Data_pack(NULL, bkt, devs->array, ndevs, PMIX_DEVICE);
+        }
+        if (NULL != devs) {
+            PMIX_DATA_ARRAY_FREE(devs);
         }
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);

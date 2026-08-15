@@ -622,10 +622,15 @@ PRTE_EXPORT int prte_app_copy(prte_app_context_t **dest, prte_app_context_t *src
 PRTE_EXPORT void prte_app_print(char **output, prte_job_t *jdata, prte_app_context_t *src);
 
 /** Pack/unpack a proc*/
+/* "devices" says whether this job's procs carry a device assignment.  It is
+ * a parameter rather than something read back off the job because the job's
+ * map is packed AFTER the proc array - so a decoder reading a proc has not
+ * yet seen the mapping policy, and deriving the answer there would skip a
+ * field the packer wrote and desynchronize the rest of the buffer. */
 PRTE_EXPORT int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc,
-                               prte_job_t *jdata, prte_job_pack_mode_t mode);
+                               bool devices, prte_job_pack_mode_t mode);
 PRTE_EXPORT int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t *proc,
-                                 prte_job_t *jdata, prte_job_pack_mode_t mode);
+                                 bool devices, prte_job_pack_mode_t mode);
 PRTE_EXPORT int prte_proc_copy(prte_proc_t **dest, prte_proc_t *src);
 PRTE_EXPORT void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src);
 
