@@ -926,6 +926,42 @@ Out of scope
   act on it.  If this is later judged in scope, it belongs behind an explicit
   opt-in and in the framework that already handles vendor-specific syntax,
   not in the mapper.
+
+  Should that reversal be considered, four constraints from `NVIDIA's
+  documentation
+  <https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/environment-variables.html#cuda-visible-devices>`_
+  settle most of the design and are worth not rediscovering:
+
+  1. The accepted values are an integer index, ``GPU-<uuid>`` (full or an
+     abbreviated unique prefix), or ``MIG-<uuid>/<gi>/<ci>``.  **There is no
+     PCI bus id form.**  That rules out the obvious route: the bus id is the
+     one handle hwloc always has, and it is not a legal value.
+  2. ``GPU-<uuid>`` is *order-independent*, so using it means PRRTE never
+     has to touch the user's ``CUDA_DEVICE_ORDER``.
+  3. The index route would require pinning ``CUDA_DEVICE_ORDER=PCI_BUS_ID``,
+     since the default ``FASTEST_FIRST`` is an unspecified heuristic.  That
+     overrides a possibly-deliberate user setting and renumbers devices for
+     the rest of their program — too much to take on someone's behalf.
+  4. A wrong value fails *silently*: "if an invalid index is encountered,
+     only devices with indices that appear before the invalid index in the
+     list are visible."  A guess truncates the visible set rather than
+     erroring, so guessing is not a safe option.
+
+  The rule that falls out: emit the comma-joined ``GPU-<uuid>`` of the
+  assigned devices **only** when hwloc supplies ``NVIDIAUUID`` for all of
+  them; otherwise set nothing, and say so.  Never set ``CUDA_DEVICE_ORDER``.
+  An unset variable leaves CUDA behaving normally; a wrong one does not.
+
+  Note where that leaves the requester of the originating issue.  hwloc sets
+  ``NVIDIAUUID`` only in its **NVML** backend (``src/topology-nvml.c``); a
+  DRM/PCI-only hwloc reports ``card*``/``renderD*`` and a bus id and nothing
+  else.  The GPU OS devices in their topology carry *no* info attributes at
+  all, so the sound route is unavailable on exactly the machine that asked
+  for the feature — which is an argument for reporting the assignment and
+  letting the site act on it, not against it.  The same shape applies to
+  AMD (``ROCR_VISIBLE_DEVICES`` takes the same index-or-uuid values, and the
+  RSMI backend supplies ``AMDUUID``), so any future work here is one rule
+  with a per-vendor info key, not a per-vendor design.
 * **Deriving the device count from the resource manager** (SLURM's
   ``--gpus-per-task``).  The requester raises it as an "even more ideally".
   It is a ``ras``-side question — what the allocation granted — and is a
