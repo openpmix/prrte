@@ -352,7 +352,13 @@ int prte_rmaps_base_resolve_app_options(prte_job_t *jdata,
     opts->map_shared = prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED,
                                           NULL, PMIX_BOOL);
 
-    /* 10. PRTE_APP_BINDING_LIMIT → opts->limit */
+    /* 10. PRTE_APP_MAP_NDEV → opts->map_ndev */
+    u16 = 0;
+    if (prte_get_attribute(&app->attributes, PRTE_APP_MAP_NDEV, (void **) &u16ptr, PMIX_UINT16)) {
+        opts->map_ndev = u16;
+    }
+
+    /* 11. PRTE_APP_BINDING_LIMIT → opts->limit */
     if (prte_get_attribute(&app->attributes, PRTE_APP_BINDING_LIMIT, (void **)&u16ptr, PMIX_UINT16)) {
         opts->limit = u16;
     }
@@ -1086,6 +1092,12 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_DEVICE, (void**)&options.map_device, PMIX_STRING);
     prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_INTERLEAVE, (void**)&options.map_interleave, PMIX_STRING);
     options.map_shared = prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_SHARED, NULL, PMIX_BOOL);
+    {
+        uint16_t nd = 0, *ndptr = &nd;
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_MAP_NDEV, (void**)&ndptr, PMIX_UINT16)) {
+            options.map_ndev = nd;
+        }
+    }
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void **) &u16ptr, PMIX_UINT16)) {
         options.cpus_per_rank = u16;
     } else {
@@ -1600,6 +1612,7 @@ ranking:
             app_options.map_interleave = (NULL == options.map_interleave) ? NULL
                                                                           : strdup(options.map_interleave);
             app_options.map_shared = options.map_shared;
+            app_options.map_ndev = options.map_ndev;
             app_options.app_idx = n;
             /* where this app's ranks start: the mappers that number their
              * own procs need the cursor the base is threading, or every app

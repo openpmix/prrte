@@ -360,6 +360,17 @@ different packages --- on the machine above, cores 16 and 96 rather than
 16 and 32. The level may be given explicitly (``interleave=numa``, for
 instance); it defaults to ``package``.
 
+Where a process needs more than one device, ``ndev`` says how many:
+
+.. code::
+
+   $ prun -n 2 --mapby device=gpu:ndev=2 --bindto package ./a.out
+
+gives each of the two processes two GPUs. A process holding devices in
+different NUMA domains is local to neither of them alone, so its locality
+becomes whatever contains them both --- here the package, which is why
+binding to a package is legal in this case and an error without ``ndev``.
+
 Naming a single device rather than a class places every process near
 that one device, which suits a job whose performance depends on one
 particular fabric interface:

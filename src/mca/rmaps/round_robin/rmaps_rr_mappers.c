@@ -396,6 +396,15 @@ pass:
 typedef struct {
     pmix_hwloc_device_t *devs;
     size_t ndevs;
+    /* Devices are handed out in groups of "ndev" - one group per proc.  The
+     * group's locality is the common ancestor of its members' localities,
+     * because a proc given two GPUs on different NUMA domains is local to
+     * neither of them alone; it is local to whatever contains both.  With
+     * the default of one device per proc a group IS a device and the
+     * ancestor is that device's own locality, so nothing changes. */
+    hwloc_obj_t *grouploc;
+    size_t ngroups;
+    size_t per;                 /* devices per group */
 } prte_rmaps_devctx_t;
 
 /* Map a --map-by device= value to a device class.  Returns
@@ -608,10 +617,44 @@ static int device_targets_begin(prte_node_t *node, prte_rmaps_options_t *opts,
         }
     }
 
+    /* Group the devices, one group per proc */
+    dc->per = (0 == opts->map_ndev) ? 1 : opts->map_ndev;
+    dc->ngroups = dc->ndevs / dc->per;
+    if (0 == dc->ngroups) {
+        /* not enough devices on this node to make even one group - the
+         * caller reports it as "no such device", naming what was asked for */
+        pmix_hwloc_release_devices(dc->devs, dc->ndevs);
+        dc->devs = NULL;
+        dc->ndevs = 0;
+        *ctx = dc;
+        return PRTE_SUCCESS;
+    }
+    dc->grouploc = (hwloc_obj_t *) calloc(dc->ngroups, sizeof(hwloc_obj_t));
+    if (NULL == dc->grouploc) {
+        pmix_hwloc_release_devices(dc->devs, dc->ndevs);
+        free(dc);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    for (n = 0; n < dc->ngroups; n++) {
+        size_t m;
+        hwloc_obj_t loc = dc->devs[n * dc->per].locality;
+        for (m = 1; m < dc->per; m++) {
+            hwloc_obj_t other = dc->devs[n * dc->per + m].locality;
+            if (NULL == loc || NULL == other) {
+                loc = NULL;
+                break;
+            }
+            loc = hwloc_get_common_ancestor_obj(node->topology->topo, loc, other);
+        }
+        dc->grouploc[n] = loc;
+    }
+
     /* Refuse a binding coarser than the devices are local to, before any
-     * proc is placed on this node. */
-    for (n = 0; n < dc->ndevs; n++) {
-        if (!binding_fits(node, dc->devs[n].locality, opts)) {
+     * proc is placed on this node.  Checked against the GROUP locality:
+     * with several devices per proc that is deliberately coarser, and a
+     * binding matching it is then legitimate. */
+    for (n = 0; n < dc->ngroups; n++) {
+        if (!binding_fits(node, dc->grouploc[n], opts)) {
             prte_show_help("help-prte-rmaps-base.txt", "rmaps:bind-above-device", true,
                            prte_hwloc_base_print_binding(opts->bind),
                            opts->map_device, node->name);
@@ -624,15 +667,15 @@ static int device_targets_begin(prte_node_t *node, prte_rmaps_options_t *opts,
     /* If every device resolves to the same place, "near this device" is
      * saying nothing about cpus - each proc still gets a distinct device,
      * which is half of what was asked for, so proceed and say so. */
-    for (n = 1; n < dc->ndevs; n++) {
-        if (dc->devs[n].locality != dc->devs[0].locality) {
+    for (n = 1; n < dc->ngroups; n++) {
+        if (dc->grouploc[n] != dc->grouploc[0]) {
             degenerate = false;
             break;
         }
     }
-    if (degenerate && 1 < dc->ndevs) {
+    if (degenerate && 1 < dc->ngroups) {
         prte_show_help("help-prte-rmaps-base.txt", "rmaps:degenerate-device-locality",
-                       true, opts->map_device, node->name, (int) dc->ndevs);
+                       true, opts->map_device, node->name, (int) dc->ngroups);
     }
 
     *ctx = dc;
@@ -648,7 +691,7 @@ static unsigned device_targets_count(prte_node_t *node, prte_rmaps_options_t *op
     if (NULL == dc) {
         return 0;
     }
-    return (unsigned) dc->ndevs;
+    return (unsigned) dc->ngroups;
 }
 
 static hwloc_obj_t device_targets_item(prte_node_t *node, prte_rmaps_options_t *opts,
@@ -657,10 +700,10 @@ static hwloc_obj_t device_targets_item(prte_node_t *node, prte_rmaps_options_t *
     prte_rmaps_devctx_t *dc = (prte_rmaps_devctx_t *) ctx;
 
     PRTE_HIDE_UNUSED_PARAMS(node, opts);
-    if (NULL == dc || (size_t) j >= dc->ndevs) {
+    if (NULL == dc || (size_t) j >= dc->ngroups) {
         return NULL;
     }
-    return dc->devs[j].locality;
+    return dc->grouploc[j];
 }
 
 /* Record which device this proc was placed against.  PRRTE cannot bind a
@@ -673,9 +716,11 @@ static void device_targets_placed(prte_proc_t *proc, prte_rmaps_options_t *opts,
                                   void *ctx, unsigned j)
 {
     prte_rmaps_devctx_t *dc = (prte_rmaps_devctx_t *) ctx;
+    char *ids = NULL;
+    size_t m;
 
     PRTE_HIDE_UNUSED_PARAMS(opts);
-    if (NULL == dc || (size_t) j >= dc->ndevs || NULL == dc->devs[j].dev.uuid) {
+    if (NULL == dc || (size_t) j >= dc->ngroups) {
         return;
     }
     /* LOCAL, even though the daemon that forks this proc needs it: no proc
@@ -683,8 +728,29 @@ static void device_targets_placed(prte_proc_t *proc, prte_rmaps_options_t *opts,
      * value travels as its own field, packed only for a job that was mapped
      * by device. Marking it global would put it in a list nothing packs and
      * trip the guard that exists to catch exactly that. */
+    /* several devices come back as a comma-delimited list, which keeps the
+     * single-device case - overwhelmingly the common one - exactly a plain
+     * uuid */
+    for (m = 0; m < dc->per; m++) {
+        char *u = dc->devs[j * dc->per + m].dev.uuid;
+        if (NULL == u) {
+            continue;
+        }
+        if (NULL == ids) {
+            ids = strdup(u);
+        } else {
+            char *t;
+            pmix_asprintf(&t, "%s,%s", ids, u);
+            free(ids);
+            ids = t;
+        }
+    }
+    if (NULL == ids) {
+        return;
+    }
     prte_set_attribute(&proc->attributes, PRTE_PROC_DEVICE_ID, PRTE_ATTR_LOCAL,
-                       dc->devs[j].dev.uuid, PMIX_STRING);
+                       ids, PMIX_STRING);
+    free(ids);
 }
 
 static void device_targets_end(void *ctx)
@@ -696,6 +762,9 @@ static void device_targets_end(void *ctx)
     }
     if (NULL != dc->devs) {
         pmix_hwloc_release_devices(dc->devs, dc->ndevs);
+    }
+    if (NULL != dc->grouploc) {
+        free(dc->grouploc);
     }
     free(dc);
 }

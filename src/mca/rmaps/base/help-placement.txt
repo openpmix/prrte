@@ -361,6 +361,9 @@ Process Mapping / Ranking / Binding Options
     permits several procs to be assigned the same device (default
     false)
 
+  * "NDEV=<n>" only applies to the "device" directive; assigns n
+    devices to each proc rather than one
+
   * "ORDERED" only applies to the PE-LIST option to indicate that
     procs are to be bound to each of the specified CPUs in the order
     in which they are assigned (i.e., the first proc on a node shall
@@ -682,6 +685,16 @@ This reorders the device list so consecutive processes land on
 different packages - on the machine above, cores 16 and 96 rather than
 16 and 32. The level may be given explicitly ("interleave=numa", for
 instance); it defaults to "package".
+
+Where a process needs more than one device, "ndev" says how many:
+
+   $ prun -n 2 --mapby device=gpu:ndev=2 --bindto package ./a.out
+
+gives each of the two processes two GPUs. A process holding devices in
+different NUMA domains is local to neither of them alone, so its
+locality becomes whatever contains them both - here the package, which
+is why binding to a package is legal in this case and an error without
+"ndev".
 
 Naming a single device instead of a class places every process near
 that one device, which is useful for a job whose performance depends
