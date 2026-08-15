@@ -610,6 +610,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PROC-NODENAME";
         case PRTE_PROC_CGROUP:
             return "PROC-CGROUP";
+        case PRTE_PROC_DEVICE_ID:
+            return "PROC_DEVICE_ID";
         case PRTE_PROC_NBEATS:
             return "PROC-NBEATS";
 

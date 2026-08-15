@@ -325,6 +325,7 @@ typedef uint16_t prte_proc_flags_t;
 #define PRTE_PROC_NODENAME          (PRTE_PROC_START_KEY + 12) // string - node where proc is located, used only by tools
 #define PRTE_PROC_CGROUP            (PRTE_PROC_START_KEY + 13) // string - name of cgroup this proc shall be assigned to
 #define PRTE_PROC_NBEATS            (PRTE_PROC_START_KEY + 14) // int32 - number of heartbeats in current window
+#define PRTE_PROC_DEVICE_ID         (PRTE_PROC_START_KEY + 15) // string - UUID of the device this proc was mapped against
 
 #define PRTE_PROC_MAX_KEY (PRTE_PROC_START_KEY + 100)
 

@@ -316,6 +316,7 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     char *tmp2;
     hwloc_cpuset_t mycpus;
     char *str;
+    char *devid;
     bool use_hwthread_cpus;
     int npus;
     int npkgs;
@@ -404,6 +405,18 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
             pmix_asprintf(&tmp, "\n%sProcess jobid: %s App: %ld Process rank: %s Bound: N/A", pfx2,
                           PRTE_JOBID_PRINT(src->name.nspace), (long) src->app_idx,
                           PRTE_VPID_PRINT(src->name.rank));
+        }
+
+        /* When the job was mapped by device, say which device this proc got.
+         * A placement the user cannot see is a placement they will not
+         * trust, and --display map is the first thing they will check. */
+        devid = NULL;
+        if (prte_get_attribute(&src->attributes, PRTE_PROC_DEVICE_ID,
+                               (void **) &devid, PMIX_STRING)) {
+            pmix_asprintf(&tmp2, "%s Device: %s", tmp, devid);
+            free(tmp);
+            free(devid);
+            tmp = tmp2;
         }
 
         /* set the return */
