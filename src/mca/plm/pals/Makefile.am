@@ -51,8 +51,7 @@ prte_mca_plm_pals_la_SOURCES = $(sources)
 prte_mca_plm_pals_la_CPPFLAGS = $(plm_pals_CPPFLAGS)
 prte_mca_plm_pals_la_LDFLAGS = -module -avoid-version $(plm_pals_LDFLAGS)
 prte_mca_plm_pals_la_LIBADD = $(plm_pals_LIBS) \
-    $(top_builddir)/src/libprrte.la   \
-    $(PRTE_TOP_BUILDDIR)/src/mca/common/pals/libmca_common_pals.la
+    $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libprtemca_plm_pals_la_SOURCES =$(sources)
