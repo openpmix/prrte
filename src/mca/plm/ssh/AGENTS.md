@@ -257,3 +257,13 @@ process exits — see the ownership note below.
   never read by anything; it was retired rather than left advertising a
   throttle that did not exist. If inter-launch pacing is ever wanted, it
   belongs in `process_launch_list`.
+- **A component registers its own variables and no others.** This one used
+  to hang three deprecated synonyms off names it does not own —
+  `prte_ssh_agent` and `pls_ssh_agent` for `plm_ssh_agent`, and
+  `prte_assume_same_shell` for `plm_ssh_assume_same_shell`. They were
+  retired rather than moved, because there is nowhere to move them to: a
+  synonym needs the component variable's id, so only the component can
+  register one, and any name it registers outside its own namespace is a
+  project-level name that exists only in builds that include this
+  component. If an old spelling must keep working, that is an argument
+  for keeping the name, not for aliasing it from inside a component.
