@@ -127,10 +127,15 @@ typedef struct prte_plm_base_module_1_0_0_t prte_plm_base_module_t;
  */
 typedef pmix_mca_base_component_t prte_plm_base_component_t;
 
-/**
- * Macro for use in modules that are of type plm
- */
-#define PRTE_PLM_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_3_0_0("plm", 2, 0, 0)
+/* The plm framework interface version. It is stated here and nowhere
+ * else: components stamp it into their struct with
+ * PRTE_MCA_BASE_VERSION(plm), and the framework's declaration reaches
+ * the same three by pasting its name, so the two cannot drift apart.
+ * Bump it on any change to the module interface that a component built
+ * against the previous one would not survive. */
+#define PRTE_MCA_plm_MAJOR_VERSION   2
+#define PRTE_MCA_plm_MINOR_VERSION   0
+#define PRTE_MCA_plm_RELEASE_VERSION 0
 
 /* Global structure for accessing PLM functions */
 PRTE_EXPORT extern prte_plm_base_module_t prte_plm; /* holds selected module's function pointers */

@@ -159,6 +159,53 @@ Each component directory must contain:
 The component's `query` function returns a priority; the highest-priority
 component that successfully opens wins selection.
 
+### Framework interface versions
+
+A framework states the version of the interface its components are built
+against, and PMIx's `pmix_mca_base_components_open()` refuses a component
+that does not match. That matters because components are run-time
+loadable: an installed plugin older than the library loading it is what
+any partial upgrade produces, and it presents whatever module struct its
+header had at the time.
+
+**The numbers live in one place: the framework's own header.** Three
+macros — `PRTE_MCA_<name>_MAJOR_VERSION`, `_MINOR_VERSION`,
+`_RELEASE_VERSION` — feed both the component stamp and the framework
+declaration, which reach them by pasting the framework's name through
+`PRTE_MCA_FW_VER()` in [`src/pmix/pmix-internal.h`](src/pmix/pmix-internal.h):
+
+```c
+/* in plm.h */
+#define PRTE_MCA_plm_MAJOR_VERSION   2
+#define PRTE_MCA_plm_MINOR_VERSION   0
+#define PRTE_MCA_plm_RELEASE_VERSION 0
+
+/* in each plm component */
+    PRTE_MCA_BASE_VERSION(plm),
+
+/* in plm_base_frame.c */
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(plm, NULL, ...);
+```
+
+Neither side restates the numbers, so bumping an interface is one edit in
+one header. **Bump it whenever you change `prte_<fw>_base_module_t` in a
+way a component built against the previous version would not survive** —
+adding an entry point is the usual case, since an older component leaves
+it NULL and the caller has no reason to expect that.
+
+The framework name is a **bare token, lower case, and must be the
+framework's directory name**: the same token is stringified into the
+component struct and pasted into the macro names, so `plm` and not
+`"plm"` or `PLM`. (This is why `prtebacktrace` components now stamp
+`prtebacktrace` where they used to say `backtrace` — the old spelling did
+not match the framework, which would have put any MCA parameter they
+registered under the wrong prefix.)
+
+PRRTE keeps its own `PRTE_MCA_BASE_VERSION` / `PRTE_MCA_BASE_FRAMEWORK_DECLARE`
+rather than using PMIx's because PMIx's stamp the project as `"pmix"`
+with PMIx's version numbers; these say `"prte"` with PRRTE's. Everything
+below that level is PMIx's code.
+
 ---
 
 ## PRRTE's Relationship with PMIx

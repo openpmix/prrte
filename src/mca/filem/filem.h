@@ -382,10 +382,15 @@ typedef struct prte_filem_base_module_1_0_0_t prte_filem_base_module_t;
 
 PRTE_EXPORT extern prte_filem_base_module_t prte_filem;
 
-/**
- * Macro for use in components that are of type FILEM
- */
-#define PRTE_FILEM_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_3_0_0("filem", 2, 0, 0)
+/* The filem framework interface version. It is stated here and nowhere
+ * else: components stamp it into their struct with
+ * PRTE_MCA_BASE_VERSION(filem), and the framework's declaration reaches
+ * the same three by pasting its name, so the two cannot drift apart.
+ * Bump it on any change to the module interface that a component built
+ * against the previous one would not survive. */
+#define PRTE_MCA_filem_MAJOR_VERSION   2
+#define PRTE_MCA_filem_MINOR_VERSION   0
+#define PRTE_MCA_filem_RELEASE_VERSION 0
 
 END_C_DECLS
 

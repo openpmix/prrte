@@ -113,8 +113,8 @@ work through the preposition/link pair, not put/get.
 
 ### The version macro
 
-Components declare `PRTE_FILEM_BASE_VERSION_2_0_0`
-(`PRTE_MCA_BASE_VERSION_3_0_0("filem", 2, 0, 0)`). Note the module
+Components declare `PRTE_MCA_BASE_VERSION(filem)`
+(`PRTE_MCA_BASE_VERSION("filem", 2, 0, 0)`). Note the module
 *struct* is still named `..._1_0_0_t`; the framework version and the
 struct version are independent numbers here.
 

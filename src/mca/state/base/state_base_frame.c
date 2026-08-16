@@ -126,7 +126,7 @@ static int prte_state_base_open(pmix_mca_base_open_flag_t flags)
     return pmix_mca_base_framework_components_open(&prte_state_base_framework, flags);
 }
 
-PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, state, "PRTE State Machine", prte_state_base_register,
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(state, "PRTE State Machine", prte_state_base_register,
                                 prte_state_base_open, prte_state_base_close,
                                 prte_state_base_static_components,
                                 PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);

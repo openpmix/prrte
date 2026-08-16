@@ -25,7 +25,7 @@ static int prteinstalldirs_env_open(void);
 
 prte_prteinstalldirs_base_component_t prte_mca_prteinstalldirs_env_component = {
     .component = {
-        PRTE_INSTALLDIRS_BASE_VERSION_2_0_0,
+        PRTE_MCA_BASE_VERSION(prteinstalldirs),
 
         /* Component name and version */
         .pmix_mca_component_name = "env",

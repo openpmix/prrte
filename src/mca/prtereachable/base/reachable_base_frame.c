@@ -48,7 +48,7 @@ static int prte_reachable_base_frame_open(pmix_mca_base_open_flag_t flags)
     return pmix_mca_base_framework_components_open(&prte_prtereachable_base_framework, flags);
 }
 
-PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, prtereachable, "PRTE Reachability Framework",
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prtereachable, "PRTE Reachability Framework",
                                 prte_reachable_base_frame_register, prte_reachable_base_frame_open,
                                 prte_reachable_base_frame_close,
                                 prte_prtereachable_base_static_components,

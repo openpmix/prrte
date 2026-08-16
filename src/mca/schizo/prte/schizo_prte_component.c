@@ -33,7 +33,7 @@ static int component_close(void);
  */
 prte_schizo_prte_component_t prte_mca_schizo_prte_component = {
     .super = {
-        PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0,
+        PRTE_MCA_BASE_VERSION(schizo),
         .pmix_mca_component_name = "prte",
         PMIX_MCA_BASE_MAKE_VERSION(component,
                                    PRTE_MAJOR_VERSION,

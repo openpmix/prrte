@@ -39,7 +39,7 @@ extern prte_ess_base_module_t prte_ess_lsf_module;
  * and pointers to our public functions in it
  */
 prte_ess_base_component_t prte_mca_ess_lsf_component = {
-    PRTE_ESS_BASE_VERSION_3_0_0,
+    PRTE_MCA_BASE_VERSION(ess),
 
     /* Component name and version */
     .pmix_mca_component_name = "lsf",

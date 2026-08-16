@@ -133,7 +133,7 @@ through `prte_errmgr_base_framework.framework_output`. The version macro
 components must use is:
 
 ```c
-#define PRTE_ERRMGR_BASE_VERSION_3_0_0 PRTE_MCA_BASE_VERSION_3_0_0("errmgr", 3, 0, 0)
+#define PRTE_MCA_BASE_VERSION(errmgr) PRTE_MCA_BASE_VERSION("errmgr", 3, 0, 0)
 ```
 
 ---
@@ -146,7 +146,7 @@ the components).
 
 ### `errmgr_base_frame.c` — framework plumbing and the default module
 
-- `PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, errmgr, …, prte_errmgr_base_open,
+- `PRTE_MCA_BASE_FRAMEWORK_DECLARE(errmgr, …, prte_errmgr_base_open,
   prte_errmgr_base_close, prte_errmgr_base_static_components, …)` declares
   `prte_errmgr_base_framework`. Because the register hook is `NULL`, the
   only framework-level MCA param is the auto-provided `errmgr_base_verbose`.

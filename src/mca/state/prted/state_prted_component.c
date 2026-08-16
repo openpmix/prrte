@@ -40,7 +40,7 @@ static int state_prted_component_query(pmix_mca_base_module_t **module, int *pri
  */
 prte_state_base_component_t prte_mca_state_prted_component =
 {
-    PRTE_STATE_BASE_VERSION_1_0_0,
+    PRTE_MCA_BASE_VERSION(state),
     /* Component name and version */
     .pmix_mca_component_name = "prted",
     PMIX_MCA_BASE_MAKE_VERSION(component,

@@ -55,7 +55,7 @@ see below.
 
 ```
 ras/
-  ras.h                    # module/component vtable + PRTE_RAS_BASE_VERSION_2_0_0
+  ras.h                    # module/component vtable + PRTE_MCA_BASE_VERSION(ras)
   base/
     base.h                 # framework-global struct (prte_ras_base) + all base API prototypes
     ras_base_frame.c       # framework open/close/register; ras_base MCA params; globals

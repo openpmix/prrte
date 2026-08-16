@@ -118,7 +118,7 @@ returning up the stack, because the launch runs asynchronously on the
 event loop (`PRTE_ACTIVATE_PROC_STATE(..., PRTE_PROC_STATE_FAILED_TO_LAUNCH)`,
 `PRTE_ACTIVATE_JOB_STATE(..., PRTE_JOB_STATE_NEVER_LAUNCHED)`).
 
-The version macro is `PRTE_ODLS_BASE_VERSION_2_0_0`.
+The version macro is `PRTE_MCA_BASE_VERSION(odls)`.
 
 ---
 

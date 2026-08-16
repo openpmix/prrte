@@ -110,7 +110,7 @@ struct prte_ess_base_module_3_0_0_t {
 The component struct is a bare `pmix_mca_base_component_t` (typedef'd to
 `prte_ess_base_component_t`) — `ess` has **no** component-level data
 beyond the standard MCA header. The version macro is
-`PRTE_ESS_BASE_VERSION_3_0_0` (declared in `ess.h`).
+`PRTE_MCA_BASE_VERSION(ess)` (declared in `ess.h`).
 
 The selected module's two function pointers are copied into the single
 global:
@@ -176,7 +176,7 @@ plus a call to the base's `prted_setup`.
 
 ### `ess_base_frame.c` — framework plumbing + signal forwarding
 
-- Standard `PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, ess, ...)` with
+- Standard `PRTE_MCA_BASE_FRAMEWORK_DECLARE(ess, ...)` with
   register/open/close hooks.
 - **MCA parameters** (registered in `prte_ess_base_register`), each with
   a deprecated `prte_ess_*` synonym:
@@ -474,7 +474,7 @@ trap for the next reader.
 - **Order is load-bearing in `prted_setup`.** Comms must be up before
   `plm.init()`; the PMIx server must be init'd before gathering aliases;
   IOF comes after routes. Do not reorder the framework opens casually.
-- **Version macro is `PRTE_ESS_BASE_VERSION_3_0_0`.** Bump deliberately;
+- **Version macro is `PRTE_MCA_BASE_VERSION(ess)`.** Bump deliberately;
   the module struct is `prte_ess_base_module_3_0_0_t`.
 - Standard PRRTE rules still apply: `prte_config.h` first, braces on
   every block, `NULL ==`/constant-on-left comparisons, no new compiler

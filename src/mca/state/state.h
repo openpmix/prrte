@@ -283,10 +283,15 @@ PRTE_EXPORT extern prte_state_base_module_t prte_state;
  */
 typedef pmix_mca_base_component_t prte_state_base_component_t;
 
-/*
- * Macro for use in components that are of type state
- */
-#define PRTE_STATE_BASE_VERSION_1_0_0 PRTE_MCA_BASE_VERSION_3_0_0("state", 1, 0, 0)
+/* The state framework interface version. It is stated here and nowhere
+ * else: components stamp it into their struct with
+ * PRTE_MCA_BASE_VERSION(state), and the framework's declaration reaches
+ * the same three by pasting its name, so the two cannot drift apart.
+ * Bump it on any change to the module interface that a component built
+ * against the previous one would not survive. */
+#define PRTE_MCA_state_MAJOR_VERSION   1
+#define PRTE_MCA_state_MINOR_VERSION   0
+#define PRTE_MCA_state_RELEASE_VERSION 0
 
 END_C_DECLS
 #endif

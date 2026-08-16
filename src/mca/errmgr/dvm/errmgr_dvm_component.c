@@ -46,7 +46,7 @@ prte_errmgr_base_component_t prte_mca_errmgr_dvm_component = {
      *  meta information about the component dvm
      */
     .base_version = {
-        PRTE_ERRMGR_BASE_VERSION_3_0_0,
+        PRTE_MCA_BASE_VERSION(errmgr),
         /* Component name and version */
         .pmix_mca_component_name = "dvm",
         PMIX_MCA_BASE_MAKE_VERSION(component,

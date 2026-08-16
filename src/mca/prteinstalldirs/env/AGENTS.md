@@ -46,7 +46,7 @@ by the registered open callback:
 
 ```c
 .component = {
-    PRTE_INSTALLDIRS_BASE_VERSION_2_0_0,
+    PRTE_MCA_BASE_VERSION(prteinstalldirs),
     .pmix_mca_component_name = "env",
     ...
     .pmix_mca_open_component = prteinstalldirs_env_open

@@ -32,7 +32,7 @@ static int component_register(void);
  */
 prte_schizo_ompi_component_t prte_mca_schizo_ompi_component = {
     .super = {
-        PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0,
+        PRTE_MCA_BASE_VERSION(schizo),
         .pmix_mca_component_name = "ompi",
         PMIX_MCA_BASE_MAKE_VERSION(component,
                                    PRTE_MAJOR_VERSION,

@@ -156,8 +156,8 @@ have no opinion about this directory." The two components differ only in
   the empty string) leaves that field `NULL`.
 
 The version macro every component uses is
-`PRTE_INSTALLDIRS_BASE_VERSION_2_0_0`
-(`PRTE_MCA_BASE_VERSION_3_0_0("prteinstalldirs", 2, 0, 0)`).
+`PRTE_MCA_BASE_VERSION(prteinstalldirs)`
+(`PRTE_MCA_BASE_VERSION("prteinstalldirs", 2, 0, 0)`).
 
 ---
 

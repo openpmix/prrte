@@ -45,7 +45,7 @@ static int ras_pmix_component_query(pmix_mca_base_module_t **module, int *priori
 
 prte_ras_pmix_component_t prte_mca_ras_pmix_component = {
     .super = {
-        PRTE_RAS_BASE_VERSION_2_0_0,
+        PRTE_MCA_BASE_VERSION(ras),
 
         /* Component name and version */
         .pmix_mca_component_name = "pmix",

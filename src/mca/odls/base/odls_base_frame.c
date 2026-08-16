@@ -357,7 +357,7 @@ static int prte_odls_base_open(pmix_mca_base_open_flag_t flags)
     return pmix_mca_base_framework_components_open(&prte_odls_base_framework, flags);
 }
 
-PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, odls, "PRTE Daemon Launch Subsystem", prte_odls_base_register,
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(odls, "PRTE Daemon Launch Subsystem", prte_odls_base_register,
                                 prte_odls_base_open, prte_odls_base_close,
                                 prte_odls_base_static_components,
                                 PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);

@@ -33,7 +33,7 @@ PRTE_EXPORT extern const pmix_mca_base_component_t prte_mca_backtrace_none_compo
 END_C_DECLS
 
 const pmix_mca_base_component_t prte_mca_prtebacktrace_none_component = {
-    PRTE_BACKTRACE_BASE_VERSION_2_0_0,
+    PRTE_MCA_BASE_VERSION(prtebacktrace),
 
     /* Component name and version */
     .pmix_mca_component_name = "none",

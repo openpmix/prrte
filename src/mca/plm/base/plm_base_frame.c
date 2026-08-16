@@ -160,7 +160,7 @@ static int prte_plm_base_open(pmix_mca_base_open_flag_t flags)
     return pmix_mca_base_framework_components_open(&prte_plm_base_framework, flags);
 }
 
-PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, plm, NULL, mca_plm_base_register, prte_plm_base_open,
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(plm, NULL, mca_plm_base_register, prte_plm_base_open,
                                 prte_plm_base_close, prte_plm_base_static_components,
                                 PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 

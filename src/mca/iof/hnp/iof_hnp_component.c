@@ -51,7 +51,7 @@ const char *prte_mca_iof_hnp_component_version_string
 
 prte_mca_iof_hnp_component_t prte_mca_iof_hnp_component = {
     .super = {
-        PRTE_IOF_BASE_VERSION_2_0_0,
+        PRTE_MCA_BASE_VERSION(iof),
 
         .pmix_mca_component_name = "hnp",
         PMIX_MCA_BASE_MAKE_VERSION(component,
