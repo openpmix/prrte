@@ -921,6 +921,61 @@ threading defect worth chasing; one that reproduces at 0 as well has nothing
 to do with the OOB threading. Keeping that distinction cheap is the reason the
 knob exists rather than the number being hard-coded.
 
+### Components as DSOs (`PRTE_SWARM_MCA_DSO`)
+
+`--enable-mca-dso` builds every MCA component as a run-time loadable DSO in
+`lib/prte` instead of linking it into `libprrte`. It is a supported build —
+and the one the stubbed test-build launchers require — but the default is
+static, so a component that only works when it is linked in (a symbol that
+needed exporting, a constructor that ran at link time, an inter-component
+dependency the static link resolved for free) breaks nobody's build and
+surfaces at a user's site. CI now builds and smoke-launches it on one Linux
+node (`ubuntuMcaDso` in `.github/workflows/builds.yaml`); this is where it
+gets run across daemons.
+
+```sh
+PRTE_SWARM_MCA_DSO=1 ./build.sh          # into the volume, components as DSOs
+PRTE_SWARM_MCA_DSO=1 ./build.sh macos    # native build, same
+./run-tests.sh linux                     # the ordinary suite, no flag needed
+```
+
+The whole suite is the test: nothing here is DSO-specific, and that is the
+point — every case that exercises a component at all now exercises loading
+it. The preflight prints which of the two it found (`components are N
+run-time DSOs` / `components are linked into libprrte`), asked of the
+install rather than of the variable, because the volume outlives the shell
+that set it.
+
+**It found something the first time it ran**, which is the argument for
+keeping it: `prun` segfaulted in teardown on every single invocation —
+after the job had run correctly, so every affected case reported right
+output and `rc=139`. PRRTE has no component repository of its own, so
+`PMIx_tool_finalize` reaches `pmix_mca_base_close()` and dlcloses PRRTE's
+component DSOs along with PMIx's; `prun` then closed the `ess` framework
+*afterwards* and walked its component list into unmapped memory. In the
+default build those structs live in `libprrte` and are mapped for the life
+of the process, so nothing was ever wrong there. The rule that came out of
+it: **a PRRTE framework must be closed while PMIx is still up.**
+
+Three things to know:
+
+- **The knob is spelled `PRTE_SWARM_MCA_DSO`, not `PRTE_MCA_DSO`.** PRRTE
+  harvests `PRTE_MCA_*` out of the launcher's environment onto the `prted`
+  command line, so the latter name would reach every daemon as
+  `--prtemca DSO 1`.
+- **It is a configure argument**, so `reconfigure_needed` sees it change and
+  reconfigures — the same mechanism that catches a changed `--with-pmix`. No
+  volume wipe needed to switch modes.
+- **Turning it back off removes the installed DSOs.** `make install` only
+  adds, and the install outlives the build dir, so the previous mode's
+  `lib/prte` would otherwise sit there for the static build to `dlopen` —
+  every component present twice, one copy stale. `build.sh` deletes that
+  directory whenever it reconfigures.
+
+Against the baked PMIx this build may not configure at all — PRRTE's floor
+moves ahead of the image — in which case use `PMIX_SRC=<checkout>`, the same
+remedy as for any other configure rejection here.
+
 ## 7. Cleanup hygiene
 
 `run-tests.sh` cleans every node before its first case and between phases.
@@ -977,6 +1032,7 @@ other swarm's `/tmp`, because the containers are different containers.
 |----------|----|
 | pick up a PRRTE source edit | `./build.sh` (incremental into the volume) |
 | pick up an openpmix edit | `PMIX_SRC=/path/to/openpmix ./build.sh` |
+| run the suite against components built as DSOs | `PRTE_SWARM_MCA_DSO=1 ./build.sh` then the ordinary `./run-tests.sh linux` — see §6, "Components as DSOs" |
 | force a clean PRRTE rebuild | `docker volume rm prte-build && ./build.sh` |
 | rebuild the base image (new baked PMIx) | `docker build --no-cache --build-arg PMIX_REF=master -t prte-swarm:latest .` — `./build.sh image` reuses docker's cached `git clone`; then wipe the volume's VPATH dirs and recreate the containers (see "The containers persist too") |
 | tear down the swarm | `docker compose down` (the `prte-build` volume persists) |

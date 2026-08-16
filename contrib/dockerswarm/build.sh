@@ -65,6 +65,17 @@
 # source too (covering both code bases); otherwise the baked-in PMIx (Linux) or
 # an installed PMIx (macOS, override with PMIX_HOME) is used.
 #
+# Optional: PRTE_SWARM_MCA_DSO=1 builds every MCA component as a run-time
+# loadable DSO (--enable-mca-dso) instead of linking it into libprrte.  That is
+# a supported build nobody runs multi-node, so the whole suite against it is
+# cheap insurance -- see AGENTS.md, "Components as DSOs".  It is off by default
+# because the default build is what users get.
+#
+# NOTE the name: anything called PRTE_MCA_* is harvested out of the launcher's
+# environment onto the prted command line as an MCA parameter, so a knob named
+# PRTE_MCA_DSO would arrive at every daemon as `--prtemca DSO 1`.  Harness
+# knobs take the PRTE_SWARM_ prefix for exactly that reason.
+#
 # Requires: docker (for linux/image), git, and a working autotools toolchain.
 
 set -euo pipefail
@@ -109,6 +120,8 @@ PMIX_HOME="${PMIX_HOME:-}"              # optional installed PMIx prefix (macOS)
 # checkout must be autogen'd and NOT configured in-tree (same rule as
 # PMIX_SRC -- configure runs VPATH over a read-only bind mount).
 OMPI_SRC="${OMPI_SRC:-}"
+# Build every component as a run-time loadable DSO rather than into libprrte.
+MCA_DSO="${PRTE_SWARM_MCA_DSO:-0}"
 
 mode=linux
 distclean=auto                          # auto | always | never
@@ -279,6 +292,7 @@ build_linux() {
     docker run --rm \
         -v "$root":/prrte-src:ro \
         -v "$VOLUME":/opt/prte \
+        -e PRTE_SWARM_MCA_DSO="$MCA_DSO" \
         ${pmix_mount[@]+"${pmix_mount[@]}"} \
         ${ompi_mount[@]+"${ompi_mount[@]}"} \
         "$IMAGE" bash -euo pipefail -c '
@@ -379,9 +393,24 @@ build_linux() {
             # break in those lines surfaces here rather than in the slower
             # sibling.  libjansson-dev is baked into the image.
             prte_args="--prefix=/opt/prte/prte --with-pmix=$PMIX_PREFIX --with-jansson --enable-debug"
+            # Every component as a loadable DSO instead of inside libprrte.
+            # It goes in the argument string, so switching the knob is a
+            # configure-argument change and reconfigure_needed catches it --
+            # the same mechanism that catches a changed --with-pmix.
+            if [ "${PRTE_SWARM_MCA_DSO:-0}" != 0 ]; then
+                prte_args="$prte_args --enable-mca-dso"
+                echo ">>>> components as DSOs (--enable-mca-dso)"
+            fi
             if reconfigure_needed . "$prte_args" /prrte-src; then
                 echo ">>>> (re)configuring PRRTE: $prte_args"
                 drop_orphans . /prrte-src
+                # The install outlives the build dir, and lib/prte holds the
+                # component DSOs of whatever was built last.  Switching the
+                # knob OFF would otherwise leave them there for the static
+                # build to dlopen -- every component present twice, one copy
+                # of it stale.  Nothing else removes them: make install only
+                # adds.
+                rm -rf /opt/prte/prte/lib/prte
                 /prrte-src/configure $prte_args
                 echo "$prte_args" > .configure-args
             fi
@@ -715,10 +744,19 @@ build_macos() {
     # uses PMIx internals, so a tree left pointing at a different PMIx than
     # you asked for builds cleanly and then dies at startup, which reads as
     # "this host is flaky" rather than "you built against the wrong PMIx".
-    local cfg_args="--prefix=$root/vpath-macos/install $pmix_arg --enable-debug ${EXTRA_CONFIGURE_ARGS:-}"
+    local dso_arg=""
+    if [ "$MCA_DSO" != 0 ]; then
+        dso_arg="--enable-mca-dso"
+        echo ">>> components as DSOs (--enable-mca-dso)"
+    fi
+    local cfg_args="--prefix=$root/vpath-macos/install $pmix_arg --enable-debug $dso_arg ${EXTRA_CONFIGURE_ARGS:-}"
     if [ -f config.status ] && [ "$(cat .prte-configure-args 2>/dev/null)" != "$cfg_args" ]; then
         echo ">>> configure arguments changed - reconfiguring"
         rm -f config.status
+        # ...and drop any component DSOs the previous configuration installed,
+        # or turning --enable-mca-dso back off leaves them to be dlopened
+        # alongside the copies now inside libprrte.  See build_linux.
+        rm -rf "$root/vpath-macos/install/lib/prte"
     fi
     # shellcheck disable=SC2086
     if [ ! -f config.status ]; then
