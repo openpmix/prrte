@@ -87,8 +87,8 @@ of which are called directly. The joy of link-time components."
   `prte_backtrace_base_component_t` — a `typedef` for
   `pmix_mca_base_component_t` — with **no `query`, no module, no
   function pointers.** It carries only the version/name header
-  (`PRTE_BACKTRACE_BASE_VERSION_2_0_0`, which expands to
-  `PRTE_MCA_BASE_VERSION_3_0_0("backtrace", 2, 0, 0)`).
+  (`PRTE_MCA_BASE_VERSION(prtebacktrace)`, which expands to
+  `PRTE_MCA_BASE_VERSION("backtrace", 2, 0, 0)`).
 - Each component provides the *same two global symbols*,
   `prte_backtrace_print` and `prte_backtrace_buffer`. Because these are
   fixed names, **only one component can be linked into a binary** — two
@@ -134,7 +134,7 @@ functions** to walk, because there is no runtime module to select or
 drive. `base/` contains only the framework object itself:
 
 - `base/backtrace_component.c` declares the framework via
-  `PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, prtebacktrace, NULL, NULL, NULL,
+  `PRTE_MCA_BASE_FRAMEWORK_DECLARE(prtebacktrace, NULL, NULL, NULL,
   NULL, prte_prtebacktrace_base_static_components,
   PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT)`. All four hook slots
   (register / open / close / query) are `NULL`: the framework uses the

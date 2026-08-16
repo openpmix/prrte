@@ -65,10 +65,15 @@ PRTE_EXPORT int prte_backtrace_buffer(char ***messages, int *len);
  */
 typedef pmix_mca_base_component_t prte_backtrace_base_component_t;
 
-/*
- * Macro for use in components that are of type backtrace
- */
-#define PRTE_BACKTRACE_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_3_0_0("backtrace", 2, 0, 0)
+/* The prtebacktrace framework interface version. It is stated here and
+ * nowhere else: components stamp it into their struct with
+ * PRTE_MCA_BASE_VERSION(prtebacktrace), and the framework's declaration
+ * reaches the same three by pasting its name, so the two cannot drift
+ * apart. Bump it on any change to the module interface that a component
+ * built against the previous one would not survive. */
+#define PRTE_MCA_prtebacktrace_MAJOR_VERSION   2
+#define PRTE_MCA_prtebacktrace_MINOR_VERSION   0
+#define PRTE_MCA_prtebacktrace_RELEASE_VERSION 0
 
 END_C_DECLS
 

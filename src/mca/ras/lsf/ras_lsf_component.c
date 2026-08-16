@@ -52,7 +52,7 @@ prte_ras_base_component_t prte_mca_ras_lsf_component = {
     /* Indicate that we are a ras v2.0.0 component (which also
        implies a specific MCA version) */
 
-    PRTE_RAS_BASE_VERSION_2_0_0,
+    PRTE_MCA_BASE_VERSION(ras),
 
     .pmix_mca_component_name = "lsf",
     PMIX_MCA_BASE_MAKE_VERSION(component,

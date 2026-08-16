@@ -175,7 +175,7 @@ The winning module is copied into the global `prte_state` instance;
 callers reach the vtable through it (`prte_state.activate_job_state(...)`).
 You should almost never call the vtable directly — use the macros.
 
-The version macro is `PRTE_STATE_BASE_VERSION_1_0_0`.
+The version macro is `PRTE_MCA_BASE_VERSION(state)`.
 
 ### Return protocol
 

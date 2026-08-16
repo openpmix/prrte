@@ -102,10 +102,15 @@ typedef struct prte_odls_base_module_1_3_0_t prte_odls_base_module_t;
  */
 typedef pmix_mca_base_component_t prte_odls_base_component_t;
 
-/**
- * Macro for use in modules that are of type odls
- */
-#define PRTE_ODLS_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_3_0_0("odls", 2, 0, 0)
+/* The odls framework interface version. It is stated here and nowhere
+ * else: components stamp it into their struct with
+ * PRTE_MCA_BASE_VERSION(odls), and the framework's declaration reaches
+ * the same three by pasting its name, so the two cannot drift apart.
+ * Bump it on any change to the module interface that a component built
+ * against the previous one would not survive. */
+#define PRTE_MCA_odls_MAJOR_VERSION   2
+#define PRTE_MCA_odls_MINOR_VERSION   0
+#define PRTE_MCA_odls_RELEASE_VERSION 0
 
 /* Global structure for accessing ODLS functions
  */

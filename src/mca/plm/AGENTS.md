@@ -106,7 +106,7 @@ Note the sequences deliberately **skip** some offsets (e.g. job error
 
 Every component fills in the same vtable, declared in `plm.h` as
 `prte_plm_base_module_t` (version macro
-`PRTE_PLM_BASE_VERSION_2_0_0`). **All entries are mandatory** in
+`PRTE_MCA_BASE_VERSION(plm)`). **All entries are mandatory** in
 principle, but in practice most components reuse the base implementations
 for everything except `spawn`, `init`, and `finalize`. The selected
 module is copied wholesale into the global `prte_plm`.
@@ -554,7 +554,7 @@ placed daemons) or wireup stalls.
   parsed and never applied. Both are gone. A dead knob is worse than no
   knob — it makes a user's correct diagnosis look wrong. `prte_plm_globals_t`
   is likewise down to the fields something actually reads.
-- **The version macro is `PRTE_PLM_BASE_VERSION_2_0_0`** (`plm` 2.0.0).
+- **The version macro is `PRTE_MCA_BASE_VERSION(plm)`** (`plm` 2.0.0).
 - Standard PRRTE rules still apply: `prte_config.h` first, braces on
   every block, `NULL ==`/constant-on-left comparisons, no new compiler
   warnings, `PRTE_ERROR_LOG` for unexpected errors.

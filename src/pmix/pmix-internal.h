@@ -235,9 +235,74 @@ PRTE_EXPORT int prte_pmix_convert_status(pmix_status_t status);
 PRTE_EXPORT pmix_status_t prte_pmix_convert_job_state_to_error(int state);
 PRTE_EXPORT pmix_status_t prte_pmix_convert_proc_state_to_error(int state);
 
-#define PRTE_MCA_BASE_VERSION_3_0_0(type, type_major, type_minor, type_release) \
-    PMIX_MCA_BASE_VERSION_2_1_0("prte", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, \
-                                PRTE_RELEASE_VERSION, type, type_major, type_minor, type_release)
+/* Reach the interface version a framework's own header states.
+ *
+ * The PRRTE counterpart of PMIX_MCA_FW_VER() in PMIx's mca.h, and the
+ * reason PRRTE needs one of its own: that macro pastes a PMIX_ prefix,
+ * and these are PRRTE's frameworks, so the numbers belong in PRRTE's
+ * namespace. A framework states its version once, as three macros in its
+ * <framework>.h - for example, in plm.h:
+ *
+ *   #define PRTE_MCA_plm_MAJOR_VERSION   2
+ *   #define PRTE_MCA_plm_MINOR_VERSION   0
+ *   #define PRTE_MCA_plm_RELEASE_VERSION 0
+ *
+ * Both sides of the load-time version check reach those same three
+ * integers by pasting the framework's name: the component stamp below,
+ * and the framework's declaration. Nothing restates them, so the version
+ * a component carries and the version it is checked against cannot drift
+ * apart, and bumping an interface is one edit in one header.
+ *
+ * The name carries the framework's directory name verbatim, lower case
+ * and all: the preprocessor pastes tokens, it does not upper-case them. */
+#define PRTE_MCA_FW_VER_(name, level) PRTE_MCA_##name##_##level##_VERSION
+#define PRTE_MCA_FW_VER(name, level)  PRTE_MCA_FW_VER_(name, level)
+
+/* Open a component struct.
+ *
+ * Every PRRTE component begins its base struct with this, naming its
+ * framework as a bare token - the framework's directory name, so that the
+ * same token both stringifies into the struct and pastes into the version
+ * macros above:
+ *
+ *   prte_plm_base_component_t prte_mca_plm_ssh_component = {
+ *       .base_version = {
+ *           PRTE_MCA_BASE_VERSION(plm),
+ *           .pmix_mca_component_name = "ssh",
+ *           ...
+ *
+ * PMIx's PMIX_MCA_BASE_VERSION() cannot serve here: it stamps the project
+ * as "pmix" with PMIx's own version numbers. This one says "prte" and
+ * PRRTE's, which is the whole reason PRRTE keeps a macro of its own at
+ * this level. */
+#define PRTE_MCA_BASE_VERSION(type)                                                \
+    PMIX_MCA_BASE_VERSION_2_1_0("prte", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,    \
+                                PRTE_RELEASE_VERSION, #type,                       \
+                                PRTE_MCA_FW_VER(type, MAJOR),                      \
+                                PRTE_MCA_FW_VER(type, MINOR),                      \
+                                PRTE_MCA_FW_VER(type, RELEASE))
+
+/* Declare a PRRTE framework, stating its interface version.
+ *
+ * The PRRTE counterpart of PMIX_MCA_BASE_VERSIONED_FRAMEWORK_DECLARE,
+ * built on the same underlying declaration so that the framework reports
+ * the version its header states and pmix_mca_base_components_open() can
+ * refuse a component built against a different one. It takes no version
+ * arguments and no project argument: every framework here is "prte", and
+ * the numbers come from the header.
+ *
+ * A framework that uses this without defining the three macros above does
+ * not compile, which is the point. Using PMIX_MCA_BASE_FRAMEWORK_DECLARE
+ * instead still works and is what PRRTE did until August 2026 - it simply
+ * reports version 0.0, which the loader reads as "no version stated" and
+ * skips the check for, so the framework's components are never screened. */
+#define PRTE_MCA_BASE_FRAMEWORK_DECLARE(name, description, registerfn, openfn,     \
+                                        closefn, static_components, flags)         \
+    PMIX_MCA_BASE_FRAMEWORK_DECLARE_FULL(prte, name,                               \
+                                         PRTE_MCA_FW_VER(name, MAJOR),             \
+                                         PRTE_MCA_FW_VER(name, MINOR),             \
+                                         description, registerfn, openfn, closefn, \
+                                         static_components, flags)
 
 
 END_C_DECLS

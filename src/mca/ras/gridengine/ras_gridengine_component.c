@@ -55,7 +55,7 @@ static int prte_ras_gridengine_verbose;
 
 prte_mca_ras_gridengine_component_t prte_mca_ras_gridengine_component = {
     .super = {
-        PRTE_RAS_BASE_VERSION_2_0_0,
+        PRTE_MCA_BASE_VERSION(ras),
         .pmix_mca_component_name = "gridengine",
         PMIX_MCA_BASE_MAKE_VERSION(component,
                                    PRTE_MAJOR_VERSION,

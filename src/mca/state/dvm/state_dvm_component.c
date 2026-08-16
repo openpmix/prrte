@@ -40,7 +40,7 @@ static int state_dvm_component_query(pmix_mca_base_module_t **module, int *prior
  */
 prte_state_base_component_t prte_mca_state_dvm_component =
 {
-    PRTE_STATE_BASE_VERSION_1_0_0,
+    PRTE_MCA_BASE_VERSION(state),
     /* Component name and version */
     .pmix_mca_component_name = "dvm",
     PMIX_MCA_BASE_MAKE_VERSION(component,

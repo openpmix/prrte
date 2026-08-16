@@ -138,7 +138,7 @@ and owns the matrix's memory management.
 ### `reachable_base_frame.c` — framework plumbing
 
 Standard MCA framework scaffolding via
-`PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, prtereachable, …)`:
+`PRTE_MCA_BASE_FRAMEWORK_DECLARE(prtereachable, …)`:
 `open` opens all available components, `close` closes them, `register` is
 a no-op. This file also **defines the framework-global module**:
 
@@ -237,8 +237,8 @@ is always built.
 - Standard PRRTE rules still apply: `prte_config.h` first, braces on
   every block, `NULL ==`/constant-on-left comparisons, no new compiler
   warnings, `PRTE_EXPORT` only where cross-unit visibility is needed.
-- **The version macro is `PRTE_REACHABLE_BASE_VERSION_2_0_0`**
-  (`PRTE_MCA_BASE_VERSION_3_0_0("prtereachable", 2, 0, 0)`). Every
+- **The version macro is `PRTE_MCA_BASE_VERSION(prtereachable)`**
+  (`PRTE_MCA_BASE_VERSION("prtereachable", 2, 0, 0)`). Every
   component's `base_version` must use it.
 
 ---

@@ -94,7 +94,7 @@ static int prte_iof_base_open(pmix_mca_base_open_flag_t flags)
     return pmix_mca_base_framework_components_open(&prte_iof_base_framework, flags);
 }
 
-PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, iof, "PRTE I/O Forwarding",
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(iof, "PRTE I/O Forwarding",
                                 prte_iof_base_register,
                                 prte_iof_base_open, prte_iof_base_close,
                                 prte_iof_base_static_components,

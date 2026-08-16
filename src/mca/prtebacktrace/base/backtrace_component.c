@@ -39,6 +39,6 @@
  */
 
 /* Uses default register/open/close functions */
-PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, prtebacktrace, NULL, NULL, NULL, NULL,
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prtebacktrace, NULL, NULL, NULL, NULL,
                                 prte_prtebacktrace_base_static_components,
                                 PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);

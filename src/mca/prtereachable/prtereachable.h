@@ -97,10 +97,15 @@ typedef struct {
     int priority;
 } prte_reachable_base_component_t;
 
-/*
- * Macro for use in components that are of type reachable
- */
-#define PRTE_REACHABLE_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_3_0_0("prtereachable", 2, 0, 0)
+/* The prtereachable framework interface version. It is stated here and
+ * nowhere else: components stamp it into their struct with
+ * PRTE_MCA_BASE_VERSION(prtereachable), and the framework's declaration
+ * reaches the same three by pasting its name, so the two cannot drift
+ * apart. Bump it on any change to the module interface that a component
+ * built against the previous one would not survive. */
+#define PRTE_MCA_prtereachable_MAJOR_VERSION   2
+#define PRTE_MCA_prtereachable_MINOR_VERSION   0
+#define PRTE_MCA_prtereachable_RELEASE_VERSION 0
 
 /* Global structure for accessing reachability functions */
 PRTE_EXPORT extern prte_reachable_base_module_t prte_reachable;

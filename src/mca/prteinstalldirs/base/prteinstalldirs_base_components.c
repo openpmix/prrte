@@ -141,7 +141,7 @@ static int prte_prteinstalldirs_base_close(void)
 }
 
 /* Declare the prteinstalldirs framework */
-PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, prteinstalldirs, NULL, NULL, prte_prteinstalldirs_base_open,
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prteinstalldirs, NULL, NULL, prte_prteinstalldirs_base_open,
                                 prte_prteinstalldirs_base_close,
                                 prte_prteinstalldirs_base_static_components,
                                 PMIX_MCA_BASE_FRAMEWORK_FLAG_NOREGISTER

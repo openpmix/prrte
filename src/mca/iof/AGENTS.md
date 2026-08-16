@@ -567,7 +567,7 @@ no other thread touching this state. Consequences:
   its own terminal stdin directly; they were never defined and have been
   removed. Stdin arrives via the PMIx server calling
   `prte_iof.push_stdin` — don't reintroduce a direct-read path.
-- **The version macro is `PRTE_IOF_BASE_VERSION_2_0_0`.** Match it in any
+- **The version macro is `PRTE_MCA_BASE_VERSION(iof)`.** Match it in any
   new component's struct.
 - Standard PRRTE rules still apply: `prte_config.h` first, braces on every
   block, `NULL ==`/constant-on-left comparisons, no new compiler warnings,

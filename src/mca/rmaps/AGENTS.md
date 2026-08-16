@@ -502,7 +502,7 @@ node→session deviation.
   their parsed rank map and rank count in file statics. Reset them at the
   start of every map and reclaim them on *every* exit, success or failure —
   a stale count is handed to the next job as its process count.
-- **The version macro is `PRTE_RMAPS_BASE_VERSION_5_0_0`.** The `4_0_0`
+- **The version macro is `PRTE_MCA_BASE_VERSION(rmaps)`.** The `4_0_0`
   alias is deliberately redefined to `5_0_0` so stale out-of-tree
   components fail loudly instead of silently violating ABI.
 - Standard PRRTE rules still apply: `prte_config.h` first, braces on

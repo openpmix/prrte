@@ -147,7 +147,7 @@ static int prte_schizo_base_open(pmix_mca_base_open_flag_t flags)
     return rc;
 }
 
-PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, schizo, "PRTE Schizo Subsystem", prte_schizo_base_register,
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(schizo, "PRTE Schizo Subsystem", prte_schizo_base_register,
                                 prte_schizo_base_open, prte_schizo_base_close,
                                 prte_schizo_base_static_components,
                                 PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);

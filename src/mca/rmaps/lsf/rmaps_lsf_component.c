@@ -47,7 +47,7 @@ static int lsf_query(pmix_mca_base_module_t **module, int *priority);
 
 prte_rmaps_rf_component_t prte_mca_rmaps_lsf_component = {
     .super = {
-        PRTE_RMAPS_BASE_VERSION_5_0_0,
+        PRTE_MCA_BASE_VERSION(rmaps),
 
         .pmix_mca_component_name = "lsf",
         PMIX_MCA_BASE_MAKE_VERSION(component,

@@ -58,7 +58,7 @@ prte_mca_prtereachable_weighted_component_t prte_mca_prtereachable_weighted_comp
             /* Indicate that we are a reachable v1.1.0 component (which also
                implies a specific MCA version) */
 
-            PRTE_REACHABLE_BASE_VERSION_2_0_0,
+            PRTE_MCA_BASE_VERSION(prtereachable),
 
             /* Component name and version */
 

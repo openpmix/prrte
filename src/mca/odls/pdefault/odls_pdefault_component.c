@@ -53,7 +53,7 @@ static int component_query(pmix_mca_base_module_t **module, int *priority);
  */
 
 prte_odls_base_component_t prte_mca_odls_pdefault_component = {
-    PRTE_ODLS_BASE_VERSION_2_0_0,
+    PRTE_MCA_BASE_VERSION(odls),
     /* Component name and version */
     .pmix_mca_component_name = "pdefault",
     PMIX_MCA_BASE_MAKE_VERSION(component,

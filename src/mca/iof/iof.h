@@ -161,9 +161,14 @@ typedef pmix_mca_base_component_t prte_iof_base_component_t;
 
 END_C_DECLS
 
-/*
- * Macro for use in components that are of type iof
- */
-#define PRTE_IOF_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_3_0_0("iof", 2, 0, 0)
+/* The iof framework interface version. It is stated here and nowhere
+ * else: components stamp it into their struct with
+ * PRTE_MCA_BASE_VERSION(iof), and the framework's declaration reaches
+ * the same three by pasting its name, so the two cannot drift apart.
+ * Bump it on any change to the module interface that a component built
+ * against the previous one would not survive. */
+#define PRTE_MCA_iof_MAJOR_VERSION   2
+#define PRTE_MCA_iof_MINOR_VERSION   0
+#define PRTE_MCA_iof_RELEASE_VERSION 0
 
 #endif /* PRTE_IOF_H */

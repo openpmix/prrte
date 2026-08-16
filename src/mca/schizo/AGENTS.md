@@ -98,7 +98,7 @@ each component calls from its own `parse_cli`.
 | `check_sanity` | `(pmix_cli_result_t *cmd_line)` | Validate directives/qualifiers and flag conflicts. Both use `prte_schizo_base_sanity`. |
 | `finalize` | `(void)` | Cleanup. Both `NULL`. |
 
-The MCA version macro is `PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0`. The
+The MCA version macro is `PRTE_MCA_BASE_VERSION(schizo)`. The
 `prte_schizo_base_component_t` is a bare `pmix_mca_base_component_t`;
 each component wraps it in its own struct (`..._prte_component_t`,
 `..._ompi_component_t`) that adds `priority`, `warn_deprecations`, and a
