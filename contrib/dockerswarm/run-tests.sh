@@ -5008,6 +5008,17 @@ test_linux() {
         else
             ok "...running with $OOB_THREADS OOB progress threads (library default is 0)"
         fi
+        # ...and whether the components are inside libprrte or loaded from
+        # disk.  Asked of the install rather than of a variable, because the
+        # volume outlives any one build.sh run and the knob that produced it
+        # may have been set in a different shell.  A suite log that does not
+        # say which of the two it ran cannot be compared with another.
+        ndso=$(RUN 'ls /opt/prte/prte/lib/prte/*.so 2>/dev/null | wc -l' | tr -d ' \r')
+        if [ "${ndso:-0}" -gt 0 ]; then
+            ok "...components are $ndso run-time DSOs (built --enable-mca-dso)"
+        else
+            ok "...components are linked into libprrte (the default build)"
+        fi
     else
         bad "no build stamp in the volume -- the last ./build.sh did not complete."
         echo "     Re-run ./build.sh and check its exit status; the install now" >&2
