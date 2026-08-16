@@ -1653,6 +1653,12 @@ static void group_op_remember(prte_grpcomm_group_signature_t *sig)
            pmix_list_get_size(&prte_grpcomm_globals.completed_group_ops)) {
         memo = (prte_grpcomm_group_memo_t *)
             pmix_list_remove_first(&prte_grpcomm_globals.completed_group_ops);
+        /* answers NULL for an empty list, and the loop bound above is the
+         * only thing that says this one is not - screen it rather than hand
+         * a NULL to the reference count */
+        if (NULL == memo) {
+            break;
+        }
         PMIX_RELEASE(memo);
     }
     memo = PMIX_NEW(prte_grpcomm_group_memo_t);

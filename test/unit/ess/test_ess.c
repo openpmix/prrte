@@ -129,6 +129,12 @@ static int test_setup_signals_rejects(void)
     /* whatever a partial parse appended must not block a later good one */
     while (0 < pmix_list_get_size(&prte_ess_base_signals)) {
         pmix_list_item_t *item = pmix_list_remove_first(&prte_ess_base_signals);
+        /* answers NULL for an empty list, and the loop bound above is the
+         * only thing that says this one is not - screen it rather than hand
+         * a NULL to the reference count */
+        if (NULL == item) {
+            break;
+        }
         PMIX_RELEASE(item);
     }
 
