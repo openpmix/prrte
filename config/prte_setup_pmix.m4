@@ -253,6 +253,31 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                          AC_MSG_WARN([accepts any unambiguous prefix of a qualifier's name.])
                          AC_MSG_ERROR([Please update PMIx and configure again])])
 
+    dnl Every PRRTE framework states the interface version its components
+    dnl are built against, and it does so through PMIx's machinery: the
+    dnl framework declaration expands to PMIX_MCA_BASE_FRAMEWORK_DECLARE_FULL
+    dnl and each component stamps PMIX_MCA_BASE_VERSION_2_1_0.  There is
+    dnl nothing to fall back to - the version fields live in PMIx's framework
+    dnl struct, and PMIx's component-open is what compares them - so this is
+    dnl a requirement rather than a feature to switch off.
+    dnl
+    dnl Ask here because the failure otherwise lands nowhere near its cause:
+    dnl against an older PMIx the numbers reach a macro that has no room for
+    dnl them, and the build stops with "expected ')' before numeric constant"
+    dnl pointing at a #define in whichever framework header compiled first.
+    AC_MSG_CHECKING([for PMIx versioned framework declaration])
+    PRTE_CHECK_PMIX_CAP([MCA_FW_VERSION],
+                        [AC_MSG_RESULT([yes])],
+                        [AC_MSG_RESULT([no])
+                         AC_MSG_WARN([PRRTE states each framework's interface version through])
+                         AC_MSG_WARN([PMIX_MCA_BASE_FRAMEWORK_DECLARE_FULL and the])
+                         AC_MSG_WARN([PMIX_MCA_BASE_VERSION_2_1_0 component stamp, which this])
+                         AC_MSG_WARN([PMIx does not provide. Those version fields live in])
+                         AC_MSG_WARN([PMIx's framework struct and PMIx compares them when it])
+                         AC_MSG_WARN([opens a component, so there is nothing PRRTE can supply])
+                         AC_MSG_WARN([in their place.])
+                         AC_MSG_ERROR([Please update PMIx and configure again])])
+
     dnl "--map-by device=<class>" places processes against the devices in a
     dnl node's topology, which means first knowing what devices it has.  PMIx
     dnl owns that answer: it already reports devices to applications through
