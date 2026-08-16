@@ -941,10 +941,18 @@ PRTE_SWARM_MCA_DSO=1 ./build.sh macos    # native build, same
 
 The whole suite is the test: nothing here is DSO-specific, and that is the
 point — every case that exercises a component at all now exercises loading
-it. The preflight prints which of the two it found (`components are N
-run-time DSOs` / `components are linked into libprrte`), asked of the
-install rather than of the variable, because the volume outlives the shell
-that set it.
+it. The preflight prints which of the two it ran, asked of the install
+rather than of the variable, because the volume outlives the shell that set
+it: `build.sh` records the mode in `/opt/prte/.build-mode` beside the build
+stamp, and the suite reads it there.
+
+**Do not try to infer the mode by counting DSOs in the install.** The
+default build installs a couple of its own — the launchers that need
+third-party headers are in the default `--enable-mca-dso` list, so an
+ordinary swarm build ships `prte_mca_ras_slurm.so` and nothing else. A
+count says "DSO build" for that. The CI job has the same problem and
+solves it by naming a component that is loadable *only* under the flag
+(`rmaps/round_robin`; `rmaps` is never in the default list).
 
 **It found something the first time it ran**, which is the argument for
 keeping it: `prun` segfaulted in teardown on every single invocation —

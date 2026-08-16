@@ -5013,12 +5013,18 @@ test_linux() {
         # volume outlives any one build.sh run and the knob that produced it
         # may have been set in a different shell.  A suite log that does not
         # say which of the two it ran cannot be compared with another.
+        #
+        # build.sh records this; do NOT try to infer it by counting DSOs in
+        # the install.  The default build installs some too - the launchers
+        # that need third-party headers are in the default --enable-mca-dso
+        # list - so a count says "DSO build" for an ordinary one.
+        mode=$(RUN 'cat /opt/prte/.build-mode 2>/dev/null' | tr -d ' \r')
         ndso=$(RUN 'ls /opt/prte/prte/lib/prte/*.so 2>/dev/null | wc -l' | tr -d ' \r')
-        if [ "${ndso:-0}" -gt 0 ]; then
-            ok "...components are $ndso run-time DSOs (built --enable-mca-dso)"
-        else
-            ok "...components are linked into libprrte (the default build)"
-        fi
+        case "$mode" in
+            mca-dso) ok "...every component is a run-time DSO ($ndso installed)" ;;
+            default) ok "...components are linked into libprrte ($ndso DSOs, the default set)" ;;
+            *)       ok "...component linkage not recorded by this build ($ndso DSOs installed)" ;;
+        esac
     else
         bad "no build stamp in the volume -- the last ./build.sh did not complete."
         echo "     Re-run ./build.sh and check its exit status; the install now" >&2

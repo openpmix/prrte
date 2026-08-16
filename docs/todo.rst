@@ -132,10 +132,11 @@ local launch needs work; it does not exercise a component only reached
 across daemons.  ``contrib/dockerswarm`` can now be built that way —
 ``PRTE_SWARM_MCA_DSO=1 ./build.sh``, after which the ordinary suite is the
 test — but the arm is **opt-in**, so what is still missing is anyone
-running it as a matter of course.  Note that both the CI job and the
-harness preflight report the DSO count on purpose: a silent fallback to
-static linking would leave every other step passing while testing
-nothing.
+running it as a matter of course.  Note that the CI job asserts on a
+*named* component being loadable rather than on a count: the default
+build already installs a DSO or two of its own, so a count cannot tell
+the two configurations apart, and a silent fallback to static linking
+would otherwise leave every step passing while testing nothing.
 
 **``SLURM_TASKS_PER_NODE`` in its single-node spelling.**  The suite asserts
 the ``2(xN)`` form that a multi-node allocation produces; the ``2(x1)`` form
