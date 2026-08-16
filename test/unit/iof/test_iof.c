@@ -94,8 +94,12 @@
 #include "src/mca/iof/base/iof_base_setup.h"
 #include "src/mca/iof/iof.h"
 #include "src/mca/iof/iof_types.h"
-#include "src/mca/iof/hnp/iof_hnp.h"
-#include "src/mca/iof/prted/iof_prted.h"
+
+/* Deliberately NOT the components' headers.  A test links against
+ * libprrte, and a component is only inside libprrte in the default build:
+ * configure --enable-mca-dso builds them as loadable modules instead, and
+ * naming any of their symbols here fails the link outright.  Nothing in
+ * this file needs one -- see the stub handler below. */
 
 #define CHECK(label, cond)                                    \
     do {                                                      \
@@ -706,6 +710,15 @@ static int test_write_handler_drain(void)
  * fd of -1 so the read event's destructor takes its no-close path and this
  * test needs no descriptors of its own.
  */
+/* Stands in for a component's read handler.  The read event below is
+ * defined and never activated, so this is only ever a pointer value --
+ * which is why the real one is not worth a link dependency on a component
+ * that may not be in libprrte at all. */
+static void stub_read_handler(int fd, short event, void *cbdata)
+{
+    PRTE_HIDE_UNUSED_PARAMS(fd, event, cbdata);
+}
+
 static int test_proc_read_event_cycle(void)
 {
     int failures = 0;
@@ -717,7 +730,7 @@ static int test_proc_read_event_cycle(void)
 
     /* one read event, defined but not activated -- the macro retains proct */
     PRTE_IOF_READ_EVENT(&proct->revstdout, proct, -1, PRTE_IOF_STDOUT,
-                        prte_iof_hnp_read_local_handler, false);
+                        stub_read_handler, false);
     CHECK("read event was defined", NULL != proct->revstdout);
     if (NULL == proct->revstdout) {
         PMIX_RELEASE(proct);
