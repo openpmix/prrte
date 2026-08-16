@@ -380,7 +380,7 @@ build_linux() {
 
             # invalidate the freshness stamp up front: from here until the
             # build finishes, whatever is installed is NOT this source tree
-            rm -f /opt/prte/.build-stamp
+            rm -f /opt/prte/.build-stamp /opt/prte/.build-mode
 
             echo ">>>> PRRTE VPATH build -> /opt/prte/prte"
             mkdir -p /opt/prte/vpath-linux && cd /opt/prte/vpath-linux
@@ -695,6 +695,16 @@ build_linux() {
             # The stamp is what lets the suite say so.  It is removed first so
             # a build that dies midway cannot leave a stale one behind.
             date -u +%Y-%m-%dT%H:%M:%SZ > /opt/prte/.build-stamp
+            # ...and how the components were linked, for the suite to report.
+            # It has to be recorded here rather than counted from the install:
+            # the default build installs component DSOs too (the launchers
+            # needing third-party headers are in the default --enable-mca-dso
+            # list), so a count cannot tell the two configurations apart.
+            if [ "${PRTE_SWARM_MCA_DSO:-0}" != 0 ]; then
+                echo "mca-dso" > /opt/prte/.build-mode
+            else
+                echo "default" > /opt/prte/.build-mode
+            fi
             echo ">>>> done: install in /opt/prte/prte"
         '
     echo ">>> Linux build complete."

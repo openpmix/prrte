@@ -215,9 +215,15 @@ jobs:
       run: |
         # Without this the rest of the job would happily pass on a build
         # that had quietly linked everything statically, testing nothing.
-        n=$(ls $RUNNER_TEMP/prteinstall/lib/prte/*.so 2>/dev/null | wc -l)
-        echo "installed $n component DSOs"
-        test "$n" -gt 0
+        #
+        # The test is a named component, not a count: the DEFAULT build
+        # already installs a DSO or two (the launchers that need
+        # third-party headers are in the default --enable-mca-dso list),
+        # so "some .so exists" would pass without this flag. rmaps is
+        # never in that list, so its components are loadable only because
+        # --enable-mca-dso put them there.
+        ls -1 $RUNNER_TEMP/prteinstall/lib/prte/ || true
+        test -f $RUNNER_TEMP/prteinstall/lib/prte/prte_mca_rmaps_round_robin.so
     - name: Run unit tests
       run: |
         cd build
