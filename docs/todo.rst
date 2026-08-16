@@ -11,7 +11,8 @@ been able to take.  Each entry says where the evidence is, so that the next
 person can decide whether it is still true before acting on it.
 
 Add to it when you leave something undone, and delete from it when you do
-the work.
+the work.  The last section is the other outcome: work that was investigated
+and decided against, kept so nobody spends the effort a second time.
 
 Runtime behavior
 ----------------
@@ -145,29 +146,6 @@ goes through the same parser and is not separately covered.
 Performance work not landed
 ---------------------------
 
-**Lazy proc-data registration is only half landed.**  The *deriving* half is
-in: ``dmodex_req`` answers a request for one of the placement keys out of
-``jdata->procs[rank]`` rather than going to the hosting daemon
-(``prte_pmix_lazy_procdata``, on by default).  The *withholding* half is not.
-``prte_pmix_server_register_nspace`` still publishes a PMIx proc-data entry
-for **every** proc in the job on **every** daemon — a table that grows with
-the whole job on a node running a fixed slice of it, and
-``prte_hostname_cutoff`` is the record of that wall having been met once
-already.  Only the two location keys are now withheld, and for a different
-reason (see below).  Narrowing the rest is what the commit message claims
-and the code does not do.
-
-The rule it must keep to: switch on what PRRTE is the *authority* for (the
-placement and binding it decided, a closed set), never on what an
-application is expected to ask for.  And the thing to measure first is
-whether a **partial** entry is even usable — whether a get for a key absent
-from a published proc-data array still reaches the host, or whether PMIx
-treats the array as the complete answer for that rank.  Nothing here
-currently depends on that (the two location keys are withheld from *remote*
-procs only, and a remote proc's locality is a question almost nobody asks),
-but withholding the rest would.  ``contrib/dockerswarm/peerinfo.c`` is the
-probe: every rank asks every other rank in its job where it is.
-
 **Aggregate the launch-message cpuset slices per next hop.**  The scatter
 itself has landed: the launch message is packed ``PRTE_JOB_PACK_NO_CPUSETS``
 and each daemon is sent the bindings of the procs it will fork, point to
@@ -259,3 +237,81 @@ the xcast payload helps (an effect of 1–7%) produced overlapping ranges whose
 microseconds of every broadcast).  See ``contrib/dockerswarm/AGENTS.md``,
 §18.
 
+Decided against
+---------------
+
+Work that was looked into and deliberately not done.  These entries are here
+so that the next person does not rediscover the idea and spend the effort
+again: each says what was measured and what the measurement decided.  Moving
+one back up the page takes new evidence, not a fresh reading of the same
+facts.
+
+**Lazy proc-data registration: the withholding half.**  The *deriving*
+half is in: ``dmodex_req`` answers a request for one of the placement keys
+out of ``jdata->procs[rank]`` rather than going to the hosting daemon
+(``prte_pmix_lazy_procdata``, on by default).  The *withholding* half is not,
+and not by omission from the design — the commit that landed the derivation
+does not touch ``pmix_server_register_fns.c`` at all.  That file's per-proc
+loop still emits a ``PMIX_PROC_INFO_ARRAY`` for **every** proc in the job on
+**every** daemon, a table that grows with the whole job on a node running a
+fixed slice of it, and ``prte_hostname_cutoff`` is the record of that wall
+having been met once already.  Only the two location keys are withheld, and
+for a different reason (the cpuset scatter, in the section above).
+Narrowing the rest is what the commit message claims and the code does not
+do.
+
+The rule it must keep to: switch on what PRRTE is the *authority* for (the
+placement and binding it decided, a closed set), never on what an
+application is expected to ask for.
+
+What the derivation is worth as it stands is small, and worth knowing before
+anyone spends effort on the other half.  Measured with
+``contrib/dockerswarm/peerinfo.c`` — every rank asks every other rank in its
+job where it is — at eight ranks over four nodes, with
+``--prtemca prte_pmix_server_verbose 2``, the twenty-four peer lookups split
+six answered by the derivation and eighteen by a wire round trip to the
+hosting daemon; with ``prte_pmix_lazy_procdata 0`` it is zero and
+twenty-four.  Every one of the six is on the master, and every one is for
+``PMIX_RANK``.  That is the only key PMIx never has: it consumes the rank
+entry as the array's identifier rather than storing it.  Everything else the
+eager registration publishes is found locally and never reaches the
+derivation, and the two keys it does not publish the derivation declines by
+design (a daemon that does not fork the proc holds no cpuset, so it cannot
+tell "unbound" from "not sent").  The master is the exception only because it
+keeps every cpuset, so its own lookups are complete and ``PMIX_RANK`` is all
+that is left to ask for.
+
+The question this entry used to say had to be measured first — whether a
+**partial** entry is usable, or whether PMIx treats a published array as the
+complete answer for that rank — is answered, and the answer is that a partial
+entry works.  ``pmix_server_get.c`` fetches per key; a rank present with
+other keys but missing this one falls through to ``direct_modex``.  Those
+eighteen wire answers above *are* that path in production: since the cpuset
+scatter, a daemon publishes an entry for a remote proc with no
+``PMIX_CPUSET`` in it, and the get is answered by the daemon that holds one.
+The one constraint is the reverse case — for a proc the daemon **hosts**, a
+missing reserved key returns ``PMIX_ERR_NOT_FOUND`` with no up-call at all,
+so nothing may ever be withheld from a proc this daemon forks.
+
+What is left to weigh is whether the withholding is worth having, because it
+saves less than it appears to.  PRRTE registers ``PMIX_NODE_MAP`` and
+``PMIX_PROC_MAP``, and PMIx's ``store_map`` already materializes
+``PMIX_HOSTNAME``, ``PMIX_NODEID``, ``PMIX_LOCAL_RANK`` and
+``PMIX_NODE_RANK`` per rank for the whole job out of them, on every daemon,
+wherever the host has not spoken to that key itself.  Dropping the proc
+arrays therefore does not remove the job-sized table; it removes
+``PMIX_GLOBAL_RANK``, ``PMIX_APP_RANK``, ``PMIX_APPNUM``,
+``PMIX_REINCARNATION``, and the three keys only the hosting daemon publishes
+anyway.  It also hands the node rank to a derivation PMIx documents as
+assuming this is the only job on the node, which on a shared node replaces a
+right answer with a wrong one rather than with silence.
+
+**So the withholding half shall not be done.**  It cannot remove the
+job-sized per-rank table, because PMIx rebuilds most of that table from the
+maps whether PRRTE publishes the proc arrays or not; what it can remove is a
+handful of keys, and it pays for them with a node rank that is wrong instead
+of absent wherever two jobs share a node.  The derivation already in the tree
+stays — it is what lets the cpuset scatter be answered — but this entry is
+closed, not deferred.  Reopen it only on a measurement showing that the table
+PMIx actually builds is what hurts, and that is a PMIx question, not a PRRTE
+one.
