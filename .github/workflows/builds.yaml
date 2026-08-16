@@ -168,6 +168,74 @@ jobs:
         prterun --map-by ppr:1:core examples/hello
         prterun --map-by ppr:1:core examples/legacy
 
+  # Every component built as a run-time loadable DSO rather than linked
+  # into libprrte.  This is a supported build, and the one the stubbed
+  # test-build launchers require, but nothing else in CI exercises it --
+  # so a component that only works when statically linked (a missing
+  # symbol export, a constructor that runs at link time) would otherwise
+  # reach users unnoticed.
+  ubuntuMcaDso:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends software-properties-common libhwloc-dev libevent-dev
+    - name: Git clone OpenPMIx
+      uses: actions/checkout@v6
+      with:
+            submodules: recursive
+            repository: openpmix/openpmix
+            path: openpmix/master
+            ref: master
+    - name: Build OpenPMIx
+      run: |
+        cd openpmix/master
+        ./autogen.pl
+        ./configure --prefix=$RUNNER_TEMP/pmixinstall
+        make -j
+        make install
+    - name: Git clone PRRTE
+      uses: actions/checkout@v6
+      with:
+            submodules: recursive
+            clean: false
+    - name: Build PRRTE
+      run: |
+        ./autogen.pl
+        mkdir build
+        cd build
+        ../configure --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall \
+            --enable-devel-check \
+            --enable-testbuild-launchers \
+            --enable-mca-dso
+        make -j
+        make install
+    - name: Confirm the components were built as DSOs
+      run: |
+        # Without this the rest of the job would happily pass on a build
+        # that had quietly linked everything statically, testing nothing.
+        n=$(ls $RUNNER_TEMP/prteinstall/lib/prte/*.so 2>/dev/null | wc -l)
+        echo "installed $n component DSOs"
+        test "$n" -gt 0
+    - name: Run unit tests
+      run: |
+        cd build
+        make check
+    - name: Build examples
+      run: |
+        pushd examples
+        export PATH=$RUNNER_TEMP/prteinstall/bin:$RUNNER_TEMP/pmixinstall/bin:${PATH}
+        export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
+        make
+        popd
+    - name: Test sanity check
+      run: |
+        export PATH=$RUNNER_TEMP/prteinstall/bin:$RUNNER_TEMP/pmixinstall/bin:${PATH}
+        export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
+        prterun --map-by ppr:1:core examples/hello
+        prterun --map-by ppr:1:core examples/legacy
+
   ubuntuClang:
     runs-on: ubuntu-latest
     steps:
