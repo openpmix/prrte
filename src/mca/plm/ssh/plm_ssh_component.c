@@ -104,7 +104,6 @@ PMIX_MCA_BASE_COMPONENT_INIT(prte, plm, ssh)
 static int ssh_component_register(void)
 {
     pmix_mca_base_component_t *c = &prte_mca_plm_ssh_component.super;
-    int var_id;
 
     prte_mca_plm_ssh_component.num_concurrent = 128;
     (void) pmix_mca_base_component_var_register(c, "num_concurrent",
@@ -161,26 +160,17 @@ static int ssh_component_register(void)
 
     /* local ssh/ssh launch agent */
     prte_mca_plm_ssh_component.agent = "ssh : rsh";
-    var_id = pmix_mca_base_component_var_register(c, "agent",
-                                                  "The command used to launch executables on remote nodes (typically \"ssh\")",
-                                                  PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                                  &prte_mca_plm_ssh_component.agent);
-    (void) pmix_mca_base_var_register_synonym(var_id, "prte", "pls", NULL, "ssh_agent",
-                                              PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
-    (void) pmix_mca_base_var_register_synonym(var_id, "prte", "prte", NULL, "ssh_agent",
-                                              PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
-    agent_var_id = var_id;
+    agent_var_id = pmix_mca_base_component_var_register(c, "agent",
+                                                       "The command used to launch executables on remote nodes (typically \"ssh\")",
+                                                       PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                                       &prte_mca_plm_ssh_component.agent);
 
     prte_mca_plm_ssh_component.assume_same_shell = true;
-    var_id = pmix_mca_base_component_var_register(c, "assume_same_shell",
-                                                  "If set to true, assume that the shell on the remote node is the same as the shell on the "
-                                                  "local node.  Otherwise, probe for what the remote shell [default: 1]",
-                                                  PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                                  &prte_mca_plm_ssh_component.assume_same_shell);
-    /* XXX -- var_conversion -- Why does this component register prte_assume_same_shell? Components
-     * should ONLY register THEIR OWN variables. */
-    (void) pmix_mca_base_var_register_synonym(var_id, "prte", "prte", NULL, "assume_same_shell",
-                                              PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+    (void) pmix_mca_base_component_var_register(c, "assume_same_shell",
+                                                "If set to true, assume that the shell on the remote node is the same as the shell on the "
+                                                "local node.  Otherwise, probe for what the remote shell [default: 1]",
+                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                                &prte_mca_plm_ssh_component.assume_same_shell);
 
     prte_mca_plm_ssh_component.pass_environ_mca_params = true;
     (void) pmix_mca_base_component_var_register(c, "pass_environ_mca_params",
