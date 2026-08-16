@@ -636,7 +636,9 @@ PRTE_EXPORT int prte(int argc, char *argv[])
         }
 
         // open the ess framework so it can init the signal forwarding
-        // list - we don't actually need the components
+        // list - we don't actually need the components.  prun_common()
+        // closes it, because it has to be closed before PMIx_tool_finalize
+        // unloads our components with its own; see the note there.
         rc = pmix_mca_base_framework_open(&prte_ess_base_framework,
                                         PMIX_MCA_BASE_OPEN_DEFAULT);
         if (PMIX_SUCCESS != rc) {
@@ -646,7 +648,6 @@ PRTE_EXPORT int prte(int argc, char *argv[])
         }
         rc = prun_common(&results, schizo, argc, argv);
 
-        (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
         exit(rc);
     }
 

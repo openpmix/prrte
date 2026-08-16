@@ -840,6 +840,20 @@ DONE:
     if (NULL != papps) {
         PMIX_APP_FREE(papps, napps);
     }
+    /* Close the ess framework our caller opened for us - and close it HERE,
+     * while PMIx is still up.  PRRTE has no component repository of its own:
+     * its components are loaded, and unloaded, by PMIx's.  PMIx_tool_finalize
+     * below reaches pmix_mca_base_close(), which finalizes that repository and
+     * dlcloses every component DSO it opened, ours included.  Closing a PRRTE
+     * framework after that walks its component list into memory that is no
+     * longer mapped, and the tool segfaults in teardown having already done
+     * its work correctly - so the job succeeds and prun exits 139.
+     *
+     * None of that is visible in the default build, where the components are
+     * linked into libprrte and their structs are mapped for the life of the
+     * process.  It is why the callers no longer close this themselves.
+     */
+    (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
     /* cleanup and leave */
     ret = PMIx_tool_finalize();
     if (PMIX_SUCCESS != ret) {

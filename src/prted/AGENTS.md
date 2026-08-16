@@ -279,6 +279,17 @@ report the job's exit status. Signal forwarding is done with
 which is what eventually arrives at `prted_comm.c`'s
 `SIGNAL_LOCAL_PROCS`.
 
+**It also closes the `ess` framework its caller opened, and the ordering
+is load-bearing: every PRRTE framework must be closed while PMIx is still
+up.** PRRTE has no component repository of its own — its components are
+loaded and unloaded by PMIx's — so `PMIx_tool_finalize` reaches
+`pmix_mca_base_close()` and dlcloses PRRTE's component DSOs too. A
+framework closed after that walks its component list into memory that is
+no longer mapped. That is invisible in the default build, where the
+component structs are inside `libprrte`; in an `--enable-mca-dso` build it
+segfaulted `prun` in teardown on every run, after the job had completed
+correctly. Do not move the close back out to `prun.c`/`prte.c`.
+
 ---
 
 ## Testing

@@ -293,7 +293,9 @@ int prun(int argc, char *argv[])
     }
 
     // open the ess framework so it can init the signal forwarding
-    // list - we don't actually need the components
+    // list - we don't actually need the components.  prun_common()
+    // closes it, because it has to be closed before PMIx_tool_finalize
+    // unloads our components with its own; see the note there.
     rc = pmix_mca_base_framework_open(&prte_ess_base_framework,
                                       PMIX_MCA_BASE_OPEN_DEFAULT);
     if (PMIX_SUCCESS != rc) {
@@ -307,11 +309,12 @@ int prun(int argc, char *argv[])
     PRTE_UPDATE_EXIT_STATUS(rc);
 
 DONE:
-    // cleanup and leave
+    // cleanup and leave.  The ess framework is NOT closed here: a path that
+    // reached prun_common() has had it closed there, and every other path to
+    // this label either never opened it or is the open's own failure.
     if (NULL != mypidfile) {
         unlink(mypidfile);
     }
-    (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
 
     exit(prte_exit_status);
 }

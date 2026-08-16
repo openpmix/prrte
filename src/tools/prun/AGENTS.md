@@ -33,7 +33,7 @@ What has to happen here:
 | `--report-pid` | must be written before we could possibly block |
 | `--report-uri` | stashed in `prte_pmix_server_globals` for `prun_common` |
 | `--app <file>` | expands the appfile into `pargv` |
-| open the `ess` framework | only for its signal-name list — no component is selected |
+| open the `ess` framework | only for its signal-name list — no component is selected. `prun_common()` **closes** it, before `PMIx_tool_finalize` unloads PRRTE's components along with PMIx's; see [`../../prted/AGENTS.md`](../../prted/AGENTS.md) |
 
 ---
 
