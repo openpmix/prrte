@@ -57,6 +57,29 @@ failures in its subtree upward, but not the ancestor chain it now believes
 in — so the new parent cannot confirm that the child agrees with it about the
 shape of the repaired tree.
 
+**Nobody owns marking failed procs ``COMM_FAILED``.**  The recovery
+sequence in ``src/rml/rml_fault_handler.c`` calls each subsystem's
+``fault_handler`` in turn, and the marked question there is whether that
+one place should also be what sets the affected procs to
+``PRTE_PROC_STATE_COMM_FAILED``, instead of leaving each handler to do it.
+It is a question about where the responsibility belongs, not a known
+misbehavior.
+
+**A RELM message-id clash is logged and ignored.**  Two places in
+``src/rml/relm/base/state_updates.c`` detect that a message uid already
+belongs to a different message — a second start for the same uid, or a
+payload whose size disagrees with the one already held — log
+``PRTE_ERR_OP_IN_PROGRESS`` and carry on.  What the right answer is (fail
+the job, or something narrower) has never been decided.  The ids are
+generated, so a clash means something upstream is already wrong.
+
+**A TCP peer that cannot be reached at one address is closed, not
+retried.**  In ``src/rml/oob/oob_tcp_connection.c`` the final
+connect-failure arm closes the peer and returns ``PRTE_ERR_UNREACH``
+where it should force the next address in the peer's list to be tried.
+A peer with several interfaces therefore gets fewer chances than the
+address list implies.
+
 **Routing-tree state is not preserved across a DVM resize.**
 ``prte_rml_compute_routing_tree`` re-initializes the failure bitmaps on every
 grow and restores only the permanent sets (``dead_dmns``, ``absent_dmns``);
@@ -98,6 +121,21 @@ exception — ``contrib/slurmswarm`` runs a real one.
 
 **macOS.**  ``contrib/dockerswarm/run-tests.sh macos`` is a single-host
 subset by construction.  Everything multi-node on that platform is untested.
+
+**``--enable-mca-dso`` beyond one node.**  Building every component as a
+run-time loadable DSO instead of linking it into ``libprrte`` is now built,
+unit-tested and smoke-launched on Linux by the ``ubuntuMcaDso`` job in
+``.github/workflows/builds.yaml``, and the same build was verified by hand
+on macOS (26 components, ``make check`` clean, ``prterun -n 2 hostname``).
+That is a single node, so it proves the components load and that the ones a
+local launch needs work; it does not exercise a component only reached
+across daemons.  ``contrib/dockerswarm`` can now be built that way —
+``PRTE_SWARM_MCA_DSO=1 ./build.sh``, after which the ordinary suite is the
+test — but the arm is **opt-in**, so what is still missing is anyone
+running it as a matter of course.  Note that both the CI job and the
+harness preflight report the DSO count on purpose: a silent fallback to
+static linking would leave every other step passing while testing
+nothing.
 
 **``SLURM_TASKS_PER_NODE`` in its single-node spelling.**  The suite asserts
 the ``2(xN)`` form that a multi-node allocation produces; the ``2(x1)`` form
