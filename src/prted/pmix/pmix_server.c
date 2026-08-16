@@ -1359,6 +1359,12 @@ void prte_pmix_server_job_departed(const pmix_nspace_t nspace)
     }
     while (PRTE_MAX_DEPARTED_JOBS <= pmix_list_get_size(&prte_pmix_server_globals.departed_jobs)) {
         nm = (prte_namelist_t *) pmix_list_remove_first(&prte_pmix_server_globals.departed_jobs);
+        /* answers NULL for an empty list, and the loop bound above is the
+         * only thing that says this one is not - screen it rather than hand
+         * a NULL to the reference count */
+        if (NULL == nm) {
+            break;
+        }
         PMIX_RELEASE(nm);
     }
     nm = PMIX_NEW(prte_namelist_t);
