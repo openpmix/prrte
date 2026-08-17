@@ -66,36 +66,41 @@ relaying is just "send again from here."
 
 Every message carries a `prte_oob_tcp_hdr_t` (`oob_tcp_hdr.h`): the origin's
 boot `epoch`, the `origin` and final `dst` **ranks**, the `tag`, a sequence
-number, the payload length, a message `type` (`IDENT`/`PROBE` for the
-handshake, `USER` for a normal message), and the nspace those two ranks belong
-to. It is exchanged **only** among daemons of the same DVM, which all run the
-same build, so it is **not** a stable ABI — you may change its layout, but
-every daemon must agree; there is no versioning.
+number, the payload length, and a message `type` (`IDENT`/`PROBE` for the
+handshake, `USER` for a normal message). It is exchanged **only** among daemons
+of the same DVM, which all run the same build, so it is **not** a stable ABI —
+you may change its layout, but every daemon must agree; there is no versioning.
 
 Five rules that are not obvious from the struct:
 
-- **Only `PRTE_OOB_TCP_HDR_LEN()` bytes of it go on the wire.** The nspace is
-  last and variable: `nslen` characters are sent, without a terminator, and
-  the receiver supplies one (`PRTE_OOB_TCP_HDR_END_NSPACE`). Anything that
-  sends or reads a header uses `PRTE_OOB_TCP_HDR_FIXED` and
-  `PRTE_OOB_TCP_HDR_LEN()`, **never** `sizeof(prte_oob_tcp_hdr_t)` — the
-  struct is bigger than the message, because the nspace array is the
-  receiver's landing space for a string that is usually ~20 bytes. That is
-  not a micro-optimization: holding the two names as `pmix_proc_t` made this
-  header 552 bytes, and it rides *every* RML message. A cpuset slice for an
-  eight-process node carries 101 bytes of payload.
-- **One nspace covers both ends**, because they have never differed on a
-  message that carries data: every send entry point takes a rank
-  (`prte_rml_send_buffer_nb` and friends), so a message is always addressed
-  within the sender's own job, the origin is the sender, and a relay copies
-  both through. The queueing macros assert it. The connect handshake is the
-  one place the two names can differ — there `dst` is the peer being
-  introduced to — and the receiver reads only the origin, so the field carries
-  the origin's nspace there too.
-- **Reading a name out of a header takes two reads off the socket.** The
-  ranks arrive with the fixed part, the nspace after it, so `hdr_recvd` is not
-  enough to build a `pmix_proc_t` — `nspace_recvd` is the flag that says the
-  names are complete. Rebuild a procid with `PRTE_OOB_TCP_HDR_PROC()`.
+- **A data message carries no namespace at all.** Its wire length is exactly
+  `PRTE_OOB_TCP_HDR_FIXED` — 30 bytes — and the receiver rebuilds both procids
+  with *its own* nspace via `PRTE_OOB_TCP_HDR_PROC()`. Three things make that
+  safe rather than merely usually-true: only `ess/hnp` and the prted path open
+  an OOB endpoint (no tool and no application process has one), every send
+  entry point takes a **rank** which `send_buffer()` resolves in
+  `PRTE_PROC_MY_NAME->nspace`, and a relay only forwards traffic of its own
+  job. So a foreign namespace is unrepresentable, not just unused. This is
+  what the header costs now; it began as two whole `pmix_proc_t` at 552 bytes
+  and rides *every* RML message — for a cpuset slice with 101 bytes of
+  payload it was 85% of the message.
+- **The connect handshake does carry one, and that is where it is checked.**
+  `tcp_peer_recv_connect_ack` refuses a peer whose nspace is not ours (and
+  refuses one that gives none, which would otherwise fall back to ours and
+  defeat the check). Once per connection, instead of restated on every
+  message. Do not remove it to "simplify": it is the enforcement that lets
+  every other header omit the field.
+- **`nslen` describes the wire length by itself.** The handshake sets it, a
+  data header sets it to zero, and both are read the same way — fixed part
+  first, then `nslen` characters, then the terminator the receiver supplies
+  (`PRTE_OOB_TCP_HDR_END_NSPACE`). Anything that sends or reads a header uses
+  `PRTE_OOB_TCP_HDR_FIXED` and `PRTE_OOB_TCP_HDR_LEN()`, **never**
+  `sizeof(prte_oob_tcp_hdr_t)` — the struct is 288 bytes, because the nspace
+  array is the receiver's landing space.
+- **Reading a name out of a header takes two reads off the socket**, even
+  though the second is empty for a data message: `hdr_recvd` is not enough to
+  build a `pmix_proc_t`, `nspace_recvd` is the flag that says the names are
+  complete.
 - **Every multi-byte field is byte-order converted**, by
   `MCA_OOB_TCP_HDR_HTON`/`_NTOH`. Add a field, extend both macros — a field
   that is quietly not converted works perfectly until two daemons differ in

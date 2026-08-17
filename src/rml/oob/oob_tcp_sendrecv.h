@@ -112,11 +112,14 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_recv_t);
                             "%s:[%s:%d] queue send to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT(&((m)->dst)));                 \
         _s = PMIX_NEW(prte_oob_tcp_send_t);                                                    \
-        /* one nspace covers both ends - see oob_tcp_hdr.h */                                  \
-        assert(PMIX_CHECK_NSPACE((m)->origin.nspace, (m)->dst.nspace));                        \
+        /* Both ends are this daemon's own namespace, so none goes on the    \
+         * wire - see oob_tcp_hdr.h.  Asserted rather than derived: it is     \
+         * what the receiver reconstructs the two procids from. */            \
+        assert(PMIX_CHECK_NSPACE((m)->origin.nspace, PRTE_PROC_MY_NAME->nspace)                \
+               && PMIX_CHECK_NSPACE((m)->dst.nspace, PRTE_PROC_MY_NAME->nspace));              \
         _s->hdr.origin = (m)->origin.rank;                                                     \
         _s->hdr.dst = (m)->dst.rank;                                                           \
-        PRTE_OOB_TCP_HDR_LOAD_NSPACE(&_s->hdr, (m)->origin.nspace);                            \
+        _s->hdr.nslen = 0;                                                                     \
         _s->hdr.type = MCA_OOB_TCP_USER;                                                       \
         _s->hdr.tag = (m)->tag;                                                                \
         _s->hdr.seq_num = (m)->seq_num;                                                        \
@@ -147,11 +150,12 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_recv_t);
                             "%s:[%s:%d] queue pending to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT(&((m)->dst)));                    \
         _s = PMIX_NEW(prte_oob_tcp_send_t);                                                       \
-        /* one nspace covers both ends - see oob_tcp_hdr.h */                                     \
-        assert(PMIX_CHECK_NSPACE((m)->origin.nspace, (m)->dst.nspace));                           \
+        /* both ends are our own namespace - see MCA_OOB_TCP_QUEUE_SEND */                        \
+        assert(PMIX_CHECK_NSPACE((m)->origin.nspace, PRTE_PROC_MY_NAME->nspace)                   \
+               && PMIX_CHECK_NSPACE((m)->dst.nspace, PRTE_PROC_MY_NAME->nspace));                 \
         _s->hdr.origin = (m)->origin.rank;                                                        \
         _s->hdr.dst = (m)->dst.rank;                                                              \
-        PRTE_OOB_TCP_HDR_LOAD_NSPACE(&_s->hdr, (m)->origin.nspace);                               \
+        _s->hdr.nslen = 0;                                                                        \
         _s->hdr.type = MCA_OOB_TCP_USER;                                                          \
         _s->hdr.tag = (m)->tag;                                                                   \
         _s->hdr.seq_num = (m)->seq_num;                                                           \

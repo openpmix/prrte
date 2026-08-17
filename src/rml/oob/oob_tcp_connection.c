@@ -1007,6 +1007,33 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
 
     /* convert the header */
     MCA_OOB_TCP_HDR_NTOH(&hdr);
+
+    /* A handshake is the one header that carries a namespace, and this is
+     * the one place it is checked - which is what lets every message that
+     * follows leave it out and be reconstructed with our own (see
+     * oob_tcp_hdr.h).  Only daemons of this DVM have an OOB endpoint, so a
+     * peer naming any other namespace is not a peer of ours: a daemon of a
+     * different DVM belonging to the same user, or a process claiming to be
+     * one.  Refuse it rather than adopt it as the local daemon of that rank.
+     * An absent namespace is refused for the same reason - it would fall
+     * back to ours and defeat the check. */
+    if (0 == hdr.nslen
+        || !PMIX_CHECK_NSPACE(hdr.nspace, PRTE_PROC_MY_NAME->nspace)) {
+        pmix_output(0,
+                    "%s tcp_peer_recv_connect_ack: refusing a connection from "
+                    "namespace \"%s\" - this daemon serves \"%s\"",
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                    (0 == hdr.nslen) ? "(none given)" : hdr.nspace,
+                    PRTE_PROC_MY_NAME->nspace);
+        if (NULL != peer) {
+            peer->state = MCA_OOB_TCP_FAILED;
+            prte_oob_tcp_peer_close(peer);
+        } else {
+            CLOSE_THE_SOCKET(sd);
+        }
+        return PRTE_ERR_CONNECTION_REFUSED;
+    }
+
     /* rebuild the sender's identity, which the header carries as a rank
      * plus the nspace read above */
     PRTE_OOB_TCP_HDR_PROC(&hdr, hdr.origin, &sender);
