@@ -42,9 +42,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/attr.h"
 
-#include <pmix_server.h>
-
-int test_devices(void);
+int test_devices(bool pmix_up);
 
 static int failures = 0;
 
@@ -197,7 +195,7 @@ static void check_unnameable_refused(void)
     PMIX_RELEASE(t);
 }
 
-int test_devices(void)
+int test_devices(bool pmix_up)
 {
     prte_topology_t *t;
     prte_node_t *alpha, *beta;
@@ -206,19 +204,19 @@ int test_devices(void)
     failures = 0;
 
     /* The assignment is published as a PMIX_DATA_ARRAY attribute, and
-     * prte_attr_load() copies it with PMIx_Data_copy - which refuses to run
-     * until PMIx itself is up.  A daemon reaches that state through
-     * PMIx_server_init, so do the same, and undo it before returning so no
-     * other test in this binary inherits a live server. */
-    if (PMIX_SUCCESS != PMIx_server_init(NULL, NULL, 0)) {
-        fprintf(stdout, "  SKIP test_devices (PMIx server init failed)\n");
+     * prte_attr_load() copies it with PMIx_Data_copy, which will not run
+     * until PMIx itself is up.  main() brings the server up and takes it
+     * down again, because the finalize has to come after the frameworks
+     * close: in an --enable-mca-dso build it dlcloses the very components
+     * the framework teardown is about to call into. */
+    if (!pmix_up) {
+        fprintf(stdout, "  SKIP test_devices (no PMIx server)\n");
         return 0;
     }
 
     t = load_topo(TOPO_FILE);
     if (NULL == t) {
         fprintf(stdout, "  SKIP test_devices (could not load %s)\n", TOPO_FILE);
-        PMIx_server_finalize();
         return 0;
     }
 
@@ -256,7 +254,6 @@ int test_devices(void)
     PMIX_RELEASE(t);
 
     check_unnameable_refused();
-    PMIx_server_finalize();
 
     if (0 == failures) {
         fprintf(stdout, "  PASS test_devices\n");
