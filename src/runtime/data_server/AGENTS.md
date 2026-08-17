@@ -34,6 +34,7 @@ app proc ◀─PMIx── its prted ◀──RML(PRTE_RML_TAG_DATA_CLIENT)──
 | `ds_lookup.c` | Answer from the store, or park the request if the caller asked to wait. |
 | `ds_unpublish.c` | Remove the caller's own items by key. |
 | `ds_purge.c` | Remove everything a (departing) process owns. |
+| `ds_relay.c` | Reissue a request to an **external** data server — one living in another DVM — over a PMIx tool connection, and answer the requesting daemon when it replies. |
 
 State is `prte_data_store`: a `pmix_pointer_array_t` of published objects
 plus a `pmix_list_t` of parked requests. There is no locking — everything
@@ -67,6 +68,49 @@ A related trap, seen in three of these files: `PMIx_Data_pack(NULL, buf,
 &rc, 1, PMIX_STATUS)` assigned back to `rc` packs the right value but then
 discards it, so the error being reported is replaced by the pack's own
 status. Keep the two in separate variables.
+
+---
+
+## An external data server — the store in another DVM
+
+`prte_pmix_server_uri` names a data server living in a **different DVM**, so
+that jobs launched by different invocations can find each other's data
+(`MPI_Publish_name` / `MPI_Comm_accept` across `mpirun`s). When it is set,
+this DVM stores nothing of its own: `prte_data_server()` hands every request
+straight to `prte_ds_relay()`.
+
+**It is not reachable over the RML, and no amount of work here would make it
+so.** The RML addresses a peer by *rank*, stamping the sender's own namespace
+on it (`rml_send.c`, `oob_base_stubs.c`), so a daemon of another DVM cannot be
+named at all — the namespace parsed out of the server's URI was simply
+discarded and the request went to the local master. The crossing is therefore
+a PMIx **tool** connection: the DVM master attaches to the remote DVM's PMIx
+server (`init_server()` in `../../prted/pmix/pmix_server_pub.c`) and reissues
+the operation as an ordinary `PMIx_Publish`/`Lookup`/`Unpublish`, which the
+remote DVM's own upcalls deliver to its data server.
+
+Three things follow, and each is load-bearing:
+
+- **Only the master attaches.** Every other daemon relays to it over the RML
+  exactly as it does for a local store, so a DVM holds one connection however
+  many daemons it has. At the master itself the RML send is a send to self.
+- **The requesting process is carried in `PMIX_REQUESTOR`.** Otherwise the far
+  end attributes the operation to the relaying daemon's *tool* identity, and
+  every ownership rule — who may unpublish, what `PMIX_RANGE_NAMESPACE`
+  admits, what a job-end purge takes — is answered about the wrong process.
+  `prte_ds_check_requestor()` honors the claim **only from a tool**; an
+  application process making one is trying to act under a peer's identity, and
+  the claim is dropped.
+- **The primary server must be named per operation.** PMIx sends a tool's
+  client-side call to whichever attached server is currently primary, and a
+  master may also be attached to a scheduler. `prte_pmix_set_primary_server()`
+  is the one place that designates one; call it immediately before the PMIx
+  call, never once at startup.
+
+The purge command carries a directive array for this reason — it is the only
+way `PMIX_REQUESTOR` can reach `ds_purge`. Three senders pack it
+(`pmix_server_unpublish_fn`, `state_dvm.c`, `state_base_fns.c`) and one reader
+unpacks it; they change together.
 
 ---
 
@@ -151,6 +195,15 @@ is on the HNP and the clients are elsewhere, so the interesting paths only
 exist with real daemons: a publish on one node found by a lookup on another,
 the range and userid rules between real processes, unpublish, and the
 `PMIX_WAIT` path where a lookup parks until a later publish satisfies it.
+
+The **external** data server is multi-node coverage by construction — the
+whole point is a namespace boundary, and one DVM has none. `test_runtime`
+stands up three DVMs at once (a server and two clients pointed at it) and
+asserts that data crosses, that the answer names the publishing process
+rather than the relay, that a parked `PMIX_WAIT` lookup in one client is woken
+by a publish in the other, that an ended job's data is purged from the server
+and that the purge takes *only* that job's data — plus the control, that a
+DVM which was not given the URI sees none of it.
 
 **Not covered:** `PMIX_RANGE_CUSTOM` (no accessor list exists to test),
 `PMIX_PERSIST_FIRST_READ` end-to-end, and `ds_purge` (which is driven by

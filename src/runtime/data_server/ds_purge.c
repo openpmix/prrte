@@ -59,6 +59,8 @@ void prte_ds_purge(pmix_proc_t *sender,
     pmix_status_t rc, ret;
     pmix_proc_t requestor;
     prte_data_req_t *req, *rqnext;
+    pmix_info_t *info;
+    size_t n, ninfo;
 
     /* unpack the proc whose data is to be purged - session
      * data is purged by providing a requestor whose rank
@@ -68,6 +70,33 @@ void prte_ds_purge(pmix_proc_t *sender,
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         goto done;
+    }
+
+    /* unpack the directives, if any */
+    count = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &ninfo, &count, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto done;
+    }
+    if (0 < ninfo) {
+        PMIX_INFO_CREATE(info, ninfo);
+        count = (int32_t) ninfo;
+        rc = PMIx_Data_unpack(NULL, buffer, info, &count, PMIX_INFO);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_INFO_FREE(info, ninfo);
+            goto done;
+        }
+        for (n = 0; n < ninfo; n++) {
+            if (PMIx_Check_key(info[n].key, PMIX_REQUESTOR)) {
+                /* a relay purging on behalf of a process in its own DVM.
+                 * Without this the purge would take everything the relay
+                 * itself owns - which is everything it ever published. */
+                prte_ds_check_requestor(&requestor, &info[n]);
+            }
+        }
+        PMIX_INFO_FREE(info, ninfo);
     }
 
     pmix_output_verbose(1, prte_data_store.output,

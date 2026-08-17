@@ -376,6 +376,7 @@ void prte_state_base_notify_data_server(pmix_proc_t *target)
     pmix_data_buffer_t *buf;
     int rc, room = -1;
     uint8_t cmd = PRTE_PMIX_PURGE_PROC_CMD;
+    size_t ninfo;
 
     /* if nobody local to us published anything, then we can ignore this */
     if (PMIX_NSPACE_INVALID(prte_pmix_server_globals.server.nspace)) {
@@ -408,8 +409,22 @@ void prte_state_base_notify_data_server(pmix_proc_t *target)
         return;
     }
 
-    /* send the request to the server */
-    PRTE_RML_RELIABLE_SEND(rc, prte_pmix_server_globals.server.rank,
+    /* no directives of our own - the count still has to be there, as the
+     * command carries one and the reader unpacks it unconditionally */
+    ninfo = 0;
+    rc = PMIx_Data_pack(NULL, buf, &ninfo, 1, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return;
+    }
+
+    /* Send the request to the server.  An external data server is not
+     * addressable over the RML - only the master holds the PMIx connection
+     * to it - so the request goes to the master, which relays it. */
+    PRTE_RML_RELIABLE_SEND(rc, (NULL == prte_data_server_uri)
+                                   ? prte_pmix_server_globals.server.rank
+                                   : PRTE_PROC_MY_HNP->rank,
                   buf, PRTE_RML_TAG_DATA_SERVER);
     if (PRTE_SUCCESS != rc) {
         PMIX_DATA_BUFFER_RELEASE(buf);

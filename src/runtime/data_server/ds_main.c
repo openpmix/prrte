@@ -148,6 +148,19 @@ void prte_data_server(int status, pmix_proc_t *sender,
         return;
     }
 
+    /* When an external data server is configured, this DVM stores nothing:
+     * the request is reissued to that server over our PMIx tool connection
+     * to it, and the relay answers this sender when it replies.  Only the
+     * master holds that connection, which is why every daemon addressed
+     * its request here (pmix_server_pub.c, execute). */
+    if (NULL != prte_data_server_uri) {
+        rc = prte_ds_relay(sender, room_number, command, buffer);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
+        return;
+    }
+
     PMIX_DATA_BUFFER_CREATE(answer);
     /* pack the room number as this must lead any response */
     rc = PMIx_Data_pack(NULL, answer, &room_number, 1, PMIX_INT);
@@ -218,6 +231,39 @@ void prte_data_server(int status, pmix_proc_t *sender,
         }
     }
 
+}
+
+void prte_ds_check_requestor(pmix_proc_t *owner, const pmix_info_t *info)
+{
+    prte_job_t *jdata;
+
+    if (PMIX_PROC != info->value.type || NULL == info->value.data.proc) {
+        return;
+    }
+
+    /* Acting for another process is what a RELAY does, and only a tool
+     * relays: a daemon of another DVM attaches to us as a tool and
+     * reissues the operation its own client asked for.  Anything else
+     * claiming it is a process trying to publish - or unpublish - under
+     * somebody else's name, so the claim is simply dropped and the
+     * operation proceeds under the caller's own identity. */
+    jdata = prte_get_job_data_object(owner->nspace);
+    if (NULL == jdata || !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+        pmix_output_verbose(1, prte_data_store.output,
+                            "%s data server: %s is not a tool - ignoring its "
+                            "claim to act for %s",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PRTE_NAME_PRINT(owner),
+                            PMIX_NAME_PRINT(info->value.data.proc));
+        return;
+    }
+
+    pmix_output_verbose(1, prte_data_store.output,
+                        "%s data server: %s is acting for %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(owner),
+                        PMIX_NAME_PRINT(info->value.data.proc));
+    PMIX_XFER_PROCID(owner, info->value.data.proc);
 }
 
 pmix_status_t prte_data_server_check_range(prte_data_req_t *req,

@@ -814,7 +814,8 @@ int pmix_server_init(void)
     prte_pmix_server_globals.server = *PRTE_NAME_INVALID;
     prte_pmix_server_globals.scheduler_connected = false;
     prte_pmix_server_globals.scheduler_lookup_done = false;
-    prte_pmix_server_globals.scheduler_set_as_server = false;
+    prte_pmix_server_globals.primary_server = *PRTE_NAME_INVALID;
+    prte_pmix_server_globals.primary_server_set = false;
 
     PMIX_INFO_LIST_START(ilist);
 

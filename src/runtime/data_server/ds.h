@@ -119,6 +119,24 @@ PRTE_EXPORT void prte_ds_purge(pmix_proc_t *sender,
 PRTE_EXPORT pmix_status_t prte_data_server_check_range(prte_data_req_t *req,
                                                        prte_data_object_t *data);
 
+/* Relay a request to the external data server named by
+ * prte_data_server_uri, and answer the requesting daemon when it replies.
+ * Returns PMIX_SUCCESS once it owns the request - including when the
+ * request failed and it has already sent the failure - so the caller must
+ * not answer one it handed over.  See ds_relay.c. */
+PRTE_EXPORT pmix_status_t prte_ds_relay(pmix_proc_t *sender, int room_number,
+                                        uint8_t command,
+                                        pmix_data_buffer_t *buffer);
+
+/* Honor a PMIX_REQUESTOR directive, which names the process a relayed
+ * request is being made on behalf of.  Only a TOOL may claim it: a daemon
+ * of another DVM attaches to us as a tool and reissues what its own client
+ * asked for, whereas an application process has no such standing and
+ * allowing it would let any process publish - and unpublish - under
+ * another's identity.  Overwrites *owner when the claim is allowed. */
+PRTE_EXPORT void prte_ds_check_requestor(pmix_proc_t *owner,
+                                         const pmix_info_t *info);
+
 END_C_DECLS
 
 #endif /* PRTE_DS_INTERNAL_H */

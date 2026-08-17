@@ -42,7 +42,7 @@ upcall; each file below implements a related group of them.
 | `pmix_server_queries.c` | `query` — namespaces, proc tables, psets, groups, allocations. |
 | `pmix_server_gen.c` | `abort`, `client_finalized`, `client_connected2`, `tool_connected`, `iof_pull`, `push_stdin`, `log`. `client_finalized` is how a **tool**'s departure is learned as well — see below. |
 | `pmix_server_fence.c` | `fence_nb` and `direct_modex`. |
-| `pmix_server_pub.c` | `publish`/`lookup`/`unpublish` (relayed to the data server). |
+| `pmix_server_pub.c` | `publish`/`lookup`/`unpublish` (relayed to the data server; `init_server()` attaches the master to an **external** one). |
 | `pmix_server_notify.c` | `notify_event` (up), and the RML receive that fans a peer's event out to local clients (down). |
 | `pmix_server_group.c` | `group` — a thin pass-through to grpcomm. |
 | `pmix_server_job_ctrl.c` | `job_control` — kill/terminate/signal/define-pset, as daemon commands. |
@@ -450,6 +450,35 @@ The parts that matter when editing this file:
   must carry every job's termination status, and the job objects do not survive
   to the end of the session — so each one is recorded on `session->results` as
   it retires.
+
+---
+
+## Servers we are a client OF, and which one is primary
+
+A daemon is a PMIx server, but the master is also a PMIx **tool** of anything
+it has to reach outside this DVM. There are two such things, and they are
+reached the same way — `PMIx_tool_attach_to_server()`:
+
+- a **scheduler**, in `prte_pmix_set_scheduler()` (`pmix_server_alloc*.c`);
+- an **external data server**, in `init_server()` (`pmix_server_pub.c`) — a
+  data server living in another DVM, which the RML cannot address at all
+  because it names a peer by rank in the sender's own namespace. See
+  [`../../runtime/data_server/AGENTS.md`](../../runtime/data_server/AGENTS.md).
+
+**PMIx sends a client-side call to whichever attached server is currently
+primary, and only one may be primary at a time.** So *every* operation that
+uses one of these connections must name its own server first:
+`prte_pmix_set_primary_server()` is the single point that does it, it is a
+no-op when the named server is already primary, and it must not be treated as
+a once-at-startup step. This is race-free because the PMIx client calls pack
+and send synchronously before returning, on the thread that just designated
+the primary — so nothing can switch it out from under an in-flight request.
+`PMIx_tool_set_server()` blocks until the PMIx progress thread completes it,
+which is fine from the PRRTE progress thread and fatal from the PMIx one.
+
+The flag this replaced (`scheduler_set_as_server`) recorded "the scheduler has
+been made primary" once and never reconsidered — correct only for as long as
+the scheduler was the sole connection.
 
 ---
 

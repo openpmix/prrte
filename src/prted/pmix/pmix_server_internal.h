@@ -413,6 +413,15 @@ PRTE_EXPORT extern void pmix_server_alloc_request_resp(int status, pmix_proc_t *
 
 PRTE_EXPORT extern pmix_status_t prte_pmix_set_scheduler(void);
 
+/* Designate an attached server as the primary one, so that the client-side
+ * PMIx calls that follow go to it.  Only one server can be primary at a
+ * time, so any operation that uses one of our tool connections must call
+ * this first rather than assume the primary is still whatever the last
+ * operation left in place.  Cheap when it is: a no-op if the named server
+ * is already primary.  Blocks briefly - PMIx_tool_set_server completes on
+ * the PMIx progress thread - so it must not be called from that thread. */
+PRTE_EXPORT extern pmix_status_t prte_pmix_set_primary_server(const pmix_proc_t *target);
+
 PRTE_EXPORT extern pmix_status_t prte_server_send_request(uint8_t cmd, prte_pmix_server_req_t *req);
 
 PRTE_EXPORT extern void prte_server_lost_connection(size_t evhdlr_registration_id,
@@ -494,7 +503,14 @@ typedef struct {
     bool require_pid_match;
     bool allow_client_clones;
     pmix_proc_t scheduler;
-    bool scheduler_set_as_server;
+    /* PMIx directs a tool's client-side operations at whichever attached
+     * server is currently PRIMARY, and only one server may be primary at a
+     * time.  A daemon can be attached to more than one - a scheduler and an
+     * external data server - so the primary in force is tracked here and
+     * every operation that goes out over one of those connections names its
+     * own server first.  See prte_pmix_set_primary_server(). */
+    pmix_proc_t primary_server;
+    bool primary_server_set;
     char *report_uri;
     char *singleton;
     pmix_device_type_t generate_dist;

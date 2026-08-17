@@ -38,7 +38,6 @@
 #include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/rml/rml_contact.h"
 #include "src/rml/rml.h"
 #include "src/runtime/data_server/prte_data_server.h"
 #include "src/runtime/prte_globals.h"
@@ -49,14 +48,27 @@
 
 #include "src/prted/pmix/pmix_server_internal.h"
 
+/* Attach to the data server named by prte_data_server_uri.
+ *
+ * The server is a DVM of its own, so it is reached as a PMIx *tool
+ * connection* and not over the RML: the RML addresses a peer by rank within
+ * the sender's own namespace and cannot name a process of another DVM at
+ * all (see src/rml/AGENTS.md).  What crosses the boundary is therefore an
+ * ordinary PMIx publish/lookup/unpublish issued by this daemon acting as a
+ * tool of the remote DVM, and the URI this wants is that DVM's PMIx server
+ * URI - what `prte --report-uri` writes out.
+ *
+ * Only the DVM master attaches.  Every other daemon relays to it over the
+ * RML exactly as it does for a data server hosted here, so a DVM holds one
+ * connection to the external server however many daemons it has.
+ */
 static int init_server(void)
 {
     char *server;
-    pmix_value_t val;
     char input[1024], *filename;
     FILE *fp;
-    int rc;
     pmix_status_t ret;
+    pmix_info_t info[2];
 
     /* only do this once */
     prte_pmix_server_globals.pubsub_init = true;
@@ -64,6 +76,10 @@ static int init_server(void)
     /* if the universal server wasn't specified, then we use
      * our own HNP for that purpose */
     if (NULL == prte_data_server_uri) {
+        prte_pmix_server_globals.server = *PRTE_PROC_MY_HNP;
+    } else if (!PRTE_PROC_IS_MASTER) {
+        /* our master holds the connection - everything we cannot serve
+         * ourselves goes to it */
         prte_pmix_server_globals.server = *PRTE_PROC_MY_HNP;
     } else {
         if (0 == strncmp(prte_data_server_uri, "file", strlen("file")) ||
@@ -105,33 +121,41 @@ static int init_server(void)
         } else {
             server = strdup(prte_data_server_uri);
         }
-        /* parse the URI to get the server's name */
-        rc = prte_rml_parse_uris(server, &prte_pmix_server_globals.server, NULL);
-        if (PRTE_SUCCESS != rc) {
-            PRTE_ERROR_LOG(rc);
-            free(server);
-            return rc;
-        }
-        /* setup our route to the server */
-        PMIX_VALUE_LOAD(&val, server, PMIX_STRING);
-        ret = PMIx_Store_internal(&prte_pmix_server_globals.server, PMIX_PROC_URI, &val);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_VALUE_DESTRUCT(&val);
-            return rc;
-        }
-        PMIX_VALUE_DESTRUCT(&val);
-
         /* check if we are to wait for the server to start - resolves
          * a race condition that can occur when the server is run
          * as a background job - e.g., in scripts
          */
         if (prte_pmix_server_globals.wait_for_server) {
-            /* ping the server */
-            struct timespec timeout = {prte_pmix_server_globals.timeout, 0};
             /* just hang loose */
+            struct timespec timeout = {prte_pmix_server_globals.timeout, 0};
             nanosleep(&timeout, NULL);
         }
+
+        /* attach to it.  PMIX_WAIT_FOR_CONNECTION is deliberately not set:
+         * the wait above is what the user asked for, and a server that is
+         * not there is an error we want reported now rather than a hang. */
+        PMIX_INFO_LOAD(&info[0], PMIX_SERVER_URI, server, PMIX_STRING);
+        PMIX_INFO_LOAD(&info[1], PMIX_PRIMARY_SERVER, NULL, PMIX_BOOL);
+        ret = PMIx_tool_attach_to_server(NULL, &prte_pmix_server_globals.server,
+                                         info, 2);
+        PMIX_INFO_DESTRUCT(&info[0]);
+        PMIX_INFO_DESTRUCT(&info[1]);
+        free(server);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            return prte_pmix_convert_status(ret);
+        }
+        /* the attach asked for it to be made primary, so the library has
+         * already done what prte_pmix_set_primary_server would - record
+         * that, or the tracker's next comparison is against nothing */
+        PMIX_XFER_PROCID(&prte_pmix_server_globals.primary_server,
+                         &prte_pmix_server_globals.server);
+        prte_pmix_server_globals.primary_server_set = true;
+
+        pmix_output_verbose(1, prte_pmix_server_globals.output,
+                            "%s attached to external data server %s",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PRTE_NAME_PRINT(&prte_pmix_server_globals.server));
     }
 
     return PRTE_SUCCESS;
@@ -178,12 +202,18 @@ static void execute(int sd, short args, void *cbdata)
         goto callback;
     }
 
-    /* if the range is SESSION, then set the target to the global server */
+    /* if the range is SESSION, then set the target to the global server.
+     * When that server is an external DVM it is not addressable over the
+     * RML at all, and only the master holds the connection to it - so the
+     * request goes to the master either way, and the master relays it from
+     * prte_data_server().  At the master itself that is a send to self,
+     * which the RML posts straight back for receipt. */
     if (PMIX_RANGE_SESSION == req->range) {
         pmix_output_verbose(1, prte_pmix_server_globals.output,
                             "%s orted:pmix:server range SESSION",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-        target = &prte_pmix_server_globals.server;
+        target = (NULL == prte_data_server_uri) ? &prte_pmix_server_globals.server
+                                                : PRTE_PROC_MY_HNP;
     } else if (PMIX_RANGE_LOCAL == req->range) {
         /* if the range is local, send it to myself */
         pmix_output_verbose(1, prte_pmix_server_globals.output, "%s orted:pmix:server range LOCAL",
@@ -398,6 +428,25 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
             PMIX_ERROR_LOG(rc);
             PMIX_RELEASE(req);
             return rc;
+        }
+
+        /* pack the directives.  A purge takes none of its own, but a
+         * relayed one carries PMIX_REQUESTOR naming the process whose data
+         * is actually to go - without it the data server would purge
+         * everything owned by the relaying tool. */
+        if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &req->msg, &ninfo, 1, PMIX_SIZE))) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_RELEASE(req);
+            return rc;
+        }
+        if (0 < ninfo) {
+            if (PMIX_SUCCESS
+                != (rc = PMIx_Data_pack(NULL, &req->msg, (pmix_info_t *) info, ninfo,
+                                        PMIX_INFO))) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_RELEASE(req);
+                return rc;
+            }
         }
 
         /* thread-shift so we can store the tracker */

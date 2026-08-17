@@ -31,4 +31,5 @@ libprrte_la_SOURCES += \
         runtime/data_server/ds_publish.c \
         runtime/data_server/ds_lookup.c \
         runtime/data_server/ds_unpublish.c \
-        runtime/data_server/ds_purge.c
+        runtime/data_server/ds_purge.c \
+        runtime/data_server/ds_relay.c

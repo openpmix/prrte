@@ -1238,6 +1238,64 @@ static int test_data_server_range(void)
     return failures;
 }
 
+/* A relayed request names the process it is acting for in PMIX_REQUESTOR,
+ * and only a TOOL is allowed to make that claim.  The relay is a daemon of
+ * another DVM attached to us as a tool (see ds_relay.c); an application
+ * process making the same claim is trying to publish - or unpublish - under
+ * a peer's identity, so the claim has to be dropped rather than honored. */
+static int test_data_server_requestor(void)
+{
+    int failures = 0;
+    prte_job_t *toolj, *appj;
+    pmix_proc_t owner, behalf;
+    pmix_info_t info;
+
+    reset_globals();
+
+    toolj = make_job("relay.tool");
+    PRTE_FLAG_SET(toolj, PRTE_JOB_FLAG_TOOL);
+    CHECK("requestor: tool job registered", PRTE_SUCCESS == prte_set_job_data_object(toolj));
+    appj = make_job("some.app");
+    CHECK("requestor: app job registered", PRTE_SUCCESS == prte_set_job_data_object(appj));
+
+    PMIX_LOAD_PROCID(&behalf, "far.away.job", 3);
+
+    /* a tool may act for somebody else */
+    PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
+    PMIX_INFO_LOAD(&info, PMIX_REQUESTOR, &behalf, PMIX_PROC);
+    prte_ds_check_requestor(&owner, &info);
+    CHECK("requestor: a tool's claim is honored", PMIX_CHECK_PROCID(&owner, &behalf));
+    PMIX_INFO_DESTRUCT(&info);
+
+    /* an application process may not */
+    PMIX_LOAD_PROCID(&owner, "some.app", 1);
+    PMIX_INFO_LOAD(&info, PMIX_REQUESTOR, &behalf, PMIX_PROC);
+    prte_ds_check_requestor(&owner, &info);
+    CHECK("requestor: an application's claim is refused",
+          PMIX_CHECK_NSPACE(owner.nspace, "some.app") && 1 == owner.rank);
+    PMIX_INFO_DESTRUCT(&info);
+
+    /* neither may a namespace we have never heard of - a job object is what
+     * says what the caller is, and without one there is nothing to trust */
+    PMIX_LOAD_PROCID(&owner, "unknown.job", 4);
+    PMIX_INFO_LOAD(&info, PMIX_REQUESTOR, &behalf, PMIX_PROC);
+    prte_ds_check_requestor(&owner, &info);
+    CHECK("requestor: an unknown namespace's claim is refused",
+          PMIX_CHECK_NSPACE(owner.nspace, "unknown.job"));
+    PMIX_INFO_DESTRUCT(&info);
+
+    /* a directive of the wrong type is ignored rather than dereferenced */
+    PMIX_LOAD_PROCID(&owner, "relay.tool", 0);
+    PMIX_INFO_LOAD(&info, PMIX_REQUESTOR, "not-a-procid", PMIX_STRING);
+    prte_ds_check_requestor(&owner, &info);
+    CHECK("requestor: a mistyped directive is ignored",
+          PMIX_CHECK_NSPACE(owner.nspace, "relay.tool"));
+    PMIX_INFO_DESTRUCT(&info);
+
+    reset_globals();
+    return failures;
+}
+
 /* ------------------------------------------------------------------ */
 /* progress threads                                                   */
 /* ------------------------------------------------------------------ */
@@ -1458,6 +1516,7 @@ int main(void)
     failures += test_exit_status();
     failures += test_data_server_objects();
     failures += test_data_server_range();
+    failures += test_data_server_requestor();
     failures += test_progress_thread_cpus();
     failures += test_progress_thread_lifecycle();
     failures += test_paramfile_ordering();

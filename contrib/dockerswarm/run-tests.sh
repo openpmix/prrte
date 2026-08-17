@@ -1390,6 +1390,29 @@ prted_dvm_start_mca() {
     sleep 4
     RUN "test -s $PRTED_URI"
 }
+# Start an ADDITIONAL persistent DVM, reporting its URI to a file of its own.
+# The cross-DVM data-server cases need three DVMs up at once, and a single
+# PRTED_URI cannot name three of them.  $1 = uri file, $2 = --host spec,
+# $3 = extra options spliced in ahead of --host (may be empty).
+#
+# Every one of these HNPs runs on node1 -- that is where prte is invoked --
+# so give each its own set of compute nodes.  They are separate DVMs, in
+# separate namespaces, with separate session directories.
+dvm_start_uri() {
+    RUN "rm -f $1" >/dev/null 2>&1
+    RUN "timeout -k 5 60 prte --daemonize --report-uri $1 $3 --host $2" >/dev/null 2>&1
+    sleep 4
+    RUN "test -s $1"
+}
+# ...and the tool forms against a named URI file
+PRUN_URI() { local uri=$1; shift; RUN "timeout -k 5 60 prun --dvm-uri file:$uri $*"; }
+PRUN_URI_BG() {
+    local uri=$1 outf=$2; shift 2
+    docker exec -d -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+        "${NODE}1" bash -lc ". /opt/prte/env.sh;
+            prun --dvm-uri file:$uri $* > $outf 2>&1"
+}
+
 # run a tool against that DVM, from the head node ($@ = argv after "prun")
 PRUN() { RUN "timeout -k 5 60 prun --dvm-uri file:$PRTED_URI $*"; }
 # ...and in the background, with its output captured on node1
@@ -1585,6 +1608,136 @@ test_runtime() {
                 || ok "a client on another node cannot see it, as LOCAL range requires"
         fi
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
+    ####################################################################
+    # An EXTERNAL data server -- one DVM keeping the data for others.
+    #
+    # This is what prte_pmix_server_uri (the old "ompi-server") is for: two
+    # jobs launched by different invocations, in different DVMs, finding
+    # each other through a third DVM that holds the store.  It is what
+    # MPI_Publish_name / MPI_Comm_accept across mpiruns runs on.
+    #
+    # It cannot be reached over the RML: every send entry point takes a rank
+    # and stamps the sender's OWN namespace on it, so a daemon of another
+    # DVM is not nameable at all.  The master therefore attaches to the
+    # server DVM as a PMIx TOOL and reissues the request there
+    # (src/runtime/data_server/ds_relay.c), carrying the asking process's
+    # identity in PMIX_REQUESTOR so the far end attributes it correctly.
+    #
+    # Nothing about that exists on one DVM, which is why it lives here and
+    # not in test/unit/runtime: the whole point is a namespace boundary.
+    ####################################################################
+    banner "runtime/data_server: two DVMs share a third DVM's data server"
+    cleanup_swarm
+    if ! RUN "test -x $DS"; then
+        skp "dataserver client not installed -- re-run ./build.sh"
+    elif ! dvm_start_uri /tmp/ds-server.uri 'node2:2' ''; then
+        bad "could not start the data-server DVM"
+    elif ! dvm_start_uri /tmp/ds-a.uri 'node3:2,node4:2' \
+                         '--prtemca pmix_server_uri file:/tmp/ds-server.uri'; then
+        bad "could not start the first client DVM"
+        RUN "timeout -k 5 30 pterm --dvm-uri file:/tmp/ds-server.uri" >/dev/null 2>&1
+    elif ! dvm_start_uri /tmp/ds-b.uri 'node5:2,node6:2' \
+                         '--prtemca pmix_server_uri file:/tmp/ds-server.uri'; then
+        bad "could not start the second client DVM"
+        RUN "timeout -k 5 30 pterm --dvm-uri file:/tmp/ds-a.uri" >/dev/null 2>&1
+        RUN "timeout -k 5 30 pterm --dvm-uri file:/tmp/ds-server.uri" >/dev/null 2>&1
+    else
+        ok "three DVMs are up: a data server and two clients pointed at it"
+        PRUN_URI_BG /tmp/ds-a.uri /tmp/ds-x1.out \
+            "--host node3:1 -n 1 $DS publish prte.test.cross across-dvms session 90"
+        sleep 8
+        if ! RUN 'grep -q "^PUBLISHED prte.test.cross" /tmp/ds-x1.out'; then
+            bad "the cross-DVM publish never happened: $(RUN 'cat /tmp/ds-x1.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+        else
+            ok "a proc in DVM A published through the external server"
+
+            out=$(PRUN_URI /tmp/ds-b.uri "--host node5:1 -n 1 $DS lookup prte.test.cross 25" 2>&1)
+            echo "$out" | grep -q '^FOUND prte.test.cross across-dvms' \
+                && ok "a proc in DVM B found it -- the data crossed the DVM boundary" \
+                || bad "a cross-DVM lookup failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+            # The owner the answer names is the PUBLISHING PROCESS, not the
+            # daemon that relayed for it.  Without the PMIX_REQUESTOR
+            # substitution every item would be owned by DVM A's master
+            # wearing its tool identity, and every ownership rule at the far
+            # end - who may unpublish, what NAMESPACE range admits - would
+            # be answered about the wrong process.  DVM A's namespace is in
+            # its URI file, so this can assert on the identity and not just
+            # on "something was named".
+            n=$(RUN 'cut -d";" -f1 /tmp/ds-a.uri' 2>/dev/null | tr -d '\r' | cut -d. -f1)
+            echo "$out" | grep -q "from $n" \
+                && bad "the published data was owned by DVM A's master, not by the publisher"
+            echo "$out" | grep -qE 'from [^ ]+:0\)' \
+                && ok "...and the answer names the publishing process, not the relay" \
+                || bad "the answer did not name a publisher: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+            banner "runtime/data_server: a DVM with no server URI shares nothing"
+            # The control.  A DVM that was not pointed at the server keeps
+            # its own store, so the same key must NOT be visible there -
+            # otherwise the case above proves only that a lookup succeeds
+            # somewhere, not that it crossed anything.
+            if ! prted_dvm_start 'node7:2'; then
+                skp "could not start an unconnected DVM; the control is missing"
+            else
+                out=$(PRUN "--host node7:1 -n 1 $DS lookup prte.test.cross 15" 2>&1)
+                echo "$out" | grep -q '^FOUND prte.test.cross' \
+                    && bad "a DVM with no server URI saw another DVM's data" \
+                    || ok "a DVM with no server URI cannot see it, as it must not"
+                RUN "timeout -k 5 30 pterm --dvm-uri file:$PRTED_URI" >/dev/null 2>&1
+            fi
+
+            banner "runtime/data_server: a waiting lookup crosses DVMs too"
+            # The parked-request path, but with the park in one DVM and the
+            # publish in another.  Both legs are relays, and the wake-up has
+            # to travel back out through the tool connection that asked.
+            PRUN_URI_BG /tmp/ds-b.uri /tmp/ds-x2.out \
+                "--host node5:1 -n 1 $DS lookupwait prte.test.xlater 60"
+            sleep 8
+            if ! RUN 'grep -q "^WAITING" /tmp/ds-x2.out'; then
+                skp "the cross-DVM waiting lookup never started"
+            else
+                ok "a lookup in DVM B is parked in the external server"
+                PRUN_URI_BG /tmp/ds-a.uri /tmp/ds-x3.out \
+                    "--host node4:1 -n 1 $DS publish prte.test.xlater eventually session 40"
+                sleep 12
+                RUN 'grep -q "^FOUND prte.test.xlater eventually" /tmp/ds-x2.out' \
+                    && ok "a publish in DVM A satisfied the lookup parked from DVM B" \
+                    || bad "a parked cross-DVM lookup was never satisfied: $(RUN 'cat /tmp/ds-x2.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+            fi
+
+            banner "runtime/data_server: an ended job's data is purged from the external server"
+            # When a job finishes, its DVM tells the data server to drop
+            # what that job published (state_dvm.c).  Relayed, that is an
+            # unpublish naming no keys, and the process it names has to be
+            # the departed one - PMIX_REQUESTOR again.  Get that wrong and
+            # the purge either does nothing or takes everything the relaying
+            # tool ever published, including the OTHER client DVM's data.
+            out=$(PRUN_URI /tmp/ds-a.uri "--host node3:1 -n 1 $DS publish prte.test.transient gone session 2" 2>&1)
+            echo "$out" | grep -q '^PUBLISHED prte.test.transient' \
+                && ok "a short-lived job in DVM A published a key" \
+                || bad "the short-lived publish failed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            sleep 8
+            # Two single-key lookups rather than one lookup2: a partial
+            # result is only carried back by a PMIx new enough to keep the
+            # payload on a non-SUCCESS status (see the partial-lookup case
+            # above), and this case is not about that.
+            out=$(PRUN_URI /tmp/ds-b.uri "--host node5:1 -n 1 $DS lookup prte.test.transient 20" 2>&1)
+            echo "$out" | grep -q '^FOUND prte.test.transient' \
+                && bad "an ended job's data survived in the external server" \
+                || ok "the ended job's key was purged from the external server"
+            # ...and the purge took ONLY that job's data.  prte.test.cross
+            # belongs to a job that is still running.
+            out=$(PRUN_URI /tmp/ds-b.uri "--host node5:1 -n 1 $DS lookup prte.test.cross 20" 2>&1)
+            echo "$out" | grep -q '^FOUND prte.test.cross across-dvms' \
+                && ok "...and it took only that job's data, not the whole store" \
+                || bad "the purge removed data belonging to a job that is still alive: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        for u in /tmp/ds-b.uri /tmp/ds-a.uri /tmp/ds-server.uri; do
+            RUN "timeout -k 5 30 pterm --dvm-uri file:$u" >/dev/null 2>&1
+        done
     fi
     cleanup_swarm
 
