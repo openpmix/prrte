@@ -747,6 +747,7 @@ static void check_complete_resume(int fd, short args, void *cbdata)
     int32_t index;
     pmix_proc_t pname;
     uint8_t command = PRTE_PMIX_PURGE_PROC_CMD;
+    size_t ninfo;
     pmix_data_buffer_t *buf;
     pmix_pointer_array_t procs;
     prte_app_context_t *app;
@@ -862,6 +863,16 @@ static void check_complete_resume(int fd, short args, void *cbdata)
         /* pack the nspace to be purged */
         pname.rank = PMIX_RANK_WILDCARD;
         rc = PMIx_Data_pack(NULL, buf, &pname, 1, PMIX_PROC);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            goto release;
+        }
+        /* no directives of our own - the count still has to be there, as
+         * the command carries one and the reader unpacks it
+         * unconditionally */
+        ninfo = 0;
+        rc = PMIx_Data_pack(NULL, buf, &ninfo, 1, PMIX_SIZE);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(buf);

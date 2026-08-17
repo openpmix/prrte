@@ -13,3 +13,4 @@ Detailed implementation plans for in-progress and upcoming features.
    bootstrap/index.rst
    ft_group/index.rst
    scalable_collectives/index.rst
+   cross_dvm_data_server/index.rst

@@ -127,6 +127,9 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
             data->persistence = info[n].value.data.persist;
         } else if (PMIx_Check_key(info[n].key, PMIX_USERID)) {
             data->uid = info[n].value.data.uint32;
+        } else if (PMIx_Check_key(info[n].key, PMIX_REQUESTOR)) {
+            /* a relay publishing on behalf of a process in its own DVM */
+            prte_ds_check_requestor(&data->owner, &info[n]);
         } else {
             /* add it to the list of data */
             ds1 = PMIX_NEW(prte_info_item_t);

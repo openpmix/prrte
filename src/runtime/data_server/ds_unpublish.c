@@ -138,6 +138,12 @@ pmix_status_t prte_ds_unpublish(pmix_proc_t *sender,
                 rq.uid = info[n].value.data.uint32;
             } else if (PMIx_Check_key(info[n].key, PMIX_RANGE)) {
                 rq.range = info[n].value.data.range;
+            } else if (PMIx_Check_key(info[n].key, PMIX_REQUESTOR)) {
+                /* a relay unpublishing on behalf of a process in its own
+                 * DVM.  This must be honored before the ownership test
+                 * below, which is what says only the publisher may remove
+                 * an item. */
+                prte_ds_check_requestor(&rq.requestor, &info[n]);
             }
         }
         /* ignore anything else for now */

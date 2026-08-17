@@ -631,7 +631,9 @@ static void _toolconn(int sd, short args, void *cbdata)
                 goto complete;
             }
             // it has been recorded in the library, so record it here
-            prte_pmix_server_globals.scheduler_set_as_server = true;
+            PMIX_XFER_PROCID(&prte_pmix_server_globals.primary_server,
+                             &prte_pmix_server_globals.scheduler);
+            prte_pmix_server_globals.primary_server_set = true;
             goto complete;
         }
     }
