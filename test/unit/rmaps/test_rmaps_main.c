@@ -29,6 +29,7 @@ extern int test_round_robin(void);
 extern int test_ppr(void);
 extern int test_seq(void);
 extern int test_rank_file(void);
+extern int test_devices(void);
 
 /* shared with the mapper tests in this directory */
 prte_rmaps_base_module_t *test_rmaps_module(const char *name);
@@ -97,6 +98,7 @@ int main(void)
     failures += test_ppr();
     failures += test_seq();
     failures += test_rank_file();
+    failures += test_devices();
 
     (void) pmix_mca_base_framework_close(&prte_rmaps_base_framework);
     prte_finalize();
