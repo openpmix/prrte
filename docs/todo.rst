@@ -146,29 +146,33 @@ goes through the same parser and is not separately covered.
 Performance work not landed
 ---------------------------
 
-**Aggregate the launch-message cpuset slices per next hop.**  The scatter
-itself has landed: the launch message is packed ``PRTE_JOB_PACK_NO_CPUSETS``
-and each daemon is sent the bindings of the procs it will fork, point to
-point (``prte_odls_base_send_cpuset_slices``).  Measured with ``--rtos
-donotlaunch`` at 1000 x 128 on a 176-core, 5-NUMA topology, that takes the
-raw launch message from **1,622,647 to 602,647 bytes** — 8 B/proc, 63% of
-what was left after the maps and the empty attribute list came out.
+**Take the nspace out of the OOB header entirely.**  ``prte_oob_tcp_hdr_t``
+rides every RML message, and it used to carry the origin and the destination
+as two ``pmix_proc_t`` — 552 bytes, of which 512 were two fixed 256-byte
+nspace arrays holding the same short string.  On small messages that was most
+of the traffic: a launch-message cpuset slice for an eight-process node is
+101 bytes of payload, so the header was 85% of it.  The header now carries
+the two ranks and one length-prefixed nspace, and only the characters the
+nspace uses go on the wire — about 50 bytes for a typical DVM.
 
-What is left to do is how those slices leave the master.  Today it is one
-routed send per daemon: the *bytes* aggregate, because
-``prte_rml_get_route`` sends each toward its target and the tree carries a
-subtree's slices over one link, but the *messages* do not — a 1000-node job
-posts 1000 sends from the master on the launch path.  Sending one message
-per next hop, each carrying the slices for that child's whole subtree, and
-having the relay split it, makes that O(radix) per daemon instead.  It needs
-a relay step the point-to-point form does not.
+The ~22 bytes that remain are still per *message* for something that is a
+property of the *DVM*: every daemon in it shares one nspace for the whole of
+its life.  It could be dropped altogether, because a receiver can reconstruct
+it — every send entry point takes a rank, so a message is always addressed
+within the sender's own job, and a relay only ever forwards traffic of its
+own job — which makes the origin's nspace always the connection peer's, and
+that is known from the IDENT handshake.  What stopped it here is that this is
+an *invariant*, not a field: nothing enforces it, and the failure mode if it
+is ever broken is a message delivered under the wrong sender identity rather
+than an error.  Doing it means first making the invariant something the code
+states and checks, not something a reader has to derive.
 
 **Judge this kind of change on wire bytes, not on the raw message size.**
-The figures above are raw, which is the right unit for "how much buffer does
-the master build and deflate" and the wrong one for "how much crosses the
-network": the xcast compresses before it forwards, and a field holding the
-same value in every record can compress away to nothing while looking
-enormous raw.  Measured on a live 32-node broadcast at 8 ppn
+A launch-message size is usually quoted raw, which is the right unit for "how
+much buffer does the master build and deflate" and the wrong one for "how
+much crosses the network": the xcast compresses before it forwards, and a
+field holding the same value in every record can compress away to nothing
+while looking enormous raw.  Measured on a live 32-node broadcast at 8 ppn
 (``grpcomm_base_verbose 1``, tag 18 is the launch message):
 
 =====================  ===========  ============  =====
@@ -245,6 +249,56 @@ so that the next person does not rediscover the idea and spend the effort
 again: each says what was measured and what the measurement decided.  Moving
 one back up the page takes new evidence, not a fresh reading of the same
 facts.
+
+**Aggregating the launch-message cpuset slices per next hop.**  The scatter
+itself has landed: the launch message is packed ``PRTE_JOB_PACK_NO_CPUSETS``
+and each daemon is sent the bindings of the procs it will fork, point to
+point (``prte_odls_base_send_cpuset_slices``).  Measured with ``--rtos
+donotlaunch`` at 1000 x 128 on a 176-core, 5-NUMA topology, that takes the
+raw launch message from **1,622,647 to 602,647 bytes** — 8 B/proc, 63% of
+what was left after the maps and the empty attribute list came out.
+
+What was proposed on top of that was how those slices leave the master.  It
+is one routed send per daemon: the *bytes* aggregate, because
+``prte_rml_get_route`` sends each toward its target and the tree carries a
+subtree's slices over one link, but the *messages* do not — a 1000-node job
+posts 999 sends from the master on the launch path.  One message per next
+hop, each carrying the slices for that child's whole subtree and split by the
+relay, would make that O(radix).
+
+Measured, that buys very little.  The payload is unchanged either way: a
+slice crosses exactly the links between the master and its daemon whichever
+way it is bundled.  What aggregation removes is one *message header* per
+crossing it saves, and at the default radix of 64 the crossings (Σ depth over
+the daemons) fall from 1,934 to 999 at a thousand nodes and from 25,773 to
+9,999 at ten thousand.  With the header at 552 bytes — what it was when this
+was measured — that is 0.52 MB saved at 1000 x 128 and 8.7 MB at 10,000 x
+128, against a launch broadcast that moves ~240 MB and ~24 GB respectively.
+The scatter that this entry follows saved ~98 MB at the first of those
+shapes; this would save another half.
+
+The master-side argument does not survive either.  The pre-broadcast pack
+loop is real — 5.7 ms at 1000 x 128, 51 ms at 10,000 x 128, measured against
+the swarm's PMIx — but it is ~22 ns per *pack call* and there are two per
+process, so the cost is per process, not per buffer.  Aggregating packs the
+same rank/cpuset pairs into fewer buffers and the loop takes just as long.
+
+**So this shall not be done.**  It removes message headers, not payload, and
+the headers it removes are two parts in a thousand of what the launch already
+broadcasts — while adding a relay protocol on the launch path, with its own
+failure handling, that has to work while the tree changes under an elastic
+grow.  Fusing the slices into the xcast instead is worse, not better:
+``grpcomm_xcast.c`` forwards one packed buffer shared by every child, and
+says where it says so that a forward which must differ per child puts the
+packing back inside the loop.
+
+What the measurement did turn up is that the **header** was the overhead
+worth attacking, and not only here: at 8 processes a node a slice message was
+101 bytes of payload behind 552 bytes of header, and every RML message in the
+system paid the same.  512 of those bytes were two fixed 256-byte nspace
+arrays holding the same short string.  That is now fixed — the header carries
+two ranks and one length-prefixed nspace, about 50 bytes on the wire — which
+takes more off this traffic than aggregating it ever would have.
 
 **Lazy proc-data registration: the withholding half.**  The *deriving*
 half is in: ``dmodex_req`` answers a request for one of the placement keys
