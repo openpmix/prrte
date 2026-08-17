@@ -28,6 +28,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <strings.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -35,6 +36,10 @@
 #include <pmix.h>
 
 static pmix_proc_t myproc;
+
+/* the string ID of the one place this example stops at when asked to stop
+ * somewhere of its own choosing - see "prterun --help stop-in-app" */
+#define EXAMPLE_BREAKPOINT "example-app"
 
 /* this is the event notification function we pass down below
  * when registering for general events - i.e.,, the default
@@ -158,6 +163,7 @@ int main(int argc, char **argv)
     bool local, all_local = false;
     char **peers;
     pmix_rank_t *locals = NULL;
+    char *bkpt;
 
     pid = getpid();
     fprintf(stderr, "Client %lu: Running\n", (unsigned long) pid);
@@ -203,6 +209,18 @@ int main(int argc, char **argv)
      * debugger */
     PMIX_INFO_LOAD(&i2, PMIX_OPTIONAL, NULL, PMIX_BOOL);
     if (PMIX_SUCCESS == (rc = PMIx_Get(&proc, PMIX_DEBUG_STOP_IN_APP, &i2, 1, &val))) {
+        /* the launcher may have named the ONE place it wants us to stop at -
+         * "prterun --stop-in-app=<name>" passes that name down in the
+         * PMIX_BREAKPOINT envar.  This example has exactly one such place,
+         * right here, so a request for any other name is a request not to
+         * stop at all.  An unnamed request stops us wherever we get to
+         * first, which is also here. */
+        bkpt = getenv("PMIX_BREAKPOINT");
+        if (NULL != bkpt && 0 != strcasecmp(bkpt, EXAMPLE_BREAKPOINT)) {
+            fprintf(stderr, "[%s:%d] not stopping at %s - %s was requested\n", myproc.nspace,
+                    myproc.rank, EXAMPLE_BREAKPOINT, bkpt);
+            goto nostop;
+        }
         /* register for debugger release */
         DEBUG_CONSTRUCT_LOCK(&mylock);
         PMIX_INFO_CREATE(info, 1);
@@ -220,10 +238,21 @@ int main(int argc, char **argv)
                     myproc.rank);
             goto done;
         }
+        /* Tell the host we have arrived and are waiting.  Only the
+         * application knows where its own breakpoints are, so nobody else
+         * can say this - and a process that waits without saying it waits
+         * forever: the runtime never reports the job ready for debug, and
+         * no debugger is ever told to attach. */
+        PMIX_INFO_CREATE(info, 2);
+        PMIX_INFO_LOAD(&info[0], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
+        PMIX_INFO_LOAD(&info[1], PMIX_BREAKPOINT, EXAMPLE_BREAKPOINT, PMIX_STRING);
+        PMIx_Notify_event(PMIX_READY_FOR_DEBUG, &myproc, PMIX_RANGE_RM, info, 2, NULL, NULL);
+        PMIX_INFO_FREE(info, 2);
         /* wait for debugger release */
         DEBUG_WAIT_THREAD(&myrel.lock);
         DEBUG_DESTRUCT_MYREL(&myrel);
     }
+nostop:
 
     /* get our universe size */
     if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, PMIX_UNIV_SIZE, NULL, 0, &val))) {
