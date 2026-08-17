@@ -383,9 +383,24 @@ worth stating rather than re-deriving:
   byte-order converted, though, so keep `MCA_OOB_TCP_HDR_HTON`/`_NTOH` covering
   every multi-byte field you add, and zero a header before filling it — the
   fixed part goes on the wire whole, padding included. Note that the struct is
-  **not** the message: it ends in a variable-length nspace, so a send or a read
-  is sized by `PRTE_OOB_TCP_HDR_FIXED`/`PRTE_OOB_TCP_HDR_LEN()` and never by
-  `sizeof`. See [`oob/AGENTS.md`](oob/AGENTS.md), *The wire header*.
+  **not** the message: it ends in an nspace that only the connect handshake
+  sends, so a send or a read is sized by
+  `PRTE_OOB_TCP_HDR_FIXED`/`PRTE_OOB_TCP_HDR_LEN()` and never by `sizeof`
+  (288 bytes of struct, 30 on the wire for a data message). See
+  [`oob/AGENTS.md`](oob/AGENTS.md), *The wire header*.
+- **The RML cannot address another DVM, and is not meant to.** Every send
+  entry point takes a `pmix_rank_t`, and `send_buffer()` builds the
+  destination as that rank in `PRTE_PROC_MY_NAME->nspace`; `prte_oob_base_send_nb`
+  resolves the next hop the same way. So a `pmix_proc_t` naming a foreign
+  daemon loses its namespace here, silently, and the message goes to the local
+  daemon of that rank. The one feature that wanted to cross — a data server
+  hosted by another DVM (`prte_pmix_server_uri`) — reaches it over a PMIx
+  **tool** connection instead; see
+  [`../runtime/data_server/AGENTS.md`](../runtime/data_server/AGENTS.md). Do
+  not add a foreign-namespace send without dealing with the rest: the routing
+  tree, `prte_rml_is_node_up()` and the boot-epoch table are all indexed by
+  rank within *this* DVM, so a foreign rank collides with a local one at every
+  layer.
 - **One transport, one router.** Do not reintroduce component/module
   abstraction to "make it pluggable" unless there is a real second
   implementation; that abstraction is exactly what was removed.

@@ -48,6 +48,15 @@ number, the payload length, and a message ``type``:
 * ``IDENT`` / ``PROBE`` — the connection handshake, and
 * ``USER`` — a normal message.
 
+``origin`` and ``dst`` are **ranks**, not full process identifiers, and a data
+message carries no namespace at all — 30 bytes in total.  There is only ever
+one namespace to name: an OOB endpoint belongs to a daemon of this DVM and to
+nothing else, and every send entry point takes a rank that is resolved in the
+sender's own namespace, so the receiver rebuilds both identifiers with its
+own.  The connection handshake is the exception, and the reason the rest can
+be silent: it does carry a namespace, and a peer presenting any namespace but
+ours is refused rather than adopted.
+
 The header is exchanged **only** among daemons of the same DVM, all running the
 same build, so it is **not** a stable ABI.  Its layout may change freely, but
 every daemon in a build must agree; there is no versioning.
