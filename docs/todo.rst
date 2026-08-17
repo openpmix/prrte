@@ -143,29 +143,41 @@ would otherwise leave every step passing while testing nothing.
 the ``2(xN)`` form that a multi-node allocation produces; the ``2(x1)`` form
 goes through the same parser and is not separately covered.
 
-Performance work not landed
----------------------------
+Performance work: what the measurements settled
+-----------------------------------------------
 
-**Take the nspace out of the OOB header entirely.**  ``prte_oob_tcp_hdr_t``
+Nothing in this section is outstanding work.  What is here is the evidence
+behind the message-size changes that have landed, and the traps that made
+each of them expensive to get to — kept so the next person can extend the
+work without re-deriving the ground, or re-proposing something already
+measured and answered.
+
+**Judge a header change on what a small message costs.**  ``prte_oob_tcp_hdr_t``
 rides every RML message, and it used to carry the origin and the destination
 as two ``pmix_proc_t`` — 552 bytes, of which 512 were two fixed 256-byte
 nspace arrays holding the same short string.  On small messages that was most
 of the traffic: a launch-message cpuset slice for an eight-process node is
-101 bytes of payload, so the header was 85% of it.  The header now carries
-the two ranks and one length-prefixed nspace, and only the characters the
-nspace uses go on the wire — about 50 bytes for a typical DVM.
+101 bytes of payload, so the header was 85% of it.  It is now **30 bytes,
+fixed**: two ranks and no namespace at all.
 
-The ~22 bytes that remain are still per *message* for something that is a
-property of the *DVM*: every daemon in it shares one nspace for the whole of
-its life.  It could be dropped altogether, because a receiver can reconstruct
-it — every send entry point takes a rank, so a message is always addressed
-within the sender's own job, and a relay only ever forwards traffic of its
-own job — which makes the origin's nspace always the connection peer's, and
-that is known from the IDENT handshake.  What stopped it here is that this is
-an *invariant*, not a field: nothing enforces it, and the failure mode if it
-is ever broken is a message delivered under the wrong sender identity rather
-than an error.  Doing it means first making the invariant something the code
-states and checks, not something a reader has to derive.
+The namespace came out in two steps, and the second one is the useful lesson.
+Collapsing the two ``pmix_proc_t`` to two ranks plus one length-prefixed
+nspace took it to ~50 bytes and was easy, because the two names had never
+differed.  Removing the last ~20 was not a matter of trimming further: what
+stood in the way was that "both ends are always this daemon's namespace" was
+an *invariant nobody enforced*, and the failure mode if it were ever broken is
+a message delivered under the wrong sender identity rather than an error.
+Two things settled that.  A **data server hosted by another DVM**
+(``prte_pmix_server_uri``, historically ``ompi-server``) was the one feature
+that ever wanted to address a foreign namespace, and it turned out never to
+have worked over the RML — every send entry point has taken a rank in the
+sender's own namespace since the 2022 rework, so the server's namespace was
+silently discarded — so it now crosses on a PMIx **tool** connection instead
+(:doc:`plans/cross_dvm_data_server/cross-dvm-data-server`).  And the invariant
+became a **check**: only daemons open an OOB endpoint, the connect handshake
+still carries a namespace, and ``tcp_peer_recv_connect_ack`` refuses a peer
+whose namespace is not ours.  Verified once per connection is what lets every
+message omit the field.
 
 **Judge this kind of change on wire bytes, not on the raw message size.**
 A launch-message size is usually quoted raw, which is the right unit for "how
