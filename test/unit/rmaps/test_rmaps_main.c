@@ -17,6 +17,8 @@
 #include "src/util/proc_info.h"
 #include "constants.h"
 
+#include <pmix_server.h>
+
 extern int test_policy_parse(void);
 extern int test_job_policy(void);
 extern int test_job_qualifiers(void);
@@ -29,7 +31,7 @@ extern int test_round_robin(void);
 extern int test_ppr(void);
 extern int test_seq(void);
 extern int test_rank_file(void);
-extern int test_devices(void);
+extern int test_devices(bool pmix_up);
 
 /* shared with the mapper tests in this directory */
 prte_rmaps_base_module_t *test_rmaps_module(const char *name);
@@ -63,12 +65,21 @@ prte_rmaps_base_module_t *test_rmaps_module(const char *name)
 int main(void)
 {
     int rc, failures = 0;
+    bool pmix_up;
 
     rc = prte_init_util(PRTE_PROC_MASTER);
     if (PRTE_SUCCESS != rc) {
         fprintf(stderr, "prte_init_util failed: %d\n", rc);
         return 1;
     }
+
+    /* One test publishes a device assignment as a PMIX_DATA_ARRAY
+     * attribute, and prte_attr_load() copies it with PMIx_Data_copy, which
+     * will not run until PMIx itself is up.  A daemon reaches that state
+     * through PMIx_server_init, so do the same - here rather than inside
+     * the test, because the matching finalize has to come after the
+     * frameworks close (see below) and only main can sequence that. */
+    pmix_up = (PMIX_SUCCESS == PMIx_server_init(NULL, NULL, 0));
 
     /* the mapper tests take their module from the framework, so it has to
      * be open and selected before they run */
@@ -98,9 +109,18 @@ int main(void)
     failures += test_ppr();
     failures += test_seq();
     failures += test_rank_file();
-    failures += test_devices();
+    failures += test_devices(pmix_up);
 
+    /* Order matters, and getting it wrong is a segfault rather than a
+     * leak.  In an --enable-mca-dso build PRRTE's components are shared
+     * objects loaded through PMIx's MCA base, so PMIx_server_finalize
+     * DLCLOSES them - and closing a PRRTE framework afterwards calls each
+     * selected component's close function at an address that is no longer
+     * mapped.  Frameworks first, PMIx second. */
     (void) pmix_mca_base_framework_close(&prte_rmaps_base_framework);
+    if (pmix_up) {
+        PMIx_server_finalize();
+    }
     prte_finalize();
 
     if (0 == failures) {
