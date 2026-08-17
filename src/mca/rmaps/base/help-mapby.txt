@@ -112,6 +112,13 @@ applied at the job level:
   is refused rather than silently doing nothing useful. The deciding
   hwloc is the one PRRTE was built against. Other device classes are
   unaffected: a network or fabric device is named by its own GUIDs.
+  Given that identity, each process is handed its GPUs in the variable
+  its vendor's runtime reads - CUDA_VISIBLE_DEVICES for NVIDIA,
+  ROCR_VISIBLE_DEVICES for AMD - named by the vendor's own identifier.
+  Only processes mapped against a device get it, and an existing value
+  is replaced. PRRTE never sets the vendor's device ORDERING variable.
+  Intel GPUs get none: ZE_AFFINITY_MASK takes indices in an order PRRTE
+  cannot reproduce, and a wrong value there hides devices silently.
 
 * "PE-LIST=a,b" assigns procs to each node in the allocation based on
   the ORDERED qualifier. The list is comprised of comma-delimited

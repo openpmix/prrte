@@ -123,6 +123,24 @@ applied at the job level:
   a network or fabric device is named by its own GUIDs or MAC address,
   which hwloc always has.
 
+  Given that identity, each process is also handed its GPUs in the
+  variable its vendor's runtime reads -- ``CUDA_VISIBLE_DEVICES`` for
+  NVIDIA, ``ROCR_VISIBLE_DEVICES`` for AMD -- naming them by the vendor's
+  own identifier. Only processes actually mapped against a device get
+  this, and a variable already set in the environment is replaced, since
+  ``--map-by device=`` is the more specific request. PRRTE never sets the
+  vendor's device *ordering* variable (``CUDA_DEVICE_ORDER`` and its
+  equivalents): the identifiers do not depend on the ordering, which is
+  the reason for using them, and changing it would renumber devices for
+  the rest of the process's life. Intel GPUs are deliberately not given a
+  variable: ``ZE_AFFINITY_MASK`` takes device indices, in an order PRRTE
+  has no way to reproduce, and a wrong value there silently hides devices
+  rather than failing.
+
+  The assignment is also readable directly, whether or not the vendor's
+  variable was set, as the ``PMIX_DEVICE_ID`` key of the process's own
+  job data.
+
 Any directive can include qualifiers by adding a colon (``:``) and any
 combination of one or more of the following (delimited by colons) to
 the ``--mapby`` option (except where noted):

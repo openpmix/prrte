@@ -720,6 +720,32 @@ each daemon discovers its own node; installing another hwloc alongside
 does not change it. Network, fabric and block devices are unaffected,
 being named by identifiers hwloc always has.
 
+Where the identity is available, each process is also handed its GPUs in
+the environment variable its vendor's runtime reads:
+
+   CUDA_VISIBLE_DEVICES   NVIDIA
+   ROCR_VISIBLE_DEVICES   AMD
+
+named by the vendor's own identifier rather than by an index. Only
+processes actually mapped against a device are given one, and a value
+already in the environment is replaced - "--map-by device=" is the more
+specific request, and because the identifiers name devices absolutely
+they compose correctly with a set a resource manager has already
+narrowed.
+
+PRRTE never sets the vendor's device ORDERING variable
+(CUDA_DEVICE_ORDER and its equivalents). The identifiers do not depend
+on it, which is precisely why they are used, and changing it would
+renumber every device for the rest of the process's life.
+
+Intel GPUs are deliberately given no variable. ZE_AFFINITY_MASK takes
+device indices in an ordering PRRTE has no way to reproduce, and a wrong
+value in these variables does not fail - it silently reduces the set of
+devices the process can see, which is worse than setting nothing.
+
+The assignment can also be read directly, whether or not a vendor
+variable was set, from the process's own job data under PMIX_DEVICE_ID.
+
 The reverse ratio - several processes on each device rather than several
 devices for each process - is a "ppr" pattern, spelled the same way as
 every other:

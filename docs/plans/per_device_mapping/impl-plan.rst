@@ -819,7 +819,56 @@ which is why H1 and H2 still have to happen.
 
 No new field on ``pmix_device_t`` is required: from ``osname``
 (``cuda0``) the component walks to the PCI function and reads
-``NVIDIAUUID`` off the sibling ``nvml0``.
+``NVIDIAUUID`` off the sibling ``nvml0`` — which is what H2's
+``vendor_id`` already does, so the component asks the enumerator rather
+than walking the topology itself.
+
+What H3 landed, and two things it found on the way
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``pmix_pgpu_module_t`` gains ``setup_fork``, dispatched from
+  ``pmix_pgpu_base_setup_fork()`` after the namespace-wide envars.  The
+  framework interface version goes to 2.0.0, since a component built
+  against 1.0.0 leaves the new entry NULL.
+* ``pmix_pgpu_base_set_visible_devices()`` in the base does the work all
+  vendors share — fetch the proc's ``PMIX_DEVICE_ID``, resolve each
+  device against the **local** topology, keep the ones belonging to the
+  caller's vendor, join their identities — so a component is three lines.
+  ``pmix_hwloc_device_t`` gains ``vendor`` alongside ``vendor_id`` for
+  that filter, because a node may carry cards from two vendors and each
+  wants its own variable.
+* ``nvd`` sets ``CUDA_VISIBLE_DEVICES``, ``amd`` sets
+  ``ROCR_VISIBLE_DEVICES``, ``intel`` deliberately sets nothing.
+
+**``PMIx_server_setup_fork`` never called ``pmix_pgpu.setup_fork``.**  It
+called the ``pnet`` and ``pmdl`` hooks and not this one, so the whole pgpu
+environment path was dead code: ``allocate()`` harvested the vendor's
+envars, ``setup_local()`` cached them, and nothing ever replayed the cache
+into a child.  Adding the call repairs that independently of anything in
+this phase.
+
+**The vendor components were not built.**  ``amd``, ``intel`` and ``nvd``
+gated themselves off in ``configure.m4`` unless ``--enable-test-build``
+was given, on the grounds that no vendor-runtime detection existed.  That
+asked the question in the wrong place: none of them links anything, and
+the machine that builds PMIx is routinely not the machine that runs it, so
+a cluster with GPUs got nothing unless somebody had configured a test
+build.  They build unconditionally now and decline at **run** time in
+``component_open``, which is where the question can actually be answered.
+
+Verified end to end rather than only in unit tests, by handing both PRRTE
+and the daemon's PMIx server the NVML topology and launching::
+
+    $ prterun --map-by device=gpu --bind-to none -n 4 \
+          printenv CUDA_VISIBLE_DEVICES
+    GPU-46f77619-68bf-8f9d-7cfb-61fa9c4ca692
+    GPU-32559d2f-bd80-6360-09ab-97af8614d541
+    GPU-f62c37c9-47b3-35d9-91d2-b403ca0ef7ca
+    GPU-81addb77-2337-6f9f-b0dd-696aa82969d1
+
+with the three negatives confirmed the same way: a job not mapped by
+device gets nothing, ``CUDA_DEVICE_ORDER`` is never set, and the same
+machine's DRM-only topology is refused.
 
 Vendors, and what each one can be told
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1051,9 +1100,16 @@ Task checklist
       refusal case added for ``turin-4gpu``; stale device goldens removed
 - [x] ``check-offline`` now runs ``--golden`` (the snapshots had drifted
       two changes behind the code, unread)
-- [ ] H3: ``setup_fork`` added to ``pmix_pgpu_module_t``; called from
-      ``pmix_pgpu_base_setup_fork()`` after the namespace envars
-- [ ] H3: ``nvd`` sets ``CUDA_VISIBLE_DEVICES`` from ``NVIDIAUUID``;
+- [x] H3: ``setup_fork`` added to ``pmix_pgpu_module_t``; called from
+      ``pmix_pgpu_base_setup_fork()`` after the namespace envars; pgpu
+      framework version 1.0.0 → 2.0.0
+- [x] H3: ``PMIx_server_setup_fork`` now calls ``pmix_pgpu.setup_fork``
+      at all — it never did, so the whole pgpu envar path was dead
+- [x] H3: ``nvd`` sets ``CUDA_VISIBLE_DEVICES`` from ``NVIDIAUUID``;
       ``amd`` from ``AMDUUID``; ``intel`` left deliberately unimplemented
+- [x] H3: the vendor components build unconditionally instead of only
+      under ``--enable-test-build``; detection moves to ``component_open``
+- [x] H3: end-to-end launch confirms the value, and the three negatives
 - [ ] Multi-node confirmation that ranks on different nodes receive
-      *their own* node's identities
+      *their own* node's identities (needs a multi-GPU cluster; the
+      container harness has no GPUs)
