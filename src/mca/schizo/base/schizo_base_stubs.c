@@ -570,16 +570,25 @@ int prte_schizo_base_setup_fork(prte_job_t *jdata, prte_app_context_t *app)
 {
     prte_attribute_t *attr;
     bool exists, prefix_defined = false;
-    char *param, *p2, *saveptr, *p, *defprefix;
+    char *param, *p2, *saveptr, *p, *defprefix, *bkpt;
     int i;
     prte_job_t *daemons;
-    /* the job is part of the hook's contract, but the only prefix this
-     * function consults is the app's own and the DVM-wide default carried
-     * on the daemon job */
-    PRTE_HIDE_UNUSED_PARAMS(jdata);
 
     /* flag that we started this job */
     PMIx_Setenv("PRTE_LAUNCHED", "1", true, &app->env);
+
+    /* if the user named the place they want the application to stop at,
+     * hand that name down to the application.  The runtime cannot know
+     * where any given breakpoint lives - only the application can - so all
+     * we can do is tell it which one was asked for and then wait for the
+     * "ready for debug" event it fires when it gets there.  An application
+     * that stops at a breakpoint of its own choosing (STOP-IN-APP with no
+     * name) sees no envar and stops at the first one it comes to. */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_BREAKPOINT,
+                           (void **) &bkpt, PMIX_STRING)) {
+        PMIx_Setenv("PMIX_BREAKPOINT", bkpt, true, &app->env);
+        free(bkpt);
+    }
 
     /* NOTE: the generic envar directives (SET/ADD/UNSET/PREPEND/APPEND, at
      * both job and app level) are NOT applied here.  odls' process_envars()
