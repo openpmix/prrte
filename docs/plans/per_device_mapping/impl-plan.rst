@@ -712,13 +712,71 @@ The cases split cleanly, and better than feared:
    :widths: 40 60
 
    * - Nodes differ in
-     - What happens today
+     - What happens
    * - Which devices they have (structure)
      - Different OS device children, ``TOO_COMPLEX``, separate
        ``prte_topology_t``.  Already correct.
-   * - Only device identity (serial numbers)
-     - Expressible diff, topology shared, identity lost.  **The only
-       broken case**, and the diff is precisely its carrier.
+   * - Whether the devices carry identity at all
+     - An absent info attribute changes an object's **info count**, which
+       ``hwloc_diff_trees()`` also calls ``TOO_COMPLEX`` — verified with
+       ``hwloc-diff`` against a copy of the NVML topology with the
+       ``NVIDIAUUID`` attributes stripped ("Found 5 differences, including
+       4 too complex ones").  So this is structural too, and such nodes
+       never share a topology either.
+   * - Only the identity **values** (serial numbers)
+     - Expressible diff, topology shared, values lost.  The only case in
+       which a shared topology misreports anything.
+
+What that means for the plumbing
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**No inventory transport was built, because it would have had no
+consumer.**  The two rows above are what settled it, and they are worth
+stating as one sentence: *whether* a device can be named is a property of
+the topology, and only its *value* is a property of the node.
+
+Follow both halves to where they are read:
+
+* The HNP needs only the first.  Its one decision is whether to accept
+  ``--map-by device=<gpu class>`` at all, and it can take that from the
+  recorded topology — which, per the table, cannot disagree with the node
+  on that question.
+* The value is read where it is used, which is the daemon: the envar in
+  H3 is set at fork time, and the daemon has its own topology.  Shipping
+  values to the HNP so they could be shipped back out again adds a
+  round trip, a wire format and a cache to arrive at the answer the
+  daemon already had.
+
+The earlier draft of this phase called for
+``PMIx_server_collect_inventory`` plumbing on the strength of "nodes can
+have different GPUs".  They can — and that case was already correct,
+because different GPUs mean a different topology.  The inventory API is
+still the right door for anything the *topology* cannot answer (a
+component querying NVML directly, say, on a node whose hwloc lacks the
+backend), and ``pgpu``'s ``collect_inventory`` stubs are still where that
+would go.  It is not the right door for reading an attribute out of a
+topology PRRTE is already holding.
+
+What H2 landed instead
+~~~~~~~~~~~~~~~~~~~~~~
+
+* ``pmix_hwloc_device_t`` gains ``vendor_id``, harvested by
+  ``pmix_hwloc_get_devices()`` from the vendor-key table
+  (``NVIDIAUUID`` / ``AMDUUID`` / ``LevelZeroUUID``).  Harvested across
+  the whole PCI **function**, not off the OS device that names it: with
+  CUDA and NVML both loaded the function is named ``cuda0`` while the
+  uuid is on ``nvml0``, so a per-device read would report "no identity"
+  on exactly the machines that have one.
+* ``prte_rmaps_base_devices_begin()`` refuses a GPU-class request when
+  any device on the node has no ``vendor_id``
+  (``rmaps:device-not-nameable``), naming the cause and the fix.  GPU
+  classes only — a fabric or network device is named by its own GUIDs.
+* ``test/topologies`` gains ``turin-4gpu-nvml.xml``: the same machine as
+  ``turin-4gpu.xml``, read by an hwloc built with CUDA/NVML.  The pair is
+  what makes both arms of the decision testable, and the device cases in
+  the offline harness moved onto the one that can be named.  Placement is
+  byte-identical between the two, which is the check that the refusal
+  changed no mapping.
 
 H3 — where the abstraction lives
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -736,6 +794,11 @@ mining ``node->topodiff`` even though the diff is free and already
 recorded: the diff route works only while the delta happens to stay
 expressible, and it cannot carry anything hwloc did not put in the
 topology in the first place.
+
+Note H2 has already settled where the *value* comes from: the daemon's
+own topology, which a ``pgpu`` component reads as
+``pmix_globals.topology`` and is running on anyway.  Nothing has to be
+shipped to it.
 
 **The envar cannot ride ``setup_application``.**  That path is
 per-namespace: ``allocate()`` returns a blob, ``setup_local()`` unpacks it
@@ -972,20 +1035,22 @@ Task checklist
 
 **Phase H — vendor identity and the envars**
 
-- [ ] H1: ``build_device_uuid()`` takes the owning node's hostname instead
+- [x] H1: ``build_device_uuid()`` takes the owning node's hostname instead
       of reading ``pmix_globals.hostname``; every producer moves together
-- [ ] H1: PMIx unit test that two enumerations of the same topology from
-      different hosts yield the same uuid
-- [ ] H2: ``pgpu`` ``collect_inventory`` implemented for ``nvd`` (and
-      ``amd``) — real device identities off the local topology
-- [ ] H2: PRRTE calls ``PMIx_server_collect_inventory`` /
-      ``PMIx_server_deliver_inventory``; per-node identity recorded
-      alongside the shared ``prte_topology_t``
-- [ ] H2: mapper assigns identity from the node's own list, not the
-      recorded topology's
-- [ ] Refuse ``--map-by device=`` with a diagnostic when the topology
-      carries no vendor identity; new ``help-*`` topic; regenerate
-      show_help content
+- [x] H1: PMIx and PRRTE unit tests enumerating one topology under two
+      node names
+- [x] H2: ``pmix_hwloc_device_t.vendor_id``, harvested across the PCI
+      function from the vendor-key table
+- [x] H2: **inventory transport NOT built** — identity *presence* is
+      structural and only its *value* is per-node, so the HNP needs
+      nothing shipped to it; see "What that means for the plumbing"
+- [x] Refuse ``--map-by device=<gpu class>`` with a diagnostic when the
+      devices carry no vendor identity; ``rmaps:device-not-nameable``;
+      show_help content regenerated
+- [x] ``turin-4gpu-nvml.xml`` added; offline device cases moved onto it;
+      refusal case added for ``turin-4gpu``; stale device goldens removed
+- [x] ``check-offline`` now runs ``--golden`` (the snapshots had drifted
+      two changes behind the code, unread)
 - [ ] H3: ``setup_fork`` added to ``pmix_pgpu_module_t``; called from
       ``pmix_pgpu_base_setup_fork()`` after the namespace envars
 - [ ] H3: ``nvd`` sets ``CUDA_VISIBLE_DEVICES`` from ``NVIDIAUUID``;
