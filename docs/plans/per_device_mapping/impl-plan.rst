@@ -870,6 +870,40 @@ with the three negatives confirmed the same way: a job not mapped by
 device gets nothing, ``CUDA_DEVICE_ORDER`` is never set, and the same
 machine's DRM-only topology is refused.
 
+Multi-node: the case fake hardware can still make
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The question a single node cannot answer is whether each node's processes
+are told about *that* node's devices, and the containers have no GPUs.
+Fake them per node instead: give every container its own copy of the NVML
+topology at the **same path**, with the UUIDs rewritten to carry the
+node's number, and point both layers at that path —
+``PRTE_MCA_hwloc_use_topo_file`` for what the daemon reports and the
+mapper places against, ``PMIX_MCA_pmix_hwloc_topo_file`` for the PMIx
+server that resolves an assignment to a vendor identity at fork time.
+Both are forwarded from the HNP's environment to every daemon
+(``plm_base_launch_support.c`` turns them into ``--prtemca`` /
+``--pmixmca`` on the daemon command line), so one export reaches the
+whole DVM while the *content* stays per node.
+
+That produces exactly the shape the identity is at risk in, and the run
+confirms it is the shape: four nodes reporting hardware that differs only
+in serial numbers, so the HNP collapses them —
+
+.. code-block:: text
+
+   TOPOLOGY ALREADY RECORDED IN POSN 0 - SOME DIFFS FOUND   (x3)
+
+— and is left holding one topology carrying node1's identities.  Sixteen
+processes across those four nodes nevertheless come back with sixteen
+distinct GPUs, each belonging to the node its process is running on::
+
+   node1 GPU-n1-46f77619-…    node3 GPU-n3-46f77619-…
+   node2 GPU-n2-46f77619-…    node4 GPU-n4-46f77619-…
+
+which is the H2 conclusion demonstrated rather than argued: the head node
+never needed the values, because they are read where they are used.
+
 Vendors, and what each one can be told
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1110,6 +1144,7 @@ Task checklist
 - [x] H3: the vendor components build unconditionally instead of only
       under ``--enable-test-build``; detection moves to ``component_open``
 - [x] H3: end-to-end launch confirms the value, and the three negatives
-- [ ] Multi-node confirmation that ranks on different nodes receive
-      *their own* node's identities (needs a multi-GPU cluster; the
-      container harness has no GPUs)
+- [x] Multi-node confirmation that ranks on different nodes receive
+      *their own* node's identities — dockerswarm, per-node topology
+      files, 16 procs over 4 nodes, 16 distinct GPUs, and the HNP
+      verified to be sharing one topology while it happens
