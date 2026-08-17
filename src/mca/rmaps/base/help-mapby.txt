@@ -103,6 +103,15 @@ applied at the job level:
   proc is still assigned its own device, but a warning is printed
   because the binding cannot be made any more specific than it would
   have been without the directive.
+  Mapping by a GPU also requires that the GPUs can be named to the
+  vendor's runtime. hwloc records a GPU's vendor identity - an NVIDIA
+  "GPU-<uuid>" and its AMD and Intel equivalents - only when built with
+  that vendor's backend (NVML, RSMI, Level Zero). Without it the GPUs
+  are still found and still placed against, but no process can be told
+  which one it got in terms its GPU library will accept, so the request
+  is refused rather than silently doing nothing useful. The deciding
+  hwloc is the one PRRTE was built against. Other device classes are
+  unaffected: a network or fabric device is named by its own GUIDs.
 
 * "PE-LIST=a,b" assigns procs to each node in the allocation based on
   the ORDERED qualifier. The list is comprised of comma-delimited

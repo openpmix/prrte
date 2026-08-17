@@ -451,6 +451,37 @@ node→session deviation.
 
 ---
 
+## Mapping by device
+
+`--map-by device=<class>` places each proc against a device rather than a
+cpu object. The enumeration is **PMIx's** (`pmix_hwloc_get_devices()`), not
+a walk written here, so that the devices a proc is assigned and the devices
+`PMIX_DEVICE_DISTANCES` reports it can see cannot disagree. Two facts about
+it govern everything in `rmaps_base_devices.c`:
+
+- **Naming a device means naming its node.** A device uuid embeds a
+  hostname, and the mapper reads *other* nodes' topologies, so
+  `prte_rmaps_base_devices_begin()` passes `node->name`. Letting PMIx
+  default it stamps the HNP on every device in the job — the uuid then
+  fails to match what the process computes locally, which is the only thing
+  the uuid is for.
+- **A GPU nothing can name is refused.** hwloc records a GPU's vendor
+  identity (`NVIDIAUUID`, `AMDUUID`, `LevelZeroUUID`) only from its vendor
+  backends, and that identity is the sole handle a GPU runtime accepts. If
+  any GPU on the node lacks one, the request fails with
+  `rmaps:device-not-nameable` rather than mapping and telling the process
+  nothing — those two outcomes are indistinguishable while the job runs,
+  and the second one silently puts every rank on the same GPU. The check is
+  GPU-only: fabric and network devices are named by their own GUIDs.
+
+That second check runs on the HNP against a **shared** topology, and is
+sound anyway: an absent info attribute changes an object's info count,
+hwloc reports that as a "too complex" difference rather than an expressible
+one, and `prte_plm_base_daemon_callback()` records such a node under its
+own `prte_topology_t`. So *whether* identity exists cannot vary inside one
+recorded topology. Its **value** can, and must be read on the node itself —
+never from the HNP's copy, which belongs to whichever node reported first.
+
 ## Conventions specific to this framework
 
 - **Policy bits are packed.** A `prte_mapping_policy_t` holds the policy

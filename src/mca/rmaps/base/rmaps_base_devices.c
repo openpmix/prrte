@@ -286,6 +286,46 @@ int prte_rmaps_base_devices_begin(prte_node_t *node, prte_rmaps_options_t *opts,
         return PRTE_SUCCESS;
     }
 
+    /* Refuse to map by a GPU we cannot name.
+     *
+     * An assignment is only worth making if the process can act on it, and
+     * for a GPU that means naming the device to the vendor's runtime -
+     * which accepts the vendor's own identifier and nothing else.  hwloc
+     * records that identifier only from its vendor backends (NVML, RSMI,
+     * Level Zero), so a PRRTE built against an hwloc without them sees the
+     * GPUs, places against them correctly, and hands the process a name no
+     * library it links has ever heard of.
+     *
+     * Mapping anyway and quietly setting nothing is the worst of the
+     * options: the job runs, the placement looks right in --display map,
+     * and the only symptom is that every rank on the node contends for the
+     * same GPU - which nobody discovers until somebody measures.  So say so
+     * up front, and name the fix.
+     *
+     * Only for the GPU classes.  A fabric or network device is named by its
+     * own GUIDs or MAC, which hwloc always has and which is the identifier
+     * the fabric libraries use; there is no vendor backend to be missing.
+     *
+     * Checked against this node's recorded topology, which is sound even
+     * though the HNP shares one topology between nodes reporting identical
+     * hardware: an absent info attribute changes an object's info count,
+     * hwloc reports that as a "too complex" difference rather than an
+     * expressible one, and PRRTE records such a node separately.  So
+     * WHETHER identity exists cannot vary within a shared topology - only
+     * its value can, and that is read on the node itself. */
+    if (0 != (type & (PMIX_DEVTYPE_GPU | PMIX_DEVTYPE_COPROC))) {
+        for (n = 0; n < dc->ndevs; n++) {
+            if (NULL == dc->devs[n].vendor_id) {
+                prte_show_help("help-prte-rmaps-base.txt", "rmaps:device-not-nameable",
+                               true, opts->map_device, node->name,
+                               dc->devs[n].dev.osname);
+                pmix_hwloc_release_devices(dc->devs, dc->ndevs);
+                free(dc);
+                return PRTE_ERR_SILENT;
+            }
+        }
+    }
+
     /* reorder before anything reads the list */
     if (NULL != opts->map_interleave) {
         hwloc_obj_type_t level = HWLOC_OBJ_PACKAGE;

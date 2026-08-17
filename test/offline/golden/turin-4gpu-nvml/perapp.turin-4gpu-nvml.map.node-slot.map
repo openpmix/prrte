@@ -1,0 +1,27 @@
+--------------------------------------------------------------------------
+A deprecated MCA variable value was specified in the environment or
+on the command line.  Deprecated MCA variables should be avoided;
+they may disappear in future releases.
+
+Deprecated variable: rmaps_default_mapping_policy
+New variable:        mapby
+--------------------------------------------------------------------------
+
+========================   JOB MAP   ========================
+Data for JOB prterun-JOBID@N offset 0 Total slots allocated N
+    App 0: Mapper: round_robin  Mapping policy: BYNODE:NOOVERSUBSCRIBE  Ranking policy: NODE  Binding policy: NUMA:IF-SUPPORTED
+    App 1: Mapper: round_robin  Mapping policy: BYSLOT:NOOVERSUBSCRIBE  Ranking policy: SLOT  Binding policy: NUMA:IF-SUPPORTED
+    Cpu set: N/A  PPR: N/A  Cpus-per-rank: N/A  Cpu Type: CORE
+
+
+Data for node: node0	Num slots: 8	Max slots: 0	Num procs: 4
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 0 Bound: package[0][core:L0-15]
+        Process jobid: prterun-JOBID@N App: 1 Process rank: 3 Bound: package[0][core:L1-15]
+        Process jobid: prterun-JOBID@N App: 1 Process rank: 4 Bound: package[0][core:L1-15]
+        Process jobid: prterun-JOBID@N App: 1 Process rank: 5 Bound: package[0][core:L1-15]
+
+Data for node: node1	Num slots: 8	Max slots: 0	Num procs: 1
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 1 Bound: package[0][core:L0-15]
+
+Data for node: node2	Num slots: 8	Max slots: 0	Num procs: 1
+        Process jobid: prterun-JOBID@N App: 0 Process rank: 2 Bound: package[0][core:L0-15]
