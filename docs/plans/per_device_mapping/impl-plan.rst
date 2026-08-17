@@ -580,6 +580,223 @@ here, the requested table is simply run.
   directive rather than here.
 
 
+Phase H — vendor identity and the visibility envars
+-----------------------------------------------------
+
+Needs F.  This is the phase that turns "which device did I get" from a
+string the process must interpret into something the vendor runtime acts
+on, and it is where the identity of a device — as opposed to its position
+— starts to matter.  Everything before this phase is positional, which is
+why none of it noticed the two defects below.
+
+The trigger was the reporter rebuilding hwloc against CUDA/NVML on
+`OMPI #14169 <https://github.com/open-mpi/ompi/issues/14169>`_ and
+attaching the resulting topology.  It settles the question that had the
+envar work blocked.
+
+What the NVML topology settles
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Each GPU function now carries three OS devices and a usable identity::
+
+    PCIDev 0000:06:00.0  (GH100 [H200 SXM 141GB])
+      +-- cuda0       subtype=CUDA    Backend=CUDA
+      +-- opencl0d0   subtype=OpenCL  Backend=OpenCL
+      +-- nvml0       subtype=NVML    NVIDIAUUID=GPU-46f77619-68bf-...
+
+``GPU-<uuid>`` is order-independent, so PRRTE can name a device exactly
+without pinning ``CUDA_DEVICE_ORDER`` — which is the thing that killed the
+index route, CUDA's default being the unspecified ``FASTEST_FIRST``
+heuristic.  See the ``CUDA_VISIBLE_DEVICES`` reasoning in
+:doc:`per-device-mapping`.
+
+Two properties of that topology matter to the code and neither is
+obvious:
+
+* The enumerator dedups all three OS devices to **one** device keyed on
+  the PCI function, and names it by the first vendor compute node it
+  meets — ``cuda0``.  The UUID lives on the *sibling* ``nvml0``.  So
+  anything wanting the vendor id walks from the chosen device to its PCI
+  ancestor and scans that function's other OS devices.  It is not on the
+  device PMIx hands back.
+* Mapping never needed any of this.  The original DRM-only topology and
+  the NVML one produce identical placement — cores 16/32/96/112 for
+  ``-n 4 --map-by device=gpu --bind-to core`` — differing only in the
+  reported device name (``renderD128`` vs ``cuda0``).  NVML is an *envar*
+  prerequisite, not a mapping one.
+
+The hwloc that decides this is the one **PRRTE is built against**, not
+whichever one the user ran by hand: ``prted`` probes each node itself.  A
+distro hwloc without the NVML backend puts us back to a bus id.
+
+Decision: no identity, no device mapping
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If the topology PRRTE holds for a node carries no vendor identity for its
+devices, ``--map-by device=`` is **refused with a diagnostic** naming the
+cause and suggesting an hwloc rebuilt with the vendor backend.  We do not
+map and then silently decline to set anything: an assignment nobody can
+act on is worse than a clear refusal, and it is indistinguishable from a
+working run until performance is measured.
+
+Where the check lands is the easy part.  A node whose hwloc lacked NVML
+has a *different set of OS devices*, so it becomes its own recorded
+topology rather than a diff (see below).  "Has vendor identity" is
+therefore a property of each ``prte_topology_t``, and the mapper can test
+it on the HNP without any of the plumbing in H2.
+
+H1 — the UUID is stamped with the wrong hostname
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``build_device_uuid()`` in PMIx's ``src/hwloc/pmix_hwloc.c`` builds a GPU
+uuid as::
+
+    pmix_asprintf(uuid, "gpu://%s::%s", pmix_globals.hostname, osdev->name);
+
+``pmix_globals.hostname`` is the hostname of *the process doing the
+enumeration*.  The mapper runs on the HNP, so every device uuid PRRTE
+records reads ``gpu://<HNP-hostname>::cuda0`` — for every node in the job.
+
+That breaks the premise ``rmaps_base_devices.c`` states out loud: the uuid
+travels rather than an ordinal precisely because it is "the same string
+PMIx reports for that device through ``PMIX_DEVICE_DISTANCES``, so the
+process can correlate the two."  A rank computing its distances locally
+gets ``gpu://<its own host>::cuda0`` and will not match.  The correlation
+works only on the HNP's own node.
+
+This is wrong today, independently of anything else in this phase, and it
+is where the work starts.  The fix is to make the hostname an input to the
+enumeration rather than an ambient global — a device belongs to the node
+whose topology it came from, not to whoever is reading that topology.
+Every producer of the uuid must move together, since the whole point of
+``build_device_uuid()`` being one function is that the grammar cannot vary
+between paths.
+
+H2 — per-node identity: the UUIDs are in the diff
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Verified**, not assumed.  Taking the reporter's NVML topology and a copy
+differing only in ``HostName`` and the four ``NVIDIAUUID`` values,
+``hwloc-diff`` (2.12.2) reports::
+
+    Found 5 differences ... exit=0
+    <diff obj_depth="0"  obj_index="0"  obj_attr_name="HostName"   .../>
+    <diff obj_depth="-6" obj_index="7"  obj_attr_name="NVIDIAUUID" .../>
+    <diff obj_depth="-6" obj_index="12" obj_attr_name="NVIDIAUUID" .../>
+    <diff obj_depth="-6" obj_index="21" obj_attr_name="NVIDIAUUID" .../>
+    <diff obj_depth="-6" obj_index="26" obj_attr_name="NVIDIAUUID" .../>
+
+``hwloc_diff_trees()`` does descend ``io_first_child`` and does emit an
+``OBJ_ATTR_INFO`` entry for a changed info value, so the delta is fully
+expressible — exit 0, no ``TOO_COMPLEX``.  ``obj_depth=-6`` is
+``HWLOC_TYPE_DEPTH_OS_DEVICE`` and ``obj_index`` the OS device's logical
+index; ``hwloc_get_obj_by_depth()`` resolves special depths through
+``slevels``, so an entry maps straight back to a device.
+
+The consequence for PRRTE is that the identity is thrown away.
+``prte_plm_base_daemon_callback()`` treats a return of 0 as "we already
+have this topology": the node ``PMIX_RETAIN``\ s the *recorded* topology,
+its own is destructed, and the delta goes into ``node->topodiff`` — which
+is written in exactly one place, destroyed in two, and **read nowhere**.
+So the mapper reads the first-reporting node's UUIDs for every node.
+
+Positionally that is still a correct map — the structure genuinely is
+identical, which is exactly why the offline harness cannot see it — but
+the moment the UUID is the thing acted on it is silently wrong everywhere
+except one node.
+
+The cases split cleanly, and better than feared:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - Nodes differ in
+     - What happens today
+   * - Which devices they have (structure)
+     - Different OS device children, ``TOO_COMPLEX``, separate
+       ``prte_topology_t``.  Already correct.
+   * - Only device identity (serial numbers)
+     - Expressible diff, topology shared, identity lost.  **The only
+       broken case**, and the diff is precisely its carrier.
+
+H3 — where the abstraction lives
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+PMIx's ``pgpu`` framework, and it needs two things it does not have.
+
+**Inventory is the right channel for identity.**
+``PMIx_server_collect_inventory()`` / ``PMIx_server_deliver_inventory()``
+already exist and already route to ``pmix_pgpu.collect_inventory``; the
+``nvd``, ``amd`` and ``intel`` bodies are stubs (*"search the topology for
+nvd GPUs"*, returning success).  PRRTE calls neither API anywhere.  So
+each daemon reports what is actually on *its* node, the HNP records it
+per node, and the mapper assigns from that list.  This is preferable to
+mining ``node->topodiff`` even though the diff is free and already
+recorded: the diff route works only while the delta happens to stay
+expressible, and it cannot carry anything hwloc did not put in the
+topology in the first place.
+
+**The envar cannot ride ``setup_application``.**  That path is
+per-namespace: ``allocate()`` returns a blob, ``setup_local()`` unpacks it
+into ``ns->envars``, and ``pmix_pgpu_base_setup_fork()`` replays *that same
+list* for every local process.  ``CUDA_VISIBLE_DEVICES`` is per-rank, so
+the existing path would hand every rank on a node the same value.
+
+The hook needed is a module-level ``setup_fork``.  ``pmix_pgpu_module_t``
+has no such entry; the API-level function already receives the
+``pmix_proc_t *``.  Add it to the module struct, call the active modules
+from ``pmix_pgpu_base_setup_fork()`` after the namespace envars, and let
+the component build its own value.  That puts every vendor-specific fact —
+which variable, which identifier form, what to do when the vendor is
+absent — inside the component, and it runs on the **daemon**, where the
+local topology is the node's own.  For the envar specifically that
+sidesteps both H1 and H2; it does not fix the identity PRRTE *reports*,
+which is why H1 and H2 still have to happen.
+
+No new field on ``pmix_device_t`` is required: from ``osname``
+(``cuda0``) the component walks to the PCI function and reads
+``NVIDIAUUID`` off the sibling ``nvml0``.
+
+Vendors, and what each one can be told
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. list-table::
+   :header-rows: 1
+   :widths: 16 26 58
+
+   * - Vendor
+     - Variable
+     - Identity available
+   * - NVIDIA
+     - ``CUDA_VISIBLE_DEVICES``
+     - ``GPU-<uuid>`` from ``NVIDIAUUID`` (NVML backend).
+       Order-independent; never set ``CUDA_DEVICE_ORDER``.
+   * - AMD
+     - ``ROCR_VISIBLE_DEVICES``
+     - Same shape, from ``AMDUUID`` (RSMI backend).
+   * - Intel
+     - ``ZE_AFFINITY_MASK``
+     - Index-based, no uuid form.  Keeps the ordering problem and needs
+       its own decision; do not guess one.
+
+Two properties of the values are worth stating because they decide the
+failure behaviour.  A wrong ``CUDA_VISIBLE_DEVICES`` does not error — "if
+an invalid index is encountered, only devices with indices that appear
+before the invalid index in the list are visible" — so it silently shrinks
+the visible set, which is why guessing is refused outright.  And because
+UUIDs are order-independent, naming a subset composes correctly with a set
+a resource manager has already filtered (Slurm's ``--gpus-per-task``
+leaves ``CUDA_VISIBLE_DEVICES`` set); an index-based value would not.
+
+Build order
+~~~~~~~~~~~
+
+H1 first and alone: it is a live defect and needs none of the rest.  Then
+H2, so per-node identity is real.  Then H3, which is only worth doing once
+the identity it would publish is correct.
+
+
 Phases as landed
 ----------------
 
@@ -662,6 +879,12 @@ Risks and open items
    * - ``prte_uniform_nodes`` maps against another node's topology
      - Documented, not detected.  Nothing else in the tree detects it
        either.
+   * - Every node is told the first node's device UUIDs
+     - Real, and invisible to the offline harness because the placement
+       stays correct — only the identity is wrong.  Phase H2.
+   * - The reported uuid names the HNP, not the node
+     - Real today.  Phase H1, and it lands first because it is a defect
+       rather than a missing feature.
 
 Still undecided, and neither blocks phase C:
 
@@ -746,3 +969,26 @@ Task checklist
       ``device=network`` places correctly
 - [ ] (docs moved to phase D2)
 - [ ] Reply on OMPI #14169 with the resulting table
+
+**Phase H — vendor identity and the envars**
+
+- [ ] H1: ``build_device_uuid()`` takes the owning node's hostname instead
+      of reading ``pmix_globals.hostname``; every producer moves together
+- [ ] H1: PMIx unit test that two enumerations of the same topology from
+      different hosts yield the same uuid
+- [ ] H2: ``pgpu`` ``collect_inventory`` implemented for ``nvd`` (and
+      ``amd``) — real device identities off the local topology
+- [ ] H2: PRRTE calls ``PMIx_server_collect_inventory`` /
+      ``PMIx_server_deliver_inventory``; per-node identity recorded
+      alongside the shared ``prte_topology_t``
+- [ ] H2: mapper assigns identity from the node's own list, not the
+      recorded topology's
+- [ ] Refuse ``--map-by device=`` with a diagnostic when the topology
+      carries no vendor identity; new ``help-*`` topic; regenerate
+      show_help content
+- [ ] H3: ``setup_fork`` added to ``pmix_pgpu_module_t``; called from
+      ``pmix_pgpu_base_setup_fork()`` after the namespace envars
+- [ ] H3: ``nvd`` sets ``CUDA_VISIBLE_DEVICES`` from ``NVIDIAUUID``;
+      ``amd`` from ``AMDUUID``; ``intel`` left deliberately unimplemented
+- [ ] Multi-node confirmation that ranks on different nodes receive
+      *their own* node's identities

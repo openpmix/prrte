@@ -927,7 +927,24 @@ Out of scope
   opt-in and in the framework that already handles vendor-specific syntax,
   not in the mapper.
 
-  Should that reversal be considered, four constraints from `NVIDIA's
+  .. note::
+
+     **This has since been judged in scope**, on the terms this bullet set:
+     in ``pgpu``, the framework that already owns vendor-specific syntax,
+     never in the mapper.  See *Phase H* of :doc:`impl-plan`.  What changed
+     is that the requester rebuilt hwloc against CUDA/NVML and supplied a
+     topology carrying ``NVIDIAUUID``, which makes the sound route below
+     available; the paragraph at the end of this bullet describes the
+     *original* topology and is kept because it is still what a distro
+     hwloc produces.
+
+     One decision here was reversed rather than refined.  Where this bullet
+     concludes "otherwise set nothing, and say so", the ruling is now to
+     **refuse the mapping request outright** when no vendor identity is
+     available.  Mapping by device and then declining to act on it is
+     indistinguishable from a working run until someone measures.
+
+  Four constraints from `NVIDIA's
   documentation
   <https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/environment-variables.html#cuda-visible-devices>`_
   settle most of the design and are worth not rediscovering:
@@ -949,16 +966,20 @@ Out of scope
 
   The rule that falls out: emit the comma-joined ``GPU-<uuid>`` of the
   assigned devices **only** when hwloc supplies ``NVIDIAUUID`` for all of
-  them; otherwise set nothing, and say so.  Never set ``CUDA_DEVICE_ORDER``.
-  An unset variable leaves CUDA behaving normally; a wrong one does not.
+  them.  Never set ``CUDA_DEVICE_ORDER``.  An unset variable leaves CUDA
+  behaving normally; a wrong one does not.
 
-  Note where that leaves the requester of the originating issue.  hwloc sets
-  ``NVIDIAUUID`` only in its **NVML** backend (``src/topology-nvml.c``); a
-  DRM/PCI-only hwloc reports ``card*``/``renderD*`` and a bus id and nothing
-  else.  The GPU OS devices in their topology carry *no* info attributes at
-  all, so the sound route is unavailable on exactly the machine that asked
-  for the feature — which is an argument for reporting the assignment and
-  letting the site act on it, not against it.  The same shape applies to
+  Note where that left the requester of the originating issue *before* they
+  rebuilt hwloc, since it is still where a distro hwloc leaves everyone
+  else.  hwloc sets ``NVIDIAUUID`` only in its **NVML** backend
+  (``src/topology-nvml.c``); a DRM/PCI-only hwloc reports
+  ``card*``/``renderD*`` and a bus id and nothing else.  The GPU OS devices
+  in their original topology carry *no* info attributes at all, so the
+  sound route was unavailable on exactly the machine that asked for the
+  feature.  The deciding hwloc is the one **PRRTE is built against** —
+  ``prted`` probes each node itself — so a site wanting the envars must
+  build PRRTE against an hwloc with the vendor backend, not merely run one
+  by hand.  The same shape applies to
   AMD (``ROCR_VISIBLE_DEVICES`` takes the same index-or-uuid values, and the
   RSMI backend supplies ``AMDUUID``), so any future work here is one rule
   with a per-vendor info key, not a per-vendor design.
