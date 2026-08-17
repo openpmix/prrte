@@ -18,11 +18,21 @@
 # The driver finds the freshly built prterun via top_builddir and the
 # topologies via top_srcdir, and exits 77 (Automake "skip") when those
 # prerequisites are absent.
+#
+# --golden is passed because a golden snapshot nothing compares is not a
+# test, it is a stale file that looks like one.  The device snapshots had
+# drifted two changes behind the code without anything noticing, because
+# this was the only thing that would ever have read them.  A missing
+# golden is a failure too: adding a topology or a curated case is meant
+# to put its placement in front of a human, which is the entire purpose
+# of keeping the curated set small.  Regenerate with:
+#
+#     python3 run_offline_maps.py --update-golden
 
 check-offline:
 	@top_srcdir='$(abs_top_srcdir)'; export top_srcdir; \
 	top_builddir='$(abs_top_builddir)'; export top_builddir; \
-	$(PYTHON) $(srcdir)/run_offline_maps.py
+	$(PYTHON) $(srcdir)/run_offline_maps.py --golden
 
 .PHONY: check-offline
 
