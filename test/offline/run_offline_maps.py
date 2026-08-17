@@ -171,6 +171,48 @@ def _count_gpus(root):
     return ngpu
 
 
+def _gpus_nameable(root):
+    """Can every GPU in this topology be named to a vendor runtime?
+
+    Mirrors the vendor-id table in pmix_hwloc_get_devices(): hwloc records a
+    device's vendor identity only from its vendor backends, under one key
+    per vendor.  PRRTE refuses --map-by device=<gpu class> when any GPU on
+    the node carries none, because an assignment the process cannot act on
+    is indistinguishable from a working run.
+
+    Scanned across the whole PCI function, not per OS device: with the CUDA
+    and NVML backends both loaded the function is named by "cuda0" while the
+    uuid sits on the sibling "nvml0".
+    """
+    keys = ("nvidiauuid", "amduuid", "levelzerouuid")
+    backends = ("cuda", "nvml", "rsmi", "levelzero", "opencl")
+    for pci in root.iter("object"):
+        if pci.get("type") != "PCIDev":
+            continue
+        osdevs = [c for c in pci if c.tag == "object" and c.get("type") == "OSDev"]
+        if not osdevs:
+            continue
+        compute = False
+        render = False
+        named = False
+        for od in osdevs:
+            if od.get("osdev_type") == "5":
+                compute = True
+            for inf in od.findall("info"):
+                nm = inf.get("name", "").lower()
+                if nm == "backend" and inf.get("value", "").lower() in backends:
+                    compute = True
+                if nm in keys:
+                    named = True
+            if (od.get("name") or "").lower().startswith("renderd"):
+                render = True
+        cls_id = (pci.get("pci_type") or "").split()
+        is_display = bool(cls_id) and cls_id[0].startswith("03")
+        if (compute or (render and is_display)) and not named:
+            return False
+    return True
+
+
 class TopoModel:
     """Per-topology model derived entirely from the XML -- no hardcoded
     dimensions."""
@@ -225,6 +267,7 @@ class TopoModel:
                         if cb and (cb & o.cpuset) != 0)
         model = cls(os.path.splitext(os.path.basename(path))[0], by_level)
         model.ngpus = _count_gpus(root)
+        model.gpus_nameable = _gpus_nameable(root)
         return model
 
     def objects_at(self, level):
@@ -626,11 +669,24 @@ def device_cases(topo):
     separately.  The plain and interleaved orders are both pinned because the
     difference between them IS the feature - one fills a package before
     moving on, the other alternates.
+
+    A topology whose GPUs carry no vendor identity gets the refusal instead
+    of the placements.  That is not a gap in the coverage, it IS the
+    behavior: PRRTE will not map by a device it cannot name to the runtime
+    that has to use it.  The two GPU topologies in test/topologies are the
+    same machine seen by an hwloc with and without the vendor backends, so
+    both arms are real rather than contrived.
     """
     if getattr(topo, "ngpus", 0) < 2:
         return
     hostspec, pool = LAYOUTS["single"]
     n = topo.ngpus
+    if not getattr(topo, "gpus_nameable", True):
+        yield Case("device.%s.gpu-unnameable" % topo.name, "device", topo,
+                   "single", hostspec, pool, map_by="device=gpu",
+                   rank_by="slot", bind_to="core", n=n, expect="reject",
+                   expect_banner="carry no")
+        return
     yield Case("device.%s.gpu" % topo.name, "device", topo, "single",
                hostspec, pool, map_by="device=gpu", rank_by="slot",
                bind_to="core", n=n, expect="map")

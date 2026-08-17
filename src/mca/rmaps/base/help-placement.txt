@@ -703,6 +703,23 @@ Because the devices are handed out in groups taken in order from the
 device list, "interleave" composes with "ndev": the interleaving decides
 the order, and the grouping then takes contiguous runs of it.
 
+Mapping by a GPU requires one thing of the machine that the other
+device classes do not: that the GPUs can be named to the vendor's
+runtime. hwloc learns a GPU's vendor identity - an NVIDIA "GPU-<uuid>"
+and its AMD and Intel equivalents - only from that vendor's backend
+(NVML, RSMI, Level Zero), which has to be enabled when hwloc is built.
+Without it, the GPUs are still discovered and processes are still
+placed correctly beside them, but no process can be told which GPU it
+was given in terms the library it links will accept. PRRTE refuses the
+request in that case. Mapping and then quietly telling the process
+nothing looks identical to a working job - the map is right, and the
+only symptom is that every process on the node uses the same GPU.
+
+The hwloc that decides this is the one PRRTE was built against, since
+each daemon discovers its own node; installing another hwloc alongside
+does not change it. Network, fabric and block devices are unaffected,
+being named by identifiers hwloc always has.
+
 The reverse ratio - several processes on each device rather than several
 devices for each process - is a "ppr" pattern, spelled the same way as
 every other:

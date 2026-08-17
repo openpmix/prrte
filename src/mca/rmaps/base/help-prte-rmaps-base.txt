@@ -516,6 +516,33 @@ Please either bind to an object at or below the device's locality (numa,
 l3cache, core, hwthread are the usual choices), or map by something other
 than a device.
 #
+[rmaps:device-not-nameable]
+Mapping by a device was requested, but the devices on this node carry no
+identity that can be given to the vendor's runtime:
+
+  Device class: %s
+  Node:         %s
+  Device:       %s
+
+A GPU can only be named to the library that will compute on it by the
+vendor's own identifier - NVIDIA's GPU-<uuid>, AMD's equivalent, and so
+on. hwloc records that identifier only when it is built with the vendor's
+backend (NVML for NVIDIA, RSMI for AMD, Level Zero for Intel). Built
+without them, hwloc still reports the GPUs and PRRTE can still place
+processes next to them, but neither can tell a process which one it got
+in terms the process can use.
+
+PRRTE refuses the request rather than mapping and saying nothing, because
+the two are indistinguishable while the job runs: the placement looks
+correct, and the only symptom is that every process on the node uses the
+same device.
+
+To use this option, rebuild hwloc with the vendor backend enabled and
+rebuild PRRTE against it - it is the hwloc PRRTE itself was built with
+that matters, since each daemon discovers its own node. Otherwise, map by
+a cpu object (numa or package are usually closest in effect) and let the
+application select its device.
+#
 [rmaps:degenerate-device-locality]
 All of the requested devices on a node are equally close to every cpu on
 it, so binding cannot express "near this device":

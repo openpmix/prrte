@@ -105,6 +105,24 @@ applied at the job level:
   own device, but a warning reports that the binding could not be made
   any more specific.
 
+  Mapping by a **GPU** additionally requires that the GPUs can be named
+  to the vendor's runtime. hwloc records a GPU's vendor identity -- an
+  NVIDIA ``GPU-<uuid>`` and its AMD and Intel equivalents -- only when it
+  is built with that vendor's backend (NVML, RSMI, or Level Zero). Built
+  without them, hwloc still reports the GPUs and PRRTE can still place
+  processes next to them, but no process can be told which GPU it got in
+  terms the library it links will accept. PRRTE refuses the request in
+  that case rather than mapping and saying nothing, because the two are
+  indistinguishable while the job runs: the placement looks correct and
+  the only symptom is that every process on the node ends up using the
+  same GPU.
+
+  The hwloc that decides this is the one **PRRTE was built against**,
+  since each daemon discovers its own node -- not whatever hwloc happens
+  to be installed alongside it. The other device classes are unaffected:
+  a network or fabric device is named by its own GUIDs or MAC address,
+  which hwloc always has.
+
 Any directive can include qualifiers by adding a colon (``:``) and any
 combination of one or more of the following (delimited by colons) to
 the ``--mapby`` option (except where noted):

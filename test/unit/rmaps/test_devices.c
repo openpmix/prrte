@@ -57,8 +57,14 @@ static int failures = 0;
     } while (0)
 
 /* The reporter's machine from OMPI #14169: four GPUs spread unevenly across
- * eight NUMA domains, which is why "map by device" exists at all. */
-#define TOPO_FILE "turin-4gpu.xml"
+ * eight NUMA domains, which is why "map by device" exists at all.  This is
+ * the reading of it by an hwloc built with the CUDA and NVML backends, so
+ * its GPUs carry a vendor identity and can be mapped against. */
+#define TOPO_FILE "turin-4gpu-nvml.xml"
+
+/* The same machine as the distro hwloc saw it: the GPUs are there, and
+ * nothing names them. */
+#define TOPO_FILE_NOID "turin-4gpu.xml"
 
 static prte_node_t *build_node(const char *name, prte_topology_t *t)
 {
@@ -124,13 +130,78 @@ static char *assigned_uuid(prte_node_t *node, char **osname)
     return uuid;
 }
 
-int test_devices(void)
+/* Load one of the shared test topologies, or NULL. */
+static prte_topology_t *load_topo(const char *file)
 {
     hwloc_topology_t topo;
     prte_topology_t *t;
+    char path[1024];
+
+    snprintf(path, sizeof(path), "%s/%s", PRTE_TEST_TOPO_DIR, file);
+    if (0 != hwloc_topology_init(&topo)) {
+        return NULL;
+    }
+    if (0 != hwloc_topology_set_xml(topo, path)
+        || 0 != hwloc_topology_set_io_types_filter(topo, HWLOC_TYPE_FILTER_KEEP_IMPORTANT)
+        || 0 != hwloc_topology_load(topo)) {
+        hwloc_topology_destroy(topo);
+        return NULL;
+    }
+    t = PMIX_NEW(prte_topology_t);
+    t->topo = topo;
+    return t;
+}
+
+/* A GPU nothing can name is not one we will map against.  Same machine as
+ * TOPO_FILE, read by an hwloc without the vendor backends: the devices are
+ * all still there and still placeable, so the only thing that can refuse
+ * the request is the identity check itself. */
+static void check_unnameable_refused(void)
+{
+    prte_rmaps_options_t opts;
+    prte_topology_t *t;
+    prte_node_t *node;
+    void *ctx = NULL;
+    int rc;
+
+    t = load_topo(TOPO_FILE_NOID);
+    if (NULL == t) {
+        fprintf(stdout, "  SKIP test_devices unnameable case (no %s)\n", TOPO_FILE_NOID);
+        return;
+    }
+    node = build_node("node-gamma", t);
+
+    memset(&opts, 0, sizeof(opts));
+    opts.app_idx = -1;
+    opts.map_device = "gpu";
+    opts.bind = PRTE_BIND_TO_NONE;
+    rc = prte_rmaps_base_devices_begin(node, &opts, &ctx);
+    CHECK("unnameable refused", PRTE_ERR_SILENT == rc);
+    CHECK("unnameable yields no context", NULL == ctx);
+    prte_rmaps_base_devices_end(ctx);
+
+    /* ...but a class with no vendor-identity concept is unaffected: a
+     * fabric device is named by its own GUIDs, which hwloc always has */
+    memset(&opts, 0, sizeof(opts));
+    opts.app_idx = -1;
+    opts.map_device = "network";
+    opts.bind = PRTE_BIND_TO_NONE;
+    ctx = NULL;
+    rc = prte_rmaps_base_devices_begin(node, &opts, &ctx);
+    CHECK("network unaffected", PRTE_SUCCESS == rc);
+    CHECK("network finds devices",
+          0 < prte_rmaps_base_devices_count(node, &opts, ctx));
+    prte_rmaps_base_devices_end(ctx);
+
+    PMIX_RELEASE(node);
+    PMIX_RELEASE(t);
+}
+
+int test_devices(void)
+{
+    prte_topology_t *t;
     prte_node_t *alpha, *beta;
     char *ua = NULL, *ub = NULL, *osname = NULL, *expect = NULL;
-    char path[1024];
 
     failures = 0;
 
@@ -144,23 +215,12 @@ int test_devices(void)
         return 0;
     }
 
-    snprintf(path, sizeof(path), "%s/%s", PRTE_TEST_TOPO_DIR, TOPO_FILE);
-    if (0 != hwloc_topology_init(&topo)) {
-        fprintf(stdout, "  SKIP test_devices (hwloc init failed)\n");
+    t = load_topo(TOPO_FILE);
+    if (NULL == t) {
+        fprintf(stdout, "  SKIP test_devices (could not load %s)\n", TOPO_FILE);
         PMIx_server_finalize();
         return 0;
     }
-    if (0 != hwloc_topology_set_xml(topo, path)
-        || 0 != hwloc_topology_set_io_types_filter(topo, HWLOC_TYPE_FILTER_KEEP_IMPORTANT)
-        || 0 != hwloc_topology_load(topo)) {
-        hwloc_topology_destroy(topo);
-        fprintf(stdout, "  SKIP test_devices (could not load %s)\n", path);
-        PMIx_server_finalize();
-        return 0;
-    }
-
-    t = PMIX_NEW(prte_topology_t);
-    t->topo = topo;
 
     /* One topology, two nodes.  In a real DVM these are two daemons that
      * reported identical hardware, which is the case the HNP collapses onto
@@ -194,6 +254,8 @@ int test_devices(void)
     PMIX_RELEASE(alpha);
     PMIX_RELEASE(beta);
     PMIX_RELEASE(t);
+
+    check_unnameable_refused();
     PMIx_server_finalize();
 
     if (0 == failures) {
