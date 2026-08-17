@@ -264,7 +264,14 @@ int prte_rmaps_base_devices_begin(prte_node_t *node, prte_rmaps_options_t *opts,
 
     topo.source = "hwloc";
     topo.topology = node->topology->topo;
-    prc = pmix_hwloc_get_devices(&topo, type, byname, &dc->devs, &dc->ndevs);
+    /* Name the node, do not let PMIx assume it.  A device uuid embeds the
+     * host the device lives on, and the mapper runs on the HNP: left to
+     * default, every device on every node in the job would come back stamped
+     * with the HNP's hostname, and the process that later computes the same
+     * uuid from its own topology would fail to match the one it was given -
+     * which is the whole reason the uuid travels rather than an ordinal. */
+    prc = pmix_hwloc_get_devices(&topo, node->name, type, byname,
+                                 &dc->devs, &dc->ndevs);
     if (PMIX_SUCCESS != prc) {
         free(dc);
         return prte_pmix_convert_status(prc);

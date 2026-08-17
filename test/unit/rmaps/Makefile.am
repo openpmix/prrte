@@ -5,7 +5,8 @@
 AM_CPPFLAGS = \
     -I$(top_srcdir)/src \
     -I$(top_srcdir)/include \
-    -I$(top_srcdir)
+    -I$(top_srcdir) \
+    -DPRTE_TEST_TOPO_DIR=\"$(top_srcdir)/test/topologies\"
 
 check_PROGRAMS = test_rmaps
 
@@ -22,7 +23,8 @@ test_rmaps_SOURCES = \
     test_round_robin.c     \
     test_ppr.c             \
     test_seq.c             \
-    test_rank_file.c
+    test_rank_file.c       \
+    test_devices.c
 
 test_rmaps_LDADD = $(top_builddir)/src/libprrte.la
 
