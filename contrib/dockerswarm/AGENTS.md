@@ -1099,6 +1099,35 @@ The container, volume, and network names above are the `PRTE_SWARM=prte`
 default; under another name they all shift together (§4). The **hostnames**
 never do — `node1`..`node10` is what the tests name, in every swarm.
 
+### Giving the nodes hardware they do not have
+
+A daemon told to read its topology from a file reports **that** topology
+as its own, so hardware the containers lack can be faked — and faked
+*differently per node*, which is what makes it useful rather than merely
+convenient. Copy a topology XML into each container at the **same path**
+with different content, then export both of these on the head node before
+starting `prte`:
+
+| variable | what it decides |
+|----------|-----------------|
+| `PRTE_MCA_hwloc_use_topo_file` | what the daemon reports, hence what the mapper places against |
+| `PMIX_MCA_pmix_hwloc_topo_file` | the daemon's PMIx server topology — what resolves a device to a vendor identity at fork time |
+
+Both are needed and they are not the same layer: setting only the first
+gives a correct map and no environment. One export on the head node
+reaches the whole DVM, because `plm_base_launch_support.c` forwards every
+`PRTE_MCA_*` and `PMIX_MCA_*` envar to each daemon as a `--prtemca` /
+`--pmixmca` argument — while `/tmp` is container-local, so the content
+stays per node.
+
+`test_rmaps` uses this for GPUs, which no container has: each node gets
+`test/topologies/turin-4gpu-nvml.xml` with the UUIDs rewritten to carry
+its node number. The result is four nodes whose hardware differs only in
+serial numbers, which is precisely the case the HNP collapses onto one
+recorded topology (`TOPOLOGY ALREADY RECORDED ... SOME DIFFS FOUND`) —
+and therefore the case where handing a process another node's device
+identity would go unnoticed.
+
 ## 11. Spawning a child job (`dynamic`)
 
 Some behavior only exists between a **primary** job and a job it spawned —
