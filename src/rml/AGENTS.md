@@ -382,7 +382,10 @@ worth stating rather than re-deriving:
   its layout, but every daemon must agree — there is no versioning. It *is*
   byte-order converted, though, so keep `MCA_OOB_TCP_HDR_HTON`/`_NTOH` covering
   every multi-byte field you add, and zero a header before filling it — the
-  whole struct goes on the wire, padding included.
+  fixed part goes on the wire whole, padding included. Note that the struct is
+  **not** the message: it ends in a variable-length nspace, so a send or a read
+  is sized by `PRTE_OOB_TCP_HDR_FIXED`/`PRTE_OOB_TCP_HDR_LEN()` and never by
+  `sizeof`. See [`oob/AGENTS.md`](oob/AGENTS.md), *The wire header*.
 - **One transport, one router.** Do not reintroduce component/module
   abstraction to "make it pluggable" unless there is a real second
   implementation; that abstraction is exactly what was removed.

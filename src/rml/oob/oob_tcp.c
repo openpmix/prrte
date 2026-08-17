@@ -762,7 +762,12 @@ static void recv_handler(int sd, short flg, void *cbdata)
 
     /* finish processing ident */
     if (MCA_OOB_TCP_IDENT == hdr.type) {
-        if (NULL == (peer = prte_oob_tcp_peer_lookup(&hdr.origin))) {
+        pmix_proc_t sender;
+
+        /* the header carries the sender as a rank plus the nspace it
+         * belongs to, so put the two back together */
+        PRTE_OOB_TCP_HDR_PROC(&hdr, hdr.origin, &sender);
+        if (NULL == (peer = prte_oob_tcp_peer_lookup(&sender))) {
             /* should never happen */
             goto cleanup;
         }
@@ -788,7 +793,7 @@ static void recv_handler(int sd, short flg, void *cbdata)
                             "%s-%s prte_oob_tcp_recv_connect: "
                             "rejected connection from %s connection state %d",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)),
-                            PRTE_NAME_PRINT(&(hdr.origin)), peer->state);
+                            PRTE_NAME_PRINT(&sender), peer->state);
             }
             CLOSE_THE_SOCKET(sd);
         }

@@ -488,48 +488,27 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)));
                 return;
             }
-            /* start by reading the header */
+            /* start by reading the fixed part of the header - the nspace
+             * that trails it is only as long as the header says it is, and
+             * the header has to be in hand to know that */
             peer->recv_msg->rdptr = (char *) &peer->recv_msg->hdr;
-            peer->recv_msg->rdbytes = sizeof(prte_oob_tcp_hdr_t);
+            peer->recv_msg->rdbytes = PRTE_OOB_TCP_HDR_FIXED;
         }
         /* if the header hasn't been completely read, read it */
         if (!peer->recv_msg->hdr_recvd) {
             pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                                 "%s:tcp:recv:handler read hdr", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
             if (PRTE_SUCCESS == (rc = read_bytes(peer))) {
-                /* completed reading the header */
+                /* completed reading the fixed part of the header */
                 peer->recv_msg->hdr_recvd = true;
                 /* convert the header */
                 MCA_OOB_TCP_HDR_NTOH(&peer->recv_msg->hdr);
-                /* if this is a zero-byte message, then we are done */
-                if (0 == peer->recv_msg->hdr.nbytes) {
-                    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT,
-                                        prte_oob_base.output,
-                                        "%s RECVD ZERO-BYTE MESSAGE FROM %s for tag %d",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                        PRTE_NAME_PRINT(&peer->name), peer->recv_msg->hdr.tag);
-                    peer->recv_msg->data = NULL; // make sure
-                } else {
-                    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT,
-                                        prte_oob_base.output,
-                                        "%s:tcp:recv:handler allocate data region of size %lu",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                        (unsigned long) peer->recv_msg->hdr.nbytes);
-                    if (peer->recv_msg->hdr.nbytes > (uint32_t)(prte_oob_base.max_msg_size * 1024 * 1024)) {
-                        prte_show_help("help-oob-tcp.txt", "msg-too-big", true,
-                                        PRTE_NAME_PRINT(&peer->name), PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                        peer->recv_msg->hdr.nbytes, prte_oob_base.max_msg_size);
-                        peer->state = MCA_OOB_TCP_FAILED;
-                        prte_oob_tcp_peer_close(peer);
-                        return;
-                    }
-                    /* allocate the data region */
-                    peer->recv_msg->data = (char *) malloc(peer->recv_msg->hdr.nbytes);
-                    /* point to it */
-                    peer->recv_msg->rdptr = peer->recv_msg->data;
-                    peer->recv_msg->rdbytes = peer->recv_msg->hdr.nbytes;
-                }
-                /* fall thru and attempt to read the data */
+                /* set up to read the nspace that trails it.  nslen is a
+                 * single byte and PMIX_MAX_NSLEN is 255, so it cannot name
+                 * more characters than the field can hold */
+                peer->recv_msg->rdptr = peer->recv_msg->hdr.nspace;
+                peer->recv_msg->rdbytes = peer->recv_msg->hdr.nslen;
+                /* fall thru and attempt to read it */
             } else if (PRTE_ERR_RESOURCE_BUSY == rc || PRTE_ERR_WOULD_BLOCK == rc) {
                 /* exit this event and let the event lib progress */
                 return;
@@ -543,7 +522,65 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
             }
         }
 
-        if (peer->recv_msg->hdr_recvd) {
+        /* the names in this header are a rank plus the nspace that follows the
+         * fixed part, so nothing may read one until those characters are in */
+        if (peer->recv_msg->hdr_recvd && !peer->recv_msg->nspace_recvd) {
+            if (0 < peer->recv_msg->hdr.nslen) {
+                rc = read_bytes(peer);
+                if (PRTE_ERR_RESOURCE_BUSY == rc || PRTE_ERR_WOULD_BLOCK == rc) {
+                    /* exit this event and let the event lib progress */
+                    return;
+                }
+                if (PRTE_SUCCESS != rc) {
+                    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
+                                        "%s:tcp:recv:handler error reading nspace - closing connection",
+                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+                    prte_oob_tcp_peer_close(peer);
+                    return;
+                }
+            }
+            /* the terminator is not sent - we supply it */
+            PRTE_OOB_TCP_HDR_END_NSPACE(&peer->recv_msg->hdr);
+            peer->recv_msg->nspace_recvd = true;
+
+            /* if this is a zero-byte message, then we are done */
+            if (0 == peer->recv_msg->hdr.nbytes) {
+                pmix_output_verbose(OOB_TCP_DEBUG_CONNECT,
+                                    prte_oob_base.output,
+                                    "%s RECVD ZERO-BYTE MESSAGE FROM %s for tag %d",
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                    PRTE_NAME_PRINT(&peer->name), peer->recv_msg->hdr.tag);
+                peer->recv_msg->data = NULL; // make sure
+            } else {
+                pmix_output_verbose(OOB_TCP_DEBUG_CONNECT,
+                                    prte_oob_base.output,
+                                    "%s:tcp:recv:handler allocate data region of size %lu",
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                    (unsigned long) peer->recv_msg->hdr.nbytes);
+                if (peer->recv_msg->hdr.nbytes > (uint32_t)(prte_oob_base.max_msg_size * 1024 * 1024)) {
+                    prte_show_help("help-oob-tcp.txt", "msg-too-big", true,
+                                    PRTE_NAME_PRINT(&peer->name), PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                    peer->recv_msg->hdr.nbytes, prte_oob_base.max_msg_size);
+                    peer->state = MCA_OOB_TCP_FAILED;
+                    prte_oob_tcp_peer_close(peer);
+                    return;
+                }
+                /* allocate the data region */
+                peer->recv_msg->data = (char *) malloc(peer->recv_msg->hdr.nbytes);
+                /* point to it */
+                peer->recv_msg->rdptr = peer->recv_msg->data;
+                peer->recv_msg->rdbytes = peer->recv_msg->hdr.nbytes;
+            }
+            /* fall thru and attempt to read the data */
+        }
+
+        if (peer->recv_msg->nspace_recvd) {
+            pmix_proc_t origin, dest;
+
+            /* the header carries the two ranks and the nspace they share */
+            PRTE_OOB_TCP_HDR_PROC(&peer->recv_msg->hdr, peer->recv_msg->hdr.origin, &origin);
+            PRTE_OOB_TCP_HDR_PROC(&peer->recv_msg->hdr, peer->recv_msg->hdr.dst, &dest);
+
             /* continue to read the data block - we start from
              * wherever we left off, which could be at the
              * beginning or somewhere in the message
@@ -554,8 +591,8 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                     OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                     "%s RECVD COMPLETE MESSAGE FROM %s (ORIGIN %s) OF %d BYTES FOR DEST %s TAG %d",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer->name),
-                    PRTE_NAME_PRINT(&peer->recv_msg->hdr.origin), (int) peer->recv_msg->hdr.nbytes,
-                    PRTE_NAME_PRINT(&peer->recv_msg->hdr.dst), peer->recv_msg->hdr.tag);
+                    PRTE_NAME_PRINT(&origin), (int) peer->recv_msg->hdr.nbytes,
+                    PRTE_NAME_PRINT(&dest), peer->recv_msg->hdr.tag);
 
                 /* Incarnation guard (bootstrap only): a departed daemon can
                  * reboot into the same rank and return with a strictly-greater
@@ -566,14 +603,12 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                  * message has already been read off the socket, so dropping
                  * here leaves the byte stream correctly framed. */
                 if (prte_bootstrap_setup &&
-                    PMIX_CHECK_NSPACE(peer->recv_msg->hdr.origin.nspace,
-                                      PRTE_PROC_MY_NAME->nspace) &&
-                    !prte_rml_epoch_ok(peer->recv_msg->hdr.origin.rank,
-                                       peer->recv_msg->hdr.epoch)) {
+                    PMIX_CHECK_NSPACE(origin.nspace, PRTE_PROC_MY_NAME->nspace) &&
+                    !prte_rml_epoch_ok(origin.rank, peer->recv_msg->hdr.epoch)) {
                     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                                         "%s DROPPING STALE-INCARNATION MSG FROM %s epoch %lu",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                        PRTE_NAME_PRINT(&peer->recv_msg->hdr.origin),
+                                        PRTE_NAME_PRINT(&origin),
                                         (unsigned long) peer->recv_msg->hdr.epoch);
                     PMIX_RELEASE(peer->recv_msg);
                     peer->recv_msg = NULL;
@@ -581,14 +616,14 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                 }
 
                 /* am I the intended recipient (header was already converted back to host order)? */
-                if (PMIX_CHECK_PROCID(&peer->recv_msg->hdr.dst, PRTE_PROC_MY_NAME)) {
+                if (PMIX_CHECK_PROCID(&dest, PRTE_PROC_MY_NAME)) {
                     /* yes - post it to the RML for delivery */
                     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT,
                                         prte_oob_base.output,
                                         "%s DELIVERING TO RML tag = %d seq_num = %d",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), peer->recv_msg->hdr.tag,
                                         peer->recv_msg->hdr.seq_num);
-                    PRTE_RML_POST_MESSAGE(&peer->recv_msg->hdr.origin, peer->recv_msg->hdr.tag,
+                    PRTE_RML_POST_MESSAGE(&origin, peer->recv_msg->hdr.tag,
                                           peer->recv_msg->hdr.seq_num, peer->recv_msg->data,
                                           peer->recv_msg->hdr.nbytes);
                     /* PMIx_Data_load took ownership of the payload */
@@ -603,10 +638,10 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                                         prte_oob_base.output,
                                         "%s TCP RELAYING ROUTED MESSAGE FOR %s",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                        PRTE_NAME_PRINT(&peer->recv_msg->hdr.dst));
+                                        PRTE_NAME_PRINT(&dest));
                     snd = PMIX_NEW(prte_rml_send_t);
-                    snd->dst = peer->recv_msg->hdr.dst;
-                    PMIX_XFER_PROCID(&snd->origin, &peer->recv_msg->hdr.origin);
+                    PMIX_XFER_PROCID(&snd->dst, &dest);
+                    PMIX_XFER_PROCID(&snd->origin, &origin);
                     /* preserve the origin's epoch across the relay (the
                      * constructor defaulted it to our own epoch) */
                     snd->epoch = peer->recv_msg->hdr.epoch;
@@ -679,6 +714,7 @@ static void rcv_cons(prte_oob_tcp_recv_t *ptr)
 {
     memset(&ptr->hdr, 0, sizeof(prte_oob_tcp_hdr_t));
     ptr->hdr_recvd = false;
+    ptr->nspace_recvd = false;
     ptr->data = NULL;
     ptr->rdptr = NULL;
     ptr->rdbytes = 0;

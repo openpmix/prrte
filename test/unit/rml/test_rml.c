@@ -70,6 +70,7 @@
 #include "src/rml/rml.h"
 #include "src/rml/oob/oob.h"
 #include "src/rml/oob/oob_tcp.h"
+#include "src/rml/oob/oob_tcp_hdr.h"
 #include "src/rml/oob/oob_tcp_peer.h"
 
 #define CHECK(label, cond)                                    \
@@ -508,6 +509,89 @@ static int test_progress_thread_pool(void)
     return failures;
 }
 
+
+/* The wire header is a fixed part followed by only the characters of the
+ * nspace it names.  Nothing here needs a socket: the properties that matter
+ * are how long a header is on the wire, that the receiver's two-step read
+ * reconstructs exactly the names the sender put in, and that the byte-order
+ * conversion is a round trip.  Those are what a reader of oob_tcp_sendrecv.c
+ * has to take on trust, and getting any of them wrong delivers a message
+ * under the wrong identity rather than failing.
+ */
+static int test_wire_header(void)
+{
+    int failures = 0;
+    prte_oob_tcp_hdr_t snd, rcv;
+    pmix_proc_t origin, dest;
+    char wire[sizeof(prte_oob_tcp_hdr_t)];
+    size_t len;
+    const char *ns = "prterun-somenode-12345@0";
+
+    /* what a sender builds */
+    memset(&snd, 0, sizeof(snd));
+    snd.epoch = 7;
+    snd.origin = 3;
+    snd.dst = 11;
+    snd.tag = PRTE_RML_TAG_DAEMON;
+    snd.seq_num = 42;
+    snd.nbytes = 4096;
+    snd.type = MCA_OOB_TCP_USER;
+    PRTE_OOB_TCP_HDR_LOAD_NSPACE(&snd, ns);
+
+    CHECK("hdr nslen excludes the terminator", strlen(ns) == snd.nslen);
+    len = PRTE_OOB_TCP_HDR_LEN(&snd);
+    CHECK("hdr wire length is the fixed part plus the nspace",
+          len == PRTE_OOB_TCP_HDR_FIXED + strlen(ns));
+    /* the point of the exercise: the struct is much larger than the message */
+    CHECK("hdr on the wire is far smaller than the struct", len < sizeof(snd) / 4);
+
+    /* what goes out: only the used prefix, in network order */
+    MCA_OOB_TCP_HDR_HTON(&snd);
+    memcpy(wire, &snd, len);
+
+    /* what a receiver does: the fixed part first, then nslen characters,
+     * then supply the terminator the sender did not send */
+    memset(&rcv, 0xff, sizeof(rcv));
+    memcpy(&rcv, wire, PRTE_OOB_TCP_HDR_FIXED);
+    CHECK("nslen needs no byte-order conversion to be usable",
+          PRTE_OOB_TCP_HDR_LEN(&rcv) == len);
+    memcpy(rcv.nspace, wire + PRTE_OOB_TCP_HDR_FIXED, rcv.nslen);
+    PRTE_OOB_TCP_HDR_END_NSPACE(&rcv);
+    MCA_OOB_TCP_HDR_NTOH(&rcv);
+
+    CHECK("epoch survives the round trip", 7 == rcv.epoch);
+    CHECK("tag survives the round trip", PRTE_RML_TAG_DAEMON == rcv.tag);
+    CHECK("seq_num survives the round trip", 42 == rcv.seq_num);
+    CHECK("nbytes survives the round trip", 4096 == rcv.nbytes);
+    CHECK("type survives the round trip", MCA_OOB_TCP_USER == rcv.type);
+    CHECK("the nspace arrives terminated and intact", 0 == strcmp(rcv.nspace, ns));
+
+    /* and the two names the header no longer carries whole come back */
+    PRTE_OOB_TCP_HDR_PROC(&rcv, rcv.origin, &origin);
+    PRTE_OOB_TCP_HDR_PROC(&rcv, rcv.dst, &dest);
+    CHECK("origin rank rebuilt", 3 == origin.rank);
+    CHECK("dst rank rebuilt", 11 == dest.rank);
+    CHECK("origin nspace rebuilt", PMIX_CHECK_NSPACE(origin.nspace, ns));
+    CHECK("dst carries the same nspace", PMIX_CHECK_NSPACE(dest.nspace, ns));
+
+    /* a maximum-length nspace still fits the single-byte length field */
+    memset(&snd, 0, sizeof(snd));
+    {
+        char big[PMIX_MAX_NSLEN + 1];
+        memset(big, 'x', PMIX_MAX_NSLEN);
+        big[PMIX_MAX_NSLEN] = '\0';
+        PRTE_OOB_TCP_HDR_LOAD_NSPACE(&snd, big);
+        CHECK("a full-length nspace is carried whole", PMIX_MAX_NSLEN == snd.nslen);
+        PRTE_OOB_TCP_HDR_END_NSPACE(&snd);
+        CHECK("a full-length nspace round trips", 0 == strcmp(snd.nspace, big));
+    }
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_wire_header\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -528,6 +612,7 @@ int main(void)
     failures += test_subnet_resolves_and_dedupes();
     failures += test_payload_outlives_sends();
     failures += test_progress_thread_pool();
+    failures += test_wire_header();
 
     prte_finalize();
 

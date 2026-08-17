@@ -565,7 +565,7 @@ static int tcp_peer_send_connect_ack(prte_oob_tcp_peer_t *peer)
     char *msg;
     prte_oob_tcp_hdr_t hdr;
     uint16_t ack_flag = htons(1);
-    size_t sdsize, offset = 0;
+    size_t sdsize, hdrsize, offset = 0;
 
     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                         "%s SEND CONNECT ACK", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
@@ -573,8 +573,11 @@ static int tcp_peer_send_connect_ack(prte_oob_tcp_peer_t *peer)
     /* load the header. Zero it first: the whole struct goes on the wire, so
      * every field - including the epoch and any padding - has to be defined */
     memset(&hdr, 0, sizeof(hdr));
-    hdr.origin = *PRTE_PROC_MY_NAME;
-    hdr.dst = peer->name;
+    hdr.origin = PRTE_PROC_MY_NAME->rank;
+    hdr.dst = peer->name.rank;
+    /* the header carries one nspace and the receiver reads it as the
+     * origin's, which is the only one this handshake is asked about */
+    PRTE_OOB_TCP_HDR_LOAD_NSPACE(&hdr, PRTE_PROC_MY_NAME->nspace);
     hdr.type = MCA_OOB_TCP_IDENT;
     hdr.tag = 0;
     hdr.seq_num = 0;
@@ -583,18 +586,19 @@ static int tcp_peer_send_connect_ack(prte_oob_tcp_peer_t *peer)
     /* payload size */
     sdsize = sizeof(ack_flag) + strlen(prte_version_string) + 1;
     hdr.nbytes = sdsize;
+    hdrsize = PRTE_OOB_TCP_HDR_LEN(&hdr);
     MCA_OOB_TCP_HDR_HTON(&hdr);
 
     /* create a space for our message */
-    sdsize += sizeof(hdr);
+    sdsize += hdrsize;
     if (NULL == (msg = (char *) malloc(sdsize))) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
     memset(msg, 0, sdsize);
 
-    /* load the message */
-    memcpy(msg + offset, &hdr, sizeof(hdr));
-    offset += sizeof(hdr);
+    /* load the message - only the used part of the header goes on the wire */
+    memcpy(msg + offset, &hdr, hdrsize);
+    offset += hdrsize;
     memcpy(msg + offset, &ack_flag, sizeof(ack_flag));
     offset += sizeof(ack_flag);
     memcpy(msg + offset, prte_version_string, strlen(prte_version_string) + 1);
@@ -622,15 +626,16 @@ static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name)
     prte_oob_tcp_hdr_t hdr;
     uint16_t ack_flag = htons(0);
     int rc = PRTE_SUCCESS;
-    size_t sdsize, offset = 0;
+    size_t sdsize, hdrsize, offset = 0;
 
     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                         "%s SEND CONNECT NACK", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* load the header - see the note in tcp_peer_send_connect_ack */
     memset(&hdr, 0, sizeof(hdr));
-    hdr.origin = *PRTE_PROC_MY_NAME;
-    hdr.dst = *name;
+    hdr.origin = PRTE_PROC_MY_NAME->rank;
+    hdr.dst = name->rank;
+    PRTE_OOB_TCP_HDR_LOAD_NSPACE(&hdr, PRTE_PROC_MY_NAME->nspace);
     hdr.type = MCA_OOB_TCP_IDENT;
     hdr.tag = 0;
     hdr.seq_num = 0;
@@ -639,18 +644,19 @@ static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name)
     /* payload size */
     sdsize = sizeof(ack_flag);
     hdr.nbytes = sdsize;
+    hdrsize = PRTE_OOB_TCP_HDR_LEN(&hdr);
     MCA_OOB_TCP_HDR_HTON(&hdr);
 
     /* create a space for our message */
-    sdsize += sizeof(hdr);
+    sdsize += hdrsize;
     if (NULL == (msg = (char *) malloc(sdsize))) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
     memset(msg, 0, sdsize);
 
-    /* load the message */
-    memcpy(msg + offset, &hdr, sizeof(hdr));
-    offset += sizeof(hdr);
+    /* load the message - only the used part of the header goes on the wire */
+    memcpy(msg + offset, &hdr, hdrsize);
+    offset += hdrsize;
     memcpy(msg + offset, &ack_flag, sizeof(ack_flag));
     offset += sizeof(ack_flag);
 
@@ -949,6 +955,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
     size_t offset = 0, cnt;
     prte_oob_tcp_hdr_t hdr;
     prte_oob_tcp_peer_t *peer;
+    pmix_proc_t sender;
     uint16_t ack_flag;
     bool is_new = (NULL == pr);
 
@@ -958,8 +965,9 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
                         (NULL == pr) ? "UNKNOWN" : PRTE_NAME_PRINT(&pr->name), sd);
 
     peer = pr;
-    /* get the header */
-    if (tcp_peer_recv_blocking(peer, sd, &hdr, sizeof(prte_oob_tcp_hdr_t))) {
+    /* get the fixed part of the header - the nspace that trails it is only
+     * as long as the header says, so it takes a second read */
+    if (tcp_peer_recv_blocking(peer, sd, &hdr, PRTE_OOB_TCP_HDR_FIXED)) {
         if (NULL != peer) {
             /* If the peer state is CONNECT_ACK, then we were waiting for
              * the connection to be ack'd
@@ -982,24 +990,41 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
         return PRTE_ERR_UNREACH;
     }
 
+    /* and now the nspace those ranks belong to.  nslen is a single byte and
+     * PMIX_MAX_NSLEN is 255, so it cannot overrun the field */
+    if (0 < hdr.nslen && !tcp_peer_recv_blocking(peer, sd, hdr.nspace, hdr.nslen)) {
+        pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
+                            "%s unable to complete recv of connect-ack nspace from %s ON SOCKET %d",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            (NULL == peer) ? "UNKNOWN" : PRTE_NAME_PRINT(&peer->name), sd);
+        return PRTE_ERR_UNREACH;
+    }
+    PRTE_OOB_TCP_HDR_END_NSPACE(&hdr);
+
     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                         "%s connect-ack recvd from %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         (NULL == peer) ? "UNKNOWN" : PRTE_NAME_PRINT(&peer->name));
 
     /* convert the header */
     MCA_OOB_TCP_HDR_NTOH(&hdr);
+    /* rebuild the sender's identity, which the header carries as a rank
+     * plus the nspace read above */
+    PRTE_OOB_TCP_HDR_PROC(&hdr, hdr.origin, &sender);
     /* if the requestor wanted the header returned, then do so now */
     if (NULL != dhdr) {
         *dhdr = hdr;
     }
 
     if (MCA_OOB_TCP_PROBE == hdr.type) {
+        size_t hdrsize;
         /* send a header back */
         hdr.type = MCA_OOB_TCP_PROBE;
         hdr.dst = hdr.origin;
-        hdr.origin = *PRTE_PROC_MY_NAME;
+        hdr.origin = PRTE_PROC_MY_NAME->rank;
+        PRTE_OOB_TCP_HDR_LOAD_NSPACE(&hdr, PRTE_PROC_MY_NAME->nspace);
+        hdrsize = PRTE_OOB_TCP_HDR_LEN(&hdr);
         MCA_OOB_TCP_HDR_HTON(&hdr);
-        tcp_peer_send_blocking(sd, &hdr, sizeof(prte_oob_tcp_hdr_t));
+        tcp_peer_send_blocking(sd, &hdr, hdrsize);
         CLOSE_THE_SOCKET(sd);
         return PRTE_SUCCESS;
     }
@@ -1017,23 +1042,23 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
 
     /* if we don't already have it, get the peer */
     if (NULL == peer) {
-        peer = prte_oob_tcp_peer_lookup(&hdr.origin);
+        peer = prte_oob_tcp_peer_lookup(&sender);
         if (NULL == peer) {
             pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                                 "%s prte_oob_tcp_recv_connect: connection from new peer",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
             peer = PMIX_NEW(prte_oob_tcp_peer_t);
-            PMIX_XFER_PROCID(&peer->name, &hdr.origin);
+            PMIX_XFER_PROCID(&peer->name, &sender);
             peer->state = MCA_OOB_TCP_ACCEPTING;
             pmix_list_append(&prte_oob_base.peers, &peer->super);
         }
     } else {
         /* compare the peers name to the expected value */
-        if (!PMIX_CHECK_PROCID(&peer->name, &hdr.origin)) {
+        if (!PMIX_CHECK_PROCID(&peer->name, &sender)) {
             pmix_output(0,
                         "%s tcp_peer_recv_connect_ack: "
                         "received unexpected process identifier %s from %s\n",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(hdr.origin)),
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&sender),
                         PRTE_NAME_PRINT(&(peer->name)));
             peer->state = MCA_OOB_TCP_FAILED;
             prte_oob_tcp_peer_close(peer);
