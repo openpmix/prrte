@@ -707,28 +707,66 @@ test_rmaps() {
     # core.  It has its own qualifier rather than riding on the binding
     # "overload-allowed", which is about CPUs - a different resource and a
     # different decision, and the two must not be confusable.
-    RUN 'nohup prte --daemonize --host node1:4,node2:4 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    #
+    # Two things this case cannot assume, and both used to be assumed:
+    #
+    #   - that there IS a network device.  There is none in these containers,
+    #     and the case above skips for exactly that reason.  It decides by the
+    #     RETURN CODE of a job small enough to fit, which is the only reliable
+    #     signal; deciding by grepping a refusal for the device wording is not,
+    #     because a job that is refused for some OTHER reason never prints it.
+    #   - how many devices a node has.  A count picked to be "obviously more"
+    #     has to stay under the DVM's slots or the slot check answers first,
+    #     and nothing in a container tells us where the two bounds sit.  So
+    #     find the boundary instead: double the job until the device rule
+    #     refuses it, and if the slots run out first, say so and skip rather
+    #     than assert something this node cannot show.
+    #
+    # --bind-to none throughout, except where the binding IS the subject: a
+    # job with more procs than cores is refused by the binder, which is a
+    # third rule again and would mask the one under test.  Slots are declared
+    # rather than counted, so the DVM is given enough of them to ask for more
+    # processes than any plausible number of network devices.
+    spn=32
+    slots=$((spn * 2))
+    RUN "nohup prte --daemonize --host node1:$spn,node2:$spn >/tmp/prte.out 2>&1 & sleep 8" >/dev/null
     if RUN 'pgrep -x prte >/dev/null'; then
-        out=$(RUN 'timeout 60 prun --map-by device=network -n 64 hostname' 2>&1)
+        out=$(RUN 'timeout 60 prun --map-by device=network --bind-to none -n 2 hostname' 2>&1)
         rc=$?
-        if echo "$out" | grep -q 'no object of that type'; then
+        if [ "$rc" != 0 ]; then
             skp "device overload rule (no network device in these topologies)"
         else
-            [ "$rc" != 0 ] && ok "more procs than devices was refused" \
-                           || bad "more procs than devices was allowed without overload"
-            echo "$out" | grep -q 'shared' \
-                && ok "the refusal names the qualifier that permits it" \
-                || bad "the refusal did not say how to permit sharing"
-            out=$(RUN 'timeout 60 prun --map-by device=network:shared -n 64 hostname' 2>&1)
-            n=$(echo "$out" | grep -cE '^node[0-9]+$')
-            [ "$n" = 64 ] && ok "the shared qualifier permits sharing the devices" \
-                          || bad "device=network:shared placed $n of 64 procs"
-            # "shared" is about devices; "overload-allowed" is about CPUs.
-            # The CPU qualifier must NOT quietly permit sharing a device.
-            out=$(RUN 'timeout 60 prun --map-by device=network --bind-to core:overload-allowed -n 64 hostname' 2>&1)
-            rc=$?
-            [ "$rc" != 0 ] && ok "binding overload does not permit sharing a device" \
-                           || bad "overload-allowed on --bind-to shared the devices"
+            # every device on these nodes could carry a proc; find the count
+            # that is one too many for them
+            n=4
+            refusal=""
+            while [ "$n" -le "$slots" ]; do
+                out=$(RUN "timeout 60 prun --map-by device=network --bind-to none -n $n hostname" 2>&1)
+                rc=$?
+                if [ "$rc" != 0 ]; then
+                    refusal="$out"
+                    break
+                fi
+                n=$((n * 2))
+            done
+            if [ -z "$refusal" ]; then
+                skp "device overload rule (these nodes have a device for every slot)"
+            else
+                ok "more procs ($n) than devices was refused"
+                echo "$refusal" | grep -q 'shared' \
+                    && ok "the refusal names the qualifier that permits it" \
+                    || bad "the refusal did not say how to permit sharing"
+                out=$(RUN "timeout 60 prun --map-by device=network:shared --bind-to none -n $n hostname" 2>&1)
+                m=$(echo "$out" | grep -cE '^node[0-9]+$')
+                [ "$m" = "$n" ] && ok "the shared qualifier permits sharing the devices" \
+                                || bad "device=network:shared placed $m of $n procs"
+                # "shared" is about devices; "overload-allowed" is about CPUs.
+                # The CPU qualifier must NOT quietly permit sharing a device.
+                out=$(RUN "timeout 60 prun --map-by device=network --bind-to core:overload-allowed -n $n hostname" 2>&1)
+                rc=$?
+                [ "$rc" != 0 ] && ok "binding overload does not permit sharing a device" \
+                               || bad "overload-allowed on --bind-to shared the devices"
+            fi
         fi
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
