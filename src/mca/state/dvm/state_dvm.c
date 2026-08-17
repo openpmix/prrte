@@ -518,7 +518,7 @@ static void ready_for_debug(int fd, short args, void *cbdata)
     void *tinfo;
     pmix_status_t rc;
     int n;
-    char *name;
+    char *name, *bkpt;
     prte_app_context_t *app;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
@@ -537,6 +537,17 @@ static void ready_for_debug(int fd, short args, void *cbdata)
     PMIX_PROC_RELEASE(nptr);
     /* pass the nspace of the job */
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_NSPACE, jdata->nspace, PMIX_STRING);
+    /* a READY_FOR_DEBUG event is supposed to say WHERE the processes are
+     * waiting.  If the user named the breakpoint, that is the answer - the
+     * procs cannot have reported ready anywhere else.  We have nothing to
+     * say when they did not: a process that stops at a place of its own
+     * choosing reports the name to its local daemon, and that name does not
+     * travel with the daemon's aggregated report to us. */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_BREAKPOINT,
+                           (void **) &bkpt, PMIX_STRING)) {
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_BREAKPOINT, bkpt, PMIX_STRING);
+        free(bkpt);
+    }
     for (n=0; n < jdata->apps->size; n++) {
         app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
         if (NULL == app) {

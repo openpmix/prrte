@@ -76,7 +76,7 @@ static void set_bool_option(prte_job_t *jdata, prte_attribute_key_t key, bool fl
  * PMIX_RUNTIME_OPTIONS info struct */
 int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
 {
-    char **options, *ptr;
+    char **options, *ptr, *bkpt;
     int n, k, tm;
     bool flag, *fptr = &flag;
     int32_t i32;
@@ -250,6 +250,7 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
              * here instead, where it is still the user's command line and
              * not a policy nobody asked for. */
             if (NULL != ptr && !prte_schizo_base_directive_is_valued(options[n]) &&
+                !PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_IN_APP) &&
                 PRTE_SUCCESS != prte_cli_bool_value(ptr, &flag)) {
                 prte_show_help("help-schizo-base.txt", "non-boolean-value", true,
                                PRTE_CLI_RTOS, options[n], ptr);
@@ -355,15 +356,44 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                 }
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_IN_APP)) {
-                flag = PMIX_CHECK_TRUE(&value);
+                /* this is the one hybrid directive: written bare or with a
+                 * truth value it asserts the boolean "stop wherever the
+                 * application chooses to stop", and written with anything
+                 * else that text is the string ID of the ONE breakpoint the
+                 * application is to stop at.  This is why the strict-boolean
+                 * refusal above steps around this directive.  A breakpoint
+                 * therefore cannot be named with any spelling of a truth
+                 * value - "true" and "false" mean what they always mean. */
+                if (PRTE_SUCCESS == prte_cli_bool_value(ptr, &flag)) {
+                    bkpt = NULL;
+                } else {
+                    flag = true;
+                    bkpt = ptr;
+                }
                 if (flag) {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP,
                                        PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
                     /* also must add to job-level cache */
                     PMIX_INFO_LOAD(&info, PMIX_DEBUG_STOP_IN_APP, NULL, PMIX_BOOL);
                     pmix_server_cache_job_info(jdata, &info);
+                    if (NULL == bkpt) {
+                        /* no particular place was named, so any prior
+                         * request for one no longer applies */
+                        prte_remove_attribute(&jdata->attributes, PRTE_JOB_BREAKPOINT);
+                    } else {
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_BREAKPOINT,
+                                           PRTE_ATTR_GLOBAL, bkpt, PMIX_STRING);
+                        /* the daemons turn this into an envar for the app to
+                         * read, but cache it as well so anything holding a
+                         * PMIx handle on the job - a debugger tool, or the
+                         * application itself - can simply ask for it */
+                        PMIX_INFO_LOAD(&info, PMIX_BREAKPOINT, bkpt, PMIX_STRING);
+                        pmix_server_cache_job_info(jdata, &info);
+                        PMIX_INFO_DESTRUCT(&info);
+                    }
                 } else {
                     prte_remove_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP);
+                    prte_remove_attribute(&jdata->attributes, PRTE_JOB_BREAKPOINT);
                 }
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_TIMEOUT)) {

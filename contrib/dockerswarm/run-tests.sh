@@ -977,6 +977,30 @@ test_schizo() {
         && ok "both --set-env directives reached the remote process" \
         || bad "a repeated --set-env was dropped: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
 
+    banner "schizo: --stop-in-app names a breakpoint the REMOTE processes see"
+    # "--stop-in-app=<name>" says WHERE the application is to stop.  The tool
+    # records the name as a job attribute and nothing turns it into an envar
+    # until setup_fork runs - on whichever daemon forks the process.  So only
+    # a remote node can show that the attribute travelled: recorded local to
+    # the HNP it would still read correctly on the head node while every
+    # process elsewhere stopped at a place nobody asked for.
+    out=$(RUN 'prterun --host node2:1,node3:1 -np 2 --map-by node \
+                 --rtos stop-in-app=sz-breakpoint \
+                 bash -c "echo SZBP \$(hostname) \${PMIX_BREAKPOINT:-unset}"' 2>&1); rc=$?
+    n=$(echo "$out" | grep -cE '^SZBP node[23] sz-breakpoint$')
+    [ "$rc" = 0 ] && [ "$n" = 2 ] \
+        && ok "the breakpoint name reached both remote processes" \
+        || bad "breakpoint name missing on a remote node (rc=$rc, matched=$n): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+
+    # ...and asking to stop with no name in particular sets no envar at all,
+    # so an application that filters on the name stops wherever it likes
+    # rather than nowhere.
+    out=$(RUN 'prterun --host node2:1 -np 1 --rtos stop-in-app \
+                 bash -c "echo SZBP2 \${PMIX_BREAKPOINT:-unset}"' 2>&1)
+    echo "$out" | grep -q '^SZBP2 unset$' \
+        && ok "an unnamed stop-in-app leaves PMIX_BREAKPOINT unset" \
+        || bad "an unnamed stop-in-app set a breakpoint: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
     banner "schizo: --merge-stderr-to-stdout is honored, not silently dropped"
     # The deprecated spelling is in the prterun/prun option tables.  With no
     # conversion behind it, it parsed cleanly and then did nothing at all -

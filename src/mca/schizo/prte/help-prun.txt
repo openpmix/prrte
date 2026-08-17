@@ -70,8 +70,9 @@ option to the help request as "--help <option>".
 | "--stop-in-init"     | Direct the specified processes to stop in     |
 |                      | "PMIx_Init"                                   |
 +----------------------+-----------------------------------------------+
-| "--stop-in-app"      | Direct the specified processes to stop at an  |
-|                      | application-controlled location               |
+| "--stop-in-app"      | Direct the processes to stop at an            |
+|      [=breakpoint]   | application-controlled location, optionally   |
+|                      | naming the breakpoint at which to stop        |
 +----------------------+-----------------------------------------------+
 | "--no-aggregate-     | Do not aggregate help messages issued by      |
 | help"                | multiple processes - report each one as it is |

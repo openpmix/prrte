@@ -120,10 +120,20 @@ Supported values include:
   application process(es) to stop in ``PMIx_Init()``. The directive
   will apply to all processes in the job.
 
-* ``STOP-IN-APP``: indicates that the runtime should direct
-  application processes to stop at some application-defined place and
-  notify they are ready-to-debug. The directive will apply to all
-  processes in the job.
+* ``STOP-IN-APP[=<breakpoint>]``: indicates that the runtime should
+  direct application processes to stop at some application-defined
+  place and notify they are ready-to-debug. The directive will apply
+  to all processes in the job. Given without a value, the processes
+  stop at whichever such place they reach first. Given a value, that
+  string is the identifier of the one breakpoint at which they are to
+  stop: the runtime passes it to the application in the
+  ``PMIX_BREAKPOINT`` environment variable and then waits for the
+  application to report itself ready for debug, so it is up to the
+  application to recognize the name and stop in the corresponding
+  place. This is the one directive whose value may be something other
+  than a truth value, and it is read as a truth value whenever it
+  spells one |mdash| so a breakpoint cannot be named ``true``,
+  ``false``, or any other spelling of a boolean.
 
 * ``TIMEOUT=<string>``: directs the runtime to terminate the job after
   it has executed for the specified time. Time is specified in

@@ -126,7 +126,7 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_XTERM, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_STOP_ON_EXEC, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_STOP_IN_INIT, PMIX_ARG_NONE),
-    PMIX_OPTION_DEFINE(PRTE_CLI_STOP_IN_APP, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_STOP_IN_APP, PMIX_ARG_OPTIONAL),
     PMIX_OPTION_DEFINE(PRTE_CLI_TIMEOUT, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_STATE, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_STACK_TRACES, PMIX_ARG_NONE),
@@ -775,11 +775,22 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
 
-        /* --stop-in-app  ->  --runtime-options stop-in-app */
+        /* --stop-in-app[=<breakpoint>]  ->  --runtime-options stop-in-app[=<breakpoint>]
+         *
+         * The optional value names the place the application is to stop at,
+         * so it has to survive the conversion - dropping it would silently
+         * turn a request to stop at one named breakpoint into a request to
+         * stop at whichever one the application reaches first. */
         else if (0 == strcmp(option, PRTE_CLI_STOP_IN_APP)) {
+            if (NULL != opt->values && NULL != opt->values[0]) {
+                pmix_asprintf(&p2, "%s=%s", PRTE_CLI_STOP_IN_APP, opt->values[0]);
+            } else {
+                p2 = strdup(PRTE_CLI_STOP_IN_APP);
+            }
             rc = prte_schizo_base_add_directive(results, option,
-                                                PRTE_CLI_RTOS, PRTE_CLI_STOP_IN_APP,
+                                                PRTE_CLI_RTOS, p2,
                                                 warn);
+            free(p2);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
 

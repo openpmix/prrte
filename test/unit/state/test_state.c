@@ -544,6 +544,93 @@ static int test_runtime_options(void)
 }
 
 /*
+ * "stop-in-app" is the one runtime option whose value is not a truth value.
+ * Written bare or with a boolean it asserts "stop wherever the application
+ * chooses"; written with anything else, that text is the string ID of the
+ * breakpoint the application is to stop at, which the daemons hand to the
+ * process in the PMIX_BREAKPOINT envar.  Two things can go wrong quietly
+ * here: the strict-boolean refusal that guards every other directive would
+ * reject a breakpoint name outright, and a name left behind by an earlier
+ * directive would send the job to a breakpoint nobody asked for.
+ */
+static int test_stop_in_app(void)
+{
+    int failures = 0;
+    prte_job_t *jdata;
+    char *spec, *bkpt;
+
+    /* bare: stop somewhere, no particular place */
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, "unit-test-sia1");
+    spec = strdup("stop-in-app");
+    CHECK("bare directive accepted",
+          PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
+    free(spec);
+    CHECK("bare sets stop-in-app",
+          prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, NULL, PMIX_BOOL));
+    CHECK("bare names no breakpoint",
+          !prte_get_attribute(&jdata->attributes, PRTE_JOB_BREAKPOINT, NULL, PMIX_STRING));
+
+    /* a name: not a truth value, so it must not be refused as one, and the
+     * directive after it must still be applied */
+    spec = strdup("stop-in-app=mpi-init,recoverable=true");
+    CHECK("named breakpoint accepted",
+          PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
+    free(spec);
+    CHECK("name sets stop-in-app",
+          prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, NULL, PMIX_BOOL));
+    bkpt = NULL;
+    CHECK("name recorded",
+          prte_get_attribute(&jdata->attributes, PRTE_JOB_BREAKPOINT, (void **) &bkpt,
+                             PMIX_STRING));
+    CHECK("name value", NULL != bkpt && 0 == strcmp(bkpt, "mpi-init"));
+    if (NULL != bkpt) {
+        free(bkpt);
+    }
+    CHECK("directive after the name applied",
+          prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL));
+
+    /* asserting the boolean afterwards drops the name: the job is no longer
+     * to stop at that one place */
+    spec = strdup("stop-in-app=true");
+    CHECK("truth value accepted",
+          PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
+    free(spec);
+    CHECK("true keeps stop-in-app",
+          prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, NULL, PMIX_BOOL));
+    CHECK("true clears the name",
+          !prte_get_attribute(&jdata->attributes, PRTE_JOB_BREAKPOINT, NULL, PMIX_STRING));
+
+    /* and turning it off clears both */
+    spec = strdup("stop-in-app=mpi-init");
+    CHECK("name re-applied", PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
+    free(spec);
+    spec = strdup("stop-in-app=false");
+    CHECK("false accepted", PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
+    free(spec);
+    CHECK("false clears stop-in-app",
+          !prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, NULL, PMIX_BOOL));
+    CHECK("false clears the name",
+          !prte_get_attribute(&jdata->attributes, PRTE_JOB_BREAKPOINT, NULL, PMIX_STRING));
+    PMIX_RELEASE(jdata);
+
+    /* the exemption is confined to this directive - its neighbors still
+     * refuse a value that is neither true nor false */
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, "unit-test-sia2");
+    spec = strdup("stop-in-init=mpi-init");
+    CHECK("stop-in-init still refuses a non-boolean",
+          PRTE_ERR_SILENT == prte_state_base_set_runtime_options(jdata, spec));
+    free(spec);
+    PMIX_RELEASE(jdata);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_stop_in_app\n");
+    }
+    return failures;
+}
+
+/*
  * Component selection is role-driven: dvm answers only for the DVM master,
  * prted only for a daemon, both at priority 100.  Exactly one applies to
  * any given process, which is what makes a "pick one" framework safe here.
@@ -648,6 +735,7 @@ int main(void)
     failures += test_proc_dispatch();
     failures += test_caddy_contract();
     failures += test_runtime_options();
+    failures += test_stop_in_app();
     failures += test_component_selection();
 
     (void) pmix_mca_base_framework_close(&prte_state_base_framework);
