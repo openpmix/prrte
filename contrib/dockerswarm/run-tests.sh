@@ -45,6 +45,11 @@ if [ -z "$PRTE_SWARM" ] || \
     exit 2
 fi
 NODE="$PRTE_SWARM-node"                 # container names: ${NODE}1 .. ${NODE}10
+# The repo root, for the few cases that need a file out of the source tree
+# rather than out of the install -- staging a topology into the containers,
+# so far. Derived from this script's own location rather than $PWD: the
+# harness is normally run from contrib/dockerswarm, but nothing makes it.
+PRTE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # Prefix for the compose commands we suggest in diagnostics: empty for the
 # default swarm, "PRTE_SWARM=<name> " otherwise, because compose reads the
 # variable from the environment of the compose command itself.
@@ -698,6 +703,120 @@ test_rmaps() {
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
         bad "could not start a DVM for the device mapping test"
+    fi
+    cleanup_swarm
+
+    banner "rmaps: mapping by GPU, with a GPU topology on every node"
+    # The containers have no GPUs, and this is the case that most needs
+    # real ones: whether each node's processes are told about THAT node's
+    # devices.  Everything about a device assignment except its identity is
+    # positional and looks correct even when the identity is wrong, so the
+    # bug this guards against is invisible to every other kind of test.
+    #
+    # Fake the hardware instead, but fake it per node.  Each container gets
+    # its own copy of a real NVML topology at the SAME path, with the GPU
+    # UUIDs rewritten to carry that node's number; a daemon told to read a
+    # topology from a file reports it as its own, so the HNP sees four
+    # nodes with identical hardware and different serial numbers.  That is
+    # exactly the shape that makes the HNP collapse them onto one recorded
+    # topology, which is what puts the identity at risk.
+    #
+    # Both layers need telling, and they are separate: PRRTE's own hwloc
+    # decides what the daemon reports and therefore what the mapper places
+    # against, while the daemon's PMIx server has its own topology and is
+    # what resolves a device to the vendor identity at fork time.  Setting
+    # only the first gives a correct map and no environment.
+    topo="$PRTE_ROOT/test/topologies/turin-4gpu-nvml.xml"
+    if [ ! -r "$topo" ]; then
+        skp "map-by device=gpu (no NVML topology in test/topologies)"
+    else
+        gpunodes=4
+        for n in $(seq 1 $gpunodes); do
+            docker cp "$topo" "$NODE$n:/tmp/gputopo.xml" >/dev/null 2>&1
+            # make this node's GPUs distinguishable from every other
+            # node's, which is the whole point of the case
+            ON "$n" "sed -i 's/GPU-/GPU-n$n-/g' /tmp/gputopo.xml" >/dev/null 2>&1
+        done
+        gpuenv="export PRTE_MCA_hwloc_use_topo_file=/tmp/gputopo.xml; \
+                export PMIX_MCA_pmix_hwloc_topo_file=/tmp/gputopo.xml;"
+        hosts="node1:8,node2:8,node3:8,node4:8"
+        RUN "$gpuenv nohup prte --daemonize --host $hosts >/tmp/prte.out 2>&1 & sleep 10" >/dev/null
+        if RUN 'pgrep -x prte >/dev/null'; then
+            # 4 GPUs per node x 4 nodes, one proc each
+            nproc=$((gpunodes * 4))
+            out=$(RUN "$gpuenv timeout 90 prun --map-by device=gpu --bind-to none -n $nproc \
+                       sh -c 'echo \$(hostname) \${CUDA_VISIBLE_DEVICES:-NONE}'" 2>&1)
+            rc=$?
+            lines=$(echo "$out" | grep -cE '^node[0-9]+ ')
+            [ "$rc" = 0 ] && [ "$lines" = "$nproc" ] \
+                && ok "map-by device=gpu placed all $nproc procs across $gpunodes nodes" \
+                || bad "map-by device=gpu placed $lines of $nproc (rc=$rc): $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+
+            echo "$out" | grep -q ' NONE' \
+                && bad "a GPU-mapped proc was given no CUDA_VISIBLE_DEVICES" \
+                || ok "every GPU-mapped proc was given CUDA_VISIBLE_DEVICES"
+
+            # THE case: no two procs anywhere in the job share a GPU, which
+            # can only hold if each node's identities came from that node
+            u=$(echo "$out" | awk '{print $2}' | sort -u | wc -l | tr -d ' ')
+            [ "$u" = "$nproc" ] && ok "all $nproc procs were given distinct GPUs" \
+                                || bad "only $u distinct GPUs across $nproc procs -- nodes are sharing identities"
+
+            # and each proc's GPU carries its OWN node's tag.  This is the
+            # assertion that fails if the HNP hands out the first-reporting
+            # node's identities to everybody.
+            wrong=$(echo "$out" | awk '{ n = $1; sub(/^node/, "", n);
+                                         if ($2 !~ ("GPU-n" n "-")) print }' | wc -l | tr -d ' ')
+            [ "$wrong" = 0 ] && ok "each proc got a GPU belonging to its own node" \
+                             || bad "$wrong procs were given another node's GPU: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+
+            # the ordering variable is never ours to set
+            out=$(RUN "$gpuenv timeout 60 prun --map-by device=gpu --bind-to none -n 2 \
+                       sh -c 'echo ORDER=\${CUDA_DEVICE_ORDER:-unset}'" 2>&1)
+            echo "$out" | grep -q 'ORDER=unset' \
+                && ok "CUDA_DEVICE_ORDER was left alone" \
+                || bad "PRRTE set the vendor device ordering: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+            # a job not mapped by device gets nothing, on the same DVM
+            out=$(RUN "$gpuenv timeout 60 prun --map-by node --bind-to none -n 2 \
+                       sh -c 'echo CVD=\${CUDA_VISIBLE_DEVICES:-unset}'" 2>&1)
+            n=$(echo "$out" | grep -c 'CVD=unset')
+            [ "$n" = 2 ] && ok "a job not mapped by device got no CUDA_VISIBLE_DEVICES" \
+                         || bad "a non-device job was handed GPUs: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+            RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+        else
+            bad "could not start a DVM with a GPU topology"
+        fi
+        # the same nodes, read by an hwloc with no vendor backend: the GPUs
+        # are all still there and none of them can be named, so the request
+        # has to be refused rather than quietly pointing every rank at the
+        # same card
+        drm="$PRTE_ROOT/test/topologies/turin-4gpu.xml"
+        if [ -r "$drm" ]; then
+            for n in $(seq 1 $gpunodes); do
+                docker cp "$drm" "$NODE$n:/tmp/gputopo.xml" >/dev/null 2>&1
+            done
+            RUN "$gpuenv nohup prte --daemonize --host $hosts >/tmp/prte.out 2>&1 & sleep 10" >/dev/null
+            if RUN 'pgrep -x prte >/dev/null'; then
+                out=$(RUN "$gpuenv timeout 60 prun --map-by device=gpu --bind-to none -n 4 hostname" 2>&1)
+                rc=$?
+                [ "$rc" != 0 ] && ok "GPUs with no vendor identity were refused (rc=$rc)" \
+                               || bad "map-by device=gpu ran against unnameable GPUs"
+                echo "$out" | grep -q 'identity' \
+                    && ok "the refusal names the cause" \
+                    || bad "the refusal did not explain itself: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+                RUN 'pgrep -x prte >/dev/null' \
+                    && ok "DVM survived the unnameable-GPU refusal" \
+                    || bad "DVM died refusing an unnameable GPU"
+                RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+            else
+                bad "could not start a DVM with a DRM-only GPU topology"
+            fi
+        fi
+        for n in $(seq 1 $gpunodes); do
+            ON "$n" 'rm -f /tmp/gputopo.xml' >/dev/null 2>&1
+        done
     fi
     cleanup_swarm
 
