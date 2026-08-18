@@ -2281,6 +2281,67 @@ test_pmix() {
 test_prted() {
     local out rc ns n bpid
 
+    banner "prted: a Get of a job that has already ENDED is answered, not parked"
+    # dmodex_req looks the target job up in prte_job_data and, finding
+    # nothing, used to park the request on the assumption that this is a
+    # race: the job exists and our record of it is still on its way.  That is
+    # one of two ways to get there.  The other is a job that has already
+    # terminated - its object was released, it is never coming back, and the
+    # request then parks forever.  Nothing drains that array on a timer, and
+    # PMIx deliberately sets no timeout on a host request so as not to race
+    # us, so the caller's PMIx_Get never returns at all.
+    #
+    # PRRTE already kept the answer: a bounded registry of departed jobs,
+    # consulted on the path that serves ANOTHER daemon's request but not on
+    # the one that serves a local client.  This asks on both, because the two
+    # sides record their departures in different places - a daemon when it
+    # releases its copy of the job, the master in its own job lifecycle - and
+    # only the daemon half was wired up.
+    #
+    # Deterministic, with no race to lose: the job is over and reaped before
+    # anything asks about it.  An answer is a pass whichever answer it is;
+    # silence is the bug, and shows up as the full timeout.
+    cleanup_swarm
+    if ! RUN 'command -v jobinfo >/dev/null'; then
+        skp "jobinfo client not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start 'node1:2,node2:2,node3:2,node4:2'; then
+        bad "could not start a DVM for the ended-job Get test"
+    else
+        # a job that runs on node2 and finishes
+        out=$(PRUN '--host node2:1 -n 1 jobinfo publish 3' 2>&1)
+        ns=$(echo "$out" | grep -m1 '^NSPACE ' | awk '{print $2}' | tr -d '\r')
+        if [ -z "$ns" ]; then
+            bad "the short-lived job never reported its nspace: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        else
+            ok "a job ran and ended (nspace $ns)"
+            sleep 5   # let the DVM finish reaping it
+            # ask on the MASTER, whose own job object is gone by now
+            t0=$(date +%s)
+            out=$(PRUN "--host node1:1 -n 1 jobinfo fetch $ns 20" 2>&1)
+            t1=$(date +%s)
+            [ $((t1 - t0)) -lt 20 ] \
+                && ok "the master answered for a job that has ended ($((t1 - t0))s)" \
+                || bad "the master parked a Get of an ended job ($((t1 - t0))s)"
+            echo "$out" | grep -qE 'JOBSIZE |NOT_FOUND' \
+                && ok "...and the answer was an answer" \
+                || bad "the master returned neither a size nor an error: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+            # ...and on a DAEMON that never hosted it, which is the other
+            # half: a different lookup, a different departure record
+            t0=$(date +%s)
+            out=$(PRUN "--host node3:1 -n 1 jobinfo fetch $ns 20" 2>&1)
+            t1=$(date +%s)
+            [ $((t1 - t0)) -lt 20 ] \
+                && ok "a daemon answered for a job that has ended ($((t1 - t0))s)" \
+                || bad "a daemon parked a Get of an ended job ($((t1 - t0))s)"
+            echo "$out" | grep -qE 'JOBSIZE |NOT_FOUND' \
+                && ok "...and that answer was an answer too" \
+                || bad "the daemon returned neither a size nor an error: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        fi
+        RUN "timeout -k 5 30 pterm --dvm-uri file:$PRTED_URI" >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
     banner "prted: a job-level Get of ANOTHER job is answered by the daemon"
     # A client asks for the JOB-LEVEL data of a DIFFERENT job, from a node
     # that hosts none of that job's procs.  This is the cross-job job-level
@@ -2857,16 +2918,17 @@ test_tools() {
     #
     # examples/dynamic.c spawns "client" from its cwd, so the child job is
     # whatever we put there: a script that outlives its parent and then exits
-    # 7, while the parent itself exits 0.  Both halves of the defect need that
-    # lifetime -- the status prun reports AND the fact that it was still there
-    # to report it.
+    # 7, while the parent itself exits 0.
     #
-    # The sleep is also what keeps this case off a race that has nothing to do
-    # with what it is testing: dynamic follows its spawn with a PMIx_Get of the
-    # child's job size and a PMIx_Connect to it, and against a child that has
-    # ALREADY exited those occasionally never return, hanging the parent.  A
-    # child that is still running when its parent asks about it is both the
-    # honest shape of this test and the one that does not flake.
+    # The child has to outlive the parent, and that is the whole reason for
+    # the sleep.  Both halves of what is being tested need it -- the status
+    # prun reports, and the fact that prun was still there to report it.  A
+    # child that had already exited by the time its parent finished would
+    # leave the timing assertion below with nothing to measure.
+    #
+    # It used to say here that the sleep also kept this case off an unrelated
+    # hang, which was true and was the wrong reason to write a test: that hang
+    # is the defect this commit fixes, and the case above proves it directly.
     for n in 1 2 3; do
         ON $n 'rm -rf /tmp/dyn && mkdir -p /tmp/dyn &&
                printf "#!/bin/sh\nsleep 15\nexit 7\n" > /tmp/dyn/client && chmod +x /tmp/dyn/client' >/dev/null 2>&1

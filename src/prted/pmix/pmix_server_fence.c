@@ -174,10 +174,35 @@ static void dmodex_req(int sd, short args, void *cbdata)
 
     /* lookup who is hosting this proc */
     if (NULL == (jdata = prte_get_job_data_object(req->tproc.nspace))) {
-        /* if we don't know the job, then it could be a race
-         * condition where we are being asked about a process
-         * that we don't know about yet. In this case, just
-         * record the request and we will process it later */
+        /* Two very different situations bring us here, and only one of them
+         * is worth waiting for.
+         *
+         * A job we have not heard of YET is a race - the requestor got the
+         * namespace from somewhere and our own record of it is still on its
+         * way - so park the request and answer it when the job turns up.
+         *
+         * A job that has already FINISHED is never coming back.  Its object
+         * was released when it terminated, so parking a request on it parks
+         * it forever: nothing drains this array on a timer, and PMIx
+         * deliberately sets no timeout on a host request so as not to race
+         * us.  That is a real hang, and an easy one to hit - a process that
+         * asks about a job it just spawned (PMIx_Get of the child's job
+         * size; examples/dynamic.c does exactly this) wedges permanently if
+         * the child was short-lived enough to be gone before the question
+         * arrived.  The bigger the job, the longer the question takes to
+         * arrive, and the likelier that is.
+         *
+         * So refuse what we can prove is over rather than waiting on it.
+         * PMIX_ERR_NOT_FOUND is the truth and is what the caller's PMIx_Get
+         * returns; what we must not do is leave them holding. */
+        if (prte_pmix_server_job_has_departed(req->tproc.nspace)) {
+            pmix_output_verbose(2, prte_pmix_server_globals.output,
+                                "%s DMODX REQ FOR %s:%u - JOB HAS ENDED",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                req->tproc.nspace, req->tproc.rank);
+            prc = PMIX_ERR_NOT_FOUND;
+            goto callback;
+        }
         req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
         return;
     }

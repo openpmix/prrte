@@ -1101,6 +1101,15 @@ static void cleanup_job(int sd, short args, void *cbdata)
             }
             PMIX_PROC_RELEASE(nptr);
         }
+        /* From here on, the answer to a question about this job is "not
+         * found" rather than "wait" - and the difference is a hang.  A
+         * lookup that fails cannot tell a job we have not heard of YET from
+         * one that has been and gone, so it assumes the first and parks the
+         * request; nothing drains that on a timer.  The daemons record their
+         * own departures where they release their copy of the job
+         * (PRTE_DAEMON_CONT_CLEANUP_JOB); this is the master's copy, and its
+         * lifecycle is here. */
+        prte_pmix_server_job_departed(caddy->jdata->nspace);
         PMIX_RELEASE(caddy->jdata);
     }
     PMIX_RELEASE(caddy);
