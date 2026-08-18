@@ -923,8 +923,13 @@ Vendors, and what each one can be told
      - Same shape, from ``AMDUUID`` (RSMI backend).
    * - Intel
      - ``ZE_AFFINITY_MASK``
-     - Index-based, no uuid form.  Keeps the ordering problem and needs
-       its own decision; do not guess one.
+     - Index-based, no uuid form — but the index is *read*, not guessed:
+       hwloc's Level Zero backend records the driver and device index
+       ``zeDeviceGet`` returned.  Needs ``ZE_FLAT_DEVICE_HIERARCHY``
+       stated with it, since the same ordinals name a card under
+       ``COMPOSITE`` and a tile under ``FLAT``.  (Written here as "needs
+       its own decision; do not guess one" — the decision is recorded in
+       `Phases as landed`_.)
 
 Two properties of the values are worth stating because they decide the
 failure behaviour.  A wrong ``CUDA_VISIBLE_DEVICES`` does not error — "if
@@ -1043,6 +1048,20 @@ pays nothing.  The attribute stays ``PRTE_ATTR_LOCAL``.
 That guard is worth knowing about before adding anything to a proc: it only
 fires in a debug build, and its output goes to stdout, so on a release build
 the attribute would simply never arrive and the daemon would read a default.
+
+**Intel GPUs are told after all.**  The vendor table above says
+``ZE_AFFINITY_MASK`` "needs its own decision; do not guess one", on the
+premise that PMIx would have to reproduce the Level Zero runtime's device
+ordering.  That premise was wrong in one specific way: PMIx does not have
+to reproduce the ordering, because hwloc's Level Zero backend *recorded*
+it — each root device carries the driver and device index ``zeDeviceGet``
+handed back for it.  So the ordinal is read from the enumeration rather
+than predicted, and read on the node that will fork the process.  What the
+topology cannot record is the model that enumeration ran under, so
+``ZE_FLAT_DEVICE_HIERARCHY`` is written alongside the mask when the child's
+environment does not already name a model, and the assignment is dropped
+with a message when it names a conflicting one.  Nothing here is guessed;
+the rule the table was protecting is intact.
 
 
 Verification checklist
