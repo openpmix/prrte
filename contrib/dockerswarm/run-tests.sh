@@ -6154,6 +6154,67 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     [ "$out" = node1 ] && ok "prun works post-shrink" || bad "prun broken post-shrink"
     RUN 'pterm' >/dev/null 2>&1; cleanup_swarm
 
+    banner "elastic DVM: a shrink accounts for the procs on the node it releases"
+    # Every shrink above releases an IDLE node.  This one releases a node
+    # carrying a live proc: without the release sweep in
+    # shrink_campaign_complete() nothing marks that proc terminated, its job
+    # never reaches PRTE_JOB_STATE_TERMINATED, and prun never returns.
+    #
+    # The job must SPAN the shrunk node -- one entirely on it dies with it
+    # either way, one that avoids it has nothing to account for.
+    #
+    # Every tool names the DVM by URI: the long-running prun leaves a
+    # rendezvous handle of its own, and bare discovery refuses to choose.
+    cleanup_swarm
+    RUN 'rm -f /tmp/dvm.uri; nohup prte --daemonize --report-uri /tmp/dvm.uri --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    duri=$(RUN 'head -1 /tmp/dvm.uri' 2>/dev/null | tr -d '\r')
+    if [ -z "$duri" ]; then
+        bad "could not start an elastic DVM for the release-accounting test"
+    else
+        out=$(RUN "PRTE_DVM_URI='$duri' timeout 90 elastic grow node2:2,node3:2" 2>&1)
+        if ! echo "$out" | grep -q PMIX_DVM_IS_READY; then
+            bad "grow did not complete -- cannot test the release accounting: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        else
+            # faulty rather than sleep: its ranks register with PMIx and name
+            # their host on startup, which is how the case knows it spanned
+            # node3.
+            RUN 'rm -f /tmp/shrink-live.out' >/dev/null 2>&1
+            RUN_BG /tmp/shrink-live.out "timeout 180 prun --dvm-uri file:/tmp/dvm.uri -n 3 --map-by ppr:1:node $FLT clean 25"
+            sleep 8
+            if ! RUN 'grep -q " HOST node3" /tmp/shrink-live.out'; then
+                bad "no rank landed on node3: $(RUN 'tr "\n" " " < /tmp/shrink-live.out' | tail -c 200)"
+            else
+                ok "a registered proc is running on the node about to be released"
+                out=$(RUN "PRTE_DVM_URI='$duri' timeout 90 elastic shrink node3" 2>&1)
+                echo "$out" | grep -q PMIX_DVM_IS_READY \
+                    && ok "shrink node3 completed under a live job" \
+                    || bad "shrink did not complete under a live job: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+                # survivors finish at ~25s.  Shorter than prun's own 180s
+                # cap, so a hang cannot be mistaken for a return.
+                n=0
+                while [ "$n" -lt 60 ]; do
+                    RUN 'pgrep -x prun' >/dev/null 2>&1 || break
+                    sleep 1; n=$((n+1))
+                done
+                [ "$n" -lt 60 ] \
+                    && ok "the job completed after its node was released" \
+                    || bad "prun never returned -- the released node's proc was never accounted for"
+                n=$(RUN 'grep -c " DONE " /tmp/shrink-live.out' | tr -d ' \r')
+                [ "${n:-0}" -ge 2 ] \
+                    && ok "...and the survivors finished normally" \
+                    || bad "$n/2 survivors finished: $(RUN 'tr "\n" " " < /tmp/shrink-live.out' | tail -c 200)"
+                RUN 'pgrep -x prte >/dev/null' && ok "...and the HNP survived" \
+                                               || bad "the HNP died on the shrink"
+                out=$(RUN 'timeout 60 prun --dvm-uri file:/tmp/dvm.uri -n 2 --map-by ppr:1:node hostname' 2>&1)
+                [ "$(echo "$out" | grep -cE '^node[12]$')" = 2 ] \
+                    && ok "...and the reduced DVM still runs a job" \
+                    || bad "the reduced DVM could not run a job: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+            fi
+        fi
+        RUN 'timeout -k 5 30 pterm --dvm-uri file:/tmp/dvm.uri' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
     banner "elastic DVM: a departing tool releases the allocation it reserved"
     # A grow creates a RESERVATION owned by the namespace that asked for it,
     # and every reservation carries a disposition saying what becomes of it
