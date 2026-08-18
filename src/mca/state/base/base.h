@@ -59,6 +59,7 @@ PRTE_EXPORT void prte_state_base_print_job_state_machine(void);
 PRTE_EXPORT void prte_state_base_print_proc_state_machine(void);
 
 PRTE_EXPORT int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec);
+PRTE_EXPORT bool prte_state_base_report_child_sep(const char *spec);
 
 /*
  * Base functions

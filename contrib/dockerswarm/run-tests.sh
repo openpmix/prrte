@@ -2718,7 +2718,7 @@ test_session() {
 #   * an appfile spreading its app contexts over different nodes
 #   * a job's exit status coming back from a proc that ran somewhere else
 test_tools() {
-    local out rc n uri1 uri2 pid1 pid2
+    local out rc n uri1 uri2 pid1 pid2 t0 t1
 
     banner "tools: prte-info reports the same build on every node"
     # Cheap, and it catches the single most confusing swarm failure: some
@@ -2838,6 +2838,90 @@ test_tools() {
 
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     fi
+    cleanup_swarm
+
+    banner "tools: prun waits for the jobs its job spawned, as prterun does"
+    # prterun runs its own DVM and shuts it down only once EVERY job in it has
+    # terminated, so it forwards the whole spawn tree's output and returns the
+    # tree's status.  prun asked to be told when its own job ended and left at
+    # that -- so a job dynamically spawned by its job lost its output forwarding
+    # and its exit status the moment the parent finished, even though the job
+    # itself ran happily on.  The DVM now stamps each job-end notification with
+    # the spawn tree it came from and how much of that tree is still running, and
+    # prun waits for the tree.
+    #
+    # This belongs on the swarm rather than in a unit test because the spawned
+    # job is mapped onto a DIFFERENT node from its parent: the tree the tool
+    # waits for spans daemons, and the notification has to cross the DVM to
+    # reach it.
+    #
+    # examples/dynamic.c spawns "client" from its cwd, so the child job is
+    # whatever we put there: a script that outlives its parent and then exits
+    # 7, while the parent itself exits 0.  Both halves of the defect need that
+    # lifetime -- the status prun reports AND the fact that it was still there
+    # to report it.
+    #
+    # The sleep is also what keeps this case off a race that has nothing to do
+    # with what it is testing: dynamic follows its spawn with a PMIx_Get of the
+    # child's job size and a PMIx_Connect to it, and against a child that has
+    # ALREADY exited those occasionally never return, hanging the parent.  A
+    # child that is still running when its parent asks about it is both the
+    # honest shape of this test and the one that does not flake.
+    for n in 1 2 3; do
+        ON $n 'rm -rf /tmp/dyn && mkdir -p /tmp/dyn &&
+               printf "#!/bin/sh\nsleep 15\nexit 7\n" > /tmp/dyn/client && chmod +x /tmp/dyn/client' >/dev/null 2>&1
+    done
+    if prted_dvm_start 'node1:2,node2:2,node3:2'; then
+        t0=$(date +%s)
+        out=$(RUN "cd /tmp/dyn && timeout 90 prun --dvm-uri file:$PRTED_URI -np 1 dynamic" 2>&1); rc=$?
+        t1=$(date +%s)
+        if ! echo "$out" | grep -q 'Spawn success'; then
+            bad "prun could not spawn a child job -- the rest of this case is meaningless: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        else
+            ok "prun's job spawned a child job"
+            # THE regression, both halves.  prun used to leave when its own job
+            # ended: it came back in well under the child's lifetime, and with
+            # 0 because it never learned what the child returned.
+            # The threshold is well clear of both sides: prun without the fix
+            # comes back in about 5s -- the parent job's own life -- and with
+            # it in about 20s, the child's.
+            [ $((t1 - t0)) -ge 10 ] \
+                && ok "prun stayed for the spawned job's whole life ($((t1 - t0))s)" \
+                || bad "prun returned in $((t1 - t0))s, before the child it spawned had finished"
+            [ "$rc" = 7 ] \
+                && ok "prun returns the spawned job's status, as prterun does (rc=$rc)" \
+                || bad "prun abandoned the job its job spawned -- expected 7, got rc=$rc"
+
+            # ...and the same directive that governs prterun's answer governs
+            # prun's, which is a decision prun now has to make for itself: the
+            # DVM is persistent, so it cannot make it for everyone.
+            out=$(RUN "cd /tmp/dyn && timeout 90 prun --dvm-uri file:$PRTED_URI --runtime-options report-child-jobs-separately -np 1 dynamic" 2>&1); rc=$?
+            [ "$rc" = 0 ] \
+                && ok "with report-child-jobs-separately prun returns the PRIMARY job's status (rc=0)" \
+                || bad "prun did not withhold the child's status (rc=$rc)"
+            echo "$out" | grep -q 'Child job' \
+                && ok "and prun still reports the child's status to the user" \
+                || bad "prun withheld the child's status AND never reported it: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+
+        # A tool must wait for ITS OWN tree and nobody else's.  An unfiltered
+        # job-end handler is how prun gets to see its descendants at all, so the
+        # thing to prove is that it does not also make it wait on a stranger:
+        # a 45s job under another prun must not delay this one.
+        PRUN_BG /tmp/otherprun.out '--host node3:1 -np 1 sleep 45'
+        sleep 3
+        t0=$(date +%s)
+        RUN "timeout -k 5 60 prun --dvm-uri file:$PRTED_URI --host node2:1 -np 1 hostname" >/dev/null 2>&1
+        t1=$(date +%s)
+        [ $((t1 - t0)) -lt 25 ] \
+            && ok "a prun is not held up by another user's job on the same DVM ($((t1 - t0))s)" \
+            || bad "prun waited on a job outside its own spawn tree ($((t1 - t0))s)"
+        RUN "timeout -k 5 30 pterm --dvm-uri file:$PRTED_URI" >/dev/null 2>&1
+        sleep 3
+    else
+        bad "could not start a persistent DVM for the prun spawn-tree case"
+    fi
+    for n in 1 2 3; do ON $n 'rm -rf /tmp/dyn' >/dev/null 2>&1; done
     cleanup_swarm
 }
 

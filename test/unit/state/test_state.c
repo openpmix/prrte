@@ -544,6 +544,62 @@ static int test_runtime_options(void)
 }
 
 /*
+ * prte_state_base_report_child_sep() reads the same directive the walk above
+ * records, but for a caller with no job object: a launcher driving a
+ * persistent DVM, deciding whether a child job's exit status becomes its own.
+ *
+ * The one thing that matters about it is that it AGREES with the walk.  Two
+ * readers of one directive that disagree would make "prun --runtime-options
+ * report-child-jobs-separately" and "prterun ..." return different exit
+ * statuses for the same run, which is the failure the directive exists to
+ * prevent.  So every case below is asserted against the attribute the walk
+ * leaves behind, not against a hand-written expectation.
+ */
+static int test_report_child_sep_reader(void)
+{
+    int failures = 0;
+    prte_job_t *jdata;
+    char *spec;
+    bool viawalk;
+    size_t n;
+    /* the spellings a command line can carry, including one that names the
+     * directive alongside others and one that does not name it at all */
+    const char *specs[] = {
+        "report-child-jobs-separately",
+        "report-child-jobs-separately=true",
+        "report-child-jobs-separately=false",
+        "recoverable,report-child-jobs-separately,notifyerrors",
+        "recoverable,report-child-jobs-separately=false",
+        "timeout=60",
+        NULL
+    };
+
+    for (n = 0; NULL != specs[n]; n++) {
+        jdata = PMIX_NEW(prte_job_t);
+        PMIX_LOAD_NSPACE(jdata->nspace, "unit-test-rcsr");
+        /* set_runtime_options edits the string it is given, so each reader
+         * gets its own copy */
+        spec = strdup(specs[n]);
+        CHECK(specs[n], PRTE_SUCCESS == prte_state_base_set_runtime_options(jdata, spec));
+        free(spec);
+        viawalk = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_CHILD_SEP,
+                                     NULL, PMIX_BOOL);
+        spec = strdup(specs[n]);
+        CHECK(specs[n], viawalk == prte_state_base_report_child_sep(spec));
+        free(spec);
+        PMIX_RELEASE(jdata);
+    }
+
+    /* a caller with nothing to read is not asking for it */
+    CHECK("no spec reads as false", !prte_state_base_report_child_sep(NULL));
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_report_child_sep_reader\n");
+    }
+    return failures;
+}
+
+/*
  * "stop-in-app" is the one runtime option whose value is not a truth value.
  * Written bare or with a boolean it asserts "stop wherever the application
  * chooses"; written with anything else, that text is the string ID of the
@@ -735,6 +791,7 @@ int main(void)
     failures += test_proc_dispatch();
     failures += test_caddy_contract();
     failures += test_runtime_options();
+    failures += test_report_child_sep_reader();
     failures += test_stop_in_app();
     failures += test_component_selection();
 
