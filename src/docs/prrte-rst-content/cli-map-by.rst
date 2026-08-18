@@ -140,7 +140,19 @@ applied at the job level:
   has no way to reproduce, and a wrong value there silently hides devices
   rather than failing.
 
-  The assignment is also readable directly, whether or not the vendor's
+  A process mapped against a **network** device is handed it the same
+  way, in the variables the fabric libraries read: ``NCCL_IB_HCA`` and
+  ``UCX_NET_DEVICES`` for a Mellanox or NVIDIA InfiniBand adapter, and
+  ``PSM3_NIC`` for an Intel Omni-Path adapter. The device is named by the
+  name those libraries accept -- ``mlx5_0`` -- which is the name hwloc
+  gave it, so unlike the GPU case there is no identity that can be
+  missing. Nothing is set for an adapter whose fabric has no component
+  behind it, and no variable that takes a device *unit number* is set at
+  all (``HFI_UNIT``, ``FI_OPX_HFI_SELECT``): a unit number is meaningful
+  only against the enumeration it came from, and a wrong one there does
+  not fail, it quietly puts the process on another adapter.
+
+  The assignment is also readable directly, whether or not a device
   variable was set, as the ``PMIX_DEVICE_ID`` key of the process's own
   job data.
 
