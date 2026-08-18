@@ -11,8 +11,18 @@ been able to take.  Each entry says where the evidence is, so that the next
 person can decide whether it is still true before acting on it.
 
 Add to it when you leave something undone, and delete from it when you do
-the work.  The last section is the other outcome: work that was investigated
-and decided against, kept so nobody spends the effort a second time.
+the work.  *Every marker* left in PRRTE's own sources — a ``TODO``, a
+``FIXME``, an ``XXX``, an arm deliberately left empty — belongs here in
+prose; **Every marker in the code** is the table that makes that
+correspondence checkable, and a marker missing from it means one of the two
+is stale.
+
+The two sections after that table are of a different kind.  **Review status**
+records how far the file-by-file review pass has reached, and — the part that
+matters more — which subsystems have been rebuilt since their review, so a
+guide's authority can be judged before it is trusted.  **Decided against** is
+the other outcome: work that was investigated and deliberately not done, kept
+so nobody spends the effort a second time.
 
 Runtime behavior
 ----------------
@@ -98,6 +108,59 @@ to async-signal-safe operations between ``fork`` and ``exec`` except for
 ``set_mempolicy``/``mbind`` means reproducing hwloc's NUMA nodeset handling
 and was left for later (``src/mca/odls/AGENTS.md``).
 
+**A hostfile line with more than one ``@`` stops the parse without saying
+where.**  ``hostfile_parse_line`` splits the value on ``@`` and takes one
+field as a hostname and two as ``user@host``; anything else prints
+``WARNING: Unhandled user@host-combination`` through ``pmix_output`` and
+returns ``PRTE_ERROR``, which abandons the rest of the file (two sites in
+``src/util/hostfile/hostfile.c``, one per token class that can carry a
+name).  Every other parse failure in that file goes through
+``hostfile_parse_error`` and ``help-hostfile.txt``, which name the file and
+the line number.  This one names neither, and it is the failure a user is
+most likely to reach by typo.
+
+**A peer whose socket cannot be created keeps its queued messages.**  In
+``prte_oob_tcp_peer_try_connect`` (``src/rml/oob/oob_tcp_connection.c``), a
+failed ``tcp_peer_create_socket`` activates ``PRTE_JOB_STATE_COMM_FAILED``,
+which is right — the failure spans every interface, so there is no other
+address to try.  What the note in place also asks for is that the peer's
+queued messages be marked and returned as unreachable, and they are not.
+This is a reconnect path as well as a first-connect one, so what is queued
+can be real work rather than a handshake.
+
+**Nothing records who is "connected".**  ``pmix_server_connect_fn`` and
+``pmix_server_disconnect_fn`` (``src/prted/pmix/pmix_server_dyn.c``)
+implement both operations as a fence across the participants, which is
+enough to make them return.  The bookkeeping is what is missing: the set of
+processes a ``PMIx_Connect`` joined is recorded nowhere, so when one of them
+terminates or fails there is nothing to consult for who was promised a
+notification.
+
+**The bootstrap configuration parses two options it deliberately does not
+publish.**  ``SessionTmpDir`` and the ``Log*`` options are read into the
+bootstrap configuration and then left there
+(``prte_ess_base_bootstrap_params``, ``src/mca/ess/base/ess_base_bootstrap.c``):
+the facilities they would drive — a dedicated session-directory override, and
+DVM state logging — do not exist, so publishing them as MCA envars would
+promise behavior the daemon does not have.  The parse stays because the file
+format is the specification; the plumbing waits on the facilities.
+
+**A job cannot ask for a transport.**  The network allocation request the
+odls builds for each job names ``<nspace>.net`` and a security key and
+otherwise takes whatever transport the resource manager offers by default
+(``prte_odls_base_default_get_add_procs_data``,
+``src/mca/odls/base/odls_base_default_fns.c``).  There is no command-line
+surface for saying which one, and the note there is the record that one was
+always intended.
+
+**Stack traces assume ``siginfo_t``.**  ``show_stackframe``
+(``src/util/stacktrace.c``) is installed as an ``sa_sigaction`` handler and
+prints ``si_code``, ``si_addr`` and their neighbors unconditionally.
+``configure`` probes for two *members* (``si_fd``, ``si_band``) but nothing
+probes for the structure itself, so a platform without it would fail to
+build rather than degrade to the plain handler.  Every platform PRRTE
+currently supports has it, which is why this has never been forced.
+
 Test coverage
 -------------
 
@@ -142,6 +205,237 @@ would otherwise leave every step passing while testing nothing.
 **``SLURM_TASKS_PER_NODE`` in its single-node spelling.**  The suite asserts
 the ``2(xN)`` form that a multi-node allocation produces; the ``2(x1)`` form
 goes through the same parser and is not separately covered.
+
+**A revived daemon, and RELM's depth-stamped link updates.**  The unheal
+path (``docs/plans/bootstrap/unheal_plan.rst``) is implemented and
+harness-verified for the routing recompute, for the xcast op-id stream a
+late joiner rejoins, and for the nidmap span the handoff encodes.  One item
+in it is argued rather than tested: RELM stamps link updates with the tree
+depth and ``update_link`` drops one whose depth does not match, while a
+revival changes depths and rides the xcast forward-first.  The static
+argument is that every daemon recomputes synchronously right after
+forwarding, so both ends have settled before any link update — a later,
+separate message — is processed.  The case that would settle it is cheap:
+kill an interior node on the Docker harness, restart it, then launch a job
+across the whole DVM and check that nothing was lost.
+
+**The topology sensing path, and a cpuset wide enough to fill the buffer.**
+``prte_hwloc_base_get_topology()``'s sensing arm reads the real machine, so
+nothing drives it — every unit test and the offline harness hand it a
+topology file instead.  Nor is ``prte_hwloc_print()`` exercised against a
+machine of a few thousand PUs, which is the width its cpuset buffer is sized
+for (``src/hwloc/AGENTS.md``).
+
+**The XML arm, and the copy constructors.**  In
+``src/runtime/data_type_support/``, the print functions' XML output has no
+test, and ``prte_job_copy`` / ``prte_proc_copy`` have no callers to be tested
+through.
+
+Every marker in the code
+------------------------
+
+The list above is meant to be the whole of it: a ``TODO``, ``FIXME`` or
+``XXX`` left in PRRTE's own sources should have an entry here in prose — and
+so should an arm deliberately left empty, like the data server's
+``PMIX_RANGE_CUSTOM`` case, which carries no keyword at all — and this table
+is what makes that checkable.  If you leave a marker, add the entry; if you
+find a marker this table does not name, either the entry or the marker is
+stale.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 45 55
+
+   * - marker
+     - entry above
+   * - ``util/hostfile/hostfile.c``, ``hostfile_parse_line`` (two sites)
+     - a hostfile line with more than one ``@``
+   * - ``util/stacktrace.c``, ``show_stackframe``
+     - stack traces assume ``siginfo_t``
+   * - ``rml/oob/oob_tcp_connection.c``,
+       ``prte_oob_tcp_peer_try_connect``
+     - a peer whose socket cannot be created
+   * - ``rml/oob/oob_tcp_connection.c``,
+       ``prte_oob_tcp_peer_recv_connect_ack``
+     - a TCP peer closed rather than retried at its next address
+   * - ``rml/rml_fault_handler.c``, ``send_failures_notice``
+     - a promoted daemon's failure notice carries no ancestor list
+   * - ``rml/routed_radix.c``, ``prte_rml_repair_routing_tree``
+     - nobody owns marking failed procs ``COMM_FAILED``
+   * - ``rml/routed_radix.c``, ``prte_rml_compute_routing_tree``
+     - routing-tree state is not preserved across a DVM resize
+   * - ``rml/relm/relm.c``, ``prte_relm_register``
+     - RELM has one module and no way to choose another
+   * - ``rml/relm/base/state_updates.c``, ``upstream_update`` and
+       ``local_update``
+     - a RELM message-id clash is logged and ignored
+   * - ``mca/filem/raw/filem_raw_module.c``, ``raw_fault_handler``
+     - ``filem/raw`` does not survive losing a daemon mid-staging
+   * - ``mca/odls/base/odls_base_bind.c``, ``prte_odls_base_set``
+     - the post-fork child still calls into hwloc once
+   * - ``mca/odls/base/odls_base_default_fns.c``,
+       ``prte_odls_base_default_get_add_procs_data``
+     - a job cannot ask for a transport
+   * - ``mca/ess/base/ess_base_bootstrap.c``,
+       ``prte_ess_base_bootstrap_params``
+     - two bootstrap options are parsed and not plumbed
+   * - ``prted/pmix/pmix_server_dyn.c``, ``pmix_server_disconnect_fn``
+     - nothing records who is "connected"
+   * - ``mca/ras/flux/ras_flux_module.c``, ``modify``
+     - ``ras/flux`` has no ``modify()``
+   * - ``runtime/data_server/ds_main.c``,
+       ``prte_data_server_check_range``
+     - ``PMIX_RANGE_CUSTOM`` denies everyone
+
+Two families of marker are **not** ours, and are deliberately absent from
+that table: the ``TODO`` comments in ``hostfile_lex.c`` and
+``rmaps_rank_file_lex.c``, which come from flex's generated skeleton, and the
+``FIXME`` comments throughout ``config/libtool.m4`` and ``config/ltmain.sh``,
+which are vendored Autotools.
+
+Review status
+-------------
+
+PRRTE's source has been going through a file-by-file review pass: read the
+code, verify each finding adversarially, fix what survives, and write what
+the review established into the directory's ``AGENTS.md``.  This section
+records where that pass has reached, because "has anyone actually looked at
+this?" should be a question with an answer, and because a review is only as
+good as the code it was a review *of* — several subsystems have been rebuilt
+since theirs.
+
+The churn figures are commits and diff lines touching the subsystem's
+sources since its own review commits, measured on **2026-08-17**.  They age;
+regenerate them with ``git log --since=<date> -- <dir>`` rather than trusting
+them a month from now.  ``AGENTS.md`` and ``CLAUDE.md`` are excluded from the
+counts, since a review's own write-up would otherwise count as change since
+the review.
+
+Reviewed, and stable since
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+What each of these directories' ``AGENTS.md`` says is still what the code
+does.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 26 24 50
+
+   * - subsystem
+     - last reviewed
+     - since
+   * - ``src/event``
+     - 2026-07-31
+     - nothing
+   * - ``src/include``
+     - 2026-08-02 (round 2)
+     - nothing
+   * - ``src/pmix``
+     - 2026-07-30
+     - 6 commits, ~110 lines
+   * - ``src/mca/filem``
+     - 2026-08-03 (round 2)
+     - 3 commits, ~30 lines
+   * - ``src/mca/ess``
+     - 2026-08-03 (round 2)
+     - 4 commits, ~120 lines
+   * - ``src/mca/iof``
+     - 2026-08-04 (round 2)
+     - 6 commits, ~150 lines
+   * - ``src/tools``
+     - 2026-07-29
+     - 11 commits, ~120 lines
+
+Reviewed, but changed materially since
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+These carry a review, and then the ground moved.  The review's findings are
+still worth reading — they say what the invariants are — but nothing here has
+been re-verified against the code as it now stands, and the top of the list
+is not a marginal case.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 20 58
+
+   * - subsystem
+     - last reviewed
+     - since
+   * - ``src/grpcomm``
+     - 2026-08-02 (round 3)
+     - The subsystem was then taken out of MCA and rebuilt at a new path
+       (``src/mca/grpcomm`` became ``src/grpcomm``), collective movements
+       were added and most of them removed again, and the xcast was
+       reworked twice.  Every line is now at an address the review never
+       saw.  **Re-review this one first.**
+   * - ``src/prted``
+     - 2026-07-30
+     - 43 commits, +3,187/-482.  The PMIx server host module
+       (``src/prted/pmix``) absorbed most of the launch-message work, the
+       lazy proc-data derivation, and the tool-connection data server.
+   * - ``src/mca/ras``
+     - 2026-07-26
+     - 44 commits, +2,093/-494.  Elastic extend/release, the SLURM
+       ``--json`` parser and its version gate, node reservation.
+   * - ``src/mca/rmaps``
+     - 2026-07-28
+     - 28 commits, +2,408/-480.  Per-device mapping is nearly all of it,
+       including a new enumerator vtable in the base.
+   * - ``src/runtime``
+     - 2026-07-29
+     - 30 commits, +1,792/-635.  Placement packed as maps, the cpuset
+       scatter, the mode byte at the head of the job buffer, and the data
+       server's move onto a PMIx tool connection.
+   * - ``src/mca/schizo``
+     - 2026-07-28
+     - 30 commits, +1,535/-522.  Device-mapping qualifiers and the
+       debugger options.
+   * - ``src/rml``
+     - 2026-07-29
+     - 20 commits, +1,522/-190.  The OOB wire header lost its namespaces,
+       per-peer worker bases arrived, and RELM gained demotion handling
+       (RELM was reviewed as part of this pass, not separately).
+   * - ``src/util``
+     - 2026-07-29
+     - 22 commits, +889/-96
+   * - ``src/mca/odls``
+     - 2026-08-04 (round 2)
+     - 8 commits, +543/-289.  The receiving half of the cpuset scatter.
+   * - ``src/hwloc``
+     - 2026-08-01 (round 3)
+     - 11 commits, +536/-437.  Device enumeration and the UUID plumbing.
+   * - ``src/mca/state``
+     - 2026-07-29
+     - 17 commits, +424/-120
+   * - ``src/mca/errmgr``
+     - 2026-08-02 (round 2)
+     - 15 commits, +301/-217
+   * - ``src/mca/plm``
+     - 2026-08-04 (round 2)
+     - 13 commits, +279/-147
+
+Not yet reviewed
+~~~~~~~~~~~~~~~~
+
+Every directory below has an ``AGENTS.md`` — the orientation guides were
+written across the tree in one pass — but an orientation guide is a
+description, not a review.  Nobody has read these for defects.
+
+**``src/mca/common``** (with ``common/slurm``).  Written 2026-08-06 and
+untouched by any review.  It is now the single place every SLURM component
+asks "is this really SLURM", so a wrong answer there is wrong in ``ras``,
+``plm`` and ``ess`` at once.
+
+**``src/mca/prtereachable``**, **``src/mca/prtebacktrace``**,
+**``src/mca/prteinstalldirs``**.  Nothing but a header-installation fix and
+the framework-version stamp has touched these since the pass began.  They are
+small and quiet, which is the argument both for leaving them and for the fact
+that a defect in them would have gone unnoticed.
+
+**``test/unit`` and the harness scripts under ``contrib/``.**  Reviewed
+informally as they were written; never subjected to the pass.  This is worth
+saying out loud, because the harness is what decides whether everything else
+passes.
 
 Performance work: what the measurements settled
 -----------------------------------------------
