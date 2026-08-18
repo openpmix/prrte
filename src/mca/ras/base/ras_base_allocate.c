@@ -811,6 +811,44 @@ void prte_ras_base_shrink_complete(prte_shrink_campaign_t *campaign)
     }
 }
 
+/* Mark the application procs on a released node as terminated.  Nothing else
+ * does: the target daemon's proc-state updates race the routing teardown its
+ * departure starts, and its later comm failure is ignored (errmgr_dvm.c), so
+ * the errmgr's lost-daemon sweep never runs either.  An unaccounted proc holds
+ * its job below PRTE_JOB_STATE_TERMINATED and prterun never shuts the DVM down.
+ *
+ * TERMINATED, not TERM_WO_SYNC: the release is planned.  track_procs() skips a
+ * proc already flagged RECORDED, so a real report is not counted twice.  Runs
+ * before prte_plm_base_reset_dvm_node(), which can drop the map's last
+ * reference to the node. */
+static void release_node_procs(prte_node_t *node)
+{
+    prte_proc_t *proc;
+    int i;
+
+    if (NULL == node || NULL == node->procs) {
+        return;
+    }
+
+    for (i = 0; i < node->procs->size; i++) {
+        proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, i);
+        if (NULL == proc) {
+            continue;
+        }
+        /* defensive: only application procs are recorded on a node, but the
+         * daemon job is not ours to account for -- the per-target block owns
+         * the target daemon's teardown */
+        if (PMIX_CHECK_NSPACE(proc->name.nspace, PRTE_PROC_MY_NAME->nspace)) {
+            continue;
+        }
+        PMIX_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
+                             "%s ras:base:shrink releasing proc %s with node %s",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             PRTE_NAME_PRINT(&proc->name), node->name));
+        PRTE_ACTIVATE_PROC_STATE(&proc->name, PRTE_PROC_STATE_TERMINATED);
+    }
+}
+
 /* Thread-shift target: collectively complete a DVM shrink campaign.  Runs once
  * per campaign on the DVM master, on a fresh event (posted from the grpcomm
  * xcast-completion callback below) so it never executes nested inside the xcast
@@ -862,6 +900,7 @@ static void shrink_campaign_complete(int sd, short args, void *cbdata)
                 continue;
             }
             node = dproc->node;
+            release_node_procs(node);
             if (PRTE_FLAG_TEST(dproc, PRTE_PROC_FLAG_ALIVE)) {
                 PRTE_FLAG_UNSET(dproc, PRTE_PROC_FLAG_ALIVE);
                 dproc->state = PRTE_PROC_STATE_TERMINATED;
