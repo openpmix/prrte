@@ -349,6 +349,26 @@ startup, or teardown:
 prte --daemonize && prun -n 4 hostname && pterm
 ```
 
+**A lookup that finds no job must say WHICH kind of nothing it found.**
+`prte_get_job_data_object()` returning `NULL` covers two opposite
+situations: a job whose record has not reached us *yet* — a race worth
+waiting out — and one that has already ended, whose object was released
+and is never coming back. Code that cannot tell them apart assumes the
+first and parks the request, and nothing on either side of that will ever
+release it: PRRTE runs no timer over those arrays, and PMIx deliberately
+sets no timeout on a host request so as not to race the host. The result
+is a permanently wedged `PMIx_Get`.
+
+`prte_pmix_server_job_has_departed()` is the discriminator, backed by a
+bounded registry of the last jobs to go. **Every** path that fails such a
+lookup and would otherwise wait must consult it — `dmodex_req()` (a local
+client's get), `pmix_server_dmdx_recv()` (another daemon's), and the
+retry cycle. Departures are recorded where the job object is released,
+which is in two different places: a daemon does it under
+`PRTE_DAEMON_CONT_CLEANUP_JOB`, and the master in `state_dvm.c`'s
+`cleanup_job()`, because the master runs its own job lifecycle. Adding a
+release site means adding a `prte_pmix_server_job_departed()` beside it.
+
 **Multi-node — `contrib/dockerswarm/`.** Most of what is interesting in
 this directory only exists across nodes: a daemon that hosts none of a
 job's procs, a tool connecting through a non-master daemon, a signal that

@@ -71,6 +71,7 @@
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
 #include "src/prted/prted.h"
+#include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 
 #define CHECK(label, cond)                                    \
@@ -1284,6 +1285,65 @@ static int test_session_time(void)
     return failures;
 }
 
+/*
+ * The departed-job registry.  A lookup that cannot find a job has to tell
+ * "we have not heard of it YET" from "it has been and gone": the first is a
+ * race worth waiting out, the second is a request that would wait forever,
+ * because nothing drains those on a timer.  This list is the only thing that
+ * can tell them apart, so the two properties that matter are that it
+ * remembers what it was told and that it stays bounded - a persistent DVM
+ * runs jobs without end.
+ */
+static int test_departed_jobs(void)
+{
+    int failures = 0;
+    /* the helpers take a pmix_nspace_t - a fixed-size array - so hand them
+     * one rather than a string literal the compiler can see is shorter */
+    pmix_nspace_t ns, first, last;
+    int i;
+
+    /* the registry lives in the server globals, which a full
+     * pmix_server_init() would have constructed for us */
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.departed_jobs, pmix_list_t);
+
+    PMIX_LOAD_NSPACE(ns, "unit-test-never-existed");
+    CHECK("an unknown job has not departed", !prte_pmix_server_job_has_departed(ns));
+
+    PMIX_LOAD_NSPACE(first, "unit-test-dep@1");
+    prte_pmix_server_job_departed(first);
+    CHECK("a departed job is remembered", prte_pmix_server_job_has_departed(first));
+    PMIX_LOAD_NSPACE(ns, "unit-test-dep@2");
+    CHECK("...and its neighbours are not", !prte_pmix_server_job_has_departed(ns));
+
+    /* recording the same one twice must not consume a second slot, or a job
+     * whose departure is reported more than once would push out the history
+     * of jobs that really did depart */
+    prte_pmix_server_job_departed(first);
+    CHECK("a repeat does not grow the list",
+          1 == pmix_list_get_size(&prte_pmix_server_globals.departed_jobs));
+
+    /* the bound holds, and it is the OLDEST that is dropped */
+    for (i = 2; i <= 40; i++) {
+        snprintf(ns, sizeof(ns), "unit-test-dep@%d", i);
+        prte_pmix_server_job_departed(ns);
+    }
+    CHECK("the list stays bounded",
+          32 >= pmix_list_get_size(&prte_pmix_server_globals.departed_jobs));
+    PMIX_LOAD_NSPACE(last, "unit-test-dep@40");
+    CHECK("the most recent departure is still known",
+          prte_pmix_server_job_has_departed(last));
+    CHECK("the oldest has aged out", !prte_pmix_server_job_has_departed(first));
+
+    /* LIST_DESTRUCT, not DESTRUCT: the latter only re-initializes the list
+     * and would leak every entry still on it */
+    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.departed_jobs);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_departed_jobs\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0, skipped = 0;
@@ -1344,6 +1404,7 @@ int main(void)
         return 1;
     }
 
+    failures += test_departed_jobs();
     failures += test_prefix_normalization();
     failures += test_singleton_id();
     failures += test_xfer_job_info();
