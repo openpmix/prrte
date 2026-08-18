@@ -631,6 +631,25 @@ job_nodes() {   # $1 = slurm job id -> comma-separated hostnames
 # in.  A group that leaves an extend standing starves the next group of the
 # pool it needs, and that is reported as "the grow did not happen" several
 # cases later.
+# The nodes SLURM could actually grant right now, and how many.
+#
+# Deliberately not "the idle ones".  A node this cluster has released through
+# an in-place resize can sit in state IDLE with its cores still accounted to
+# the job that was shrunk off it -- `scontrol show node` reports State=IDLE
+# and CPUAlloc=8 together -- and an allocation that names such a node pends on
+# Reason=Resources until every job in the queue is gone.  Asking sinfo for the
+# free-CPU count as well is what tells the two apart; a case that takes IDLE
+# at face value waits out its timeout and then reports the scheduler's
+# accounting as a PRRTE failure.
+grantable_nodes() {
+    SQ "sinfo -h -N -o '%N %t %C'" | tr -d '\r' \
+        | awk '$2 == "idle" && substr($3, 1, 2) == "0/" { print $1 }' | sort -u | paste -sd, -
+}
+grantable_count() {
+    local g; g=$(grantable_nodes)
+    [ -z "$g" ] && echo 0 || echo "$g" | tr ',' '\n' | grep -c .
+}
+
 drop_extra_jobs() {   # $1 = the job id to keep
     local j
     for j in $(SQ "squeue -h -o '%i'" | tr -d ' \r'); do
@@ -671,6 +690,7 @@ test_elastic() {
 
     elastic_grant_group "$jid"
     elastic_count_release_group "$jid"
+    elastic_reextend_reuse_group "$jid"
     elastic_release_during_grow_group "$jid"
     elastic_pending_cancel_group "$jid"
     elastic_tainted_hostname_group
@@ -843,6 +863,142 @@ elastic_count_release_group() {
         && bad "count release did not cancel job $ajid" \
         || ok "the whole SLURM job was cancelled rather than resized"
     drop_extra_jobs "$jid"
+}
+
+# The shape reported against ras/slurm: extend, release part of what was
+# granted, then extend again onto a node that release just gave back.
+#
+# Only the last step is new.  A grow completes through DAEMONS_REPORTED ->
+# VM_READY, which fires when the daemon job's num_procs equals num_reported,
+# and neither counter is ever decremented when a daemon departs.  A release
+# therefore leaves the two balanced -- the departed daemon had already
+# reported -- so the fence the next extend raises comes down only if the
+# daemon on the reused node reports in.  A node that comes back carrying
+# anything from its previous life (a pool entry the DVM still believes is
+# occupied, a retired vpid) never reports, and the extend hangs with nothing
+# logged anywhere.  Issue #2491 closed the routing half of this, which the
+# sibling harness covers by hostname; here the reuse is the SCHEDULER'S
+# choice, and arranging that is what only a real SLURM can do.
+#
+# Arranging it means leaving the scheduler no alternative: the first extend
+# asks for the WHOLE free pool, so that when two of those nodes are released
+# they are the only nodes SLURM has left to grant.  Do not shrink that first
+# request to a fixed size -- with a spare node anywhere in the cluster the
+# scheduler is free to grant one that was never in the DVM, and the case
+# asserts nothing while looking like it passed.
+elastic_reextend_reuse_group() {
+    local jid=$1 out ajid bjid gnodes released reused pool strays forced n
+
+    banner "ras/slurm: an extend that reuses a node an earlier release gave back"
+    n=$(grantable_count)
+    if [ "$n" -lt 3 ]; then
+        skp "SLURM can grant only $n node(s) -- the reuse case needs three"
+        return
+    fi
+    out=$(SA "timeout 240 elastic extend $n" 2>&1)
+    ajid=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
+    if [ -z "$ajid" ]; then
+        bad "could not extend onto the free pool ($n nodes): $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        skp "the reuse case needs granted nodes to release two of"
+        drop_extra_jobs "$jid"
+        return
+    fi
+    gnodes=$(job_nodes "$ajid")
+    sleep 8
+    # shellcheck disable=SC2086
+    [ "$(prted_count $(idx_of "$gnodes"))" = "$n" ] \
+        && ok "the whole free pool joined the DVM ($gnodes)" \
+        || bad "not every node of $gnodes got a daemon"
+    pool=$(grantable_nodes)
+    [ -z "$pool" ] \
+        && ok "SLURM has nothing left to grant -- a later extend can only come from a release" \
+        || skp "SLURM can still grant '$pool' -- a spare node reappeared under the case"
+
+    released="$(echo "$gnodes" | cut -d, -f1),$(echo "$gnodes" | cut -d, -f2)"
+    out=$(SA "timeout 180 elastic shrink $released" 2>&1)
+    sleep 6
+    echo "$out" | grep -q PMIX_DVM_IS_READY \
+        && ok "the partial release completed ($released)" \
+        || bad "the partial release never completed: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    # shellcheck disable=SC2086
+    [ "$(prted_count $(idx_of "$released"))" = 0 ] \
+        && ok "both released nodes gave up their daemons" \
+        || bad "a daemon survived on a released node ($released)"
+    [ "$(SQ "squeue -h -j $ajid -o '%D'" | tr -d ' \r')" = "$((n - 2))" ] \
+        && ok "SLURM resized the granted job down by the two released nodes" \
+        || bad "job $ajid still holds $(SQ "squeue -h -j $ajid -o '%D'" | tr -d ' \r') nodes, expected $((n - 2))"
+    # Anything the scheduler can still grant has to be put out of its reach,
+    # or the extend below is free to land somewhere that proves nothing.
+    # Normally there is nothing to do: the extend above took the whole pool.
+    # A node can come back into it late, though -- cores an in-place resize
+    # left accounted (see grantable_nodes) are freed on slurmctld's own
+    # schedule, not PRRTE's -- so park whatever has reappeared.
+    pool=$(grantable_nodes)
+    strays=$(echo "$pool" | tr ',' '\n' \
+             | grep -vxF -e "${released%%,*}" -e "${released##*,}" | paste -sd, -)
+    [ -n "$strays" ] && ALLOC new --tag park --nodelist "$strays" --timeout 30 >/dev/null 2>&1
+    pool=$(grantable_nodes)
+    forced=0
+    [ "$(echo "$pool" | tr ',' '\n' | sort | paste -sd, -)" \
+      = "$(echo "$released" | tr ',' '\n' | sort | paste -sd, -)" ] && forced=1
+    [ "$forced" = 1 ] \
+        && ok "the released nodes are the only ones SLURM has left to grant" \
+        || skp "SLURM can also grant '$pool' -- this run cannot force the reuse"
+
+    out=$(SA 'timeout 180 elastic extend 1' 2>&1)
+    bjid=$(echo "$out" | sed -n 's/^>>> ALLOC_ID \([0-9][0-9]*\).*/\1/p' | head -1)
+    if [ -z "$bjid" ]; then
+        bad "the re-extend was refused: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        skp "the reuse assertions need the re-extend to be granted"
+        SA "timeout 180 elastic release-id $ajid" >/dev/null 2>&1
+        ALLOC free --tag park >/dev/null 2>&1
+        drop_extra_jobs "$jid"
+        return
+    fi
+    # The reported hang reads exactly like this: phase one hands back an
+    # allocation id, and the phase-two completion event never arrives.  It is
+    # asserted whatever node the scheduler chose -- an extend that does not
+    # complete is a bug wherever it landed.
+    echo "$out" | grep -q PMIX_DVM_IS_READY \
+        && ok "the re-extend completed (phase-two event delivered)" \
+        || bad "the re-extend never completed -- the reported hang: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    reused=$(job_nodes "$bjid")
+    if echo "$released" | tr ',' '\n' | grep -qx "$reused"; then
+        ok "SLURM granted back a node the release had freed ($reused)"
+    elif [ "$forced" = 1 ]; then
+        bad "the re-extend landed on '$reused', which the release did not free"
+    else
+        skp "the re-extend landed on '$reused' -- the scheduler had a spare, so no reuse happened"
+    fi
+    sleep 8
+    # shellcheck disable=SC2086
+    [ "$(prted_count $(idx_of "$reused"))" = 1 ] \
+        && ok "a daemon is running on the granted node ($reused)" \
+        || bad "no daemon on $reused -- it never joined the DVM"
+    # A daemon that checked in is not yet a node the DVM will map onto: a
+    # reuse also has to have left one usable pool entry behind, neither the
+    # departed one nor two of them.
+    out=$(SA "timeout 60 prun --host $reused:1 -n 1 hostname" 2>&1)
+    [ "$(echo "$out" | tail -1 | tr -d '\r')" = "$reused" ] \
+        && ok "a job maps onto that node" \
+        || bad "$reused ran nothing: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    out=$(SA 'timeout 30 prun -n 1 hostname' 2>&1 | tail -1)
+    [ "$(echo "$out" | tr -d '\r')" = node1 ] \
+        && ok "DVM still responsive afterwards" \
+        || bad "DVM wedged after the re-extend: $out"
+
+    # Give it all back through PRRTE rather than the scheduler.  A scancelled
+    # node keeps its pool entry in the DVM, and a request PRRTE still believes
+    # is outstanding makes the NEXT group's extend fail with PMIX_ERR_EXISTS --
+    # which is why every early return above releases before it gives up.
+    SA "timeout 180 elastic release-id $bjid" >/dev/null 2>&1
+    SA "timeout 180 elastic release-id $ajid" >/dev/null 2>&1
+    ALLOC free --tag park >/dev/null 2>&1
+    drop_extra_jobs "$jid"
+    for _ in $(seq 30); do
+        [ "$(cluster_idle_count)" -ge 6 ] && break
+        sleep 1
+    done
 }
 
 elastic_release_during_grow_group() {
