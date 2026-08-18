@@ -201,7 +201,7 @@ serves without consulting the ras. `ras/slurm`'s `modify()` accepts only
 `PMIX_ALLOC_REQ_CANCEL` — which nodes an extend lands on is the scheduler's
 choice. Hence `elastic extend|release|release-id|cancel`.
 
-Two cases are worth calling out:
+Four cases are worth calling out:
 
 - **The in-place resize.** A partial release keeps the SLURM job and shrinks
   it with `scontrol update job <id> ReqNodeList=<survivors>`. Whether SLURM
@@ -212,6 +212,32 @@ Two cases are worth calling out:
   *told* to make a job pend. Here the case asks for more nodes than the
   cluster has free and SLURM queues it PENDING by itself, which is the state
   `PMIX_ALLOC_REQ_CANCEL` exists for.
+- **An extend that lands on a node an earlier release gave back.** Reported
+  as a hang, and the half of it `ras/slurm` owns: a grow completes only
+  through `DAEMONS_REPORTED` → `VM_READY`, and neither of the counters that
+  gate it is decremented when a daemon departs, so the fence the extend
+  raises comes down only if the daemon on the reused node reports in. Which
+  node an extend lands on is the *scheduler's* choice, so the case has to
+  leave SLURM no alternative: the first extend asks for the **whole free
+  pool**, and after two of those nodes are released they are the only nodes
+  left to grant. Do not shrink that first request to a fixed size — with a
+  spare node anywhere in the cluster the scheduler may grant one that was
+  never in the DVM, and the case would assert nothing while looking like it
+  passed. The completion assertion runs whatever node was granted (an extend
+  that does not complete is a bug wherever it landed); only the claim that a
+  *reuse* happened is downgraded to a skip when the scheduler had a spare.
+  (The sibling harness covers the same shape chosen by *hostname*; [#2491]
+  closed the routing half of it.)
+- **Which brings in the one piece of SLURM bookkeeping this suite has to
+  work around.** A node released by an in-place resize can sit in state
+  `IDLE` with its cores still accounted to the job that was shrunk off it —
+  `scontrol show node` reports `State=IDLE` and `CPUAlloc=8` together, and
+  slurmctld frees them on its own schedule — so an allocation naming that
+  node pends on `Reason=Resources` until the queue drains. `sinfo -t idle`
+  cannot see the difference; `grantable_nodes()` asks for the free-CPU count
+  as well, and every case that needs to know what the scheduler can hand out
+  must go through it. A case that takes `IDLE` at face value waits out its
+  timeout and then reports the scheduler's accounting as a PRRTE failure.
 
 The tainted-hostname case is carried over from the sibling harness because
 the stakes are different here: the command that would be built is one a live
@@ -240,6 +266,7 @@ than the run before. A group that gives up now says what it gave up on, and
 the caller runs the next one regardless.
 
 [#2617]: https://github.com/openpmix/prrte/issues/2617
+[#2491]: https://github.com/openpmix/prrte/issues/2491
 
 **`test_launch`** — a deliberately short smoke test. Ranks spread over the
 allocated nodes, output forwarded back, a failing job reported as failing,

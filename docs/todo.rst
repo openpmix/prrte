@@ -27,23 +27,6 @@ so nobody spends the effort a second time.
 Runtime behavior
 ----------------
 
-**An elastic re-extend that reuses a previously-shrunk node was reported to
-hang.**  The sequence is: allocate one node, extend by three, shrink two,
-then extend by one *reusing* a node the shrink released.  The first extend
-completes; the re-extend does not
-(`#2491 <https://github.com/openpmix/prrte/issues/2491>`_ closed the routing
-half of this, not this half).  The mechanism identified at the time: a grow
-completes only through ``DAEMONS_REPORTED`` → ``VM_READY``, which fires when
-``daemons->num_procs == daemons->num_reported``, and both counters are
-monotonic — neither is decremented when a daemon departs.  A shrink therefore
-leaves them balanced, so the first extend is fine, while a re-extend raises
-the fence for a daemon that must report before the grow can complete.  The
-dockerswarm suite covers grow → shrink → re-grow by *hostname* and passes;
-what has never been re-verified against current master is the same shape
-driven through ``ras/slurm``, where the reuse code lives.  A case belongs in
-``contrib/slurmswarm/run-tests.sh`` either way — it is cheap, and its
-absence is why this is still an open question rather than a closed one.
-
 **``ras/flux`` has no ``modify()``.**  It returns ``PMIX_ERR_NOT_SUPPORTED``
 (``src/mca/ras/flux/ras_flux_module.c``), so the elastic extend/release
 surface exists for SLURM only.  Everything above the component is
