@@ -84,8 +84,8 @@ static int prte_rmaps_base_register(pmix_mca_base_register_flag_t flags)
     ret = pmix_mca_base_var_register("prte", NULL, NULL, "mapby",
                                      "Default mapping Policy [slot | hwthread | core | l1cache | "
                                       "l2cache | l3cache | numa | package | node | seq | ppr | "
-                                      "device=<class|name> (gpu, network, openfabrics, nic, block, or a\n"
-                                      " device name such as mlx5_0) | "
+                                      "device=<class|name> (gpu, network (aka nic, fabric,\n"
+                                      " openfabrics), block, or a device name such as mlx5_0) | "
                                       "rankfile | pe-list=a,b (comma-delimited ranges of cpus to use for this job)],"
                                       " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
                                       "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "

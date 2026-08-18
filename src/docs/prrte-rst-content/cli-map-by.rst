@@ -83,9 +83,12 @@ applied at the job level:
 * ``DEVICE=<class|name>`` assigns one proc to each device in the node's
   topology, in PCI bus order, placing it on the CPUs local to that
   device. The value is either a class of device -- ``gpu``, ``network``,
-  ``openfabrics``, ``nic`` (network and openfabrics together), or
-  ``block`` -- or the name or UUID of one particular device such as
+  or ``block`` -- or the name or UUID of one particular device such as
   ``mlx5_0``, in which case every proc is placed near that one device.
+  ``nic``, ``fabric`` and ``openfabrics`` are accepted as spellings of
+  ``network`` and mean exactly the same set: one entry per card, whether
+  the node presents it as an OpenFabrics device (``mlx5_0``), a network
+  interface (``ib0``), or both.
 
   Note there is no bare ``--mapby gpu``: the class is the *value* of the
   ``device`` directive, which is what allows other classes of device to

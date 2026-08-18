@@ -295,6 +295,36 @@ int test_policy_parse(void)
     free(sval);
     PMIX_RELEASE(app);
 
+    /* Every class is carried the same way, so a new one costs a value and
+     * not a code path.  The parser stores the spelling verbatim; which
+     * devices it names is the enumerator's question, and the qualifiers
+     * below apply to whatever the value turned out to be. */
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=nic:ndev=2:shared");
+    CHECK("mapby device=nic: rc", PRTE_SUCCESS == rc);
+    u16 = get_u16(&app->attributes, PRTE_APP_MAPBY);
+    CHECK("mapby device=nic: policy", PRTE_MAPPING_BYDEVICE == PRTE_GET_MAPPING_POLICY(u16));
+    sval = get_str(&app->attributes, PRTE_APP_MAP_DEVICE);
+    CHECK("mapby device=nic: spec", NULL != sval && 0 == strcmp(sval, "nic"));
+    free(sval);
+    CHECK("mapby device=nic: ndev qualifier",
+          2 == get_u16(&app->attributes, PRTE_APP_MAP_NDEV));
+    CHECK("mapby device=nic: shared qualifier",
+          prte_get_attribute(&app->attributes, PRTE_APP_MAP_SHARED, NULL, PMIX_BOOL));
+    PMIX_RELEASE(app);
+
+    app = PMIX_NEW(prte_app_context_t);
+    rc = prte_rmaps_base_set_app_mapping_policy(app, "device=fabric:interleave=numa");
+    CHECK("mapby device=fabric: rc", PRTE_SUCCESS == rc);
+    sval = get_str(&app->attributes, PRTE_APP_MAP_DEVICE);
+    CHECK("mapby device=fabric: spec", NULL != sval && 0 == strcmp(sval, "fabric"));
+    free(sval);
+    sval = get_str(&app->attributes, PRTE_APP_MAP_INTERLEAVE);
+    CHECK("mapby device=fabric: interleave qualifier",
+          NULL != sval && 0 == strcmp(sval, "numa"));
+    free(sval);
+    PMIX_RELEASE(app);
+
     /* the value is read after the "=", not at a fixed offset past the full
      * spelling - the directive may be abbreviated to any unambiguous prefix */
     app = PMIX_NEW(prte_app_context_t);
