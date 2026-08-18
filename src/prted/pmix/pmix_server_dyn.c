@@ -682,37 +682,40 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_PROC,
                                PRTE_ATTR_GLOBAL, &info->value.data.uint16, PMIX_UINT16);
 
-            /* there can be multiple of these, so we add them to the attribute list */
         } else if (PMIX_CHECK_KEY(info, PMIX_ENVARS_HARVESTED)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_ENVARS_HARVESTED,
                                PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+
+            /* envar directives are multi-valued, so append: prte_pmix_xfer_app()
+             * has already put app_idx 0's directives on this list under these
+             * keys, and prte_set_attribute() would overwrite the first one */
         } else if (PMIX_CHECK_KEY(info, PMIX_SET_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_SET_ENVAR,
-                               PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
+            prte_append_attribute(&jdata->attributes, PRTE_JOB_SET_ENVAR,
+                                  PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
         } else if (PMIX_CHECK_KEY(info, PMIX_ADD_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_ADD_ENVAR,
-                               PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
+            prte_append_attribute(&jdata->attributes, PRTE_JOB_ADD_ENVAR,
+                                  PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
         } else if (PMIX_CHECK_KEY(info, PMIX_UNSET_ENVAR)) {
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_UNSET_ENVAR,
-                               PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
+            prte_append_attribute(&jdata->attributes, PRTE_JOB_UNSET_ENVAR,
+                                  PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
         } else if (PMIX_CHECK_KEY(info, PMIX_PREPEND_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_PREPEND_ENVAR,
-                               PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
+            prte_append_attribute(&jdata->attributes, PRTE_JOB_PREPEND_ENVAR,
+                                  PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
         } else if (PMIX_CHECK_KEY(info, PMIX_APPEND_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_APPEND_ENVAR,
-                               PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
+            prte_append_attribute(&jdata->attributes, PRTE_JOB_APPEND_ENVAR,
+                                  PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
 
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TOOL)) {
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
