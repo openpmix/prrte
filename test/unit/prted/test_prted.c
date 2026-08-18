@@ -200,6 +200,10 @@ static int test_xfer_job_info(void)
     pmix_info_t info[3];
     char *str;
     uint32_t u32, *u32ptr;
+    pmix_envar_t envt;
+    prte_attribute_t *attr;
+    size_t nenvars;
+    bool found_app;
 
     /* a boolean directive lands as a job attribute */
     jdata = fresh_job();
@@ -275,6 +279,38 @@ static int test_xfer_job_info(void)
     CHECK("xfer/unknown-cached",
           prte_get_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, NULL, PMIX_POINTER));
     PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_RELEASE(jdata);
+
+    /* envar directives are multi-valued: each must land on the list, and none
+     * may displace one already there under the same key - prte_pmix_xfer_app()
+     * runs first and puts app_idx 0's directives on this same list */
+    jdata = fresh_job();
+    PMIX_ENVAR_CONSTRUCT(&envt);
+    envt.envar = (char *) "APP_LEVEL";
+    envt.value = (char *) "1";
+    prte_append_attribute(&jdata->attributes, PRTE_JOB_SET_ENVAR, PRTE_ATTR_GLOBAL,
+                          &envt, PMIX_ENVAR);
+    envt.envar = (char *) "JOB_LEVEL";
+    envt.value = (char *) "2";
+    PMIX_INFO_LOAD(&info[0], PMIX_SET_ENVAR, &envt, PMIX_ENVAR);
+    envt.envar = (char *) "JOB_LEVEL_2";
+    envt.value = (char *) "3";
+    PMIX_INFO_LOAD(&info[1], PMIX_SET_ENVAR, &envt, PMIX_ENVAR);
+    CHECK("xfer/envar-rc", PRTE_SUCCESS == prte_pmix_xfer_job_info(jdata, info, 2));
+    nenvars = 0;
+    found_app = false;
+    PMIX_LIST_FOREACH(attr, &jdata->attributes, prte_attribute_t) {
+        if (PRTE_JOB_SET_ENVAR == attr->key) {
+            ++nenvars;
+            if (0 == strcmp(attr->data.data.envar.envar, "APP_LEVEL")) {
+                found_app = true;
+            }
+        }
+    }
+    CHECK("xfer/envar-count", 3 == nenvars);
+    CHECK("xfer/envar-preexisting-kept", found_app);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
     PMIX_RELEASE(jdata);
 
     /* an empty directive array is a no-op, not a fault */
