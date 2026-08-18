@@ -135,10 +135,22 @@ applied at the job level:
   vendor's device *ordering* variable (``CUDA_DEVICE_ORDER`` and its
   equivalents): the identifiers do not depend on the ordering, which is
   the reason for using them, and changing it would renumber devices for
-  the rest of the process's life. Intel GPUs are deliberately not given a
-  variable: ``ZE_AFFINITY_MASK`` takes device indices, in an order PRRTE
-  has no way to reproduce, and a wrong value there silently hides devices
-  rather than failing.
+  the rest of the process's life.
+
+  Intel is the exception to "named by identity rather than by index".
+  ``ZE_AFFINITY_MASK`` has no identifier form -- it takes Level Zero
+  device ordinals -- but the ordinals are not guessed: hwloc's Level Zero
+  backend records the driver and device index ``zeDeviceGet`` returned for
+  each device, so the value is *read* from that enumeration rather than
+  predicted, on the node that will run the process. Because a Level Zero
+  driver reads ``ZE_FLAT_DEVICE_HIERARCHY`` first and interprets the mask
+  against the devices that model exposes -- the same ordinals name a card
+  under ``COMPOSITE`` and a tile under ``FLAT`` -- the model is stated
+  alongside the mask whenever the process's environment does not already
+  name one. If it names one and it disagrees, nothing is set and a message
+  says so: overriding a deliberate choice would change how many devices
+  the program sees, and writing a mask that will be read under a different
+  model would silently hand it half the hardware it was assigned.
 
   A process mapped against a **network** device is handed it the same
   way, in the variables the fabric libraries read: ``NCCL_IB_HCA`` and

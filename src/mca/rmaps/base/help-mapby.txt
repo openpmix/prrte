@@ -120,8 +120,12 @@ applied at the job level:
   ROCR_VISIBLE_DEVICES for AMD - named by the vendor's own identifier.
   Only processes mapped against a device get it, and an existing value
   is replaced. PRRTE never sets the vendor's device ORDERING variable.
-  Intel GPUs get none: ZE_AFFINITY_MASK takes indices in an order PRRTE
-  cannot reproduce, and a wrong value there hides devices silently.
+  Intel GPUs get ZE_AFFINITY_MASK, which has no identifier form and takes
+  Level Zero device ordinals - read from the enumeration hwloc's Level
+  Zero backend recorded, not guessed. ZE_FLAT_DEVICE_HIERARCHY is stated
+  alongside it, since a driver interprets the mask against whichever
+  model that names; if the process already names a different model,
+  nothing is set and a message says so.
   A process mapped against a network device is handed it the same way,
   in the variables the fabric libraries read - NCCL_IB_HCA and
   UCX_NET_DEVICES for a Mellanox/NVIDIA adapter, PSM3_NIC for an Intel
