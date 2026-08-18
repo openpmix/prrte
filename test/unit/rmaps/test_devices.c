@@ -195,6 +195,69 @@ static void check_unnameable_refused(void)
     PMIX_RELEASE(t);
 }
 
+/* Every spelling of the network class names the same set.
+ *
+ * The four are synonyms because one card is routinely two OS devices - an
+ * OpenFabrics one and a network one on the same PCI function - and the
+ * enumeration dedupes by function, so the union is one entry per card.
+ * When the spellings meant different types, "network" and "openfabrics"
+ * returned the same hardware under different names and different counts,
+ * and whichever the user did not type looked like a wrong answer.
+ *
+ * The topology is the reporter's machine: six Mellanox functions carrying
+ * both views, plus a management NIC that has only the network view - so a
+ * naive union would have counted the six cards twice and the answer here
+ * (seven) is the one the dedup produces.
+ */
+static void check_network_synonyms(void)
+{
+    static const char *spellings[] = {"network", "nic", "fabric",
+                                      "openfabrics", NULL};
+    prte_rmaps_options_t opts;
+    prte_topology_t *t;
+    prte_node_t *node;
+    void *ctx = NULL;
+    unsigned count[4];
+    int n;
+
+    t = load_topo(TOPO_FILE);
+    if (NULL == t) {
+        fprintf(stdout, "  SKIP test_devices network synonyms (no %s)\n", TOPO_FILE);
+        return;
+    }
+    node = build_node("node-delta", t);
+
+    for (n = 0; NULL != spellings[n]; n++) {
+        memset(&opts, 0, sizeof(opts));
+        opts.app_idx = -1;
+        opts.map_device = (char *) spellings[n];
+        opts.bind = PRTE_BIND_TO_NONE;
+        ctx = NULL;
+        CHECK(spellings[n], PRTE_SUCCESS == prte_rmaps_base_devices_begin(node, &opts, &ctx));
+        count[n] = prte_rmaps_base_devices_count(node, &opts, ctx);
+        prte_rmaps_base_devices_end(ctx);
+    }
+
+    CHECK("network finds the cards", 7 == count[0]);
+    CHECK("nic means network", count[1] == count[0]);
+    CHECK("fabric means network", count[2] == count[0]);
+    CHECK("openfabrics means network", count[3] == count[0]);
+
+    /* and it is a different set from the GPUs on the same node, which is
+     * the check that would catch a class collapsing into "everything" */
+    memset(&opts, 0, sizeof(opts));
+    opts.app_idx = -1;
+    opts.map_device = "gpu";
+    opts.bind = PRTE_BIND_TO_NONE;
+    ctx = NULL;
+    CHECK("gpu", PRTE_SUCCESS == prte_rmaps_base_devices_begin(node, &opts, &ctx));
+    CHECK("gpu is its own class", 4 == prte_rmaps_base_devices_count(node, &opts, ctx));
+    prte_rmaps_base_devices_end(ctx);
+
+    PMIX_RELEASE(node);
+    PMIX_RELEASE(t);
+}
+
 int test_devices(bool pmix_up)
 {
     prte_topology_t *t;
@@ -254,6 +317,7 @@ int test_devices(bool pmix_up)
     PMIX_RELEASE(t);
 
     check_unnameable_refused();
+    check_network_synonyms();
 
     if (0 == failures) {
         fprintf(stdout, "  PASS test_devices\n");

@@ -395,9 +395,11 @@ particular fabric interface:
 
    $ prun -n 8 --mapby device=mlx5_0 --bindto core ./a.out
 
-Other classes are selected the same way: ``device=openfabrics`` for
-fabric interfaces, ``device=network`` for network interfaces,
-``device=nic`` for both, and ``device=block`` for block devices.
+Other classes are selected the same way: ``device=network`` for the
+node's network interfaces and ``device=block`` for block devices.
+``device=nic``, ``device=fabric`` and ``device=openfabrics`` all mean
+``device=network``: a card that presents both an OpenFabrics device and
+a network interface is one device under any of them.
 
 
 Mapping Processes to Nodes Using Policies

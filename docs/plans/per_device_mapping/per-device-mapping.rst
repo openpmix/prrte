@@ -255,12 +255,13 @@ Add one mapping directive::
    * - ``gpu``
      - every compute GPU on the node (``PMIX_DEVTYPE_GPU`` ∪
        ``PMIX_DEVTYPE_COPROC``, filtered — see below)
-   * - ``network``
-     - every network interface (``PMIX_DEVTYPE_NETWORK``)
-   * - ``openfabrics`` (``hca``, ``ofa``)
-     - every OpenFabrics device (``PMIX_DEVTYPE_OPENFABRICS``)
-   * - ``nic``
-     - ``network`` ∪ ``openfabrics``, deduped by PCI function
+   * - ``network`` (``nic``, ``fabric``, ``openfabrics``)
+     - every network interface (``PMIX_DEVTYPE_NETWORK`` ∪
+       ``PMIX_DEVTYPE_OPENFABRICS``, deduped by PCI function).  The four
+       spellings are synonyms: the split they originally had made
+       ``network`` and ``openfabrics`` name the same card differently,
+       and whichever the user did not type looked like a wrong answer.
+       A single interface is still reachable by naming it.
    * - ``block``
      - every block device (``PMIX_DEVTYPE_BLOCK``)
    * - anything else
@@ -460,8 +461,11 @@ is "a pure function of a topology plus a string", which this is):
 3. Otherwise, no GPUs on this node.  That is a hard error for a job that
    asked to map by one — see `Placement`_.
 
-For ``network``/``openfabrics``/``block`` no filtering beyond the type and
-the PCI-function dedup is needed.
+For ``network``/``block`` no filtering beyond the type and the
+PCI-function dedup is needed.  The dedup is what makes the network
+spellings synonyms rather than merely overlapping: one HCA's OpenFabrics
+device and network interface share a PCI function and collapse to one
+entry.
 
 Ordering
 ~~~~~~~~

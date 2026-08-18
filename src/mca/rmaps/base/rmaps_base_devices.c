@@ -89,13 +89,24 @@ static pmix_device_type_t device_class(const char *spec)
          * a vendor backend rather than through DRM */
         return PMIX_DEVTYPE_GPU | PMIX_DEVTYPE_COPROC;
     }
-    if (PMIX_CHECK_CLI_OPTION(s, "openfabrics")) {
-        return PMIX_DEVTYPE_OPENFABRICS;
-    }
-    if (PMIX_CHECK_CLI_OPTION(s, "network")) {
-        return PMIX_DEVTYPE_NETWORK;
-    }
-    if (PMIX_CHECK_CLI_OPTION(s, "nic")) {
+    /* Every spelling of "the thing this node talks to the network with"
+     * means the same set, deliberately.  One HCA presents itself twice -
+     * an OpenFabrics OS device (mlx5_0) and a network one (ib0) on the same
+     * PCI function - and a user asking for a NIC wants the card, not one of
+     * hwloc's two views of it.  Splitting the spellings, as this once did,
+     * made "network" and "openfabrics" return the same hardware under
+     * different names and gave whichever the user did not type an answer
+     * that looked wrong.  The enumeration dedupes by PCI function, so the
+     * union is one entry per card; a particular interface is still
+     * reachable by naming it (device=eno6).
+     *
+     * The cost is that there is no longer a spelling for "ethernet only".
+     * That is a narrower question than the directive is for, and naming the
+     * interface answers it exactly. */
+    if (PMIX_CHECK_CLI_OPTION(s, "network")
+        || PMIX_CHECK_CLI_OPTION(s, "openfabrics")
+        || PMIX_CHECK_CLI_OPTION(s, "fabric")
+        || PMIX_CHECK_CLI_OPTION(s, "nic")) {
         return PMIX_DEVTYPE_NETWORK | PMIX_DEVTYPE_OPENFABRICS;
     }
     if (PMIX_CHECK_CLI_OPTION(s, "block")) {
