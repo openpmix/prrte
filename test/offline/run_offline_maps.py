@@ -476,10 +476,19 @@ def locate_prterun(top_builddir):
 def build_argv(prterun_argv0, topo_path, case):
     argv = [prterun_argv0, "--rtos", "donotlaunch", "--display", "map",
             # pin the mapping-policy baseline so the harness is hermetic: do not
-            # inherit any rmaps_default_mapping_policy a developer may have set
-            # (e.g. in ~/.prte/mca-params.conf). Defaults to the no-directive
-            # "" baseline; cases needing oversubscription pin ":oversubscribe".
-            "--prtemca", "rmaps_default_mapping_policy", case.default_map_policy,
+            # inherit a default mapping policy a developer may have set (e.g. in
+            # ~/.prte/mca-params.conf). Defaults to the no-directive "" baseline;
+            # cases needing oversubscription pin ":oversubscribe".
+            #
+            # Spelled "mapby", the variable's own name, rather than one of its
+            # deprecated synonyms ("map_by", "rmaps_default_mapping_policy").
+            # A synonym still pins the value, but PRRTE prints a deprecation
+            # banner for it, and that banner then lands in every captured
+            # golden - noise in the snapshots, and a spurious diff for anyone
+            # who regenerates only some of them. A command-line setting beats
+            # a file setting whichever spelling the file used, so nothing is
+            # lost by using the current one.
+            "--prtemca", "mapby", case.default_map_policy,
             "--prtemca", "hwloc_use_topo_file", topo_path,
             "-H", case.hostspec]
     if case.map_by is not None:
@@ -580,7 +589,7 @@ class Case:
     extra_args: tuple = ()
     expect: str = "map"          # "map" | "reject"
     expect_banner: str = None    # substring expected on reject
-    # value pinned for rmaps_default_mapping_policy; "" = the no-directive
+    # value pinned for the "mapby" MCA variable; "" = the no-directive
     # baseline. A case that wants oversubscription to come from the DVM
     # default rather than from the command line sets ":oversubscribe" here.
     default_map_policy: str = ""
