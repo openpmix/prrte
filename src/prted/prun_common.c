@@ -114,6 +114,40 @@ static pmix_nspace_t spawnednspace;
  * job used to come back as 71 - the low byte of PRTE_ERROR. */
 static int job_exit_code = -1;
 
+/* Our own job's termination is not the end of the work we started: a job it
+ * spawned outlives it by default, and prterun - which runs its own DVM and
+ * shuts it down only once every job in it has terminated - waits for the
+ * whole tree and returns what the tree came back with.  We are the same
+ * launcher talking to a DVM somebody else owns, so we have to wait for the
+ * same thing by watching for it.  The DVM stamps each PMIX_EVENT_JOB_END
+ * with the root of the spawn tree the job belonged to and the number of jobs
+ * in that tree still running; what follows is what we make of that.
+ *
+ * Whether a child job's status is reported on its own instead of becoming
+ * ours.  Read from our command line before the spawn, on the main thread. */
+static bool report_child_sep = false;
+
+/* The first non-zero termination status seen anywhere in the tree, and the
+ * first message that came with one - what we hand the waiting main thread
+ * once the tree has drained.
+ *
+ * These three, and the list below, are written by the event handler on the
+ * PMIx progress thread and read by the main thread only after the wait that
+ * handler wakes has completed and the handler has been deregistered.  None
+ * of them is a PRRTE object, so nothing here is touched from the wrong
+ * thread. */
+static int status_from_tree = 0;
+static char *tree_msg = NULL;
+
+/* a child job's exit status, held for reporting once we are back on the main
+ * thread - show_help is not ours to call from the PMIx progress thread */
+typedef struct child_status_t {
+    struct child_status_t *next;
+    pmix_nspace_t nspace;
+    int code;
+} child_status_t;
+static child_status_t *child_statuses = NULL;
+
 static size_t evid = INT_MAX;
 static pmix_proc_t myproc;
 static bool verbose = false;
@@ -212,14 +246,40 @@ progress:
     }
 }
 
+/* Is JOBID, whose end the DVM just reported with spawn-tree root ROOT, part
+ * of the tree we launched?
+ *
+ * Our own job is, by name.  Beyond that a descendant is recognized by its
+ * root, which for anything we started is either the namespace we hold as a
+ * tool - the DVM builds a job object for a connected tool and roots the tree
+ * there - or, where it did not, our job's own namespace.  Everything else
+ * belongs to another user of the same persistent DVM and is none of our
+ * business: an unfiltered handler is how we get to see our descendants at
+ * all, and this is what keeps it from making us wait on strangers. */
+static bool in_our_tree(const char *jobid, const char *root)
+{
+    if (0 == strncmp(jobid, spawnednspace, PMIX_MAX_NSLEN)) {
+        return true;
+    }
+    if (NULL == root || '\0' == root[0]) {
+        return false;
+    }
+    return (0 == strncmp(root, myproc.nspace, PMIX_MAX_NSLEN) ||
+            0 == strncmp(root, spawnednspace, PMIX_MAX_NSLEN));
+}
+
 static void evhandler(size_t evhdlr_registration_id, pmix_status_t status,
                       const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
                       pmix_info_t *results, size_t nresults,
                       pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
     prte_pmix_lock_t *lock = NULL;
-    int jobstatus = 0;
+    int jobstatus = 0, xcode = -1;
     pmix_nspace_t jobid = {0};
+    char *root = NULL;
+    uint32_t active = 0;
+    bool primary;
+    child_status_t *cs;
     size_t n;
     char *msg = NULL;
     PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, source, results, nresults);
@@ -237,29 +297,85 @@ static void evhandler(size_t evhdlr_registration_id, pmix_status_t status,
             } else if (0 == strncmp(info[n].key, PMIX_EXIT_CODE, PMIX_MAX_KEYLEN)) {
                 /* the application's own status - preferred over the
                  * termination reason when we come to exit */
-                job_exit_code = info[n].value.data.integer;
+                xcode = info[n].value.data.integer;
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {
                 PMIX_LOAD_NSPACE(jobid, info[n].value.data.proc->nspace);
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
                 lock = (prte_pmix_lock_t *) info[n].value.data.ptr;
+#ifdef PMIX_SPAWN_TREE_ROOT
+            } else if (0 == strncmp(info[n].key, PMIX_SPAWN_TREE_ROOT, PMIX_MAX_KEYLEN)) {
+                root = info[n].value.data.string;
+            } else if (0 == strncmp(info[n].key, PMIX_SPAWN_TREE_ACTIVE, PMIX_MAX_KEYLEN)) {
+                active = info[n].value.data.uint32;
+#endif
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_TEXT_MESSAGE, PMIX_MAX_KEYLEN)) {
                 msg = info[n].value.data.string;
             }
         }
-        if (verbose && PMIX_CHECK_NSPACE(jobid, spawnednspace)) {
-            pmix_output(0, "JOB %s COMPLETED WITH STATUS %d", PRTE_JOBID_PRINT(jobid), jobstatus);
+    }
+
+    if (!in_our_tree(jobid, root)) {
+        /* somebody else's job on a DVM we share */
+        goto progress;
+    }
+    primary = (0 == strncmp(jobid, spawnednspace, PMIX_MAX_NSLEN));
+
+    if (verbose) {
+        pmix_output(0, "JOB %s COMPLETED WITH STATUS %d, %u LEFT IN TREE",
+                    PRTE_JOBID_PRINT(jobid), jobstatus, active);
+    }
+
+    /* Fold this job's result into what we will exit with.  The rule is
+     * prterun's: the FIRST non-zero status wins, so a job that failed is not
+     * overwritten by one that later succeeded - unless the user asked for
+     * child jobs to be reported separately, in which case only the primary
+     * job decides our status and a child's failure is reported on its own. */
+    if (primary || !report_child_sep) {
+        if (0 >= job_exit_code && 0 < xcode) {
+            job_exit_code = xcode;
         }
+        if (0 == status_from_tree && 0 != jobstatus) {
+            status_from_tree = jobstatus;
+        }
+    } else if (0 < xcode) {
+        /* 0 < , not 0 != : xcode starts at -1 meaning "the DVM reported
+         * none", which is what a job that exited cleanly leaves it at */
+        cs = (child_status_t *) malloc(sizeof(child_status_t));
+        if (NULL != cs) {
+            PMIX_LOAD_NSPACE(cs->nspace, jobid);
+            cs->code = xcode;
+            cs->next = child_statuses;
+            child_statuses = cs;
+        }
+    }
+    if (NULL != msg && NULL == tree_msg) {
+        tree_msg = strdup(msg);
+    }
+
+    /* Wait until the tree is empty.  A job can only be spawned by a process
+     * that is still running, so a tree with nothing left in it cannot
+     * acquire anything more, and this is the last event we will get. */
+    if (0 < active) {
+        goto progress;
+    }
+
+    if (NULL == lock) {
+        /* the event did not carry the object we registered - fall back to
+         * the lock the main thread is actually parked on */
+        lock = release_lock;
     }
     if (NULL != lock) {
         /* save the status */
-        lock->status = jobstatus;
-        if (NULL != msg) {
-            lock->msg = strdup(msg);
+        lock->status = status_from_tree;
+        if (NULL != tree_msg) {
+            lock->msg = tree_msg;
+            tree_msg = NULL;
         }
         /* release the lock */
         PRTE_PMIX_WAKEUP_THREAD(lock);
     }
 
+progress:
     /* we _always_ have to execute the evhandler callback or
      * else the event progress engine will hang */
     if (NULL != cbfunc) {
@@ -774,25 +890,30 @@ int prun_common(pmix_cli_result_t *results,
         PMIX_INFO_FREE(iptr, 1);
     }
 
-    /* register to be notified when
-     * our job completes */
+    /* Register to be notified when the work we started completes.
+     *
+     * NOT filtered to our own namespace with PMIX_EVENT_AFFECTED_PROC, which
+     * is what this used to do and is the whole reason a job dynamically
+     * spawned by ours was abandoned the moment ours ended: the spawned job's
+     * termination names the spawned job, so the filter hid exactly the
+     * events we most needed.  We take every job end the session reports and
+     * sort out which are ours in the handler, where the spawn-tree root the
+     * DVM stamps on each one makes that a string compare. */
     ret = PMIX_EVENT_JOB_END;
     /* setup the info */
-    ninfo = 3;
+    ninfo = 2;
     PMIX_INFO_CREATE(iptr, ninfo);
     /* give the handler a name */
     PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_HDLR_NAME, "JOB_TERMINATION_EVENT", PMIX_STRING);
-    /* specify we only want to be notified when our
-     * job terminates */
-    PMIX_LOAD_PROCID(&pname, spawnednspace, PMIX_RANK_WILDCARD);
-    PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
     /* request that they return our lock object */
-    PMIX_INFO_LOAD(&iptr[2], PMIX_EVENT_RETURN_OBJECT, &rellock, PMIX_POINTER);
+    PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_RETURN_OBJECT, &rellock, PMIX_POINTER);
     /* do the registration */
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
     PMIx_Register_event_handler(&ret, 1, iptr, ninfo, evhandler, regcbfunc, &lock);
     PRTE_PMIX_WAIT_THREAD(&lock);
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
+    /* the registration copied these */
+    PMIX_INFO_FREE(iptr, ninfo);
 
     if (verbose) {
         pmix_output(0, "JOB %s EXECUTING", PRTE_JOBID_PRINT(spawnednspace));
@@ -817,6 +938,19 @@ int prun_common(pmix_cli_result_t *results,
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PRTE_PMIX_DESTRUCT_LOCK(&rellock);
 
+    /* Report any child job that ended non-zero while "report child jobs
+     * separately" was in effect.  Held until here rather than said as it
+     * happened: the handler that collected these runs on the PMIx progress
+     * thread, and show_help is not ours to call from there.  The handler is
+     * deregistered by now, so nothing is still writing this list. */
+    while (NULL != child_statuses) {
+        child_status_t *cs = child_statuses;
+        child_statuses = cs->next;
+        prte_show_help("help-state-base.txt", "child-job-status", true,
+                       PRTE_LOCAL_JOBID_PRINT(cs->nspace), cs->code);
+        free(cs);
+    }
+
     /* close the push of our stdin */
     PMIX_INFO_LOAD(&info, PMIX_IOF_COMPLETE, NULL, PMIX_BOOL);
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
@@ -832,6 +966,17 @@ int prun_common(pmix_cli_result_t *results,
 DONE:
     /* the release lock is about to leave scope */
     release_lock = NULL;
+    /* an abort message we never got to hand to a waiter - the DVM went away
+     * before the tree drained */
+    if (NULL != tree_msg) {
+        free(tree_msg);
+        tree_msg = NULL;
+    }
+    while (NULL != child_statuses) {
+        child_status_t *cstmp = child_statuses;
+        child_statuses = cstmp->next;
+        free(cstmp);
+    }
     PMIX_LIST_FOREACH(evitm, &forwarded_signals, prte_event_list_item_t)
     {
         prte_event_signal_del(&evitm->ev);
@@ -945,9 +1090,20 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_RTOS);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RUNTIME_OPTIONS, opt->values[0], PMIX_STRING);
+        /* one of these is ours to act on as well: it decides whether a child
+         * job's exit status becomes OUR exit status, and we are the process
+         * that has one.  The DVM reads the same directive for its own answer
+         * when it is the launcher; here nobody else can.  The MCA param has
+         * the same standing it has there - set, it wins outright. */
+        report_child_sep = prte_report_child_jobs_separately ||
+                           prte_state_base_report_child_sep(opt->values[0]);
     } else if (NULL != prte_schizo_base.default_runtime_options) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RUNTIME_OPTIONS,
                            prte_schizo_base.default_runtime_options, PMIX_STRING);
+        report_child_sep = prte_report_child_jobs_separately ||
+                           prte_state_base_report_child_sep(prte_schizo_base.default_runtime_options);
+    } else {
+        report_child_sep = prte_report_child_jobs_separately;
     }
 
     /* check what user wants us to do with stdin */

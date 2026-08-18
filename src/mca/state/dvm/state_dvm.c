@@ -1106,6 +1106,77 @@ static void cleanup_job(int sd, short args, void *cbdata)
     PMIX_RELEASE(caddy);
 }
 
+#ifdef PMIX_SPAWN_TREE_ROOT
+/* Do these two namespaces name the same thing?
+ *
+ * NOT PMIX_CHECK_NSPACE, which answers "true" the moment either side is
+ * empty - wildcard semantics that are right for a match against a request
+ * and wrong here.  Most jobs in a DVM carry an empty launcher, and reading
+ * every one of them as a member of whatever tree we are asking about would
+ * put a stranger's job in a tool's wait set. */
+static bool same_nspace(const char *a, const char *b)
+{
+    if (PMIX_NSPACE_INVALID(a) || PMIX_NSPACE_INVALID(b)) {
+        return false;
+    }
+    return (0 == strncmp(a, b, PMIX_MAX_NSLEN));
+}
+
+/* The root of the spawn tree JDATA belongs to.  prte_job_t::launcher already
+ * holds it, recorded when the job was created and copied transitively from
+ * the parent, so a grandchild names the same root as its parent does.  It is
+ * empty only for a job nobody spawned - the primary job of a prterun, or of a
+ * prun whose tool namespace never got a job object - and such a job is the
+ * root of its own tree. */
+static const char *spawn_tree_root(prte_job_t *jdata)
+{
+    if (PMIX_NSPACE_INVALID(jdata->launcher)) {
+        return jdata->nspace;
+    }
+    return jdata->launcher;
+}
+
+/* How many jobs in ROOT's spawn tree have yet to terminate, not counting
+ * JDATA, whose termination is being reported.
+ *
+ * A job is in the tree if it names ROOT as its launcher, or if it IS the root
+ * - the latter matters when the root is a job rather than a tool, so that a
+ * child ending while its parent is still alive does not report an empty tree.
+ * Tool job objects are skipped: a tool is a namespace the DVM tracks, not a
+ * job that ever reaches a terminal state, so counting one would leave the
+ * tree permanently non-empty.
+ *
+ * "Not yet terminated" is the same test check_complete() applies when a
+ * non-persistent DVM decides whether it can shut down, and deliberately so:
+ * the whole point is that a tool watching a persistent DVM can now wait for
+ * exactly what prterun waits for. */
+static uint32_t spawn_tree_active(prte_job_t *jdata, const char *root)
+{
+    prte_job_t *jptr;
+    uint32_t count = 0;
+    int i;
+
+    for (i = 0; i < prte_job_data->size; i++) {
+        jptr = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, i);
+        if (NULL == jptr || jptr == jdata) {
+            continue;
+        }
+        if (PMIX_CHECK_NSPACE(jptr->nspace, PRTE_PROC_MY_NAME->nspace) ||
+            PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_TOOL)) {
+            continue;
+        }
+        if (!same_nspace(jptr->launcher, root) &&
+            !same_nspace(jptr->nspace, root)) {
+            continue;
+        }
+        if (jptr->state < PRTE_JOB_STATE_TERMINATED) {
+            ++count;
+        }
+    }
+    return count;
+}
+#endif
+
 static void dvm_notify(int sd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
@@ -1125,6 +1196,10 @@ static void dvm_notify(int sd, short args, void *cbdata)
     pmix_data_range_t range = PMIX_RANGE_SESSION;
     pmix_status_t code, ret;
     char *errmsg = NULL;
+#ifdef PMIX_SPAWN_TREE_ROOT
+    const char *treeroot;
+    uint32_t treeactive;
+#endif
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
@@ -1201,6 +1276,18 @@ static void dvm_notify(int sd, short args, void *cbdata)
         if (0 < xcode) {
             ++ninfo;
         }
+#ifdef PMIX_SPAWN_TREE_ROOT
+        /* Which spawn tree this job belonged to, and what is left of it.
+         * A tool that launched the root of the tree cannot work either out
+         * for itself: it is told when a job ends, never when one starts, so
+         * at the moment its own job ends it has no way to know whether
+         * anything it started is still running - nor, when some later job
+         * ends, whether that job descended from it or belongs to another
+         * user of the same persistent DVM. */
+        treeroot = spawn_tree_root(jdata);
+        treeactive = spawn_tree_active(jdata, treeroot);
+        ninfo += 2;
+#endif
         PMIX_INFO_CREATE(info, ninfo);
         n = 0;
         /* ensure this only goes to the job terminated event handler */
@@ -1216,6 +1303,10 @@ static void dvm_notify(int sd, short args, void *cbdata)
             pname.rank = PMIX_RANK_WILDCARD;
         }
         PMIX_INFO_LOAD(&info[n++], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
+#ifdef PMIX_SPAWN_TREE_ROOT
+        PMIX_INFO_LOAD(&info[n++], PMIX_SPAWN_TREE_ROOT, treeroot, PMIX_STRING);
+        PMIX_INFO_LOAD(&info[n++], PMIX_SPAWN_TREE_ACTIVE, &treeactive, PMIX_UINT32);
+#endif
         /* and what the application exited with, when that is a thing */
         if (0 < xcode) {
             PMIX_INFO_LOAD(&info[n++], PMIX_EXIT_CODE, &xcode, PMIX_INT);

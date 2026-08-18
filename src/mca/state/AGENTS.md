@@ -380,6 +380,16 @@ defaults it reads are this framework's MCA params.
 > param. The `!prte_persistent` gate on that copy matches where it is
 > read: only a one-shot DVM reports an exit status, so a job spawned into
 > a persistent DVM cannot change the policy for everyone else.
+>
+> On a **persistent** DVM the same policy therefore has to be applied by
+> the *tool*, which is the process that has an exit status to report, and
+> `prun` does it with `prte_state_base_report_child_sep()` — the reader
+> that lives beside the walk in `state_base_options.c` so the directive has
+> one spelling and one set of truth rules. The DVM sends `prun` the facts
+> it needs and no policy: `dvm_notify()` stamps every `PMIX_EVENT_JOB_END`
+> with `PMIX_SPAWN_TREE_ROOT` (`prte_job_t::launcher`, or the job itself
+> when nothing spawned it) and `PMIX_SPAWN_TREE_ACTIVE` (how many jobs in
+> that tree have yet to terminate). See `src/prted/AGENTS.md`.
 
 > **Do not use the directive loop's index as a scratch variable.** The
 > walk is `for (n = 0; NULL != options[n]; n++)`. Two branches used to
@@ -494,7 +504,7 @@ states invoke.
 
 | Layer | Where | Covers |
 |-------|-------|--------|
-| Unit | [`test/unit/state/test_state.c`](../../../test/unit/state/test_state.c) (`make check`) | the table API and its return protocol; dispatch incl. the ERROR/ANY fallback ordering and the NULL-cbfunc/NULL-proc guards; the caddy initialization contract (the NULL-job case above); `set_runtime_options` directive parsing — boolean sense, directive ordering, unknown/bad-combination refusals; per-role component selection. |
+| Unit | [`test/unit/state/test_state.c`](../../../test/unit/state/test_state.c) (`make check`) | the table API and its return protocol; dispatch incl. the ERROR/ANY fallback ordering and the NULL-cbfunc/NULL-proc guards; the caddy initialization contract (the NULL-job case above); `set_runtime_options` directive parsing — boolean sense, directive ordering, unknown/bad-combination refusals; `prte_state_base_report_child_sep()` agreeing with that walk on every spelling of the directive; per-role component selection. |
 | Multi-node | `test_state` in [`contrib/dockerswarm/run-tests.sh`](../../../contrib/dockerswarm/run-tests.sh) | the runtime-option directives end-to-end through `prterun` (a real forked child is what makes the boolean sense observable, via `odls`); **`report-child-jobs-separately` against a real parent/child job pair** (see below); a `NULL`-job `NEVER_LAUNCHED` reaching the errmgr fallback and tearing the DVM down promptly instead of hanging; and `check_complete`'s resource accounting, which only shows up as successive jobs re-filling the same allocation on one persistent DVM. |
 
 Testing a policy that discriminates between a **primary** job and one it

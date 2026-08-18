@@ -279,6 +279,41 @@ report the job's exit status. Signal forwarding is done with
 which is what eventually arrives at `prted_comm.c`'s
 `SIGNAL_LOCAL_PROCS`.
 
+**"The job" means the whole spawn tree, and the `PMIX_EVENT_JOB_END`
+handler is deliberately *not* filtered to our own namespace.** A job
+spawned by ours outlives it by default, so our job's termination is not
+the end of what we launched — and `prterun`, which owns its DVM and shuts
+it down only once every job in it has terminated, waits for the lot and
+returns what the lot came back with. Filtering the handler with
+`PMIX_EVENT_AFFECTED_PROC` hid exactly the events needed to match that:
+the spawned job's termination names the *spawned* job, so `prun` left the
+moment its own job ended, and the spawned job's output and exit status
+went nowhere. So the handler now takes every job end in the session and
+sorts them out itself:
+
+- **Whose is it?** `ours()` accepts our own namespace, plus anything whose
+  `PMIX_SPAWN_TREE_ROOT` is our tool namespace (the DVM builds a job object
+  for a connected tool and roots the tree there) or our job's namespace
+  (where it did not). Everything else is another user's work on a shared
+  persistent DVM and must not make us wait.
+- **Are we done?** `PMIX_SPAWN_TREE_ACTIVE` — how many jobs in that tree
+  have yet to terminate. This is the part a tool cannot compute: it is
+  told when a job *ends*, never when one starts, so at its own job's end it
+  has no way to know whether to keep waiting. Zero is sound as a terminal
+  condition rather than merely likely, because a job can only be spawned by
+  a process that is still running.
+- **What do we exit with?** The first non-zero status from anywhere in the
+  tree, unless `report-child-jobs-separately` is in effect, in which case
+  only the primary job decides and a child's non-zero status is reported on
+  its own. The DVM cannot make that call on a persistent DVM — it is one
+  launcher's policy, not the run's — so `prun` reads the directive off its
+  own command line with `prte_state_base_report_child_sep()`.
+
+Note where the child-status messages are rendered: the handler runs on the
+**PMIx** progress thread, so it only records them, and `prun_common()`
+walks the list and calls `prte_show_help()` after the wait completes and
+the handler has been deregistered.
+
 **It also closes the `ess` framework its caller opened, and the ordering
 is load-bearing: every PRRTE framework must be closed while PMIx is still
 up.** PRRTE has no component repository of its own — its components are
@@ -320,6 +355,14 @@ job's procs, a tool connecting through a non-master daemon, a signal that
 must reach one job and not another, a shrink that has to ACK before it
 departs. `run-tests.sh`'s `test_prted()` covers these; see
 [`contrib/dockerswarm/AGENTS.md`](../../contrib/dockerswarm/AGENTS.md).
+
+`prun`'s spawn-tree wait is here too, under the `src/tools` banner, and
+belongs on the swarm rather than in a unit test for a specific reason: the
+spawned job is mapped onto a *different node* from its parent, so the tree
+the tool waits for spans daemons and the notification has to cross the DVM
+to reach it. The case also proves the other half — that an unfiltered
+job-end handler does **not** make one `prun` wait on another `prun`'s job
+on the same persistent DVM.
 
 ---
 
