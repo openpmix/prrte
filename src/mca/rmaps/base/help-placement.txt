@@ -743,7 +743,26 @@ device indices in an ordering PRRTE has no way to reproduce, and a wrong
 value in these variables does not fail - it silently reduces the set of
 devices the process can see, which is worse than setting nothing.
 
-The assignment can also be read directly, whether or not a vendor
+A process mapped against a network device is handed it the same way, in
+the environment variables the fabric libraries read:
+
+   NCCL_IB_HCA          Mellanox / NVIDIA InfiniBand adapters
+   UCX_NET_DEVICES      Mellanox / NVIDIA InfiniBand adapters
+   PSM3_NIC             Intel Omni-Path adapters
+
+named as those libraries name the device - "mlx5_0" - which is the name
+hwloc gave it. Unlike a GPU's vendor identity that name is always there,
+so the identity check above does not apply to this class.
+
+No variable that names an adapter by its unit NUMBER is set - HFI_UNIT
+and FI_OPX_HFI_SELECT among them. A unit number is meaningful only
+against the enumeration it came from, which is the driver's rather than
+one PRRTE performed, and a wrong number in these variables does not fail
+- it quietly puts the process on a different adapter. Nothing is set at
+all for an adapter whose fabric has no support behind it, rather than
+guessing at a variable it might read.
+
+The assignment can also be read directly, whether or not a device
 variable was set, from the process's own job data under PMIX_DEVICE_ID.
 
 The reverse ratio - several processes on each device rather than several

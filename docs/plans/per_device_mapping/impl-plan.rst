@@ -935,12 +935,87 @@ UUIDs are order-independent, naming a subset composes correctly with a set
 a resource manager has already filtered (Slurm's ``--gpus-per-task``
 leaves ``CUDA_VISIBLE_DEVICES`` set); an index-based value would not.
 
+H4 — the same for network devices
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The GPU work left the network classes half-finished in two ways, and this
+phase closed both.
+
+**The vocabulary was split where users expect one word.**
+``device=network`` meant ``PMIX_DEVTYPE_NETWORK``, ``device=openfabrics``
+meant ``PMIX_DEVTYPE_OPENFABRICS``, and ``device=nic`` meant the union.
+But one HCA presents itself as *both* — an OpenFabrics OS device
+(``mlx5_0``) and a network interface (``ib0``) on one PCI function — so
+the two narrow spellings returned the same hardware under different names
+and different counts, and whichever the user did not type looked like a
+wrong answer.  ``network``, ``nic``, ``fabric`` and ``openfabrics`` are
+now synonyms for the union, which the PCI-function dedup collapses to one
+entry per card.  The cost is that there is no longer a spelling for
+"ethernet only"; naming the interface (``device=eno6``) answers that
+question exactly, and it is a narrower question than the directive is for.
+
+**A NIC assignment could not be acted on.**  The GPU path ends by naming
+the device to the vendor's runtime; the network path ended at
+``PMIX_DEVICE_ID`` and nothing else.  PMIx's ``pnet`` framework now
+mirrors ``pgpu``: a module-level ``setup_fork``, base fan-out after the
+namespace envar cache is replayed, and
+``pmix_pnet_base_get_assigned_devices()`` / ``_set_assigned_devices()``
+as the shared implementation.  Two things were needed underneath it.
+
+A NIC's **selector** is its OS device name — that is what every fabric
+library's variable accepts, and unlike a GPU's vendor identity it can
+never be missing.  Which of a function's two OS devices supplies that
+name therefore stopped being a coin flip: ``osdev_preferred()`` now takes
+the OpenFabrics device over the network interface, because ``ib0`` is
+accepted by none of those variables.
+
+And a NIC has **no vendor attribute** to filter on the way a GPU does, so
+``pmix_hwloc_device_t`` now carries the PCI ``vendor``/``class`` ids and a
+component selects with the same pair it hands ``pmix_hwloc_check_vendor()``
+in its own ``component_open``.  On a node with two fabrics, naming
+somebody else's NIC in your variable is worse than naming none.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 30 50
+
+   * - Fabric
+     - Variable
+     - Form
+   * - Mellanox / NVIDIA
+     - ``NCCL_IB_HCA``
+     - The device name (``mlx5_0``); NCCL matches an HCA by name.
+   * - Mellanox / NVIDIA
+     - ``UCX_NET_DEVICES``
+     - ``mlx5_0:*`` — UCX names a device *port* and matches each entry as
+       a glob, so this is "this card, whatever ports it has".  The ``:``
+       is load-bearing: ``mlx5_1*`` would also match ``mlx5_10``.
+   * - Intel Omni-Path
+     - ``PSM3_NIC``
+     - The device name; PSM3 selects by NIC name.
+   * - Intel Omni-Path
+     - ``HFI_UNIT``, ``FI_OPX_HFI_SELECT``
+     - **Deliberately not set.**  Both take a unit *ordinal*, which is
+       meaningful only against the driver's enumeration rather than one
+       PMIx performed.  ``hfi1_0``'s trailing digit looks like it and
+       usually is, but a wrong value here does not fail — it quietly puts
+       the process on another adapter.
+
+The ``nvd`` and ``opa`` components also lost their ``configure.m4``
+files, for the reason ``pgpu``'s vendor components did: ``nvd`` was
+hardwired off ("no real NVIDIA-transport detection exists yet") and
+``opa``'s said "always succeed".  Neither links anything, and whether a
+component has work to do is a property of the machine the *daemon* runs
+on — which only ``component_open`` is in a position to know.
+
 Build order
 ~~~~~~~~~~~
 
 H1 first and alone: it is a live defect and needs none of the rest.  Then
 H2, so per-node identity is real.  Then H3, which is only worth doing once
-the identity it would publish is correct.
+the identity it would publish is correct.  H4 last: it is the same shape
+as H3 applied to a second framework, and it reuses the ``setup_fork``
+plumbing H3 proved.
 
 
 Phases as landed
