@@ -17,6 +17,7 @@
 #include "src/util/pmix_output.h"
 #include "src/mca/state/state.h"
 
+#include "src/grpcomm/grpcomm.h"
 #include "src/rml/radix.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
@@ -347,7 +348,7 @@ static void reconcile_child_ancestry(pmix_data_array_t* report,
             PRTE_NAME_PRINT(sender), (unsigned long) inferred.size
         ));
         report_new_departures(&inferred);
-        prte_rml_repair_routing_tree(&inferred, /* global = */ false);
+        prte_rml_repair_routing_tree(&inferred, /* global = */ false, /* epoch = */ 0);
         break;
 
     case PRTE_RML_ANCESTRY_STALE:
@@ -379,6 +380,22 @@ void prte_rml_recv_failures_notice(
         return;
     }
 
+    /* A global notice carries the collective recovery epoch it moves the DVM
+     * to - see the epoch member of prte_rml_recovery_status_t.  The upward leg
+     * does not: only the HNP issues an epoch, and only its broadcast applies
+     * one. */
+    uint32_t epoch = 0;
+    if(global){
+        cnt = 1;
+        ret = PMIx_Data_unpack(NULL, buf, &epoch, &cnt, PMIX_UINT32);
+        if(PMIX_SUCCESS != ret){
+            PMIX_ERROR_LOG(ret);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+            return;
+        }
+    }
+
+    cnt = 1;
     pmix_data_array_t failed_ranks = PMIX_DATA_ARRAY_STATIC_INIT;
     ret = PMIx_Data_unpack(NULL, buf, &failed_ranks, &cnt, PMIX_DATA_ARRAY);
     if(PMIX_SUCCESS != ret){
@@ -395,7 +412,7 @@ void prte_rml_recv_failures_notice(
      * around, and a duplicate notice is a no-op. */
     report_new_departures(&failed_ranks);
 
-    prte_rml_repair_routing_tree(&failed_ranks, global);
+    prte_rml_repair_routing_tree(&failed_ranks, global, epoch);
 
     /* repair takes a copy of what it needs, so the unpacked array is ours */
     PMIx_Data_array_destruct(&failed_ranks);
@@ -451,7 +468,7 @@ void prte_rml_recv_adoption_notice(
     case PRTE_RML_ANCESTRY_INFERRED:
         // Finally, report the inferred deaths and do a full repair on them
         report_new_departures(&inferred);
-        prte_rml_repair_routing_tree(&inferred, /* global = */ false);
+        prte_rml_repair_routing_tree(&inferred, /* global = */ false, /* epoch = */ 0);
         break;
 
     case PRTE_RML_ANCESTRY_STALE:
@@ -540,6 +557,23 @@ static void send_failures_notice(const prte_rml_recovery_status_t* status){
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIX_DATA_BUFFER_RELEASE(msg);
         return;
+    }
+
+    /* Only the broadcast carries an epoch, and issuing it here - once per
+     * notice actually emitted - is what makes the value the same everywhere
+     * and strictly increasing.  Every daemon adopts it rather than counting
+     * the notices it has received, so a daemon that missed one (a daemon
+     * launched into a DVM that has already recovered has missed all of them)
+     * is corrected by the next notice or by the WIREUP broadcast. */
+    if(global){
+        uint32_t epoch = prte_grpcomm_issue_epoch();
+        ret = PMIx_Data_pack(NULL, msg, &epoch, 1, PMIX_UINT32);
+        if(PMIX_SUCCESS != ret){
+            PMIX_ERROR_LOG(ret);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+            PMIX_DATA_BUFFER_RELEASE(msg);
+            return;
+        }
     }
 
     // Build array of failures to pass up to my parent

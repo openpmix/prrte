@@ -16,7 +16,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
@@ -152,6 +152,27 @@ PRTE_EXPORT int prte_grpcomm_group(pmix_group_operation_t op, char *grpid,
  * refused with PRTE_ERR_NOT_SUPPORTED rather than quietly served; relay the
  * request to the master instead. */
 PRTE_EXPORT int prte_grpcomm_assign_context_id(size_t *ctxid);
+
+/* The collective recovery epoch this daemon is currently at.
+ *
+ * Exposed because the epoch has to travel to a daemon that joins an already
+ * recovered DVM, and the two places that send it - the WIREUP broadcast and
+ * the global DAEMON_DIED notice - are outside grpcomm.  The counter itself
+ * stays in grpcomm_internal.h with the rest of the collective state, so this
+ * is the only way in. */
+PRTE_EXPORT uint32_t prte_grpcomm_current_epoch(void);
+
+/* Reserve the epoch a global failure notice will move the DVM to.
+ *
+ * **Only the DVM master may call this**, and only when it originates such a
+ * notice: the value is what every daemon adopts on receipt, so a second
+ * issuer would hand out a number someone else has already spent.  It is a
+ * counter of its own rather than "current + 1" because the master's own
+ * epoch does not move until its broadcast is relayed back to it, and a
+ * second failure detected inside that window would otherwise reissue the
+ * number the first one is already carrying - collapsing two restarts into
+ * one, which is a hang rather than a wrong answer. */
+PRTE_EXPORT uint32_t prte_grpcomm_issue_epoch(void);
 
 END_C_DECLS
 

@@ -167,6 +167,17 @@ set downward, which is why the first field on the wire is the `global` flag and
 why the ancestor list rides only the upward leg. A lineage means nothing to a
 daemon receiving a broadcast.
 
+The downward leg carries one more field the upward leg does not: the
+**collective recovery epoch** this failure moves the DVM to, packed straight
+after the `global` flag and delivered to the fault handlers on
+`prte_rml_recovery_status_t::epoch`. Only the HNP issues one
+(`prte_grpcomm_issue_epoch()`), because the point of the value is that every
+daemon adopts the *same* number rather than counting the notices it happened
+to receive — a daemon that missed one would otherwise be a step behind
+forever, which is precisely the state a daemon launched into an already
+recovered DVM is in. The RML carries it and does not read it; what it means is
+in [`src/grpcomm/AGENTS.md`](../grpcomm/AGENTS.md), under "The epoch".
+
 The upward notice's rank array cannot describe a re-home. It is filtered by
 `radix_subtree_contains(&cur_node, …)`, and the ancestor whose death moved the
 sender is by definition *not* in the sender's subtree — so the notice a

@@ -150,7 +150,7 @@ always one thing.
 | `fence_ops` | List of `prte_grpcomm_fence_t`. A tracker is found here by its signature alone, so it must come **off** this list before its result is delivered — see *Retire before you deliver* below. |
 | `group_ops` | List of `prte_grpcomm_group_t`. |
 | `completed_group_ops` | Bounded memo of already-released group ops (see below). |
-| `recovery_epoch` | The collective recovery epoch, shared by fence and group: one failure, one restart, one epoch. |
+| `recovery_epoch` | The collective recovery epoch, shared by fence and group: one failure, one restart, one epoch. Issued by the master, absolute on the wire, adopted by highest value seen — see "The epoch" below. |
 
 Note the verbosity variable that backs the MCA parameter is at **file
 scope** in `grpcomm.c`, not a local: the MCA layer keeps the pointer it is
@@ -657,6 +657,20 @@ collectives, stamped on every `PRTE_RML_TAG_GROUP` and
 `PRTE_RML_TAG_FENCE` message as `[epoch][body]`. A contribution stamped
 older than the receiver's epoch belongs to a round that no longer exists
 and is dropped before it is merged.
+
+**The value is the master's, and absolute.** The DVM master issues it —
+`prte_grpcomm_issue_epoch()`, called once per global failure notice it
+emits — and packs it into that notice; every daemon adopts what it is
+given (`prte_grpcomm_advance_epoch(status->epoch)`), taking the highest
+value it has seen. Each daemon counting the notices *it* received would be
+simpler and is wrong: the number would then be a function of delivery, so
+a daemon that missed one broadcast is a step behind for the rest of the
+DVM's life, with every contribution it offers dropped as stale and every
+collective over a job placed on it hung. That is not a hypothetical — a
+daemon launched by an elastic grow has missed **all** of them: the routing
+tree holds its vpid from the moment the grow records it, so a broadcast
+sent while its launch is in flight is addressed to a daemon with no
+contact info and is dropped by design (`prte_oob_base_send_nb`).
 
 **Why a per-link round does not work here, and why one epoch does.** The
 obvious model is xcast's — `ack_id_down` chosen by the parent, echoed by

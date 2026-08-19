@@ -883,7 +883,7 @@ static void shrink_campaign_complete(int sd, short args, void *cbdata)
         for (t = 0; t < camp->ntargets; t++) {
             fr[t] = camp->targets[t];
         }
-        prte_rml_repair_routing_tree(&failed, false);
+        prte_rml_repair_routing_tree(&failed, false, /* epoch = */ 0);
         free(failed.array);
         failed.array = NULL;
     }

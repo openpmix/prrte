@@ -399,6 +399,18 @@ typedef struct {
 
     pmix_data_array_t failed_ranks;
 
+    // The collective recovery epoch this event moves the DVM to, and the
+    // reason it is carried here rather than counted by each handler: it is
+    // issued by the HNP when it originates the global notice, so every daemon
+    // adopts the same number no matter how many notices it has seen. A daemon
+    // that missed one - which a daemon launched into an already-recovered DVM
+    // necessarily has - is corrected by the next one that reaches it, and by
+    // the WIREUP broadcast it receives on joining.
+    //
+    // Only meaningful when scope is GLOBAL; zero on the local pass, which
+    // does not move the epoch.
+    uint32_t epoch;
+
     // Ancestor deaths could lead to this rank substituting for a hole further
     // up the tree. If we've been promoted, our subtree has grown. At most, one
     // of our old children can be the same. Their position in the children list
