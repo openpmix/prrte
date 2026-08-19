@@ -48,7 +48,8 @@ The UID (``prte_relm_uid_t``) is a 32-bit counter that is allowed to wrap; the
 design assumes a message is globally complete and unreferenced long before its
 UID could be reused.  The top of the range is reserved for sentinels
 (``UNKNOWN`` / ``NONE`` / ``INVALID``), so valid UIDs run up to
-``PRTE_RELM_UID_MAX``.
+``PRTE_RELM_UID_MAX`` and ``prte_relm_next_uid()`` steps over the sentinels as
+it wraps.
 
 State is kept per destination.  ``prte_relm_state_machine_t`` holds a hash table
 of ``prte_relm_rank_t`` objects keyed by destination rank; each of those holds a

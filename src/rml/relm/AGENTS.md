@@ -66,10 +66,17 @@ new neighbors so in-flight messages resume over the repaired tree.
   `PRTE_RELM_EPHEMERAL_STATES_START` (`NEW`, `ACKACKED`, `CACHED`, `EVICTED`)
   drive transitions but must **never** be stored as a message's `state`. The
   engine asserts this; don't defeat it.
-- **UIDs wrap.** `prte_relm_uid_t` is a `uint32_t` that is allowed to wrap; the
-  design assumes a message is globally complete (and dereferenced) long before
-  its UID is reused. Reserved sentinels (`UNKNOWN`/`NONE`/`INVALID`) sit at the
-  top of the range — respect `PRTE_RELM_UID_MAX`.
+- **UIDs wrap, and the wrap has to step over the sentinels.**
+  `prte_relm_uid_t` is a `uint32_t` that is allowed to wrap; the design assumes
+  a message is globally complete (and dereferenced) long before its UID is
+  reused. Reserved sentinels (`UNKNOWN`/`NONE`/`INVALID`) sit at the top of the
+  range, *above* `PRTE_RELM_UID_MAX` — which is why the counter is handed out
+  by `prte_relm_next_uid()` and not by a bare `next_uid++`. The bare increment
+  walked through all three on its way back to zero, and a UID above the max is
+  not a wrap but a poisoned signature: `prte_relm_get_msg()` refuses it and
+  answers NULL, so three of every 2^32 reliable messages took the daemon down
+  instead of being sent. Every lookup helper enforces `PRTE_RELM_UID_MAX`;
+  anything that generates a UID must respect it.
 - **Data lifetime.** A message's `data` is unloaded/emptied when it is posted or
   evicted; cached data is dropped by timer (`relm_base_cache_ms`) or when the
   cache exceeds `relm_base_cache_max_count`. Don't assume `msg->data.bytes` is

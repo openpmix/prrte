@@ -109,6 +109,11 @@ prte_relm_msg_t* prte_relm_get_msg(prte_relm_signature_t* sig);
 prte_relm_msg_t* prte_relm_get_prev_msg(prte_relm_msg_t* msg);
 prte_relm_rank_t* prte_relm_get_rank(pmix_rank_t dst);
 
+// Hand out the next UID for a locally-started message, stepping over the
+// reserved sentinels at the top of the range so the counter's documented
+// wrap never yields a UID above PRTE_RELM_UID_MAX
+prte_relm_uid_t prte_relm_next_uid(void);
+
 // Create a new message from a local reliable_send call and start it
 int prte_relm_start_msg(
     pmix_rank_t dst, pmix_data_buffer_t* buf, prte_rml_tag_t tag
