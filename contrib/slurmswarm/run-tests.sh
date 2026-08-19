@@ -1,6 +1,8 @@
 #!/bin/bash
 #
 # Copyright (c) 2026      Nanook Consulting  All rights reserved.
+# Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+#                         All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -982,6 +984,25 @@ elastic_reextend_reuse_group() {
     [ "$(echo "$out" | tail -1 | tr -d '\r')" = "$reused" ] \
         && ok "a job maps onto that node" \
         || bad "$reused ran nothing: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    # ...and mapping onto a node is not running a COLLECTIVE over it.  The
+    # release advanced every surviving daemon's collective recovery epoch; the
+    # daemon this extend launched starts at zero, so its contributions are
+    # dropped as stale and the fence hangs, while everything above still passes.
+    # The job must SPAN node1 and the reused node -- a fence whose procs sit on
+    # one daemon is answered by that daemon alone.
+    if ! SA 'command -v fencer >/dev/null'; then
+        skp "fencer client not installed -- re-run ./build.sh"
+    else
+        out=$(SA "timeout 90 prun --host node1:1,$reused:1 -n 2 --map-by node fencer collect" 2>&1)
+        n=$(echo "$out" | grep -c 'FENCER collect rank .* rc PMIX_SUCCESS')
+        [ "$n" = 2 ] \
+            && ok "a fence completes across the reused node" \
+            || bad "$n of 2 ranks completed the fence -- the reused node is an epoch behind: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        n=$(echo "$out" | grep -c 'peers-bad 0')
+        [ "$n" = 2 ] \
+            && ok "...and both ranks read the other's contribution back" \
+            || bad "$n of 2 ranks got a complete modex: $(echo "$out" | grep peers- | tr '\n' ' ' | tail -c 300)"
+    fi
     out=$(SA 'timeout 30 prun -n 1 hostname' 2>&1 | tail -1)
     [ "$(echo "$out" | tr -d '\r')" = node1 ] \
         && ok "DVM still responsive afterwards" \

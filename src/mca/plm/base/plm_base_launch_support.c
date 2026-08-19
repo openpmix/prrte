@@ -2157,6 +2157,19 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
         param = NULL;
     }
 
+    /* A collective message stamped below the receiver's epoch is dropped as
+     * stale, so a daemon launched at zero into a recovered DVM hangs every
+     * collective over a job placed on it. Like the departed vpids above, this
+     * has to be in hand before the daemon's first collective. */
+    if (0 < prte_grpcomm_current_epoch()) {
+        pmix_argv_append(argc, argv, "--prtemca");
+        pmix_argv_append(argc, argv, "grpcomm_recovery_epoch");
+        pmix_asprintf(&param, "%u", prte_grpcomm_current_epoch());
+        pmix_argv_append(argc, argv, param);
+        free(param);
+        param = NULL;
+    }
+
     /* Tell the daemon whether this DVM is persistent. Only the HNP knows -
      * it is decided in prte(), which no daemon runs - and a daemon that is
      * not told simply assumes the default. Pass it only when true, since

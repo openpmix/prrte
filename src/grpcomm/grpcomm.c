@@ -10,6 +10,8 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+ *                         All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -54,6 +56,10 @@ prte_grpcomm_release_bcast_fn_t prte_grpcomm_release_bcast = prte_grpcomm_xcast;
  * a dangling write the moment this function returns. */
 static int verbosity = 0;
 
+/* File scope for the same reason as verbosity; int because the MCA layer has no
+ * unsigned type. */
+static int launched_epoch = 0;
+
 void prte_grpcomm_register(void)
 {
     verbosity = 0;
@@ -82,6 +88,24 @@ void prte_grpcomm_register(void)
                                "grpcomm_base_verbose 1.",
                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                &prte_grpcomm_globals.enable_timing);
+
+    /* Set by the launcher on the prted command line, never by a user - see
+     * prte_plm_base_prted_append_basic_args. */
+    launched_epoch = 0;
+    pmix_mca_base_var_register("prte", "grpcomm", NULL, "recovery_epoch",
+                               "Collective recovery epoch this DVM had reached when this "
+                               "daemon was launched. Set by the launcher; not intended "
+                               "for users",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &launched_epoch);
+    if (0 < launched_epoch) {
+        prte_grpcomm_globals.recovery_epoch = (uint32_t) launched_epoch;
+    }
+}
+
+uint32_t prte_grpcomm_current_epoch(void)
+{
+    return prte_grpcomm_globals.recovery_epoch;
 }
 
 /**

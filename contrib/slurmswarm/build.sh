@@ -1,6 +1,8 @@
 #!/bin/bash
 #
 # Copyright (c) 2026      Nanook Consulting  All rights reserved.
+# Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+#                         All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -329,6 +331,14 @@ build_linux() {
             echo ">>>> elastic test client (from ../dockerswarm)"
             gcc -O0 -g -o /opt/prte/prte/bin/elastic \
                 /prrte-src/contrib/dockerswarm/elastic.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
+            # fencer: one fence and nothing else -- every other job this suite
+            # runs is hostname, which never fences.  Same rpath and apostrophe
+            # rules as above.
+            echo ">>>> fencer test client (from ../dockerswarm)"
+            gcc -O0 -g -o /opt/prte/prte/bin/fencer \
+                /prrte-src/contrib/dockerswarm/fencer.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
             # The recording wrapper around salloc/scontrol/scancel.  It goes

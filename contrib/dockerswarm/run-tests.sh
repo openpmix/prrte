@@ -1,6 +1,8 @@
 #!/bin/bash
 #
 # Copyright (c) 2026      Nanook Consulting  All rights reserved.
+# Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+#                         All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -6521,6 +6523,72 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     out=$(RUN 'prun --np 1 hostname')
     [ "$out" = node1 ] && ok "prun works post-shrink" || bad "prun broken post-shrink"
     RUN 'pterm' >/dev/null 2>&1; cleanup_swarm
+
+    banner "elastic DVM: a collective spans a node grown in after a shrink"
+    # A shrink advances every surviving daemon's collective recovery epoch; a
+    # daemon the next grow launches starts at zero, so its contributions are
+    # dropped as stale (prte_grpcomm_fence_recv) and the collective hangs.
+    #
+    # Two things the shape must keep.  The shrink comes FIRST -- the case above
+    # grows then shrinks, by which time the grown daemons are at the new epoch.
+    # And the job must FENCE, spanning the new node: `hostname`, or a fence
+    # placed entirely on node4, passes either way.  A fresh node rather than the
+    # released one is deliberate; the SLURM harness covers the reuse variant.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if ! RUN "test -x $FENCER"; then
+        skp "fencer client not installed -- re-run ./build.sh"
+    elif ! pmix_cap PMIX_CAP_TOOL_FINALIZED; then
+        # Without it a departed elastic tool strands the nodes it grew, and
+        # the job below could not reach them.
+        skp "post-shrink collective (PMIx predates PMIX_CAP_TOOL_FINALIZED)"
+    elif ! RUN 'pgrep -x prte >/dev/null'; then
+        bad "could not start an elastic DVM for the post-shrink collective test"
+    else
+        out=$(RUN 'timeout 90 elastic grow node2:2,node3:2' 2>&1)
+        if ! echo "$out" | grep -q PMIX_DVM_IS_READY; then
+            bad "grow node2,node3 did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            skp "the case needs a grown node to release"
+        else
+            out=$(RUN 'timeout 90 elastic shrink node3' 2>&1); sleep 3
+            echo "$out" | grep -q PMIX_DVM_IS_READY \
+                && ok "node3 released -- the shrink that advances the epoch" \
+                || bad "shrink node3 did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            out=$(RUN 'timeout 90 elastic grow node4:2' 2>&1)
+            if ! echo "$out" | grep -q PMIX_DVM_IS_READY; then
+                bad "the post-shrink grow did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            else
+                [ "$(prted_count 4)" = 1 ] \
+                    && ok "...and node4 joined the shrunken DVM" \
+                    || bad "no daemon on node4 after the post-shrink grow"
+                # Placement first: a fence failure below is then unambiguous.
+                out=$(RUN 'timeout 60 prun --host node1:1,node2:1,node4:1 -n 3 --map-by node hostname' 2>&1)
+                n=$(echo "$out" | grep -cE '^node[124]$')
+                [ "$n" = 3 ] \
+                    && ok "a job maps onto all three of them" \
+                    || bad "the job reached $n/3 nodes: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+                # The case itself, bounded under prun's own patience so a hang
+                # cannot be mistaken for a return.
+                out=$(RUN "timeout 60 prun --host node1:1,node2:1,node4:1 -n 3 --map-by node $FENCER barrier" 2>&1)
+                n=$(echo "$out" | grep -c 'FENCER barrier rank .* rc PMIX_SUCCESS')
+                [ "$n" = 3 ] \
+                    && ok "all 3 ranks completed a barrier fence spanning node4" \
+                    || bad "$n of 3 ranks completed the barrier -- the grown daemon is an epoch behind: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+                # ...and again carrying data: the fence MPI_Init raises.
+                out=$(RUN "timeout 60 prun --host node1:1,node2:1,node4:1 -n 3 --map-by node $FENCER collect" 2>&1)
+                n=$(echo "$out" | grep -c 'FENCER collect rank .* rc PMIX_SUCCESS')
+                [ "$n" = 3 ] \
+                    && ok "...and all 3 completed a modex fence" \
+                    || bad "$n of 3 ranks completed the modex fence: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+                n=$(echo "$out" | grep -c 'peers-bad 0')
+                [ "$n" = 3 ] \
+                    && ok "...with every rank reading every peer contribution back" \
+                    || bad "$n of 3 ranks got a complete modex: $(echo "$out" | grep peers- | tr '\n' ' ' | tail -c 300)"
+            fi
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
 
     banner "elastic DVM: a shrink accounts for the procs on the node it releases"
     # Every shrink above releases an IDLE node.  This one releases a node

@@ -495,6 +495,12 @@ section for where each half lives.
 daemon"** notice naming the shrunk node — **that notice is expected** (shrink
 completion is driven by the targeted daemon's death). The HNP must survive it.
 
+**Grow after a shrink, then fence over the new node.** A shrink advances every
+survivor's collective recovery epoch; a daemon the grow launches starts at zero,
+its contributions are dropped as stale, and the collective hangs. The order
+matters (grow-then-shrink cannot show it) and so does the job: `fencer`
+**spanning** the new node, since `hostname` passes either way.
+
 **Relay** (radix-2 deep grow, `run-tests.sh` does this): grown across node2–node9
 with `--prtemca prte_rml_radix 2`, the daemon tree is 3–4 deep, so the
 `PMIX_DVM_IS_READY` completion fence must relay through intermediate daemons. If

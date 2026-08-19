@@ -36,7 +36,7 @@ differences are in §3, §9 and §10 and nowhere else.
 | `slurm-alloc.py` | Creates and holds a real allocation across many `docker exec` calls, and replays the environment SLURM put in it. See §11. |
 | `slurm-shim.py` | A recording, optionally misbehaving, **wrapper** around the real `salloc`/`scontrol`/`scancel`. Answers the two questions slurmctld cannot: what PRRTE *asked* for, and what PRRTE does when the scheduler misbehaves. See §14. |
 | `docker-compose.yml` | The ten nodes `prteslurm-node1..prteslurm-node10`. Every name derives from `$PRTE_SLURM_SWARM`, so two clones can each run a cluster. |
-| *(no file here)* | The `elastic` test client is compiled from [`../dockerswarm/elastic.c`](../dockerswarm/elastic.c) rather than copied — it is the same program, and two copies would drift. |
+| *(no file here)* | The `elastic` and `fencer` test clients are compiled from [`../dockerswarm/`](../dockerswarm/) rather than copied — they are the same programs, and two copies would drift. |
 
 ## 2. How it works
 
@@ -227,7 +227,10 @@ Four cases are worth calling out:
   that does not complete is a bug wherever it landed); only the claim that a
   *reuse* happened is downgraded to a skip when the scheduler had a spare.
   (The sibling harness covers the same shape chosen by *hostname*; [#2491]
-  closed the routing half of it.)
+  closed the routing half of it.) The case ends with a **fence** spanning the
+  head node and the granted-back one: a daemon launched after a release starts
+  at collective recovery epoch zero and its contributions are dropped as stale,
+  which every placement assertion above it passes straight through.
 - **Which brings in the one piece of SLURM bookkeeping this suite has to
   work around.** A node released by an in-place resize can sit in state
   `IDLE` with its cores still accounted to the job that was shrunk off it —

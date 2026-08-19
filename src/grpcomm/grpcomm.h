@@ -18,6 +18,8 @@
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
+ * Copyright (c) 2026      Barcelona Supercomputing Center (BSC-CNS).
+ *                         All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -152,6 +154,10 @@ PRTE_EXPORT int prte_grpcomm_group(pmix_group_operation_t op, char *grpid,
  * refused with PRTE_ERR_NOT_SUPPORTED rather than quietly served; relay the
  * request to the master instead. */
 PRTE_EXPORT int prte_grpcomm_assign_context_id(size_t *ctxid);
+
+/* The collective recovery epoch this daemon is at. The launcher passes it to
+ * every daemon it starts. */
+PRTE_EXPORT uint32_t prte_grpcomm_current_epoch(void);
 
 END_C_DECLS
 
