@@ -104,16 +104,19 @@ relm fault handlers.
 
 `PRTE_PROC_STATE_COMM_FAILED` is what makes the HNP act on a departure: mark the
 daemon not-alive, decrement `num_daemons`, print `node-died`, and fail the jobs
-that had procs on it. It is raised in **two** places, and both are needed:
+that had procs on it. It is raised from **two kinds of place**, and both are
+needed:
 
 - `prte_mca_oob_tcp_component_lost_connection` — the daemon that actually lost
   the socket. This is also what drives the HNP's countdown to
   `DAEMONS_TERMINATED` during a *normal* teardown (the errmgr's
   `prte_prteds_term_ordered` branch), so it cannot be removed.
-- `prte_rml_recv_failures_notice` — a daemon that only *heard* about the death,
-  for the ranks it had not already recorded.
+- `report_new_departures()` in `rml_fault_handler.c` — a daemon that only
+  *learned* of the death, for the ranks it had not already recorded. Three
+  paths call it: the failure notice (`prte_rml_recv_failures_notice`) and the
+  two lineage inferences, from a child's report and from an adoption notice.
 
-The second one is easy to think unnecessary, and its absence was a real hang.
+The second kind is easy to think unnecessary, and its absence was a real hang.
 At the default radix a ten-node DVM is **flat**, so the HNP is every daemon's
 parent and is always the one that loses the socket; the first path alone looks
 sufficient. Give the tree any depth and an interior daemon becomes the detector:
@@ -123,10 +126,21 @@ dead node's procs are never marked terminated, the job never completes, and its
 tool waits forever. `prun` against a radix-2 DVM hung indefinitely where the
 same DVM at radix 64 released instantly.
 
-Two properties keep the pair from double-reporting: the notice path reports only
-ranks not already in `failed_dmns` (so the detector's own rank, echoed back by
-the HNP's global broadcast, is skipped), and the errmgr independently ignores a
-comm failure for a daemon it has already torn out.
+Two properties keep these from double-reporting: a report names only ranks not
+already in `failed_dmns` (so the detector's own rank, echoed back by the HNP's
+global broadcast, is skipped), and the errmgr independently ignores a comm
+failure for a daemon it has already torn out.
+
+That dedup is also why the three learning paths have to stay behind one
+function. `failed_dmns` is the *only* record of what this daemon already knows,
+and `prte_rml_repair_routing_tree` sets it — so a path that repairs without
+reporting does not merely stay quiet, it makes every later report for that rank
+look like a duplicate and suppresses it permanently. The two inference paths
+were exactly that: they repaired the tree on a deduced death and told nobody, so
+whichever of them won the race against the real notice silently ate the
+`COMM_FAILED`. Hence the ordering rule in `report_new_departures` — report
+*before* the repair, which is safe because the state activation is
+thread-shifted and cannot outrun it.
 
 ### Both recovery notices carry a lineage, and both reconcile it the same way
 
