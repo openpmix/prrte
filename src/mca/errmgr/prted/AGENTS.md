@@ -109,6 +109,19 @@ order:
 2. **Lifeline lost** (`LIFELINE_LOST`) → set exit status, `killprocs` all
    children, and `prte_quit()`. Our routed children will see us leave and
    die on their own.
+
+   This is the daemon's suicide requirement, and it is the *whole* answer
+   to losing the HNP: the root is the one rank with no inheritor to be
+   routed around, so `prte_rml_route_lost()` returns `PRTE_ERR_FATAL` for
+   it rather than repairing, and the OOB turns that into `LIFELINE_LOST`
+   instead of `COMM_FAILED`. Anything that "recovers" here leaves orphaned
+   daemons — and the application processes under them — running with
+   nothing left to command them. `contrib/dockerswarm/run-tests.sh`
+   ("losing the HNP is the one loss no daemon may survive") kills the HNP
+   under a live job at radix 2, where ranks 1 and 2 lose that socket
+   directly while the ranks below them get here the long way: they lose
+   their own parent, repair the tree, land on rank 0, and only then find
+   the root gone.
 3. **Unreachable peer** (`UNABLE_TO_SEND_MSG`, `NO_PATH_TO_TARGET`,
    `PEER_UNKNOWN`, `FAILED_TO_CONNECT`) → **this is not, by itself, our
    lifeline**, and it must not end the daemon. See the gotcha below;
