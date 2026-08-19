@@ -50,6 +50,17 @@ For the protocol itself see
   reported depth matches the expected parent/child depth. If you change how
   promotions renumber depth, keep `pack_link_update`/`update_link` in sync or
   recovery messages will be silently dropped.
+- **A detected signature collision fails the job.** `local_update`'s `NEW` arm
+  and `upstream_update`'s `SENDING` arm both check whether a second message is
+  arriving under a signature that already names one, and both now report and
+  activate `PRTE_JOB_STATE_FORCED_EXIT`. They used to log
+  `PRTE_ERR_OP_IN_PROGRESS` and carry on, which meant the layer whose job is
+  not to lose messages silently dropped one and ACKed its sender for the other.
+  See [`../AGENTS.md`](../AGENTS.md) for the reasoning and why nothing narrower
+  works. The `SENDING` arm compares the payload bytes, not just their length —
+  a repeat of a message we already hold is ordinary (a replay, or a resend
+  after the tree moved) and carries identical bytes, so anything else is a
+  genuine collision regardless of size.
 - **Never persist ephemeral states.** `CACHED`/`EVICTED`/`NEW`/`ACKACKED` are
   transitions, not stored states (see `../AGENTS.md`).
 - **The purge frees objects, not just table entries.** `purge()` drops a failed

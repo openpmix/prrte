@@ -39,14 +39,6 @@ since the transport it stages over (xcast) is already resilient.  Until then,
 a daemon lost while files are in flight fails the staging rather than
 re-driving it.
 
-**A RELM message-id clash is logged and ignored.**  Two places in
-``src/rml/relm/base/state_updates.c`` detect that a message uid already
-belongs to a different message — a second start for the same uid, or a
-payload whose size disagrees with the one already held — log
-``PRTE_ERR_OP_IN_PROGRESS`` and carry on.  What the right answer is (fail
-the job, or something narrower) has never been decided.  The ids are
-generated, so a clash means something upstream is already wrong.
-
 **A TCP peer that cannot be reached at one address is closed, not
 retried.**  In ``src/rml/oob/oob_tcp_connection.c`` the final
 connect-failure arm closes the peer and returns ``PRTE_ERR_UNREACH``
@@ -224,9 +216,6 @@ the marker is stale.
      - routing-tree state is not preserved across a DVM resize
    * - ``rml/relm/relm.c``, ``prte_relm_register``
      - RELM has one module and no way to choose another
-   * - ``rml/relm/base/state_updates.c``, ``upstream_update`` and
-       ``local_update``
-     - a RELM message-id clash is logged and ignored
    * - ``mca/filem/raw/filem_raw_module.c``, ``raw_fault_handler``
      - ``filem/raw`` does not survive losing a daemon mid-staging
    * - ``mca/odls/base/odls_base_bind.c``, ``prte_odls_base_set``

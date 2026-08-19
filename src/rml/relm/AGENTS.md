@@ -77,6 +77,20 @@ new neighbors so in-flight messages resume over the repaired tree.
   answers NULL, so three of every 2^32 reliable messages took the daemon down
   instead of being sent. Every lookup helper enforces `PRTE_RELM_UID_MAX`;
   anything that generates a UID must respect it.
+- **A signature collision is fatal, by decision.** Two live messages under one
+  `<src,uid,dst>` cannot both be delivered, and the one that is dropped is
+  silently lost by the layer that exists to not lose it — with no way to tell
+  which of the two is real. So both detectors in `base/state_updates.c` (a
+  second `NEW` for a UID that already names a message, and a `SENDING` whose
+  payload differs from the one already held) report and activate
+  `PRTE_JOB_STATE_FORCED_EXIT`, like every other broken invariant here. They
+  used to log `PRTE_ERR_OP_IN_PROGRESS` and carry on. Since the UIDs are
+  generated, reaching either detector means the identity space is already
+  broken; there is no narrower repair, because handing the message a different
+  UID leaves the stale entry that proved the counter untrustworthy and every
+  other daemon on the path keys on the same duplicated pair. Note the
+  `SENDING` detector compares the *bytes*, not just their length: a
+  same-length collision is exactly as damaging and was previously undetected.
 - **Data lifetime.** A message's `data` is unloaded/emptied when it is posted or
   evicted; cached data is dropped by timer (`relm_base_cache_ms`) or when the
   cache exceeds `relm_base_cache_max_count`. Don't assume `msg->data.bytes` is

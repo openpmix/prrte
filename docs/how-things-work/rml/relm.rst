@@ -51,6 +51,16 @@ UID could be reused.  The top of the range is reserved for sentinels
 ``PRTE_RELM_UID_MAX`` and ``prte_relm_next_uid()`` steps over the sentinels as
 it wraps.
 
+Because the UIDs are generated, two live messages sharing one signature means
+the identity space has already broken, and there is no recovery: only one of
+the two can be delivered under that signature, and the other is silently lost
+by a layer whose whole purpose is not to lose it.  A daemon that detects the
+collision — a second ``NEW`` for a UID that already names a message, or a
+``SENDING`` carrying different bytes than the ones already held under that
+signature — therefore reports it and activates
+``PRTE_JOB_STATE_FORCED_EXIT``, the same response every other broken protocol
+invariant in RELM gets.
+
 State is kept per destination.  ``prte_relm_state_machine_t`` holds a hash table
 of ``prte_relm_rank_t`` objects keyed by destination rank; each of those holds a
 hash table of ``prte_relm_msg_t`` objects keyed by GUID.  A ``prte_relm_msg_t``
