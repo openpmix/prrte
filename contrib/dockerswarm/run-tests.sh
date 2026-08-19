@@ -5215,6 +5215,86 @@ test_rml() {
     fi
     cleanup_swarm
 
+    banner "rml: a re-homed daemon reports the lineage that explains the re-home"
+    # Two interior daemons at once, which is the shape that separates a daemon's
+    # new parent from the death that gave it one.  radix 2 over ten nodes is
+    # 0 -> {1,2}, 1 -> {3,5}, 2 -> {4,6}, 3 -> {7}, 4 -> {8}, 5 -> {9}; killing
+    # node2 (rank 1) and node6 (rank 5) together leaves rank 3 (node4) re-homed
+    # onto rank 9 (node10) -- and rank 9 never held a socket to rank 1, so
+    # nothing it can observe tells it that the daemon it now believes is its
+    # own parent is gone.
+    #
+    # Rank 3's failure notice is the one thing that could tell it, and until it
+    # carried an ancestor list it could not: the failure array is filtered to
+    # the sender's own subtree, and the ancestor that moved it is by definition
+    # not in it, so the notice a re-homing daemon sends is EMPTY.  It now
+    # carries the lineage it believes in, ending with the parent it is sending
+    # to, and the receiver reconciles that against its own exactly as it does an
+    # adoption notice coming the other way.
+    #
+    # What this case pins is the wire path and the recovery: the lineage
+    # travels, every parent checks it, and a double interior loss leaves a DVM
+    # that tears down instead of a daemon that decided the tree was
+    # unreconcilable.  What it CANNOT force is the inference itself.  Rank 9
+    # discovers rank 1 by trying to send to it, and in a container the dead
+    # daemon's host is still up, so the connect is refused immediately rather
+    # than hanging the way a vanished node's would -- rank 9 almost always wins
+    # its own race and finds nothing left to learn.  The inference is pinned
+    # instead by test/unit/rml/test_rml_routing.c::test_reconcile_ancestry,
+    # which sets the two views up directly.
+    cleanup_swarm
+    hosts='node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1,node8:1,node9:1,node10:1'
+    RUN_BG /tmp/rml-2kill.out "timeout -k 5 180 prterun --prtemca rml_base_radix 2 \
+               --prtemca routed_base_verbose 2 --leave-session-attached \
+               --host $hosts -np 10 --map-by node sleep 90"
+    sleep 12
+    if ! RUN 'pgrep -x prterun' >/dev/null 2>&1; then
+        bad "the radix-2 job never started: $(RUN 'tr -d "\\000" < /tmp/rml-2kill.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+    elif [ "$(prted_count 2 6)" != 2 ]; then
+        bad "node2/node6 have no daemons to kill -- the DVM did not span ten nodes"
+    else
+        ok "a job is running across a ten-node radix-2 tree"
+        # as close to simultaneous as the harness can get: both kills issued
+        # before either is waited on
+        ON 2 'pkill -9 -x prted' >/dev/null 2>&1 &
+        ON 6 'pkill -9 -x prted' >/dev/null 2>&1 &
+        wait
+        n=0
+        while [ "$n" -lt 90 ]; do
+            RUN 'pgrep -x prterun' >/dev/null 2>&1 || break
+            sleep 1; n=$((n+1))
+        done
+        [ "$n" -lt 90 ] \
+            && ok "losing two interior daemons at once did not hang the DVM (${n}s)" \
+            || bad "prterun never returned after a double interior daemon loss"
+        out=$(RUN 'tr -d "\\000" < /tmp/rml-2kill.out' 2>&1)
+        # the scenario actually happened: daemons re-homed onto new parents
+        n=$(echo "$out" | grep -c 'recovering with parent update')
+        [ "$n" -ge 2 ] \
+            && ok "...after $n daemons re-homed onto a new parent" \
+            || bad "no daemon re-homed, so the case asserted nothing: $(echo "$out" | grep -c .) lines captured"
+        # and every one of those re-homings carried a lineage the new parent
+        # checked -- this is the wire field, end to end
+        n=$(echo "$out" | grep -c 'lineage reported by')
+        [ "$n" -ge 1 ] \
+            && ok "...each reporting the lineage that explains it ($n checked)" \
+            || bad "no failure notice carried an ancestor list"
+        # a lineage that cannot be placed is a race to drop going up, and fatal
+        # coming down.  Neither may fire here: both views are reconcilable.
+        echo "$out" | grep -q 'incompatible routing tree state' \
+            && bad "a daemon declared the routing tree unreconcilable" \
+            || ok "...and no daemon found the repaired tree unreconcilable"
+        echo "$out" | grep -q 'cannot be reconciled' \
+            && bad "a reported lineage could not be reconciled" \
+            || ok "...nor rejected a reported one"
+        # and the eight daemons that did not die went with it, rather than one
+        # of them surviving on a lineage nobody else believes in
+        c=$(prted_settle 15 1 3 4 5 7 8 9 10)
+        [ "$c" = 0 ] && ok "...and every surviving daemon went down with it" \
+                     || bad "$c prted still running after the DVM tore down"
+    fi
+    cleanup_swarm
+
     banner "rml/oob: peer sockets serviced by dedicated OOB progress threads"
     # prte_oob_progress_threads (default 0) moves each peer's send/recv socket
     # events off the main progress thread onto one of N worker bases, chosen

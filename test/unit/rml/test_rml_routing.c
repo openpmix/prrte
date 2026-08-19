@@ -71,7 +71,7 @@ static void build_dvm(int radix, pmix_rank_t ndmns, pmix_rank_t myrank)
     prte_rml_compute_routing_tree();
 }
 
-/* construct the four failure bitmaps the way prte_rml_open() does */
+/* construct the failure bitmaps the way prte_rml_open() does */
 static void bitmaps_construct(void)
 {
     PMIX_CONSTRUCT(&prte_rml_base.failed_dmns, pmix_bitmap_t);
@@ -82,6 +82,8 @@ static void bitmaps_construct(void)
     pmix_bitmap_init(&prte_rml_base.absent_dmns, 64);
     PMIX_CONSTRUCT(&prte_rml_base.lateral_links, pmix_bitmap_t);
     pmix_bitmap_init(&prte_rml_base.lateral_links, 64);
+    PMIX_CONSTRUCT(&prte_rml_base.revived_dmns, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.revived_dmns, 64);
 }
 
 /*
@@ -179,6 +181,7 @@ static void bitmaps_destruct(void)
     PMIX_DESTRUCT(&prte_rml_base.dead_dmns);
     PMIX_DESTRUCT(&prte_rml_base.absent_dmns);
     PMIX_DESTRUCT(&prte_rml_base.lateral_links);
+    PMIX_DESTRUCT(&prte_rml_base.revived_dmns);
 }
 
 /* forget every failure mark between cases */
@@ -460,6 +463,347 @@ static int test_departed_ranks_survive_recompute(void)
     bitmaps_reset();
     if (0 == failures) {
         fprintf(stdout, "PASSED test_departed_ranks_survive_recompute\n");
+    }
+    return failures;
+}
+
+/*
+ * Ancestry reconciliation -- prte_rml_reconcile_ancestry().
+ *
+ * Both notices that reshape the tree carry a peer's view of THIS daemon's
+ * lineage: the adoption notice a parent sends down, and (since the failure
+ * notice learned to carry one) the report a re-homed child sends up.  Both
+ * reconcile it here, and the whole point of the exercise is that the two
+ * daemons converge without waiting for a send to a dead rank to time out.
+ *
+ * This is the piece of fault recovery that IS unit-testable: it is pure
+ * computation over prte_rml_base, where prte_rml_repair_routing_tree() -- which
+ * is what acts on the verdict -- ends in the grpcomm/filem/relm fault handlers
+ * and RML sends that do not exist in this process.  The reports here are not
+ * hand-written constants: each is the ancestor list the peer's own
+ * prte_rml_compute_routing_tree() produces from the failures that peer knows
+ * about, so a change to the radix math moves both sides of the comparison.
+ */
+
+/* The ancestor list `rank` computes when the given ranks have departed, as a
+ * detached copy.  This is exactly the peer's view: same code, different
+ * knowledge. */
+static pmix_data_array_t ancestry_of(int radix, pmix_rank_t ndmns, pmix_rank_t rank,
+                                     const pmix_rank_t *dead, size_t ndead)
+{
+    pmix_data_array_t out = PMIX_DATA_ARRAY_STATIC_INIT;
+    size_t i;
+
+    bitmaps_reset();
+    for (i = 0; i < ndead; i++) {
+        pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, dead[i]);
+    }
+    build_dvm(radix, ndmns, rank);
+
+    PMIx_Data_array_construct(&out, prte_rml_base.ancestors.size, PMIX_PROC_RANK);
+    for (i = 0; i < prte_rml_base.ancestors.size; i++) {
+        ((pmix_rank_t *) out.array)[i] = ((pmix_rank_t *) prte_rml_base.ancestors.array)[i];
+    }
+    return out;
+}
+
+/* Drop the trailing entry, as the receiver of a failure notice does once it has
+ * confirmed that entry names itself. */
+static void ranks_drop_last(pmix_data_array_t *arr)
+{
+    pmix_data_array_t cut = PMIX_DATA_ARRAY_STATIC_INIT;
+    size_t i;
+
+    if (0 == arr->size) {
+        return;
+    }
+    if (1 < arr->size) {
+        PMIx_Data_array_construct(&cut, arr->size - 1, PMIX_PROC_RANK);
+        for (i = 0; i + 1 < arr->size; i++) {
+            ((pmix_rank_t *) cut.array)[i] = ((pmix_rank_t *) arr->array)[i];
+        }
+    }
+    PMIx_Data_array_destruct(arr);
+    *arr = cut;
+}
+
+static pmix_data_array_t mk_ranks(const pmix_rank_t *r, size_t n)
+{
+    pmix_data_array_t out = PMIX_DATA_ARRAY_STATIC_INIT;
+    size_t i;
+
+    if (0 < n) {
+        PMIx_Data_array_construct(&out, n, PMIX_PROC_RANK);
+        for (i = 0; i < n; i++) {
+            ((pmix_rank_t *) out.array)[i] = r[i];
+        }
+    }
+    return out;
+}
+
+static bool holds_exactly(const pmix_data_array_t *arr, const pmix_rank_t *r, size_t n)
+{
+    size_t i;
+
+    if (arr->size != n) {
+        return false;
+    }
+    for (i = 0; i < n; i++) {
+        if (((pmix_rank_t *) arr->array)[i] != r[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Snapshot of the failed set, so every case can insist that a reconciliation
+ * left nothing marked behind: the walk sets bits as it hypothesises deaths and
+ * MUST undo them, because the caller is the thing that decides whether any of
+ * it is real. */
+static bool failed_set_is(pmix_rank_t ndmns, const pmix_rank_t *set, size_t n)
+{
+    pmix_rank_t r;
+    size_t i;
+
+    for (r = 0; r < ndmns; r++) {
+        bool want = false;
+        for (i = 0; i < n; i++) {
+            want |= (set[i] == r);
+        }
+        if (want != pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, r)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static int test_reconcile_ancestry(void)
+{
+    int failures = 0;
+    pmix_data_array_t report, inferred, mine;
+    prte_rml_ancestry_t verdict;
+    const pmix_rank_t r1[] = {1}, r2[] = {2}, r5[] = {5}, none[] = {0};
+
+    /*
+     * (a) The two views agree.  Radix 2 over 7 daemons with nothing wrong:
+     * rank 4's parent is rank 2, and what rank 4 reports upward is [0,2].
+     * Rank 2 strips itself off the end and finds its own list.
+     */
+    report = ancestry_of(2, 7, 4, NULL, 0);
+    ranks_drop_last(&report);
+    bitmaps_reset();
+    build_dvm(2, 7, 2);
+    inferred = (pmix_data_array_t) PMIX_DATA_ARRAY_STATIC_INIT;
+    verdict = prte_rml_reconcile_ancestry(&report, &inferred);
+    CHECK("an agreeing report is agreement", PRTE_RML_ANCESTRY_AGREED == verdict);
+    CHECK("...and infers nothing", 0 == inferred.size);
+    PMIx_Data_array_destruct(&report);
+    PMIx_Data_array_destruct(&inferred);
+
+    /*
+     * (b) The case the upward report exists for.  Rank 2 dies; rank 6 inherits
+     * its slot and rank 4 re-homes onto rank 6.  Rank 4's failure notice can
+     * say nothing about rank 2 -- the array it carries is filtered to rank 4's
+     * own subtree and an ancestor is never in it -- so the ONLY thing that can
+     * tell rank 6 why it suddenly has a child is the lineage.
+     */
+    report = ancestry_of(2, 7, 4, r2, 1);
+    CHECK("the re-homed child reports its new parent last",
+          6 == ((pmix_rank_t *) report.array)[report.size - 1]);
+    ranks_drop_last(&report);
+    bitmaps_reset();
+    build_dvm(2, 7, 6); /* rank 6 has not detected anything yet */
+    inferred = (pmix_data_array_t) PMIX_DATA_ARRAY_STATIC_INIT;
+    verdict = prte_rml_reconcile_ancestry(&report, &inferred);
+    CHECK("a re-homed child's lineage yields an inference",
+          PRTE_RML_ANCESTRY_INFERRED == verdict);
+    CHECK("...naming the ancestor that must have died",
+          holds_exactly(&inferred, r2, 1));
+    CHECK("...and leaves nothing marked failed", failed_set_is(7, none, 0));
+    PMIx_Data_array_destruct(&report);
+    PMIx_Data_array_destruct(&inferred);
+
+    /*
+     * (c) The same shape two levels deep, which is where the timeout it saves
+     * is not merely a socket away: radix 2 over 15, ranks 1 and 5 both gone.
+     * Rank 3 re-homes all the way onto rank 13 -- and rank 13, whose only lost
+     * socket was to rank 5, has no way of its own to learn that rank 1 died.
+     */
+    {
+        const pmix_rank_t dead_15[] = {1, 5};
+        report = ancestry_of(2, 15, 3, dead_15, 2);
+        CHECK("the deep child re-homes onto rank 13",
+              13 == ((pmix_rank_t *) report.array)[report.size - 1]);
+        ranks_drop_last(&report);
+        bitmaps_reset();
+        build_dvm(2, 15, 13); /* rank 13 knows only about the parent it lost */
+        pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, 5);
+        build_dvm(2, 15, 13);
+        inferred = (pmix_data_array_t) PMIX_DATA_ARRAY_STATIC_INIT;
+        verdict = prte_rml_reconcile_ancestry(&report, &inferred);
+        CHECK("a two-level re-home is reconcilable",
+              PRTE_RML_ANCESTRY_INFERRED == verdict);
+        CHECK("...inferring the death nothing else would have told us about",
+              holds_exactly(&inferred, r1, 1));
+        CHECK("...and leaves only the death we already knew about marked",
+              failed_set_is(15, r5, 1));
+        PMIx_Data_array_destruct(&report);
+        PMIx_Data_array_destruct(&inferred);
+    }
+
+    /*
+     * (d) The regression that used to take the DVM down.  The HNP loses rank 1
+     * and adopts rank 5 directly, so the adoption notice it sends carries the
+     * shortest list there is: [0].  Rank 5 has not noticed anything yet, so its
+     * own list is [0,1] -- one entry longer.
+     *
+     * That difference used to be "fixed" by padding the report out to our own
+     * length and letting update_ancestors fill the invented slot, which walks
+     * from the root to its next living node and yields rank 2 -- the root's
+     * OTHER child, no ancestor of rank 5 at any point in the DVM's life.  The
+     * padded report reconciled against nothing, and an unreconcilable adoption
+     * notice is a FORCED_EXIT.  A dead interior daemon plus a parent that
+     * noticed first is not an exotic race; it is the ordinary one.
+     */
+    report = mk_ranks((const pmix_rank_t[]){0}, 1);
+    bitmaps_reset();
+    build_dvm(2, 7, 5);
+    inferred = (pmix_data_array_t) PMIX_DATA_ARRAY_STATIC_INIT;
+    verdict = prte_rml_reconcile_ancestry(&report, &inferred);
+    CHECK("an adoption straight from the root is reconcilable",
+          PRTE_RML_ANCESTRY_INFERRED == verdict);
+    CHECK("...inferring the intervening daemon's death",
+          holds_exactly(&inferred, r1, 1));
+    CHECK("...and leaves nothing marked failed", failed_set_is(7, none, 0));
+    PMIx_Data_array_destruct(&report);
+    PMIx_Data_array_destruct(&inferred);
+
+    /*
+     * (e) A peer that is BEHIND us reports a deeper lineage.  Our own knowledge
+     * accounts for the difference, so there is nothing to infer and nothing to
+     * complain about -- this is the common ordering, since a report is a
+     * snapshot of the sender's view when it sent.
+     */
+    report = ancestry_of(2, 7, 5, NULL, 0); /* [0,1], from before the death */
+    bitmaps_reset();
+    pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, 1);
+    build_dvm(2, 7, 5); /* we know rank 1 is gone: [0] */
+    inferred = (pmix_data_array_t) PMIX_DATA_ARRAY_STATIC_INIT;
+    verdict = prte_rml_reconcile_ancestry(&report, &inferred);
+    CHECK("a report our own knowledge explains is agreement",
+          PRTE_RML_ANCESTRY_AGREED == verdict);
+    CHECK("...and infers nothing", 0 == inferred.size);
+    PMIx_Data_array_destruct(&report);
+    PMIx_Data_array_destruct(&inferred);
+
+    /*
+     * (f) A lineage no set of deaths produces.  Rank 2 is alive and is not on
+     * rank 5's path to the root at any depth, so a report of [0,2] cannot be
+     * reconciled -- and, crucially, the walk must put back every bit it set
+     * while trying.
+     */
+    report = mk_ranks((const pmix_rank_t[]){0, 2}, 2);
+    bitmaps_reset();
+    build_dvm(2, 7, 5);
+    inferred = (pmix_data_array_t) PMIX_DATA_ARRAY_STATIC_INIT;
+    verdict = prte_rml_reconcile_ancestry(&report, &inferred);
+    CHECK("an impossible lineage is inconsistent",
+          PRTE_RML_ANCESTRY_INCONSISTENT == verdict);
+    CHECK("...and hands back no inferences to act on", 0 == inferred.size);
+    CHECK("...having undone every bit it set while trying",
+          failed_set_is(7, none, 0));
+    PMIx_Data_array_destruct(&report);
+    PMIx_Data_array_destruct(&inferred);
+
+    /*
+     * (g) The revival race, which is the one that costs a live daemon.  Rank 2
+     * departed and has come back (the bootstrap unheal path).  A failure notice
+     * that was already in flight when the revival xcast went out carries a
+     * lineage from before the return -- exactly the lineage of case (b), which
+     * reconciles perfectly if you let it, by declaring rank 2 dead a second
+     * time.  It must not: only a lost socket or the HNP's arbitrated broadcast
+     * may bury a daemon that is up and talking to us.
+     */
+    report = ancestry_of(2, 7, 4, r2, 1);
+    ranks_drop_last(&report);
+    bitmaps_reset();
+    build_dvm(2, 7, 6);
+    pmix_bitmap_set_bit(&prte_rml_base.revived_dmns, 2);
+    inferred = (pmix_data_array_t) PMIX_DATA_ARRAY_STATIC_INIT;
+    verdict = prte_rml_reconcile_ancestry(&report, &inferred);
+    CHECK("a lineage predating a return is stale, not actionable",
+          PRTE_RML_ANCESTRY_STALE == verdict);
+    CHECK("...and infers nothing", 0 == inferred.size);
+    CHECK("...leaving the returned daemon alive",
+          !pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, 2));
+    PMIx_Data_array_destruct(&report);
+    PMIx_Data_array_destruct(&inferred);
+
+    /* ...and the mark is not permanent: a death somebody actually observed
+     * clears it, so a rank that returns and later really dies is not pinned
+     * alive forever. */
+    bitmaps_reset();
+    build_dvm(2, 7, 6);
+    pmix_bitmap_set_bit(&prte_rml_base.revived_dmns, 2);
+    pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, 2);
+    pmix_bitmap_clear_bit(&prte_rml_base.revived_dmns, 2);
+    CHECK("a confirmed death clears the returned mark",
+          !pmix_bitmap_is_set_bit(&prte_rml_base.revived_dmns, 2));
+
+    /*
+     * (h) The root is never inferable.  Rank 0 is every daemon's first
+     * ancestor and has no inheritor to be routed around -- which is why
+     * update_ancestors starts its walk at index 1, and why losing the HNP is
+     * fatal by construction rather than recoverable.  A well-formed report can
+     * never ask for it, since every ancestor list begins with 0 and index 0
+     * therefore never differs; an empty one reaching a daemon that is NOT the
+     * root would fall into the tail loop and take the whole DVM with it.
+     */
+    report = mk_ranks(NULL, 0);
+    bitmaps_reset();
+    build_dvm(2, 7, 5);
+    inferred = (pmix_data_array_t) PMIX_DATA_ARRAY_STATIC_INIT;
+    verdict = prte_rml_reconcile_ancestry(&report, &inferred);
+    CHECK("an empty lineage cannot bury the root",
+          PRTE_RML_ANCESTRY_INCONSISTENT == verdict);
+    CHECK("...and infers nothing", 0 == inferred.size);
+    CHECK("...leaving the HNP alive",
+          !pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, 0));
+    PMIx_Data_array_destruct(&report);
+    PMIx_Data_array_destruct(&inferred);
+
+    /*
+     * (i) The root has no ancestors, so every child's report reduces to nothing
+     * once its trailing entry (the HNP itself) is stripped.  The HNP can never
+     * infer anything from one, which is right -- it is the arbiter, not a
+     * daemon that can be wrong about its lineage.
+     */
+    report = ancestry_of(2, 7, 1, NULL, 0);
+    ranks_drop_last(&report);
+    bitmaps_reset();
+    build_dvm(2, 7, 0);
+    inferred = (pmix_data_array_t) PMIX_DATA_ARRAY_STATIC_INIT;
+    verdict = prte_rml_reconcile_ancestry(&report, &inferred);
+    CHECK("a report to the root is trivially agreement",
+          PRTE_RML_ANCESTRY_AGREED == verdict);
+    CHECK("...and infers nothing", 0 == inferred.size);
+    PMIx_Data_array_destruct(&report);
+    PMIx_Data_array_destruct(&inferred);
+
+    /*
+     * (j) At the default radix the tree is flat, so there is no lineage to
+     * disagree about at all: every daemon's list is [0] and every report
+     * reduces to empty.  The notice costs a handful of bytes and says nothing,
+     * which is why this whole class of bug is invisible until a small radix
+     * gives the tree some depth.
+     */
+    mine = ancestry_of(64, 10, 7, NULL, 0);
+    CHECK("a flat tree gives every daemon one ancestor", 1 == mine.size);
+    PMIx_Data_array_destruct(&mine);
+
+    bitmaps_reset();
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_reconcile_ancestry\n");
     }
     return failures;
 }
@@ -821,6 +1165,7 @@ int main(void)
     failures += test_radix_traversal();
     failures += test_routing_tree();
     failures += test_departed_ranks_survive_recompute();
+    failures += test_reconcile_ancestry();
     failures += test_dead_dmns_round_trip();
     failures += test_num_contributors();
     failures += test_lateral_links();

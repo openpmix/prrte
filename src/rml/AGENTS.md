@@ -128,6 +128,106 @@ ranks not already in `failed_dmns` (so the detector's own rank, echoed back by
 the HNP's global broadcast, is skipped), and the errmgr independently ignores a
 comm failure for a daemon it has already torn out.
 
+### Both recovery notices carry a lineage, and both reconcile it the same way
+
+A repair emits two notices, and until recently only one of them said anything
+about the *shape* of the tree:
+
+| | tag | payload | sent when |
+|---|---|---|---|
+| parent → child | `DAEMON_ADOPTED` | the child's new ancestor list (`[my ancestors…, me]`) | our children changed, or we were promoted |
+| child → parent | `DAEMON_DIED` | the failed ranks **in the sender's own subtree**, plus (now) the sender's ancestor list | every repair, to the current lifeline |
+
+The HNP does not send that second one upward — it has nowhere to send it — but
+it reuses the same tag and the same packing routine to broadcast the confirmed
+set downward, which is why the first field on the wire is the `global` flag and
+why the ancestor list rides only the upward leg. A lineage means nothing to a
+daemon receiving a broadcast.
+
+The upward notice's rank array cannot describe a re-home. It is filtered by
+`radix_subtree_contains(&cur_node, …)`, and the ancestor whose death moved the
+sender is by definition *not* in the sender's subtree — so the notice a
+re-homing daemon sends its new parent is, in the ordinary case, **empty**. A
+parent that had not yet detected that death learned nothing from it and went on
+routing the child's traffic through a dead ancestor until one of its own sends
+timed out. That gap is what the ancestor list closes: its last entry is the
+parent it was sent to, so stripping that entry leaves the sender's view of the
+*receiver's* lineage, directly comparable with the receiver's own.
+
+`prte_rml_reconcile_ancestry()` is the single implementation both directions
+use. It applies our own failure knowledge to the report (`update_ancestors`,
+which can only shorten a list), and then walks our list toward the report one
+hypothesised death at a time. Its verdict is one of four:
+
+- **`AGREED`** — nothing to do; the common case, and the only one a test can
+  force (see below).
+- **`INFERRED`** — the peer knows of ancestor deaths we do not, and the array
+  names them. The caller drives `prte_rml_repair_routing_tree()`.
+- **`STALE`** — reconciling would require declaring a **returned** rank dead;
+  see below.
+- **`INCONSISTENT`** — no set of deaths reconciles the two views.
+
+The two directions deliberately differ on that last one. An adoption notice is
+how a daemon learns *its own* lineage, so a report it cannot place means it no
+longer knows where it is: `FORCED_EXIT`. A failure notice is an accelerant —
+everything it can tell us also arrives by a path that does not depend on a
+peer's honesty (our own lost socket, or the HNP's arbitrated broadcast) — so an
+unplaceable report going *up* is logged and dropped. Both directions also
+require the report to name us before any of this runs.
+
+Three things here are load-bearing, and two of them were bugs:
+
+- **Do not pad the report out to our own length.** `update_ancestors` fills an
+  empty slot with "the previous ancestor's next inheritor", which is right for a
+  hole in the middle of a real list and nonsense for a slot invented past its
+  end. The reconciliation used to pad, and a report of `[0]` — all the HNP sends
+  when it adopts a grandchild after losing the daemon between — became `[0,2]` at
+  radix 2, rank 2 being the root's *other* child and no ancestor of the receiver
+  at any point in the DVM's life. That reconciled against nothing, and an
+  unplaceable adoption notice is a `FORCED_EXIT`. The trigger was not exotic: a
+  dead interior daemon whose parent noticed before its grandchild did. A
+  legitimately shorter report is what the tail loop handles.
+
+- **A rank that has RETURNED may not be inferred dead.** `revived_dmns` records
+  them (set by `prte_rml_revive_routing_tree`, cleared when a death is actually
+  recorded). A report is a snapshot of the sender's view when it *sent*, and a
+  revival travels as its own xcast: a notice that crossed with one carries a
+  lineage from before the return, and it reconciles perfectly — by burying a
+  daemon that is alive and talking to us. That is the `STALE` verdict, and it
+  abandons the whole reconciliation rather than skipping the one rank.
+
+- **Nothing may be left marked.** The walk sets bits in `failed_dmns` as it
+  hypothesises, because that is what makes `update_ancestors` step past a rank;
+  every one of them is cleared again before returning, since deciding whether any
+  of it is real is the *caller's* job.
+
+- **`record_inference` is what makes the walk terminate**, and both of its
+  remaining refusals matter. It will not infer a rank that is *already* failed —
+  nothing can be inferred about one, so seeing it means the walk is not
+  converging — which bounds the walk at one accepted inference per daemon. And
+  it will not infer **rank 0**: the root is every ancestor list's first entry
+  and has no inheritor to route around, which is why `update_ancestors` starts
+  at index 1 — so a hypothesised root death is never revisited and the loop
+  spins forever. The unit test for that one *hangs* rather than failing, which
+  is worth knowing before you go looking for it.
+
+`test/unit/rml/test_rml_routing.c::test_reconcile_ancestry` pins all of it,
+including both bugs above, by standing the two views up directly — each report
+is the ancestor list the peer's own `compute_routing_tree()` produces from the
+failures that peer knows about, so a change to the radix math moves both sides.
+
+**What the container harness cannot force.** The swarm case
+(`contrib/dockerswarm/run-tests.sh`, "a re-homed daemon reports the lineage
+that explains the re-home") kills two interior daemons at once, which is the
+shape that separates a daemon's new parent from the death that gave it one. It
+pins the wire path and the recovery — the lineage travels, every parent checks
+it, and the DVM tears down instead of a daemon deciding the tree is
+unreconcilable — but not the *inference*. The new parent discovers the death by
+trying to send to it, and in a container the dead daemon's host is still up, so
+that connect is refused immediately rather than hanging the way a vanished
+node's would; the parent wins its own race and finds nothing left to learn. The
+window this closes is a real cluster's, where a node that goes away sends no RST.
+
 ### The tree layout, precisely
 
 `radix.h` is the whole of the math, and it is worth writing down because the

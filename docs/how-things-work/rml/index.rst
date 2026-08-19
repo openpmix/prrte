@@ -184,6 +184,17 @@ final."  The recovery status is then delivered to the registered fault handlers:
 the RML's own (``rml_fault_handler.c``, which drives process states and
 death/adoption notices), followed by grpcomm, filem, and relm.
 
+Both of those notices carry the sender's view of the *other* daemon's ancestor
+list, and the receiver reconciles it against its own before acting.  That is
+what lets two daemons agree on the repaired tree in one exchange rather than
+waiting for a message addressed to a dead rank to time out: the failure notice
+a re-homed daemon sends upward reports only the failures inside its own
+subtree, and the ancestor whose death moved it is never in that set, so without
+the lineage a new parent has no way to learn why it suddenly has a child.  A
+report that cannot be reconciled is fatal coming *down* the tree — an adoption
+notice is how a daemon learns its own place — and merely dropped coming up,
+where the same news always arrives by another route.
+
 ``relm`` (the ``src/rml/relm/`` subtree) is the **reliable messaging** layer.
 ``prte_rml_send_buffer_reliable_nb`` routes through it; it drives a small state
 machine that re-sends messages over the repaired tree so that a message in

@@ -39,12 +39,6 @@ since the transport it stages over (xcast) is already resilient.  Until then,
 a daemon lost while files are in flight fails the staging rather than
 re-driving it.
 
-**A promoted daemon's failure notice does not carry its ancestor list.**  In
-``src/rml/rml_fault_handler.c``, a daemon whose parent changed reports the
-failures in its subtree upward, but not the ancestor chain it now believes
-in — so the new parent cannot confirm that the child agrees with it about the
-shape of the repaired tree.
-
 **Nobody owns marking failed procs ``COMM_FAILED``.**  The recovery
 sequence in ``src/rml/rml_fault_handler.c`` calls each subsystem's
 ``fault_handler`` in turn, and the marked question there is whether that
@@ -234,8 +228,6 @@ the marker is stale.
    * - ``rml/oob/oob_tcp_connection.c``,
        ``prte_oob_tcp_peer_recv_connect_ack``
      - a TCP peer closed rather than retried at its next address
-   * - ``rml/rml_fault_handler.c``, ``send_failures_notice``
-     - a promoted daemon's failure notice carries no ancestor list
    * - ``rml/routed_radix.c``, ``prte_rml_repair_routing_tree``
      - nobody owns marking failed procs ``COMM_FAILED``
    * - ``rml/routed_radix.c``, ``prte_rml_compute_routing_tree``
