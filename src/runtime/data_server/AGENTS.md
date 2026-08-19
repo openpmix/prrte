@@ -29,7 +29,7 @@ app proc ◀─PMIx── its prted ◀──RML(PRTE_RML_TAG_DATA_CLIENT)──
 |------|------|
 | `prte_data_server.h` | The public surface: init/finalize, the RML receive callback, and the four command codes. |
 | `ds.h` | The internal objects — `prte_data_object_t` (one published item), `prte_data_req_t` (one parked lookup), `prte_ds_info_t`, and the `prte_data_store` singleton. |
-| `ds_main.c` | `prte_data_server()` — the RML receive that unpacks the room number and command and dispatches; `prte_data_server_check_range()`; all the class instances. |
+| `ds_main.c` | `prte_data_server()` — the RML receive that unpacks the room number and command and dispatches; the access check and the two range checks; all the class instances. |
 | `ds_publish.c` | Store an item, then satisfy any parked lookups it answers. |
 | `ds_lookup.c` | Answer from the store, or park the request if the caller asked to wait. |
 | `ds_unpublish.c` | Remove the caller's own items by key. |
@@ -114,28 +114,89 @@ unpacks it; they change together.
 
 ---
 
-## Ranges — the access-control rules
+## Who may read, and who may remove
 
-`prte_data_server_check_range()` decides whether a requestor may see a
-published item. It is the only access control here, so it is worth reading
-before changing:
+Two different questions, and conflating them is what went wrong here
+before. **Reading** is decided by the publisher's access permissions and
+then by the range. **Removal** is decided by ownership alone.
 
-| `data->range` | Admits |
-|---------------|--------|
-| `SESSION`, `GLOBAL`, `UNDEF` | anyone |
-| `NAMESPACE` | any rank of the publisher's namespace |
-| `LOCAL` | requestors behind the same daemon (`req->proxy` vs `data->proxy`) |
-| `PROC_LOCAL` | the publishing process itself |
-| `RM` | our own (the host server's) namespace |
-| `CUSTOM` | **nobody** — the accessor list is not implemented |
+### Retrieval: permissions first, then range
 
-`CUSTOM` denying is deliberate, not an oversight in the tests: the function
-falls through to `return PMIX_ERROR`, which is the safe direction for an
-unimplemented rule.
+`prte_data_server_check_access()` is the first gate. Absent an accessor
+list, published data belongs to its publisher: the requestor must present
+the publisher's own uid **and** gid. A publisher that names a list —
+`PMIX_ACCESS_USERIDS`, `PMIX_ACCESS_GRPIDS`, either inside a
+`PMIX_ACCESS_PERMISSIONS` array or at the top level — replaces that
+default, and each list it gives is a **requirement**, not a grant: a
+requestor must satisfy every list present. (So a publisher whose own uid is
+absent from its own `PMIX_ACCESS_USERIDS` cannot look its own data up
+either. It can still unpublish it — see below.) A refusal is
+`PMIX_ERR_NO_PERMISSIONS`, and `ds_lookup` reports that status rather than
+`NOT_FOUND` when the key existed and only permission was lacking.
 
-Separately from the range, both publish and lookup compare `uid` — data is
-only visible to the user that posted it. That check is in the callers, not
-in `check_range`.
+A restriction the publisher gave and we cannot parse **fails the publish**.
+Storing it anyway would store the data unrestricted, which is the one
+outcome nobody asked for.
+
+This depends on PMIx handing us both ids. The library appends `PMIX_USERID`
+and `PMIX_GRPID` to the info array of every publish, lookup and unpublish —
+the gid took an openpmix change to be handed over at all (it comes from the
+peer's connection record, not from the message), and where it is missing
+both sides read `UINT32_MAX` and the rule degrades to uid-only rather than
+locking everyone out.
+
+### Then the range, in both directions
+
+The PMIx retrieval rules apply the range test twice: the requestor must
+fall within the range the *publisher* named, and the publisher must fall
+within the range the *requester* named. One predicate answers both —
+`range_admits()` in `ds_main.c`, "does `subject` fall within `range` as seen
+from `anchor`" — and the two entry points differ only in which process
+plays which role:
+
+| Entry point | Range applied | Anchor → subject |
+|-------------|---------------|------------------|
+| `prte_data_server_check_range()` | `data->range` | publisher → requestor |
+| `prte_data_server_check_search_range()` | `req->range` | requestor → publisher |
+
+| range | Admits the subject when |
+|-------|-------------------------|
+| `SESSION`, `GLOBAL`, `UNDEF` | always |
+| `NAMESPACE` | it shares the anchor's namespace |
+| `LOCAL` | it sits behind the anchor's daemon (`req->proxy` vs `data->proxy`) |
+| `PROC_LOCAL` | it *is* the anchor |
+| `RM` | it is the host environment — our own namespace |
+| `CUSTOM` | the publisher's accessor list admits it |
+
+`CUSTOM` is the one range that is not a relation between two processes: the
+accessor list *is* the range, so `check_range` answers it directly — admit
+when a list was given (the access check has already applied it), refuse when
+the publisher named nobody, since there is no other reading of a custom
+range with no custom in it. In the requester's direction there is no list to
+consult and `range_admits` refuses it.
+
+The requester's half used to be missing entirely: `ds_lookup` unpacked
+`PMIX_RANGE` and put it only on a *parked* request, where nothing read it,
+so a lookup that asked to search its own namespace searched everything its
+publishers would let it see. Both checks now run in `ds_lookup` and in
+`ds_publish`'s pending-request loop, and the default on both sides is
+`PMIX_RANGE_SESSION` — the constructors say so, which is why `rqcon` sets a
+range at all.
+
+### Removal: ownership, and nothing else
+
+`ds_unpublish` applies neither rule. **An owner may unpublish what it
+published on any range**, and the range the unpublish itself names does not
+narrow that. The test is that the requesting process *is* the owner — a
+stronger check than comparing uids, because a process identity is stamped by
+its own PMIx server rather than asserted by the caller (or, for a relay,
+claimed in `PMIX_REQUESTOR` and honored only from a tool).
+
+Gating removal on the read rule is exactly the confusion this section
+exists to prevent: it left a `PMIX_RANGE_RM` or `PMIX_RANGE_CUSTOM` item
+impossible to remove — the owner falls outside its own item's range — while
+still answering `PMIX_SUCCESS`, so the item sat in the store until its job
+ended.
 
 `data->proxy` and `req->proxy` are what the `LOCAL` rule compares, and
 `PMIX_NEW` does not zero its allocation, so both constructors have to
@@ -176,6 +237,9 @@ have a later publish trying to reply to a process that no longer exists.
 - **A stack `PMIX_CONSTRUCT`ed object needs `PMIX_DESTRUCT` on *every*
   return.** `ds_lookup` and `ds_unpublish` both build a `prte_data_req_t` on
   the stack to carry the requestor into `check_range`.
+- **An access rule is not an ownership rule.** See the section above: what
+  may be read and what may be removed are different questions, and the
+  answer to the first one refused owners their own data.
 - **No locking, and none is wanted.** Everything here runs inside the RML
   receive on the progress thread.
 - **`prte_data_store.output` is `-1` until a verbosity is registered**, so
@@ -186,15 +250,24 @@ have a later publish trying to reply to a process that no longer exists.
 
 ## Testing
 
-**Unit — `test/unit/runtime/test_runtime.c`.** `prte_data_server_check_range`
-against every range value in both directions, and the object constructors'
-initialization contract. Neither needs the RML.
+**Unit — `test/unit/runtime/test_runtime.c`.** Both range checks against
+every range value in both directions — `prte_data_server_check_range` from
+the publisher's side and `prte_data_server_check_search_range` from the
+requester's — and the object constructors' initialization contract,
+including the `PMIX_RANGE_SESSION` default a request carries. Neither needs
+the RML.
 
 **Multi-node — `contrib/dockerswarm`, the `test_runtime` phase.** The store
 is on the HNP and the clients are elsewhere, so the interesting paths only
 exist with real daemons: a publish on one node found by a lookup on another,
-the range and userid rules between real processes, unpublish, and the
-`PMIX_WAIT` path where a lookup parks until a later publish satisfies it.
+the range and access rules between real processes, a namespace-scoped lookup
+that must *not* reach another job's data, an accessor list that admits or
+refuses a real reader (and is answered with `PMIX_ERR_NO_PERMISSIONS`),
+unpublish — including an owner removing data published on a range it does
+not itself fall within — and the `PMIX_WAIT` path where a lookup parks
+until a later publish satisfies it. The `dataserver` helper takes the
+publish range, the unpublish range and an access spec as separate arguments
+for those cases.
 
 The **external** data server is multi-node coverage by construction — the
 whole point is a namespace boundary, and one DVM has none. `test_runtime`
@@ -205,9 +278,11 @@ by a publish in the other, that an ended job's data is purged from the server
 and that the purge takes *only* that job's data — plus the control, that a
 DVM which was not given the URI sees none of it.
 
-**Not covered:** `PMIX_RANGE_CUSTOM` (no accessor list exists to test),
-`PMIX_PERSIST_FIRST_READ` end-to-end, and `ds_purge` (which is driven by
-process termination rather than by a client call).
+**Not covered:** `PMIX_PERSIST_FIRST_READ` end-to-end, and `ds_purge` (which
+is driven by process termination rather than by a client call). Access
+permissions are covered only with the harness running as a single user, so
+what the swarm proves is that a list naming *somebody else* keeps us out —
+not that a genuinely different uid gets in.
 
 A note on the partial-lookup case, because it took both code bases to make
 it work. PRRTE returning the status *and* the values it found is only half
