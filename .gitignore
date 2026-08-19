@@ -11,9 +11,9 @@ cov-int
 # Out-of-tree (VPATH) build dirs.  vpath-linux/vpath-macos are the ones
 # contrib/dockerswarm/build.sh creates; build/ is the conventional name
 # for your own, which AGENTS.md tells you to use rather than configuring
-# in the source tree.
-/vpath-linux/
-/vpath-macos/
+# in the source tree.  Any other vpath-* is a build against some other
+# dependency - a PMIx from a topic branch, say - and is equally yours.
+/vpath-*/
 /build/
 
 .hgrc
