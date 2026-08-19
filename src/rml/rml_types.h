@@ -361,6 +361,23 @@ typedef struct {
                        //   up, not necessarily related to failures
 } prte_rml_routed_tree_node_t;
 
+/* Outcome of reconciling a peer's report of THIS daemon's ancestor list
+ * against our own view of it - see prte_rml_reconcile_ancestry(). */
+typedef enum {
+    /* The two views agree once our own failure knowledge has been applied to
+     * the report: the peer told us nothing we did not already know. */
+    PRTE_RML_ANCESTRY_AGREED,
+    /* The peer knows of ancestor deaths we do not.  The inferred array holds
+     * the ranks that must have failed for its view to be the correct one. */
+    PRTE_RML_ANCESTRY_INFERRED,
+    /* Reconciling would require declaring a rank dead that has RETURNED, so
+     * the report necessarily predates the return and says nothing current.
+     * A race to be ignored, not an error. */
+    PRTE_RML_ANCESTRY_STALE,
+    /* No set of ancestor deaths reconciles the two views. */
+    PRTE_RML_ANCESTRY_INCONSISTENT
+} prte_rml_ancestry_t;
+
 /* struct for passing information about a daemon fault to MCA components */
 typedef struct {
     pmix_object_t super;

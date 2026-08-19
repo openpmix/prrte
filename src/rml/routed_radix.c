@@ -270,6 +270,10 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global){
             } else {
                 pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, r);
             }
+            // A rank we are now recording as departed is no longer one whose
+            // return has to be protected from being inferred away, so let the
+            // mark go. It is re-set if the rank returns again.
+            pmix_bitmap_clear_bit(&prte_rml_base.revived_dmns, r);
         }
         ((pmix_rank_t*)status.failed_ranks.array)[j++] = r;
     }
@@ -395,6 +399,10 @@ void prte_rml_revive_routing_tree(pmix_rank_t rank){
     pmix_bitmap_clear_bit(&prte_rml_base.failed_dmns, rank);
     pmix_bitmap_clear_bit(&prte_rml_base.global_failed_dmns, rank);
     pmix_bitmap_clear_bit(&prte_rml_base.absent_dmns, rank);
+    // Remember that it came back. A lineage reported to us by a peer whose
+    // view predates this xcast would otherwise let us infer the rank dead
+    // again - see prte_rml_reconcile_ancestry.
+    pmix_bitmap_set_bit(&prte_rml_base.revived_dmns, rank);
 
     // Rebuild from the base positions with the returned rank now living: it
     // re-takes its slot above us if it was our ancestor (demoting us), or

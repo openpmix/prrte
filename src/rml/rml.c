@@ -56,6 +56,7 @@ prte_rml_base_t prte_rml_base = {
     .global_failed_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
     .dead_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
     .absent_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
+    .revived_dmns = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
     .lateral_links = { .super = PMIX_OBJ_STATIC_INIT(pmix_bitmap_t) },
     .lateral_lost_cb = NULL,
     .peer_epochs = NULL,
@@ -325,6 +326,7 @@ void prte_rml_close(void)
     PMIX_DESTRUCT(&prte_rml_base.global_failed_dmns);
     PMIX_DESTRUCT(&prte_rml_base.dead_dmns);
     PMIX_DESTRUCT(&prte_rml_base.absent_dmns);
+    PMIX_DESTRUCT(&prte_rml_base.revived_dmns);
     PMIX_DESTRUCT(&prte_rml_base.lateral_links);
     if (NULL != prte_rml_base.peer_epochs) {
         free(prte_rml_base.peer_epochs);
@@ -366,6 +368,12 @@ int prte_rml_open(void)
      * comes back (the unheal path). Initialized once here for the same reason. */
     PMIX_CONSTRUCT(&prte_rml_base.absent_dmns, pmix_bitmap_t);
     pmix_bitmap_init(&prte_rml_base.absent_dmns, prte_process_info.num_daemons);
+    /* revived_dmns records the ranks that have come back, so that a peer's
+     * report of our lineage - which may predate the return - can never be the
+     * thing that declares one of them dead again. Constructed once here for
+     * the same reason as the two above. */
+    PMIX_CONSTRUCT(&prte_rml_base.revived_dmns, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.revived_dmns, prte_process_info.num_daemons);
     /* lateral_links records the peers we hold a non-tree connection to. Like
      * the two above it is constructed once and never re-initialized by a
      * routing recompute: a grow reshapes the tree but does not dissolve the
