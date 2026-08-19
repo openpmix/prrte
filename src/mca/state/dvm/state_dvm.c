@@ -270,6 +270,7 @@ static void vm_ready(int fd, short args, void *cbdata)
     prte_job_t *jptr;
     prte_proc_t *dmn;
     int32_t v;
+    uint32_t epoch;
     pmix_value_t *val, *sval;
     pmix_status_t ret;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
@@ -308,6 +309,33 @@ static void vm_ready(int fd, short args, void *cbdata)
             rc = prte_util_pack_job_catchup(&buf, caddy->jdata);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_DESTRUCT(&buf);
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+                PMIX_RELEASE(caddy);
+                return;
+            }
+
+            /* ...and the collective recovery epoch this DVM has reached.  A
+             * daemon that just joined starts at zero, and every fence or group
+             * contribution it makes is then dropped as stale by daemons that
+             * have recovered from a failure - or from an elastic shrink, which
+             * departs its daemon through the same machinery.  It cannot learn
+             * the epoch from the failure notices that moved it: those were
+             * broadcast while this daemon either did not exist or had not yet
+             * reported in, and a broadcast to a daemon with no contact info is
+             * dropped by design (prte_oob_base_send_nb).  This message is
+             * built only once every expected daemon HAS reported, so it is the
+             * first thing that can carry the value to one of them.  Daemons
+             * already at this epoch take it as a no-op.
+             *
+             * The epoch we have applied, rather than the last one issued: a
+             * notice still in flight will also reach the new daemon, which is
+             * routable by now, and the epoch is adopted by highest value seen
+             * so the two orders agree. */
+            epoch = prte_grpcomm_current_epoch();
+            rc = PMIx_Data_pack(NULL, &buf, &epoch, 1, PMIX_UINT32);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_DESTRUCT(&buf);
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 PMIX_RELEASE(caddy);

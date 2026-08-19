@@ -1054,6 +1054,23 @@ static void process_wireup(pmix_data_buffer_t *msg){
        return;
     }
 
+    /* the collective recovery epoch the DVM has reached.  This is how a daemon
+     * that joined an already-recovered DVM learns it: the failure notices that
+     * moved the epoch were broadcast before this daemon was routable, so they
+     * never arrived, and its contributions would be dropped as stale forever
+     * after (see the epoch member of prte_rml_recovery_status_t).  Adopting is
+     * by highest value seen, so a daemon already at or past this one is
+     * unaffected and no in-flight notice can be undone by a late wireup. */
+    uint32_t epoch = 0;
+    int ecnt = 1;
+    ret = PMIx_Data_unpack(NULL, msg, &epoch, &ecnt, PMIX_UINT32);
+    if(PMIX_SUCCESS != ret){
+       PMIX_ERROR_LOG(ret);
+       PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+       return;
+    }
+    prte_grpcomm_advance_epoch(epoch);
+
     pmix_value_t val = PMIX_VALUE_STATIC_INIT;
     pmix_value_t sval = PMIX_VALUE_STATIC_INIT;
     pmix_proc_t dmn;
