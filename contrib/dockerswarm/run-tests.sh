@@ -1612,6 +1612,21 @@ test_runtime() {
                 && ok "...and the reply carried the publisher's identity" \
                 || bad "the reply did not name the data owner: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
 
+            banner "runtime/data_server: a lookup's own range constrains the search"
+            # The PMIx retrieval rules apply the range TWICE: the publisher's
+            # says who may see the item, and the requester's says whose items
+            # it is willing to see.  ds_lookup used to unpack the requester's
+            # range and put it only on a PARKED request, where nothing ever
+            # read it - so an immediate lookup searched everything the
+            # publishers would let it see, whatever it had asked for.
+            #
+            # Each prun gets its own namespace, so a NAMESPACE-range lookup
+            # from a different job must not reach this SESSION-range item.
+            out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.k1 15 namespace" 2>&1)
+            echo "$out" | grep -q '^FOUND prte.test.k1' \
+                && bad "a namespace-scoped lookup reached another namespace's data" \
+                || ok "a namespace-scoped lookup did not reach another namespace's data"
+
             banner "runtime/data_server: a key nobody published is NOT_FOUND, not a hang"
             # A miss travels the same path and has to come back as a status.
             # ds_lookup used to have exits that returned without sending
@@ -1710,6 +1725,53 @@ test_runtime() {
         [ "$n" = 1 ] \
             && ok "...and the key was gone afterwards" \
             || bad "the key survived the unpublish (FOUND $n times)"
+
+        banner "runtime/data_server: an owner may unpublish on any range"
+        # Removal is a question of OWNERSHIP, not of access: the publisher
+        # may take back what it published whatever range it went out on, and
+        # whatever range the unpublish itself names.  This used to be gated
+        # on the read rule, so an owner could not remove data published to a
+        # range it does not itself fall within (PMIX_RANGE_RM admits only the
+        # host's namespace, PMIX_RANGE_CUSTOM only the accessors it named) --
+        # and was told SUCCESS while the item stayed in the store.
+        out=$(PRUN "--host node2:1 -n 1 $DS unpublish prte.test.rng 15 global session" 2>&1)
+        n=$(echo "$out" | grep -c '^FOUND prte.test.rng')
+        [ "$n" = 1 ] \
+            && ok "an owner unpublished its GLOBAL-range data naming SESSION" \
+            || bad "an owner could not remove its own data (FOUND $n times): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+        banner "runtime/data_server: access permissions decide who may read"
+        # Absent an accessor list, published data belongs to its publisher:
+        # only the publisher's own uid and gid may read it.  A list -- given
+        # here as PMIX_ACCESS_USERIDS inside a PMIX_ACCESS_PERMISSIONS array,
+        # or PMIX_ACCESS_GRPIDS at the top level -- replaces that default with
+        # a requirement, and a requestor that fails it is told
+        # PMIX_ERR_NO_PERMISSIONS rather than "not found".
+        #
+        # Every container here runs as the same user, so the discriminating
+        # case is a list naming somebody else: what it proves is that the
+        # publisher's list is read and enforced, not merely stored.
+        for spec in self-uid other-uid self-gid other-gid; do
+            PRUN_BG /tmp/ds-acc-$spec.out \
+                "--host node2:1 -n 1 $DS publish prte.test.acc.$spec val session 60 $spec"
+        done
+        sleep 8
+        for spec in self-uid self-gid; do
+            out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.acc.$spec 15" 2>&1)
+            echo "$out" | grep -q "^FOUND prte.test.acc.$spec" \
+                && ok "a list naming our own identity ($spec) admits the reader" \
+                || bad "a permitted reader was refused ($spec): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        done
+        for spec in other-uid other-gid; do
+            out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.acc.$spec 15" 2>&1)
+            echo "$out" | grep -q "^FOUND prte.test.acc.$spec" \
+                && bad "a list naming somebody else ($spec) did not keep us out" \
+                || ok "a list naming somebody else ($spec) refused the reader"
+            echo "$out" | grep -q 'STATUS PMIX_ERR_NO_PERMISSIONS' \
+                && ok "...and said so with NO_PERMISSIONS, not NOT_FOUND" \
+                || bad "a refusal was not reported as NO_PERMISSIONS ($spec): $(echo "$out" | grep '^STATUS' | tr -d '\r')"
+        done
+
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     fi
     cleanup_swarm

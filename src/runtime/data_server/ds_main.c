@@ -266,71 +266,165 @@ void prte_ds_check_requestor(pmix_proc_t *owner, const pmix_info_t *info)
     PMIX_XFER_PROCID(owner, info->value.data.proc);
 }
 
+/* One range rule, applied in both directions.
+ *
+ * The PMIx retrieval rules for published data impose the range test
+ * twice: the publisher's range says who may see the item, and the
+ * requester's range says whose items it is willing to see.  Both ask the
+ * same question - does "subject" fall within "range" as seen from
+ * "anchor" - so both are answered here, with the caller deciding which
+ * process plays which role.
+ *
+ * This is an ACCESS rule: it says who may read an item.  It is therefore
+ * the wrong test for who may REMOVE one, which is a question of
+ * ownership - see ds_unpublish.c. */
+static pmix_status_t range_admits(pmix_data_range_t range,
+                                  const pmix_proc_t *anchor,
+                                  const pmix_proc_t *anchor_proxy,
+                                  const pmix_proc_t *subject,
+                                  const pmix_proc_t *subject_proxy)
+{
+    bool match;
+
+    switch (range) {
+    case PMIX_RANGE_UNDEF:
+    case PMIX_RANGE_SESSION:
+    case PMIX_RANGE_GLOBAL:
+        // open to everyone
+        match = true;
+        break;
+
+    case PMIX_RANGE_NAMESPACE:
+        match = PMIX_CHECK_NSPACE(anchor->nspace, subject->nspace);
+        break;
+
+    case PMIX_RANGE_LOCAL:
+        // the two must sit behind the same daemon
+        match = PMIX_CHECK_PROCID(anchor_proxy, subject_proxy);
+        break;
+
+    case PMIX_RANGE_PROC_LOCAL:
+        match = PMIX_CHECK_PROCID(anchor, subject);
+        break;
+
+    case PMIX_RANGE_RM:
+        /* the subject must be the host environment - which means its
+         * nspace must match that of the host's server, which is my own */
+        match = PMIX_CHECK_NSPACE(subject->nspace, PRTE_PROC_MY_NAME->nspace);
+        break;
+
+    case PMIX_RANGE_CUSTOM:
+        /* a CUSTOM range is the publisher's accessor list, and only a
+         * publisher has one - see prte_data_server_check_range(), which
+         * answers this case before we are reached.  In the other
+         * direction, where the anchor is a requestor asking us to search,
+         * there is no list to consult and nothing it could mean */
+        match = false;
+        break;
+
+    default:
+        match = false;
+        break;
+    }
+
+    pmix_output_verbose(10, prte_data_store.output,
+                        "%s\tRANGE %s ANCHOR %s SUBJECT %s: %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PMIx_Data_range_string(range),
+                        PMIX_NAME_PRINT(anchor),
+                        PMIX_NAME_PRINT(subject),
+                        match ? "ADMIT" : "DENY");
+
+    return match ? PMIX_SUCCESS : PMIX_ERROR;
+}
+
+/* the publisher's range: may this requestor see this item? */
 pmix_status_t prte_data_server_check_range(prte_data_req_t *req,
                                            prte_data_object_t *data)
 {
-    // we automatically accept session and global ranges
-    if (PMIX_RANGE_SESSION == data->range ||
-        PMIX_RANGE_GLOBAL == data->range ||
-        PMIX_RANGE_UNDEF == data->range) {
+    if (PMIX_RANGE_CUSTOM == data->range) {
+        /* for CUSTOM the accessor list IS the range - "available only to
+         * processes as specified in the pmix_info_t associated with this
+         * call".  So admit whoever the list admits, which
+         * prte_data_server_check_access() decides, and refuse everyone
+         * when the publisher named nobody: there is no other reading of a
+         * custom range with no custom in it. */
+        if (0 == data->nauids && 0 == data->nagids) {
+            return PMIX_ERROR;
+        }
         return PMIX_SUCCESS;
     }
+    return range_admits(data->range, &data->owner, &data->proxy,
+                        &req->requestor, &req->proxy);
+}
 
-    if (PMIX_RANGE_NAMESPACE == data->range) {
-        if (PMIX_CHECK_NSPACE(req->requestor.nspace, data->owner.nspace)) {
-            pmix_output_verbose(10, prte_data_store.output,
-                                "%s\tMATCH NSPACES %s %s",
-                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                req->requestor.nspace,
-                                data->owner.nspace);
+/* the publisher's access permissions: may this requestor's uid and gid see
+ * this item?  See the header for the rule; note that a list the publisher
+ * gave is a REQUIREMENT, so a publisher whose own uid is not on its own
+ * PMIX_ACCESS_USERIDS list cannot look its own data up either.  Removing it
+ * is a separate question, answered by ownership - see ds_unpublish.c. */
+pmix_status_t prte_data_server_check_access(prte_data_req_t *req,
+                                            prte_data_object_t *data)
+{
+    size_t n;
+    bool found;
+
+    if (0 == data->nauids && 0 == data->nagids) {
+        /* no accessors named: the data belongs to whoever published it */
+        if (req->uid == data->uid && req->gid == data->gid) {
             return PMIX_SUCCESS;
         }
+        pmix_output_verbose(10, prte_data_store.output,
+                            "%s\tACCESS DENY owner %u/%u requestor %u/%u",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            (unsigned) data->uid, (unsigned) data->gid,
+                            (unsigned) req->uid, (unsigned) req->gid);
+        return PMIX_ERR_NO_PERMISSIONS;
     }
-    if (PMIX_RANGE_LOCAL == data->range) {
-        // the sender is the requestor's daemon, so see if
-        // that matches the published data's proxy
-        if (PMIX_CHECK_PROCID(&data->proxy, &req->proxy)) {
-            pmix_output_verbose(10, prte_data_store.output,
-                                "%s\tMATCH LOCATION %s %s",
-                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                PMIX_NAME_PRINT(&data->proxy),
-                                PMIX_NAME_PRINT(&req->proxy));
-            return PMIX_SUCCESS;
+
+    if (0 < data->nauids) {
+        found = false;
+        for (n = 0; n < data->nauids; n++) {
+            if (data->auids[n] == req->uid) {
+                found = true;
+                break;
+            }
         }
-    }
-    if (PMIX_RANGE_PROC_LOCAL == data->range) {
-        // the requestor must be the same as the owner
-        if (PMIX_CHECK_PROCID(&data->owner, &req->requestor)) {
+        if (!found) {
             pmix_output_verbose(10, prte_data_store.output,
-                                "%s\tMATCH LOCAL %s %s",
+                                "%s\tACCESS DENY uid %u not permitted",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                PMIX_NAME_PRINT(&data->owner),
-                                PMIX_NAME_PRINT(&req->requestor));
-            return PMIX_SUCCESS;
-        }
-    }
-
-    if (PMIX_RANGE_CUSTOM == data->range) {
-        // requestor must be on the list of allowed accessors
-
-    }
-
-    if (PMIX_RANGE_RM == data->range) {
-        // the requestor must be from the host - which means
-        // the nspace of the requestor must match that of
-        // the host's server, which is my own
-        if (PMIX_CHECK_NSPACE(req->requestor.nspace, PRTE_PROC_MY_NAME->nspace)) {
-            pmix_output_verbose(10, prte_data_store.output,
-                                "%s\tMATCH RM %s %s",
-                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                req->requestor.nspace,
-                                PRTE_PROC_MY_NAME->nspace);
-            return PMIX_SUCCESS;
+                                (unsigned) req->uid);
+            return PMIX_ERR_NO_PERMISSIONS;
         }
     }
 
-    // no matches
-    return PMIX_ERROR;
+    if (0 < data->nagids) {
+        found = false;
+        for (n = 0; n < data->nagids; n++) {
+            if (data->agids[n] == req->gid) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            pmix_output_verbose(10, prte_data_store.output,
+                                "%s\tACCESS DENY gid %u not permitted",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                (unsigned) req->gid);
+            return PMIX_ERR_NO_PERMISSIONS;
+        }
+    }
+
+    return PMIX_SUCCESS;
+}
+
+/* the requester's range: is this publisher one it asked to search? */
+pmix_status_t prte_data_server_check_search_range(prte_data_req_t *req,
+                                                  prte_data_object_t *data)
+{
+    return range_admits(req->range, &req->requestor, &req->proxy,
+                        &data->owner, &data->proxy);
 }
 
 // CLASS INSTANCE
@@ -344,6 +438,11 @@ static void construct(prte_data_object_t *ptr)
     PMIX_PROC_CONSTRUCT(&ptr->proxy);
     PMIX_PROC_CONSTRUCT(&ptr->owner);
     ptr->uid = UINT32_MAX;
+    ptr->gid = UINT32_MAX;
+    ptr->auids = NULL;
+    ptr->nauids = 0;
+    ptr->agids = NULL;
+    ptr->nagids = 0;
     ptr->range = PMIX_RANGE_SESSION;
     ptr->persistence = PMIX_PERSIST_SESSION;
     PMIX_CONSTRUCT(&ptr->info, pmix_list_t);
@@ -351,6 +450,12 @@ static void construct(prte_data_object_t *ptr)
 
 static void destruct(prte_data_object_t *ptr)
 {
+    if (NULL != ptr->auids) {
+        free(ptr->auids);
+    }
+    if (NULL != ptr->agids) {
+        free(ptr->agids);
+    }
     PMIX_LIST_DESTRUCT(&ptr->info);
 }
 
@@ -366,7 +471,10 @@ static void rqcon(prte_data_req_t *p)
     p->room_number = -1;
     p->keys = NULL;
     p->uid = UINT32_MAX;
-    p->range = PMIX_RANGE_UNDEF;
+    p->gid = UINT32_MAX;
+    /* the default range for a lookup or an unpublish is SESSION - the
+     * same default the publish side carries */
+    p->range = PMIX_RANGE_SESSION;
 }
 static void rqdes(prte_data_req_t *p)
 {

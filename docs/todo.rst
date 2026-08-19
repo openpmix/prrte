@@ -32,12 +32,6 @@ Runtime behavior
 surface exists for SLURM only.  Everything above the component is
 RM-agnostic; what is missing is the Flux-side conversation.
 
-**``PMIX_RANGE_CUSTOM`` denies everyone.**  The data server's ``check_range``
-has no accessor-list implementation and falls through to ``PMIX_ERROR``
-(``src/runtime/data_server/``).  Denying is the safe direction for an
-unimplemented rule, and it is the reason a publisher cannot express "these
-specific processes may read this".
-
 **``filem/raw`` does not survive losing a daemon mid-staging.**  Its fault
 handler is deliberately minimal (``src/mca/filem/raw/filem_raw_module.c``);
 the note in place observes that the real thing should be straightforward,
@@ -219,11 +213,10 @@ Every marker in the code
 
 The list above is meant to be the whole of it: a ``TODO``, ``FIXME`` or
 ``XXX`` left in PRRTE's own sources should have an entry here in prose — and
-so should an arm deliberately left empty, like the data server's
-``PMIX_RANGE_CUSTOM`` case, which carries no keyword at all — and this table
-is what makes that checkable.  If you leave a marker, add the entry; if you
-find a marker this table does not name, either the entry or the marker is
-stale.
+so should an arm deliberately left empty, which carries no keyword at all —
+and this table is what makes that checkable.  If you leave a marker, add the
+entry; if you find a marker this table does not name, either the entry or
+the marker is stale.
 
 .. list-table::
    :header-rows: 1
@@ -266,9 +259,6 @@ stale.
      - nothing records who is "connected"
    * - ``mca/ras/flux/ras_flux_module.c``, ``modify``
      - ``ras/flux`` has no ``modify()``
-   * - ``runtime/data_server/ds_main.c``,
-       ``prte_data_server_check_range``
-     - ``PMIX_RANGE_CUSTOM`` denies everyone
 
 Two families of marker are **not** ours, and are deliberately absent from
 that table: the ``TODO`` comments in ``hostfile_lex.c`` and

@@ -49,6 +49,88 @@
 #include "src/runtime/data_server/prte_data_server.h"
 #include "src/runtime/data_server/ds.h"
 
+/* Load a uid/gid list out of an access-permission directive.  The Standard
+ * types these as a pmix_data_array_t of the ids; a single id given as a
+ * plain PMIX_UINT32 is accepted too, since refusing it would only push
+ * publishers into building a one-element array.  Anything else is a
+ * restriction we cannot read, and a restriction we cannot read has to fail
+ * the publish - never be silently dropped, which would store the data with
+ * no restriction at all. */
+static pmix_status_t load_ids(const pmix_value_t *val, uint32_t **ids, size_t *nids)
+{
+    pmix_data_array_t *array;
+    uint32_t *dst;
+
+    if (PMIX_UINT32 == val->type) {
+        dst = (uint32_t *) malloc(sizeof(uint32_t));
+        if (NULL == dst) {
+            return PMIX_ERR_NOMEM;
+        }
+        dst[0] = val->data.uint32;
+        if (NULL != *ids) {
+            free(*ids);
+        }
+        *ids = dst;
+        *nids = 1;
+        return PMIX_SUCCESS;
+    }
+
+    if (PMIX_DATA_ARRAY != val->type) {
+        return PMIX_ERR_BAD_PARAM;
+    }
+    array = val->data.darray;
+    if (NULL == array || NULL == array->array || 0 == array->size ||
+        PMIX_UINT32 != array->type) {
+        return PMIX_ERR_BAD_PARAM;
+    }
+    dst = (uint32_t *) malloc(array->size * sizeof(uint32_t));
+    if (NULL == dst) {
+        return PMIX_ERR_NOMEM;
+    }
+    memcpy(dst, array->array, array->size * sizeof(uint32_t));
+    if (NULL != *ids) {
+        free(*ids);
+    }
+    *ids = dst;
+    *nids = array->size;
+    return PMIX_SUCCESS;
+}
+
+/* Unpack a PMIX_ACCESS_PERMISSIONS directive - an array of pmix_info_t
+ * naming the permissions - onto the data object. */
+static pmix_status_t load_permissions(const pmix_value_t *val,
+                                      prte_data_object_t *data)
+{
+    pmix_data_array_t *array;
+    pmix_info_t *iptr;
+    pmix_status_t rc;
+    size_t n;
+
+    if (PMIX_DATA_ARRAY != val->type) {
+        return PMIX_ERR_BAD_PARAM;
+    }
+    array = val->data.darray;
+    if (NULL == array || NULL == array->array || 0 == array->size ||
+        PMIX_INFO != array->type) {
+        return PMIX_ERR_BAD_PARAM;
+    }
+    iptr = (pmix_info_t *) array->array;
+    for (n = 0; n < array->size; n++) {
+        if (PMIx_Check_key(iptr[n].key, PMIX_ACCESS_USERIDS)) {
+            rc = load_ids(&iptr[n].value, &data->auids, &data->nauids);
+        } else if (PMIx_Check_key(iptr[n].key, PMIX_ACCESS_GRPIDS)) {
+            rc = load_ids(&iptr[n].value, &data->agids, &data->nagids);
+        } else {
+            /* a permission we do not know how to enforce */
+            rc = PMIX_ERR_BAD_PARAM;
+        }
+        if (PMIX_SUCCESS != rc) {
+            return rc;
+        }
+    }
+    return PMIX_SUCCESS;
+}
+
 pmix_status_t prte_ds_publish(pmix_proc_t *sender,
                               pmix_data_buffer_t *buffer,
                               pmix_data_buffer_t *answer)
@@ -120,6 +202,7 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
     }
 
     /* check for directives */
+    ret = PMIX_SUCCESS;
     for (n = 0; n < ninfo; n++) {
         if (PMIx_Check_key(info[n].key, PMIX_RANGE)) {
             data->range = info[n].value.data.range;
@@ -127,6 +210,16 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
             data->persistence = info[n].value.data.persist;
         } else if (PMIx_Check_key(info[n].key, PMIX_USERID)) {
             data->uid = info[n].value.data.uint32;
+        } else if (PMIx_Check_key(info[n].key, PMIX_GRPID)) {
+            data->gid = info[n].value.data.uint32;
+        } else if (PMIx_Check_key(info[n].key, PMIX_ACCESS_PERMISSIONS)) {
+            ret = load_permissions(&info[n].value, data);
+        } else if (PMIx_Check_key(info[n].key, PMIX_ACCESS_USERIDS)) {
+            /* the Standard puts these inside PMIX_ACCESS_PERMISSIONS, but
+             * they are self-describing enough to honor at the top level */
+            ret = load_ids(&info[n].value, &data->auids, &data->nauids);
+        } else if (PMIx_Check_key(info[n].key, PMIX_ACCESS_GRPIDS)) {
+            ret = load_ids(&info[n].value, &data->agids, &data->nagids);
         } else if (PMIx_Check_key(info[n].key, PMIX_REQUESTOR)) {
             /* a relay publishing on behalf of a process in its own DVM */
             prte_ds_check_requestor(&data->owner, &info[n]);
@@ -135,6 +228,14 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
             ds1 = PMIX_NEW(prte_info_item_t);
             PMIX_INFO_XFER(&ds1->info, &info[n]);
             pmix_list_append(&data->info, &ds1->super);
+        }
+        if (PMIX_SUCCESS != ret) {
+            /* an access restriction we could not read.  Storing the data
+             * anyway would store it unrestricted, so refuse the publish */
+            PMIX_ERROR_LOG(ret);
+            PMIX_INFO_FREE(info, ninfo);
+            PMIX_RELEASE(data);
+            return ret;
         }
     }
     /* the values we keep were copied into the data object above, so the
@@ -154,11 +255,16 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
     rc = PRTE_SUCCESS;
     PMIX_LIST_FOREACH_SAFE(req, rqnext, &prte_data_store.pending, prte_data_req_t)
     {
-        if (req->uid != data->uid) {
+        /* the same three tests an immediate lookup applies, in the same
+         * order: the publisher's access permissions, then its range, then
+         * the range the requestor asked us to search */
+        if (PMIX_SUCCESS != prte_data_server_check_access(req, data)) {
             continue;
         }
-        /* check the range */
         if (PMIX_SUCCESS != prte_data_server_check_range(req, data)) {
+            continue;
+        }
+        if (PMIX_SUCCESS != prte_data_server_check_search_range(req, data)) {
             continue;
         }
 

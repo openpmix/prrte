@@ -132,13 +132,12 @@ pmix_status_t prte_ds_unpublish(pmix_proc_t *sender,
             PMIX_DESTRUCT(&rq);
             return rc;
         }
-        /* scan the directives for things we care about */
+        /* Scan the directives for things we care about, which for a
+         * removal is only who is asking.  PMIX_RANGE and the caller's
+         * uid/gid say who may READ an item; an owner may take back what it
+         * published on any range, so neither is consulted here. */
         for (n = 0; n < ninfo; n++) {
-            if (PMIx_Check_key(info[n].key, PMIX_USERID)) {
-                rq.uid = info[n].value.data.uint32;
-            } else if (PMIx_Check_key(info[n].key, PMIX_RANGE)) {
-                rq.range = info[n].value.data.range;
-            } else if (PMIx_Check_key(info[n].key, PMIX_REQUESTOR)) {
+            if (PMIx_Check_key(info[n].key, PMIX_REQUESTOR)) {
                 /* a relay unpublishing on behalf of a process in its own
                  * DVM.  This must be honored before the ownership test
                  * below, which is what says only the publisher may remove
@@ -158,19 +157,25 @@ pmix_status_t prte_ds_unpublish(pmix_proc_t *sender,
             if (NULL == data) {
                 continue;
             }
-            /* can only access data posted by the same user id */
-            if (rq.uid != data->uid) {
-                continue;
-            }
-            /* can only access data posted by the same process */
+            /* only the publishing process may remove its own data - a
+             * stronger test than comparing uids, and the one that matters:
+             * a process identity is stamped by its own PMIx server (or, for
+             * a relay, claimed in PMIX_REQUESTOR and honored only from a
+             * tool), not asserted by the caller */
             if (!PMIX_CHECK_NSPACE(rq.requestor.nspace, data->owner.nspace) ||
                 rq.requestor.rank != data->owner.rank) {
                 continue;
             }
-            /* check the range */
-            if (PMIX_SUCCESS != prte_data_server_check_range(&rq, data)) {
-                continue;
-            }
+            /* Ownership is the whole rule for removal, and the test above
+             * has just established it: an owner may unpublish what it
+             * published on ANY range.  Range and access permissions govern
+             * who may READ an item, and neither belongs here - applying
+             * the read rule refused an owner its own data whenever the
+             * range was one the owner does not itself fall within (a
+             * PMIX_RANGE_RM item admits only the host's namespace, a
+             * PMIX_RANGE_CUSTOM one only the accessors it named), while
+             * still answering SUCCESS, and the item then sat in the store
+             * until its job ended. */
             /* see if we have this key */
             PMIX_LIST_FOREACH_SAFE(ds1, ds2, &data->info, prte_info_item_t) {
                 if (PMIx_Check_key(ds1->info.key, rq.keys[i])) {

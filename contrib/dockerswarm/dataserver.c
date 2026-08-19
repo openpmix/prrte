@@ -11,10 +11,19 @@
  * dataserver -- a minimal PMIx client for exercising PRRTE's publish/lookup
  * data server (src/runtime/data_server/) across nodes.
  *
- *   dataserver publish <key> <value> [range] [seconds]
+ *   dataserver publish <key> <value> [range] [seconds] [access]
  *       PMIx_Publish the key, print "PUBLISHED <key>", then stay alive for
  *       <seconds> (the data lives as long as the publisher does, and a
  *       lookup has to find it while it is there).
+ *
+ *       <access> names an access-permission list to publish with:
+ *         self-uid / other-uid   PMIX_ACCESS_USERIDS holding our own
+ *                                effective uid, or one that is not ours,
+ *                                inside a PMIX_ACCESS_PERMISSIONS array
+ *         self-gid / other-gid   PMIX_ACCESS_GRPIDS at the top level,
+ *                                holding our own effective gid or another
+ *       Absent a list, published data is readable only by its publisher's
+ *       own uid and gid, which is the default the data server applies.
  *
  *   dataserver lookup <key> [seconds] [range]
  *       PMIx_Lookup with no wait.  Prints one "FOUND <key> <value>" line per
@@ -34,10 +43,15 @@
  * instance rather than to the HNP (see pmix_server_pub.c), so it is only
  * reachable by a lookup carrying the same range.
  *
- *   dataserver unpublish <key> [seconds]
+ *   dataserver unpublish <key> [seconds] [pubrange] [unpubrange]
  *       Publish, then unpublish, then look up - all from one process, since
  *       only the publisher may unpublish its own data.  Prints
  *       "UNPUBLISHED" and then the lookup outcome.
+ *
+ *       The two ranges are separate on purpose.  Duplicate keys are allowed
+ *       on different ranges, so an unpublish removes only what was published
+ *       to the range IT names (PMIX_RANGE_SESSION when it names none) - give
+ *       the two arguments different values and the item must survive.
  *
  * <range> is one of session (default), namespace, local, proc-local, global.
  *
@@ -80,11 +94,60 @@ static pmix_data_range_t parse_range(const char *s)
     return PMIX_RANGE_SESSION;
 }
 
+/* Load the access-permission directive named by <access> into *info.
+ * Returns the number of directives loaded (0 or 1).  The uid form is
+ * nested inside PMIX_ACCESS_PERMISSIONS and the gid form is given at the
+ * top level, so the two spellings the data server accepts both get
+ * exercised. */
+static size_t load_access(const char *access, pmix_info_t *info)
+{
+    pmix_data_array_t *ids, *perms;
+    uint32_t *idp;
+    pmix_info_t *ip;
+
+    if (NULL == access) {
+        return 0;
+    }
+
+    PMIX_DATA_ARRAY_CREATE(ids, 1, PMIX_UINT32);
+    idp = (uint32_t *) ids->array;
+
+    if (0 == strcmp(access, "self-uid") || 0 == strcmp(access, "other-uid")) {
+        idp[0] = (uint32_t) geteuid();
+        if ('o' == access[0]) {
+            idp[0] += 1;
+        }
+        /* wrap it in a PMIX_ACCESS_PERMISSIONS array */
+        PMIX_DATA_ARRAY_CREATE(perms, 1, PMIX_INFO);
+        ip = (pmix_info_t *) perms->array;
+        PMIX_INFO_LOAD(&ip[0], PMIX_ACCESS_USERIDS, ids, PMIX_DATA_ARRAY);
+        PMIX_DATA_ARRAY_FREE(ids);
+        PMIX_INFO_LOAD(info, PMIX_ACCESS_PERMISSIONS, perms, PMIX_DATA_ARRAY);
+        PMIX_DATA_ARRAY_FREE(perms);
+        return 1;
+    }
+
+    if (0 == strcmp(access, "self-gid") || 0 == strcmp(access, "other-gid")) {
+        idp[0] = (uint32_t) getegid();
+        if ('o' == access[0]) {
+            idp[0] += 1;
+        }
+        PMIX_INFO_LOAD(info, PMIX_ACCESS_GRPIDS, ids, PMIX_DATA_ARRAY);
+        PMIX_DATA_ARRAY_FREE(ids);
+        return 1;
+    }
+
+    PMIX_DATA_ARRAY_FREE(ids);
+    fprintf(stderr, "ERROR unknown access spec: %s\n", access);
+    return 0;
+}
+
 static int do_publish(const char *key, const char *value,
-                      const char *rangestr, int seconds)
+                      const char *rangestr, int seconds, const char *access)
 {
     pmix_status_t rc;
-    pmix_info_t info[2];
+    pmix_info_t info[3];
+    size_t n, ninfo = 2;
     pmix_data_range_t range = parse_range(rangestr);
 
     rc = PMIx_Init(&myproc, NULL, 0);
@@ -97,10 +160,12 @@ static int do_publish(const char *key, const char *value,
 
     PMIX_INFO_LOAD(&info[0], key, value, PMIX_STRING);
     PMIX_INFO_LOAD(&info[1], PMIX_RANGE, &range, PMIX_DATA_RANGE);
+    ninfo += load_access(access, &info[2]);
 
-    rc = PMIx_Publish(info, 2);
-    PMIX_INFO_DESTRUCT(&info[0]);
-    PMIX_INFO_DESTRUCT(&info[1]);
+    rc = PMIx_Publish(info, ninfo);
+    for (n = 0; n < ninfo; n++) {
+        PMIX_INFO_DESTRUCT(&info[n]);
+    }
     if (PMIX_SUCCESS != rc) {
         fprintf(stderr, "ERROR PMIx_Publish(%s): %s\n", key, PMIx_Error_string(rc));
         PMIx_Finalize(NULL, 0);
@@ -184,10 +249,13 @@ static int do_lookup(char **keys, size_t nkeys, int seconds, bool wait,
     return ret;
 }
 
-static int do_unpublish(const char *key, int seconds)
+static int do_unpublish(const char *key, int seconds, const char *pubrange,
+                        const char *unpubrange)
 {
     pmix_status_t rc;
-    pmix_info_t info;
+    pmix_info_t info[2];
+    pmix_data_range_t range = parse_range(pubrange);
+    pmix_data_range_t urange = parse_range(unpubrange);
     /* PMIx_Unpublish takes a NULL-terminated key array */
     char *keys[2] = {NULL, NULL};
 
@@ -197,9 +265,11 @@ static int do_unpublish(const char *key, int seconds)
         return 1;
     }
 
-    PMIX_INFO_LOAD(&info, key, "unpublish-me", PMIX_STRING);
-    rc = PMIx_Publish(&info, 1);
-    PMIX_INFO_DESTRUCT(&info);
+    PMIX_INFO_LOAD(&info[0], key, "unpublish-me", PMIX_STRING);
+    PMIX_INFO_LOAD(&info[1], PMIX_RANGE, &range, PMIX_DATA_RANGE);
+    rc = PMIx_Publish(info, 2);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
     if (PMIX_SUCCESS != rc) {
         fprintf(stderr, "ERROR PMIx_Publish: %s\n", PMIx_Error_string(rc));
         PMIx_Finalize(NULL, 0);
@@ -211,11 +281,19 @@ static int do_unpublish(const char *key, int seconds)
     /* confirm it is really there before we take it away, so a later
      * NOTFOUND cannot be blamed on the publish */
     keys[0] = (char *) key;
-    (void) lookup_keys(keys, 1, seconds, false, NULL);
+    (void) lookup_keys(keys, 1, seconds, false, pubrange);
 
     keys[0] = (char *) key;
     keys[1] = NULL;
-    rc = PMIx_Unpublish(keys, NULL, 0);
+    if (NULL == unpubrange) {
+        /* say nothing about the range, which is the common case and the
+         * one that leans on the default matching the publish default */
+        rc = PMIx_Unpublish(keys, NULL, 0);
+    } else {
+        PMIX_INFO_LOAD(&info[0], PMIX_RANGE, &urange, PMIX_DATA_RANGE);
+        rc = PMIx_Unpublish(keys, info, 1);
+        PMIX_INFO_DESTRUCT(&info[0]);
+    }
     if (PMIX_SUCCESS != rc) {
         fprintf(stderr, "ERROR PMIx_Unpublish: %s\n", PMIx_Error_string(rc));
         PMIx_Finalize(NULL, 0);
@@ -225,7 +303,7 @@ static int do_unpublish(const char *key, int seconds)
     fflush(stdout);
 
     keys[0] = (char *) key;
-    (void) lookup_keys(keys, 1, seconds, false, NULL);
+    (void) lookup_keys(keys, 1, seconds, false, pubrange);
 
     PMIx_Finalize(NULL, 0);
     return 0;
@@ -237,11 +315,11 @@ int main(int argc, char **argv)
 
     if (2 > argc) {
         fprintf(stderr,
-                "usage: %s publish <key> <value> [range] [secs]\n"
+                "usage: %s publish <key> <value> [range] [secs] [access]\n"
                 "       %s lookup <key> [secs] [range]\n"
                 "       %s lookupwait <key> [secs] [range]\n"
                 "       %s lookup2 <key1> <key2> [secs]\n"
-                "       %s unpublish <key> [secs]\n",
+                "       %s unpublish <key> [secs] [pubrange] [unpubrange]\n",
                 argv[0], argv[0], argv[0], argv[0], argv[0]);
         return 2;
     }
@@ -252,7 +330,8 @@ int main(int argc, char **argv)
             return 2;
         }
         return do_publish(argv[2], argv[3], (5 > argc) ? NULL : argv[4],
-                          (6 > argc) ? 120 : atoi(argv[5]));
+                          (6 > argc) ? 120 : atoi(argv[5]),
+                          (7 > argc) ? NULL : argv[6]);
     }
     if (0 == strcmp(argv[1], "lookup") || 0 == strcmp(argv[1], "lookupwait")) {
         if (3 > argc) {
@@ -278,7 +357,9 @@ int main(int argc, char **argv)
             fprintf(stderr, "unpublish needs a key\n");
             return 2;
         }
-        return do_unpublish(argv[2], (4 > argc) ? 20 : atoi(argv[3]));
+        return do_unpublish(argv[2], (4 > argc) ? 20 : atoi(argv[3]),
+                            (5 > argc) ? NULL : argv[4],
+                            (6 > argc) ? NULL : argv[5]);
     }
 
     fprintf(stderr, "unknown mode: %s\n", argv[1]);

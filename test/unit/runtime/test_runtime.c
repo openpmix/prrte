@@ -1226,12 +1226,181 @@ static int test_data_server_range(void)
     CHECK("range: RM admits the host's own namespace",
           PMIX_SUCCESS == prte_data_server_check_range(req, data));
 
-    /* CUSTOM has no accessor list implemented, so it must deny rather than
-     * fall through to a permit */
+    /* For CUSTOM the accessor list IS the range, so a publisher that named
+     * nobody admits nobody - including itself */
     data->range = PMIX_RANGE_CUSTOM;
     PMIX_LOAD_PROCID(&req->requestor, "publisher.ns", 2);
-    CHECK("range: CUSTOM denies (no accessor list is implemented)",
+    CHECK("range: CUSTOM denies when the publisher named no accessors",
           PMIX_SUCCESS != prte_data_server_check_range(req, data));
+    /* ...and defers to the list when there is one, which the access check
+     * is what evaluates */
+    data->nauids = 1;
+    data->auids = (uint32_t *) malloc(sizeof(uint32_t));
+    data->auids[0] = 4242;
+    CHECK("range: CUSTOM admits when an accessor list was given",
+          PMIX_SUCCESS == prte_data_server_check_range(req, data));
+
+    PMIX_RELEASE(req);
+    PMIX_RELEASE(data);
+    return failures;
+}
+
+/* Access permissions are the FIRST gate on retrieval - a requestor must
+ * satisfy them before the range constraint is even asked.  Absent a list,
+ * published data belongs to its publisher: only the publisher's own uid and
+ * gid may read it.  Each list the publisher does give is a requirement. */
+static int test_data_server_access(void)
+{
+    int failures = 0;
+    prte_data_object_t *data;
+    prte_data_req_t *req;
+
+    data = PMIX_NEW(prte_data_object_t);
+    CHECK("access: a new object has no owner uid/gid",
+          UINT32_MAX == data->uid && UINT32_MAX == data->gid);
+    CHECK("access: a new object names no accessors",
+          NULL == data->auids && 0 == data->nauids &&
+          NULL == data->agids && 0 == data->nagids);
+    data->uid = 1000;
+    data->gid = 100;
+
+    req = PMIX_NEW(prte_data_req_t);
+    CHECK("access: a new request has no uid/gid",
+          UINT32_MAX == req->uid && UINT32_MAX == req->gid);
+
+    /* no list: the publisher's own identity is the rule */
+    req->uid = 1000;
+    req->gid = 100;
+    CHECK("access: the publisher's own uid and gid are admitted",
+          PMIX_SUCCESS == prte_data_server_check_access(req, data));
+    req->uid = 1001;
+    CHECK("access: another uid is refused",
+          PMIX_ERR_NO_PERMISSIONS == prte_data_server_check_access(req, data));
+    req->uid = 1000;
+    req->gid = 101;
+    CHECK("access: another gid is refused",
+          PMIX_ERR_NO_PERMISSIONS == prte_data_server_check_access(req, data));
+
+    /* a uid list is a requirement, and it is the ONLY one when no gid list
+     * was given - the whole point being to admit somebody else */
+    data->nauids = 2;
+    data->auids = (uint32_t *) malloc(2 * sizeof(uint32_t));
+    data->auids[0] = 1001;
+    data->auids[1] = 1002;
+    req->uid = 1001;
+    req->gid = 999;
+    CHECK("access: a uid on the list is admitted whatever its gid",
+          PMIX_SUCCESS == prte_data_server_check_access(req, data));
+    req->uid = 1003;
+    CHECK("access: a uid not on the list is refused",
+          PMIX_ERR_NO_PERMISSIONS == prte_data_server_check_access(req, data));
+    req->uid = 1000;
+    CHECK("access: the publisher's own uid is refused by a list that omits it",
+          PMIX_ERR_NO_PERMISSIONS == prte_data_server_check_access(req, data));
+
+    /* both lists given: both are requirements */
+    data->nagids = 1;
+    data->agids = (uint32_t *) malloc(sizeof(uint32_t));
+    data->agids[0] = 50;
+    req->uid = 1001;
+    req->gid = 50;
+    CHECK("access: a requestor meeting both lists is admitted",
+          PMIX_SUCCESS == prte_data_server_check_access(req, data));
+    req->gid = 51;
+    CHECK("access: meeting the uid list but not the gid list is refused",
+          PMIX_ERR_NO_PERMISSIONS == prte_data_server_check_access(req, data));
+    req->uid = 1003;
+    req->gid = 50;
+    CHECK("access: meeting the gid list but not the uid list is refused",
+          PMIX_ERR_NO_PERMISSIONS == prte_data_server_check_access(req, data));
+
+    /* a gid list on its own */
+    free(data->auids);
+    data->auids = NULL;
+    data->nauids = 0;
+    req->uid = 1003;
+    req->gid = 50;
+    CHECK("access: a gid on the list is admitted whatever its uid",
+          PMIX_SUCCESS == prte_data_server_check_access(req, data));
+
+    PMIX_RELEASE(req);
+    PMIX_RELEASE(data);
+    return failures;
+}
+
+/* The requester's own range is the OTHER half of the rule: the PMIx
+ * retrieval rules constrain a lookup to data whose publisher falls within
+ * the range the requester asked for, which is what keeps duplicate keys
+ * published on different ranges apart.  It is the same predicate as
+ * above with the two processes swapped, and it used to be unpacked and
+ * then never applied to anything. */
+static int test_data_server_search_range(void)
+{
+    int failures = 0;
+    prte_data_object_t *data;
+    prte_data_req_t *req;
+
+    data = PMIX_NEW(prte_data_object_t);
+    PMIX_LOAD_PROCID(&data->owner, "publisher.ns", 2);
+    PMIX_LOAD_PROCID(&data->proxy, "prte-daemons", 5);
+    /* the publisher's own range admits everyone throughout, so what is
+     * under test is only the requester's */
+    data->range = PMIX_RANGE_GLOBAL;
+
+    req = PMIX_NEW(prte_data_req_t);
+    PMIX_LOAD_PROCID(&req->requestor, "other.ns", 0);
+    PMIX_LOAD_PROCID(&req->proxy, "prte-daemons", 9);
+
+    CHECK("search: a new request defaults to the SESSION range",
+          PMIX_RANGE_SESSION == req->range);
+
+    /* session/global/undef search everything */
+    CHECK("search: SESSION admits any publisher",
+          PMIX_SUCCESS == prte_data_server_check_search_range(req, data));
+    req->range = PMIX_RANGE_GLOBAL;
+    CHECK("search: GLOBAL admits any publisher",
+          PMIX_SUCCESS == prte_data_server_check_search_range(req, data));
+    req->range = PMIX_RANGE_UNDEF;
+    CHECK("search: UNDEF admits any publisher",
+          PMIX_SUCCESS == prte_data_server_check_search_range(req, data));
+
+    /* NAMESPACE searches only publishers in the requester's namespace */
+    req->range = PMIX_RANGE_NAMESPACE;
+    CHECK("search: NAMESPACE refuses a publisher in another namespace",
+          PMIX_SUCCESS != prte_data_server_check_search_range(req, data));
+    PMIX_LOAD_PROCID(&req->requestor, "publisher.ns", 7);
+    CHECK("search: NAMESPACE admits a publisher in the requester's namespace",
+          PMIX_SUCCESS == prte_data_server_check_search_range(req, data));
+
+    /* LOCAL searches only publishers behind the requester's own daemon */
+    req->range = PMIX_RANGE_LOCAL;
+    CHECK("search: LOCAL refuses a publisher behind another daemon",
+          PMIX_SUCCESS != prte_data_server_check_search_range(req, data));
+    PMIX_LOAD_PROCID(&req->proxy, "prte-daemons", 5);
+    CHECK("search: LOCAL admits a publisher behind the same daemon",
+          PMIX_SUCCESS == prte_data_server_check_search_range(req, data));
+
+    /* PROC_LOCAL searches only what the requester published itself */
+    req->range = PMIX_RANGE_PROC_LOCAL;
+    CHECK("search: PROC_LOCAL refuses a peer's data",
+          PMIX_SUCCESS != prte_data_server_check_search_range(req, data));
+    PMIX_LOAD_PROCID(&req->requestor, "publisher.ns", 2);
+    CHECK("search: PROC_LOCAL admits the requester's own data",
+          PMIX_SUCCESS == prte_data_server_check_search_range(req, data));
+
+    /* RM searches only data published by the host environment */
+    req->range = PMIX_RANGE_RM;
+    CHECK("search: RM refuses data published by an application",
+          PMIX_SUCCESS != prte_data_server_check_search_range(req, data));
+    PMIX_LOAD_NSPACE(data->owner.nspace, PRTE_PROC_MY_NAME->nspace);
+    CHECK("search: RM admits data published by the host",
+          PMIX_SUCCESS == prte_data_server_check_search_range(req, data));
+
+    /* and CUSTOM denies here too - a requester has no accessor list to be
+     * on any more than a publisher has one to name */
+    req->range = PMIX_RANGE_CUSTOM;
+    CHECK("search: CUSTOM denies (no accessor list is implemented)",
+          PMIX_SUCCESS != prte_data_server_check_search_range(req, data));
 
     PMIX_RELEASE(req);
     PMIX_RELEASE(data);
@@ -1516,6 +1685,8 @@ int main(void)
     failures += test_exit_status();
     failures += test_data_server_objects();
     failures += test_data_server_range();
+    failures += test_data_server_search_range();
+    failures += test_data_server_access();
     failures += test_data_server_requestor();
     failures += test_progress_thread_cpus();
     failures += test_progress_thread_lifecycle();

@@ -12,7 +12,7 @@
  * Copyright (c) 2007      Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,9 +47,18 @@ typedef struct {
      * owner can remove it
      */
     pmix_proc_t owner;
-    /* uid of the owner - helps control
-     * access rights */
+    /* effective uid and gid of the owner - absent an accessor list,
+     * these ARE the access rule: the data belongs to its publisher */
     uint32_t uid;
+    uint32_t gid;
+    /* the accessor lists the publisher gave, if any
+     * (PMIX_ACCESS_USERIDS / PMIX_ACCESS_GRPIDS, either at the top level
+     * or inside a PMIX_ACCESS_PERMISSIONS array).  Each list that is
+     * present is a requirement the requestor must meet. */
+    uint32_t *auids;
+    size_t nauids;
+    uint32_t *agids;
+    size_t nagids;
     /* characteristics */
     pmix_data_range_t range;
     pmix_persistence_t persistence;
@@ -67,7 +76,10 @@ typedef struct {
     pmix_proc_t proxy;
     pmix_proc_t requestor;
     int room_number;
+    /* effective uid and gid of the requestor - what an accessor list, or
+     * the publisher's own identity, is checked against */
     uint32_t uid;
+    uint32_t gid;
     pmix_data_range_t range;
     char **keys;
 } prte_data_req_t;
@@ -116,8 +128,29 @@ PRTE_EXPORT void prte_ds_purge(pmix_proc_t *sender,
                                pmix_data_buffer_t *buffer,
                                pmix_data_buffer_t *answer);
 
+/* Apply the PUBLISHER's range: may this requestor see this item?  This is
+ * an access rule, so it governs lookup - not removal, which is a question
+ * of ownership (see ds_unpublish.c). */
 PRTE_EXPORT pmix_status_t prte_data_server_check_range(prte_data_req_t *req,
                                                        prte_data_object_t *data);
+
+/* Apply the publisher's ACCESS PERMISSIONS: may this requestor's uid and
+ * gid see this item?  A publisher that named no accessors keeps the data to
+ * itself - the requestor must present the publisher's own uid and gid - and
+ * each list it did name (PMIX_ACCESS_USERIDS, PMIX_ACCESS_GRPIDS) is a
+ * requirement rather than a grant, so a requestor must satisfy every list
+ * that is present.  Returns PMIX_ERR_NO_PERMISSIONS when refused, which is
+ * the status the retrieval rules ask for. */
+PRTE_EXPORT pmix_status_t prte_data_server_check_access(prte_data_req_t *req,
+                                                        prte_data_object_t *data);
+
+/* Apply the REQUESTER's range: is this publisher one the lookup asked to
+ * search?  The PMIx retrieval rules constrain a lookup to data whose
+ * publisher falls within the range the requester gave (the default being
+ * PMIX_RANGE_SESSION), which is what keeps duplicate keys published on
+ * different ranges apart.  Both checks have to pass. */
+PRTE_EXPORT pmix_status_t prte_data_server_check_search_range(prte_data_req_t *req,
+                                                              prte_data_object_t *data);
 
 /* Relay a request to the external data server named by
  * prte_data_server_uri, and answer the requesting daemon when it replies.
