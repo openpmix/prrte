@@ -49,6 +49,65 @@
 #include "src/runtime/data_server/prte_data_server.h"
 #include "src/runtime/data_server/ds.h"
 
+/* A parked lookup that was given a PMIX_TIMEOUT gets an event that fires if
+ * nothing satisfies it first.  Without one, a PMIX_WAIT lookup for a key
+ * nobody ever publishes waits forever: the timeout the caller gave reached
+ * the daemon's caddy and went no further, and the request left the pending
+ * list only when a publish matched it or its requestor died. */
+static void lookup_timeout(int sd, short args, void *cbdata)
+{
+    prte_data_req_t *req = (prte_data_req_t *) cbdata;
+    pmix_data_buffer_t *reply;
+    pmix_status_t ret = PMIX_ERR_TIMEOUT;
+    uint8_t command = PRTE_PMIX_LOOKUP_CMD;
+    int rc;
+
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+    PMIX_ACQUIRE_OBJECT(req);
+
+    /* the event has fired, so there is nothing left to disarm */
+    req->timer_active = false;
+
+    pmix_output_verbose(1, prte_data_store.output,
+                        "%s data server: parked lookup from %s timed out",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PMIX_NAME_PRINT(&req->requestor));
+
+    /* it is waiting for nothing now */
+    pmix_list_remove_item(&prte_data_store.pending, &req->super);
+
+    /* answer it: room number, the command it is an answer to, and the
+     * status.  A timeout carries no payload, and the daemon-side receiver
+     * knows not to look for one */
+    PMIX_DATA_BUFFER_CREATE(reply);
+    rc = PMIx_Data_pack(NULL, reply, &req->room_number, 1, PMIX_INT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto done;
+    }
+    rc = PMIx_Data_pack(NULL, reply, &command, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto done;
+    }
+    rc = PMIx_Data_pack(NULL, reply, &ret, 1, PMIX_STATUS);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto done;
+    }
+    PRTE_RML_RELIABLE_SEND(rc, req->proxy.rank, reply, PRTE_RML_TAG_DATA_CLIENT);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        goto done;
+    }
+    PMIX_RELEASE(req);
+    return;
+
+done:
+    PMIX_DATA_BUFFER_RELEASE(reply);
+    PMIX_RELEASE(req);
+}
+
 pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
                              pmix_data_buffer_t *buffer,
                              pmix_data_buffer_t *answer)
@@ -65,6 +124,7 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
     pmix_data_buffer_t pbkt;
     uint32_t uid = UINT32_MAX;
     uint32_t gid = UINT32_MAX;
+    int timeout = 0;
     bool wait = false;
     bool denied = false;
     /* the default range for a lookup is SESSION - see the PMIx
@@ -77,6 +137,7 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
     bool found;
     prte_data_req_t *req, rq;
     pmix_byte_object_t pbo;
+    struct timeval tv;
 
     /* unpack the requestor */
     count = 1;
@@ -136,6 +197,8 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
                 uid = info[n].value.data.uint32;
             } else if (PMIx_Check_key(info[n].key, PMIX_GRPID)) {
                 gid = info[n].value.data.uint32;
+            } else if (PMIx_Check_key(info[n].key, PMIX_TIMEOUT)) {
+                timeout = info[n].value.data.integer;
             } else if (PMIx_Check_key(info[n].key, PMIX_WAIT)) {
                 /* flag that we wait until the data is present */
                 wait = true;
@@ -294,6 +357,16 @@ pmix_status_t prte_ds_lookup(pmix_proc_t *sender, int room_number,
             req->keys = cache;
             cache = NULL;
             pmix_list_append(&prte_data_store.pending, &req->super);
+            if (0 < timeout) {
+                /* the caller said how long it is prepared to wait */
+                tv.tv_sec = timeout;
+                tv.tv_usec = 0;
+                prte_event_evtimer_set(prte_event_base, &req->ev,
+                                       lookup_timeout, req);
+                req->timer_active = true;
+                PMIX_POST_OBJECT(req);
+                prte_event_evtimer_add(&req->ev, &tv);
+            }
             PMIx_Argv_free(keys);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             PMIX_DESTRUCT(&rq);

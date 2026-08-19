@@ -1772,6 +1772,16 @@ test_runtime() {
                 || bad "a refusal was not reported as NO_PERMISSIONS ($spec): $(echo "$out" | grep '^STATUS' | tr -d '\r')"
         done
 
+        banner "runtime/data_server: a parked lookup honors PMIX_TIMEOUT"
+        # PMIX_WAIT parks the request until somebody publishes the key.  With
+        # a PMIX_TIMEOUT the wait is bounded: the data server arms a timer on
+        # the parked request and answers PMIX_ERR_TIMEOUT if nothing satisfies
+        # it first.  Without that timer the caller waited forever -- the
+        # timeout reached the daemon's caddy and went no further.
+        out=$(PRUN "--host node3:1 -n 1 $DS lookupwait prte.test.nobodypublishes 15" 2>&1)
+        echo "$out" | grep -q 'STATUS PMIX_ERR_TIMEOUT' \
+            && ok "a wait for a key nobody publishes ended in TIMEOUT" \
+            || bad "a parked lookup did not time out: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     fi
     cleanup_swarm

@@ -218,6 +218,15 @@ later publish resolves the rest, `complete_resolved` is what says the
 request is finished — do not re-derive it by counting `req->keys`, because
 that array has already been swapped for the unresolved remainder.
 
+A `PMIX_TIMEOUT` given with the wait bounds it: the parked request carries
+an event armed for that many seconds (`lookup_timeout` in `ds_lookup.c`),
+which takes it off `pending` and answers `PMIX_ERR_TIMEOUT` with no payload.
+Anything that disposes of the request earlier — a satisfying publish, a
+purge, finalize — releases it, and the destructor is what disarms the
+timer, so every path is covered by `PMIX_RELEASE`. Without the timer a wait
+for a key nobody publishes never returned: the timeout reached the daemon's
+caddy (`req->timeout` in `pmix_server_pub.c`) and went no further.
+
 `ds_purge` drops both the departing process's published items *and* any
 lookup it left parked; a request that outlives its requestor would otherwise
 have a later publish trying to reply to a process that no longer exists.
@@ -240,6 +249,9 @@ have a later publish trying to reply to a process that no longer exists.
 - **An access rule is not an ownership rule.** See the section above: what
   may be read and what may be removed are different questions, and the
   answer to the first one refused owners their own data.
+- **A parked request can own an armed timer.** Remove it from `pending` and
+  `PMIX_RELEASE` it; never `free` around it, and never leave the list
+  holding one you have released.
 - **No locking, and none is wanted.** Everything here runs inside the RML
   receive on the progress thread.
 - **`prte_data_store.output` is `-1` until a verbosity is registered**, so
@@ -264,10 +276,10 @@ the range and access rules between real processes, a namespace-scoped lookup
 that must *not* reach another job's data, an accessor list that admits or
 refuses a real reader (and is answered with `PMIX_ERR_NO_PERMISSIONS`),
 unpublish — including an owner removing data published on a range it does
-not itself fall within — and the `PMIX_WAIT` path where a lookup parks
-until a later publish satisfies it. The `dataserver` helper takes the
-publish range, the unpublish range and an access spec as separate arguments
-for those cases.
+not itself fall within — and the `PMIX_WAIT` path, both where a later
+publish satisfies it and where `PMIX_TIMEOUT` ends it. The `dataserver`
+helper takes the publish range, the unpublish range and an access spec as
+separate arguments for those cases.
 
 The **external** data server is multi-node coverage by construction — the
 whole point is a namespace boundary, and one DVM has none. `test_runtime`

@@ -73,6 +73,10 @@ PMIX_CLASS_DECLARATION(prte_data_object_t);
 /* define a request object for delayed answers */
 typedef struct {
     pmix_list_item_t super;
+    /* the timeout event, armed only for a parked request that was given a
+     * PMIX_TIMEOUT.  Named "ev" by the caddy convention */
+    prte_event_t ev;
+    bool timer_active;
     pmix_proc_t proxy;
     pmix_proc_t requestor;
     int room_number;
