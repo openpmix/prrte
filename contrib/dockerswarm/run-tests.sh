@@ -137,6 +137,12 @@ SWARM_CLEAN='
     # the CPU burners the PMIx-churn phases raise (see load_on): harmless if
     # none are running, and leaving one behind would slow every later phase
     pkill -9 -x yes 2>/dev/null
+    # a bare `sleep` is the stand-in application in several cases. One that
+    # outlives its daemon is exactly what a case checking orphan cleanup looks
+    # for, so a case that legitimately fails leaves strays behind - and without
+    # this they would be counted against the NEXT run, which reports the
+    # failure against innocent code.
+    pkill -9 -x sleep 2>/dev/null
     rm -rf /tmp/prte.* /tmp/prted.* /tmp/prtrn.* /tmp/prun.* /tmp/ompi.* \
            /tmp/pmix.* 2>/dev/null
     find /tmp -maxdepth 2 -name "pmix.*" -prune -exec rm -rf {} + 2>/dev/null
@@ -4591,6 +4597,70 @@ test_errmgr() {
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
         bad "could not start a radix-2 DVM for the leaf-loss test"
+    fi
+    cleanup_swarm
+
+    banner "errmgr: losing the HNP is the one loss no daemon may survive"
+    # The mirror of the case above, and the reason that one has to be careful
+    # about what it treats as a lifeline.  A daemon that loses a CHILD routes
+    # around it; a daemon that loses the HNP must not, because the root is the
+    # one rank with no inheritor to be routed around -- which is why
+    # prte_rml_update_ancestors starts its walk at index 1, and why
+    # prte_rml_route_lost returns PRTE_ERR_FATAL for the HNP alone instead of
+    # repairing.  The OOB turns that non-SUCCESS return into
+    # PRTE_PROC_STATE_LIFELINE_LOST rather than COMM_FAILED, and errmgr/prted
+    # answers it by killing its local procs and exiting.  Every daemon must
+    # reach that conclusion: anything that "recovers" instead leaves orphaned
+    # prteds -- and orphaned application processes -- running on the cluster
+    # with nothing left to command them.
+    #
+    # radix 2 over seven nodes is what separates the two ways of reaching it.
+    # Only ranks 1 and 2 (node2, node3) are the HNP's children and lose that
+    # socket directly.  Ranks 3-6 lose their PARENT, repair the tree around it
+    # the ordinary way, land on rank 0 as their new lifeline, and discover the
+    # root is gone only when they try to use it.  At the default radix every
+    # daemon is in the first category and the second is never exercised at all.
+    cleanup_swarm
+    if prted_dvm_start_mca 'node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1' \
+                           '--prtemca rml_base_radix 2'; then
+        # one proc under a direct child of the HNP (node2) and two under
+        # daemons that are two levels down (node4, node7)
+        PRUN_BG /tmp/errmgr-hnp.out '--host node2:1,node4:1,node7:1 -n 3 --map-by node sleep 313'
+        sleep 6
+        c=$(prted_count 2 3 4 5 6 7)
+        if [ "$c" != 6 ]; then
+            bad "the DVM spans $c of 6 compute nodes -- not the tree this case needs"
+        elif ! ON 2 'pgrep -x sleep' >/dev/null 2>&1; then
+            bad "the job never started: $(RUN 'tr -d "\\000" < /tmp/errmgr-hnp.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+        else
+            ok "a job is running under a seven-node radix-2 DVM"
+            RUN 'pkill -9 -x prte' >/dev/null 2>&1
+            c=$(prted_settle 45 2 3 4 5 6 7)
+            [ "$c" = 0 ] \
+                && ok "every daemon exited when the HNP died" \
+                || bad "$c daemon(s) outlived the HNP -- a lifeline loss was recovered from"
+            # ...and took their local procs with them.  A daemon that exits
+            # without killing what it launched is the same orphan problem one
+            # level down, and the DVM that could clean it up is already gone.
+            n=0
+            for k in 2 4 7; do
+                ON "$k" 'pgrep -x sleep' >/dev/null 2>&1 && n=$((n+1))
+            done
+            [ "$n" = 0 ] \
+                && ok "...having killed the procs they were running" \
+                || bad "$n node(s) left an application proc orphaned"
+            # the tool has nothing left to talk to either
+            i=0
+            while [ "$i" -lt 30 ]; do
+                RUN 'pgrep -x prun' >/dev/null 2>&1 || break
+                sleep 1; i=$((i+1))
+            done
+            [ "$i" -lt 30 ] \
+                && ok "...and the tool did not hang on a DVM that is gone (${i}s)" \
+                || bad "prun is still waiting on an HNP that no longer exists"
+        fi
+    else
+        bad "could not start a radix-2 DVM for the HNP-loss test"
     fi
     cleanup_swarm
 
