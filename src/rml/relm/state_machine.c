@@ -168,16 +168,43 @@ static void des_msg_cd(start_msg_caddy_t* ptr){
 }
 PMIX_CLASS_INSTANCE(start_msg_caddy_t, pmix_object_t, con_msg_cd, des_msg_cd);
 
+/* Hand out the next UID for a locally-started message.
+ *
+ * The counter is allowed to wrap - the design assumes a message is globally
+ * complete, and every reference to it gone, long before its UID comes round
+ * again. What it may not do is step *onto* the reserved values. The three
+ * sentinels UNKNOWN/NONE/INVALID sit at the top of the range, above
+ * PRTE_RELM_UID_MAX, and a plain "next_uid++" walked straight through them on
+ * its way back to zero. That is not a wrap, it is a poisoned signature:
+ * prte_relm_get_msg() refuses any UID above the max and answers NULL, so
+ * three of every 2^32 reliable messages took the daemon down rather than
+ * being sent. Step over the sentinels so the wrap the design documents is the
+ * wrap the code performs.
+ */
+prte_relm_uid_t prte_relm_next_uid(void){
+    prte_relm_uid_t uid = prte_relm_sm->next_uid;
+    prte_relm_sm->next_uid = (PRTE_RELM_UID_MAX == uid) ? 0 : uid + 1;
+    return uid;
+}
+
 static void prte_relm_start_msg_cb(int fd, short argn, void* cbdata){
     PRTE_HIDE_UNUSED_PARAMS(fd, argn);
     start_msg_caddy_t* cd = (start_msg_caddy_t*) cbdata;
 
     prte_relm_signature_t sig = {
         .src = PRTE_PROC_MY_NAME->rank,
-        .uid = prte_relm_sm->next_uid++,
+        .uid = prte_relm_next_uid(),
         .dst = cd->dst
     };
     prte_relm_msg_t* msg = prte_relm_get_msg(&sig);
+    if(NULL == msg){
+        /* get_msg answers NULL for a rank outside the DVM or a hash-table
+         * failure, and the NEW update has no message to update */
+        PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+        PMIX_RELEASE(cd);
+        return;
+    }
     PRTE_RELM_MSG_OUTPUT(2, msg, "updating state to NEW");
 
     prte_relm_sm->update_state(
