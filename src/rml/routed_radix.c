@@ -366,11 +366,32 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global){
 
     }
 
-    // Notify components
+    // Notify components.
+    //
+    // Deliberately NOT the place that raises PRTE_PROC_STATE_COMM_FAILED for
+    // the departed ranks, tempting though the symmetry is. Repairing the tree
+    // and telling the errmgr a daemon is gone are not the same question, and
+    // each happens without the other:
+    //
+    //  - A DVM shrink repairs in one batch for every target and must not raise
+    //    it: the campaign tears the targets out of the DVM itself, and the
+    //    errmgr's already-departed guard exists precisely to swallow the
+    //    comm-failure their real departure produces later
+    //    (ras_base_allocate.c, errmgr_dvm.c).
+    //  - During an ordered teardown prte_rml_route_lost returns without
+    //    repairing at all, yet the OOB still raises COMM_FAILED - and that
+    //    raise is what drives "all my routes and children are gone, terminate"
+    //    in both errmgr components. Moving the raise in here would break
+    //    orderly shutdown.
+    //  - errmgr/prted heals the tree around a peer it has given up connecting
+    //    to from inside its own error handler; raising there would re-enter it.
+    //
+    // What must not diverge is the set of paths that DO report, because this
+    // function's failed_dmns set is what they all use to tell a first report
+    // from a duplicate. They are collected in rml_fault_handler.c behind
+    // report_new_departures(); see the comment there.
     const prte_rml_recovery_status_t* s = &status;
     prte_rml_fault_handler(s);
-    // TODO: Should this fn become the central point responsible for setting
-    // failed procs to PRTE_PROC_STATE_COMM_FAILED?
     prte_grpcomm_fault_handler(s);
     prte_filem  .fault_handler(s);
     prte_relm   .fault_handler(s);

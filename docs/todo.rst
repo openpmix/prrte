@@ -39,14 +39,6 @@ since the transport it stages over (xcast) is already resilient.  Until then,
 a daemon lost while files are in flight fails the staging rather than
 re-driving it.
 
-**Nobody owns marking failed procs ``COMM_FAILED``.**  The recovery
-sequence in ``src/rml/rml_fault_handler.c`` calls each subsystem's
-``fault_handler`` in turn, and the marked question there is whether that
-one place should also be what sets the affected procs to
-``PRTE_PROC_STATE_COMM_FAILED``, instead of leaving each handler to do it.
-It is a question about where the responsibility belongs, not a known
-misbehavior.
-
 **A RELM message-id clash is logged and ignored.**  Two places in
 ``src/rml/relm/base/state_updates.c`` detect that a message uid already
 belongs to a different message — a second start for the same uid, or a
@@ -228,8 +220,6 @@ the marker is stale.
    * - ``rml/oob/oob_tcp_connection.c``,
        ``prte_oob_tcp_peer_recv_connect_ack``
      - a TCP peer closed rather than retried at its next address
-   * - ``rml/routed_radix.c``, ``prte_rml_repair_routing_tree``
-     - nobody owns marking failed procs ``COMM_FAILED``
    * - ``rml/routed_radix.c``, ``prte_rml_compute_routing_tree``
      - routing-tree state is not preserved across a DVM resize
    * - ``rml/relm/relm.c``, ``prte_relm_register``
@@ -520,6 +510,37 @@ so that the next person does not rediscover the idea and spend the effort
 again: each says what was measured and what the measurement decided.  Moving
 one back up the page takes new evidence, not a fresh reading of the same
 facts.
+
+**Making the routing-tree repair the one place that raises
+``COMM_FAILED``.**  ``prte_rml_repair_routing_tree`` ends by calling every
+subsystem's ``fault_handler`` in turn, and a marker there asked whether that
+one place should also set the departed ranks to
+``PRTE_PROC_STATE_COMM_FAILED`` rather than leaving each caller to do it.  It
+should not.  Repairing the tree and telling the errmgr a daemon is gone are
+different questions, and the code has both halves without the other:
+
+* A DVM shrink repairs in one batch for the whole campaign and must **not**
+  raise it — ``shrink_campaign_complete`` (``src/mca/ras/base/ras_base_allocate.c``)
+  tears the targets out of the DVM itself, and the already-departed guard in
+  ``errmgr/dvm`` exists precisely to swallow the comm-failure their real
+  departure produces afterwards.
+* During an ordered teardown ``prte_rml_route_lost`` returns without repairing
+  anything, yet the OOB still raises ``COMM_FAILED`` — and that raise is what
+  drives "all my routes and children are gone, terminate" in *both* errmgr
+  components.  Centralizing the raise would break orderly shutdown.
+* ``errmgr/prted`` heals the tree around a peer it has given up connecting to
+  from inside its own error handler, where raising the state again would
+  re-enter it.
+
+Four of the six call sites therefore repair without reporting, for three
+different reasons, and one report happens where no repair does.  What the
+paths that *do* report must not do is diverge, because the routing tree's
+``failed_dmns`` set is what they all use to tell a first report from a
+duplicate — a path that repairs without reporting makes every later report
+for that rank look like a duplicate and suppresses it for good.  They are
+collected behind ``report_new_departures`` in
+``src/rml/rml_fault_handler.c``; the two lineage-inference paths used to be
+outside it, and are not any more.
 
 **Aggregating the launch-message cpuset slices per next hop.**  The scatter
 itself has landed: the launch message is packed ``PRTE_JOB_PACK_NO_CPUSETS``

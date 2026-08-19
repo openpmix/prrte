@@ -142,6 +142,15 @@ whichever of them won the race against the real notice silently ate the
 *before* the repair, which is safe because the state activation is
 thread-shifted and cannot outrun it.
 
+Do **not** be tempted to move the raise into `prte_rml_repair_routing_tree`
+itself, next to the fault-handler fan-out. Repairing the tree and reporting a
+departure are different questions and the code needs each without the other: a
+DVM shrink repairs for every target and must not report (the campaign tears them
+out itself), an ordered teardown reports without repairing at all (and that
+report is what terminates the daemons), and `errmgr/prted` repairs from inside
+its own error handler, where a report would re-enter it. `docs/todo.rst`,
+"Decided against", carries the full reasoning.
+
 ### Both recovery notices carry a lineage, and both reconcile it the same way
 
 A repair emits two notices, and until recently only one of them said anything
