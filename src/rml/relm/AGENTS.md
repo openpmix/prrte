@@ -111,12 +111,19 @@ new neighbors so in-flight messages resume over the repaired tree.
 
 ## Testing
 
-RELM has no unit test, and the reason is structural rather than an oversight:
-every entry point either thread-shifts onto `prte_event_base` or is reached
-from the RML's fault handler, and the state machine's whole purpose is what
-happens across *several* daemons when one of them dies. Coverage therefore
+Most of RELM cannot be unit tested, and the reason is structural rather than an
+oversight: every entry point either thread-shifts onto `prte_event_base` or is
+reached from the RML's fault handler, and the state machine's whole purpose is
+what happens across *several* daemons when one of them dies. That coverage
 lives in `contrib/dockerswarm` — the `test_rml` phase drives the relay and
 lost-daemon paths RELM sits on, and the elastic grow/shrink phases exercise the
-link-update exchange after a tree change. If you add a unit test here, the
-tractable pieces are the pure ones: the pack/unpack helpers in `util.c` and the
-UID/GUID identity and ordering logic in `types.h`/`state_machine.c`.
+link-update exchange after a tree change.
+
+What *is* pure computation is the identity layer, and
+`test/unit/rml/test_relm.c` (run by `make check`) covers it: the UID generator
+and its wrap, the `<src,uid,dst>` signature and GUID, the find/get lookup
+helpers and what they refuse, the prev/next ordering chain, and
+`prte_relm_release_msg`. It stands the state machine up by hand — `PMIX_NEW`
+plus the `new_rank`/`new_msg` callbacks — rather than calling the base module's
+`init()`, which would also post RML receives. The other tractable piece, not
+yet covered, is the pack/unpack helpers in `util.c`.
