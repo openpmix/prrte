@@ -6834,6 +6834,77 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     fi
     cleanup_swarm
 
+    banner "elastic DVM: a collective spans a node grown in after a shrink"
+    # The collective analogue of the case above, and the same shape of gap.
+    #
+    # An elastic shrink departs its daemon through the fault machinery, so it
+    # ends in a global DAEMON_DIED broadcast and every surviving daemon
+    # advances its collective recovery epoch. The daemon the next grow launches
+    # was not there to receive that broadcast -- the routing tree holds its
+    # vpid from the moment the grow records it, so a broadcast sent while its
+    # launch is in flight is addressed to a daemon with no contact info and is
+    # dropped by design -- and a fence or group contribution stamped below the
+    # receiver's epoch is discarded as a leftover from a round the failure has
+    # since restarted. Every collective over a job placed on that node then
+    # hangs, at ANY radix. The epoch therefore travels as an absolute value the
+    # master issues, carried both on the failure notice and on the WIREUP
+    # broadcast -- the first message that can reach a daemon which has just
+    # joined.
+    #
+    # This needs its own case because nothing above can see it: `hostname`
+    # never fences, and the epoch is not a routing property, so the deep-tree
+    # case passes with the DVM in exactly this state. A FRESH node rather than
+    # the released one is deliberate -- the reuse is incidental, what matters
+    # is that the daemon was launched after the epoch moved.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if ! RUN 'pgrep -x prte >/dev/null'; then
+        bad "could not start an elastic DVM for the collective-epoch test"
+    elif ! RUN "test -x $FENCER"; then
+        skp "fencer client not installed -- re-run ./build.sh"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        RUN 'timeout 90 elastic grow node2:2,node3:2' >/dev/null 2>&1
+        out=$(RUN 'timeout 90 elastic shrink node3' 2>&1); sleep 3
+        echo "$out" | grep -q PMIX_DVM_IS_READY \
+            && ok "shrink node3 completed, so the epoch has moved" \
+            || bad "shrink node3 did not complete"
+        out=$(RUN 'timeout 90 elastic grow node4:2' 2>&1); sleep 3
+        echo "$out" | grep -q PMIX_DVM_IS_READY \
+            && ok "grow of a fresh node after the shrink completed" \
+            || bad "grow after the shrink did not complete"
+        # Launch first, so a fence that never returns cannot be confused with a
+        # job that never started. node4 is the daemon launched after the epoch
+        # moved, and the fence below is only a test if a rank sits on it.
+        out=$(RUN 'timeout 60 prun -n 3 --map-by ppr:1:node hostname' 2>&1)
+        for n in node1 node2 node4; do
+            echo "$out" | grep -qw "$n" && ok "$n ran its proc after grow/shrink/grow" \
+                                        || bad "$n launched nothing after grow/shrink/grow"
+        done
+        # A modex: every rank contributes, and every rank must be able to read
+        # every other rank back afterwards. Without the epoch the grown-in
+        # daemon contributes at 0, its parent drops that as stale, and the
+        # controller waits one contribution short until the timeout.
+        out=$(RUN "timeout 90 prun -n 3 --map-by ppr:1:node $FENCER collect" 2>&1)
+        n=$(echo "$out" | grep -c 'FENCER collect rank .* rc PMIX_SUCCESS')
+        [ "$n" = 3 ] \
+            && ok "all 3 ranks completed a modex fence spanning the grown-in node" \
+            || bad "$n of 3 ranks completed the fence: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        n=$(echo "$out" | grep -c 'peers-bad 0')
+        [ "$n" = 3 ] \
+            && ok "...and every rank read every peer's contribution back" \
+            || bad "$n of 3 ranks got a complete modex: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        # ...and a bare barrier, which carries no data at all, so it fails only
+        # on the epoch rather than on anything about the payload.
+        out=$(RUN "timeout 90 prun -n 3 --map-by ppr:1:node $FENCER barrier" 2>&1)
+        n=$(echo "$out" | grep -c 'FENCER barrier rank .* rc PMIX_SUCCESS')
+        [ "$n" = 3 ] \
+            && ok "all 3 ranks completed a bare barrier across the same DVM" \
+            || bad "$n of 3 ranks completed the barrier: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
     banner "elastic DVM: a grow launches ONLY on the nodes it was given"
     # An allocation request naming node4 must start a daemon on node4 and
     # nowhere else. Shrink node2 first so the DVM holds a node that is in the

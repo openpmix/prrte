@@ -672,6 +672,25 @@ tree holds its vpid from the moment the grow records it, so a broadcast
 sent while its launch is in flight is addressed to a daemon with no
 contact info and is dropped by design (`prte_oob_base_send_nb`).
 
+An absolute value is also what makes the epoch **tellable**, which is the
+other half of the same problem. The `PRTE_RML_TAG_WIREUP` broadcast — sent
+once every expected daemon has reported in, and the first message that can
+reach a daemon which has just joined — carries `prte_grpcomm_current_epoch()`,
+and `process_wireup()` adopts it. Because adoption is by highest value
+seen, the seed and any notice still in flight commute: a daemon already at
+or past that epoch is unaffected, and a late wireup cannot walk anyone
+back. The issued counter is deliberately separate from the applied one:
+the master's own epoch does not move until its broadcast is relayed back
+to it, and a second failure inside that window would otherwise reissue the
+number the first notice is already carrying, collapsing two restarts into
+one — a hang, not a wrong answer.
+
+A daemon that joins a **bootstrapped** DVM, with no HNP-built wireup
+behind it, still starts at zero. `rml_base_dead_dmns` and the vpid holes
+the nidmap encodes carry the same limitation, and for the same reason:
+everything that repairs a late joiner's view of the DVM is something the
+HNP sends it.
+
 **Why a per-link round does not work here, and why one epoch does.** The
 obvious model is xcast's — `ack_id_down` chosen by the parent, echoed by
 the child. It does not transfer. xcast's payload flows *down*, so the

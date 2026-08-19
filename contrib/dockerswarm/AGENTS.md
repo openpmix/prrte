@@ -1079,6 +1079,21 @@ already exists (re-growing a shrunk node relies on it).
 `run-tests.sh` covers re-growing the same node, growing a different one
 afterwards, and that a grow leaves every node it was not given alone.
 
+**A daemon grown in after a shrink starts behind the DVM in two ways, and
+only one of them is about routing.** The suite covers both, in adjacent
+cases, because neither can see the other's defect:
+
+- Its *departed-vpid set* is empty, so it can compute a first routing tree
+  whose parent is a retired rank. Only visible at a radix small enough for
+  the tree to have depth — hence the explicit `rml_base_radix 2` in that
+  case, without which every daemon's parent is rank 0 and rank 0 is always
+  alive.
+- Its *collective recovery epoch* is zero, because the shrink's
+  `DAEMON_DIED` broadcast went out while it was unreachable. Every fence or
+  group contribution it makes is dropped as stale, at any radix. Invisible
+  to every case that launches `hostname`, which never fences — so that case
+  runs a `fencer` job that spans the grown-in node.
+
 Still bound elastic commands with `timeout` in any new test: a grow that does
 not complete otherwise wedges the whole suite rather than failing one case.
 
