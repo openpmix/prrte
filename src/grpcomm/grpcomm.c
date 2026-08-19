@@ -8,7 +8,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting  All rights reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
  * $COPYRIGHT$
  *
@@ -224,6 +224,21 @@ bool prte_grpcomm_procs_lost(const pmix_proc_t *procs, size_t nprocs)
     return false;
 }
 
+/* The master's issued-epoch counter: the number it has handed out, which is
+ * not the same as the number it has applied.  See prte_grpcomm_issue_epoch()
+ * in grpcomm.h for why the two are separate. */
+static uint32_t issued_epoch = 0;
+
+uint32_t prte_grpcomm_current_epoch(void)
+{
+    return prte_grpcomm_globals.recovery_epoch;
+}
+
+uint32_t prte_grpcomm_issue_epoch(void)
+{
+    return ++issued_epoch;
+}
+
 void prte_grpcomm_advance_epoch(uint32_t to)
 {
     if (to <= prte_grpcomm_globals.recovery_epoch) {
@@ -254,7 +269,15 @@ void prte_grpcomm_fault_handler(const prte_rml_recovery_status_t* status)
      * global scope is what provides that - one broadcast, same order
      * everywhere, after the routing tree has been repaired. */
     if (PRTE_RML_FAULT_SCOPE_GLOBAL == status->scope) {
-        prte_grpcomm_advance_epoch(
-            prte_grpcomm_globals.recovery_epoch + 1);
+        /* The epoch is the master's to decide and rides on the notice as an
+         * absolute value, rather than each daemon counting the notices it has
+         * seen.  Counting locally makes the number a function of what a daemon
+         * received: one missed broadcast leaves it a step behind for the rest
+         * of the DVM's life, with every contribution it offers dropped as
+         * stale, and a daemon launched into a DVM that has already recovered
+         * has necessarily missed all of them.  Taking the value from the
+         * notice makes the number reconstructable from any message that
+         * carries one, which is what lets a joining daemon be told it. */
+        prte_grpcomm_advance_epoch(status->epoch);
     }
 }

@@ -750,6 +750,106 @@ static int test_fence_fault_handler(void)
     return failures;
 }
 
+/*
+ * The recovery epoch tells one round of a restarted collective from the
+ * next, and it is issued by the DVM master and carried on the global failure
+ * notice as an absolute value.  The alternative - each daemon counting the
+ * notices it has seen - makes the number a function of what a daemon
+ * received, so a daemon that missed one is a step behind for the rest of the
+ * DVM's life and has every contribution it offers dropped as stale.  A
+ * daemon launched into a DVM that has already recovered (an elastic grow
+ * after a shrink) has missed all of them, which is why the value has to be
+ * something it can simply be told.
+ */
+static int test_recovery_epoch(void)
+{
+    int failures = 0;
+#if PRTE_TEST_GRPCOMM_INTERNALS
+    prte_rml_recovery_status_t status;
+    uint32_t first, second;
+
+    /* the master issues the numbers, and they increase strictly.  They do
+     * not wait on the master applying them: its own epoch does not move
+     * until its broadcast is relayed back to it, and a second failure
+     * detected inside that window must not reissue the number the first
+     * notice is already carrying - that would collapse two restarts into
+     * one, which is a hang rather than a wrong answer */
+    first = prte_grpcomm_issue_epoch();
+    second = prte_grpcomm_issue_epoch();
+    CHECK("epoch: issued values increase", second > first);
+    CHECK("epoch: issuing does not move the applied epoch",
+          0 == prte_grpcomm_current_epoch());
+
+    /* the state the fault handler walks.  Nothing is in flight, so every
+     * restart below is a walk over empty lists - what is under test is the
+     * counter, not what it restarts */
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.xcast_ops, prte_grpcomm_xcast_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.group_ops, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.completed_group_ops, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_rml_base.failed_dmns, pmix_bitmap_t);
+    pmix_bitmap_init(&prte_rml_base.failed_dmns, 8);
+
+    /* the local pass never moves the epoch: the restart has to be
+     * simultaneous across the DVM, and only the global notice is */
+    PMIX_CONSTRUCT(&status, prte_rml_recovery_status_t);
+    status.scope = PRTE_RML_FAULT_SCOPE_LOCAL;
+    status.epoch = 4;
+    prte_grpcomm_fault_handler(&status);
+    PMIX_DESTRUCT(&status);
+    CHECK("epoch: the local pass does not move the epoch",
+          0 == prte_grpcomm_current_epoch());
+
+    /* the global notice carries the epoch, and it is adopted as given -
+     * not incremented.  A daemon seeing its first notice at 7 must land on
+     * 7, exactly where a daemon that saw all six before it lands */
+    PMIX_CONSTRUCT(&status, prte_rml_recovery_status_t);
+    status.scope = PRTE_RML_FAULT_SCOPE_GLOBAL;
+    status.epoch = 7;
+    prte_grpcomm_fault_handler(&status);
+    PMIX_DESTRUCT(&status);
+    CHECK("epoch: a global notice is adopted as given",
+          7 == prte_grpcomm_current_epoch());
+
+    /* replaying it changes nothing.  This is what makes the value safe to
+     * send by more than one route - the WIREUP broadcast a joining daemon
+     * receives carries it too, and the two can arrive in either order */
+    PMIX_CONSTRUCT(&status, prte_rml_recovery_status_t);
+    status.scope = PRTE_RML_FAULT_SCOPE_GLOBAL;
+    status.epoch = 7;
+    prte_grpcomm_fault_handler(&status);
+    PMIX_DESTRUCT(&status);
+    CHECK("epoch: a replayed notice does not advance it",
+          7 == prte_grpcomm_current_epoch());
+
+    /* and an older one cannot walk it back */
+    PMIX_CONSTRUCT(&status, prte_rml_recovery_status_t);
+    status.scope = PRTE_RML_FAULT_SCOPE_GLOBAL;
+    status.epoch = 3;
+    prte_grpcomm_fault_handler(&status);
+    PMIX_DESTRUCT(&status);
+    CHECK("epoch: an older notice does not walk it back",
+          7 == prte_grpcomm_current_epoch());
+
+    /* seeding a daemon that joined late - what the WIREUP broadcast does -
+     * is the same operation, and lands it where the DVM already is */
+    prte_grpcomm_advance_epoch(9);
+    CHECK("epoch: a seed carries a late joiner forward",
+          9 == prte_grpcomm_current_epoch());
+
+    prte_grpcomm_globals.recovery_epoch = 0;
+    PMIX_DESTRUCT(&prte_grpcomm_globals.xcast_ops);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.group_ops);
+    PMIX_CONSTRUCT(&prte_grpcomm_globals.group_ops, pmix_list_t);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_globals.completed_group_ops);
+    PMIX_DESTRUCT(&prte_rml_base.failed_dmns);
+#endif
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_recovery_epoch\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -780,6 +880,7 @@ int main(void)
     failures += test_group_directives();
     failures += test_fence_tracker();
     failures += test_fence_fault_handler();
+    failures += test_recovery_epoch();
 
     PMIx_server_finalize();
     prte_finalize();

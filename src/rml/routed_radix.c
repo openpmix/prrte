@@ -10,7 +10,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2023      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
@@ -228,7 +228,8 @@ static void update_descendants(void){
 // Defined below, shared with prte_rml_compute_routing_tree.
 static void build_tree_from_base(void);
 
-void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global){
+void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global,
+                                  uint32_t epoch){
     if(global){
         // Make sure these are given local notice first, but mark as globally
         // failed just before, to avoid redundant failure notices up the tree
@@ -236,12 +237,16 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global){
         for(size_t i = 0; i < failed_ranks->size; i++){
             pmix_bitmap_set_bit(&prte_rml_base.global_failed_dmns, ranks[i]);
         }
-        prte_rml_repair_routing_tree(failed_ranks, false);
+        // the local pass never moves the epoch, so it needs no value
+        prte_rml_repair_routing_tree(failed_ranks, false, 0);
     }
 
     prte_rml_recovery_status_t status;
     PMIX_CONSTRUCT(&status, prte_rml_recovery_status_t);
-    if(global) status.scope = PRTE_RML_FAULT_SCOPE_GLOBAL;
+    if(global){
+        status.scope = PRTE_RML_FAULT_SCOPE_GLOBAL;
+        status.epoch = epoch;
+    }
 
     resize_ranks(&status.failed_ranks, failed_ranks->size);
     size_t j = 0;
@@ -665,7 +670,7 @@ int prte_rml_route_lost(pmix_rank_t route){
     resize_ranks(&failed_ranks, 1);
     ((pmix_rank_t*)failed_ranks.array)[0] = route;
 
-    prte_rml_repair_routing_tree(&failed_ranks, /* global = */ false);
+    prte_rml_repair_routing_tree(&failed_ranks, /* global = */ false, /* epoch = */ 0);
 
     PMIx_Data_array_destruct(&failed_ranks);
     return PRTE_SUCCESS;

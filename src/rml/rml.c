@@ -624,6 +624,7 @@ PMIX_CLASS_INSTANCE(prte_rml_recv_request_t, pmix_object_t, prq_cons, prq_des);
 static void rscon(prte_rml_recovery_status_t* p){
     p->scope = PRTE_RML_FAULT_SCOPE_LOCAL;
     p->failed_ranks = (pmix_data_array_t) PMIX_DATA_ARRAY_STATIC_INIT;
+    p->epoch = 0;
     p->promoted = false;
     p->demoted = false;
 

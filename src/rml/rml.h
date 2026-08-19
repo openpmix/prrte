@@ -425,8 +425,13 @@ PRTE_EXPORT void prte_rml_update_ancestors(pmix_data_array_t* ancestors);
  * act on the inference by driving prte_rml_repair_routing_tree(). */
 PRTE_EXPORT prte_rml_ancestry_t prte_rml_reconcile_ancestry(pmix_data_array_t* report,
                                                             pmix_data_array_t* inferred);
+/* Repair the routing tree around a set of departed ranks and notify the fault
+ * handlers.  `epoch` is the collective recovery epoch the HNP issued with the
+ * global notice being applied; it is carried through to the handlers on the
+ * status and is meaningful only when `global` is true - pass 0 on every local
+ * repair, which does not move the epoch. */
 PRTE_EXPORT void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks,
-                                              bool global);
+                                              bool global, uint32_t epoch);
 PRTE_EXPORT void prte_rml_revive_routing_tree(pmix_rank_t rank);
 PRTE_EXPORT void prte_rml_fault_handler(const prte_rml_recovery_status_t* s);
 PRTE_EXPORT int prte_rml_get_num_contributors(pmix_rank_t *dmns, size_t ndmns);
