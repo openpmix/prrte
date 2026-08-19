@@ -156,10 +156,12 @@ void prte_rml_recv_adoption_notice(
     // any relevant faults that must have happened and use that information to
     // update our state.
 
-    // Update the reported list with any faults we know of
-    if(report.size < prte_rml_base.ancestors.size){
-        resize_ranks(&report, prte_rml_base.ancestors.size);
-    }
+    // Update the reported list with any faults we know of. Note the reported
+    // list is deliberately NOT padded out to our own length first:
+    // update_ancestors fills an empty slot with "the previous ancestor's next
+    // inheritor", which is meaningful for a hole in the middle of a real list
+    // and nonsense for a slot invented past its end. A legitimately shorter
+    // report is what the tail loop below is for.
     prte_rml_update_ancestors(&report);
 
     // If we match after updating their list, there's no new info for us
