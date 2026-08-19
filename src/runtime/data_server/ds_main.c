@@ -472,12 +472,20 @@ static void rqcon(prte_data_req_t *p)
     p->keys = NULL;
     p->uid = UINT32_MAX;
     p->gid = UINT32_MAX;
+    p->timer_active = false;
     /* the default range for a lookup or an unpublish is SESSION - the
      * same default the publish side carries */
     p->range = PMIX_RANGE_SESSION;
 }
 static void rqdes(prte_data_req_t *p)
 {
+    /* a parked request that is answered - or purged - before its timeout
+     * fires still owns an armed event, and libevent must not be left
+     * holding a pointer into freed storage */
+    if (p->timer_active) {
+        prte_event_evtimer_del(&p->ev);
+        p->timer_active = false;
+    }
     PMIx_Argv_free(p->keys);
 }
 PMIX_CLASS_INSTANCE(prte_data_req_t,

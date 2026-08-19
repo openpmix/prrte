@@ -577,10 +577,11 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender,
     }
 
     /* these answers carry no payload: nothing was found, nothing could be
-     * shown to this requestor, or the command is one that returns only a
-     * status */
+     * shown to this requestor, the wait ran out, or the command is one that
+     * returns only a status */
     if (PMIX_ERR_NOT_FOUND == ret ||
         PMIX_ERR_NO_PERMISSIONS == ret ||
+        PMIX_ERR_TIMEOUT == ret ||
         PRTE_PMIX_UNPUBLISH_CMD == command ||
         PRTE_PMIX_PUBLISH_CMD == command) {
         goto release;

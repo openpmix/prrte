@@ -32,7 +32,9 @@
  *   dataserver lookupwait <key> [seconds] [range]
  *       PMIx_Lookup with PMIX_WAIT, which parks the request in the data
  *       server until somebody publishes the key.  Prints "WAITING" first so
- *       the harness can tell it got that far.
+ *       the harness can tell it got that far.  It also carries PMIX_TIMEOUT
+ *       = <seconds>, so a key nobody ever publishes ends in
+ *       "STATUS PMIX_ERR_TIMEOUT" rather than hanging.
  *
  *   dataserver lookup2 <key1> <key2> [seconds]
  *       Look both keys up in one call.  With only one of them published
