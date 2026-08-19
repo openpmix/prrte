@@ -217,6 +217,65 @@ prte_rml_ancestry_t prte_rml_reconcile_ancestry(pmix_data_array_t* report,
     return verdict;
 }
 
+/* Hand a set of departed daemon ranks to the errmgr, skipping any this daemon
+ * had already recorded.
+ *
+ * PRTE_PROC_STATE_COMM_FAILED is what makes a daemon act on a departure rather
+ * than merely route around it - on the HNP it is what sweeps the dead node's
+ * procs to TERM_WO_SYNC so their job can complete.  It is otherwise raised only
+ * by prte_mca_oob_tcp_component_lost_connection, i.e. only on the daemon that
+ * was holding the socket.  At the default radix that is always the HNP - a
+ * ten-node DVM at radix 64 is flat, so the HNP is every daemon's parent - and
+ * the DVM therefore looked correct.  Give the routing tree any depth and it
+ * stops being true: an interior daemon detects the loss, the notice walks up
+ * and correctly marks the rank failed everywhere including the HNP, and the HNP
+ * - never having lost a socket - never runs the errmgr.  The procs that were on
+ * the dead node are never marked terminated, so the job never completes and its
+ * tool waits forever.  A `prun` against a radix-2 DVM whose job's node was
+ * killed hung indefinitely, where the same DVM at radix 64 released it at once.
+ *
+ * Every path in this file that learns of a departure reports it here, whether
+ * it was told (a failure notice) or deduced it (a peer's lineage that only an
+ * unrecorded death explains).  Those must not diverge: the routing tree's
+ * failed_dmns set is the sole record of what we already know, so a path that
+ * repairs the tree without reporting does not merely stay quiet - it makes
+ * every later notice for that rank look like a duplicate and suppresses the
+ * report for good.
+ *
+ * Which is also why this MUST be called before the repair that records the
+ * ranks, and why it can be: the state activation is thread-shifted, so the
+ * errmgr cannot run ahead of the repair no matter what order the two calls
+ * appear in, whereas the failed_dmns test is only meaningful while the repair
+ * has yet to set the bits.
+ *
+ * For an inferred death that also depends on prte_rml_reconcile_ancestry
+ * having undone the marks it sets while walking - it does, deliberately, "so
+ * the caller can do the full error handling process", and
+ * test_reconcile_ancestry pins it.  A bit left behind there would not merely
+ * skip one report; it would make the rank look known to every path forever.
+ */
+static void report_new_departures(const pmix_data_array_t* failed)
+{
+    /* mirrors the OOB's guard: while finalizing there is nobody left to tell */
+    if (prte_finalizing) {
+        return;
+    }
+    pmix_rank_t* ranks = (pmix_rank_t*) failed->array;
+    for (size_t i = 0; i < failed->size; i++) {
+        pmix_proc_t dmn;
+        /* PMIX_RANK_INVALID is the padding an ancestor walk leaves behind, not
+         * a departure */
+        if (PMIX_RANK_INVALID == ranks[i]) {
+            continue;
+        }
+        if (pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, ranks[i])) {
+            continue;
+        }
+        PMIX_LOAD_PROCID(&dmn, PRTE_PROC_MY_NAME->nspace, ranks[i]);
+        PRTE_ACTIVATE_PROC_STATE(&dmn, PRTE_PROC_STATE_COMM_FAILED);
+    }
+}
+
 /* A child's report of its own lineage, riding its failure notice (see
  * send_failures_notice). Its last entry is the parent it sent to, which is what
  * makes it checkable: strip that entry and what remains is the child's view of
@@ -287,6 +346,7 @@ static void reconcile_child_ancestry(pmix_data_array_t* report,
             " death(s) we had not recorded", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
             PRTE_NAME_PRINT(sender), (unsigned long) inferred.size
         ));
+        report_new_departures(&inferred);
         prte_rml_repair_routing_tree(&inferred, /* global = */ false);
         break;
 
@@ -328,56 +388,14 @@ void prte_rml_recv_failures_notice(
         return;
     }
 
-    /* Note which of these we did not already know about, BEFORE the repair
-     * records them - see the errmgr hand-off below. */
-    pmix_rank_t* incoming = (pmix_rank_t*) failed_ranks.array;
-    size_t n_incoming = failed_ranks.size;
-    bool* newly = NULL;
-    if (0 < n_incoming) {
-        newly = (bool*) calloc(n_incoming, sizeof(bool));
-    }
-    if (NULL != newly) {
-        for (size_t i = 0; i < n_incoming; i++) {
-            newly[i] = (PMIX_RANK_INVALID != incoming[i]) &&
-                       !pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, incoming[i]);
-        }
-    }
+    /* Hand the departure to the errmgr before the repair records it - only
+     * ranks we had not already recorded are reported, so the daemon that
+     * detected the loss itself (and already raised COMM_FAILED from the OOB)
+     * does not raise it twice when the HNP's global broadcast comes back
+     * around, and a duplicate notice is a no-op. */
+    report_new_departures(&failed_ranks);
 
     prte_rml_repair_routing_tree(&failed_ranks, global);
-
-    /* Hand the departure to the errmgr.
-     *
-     * PRTE_PROC_STATE_COMM_FAILED is otherwise raised only by
-     * prte_mca_oob_tcp_component_lost_connection, i.e. only on the daemon that
-     * was holding the socket.  At the default radix that is always the HNP -
-     * a ten-node DVM at radix 64 is flat, so the HNP is every daemon's parent -
-     * and the DVM therefore looked correct.  Give the routing tree any depth
-     * and it stops being true: an interior daemon detects the loss, the notice
-     * walks up and correctly marks the rank failed everywhere including the
-     * HNP, and the HNP - never having lost a socket - never runs the errmgr.
-     * The procs that were on the dead node are never marked terminated, so the
-     * job never completes and its tool waits forever.  A `prun` against a
-     * radix-2 DVM whose job's node was killed hung indefinitely, where the same
-     * DVM at radix 64 released it at once.
-     *
-     * Only ranks this daemon had not already recorded are reported, so the
-     * daemon that detected the loss itself (and already raised COMM_FAILED from
-     * the OOB) does not raise it twice when the HNP's global broadcast comes
-     * back around, and a duplicate notice is a no-op.  The guard mirrors the
-     * OOB's: while finalizing there is nobody left to tell. */
-    if (NULL != newly) {
-        if (!prte_finalizing) {
-            for (size_t i = 0; i < n_incoming; i++) {
-                pmix_proc_t dmn;
-                if (!newly[i]) {
-                    continue;
-                }
-                PMIX_LOAD_PROCID(&dmn, PRTE_PROC_MY_NAME->nspace, incoming[i]);
-                PRTE_ACTIVATE_PROC_STATE(&dmn, PRTE_PROC_STATE_COMM_FAILED);
-            }
-        }
-        free(newly);
-    }
 
     /* repair takes a copy of what it needs, so the unpacked array is ours */
     PMIx_Data_array_destruct(&failed_ranks);
@@ -431,7 +449,8 @@ void prte_rml_recv_adoption_notice(
         break;
 
     case PRTE_RML_ANCESTRY_INFERRED:
-        // Finally, do a full repair on the inferred faults
+        // Finally, report the inferred deaths and do a full repair on them
+        report_new_departures(&inferred);
         prte_rml_repair_routing_tree(&inferred, /* global = */ false);
         break;
 

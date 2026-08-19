@@ -476,6 +476,16 @@ static int test_departed_ranks_survive_recompute(void)
  * reconcile it here, and the whole point of the exercise is that the two
  * daemons converge without waiting for a send to a dead rank to time out.
  *
+ * The "leaves nothing marked failed" checks below are load-bearing, not
+ * tidiness.  The walk marks each rank it hypothesises dead so the next pass of
+ * update_ancestors steps over it, and undoes those marks before returning.
+ * Its caller then reports the inferred deaths to the errmgr, and the test it
+ * reports on is exactly failed_dmns -- "did we already know about this rank"
+ * (report_new_departures(), src/rml/rml_fault_handler.c).  A bit left set here
+ * would therefore not just leak state: it would make every inferred death look
+ * like one already handled, and silently suppress the COMM_FAILED that ends
+ * the dead node's jobs.
+ *
  * This is the piece of fault recovery that IS unit-testable: it is pure
  * computation over prte_rml_base, where prte_rml_repair_routing_tree() -- which
  * is what acts on the verdict -- ends in the grpcomm/filem/relm fault handlers
