@@ -1717,7 +1717,7 @@ test_runtime() {
     # process: publish, confirm, unpublish, confirm gone.
     if ! RUN "test -x $DS"; then
         skp "dataserver client not installed -- re-run ./build.sh"
-    elif ! prted_dvm_start 'node1:2,node2:2,node3:2'; then
+    elif ! prted_dvm_start 'node1:2,node2:4,node3:2'; then
         bad "could not start a DVM for the unpublish test"
     else
         out=$(PRUN "--host node2:1 -n 1 $DS unpublish prte.test.gone 15" 2>&1)
@@ -1762,6 +1762,23 @@ test_runtime() {
                 "--host node2:1 -n 1 $DS publish prte.test.acc.$spec val session 60 $spec"
         done
         sleep 8
+        # Confirm all four are actually published before reading anything.
+        # They must be resident TOGETHER -- the data server purges a
+        # publisher's items when it terminates -- so node2 has to have a slot
+        # for each, and it did not: two of the four died with
+        # JOB_FAILED_TO_MAP, their keys were never published, and the lookups
+        # below then read the resulting NOT_FOUND as a permission verdict.
+        # That reported the gid half of this test as a data-server bug for as
+        # long as it has existed, so check the premise rather than assume it.
+        nacc=0
+        for spec in self-uid other-uid self-gid other-gid; do
+            RUN "grep -q '^PUBLISHED prte.test.acc.$spec' /tmp/ds-acc-$spec.out" \
+                && nacc=$((nacc+1)) \
+                || bad "the $spec publish never happened: $(RUN "cat /tmp/ds-acc-$spec.out" 2>&1 | tr '\n' ' ' | tail -c 200)"
+        done
+        [ "$nacc" = 4 ] \
+            && ok "all four access-permission keys were published" \
+            || bad "only $nacc of 4 access-permission keys were published"
         for spec in self-uid self-gid; do
             out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.acc.$spec 15" 2>&1)
             echo "$out" | grep -q "^FOUND prte.test.acc.$spec" \
