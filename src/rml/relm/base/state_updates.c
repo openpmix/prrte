@@ -8,6 +8,10 @@
  */
 
 #include "constants.h"
+
+#include <string.h>
+
+#include "src/mca/state/state.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 
@@ -101,11 +105,29 @@ static void upstream_update(
         if(0 == bo.size){
             PRTE_RELM_MSG_ERROR_LOG(msg, PRTE_ERR_BAD_PARAM);
         } else if(NULL != msg->data.bytes){
-            if(bo.size != msg->data.size){
-                PRTE_RELM_MSG_ERROR_LOG(msg, PRTE_ERR_OP_IN_PROGRESS);
-                // TODO: GUID clash = job failure?
-            }
+            /* Seeing SENDING again for a message we already hold the data for
+             * is ordinary - a replay we asked for, or a resend after the tree
+             * moved - and it carries the same bytes, so keeping ours and
+             * dropping the copy is right.
+             *
+             * Different bytes under the same <src,uid,dst> is not ordinary.
+             * Two distinct messages are wearing one identity, and only one of
+             * them can be delivered under it: whichever we drop here is lost
+             * for good, and its sender will be ACKed for the other one and
+             * believe it arrived. Silently losing a message is the one thing
+             * this layer exists to prevent, and we cannot tell which of the
+             * two payloads is the real one, so stop rather than deliver the
+             * wrong bytes and call it success. The UIDs are generated, so
+             * arriving here at all means our identity space is already
+             * broken. */
+            bool same = bo.size == msg->data.size &&
+                        0 == memcmp(bo.bytes, msg->data.bytes, bo.size);
             PMIx_Byte_object_destruct(&bo);
+            if(!same){
+                PRTE_RELM_MSG_ERROR_LOG(msg, PRTE_ERR_FATAL);
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+                break;
+            }
         } else {
             msg->data = bo;
         }
@@ -236,10 +258,18 @@ static void local_update(
 
     case PRTE_RELM_STATE_NEW:
         if(PRTE_RELM_STATE_INVALID != msg->state){
-            // Either two attempts to start the same msg, or somehow a new
-            // msg was given the same uid as an existing msg
-            PRTE_RELM_MSG_ERROR_LOG(msg, PRTE_ERR_OP_IN_PROGRESS);
-            // TODO: GUID clash = job failure?
+            /* Either two attempts to start the same msg, or somehow a new msg
+             * was given the same uid as an existing msg. The UID came from our
+             * own counter and every message we start is a fresh signature, so
+             * neither can happen while this daemon's own bookkeeping is sound:
+             * getting here means our message table no longer identifies
+             * messages uniquely, and from now on an ACK may credit the wrong
+             * one. There is nothing narrower to do - handing the message a
+             * different UID would leave the stale entry that proves the
+             * counter is untrustworthy, and every other daemon on the path
+             * keys on the same <src,uid> we just duplicated. */
+            PRTE_RELM_MSG_ERROR_LOG(msg, PRTE_ERR_FATAL);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         } else if(NULL == buf){
             // We need the msg data for this state update
             PRTE_RELM_MSG_ERROR_LOG(msg, PRTE_ERR_BAD_PARAM);
