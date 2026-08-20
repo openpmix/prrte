@@ -133,15 +133,16 @@ static int ras_pmix_register(void)
 
 static int ras_pmix_component_open(void)
 {
-    // initialize the globals
-    prte_mca_ras_pmix_component.connect_to_system_scheduler = false;
-    PMIx_Load_procid(&prte_mca_ras_pmix_component.server, NULL, PMIX_RANK_INVALID);
-    prte_mca_ras_pmix_component.uri = NULL;
-    prte_mca_ras_pmix_component.connection_order = NULL;
-    prte_mca_ras_pmix_component.server_pid = 0;
-    prte_mca_ras_pmix_component.server_host = NULL;
-    prte_mca_ras_pmix_component.max_retries = 5;
-    prte_mca_ras_pmix_component.retry_delay = 1;
+    /* Deliberately empty.  This used to re-initialize every field below,
+     * which are precisely the storage locations ras_pmix_register() binds to
+     * MCA variables - and a framework registers before it opens
+     * (pmix_mca_base_framework_open calls _register first), so those
+     * assignments ran AFTER the user's values had been read into them.  Every
+     * ras_pmix_* parameter was therefore discarded: a scheduler URI, an
+     * nspace, a pid, a host, the retry counts, all of them reset to the
+     * defaults the registration had already applied.  Nothing here needs
+     * initializing that registration does not already do; the component is a
+     * static global, so anything it does not bind starts zeroed. */
     return PRTE_SUCCESS;
 }
 
