@@ -33,6 +33,7 @@ static pmix_status_t modify(prte_pmix_server_req_t *req);
  * Global variable
  */
 prte_ras_base_module_t prte_ras_pmix_module = {
+    .scheduler_owned = true,
     .init = NULL,
     .allocate = allocate,
     .modify = modify,

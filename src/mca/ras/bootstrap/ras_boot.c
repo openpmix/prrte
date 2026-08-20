@@ -31,6 +31,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes);
  * Global variable
  */
 prte_ras_base_module_t prte_ras_bootstrap_module = {
+    .scheduler_owned = false,
     .init = NULL,
     .allocate = allocate,
     .modify = NULL,

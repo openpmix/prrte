@@ -53,3 +53,24 @@ to the DVM but was given a negative number of slots:
 We cannot subtract slots from an unknown host. Please
 correct the file or ensure that we are allocated the
 host in advance.
+
+[ras-base:add-host-managed]
+An add-host or add-hostfile directive was given, but this DVM's allocation
+is owned by a resource manager.
+
+Only the scheduler can decide which nodes this DVM holds. PRRTE cannot add
+one on its own authority - a daemon launched on a node the scheduler has not
+granted fails to start, and that failure takes the whole DVM down rather than
+just the job that asked for it.
+
+To obtain additional nodes, ask the scheduler for them: outside PRRTE before
+starting the DVM, or through a PMIx allocation request that the resource
+manager's component can serve.
+
+[ras-base:add-host-unsupported]
+An add-host or add-hostfile directive was given, but no active component can
+serve it.
+
+The nodes this DVM holds were established by an allocator that does not
+support adding to them after the fact - a bootstrapped DVM, for instance,
+takes its membership from the configuration file every daemon reads.

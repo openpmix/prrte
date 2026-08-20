@@ -54,6 +54,10 @@ PRTE_EXPORT int prte_ras_base_select(void);
 typedef struct prte_ras_base_t {
     /* list of selected modules */
     pmix_list_t selected_modules;
+    /* Does an external resource manager own our allocation?  Copied from the
+     * selected module (prte_ras_base_module_t::scheduler_owned) once, because
+     * everything that wants to know is nowhere near the ras. */
+    bool scheduler_owned;
     /* PMIX_ALLOC_RELEASE requests parked because the DVM was still growing
      * when they arrived, in arrival order. See prte_ras_base_dvm_is_growing()
      * and prte_ras_base_replay_deferred_releases() below. */

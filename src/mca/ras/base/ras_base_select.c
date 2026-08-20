@@ -175,9 +175,12 @@ int prte_ras_base_select(void)
 
     mod = (prte_ras_base_selected_module_t *)
               pmix_list_get_first(&prte_ras_base.selected_modules);
+    prte_ras_base.scheduler_owned = mod->module->scheduler_owned;
     pmix_output_verbose(5, prte_ras_base_framework.framework_output,
-                        "mca:ras:select: active allocator is [%s] (priority %d)",
-                        mod->component->pmix_mca_component_name, mod->pri);
+                        "mca:ras:select: active allocator is [%s] (priority %d, %s)",
+                        mod->component->pmix_mca_component_name, mod->pri,
+                        prte_ras_base.scheduler_owned ? "scheduler-owned"
+                                                      : "locally owned");
 
     return PRTE_SUCCESS;
 }

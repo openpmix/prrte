@@ -51,6 +51,7 @@
  */
 prte_ras_base_t prte_ras_base = {
     .selected_modules = PMIX_LIST_STATIC_INIT,
+    .scheduler_owned = false,
     .deferred_releases = PMIX_LIST_STATIC_INIT,
     .total_slots_alloc = 0,
     .multiplier = 0,
