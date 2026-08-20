@@ -340,6 +340,16 @@ the node to its slot count and leave the rest of the user's `-host` list
 empty. Every mapper here caps itself: by-slot/by-node/by-cpu and ppr read
 the field before placing, and `map_targets` checks it per placement.
 
+**Permission to oversubscribe lifts the ceiling, it does not change the
+distribution.** Each node gets what it was given first, and the procs left
+over once every node has had its share are then split **evenly** over the
+nodes — the same arithmetic by-slot and by-node use for their second pass, so
+every mapper answers an oversubscribed job alike. With `-host a:2,b:2,c:2`
+and `--map-by core:oversubscribe`, `-n 8` is 3/3/2, `-n 12` is 4/4/4 and
+`-n 18` is 6/6/6, each identical to `--map-by slot:oversubscribe`. Before
+this, an object map put the whole overflow on the head of the list (8/0/0,
+8/2/2, 14/2/2).
+
 **A cap that is *larger* than the node is reconciled in `get_target_nodes`,
 and the answer depends on who sized the node.** A resource manager decided
 how much of that node is ours and we cannot hand a job more, so the request

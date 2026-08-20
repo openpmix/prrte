@@ -130,7 +130,8 @@ and quietly dropping the node shrinks the allocation the user gave us
 without telling them. `outofcpus` vs. `allfull` distinguish the two failure
 help messages (`allocation-overload` vs `failed-map`). Note this mapper has
 **no** second-pass block — the outer `do { … } while (!allfull)` loop handles
-iteration.
+iteration, and the per-pass budget below is what gives those later passes the
+job byslot's second pass does.
 
 **A node's budget is `slots_available`, not its slot count.** The loop asks
 for one proc at a time, so nothing in `check_avail`/`check_oversubscribed` —
@@ -141,6 +142,23 @@ that, `--host a:1,b:1,c:1 -n 3` selecting within an existing allocation put
 all three procs on `a` and left `b` and `c` out of the map — the total was
 still checked against the caps, so the job ran, just nowhere near where it
 was told to. See the framework guide.
+
+**Each pass gives a node a budget, and the budget is what makes an
+oversubscribed job come out balanced.** On the first pass it is
+`node->slots_available` — what the node offers this job. On every pass after
+that (which can only happen when oversubscription is allowed) it is an even
+share of the procs still unplaced, recomputed per pass over the nodes still
+on the list: the same `extra_procs_to_assign`/`nxtra_nodes` split byslot uses
+for its second pass, which is why the two now agree — `-host a:2,b:2,c:2`
+with `--map-by core:oversubscribe` gives 3/3/2 at `-n 8`, 4/4/4 at `-n 12`
+and 6/6/6 at `-n 18`, exactly as `--map-by slot:oversubscribe` does.
+Recomputing per pass (rather than once, as byslot does) also lets the split
+correct itself when a node cannot take its share because its cpus ran out or
+it hit `max_slots` and left the list.
+
+Being allowed to oversubscribe says how many procs a node may end up with,
+not that the head of the list may have them all: without the budget an
+object map filled the first node with the entire job.
 
 **The `redo:` loop and `check_avail` do not mix casually.** When
 `check_avail` declines a node it may also have removed it from `node_list`

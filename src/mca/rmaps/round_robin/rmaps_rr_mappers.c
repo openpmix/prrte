@@ -673,9 +673,11 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
 {
     int rc=PRTE_SUCCESS, nprocs_mapped;
     prte_node_t *node, *nnext;
-    int ncpus;
+    int ncpus, budget, nplaced;
+    int extra_procs_to_assign = 0, nxtra_nodes = 0;
+    float balance;
     prte_proc_t *proc;
-    bool nodefull, allfull, outofcpus=false;
+    bool nodefull, allfull, outofcpus=false, firstpass, wasfirst;
     hwloc_obj_t obj = NULL;
     unsigned j, nobjs;
     void *ctx = NULL;
@@ -718,8 +720,32 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
      */
     allfull = true;
     nprocs_mapped = 0;
+    firstpass = true;
     do {
         allfull = true;
+        /* Every pass after the first is placing procs the nodes have no room
+         * for, which only happens when we were told we may oversubscribe.
+         * Spread those evenly rather than letting the head of the list absorb
+         * them: the same even split by-slot and by-node use for their second
+         * pass, so the mappers answer an oversubscribed job alike. Recomputed
+         * each time round because a node may take less than its share (its
+         * cpus ran out, or it hit max_slots and left the list), and the next
+         * pass should then divide what is left among the nodes still here. */
+        if (!firstpass && options->oversubscribe) {
+            int nnodes = (int) pmix_list_get_size(node_list);
+            int remaining = (int) app->num_procs - nprocs_mapped;
+            if (0 >= nnodes) {
+                break;
+            }
+            balance = (float) remaining / (float) nnodes;
+            extra_procs_to_assign = (int) balance;
+            nxtra_nodes = 0;
+            if (0 < (balance - (float) extra_procs_to_assign)) {
+                /* the first few nodes take one more than the rest */
+                nxtra_nodes = remaining - (extra_procs_to_assign * nnodes);
+                extra_procs_to_assign++;
+            }
+        }
         PMIX_LIST_FOREACH_SAFE(node, nnext, node_list, prte_node_t)
         {
             outofcpus = false;
@@ -768,24 +794,42 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
                                 "mca:rmaps:rr: found %u %s objects on node %s",
                                 nobjs, tgts->name, node->name);
 
+            /* How many procs may this node take on this pass?
+             *
+             * What a node offers a job is node->slots_available, not its slot
+             * count: a ":N" suffix on a -host entry caps what this job may
+             * take from it, and get_target_nodes records the cap there
+             * (setup_proc consumes one per placed proc). Nothing below sees
+             * it - check_avail and check_oversubscribed both measure against
+             * node->slots - so without this the loop filled each node to its
+             * slot count and left the rest of the -host list empty.
+             *
+             * Permission to oversubscribe does not change how the procs are
+             * distributed, only how many a node may end up with. So the first
+             * pass still hands each node exactly what it offers, and the
+             * passes after it hand out the even share computed above. A tool
+             * does not consume slots at all, so nothing bounds it here. */
+            if (PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
+                budget = (int) app->num_procs;
+            } else if (firstpass || !options->oversubscribe) {
+                budget = node->slots_available;
+            } else {
+                budget = extra_procs_to_assign;
+                if (0 < nxtra_nodes) {
+                    --nxtra_nodes;
+                    if (0 == nxtra_nodes) {
+                        --extra_procs_to_assign;
+                    }
+                }
+            }
             nodefull = false;
+            nplaced = 0;
         redo:
             for (j=0; j < nobjs && nprocs_mapped < app->num_procs && !nodefull; j++) {
                 pmix_output_verbose(10, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps:rr: assigning proc to object %d", j);
-                /* has this node given the job all it is allowed to? The
-                 * number of slots a node contributes to a job is not always
-                 * its slot count: a ":N" suffix on a -host entry caps what
-                 * this job may take from it, and get_target_nodes records
-                 * that cap in slots_available (setup_proc consumes one per
-                 * placed proc). Nothing below sees it - check_avail and
-                 * check_oversubscribed both measure against node->slots -
-                 * so this loop would happily fill the node to its slot
-                 * count and leave the rest of the -host list empty. The
-                 * other mappers cap themselves the same way. */
-                if (!options->oversubscribe &&
-                    !PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
-                    0 >= node->slots_available) {
+                if (nplaced >= budget) {
+                    /* this node has had its share for this pass */
                     nodefull = true;
                     break;
                 }
@@ -842,6 +886,7 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
                     tgts->placed(proc, options, ctx, j);
                 }
                 nprocs_mapped++;
+                nplaced++;
                 rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
                 if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
                     /* move to next node */
@@ -882,7 +927,16 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
         if (tgts->nowrap) {
             break;
         }
-    } while (nprocs_mapped < app->num_procs && !allfull);
+        wasfirst = firstpass;
+        firstpass = false;
+        /* A first pass that placed nothing at all normally means the job
+         * cannot be placed - but not when we may oversubscribe: there every
+         * node offering nothing is exactly the case oversubscription exists
+         * for, and it is the pass after this one that places those procs.
+         * Ending the loop here failed the map instead, which is what a
+         * PMIx_Spawn onto a node its parent job has filled looks like. */
+    } while (nprocs_mapped < app->num_procs &&
+             (!allfull || (options->oversubscribe && wasfirst)));
 
     if (nprocs_mapped == app->num_procs) {
         return PRTE_SUCCESS;

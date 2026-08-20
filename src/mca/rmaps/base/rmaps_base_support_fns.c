@@ -477,6 +477,12 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
                 PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                      "%s node %s is fully used, but available for oversubscription",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
+                /* this node offers the job nothing - say so. The mappers read
+                 * slots_available as what they may take here, and this branch
+                 * used to leave whatever the last job to map left behind: a
+                 * count from a node that had room, against a node that has
+                 * none. */
+                node->slots_available = 0;
                 /* cache the available CPUs for later */
                 hwloc_bitmap_copy(node->jobcache, node->available);
             } else if (!keepall) {
