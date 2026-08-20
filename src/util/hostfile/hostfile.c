@@ -426,6 +426,7 @@ static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_
 {
     int token;
     int rc = PRTE_SUCCESS;
+    struct stat sbuf;
 
     cur_hostfile_name = hostfile;
 
@@ -434,6 +435,22 @@ static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_
      * every hostfile after the first reported its parse errors at a line
      * number carried over from the ones before it */
     prte_util_hostfile_line = 1;
+
+    /* Refuse anything that is not a regular file BEFORE it reaches the lexer.
+     * fopen() opens a directory quite happily, and every read from the result
+     * then fails with EISDIR - which the lexer does not distinguish from "no
+     * input available yet", so it spins and the tool never gets an answer at
+     * all.  A user reaches this by naming a directory ("--hostfile /tmp", or
+     * a path variable that expanded to one), which deserves the same message
+     * a missing file gets, not a hang.  A stat that fails is left to fopen
+     * below, which is where "no such file" - and the default-hostfile
+     * exemption for it - is already handled. */
+    if (0 == stat(hostfile, &sbuf) && !S_ISREG(sbuf.st_mode)) {
+        prte_show_help("help-hostfile.txt", "not-a-file", true, hostfile);
+        rc = PRTE_ERR_SILENT;
+        goto unlock;
+    }
+
     prte_util_hostfile_in = fopen(hostfile, "r");
     if (NULL == prte_util_hostfile_in) {
         if (NULL == prte_default_hostfile || 0 != strcmp(prte_default_hostfile, hostfile)) {

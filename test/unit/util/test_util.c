@@ -912,6 +912,20 @@ static int test_hostfile(void)
     PMIX_LIST_DESTRUCT(&nodes);
 
     /*
+     * ...and so is a path that exists but is not a regular file. This is not
+     * pedantry: fopen() opens a directory quite happily, every read from the
+     * result fails with EISDIR, and the lexer does not tell that apart from
+     * "no input yet" - so it spun, and "prun --hostfile /tmp" hung the tool
+     * forever instead of reporting a typo. The refusal has to happen before
+     * the file is opened, which is what this pins.
+     */
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    rc = prte_util_add_hostfile_nodes(&nodes, ".");
+    CHECK("a directory is refused, not parsed", PRTE_SUCCESS != rc);
+    CHECK("and contributed no nodes", 0 == pmix_list_get_size(&nodes));
+    PMIX_LIST_DESTRUCT(&nodes);
+
+    /*
      * A syntax error has to be refused - and, because the parser is a
      * process-global flex scanner reading a process-global FILE*, it also has
      * to leave nothing behind: the good hostfile parsed immediately

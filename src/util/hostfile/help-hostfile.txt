@@ -252,6 +252,15 @@ PRTE was unable to open the hostfile:
 
 Check to make sure the path and filename are correct.
 #
+[not-a-file]
+
+The hostfile given is not a regular file:
+
+   %s
+
+A directory (or a device, socket, or similar) cannot be read as a hostfile.
+Check to make sure the path and filename are correct.
+#
 [port]
 
 PRTE detected a bad parameter in the hostfile:
