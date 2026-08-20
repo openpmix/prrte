@@ -59,6 +59,7 @@ static int finalize(void);
  * Global variable
  */
 prte_ras_base_module_t prte_ras_lsf_module = {
+    .scheduler_owned = true,
     .init = NULL,
     .allocate = allocate,
     .finalize = finalize

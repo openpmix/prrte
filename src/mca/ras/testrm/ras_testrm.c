@@ -31,6 +31,7 @@ static int finalize(void);
  * Global variable
  */
 prte_ras_base_module_t prte_ras_testrm_module = {
+    .scheduler_owned = false,
     .allocate = allocate,
     .finalize = finalize
 };

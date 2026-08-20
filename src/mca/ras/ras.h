@@ -117,6 +117,18 @@ typedef int (*prte_ras_base_module_finalize_fn_t)(void);
  * ras module
  */
 struct prte_ras_base_module_2_0_0_t {
+    /** Does an external resource manager own this allocation?
+     *
+     * True when the nodes came from a scheduler that alone decides what this
+     * DVM holds - Slurm, PBS, LSF, Flux, gridengine, or a PMIx scheduler.
+     * PRRTE may then SELECT from the allocation but must never add to it: a
+     * node the scheduler did not grant cannot be launched on, and pretending
+     * otherwise produces a daemon launch that fails and takes the DVM with
+     * it.  False for the allocators that are themselves the authority - a
+     * hostfile, a bootstrap configuration, the synthetic test components -
+     * where growing the pool on the user's say-so is exactly the point.
+     */
+    bool                                scheduler_owned;
     /** init */
     prte_ras_base_module_init_fn_t      init;
     /** Allocation function pointer */
@@ -149,7 +161,7 @@ typedef pmix_mca_base_component_t prte_ras_base_component_t;
  * Bump it on any change to the module interface that a component built
  * against the previous one would not survive. */
 #define PRTE_MCA_ras_MAJOR_VERSION   2
-#define PRTE_MCA_ras_MINOR_VERSION   0
+#define PRTE_MCA_ras_MINOR_VERSION   1
 #define PRTE_MCA_ras_RELEASE_VERSION 0
 
 END_C_DECLS

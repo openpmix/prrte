@@ -77,6 +77,7 @@ static int prte_ras_slurm_finalize(void);
  * RAS slurm module
  */
 prte_ras_base_module_t prte_ras_slurm_module = {
+    .scheduler_owned = true,
     .init = init,
     .allocate = prte_ras_slurm_allocate,
     .modify = modify,

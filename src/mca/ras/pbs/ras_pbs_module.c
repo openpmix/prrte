@@ -58,6 +58,7 @@ static char *filename;
  * Global variable
  */
 prte_ras_base_module_t prte_ras_pbs_module = {
+    .scheduler_owned = true,
     .allocate = allocate,
     .finalize = finalize
 };

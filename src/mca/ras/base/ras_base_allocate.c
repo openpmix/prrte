@@ -1901,9 +1901,42 @@ void prte_ras_base_complete_request(prte_pmix_server_req_t *req)
     }
 }
 
+/*
+ * May an add-host/add-hostfile directive be honored here?
+ *
+ * Two different noes.  Under an allocation owned by an external resource
+ * manager it is not PRRTE's to grant: only the scheduler can say which nodes
+ * this DVM holds, and launching a daemon on one it did not grant does not
+ * fail locally - the launch fails and takes the whole DVM with it.  That was
+ * the behavior before this check existed.
+ *
+ * Otherwise the request is routed by name to the component that serves it, so
+ * refuse if that component is not the active allocator.  A bootstrapped DVM
+ * is the case that reaches this: its membership comes from a configuration
+ * file every daemon reads, and ras/bootstrap outranks ras/hosts.
+ */
+static int ras_base_add_hosts_allowed(void)
+{
+    prte_ras_base_selected_module_t *mod;
+
+    if (prte_ras_base.scheduler_owned) {
+        prte_show_help("help-ras-base.txt", "ras-base:add-host-managed", true);
+        return PRTE_ERR_NOT_SUPPORTED;
+    }
+
+    PMIX_LIST_FOREACH(mod, &prte_ras_base.selected_modules, prte_ras_base_selected_module_t) {
+        if (0 == strcasecmp("hosts", mod->component->pmix_mca_component_name)) {
+            return PRTE_SUCCESS;
+        }
+    }
+
+    prte_show_help("help-ras-base.txt", "ras-base:add-host-unsupported", true);
+    return PRTE_ERR_NOT_SUPPORTED;
+}
+
 int prte_ras_base_add_hosts(prte_job_t *jdata)
 {
-    int i;
+    int i, rc;
     prte_app_context_t *app;
     char *hosts, **hostfiles, **addhosts, *tmp;
     prte_pmix_server_req_t *req;
@@ -1936,6 +1969,18 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
     if (NULL == hostfiles && NULL == addhosts) {
         // there were no directives
         return PRTE_SUCCESS;
+    }
+
+    /* Can this be served at all?  Refuse here, synchronously, rather than
+     * posting a request nothing will answer: a few lines below this marks the
+     * DVM not-ready and the caller parks the job in the cache, and only the
+     * grow's VM_READY re-entry releases it.  A request no module serves would
+     * leave the job waiting on a DVM that never becomes ready again. */
+    rc = ras_base_add_hosts_allowed();
+    if (PRTE_SUCCESS != rc) {
+        PMIx_Argv_free(hostfiles);
+        PMIx_Argv_free(addhosts);
+        return rc;
     }
 
     // create an allocation request tracker

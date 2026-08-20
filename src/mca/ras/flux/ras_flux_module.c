@@ -74,6 +74,7 @@ static int parse_json_payload(json_t *root,  pmix_list_t *prte_nodelist);
  * Global variable
  */
 prte_ras_base_module_t prte_ras_flux_module = {
+    .scheduler_owned = true,
     .init = init,
     .allocate = allocate,
     .modify = modify,
