@@ -141,33 +141,81 @@ distinct requester among its targets: one campaign can cover several grows.
 
 ---
 
-## Component selection is not "pick one"
+## An allocation has exactly one owner
 
-`prte_ras_base_select()` (in `ras_base_select.c`) works like the `rmaps`
-selector, not the usual single-winner MCA pattern: it queries every
-component, runs each returned module's `init`, and stores **all** of
-them **priority-sorted** in `prte_ras_base.selected_modules`
-(a `pmix_list_t` of `prte_ras_base_selected_module_t`, each holding
-`pri`, `module`, `component`). The driver then walks that list at
-allocate time. With `ras_base_verbose > 4` the selector prints the final
-prioritized list.
+`prte_ras_base_select()` (in `ras_base_select.c`) queries every component and
+builds a **priority-ordered candidate list**, then takes the first candidate
+whose `init()` succeeds. That one module is stored in
+`prte_ras_base.selected_modules` — still a `pmix_list_t` of
+`prte_ras_base_selected_module_t`, holding exactly one entry, so that every
+consumer (allocate, modify, release, shrink-complete, finalize) iterates
+unchanged. Only the winner is initialized, which is why `ras/slurm` no longer
+stands up its elastic bookkeeping in a DVM it is not allocating for. With
+`ras_base_verbose > 4` the selector prints the candidates and names the winner.
 
-Query priorities (higher wins first):
+Query priorities (higher wins):
 
 ```
 simulator 1000  =  testrm 1000  >  pbs 100  =  gridengine 100  =  flux 100
    >  lsf 75  >  slurm 50  >  bootstrap 20  =  pmix 20  >  hosts 1
 ```
 
-`hosts` is the catch-all default at priority **1** — it is always
-available and is tried last, handling `--host`/`--hostfile`/default
-hostfile and (via the base) the ultimate fall-back to a 1-slot local
-node. The RM components make themselves available only when their
-environment is detected (e.g. `slurm` requires a Slurm job id in the
-environment — see [`common/slurm`](../common/slurm/AGENTS.md)), so on any
-given machine at most one RM answers, then `hosts` closes out the list.
+`hosts` is the catch-all at priority **1**: always available, it handles
+`--host`/`--hostfile`/the default hostfile and (via the base) the ultimate
+fall-back to a 1-slot local node. The RM components make themselves available
+only when their environment is detected (e.g. `slurm` requires a Slurm job id
+— see [`common/slurm`](../common/slurm/AGENTS.md)), so at most one RM answers
+on a given machine. `pmix` answers only when it has actually been pointed at a
+scheduler (a URI, nspace, pid, host, connection order, or the
+system-scheduler switch); it used to answer unconditionally, which was
+harmless only while every module was kept, and would now shadow `hosts` in
+every unmanaged environment — its `allocate()` always returns
+`TAKE_NEXT_OPTION`, so nothing would read a hostfile.
 `simulator`/`testrm` sit at 1000 so that when explicitly configured they
 pre-empt everything.
+
+**This was multi-select until recently, and it never delivered what it was
+for.** The idea was a mixed allocator — a scheduler allocation plus extra
+hosts from a hostfile — but `prte_ras_base_allocate()` breaks at the first
+module that succeeds, so there is no union step and the second allocator never
+contributed a node. (Under a scheduler a hostfile is a *filter*; one naming a
+node outside the allocation is refused outright.) What the extra modules did
+do was serve `prte_ras_base_modify()`: a request the real allocator declined
+fell through to a module with no authority over the allocation. `ras/slurm`
+answers `PMIX_ERR_NOT_SUPPORTED` to anything that is not EXTEND/RELEASE/CANCEL
+and the driver reads that as "ask the next module", so a `PMIX_ALLOC_NEW`
+naming hostnames inside a Slurm allocation was served by `ras/hosts` — answered
+`PMIX_SUCCESS` with an allocation id minted, while Slurm was never asked and
+had granted nothing. The daemon launch on the un-allocated node then failed
+and took the DVM down. `docs/todo.rst` records what supporting mixed
+allocators would actually take.
+
+## Who may add a node
+
+Each module states, in `prte_ras_base_module_t::scheduler_owned`, whether an
+external resource manager owns what it allocated. Slurm, PBS, LSF, Flux,
+gridengine and the PMIx scheduler say yes; hosts, bootstrap, simulator and
+testrm say no. The base copies the selected module's answer into
+`prte_ras_base.scheduler_owned`.
+
+Where it is yes, **PRRTE may select from the allocation but must never add to
+it.** `prte_ras_base_add_hosts()` refuses `--add-host`/`--add-hostfile`
+outright (`ras-base:add-host-managed`), and refuses when no active component
+can serve the directive at all (`ras-base:add-host-unsupported`, which a
+bootstrapped DVM reaches). The refusal is issued **before** the request is
+posted, and that placement is load-bearing: serving it is asynchronous, the
+DVM is marked not-ready and the job parked in the cache, and only the grow's
+`VM_READY` re-entry releases it — so a request nothing answers leaves the job
+waiting on a DVM that never becomes ready again.
+
+Note what already handles the other direction: a node a scheduler has taken
+back is marked `PRTE_NODE_STATE_NOT_INCLUDED` by
+`prte_ras_slurm_exclude_shrunk_nodes()`, and both `setup_virtual_machine`
+branches and the mapper skip that state. Its pool entry deliberately survives
+— the pool index is `PMIX_NODEID` and must never be reused. The only thing
+that ever brought such a node back was `--add-host`, because
+`prte_ras_base_node_insert()` carries `PRTE_NODE_STATE_ADDED` onto an existing
+pool entry; refusing add-host under a scheduler closes that.
 
 ---
 
@@ -189,7 +237,7 @@ framework. Its phases:
    it twice. (The sanctioned way to grow an allocation is
    add-host/add-hostfile or an allocation request →
    `prte_ras_base_modify`.)
-2. **Cycle modules.** Walk `selected_modules` in priority order calling
+2. **Ask the allocator.** Walk `selected_modules` — one entry — calling
    `mod->module->allocate(jdata, &nodes)`, honoring the return protocol
    above.
 3. **Empty-list handling.** If no module contributed and
@@ -358,7 +406,8 @@ deviation*.)
 
 | Field | Meaning |
 |-------|---------|
-| `selected_modules` | Priority-sorted list of selected components. |
+| `selected_modules` | The selected component. A one-entry list so every consumer can iterate it. |
+| `scheduler_owned` | Does an external RM own our allocation? Copied from the selected module. |
 | `total_slots_alloc` | Sum of `slots` across the pool. |
 | `multiplier` | `ras_base_multiplier` — fabricate N daemons/node to simulate scale (default 1). |
 | `launch_orted_on_hn` | `ras_base_launch_orted_on_hn` — run a daemon on the head node. |
