@@ -755,6 +755,54 @@ def hostcap_cases(topo):
                expect_counts={"nodeA0": 3, "nodeA1": 3, "nodeA2": 2},
                expect="map")
 
+    yield Case("hostcap.%s.slots-oversub-span" % topo.name, "hostcap", topo,
+               "capped", "nodeA0:2,nodeA1:2,nodeA2:2",
+               [("nodeA0", 2), ("nodeA1", 2), ("nodeA2", 2)],
+               map_by="core:oversubscribe:span", n=8, alloc_args=small,
+               expect_counts={"nodeA0": 3, "nodeA1": 3, "nodeA2": 2},
+               expect="map")
+
+    # :SPAN answers the same job the same way - it reaches the balance by
+    # cycling the nodes rather than by splitting a remainder, so this is
+    # worth pinning on both paths
+    yield Case("hostcap.%s.cap-span" % topo.name, "hostcap", topo,
+               "capped", "nodeA0:2,nodeA1:2,nodeA2:2",
+               [("nodeA0", 2), ("nodeA1", 2), ("nodeA2", 2)],
+               map_by="core:span", n=6, alloc_args=alloc,
+               expect_counts={"nodeA0": 2, "nodeA1": 2, "nodeA2": 2},
+               expect="map")
+
+    yield Case("hostcap.%s.cap-span-oversub" % topo.name, "hostcap", topo,
+               "capped", "nodeA0:2,nodeA1:2,nodeA2:2",
+               [("nodeA0", 2), ("nodeA1", 2), ("nodeA2", 2)],
+               map_by="core:oversubscribe:span", n=8, alloc_args=alloc,
+               expect_counts={"nodeA0": 3, "nodeA1": 3, "nodeA2": 2},
+               expect="map")
+
+    # :SPAN treats the allocation as one big node, so it hands out one target
+    # per node per trip round the list.  What that buys is a balanced job:
+    # the same request without :SPAN fills each node in turn instead.  Pinned
+    # against an allocation whose nodes have more cores than slots, since a
+    # node-major walk and an interleaved one only differ once a node can hold
+    # more than its share.
+    four = ("--prtemca", "ras", "simulator",
+            "--prtemca", "ras_simulator_num_nodes", "3",
+            "--prtemca", "ras_simulator_slots", "4",
+            "--prtemca", "ras_simulator_max_slots", "0")
+    allfour = "nodeA0:4,nodeA1:4,nodeA2:4"
+    fourpool = [("nodeA0", 4), ("nodeA1", 4), ("nodeA2", 4)]
+    for cid, mb, n, cnt in (
+            ("span-balance", "core:span", 8, {"nodeA0": 3, "nodeA1": 3, "nodeA2": 2}),
+            ("span-fewer-than-nodes", "core:span", 2, {"nodeA0": 1, "nodeA1": 1}),
+            ("span-exact", "core:span", 12, {"nodeA0": 4, "nodeA1": 4, "nodeA2": 4}),
+            ("span-oversub", "core:oversubscribe:span", 14,
+             {"nodeA0": 5, "nodeA1": 5, "nodeA2": 4}),
+            # the contrast: no :SPAN, so the nodes are filled in turn
+            ("nospan-fills", "core", 8, {"nodeA0": 4, "nodeA1": 4})):
+        yield Case("hostcap.%s.%s" % (topo.name, cid), "hostcap", topo,
+                   "capped", allfour, fourpool, map_by=mb, n=n,
+                   alloc_args=four, expect_counts=cnt, expect="map")
+
     # A node with nothing left to give is what oversubscription is FOR, and it
     # is reached without a spawn: the second app of an MPMD job maps against
     # the slots the first one just consumed.  The first pass hands out what
@@ -769,7 +817,6 @@ def hostcap_cases(topo):
                apps=[AppSpec(6), AppSpec(2)], alloc_args=small,
                expect_counts={"nodeA0": 3, "nodeA1": 3, "nodeA2": 2},
                expect="map")
-
     # a cap ABOVE what the node holds is a different question, and the answer
     # turns on who sized the node.  ras/simulator declares itself not
     # scheduler-owned, so here the ":N" re-describes the node and the job maps

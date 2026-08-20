@@ -178,7 +178,12 @@ the ``--mapby`` option (except where noted):
 * ``SPAN`` load balance the processes across the allocation by treating
   the allocation as a single "super-node" (can not be used in
   combination with ``slot``, ``node``, ``seq``, ``ppr``, ``rankfile``, or
-  ``pe-list`` directives)
+  ``pe-list`` directives). One process is placed on each object in turn,
+  cycling across the nodes, so a job that does not fill the allocation
+  spreads over all of it instead of filling the first nodes. On three
+  4-slot nodes, ``-n 8 --map-by core:SPAN`` places 3, 3 and 2 processes,
+  where ``--map-by core`` alone places 4 and 4 and leaves the third node
+  empty.
 
 * ``OVERSUBSCRIBE`` allow more processes on a node than processing elements
 

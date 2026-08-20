@@ -673,15 +673,17 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
 {
     int rc=PRTE_SUCCESS, nprocs_mapped;
     prte_node_t *node, *nnext;
-    int ncpus, budget, nplaced;
+    int ncpus, budget, nplaced, ndx;
     int extra_procs_to_assign = 0, nxtra_nodes = 0;
     float balance;
     prte_proc_t *proc;
-    bool nodefull, allfull, outofcpus=false, firstpass, wasfirst;
+    bool nodefull, allfull, outofcpus=false, firstpass, wasfirst, interleave;
     hwloc_obj_t obj = NULL;
-    unsigned j, nobjs;
+    unsigned i, j, nobjs, start;
     void *ctx = NULL;
     bool began = false;
+    int *cursor = NULL;
+    int ncursor = 0;
 
     pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr:byobj mapping by %s for job %s slots %d num_procs %lu",
@@ -718,6 +720,32 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
      * to the next node. Thus, procs tend to be "front loaded" onto the
      * list of nodes, as opposed to being "load balanced" in the span mode
      */
+    /* Span cycles across the nodes, so it has to remember which target it
+     * used last on each of them: the k'th proc a node receives goes on its
+     * k'th target. Keyed by the node's slot in the global pool, which is the
+     * one identifier that survives a node being dropped from the list.
+     * A target set that cannot be revisited (nowrap) is left alone - it gets
+     * one pass, so there is nothing to cycle. */
+    interleave = (options->mapspan && !tgts->nowrap);
+    if (interleave) {
+        PMIX_LIST_FOREACH(node, node_list, prte_node_t) {
+            if (node->index >= ncursor) {
+                ncursor = node->index + 1;
+            }
+        }
+        if (0 < ncursor) {
+            cursor = (int *) calloc(ncursor, sizeof(int));
+            if (NULL == cursor) {
+                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                goto errout;
+            }
+        } else {
+            /* no node carries a pool index - nothing to key on, so place
+             * these the way a non-span map would rather than guess */
+            interleave = false;
+        }
+    }
+
     allfull = true;
     nprocs_mapped = 0;
     firstpass = true;
@@ -731,7 +759,7 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
          * each time round because a node may take less than its share (its
          * cpus ran out, or it hit max_slots and left the list), and the next
          * pass should then divide what is left among the nodes still here. */
-        if (!firstpass && options->oversubscribe) {
+        if (!firstpass && options->oversubscribe && !interleave) {
             int nnodes = (int) pmix_list_get_size(node_list);
             int remaining = (int) app->num_procs - nprocs_mapped;
             if (0 >= nnodes) {
@@ -809,8 +837,22 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
              * pass still hands each node exactly what it offers, and the
              * passes after it hand out the even share computed above. A tool
              * does not consume slots at all, so nothing bounds it here. */
+            ndx = (NULL != cursor && 0 <= node->index && node->index < ncursor)
+                  ? node->index : -1;
+            start = 0;
             if (PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
                 budget = (int) app->num_procs;
+            } else if (interleave) {
+                /* one target per node per trip round the list - the cycling
+                 * IS the load balance, so there is no share to compute here
+                 * and no need to treat the first pass differently: a node
+                 * simply stops taking procs when it has given what it has,
+                 * unless we may oversubscribe, in which case it keeps its
+                 * place in the rotation and the overflow spreads itself. */
+                budget = (options->oversubscribe || 0 < node->slots_available) ? 1 : 0;
+                if (0 <= ndx) {
+                    start = (unsigned) (cursor[ndx] % (int) nobjs);
+                }
             } else if (firstpass || !options->oversubscribe) {
                 budget = node->slots_available;
             } else {
@@ -825,7 +867,11 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
             nodefull = false;
             nplaced = 0;
         redo:
-            for (j=0; j < nobjs && nprocs_mapped < app->num_procs && !nodefull; j++) {
+            for (i=0; i < nobjs && nprocs_mapped < app->num_procs && !nodefull; i++) {
+                /* the node-major walk takes the targets in order; the
+                 * interleaved one resumes where this node left off, wrapping
+                 * so an oversubscribed second lap starts over at the front */
+                j = (0 == start) ? i : (unsigned) ((start + i) % nobjs);
                 pmix_output_verbose(10, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps:rr: assigning proc to object %d", j);
                 if (nplaced >= budget) {
@@ -887,6 +933,9 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
                 }
                 nprocs_mapped++;
                 nplaced++;
+                if (0 <= ndx) {
+                    cursor[ndx]++;
+                }
                 rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
                 if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
                     /* move to next node */
@@ -939,10 +988,17 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
              (!allfull || (options->oversubscribe && wasfirst)));
 
     if (nprocs_mapped == app->num_procs) {
+        if (NULL != cursor) {
+            free(cursor);
+        }
         return PRTE_SUCCESS;
     }
 
 errout:
+    if (NULL != cursor) {
+        free(cursor);
+        cursor = NULL;
+    }
     /* an early exit can leave the enumerator holding this node's state */
     if (began && NULL != tgts->end) {
         tgts->end(ctx);
