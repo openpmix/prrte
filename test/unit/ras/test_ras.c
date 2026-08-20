@@ -30,10 +30,9 @@
  *      forgets to fill in allocate contributes nothing and is invisible.
  *      Check every statically-built component's vtable.
  *
- *   3. prte_ras_base_select. Unlike the usual single-winner MCA pattern,
- *      ras keeps ALL modules that answer and stores them priority-sorted;
- *      the driver depends on that ordering, and on `hosts` (priority 1)
- *      always being present and last so the local-host fallback works.
+ *   3. prte_ras_base_select. Exactly one module is selected - an allocation
+ *      has one owner - and with no RM in the environment that is `hosts`
+ *      (priority 1), so the local-host fallback still works.
  *
  *   4. prte_ras_base_flag_string, which renders the node flag bitmask for
  *      --display-allocation.
@@ -63,6 +62,7 @@
 #include "src/util/proc_info.h"
 
 #include "src/mca/ras/base/base.h"
+#include "src/mca/ras/pmix/ras_pmix.h"
 #include "src/mca/ras/ras.h"
 
 #define CHECK(label, cond)                                              \
@@ -606,18 +606,25 @@ static int test_module_contract(void)
 }
 
 /*
- * ras keeps every module that answers, priority-sorted -- it is not a
- * single-winner selection. The driver walks that list in order, and the
- * always-available `hosts` component must sort last so the RM components
- * get first refusal and the local-host fallback still runs.
+ * An allocation has exactly one owner: ras selects a single module, the
+ * highest-priority candidate whose init() succeeds.
+ *
+ * It used to keep every module that answered and walk the list, and that is
+ * what made a PMIX_ALLOC_NEW the real allocator had declined fall through to
+ * ras/hosts, which added nodes the scheduler had never granted.  So "exactly
+ * one" is the property under test, not an implementation detail.
+ *
+ * This runs with every RM environment variable unset, so the only component
+ * that can answer is `hosts` -- which is also the assertion that ras/pmix
+ * stays out of the way: it is priority 20 against hosts' 1 and would win if
+ * it still answered unconditionally, and since its allocate() only ever
+ * returns TAKE_NEXT_OPTION there would then be nothing left to read a
+ * hostfile.
  */
 static int test_select(void)
 {
     int failures = 0;
     prte_ras_base_selected_module_t *mod;
-    int last_pri = INT_MAX;
-    bool ordered = true, found_hosts = false;
-    const char *tail = NULL;
     int rc;
 
     /* keep a developer's own allocation out of the result */
@@ -638,35 +645,38 @@ static int test_select(void)
 
     rc = prte_ras_base_select();
     CHECK("select: rc", PRTE_SUCCESS == rc);
-    CHECK("select: something selected",
-          0 < pmix_list_get_size(&prte_ras_base.selected_modules));
+    CHECK("select: exactly one module selected",
+          1 == pmix_list_get_size(&prte_ras_base.selected_modules));
 
-    PMIX_LIST_FOREACH(mod, &prte_ras_base.selected_modules,
-                      prte_ras_base_selected_module_t) {
-        if (mod->pri > last_pri) {
-            ordered = false;
-        }
-        last_pri = mod->pri;
-        CHECK("select: module present", NULL != mod->module);
-        CHECK("select: component present", NULL != mod->component);
-        if (NULL != mod->component) {
-            tail = mod->component->pmix_mca_component_name;
-            if (0 == strcmp(tail, "hosts")) {
-                found_hosts = true;
-                CHECK("select: hosts is priority 1", 1 == mod->pri);
-            }
-        }
+    mod = (prte_ras_base_selected_module_t *)
+              pmix_list_get_first(&prte_ras_base.selected_modules);
+    if (NULL == mod) {
+        fprintf(stderr, "FAIL [select]: nothing selected\n");
+        return failures + 1;
     }
-    CHECK("select: descending priority order", ordered);
-    /* hosts is the unconditional catch-all: without it there is no
-     * --host/--hostfile handling and no local-host fallback */
-    CHECK("select: hosts selected", found_hosts);
-    CHECK("select: hosts sorts last", NULL != tail && 0 == strcmp(tail, "hosts"));
+    CHECK("select: module present", NULL != mod->module);
+    CHECK("select: component present", NULL != mod->component);
+    /* hosts is the catch-all: without it there is no --host/--hostfile
+     * handling and no local-host fallback */
+    CHECK("select: hosts is the owner with no RM in the environment",
+          NULL != mod->component &&
+          0 == strcmp("hosts", mod->component->pmix_mca_component_name));
+    CHECK("select: hosts is priority 1", 1 == mod->pri);
+
+    /* ...and PRRTE is its own authority over a hostfile allocation, so
+     * add-host may grow the pool */
+    CHECK("select: a hostfile allocation is not scheduler-owned",
+          !prte_ras_base.scheduler_owned);
+    CHECK("select: the flag came from the module",
+          NULL != mod->module &&
+          mod->module->scheduler_owned == prte_ras_base.scheduler_owned);
 
     /* select() latches -- a second call must be a harmless no-op rather
-     * than appending every module a second time */
+     * than selecting a second time */
     rc = prte_ras_base_select();
     CHECK("select: idempotent rc", PRTE_SUCCESS == rc);
+    CHECK("select: still exactly one module",
+          1 == pmix_list_get_size(&prte_ras_base.selected_modules));
 
     return failures;
 }
@@ -715,6 +725,67 @@ static pmix_mca_base_component_t *find_ras_component(const char *name)
         }
     }
     return NULL;
+}
+
+/*
+ * ras/pmix must not answer a query unless someone has pointed it at a
+ * scheduler.
+ *
+ * It used to answer unconditionally, "in case the system includes a scheduler
+ * that supports PMIx operations".  That was survivable only while the
+ * framework kept every module that answered, because this component's
+ * allocate() always returns TAKE_NEXT_OPTION - it forwards requests to a
+ * scheduler, it never discovers nodes - so the next module down did the
+ * allocating.  With one module selected, an unconditional answer at priority
+ * 20 beats ras/hosts at 1 and there is nothing left to read a hostfile.
+ *
+ * Driven through the framework rather than by naming the component's symbols:
+ * ras-pmix may be a plugin, in which case it has none in libprrte.
+ */
+static int test_pmix_gate(void)
+{
+    int failures = 0;
+    pmix_mca_base_component_t *comp;
+    pmix_mca_base_module_t *module = NULL;
+    int pri = -1, rc;
+
+    comp = find_ras_component("pmix");
+    if (NULL == comp) {
+        fprintf(stdout, "SKIP test_pmix_gate: ras/pmix component not found\n");
+        return 0;
+    }
+    CHECK("pmix: has a query function", NULL != comp->pmix_mca_query_component);
+    if (NULL == comp->pmix_mca_query_component) {
+        return failures;
+    }
+
+    /* nothing configured: no scheduler to forward to, so no module */
+    rc = comp->pmix_mca_query_component(&module, &pri);
+    CHECK("pmix: refuses when not pointed at a scheduler",
+          PRTE_SUCCESS != rc || NULL == module);
+
+    /* point it at one - any one of the connection parameters is the
+     * statement of intent, and the system-scheduler switch is the one with
+     * no string to free afterwards */
+    prte_mca_ras_pmix_component.connect_to_system_scheduler = true;
+    module = NULL;
+    pri = -1;
+    rc = comp->pmix_mca_query_component(&module, &pri);
+    prte_mca_ras_pmix_component.connect_to_system_scheduler = false;
+
+    CHECK("pmix: answers once pointed at a scheduler", PRTE_SUCCESS == rc);
+    CHECK("pmix: returns a module", NULL != module);
+    CHECK("pmix: at priority 20", 20 == pri);
+    /* and what it allocates belongs to that scheduler, so add-host may not
+     * grow it */
+    CHECK("pmix: is scheduler-owned",
+          NULL == module ||
+          ((prte_ras_base_module_t *) module)->scheduler_owned);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_pmix_gate\n");
+    }
+    return failures;
 }
 
 /*
@@ -1010,6 +1081,7 @@ int main(void)
     /* after test_select(), which opens the framework and latches a
      * selection made with no SLURM allocation in the environment -- so
      * nothing has called slurm's init() before this does */
+    failures += test_pmix_gate();
     failures += test_slurm_allocation();
 
     prte_finalize();
