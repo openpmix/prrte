@@ -294,7 +294,7 @@ A mapper is mostly glue around them:
 | `prte_rmaps_base_get_ncpus()` | How many usable cpus/cores an object (or whole node) offers under the current cpu-type. |
 | `prte_rmaps_base_check_avail()` | Can this node/object take more procs? Also adds the node to `jdata->map->nodes` exactly once and sets `options->target`. **It can also remove and release the node** — see below. |
 | `prte_rmaps_base_check_oversubscribed()` | After placing a proc, flag/deny oversubscription per the node's SLOTS_GIVEN and the job's OVERSUBSCRIBE directive. |
-| `prte_rmaps_base_setup_proc()` | Create the `prte_proc_t`, attach it to the node, assign node rank, bump `slots_inuse`, and **bind it** (`prte_rmaps_base_bind_proc`). |
+| `prte_rmaps_base_setup_proc()` | Create the `prte_proc_t`, attach it to the node, assign node rank, bump `slots_inuse`, draw down `slots_available`, and **bind it** (`prte_rmaps_base_bind_proc`). |
 | `prte_rmaps_base_compute_vpids()` | Assign global ranks by slot/node/fill/span, then derive local & app ranks. |
 | `prte_rmaps_base_bind_proc()` | Bind a proc: dispatch to `bind_generic` / `bind_multiple` (pe>1) / `bind_to_cpuset` (pe-list), or no-op for by-user/bind-none. |
 
@@ -323,6 +323,22 @@ obligations follow:
   The sequential mapper walks hostfile entries, not `prte_node_t`s, so it
   passes `NULL` and simply takes the "no" — handing over a list of the wrong
   type meant removing a `prte_node_t` from a list of `seq_node_t`.
+
+### `slots_available` is the per-job budget, and it is not `slots`
+
+`node->slots` is what the node has; `node->slots_available` is what *this
+job* may take from it. `get_target_nodes()` sets the second one, and a `:N`
+suffix on a `-host` entry makes it smaller than the first — that is the whole
+point of the suffix when the `-host` selects within an allocation somebody
+else built. `setup_proc()` consumes one per placed proc, so a mapper caps
+itself on a node by watching `slots_available` run out.
+
+Nothing below the mappers does that for them: `check_avail()` and
+`check_oversubscribed()` both measure against `node->slots`, so a mapper that
+consults neither the field nor its own count of what it has placed will fill
+the node to its slot count and leave the rest of the user's `-host` list
+empty. Every mapper here caps itself: by-slot/by-node/by-cpu and ppr read
+the field before placing, and `map_targets` checks it per placement.
 
 ### Who owns what in `options`
 

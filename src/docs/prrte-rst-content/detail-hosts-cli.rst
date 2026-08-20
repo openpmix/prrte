@@ -65,3 +65,14 @@ the DVM was started across only some of the allocation, or because a
 reservation holding it was released |mdash| use ``--activate``, which
 only starts a daemon and so is permitted even under a resource
 manager's allocation.
+
+The ``:slots`` count applies to *placement*, and not merely to the size
+of the job: it is the number of processes that may be placed on that
+host, whatever mapping policy is in effect. So
+
+.. code::
+
+   prterun --host node1:1,node2:1,node3:1 -n 3 ./app
+
+puts one process on each of the three hosts under every ``--map-by``
+directive, and not three on ``node1``.

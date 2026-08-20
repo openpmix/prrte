@@ -132,6 +132,16 @@ help messages (`allocation-overload` vs `failed-map`). Note this mapper has
 **no** second-pass block — the outer `do { … } while (!allfull)` loop handles
 iteration.
 
+**A node's budget is `slots_available`, not its slot count.** The loop asks
+for one proc at a time, so nothing in `check_avail`/`check_oversubscribed` —
+both of which measure against `node->slots` — stops it at the smaller number
+a `-host` entry's `:N` suffix asked for. It therefore checks the field itself
+before each placement (`setup_proc` draws it down by one per proc). Without
+that, `--host a:1,b:1,c:1 -n 3` selecting within an existing allocation put
+all three procs on `a` and left `b` and `c` out of the map — the total was
+still checked against the caps, so the job ran, just nowhere near where it
+was told to. See the framework guide.
+
 **The `redo:` loop and `check_avail` do not mix casually.** When
 `check_avail` declines a node it may also have removed it from `node_list`
 and released it (the `max_slots` case — see the framework guide). So the

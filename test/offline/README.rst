@@ -74,3 +74,11 @@ exactly one object of the requested level, computed from the topology.
 golden snapshots rather than invariants.  Cases that PRRTE must reject
 (``rank-by fill/span`` without an object map; binding above the mapped
 object; bad tokens) are verified to be rejected.
+
+The ``hostcap`` group asks a different question from the rest: every other
+case hands ``-H`` to a ``prterun`` that has no allocation, so the spec
+*builds* one and each node's slot count is its own ``-H`` count.  Those cases
+use ``ras/simulator`` to supply an allocation first, so that a ``:N`` cap and
+the node's real slot count can disagree -- the shape in which the mapper has
+to place by the cap.  Such a case names the per-node counts it expects
+outright (``expect_counts``) rather than deriving them.

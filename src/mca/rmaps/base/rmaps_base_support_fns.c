@@ -551,6 +551,13 @@ prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata,
         proc->node_rank = node->num_procs;
         node->num_procs++;
         ++node->slots_inuse;
+        /* slots_available is what this mapping operation may still take
+         * from the node - it is not always slots minus slots_inuse (a
+         * -host suffix can cap it below that), so it has to be consumed
+         * here rather than recomputed by the mappers */
+        if (0 < node->slots_available) {
+            --node->slots_available;
+        }
     }
 
     /* retain the proc struct so that we correctly track its release */

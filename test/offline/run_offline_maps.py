@@ -474,7 +474,9 @@ def locate_prterun(top_builddir):
 
 
 def build_argv(prterun_argv0, topo_path, case):
-    argv = [prterun_argv0, "--rtos", "donotlaunch", "--display", "map",
+    argv = [prterun_argv0, "--rtos", "donotlaunch", "--display", "map"]
+    argv += list(case.alloc_args)
+    argv += [
             # pin the mapping-policy baseline so the harness is hermetic: do not
             # inherit a default mapping policy a developer may have set (e.g. in
             # ~/.prte/mca-params.conf). Defaults to the no-directive "" baseline;
@@ -587,6 +589,14 @@ class Case:
     n: int = 1
     apps: list = field(default_factory=list)   # list[AppSpec]
     extra_args: tuple = ()
+    # Args that build the ALLOCATION the case selects within, emitted ahead
+    # of everything else.  Every other case lets the -H spec build its own
+    # allocation, which makes each node's slot count equal to its -H count -
+    # the one shape in which a ":N" cap cannot disagree with the node.
+    alloc_args: tuple = ()
+    # {node: nprocs} this case must produce, for placements the generic
+    # invariants below do not describe.
+    expect_counts: dict = None
     expect: str = "map"          # "map" | "reject"
     expect_banner: str = None    # substring expected on reject
     # value pinned for the "mapby" MCA variable; "" = the no-directive
@@ -668,6 +678,55 @@ def group_cases(topo):
     yield Case("group.%s.multiapp" % topo.name, "multiapp", topo, "even",
                hostspec, pool, map_by="core", rank_by="slot", bind_to="core",
                apps=[AppSpec(2), AppSpec(3)], expect="map")
+
+
+def hostcap_cases(topo):
+    """A ":N" cap on a -H entry, applied to an allocation that already exists.
+
+    Every other case in this harness hands -H to a prterun that has no
+    allocation, so the spec builds one and each node's slot count *is* its
+    -H count.  The interesting case is the other one: an allocation already
+    in hand (here from ras/simulator, the only resource manager available
+    offline) and a -H that selects within it.  Then the cap and the node's
+    own slot count disagree, and the mapper has to place by the cap.
+
+    That is exactly what it did not do: the by-object mappers - which is
+    where the default mapping policy lands - filled the head of the list to
+    its slot count and left the tail of the -H list empty.
+    """
+    nslots = 8
+    alloc = ("--prtemca", "ras", "simulator",
+             "--prtemca", "ras_simulator_num_nodes", "3",
+             "--prtemca", "ras_simulator_slots", str(nslots),
+             "--prtemca", "ras_simulator_max_slots", "0")
+    nodes = ["nodeA0", "nodeA1", "nodeA2"]
+    pool = [(nd, 1) for nd in nodes]
+    hostspec = ",".join("%s:1" % nd for nd in nodes)
+    one_each = dict((nd, 1) for nd in nodes)
+
+    # one slot taken from each of three nodes: every policy has to put one
+    # proc on each, whether or not the policy names an object
+    for mb in (None, "core", "package", "node", "slot", "hwthread"):
+        if mb in ("package",) and topo.count("Package") < 1:
+            continue
+        yield Case("hostcap.%s.cap1.m-%s" % (topo.name, mb or "default"),
+                   "hostcap", topo, "capped", hostspec, pool,
+                   map_by=mb, n=len(nodes), alloc_args=alloc,
+                   expect_counts=dict(one_each), expect="map")
+
+    # uneven caps: the map has to follow the caps the user wrote, not spread
+    # the procs evenly and not fill the first node
+    yield Case("hostcap.%s.cap-uneven" % topo.name, "hostcap", topo,
+               "capped", "nodeA0:1,nodeA1:2", [("nodeA0", 1), ("nodeA1", 2)],
+               map_by="core", n=3, alloc_args=alloc,
+               expect_counts={"nodeA0": 1, "nodeA1": 2}, expect="map")
+
+    # asking for more than the caps total is refused, even though the
+    # allocation itself is big enough to hold the job
+    yield Case("hostcap.%s.cap-exceeded" % topo.name, "hostcap", topo,
+               "capped", hostspec, pool, map_by="core", n=len(nodes) + 1,
+               alloc_args=alloc, expect="reject",
+               expect_banner="not enough slots available")
 
 
 def device_cases(topo):
@@ -803,6 +862,7 @@ def generate_cases(topos, layouts, ns, full):
         cases.extend(matrix_cases(topo, layouts, ns))
         cases.extend(negative_cases(topo))
         cases.extend(group_cases(topo))
+        cases.extend(hostcap_cases(topo))
         cases.extend(device_cases(topo))
         cases.extend(perapp_cases(topo))
     return cases
@@ -935,6 +995,12 @@ def check_universal(case, pmap):
 
 def check_mapping(case, pmap):
     v = []
+    if case.expect_counts is not None:
+        actual = dict(_node_counts(pmap))
+        if actual != case.expect_counts:
+            v.append(("M-counts", "node counts %s != expected %s"
+                      % (actual, case.expect_counts)))
+        return v
     if case.apps:
         return v  # multi-app placement shape is pinned by golden snapshots
     if not case.map_by or ":" in case.map_by or case.map_by not in MAP_BY:
