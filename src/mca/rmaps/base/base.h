@@ -101,6 +101,11 @@ typedef struct {
     pmix_list_item_t super;
     prte_node_t *node;
     int32_t slots;
+    /* whether the node carried PRTE_NODE_FLAG_SLOTS_GIVEN before we re-sized
+     * it. Growing a node to satisfy a "-host node:N" sets that flag, and it
+     * decides whether a later job may oversubscribe the node - so it has to
+     * go back with the count. */
+    bool slots_given;
 } prte_rmaps_base_resize_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rmaps_base_resize_t);
 
@@ -129,9 +134,9 @@ PRTE_EXPORT void prte_rmaps_base_map_job(int sd, short args, void *cbdata);
 PRTE_EXPORT char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping);
 PRTE_EXPORT char *prte_rmaps_base_print_ranking(prte_ranking_policy_t ranking);
 
-/* Record that this mapping grew a node, so the count it had before can be
+/* Record that this mapping re-sized a node, so the count it had before can be
  * put back when the map completes. Recording the same node twice keeps the
- * first (original) value. */
+ * first (original) value. Call this BEFORE changing the node. */
 PRTE_EXPORT void prte_rmaps_base_record_resize(prte_node_t *node, int32_t slots);
 
 /* Put every re-sized node back the way we found it. Called on both outcomes
