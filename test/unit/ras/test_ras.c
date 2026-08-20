@@ -61,8 +61,8 @@
 #include "src/util/prte_bootstrap.h"
 #include "src/util/proc_info.h"
 
+#include "src/mca/base/pmix_mca_base_var.h"
 #include "src/mca/ras/base/base.h"
-#include "src/mca/ras/pmix/ras_pmix.h"
 #include "src/mca/ras/ras.h"
 
 #define CHECK(label, cond)                                              \
@@ -740,18 +740,30 @@ static pmix_mca_base_component_t *find_ras_component(const char *name)
  * 20 beats ras/hosts at 1 and there is nothing left to read a hostfile.
  *
  * Driven through the framework rather than by naming the component's symbols:
- * ras-pmix may be a plugin, in which case it has none in libprrte.
+ * ras-pmix may be a plugin, in which case it has none in libprrte, and naming
+ * prte_mca_ras_pmix_component here fails the --enable-mca-dso link outright.
+ * The switch is reached the same way anything else reaches another
+ * component's parameter - look the MCA variable up by name, and write through
+ * the pointer to the registering code's own storage that get_value returns.
  */
 static int test_pmix_gate(void)
 {
     int failures = 0;
     pmix_mca_base_component_t *comp;
     pmix_mca_base_module_t *module = NULL;
-    int pri = -1, rc;
+    bool *sched_switch = NULL;
+    int pri = -1, rc, vari;
 
     comp = find_ras_component("pmix");
     if (NULL == comp) {
         fprintf(stdout, "SKIP test_pmix_gate: ras/pmix component not found\n");
+        return 0;
+    }
+    vari = pmix_mca_base_var_find("prte", "ras", "pmix", "system_scheduler");
+    if (0 > vari ||
+        PMIX_SUCCESS != pmix_mca_base_var_get_value(vari, &sched_switch, NULL, NULL) ||
+        NULL == sched_switch) {
+        fprintf(stdout, "SKIP test_pmix_gate: ras_pmix_system_scheduler not registered\n");
         return 0;
     }
     CHECK("pmix: has a query function", NULL != comp->pmix_mca_query_component);
@@ -767,11 +779,11 @@ static int test_pmix_gate(void)
     /* point it at one - any one of the connection parameters is the
      * statement of intent, and the system-scheduler switch is the one with
      * no string to free afterwards */
-    prte_mca_ras_pmix_component.connect_to_system_scheduler = true;
+    *sched_switch = true;
     module = NULL;
     pri = -1;
     rc = comp->pmix_mca_query_component(&module, &pri);
-    prte_mca_ras_pmix_component.connect_to_system_scheduler = false;
+    *sched_switch = false;
 
     CHECK("pmix: answers once pointed at a scheduler", PRTE_SUCCESS == rc);
     CHECK("pmix: returns a module", NULL != module);
