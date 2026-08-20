@@ -27,6 +27,8 @@
 #include "prte_config.h"
 #include "constants.h"
 
+#include <string.h>
+
 #include "src/mca/base/pmix_base.h"
 
 #include "src/prted/pmix/pmix_server_internal.h"
@@ -148,9 +150,33 @@ static int ras_pmix_component_open(void)
 
 static int ras_pmix_component_query(pmix_mca_base_module_t **module, int *priority)
 {
-    /* always make ourselves available in case the system includes a
-     * scheduler that supports PMIx operations
-     */
+    /* Be available only when someone has actually pointed us at a scheduler.
+     *
+     * This used to answer unconditionally, "in case the system includes a
+     * scheduler that supports PMIx operations".  That was harmless only while
+     * the framework kept every module that answered: our allocate() always
+     * returns TAKE_NEXT_OPTION - this component forwards requests to a
+     * scheduler, it never discovers nodes itself - so the next module down
+     * did the allocating.  With one module selected there is no next module,
+     * and answering here on spec would shadow ras/hosts (priority 1) in every
+     * unmanaged environment, leaving nothing to read a hostfile.
+     *
+     * The connection parameters are the statement of intent: a URI, a
+     * scheduler nspace, a pid or host to find it at, an explicit connection
+     * order, or the system-scheduler switch.  With none of them set there is
+     * no scheduler to forward anything to, and saying so is the honest
+     * answer. */
+    if (NULL == prte_mca_ras_pmix_component.uri &&
+        NULL == prte_mca_ras_pmix_component.connection_order &&
+        NULL == prte_mca_ras_pmix_component.server_host &&
+        0 == prte_mca_ras_pmix_component.server_pid &&
+        !prte_mca_ras_pmix_component.connect_to_system_scheduler &&
+        0 == strlen(prte_mca_ras_pmix_component.server.nspace)) {
+        *module = NULL;
+        *priority = 0;
+        return PRTE_ERROR;
+    }
+
     *module = (pmix_mca_base_module_t *) &prte_ras_pmix_module;
     *priority = 20;
     return PRTE_SUCCESS;
