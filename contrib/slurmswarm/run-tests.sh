@@ -431,6 +431,50 @@ test_ras_alloc() {
     dvm_stop
     cleanup_cluster
 
+    banner "ras: the allocation has exactly one owner, and it is ras/slurm"
+    # The only place this is observable.  In an unmanaged environment just one
+    # component answers the query, so single- and multi-select look identical;
+    # here ras/slurm (50) and ras/hosts (1) both answer and only one may be
+    # selected.  It used to keep both, which is what let a request ras/slurm
+    # declined fall through to ras/hosts, and ras/hosts claims NEW/EXTEND/
+    # RELEASE on the directive alone - so a PMIX_ALLOC_NEW naming hostnames
+    # was answered PMIX_SUCCESS with an allocation id minted while SLURM was
+    # never asked, and the daemon launch on the un-allocated node then took
+    # the whole DVM down.
+    cleanup_cluster
+    ALLOC new --tag dvm --nodes 3 --tasks-per-node 2 >/dev/null 2>&1
+    out=$(SA 'timeout 60 prterun --prtemca ras_base_verbose 5 -n 1 hostname 2>&1')
+    echo "$out" | grep -q 'Component: slurm Priority: 50' \
+        && ok "ras/slurm is a candidate" \
+        || bad "ras/slurm did not answer the query"
+    echo "$out" | grep -q 'Component: hosts Priority: 1' \
+        && ok "ras/hosts is a candidate too, so the choice is a real one" \
+        || bad "ras/hosts did not answer the query"
+    echo "$out" | grep -q 'active allocator is .slurm.*scheduler-owned' \
+        && ok "slurm wins, and the allocation is marked scheduler-owned" \
+        || bad "wrong allocator: $(echo "$out" | grep -i 'active allocator' | tr '\n' ' ')"
+    [ "$(echo "$out" | grep -c 'active allocator is')" = 1 ] \
+        && ok "exactly one allocator was selected" \
+        || bad "more than one allocator selected"
+
+    banner "ras: add-host cannot grow an allocation the scheduler owns"
+    # The same authority, reached from the command line instead of a PMIx
+    # directive.  This used to insert the node and then kill the DVM trying to
+    # launch a daemon on it.
+    out=$(SA 'timeout 60 prterun --add-host node9:2 -n 2 hostname 2>&1 | tr -d "\0"')
+    echo "$out" | grep -q "is owned by a resource manager" \
+        && ok "add-host is refused, and says why" \
+        || bad "add-host was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    echo "$out" | grep -qE '^node[0-9]+$' \
+        && bad "the job ran anyway after add-host was refused" \
+        || ok "the job did not launch on a node SLURM never granted"
+    # ...and the refusal is a refusal, not a casualty: launching still works
+    out=$(SA 'timeout 60 prterun -n 3 --map-by node hostname' 2>&1)
+    n=$(echo "$out" | grep -E '^node[0-9]+$' | sort -u | wc -l | tr -d ' ')
+    [ "$n" = 3 ] && ok "the allocation still launches after the refusal" \
+                 || bad "launching broke after the add-host refusal ($n/3)"
+    cleanup_cluster
+
     banner "ras/slurm: SLURM's compressed node list expands to exactly those nodes"
     # SLURM hands out "node[2,4,6]" and ras/slurm has its own parser for that
     # notation -- a scheduler handing out comma-separated names never reaches

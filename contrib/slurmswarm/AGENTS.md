@@ -165,7 +165,19 @@ it finds, and a broken cluster would make all of them lie.
 **`test_ras_alloc`** — what an allocation *means* to the DVM. The DVM forms
 across the whole allocation with no `--host`; the slot count is SLURM's, not
 the core count; `--host` selects within the allocation and refuses outside
-it. Two cases here cannot exist anywhere else:
+it. Several cases here cannot exist anywhere else:
+
+- **Who owns the allocation.** `ras` selects a single module, and this is the
+  only harness where the choice is a real one: `ras/slurm` (priority 50) and
+  `ras/hosts` (1) both answer the query, so a regression to keeping both is
+  visible here and nowhere else. In an unmanaged environment only one
+  component answers and single- and multi-select look identical. The case
+  reads the selector's own verbose output for both candidates, exactly one
+  winner, and the `scheduler-owned` mark.
+- **`--add-host` against an allocation PRRTE does not own.** Refused, with the
+  reason named, and — the half that matters — the DVM survives the refusal.
+  Before, the node was inserted and the daemon launch on it failed, which
+  takes the whole DVM down rather than just the job that asked.
 
 - **SLURM's compressed node list.** SLURM hands out `node[2,4,6]`, and
   `ras/slurm` has its own parser for that notation — a fake scheduler handing
