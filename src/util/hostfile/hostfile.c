@@ -44,6 +44,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ras/base/base.h"
+#include "src/mca/rmaps/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
@@ -793,10 +794,33 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
                     /* if the slot count here is less than the
                      * total slots avail on this node, set it
                      * to the specified count - this allows people
-                     * to subdivide an allocation
+                     * to subdivide an allocation.
+                     *
+                     * The nodes on this list are the pool's own objects, so
+                     * the smaller count has to be handed back when the map is
+                     * done: the "slots=" says how many slots THIS job may
+                     * have on the node, not how big the node is, exactly as a
+                     * "-host node:N" does. Left unrecorded, one job's hostfile
+                     * shrank the node for every job the DVM ran afterwards -
+                     * jobs that never named the hostfile - and the allocation
+                     * could only ever get smaller, with nothing short of
+                     * restarting the DVM to put it back.
+                     *
+                     * Only do this when we are selecting the nodes a job will
+                     * map onto ("remove"), because that is the one caller
+                     * running inside prte_rmaps_base_map_job(), which restores
+                     * what it recorded before it returns. The record list is a
+                     * framework global, not a per-job one, and a DVM maps one
+                     * job while another is still forming its daemons - so an
+                     * entry made anywhere else is one some unrelated job's map
+                     * would put back. The other caller, the VM setup, is only
+                     * marking which nodes are to host a daemon; it never maps
+                     * and reads no slot count, so it has nothing to resize for.
                      */
-                    if (PRTE_FLAG_TEST(node_from_file, PRTE_NODE_FLAG_SLOTS_GIVEN)
+                    if (remove
+                        && PRTE_FLAG_TEST(node_from_file, PRTE_NODE_FLAG_SLOTS_GIVEN)
                         && node_from_file->slots < node_from_list->slots) {
+                        prte_rmaps_base_record_resize(node_from_list, node_from_list->slots);
                         node_from_list->slots = node_from_file->slots;
                     }
                     if (remove) {
