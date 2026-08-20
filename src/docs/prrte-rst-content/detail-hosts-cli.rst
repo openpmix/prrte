@@ -59,4 +59,9 @@ them is an error, reported as:
       Missing requested host: node9
 
 To bring a new host into a DVM that is already running, use
-``--add-host`` or ``--add-hostfile`` instead.
+``--add-host`` or ``--add-hostfile`` instead.  If the host is one the
+allocation already contains but that carries no daemon |mdash| because
+the DVM was started across only some of the allocation, or because a
+reservation holding it was released |mdash| use ``--activate``, which
+only starts a daemon and so is permitted even under a resource
+manager's allocation.

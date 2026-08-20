@@ -111,6 +111,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_ADDHOSTFILE            "add-hostfile"              // required
 #define PRTE_CLI_HOST                   "host"                      // required
 #define PRTE_CLI_ADDHOST                "add-host"                  // required
+#define PRTE_CLI_ACTIVATE               "activate"                  // required
 #define PRTE_CLI_PATH                   "path"                      // required
 #define PRTE_CLI_PSET                   "pset"                      // required
 #define PRTE_CLI_PRELOAD_FILES          "preload-files"             // required

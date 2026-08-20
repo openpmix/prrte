@@ -178,6 +178,21 @@ it. Several cases here cannot exist anywhere else:
   reason named, and — the half that matters — the DVM survives the refusal.
   Before, the node was inserted and the daemon launch on it failed, which
   takes the whole DVM down rather than just the job that asked.
+- **`--activate` against the same allocation.** *Allowed* — the case that
+  gives the refusal above its shape. A DVM started with `--host` forms across
+  only part of its allocation, and `--activate` starts a daemon on one of the
+  nodes left out. It names only what SLURM already granted, so it needs none
+  of the authority add-host lacks, and refusing it would have made the
+  ownership check a blanket ban on ever growing the DVM. This distinction is
+  invisible everywhere else: where PRRTE owns the allocation, add-host would
+  serve the same request, so nothing separates "allowed because it adds
+  nothing" from "allowed because we own it". The case runs both forms — a
+  name and `file=<hostfile>`, the form a user under SLURM actually has to
+  hand — and pins the two edges: a node SLURM never granted is refused here
+  too, with a *different* message ("not part of this DVM's allocation", not
+  "owned by a resource manager"); and a `slots=` in the hostfile is **not**
+  applied, since PRRTE has no more authority over a scheduler's slot count
+  than over its node list.
 
 - **SLURM's compressed node list.** SLURM hands out `node[2,4,6]`, and
   `ras/slurm` has its own parser for that notation — a fake scheduler handing

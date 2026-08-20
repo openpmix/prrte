@@ -360,6 +360,11 @@ static void _query(int sd, short args, void *cbdata)
                 PMIx_Argv_append_nosize(&ans, PMIX_HOSTFILE);
                 PMIx_Argv_append_nosize(&ans, PMIX_ADD_HOST);
                 PMIx_Argv_append_nosize(&ans, PMIX_ADD_HOSTFILE);
+                /* not a PMIx attribute: PMIx has no standard way to say
+                 * "start a daemon on a node I already hold". It is still a
+                 * spawn directive this DVM honors, and a tool that wants to
+                 * know whether it can use it has nowhere else to ask. */
+                PMIx_Argv_append_nosize(&ans, PRTE_ACTIVATE_HOSTS);
                 PMIx_Argv_append_nosize(&ans, PMIX_PREFIX);
                 PMIx_Argv_append_nosize(&ans, PMIX_WDIR);
                 /* deliberately not PMIX_MAPPER: naming a mapping component

@@ -95,6 +95,11 @@ typedef uint8_t prte_app_context_flags_t;
  * mapping policy is the choice of mapper. Local to the HNP - never
  * packed/sent. */
 #define PRTE_APP_LAST_MAPPER        38 /* char* mapping component that placed this app */
+/* nodes the DVM is to be extended across before this app is launched. Unlike
+ * PRTE_APP_ADD_HOST this adds nothing to the allocation - it can only name
+ * nodes the allocation already contains, and merely asks that a daemon be
+ * started on them. */
+#define PRTE_APP_ACTIVATE_HOSTS     42 /* char* hosts to bring into the DVM */
 
 #define PRTE_APP_MAX_KEY 100
 

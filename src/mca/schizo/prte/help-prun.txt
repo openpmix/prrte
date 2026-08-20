@@ -154,6 +154,10 @@ option to the help request as "--help <option>".
 | "--add-host <hosts>" | List of hosts to add to the DVM prior to      |
 |                      | launching the given app                       |
 +----------------------+-----------------------------------------------+
+| "--activate <hosts>" | List of allocated nodes to bring into the DVM |
+|                      | (start a daemon on) prior to launching the    |
+|                      | given app                                     |
++----------------------+-----------------------------------------------+
 | "--hostfile          | Provide a hostfile                            |
 | <filename>"          |                                               |
 +----------------------+-----------------------------------------------+
@@ -441,6 +445,11 @@ mapping the job.
 [add-host]
 
 #include#help-dash-host.txt#add-host
+
+#
+[activate]
+
+#include#help-dash-host.txt#activate
 
 #
 [np]

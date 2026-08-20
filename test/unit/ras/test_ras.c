@@ -37,7 +37,12 @@
  *   4. prte_ras_base_flag_string, which renders the node flag bitmask for
  *      --display-allocation.
  *
- *   5. ras/slurm's "detect and report an allocation" capability, driven
+ *   5. prte_ras_base_activate_hosts, which resolves a --activate
+ *      specification against the node pool. It is the one operation that
+ *      may extend the DVM under an allocation PRRTE does not own, so what
+ *      it will and will not accept is exactly the safety property.
+ *
+ *   6. ras/slurm's "detect and report an allocation" capability, driven
  *      through the framework rather than by calling into the component.
  *      That is everything the component can do when jansson is absent --
  *      every modify entry point declines without it -- and it is the half
@@ -58,6 +63,7 @@
 #include "src/runtime/runtime.h"
 #include "src/util/attr.h"
 #include "src/util/pmix_argv.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/prte_bootstrap.h"
 #include "src/util/proc_info.h"
 
@@ -1054,6 +1060,308 @@ static int test_dvm_growing(void)
     return failures;
 }
 
+/*
+ * --activate: resolve a --host-syntax specification against the node pool and
+ * mark the nodes a grow should launch on.
+ *
+ * The grow itself is not exercised here -- prte_ras_base_activate_dvm_grow()
+ * activates a job state, which needs a live state machine and event base --
+ * so every case below either refuses (returning before any grow) or takes the
+ * "--add-host is also present, so ITS grow is the one that launches" branch,
+ * which marks the nodes and returns without activating anything. That branch
+ * is worth pinning for its own sake: the ordering it encodes is what keeps a
+ * second grow from racing ahead of add-host's asynchronous node insertion.
+ *
+ * What this covers is the whole decision surface: which pool entries a
+ * specification names, which it is allowed to name, and the rule that a
+ * specification failing anywhere marks nothing.
+ */
+static prte_job_t *mkactivate_job(const char *spec, bool with_addhost)
+{
+    prte_job_t *jdata;
+    prte_app_context_t *app;
+
+    jdata = PMIX_NEW(prte_job_t);
+    app = PMIX_NEW(prte_app_context_t);
+    app->idx = pmix_pointer_array_add(jdata->apps, app);
+    jdata->num_apps = 1;
+    if (NULL != spec) {
+        prte_set_attribute(&app->attributes, PRTE_APP_ACTIVATE_HOSTS,
+                           PRTE_ATTR_GLOBAL, (void *) spec, PMIX_STRING);
+    }
+    if (with_addhost) {
+        prte_set_attribute(&app->attributes, PRTE_APP_ADD_HOST,
+                           PRTE_ATTR_GLOBAL, (void *) "somewhere", PMIX_STRING);
+    }
+    return jdata;
+}
+
+/* run one specification and report the rc; nodes are marked in place */
+static int activate(const char *spec, bool with_addhost)
+{
+    prte_job_t *jdata = mkactivate_job(spec, with_addhost);
+    int rc = prte_ras_base_activate_hosts(jdata);
+
+    PMIX_RELEASE(jdata);
+    return rc;
+}
+
+/* write `content` to `path` and run "<prefix>file=<path>" through activate */
+static int mkhostfile_and_activate2(const char *path, const char *content,
+                                    const char *prefix, bool with_addhost)
+{
+    FILE *fp;
+    char *spec;
+    int rc;
+
+    fp = fopen(path, "w");
+    if (NULL == fp) {
+        fprintf(stderr, "could not write test hostfile %s\n", path);
+        return PRTE_ERROR;
+    }
+    fputs(content, fp);
+    fclose(fp);
+
+    pmix_asprintf(&spec, "%s%s", prefix, path);
+    rc = activate(spec, with_addhost);
+    free(spec);
+    unlink(path);
+    return rc;
+}
+
+static int mkhostfile_and_activate(const char *path, const char *content,
+                                   bool with_addhost)
+{
+    return mkhostfile_and_activate2(path, content, "file=", with_addhost);
+}
+
+static int test_activate_hosts(void)
+{
+    int failures = 0;
+    prte_node_t *idle1, *idle2, *busy, *gone, *nptr;
+    prte_proc_t *dmn;
+    bool saved_alloc;
+    prte_node_state_t *parked;
+    char *relative;
+    const char *hf = "prte_test_activate_hosts.txt";
+    int i, npool;
+
+    /* The "+e" forms select across the whole pool, so this test needs to own
+     * it. The earlier tests have left their nodes there - up, with no daemon,
+     * which is exactly what +e looks for - so park them out of the way and
+     * put them back on the way out. */
+    npool = prte_node_pool->size;
+    parked = (prte_node_state_t *) malloc(npool * sizeof(prte_node_state_t));
+    for (i = 0; i < npool; i++) {
+        nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i);
+        if (NULL == nptr) {
+            continue;
+        }
+        parked[i] = nptr->state;
+        nptr->state = PRTE_NODE_STATE_NOT_INCLUDED;
+    }
+
+    /* Four pool entries beyond the HNP: two allocated nodes with no daemon
+     * (exactly what --activate exists to reach), one already in the DVM, and
+     * one the scheduler has taken back. */
+    idle1 = PMIX_NEW(prte_node_t);
+    idle1->name = strdup("act-idle1");
+    idle1->state = PRTE_NODE_STATE_UP;
+    idle1->slots = 4;
+    idle1->index = pmix_pointer_array_add(prte_node_pool, idle1);
+
+    idle2 = PMIX_NEW(prte_node_t);
+    idle2->name = strdup("act-idle2");
+    idle2->state = PRTE_NODE_STATE_UP;
+    idle2->slots = 4;
+    idle2->index = pmix_pointer_array_add(prte_node_pool, idle2);
+
+    busy = PMIX_NEW(prte_node_t);
+    busy->name = strdup("act-busy");
+    busy->state = PRTE_NODE_STATE_UP;
+    busy->slots = 4;
+    busy->index = pmix_pointer_array_add(prte_node_pool, busy);
+    dmn = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&dmn->name, PRTE_PROC_MY_NAME->nspace, 7);
+    busy->daemon = dmn;
+
+    gone = PMIX_NEW(prte_node_t);
+    gone->name = strdup("act-gone");
+    gone->state = PRTE_NODE_STATE_NOT_INCLUDED;
+    gone->slots = 4;
+    gone->index = pmix_pointer_array_add(prte_node_pool, gone);
+
+    /* the relative "+nK" index counts from the first allocated entry, and
+     * pool entry 0 is the HNP's - which the earlier tests have established
+     * as allocated */
+    saved_alloc = prte_hnp_is_allocated;
+    prte_hnp_is_allocated = true;
+
+    /* a job with no directive at all is not this function's business */
+    CHECK("activate: no directive is a no-op",
+          PRTE_SUCCESS == activate(NULL, false));
+
+    /* a name the allocation does not contain is refused - this is the whole
+     * difference from --add-host, which would have inserted it */
+    CHECK("activate: unknown host refused",
+          PRTE_ERR_SILENT == activate("act-nosuch", false));
+    CHECK("activate: nothing marked by a refused spec",
+          PRTE_NODE_STATE_UP == idle1->state);
+
+    /* a slot count is refused rather than silently dropped: activate has no
+     * authority to change what the allocation grants */
+    CHECK("activate: slot modifier refused",
+          PRTE_ERR_SILENT == activate("act-idle1:8", false));
+    CHECK("activate: slots unchanged by the refusal", 4 == idle1->slots);
+    CHECK("activate: nothing marked by the refusal",
+          PRTE_NODE_STATE_UP == idle1->state);
+
+    /* a node the scheduler took back is not available: launching a daemon on
+     * it fails, and a daemon that cannot start takes the DVM down */
+    CHECK("activate: excluded node refused",
+          PRTE_ERR_SILENT == activate("act-gone", false));
+
+    /* naming a node already in the DVM is satisfied, not refused - and
+     * activates no grow, since there is nothing to launch */
+    CHECK("activate: node already in the DVM is a no-op",
+          PRTE_SUCCESS == activate("act-busy", false));
+
+    /* a spec that fails on its LAST token must not leave the earlier ones
+     * marked: those marks would be swept into some later, unrelated grow */
+    CHECK("activate: partial spec refused",
+          PRTE_ERR_SILENT == activate("act-idle1,act-nosuch", false));
+    CHECK("activate: first token not marked by a later failure",
+          PRTE_NODE_STATE_UP == idle1->state);
+
+    /* "+e" is valid --host syntax and is deliberately NOT accepted here: it
+     * selects nodes with no process on them, which is mostly nodes already
+     * in the DVM, so the request would start nothing and report success */
+    CHECK("activate: +e refused",
+          PRTE_ERR_SILENT == activate("+e", false));
+    CHECK("activate: +e:2 refused",
+          PRTE_ERR_SILENT == activate("+e:2", false));
+    CHECK("activate: nothing marked by the refused +e",
+          PRTE_NODE_STATE_UP == idle1->state &&
+          PRTE_NODE_STATE_UP == idle2->state);
+
+    /* an out-of-range relative index is refused */
+    CHECK("activate: +n99 refused",
+          PRTE_ERR_SILENT == activate("+n99", false));
+    /* as is a malformed relative token */
+    CHECK("activate: +x refused",
+          PRTE_ERR_SILENT == activate("+x", false));
+    /* ...and a count that is not a number. --host's own parser takes
+     * strtol's answer unchecked, so "+nabc" means "+n0" there; here it must
+     * not quietly resolve to a node nobody named. */
+    CHECK("activate: +nabc refused",
+          PRTE_ERR_SILENT == activate("+nabc", false));
+
+    /* file= reads a hostfile in --hostfile's own format, and resolves what
+     * it finds against the pool exactly as a typed name is resolved */
+    CHECK("activate: bare file= refused",
+          PRTE_ERR_SILENT == activate("file=", false));
+    CHECK("activate: a file that does not exist is refused",
+          PRTE_ERR_SILENT == activate("file=/nonexistent/activate-hosts", false));
+    CHECK("activate: a file naming an unallocated host is refused",
+          PRTE_ERR_SILENT == mkhostfile_and_activate(hf, "act-nosuch\n", false));
+    CHECK("activate: nothing marked by the refused file",
+          PRTE_NODE_STATE_UP == idle1->state);
+
+    /* Now the accepting path. --add-host is present, so this marks the nodes
+     * and leaves the grow to add-host's request - which is exactly the
+     * ordering contract, and lets the marking be observed here. */
+    CHECK("activate: named node accepted",
+          PRTE_SUCCESS == activate("act-idle1", true));
+    CHECK("activate: named node marked ADDED",
+          PRTE_NODE_STATE_ADDED == idle1->state);
+    CHECK("activate: other node untouched",
+          PRTE_NODE_STATE_UP == idle2->state);
+
+    /* a hostfile naming the rest of them.  It carries a "slots=" that must
+     * NOT be applied - a hostfile handed to a launcher selects nodes, it
+     * does not resize them - and an entry for a node already in the DVM,
+     * which is satisfied rather than refused. */
+    CHECK("activate: hostfile accepted",
+          PRTE_SUCCESS == mkhostfile_and_activate(hf,
+                              "act-idle2 slots=99\nact-busy\n", true));
+    CHECK("activate: node named in the file marked ADDED",
+          PRTE_NODE_STATE_ADDED == idle2->state);
+    CHECK("activate: the file's slot count was not applied", 4 == idle2->slots);
+    CHECK("activate: excluded node still excluded",
+          PRTE_NODE_STATE_NOT_INCLUDED == gone->state);
+    CHECK("activate: node in the DVM never marked",
+          PRTE_NODE_STATE_UP == busy->state);
+
+    /* the forms mix in one list */
+    idle1->state = PRTE_NODE_STATE_UP;
+    idle2->state = PRTE_NODE_STATE_UP;
+    CHECK("activate: a name and a file in one spec",
+          PRTE_SUCCESS == mkhostfile_and_activate2(hf, "act-idle2\n",
+                              "act-idle1,file=", true));
+    CHECK("activate: the named node was marked",
+          PRTE_NODE_STATE_ADDED == idle1->state);
+    CHECK("activate: the file's node was marked too",
+          PRTE_NODE_STATE_ADDED == idle2->state);
+
+    /* "+all" takes every allocated node that is not in the DVM - and only
+     * those: the one carrying a daemon and the one the scheduler took back
+     * are not candidates however the request is spelled */
+    idle1->state = PRTE_NODE_STATE_UP;
+    idle2->state = PRTE_NODE_STATE_UP;
+    CHECK("activate: +all accepted",
+          PRTE_SUCCESS == activate("+all", true));
+    CHECK("activate: +all marked both idle nodes",
+          PRTE_NODE_STATE_ADDED == idle1->state &&
+          PRTE_NODE_STATE_ADDED == idle2->state);
+    CHECK("activate: +all did not touch the node in the DVM",
+          PRTE_NODE_STATE_UP == busy->state);
+    CHECK("activate: +all did not touch the excluded node",
+          PRTE_NODE_STATE_NOT_INCLUDED == gone->state);
+    CHECK("activate: +ALL is the same token",
+          PRTE_SUCCESS == activate("+ALL", true));
+
+    /* with every candidate already claimed by the pending grow, "+all" is
+     * satisfied rather than refused, and starts no second grow */
+    CHECK("activate: +all is satisfied when every candidate is already claimed",
+          PRTE_SUCCESS == activate("+all", false));
+
+    /* ...but "+all" is a whole token: "+allende" is not it */
+    CHECK("activate: +allende refused",
+          PRTE_ERR_SILENT == activate("+allende", false));
+
+    /* the relative index names a pool entry directly. With the HNP's node in
+     * the allocation the index is the pool index, as it is for --host. */
+    idle1->state = PRTE_NODE_STATE_UP;
+    pmix_asprintf(&relative, "+n%d", idle1->index);
+    CHECK("activate: relative index accepted",
+          PRTE_SUCCESS == activate(relative, true));
+    CHECK("activate: relative index marked its pool entry",
+          PRTE_NODE_STATE_ADDED == idle1->state);
+    free(relative);
+
+    prte_hnp_is_allocated = saved_alloc;
+    for (i = 0; i < npool; i++) {
+        nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i);
+        if (NULL == nptr) {
+            continue;
+        }
+        nptr->state = parked[i];
+    }
+    free(parked);
+    busy->daemon = NULL;
+    PMIX_RELEASE(dmn);
+    pmix_pointer_array_set_item(prte_node_pool, idle1->index, NULL);
+    pmix_pointer_array_set_item(prte_node_pool, idle2->index, NULL);
+    pmix_pointer_array_set_item(prte_node_pool, busy->index, NULL);
+    pmix_pointer_array_set_item(prte_node_pool, gone->index, NULL);
+    PMIX_RELEASE(idle1);
+    PMIX_RELEASE(idle2);
+    PMIX_RELEASE(busy);
+    PMIX_RELEASE(gone);
+
+    return failures;
+}
+
 
 int main(void)
 {
@@ -1090,6 +1398,7 @@ int main(void)
     failures += test_hnp_dedup();
     failures += test_flag_string();
     failures += test_dvm_growing();
+    failures += test_activate_hosts();
     /* after test_select(), which opens the framework and latches a
      * selection made with no SLURM allocation in the environment -- so
      * nothing has called slurm's init() before this does */

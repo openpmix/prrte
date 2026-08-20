@@ -52,25 +52,21 @@ grow and restores only the permanent sets (``dead_dmns``, ``absent_dmns``);
 whether anything else should survive the recompute is an open question marked
 in ``src/rml/routed_radix.c``.
 
-**A node in the allocation that has no daemon cannot be brought into the
-DVM.**  The node pool holds every node the allocation contains, and
-``--host``/``--hostfile`` given when the DVM starts only narrow which of them
-get daemons (``prte_plm_base_setup_virtual_machine`` builds its candidate list
-from the whole pool and filters a working copy).  So an allocated node that
-was filtered out sits in the pool, up, with ``node->daemon`` NULL, and there
-is no way to ask for a daemon on it afterwards.  ``--add-host`` used to do it
-by accident - ``prte_ras_base_node_insert`` carries
-``PRTE_NODE_STATE_ADDED`` onto an existing pool entry, so naming a known node
-marked it for the next grow - but that same option would just as readily
-insert a node the scheduler never granted, so it is now refused outright
-against an allocation PRRTE does not own.  The operation itself is worth
-having and is nearly free: mark the chosen pool entries
-``PRTE_NODE_STATE_ADDED`` and call ``prte_ras_base_activate_dvm_grow()``.  It
-needs no ``ras`` module, touches no scheduler, and is safe by construction
-since it can only name nodes the allocation already contains.  What has not
-been decided is the request surface - a new PMIx directive, a
-``PMIX_ALLOC_EXTEND`` whose ``PMIX_ALLOC_NODE_LIST`` is restricted to known
-nodes, or a command-line option.
+**Only a command line can ask for a daemon on an allocated node.**  The
+command-line half of this is done: ``--activate`` (``prun`` and
+``prterun``) takes node names, ``+all``, ``+n<K>`` and ``file=<hostfile>``,
+resolves them against the node pool,
+marks the chosen entries ``PRTE_NODE_STATE_ADDED`` and calls
+``prte_ras_base_activate_dvm_grow()`` (``prte_ras_base_activate_hosts``).
+It needs no ``ras`` module, touches no scheduler, and is safe by
+construction since it can only name nodes the allocation already contains -
+which is why it is allowed where ``--add-host`` is refused.  What remains
+undecided is whether a *programmatic* requester should be able to ask for
+the same thing, and how: the directive is currently a PRRTE-private spawn
+key (``prte.activate.hosts``), and a library caller that wants to grow the
+DVM across nodes it already holds has no PMIx-standard way to say so.  The
+candidates are a new PMIx attribute or a ``PMIX_ALLOC_EXTEND`` whose
+``PMIX_ALLOC_NODE_LIST`` is restricted to known nodes.
 
 **Mixed allocators are not supported, and would need more than the ``ras``
 framework.**  The motivating case is a cloud/local combination: an allocation

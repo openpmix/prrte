@@ -7023,6 +7023,134 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     fi
     cleanup_swarm
 
+    banner "ras/hosts: --activate brings an allocated-but-idle node into the DVM"
+    # The other half of the resize surface, and the only one permitted where a
+    # scheduler owns the allocation: it starts a daemon on a node the
+    # allocation ALREADY contains and adds nothing. Two ways a pool entry ends
+    # up allocated with no daemon, and both are here:
+    #
+    #   - prte_max_vm_size caps how many of the allocation's nodes the DVM
+    #     forms across, so the rest sit in the pool, up, unreachable. This is
+    #     the case the deferred-work note was written about, and it needs no
+    #     elastic mode at all.
+    #   - a shrink hands its node back to the pool the same way.
+    #
+    # None of this can be seen on one host: the whole point is a node the DVM
+    # is not on, and the proof is a daemon appearing there.
+    cleanup_swarm
+    # four allocated, two in the DVM: node3 exercises the named form and node4
+    # the "+all" form, so neither is already in when its turn comes
+    RUN 'nohup prte --daemonize --prtemca prte_max_vm_size 2 --host node1:2,node2:2,node3:2,node4:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        [ "$(prted_count 3 4)" = 0 ] \
+            && ok "max_vm_size left node3+node4 allocated with no daemon" \
+            || bad "they already have daemons - the test premise is gone"
+        out=$(RUN 'timeout 90 prun --activate node3 --host node3:2 -n 2 --map-by node hostname' 2>&1)
+        c=$(echo "$out" | grep -c '^node3$')
+        [ "$c" = 2 ] && ok "--activate node3 grew the DVM and ran there (2 procs)" \
+                     || bad "--activate launch produced $c/2 procs on node3: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        [ "$(prted_count 3)" = 1 ] && ok "daemon started on the activated node" \
+                                   || bad "activated node has no daemon"
+        [ "$(prted_count 4)" = 0 ] && ok "and only that node - node4 was not swept in" \
+                                   || bad "naming node3 also started a daemon on node4"
+
+        # "+all" takes everything the allocation holds that is not in the DVM,
+        # which is now node4 alone
+        out=$(RUN 'timeout 90 prun --activate +all --host node4:2 -n 2 --map-by node hostname' 2>&1)
+        c=$(echo "$out" | grep -c '^node4$')
+        [ "$c" = 2 ] && ok "+all brought in the one remaining node (2 procs)" \
+                     || bad "+all launch produced $c/2 procs on node4: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        [ "$(prted_count 4)" = 1 ] && ok "daemon started on the node +all found" \
+                                   || bad "+all left the remaining node without a daemon"
+
+        # ...and now that the DVM spans the whole allocation, "+all" is
+        # satisfied rather than refused: it is a statement about membership
+        out=$(RUN 'timeout 60 prun -n 1 --activate +all hostname' 2>&1)
+        echo "$out" | grep -qE '^node[0-9]+$' \
+            && ok "+all is satisfied when the DVM already spans the allocation" \
+            || bad "+all failed with nothing left to do: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+        # ...and it cannot name anything the allocation does not hold. This is
+        # the property that lets it run under a scheduler at all, so a refusal
+        # here is the feature, not a limitation. node5 is outside the four
+        # this DVM was given - and note "+all" above did NOT reach it either,
+        # which is the same guarantee stated the other way round.
+        out=$(RUN 'timeout 60 prun --activate node5 -n 1 hostname' 2>&1)
+        echo "$out" | grep -q 'not part of this DVM' \
+            && ok "--activate refuses a host the allocation does not contain" \
+            || bad "--activate accepted an unallocated host: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        [ "$(prted_count 5)" = 0 ] && ok "no daemon launched on the refused host" \
+                                   || bad "a daemon was launched on node5"
+
+        # a slot count is refused rather than ignored - activate has no
+        # authority to change what the allocation grants. The refusal comes
+        # before the name is resolved, so it does not matter that node3 is
+        # by now a perfectly good member of the DVM.
+        out=$(RUN 'timeout 60 prun --activate node3:8 -n 1 hostname' 2>&1)
+        echo "$out" | grep -q 'carried a slot count' \
+            && ok "--activate refuses a slot modifier" \
+            || bad "--activate accepted a slot modifier: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the --activate test"
+    fi
+    cleanup_swarm
+
+    banner "ras/hosts: --activate re-admits a node a shrink handed back"
+    # A shrink leaves its node in the pool, up, with no daemon - deliberately,
+    # since the pool index is the PMIX_NODEID and must never be reused. Before
+    # --activate existed the only thing that brought such a node back was
+    # --add-host, which would just as readily have inserted a node nobody
+    # granted. The nodes are named through "file=", which reads a hostfile in
+    # --hostfile's own format so the file that described the allocation can be
+    # handed straight back; the slots= it carries must NOT be applied.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 --host node1:2,node2:2,node3:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        RUN 'timeout 90 elastic shrink node2' >/dev/null 2>&1
+        RUN 'timeout 90 elastic shrink node3' >/dev/null 2>&1
+        sleep 3
+        [ "$(prted_count 2 3)" = 0 ] \
+            && ok "both nodes left the DVM" \
+            || bad "shrink did not remove the daemons"
+        RUN 'printf "node2 slots=99\nnode3\n" > /tmp/activate.txt'
+        out=$(RUN 'timeout 90 prun --activate file=/tmp/activate.txt --host node2:2,node3:2 -n 4 --map-by node hostname' 2>&1)
+        c=$(echo "$out" | grep -cE '^node[23]$')
+        [ "$c" = 4 ] && ok "file= re-admitted both shrunk nodes (4 procs)" \
+                     || bad "file= launch produced $c/4 procs: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        [ "$(prted_count 2 3)" = 2 ] && ok "one daemon per re-admitted node" \
+                                     || bad "re-admitted nodes do not both have a daemon"
+        for n in 2 3; do
+            [ "$(prted_procs "$n")" = 1 ] || bad "node$n is running $(prted_procs "$n") prted"
+        done
+        # the file said slots=99; activate has no authority to grant that, and
+        # a hostfile handed to a launcher selects nodes rather than resizing
+        alloc=$(RUN 'timeout 30 prun --display allocation -n 1 hostname' 2>&1)
+        echo "$alloc" | grep -qE '^[[:space:]]*node2:[[:space:]]+slots=2' \
+            && ok "the file's slots=99 was not applied to node2" \
+            || bad "activate applied a slot count from its hostfile: $(echo "$alloc" | grep node2 | tr '\n' ' ')"
+
+        # "+e" is --host syntax that cannot mean anything here, and says so
+        out=$(RUN 'timeout 60 prun --activate +e -n 1 hostname' 2>&1)
+        echo "$out" | grep -q 'empty node' \
+            && ok "+e is refused with its own explanation" \
+            || bad "+e was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+        # a file naming a host the allocation does not contain is refused,
+        # and names both the host and the file
+        RUN 'printf "node9\n" > /tmp/activate-bad.txt'
+        out=$(RUN 'timeout 60 prun --activate file=/tmp/activate-bad.txt -n 1 hostname' 2>&1)
+        echo "$out" | grep -q 'hostfile given to "--activate" names a host' \
+            && ok "a hostfile naming an unallocated host is refused" \
+            || bad "activate accepted an unallocated host from a file: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        [ "$(prted_count 9)" = 0 ] && ok "no daemon launched from the refused file" \
+                                   || bad "a daemon was launched on node9"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start an elastic DVM for the --activate re-admit test"
+    fi
+    cleanup_swarm
+
     banner "dash-host: relative node syntax selects from the DVM"
     # "+n<K>" names the K'th node of the allocation, "+e:N" names N nodes
     # that are currently empty. Neither can say anything about how big a

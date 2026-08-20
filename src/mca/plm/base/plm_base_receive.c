@@ -728,6 +728,17 @@ moveon:
             goto ANSWER_LAUNCH;
         }
 
+        /* then any --activate option, which brings allocated-but-idle nodes
+         * into the DVM. This must follow add-hosts: where a request carries
+         * both, the grow add-hosts posts is the one that launches, and it
+         * sweeps up whatever activate marked. */
+        if (PRTE_SUCCESS != (rc = prte_ras_base_activate_hosts(jdata))) {
+            if (PRTE_ERR_SILENT != rc) {
+                PRTE_ERROR_LOG(rc);
+            }
+            goto ANSWER_LAUNCH;
+        }
+
         if (NULL != parent && !PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL) &&
             !PMIX_CHECK_NSPACE(parent->nspace, PRTE_PROC_MY_NAME->nspace)) {
             if (NULL == parent->bookmark) {

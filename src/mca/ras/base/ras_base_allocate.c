@@ -28,7 +28,11 @@
 
 #include "prte_config.h"
 
+#include <limits.h>
 #include <string.h>
+#ifdef HAVE_STRINGS_H
+#    include <strings.h>
+#endif
 
 #include "constants.h"
 #include "types.h"
@@ -2030,6 +2034,383 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
     // mark that the DVM is not ready so the launch does not continue
     // until we have processed the nodes
     prte_dvm_ready = false;
+
+    return PRTE_SUCCESS;
+}
+
+/*
+ * --activate: bring nodes the allocation already contains into the DVM.
+ *
+ * The node pool holds every node the allocation contains, but only those the
+ * DVM was started across carry a daemon: a --host/--hostfile given to "prte"
+ * narrows which pool entries get one, and a released reservation hands its
+ * nodes back to the pool without one.  Such a node is up, allocated, and
+ * unreachable - nothing in the DVM can use it, and until now nothing could
+ * ask for it back.
+ *
+ * This is deliberately weaker than --add-host, and that is what makes it
+ * safe where add-host is not.  It adds nothing to the allocation, changes no
+ * slot count, and asks no scheduler for anything: it can only name nodes the
+ * allocation already contains, so it is permitted even when a resource
+ * manager owns the allocation.  All it does is mark the chosen pool entries
+ * PRTE_NODE_STATE_ADDED - which is precisely what every other producer of a
+ * grow does - and let the ordinary DVM extension launch daemons on them.
+ */
+
+/* Is this pool entry already part of the DVM?  Pool entry 0 is the HNP's own
+ * node, which is in the DVM by definition - and which the grow loop in
+ * prte_plm_base_setup_virtual_machine() starts past, so it could not be a
+ * target even if it somehow carried no daemon. */
+static bool ras_base_in_dvm(prte_node_t *node)
+{
+    return (NULL != node->daemon || 0 == node->index);
+}
+
+/* May a daemon be started on this pool entry?  A node already in the DVM is
+ * not activatable but is not an error either - see below. */
+static bool ras_base_activatable(prte_node_t *node)
+{
+    if (ras_base_in_dvm(node)) {
+        return false;
+    }
+    /* ADDED means some other pending grow has already claimed it; UP is the
+     * ordinary idle case.  Every other state says the node is not to be used
+     * (DOWN, REBOOT, DO_NOT_USE) or has been taken back by the scheduler
+     * (NOT_INCLUDED), and a daemon launched on one of those fails - taking
+     * the DVM with it, since a daemon that cannot start is fatal. */
+    return (PRTE_NODE_STATE_UP == node->state || PRTE_NODE_STATE_ADDED == node->state);
+}
+
+/* Read a non-negative decimal index, refusing anything that is not wholly
+ * digits.  parse_dash_host() takes strtol's answer unchecked, so "+nabc"
+ * quietly means "+n0" there; here that would silently activate a node
+ * nobody named and report success. */
+static bool ras_base_read_count(const char *str, int *val)
+{
+    char *endp = NULL;
+    long v;
+
+    if (NULL == str || '\0' == *str) {
+        return false;
+    }
+    v = strtol(str, &endp, 10);
+    if (NULL == endp || '\0' != *endp || 0 > v || INT_MAX < v) {
+        return false;
+    }
+    *val = (int) v;
+    return true;
+}
+
+/* Is this node already in the selection? */
+static bool ras_base_activate_selected(pmix_pointer_array_t *sel, prte_node_t *node)
+{
+    int i;
+    prte_node_t *nptr;
+
+    for (i = 0; i < sel->size; i++) {
+        nptr = (prte_node_t *) pmix_pointer_array_get_item(sel, i);
+        if (nptr == node) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static int ras_base_activate_select(pmix_pointer_array_t *sel, prte_node_t *node,
+                                    const char *token)
+{
+    if (ras_base_in_dvm(node)) {
+        /* already in the DVM.  Not an error: --activate states what the DVM's
+         * membership is to include, and for this node it already does.  A
+         * relative token ("+e:2") never lands here - it selects only from
+         * daemon-less entries - so this is the user naming a node twice, or
+         * naming one they were not sure about. */
+        return PRTE_SUCCESS;
+    }
+    if (!ras_base_activatable(node)) {
+        prte_show_help("help-ras-base.txt", "ras-base:activate-unavailable", true,
+                       node->name, prte_node_state_to_str(node->state), token);
+        return PRTE_ERR_SILENT;
+    }
+    if (!ras_base_activate_selected(sel, node)) {
+        pmix_pointer_array_add(sel, node);
+    }
+    return PRTE_SUCCESS;
+}
+
+/*
+ * Resolve a "file=" token: read the hostfile, then look every name it holds
+ * up in the node pool.  The parsed nodes are throwaway objects describing
+ * what the file said; what goes into the selection is the pool's own entry
+ * for each, which is the only thing a grow can act on.
+ */
+static int ras_base_activate_hostfile(char *hostfile, pmix_pointer_array_t *sel)
+{
+    pmix_list_t nodes;
+    prte_node_t *nd, *node;
+    int rc;
+
+    if ('\0' == *hostfile) {
+        prte_show_help("help-ras-base.txt", "ras-base:activate-nofile", true);
+        return PRTE_ERR_SILENT;
+    }
+
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    /* the parser reports its own failures - a file it cannot open, a bad
+     * line, relative syntax inside a file - through show_help */
+    rc = prte_util_add_hostfile_nodes(&nodes, hostfile);
+    if (PRTE_SUCCESS != rc) {
+        PMIX_LIST_DESTRUCT(&nodes);
+        return (PRTE_ERR_SILENT == rc) ? rc : PRTE_ERR_SILENT;
+    }
+
+    PMIX_LIST_FOREACH(nd, &nodes, prte_node_t) {
+        node = prte_node_match(NULL, nd->name);
+        if (NULL == node) {
+            prte_show_help("help-ras-base.txt", "ras-base:activate-unknown-in-file", true,
+                           nd->name, hostfile);
+            PMIX_LIST_DESTRUCT(&nodes);
+            return PRTE_ERR_SILENT;
+        }
+        rc = ras_base_activate_select(sel, node, nd->name);
+        if (PRTE_SUCCESS != rc) {
+            PMIX_LIST_DESTRUCT(&nodes);
+            return rc;
+        }
+    }
+    PMIX_LIST_DESTRUCT(&nodes);
+
+    return PRTE_SUCCESS;
+}
+
+/*
+ * Resolve one --activate specification against the node pool, appending the
+ * nodes it names to sel.  Nothing is modified here: a specification is either
+ * wholly acceptable or wholly refused, so that a bad token in a later app
+ * segment cannot leave nodes marked for a grow that never happens.
+ *
+ * The syntax is --host's, minus what activate cannot honor:
+ *   node01,node02   - name the nodes directly
+ *   +all            - every allocated node that is not in the DVM
+ *   +n<K>           - the K'th node of the allocation
+ *   file=<path>     - a hostfile, read exactly as --hostfile reads one
+ * A ":<slots>" modifier is refused rather than ignored (see below), and so
+ * is "+e" - see there for why it cannot mean anything useful here.
+ */
+static int ras_base_activate_spec(char *spec, pmix_pointer_array_t *sel)
+{
+    char **tokens;
+    int rc = PRTE_SUCCESS;
+    int k, n, nodeidx;
+    prte_node_t *node;
+
+    tokens = PMIx_Argv_split(spec, ',');
+    if (NULL == tokens) {
+        return PRTE_SUCCESS;
+    }
+
+    for (k = 0; NULL != tokens[k]; k++) {
+        if (0 == strncmp(tokens[k], "file=", 5)) {
+            /* a hostfile, in exactly the format --hostfile reads - which is
+             * also what makes it useful here: the file that described the
+             * allocation to begin with can be handed straight back.  Only
+             * the node NAMES are taken from it.  A "slots=" in the file is
+             * not applied, for the same reason the ":N" form below is
+             * refused, and this is how a hostfile given to a tool already
+             * behaves: it selects, it does not resize.
+             *
+             * The parser is the real one, so ^exclusion, aliases and its
+             * refusal of relative syntax inside a file all come along. */
+            rc = ras_base_activate_hostfile(&tokens[k][5], sel);
+            if (PRTE_SUCCESS != rc) {
+                goto done;
+            }
+
+        } else if ('+' != tokens[k][0]) {
+            /* an explicit node name.  A ":N" slot modifier is refused, not
+             * quietly dropped: activate has no authority to change what the
+             * allocation grants, and a request that appears to have been
+             * honored but silently was not is worse than a refusal.  Use
+             * --add-host where PRRTE owns the allocation and the slot count
+             * really is PRRTE's to change. */
+            if (NULL != strchr(tokens[k], ':')) {
+                prte_show_help("help-ras-base.txt", "ras-base:activate-slots", true, tokens[k]);
+                rc = PRTE_ERR_SILENT;
+                goto done;
+            }
+            node = prte_node_match(NULL, tokens[k]);
+            if (NULL == node) {
+                prte_show_help("help-ras-base.txt", "ras-base:activate-unknown", true, tokens[k]);
+                rc = PRTE_ERR_SILENT;
+                goto done;
+            }
+            rc = ras_base_activate_select(sel, node, tokens[k]);
+            if (PRTE_SUCCESS != rc) {
+                goto done;
+            }
+
+        } else if (0 == strcasecmp(&tokens[k][1], "all")) {
+            /* every allocated node that is not in the DVM.  Finding none is
+             * not an error: "activate all" is a statement about what the
+             * DVM's membership should include, and if it already includes
+             * everything the allocation holds then it is satisfied. */
+            for (n = 0; n < prte_node_pool->size; n++) {
+                node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n);
+                if (NULL == node || !ras_base_activatable(node)) {
+                    continue;
+                }
+                if (!ras_base_activate_selected(sel, node)) {
+                    pmix_pointer_array_add(sel, node);
+                }
+            }
+
+        } else if ('n' == tokens[k][1] || 'N' == tokens[k][1]) {
+            /* a specific node of the allocation, by index */
+            if (!ras_base_read_count(&tokens[k][2], &nodeidx)) {
+                prte_show_help("help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
+                               true, tokens[k]);
+                rc = PRTE_ERR_SILENT;
+                goto done;
+            }
+            /* pool entry 0 is the HNP's own node, which is part of the
+             * allocation only when the resource manager included it - the
+             * same offset parse_dash_host() applies to this syntax */
+            if (!prte_hnp_is_allocated) {
+                ++nodeidx;
+            }
+            if (nodeidx >= prte_node_pool->size) {
+                prte_show_help("help-dash-host.txt", "dash-host:relative-node-out-of-bounds",
+                               true, nodeidx, tokens[k]);
+                rc = PRTE_ERR_SILENT;
+                goto done;
+            }
+            node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, nodeidx);
+            if (NULL == node) {
+                prte_show_help("help-dash-host.txt", "dash-host:relative-node-not-found",
+                               true, nodeidx, tokens[k]);
+                rc = PRTE_ERR_SILENT;
+                goto done;
+            }
+            rc = ras_base_activate_select(sel, node, tokens[k]);
+            if (PRTE_SUCCESS != rc) {
+                goto done;
+            }
+
+        } else if ('e' == tokens[k][1] || 'E' == tokens[k][1]) {
+            /* "+e" is valid --host syntax, so it gets its own refusal rather
+             * than the generic "that is not relative node syntax".  It means
+             * "nodes with no application process running on them", which is
+             * not a question about DVM membership at all: the nodes it picks
+             * are mostly ones the DVM is already on, so honoring it here
+             * would launch nothing and report success. */
+            prte_show_help("help-ras-base.txt", "ras-base:activate-empty", true, tokens[k]);
+            rc = PRTE_ERR_SILENT;
+            goto done;
+
+        } else {
+            prte_show_help("help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
+                           true, tokens[k]);
+            rc = PRTE_ERR_SILENT;
+            goto done;
+        }
+    }
+
+done:
+    PMIx_Argv_free(tokens);
+    return rc;
+}
+
+int prte_ras_base_activate_hosts(prte_job_t *jdata)
+{
+    int i, rc, nactivated;
+    prte_app_context_t *app;
+    char *spec;
+    prte_node_t *node;
+    pmix_pointer_array_t sel;
+    bool found = false, adding = false;
+
+    PMIX_CONSTRUCT(&sel, pmix_pointer_array_t);
+    pmix_pointer_array_init(&sel, 8, INT_MAX, 8);
+
+    for (i = 0; i < jdata->apps->size; i++) {
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i);
+        if (NULL == app) {
+            continue;
+        }
+        /* note whether this same request also grows the allocation - it
+         * decides who activates the grow, below */
+        if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOST, NULL, PMIX_STRING) ||
+            prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE, NULL, PMIX_STRING)) {
+            adding = true;
+        }
+        spec = NULL;
+        if (!prte_get_attribute(&app->attributes, PRTE_APP_ACTIVATE_HOSTS,
+                                (void **) &spec, PMIX_STRING) ||
+            NULL == spec) {
+            continue;
+        }
+        found = true;
+        rc = ras_base_activate_spec(spec, &sel);
+        free(spec);
+        if (PRTE_SUCCESS != rc) {
+            PMIX_DESTRUCT(&sel);
+            return rc;
+        }
+    }
+
+    if (!found) {
+        PMIX_DESTRUCT(&sel);
+        return PRTE_SUCCESS;
+    }
+
+    /* every token resolved, so the selection can now be committed */
+    nactivated = 0;
+    for (i = 0; i < sel.size; i++) {
+        node = (prte_node_t *) pmix_pointer_array_get_item(&sel, i);
+        if (NULL == node) {
+            continue;
+        }
+        if (PRTE_NODE_STATE_ADDED == node->state) {
+            /* already claimed by a pending grow, which will launch it */
+            continue;
+        }
+        node->state = PRTE_NODE_STATE_ADDED;
+        ++nactivated;
+    }
+    PMIX_DESTRUCT(&sel);
+
+    if (0 == nactivated) {
+        /* every named node is already in the DVM, or already on its way in.
+         * There is nothing to launch, so leave the DVM ready and let the job
+         * proceed - marking it not-ready here would park the job waiting on
+         * a grow that never runs. */
+        PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+                             "%s ras:base:activate_hosts nothing to activate",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        return PRTE_SUCCESS;
+    }
+
+    PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+                         "%s ras:base:activate_hosts activating %d node%s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nactivated,
+                         (1 == nactivated) ? "" : "s"));
+
+    if (adding) {
+        /* This same request carries --add-host/--add-hostfile, and
+         * prte_ras_base_add_hosts() has already posted the asynchronous
+         * request that inserts those nodes and then activates a grow.  That
+         * grow launches on every node marked PRTE_NODE_STATE_ADDED, ours
+         * included, so it is the one to wait for.  Activating a second grow
+         * here would race ahead of the insertion and extend the DVM before
+         * the added nodes existed. */
+        return PRTE_SUCCESS;
+    }
+
+    /* mark that the DVM is not ready so the launch does not continue until
+     * the new daemons are up - the VM_READY re-entry at the end of the grow
+     * marks it ready again and releases the job from the cache */
+    prte_dvm_ready = false;
+    prte_ras_base_activate_dvm_grow();
 
     return PRTE_SUCCESS;
 }
