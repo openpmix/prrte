@@ -121,6 +121,26 @@ Two sub-modes:
 - **span** (`options->mapspan`): one proc per object cycling across *all*
   nodes as if they were one big node — load-balanced.
 
+**Span is an interleave, and that takes two things: a budget of one target
+per node per pass, and a cursor.** The outer `do { … } while` is the trip
+round the node list, so a budget of 1 makes each pass lay down one proc per
+node — which is the cycling, and is also why span needs none of the
+even-split arithmetic below: balance falls out of the rotation, oversubscribed
+or not. The cursor is what makes the *targets* advance: the k'th proc a node
+receives goes on that node's k'th target, so it is kept per node (keyed by
+`node->index`, the pool slot, which survives a node being dropped from the
+list) and the object loop starts there and wraps.
+
+Without both, span was not spanning at all: `mapspan` only suppressed the
+`goto redo`, so the loop still filled each node's targets before moving on
+and span differed from non-span only when a node was asked to hold more procs
+than it has targets. On 3 nodes of 4 slots, `-n 8 --map-by core:span` came out
+4/4/0 where the "one big node" reading it documents gives 3/3/2.
+
+A target set that cannot be revisited (`tgts->nowrap`, the device maps) is
+deliberately excluded: it gets a single pass by design, so there is no
+rotation to join, and a budget of 1 would place one proc per node and stop.
+
 Per object it checks free cpus against `cpus_per_rank` (only when
 actually binding; if binding was reset to NONE for an oversubscribed
 node, a cpu shortage must not block placement). A node with **zero** objects
@@ -158,7 +178,9 @@ it hit `max_slots` and left the list.
 
 Being allowed to oversubscribe says how many procs a node may end up with,
 not that the head of the list may have them all: without the budget an
-object map filled the first node with the entire job.
+object map filled the first node with the entire job (8/0/0 above), and with
+the budget applied only on the first pass it still gave that node the whole
+overflow (8/2/2 at `-n 12`).
 
 **The `redo:` loop and `check_avail` do not mix casually.** When
 `check_avail` declines a node it may also have removed it from `node_list`

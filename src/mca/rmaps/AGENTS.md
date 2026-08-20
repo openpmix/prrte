@@ -344,7 +344,9 @@ the field before placing, and `map_targets` checks it per placement.
 distribution.** Each node gets what it was given first, and the procs left
 over once every node has had its share are then split **evenly** over the
 nodes — the same arithmetic by-slot and by-node use for their second pass, so
-every mapper answers an oversubscribed job alike. With `-host a:2,b:2,c:2`
+every mapper answers an oversubscribed job alike. (`:SPAN` reaches the same
+balance without that arithmetic: it hands out one target per node per pass,
+so the rotation itself spreads the overflow.) With `-host a:2,b:2,c:2`
 and `--map-by core:oversubscribe`, `-n 8` is 3/3/2, `-n 12` is 4/4/4 and
 `-n 18` is 6/6/6, each identical to `--map-by slot:oversubscribe`. Before
 this, an object map put the whole overflow on the head of the list (8/0/0,
