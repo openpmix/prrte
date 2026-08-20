@@ -475,6 +475,71 @@ test_ras_alloc() {
                  || bad "launching broke after the add-host refusal ($n/3)"
     cleanup_cluster
 
+    banner "ras: --activate CAN start a daemon on a node SLURM already granted"
+    # The other side of the same authority, and the reason the refusal above
+    # is not the whole story.  A DVM started with --host forms across only
+    # part of its allocation, so the rest sits in the node pool, up, with no
+    # daemon and no way to reach it.  --activate is that way: it names only
+    # nodes SLURM has already granted, adds nothing and asks the scheduler
+    # for nothing, so the authority add-host lacks it never needs.
+    #
+    # This can only be shown here.  Everywhere else PRRTE owns the allocation
+    # and add-host would have served the same request, so nothing separates
+    # "allowed because it adds nothing" from "allowed because we own it".
+    cleanup_cluster
+    # four nodes, two in the DVM: node3 for the named form and node4 for the
+    # hostfile form, so neither is already in the DVM when its case runs
+    ALLOC new --tag dvm --nodes 4 --tasks-per-node 2 >/dev/null 2>&1
+    if dvm_start --host node1:2,node2:2; then
+        [ "$(prted_count 3 4)" = 0 ] \
+            && ok "node3 and node4 are allocated but not in the DVM" \
+            || bad "they already have daemons - the test premise is gone"
+        out=$(SA 'timeout 90 prun --activate node3 --host node3:2 -n 2 --map-by node hostname 2>&1 | tr -d "\0"')
+        c=$(echo "$out" | grep -c '^node3$')
+        [ "$c" = 2 ] \
+            && ok "--activate brought node3 into the DVM under SLURM (2 procs)" \
+            || bad "--activate produced $c/2 procs on node3: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        [ "$(prted_count 3)" = 1 ] \
+            && ok "a daemon is running on the activated node" \
+            || bad "no daemon on the activated node"
+        echo "$out" | grep -q "is owned by a resource manager" \
+            && bad "--activate was refused as if it were add-host" \
+            || ok "scheduler ownership did not refuse it"
+
+        # the same request read from a hostfile, which is the form a user
+        # under SLURM actually has to hand: the file that described the
+        # allocation. Its slots= must not be applied - PRRTE has no more
+        # authority over the slot count than over the node list.
+        SA 'printf "node4 slots=99\n" > /tmp/activate.txt' >/dev/null 2>&1
+        out=$(SA 'timeout 90 prun --activate file=/tmp/activate.txt --host node4:2 -n 2 --map-by node hostname 2>&1 | tr -d "\0"')
+        c=$(echo "$out" | grep -c '^node4$')
+        [ "$c" = 2 ] \
+            && ok "file= brought node4 in under SLURM too (2 procs)" \
+            || bad "file= produced $c/2 procs on node4: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        [ "$(prted_count 4)" = 1 ] \
+            && ok "a daemon is running on the node named by the file" \
+            || bad "no daemon on the node the file named"
+        alloc=$(SA 'timeout 30 prun --display allocation -n 1 hostname 2>&1 | tr -d "\0"')
+        echo "$alloc" | grep -qE '^[[:space:]]*node4:[[:space:]]+slots=2' \
+            && ok "the file's slots=99 was not applied under SLURM" \
+            || bad "activate changed a scheduler-granted slot count: $(echo "$alloc" | grep node4 | tr '\n' ' ')"
+
+        # ...and the limit still holds: what SLURM did not grant, --activate
+        # cannot reach either.  It is a different refusal from add-host's -
+        # not "you may not enlarge this allocation" but "that is not in it".
+        out=$(SA 'timeout 60 prun --activate node9 -n 1 hostname 2>&1 | tr -d "\0"')
+        echo "$out" | grep -q 'not part of this DVM' \
+            && ok "--activate refuses a node SLURM never granted" \
+            || bad "--activate accepted an unallocated node: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        [ "$(prted_count 9)" = 0 ] \
+            && ok "no daemon was launched outside the allocation" \
+            || bad "a daemon was launched on node9"
+        dvm_stop
+    else
+        bad "could not start a partial DVM for the --activate test"
+    fi
+    cleanup_cluster
+
     banner "ras/slurm: SLURM's compressed node list expands to exactly those nodes"
     # SLURM hands out "node[2,4,6]" and ras/slurm has its own parser for that
     # notation -- a scheduler handing out comma-separated names never reaches

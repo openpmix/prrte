@@ -67,6 +67,10 @@ To obtain additional nodes, ask the scheduler for them: outside PRRTE before
 starting the DVM, or through a PMIx allocation request that the resource
 manager's component can serve.
 
+If the node you named is one the scheduler already granted, and you only want
+a daemon started on it, use "--activate" instead - it can name nothing the
+allocation does not already contain, so it needs no authority PRRTE lacks.
+
 [ras-base:add-host-unsupported]
 An add-host or add-hostfile directive was given, but no active component can
 serve it.
@@ -74,3 +78,65 @@ serve it.
 The nodes this DVM holds were established by an allocator that does not
 support adding to them after the fact - a bootstrapped DVM, for instance,
 takes its membership from the configuration file every daemon reads.
+
+[ras-base:activate-unknown]
+An "--activate" directive named a host that is not part of this DVM's
+allocation:
+
+  Host: %s
+
+"--activate" can only start a daemon on a node the allocation already
+contains; it cannot add one. Check the name, or use "--add-host" if PRRTE
+owns this allocation and you mean to enlarge it.
+
+[ras-base:activate-unavailable]
+An "--activate" directive named a host that is not available for use:
+
+  Host:     %s
+  State:    %s
+  Given as: %s
+
+A node in this state has either been taken back by the scheduler, or has
+been marked unusable. Starting a daemon on it would fail, and a daemon that
+fails to start takes the whole DVM down with it.
+
+[ras-base:activate-empty]
+An "--activate" directive used the "empty node" syntax:
+
+  Given as: %s
+
+"+e" asks for nodes that have no application process running on them, which
+says nothing about whether a node is in the DVM - most of the nodes it picks
+are already in it. Honoring it here would start no daemon and report success.
+
+If you meant "every node not currently in the DVM", that is "+all". You can
+also name the nodes you want, use "+n<K>" to name one by its position in the
+allocation, or use "file=<hostfile>" to read them from a file.
+
+[ras-base:activate-nofile]
+An "--activate" directive gave "file=" with no filename after it.
+
+The form is "--activate file=<hostfile>", naming a file in the same format
+"--hostfile" reads.
+
+[ras-base:activate-unknown-in-file]
+A hostfile given to "--activate" names a host that is not part of this DVM's
+allocation:
+
+  Host: %s
+  File: %s
+
+"--activate" can only start a daemon on a node the allocation already
+contains; it cannot add one. Check the file, or use "--add-hostfile" if PRRTE
+owns this allocation and you mean to enlarge it.
+
+[ras-base:activate-slots]
+An "--activate" directive carried a slot count:
+
+  Given as: %s
+
+"--activate" cannot change what the allocation grants - it only starts a
+daemon on a node the allocation already contains - so a slot count here
+could not be honored and is refused rather than silently ignored. Drop the
+":N" extension, or use "--add-host" where PRRTE owns the allocation and the
+slot count really is PRRTE's to set.

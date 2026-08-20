@@ -47,6 +47,7 @@
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_path.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_getcwd.h"
@@ -477,6 +478,43 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
         free(tval);
         // we don't add these to the hosts array as they
         // are not part of an initial DVM
+    }
+
+    /* Did the user ask that nodes already in the allocation be brought
+     * into the DVM? */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_ACTIVATE);
+    if (NULL != opt) {
+        char **atokens;
+        int a;
+
+        tval = PMIx_Argv_join(opt->values, ',');
+        /* a "file=" entry names a hostfile that the DVM MASTER will read, so
+         * a relative path has to be resolved against OUR cwd here - the same
+         * thing --hostfile and --add-hostfile do above, and for the same
+         * reason: the HNP is another process, very likely on another node,
+         * and its cwd is not ours */
+        atokens = PMIx_Argv_split(tval, ',');
+        free(tval);
+        for (a = 0; NULL != atokens[a]; a++) {
+            if (0 != strncmp(atokens[a], "file=", 5) ||
+                '\0' == atokens[a][5] ||
+                pmix_path_is_absolute(&atokens[a][5])) {
+                /* leave a bare "file=" alone: turning it into the cwd would
+                 * hand the DVM a directory, where what it should report is
+                 * that no filename was given */
+                continue;
+            }
+            value = pmix_os_path(false, cwd, &atokens[a][5], NULL);
+            free(atokens[a]);
+            pmix_asprintf(&atokens[a], "file=%s", value);
+            free(value);
+        }
+        tval = PMIx_Argv_join(atokens, ',');
+        PMIx_Argv_free(atokens);
+        PMIX_INFO_LIST_ADD(rc, app->info, PRTE_ACTIVATE_HOSTS, tval, PMIX_STRING);
+        free(tval);
+        // these name nodes the allocation already holds, so they are
+        // likewise no part of an initial DVM
     }
 
     /* check for bozo error */

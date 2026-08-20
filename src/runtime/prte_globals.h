@@ -140,6 +140,14 @@ PRTE_EXPORT extern int prte_exit_status;
 /* define some common keys used in PRTE */
 #define PRTE_DB_DAEMON_VPID "prte.daemon.vpid"
 
+/* Spawn directive naming nodes the DVM is to be extended across before the
+ * accompanying job is launched.  This is not a PMIx attribute: PMIx has no
+ * standard way to say "start a daemon on a node I already hold", and the
+ * operation is deliberately weaker than PMIX_ADD_HOST - it can only name
+ * nodes the allocation already contains.  The value is a string in
+ * --host syntax. */
+#define PRTE_ACTIVATE_HOSTS "prte.activate.hosts"
+
 /* State Machine lists */
 PRTE_EXPORT extern pmix_list_t prte_job_states;
 PRTE_EXPORT extern pmix_list_t prte_proc_states;

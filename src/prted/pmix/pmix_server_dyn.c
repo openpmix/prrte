@@ -836,6 +836,10 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                 prte_set_attribute(&app->attributes, PRTE_APP_ADD_HOST, PRTE_ATTR_GLOBAL,
                                    info->value.data.string, PMIX_STRING);
 
+            } else if (PMIX_CHECK_KEY(info, PRTE_ACTIVATE_HOSTS)) {
+                prte_set_attribute(&app->attributes, PRTE_APP_ACTIVATE_HOSTS, PRTE_ATTR_GLOBAL,
+                                   info->value.data.string, PMIX_STRING);
+
             } else if (PMIX_CHECK_KEY(info, PMIX_PREFIX)) {
                 prte_prepend_attribute(&app->attributes, PRTE_APP_PMIX_PREFIX,
                                        PRTE_ATTR_GLOBAL,

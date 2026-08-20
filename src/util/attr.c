@@ -258,6 +258,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "APP-DASH-HOST";
         case PRTE_APP_ADD_HOST:
             return "APP-ADD-HOST";
+        case PRTE_APP_ACTIVATE_HOSTS:
+            return "APP-ACTIVATE-HOSTS";
         case PRTE_APP_USER_CWD:
             return "APP-USER-CWD";
         case PRTE_APP_SSNDIR_CWD:

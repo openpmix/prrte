@@ -19,6 +19,7 @@
 # packages that want to use these RST files.
 rstdir = $(prtedatadir)/rst/prrte-rst-content
 dist_rst_DATA = \
+    cli-activate.rst \
     cli-add-host.rst \
     cli-add-hostfile.rst \
     cli-alloc-id.rst \

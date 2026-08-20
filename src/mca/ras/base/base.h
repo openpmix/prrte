@@ -140,6 +140,19 @@ PRTE_EXPORT void prte_ras_base_check_reservations_on_term(prte_job_t *jdata);
 
 PRTE_EXPORT int prte_ras_base_add_hosts(prte_job_t *jdata);
 
+/* Bring nodes the allocation already contains, but which carry no daemon,
+ * into the DVM.  Collects the PRTE_APP_ACTIVATE_HOSTS directives (the
+ * "--activate" cmd line option) across the job's apps, resolves them against
+ * the node pool, marks the resolved entries PRTE_NODE_STATE_ADDED and
+ * activates a DVM grow.  Unlike prte_ras_base_add_hosts() this adds nothing
+ * to the allocation and touches no scheduler, so it is permitted even where
+ * a resource manager owns the allocation.  Must be called AFTER
+ * prte_ras_base_add_hosts(): when the same request carries both, the grow
+ * that add-host posts is the one that launches, and it will pick up the
+ * nodes marked here.  Sets prte_dvm_ready = false when it activates a grow
+ * of its own. */
+PRTE_EXPORT int prte_ras_base_activate_hosts(prte_job_t *jdata);
+
 /* Render the node specification carried by a PMIX_ALLOC_NODE_LIST-style info
  * (a string, a regex, or a regex2) into a comma-delimited node-name string the
  * caller must free. Returns PMIX_ERR_BAD_PARAM for any other value type. */

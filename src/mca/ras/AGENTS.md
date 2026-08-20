@@ -217,6 +217,55 @@ that ever brought such a node back was `--add-host`, because
 `prte_ras_base_node_insert()` carries `PRTE_NODE_STATE_ADDED` onto an existing
 pool entry; refusing add-host under a scheduler closes that.
 
+**What the refusal took away, and `--activate` gives back.** Refusing
+add-host under a scheduler also closed the *legitimate* case it had been
+serving by accident: a node the scheduler **did** grant, sitting in the pool
+with `node->daemon` NULL because a `--host`/`--hostfile` given at DVM startup
+narrowed which pool entries got daemons, or because a released reservation
+handed it back without one. `prte_ras_base_activate_hosts()` (the
+`--activate` cmd line option, `PRTE_APP_ACTIVATE_HOSTS`) is that operation
+and nothing more: it resolves a `--host`-syntax specification against the
+node pool, marks the resolved entries `PRTE_NODE_STATE_ADDED` and calls
+`prte_ras_base_activate_dvm_grow()`. It inserts no node, changes no slot
+count, and calls no module — so `scheduler_owned` does not gate it, and it
+cannot name anything the allocation does not already contain. A `:N` slot
+extension is **refused** rather than ignored for the same reason: activate
+has no authority to set slot counts.
+
+Two things about it are load-bearing:
+
+- It runs **after** `prte_ras_base_add_hosts()` in `plm_base_receive.c`, and
+  when the same request carries both it deliberately does **not** activate a
+  grow of its own. Add-host's grow is asynchronous — the request has to be
+  served before the nodes exist — and it launches on every node marked
+  `ADDED`, so it sweeps up activate's too. A second grow posted here would
+  race ahead of the insertion.
+- Resolution is separated from commitment. A specification that fails
+  anywhere marks nothing, so a bad token in a later app segment cannot leave
+  pool entries marked `ADDED` for a grow that never runs — which is how a
+  node gets relaunched later by some entirely unrelated request.
+
+`+e` is **refused** here, with its own message rather than the generic
+"invalid relative node syntax" — it is valid `--host` syntax, so a user has
+every reason to try it. For `--host` it means "no application process running
+on this node", which says nothing about DVM membership: most of what it picks
+is already in the DVM, so honoring it would start no daemon and report
+success.
+
+The "every one of them" form is `+all` (the `+` prefix is what already marks
+a token as *not* a hostname in this grammar). It selects every allocated node
+that is not in the DVM, and finding none is success, not an error — the same
+rule that makes naming an already-joined node a no-op.
+
+The other indirect form is `file=<hostfile>`, read by
+`prte_util_add_hostfile_nodes()` — the real parser, so `^host` exclusions,
+aliases and its refusal of relative syntax inside a file all come along. Only
+the **names** are used; a `slots=` in the file is not applied, which is both
+consistent with the `:N` refusal and with what a hostfile handed to a tool
+already does (it selects, it does not resize). Note the tool side matters:
+`create_app()` in `prte_app_parse.c` absolutizes a relative `file=` path
+against the *tool's* cwd, because the HNP is the process that opens it.
+
 ---
 
 ## `prte_ras_base_allocate()` — the driver
@@ -346,6 +395,7 @@ elastic-DVM or PMIx_Allocation code:
 |---------------|------|
 | `prte_ras_base_modify()` | The `modify` driver (also a state callback). Cycles modules (keyed by `req->key`) to serve a `prte_pmix_server_req_t`; on `PMIX_SUCCESS` calls `prte_ras_base_complete_request`, then invokes the requester's `infocbfunc`. |
 | `prte_ras_base_add_hosts()` | Collect `PRTE_APP_ADD_HOSTFILE`/`PRTE_APP_ADD_HOST` directives across apps into a `PMIX_ALLOC_EXTEND` request and hand it to `prte_ras_base_modify`. Sets `prte_dvm_ready = false` until processed. |
+| `prte_ras_base_activate_hosts()` | Collect `PRTE_APP_ACTIVATE_HOSTS` directives across apps, resolve them against the node pool, mark the resolved entries `PRTE_NODE_STATE_ADDED` and activate a grow. Adds nothing to the allocation, so it is permitted under a scheduler; must run after `prte_ras_base_add_hosts()`. Sets `prte_dvm_ready = false` when it activates a grow of its own. |
 | `prte_ras_base_complete_request()` | The heavy reservation router. For `PMIX_ALLOC_NEW`/`EXTEND` it resolves the destination `prte_session_t` (honoring `PMIX_ALLOC_TARGET`/`SHARE`/`INHERITANCE`/`ID`/`REQ_ID`), parses `PMIX_ALLOC_NODE_LIST`, inserts the nodes, and attaches them to the reservation (`add_nodes_to_session`). For `PMIX_ALLOC_RELEASE` it tears down a named reservation or xcasts a `PRTE_DAEMON_SHRINK_CMD`. Marks `PRTE_JOB_EXTEND_DVM` and re-launches daemons for grows. |
 | `prte_ras_base_release_allocation()` | Session-destruct hook: cycles modules whose `release_allocation` matches `session->alloc_module`. |
 | `prte_ras_base_shrink_complete()` | Offers a drained `prte_shrink_campaign_t` to every module's `shrink_complete`. |
@@ -548,7 +598,7 @@ prototype here compiles and then mismatches the real library.
 | Layer | What it covers |
 |-------|----------------|
 | [`test/unit/ras/test_ras.c`](../../../test/unit/ras/) (`make check`) | `prte_ras_base_node_insert` (dedup, drain, slot accounting, `ADD_SLOTS` clamping, FQDN normalization, HNP dedup, pre-assigned pool slots), the module vtable contract for every static component, `prte_ras_base_select` priority ordering, `prte_ras_base_flag_string`, and `ras/slurm`'s detect-and-report half — query gating on `SLURM_JOBID` at priority 50, then `allocate()` expanding a compressed `SLURM_NODELIST` and refusing a tainted jobid or an over-length nodelist. That last part is driven **through the framework** (find the component, query it, call the module it returns) rather than by naming its symbols, because `ras-slurm` is a plugin and has none in `libprrte`; keep it that way. It skips with a printed reason when the component is not there to be found. |
-| [`contrib/dockerswarm/run-tests.sh`](../../../contrib/dockerswarm/) (`linux`) | The multi-node paths: grow/shrink/re-grow leaving exactly one daemon per node (a duplicated pool entry launches two), `--add-hostfile` growing a live DVM through `add_hosts → ras/pmix defer → ras/hosts` including the `slots=+N` in-place adjust, and **`ras/slurm`'s whole modify surface** against a faked scheduler (below). |
+| [`contrib/dockerswarm/run-tests.sh`](../../../contrib/dockerswarm/) (`linux`) | The multi-node paths: grow/shrink/re-grow leaving exactly one daemon per node (a duplicated pool entry launches two), `--add-hostfile` growing a live DVM through `add_hosts → ras/pmix defer → ras/hosts` including the `slots=+N` in-place adjust, `--activate` bringing an allocated-but-idle node into the DVM (one left out by `prte_max_vm_size`, and two a shrink handed back, named through `file=`) while refusing a host the allocation does not contain and refusing to apply the hostfile's `slots=`, and **`ras/slurm`'s whole modify surface** against a faked scheduler (below). |
 | Live RM | PBS/LSF/Flux discovery still needs a real scheduler; there is no substitute. |
 
 **`ras/slurm`'s `modify` surface is covered in `contrib/dockerswarm`, not
