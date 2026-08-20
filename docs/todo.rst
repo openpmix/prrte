@@ -55,18 +55,49 @@ in ``src/rml/routed_radix.c``.
 **Only a command line can ask for a daemon on an allocated node.**  The
 command-line half of this is done: ``--activate`` (``prun`` and
 ``prterun``) takes node names, ``+all``, ``+n<K>`` and ``file=<hostfile>``,
-resolves them against the node pool,
-marks the chosen entries ``PRTE_NODE_STATE_ADDED`` and calls
-``prte_ras_base_activate_dvm_grow()`` (``prte_ras_base_activate_hosts``).
-It needs no ``ras`` module, touches no scheduler, and is safe by
-construction since it can only name nodes the allocation already contains -
-which is why it is allowed where ``--add-host`` is refused.  What remains
-undecided is whether a *programmatic* requester should be able to ask for
-the same thing, and how: the directive is currently a PRRTE-private spawn
-key (``prte.activate.hosts``), and a library caller that wants to grow the
-DVM across nodes it already holds has no PMIx-standard way to say so.  The
-candidates are a new PMIx attribute or a ``PMIX_ALLOC_EXTEND`` whose
-``PMIX_ALLOC_NODE_LIST`` is restricted to known nodes.
+resolves them against the node pool, marks the chosen entries
+``PRTE_NODE_STATE_ADDED`` and calls ``prte_ras_base_activate_dvm_grow()``
+(``prte_ras_base_activate_hosts``).  It needs no ``ras`` module, touches no
+scheduler, and is safe by construction since it can only name nodes the
+allocation already contains - which is why it is allowed where
+``--add-host`` is refused.  A *programmatic* requester has no equivalent:
+the directive travels as a PRRTE-private spawn key
+(``prte.activate.hosts``) precisely because PMIx has no standard way to say
+"start a daemon on a node I already hold".
+
+The intended shape is a new **allocation directive**, not an extension of
+some existing attribute's meaning.  Add ``PMIX_ALLOC_ACTIVATE`` to
+``pmix_alloc_directive_t`` (``pmix_common.h``, next unused value after
+``PMIX_ALLOC_REQ_CANCEL``), naming its nodes with ``PMIX_HOST`` and/or
+``PMIX_HOSTFILE`` - the attributes that already mean "these hosts" and
+"this hostfile" everywhere else - and parsed **identically** to the command
+line, so a request and a ``--activate`` spec cannot drift apart.  That
+means factoring the resolver out of ``ras_base_activate_hosts`` rather than
+writing a second one; note the command line folds the hostfile into its own
+list as ``file=<path>`` while the PMIx form carries it as a separate
+attribute, so the shared entry point wants a host-syntax string and a
+hostfile path as two arguments.  On PRRTE's side the directive is another
+arm in ``prte_ras_base_complete_request()``/``ras/hosts``' ``modify()``
+beside ``NEW``/``EXTEND``/``RELEASE``, and - as with the command line - it
+must **not** be gated on ``prte_ras_base.scheduler_owned``, since it can
+name nothing the scheduler has not already granted.
+
+The second half is more general than activation and is worth having on its
+own: **there is no way to put an allocation directive into a**
+``PMIx_Spawn`` **call.**  Today a caller that needs resources before it can
+launch has to issue ``PMIx_Allocation_request`` itself, wait for it, and
+then spawn - the library equivalent of running ``salloc`` before ``srun``.
+An attribute carrying an allocation request on the spawn would let the host
+do what ``srun`` does when invoked outside an allocation: obtain the
+allocation per the directive, wait for it to complete, and only then
+execute the spawn.  PRRTE already has the mechanism this needs - the
+add-host path marks the DVM not-ready, parks the job in ``prte_cache``, and
+lets the grow's ``VM_READY`` re-entry release it (``prte_ras_base_add_hosts``,
+``plm_base_receive.c``) - so what is missing is the attribute and the
+routing, not the machinery.  Getting the failure semantics right is the
+part that needs thought: an allocation request that is refused, or that
+times out, has to fail the spawn with something the caller can tell apart
+from a launch failure.
 
 **Mixed allocators are not supported, and would need more than the ``ras``
 framework.**  The motivating case is a cloud/local combination: an allocation
