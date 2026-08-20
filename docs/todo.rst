@@ -52,6 +52,39 @@ grow and restores only the permanent sets (``dead_dmns``, ``absent_dmns``);
 whether anything else should survive the recompute is an open question marked
 in ``src/rml/routed_radix.c``.
 
+**A node in the allocation that has no daemon cannot be brought into the
+DVM.**  The node pool holds every node the allocation contains, and
+``--host``/``--hostfile`` given when the DVM starts only narrow which of them
+get daemons (``prte_plm_base_setup_virtual_machine`` builds its candidate list
+from the whole pool and filters a working copy).  So an allocated node that
+was filtered out sits in the pool, up, with ``node->daemon`` NULL, and there
+is no way to ask for a daemon on it afterwards.  ``--add-host`` used to do it
+by accident - ``prte_ras_base_node_insert`` carries
+``PRTE_NODE_STATE_ADDED`` onto an existing pool entry, so naming a known node
+marked it for the next grow - but that same option would just as readily
+insert a node the scheduler never granted, so it is now refused outright
+against an allocation PRRTE does not own.  The operation itself is worth
+having and is nearly free: mark the chosen pool entries
+``PRTE_NODE_STATE_ADDED`` and call ``prte_ras_base_activate_dvm_grow()``.  It
+needs no ``ras`` module, touches no scheduler, and is safe by construction
+since it can only name nodes the allocation already contains.  What has not
+been decided is the request surface - a new PMIx directive, a
+``PMIX_ALLOC_EXTEND`` whose ``PMIX_ALLOC_NODE_LIST`` is restricted to known
+nodes, or a command-line option.
+
+**Mixed allocators are not supported, and would need more than the ``ras``
+framework.**  The motivating case is a cloud/local combination: an allocation
+from a scheduler plus a set of unmanaged nodes outside it.  The ``ras``
+framework was made multi-select for this, and it never delivered it -
+``prte_ras_base_allocate`` breaks at the first module that succeeds, so there
+is no union step and the second allocator never contributed a node.  That
+selection is now single, which loses nothing that worked.  Supporting the case
+properly is a larger piece of work than re-admitting multiple ``ras`` modules:
+``plm`` is not multi-select either, so nothing tracks which launcher owns
+which nodes, and the daemon-launch path would have to fan out through more
+than one.  At minimum it needs a launcher affinity recorded per node and
+honored by ``prte_plm_base_setup_virtual_machine``.
+
 **RELM has one module and no way to choose another.**
 ``prte_relm_register`` registers the base implementation unconditionally
 (``src/rml/relm/relm.c``); the MCA variable that would select between modules
