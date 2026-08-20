@@ -773,6 +773,22 @@ int prte_rmaps_rr_map_targets(prte_job_t *jdata, prte_app_context_t *app,
             for (j=0; j < nobjs && nprocs_mapped < app->num_procs && !nodefull; j++) {
                 pmix_output_verbose(10, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps:rr: assigning proc to object %d", j);
+                /* has this node given the job all it is allowed to? The
+                 * number of slots a node contributes to a job is not always
+                 * its slot count: a ":N" suffix on a -host entry caps what
+                 * this job may take from it, and get_target_nodes records
+                 * that cap in slots_available (setup_proc consumes one per
+                 * placed proc). Nothing below sees it - check_avail and
+                 * check_oversubscribed both measure against node->slots -
+                 * so this loop would happily fill the node to its slot
+                 * count and leave the rest of the -host list empty. The
+                 * other mappers cap themselves the same way. */
+                if (!options->oversubscribe &&
+                    !PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
+                    0 >= node->slots_available) {
+                    nodefull = true;
+                    break;
+                }
                 /* get the target object */
                 obj = tgts->item(node, options, ctx, j);
                 if (NULL == obj) {

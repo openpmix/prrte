@@ -96,6 +96,12 @@ and every node came out with zero available slots: `--host +n1` was refused
 for lack of resources even though the node list had been resolved correctly,
 and only ever "worked" under `--map-by :OVERSUBSCRIBE`, which skips the check.
 
+The answer is a *cap*, not a slot count: when the `-host` selects within an
+allocation that already exists, the node keeps its own `slots` and the cap
+lands in `node->slots_available` — which is what the mappers have to place
+against, and what they did not all do.  See
+[`src/mca/rmaps/AGENTS.md`](../../mca/rmaps/AGENTS.md).
+
 ---
 
 ## No allocation check in the "add" path
