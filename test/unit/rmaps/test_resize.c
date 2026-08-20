@@ -18,17 +18,27 @@
  * successful one - a job that could not map has no more claim on the extra
  * slots than one that did.  These two functions are the whole of that
  * contract, and neither needs a topology or a DVM to check.
+ *
+ * The same contract binds the other direction.  A hostfile "slots=N" smaller
+ * than the node makes the node smaller for the job that named the hostfile,
+ * and the nodes the mapper narrows are the node pool's own objects - so a
+ * shrink that was not recorded left every later job in the DVM looking at a
+ * node that had lost slots it never gave up, and the allocation could only
+ * ever get smaller.  test_hostfile_cap() below covers that path.
  */
 
 #include "prte_config.h"
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "constants.h"
 #include "src/runtime/prte_globals.h"
 #include "src/mca/rmaps/base/base.h"
+#include "src/util/hostfile/hostfile.h"
 
 int test_resize(void);
+int test_hostfile_cap(void);
 
 #define CHECK(label, cond)                                              \
     do {                                                                \
@@ -106,6 +116,94 @@ int test_resize(void)
 
     if (0 == failures) {
         fprintf(stdout, "  PASS test_resize\n");
+    }
+    return failures;
+}
+
+/* write a hostfile into the current directory; returns path or NULL */
+static char *write_hostfile(const char *body, char *path, size_t pathlen)
+{
+    FILE *fp;
+
+    snprintf(path, pathlen, "prte_test_resize_hostfile_%lu.txt",
+             (unsigned long) getpid());
+    fp = fopen(path, "w");
+    if (NULL == fp) {
+        return NULL;
+    }
+    fputs(body, fp);
+    fclose(fp);
+    return path;
+}
+
+static prte_node_t *one_node(pmix_list_t *nodes, const char *name, int32_t slots)
+{
+    prte_node_t *nd;
+
+    nd = PMIX_NEW(prte_node_t);
+    nd->name = strdup(name);
+    nd->slots = slots;
+    pmix_list_append(nodes, &nd->super);
+    return nd;
+}
+
+int test_hostfile_cap(void)
+{
+    int failures = 0;
+    int rc;
+    char path[512];
+    pmix_list_t nodes;
+    prte_node_t *nd;
+
+    if (NULL == write_hostfile("hostA slots=1\n", path, sizeof(path))) {
+        fprintf(stderr, "FAIL [hostfile-cap]: could not write a temp hostfile\n");
+        return 1;
+    }
+
+    /* selecting the nodes a job will map onto: the smaller count applies to
+     * the job, and is recorded so the node goes back to its own size */
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    nd = one_node(&nodes, "hostA", 4);
+    rc = prte_util_filter_hostfile_nodes(&nodes, path, true);
+    CHECK("cap: filter succeeded", PRTE_SUCCESS == rc);
+    CHECK("cap: node capped for this job", 1 == nd->slots);
+    CHECK("cap: the shrink was recorded",
+          1 == pmix_list_get_size(&prte_rmaps_base.resized_nodes));
+    prte_rmaps_base_restore_resized();
+    CHECK("cap: node back to its own size", 4 == nd->slots);
+    PMIX_LIST_DESTRUCT(&nodes);
+
+    /* marking which nodes are to host a daemon (remove == false) is not a
+     * map: it reads no slot count, and nothing puts back what it changes,
+     * because it runs before the map that would have restored it */
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    nd = one_node(&nodes, "hostA", 4);
+    rc = prte_util_filter_hostfile_nodes(&nodes, path, false);
+    CHECK("mark: filter succeeded", PRTE_SUCCESS == rc);
+    CHECK("mark: node left alone", 4 == nd->slots);
+    CHECK("mark: nothing recorded",
+          0 == pmix_list_get_size(&prte_rmaps_base.resized_nodes));
+    PMIX_LIST_DESTRUCT(&nodes);
+
+    /* a count larger than the node is not a cap - a hostfile can only
+     * subdivide an allocation, never enlarge it */
+    if (NULL == write_hostfile("hostA slots=8\n", path, sizeof(path))) {
+        fprintf(stderr, "FAIL [hostfile-cap]: could not write a temp hostfile\n");
+        return failures + 1;
+    }
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+    nd = one_node(&nodes, "hostA", 4);
+    rc = prte_util_filter_hostfile_nodes(&nodes, path, true);
+    CHECK("grow: filter succeeded", PRTE_SUCCESS == rc);
+    CHECK("grow: node not enlarged", 4 == nd->slots);
+    CHECK("grow: nothing recorded",
+          0 == pmix_list_get_size(&prte_rmaps_base.resized_nodes));
+    PMIX_LIST_DESTRUCT(&nodes);
+
+    unlink(path);
+
+    if (0 == failures) {
+        fprintf(stdout, "  PASS test_hostfile_cap\n");
     }
     return failures;
 }

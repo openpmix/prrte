@@ -17,7 +17,7 @@ keyword modifiers.
 | Entry point | Used for | Behavior |
 |-------------|----------|----------|
 | `prte_util_add_hostfile_nodes()` | building an allocation (`prte --hostfile`, `--add-hostfile`) | Adds every named node to the caller's list, merging duplicates and dropping the excluded ones. |
-| `prte_util_filter_hostfile_nodes()` | selecting for a job (`prun --hostfile`) | Removes from the caller's list every node the hostfile does not name. Returns `PRTE_ERR_TAKE_NEXT_OPTION` if the hostfile was empty, and refuses a hostfile naming a node the allocation does not have. |
+| `prte_util_filter_hostfile_nodes()` | selecting for a job (`prun --hostfile`) | Removes from the caller's list every node the hostfile does not name, and caps the ones it keeps (see below). Returns `PRTE_ERR_TAKE_NEXT_OPTION` if the hostfile was empty, and refuses a hostfile naming a node the allocation does not have. |
 | `prte_util_get_ordered_host_list()` | `rmaps/seq`, `rmaps/rank_file` | Keeps duplicates and order: the list *is* the sequence of placements. |
 
 `hostfile_lex.c` is **generated** by flex from `hostfile_lex.l` and is not in
@@ -116,6 +116,35 @@ same index means a different node depending on which one the user typed it at.
 
 ---
 
+## A `slots=` that selects is a cap on the *job*, and it must be given back
+
+`prte_util_filter_hostfile_nodes()` does more than select: a `slots=` count
+smaller than the node's own replaces it, which is how a user subdivides an
+allocation somebody else built. The nodes on the caller's list are the node
+**pool's own objects**, so that write is to the DVM's idea of the node, and
+what the hostfile stated is only what *this job* may take there — exactly what
+a `-host node:N` states, and the opposite of `--add-hostfile`, which is how an
+allocation is changed.
+
+So the count has to come back. Record it with
+`prte_rmaps_base_record_resize()` before writing, and
+`prte_rmaps_base_restore_resized()` at `map_job`'s `cleanup` puts it back on
+both outcomes of the map. Left unrecorded (issue #2698), one job's hostfile
+shrank the node for every job the DVM ran afterwards — jobs that never named
+the hostfile — and since the write only ever lowers the count, the allocation
+could only shrink, with nothing short of restarting the DVM to undo it.
+
+**Only the `remove == true` caller may do this**, because that is the one
+running inside `prte_rmaps_base_map_job()`, which restores what it recorded
+before it returns. `prte_rmaps_base.resized_nodes` is a framework global, not
+a per-job list, and a DVM maps one job while another is still forming its
+daemons — so an entry made outside a map is one that some unrelated job's map
+would put back. The other caller, `prte_plm_base_setup_virtual_machine()`, is
+marking which nodes are to host a daemon: it never maps and reads no slot
+count, so it has nothing to resize for.
+
+---
+
 ## Ownership, and the `keep` list
 
 `prte_util_filter_hostfile_nodes()` moves the caller's nodes onto a local
@@ -134,6 +163,12 @@ appearing more than once.
 
 ## Testing
 
+- `test/unit/rmaps/test_resize.c` (`test_hostfile_cap`) covers the section
+  above: that the cap applies and is recorded when selecting for a map, that
+  it is restored, that VM-setup marking leaves the node alone, and that a
+  count *larger* than the node changes nothing. It lives under `rmaps`
+  because the record/restore list is a framework global that needs the
+  framework opened.
 - `test/unit/util/test_util.c` writes temporary hostfiles and parses them:
   slot counts, `max_slots`, comments, the `^` exclusion (including a duplicated
   excluded name), a malformed file, and a good file parsed straight after a

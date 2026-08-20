@@ -46,3 +46,11 @@ RM.
 
 .. important:: If using a resource manager, the user-specified number
                of slots is capped by the RM-assigned value.
+
+A hostfile given to a job that is being submitted to an already-running
+DVM *selects within* the DVM's allocation: it names the subset of nodes
+that job may use, and a ``slots`` count smaller than the node's own is
+the number of slots that job may take there.  It says nothing about how
+big the node is, so it applies to that job alone |mdash| the node is
+back to its allocated size for the next job, which may be someone
+else's.  Changing the allocation is what ``--add-hostfile`` is for.

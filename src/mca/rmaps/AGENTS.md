@@ -352,6 +352,14 @@ and `--map-by core:oversubscribe`, `-n 8` is 3/3/2, `-n 12` is 4/4/4 and
 this, an object map put the whole overflow on the head of the list (8/0/0,
 8/2/2, 14/2/2).
 
+The same machinery covers the other direction, and the other spelling. A
+hostfile `slots=` *smaller* than the node caps the job the same way — that is
+what lets a user subdivide an allocation — and
+`prte_util_filter_hostfile_nodes()` writes it straight onto the pool's node
+object, so it records the resize first. Unrecorded (issue #2698), one job's
+hostfile shrank the node for every job the DVM ran afterwards. See
+[`src/util/hostfile/AGENTS.md`](../../util/hostfile/AGENTS.md).
+
 **A cap that is *larger* than the node is reconciled in `get_target_nodes`,
 and the answer depends on who sized the node.** A resource manager decided
 how much of that node is ours and we cannot hand a job more, so the request
@@ -605,7 +613,7 @@ without a node pool, a topology, or a DVM:
 | `test_resolve_options.c` | `resolve_app_options` and the rank/bind default derivations |
 | `test_ranking.c` | `compute_vpids`: by-slot/by-node traversal, the per-app cursor, by-user pass-through, and that a cycling scheme terminates |
 | `test_check_avail.c` | `check_avail`: the map-add-once rule, `max_slots`, and the node-removal contract above |
-| `test_resize.c` | `record_resize`/`restore_resized`: a node grown for one map goes back — the count and the SLOTS_GIVEN flag |
+| `test_resize.c` | `record_resize`/`restore_resized`: a node re-sized for one map goes back — the count and the SLOTS_GIVEN flag — and the hostfile `slots=` cap that rides the same list |
 | `test_dispatch.c`, `test_<component>.c` | each mapper's accept/defer gate |
 
 `test_ranking.c` builds a job map by hand — synthetic nodes carrying
