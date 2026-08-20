@@ -542,92 +542,6 @@ static int test_child_pipe_protocol(void)
     return failures;
 }
 
-/*
- * The spawn-thread pool.  start_threads sizes the pool from the job it is
- * first handed, and writes its choice back into
- * prte_odls_globals.num_threads.  That makes the "have we already built a
- * pool?" test load-bearing: keying it off ev_threads (which stays NULL
- * whenever the pool is "no dedicated threads at all") let the choice made
- * for the first small job stand for the life of the daemon, so a later job
- * with thousands of local procs still forked them one at a time on the
- * progress thread.  Guard the guard, and the reset harvest_threads owes.
- */
-static int test_thread_pool_sizing(void)
-{
-    int failures = 0;
-    prte_job_t *jdata;
-    bool save_persistent = prte_persistent;
-
-    /* Drive the from-the-job sizing branch.  prte_persistent defaults to
-     * true, and a persistent DVM short-circuits to max_threads and spins
-     * that many real progress threads - which this bare test process is in
-     * no position to start and stop. */
-    prte_persistent = false;
-
-    /* start from a known-clean pool */
-    prte_odls_base_harvest_threads();
-    CHECK("harvest clears the base array", NULL == prte_odls_globals.ev_bases);
-    CHECK("harvest leaves no threads behind", 0 == prte_odls_globals.num_threads);
-    /* the sizing sentinel is what register() established; harvest must NOT
-     * put it back (see below) */
-    prte_odls_globals.num_threads = -1;
-
-    /* a job below the cutoff gets no dedicated threads, and forks on the
-     * shared default base */
-    jdata = PMIX_NEW(prte_job_t);
-    jdata->num_local_procs = 1;
-    prte_odls_base_start_threads(jdata);
-    CHECK("small job uses no dedicated threads", 0 == prte_odls_globals.num_threads);
-    /* ...which means the one entry is the shared default base itself.  (In
-     * this bare test process prte_event_base has never been created, so
-     * compare against it rather than asserting non-NULL.) */
-    CHECK("small job dispatches on the default base",
-          NULL != prte_odls_globals.ev_bases
-          && prte_event_base == prte_odls_globals.ev_bases[0]);
-    /* launch_local indexes ev_bases with next_base after incrementing and
-     * wrapping at num_threads; with no dedicated threads that must land on
-     * the single element, not past it */
-    ++prte_odls_globals.next_base;
-    if (prte_odls_globals.num_threads <= prte_odls_globals.next_base) {
-        prte_odls_globals.next_base = 0;
-    }
-    CHECK("the dispatch index stays inside the one-element array",
-          0 == prte_odls_globals.next_base);
-
-    /* asking again for the same pool must be a no-op, not a rebuild */
-    prte_odls_base_start_threads(jdata);
-    CHECK("start_threads is idempotent", 0 == prte_odls_globals.num_threads);
-    PMIX_RELEASE(jdata);
-
-    /* Harvest tears the pool down and must leave it torn down.  It runs
-     * from framework CLOSE, so anything that reopens the sizing question
-     * here is an invitation to build a whole new pool on the way out: with
-     * the "-1 = you decide" sentinel restored, a later start_threads during
-     * teardown re-sized from the job and spun a second set of real threads
-     * (seen on a 40-proc node, which printed "START 5 LAUNCH THREADS"
-     * twice).  Record "no threads", not "undecided". */
-    prte_odls_base_harvest_threads();
-    CHECK("harvest released the base array", NULL == prte_odls_globals.ev_bases);
-    CHECK("harvest leaves the pool at zero, not undecided",
-          0 == prte_odls_globals.num_threads);
-
-    /* ...and a call that arrives while finalizing builds nothing at all */
-    prte_finalizing = true;
-    jdata = PMIX_NEW(prte_job_t);
-    jdata->num_local_procs = (int32_t) prte_odls_globals.cutoff + 8;
-    prte_odls_base_start_threads(jdata);
-    CHECK("start_threads builds nothing once finalizing",
-          NULL == prte_odls_globals.ev_bases && 0 == prte_odls_globals.num_threads);
-    PMIX_RELEASE(jdata);
-    prte_finalizing = false;
-
-    prte_persistent = save_persistent;
-
-    if (0 == failures) {
-        fprintf(stdout, "PASSED test_thread_pool_sizing\n");
-    }
-    return failures;
-}
 
 /*
  * Signalling a proc that has no pid must not reach the daemon.
@@ -754,7 +668,6 @@ int main(void)
     failures += test_attribute_order();
     failures += test_process_envars();
     failures += test_child_pipe_protocol();
-    failures += test_thread_pool_sizing();
     failures += test_signal_skips_dead_procs();
 
     (void) pmix_mca_base_framework_close(&prte_odls_base_framework);

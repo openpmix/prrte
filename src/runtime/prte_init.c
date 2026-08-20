@@ -84,6 +84,7 @@
 #include "src/runtime/pmix_init_util.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
+#include "src/runtime/prte_worker_pool.h"
 #include "src/runtime/runtime.h"
 #include "src/runtime/runtime_internals.h"
 
@@ -557,6 +558,21 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
     if (PRTE_SUCCESS != (ret = prte_ess_base_select())) {
         error = "prte_ess_base_select";
         goto error;
+    }
+
+    /* Stand up the pool of worker threads.  Only the DVM master and the
+     * daemons have anything to put on it - peer sockets and local children -
+     * so a tool spins no threads it will never use.
+     *
+     * This must precede prte_ess.init(), which is where the OOB is opened:
+     * a peer built before the pool exists is pinned to the main progress
+     * thread for its whole life, and a daemon's peer to the HNP - the one
+     * socket everything it does crosses - is built right there. */
+    if (PRTE_PROC_IS_MASTER || PRTE_PROC_IS_DAEMON) {
+        if (PRTE_SUCCESS != (ret = prte_worker_pool_init())) {
+            error = "prte_worker_pool_init";
+            goto error;
+        }
     }
 
     /* initialize the RTE for this environment */

@@ -500,9 +500,12 @@ worth stating rather than re-deriving:
   *caddy* + `PRTE_PMIX_THREADSHIFT` (see `PRTE_OOB_SEND`,
   `prte_rml_recv_buffer_nb`). Never read or write shared RML state off that
   thread, and never block on it. The one exception is deliberate and bounded:
-  a peer's *socket* send/recv handlers can be put on a worker progress thread
-  (`prte_oob_progress_threads`, default 0 — off), so that the wire keeps moving
-  while the main thread computes. Everything those handlers hand upward —
+  a peer's *socket* send/recv handlers run on a worker progress thread drawn
+  from the process-wide pool (`prte_worker_pool_assign()`, sized by
+  `prte_num_worker_threads`, default 8 — set it to 0 to put them back on the
+  main thread), so that the wire keeps moving while the main thread computes.
+  That pool is shared with the odls fork path, so a thread carrying your
+  sockets may also be forking a child. Everything those handlers hand upward —
   message delivery, relaying, send completions, the connection state machine —
   still comes back to `prte_event_base`. See [`oob/AGENTS.md`](oob/AGENTS.md),
   *Which thread services a peer's socket*, before adding anything to those

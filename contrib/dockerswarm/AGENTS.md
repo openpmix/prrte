@@ -886,39 +886,34 @@ foreground under `docker exec -d` (see §5).
 
 ---
 
-### The suite runs the OOB with worker threads
+### The suite runs with the worker thread pool on
 
-`prte_oob_base.num_progress_threads` defaults to **0** in the library: every
-peer's socket send/recv events are serviced on the main progress thread, so
-the OOB is effectively single-threaded. With workers configured, each peer is
-assigned to a worker base and its handlers run on that thread, posting
-completions back to `prte_event_base` — and that is the arrangement in which a
-missing lock, a peer touched from two threads, or a completion that assumes it
-runs on the main thread has any consequence at all.
+`prte_num_worker_threads` (default **8**) sizes one process-wide pool of
+worker progress threads, shared by two subsystems: a peer's socket send/recv
+handlers run on a base drawn from it, and so does each local `fork`/`exec`.
+With the pool off, all of that runs on the main progress thread and the
+ordering is fixed. With it on, a missing lock, a peer touched from two
+threads, or a completion that assumes it runs on the main thread has
+consequences — which is the whole reason to test in that mode.
 
-At the library default this suite could never reach that path: not one case
-would exercise it, and a race introduced there would ship. So `run-tests.sh`
-opts in, exporting `PRTE_MCA_oob_progress_threads` into every tool it runs —
-and thereby into every daemon, since `prte_plm_base_setup_virtual_machine`
+`run-tests.sh` states the setting explicitly rather than inheriting it,
+exporting `PRTE_MCA_prte_num_worker_threads` into every tool it runs — and
+thereby into every daemon, since `prte_plm_base_setup_virtual_machine`
 harvests `PRTE_MCA_*` from the launcher's environment onto the daemon command
-line.
+line. The preflight prints the number it used, so a suite log always says
+which mode produced it.
 
-**The default here is 2**, the smallest genuinely multi-threaded setting: one
-worker plus the main thread is already two threads touching the OOB, and two
-workers means two peers can be serviced at once. The preflight prints the
-number it used, so a suite log always says which mode produced it.
-
-Override with `PRTE_SWARM_OOB_THREADS`:
+Override with `PRTE_SWARM_WORKER_THREADS`:
 
 ```sh
-PRTE_SWARM_OOB_THREADS=0 ./run-tests.sh linux   # library default, single-threaded
-PRTE_SWARM_OOB_THREADS=8 ./run-tests.sh linux   # push the threading harder
+PRTE_SWARM_WORKER_THREADS=0 ./run-tests.sh linux   # everything on the main thread
+PRTE_SWARM_WORKER_THREADS=16 ./run-tests.sh linux  # push the threading harder
 ```
 
 **If a case fails, re-run it at 0 before reading the failure as a bug in what
 you just changed.** A failure that reproduces only with workers is a genuine
 threading defect worth chasing; one that reproduces at 0 as well has nothing
-to do with the OOB threading. Keeping that distinction cheap is the reason the
+to do with the threading. Keeping that distinction cheap is the reason the
 knob exists rather than the number being hard-coded.
 
 ### Components as DSOs (`PRTE_SWARM_MCA_DSO`)

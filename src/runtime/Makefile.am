@@ -35,7 +35,8 @@ headers += \
         runtime/prte_quit.h \
         runtime/runtime_internals.h \
         runtime/prte_wait.h \
-        runtime/prte_progress_threads.h
+        runtime/prte_progress_threads.h \
+        runtime/prte_worker_pool.h
 
 libprrte_la_SOURCES += \
         runtime/prte_finalize.c \
@@ -49,6 +50,7 @@ libprrte_la_SOURCES += \
         runtime/data_type_support/prte_dt_unpacking_fns.c \
         runtime/prte_mca_params.c \
         runtime/prte_wait.c \
-        runtime/prte_progress_threads.c
+        runtime/prte_progress_threads.c \
+        runtime/prte_worker_pool.c
 
 include runtime/data_server/Makefile.am

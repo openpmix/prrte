@@ -63,6 +63,7 @@
 #endif
 
 #include "src/runtime/prte_globals.h"
+#include "src/runtime/prte_worker_pool.h"
 #include "src/runtime/runtime.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_if.h"
@@ -425,87 +426,62 @@ static int test_payload_outlives_sends(void)
     return failures;
 }
 
-/*
- * The pool of event bases that peer sockets are serviced on.
+/* Which base a peer's socket handlers run on.
  *
- * Two properties matter and neither needs a socket to check.  First, the
- * "no worker threads" case - which is the default, and therefore the shape
- * every existing deployment runs - must still leave ev_bases holding exactly
- * one entry, prte_event_base, because every call site indexes the array
- * unconditionally; a NULL array or a zero-length one is a segfault on the
- * first peer.  Second, peers must be handed out round-robin and the cursor
- * must wrap, since a cursor that ran off the end would index past the array.
+ * peer_cons does not decide - it asks the process-wide worker pool (see
+ * src/runtime/prte_worker_pool.h), and what matters here is that it asks at
+ * all, and that it copes with the answer in both shapes.  With no pool up -
+ * the state a peer built before prte_init stood one up, or after finalize
+ * took it down, is in - every peer must land on prte_event_base, because
+ * every socket path uses peer->evbase unconditionally.  With a pool up,
+ * successive peers must land on different bases, or the pool buys nothing.
  *
- * The multi-thread case is driven with a hand-built array rather than by
- * asking for real threads: prte_progress_thread_init spins an actual engine
- * thread per base, which a bare test process has no business starting.  What
- * is under test here is the assignment arithmetic, not libevent.
+ * The rotation itself is tested where it lives, in test_runtime.
  */
-static int test_progress_thread_pool(void)
+static int test_peer_base_assignment(void)
 {
-    int failures = 0, i;
-    prte_event_base_t *fake[3];
-    prte_oob_tcp_peer_t *peers[7];
+    int failures = 0, i, save = prte_num_worker_threads;
+    prte_oob_tcp_peer_t *peers[6];
 
-    /* the default: no dedicated threads */
-    prte_oob_base.num_progress_threads = 0;
-    prte_oob_base.ev_bases = NULL;
-    prte_oob_base.ev_threads = NULL;
-    prte_oob_base.next_base = 0;
-    CHECK("pool starts", PRTE_SUCCESS == prte_oob_start_progress_threads());
-    CHECK("array exists with no threads", NULL != prte_oob_base.ev_bases);
-    CHECK("no threads means the main base",
-          NULL != prte_oob_base.ev_bases && prte_event_base == prte_oob_base.ev_bases[0]);
-    CHECK("no threads recorded", 0 == prte_oob_base.num_progress_threads);
-    CHECK("no thread names recorded", NULL == prte_oob_base.ev_threads);
-
-    /* every peer lands on that one entry, and the cursor does not move */
+    /* no pool: every peer takes the main base.  (prte_event_base has never
+     * been created in this bare test process, so compare against it rather
+     * than asserting non-NULL.) */
+    prte_num_worker_threads = 0;
+    CHECK("empty pool starts", PRTE_SUCCESS == prte_worker_pool_init());
     for (i = 0; i < 3; i++) {
         peers[i] = PMIX_NEW(prte_oob_tcp_peer_t);
         CHECK("peer takes the main base", prte_event_base == peers[i]->evbase);
     }
-    CHECK("cursor pinned with no threads", 0 == prte_oob_base.next_base);
     for (i = 0; i < 3; i++) {
         PMIX_RELEASE(peers[i]);
     }
+    prte_worker_pool_finalize();
 
-    prte_oob_harvest_progress_threads();
-    CHECK("harvest clears the array", NULL == prte_oob_base.ev_bases);
-    CHECK("harvest clears the count", 0 == prte_oob_base.num_progress_threads);
-
-    /* a negative request is a request for none, not an array sized -1 */
-    prte_oob_base.num_progress_threads = -4;
-    CHECK("negative pool starts", PRTE_SUCCESS == prte_oob_start_progress_threads());
-    CHECK("negative clamps to none", 0 == prte_oob_base.num_progress_threads);
-    CHECK("negative still yields the main base",
-          NULL != prte_oob_base.ev_bases && prte_event_base == prte_oob_base.ev_bases[0]);
-    prte_oob_harvest_progress_threads();
-
-    /* three bases, seven peers: 0,1,2,0,1,2,0 */
-    for (i = 0; i < 3; i++) {
-        /* distinct non-NULL values are all the assignment arithmetic sees */
-        fake[i] = (prte_event_base_t *) &fake[i];
-    }
-    prte_oob_base.num_progress_threads = 3;
-    prte_oob_base.ev_bases = fake;
-    prte_oob_base.next_base = 0;
-    for (i = 0; i < 7; i++) {
+    /* three workers, six peers: each peer takes a worker base, and the
+     * assignment cycles with the pool's period rather than pinning them all
+     * to one thread */
+    prte_num_worker_threads = 3;
+    CHECK("worker pool starts", PRTE_SUCCESS == prte_worker_pool_init());
+    for (i = 0; i < 6; i++) {
         peers[i] = PMIX_NEW(prte_oob_tcp_peer_t);
     }
-    for (i = 0; i < 7; i++) {
-        CHECK("peer assigned round-robin", fake[i % 3] == peers[i]->evbase);
+    for (i = 0; i < 6; i++) {
+        CHECK("peer left the main base", prte_event_base != peers[i]->evbase);
+        CHECK("peer assignment cycles with the pool",
+              peers[i]->evbase == peers[i % 3]->evbase);
     }
-    CHECK("cursor wrapped", 1 == prte_oob_base.next_base);
-    for (i = 0; i < 7; i++) {
+    CHECK("consecutive peers get different bases",
+          peers[0]->evbase != peers[1]->evbase
+          && peers[1]->evbase != peers[2]->evbase
+          && peers[0]->evbase != peers[2]->evbase);
+    for (i = 0; i < 6; i++) {
         PMIX_RELEASE(peers[i]);
     }
-    /* the array is on our stack - do not let harvest free it */
-    prte_oob_base.ev_bases = NULL;
-    prte_oob_base.num_progress_threads = 0;
-    prte_oob_base.next_base = 0;
+    prte_worker_pool_finalize();
+    prte_num_worker_threads = save;
 
     if (0 == failures) {
-        fprintf(stdout, "PASSED test_progress_thread_pool\n");
+        fprintf(stdout, "PASSED test_peer_base_assignment\n");
     }
     return failures;
 }
@@ -648,7 +624,7 @@ int main(void)
     failures += test_bad_subnets_dropped();
     failures += test_subnet_resolves_and_dedupes();
     failures += test_payload_outlives_sends();
-    failures += test_progress_thread_pool();
+    failures += test_peer_base_assignment();
     failures += test_wire_header();
 
     prte_finalize();

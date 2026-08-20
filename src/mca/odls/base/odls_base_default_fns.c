@@ -80,6 +80,7 @@
 #include "src/prted/prted.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
+#include "src/runtime/prte_worker_pool.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/pmix_context_fns.h"
 #include "src/util/name_fns.h"
@@ -478,13 +479,8 @@ static void job_reg_join(prte_odls_jcaddy_t *cd)
             PMIX_RELEASE(cd);
             return;
         }
-        /* spin up the spawn threads */
-        prte_odls_base_start_threads(cd->jdata);
         return;
     }
-
-    /* spin up the spawn threads */
-    prte_odls_base_start_threads(cd->jdata);
 
     /* no local support setup is required, so we can proceed
      * directly to launching the local procs */
@@ -2040,11 +2036,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL)) {
                 evb = prte_event_base;
             } else {
-                ++prte_odls_globals.next_base;
-                if (prte_odls_globals.num_threads <= prte_odls_globals.next_base) {
-                    prte_odls_globals.next_base = 0;
-                }
-                evb = prte_odls_globals.ev_bases[prte_odls_globals.next_base];
+                evb = prte_worker_pool_assign();
             }
 
             /* set the waitpid callback here for thread protection and
@@ -2105,9 +2097,10 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                 }
             }
             pmix_output_verbose(1, prte_odls_base_framework.framework_output,
-                                "%s odls:dispatch %s to thread %d",
+                                "%s odls:dispatch %s to %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&child->name),
-                                prte_odls_globals.next_base);
+                                (prte_event_base == evb) ? "the main progress thread"
+                                                         : "a worker thread");
             prte_event_set(evb, &cd->ev, -1, PRTE_EV_WRITE, prte_odls_base_spawn_proc, cd);
             prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
         }
@@ -2819,11 +2812,7 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
     if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL)) {
         evb = prte_event_base;
     } else {
-        ++prte_odls_globals.next_base;
-        if (prte_odls_globals.num_threads <= prte_odls_globals.next_base) {
-            prte_odls_globals.next_base = 0;
-        }
-        evb = prte_odls_globals.ev_bases[prte_odls_globals.next_base];
+        evb = prte_worker_pool_assign();
     }
     /* flag the proc alive BEFORE registering the waitpid, exactly as
      * launch_local does. prte_wait_cb short-circuits a registration for a

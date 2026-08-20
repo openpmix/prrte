@@ -143,56 +143,10 @@ Because there is only one component and it delegates almost everything,
 message construction, parsing, wireup, environment assembly, threading,
 `waitpid` interpretation, and cleanup. Walk these in order.
 
-### 1. Framework globals and the spawn-thread pool (`odls_base_frame.c`)
+### 1. Framework globals (`odls_base_frame.c`)
 
 `prte_odls_globals` (`prte_odls_globals_t` in `base.h`) holds:
 
-- **`ev_bases` / `ev_threads` / `num_threads` / `max_threads` / `cutoff` /
-  `next_base`** — a pool of libevent progress threads used to *parallelize
-  forking* when a node hosts many local procs. `prte_odls_base_start_threads()`
-  decides how many to spin up: a persistent DVM uses `max_threads` (default
-  16); otherwise, below `cutoff` (default 32) local procs it uses **zero**
-  dedicated threads (fork straight on `prte_event_base`), and above it
-  scales to `num_local_procs / 8` capped at `max_threads`.
-  `prte_odls_base_harvest_threads()` tears them down and resets the pool
-  state to "nothing built yet".
-
-  Two things about this that are easy to get wrong, because both failures
-  are invisible:
-  - **"Have we built a pool?" is `ev_bases != NULL`, not
-    `ev_threads != NULL`.** `ev_threads` holds the *names* of dedicated
-    threads and stays NULL whenever the answer was "no dedicated threads
-    at all", so keying the guard off it re-entered the sizing code on
-    every job.
-  - **`num_threads` is both the request and the answer**, which makes it
-    dangerous to reset. It is registered at `-1` ("you decide") and
-    `start_threads` *overwrites* it with the size it picked. So `-1` in
-    that variable is a standing invitation to size a pool from whatever
-    job comes next — and `harvest_threads` runs from framework **close**.
-    Putting the sentinel back there let a `start_threads` call arriving
-    during teardown build a whole new pool of real threads on the way out
-    (a 40-proc node printed `START 5 LAUNCH THREADS` twice, the second
-    time after `kill_local_procs`). Harvest records `0` — "no threads" —
-    and `start_threads` returns immediately once `prte_finalizing` is set.
-    Do not "restore" the sentinel there.
-
-  **`prte_persistent` is what makes the difference here, and a daemon has
-  to be *told* it.** `start_threads` short-circuits to `max_threads` (16)
-  when `prte_persistent` is set, on the reasoning that a persistent DVM
-  will service many jobs and should size for the worst of them. That flag
-  is decided in `prte()` (`src/prted/prte.c`) — which only the HNP runs.
-  It used to default to **true** and be assigned nowhere else, so every
-  daemon believed it was persistent no matter how the DVM had started: a
-  plain `prterun -n 1 hostname` spun 16 progress threads on each compute
-  node, and the cutoff/`num_local_procs / 8` scaling below was dead
-  everywhere but the head node. It is now an MCA parameter that the HNP
-  appends to each daemon's command line
-  (`prte_plm_base_prted_append_basic_args`), defaulting to false; a
-  bootstrapped daemon, which has no launcher to tell it anything, sets it
-  for itself because that DVM is persistent by construction. If you add
-  daemon-side code that reads `prte_persistent`, it now means what it
-  says — but check `--prtemca odls_base_verbose 5` for `START n LAUNCH
-  THREADS` if you are ever unsure which way a given daemon decided.
 - **`xterm_ranks` / `xtermcmd`** — support for `--xterm`: a list of ranks
   whose output should be shown in separate `xterm` windows, parsed at
   framework open from the `prte_xterm` global.
@@ -200,11 +154,26 @@ message construction, parsing, wireup, environment assembly, threading,
   go to the child only or its whole process group.
 - **`exec_agent`** — an optional wrapper command to exec instead of the app.
 
-MCA params, all under `prte odls base`: `max_threads`, `num_threads`,
-`cutoff`, `signal_direct_children_only`, `exec_agent`. Framework open also
-**unblocks `SIGCHLD`** (odls must see child deaths) and builds the xterm
-command vector. Framework close reaps the thread pool and releases the
-global `prte_local_children` array.
+**Forking is parallelized on the process-wide worker pool, which odls does
+not own.** The launch walk asks `prte_worker_pool_assign()`
+([`src/runtime/prte_worker_pool.h`](../../runtime/prte_worker_pool.h)) for a
+base per child and posts the fork there; the pool is sized by
+`prte_num_worker_threads` (default 8) and is shared with the OOB, which puts
+peer sockets on the same threads. odls used to carry a pool of its own —
+`ev_bases`/`ev_threads`/`num_threads`/`max_threads`/`cutoff`/`next_base`, sized
+from the first job it was handed — and every one of those fields and
+parameters is gone. Two of its failure modes are worth remembering, because
+anything that reintroduces per-subsystem sizing invites them back: the "have
+we built a pool yet?" guard has to key off the pool itself and not off the
+*names* of the threads (which stay NULL whenever the answer was "no dedicated
+threads"), and a variable that is both the request and the answer must not
+have its "you decide" sentinel restored by a teardown path, or a call arriving
+during finalize builds a whole new set of real threads on the way out.
+
+MCA params, all under `prte odls base`: `signal_direct_children_only`,
+`exec_agent`, `scatter_cpusets`. Framework open also **unblocks `SIGCHLD`**
+(odls must see child deaths) and builds the xterm command vector. Framework
+close releases the global `prte_local_children` array.
 
 This file also defines the two caddy classes (below) via
 `PMIX_CLASS_INSTANCE`.
@@ -550,11 +519,12 @@ computed proc state.
 - **Message build/parse, wireup, waitpid interpretation, kill/signal, and
   state activation** all run on the **progress thread** (`prte_event_base`)
   — the normal PRRTE event-driven model.
-- **Only the fork/exec spawn step** may be off-loaded to the **odls
-  worker-thread pool** (`prte_odls_globals.ev_bases`) to parallelize
-  launching many procs. Each spawn is a self-contained caddy handed to one
-  worker base; it touches only its own child, so no shared-state locking is
-  needed on the hot path.
+- **Only the fork/exec spawn step** may be off-loaded to the **process-wide
+  worker pool** (`prte_worker_pool_assign()`) to parallelize launching many
+  procs. Each spawn is a self-contained caddy handed to one worker base; it
+  touches only its own child, so no shared-state locking is needed on the hot
+  path. The pool is shared with the OOB — a worker base servicing your fork
+  may also be servicing a peer socket.
 - `SIGCHLD` must stay unblocked (done at framework open); child death is
   delivered through `src/runtime/prte_wait.c`, which fires the registered
   `wait_local_proc` callback on `prte_event_base`.
@@ -715,9 +685,9 @@ prun --xterm 0,1 ...                        # route ranks 0,1 to xterm windows (
 prun --report-bindings ...                  # print each child's applied binding (odls_base_bind.c)
 ```
 
-Useful tuning params: `--prtemca odls_base_num_threads N` /
-`odls_base_cutoff N` (spawn-thread pool sizing),
-`--prtemca odls_base_exec_agent CMD` (wrap every exec),
+Useful tuning params: `--prtemca prte_num_worker_threads N` (the process-wide
+worker pool the forks are dispatched to; `0` forks on the main progress
+thread), `--prtemca odls_base_exec_agent CMD` (wrap every exec),
 `--prtemca odls_base_signal_direct_children_only 1` (don't signal the
 child's whole process group).
 
@@ -769,7 +739,7 @@ code sorts after every fatal code); and the two caddy classes
 the documented NULL/zero defaults and destruct cleanly (both the
 all-NULL and the fully-populated paths).
 
-Three cases go further than structure, because the code under them is a
+Two cases go further than structure, because the code under them is a
 pure function of its inputs:
 
 - **`prte_odls_base_process_envars`** — exported (rather than file-static)
@@ -780,11 +750,10 @@ pure function of its inputs:
 - **The child→parent pipe record** — `child_warn` across a real pipe, and
   `child_fail` across a real `fork`, checking both the decoded record and
   that the child died with the exit status it was handed.
-- **The spawn-thread pool sizing** — that the "already built?" guard and
-  the `-1` sentinel survive a `harvest_threads`. The persistent-DVM branch
-  is *not* exercised: it spins `max_threads` real progress threads, which a
-  bare test process cannot start and stop, so the test clears
-  `prte_persistent` first.
+
+The worker pool the spawns are dispatched to is no longer odls's, so its
+sizing and rotation are covered in `test/unit/runtime/test_runtime.c`
+(`test_worker_pool`) rather than here.
 
 Add structural regression guards here; anything that needs a running
 launch belongs in the swarm harness or the integration harness.

@@ -81,29 +81,27 @@ bounded() {
 # Linux: the full 10-node swarm
 ########################################################################
 
-# THE SUITE RUNS WITH OOB PROGRESS THREADS ON, AND THAT IS DELIBERATE.
+# THE SUITE RUNS WITH THE WORKER THREAD POOL ON, AND THAT IS DELIBERATE.
 #
-# prte_oob_base.num_progress_threads defaults to 0 in the library: every
-# peer's socket send/recv events are serviced on the main progress thread, so
-# the OOB is effectively single-threaded and the ordering between a send
+# With the pool off, every peer's socket send/recv events and every local
+# fork/exec run on the main progress thread, so the ordering between a send
 # completing and anything else the daemon does is fixed. With workers, each
-# peer is assigned to a worker base and its handlers run on that thread,
-# posting completions back to prte_event_base -- which is the arrangement
-# where a missing lock, a peer touched from two threads, or a completion that
-# assumes it runs on the main thread actually has consequences.
+# peer is assigned a worker base and its handlers run on that thread, posting
+# completions back to prte_event_base, and forks are dispatched to the same
+# threads -- which is the arrangement where a missing lock, a peer touched
+# from two threads, or a completion that assumes it runs on the main thread
+# actually has consequences.
 #
-# At the default of 0 this suite could never reach any of that: not one case
-# would exercise the threaded path, and a race introduced there would ship.
-# So the suite opts in, for every tool and (via the PRTE_MCA_ forwarding in
-# prte_plm_base_setup_virtual_machine) every daemon it launches.
-#
-# Two is the smallest number that is genuinely multi-threaded -- one worker
-# plus the main thread is already two threads touching the OOB, and two
-# workers means two peers can be serviced concurrently. Override with
-# PRTE_SWARM_OOB_THREADS to sweep it, or set it to 0 to reproduce the old
-# single-threaded behavior when bisecting a failure.
-OOB_THREADS="${PRTE_SWARM_OOB_THREADS:-2}"
-OOBENV=(-e "PRTE_MCA_oob_progress_threads=$OOB_THREADS")
+# The pool is now process-wide (prte_num_worker_threads, default 8) and shared
+# with the odls fork path, so the threaded path runs by default and this suite
+# no longer has to opt in to reach it. The forcing stays anyway, for two
+# reasons: it states in one place what the suite actually ran at, and setting
+# PRTE_SWARM_WORKER_THREADS=0 reproduces the single-threaded behavior for every
+# tool and (via the PRTE_MCA_ forwarding in
+# prte_plm_base_setup_virtual_machine) every daemon it launches, which is the
+# first thing to try when bisecting a failure that smells like a race.
+WORKER_THREADS="${PRTE_SWARM_WORKER_THREADS:-8}"
+OOBENV=(-e "PRTE_MCA_prte_num_worker_threads=$WORKER_THREADS")
 
 # run a command on the head node (login env so PATH/LD_LIBRARY_PATH are set)
 RUN() { docker exec -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
@@ -5094,7 +5092,7 @@ test_odls() {
 }
 
 test_rml() {
-    local out rc n c
+    local out rc n c w t wthr0 wthr4
 
     banner "rml: a small radix builds an interior tree and messages get relayed"
     # radix 2 over 7 nodes gives the HNP two children and four grandchildren,
@@ -5382,33 +5380,60 @@ test_rml() {
     fi
     cleanup_swarm
 
-    banner "rml/oob: peer sockets serviced by dedicated OOB progress threads"
-    # prte_oob_progress_threads (default 0) moves each peer's send/recv socket
-    # events off the main progress thread onto one of N worker bases, chosen
-    # round-robin at peer construction.  The connection state machine, routing,
-    # message delivery and every send completion stay on the main thread.  This
-    # is the only place that threaded path runs at all, so all four things it
-    # could break are checked here rather than assumed.
+    banner "rml/oob: peer sockets serviced by the worker thread pool"
+    # prte_num_worker_threads (default 8) moves each peer's send/recv socket
+    # events off the main progress thread onto one of N worker bases, handed
+    # out in rotation at peer construction.  The connection state machine,
+    # routing, message delivery and every send completion stay on the main
+    # thread.  This is the only place that threaded path runs at all, so all
+    # four things it could break are checked here rather than assumed.
     cleanup_swarm
 
     # (a) the parameter has to reach the *daemons*, not just the HNP -- the
-    # whole point is remote sockets.  oob_base_verbose 5 makes each daemon
-    # announce the pool it built; --leave-session-attached is what gets a
-    # prted's stderr back to us.
-    out=$(RUN 'timeout -k 5 90 prterun --prtemca prte_oob_progress_threads 4 \
-                  --prtemca oob_base_verbose 5 --leave-session-attached \
-                  --host node1:1,node2:1,node3:1 -np 3 --map-by node hostname' 2>&1)
-    n=$(echo "$out" | grep -c 'starting 4 OOB progress threads')
-    [ "$n" -ge 2 ] \
-        && ok "the daemons started their OOB progress-thread pools ($n reported)" \
-        || bad "the thread pool was not built on the daemons: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+    # whole point is remote sockets.  The observable is a remote daemon's own
+    # thread count, taken with the pool off and again with four workers: the
+    # difference has to be exactly four.
+    #
+    # Pick the daemon by the value on ITS OWN command line rather than by
+    # whatever pgrep finds first.  The cases just above this one kill daemons
+    # deliberately, and a stray prted left behind by one of them is running at
+    # the suite-wide default -- which is a perfectly plausible thread count, so
+    # sampling the wrong process does not look like an error, it looks like a
+    # wrong answer.  (It was one: this case first reported "10 threads with 0",
+    # i.e. a daemon carrying the suite default of 8 on top of a 2-thread
+    # baseline.)  Selecting on the command line also makes the case say what it
+    # means -- the parameter arrived, and the daemon acted on it.
+    wthr0="" ; wthr4=""
+    for w in 0 4; do
+        cleanup_swarm
+        if prted_dvm_start_mca 'node1:1,node2:1,node3:1' \
+               "--prtemca prte_num_worker_threads $w"; then
+            t=$(ON 2 'for p in $(pgrep -x prted); do
+                          printf "%s %s %s\n" "$p" "$(ls /proc/$p/task | wc -l)" \
+                                 "$(tr "\0" " " < /proc/$p/cmdline)"
+                      done' 2>/dev/null |
+                awk -v w="$w" '$0 ~ ("prte_num_worker_threads " w " ") { print $2; exit }')
+            RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+        else
+            t=""
+            bad "could not start a DVM with $w worker threads"
+        fi
+        [ "$w" = 0 ] && wthr0="$t" || wthr4="$t"
+    done
     cleanup_swarm
+    if [ -z "$wthr0" ] || [ -z "$wthr4" ]; then
+        bad "no prted on node2 carried the requested prte_num_worker_threads (got '$wthr0' / '$wthr4')"
+    elif [ "$wthr4" = "$((wthr0 + 4))" ]; then
+        ok "a remote daemon built the worker pool it was told to ($wthr0 -> $wthr4 threads)"
+    else
+        bad "the worker pool did not reach the daemons ($wthr0 threads with 0, $wthr4 with 4)"
+    fi
 
     # (b) a relayed tree still delivers.  radix 2 over 7 nodes means every leaf
     # is reached through an interior daemon, so a message crosses a worker base
     # on the way in (recv handler) and again on the way out (relay -> send).
     out=$(RUN 'timeout -k 5 120 prterun --prtemca rml_base_radix 2 \
-                  --prtemca prte_oob_progress_threads 4 \
+                  --prtemca prte_num_worker_threads 4 \
                   --host node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1 \
                   -np 7 --map-by node hostname' 2>&1); rc=$?
     n=$(echo "$out" | grep -cE '^node[1-7]$')
@@ -5421,7 +5446,7 @@ test_rml() {
     # second thread is exactly what could corrupt, and a byte count is the only
     # check that catches a corrupted one -- a truncated relay still "runs".
     out=$(RUN 'timeout -k 5 120 prterun --prtemca rml_base_radix 2 \
-                  --prtemca prte_oob_progress_threads 4 \
+                  --prtemca prte_num_worker_threads 4 \
                   --host node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1 \
                   -np 7 --map-by node \
                   sh -c "head -c 500000 /dev/zero | tr \"\\0\" \"x\""' 2>&1)
@@ -5440,7 +5465,7 @@ test_rml() {
     # nothing else; the deep-tree half of the same scenario is the case above,
     # which runs it at radix 2 with the threads off.
     if prted_dvm_start_mca 'node1:1,node2:1,node3:1,node4:1,node5:1,node6:1,node7:1' \
-           '--prtemca prte_oob_progress_threads 4'; then
+           '--prtemca prte_num_worker_threads 4'; then
         PRUN_BG /tmp/rml-thr-longrun.out '--host node7:1 -n 1 sleep 120'
         sleep 6
         if ! RUN 'pgrep -x prun' >/dev/null 2>&1; then
@@ -5463,7 +5488,7 @@ test_rml() {
         fi
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
-        bad "could not start a DVM with OOB progress threads"
+        bad "could not start a DVM with worker threads"
     fi
     cleanup_swarm
 }
@@ -5717,15 +5742,14 @@ test_linux() {
     stamp=$(RUN 'cat /opt/prte/.build-stamp 2>/dev/null' | tr -d '\r')
     if [ -n "$stamp" ]; then
         ok "install built $stamp"
-        # Say which OOB threading the whole run used. The library defaults to
-        # 0 (everything on the main progress thread); this suite opts in to
-        # workers so the threaded send/recv path is covered at all. A failure
-        # that only appears here is the first thing to re-check with
-        # PRTE_SWARM_OOB_THREADS=0, which is why the number is in the log.
-        if [ "$OOB_THREADS" = 0 ]; then
-            ok "...running with OOB progress threads OFF (single-threaded OOB)"
+        # Say which worker threading the whole run used. The pool services
+        # both peer sockets and local fork/exec; a failure that only appears
+        # here is the first thing to re-check with
+        # PRTE_SWARM_WORKER_THREADS=0, which is why the number is in the log.
+        if [ "$WORKER_THREADS" = 0 ]; then
+            ok "...running with the worker pool OFF (everything on the main progress thread)"
         else
-            ok "...running with $OOB_THREADS OOB progress threads (library default is 0)"
+            ok "...running with $WORKER_THREADS worker threads (library default is 8)"
         fi
         # ...and whether the components are inside libprrte or loaded from
         # disk.  Asked of the install rather than of a variable, because the
