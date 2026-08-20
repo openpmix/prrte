@@ -362,7 +362,9 @@ map, not to the allocation — `--host` says how many slots *this job* may have
 (`--add-host` is what changes an allocation) — so it is recorded with
 `prte_rmaps_base_record_resize()` and undone by
 `prte_rmaps_base_restore_resized()` at `map_job`'s `cleanup`, on both
-outcomes. `prte_ras_base.total_slots_alloc` describes the allocation and is
+outcomes — along with the node's `PRTE_NODE_FLAG_SLOTS_GIVEN`, which the
+growth sets and which a *later* job reads to decide whether it may
+oversubscribe. `prte_ras_base.total_slots_alloc` describes the allocation and is
 deliberately left alone. `prte_ras_base.scheduler_owned` is what tells the two
 cases apart — the same flag that decides whether `--add-host` may grow the
 pool, and for the same reason: both ask whether the node counts are ours to
@@ -603,6 +605,7 @@ without a node pool, a topology, or a DVM:
 | `test_resolve_options.c` | `resolve_app_options` and the rank/bind default derivations |
 | `test_ranking.c` | `compute_vpids`: by-slot/by-node traversal, the per-app cursor, by-user pass-through, and that a cycling scheme terminates |
 | `test_check_avail.c` | `check_avail`: the map-add-once rule, `max_slots`, and the node-removal contract above |
+| `test_resize.c` | `record_resize`/`restore_resized`: a node grown for one map goes back — the count and the SLOTS_GIVEN flag |
 | `test_dispatch.c`, `test_<component>.c` | each mapper's accept/defer gate |
 
 `test_ranking.c` builds a job map by hand — synthetic nodes carrying

@@ -79,6 +79,7 @@ static void rsz_con(prte_rmaps_base_resize_t *p)
 {
     p->node = NULL;
     p->slots = 0;
+    p->slots_given = false;
 }
 PMIX_CLASS_INSTANCE(prte_rmaps_base_resize_t, pmix_list_item_t, rsz_con, NULL);
 

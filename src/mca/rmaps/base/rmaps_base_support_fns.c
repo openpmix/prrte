@@ -143,6 +143,7 @@ void prte_rmaps_base_record_resize(prte_node_t *node, int32_t slots)
     rsz = PMIX_NEW(prte_rmaps_base_resize_t);
     rsz->node = node;   // borrowed - the pool owns it
     rsz->slots = slots;
+    rsz->slots_given = PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
     pmix_list_append(&prte_rmaps_base.resized_nodes, &rsz->super);
 }
 
@@ -157,6 +158,16 @@ void prte_rmaps_base_restore_resized(void)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              rsz->node->name, rsz->slots));
         rsz->node->slots = rsz->slots;
+        /* the flag says the slot count was stated rather than detected, and
+         * a later job reads it to decide whether it may oversubscribe this
+         * node. Growing the node for a "-host node:N" sets it, so a job that
+         * merely said how many slots it wanted would otherwise have left the
+         * node refusing oversubscription to every job that followed. */
+        if (rsz->slots_given) {
+            PRTE_FLAG_SET(rsz->node, PRTE_NODE_FLAG_SLOTS_GIVEN);
+        } else {
+            PRTE_FLAG_UNSET(rsz->node, PRTE_NODE_FLAG_SLOTS_GIVEN);
+        }
         PMIX_RELEASE(rsz);
     }
 }

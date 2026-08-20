@@ -80,6 +80,27 @@ int test_resize(void)
     prte_rmaps_base_restore_resized();
     CHECK("regrown: back to the original 4", 4 == n1->slots);
 
+    /* the "slots were stated, not detected" flag goes back with the count.
+     * Growing a node for a "-host node:N" sets it, and a later job reads it
+     * to decide whether it may oversubscribe - so a job that only said how
+     * many slots it wanted would otherwise leave the node refusing
+     * oversubscription to every job that came after it. */
+    PRTE_FLAG_UNSET(n1, PRTE_NODE_FLAG_SLOTS_GIVEN);
+    prte_rmaps_base_record_resize(n1, n1->slots);
+    n1->slots = 8;
+    PRTE_FLAG_SET(n1, PRTE_NODE_FLAG_SLOTS_GIVEN);
+    prte_rmaps_base_restore_resized();
+    CHECK("restored: slots-given cleared again",
+          !PRTE_FLAG_TEST(n1, PRTE_NODE_FLAG_SLOTS_GIVEN));
+
+    /* and a node the allocation itself sized keeps the flag it came with */
+    PRTE_FLAG_SET(n2, PRTE_NODE_FLAG_SLOTS_GIVEN);
+    prte_rmaps_base_record_resize(n2, n2->slots);
+    n2->slots = 6;
+    prte_rmaps_base_restore_resized();
+    CHECK("restored: slots-given kept",
+          PRTE_FLAG_TEST(n2, PRTE_NODE_FLAG_SLOTS_GIVEN));
+
     PMIX_RELEASE(n1);
     PMIX_RELEASE(n2);
 
