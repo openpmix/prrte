@@ -86,7 +86,23 @@ typedef struct {
     /* whether the topology reports any core objects at all; when false, a
      * user request to map or bind to "core" must fall back to hwthreads */
     bool have_cores;
+    /* nodes this mapping operation re-sized, and what they said before.
+     * Only an unmanaged allocation can be re-sized, and only for the job
+     * being mapped - a "-host node:N" states how many slots that job may
+     * take on the node, not a change to the allocation - so the original
+     * counts go back when the map is done. Emptied by
+     * prte_rmaps_base_restore_resized() at the end of every map. */
+    pmix_list_t resized_nodes;
 } prte_rmaps_base_t;
+
+/* one entry of prte_rmaps_base.resized_nodes: the node is borrowed, since
+ * the pool owns it and outlives any mapping */
+typedef struct {
+    pmix_list_item_t super;
+    prte_node_t *node;
+    int32_t slots;
+} prte_rmaps_base_resize_t;
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rmaps_base_resize_t);
 
 /**
  * Global instance of rmaps-wide framework data
@@ -112,6 +128,16 @@ PRTE_EXPORT void prte_rmaps_base_map_job(int sd, short args, void *cbdata);
 /* pretty-print functions */
 PRTE_EXPORT char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping);
 PRTE_EXPORT char *prte_rmaps_base_print_ranking(prte_ranking_policy_t ranking);
+
+/* Record that this mapping grew a node, so the count it had before can be
+ * put back when the map completes. Recording the same node twice keeps the
+ * first (original) value. */
+PRTE_EXPORT void prte_rmaps_base_record_resize(prte_node_t *node, int32_t slots);
+
+/* Put every re-sized node back the way we found it. Called on both outcomes
+ * of a map: a job that failed to map has no more claim on the extra slots
+ * than one that succeeded. */
+PRTE_EXPORT void prte_rmaps_base_restore_resized(void);
 
 PRTE_EXPORT int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes,
                                              bool remove);

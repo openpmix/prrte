@@ -340,6 +340,22 @@ the node to its slot count and leave the rest of the user's `-host` list
 empty. Every mapper here caps itself: by-slot/by-node/by-cpu and ppr read
 the field before placing, and `map_targets` checks it per placement.
 
+**A cap that is *larger* than the node is reconciled in `get_target_nodes`,
+and the answer depends on who sized the node.** A resource manager decided
+how much of that node is ours and we cannot hand a job more, so the request
+is refused (`dash-host:slots-exceed-allocation`); an unmanaged allocation is
+only the user's own description of a machine nobody is scheduling, so the
+`:N` re-states it and the node is grown to fit. That growth belongs to the
+map, not to the allocation — `--host` says how many slots *this job* may have
+(`--add-host` is what changes an allocation) — so it is recorded with
+`prte_rmaps_base_record_resize()` and undone by
+`prte_rmaps_base_restore_resized()` at `map_job`'s `cleanup`, on both
+outcomes. `prte_ras_base.total_slots_alloc` describes the allocation and is
+deliberately left alone. `prte_ras_base.scheduler_owned` is what tells the two
+cases apart — the same flag that decides whether `--add-host` may grow the
+pool, and for the same reason: both ask whether the node counts are ours to
+change. See [`src/mca/ras/AGENTS.md`](../ras/AGENTS.md).
+
 ### Who owns what in `options`
 
 `node->available` and `options->job_cpuset` are **never NULL**. The mappers

@@ -473,6 +473,24 @@ test_ras_alloc() {
     n=$(echo "$out" | grep -E '^node[0-9]+$' | sort -u | wc -l | tr -d ' ')
     [ "$n" = 3 ] && ok "the allocation still launches after the refusal" \
                  || bad "launching broke after the add-host refusal ($n/3)"
+
+    banner "rmaps: --host cannot claim more of a node than SLURM allocated"
+    # The same authority again, this time over how much of a node a job may
+    # take rather than which nodes exist.  Outside a scheduler's allocation a
+    # ":N" larger than the node re-describes it - the node counts are the
+    # user's own - so this arm is only reachable here.  Without the check the
+    # job was sized against the larger number and then mapped against the
+    # smaller one, and the user got a bare "failed to map" that said nothing
+    # about slots.
+    out=$(SA 'timeout 60 prterun --host node1:99 -n 99 hostname 2>&1 | tr -d "\0"')
+    echo "$out" | grep -q "asked for more slots on a node" \
+        && ok "the request is refused, and says which node and how many" \
+        || bad "--host over-claim was not refused: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+    # the same spec within what SLURM gave is still served
+    out=$(SA 'timeout 60 prterun --host node1:2,node2:2 -n 4 hostname' 2>&1)
+    n=$(echo "$out" | grep -cE '^node[0-9]+$')
+    [ "$n" = 4 ] && ok "a --host within the allocation still runs" \
+                 || bad "a legal --host stopped working ($n/4)"
     cleanup_cluster
 
     banner "ras: --activate CAN start a daemon on a node SLURM already granted"

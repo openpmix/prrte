@@ -26,6 +26,7 @@ extern int test_resolve_options(void);
 extern int test_ranking(void);
 extern int test_binding(void);
 extern int test_check_avail(void);
+extern int test_resize(void);
 extern int test_dispatch(void);
 extern int test_round_robin(void);
 extern int test_ppr(void);
@@ -104,6 +105,7 @@ int main(void)
     failures += test_ranking();
     failures += test_binding();
     failures += test_check_avail();
+    failures += test_resize();
     failures += test_dispatch();
     failures += test_round_robin();
     failures += test_ppr();

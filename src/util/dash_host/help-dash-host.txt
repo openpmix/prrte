@@ -199,3 +199,37 @@ The requested number of empty hosts was not available — the system was
 short by %d hosts.  Please recheck your allocation.
 
 Re-run this command with "--help hosts" for further information.
+#
+[dash-host:slots-exceed-allocation]
+
+The "--host" specification asked for more slots on a node than the
+allocation provides:
+
+   Node:              %s
+   Slots requested:   %d
+   Slots available:   %d
+
+The allocation came from a resource manager, so the number of slots on
+this node is not PRRTE's to change — a "--host" entry can only select
+from what was allocated to you.
+
+Either reduce the number requested for this host, obtain a larger
+allocation, or add the ":OVERSUBSCRIBE" qualifier to your mapping
+directive if you truly want more processes than slots on this node.
+#
+[dash-host:slots-exceed-max]
+
+The "--host" specification asked for more slots on a node than its
+maximum permits:
+
+   Node:              %s
+   Slots requested:   %d
+   Slots available:   %d
+   Max slots:         %d
+
+The maximum slot count is a hard limit — unlike the slot count itself,
+it cannot be raised by a "--host" entry. It is usually set by a
+"max_slots=" entry in a hostfile.
+
+Either reduce the number requested for this host or raise the maximum
+for this node.

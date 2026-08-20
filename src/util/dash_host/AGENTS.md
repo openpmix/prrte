@@ -99,7 +99,9 @@ and only ever "worked" under `--map-by :OVERSUBSCRIBE`, which skips the check.
 The answer is a *cap*, not a slot count: when the `-host` selects within an
 allocation that already exists, the node keeps its own `slots` and the cap
 lands in `node->slots_available` — which is what the mappers have to place
-against, and what they did not all do.  See
+against, and what they did not all do.  A cap *larger* than the node is
+reconciled there too: refused under a resource manager, and otherwise taken
+as a re-description of the node for the duration of that map.  See
 [`src/mca/rmaps/AGENTS.md`](../../mca/rmaps/AGENTS.md).
 
 ---

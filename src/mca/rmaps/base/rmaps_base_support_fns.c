@@ -128,6 +128,39 @@ static bool node_in_targets(prte_node_t *nd,
 /*
  * Query the registry for all nodes allocated to a specified app_context
  */
+void prte_rmaps_base_record_resize(prte_node_t *node, int32_t slots)
+{
+    prte_rmaps_base_resize_t *rsz;
+
+    /* if this map already grew the node, the value it had the first time is
+     * the one to put back - a later app must not record the grown count as
+     * the original */
+    PMIX_LIST_FOREACH(rsz, &prte_rmaps_base.resized_nodes, prte_rmaps_base_resize_t) {
+        if (rsz->node == node) {
+            return;
+        }
+    }
+    rsz = PMIX_NEW(prte_rmaps_base_resize_t);
+    rsz->node = node;   // borrowed - the pool owns it
+    rsz->slots = slots;
+    pmix_list_append(&prte_rmaps_base.resized_nodes, &rsz->super);
+}
+
+void prte_rmaps_base_restore_resized(void)
+{
+    prte_rmaps_base_resize_t *rsz;
+
+    while (NULL != (rsz = (prte_rmaps_base_resize_t *)
+                    pmix_list_remove_first(&prte_rmaps_base.resized_nodes))) {
+        PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+                             "%s restoring node %s to %d slots",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             rsz->node->name, rsz->slots));
+        rsz->node->slots = rsz->slots;
+        PMIX_RELEASE(rsz);
+    }
+}
+
 int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
                                      int32_t *total_num_slots,
                                      prte_job_t *jdata, prte_app_context_t *app,
@@ -381,6 +414,48 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
                     NULL != hosts) {
                     s = prte_util_dash_host_compute_slots(node, hosts);
                     free(hosts);
+                    /* the spec can name more slots on this node than the node
+                     * has left. Who may answer that depends on where the
+                     * allocation came from: a resource manager decided how
+                     * much of the node is ours and we cannot hand out more,
+                     * while an unmanaged allocation is only the description
+                     * the user gave us of a machine nobody is scheduling - so
+                     * the ":N" simply re-describes it - which is the same
+                     * authority prte_ras_base.scheduler_owned records for the
+                     * add-host directive. Left unreconciled, the
+                     * job was sized against the larger number and then mapped
+                     * against the smaller one, which is a "failed to map" with
+                     * nothing said about the slots. */
+                    if (s > node->slots - node->slots_inuse &&
+                        (PRTE_MAPPING_NO_OVERSUBSCRIBE &
+                         PRTE_GET_MAPPING_DIRECTIVE(policy))) {
+                        if (prte_ras_base.scheduler_owned) {
+                            prte_show_help("help-dash-host.txt",
+                                           "dash-host:slots-exceed-allocation", true,
+                                           node->name, s,
+                                           node->slots - node->slots_inuse);
+                            return PRTE_ERR_SILENT;
+                        }
+                        if (0 != node->slots_max &&
+                            node->slots_inuse + s > node->slots_max) {
+                            prte_show_help("help-dash-host.txt",
+                                           "dash-host:slots-exceed-max", true,
+                                           node->name, s,
+                                           node->slots_max - node->slots_inuse,
+                                           node->slots_max);
+                            return PRTE_ERR_SILENT;
+                        }
+                        /* grow the node to what the user just told us it is,
+                         * for the duration of this map. The ":N" says how many
+                         * slots THIS job may have on the node - the allocation
+                         * itself is unchanged, which is the difference between
+                         * -host and -add-host - so the count goes back at
+                         * cleanup and prte_ras_base.total_slots_alloc, which
+                         * describes the allocation, is left alone. */
+                        prte_rmaps_base_record_resize(node, node->slots);
+                        node->slots = node->slots_inuse + s;
+                        PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
+                    }
                 } else {
                     s = node->slots - node->slots_inuse;
                 }
