@@ -1355,7 +1355,12 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
     ret = PMIx_Spawn_nb(iptr, ninfo, papps, napps, spcbfunc, &lock);
     if (PMIX_SUCCESS != ret) {
-        pmix_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
+        /* SILENT means the DVM has already explained itself through
+         * show_help - restating it as a bare error code contradicts what the
+         * code means and buries the explanation the user was given */
+        if (PMIX_ERR_SILENT != ret) {
+            pmix_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
+        }
         rc = ret;
         PRTE_UPDATE_EXIT_STATUS(rc);
         goto DONE;
@@ -1373,9 +1378,12 @@ PRTE_EXPORT int prte(int argc, char *argv[])
          * trace of the failure is the status handed back through the
          * callback. Say the same thing the synchronous failure above says,
          * so which side of the call detected it is not something the user
-         * has to care about. */
-        pmix_output(0, "PMIx_Spawn failed (%d): %s", lock.status,
-                    PMIx_Error_string(lock.status));
+         * has to care about - including its silence on SILENT, which is the
+         * DVM saying it has already printed the explanation itself. */
+        if (PMIX_ERR_SILENT != lock.status) {
+            pmix_output(0, "PMIx_Spawn failed (%d): %s", lock.status,
+                        PMIx_Error_string(lock.status));
+        }
         rc = lock.status;
         PRTE_UPDATE_EXIT_STATUS(rc);
         goto DONE;

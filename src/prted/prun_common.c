@@ -841,7 +841,13 @@ int prun_common(pmix_cli_result_t *results,
 
     ret = PMIx_Spawn(iptr, ninfo, papps, napps, spawnednspace);
     if (PMIX_SUCCESS != ret) {
-        pmix_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
+        /* SILENT is the DVM saying it has already explained itself - it is
+         * how every refusal that comes with a show_help message is reported.
+         * Restating it as a bare error code contradicts the very thing the
+         * code means, and buries the explanation the user was given. */
+        if (PMIX_ERR_SILENT != ret) {
+            pmix_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
+        }
         rc = ret;
         goto DONE;
     }
