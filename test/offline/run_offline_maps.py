@@ -728,15 +728,53 @@ def hostcap_cases(topo):
                alloc_args=alloc, expect="reject",
                expect_banner="not enough slots available")
 
+    # permission to oversubscribe changes how many procs a node may end up
+    # with, not how they are handed out: each node still gets what it was
+    # given first, and the leftovers are then split evenly - the same answer
+    # by-slot and by-node give for the same job
+    yield Case("hostcap.%s.cap-oversub" % topo.name, "hostcap", topo,
+               "capped", "nodeA0:2,nodeA1:2,nodeA2:2",
+               [("nodeA0", 2), ("nodeA1", 2), ("nodeA2", 2)],
+               map_by="core:oversubscribe", n=8, alloc_args=alloc,
+               expect_counts={"nodeA0": 3, "nodeA1": 3, "nodeA2": 2},
+               expect="map")
+
+    # the same rule with no cap in play: the ":N" here is exactly what the
+    # nodes hold, so what bounds the first pass is the node itself.  These
+    # nodes have more cores than slots (the simulator sizes the slots, the
+    # topology supplies the cores), which is the shape that tells a mapper
+    # that respects slots from one that fills a node to its core count.
+    small = ("--prtemca", "ras", "simulator",
+             "--prtemca", "ras_simulator_num_nodes", "3",
+             "--prtemca", "ras_simulator_slots", "2",
+             "--prtemca", "ras_simulator_max_slots", "0")
+    yield Case("hostcap.%s.slots-oversub" % topo.name, "hostcap", topo,
+               "capped", "nodeA0:2,nodeA1:2,nodeA2:2",
+               [("nodeA0", 2), ("nodeA1", 2), ("nodeA2", 2)],
+               map_by="core:oversubscribe", n=8, alloc_args=small,
+               expect_counts={"nodeA0": 3, "nodeA1": 3, "nodeA2": 2},
+               expect="map")
+
+    # A node with nothing left to give is what oversubscription is FOR, and it
+    # is reached without a spawn: the second app of an MPMD job maps against
+    # the slots the first one just consumed.  The first pass hands out what
+    # the nodes offer, which here is nothing, and the pass after it places
+    # them - so a mapper that reads "no node could take anything" as "this job
+    # cannot be placed" fails the map.  That is what a PMIx_Spawn onto a node
+    # its parent job has filled looked like.
+    yield Case("hostcap.%s.oversub-full" % topo.name, "hostcap", topo,
+               "capped", "nodeA0:2,nodeA1:2,nodeA2:2",
+               [("nodeA0", 2), ("nodeA1", 2), ("nodeA2", 2)],
+               map_by="core:oversubscribe",
+               apps=[AppSpec(6), AppSpec(2)], alloc_args=small,
+               expect_counts={"nodeA0": 3, "nodeA1": 3, "nodeA2": 2},
+               expect="map")
+
     # a cap ABOVE what the node holds is a different question, and the answer
     # turns on who sized the node.  ras/simulator declares itself not
     # scheduler-owned, so here the ":N" re-describes the node and the job maps
     # against the larger count - the arm a scheduler would refuse instead is
     # only reachable where a real one is running (contrib/slurmswarm).
-    small = ("--prtemca", "ras", "simulator",
-             "--prtemca", "ras_simulator_num_nodes", "3",
-             "--prtemca", "ras_simulator_slots", "2",
-             "--prtemca", "ras_simulator_max_slots", "0")
     yield Case("hostcap.%s.cap-over-node" % topo.name, "hostcap", topo,
                "capped", "nodeA0:4", [("nodeA0", 4)], map_by="core", n=4,
                alloc_args=small, expect_counts={"nodeA0": 4}, expect="map")
@@ -1036,15 +1074,20 @@ def check_mapping(case, pmap):
                 v.append(("M-slot",
                           "node counts %s != block-fill %s" % (actual, exp)))
     else:
-        # object-level maps (non-span) are node-local: all procs land on the
-        # first node, round-robin across that node's objects, oversubscribing
-        # rather than spilling to the next node.  (--map-by node / :SPAN are
-        # the directives that spread across nodes.)
-        first = case.pool[0][0]
-        if actual != {first: n}:
-            v.append(("M-%s" % case.map_by,
-                      "node counts %s != node-local {%s: %d}"
-                      % (actual, first, n)))
+        # object-level maps (non-span) are front-loaded like by-slot: each
+        # node is filled with what it offers - round-robin across that node's
+        # objects - before the mapper moves to the next one.  So while the job
+        # fits in the allocation the shape is a block fill, which for the
+        # common case of a job smaller than the first node is "everything on
+        # the first node".  (--map-by node / :SPAN are the directives that
+        # spread across nodes.)  Past the total slot count the procs left over
+        # come back around to oversubscribe, and that spread is left to
+        # golden, exactly as for by-slot.
+        if n <= total_slots:
+            exp = _expected_block_fill(case.pool, n)
+            if actual != exp:
+                v.append(("M-%s" % case.map_by,
+                          "node counts %s != block-fill %s" % (actual, exp)))
     return v
 
 

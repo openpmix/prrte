@@ -91,3 +91,15 @@ big the host is:
   taken to have that many slots **for that job**. The allocation itself
   is unchanged, and the next job sees the host at its original size.
   Use ``--add-host`` to change the allocation.
+
+Permission to oversubscribe does not change how processes are spread
+over the hosts you named, only how many a host may end up with. Each
+host is given the number of slots you asked for first, and the processes
+left over after that are then divided evenly among the hosts. So
+
+.. code::
+
+   prterun --host a:2,b:2,c:2 -n 12 --map-by core:oversubscribe ./app
+
+puts four processes on each host, and not eight on ``a``. Every mapping
+directive divides the overflow the same way.
