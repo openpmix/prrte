@@ -71,8 +71,16 @@ prte_rmaps_base_t prte_rmaps_base = {
     .default_mapping_policy = NULL,
     .default_ranking_policy = NULL,
     .require_hwtcpus = false,
-    .have_cores = true
+    .have_cores = true,
+    .resized_nodes = PMIX_LIST_STATIC_INIT
 };
+
+static void rsz_con(prte_rmaps_base_resize_t *p)
+{
+    p->node = NULL;
+    p->slots = 0;
+}
+PMIX_CLASS_INSTANCE(prte_rmaps_base_resize_t, pmix_list_item_t, rsz_con, NULL);
 
 static int prte_rmaps_base_register(pmix_mca_base_register_flag_t flags)
 {
@@ -135,6 +143,9 @@ static int prte_rmaps_base_close(void)
         PMIX_RELEASE(item);
     }
     PMIX_DESTRUCT(&prte_rmaps_base.selected_modules);
+    /* a map always drains this, but a teardown in the middle of one must
+     * not leak what it left */
+    PMIX_LIST_DESTRUCT(&prte_rmaps_base.resized_nodes);
     hwloc_bitmap_free(prte_rmaps_base.available);
     hwloc_bitmap_free(prte_rmaps_base.baseset);
 
@@ -151,6 +162,7 @@ static int prte_rmaps_base_open(pmix_mca_base_open_flag_t flags)
 
     /* init the globals */
     PMIX_CONSTRUCT(&prte_rmaps_base.selected_modules, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_rmaps_base.resized_nodes, pmix_list_t);
     prte_rmaps_base.available = hwloc_bitmap_alloc();
     prte_rmaps_base.baseset = hwloc_bitmap_alloc();
 

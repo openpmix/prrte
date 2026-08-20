@@ -76,3 +76,18 @@ host, whatever mapping policy is in effect. So
 
 puts one process on each of the three hosts under every ``--map-by``
 directive, and not three on ``node1``.
+
+Asking for more slots on a host than it has depends on who decided how
+big the host is:
+
+* Under a resource manager, the number of slots on a host was set by
+  the scheduler, and PRRTE cannot hand a job more of a host than was
+  allocated to it. Naming a larger count is an error. Add the
+  ``:OVERSUBSCRIBE`` qualifier to your mapping directive if you really
+  do want more processes than slots.
+
+* Without a resource manager, the slot count is only a description you
+  gave PRRTE, so a larger ``:slots`` count re-states it: the host is
+  taken to have that many slots **for that job**. The allocation itself
+  is unchanged, and the next job sees the host at its original size.
+  Use ``--add-host`` to change the allocation.

@@ -178,6 +178,13 @@ it. Several cases here cannot exist anywhere else:
   reason named, and — the half that matters — the DVM survives the refusal.
   Before, the node was inserted and the daemon launch on it failed, which
   takes the whole DVM down rather than just the job that asked.
+- **A `--host` claiming more of a node than SLURM allocated.** Refused, and
+  the message names the node and both counts. Same authority as the entry
+  above, applied to how much of a node a job may take rather than to which
+  nodes exist — and, like it, only reachable here: where PRRTE owns the node
+  counts a larger `:N` re-describes the node instead, so the refusing arm has
+  no other home. The case also runs a `--host` within the allocation, since a
+  check that refuses everything would pass the first half.
 - **`--activate` against the same allocation.** *Allowed* — the case that
   gives the refusal above its shape. A DVM started with `--host` forms across
   only part of its allocation, and `--activate` starts a daemon on one of the

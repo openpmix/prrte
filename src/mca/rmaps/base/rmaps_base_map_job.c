@@ -1756,6 +1756,10 @@ cleanup:
     }
     /* release the colocation target array if one was provided/created */
     PMIX_DATA_ARRAY_FREE(darray);
+    /* a node this map grew to satisfy a "-host node:N" goes back to the size
+     * the allocation says it is: the spec sized this job's claim on the node,
+     * not the node */
+    prte_rmaps_base_restore_resized();
     /* reset any node map flags we used so the next job will start clean */
     for (int i = 0; i < jdata->map->nodes->size; i++) {
         if (NULL != (node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, i))) {

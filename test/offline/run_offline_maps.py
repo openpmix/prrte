@@ -728,6 +728,19 @@ def hostcap_cases(topo):
                alloc_args=alloc, expect="reject",
                expect_banner="not enough slots available")
 
+    # a cap ABOVE what the node holds is a different question, and the answer
+    # turns on who sized the node.  ras/simulator declares itself not
+    # scheduler-owned, so here the ":N" re-describes the node and the job maps
+    # against the larger count - the arm a scheduler would refuse instead is
+    # only reachable where a real one is running (contrib/slurmswarm).
+    small = ("--prtemca", "ras", "simulator",
+             "--prtemca", "ras_simulator_num_nodes", "3",
+             "--prtemca", "ras_simulator_slots", "2",
+             "--prtemca", "ras_simulator_max_slots", "0")
+    yield Case("hostcap.%s.cap-over-node" % topo.name, "hostcap", topo,
+               "capped", "nodeA0:4", [("nodeA0", 4)], map_by="core", n=4,
+               alloc_args=small, expect_counts={"nodeA0": 4}, expect="map")
+
 
 def device_cases(topo):
     """--map-by device=, whose placement is pinned by golden snapshots.
