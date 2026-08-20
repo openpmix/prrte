@@ -72,11 +72,11 @@ static char *dead_dmns_spec = NULL;
 
 /* The incarnation table is the one piece of RML state a peer's socket handler
  * reaches directly, and that handler runs on whichever base is servicing the
- * peer - one of the OOB progress threads when any were configured (see
- * prte_oob_base.num_progress_threads).  Two of them arriving at once would
- * both realloc the array.  The lock is taken only on the bootstrap incarnation
- * check, which is a handful of instructions per message and uncontended
- * whenever the OOB is running on the main thread alone. */
+ * peer - one of the process-wide worker threads when any are configured (see
+ * prte_num_worker_threads).  Two of them arriving at once would both realloc
+ * the array.  The lock is taken only on the bootstrap incarnation check, which
+ * is a handful of instructions per message and uncontended whenever the OOB is
+ * running on the main thread alone. */
 static pmix_mutex_t epoch_lock = PMIX_MUTEX_STATIC_INIT;
 
 /* Grow the per-rank epoch table so index rank is valid, zero-filling new slots

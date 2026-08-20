@@ -22,7 +22,7 @@ Five separable things share the directory:
 | **Object model & globals** | `prte_globals.[ch]` | The three central data structures (`prte_job_t`, `prte_node_t`, `prte_proc_t`), plus `prte_session_t`, `prte_app_context_t`, `prte_topology_t`, the launch-fence campaign objects — their class instances, and the global registries (`prte_job_data`, `prte_node_pool`, `prte_sessions`, ...) with the lookup functions over them. |
 | **Lifecycle** | `prte_init.c`, `prte_finalize.c`, `prte_quit.[ch]`, `prte_locks.[ch]` | The three-stage startup (`prte_init_minimum` → `prte_init_util` → `prte_init`), teardown, the "stop looping the event base" path, and the one-shot mutexes that keep re-entrant shutdown from bouncing. |
 | **MCA parameters** | `prte_mca_params.c` | `prte_register_paramfile_params()` — the parameters naming the MCA parameter files, registered ahead of those files being read — and `prte_register_params()`, every other `prte_*` MCA variable, registered once afterwards. |
-| **Threads & timers** | `prte_progress_threads.[ch]`, `prte_wait.[ch]` | Named progress threads (event base + engine thread + refcount), the SIGCHLD/waitpid plumbing, and the `PRTE_DETECT_TIMEOUT`/`PRTE_TIMER_EVENT` macros. |
+| **Threads & timers** | `prte_progress_threads.[ch]`, `prte_worker_pool.[ch]`, `prte_wait.[ch]` | Named progress threads (event base + engine thread + refcount), the process-wide pool of worker threads built on top of them, the SIGCHLD/waitpid plumbing, and the `PRTE_DETECT_TIMEOUT`/`PRTE_TIMER_EVENT` macros. |
 | **Sub-directories** | [`data_server/`](data_server/AGENTS.md), [`data_type_support/`](data_type_support/AGENTS.md) | The PMIx publish/lookup service, and the pack/unpack/copy/print functions for the objects above. Each has its own AGENTS.md. |
 
 ---
@@ -198,6 +198,40 @@ specification. It is deliberately outside the `HAVE_PTHREAD_SETAFFINITY_NP`
 guard its only caller sits behind, so it can be tested on a platform without
 `pthread_setaffinity_np`; ranges are **inclusive** of their upper bound.
 
+### The worker pool
+
+`prte_worker_pool.[ch]` is the **one** pool of worker threads in the process.
+Two subsystems want work off the main progress thread — the OOB, for a peer's
+socket send/recv handlers, and odls, for the fork/exec of a local child — and
+both used to carry a private pool, private sizing rules and a private
+round-robin cursor. They now both call `prte_worker_pool_assign()`.
+
+- Sized by `prte_num_worker_threads` (default **8**). Zero means no workers,
+  and then every assignment is `prte_event_base` — the shape the tree ran in
+  before any of this existed.
+- Built in `prte_init()` and only for `PRTE_PROC_IS_MASTER ||
+  PRTE_PROC_IS_DAEMON`; a tool has neither peers to service nor children to
+  fork, so it spins nothing. Released in `prte_finalize()` right after the
+  `ess` framework closes, which is what tears the OOB and odls down.
+- **The threads are already stopped by then.** `prte_finalize` calls
+  `prte_progress_thread_pause(NULL)` at its very top, long before
+  `prte_ess.finalize()` runs, so no worker is inside an event handler while
+  the OOB destructs its peers. `prte_worker_pool_finalize()` is giving the
+  trackers back, not racing anything.
+- **The rotation is the ring, not a cursor.** The bases sit on a
+  `pmix_ring_buffer_t`; an assignment pops the oldest and pushes it straight
+  back, which advances the ring by one. That is the whole point of using a
+  ring here — there is no separate index that can fall out of step with the
+  pool's size, which is the bug both of the old private pools were shaped
+  around avoiding.
+- `prte_worker_pool_assign()` **never returns NULL.** Callers use the result
+  unconditionally, so "no pool" has to be an answer rather than a special
+  case: before init, after finalize, and with zero threads configured, it
+  hands back `prte_event_base`.
+- A thread that fails to start shrinks the pool rather than failing the init.
+  `prte_worker_pool_size()` is the answer; `prte_num_worker_threads` is only
+  the request.
+
 ---
 
 ## Gotchas before you edit
@@ -296,7 +330,9 @@ map with more nodes than one array block, and the refcount arithmetic when
 both maps are released), the pack/unpack round trips for job/app/proc/node/map
 and the GLOBAL-vs-LOCAL attribute split, object lifetimes and the borrowed
 backpointer contract, the exit-status macros, the data server's range checks
-and object construction, the progress-thread cpu parser and lifecycle, and
+and object construction, the progress-thread cpu parser and lifecycle, the
+worker pool (the empty and negative cases, and two laps of the rotation over
+three real threads), and
 the two-phase parameter registration (it writes a parameter file and points
 `prte_param_files` at it *before* calling `prte_init_util`, then checks that
 a core `prte_*` parameter and an RML one came back carrying the file's

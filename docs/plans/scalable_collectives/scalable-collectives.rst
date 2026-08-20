@@ -1683,7 +1683,9 @@ inside that spread, so the apparent ordering is not evidence.
    depth-1 series does show.
 
 **The OOB worker bases were measured, and made the barrier worse here.**
-``prte_oob_progress_threads`` defaults to 0, so every other number in this
+``prte_oob_progress_threads`` (since replaced by the process-wide
+``prte_num_worker_threads``, which defaults to 8) defaulted to 0 at the time,
+so every other number in this
 document was taken with each daemon servicing all its peer sockets on one
 event base.  Forced to 4 — verified by thread count, +4 on both the HNP and
 remote daemons — the barrier was 1.2-1.9x *worse* at five of six points.  That

@@ -66,7 +66,7 @@
 #include "src/class/pmix_list.h"
 #include "src/event/event-internal.h"
 #include "src/include/prte_socket_errno.h"
-#include "src/runtime/prte_progress_threads.h"
+#include "src/runtime/prte_worker_pool.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_if.h"
 #include "src/util/error.h"
@@ -163,20 +163,11 @@ static void peer_cons(prte_oob_tcp_peer_t *peer)
 {
     peer->auth_method = NULL;
     peer->sd = -1;
-    /* claim the next base in the pool.  Peers are only ever built on the main
-     * progress thread (the send path, the URI parser, the accept handler), so
-     * the cursor needs no protection.  prte_oob_open always leaves ev_bases
-     * holding at least one entry, but a peer built before it ran - or after
-     * prte_oob_close harvested the pool - has to land somewhere. */
-    if (NULL == prte_oob_base.ev_bases) {
-        peer->evbase = prte_event_base;
-    } else {
-        peer->evbase = prte_oob_base.ev_bases[prte_oob_base.next_base];
-        if (0 < prte_oob_base.num_progress_threads) {
-            prte_oob_base.next_base = (prte_oob_base.next_base + 1)
-                                      % prte_oob_base.num_progress_threads;
-        }
-    }
+    /* claim the next base in the process-wide worker pool.  With no workers
+     * configured - or before the pool is up, or after it is gone - this is
+     * prte_event_base, which is where peer sockets were serviced before any
+     * of this existed. */
+    peer->evbase = prte_worker_pool_assign();
     PMIX_CONSTRUCT(&peer->lock, pmix_mutex_t);
     PMIX_CONSTRUCT(&peer->addrs, pmix_list_t);
     peer->active_addr = NULL;

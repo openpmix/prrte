@@ -158,13 +158,19 @@ In a launcher-less (bootstrapped) DVM daemons boot independently, so:
 
 ## Which thread services a peer's socket
 
-By default, all of it runs on `prte_event_base` — one progress thread, exactly
-as it always did. `prte_oob_progress_threads` (`prte_oob_base.num_progress_threads`,
-default **0**) starts N worker progress threads and hands each peer one of them,
-round-robin, at construction (`peer->evbase`). The point is not extra bandwidth —
-one thread's `writev` copy rate is several times a 10-25 GbE link — it is
-**occupancy**: while the main thread is deflating an xcast, registering a
-namespace, or running the odls fork path, nothing services a socket at all.
+`peer_cons` asks the **process-wide worker pool**
+([`src/runtime/prte_worker_pool.h`](../../runtime/prte_worker_pool.h)) for a
+base at construction (`peer->evbase`); the pool holds
+`prte_num_worker_threads` bases (default **8**) on a ring and hands them out in
+rotation. The OOB does not own that pool — it is shared with the odls fork
+path, and it is built by `prte_init` and torn down by `prte_finalize`. Setting
+`prte_num_worker_threads` to 0 makes every assignment `prte_event_base`, which
+is exactly how the transport ran before any of this existed.
+
+The point is not extra bandwidth — one thread's `writev` copy rate is several
+times a 10-25 GbE link — it is **occupancy**: while the main thread is
+deflating an xcast, registering a namespace, or running the odls fork path,
+nothing services a socket at all.
 
 The split is deliberate and narrow:
 
@@ -211,11 +217,12 @@ Four rules keep that safe, and all four are load-bearing:
   false`. If you add a third place that queues onto a peer, it needs the same
   tail.
 
-With `num_progress_threads == 0`, `peer->evbase` **is** `prte_event_base`:
+With an empty pool, `peer->evbase` **is** `prte_event_base`:
 `PRTE_OOB_COMPLETE_SEND` completes inline instead of posting, the rebind is a
 delete/re-set onto the base the events were already on, and the mutex is
-uncontended. `prte_oob_base.ev_bases` still exists and still holds one entry, so
-every call site indexes it unconditionally — do not "optimize" that array away.
+uncontended. `prte_worker_pool_assign()` never returns NULL, precisely so
+`peer_cons` needs no special case — and a peer built before the pool is up, or
+after it is gone, still gets a usable base.
 
 The one piece of state outside this directory that a worker touches directly is
 the RML's incarnation table (`prte_rml_epoch_ok`, bootstrap only), which

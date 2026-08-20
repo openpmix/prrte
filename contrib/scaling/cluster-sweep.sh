@@ -27,7 +27,7 @@
 #
 #   The sweep also prices three things we found dominate on a single host and
 #   need confirming (or refuting) on a cluster: the PMIx GDS component, the
-#   OOB worker threads, and how much of a fence's cost is payload at all.
+#   worker threads, and how much of a fence's cost is payload at all.
 #
 # HOW TO RUN IT
 #
@@ -518,11 +518,11 @@ sweep() {
             done
         fi
 
-        # --- threads: OOB worker bases off against on ---------------------
+        # --- threads: the worker thread pool off against on ---------------
         if has_phase threads; then
             for t in 0 $((64 / 4)); do
-                say "threads phase: nodes=$n oob_threads=$t"
-                if dvm_start "$n" "$slots" 64 "--prtemca prte_oob_progress_threads $t"; then
+                say "threads phase: nodes=$n worker_threads=$t"
+                if dvm_start "$n" "$slots" 64 "--prtemca prte_num_worker_threads $t"; then
                     run_job warm "$n" 64 1 "$nkeys" 1024 default "$t" 0 >/dev/null 2>&1 || true
                     run_reps threads "$n" 64 1 "$nkeys" 1024 default "$t"
                     dvm_stop
@@ -599,7 +599,7 @@ fi
 
 mkdir -p "$outdir" || die "cannot create $outdir"
 : > "$LOG"
-echo "phase,nodes,radix,ppn,nprocs,nkeys,size,bytes_per_rank,total_bytes,gds,oob_threads,rep,put_us,collect_us,barrier_us,data_cost_us" > "$RAW"
+echo "phase,nodes,radix,ppn,nprocs,nkeys,size,bytes_per_rank,total_bytes,gds,worker_threads,rep,put_us,collect_us,barrier_us,data_cost_us" > "$RAW"
 
 say "results  -> $outdir"
 say "plan     -> $plan_dvms DVM cycles, $plan_jobs jobs (~$(( (plan_dvms * 45 + plan_jobs * 10) / 60 )) min estimated)"

@@ -73,6 +73,7 @@
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_progress_threads.h"
+#include "src/runtime/prte_worker_pool.h"
 #include "src/runtime/runtime.h"
 #include "src/util/attr.h"
 #include "src/util/proc_info.h"
@@ -1627,6 +1628,80 @@ static int test_progress_thread_lifecycle(void)
     return failures;
 }
 
+/* The process-wide worker pool.
+ *
+ * Two things are worth pinning.  The rotation must actually rotate: the
+ * bases sit on a ring and each assignment pops the oldest and pushes it
+ * straight back, so N successive requests must visit all N bases and the
+ * (N+1)th must come back around to the first.  A cursor kept alongside the
+ * ring is exactly what this replaced, and the failure it invites - a cursor
+ * that no longer matches the pool's size - is what "walk it twice around"
+ * catches.
+ *
+ * And the empty pool must still answer.  Every caller uses the result
+ * unconditionally, so "no workers configured" has to hand back
+ * prte_event_base rather than NULL.  (In this bare test process
+ * prte_event_base has never been created, so compare against it rather than
+ * asserting non-NULL.)
+ */
+static int test_worker_pool(void)
+{
+    int failures = 0, i, save = prte_num_worker_threads;
+    prte_event_base_t *first[3], *evb;
+
+    /* no workers: every assignment is the main progress thread */
+    prte_num_worker_threads = 0;
+    CHECK("pool: an empty pool starts", PRTE_SUCCESS == prte_worker_pool_init());
+    CHECK("pool: an empty pool has no threads", 0 == prte_worker_pool_size());
+    for (i = 0; i < 3; i++) {
+        CHECK("pool: no workers means the main base",
+              prte_event_base == prte_worker_pool_assign());
+    }
+    prte_worker_pool_finalize();
+
+    /* a negative request is a request for none, not a ring sized -1 */
+    prte_num_worker_threads = -4;
+    CHECK("pool: a negative request starts", PRTE_SUCCESS == prte_worker_pool_init());
+    CHECK("pool: a negative request clamps to none", 0 == prte_worker_pool_size());
+    CHECK("pool: a negative request still answers",
+          prte_event_base == prte_worker_pool_assign());
+    prte_worker_pool_finalize();
+
+    /* three workers */
+    prte_num_worker_threads = 3;
+    CHECK("pool: three workers start", PRTE_SUCCESS == prte_worker_pool_init());
+    CHECK("pool: three workers recorded", 3 == prte_worker_pool_size());
+
+    for (i = 0; i < 3; i++) {
+        first[i] = prte_worker_pool_assign();
+        CHECK("pool: an assignment is a real base", NULL != first[i]);
+        CHECK("pool: an assignment is not the main base", prte_event_base != first[i]);
+    }
+    CHECK("pool: the first lap visits three distinct bases",
+          first[0] != first[1] && first[1] != first[2] && first[0] != first[2]);
+
+    /* second lap: same order, which is what makes it a rotation rather than
+     * an arbitrary shuffle */
+    for (i = 0; i < 3; i++) {
+        evb = prte_worker_pool_assign();
+        CHECK("pool: the rotation wraps in order", first[i] == evb);
+    }
+
+    /* asking again while the pool is up must not build a second one */
+    CHECK("pool: init is idempotent", PRTE_SUCCESS == prte_worker_pool_init());
+    CHECK("pool: init did not add threads", 3 == prte_worker_pool_size());
+
+    prte_worker_pool_finalize();
+    CHECK("pool: finalize leaves no threads", 0 == prte_worker_pool_size());
+    CHECK("pool: a harvested pool falls back to the main base",
+          prte_event_base == prte_worker_pool_assign());
+    /* and finalizing twice is not a fault */
+    prte_worker_pool_finalize();
+
+    prte_num_worker_threads = save;
+    return failures;
+}
+
 /* ------------------------------------------------------------------ */
 
 int main(void)
@@ -1690,6 +1765,7 @@ int main(void)
     failures += test_data_server_requestor();
     failures += test_progress_thread_cpus();
     failures += test_progress_thread_lifecycle();
+    failures += test_worker_pool();
     failures += test_paramfile_ordering();
 
     if (paramfile_written) {

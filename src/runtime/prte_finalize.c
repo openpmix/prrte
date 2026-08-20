@@ -46,6 +46,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
 #include "src/runtime/prte_progress_threads.h"
+#include "src/runtime/prte_worker_pool.h"
 #include "src/runtime/runtime.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
@@ -114,6 +115,12 @@ int prte_finalize(void)
         PRTE_ERROR_LOG(rc);
     }
     (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
+
+    /* The ess finalize above tore down the OOB and the odls, so nothing is
+     * left that wants a worker base.  The threads themselves were already
+     * stopped by the prte_progress_thread_pause(NULL) at the top of this
+     * function, so this just gives the trackers back. */
+    prte_worker_pool_finalize();
 
     /* Tear the sessions down, and with them the node pool.
      *

@@ -134,17 +134,17 @@ tree can be repaired (see :ref:`rml-label`).
 Which thread moves the bytes
 ----------------------------
 
-By default every part of the transport runs on the one PRRTE progress thread,
-and this section describes something you can turn on rather than something that
-is already happening.
+A daemon runs a pool of **worker progress threads**, sized by
+``prte_num_worker_threads`` (default ``8``).  It is one pool for the whole
+process, shared with the local fork/exec path; the OOB does not have a pool of
+its own.  Each peer is assigned a base from that pool, in rotation, when the
+peer is created.
 
-``prte_oob_progress_threads`` (default ``0``) starts that many additional
-progress threads and assigns each peer one of them, round-robin, when the peer
-is created.  Only the peer's **send and recv socket handlers** move there, and
-only once the connection is established.  Everything those handlers hand
-onwards — delivering a message to the RML, relaying one on, running a send's
-completion callback, reacting to a lost connection — comes back to the main
-progress thread, as does the whole connection state machine.
+Only the peer's **send and recv socket handlers** run there, and only once the
+connection is established.  Everything those handlers hand onwards —
+delivering a message to the RML, relaying one on, running a send's completion
+callback, reacting to a lost connection — comes back to the main progress
+thread, as does the whole connection state machine.
 
 The reason to want this is not raw bandwidth.  A single thread copies into the
 kernel several times faster than a 10-25 GbE link drains, so the transport is
@@ -155,8 +155,10 @@ for that fraction of the launch.  Giving the sockets their own threads keeps
 them busy across those stalls.  It also lifts a real ceiling on 100 GbE and on
 nodes with several NICs, where one thread's copy rate *is* the limit.
 
-Start with ``0`` (the default, and identical to the behavior that predates the
-option) and raise it only where a launch is demonstrably stalling the wire.
+Setting ``prte_num_worker_threads`` to ``0`` puts every peer back on the main
+progress thread — the behavior that predates the pool — and is the thing to
+try when you suspect the extra threads are costing more than they earn, which
+they can on a node with no spare cores.
 
 Bootstrap specifics
 -------------------

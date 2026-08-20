@@ -104,18 +104,6 @@ typedef struct {
                                delay backs off exponentially up to this value (0 => fixed delay) */
     int connect_max_time;   /**< max seconds to keep retrying a non-lifeline peer before giving up
                                and letting the routing tree heal to an ancestor (0 => forever) */
-
-    /* Worker progress threads servicing peer socket events.  Each peer's
-     * send/recv events are bound to one of these bases (round-robin), so the
-     * wire keeps moving while the main progress thread is busy computing.
-     * num_progress_threads == 0 (the default) means "no worker threads": the
-     * array still exists, holding exactly one entry - prte_event_base - so
-     * every call site can index it unconditionally and the code path is
-     * bit-for-bit the one that ran before any of this existed. */
-    int num_progress_threads;      /**< number of dedicated worker progress threads */
-    prte_event_base_t **ev_bases;  /**< the bases peers are assigned to */
-    char **ev_threads;             /**< names of the threads we started (NULL when none) */
-    int next_base;                 /**< round-robin cursor into ev_bases */
 } prte_oob_base_t;
 PRTE_EXPORT extern prte_oob_base_t prte_oob_base;
 
@@ -123,13 +111,6 @@ PRTE_EXPORT extern prte_oob_base_t prte_oob_base;
 PRTE_EXPORT int prte_oob_open(void);
 PRTE_EXPORT void prte_oob_close(void);
 PRTE_EXPORT int prte_oob_register(void);
-
-/* Build and tear down the pool of bases that peer sockets are serviced on.
- * Called by prte_oob_open/prte_oob_close; exported (rather than left static)
- * so the unit test can drive the sizing and the round-robin assignment
- * without standing up listeners. */
-PRTE_EXPORT int prte_oob_start_progress_threads(void);
-PRTE_EXPORT void prte_oob_harvest_progress_threads(void);
 
 /* Simulate this node's failure better than simply killing the process */
 PRTE_EXPORT void prte_oob_simulate_node_failure(void);

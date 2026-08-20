@@ -56,13 +56,6 @@ typedef struct {
     pmix_list_t xterm_ranks;
     /* the xterm cmd to be used */
     char **xtermcmd;
-    /* thread pool */
-    int max_threads;
-    int num_threads;
-    int cutoff;
-    prte_event_base_t **ev_bases; // event base array for progress threads
-    char **ev_threads;            // event progress thread names
-    int next_base;                // counter to load-level thread use
     bool signal_direct_children_only;
     char *exec_agent;
     /* send each daemon its own procs' bindings instead of broadcasting
@@ -202,10 +195,6 @@ PRTE_EXPORT int prte_odls_base_default_restart_proc(prte_proc_t *child,
  * Preload binary/files functions
  */
 PRTE_EXPORT int prte_odls_base_preload_files_app_context(prte_app_context_t *context);
-
-PRTE_EXPORT void prte_odls_base_start_threads(prte_job_t *jdata);
-
-PRTE_EXPORT void prte_odls_base_harvest_threads(void);
 
 /* Binding support.
  *
