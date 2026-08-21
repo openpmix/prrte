@@ -194,9 +194,9 @@ a scheduler that can say no: `salloc` really allocates a job, `scontrol show job
 --json` really emits SLURM's own schema, `scontrol update` really has to be a
 resize SLURM accepts **on a running job**, and `scancel` really removes an
 allocation. Note the request shapes differ from a plain elastic grow:
-`elastic grow <nodes>` is `PMIX_ALLOC_NEW` naming hosts, which the *base*
-serves without consulting the ras. `ras/slurm`'s `modify()` accepts only
-(`PMIX_ALLOC_EXTEND`|`PMIX_ALLOC_NEW`)+`NUM_NODES`,
+`elastic grow <nodes>` names hosts with slot counts, which `ras/slurm`
+refuses — Slurm decides the slots. `ras/slurm`'s `modify()` accepts
+(`PMIX_ALLOC_EXTEND`|`PMIX_ALLOC_NEW`)+(`NUM_NODES`|`NODE_LIST`),
 `PMIX_ALLOC_RELEASE`+(`NODE_LIST`|`NUM_NODES`|`ALLOC_ID`) and
 `PMIX_ALLOC_REQ_CANCEL` — which nodes a grow lands on is the scheduler's
 choice. Hence `elastic extend|new|release|release-id|cancel`. The two grow

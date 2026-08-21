@@ -158,6 +158,7 @@ extern const char *const num_obj_subfields[NUM_OBJ_SUBFIELD_COUNT];
 
 enum record_job_data_field {
     PRTE_JOB_DATA_NODES,
+    PRTE_JOB_DATA_NODELIST,
     PRTE_JOB_DATA_JOB_ID,
     PRTE_JOB_DATA_COUNT
 };

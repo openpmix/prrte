@@ -114,6 +114,7 @@ static int prte_ras_slurm_extract_reused_nodes(const char *slurm_jobid,
 static int prte_ras_slurm_add_reused_nodes_to_session(const char *slurm_jobid,
                                                       pmix_pointer_array_t *reused_nodes);
 static void prte_ras_slurm_rollback_session(const char *slurm_jobid);
+static int prte_ras_slurm_vet_node_list(char **names, uint64_t *count);
 static int prte_ras_slurm_limit_to_parent_remainder(pmix_hash_table_t *fields);
 static int prte_ras_slurm_trim_job_to_parent(const char *slurm_jobid);
 static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata);
@@ -149,6 +150,7 @@ const char *const num_obj_subfields[NUM_OBJ_SUBFIELD_COUNT] = {
 /* Fields for internal PRRTE record keeping */
 const char *const record_job_data_fields[PRTE_JOB_DATA_COUNT] = {
     [PRTE_JOB_DATA_NODES]  = "nodes",
+    [PRTE_JOB_DATA_NODELIST] = "nodelist",
     [PRTE_JOB_DATA_JOB_ID] = "job_id",
 };
 
@@ -165,6 +167,7 @@ static const char *mem_per_cpu_format  = "--mem-per-cpu=%s";
 static const char *mem_per_node_format = "--mem=%s";
 static const char *time_format = "--time=%s";
 static const char *nodes_format = "--nodes=%s";
+static const char *nodelist_format = "--nodelist=%s";
 static const char *threads_per_core_format = "--threads-per-core=%s";
 
 /*
@@ -869,6 +872,15 @@ static int prte_ras_slurm_launch_expander_job(pmix_hash_table_t *fields)
         goto cleanup;
     }
 
+    /* Only when the caller named the nodes; Slurm picks them otherwise */
+    err = prte_ras_slurm_make_salloc_arg(fields, record_job_data_fields[PRTE_JOB_DATA_NODELIST],
+                                         nodelist_format, false, &argc, argv);
+
+    if(PRTE_SUCCESS != err && PRTE_ERR_NOT_FOUND != err) {
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+
     if (prte_mca_ras_slurm_component.propagate_account) {
         err = prte_ras_slurm_make_salloc_arg(fields, str_fields[STR_ACCOUNT], account_format, false, &argc, argv);
 
@@ -1166,6 +1178,45 @@ static void prte_ras_slurm_rollback_session(const char *slurm_jobid)
     }
 
     PMIX_RELEASE(session);
+}
+
+/**
+ * @brief Vet a caller-supplied node list and count it.
+ *
+ * Slurm is asked for these nodes by name, so each has to be a name it could
+ * be given: no slot counts (Slurm decides those; --exclusive takes the whole
+ * node) and nothing tainted. A node the DVM already holds needs no check of
+ * its own - --exclusive means Slurm cannot grant it twice, so such a request
+ * simply pends until the node is released.
+ *
+ * @param[in]  names Node names from PMIX_ALLOC_NODE_LIST.
+ * @param[out] count Number of names.
+ */
+static int prte_ras_slurm_vet_node_list(char **names, uint64_t *count)
+{
+    int n;
+    int err;
+
+    for (n = 0; NULL != names[n]; n++) {
+        if (NULL != strchr(names[n], ':')) {
+            pmix_output(0, "ras:slurm:modify: slot counts cannot be requested per"
+                           " node (%s); Slurm allocates whole nodes here.", names[n]);
+            return PRTE_ERR_BAD_PARAM;
+        }
+
+        err = prte_ras_slurm_validate_hostname(names[n]);
+        if (PRTE_SUCCESS != err) {
+            return err;
+        }
+    }
+
+    if (0 == n) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    *count = (uint64_t) n;
+
+    return PRTE_SUCCESS;
 }
 
 /**
@@ -1727,17 +1778,46 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
 
     uint64_t num_nodes;
     bool found = false;
+    char *node_string = NULL;
+    char **node_names = NULL;
 
     for (size_t i = 0; i < req->ninfo; i++) {
 
         if (0 == strcmp(req->info[i].key, PMIX_ALLOC_NUM_NODES)) {
 
-            if (req->info[i].value.type != PMIX_UINT64) {
+            if (req->info[i].value.type != PMIX_UINT64 || found) {
                 err = PRTE_ERR_BAD_PARAM;
                 goto cleanup;
             }
         
             num_nodes = req->info[i].value.data.uint64;
+            found = true;
+        } else if (PMIx_Check_key(req->info[i].key, PMIX_ALLOC_NODE_LIST)) {
+
+            /* Naming the nodes is a request Slurm can serve: it allocates
+             * them by name, or queues until it can. One selector only. */
+            if (found) {
+                err = PRTE_ERR_BAD_PARAM;
+                goto cleanup;
+            }
+
+            err = prte_pmix_convert_status(
+                      prte_ras_base_parse_node_list(&req->info[i], &node_string));
+            if (PRTE_SUCCESS != err) {
+                goto cleanup;
+            }
+
+            node_names = PMIx_Argv_split(node_string, ',');
+            if (NULL == node_names) {
+                err = PRTE_ERR_BAD_PARAM;
+                goto cleanup;
+            }
+
+            err = prte_ras_slurm_vet_node_list(node_names, &num_nodes);
+            if (PRTE_SUCCESS != err) {
+                goto cleanup;
+            }
+
             found = true;
         } else if (0 == strcmp(req->info[i].key, PMIX_ALLOC_REQ_ID)) {
             if (req->info[i].value.type != PMIX_STRING) {
@@ -1806,6 +1886,28 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
 
     /* Now owned by hash table */
     nodes_string = NULL;
+
+    if (NULL != node_names) {
+        char *joined = PMIx_Argv_join(node_names, ',');
+
+        if (NULL == joined) {
+            err = PRTE_ERR_OUT_OF_RESOURCE;
+            PRTE_ERROR_LOG(err);
+            goto cleanup;
+        }
+
+        pmix_err = pmix_hash_table_set_value_ptr(&slurm_jobfields,
+                        record_job_data_fields[PRTE_JOB_DATA_NODELIST],
+                        strlen(record_job_data_fields[PRTE_JOB_DATA_NODELIST]),
+                        (void *) joined);
+
+        if(PMIX_SUCCESS != pmix_err) {
+            free(joined);
+            err = prte_pmix_convert_status(pmix_err);
+            PRTE_ERROR_LOG(err);
+            goto cleanup;
+        }
+    }
 
     err = prte_ras_slurm_launch_expander_job(&slurm_jobfields);
 
@@ -1898,6 +2000,8 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
     }
 
     free(nodes_string);
+    free(node_string);
+    PMIx_Argv_free(node_names);
 
     if(have_slurm_jobfields) {
         void *key;
