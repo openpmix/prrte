@@ -60,6 +60,25 @@
 
 #include "src/mca/odls/base/base.h"
 
+#if PRTE_HAVE_SET_MEMPOLICY
+#    include <sys/syscall.h>
+#    include <unistd.h>
+#endif
+
+/* Mode values for set_mempolicy(2). These are kernel ABI constants, and
+   <linux/mempolicy.h> is not guaranteed to be installed, so define the two
+   we use if the headers did not - which is what hwloc does as well. The
+   nodemask that goes with them is computed on every platform, so that the
+   computation is exercised by the unit tests wherever they are run; only
+   issuing the syscall is conditional. */
+#ifndef MPOL_DEFAULT
+#    define MPOL_DEFAULT 0
+#endif
+#ifndef MPOL_BIND
+#    define MPOL_BIND 2
+#endif
+#define PRTE_BITS_PER_LONG (8 * (unsigned) sizeof(unsigned long))
+
 /* Runs in the parent. Renders, for --report-bindings, the binding we are
    about to apply to the child (the cpuset requested by the mapper).  It
    cannot read the child's actual applied binding - the child does not
@@ -127,6 +146,120 @@ void prte_odls_base_child_warn(int write_fd, prte_odls_child_err_t which, int er
 
     /* best effort */
     (void) pmix_fd_write(write_fd, sizeof(msg), &msg);
+}
+
+/* Does this platform bind memory at all?  hwloc answers ENOSYS when neither
+   membind hook is present (macOS, for one), and the caller reproduces that
+   answer rather than making the child find out.  Only meaningful for a
+   topology that describes *this* machine - hwloc zeroes the support bits of
+   an imported one, and PRRTE asserts them back (see set_topology() in
+   src/hwloc/hwloc_base_util.c), so they say nothing there. */
+static bool membind_supported(void)
+{
+    const struct hwloc_topology_support *support;
+
+    support = hwloc_topology_get_support(prte_hwloc_topology);
+    if (NULL == support || NULL == support->membind) {
+        return false;
+    }
+    return support->membind->set_thisproc_membind
+           || support->membind->set_thisthread_membind;
+}
+
+/* Runs in the PARENT.  Reproduces, on this side of the fork, everything
+   hwloc_set_membind() does on its way to the single set_mempolicy(2) call it
+   ultimately issues: the cpuset-to-nodeset conversion (hwloc_set_membind() ->
+   hwloc_fix_membind_cpuset() -> hwloc_fix_membind()), the translation of the
+   hwloc policy into an MPOL_* mode, and the kernel nodemask
+   (hwloc_linux_membind_mask_from_nodeset()).  All of that allocates, which is
+   precisely why it cannot happen in the child; what is left for the child is
+   one syscall with no arguments to compute.
+
+   On failure this records the errno hwloc would have produced in
+   cd->membind_prep_errno, and the child reports it exactly as if the call had
+   been made and failed. */
+void prte_odls_base_prepare_mempolicy(prte_odls_spawn_caddy_t *cd)
+{
+    hwloc_topology_t topo = prte_hwloc_topology;
+    hwloc_const_bitmap_t complete_cpuset, topo_cpuset;
+    hwloc_const_bitmap_t complete_nodeset, topo_nodeset;
+    hwloc_nodeset_t nodeset;
+    unsigned max_os_index, i;
+    unsigned long *mask;
+    int last;
+
+    if (HWLOC_MEMBIND_DEFAULT == cd->membind_policy) {
+        /* hwloc issues set_mempolicy(MPOL_DEFAULT, NULL, 0) - some kernels
+           refuse a nodemask with this mode - so no nodeset is involved */
+        cd->membind_mode = MPOL_DEFAULT;
+        return;
+    }
+    if (HWLOC_MEMBIND_BIND != cd->membind_policy
+        || 0 == (cd->membind_flags & HWLOC_MEMBIND_STRICT)) {
+        /* prepare_binding() only ever asks for DEFAULT or BIND|STRICT.
+           Anything else would need the rest of hwloc's policy translation,
+           so refuse it the way hwloc refuses a policy it cannot express. */
+        cd->membind_prep_errno = ENOSYS;
+        return;
+    }
+    cd->membind_mode = MPOL_BIND;
+
+    complete_cpuset = hwloc_topology_get_complete_cpuset(topo);
+    topo_cpuset = hwloc_topology_get_topology_cpuset(topo);
+    complete_nodeset = hwloc_topology_get_complete_nodeset(topo);
+    topo_nodeset = hwloc_topology_get_topology_nodeset(topo);
+
+    /* hwloc_fix_membind_cpuset() */
+    if (hwloc_bitmap_iszero(cd->bind_cpuset)
+        || !hwloc_bitmap_isincluded(cd->bind_cpuset, complete_cpuset)) {
+        cd->membind_prep_errno = EINVAL;
+        return;
+    }
+    nodeset = hwloc_bitmap_alloc();
+    if (NULL == nodeset) {
+        cd->membind_prep_errno = ENOMEM;
+        return;
+    }
+    if (hwloc_bitmap_isincluded(topo_cpuset, cd->bind_cpuset)) {
+        /* the cpuset covers the whole topology - take every node */
+        hwloc_bitmap_copy(nodeset, complete_nodeset);
+    } else {
+        hwloc_cpuset_to_nodeset(topo, cd->bind_cpuset, nodeset);
+    }
+
+    /* hwloc_fix_membind() */
+    if (hwloc_bitmap_iszero(nodeset)
+        || !hwloc_bitmap_isincluded(nodeset, complete_nodeset)) {
+        hwloc_bitmap_free(nodeset);
+        cd->membind_prep_errno = EINVAL;
+        return;
+    }
+    if (hwloc_bitmap_isincluded(topo_nodeset, nodeset)) {
+        hwloc_bitmap_copy(nodeset, complete_nodeset);
+    }
+
+    /* hwloc_linux_membind_mask_from_nodeset(): an infinite nodeset has no
+       kernel representation, and hwloc passes node 0 alone for it */
+    if (hwloc_bitmap_isfull(nodeset)) {
+        hwloc_bitmap_only(nodeset, 0);
+    }
+    last = hwloc_bitmap_last(nodeset);
+    max_os_index = (0 > last) ? 0 : (unsigned) last;
+    /* add one to turn the last index into a count, then round up to a whole
+       number of longs */
+    max_os_index = (max_os_index + 1 + PRTE_BITS_PER_LONG - 1) & ~(PRTE_BITS_PER_LONG - 1);
+    mask = calloc(max_os_index / PRTE_BITS_PER_LONG, sizeof(unsigned long));
+    if (NULL == mask) {
+        hwloc_bitmap_free(nodeset);
+        cd->membind_prep_errno = ENOMEM;
+        return;
+    }
+    for (i = 0; i < max_os_index / PRTE_BITS_PER_LONG; i++) {
+        mask[i] = hwloc_bitmap_to_ith_ulong(nodeset, i);
+    }
+    hwloc_bitmap_free(nodeset);
+    cd->membind_nodemask = mask;
+    cd->membind_maxnode = max_os_index + 1;
 }
 
 /* Runs in the PARENT, before the fork. Does everything that requires
@@ -224,6 +357,22 @@ void prte_odls_base_prepare_binding(prte_odls_spawn_caddy_t *cd)
             cd->membind_flags = 0;
             break;
         }
+        /* settle here what the child will be able to do, so that all it has
+           left is to issue the call */
+        if (!hwloc_topology_is_thissystem(prte_hwloc_topology)) {
+            /* the topology describes some other machine (hwloc_use_topo_file):
+               hwloc gives such a topology no-op binding hooks and reports
+               success without touching anything, so do nothing rather than
+               aim a real syscall at another machine's NUMA numbering */
+            cd->do_membind = false;
+        } else if (!membind_supported()) {
+            /* hwloc would answer ENOSYS - let the child report exactly that */
+            cd->membind_prep_errno = ENOSYS;
+        } else {
+#if PRTE_HAVE_SET_MEMPOLICY
+            prte_odls_base_prepare_mempolicy(cd);
+#endif
+        }
     }
 
 #if PRTE_HAVE_SCHED_SETAFFINITY
@@ -294,23 +443,40 @@ void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd)
         return;
     }
 
-    /* Apply the memory-binding policy, if one was requested. hwloc is used
-       on all platforms here; converting this to a bare syscall would mean
-       reproducing hwloc's NUMA nodeset handling and is left for later. */
+    /* Apply the memory-binding policy, if one was requested. Where the
+       set_mempolicy(2) syscall is reachable we issue it directly with the
+       mode and nodemask the parent precomputed - that is async-signal-safe,
+       and it is the one call hwloc_set_membind() makes underneath after
+       several allocations we cannot afford here. Elsewhere we fall back to
+       hwloc, which allocates internally, for want of anything better. */
     if (cd->do_membind) {
-        rc = hwloc_set_membind(prte_hwloc_topology, cd->bind_cpuset, cd->membind_policy,
-                               cd->membind_flags);
-        if (0 != rc && PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding)) {
-            /* hwloc failing with ENOSYS when no explicit policy was set is
-               not really an error (mirrors the historical membind path) */
-            if (ENOSYS == errno && PRTE_HWLOC_BASE_MAP_NONE == prte_hwloc_base_map) {
+        int err = cd->membind_prep_errno;
+
+        if (0 == err) {
+#if PRTE_HAVE_SET_MEMPOLICY
+            if (0 > syscall(__NR_set_mempolicy, cd->membind_mode, cd->membind_nodemask,
+                            cd->membind_maxnode)) {
+                err = errno;
+            }
+#else
+            if (0 != hwloc_set_membind(prte_hwloc_topology, cd->bind_cpuset,
+                                       cd->membind_policy, cd->membind_flags)) {
+                err = errno;
+            }
+#endif
+        }
+        if (0 != err && PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding)) {
+            /* memory binding being unavailable when no memory policy was
+               actually requested is not really an error (mirrors the
+               historical membind path) */
+            if (ENOSYS == err && PRTE_HWLOC_BASE_MAP_NONE == prte_hwloc_base_map) {
                 return;
             }
             if (PRTE_HWLOC_BASE_MBFA_ERROR == prte_hwloc_base_mbfa) {
-                prte_odls_base_child_fail(write_fd, 1, PRTE_ODLS_CHILD_ERR_BIND_MEM, errno);
+                prte_odls_base_child_fail(write_fd, 1, PRTE_ODLS_CHILD_ERR_BIND_MEM, err);
                 /* does not return */
             }
-            prte_odls_base_child_warn(write_fd, PRTE_ODLS_CHILD_WARN_MEM_NOT_BOUND, errno);
+            prte_odls_base_child_warn(write_fd, PRTE_ODLS_CHILD_WARN_MEM_NOT_BOUND, err);
             return;
         }
     }

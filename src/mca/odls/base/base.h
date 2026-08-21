@@ -140,6 +140,11 @@ typedef struct {
     bool do_membind;                    /* also apply the memory binding policy */
     hwloc_membind_policy_t membind_policy;
     int membind_flags;
+    int membind_prep_errno;             /* nonzero: report this instead of
+                                           attempting the memory binding */
+    int membind_mode;                   /* MPOL_* mode for set_mempolicy() */
+    unsigned long *membind_nodemask;    /* NULL for MPOL_DEFAULT */
+    unsigned long membind_maxnode;      /* bits in membind_nodemask */
 #if PRTE_HAVE_SCHED_SETAFFINITY
     cpu_set_t *bind_mask;               /* CPU_ALLOC'd mask for sched_setaffinity */
     size_t bind_masksize;               /* CPU_ALLOC_SIZE of bind_mask */
@@ -206,6 +211,14 @@ PRTE_EXPORT int prte_odls_base_preload_files_app_context(prte_app_context_t *con
  * in the async-signal-safe window before execve(), and only issues the
  * bind syscalls, reporting failures up the pipe. */
 PRTE_EXPORT void prte_odls_base_prepare_binding(prte_odls_spawn_caddy_t *cd);
+
+/* Translate the caddy's cpu binding into the mode and kernel nodemask that
+ * set_mempolicy(2) takes, exactly as hwloc_set_membind() would - the child
+ * then has only the syscall left to issue. Called by
+ * prte_odls_base_prepare_binding in the parent; exported (and compiled on
+ * every platform, not just the ones that can issue the syscall) so the unit
+ * tests can drive it directly against a known topology. */
+PRTE_EXPORT void prte_odls_base_prepare_mempolicy(prte_odls_spawn_caddy_t *cd);
 PRTE_EXPORT void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd);
 
 /*

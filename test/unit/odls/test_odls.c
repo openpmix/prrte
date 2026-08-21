@@ -641,6 +641,172 @@ static int test_signal_skips_dead_procs(void)
     return failures;
 }
 
+/*
+ * The memory-binding translation (odls_base_bind.c).
+ *
+ * The child applies the job's memory policy with a bare set_mempolicy(2),
+ * because hwloc_set_membind() allocates several times on its way there and
+ * the child is in the async-signal-safe window before execve().  What the
+ * parent has to hand it is exactly what hwloc would have computed: an MPOL_*
+ * mode and a kernel nodemask derived from the proc's cpuset.  That
+ * derivation is where a mistake would silently bind a process to the wrong
+ * NUMA node, so drive it directly against a topology whose NUMA layout we
+ * know.
+ *
+ * This runs on every platform, including ones that cannot issue the syscall
+ * - the translation is pure bitmap arithmetic and does not need the kernel
+ * to have it.
+ */
+#ifndef MPOL_DEFAULT
+#    define MPOL_DEFAULT 0
+#endif
+#ifndef MPOL_BIND
+#    define MPOL_BIND 2
+#endif
+#define TEST_BITS_PER_LONG (8 * (unsigned) sizeof(unsigned long))
+
+/* is bit `n` - and nothing else - set in the caddy's nodemask? */
+static bool only_node_set(prte_odls_spawn_caddy_t *cd, unsigned n)
+{
+    unsigned i, nlongs;
+
+    if (NULL == cd->membind_nodemask || 0 == cd->membind_maxnode) {
+        return false;
+    }
+    nlongs = (unsigned) (cd->membind_maxnode - 1) / TEST_BITS_PER_LONG;
+    for (i = 0; i < nlongs; i++) {
+        unsigned long want = (i == n / TEST_BITS_PER_LONG)
+                                 ? (1UL << (n % TEST_BITS_PER_LONG))
+                                 : 0UL;
+        if (cd->membind_nodemask[i] != want) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static int test_mempolicy(void)
+{
+    int failures = 0;
+    hwloc_topology_t topo, save;
+    hwloc_obj_t numa;
+    prte_odls_spawn_caddy_t *cd;
+    char path[1024];
+    unsigned nnuma, n;
+
+    snprintf(path, sizeof(path), "%s/%s", PRTE_TEST_TOPO_DIR, "test-topo.xml");
+    if (0 != hwloc_topology_init(&topo)) {
+        fprintf(stdout, "  SKIP test_mempolicy (topology init failed)\n");
+        return 0;
+    }
+    if (0 != hwloc_topology_set_xml(topo, path) || 0 != hwloc_topology_load(topo)) {
+        hwloc_topology_destroy(topo);
+        fprintf(stdout, "  SKIP test_mempolicy (cannot load %s)\n", path);
+        return 0;
+    }
+    nnuma = (unsigned) hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_NUMANODE);
+    if (2 > nnuma) {
+        hwloc_topology_destroy(topo);
+        fprintf(stdout, "  SKIP test_mempolicy (topology has no NUMA nodes)\n");
+        return 0;
+    }
+    /* the translation reads the process-wide topology, as it does in a
+     * daemon; put ours in place and restore whatever was there */
+    save = prte_hwloc_topology;
+    prte_hwloc_topology = topo;
+
+    /* the default policy names no nodes at all: hwloc issues
+     * set_mempolicy(MPOL_DEFAULT, NULL, 0) because some kernels refuse a
+     * nodemask with that mode */
+    cd = PMIX_NEW(prte_odls_spawn_caddy_t);
+    cd->membind_policy = HWLOC_MEMBIND_DEFAULT;
+    cd->membind_flags = 0;
+    cd->bind_cpuset = hwloc_bitmap_dup(hwloc_topology_get_allowed_cpuset(topo));
+    prte_odls_base_prepare_mempolicy(cd);
+    CHECK("default policy prepares", 0 == cd->membind_prep_errno);
+    CHECK("default policy mode", MPOL_DEFAULT == cd->membind_mode);
+    CHECK("default policy has no nodemask", NULL == cd->membind_nodemask);
+    CHECK("default policy has no maxnode", 0 == cd->membind_maxnode);
+    PMIX_RELEASE(cd);
+
+    /* a cpuset inside one NUMA node must yield that node, and only it */
+    for (n = 0; n < nnuma; n++) {
+        char label[64];
+
+        numa = hwloc_get_obj_by_type(topo, HWLOC_OBJ_NUMANODE, n);
+        if (NULL == numa || NULL == numa->cpuset || hwloc_bitmap_iszero(numa->cpuset)) {
+            continue;
+        }
+        cd = PMIX_NEW(prte_odls_spawn_caddy_t);
+        cd->membind_policy = HWLOC_MEMBIND_BIND;
+        cd->membind_flags = HWLOC_MEMBIND_STRICT;
+        cd->bind_cpuset = hwloc_bitmap_alloc();
+        /* one cpu of that node - the narrowest binding a mapper produces */
+        hwloc_bitmap_only(cd->bind_cpuset, (unsigned) hwloc_bitmap_first(numa->cpuset));
+        prte_odls_base_prepare_mempolicy(cd);
+        snprintf(label, sizeof(label), "numa %u prepares", numa->os_index);
+        CHECK(label, 0 == cd->membind_prep_errno);
+        snprintf(label, sizeof(label), "numa %u mode", numa->os_index);
+        CHECK(label, MPOL_BIND == cd->membind_mode);
+        snprintf(label, sizeof(label), "numa %u nodemask", numa->os_index);
+        CHECK(label, only_node_set(cd, numa->os_index));
+        snprintf(label, sizeof(label), "numa %u maxnode covers it", numa->os_index);
+        CHECK(label, cd->membind_maxnode > (unsigned long) numa->os_index);
+        PMIX_RELEASE(cd);
+    }
+
+    /* a cpuset spanning the whole machine must yield every node, not one */
+    cd = PMIX_NEW(prte_odls_spawn_caddy_t);
+    cd->membind_policy = HWLOC_MEMBIND_BIND;
+    cd->membind_flags = HWLOC_MEMBIND_STRICT;
+    cd->bind_cpuset = hwloc_bitmap_dup(hwloc_topology_get_topology_cpuset(topo));
+    prte_odls_base_prepare_mempolicy(cd);
+    CHECK("whole-machine prepares", 0 == cd->membind_prep_errno);
+    if (NULL != cd->membind_nodemask) {
+        unsigned set = 0, i, bit;
+        for (i = 0; i < (unsigned) (cd->membind_maxnode - 1) / TEST_BITS_PER_LONG; i++) {
+            for (bit = 0; bit < TEST_BITS_PER_LONG; bit++) {
+                if (cd->membind_nodemask[i] & (1UL << bit)) {
+                    set++;
+                }
+            }
+        }
+        CHECK("whole-machine names every node", set == nnuma);
+    } else {
+        CHECK("whole-machine has a nodemask", false);
+    }
+    PMIX_RELEASE(cd);
+
+    /* an empty cpuset is the EINVAL hwloc_fix_membind_cpuset() answers with,
+     * and it must be reported rather than turned into a bind to node 0 */
+    cd = PMIX_NEW(prte_odls_spawn_caddy_t);
+    cd->membind_policy = HWLOC_MEMBIND_BIND;
+    cd->membind_flags = HWLOC_MEMBIND_STRICT;
+    cd->bind_cpuset = hwloc_bitmap_alloc();
+    prte_odls_base_prepare_mempolicy(cd);
+    CHECK("empty cpuset refused", EINVAL == cd->membind_prep_errno);
+    CHECK("empty cpuset yields no nodemask", NULL == cd->membind_nodemask);
+    PMIX_RELEASE(cd);
+
+    /* a policy the translation does not express must say so, not guess */
+    cd = PMIX_NEW(prte_odls_spawn_caddy_t);
+    cd->membind_policy = HWLOC_MEMBIND_INTERLEAVE;
+    cd->membind_flags = 0;
+    cd->bind_cpuset = hwloc_bitmap_dup(hwloc_topology_get_allowed_cpuset(topo));
+    prte_odls_base_prepare_mempolicy(cd);
+    CHECK("unsupported policy refused", ENOSYS == cd->membind_prep_errno);
+    CHECK("unsupported policy yields no nodemask", NULL == cd->membind_nodemask);
+    PMIX_RELEASE(cd);
+
+    prte_hwloc_topology = save;
+    hwloc_topology_destroy(topo);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_mempolicy\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -669,6 +835,7 @@ int main(void)
     failures += test_process_envars();
     failures += test_child_pipe_protocol();
     failures += test_signal_skips_dead_procs();
+    failures += test_mempolicy();
 
     (void) pmix_mca_base_framework_close(&prte_odls_base_framework);
     prte_finalize();

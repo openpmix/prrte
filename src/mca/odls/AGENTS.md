@@ -436,8 +436,9 @@ Binding is split across the fork so the child stays async-signal-safe:
   the async-signal-safe window before `execve`. It only *issues the bind
   syscalls*: a bare `sched_setaffinity` with the precomputed mask on Linux,
   or `hwloc_set_cpubind` as the `#else` fallback (macOS and other platforms
-  without `sched_setaffinity`), plus `hwloc_set_membind`. It allocates
-  nothing and renders nothing.
+  without `sched_setaffinity`), and a bare `set_mempolicy` with the
+  precomputed mode and nodemask (`hwloc_set_membind` as the `#else`). It
+  allocates nothing and renders nothing.
 
 Because the child is not a real PRTE process — and runs in that
 async-signal-safe window — **it cannot use normal error reporting or
@@ -453,10 +454,42 @@ warning depends on `PRTE_BINDING_REQUIRED` and `PRTE_BINDING_POLICY_IS_SET`
 defaulted one degrades to a warning). If the proc has no cpuset but the
 daemon itself is bound, the proc is "freed" to all allowed cpus.
 
-The one remaining hwloc call in the child is `hwloc_set_membind` (memory
-binding), which still allocates internally; converting it to a bare
-`set_mempolicy`/`mbind` syscall would mean reproducing hwloc's NUMA
-nodeset handling and is left for later.
+**The child calls into hwloc on no platform that has the syscalls.** Both
+bind calls hwloc offers allocate — `hwloc_set_membind` several times, on its
+way to the single `set_mempolicy(2)` it issues underneath — and a `malloc`
+in a forked child deadlocks whenever another thread of the daemon held the
+arena lock at `fork` time. The daemon is multi-threaded (the PMIx progress
+thread, plus the shared worker pool the forks themselves run on), so that
+window is real. `prte_odls_base_prepare_mempolicy()` therefore does hwloc's
+work in the parent: the cpuset→nodeset conversion (`hwloc_set_membind` →
+`hwloc_fix_membind_cpuset` → `hwloc_fix_membind`), the policy→`MPOL_*`
+translation, and the kernel nodemask
+(`hwloc_linux_membind_mask_from_nodeset`). It is compiled on every platform,
+not only the ones that can issue the syscall, so that the unit test covers
+it wherever it runs; `PRTE_HAVE_SET_MEMPOLICY` (`config/prte_check_mempolicy.m4`)
+gates only the syscall, with the old `hwloc_set_membind` left as the `#else`.
+
+Three decisions the parent makes so the child has only the one call left:
+
+- **A topology that is not this machine gets no memory binding at all.**
+  Under `hwloc_use_topo_file` the topology describes some *other* machine,
+  and hwloc gives such a topology no-op binding hooks that report success
+  without touching anything. Aiming a real `set_mempolicy` at another
+  machine's NUMA numbering would not be reproducing that — it would be
+  binding a process by numbers that mean nothing here — so `do_membind` is
+  cleared. (Note the asymmetry with *cpu* binding, which goes through
+  `sched_setaffinity` and *is* applied from such a topology.)
+- **A platform with no memory binding is answered as hwloc would**, with
+  `ENOSYS` recorded in `cd->membind_prep_errno` for the child to report.
+  The support bits are read through `hwloc_topology_get_support()` and are
+  only meaningful for a this-system topology — `set_topology()` in
+  [`src/hwloc/hwloc_base_util.c`](../../hwloc/hwloc_base_util.c) asserts
+  them back on for an imported one, so they say nothing there.
+- **Only `MPOL_DEFAULT` and `MPOL_BIND` are expressed**, because
+  `prte_hwloc_base_map` only ever asks for `HWLOC_MEMBIND_DEFAULT` or
+  `HWLOC_MEMBIND_BIND|STRICT`. Anything else records `ENOSYS` rather than
+  guessing. If a third memory policy is ever added, this is what has to
+  grow with it.
 
 ### 7. Reaping children — `prte_odls_base_default_wait_local_proc()`
 
