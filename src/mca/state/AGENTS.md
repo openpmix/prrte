@@ -465,6 +465,26 @@ contention — the process's role decides which machine it runs.
   whatever ERROR/ANY catch-all is registered, so *any* handler you put on
   a fallback entry will see a `NULL` job sooner or later. `caddy->job_state`
   is always valid; `caddy->jdata` is not.
+- **A proc's state can arrive out of order, and it must never go
+  backwards.** `prte_odls_base_spawn_proc()` activates `RUNNING` at the tail
+  of the launch, from a **worker thread**, while the WAITPID/IOF join that
+  records the termination runs on the progress thread. A proc short-lived
+  enough to die and be reaped before the launch path finishes therefore
+  produces `WAITPID FIRED` → `IOF COMPLETE` → `NORMALLY TERMINATED` →
+  **`RUNNING`**, microseconds apart and in that order. `state/prted`'s
+  `track_procs` must not let that last one overwrite the terminated state,
+  and its launch-complete report must not pack `RUNNING` for a proc already
+  flagged `PRTE_PROC_FLAG_RECORDED`: the join has fired, so nothing is left
+  to correct the lie, and the DVM master believes that proc is alive for the
+  rest of the DVM's life. The job never completes, `terminate_orteds` is
+  never called, and `prterun` hangs with every daemon still up. The
+  `WAITPID_FIRED` arm guards the opposite order for the same reason ("do NOT
+  update the proc state as this can hit while we are still trying to notify
+  the HNP of successful launch for short-lived procs"); the two halves belong
+  together. Anything slow on the parent's launch path widens the window —
+  it was found through hwloc's `memory not bound` warning, which adds a pipe
+  record and a `show_help` render to `do_parent` before the `RUNNING`
+  activation.
 - **Never do real work in the activator.** Activation only queues an
   event; the handler runs later on the progress thread. Don't assume the
   handler has run when `PRTE_ACTIVATE_*_STATE` returns, and don't read
