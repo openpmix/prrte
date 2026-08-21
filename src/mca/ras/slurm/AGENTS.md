@@ -21,7 +21,7 @@ Files:
 |------|----------|
 | `ras_slurm_component.c` | Registration; `query` gates on `SLURM_JOBID`; many `propagate_*` MCA params. |
 | `ras_slurm_module.c` | `init`, `allocate`, `modify`, `finalize`; the `SLURM_NODELIST` regex parser; session/tagging helpers; jobid/hostname validation. |
-| `ras_slurm_modify_extend.c` | `PMIX_ALLOC_EXTEND`: build & launch a `salloc --no-shell` expander job, wait for it, absorb new nodes. |
+| `ras_slurm_modify_extend.c` | `PMIX_ALLOC_EXTEND`: build & launch a `salloc --no-shell` expander job, wait for it, trim its time limit, absorb new nodes. |
 | `ras_slurm_modify_release.c` | `PMIX_ALLOC_RELEASE`: `scontrol update job` to shrink; remove nodes by count. |
 | `ras_slurm_modify_cancel.c` | `PMIX_ALLOC_REQ_CANCEL`: track and cancel pending extend requests. |
 | `ras_slurm_modify_common.c` | Shared helpers: `kill_job`, control-char checks, command-output draining. |
@@ -83,13 +83,34 @@ deviation* and the framework guide.
   job's SLURM attributes (account, partition, qos, cwd, mem-per-cpu,
   mem-per-node, time, threads-per-core — each gated by a `propagate_*`
   MCA param, all default true), builds `salloc` args, launches an
-  **expander job**, waits for its `salloc` to exit, then adds the modified
-  resources. Answers in two phases — see below.
+  **expander job**, waits for its `salloc` to exit, trims its time limit to
+  the parent's end, then adds the modified resources. Answers in two
+  phases — see below.
 - **`PMIX_ALLOC_RELEASE`** → `serve_release_req`: shrinks the SLURM job
   with `scontrol update job`, removing nodes by count while protecting
   the launching node (`SLURMD_NODENAME`).
 - **`PMIX_ALLOC_REQ_CANCEL`** → `serve_cancel_req`: cancels a pending
   extend by request id, and answers it (see below).
+
+### The expander job ends with the parent allocation
+
+The expander must not outlive the allocation it was grown for, which takes two
+steps. At submit, `limit_to_parent_remainder` asks for the parent's remaining
+time instead of its whole limit. At the grant, `trim_job_to_parent` makes the
+window exact — `scontrol update job <id> TimeLimit=<minutes>` — because Slurm
+counts a limit from the job's own start, which a queued job does not have yet.
+
+- **Only ever shortens**, truncating to the minute. A parent with no end time
+  is left alone: Slurm prints one for such a job anyway (start plus a year),
+  which `get_job_times` reports as 0.
+- **Never zero minutes.** Slurm reads `TimeLimit=0` as *no limit*, so a window
+  under a minute becomes one minute.
+- **Neither step failing fails the extend.** A generous request is still a
+  valid one, granted nodes are usable, and the limit is site policy; both
+  report and carry on.
+- Only the trim is clock-safe: the submit step compares Slurm's end time
+  against the local clock.
+- Both are gated by `ras_slurm_propagate_time`.
 
 ### An extend is answered when the DVM has grown, not when Slurm has granted
 

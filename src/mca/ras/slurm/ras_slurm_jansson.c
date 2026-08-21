@@ -46,6 +46,7 @@
  * Local functions
  */
 static int prte_ras_slurm_get_json_numobj_field(json_t *job, const char *key, pmix_hash_table_t *values_table);
+static int prte_ras_slurm_get_json_numobj_value(json_t *job, const char *key, int64_t *out);
 static int prte_ras_slurm_get_jobinfo_json(const char *slurm_jobid, json_t **job_info_out);
 static size_t prte_ras_slurm_jansson_cbfunc(void *buffer, size_t buflen, void *data);
 
@@ -1054,4 +1055,128 @@ int prte_ras_slurm_check_resources(const char *slurm_jobid)
     }
 
     return err;
+}
+
+/*
+ * Read the value of one Slurm numeric object out of a job record.
+ *
+ * A field that is absent, unset or infinite reads back as 0; only a field of
+ * the wrong shape fails.
+ *
+ * @param[in]  job JSON job object.
+ * @param[in]  key Field name to read.
+ * @param[out] out The number, or 0.
+ */
+static int prte_ras_slurm_get_json_numobj_value(json_t *job, const char *key, int64_t *out)
+{
+    if (NULL == job || NULL == key || NULL == out) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    *out = 0;
+
+    json_t *field = json_object_get(job, key);
+    if (NULL == field || json_is_null(field)) {
+        return PRTE_SUCCESS;
+    }
+    if (!json_is_object(field)) {
+        return PRTE_ERR_JSON_PARSE_FAILURE;
+    }
+
+    json_t *set_flag = json_object_get(field, num_obj_subfields[NUM_OBJ_SUBFIELD_SET]);
+    if (NULL == set_flag || !json_is_boolean(set_flag)) {
+        return PRTE_ERR_JSON_PARSE_FAILURE;
+    }
+    if (!json_is_true(set_flag)) {
+        return PRTE_SUCCESS;
+    }
+
+    json_t *inf_flag = json_object_get(field, num_obj_subfields[NUM_OBJ_SUBFIELD_INFINITE]);
+    if (NULL == inf_flag || !json_is_boolean(inf_flag)) {
+        return PRTE_ERR_JSON_PARSE_FAILURE;
+    }
+    if (json_is_true(inf_flag)) {
+        return PRTE_SUCCESS;
+    }
+
+    json_t *num_field = json_object_get(field, num_obj_subfields[NUM_OBJ_SUBFIELD_NUMBER]);
+    if (NULL == num_field || !json_is_integer(num_field)) {
+        return PRTE_ERR_JSON_PARSE_FAILURE;
+    }
+
+    json_int_t num = json_integer_value(num_field);
+    if (0 > num) {
+        return PRTE_ERR_JSON_PARSE_FAILURE;
+    }
+
+    *out = (int64_t) num;
+
+    return PRTE_SUCCESS;
+}
+
+/*
+ * Read a job's start and end times, in seconds since the epoch.
+ *
+ * Either output may be NULL. A time Slurm does not report comes back as 0, as
+ * does the end of a job with no time limit: Slurm prints an end_time for one
+ * anyway - its start plus a year - which is a placeholder, not a deadline.
+ *
+ * end_time is the start plus the CURRENT time limit, so it answers "when does
+ * this allocation end" only once the job is running.
+ *
+ * @param[in]  slurm_jobid Slurm job ID to query.
+ * @param[out] start_time  Job start time, or 0.
+ * @param[out] end_time    Job end time, or 0 if it has none.
+ */
+int prte_ras_slurm_get_job_times(const char *slurm_jobid, time_t *start_time, time_t *end_time)
+{
+    int err = PRTE_SUCCESS;
+    json_t *job_info = NULL;
+    int64_t time_limit = 0;
+    int64_t start = 0;
+    int64_t end = 0;
+
+    if (NULL == slurm_jobid) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    err = prte_ras_slurm_get_jobinfo_json(slurm_jobid, &job_info);
+
+    if (PRTE_SUCCESS != err) {
+        return err;
+    }
+
+    err = prte_ras_slurm_get_json_numobj_value(job_info, "start_time", &start);
+
+    if (PRTE_SUCCESS == err) {
+        err = prte_ras_slurm_get_json_numobj_value(job_info, "end_time", &end);
+    }
+
+    if (PRTE_SUCCESS == err) {
+        err = prte_ras_slurm_get_json_numobj_value(job_info,
+                                                   num_obj_fields[NUM_OBJ_TIME_LIMIT],
+                                                   &time_limit);
+    }
+
+    json_decref(job_info);
+
+    if (PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+
+    if (0 == time_limit) {
+        end = 0;
+    }
+
+    if (NULL != start_time) {
+        *start_time = (time_t) start;
+    }
+
+    if (NULL != end_time) {
+        *end_time = (time_t) end;
+    }
+
+    return PRTE_SUCCESS;
 }
