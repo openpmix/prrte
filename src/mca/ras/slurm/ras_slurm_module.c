@@ -302,11 +302,37 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
     return PRTE_SUCCESS;
 }
 
+/**
+ * @brief Whether a request asks the scheduler for a number of nodes.
+ *
+ * The only grow shape this component serves; one that names its own nodes
+ * belongs to the module that adds hosts directly.
+ */
+static bool request_asks_for_node_count(const prte_pmix_server_req_t *req)
+{
+    for (size_t i = 0; i < req->ninfo; i++) {
+        if (PMIx_Check_key(req->info[i].key, PMIX_ALLOC_NUM_NODES)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static pmix_status_t modify(prte_pmix_server_req_t *req)
 {
     int err = PRTE_SUCCESS;
 
-    if(PMIX_ALLOC_EXTEND == req->allocdir) {
+    /* PMIX_ALLOC_NEW is a synonym for PMIX_ALLOC_EXTEND here: Slurm cannot
+     * grow an allocation in place, so an extend is always a second, disjoint
+     * job - "new" to the scheduler - that the DVM then spans. The synonym
+     * covers the shape this component can ask Slurm for, a node count; a
+     * PMIX_ALLOC_NEW naming its own nodes is left to the next module. */
+    if (PMIX_ALLOC_NEW == req->allocdir && !request_asks_for_node_count(req)) {
+        return PMIX_ERR_TAKE_NEXT_OPTION;
+    }
+
+    if(PMIX_ALLOC_EXTEND == req->allocdir || PMIX_ALLOC_NEW == req->allocdir) {
         err = prte_ras_slurm_serve_extend_req(req);
         req->pstatus = prte_pmix_convert_rc(err);
     } else if(PMIX_ALLOC_RELEASE == req->allocdir) {

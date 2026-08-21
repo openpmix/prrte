@@ -230,10 +230,11 @@ resize SLURM accepts **on a running job**, and `scancel` really removes an
 allocation. Note the request shapes differ from a plain elastic grow:
 `elastic grow <nodes>` is `PMIX_ALLOC_NEW` naming hosts, which the *base*
 serves without consulting the ras. `ras/slurm`'s `modify()` accepts only
-`PMIX_ALLOC_EXTEND`+`NUM_NODES`,
+(`PMIX_ALLOC_EXTEND`|`PMIX_ALLOC_NEW`)+`NUM_NODES`,
 `PMIX_ALLOC_RELEASE`+(`NODE_LIST`|`NUM_NODES`|`ALLOC_ID`) and
-`PMIX_ALLOC_REQ_CANCEL` — which nodes an extend lands on is the scheduler's
-choice. Hence `elastic extend|release|release-id|cancel`.
+`PMIX_ALLOC_REQ_CANCEL` — which nodes a grow lands on is the scheduler's
+choice. Hence `elastic extend|new|release|release-id|cancel`. The two grow
+directives are one request to this component.
 
 Five cases are worth calling out:
 

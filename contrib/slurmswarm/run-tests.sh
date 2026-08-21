@@ -745,9 +745,10 @@ test_plm() {
 # The request shapes are not the same as a plain elastic grow.  `elastic grow
 # <nodes>` is PMIX_ALLOC_NEW naming hosts, which the base serves without ever
 # consulting the ras.  ras/slurm's modify() accepts only
-# PMIX_ALLOC_EXTEND+NUM_NODES, PMIX_ALLOC_RELEASE+(NODE_LIST|NUM_NODES|
-# ALLOC_ID) and PMIX_ALLOC_REQ_CANCEL -- which nodes an extend lands on is
-# the scheduler's choice.  Hence `elastic extend|release|release-id|cancel`.
+# (PMIX_ALLOC_EXTEND|PMIX_ALLOC_NEW)+NUM_NODES, PMIX_ALLOC_RELEASE+(NODE_LIST|
+# NUM_NODES|ALLOC_ID) and PMIX_ALLOC_REQ_CANCEL -- which nodes a grow lands on
+# is the scheduler's choice.  Hence `elastic extend|new|release|release-id|
+# cancel`.
 job_nodes() {   # $1 = slurm job id -> comma-separated hostnames
     local nl; nl=$(SQ "squeue -h -j $1 -o '%N'" | tr -d ' \r')
     [ -n "$nl" ] || return 1
@@ -818,6 +819,7 @@ test_elastic() {
     fi
 
     elastic_grant_group "$jid"
+    elastic_new_synonym_group "$jid"
     elastic_count_release_group "$jid"
     elastic_reextend_reuse_group "$jid"
     elastic_release_during_grow_group "$jid"

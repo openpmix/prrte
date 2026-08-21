@@ -1700,9 +1700,10 @@ void prte_ras_slurm_extend_abort_request(const char *request_id)
 /**
  * @brief Coordinate a resource-extension request with Slurm
  *
- * Service a PMIx allocation request (PMIX_ALLOC_EXTEND) by requesting 
- * additional nodes from Slurm and adding the resulting resources to PRRTE.
- * Current implementation requires specifying PMIX_ALLOC_NUM_NODES as a PMIX_UINT64.
+ * Service a PMIx allocation request (PMIX_ALLOC_EXTEND, or the PMIX_ALLOC_NEW
+ * that modify() reads as its synonym) by requesting additional nodes from
+ * Slurm and adding the resulting resources to PRRTE. Current implementation
+ * requires specifying PMIX_ALLOC_NUM_NODES as a PMIX_UINT64.
  *
  * @param[in] req PMIx server request describing the resource extension.
  */
