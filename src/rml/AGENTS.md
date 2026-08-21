@@ -50,7 +50,7 @@ TCP. If you find such comments, they are cruft — fix them.
 | File | Responsibility |
 |------|----------------|
 | `rml_fault_handler.c` | The RML's own reaction to a recomputed tree: sets process states and drives death/adoption notices. |
-| `relm/` | RELM — reliable messaging that survives daemon failures by re-driving messages over the repaired tree. Has its own small state machine (`relm/state_machine.c`, `relm/base/`). See [`relm/AGENTS.md`](relm/AGENTS.md). |
+| `relm/` | RELM — reliable messaging that survives daemon failures by re-driving messages over the repaired tree. Has its own small state machine (`relm/state_machine.c`, `relm/state_updates.c`, `relm/link_updates.c`). See [`relm/AGENTS.md`](relm/AGENTS.md). |
 
 The transport lives in [`oob/`](oob/AGENTS.md), which has its own editing map.
 

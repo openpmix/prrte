@@ -99,11 +99,6 @@ which nodes, and the daemon-launch path would have to fan out through more
 than one.  At minimum it needs a launcher affinity recorded per node and
 honored by ``prte_plm_base_setup_virtual_machine``.
 
-**RELM has one module and no way to choose another.**
-``prte_relm_register`` registers the base implementation unconditionally
-(``src/rml/relm/relm.c``); the MCA variable that would select between modules
-does not exist.  This is only worth doing if a second module does.
-
 **The post-fork child still calls into hwloc once.**  ``odls`` was converted
 to async-signal-safe operations between ``fork`` and ``exec`` except for
 ``hwloc_set_membind``, which allocates internally; replacing it with a bare
@@ -256,8 +251,6 @@ the marker is stale.
    * - ``rml/oob/oob_tcp_connection.c``,
        ``prte_oob_tcp_peer_try_connect``
      - a peer whose socket cannot be created
-   * - ``rml/relm/relm.c``, ``prte_relm_register``
-     - RELM has one module and no way to choose another
    * - ``mca/filem/raw/filem_raw_module.c``, ``raw_fault_handler``
      - ``filem/raw`` does not survive losing a daemon mid-staging
    * - ``mca/odls/base/odls_base_bind.c``, ``prte_odls_base_set``
@@ -541,6 +534,35 @@ so that the next person does not rediscover the idea and spend the effort
 again: each says what was measured and what the measurement decided.  Moving
 one back up the page takes new evidence, not a fresh reading of the same
 facts.
+
+**Giving RELM an MCA variable to choose between reliability modules.**  The
+marker in ``prte_relm_register`` asked for the enum variable that would select
+one, and the entry that carried it said the work was only worth doing if a
+second module was.  None was: RELM shipped with a ``prte_relm_module_t`` of
+four function pointers that only ever held the base module's, a ``base/``
+subdirectory holding the only implementation, and a second bundle of nine
+callbacks on the state machine that the base module's ``init()`` wired to its
+own functions.  Two dispatch surfaces, one implementation, and nothing that
+could pick anything.
+
+The one candidate second module was a passthrough that degraded a reliable
+send to an ordinary one — an escape hatch and an A/B lever, since the base
+protocol walks the path three times per message (data down, ACK up, ACK-ACK
+down) and rides paths as busy as every IOF chunk from a daemon to the HNP.
+That is an on/off switch, not a choice between strategies, and it would hand a
+user a way to silently lose the messages this layer exists not to lose.  A
+genuinely different strategy — end-to-end acknowledgement, journaled delivery
+— has no requirement behind it and no author.
+
+So the indirection was removed rather than completed, the way ``routed`` and
+``oob`` were folded into ``src/rml`` and ``grpcomm`` was de-framework'd before
+it: ``base/`` is flattened into ``src/rml/relm/``, the protocol's entry points
+are ordinary functions the engine calls directly, and ``relm.h`` is four
+symbols wide.  The split that survives is structural — ``state_machine.c`` is
+the generic engine, ``state_updates.c`` and ``link_updates.c`` are the
+protocol on top of it — and it is a compile-time boundary rather than a
+dispatch one.  Reintroducing dispatch is cheap against an interface that
+narrow, so it can be done when a second implementation actually exists.
 
 **Making the routing-tree repair the one place that raises
 ``COMM_FAILED``.**  ``prte_rml_repair_routing_tree`` ends by calling every

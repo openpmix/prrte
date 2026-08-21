@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
+ * Copyright (c) 2026      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -7,11 +8,12 @@
  * $HEADER$
  */
 
+#include "prte_config.h"
+
 #include "src/rml/rml.h"
 #include "src/rml/relm/state_machine.h"
 #include "src/rml/relm/types.h"
 #include "src/rml/relm/util.h"
-#include "src/rml/relm/base/state_machine.h"
 
 // Convert an index in the state machine's bitmaps to the link's rank
 static pmix_rank_t link_i_to_r(const int index);
@@ -27,7 +29,7 @@ static void try_send_pending_link_updates(void);
 // we are no longer on the direct path of
 static void purge(const prte_rml_recovery_status_t* status);
 
-static int prte_relm_base_pack_link_dst_updates(
+static int pack_link_dst_updates(
     pmix_data_buffer_t* buf, prte_relm_rank_t* rank
 ){
     int ret = PMIX_SUCCESS;
@@ -41,7 +43,7 @@ static int prte_relm_base_pack_link_dst_updates(
         bool sending_to_sent = PRTE_RELM_STATE_SENDING == msg->state;
         if(sending_to_sent) msg->state = PRTE_RELM_STATE_SENT;
 
-        ret = prte_relm_sm->pack_state_update(buf, msg);
+        ret = prte_relm_pack_state_update(buf, msg);
 
         if(sending_to_sent) msg->state = PRTE_RELM_STATE_SENDING;
 
@@ -53,7 +55,7 @@ static int prte_relm_base_pack_link_dst_updates(
     return ret;
 }
 
-int prte_relm_base_pack_link_update(
+int prte_relm_pack_link_update(
     pmix_data_buffer_t* buf, pmix_rank_t link
 ) {
     // Pack my current depth, so receiver can ignore lingering updates from
@@ -71,7 +73,7 @@ int prte_relm_base_pack_link_update(
     PMIX_HASH_TABLE_FOREACH(dst, uint32, rank, &prte_relm_sm->ranks){
         // Pack each message that sends through this link
         if(link == prte_rml_get_route(dst)){
-            ret = prte_relm_base_pack_link_dst_updates(buf, rank);
+            ret = pack_link_dst_updates(buf, rank);
             if(PMIX_SUCCESS != ret) break;
         }
     }
@@ -79,7 +81,7 @@ int prte_relm_base_pack_link_update(
     return ret;
 }
 
-void prte_relm_base_update_link(
+void prte_relm_handle_link_update(
   pmix_data_buffer_t* buf, pmix_rank_t link
 ) {
     // Ignore lingering updates from old links
@@ -112,7 +114,7 @@ void prte_relm_base_update_link(
     try_send_pending_link_updates();
 }
 
-void prte_relm_base_fault_handler(const prte_rml_recovery_status_t* status){
+void prte_relm_fault_handler(const prte_rml_recovery_status_t* status){
     if(status->scope != PRTE_RML_FAULT_SCOPE_LOCAL) return;
 
     purge(status);
@@ -206,8 +208,8 @@ static size_t purge_rank(
         bool purge = !prte_rml_is_node_up(msg->src);
         if(!purge && (status->promoted || status->demoted)){
             //We may no longer be in the path for this message
-            pmix_rank_t up = prte_relm_sm->upstream_rank(msg);
-            pmix_rank_t down = prte_relm_sm->downstream_rank(msg);
+            pmix_rank_t up = prte_relm_upstream_rank(msg);
+            pmix_rank_t down = prte_relm_downstream_rank(msg);
             purge = up == down;
         }
         if(purge){

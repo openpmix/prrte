@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
+ * Copyright (c) 2026      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -10,7 +11,13 @@
 /**
  * @file:
  *
- * Reliable Messaging (RELM) framework
+ * Reliable Messaging (RELM)
+ *
+ * This is the whole of RELM's interface to the rest of the tree: the RML's
+ * send path calls prte_relm_start_msg, the routing layer calls
+ * prte_relm_fault_handler, and prte_rml_open/close bracket the subsystem.
+ * Everything else in this directory runs in response to received RELM
+ * control messages.
  */
 
 #ifndef PRTE_RELM_H
@@ -23,14 +30,19 @@
 
 BEGIN_C_DECLS
 
-/* Initialize/finalize selected module */
-typedef void (*prte_relm_base_module_init_fn_t)(void);
-typedef void (*prte_relm_base_module_finalize_fn_t)(void);
+/* Configuration and output channel, set by prte_relm_register from the
+ * relm_base MCA parameters */
+typedef struct {
+    int output;
+    int verbosity;
+    int cache_ms;
+    int cache_max_count;
+} prte_relm_base_t;
+PRTE_EXPORT extern prte_relm_base_t prte_relm_base;
 
-/* Respond to failed daemons */
-typedef void (*prte_relm_base_module_fault_handler_fn_t)(
-    const prte_rml_recovery_status_t* status
-);
+PRTE_EXPORT void prte_relm_register(void);
+PRTE_EXPORT void prte_relm_open(void);
+PRTE_EXPORT void prte_relm_close(void);
 
 /* Reliably send a non-blocking message to a specific destination.
  *
@@ -44,21 +56,14 @@ typedef void (*prte_relm_base_module_fault_handler_fn_t)(
  * @retval PRTE_ERR_NODE_DOWN         Provided dst is believed to have failed
  * @retval PRTE_ERROR                 An unspecified error occurred
  */
-typedef int (*prte_relm_base_module_reliable_send_fn_t)(
-    pmix_rank_t dest, pmix_data_buffer_t* buf, prte_rml_tag_t tag
+PRTE_EXPORT int prte_relm_start_msg(
+    pmix_rank_t dst, pmix_data_buffer_t* buf, prte_rml_tag_t tag
 );
 
-typedef struct {
-    prte_relm_base_module_init_fn_t          init;
-    prte_relm_base_module_finalize_fn_t      finalize;
-    prte_relm_base_module_fault_handler_fn_t fault_handler;
-    prte_relm_base_module_reliable_send_fn_t reliable_send;
-} prte_relm_module_t;
-PRTE_EXPORT extern prte_relm_module_t prte_relm;
-
-PRTE_EXPORT void prte_relm_register(void);
-PRTE_EXPORT void prte_relm_open(void);
-PRTE_EXPORT void prte_relm_close(void);
+/* Respond to failed daemons */
+PRTE_EXPORT void prte_relm_fault_handler(
+    const prte_rml_recovery_status_t* status
+);
 
 END_C_DECLS
 

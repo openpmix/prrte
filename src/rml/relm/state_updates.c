@@ -1,11 +1,14 @@
 /*
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
+ * Copyright (c) 2026      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
  *
  * $HEADER$
  */
+
+#include "prte_config.h"
 
 #include "constants.h"
 
@@ -19,7 +22,6 @@
 #include "src/rml/relm/state_machine.h"
 #include "src/rml/relm/types.h"
 #include "src/rml/relm/util.h"
-#include "src/rml/relm/base/state_machine.h"
 
 // Handle a state update started by a downstream's message
 static void downstream_update(
@@ -39,7 +41,7 @@ static void local_update(
 // Callback for cache timeout events. Calls a state update on msg in cb_data
 static void evict(int fd, short args, void* cb_data);
 
-int prte_relm_base_pack_state_update(
+int prte_relm_pack_state_update(
     pmix_data_buffer_t* buf, prte_relm_msg_t* msg
 ) {
     int ret = PMIX_SUCCESS;
@@ -59,15 +61,15 @@ int prte_relm_base_pack_state_update(
     return ret;
 }
 
-void prte_relm_base_update_state(
+void prte_relm_handle_state_update(
     pmix_data_buffer_t* buf, prte_relm_msg_t* msg, prte_relm_state_t state,
     pmix_rank_t src
 ) {
     if(PRTE_PROC_MY_NAME->rank == src){
         local_update(buf, msg, state);
-    } else if(prte_relm_sm->downstream_rank(msg) == src){
+    } else if(prte_relm_downstream_rank(msg) == src){
         downstream_update(buf, msg, state);
-    } else if(prte_relm_sm->upstream_rank(msg) == src){
+    } else if(prte_relm_upstream_rank(msg) == src){
         upstream_update(buf, msg, state);
     }
     //Ignore lingering messages from old links

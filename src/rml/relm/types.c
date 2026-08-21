@@ -7,6 +7,8 @@
  * $HEADER$
  */
 
+#include "prte_config.h"
+
 #include "src/rml/rml.h"
 #include "src/rml/relm/state_machine.h"
 #include "src/rml/relm/util.h"

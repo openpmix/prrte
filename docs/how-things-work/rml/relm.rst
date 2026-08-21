@@ -12,24 +12,27 @@ so forgiving.  **RELM** ("reliable messaging") is the layer that guarantees a
 message is delivered exactly once to its destination even if daemons on the path
 fail and the tree is rebuilt underneath it.
 
-RELM lives in ``src/rml/relm/``; its editing map is ``src/rml/relm/AGENTS.md``
-and the concrete implementation's map is ``src/rml/relm/base/AGENTS.md``.
+RELM lives in ``src/rml/relm/``; its editing map is ``src/rml/relm/AGENTS.md``.
 
 How RELM is invoked
 -------------------
 
 Application code sends reliably with ``prte_rml_send_buffer_reliable_nb``
-(wrapped by the ``PRTE_RML_RELIABLE_SEND`` macro).  That call routes through the
-``prte_relm`` module to ``prte_relm_start_msg``.  Everything else in the
-subsystem runs in reaction to two things: RELM control messages received from
-neighbors, and fault notices from the routing layer.
+(wrapped by the ``PRTE_RML_RELIABLE_SEND`` macro), which calls
+``prte_relm_start_msg``.  Everything else in the subsystem runs in reaction to
+two things: RELM control messages received from neighbors, and fault notices
+from the routing layer.
 
-RELM is shaped like a small framework — the ``prte_relm_module_t`` interface and
-a state machine (``prte_relm_state_machine_t``) full of function pointers — so a
-different reliability strategy could be substituted.  Today there is exactly one
-implementation, the *base* module, which ``relm.c`` installs at open time by
-copying ``prte_relm_base_module`` into the global ``prte_relm`` and wiring every
-state-machine callback to a ``prte_relm_base_*`` function.
+``relm.h`` is the whole of RELM's interface to the rest of the tree:
+``prte_relm_start_msg``, ``prte_relm_fault_handler``, and the
+``prte_relm_register``/``open``/``close`` bracket that ``prte_rml_open`` and
+``prte_rml_close`` call.  Inside, the code divides by *what* rather than by
+*which*: ``state_machine.c`` is the generic engine — message identity, the
+lookup tables, ordering, and the emitters that push a state one hop — and
+``state_updates.c`` and ``link_updates.c`` are the protocol driven on top of
+it.  There is one reliability strategy, and it is called directly; RELM
+formerly wore a module/callback indirection that never selected anything, and
+that has been removed.
 
 Identifying a message
 ---------------------
@@ -130,7 +133,7 @@ are sent with the ordinary RML over a single ``prte_rml_get_route`` hop, tagged
 ``prte_relm_message_handler``, that unpacks an update, finds or creates the local
 message object, and feeds it to the state machine.
 
-The interesting logic is ``prte_relm_base_update_state`` (``state_updates.c``),
+The interesting logic is ``prte_relm_handle_state_update`` (``state_updates.c``),
 which routes an incoming update by **who sent it**:
 
 * ``local_update`` — a change requested by this daemon itself;
@@ -209,7 +212,7 @@ Where to look
 
 * Entry point and message identity: ``state_machine.c`` (``start_msg``,
   ``find``/``get``, GUID math in ``types.h``).
-* Steady-state transitions: ``base/state_updates.c``.
-* Fault recovery and link updates: ``base/link_updates.c``.
+* Steady-state transitions: ``state_updates.c``.
+* Fault recovery and link updates: ``link_updates.c``.
 * Pack/unpack and helper macros: ``util.c`` / ``util.h``.
-* Module wiring and MCA parameters: ``base/base.c``.
+* Open/close wiring and MCA parameters: ``relm.c``.

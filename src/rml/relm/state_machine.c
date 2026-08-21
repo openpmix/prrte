@@ -1,11 +1,14 @@
 /*
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
+ * Copyright (c) 2026      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
  *
  * $HEADER$
  */
+
+#include "prte_config.h"
 
 #include "constants.h"
 #include "src/mca/state/state.h"
@@ -18,7 +21,7 @@
 #include "src/rml/relm/state_machine.h"
 #include "src/rml/relm/types.h"
 #include "src/rml/relm/util.h"
-#include "src/rml/relm/base/base.h"
+#include "src/rml/relm/relm.h"
 
 prte_relm_state_machine_t* prte_relm_sm = NULL;
 
@@ -69,7 +72,7 @@ prte_relm_rank_t* prte_relm_get_rank(pmix_rank_t r){
     prte_relm_rank_t* rank = prte_relm_find_rank(r);
     if(NULL != rank) return rank;
 
-    rank = prte_relm_sm->new_rank();
+    rank = PMIX_NEW(prte_relm_rank_t);
     int ret = pmix_hash_table_set_value_uint32(&prte_relm_sm->ranks, r, rank);
     if(PMIX_SUCCESS != ret){
         PMIX_ERROR_LOG(ret);
@@ -94,7 +97,7 @@ prte_relm_msg_t* prte_relm_get_msg(prte_relm_signature_t* sig){
     prte_relm_rank_t* rank = prte_relm_get_rank(sig->dst);
     if(rank == NULL) return NULL;
 
-    msg = prte_relm_sm->new_msg();
+    msg = PMIX_NEW(prte_relm_msg_t);
     msg->src = sig->src;
     msg->uid = sig->uid;
     msg->dst = sig->dst;
@@ -207,7 +210,7 @@ static void prte_relm_start_msg_cb(int fd, short argn, void* cbdata){
     }
     PRTE_RELM_MSG_OUTPUT(2, msg, "updating state to NEW");
 
-    prte_relm_sm->update_state(
+    prte_relm_handle_state_update(
         cd->data, msg, PRTE_RELM_STATE_NEW, PRTE_PROC_MY_NAME->rank
     );
 
@@ -315,7 +318,7 @@ void prte_relm_update_state(prte_relm_msg_t* msg, prte_relm_state_t state){
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         return;
     }
-    prte_relm_sm->update_state(NULL, msg, state, PRTE_PROC_MY_NAME->rank);
+    prte_relm_handle_state_update(NULL, msg, state, PRTE_PROC_MY_NAME->rank);
     // Can't check for ephemeral states after, msg may have been released
 }
 
@@ -340,7 +343,7 @@ void prte_relm_send_state_downstream(prte_relm_msg_t* msg){
         PRTE_RELM_STATE_ACKACKED == msg->state;
     if(!valid_state) PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
 
-    pmix_rank_t hop = prte_relm_sm->downstream_rank(msg);
+    pmix_rank_t hop = prte_relm_downstream_rank(msg);
     bool valid_dst = PRTE_PROC_MY_NAME->rank != hop;
     if(!valid_dst) PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
 
@@ -350,7 +353,7 @@ void prte_relm_send_state_downstream(prte_relm_msg_t* msg){
     }
 
     pmix_data_buffer_t* buf = PMIx_Data_buffer_create();
-    int ret = prte_relm_sm->pack_state_update(buf, msg);
+    int ret = prte_relm_pack_state_update(buf, msg);
     if(PMIX_SUCCESS != ret){
         PMIX_ERROR_LOG(ret);
         PMIx_Data_buffer_release(buf);
@@ -379,7 +382,7 @@ void prte_relm_send_state_upstream(prte_relm_msg_t* msg){
         PRTE_RELM_STATE_REQUESTED == msg->state;
     if(!valid_state) PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
 
-    pmix_rank_t hop = prte_relm_sm->upstream_rank(msg);
+    pmix_rank_t hop = prte_relm_upstream_rank(msg);
     bool valid_dst = PRTE_PROC_MY_NAME->rank != hop;
     if(!valid_dst) PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
 
@@ -389,7 +392,7 @@ void prte_relm_send_state_upstream(prte_relm_msg_t* msg){
     }
 
     pmix_data_buffer_t* buf = PMIx_Data_buffer_create();
-    int ret = prte_relm_sm->pack_state_update(buf, msg);
+    int ret = prte_relm_pack_state_update(buf, msg);
     if(PMIX_SUCCESS != ret) PMIX_ERROR_LOG(ret);
     if(PMIX_SUCCESS == ret) {
         ret = prte_rml_send_buffer_nb(hop, buf, PRTE_RML_TAG_RELM_STATE);
@@ -412,7 +415,7 @@ void prte_relm_send_link_update(pmix_rank_t link){
     pmix_data_buffer_t* buf = PMIx_Data_buffer_create();
     int ret = PMIX_SUCCESS;
     if(PMIX_SUCCESS == ret){
-        ret = prte_relm_sm->pack_link_update(buf, link);
+        ret = prte_relm_pack_link_update(buf, link);
         if(PMIX_SUCCESS != ret) PMIX_ERROR_LOG(ret);
     }
     if(PMIX_SUCCESS == ret){
@@ -461,25 +464,15 @@ void prte_relm_message_handler(pmix_rank_t src, pmix_data_buffer_t* buf){
         return;
     }
 
-    prte_relm_sm->update_state(buf, msg, state, src);
+    prte_relm_handle_state_update(buf, msg, state, src);
 }
 
 void prte_relm_link_update_handler(pmix_rank_t src, pmix_data_buffer_t* buf){
     PRTE_RELM_OUTPUT_VERBOSE(1, "received link update from %d", src);
-    prte_relm_sm->update_link(buf, src);
+    prte_relm_handle_link_update(buf, src);
 }
 
 static void sm_cons(prte_relm_state_machine_t* sm){
-    sm->new_rank = NULL;
-    sm->pack_link_update = NULL;
-    sm->update_link = NULL;
-    sm->new_msg = NULL;
-    sm->pack_state_update = NULL;
-    sm->update_state = NULL;
-    sm->upstream_rank = NULL;
-    sm->downstream_rank = NULL;
-    sm->fault_handler = NULL;
-
     PMIX_CONSTRUCT(&sm->ranks, pmix_hash_table_t);
     pmix_hash_table_init(&sm->ranks, 20);
 

@@ -7,6 +7,8 @@
  * $HEADER$
  */
 
+#include "prte_config.h"
+
 #include "constants.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"

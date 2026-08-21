@@ -24,7 +24,7 @@
 
 #include "src/rml/relm/types.h"
 #include "src/rml/relm/state_machine.h"
-#include "src/rml/relm/base/base.h"
+#include "src/rml/relm/relm.h"
 
 BEGIN_C_DECLS
 

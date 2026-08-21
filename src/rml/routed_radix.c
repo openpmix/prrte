@@ -398,8 +398,8 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global,
     const prte_rml_recovery_status_t* s = &status;
     prte_rml_fault_handler(s);
     prte_grpcomm_fault_handler(s);
-    prte_filem  .fault_handler(s);
-    prte_relm   .fault_handler(s);
+    prte_filem.fault_handler(s);
+    prte_relm_fault_handler(s);
 
     PMIX_DESTRUCT(&status);
 }
@@ -533,8 +533,8 @@ void prte_rml_revive_routing_tree(pmix_rank_t rank){
     // change is expected.
     const prte_rml_recovery_status_t* s = &status;
     prte_grpcomm_fault_handler(s);
-    prte_filem  .fault_handler(s);
-    prte_relm   .fault_handler(s);
+    prte_filem.fault_handler(s);
+    prte_relm_fault_handler(s);
 
     PMIX_DESTRUCT(&status);
 }

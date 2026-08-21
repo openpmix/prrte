@@ -1,5 +1,6 @@
 #
 # Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
+# Copyright (c) 2026      Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -16,7 +17,7 @@ headers += \
 libprrte_la_SOURCES += \
       rml/relm/relm.c \
       rml/relm/state_machine.c \
+      rml/relm/state_updates.c \
+      rml/relm/link_updates.c \
       rml/relm/types.c \
       rml/relm/util.c
-
-include rml/relm/base/Makefile.am
