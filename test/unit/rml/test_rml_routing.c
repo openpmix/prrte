@@ -468,6 +468,83 @@ static int test_departed_ranks_survive_recompute(void)
 }
 
 /*
+ * The confirmation state of a departure has to survive the recompute too.
+ *
+ * global_failed_dmns is the subset of failed_dmns whose departure the HNP has
+ * already broadcast to the whole DVM.  Its only consumer is
+ * send_failures_notice(), which subtracts it from failed_dmns when this
+ * daemon's parent changes: what is left is the failures in our subtree that a
+ * NEW parent may not have heard about, and only those are reported upward.
+ * Nothing else in the daemon records that a departure has been broadcast, so
+ * unlike ancestors, children and failed_dmns itself, this set is derivable
+ * from nothing -- wiping it on a grow told the daemon that every departure it
+ * knows is still unconfirmed, and the next parent change re-reported all of
+ * them for the parent to recognize and drop one at a time.
+ *
+ * The widths matter as much as the contents: the subtraction is
+ * pmix_bitmap_bitwise_xor_inplace(), which returns PMIX_ERR_BAD_PARAM and
+ * changes NOTHING when the two bitmaps hold different numbers of words.  A
+ * grow widens failed_dmns, so global_failed_dmns must be re-initialized to the
+ * new span and refilled, not merely carried forward -- carrying it forward
+ * would leave the two a word apart and silently defeat the subtraction it was
+ * being preserved for.
+ */
+static int test_global_failures_survive_recompute(void)
+{
+    int failures = 0;
+
+    /* radix 2, 7 daemons, we are the root.  Rank 1 departed and the DVM was
+     * told; rank 2 departed and has not been broadcast yet. */
+    bitmaps_reset();
+    build_dvm(2, 7, 0);
+    pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, 1);
+    pmix_bitmap_set_bit(&prte_rml_base.dead_dmns, 2);
+    build_dvm(2, 7, 0);
+    pmix_bitmap_set_bit(&prte_rml_base.global_failed_dmns, 1);
+
+    /* the grow: a wider span, tree recomputed from scratch */
+    build_dvm(2, 200, 0);
+
+    CHECK("both departures are still failed",
+          pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, 1) &&
+          pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, 2));
+    CHECK("a broadcast departure is still globally confirmed",
+          pmix_bitmap_is_set_bit(&prte_rml_base.global_failed_dmns, 1));
+    CHECK("a departure that was never broadcast is still not confirmed",
+          !pmix_bitmap_is_set_bit(&prte_rml_base.global_failed_dmns, 2));
+
+    /* the widths the subtraction needs.  200 daemons is four 64-bit words
+     * where 7 was one, so this fails if the set is carried forward as-is. */
+    CHECK("the two sets are the same width after the grow",
+          pmix_bitmap_size(&prte_rml_base.global_failed_dmns)
+              == pmix_bitmap_size(&prte_rml_base.failed_dmns));
+    CHECK("so the subtraction the notice path performs actually runs",
+          PMIX_SUCCESS == pmix_bitmap_bitwise_xor_inplace(
+                              &prte_rml_base.global_failed_dmns,
+                              &prte_rml_base.failed_dmns));
+
+    /* global_failed_dmns is a subset of failed_dmns, and the restore keeps it
+     * one: a rank whose absent mark the unheal path cleared is live again, so
+     * it must not come back as a confirmed failure either. */
+    bitmaps_reset();
+    build_dvm(2, 7, 0);
+    pmix_bitmap_set_bit(&prte_rml_base.absent_dmns, 3);
+    build_dvm(2, 7, 0);
+    pmix_bitmap_set_bit(&prte_rml_base.global_failed_dmns, 3);
+    pmix_bitmap_clear_bit(&prte_rml_base.absent_dmns, 3);
+    build_dvm(2, 9, 0);
+    CHECK("a revived rank is live again", prte_rml_is_node_up(3));
+    CHECK("and is not left behind in the globally-failed set",
+          !pmix_bitmap_is_set_bit(&prte_rml_base.global_failed_dmns, 3));
+
+    bitmaps_reset();
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_global_failures_survive_recompute\n");
+    }
+    return failures;
+}
+
+/*
  * Ancestry reconciliation -- prte_rml_reconcile_ancestry().
  *
  * Both notices that reshape the tree carry a peer's view of THIS daemon's
@@ -1175,6 +1252,7 @@ int main(void)
     failures += test_radix_traversal();
     failures += test_routing_tree();
     failures += test_departed_ranks_survive_recompute();
+    failures += test_global_failures_survive_recompute();
     failures += test_reconcile_ancestry();
     failures += test_dead_dmns_round_trip();
     failures += test_num_contributors();

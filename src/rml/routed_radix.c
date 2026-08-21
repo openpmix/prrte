@@ -731,7 +731,17 @@ void prte_rml_compute_routing_tree(void){
     // Save our state prior to any daemon failures
     prte_rml_base.n_dmns = prte_process_info.num_daemons;
 
-    // TODO: Should we save this info when DVM is resized?
+    // Everything this routine wipes is re-derived below, with one exception:
+    // which of the departures have been GLOBALLY confirmed. That is derivable
+    // from nothing else, so hold it aside across the wipe and put it back.
+    // Both sets must still be re-initialized rather than merely carried
+    // forward: a grow widens the vpid span, and the difference these two are
+    // used for (send_failures_notice) is a pmix_bitmap XOR, which silently
+    // does nothing when the two operands are not the same number of words.
+    pmix_bitmap_t prev_global;
+    PMIX_CONSTRUCT(&prev_global, pmix_bitmap_t);
+    pmix_bitmap_copy(&prev_global, &prte_rml_base.global_failed_dmns);
+
     pmix_bitmap_init(&prte_rml_base.failed_dmns, prte_rml_base.n_dmns);
     pmix_bitmap_init(&prte_rml_base.global_failed_dmns, prte_rml_base.n_dmns);
 
@@ -750,8 +760,22 @@ void prte_rml_compute_routing_tree(void){
         if(pmix_bitmap_is_set_bit(&prte_rml_base.dead_dmns, r) ||
            pmix_bitmap_is_set_bit(&prte_rml_base.absent_dmns, r)){
             pmix_bitmap_set_bit(&prte_rml_base.failed_dmns, r);
+            // A departure the DVM has already broadcast stays broadcast: a
+            // grow reshapes the tree, it does not un-tell anybody. This set
+            // is what a re-homed daemon subtracts to work out which of its
+            // subtree's failures a NEW parent has yet to hear about
+            // (send_failures_notice); losing it made every recompute turn the
+            // next parent change into a report of every departure the daemon
+            // knows, which its parent then has to recognize and drop one by
+            // one. Restored inside this arm, so the documented invariant
+            // global_failed_dmns is a subset of failed_dmns holds by
+            // construction rather than by the caller's good behavior.
+            if(pmix_bitmap_is_set_bit(&prev_global, r)){
+                pmix_bitmap_set_bit(&prte_rml_base.global_failed_dmns, r);
+            }
         }
     }
+    PMIX_DESTRUCT(&prev_global);
 
     // Derive ancestors, lifeline, and children from the base radix positions
     // and route around whatever is currently failed (the restored holes above).

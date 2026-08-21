@@ -401,6 +401,31 @@ connection path.
   (#2491). The DVM never reuses a daemon vpid, so a hole in `[0, num_daemons)`
   is permanent.
 
+- **What a recompute may and may not throw away.** `compute_routing_tree` is
+  the whole of a resize's effect on the tree, and the rule it follows is that
+  it re-derives everything it can and preserves only what it cannot. Ancestors,
+  lifeline, children and `cur_node` are rebuilt from the fault-free radix
+  positions (`build_tree_from_base`) rather than mutated, and `failed_dmns` is
+  rebuilt too — every path that sets a bit in it also records the rank in
+  `dead_dmns` or `absent_dmns` (`repair_routing_tree`; `reconcile_ancestry`'s
+  provisional marks are undone before it returns), so restoring those two
+  reproduces it exactly, at the new width.
+  `global_failed_dmns` is the one thing that is **not** derivable: nothing else
+  in the daemon records that a departure has already been broadcast, so it is
+  re-initialized to the new span and its marks are copied back across the wipe.
+  Both halves of that are load-bearing. The set exists so a re-homed daemon can
+  subtract it from `failed_dmns` and report to a new parent only what that
+  parent may not know (`send_failures_notice`); dropping the marks made every
+  parent change after a grow re-report every departure in the subtree. And the
+  subtraction is `pmix_bitmap_bitwise_xor_inplace`, which returns
+  `PMIX_ERR_BAD_PARAM` and modifies **nothing** when the two bitmaps hold
+  different numbers of words — so simply carrying the set forward unwidened,
+  the obvious alternative, would silently defeat the very subtraction it was
+  preserved for. `test_global_failures_survive_recompute` pins both.
+  The remaining `prte_rml_base` sets — `absent_dmns`, `revived_dmns`,
+  `lateral_links`, `peer_epochs` — are never touched by the recompute at all,
+  each for its own reason given where it is declared.
+
 - **A daemon we LAUNCH is told the departure set on its command line**, by
   `prte_plm_base_prted_append_basic_args` (`rml_base_dead_dmns`, a
   range-collapsed list such as `2,7:9` — colon-separated, because every
