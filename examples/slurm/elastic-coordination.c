@@ -1083,7 +1083,8 @@ typedef enum {
     VERIFY_NODES_AT_LEAST,
     VERIFY_NODES_AT_MOST,
     VERIFY_ALLOC_GONE,
-    VERIFY_NODES_ABSENT
+    VERIFY_NODES_ABSENT,
+    VERIFY_NODES_PRESENT
 } verify_kind_t;
 
 typedef struct {
@@ -1101,6 +1102,33 @@ typedef struct {
 } watch_t;
 
 static int wait_until_alloc_count_at_least(size_t min_count);
+static int wait_until_nodes_present(char **nodes)
+{
+    queries_quiet = 1;
+    for (int i = 0; i < VERIFY_TIMEOUT; i++) {
+        alloc_snapshot_t snap;
+        int present = 0;
+
+        if (0 == query_snapshot(&snap)) {
+            present = 1;
+            for (int n = 0; NULL != nodes[n]; n++) {
+                if (!snapshot_has_node(&snap, nodes[n])) {
+                    present = 0;
+                    break;
+                }
+            }
+            snapshot_free(&snap);
+        }
+        if (present) {
+            queries_quiet = 0;
+            return 0;
+        }
+        sleep(1);
+    }
+    queries_quiet = 0;
+    return -1;
+}
+
 static int wait_until_total_nodes_at_most(size_t max_count);
 static int wait_until_alloc_removed(const char *allocid);
 
@@ -1149,6 +1177,7 @@ static size_t current_total_nodes(void)
     return total;
 }
 static int wait_until_nodes_absent(char **nodes);
+static int wait_until_nodes_present(char **nodes);
 static int squeue_job_exists(const char *jobid);
 
 static void watch_finish(watch_t *ctx, pmix_status_t rc)
@@ -1225,6 +1254,18 @@ static void watch_finish(watch_t *ctx, pmix_status_t rc)
             record_message("VERIFY %s: %s (requested nodes %s in PRRTE)\n",
                            ctx->description, gone ? "PASS" : "WARN",
                            gone ? "absent" : "still present");
+            if (NULL != nodes) {
+                PMIx_Argv_free(nodes);
+            }
+            break;
+        }
+        case VERIFY_NODES_PRESENT: {
+            char **nodes = PMIx_Argv_split(ctx->subject, ',');
+            int here = (NULL != nodes && 0 == wait_until_nodes_present(nodes));
+
+            record_message("VERIFY %s: %s (requested nodes %s in PRRTE)\n",
+                           ctx->description, here ? "PASS" : "WARN",
+                           here ? "present" : "still missing");
             if (NULL != nodes) {
                 PMIx_Argv_free(nodes);
             }
@@ -1484,6 +1525,23 @@ static void handle_extend_count(uint64_t count, const char *name)
                    (size_t) count, NULL, 0, 1);
 }
 
+/* Name the nodes instead of a count. Slurm allocates them by name, so the
+ * request waits for those nodes rather than for any free ones - including
+ * for one this DVM still holds, since the job is exclusive. */
+static void handle_extend_list(const char *list, const char *name)
+{
+    pmix_info_t *info;
+    char reqid[REQID_LEN];
+
+    make_reqid(reqid, sizeof(reqid), "extend", name);
+    PMIX_INFO_CREATE(info, 2);
+    PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NODE_LIST, list, PMIX_STRING);
+    PMIX_INFO_LOAD(&info[1], PMIX_ALLOC_REQ_ID, reqid, PMIX_STRING);
+
+    submit_watched(PMIX_ALLOC_EXTEND, info, 2, "extend list", reqid,
+                   VERIFY_NODES_PRESENT, 0, 0, list, 0, 1);
+}
+
 static void handle_shrink_count(uint64_t count)
 {
     alloc_snapshot_t before;
@@ -1583,6 +1641,7 @@ static void usage(const char *argv0)
     printf("Usage: %s\n\n", argv0);
     printf("Run inside a Slurm job and under PRRTE/PMIx, then enter commands:\n");
     printf("  extend count N [as REQUEST_NAME]\n");
+    printf("  extend list NODE1,NODE2 [as REQUEST_NAME]\n");
     printf("  shrink count N\n");
     printf("  shrink alloc SLURM_JOB_ID\n");
     printf("  shrink list NODE1,NODE2\n");
@@ -1775,9 +1834,18 @@ int main(int argc, char **argv)
 
             type = strtok(NULL, " \t");
             arg = strtok(NULL, " \t");
-            if (NULL == type || NULL == arg || 0 != strcmp(type, "count") ||
-                0 != parse_u64(arg, &count)) {
-                printf("usage: extend count N [as REQUEST_NAME]\n");
+            if (NULL == type || NULL == arg) {
+                printf("usage: extend count N | extend list NODE1,NODE2"
+                       " [as REQUEST_NAME]\n");
+                continue;
+            }
+            if (0 == strcmp(type, "list")) {
+                handle_extend_list(arg, parse_as_name());
+                continue;
+            }
+            if (0 != strcmp(type, "count") || 0 != parse_u64(arg, &count)) {
+                printf("usage: extend count N | extend list NODE1,NODE2"
+                       " [as REQUEST_NAME]\n");
                 continue;
             }
             handle_extend_count(count, parse_as_name());
