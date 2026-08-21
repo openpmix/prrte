@@ -184,7 +184,7 @@ Symmetric to ``prte_rml_repair_routing_tree``:
 #. Fill in ``parent_changed`` / ``children_changed`` / a new ``demoted`` flag
    (mirroring ``promoted``) and notify the components:
    ``prte_rml_fault_handler``, ``prte_grpcomm.fault_handler``,
-   ``prte_filem.fault_handler``, ``prte_relm.fault_handler``.
+   ``prte_filem.fault_handler``, ``prte_relm_fault_handler``.
 
 Recovery-status and component impact
 ------------------------------------

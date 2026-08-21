@@ -18,10 +18,9 @@
  * several daemons do when one of them dies, and lives in the container
  * harness (contrib/dockerswarm).
  *
- * The state machine is stood up by hand: PMIX_NEW plus the two constructor
- * callbacks the lookup helpers actually call.  prte_relm_base_module's init()
- * would also post two persistent RML receives, which needs an RML that is
- * open.
+ * The state machine is stood up by hand with PMIX_NEW rather than through
+ * prte_relm_open(), which would also post two persistent RML receives and so
+ * would need an RML that is open.
  */
 
 #include "prte_config.h"
@@ -37,7 +36,6 @@
 #include "src/rml/rml.h"
 #include "src/rml/relm/state_machine.h"
 #include "src/rml/relm/types.h"
-#include "src/rml/relm/base/state_machine.h"
 
 #define CHECK(label, cond)                                    \
     do {                                                      \
@@ -57,8 +55,6 @@ static void sm_reset(void)
         PMIX_RELEASE(prte_relm_sm);
     }
     prte_relm_sm = PMIX_NEW(prte_relm_state_machine_t);
-    prte_relm_sm->new_rank = prte_relm_base_new_rank;
-    prte_relm_sm->new_msg = prte_relm_base_new_msg;
 }
 
 static prte_relm_msg_t *get_msg(pmix_rank_t src, prte_relm_uid_t uid, pmix_rank_t dst)

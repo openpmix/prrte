@@ -187,5 +187,5 @@ int prte_rml_send_buffer_reliable_nb(pmix_rank_t rank,
         return prte_rml_send_buffer_nb(rank, buffer, tag);
     }
 
-    return prte_relm.reliable_send(rank, buffer, tag);
+    return prte_relm_start_msg(rank, buffer, tag);
 }

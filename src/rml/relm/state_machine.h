@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2026      Sandia National Laboratories  All rights reserved.
+ * Copyright (c) 2026      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,56 +25,41 @@
 #endif
 
 #include "src/pmix/pmix-internal.h"
+
+#include "src/rml/rml.h"
+#include "src/rml/relm/relm.h"
 #include "src/rml/relm/types.h"
 
 BEGIN_C_DECLS
 
-// Default construct a rank's state
-typedef prte_relm_rank_t* (*prte_relm_new_rank_fn_t)(void);
-// Pack msg information for a new link after a failure
-typedef int (*prte_relm_pack_link_update_fn_t)(
-    pmix_data_buffer_t* buf, pmix_rank_t link
-);
-// Recv msg information from a new link after a failure
-typedef void (*prte_relm_update_link_fn_t)(
-    pmix_data_buffer_t* buf, pmix_rank_t link
-);
+/* The protocol's own entry points, implemented in state_updates.c and
+ * link_updates.c. The generic engine below drives them; they in turn call
+ * back into it to move a message's state along. */
 
-// Default construct a message's state
-typedef prte_relm_msg_t* (*prte_relm_new_msg_fn_t)(void);
 // Pack any state information and/or data for a msg state update
-typedef int (*prte_relm_pack_state_update_fn_t)(
-    pmix_data_buffer_t* buf, prte_relm_msg_t* msg
-);
-// Handle a single msg's state update.
+int prte_relm_pack_state_update(pmix_data_buffer_t* buf, prte_relm_msg_t* msg);
+// Handle a single msg's state update, dispatching on who originated it.
 // buf is NULL unless this update is associated with a recvd message buffer.
-typedef void (*prte_relm_update_state_fn_t)(
+void prte_relm_handle_state_update(
     pmix_data_buffer_t* buf, prte_relm_msg_t* msg, prte_relm_state_t state,
     pmix_rank_t src
 );
 
-// Get the next rank in this msg's path from src->dst or dst->src
-typedef pmix_rank_t (*prte_relm_upstream_rank_fn_t)(prte_relm_msg_t* msg);
-typedef pmix_rank_t (*prte_relm_downstream_rank_fn_t)(prte_relm_msg_t* msg);
+// Pack msg information for a new link after a failure
+int prte_relm_pack_link_update(pmix_data_buffer_t* buf, pmix_rank_t link);
+// Recv msg information from a new link after a failure
+void prte_relm_handle_link_update(pmix_data_buffer_t* buf, pmix_rank_t link);
 
-typedef void (*prte_relm_fault_handler_fn_t)(
-    const prte_rml_recovery_status_t* status
-);
+// Get the next rank in this msg's path from src->dst or dst->src
+static inline pmix_rank_t prte_relm_upstream_rank(prte_relm_msg_t* msg){
+    return prte_rml_get_route(msg->src);
+}
+static inline pmix_rank_t prte_relm_downstream_rank(prte_relm_msg_t* msg){
+    return prte_rml_get_route(msg->dst);
+}
 
 typedef struct {
     pmix_object_t super;
-
-    // Behavior customization points for different implementations
-    // Most can be reused from the base implementation
-    prte_relm_new_rank_fn_t          new_rank;
-    prte_relm_pack_link_update_fn_t  pack_link_update;
-    prte_relm_update_link_fn_t       update_link;
-    prte_relm_new_msg_fn_t           new_msg;
-    prte_relm_pack_state_update_fn_t pack_state_update;
-    prte_relm_update_state_fn_t      update_state;
-    prte_relm_upstream_rank_fn_t     upstream_rank;
-    prte_relm_downstream_rank_fn_t   downstream_rank;
-    prte_relm_fault_handler_fn_t     fault_handler;
 
     // Messages bound for a given rank, if any are currently in progress.
     pmix_hash_table_t ranks; // pmix_rank_t -> prte_relm_rank_t
@@ -113,11 +99,6 @@ prte_relm_rank_t* prte_relm_get_rank(pmix_rank_t dst);
 // reserved sentinels at the top of the range so the counter's documented
 // wrap never yields a UID above PRTE_RELM_UID_MAX
 prte_relm_uid_t prte_relm_next_uid(void);
-
-// Create a new message from a local reliable_send call and start it
-int prte_relm_start_msg(
-    pmix_rank_t dst, pmix_data_buffer_t* buf, prte_rml_tag_t tag
-);
 
 // Release a msg and recursively release any prev_msgs.
 // Sets msg->next_uid's prev_uid to NONE

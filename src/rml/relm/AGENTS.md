@@ -5,41 +5,63 @@ fire-and-forget: if a daemon on the path dies while a message is in flight, the
 message is simply lost. RELM guarantees delivery across daemon failures by
 tracking each message's state hop-by-hop and re-driving it over the routing tree
 after the tree has been repaired. It is newer than the collapsed RML core and is
-intentionally kept as its own module.
+kept as its own subdirectory.
 
 Read [`../AGENTS.md`](../AGENTS.md) for how RELM plugs into the RML, and
 [`docs/how-things-work/rml/relm.rst`](../../../docs/how-things-work/rml/relm.rst)
-for the full protocol walkthrough. The base implementation lives in
-[`base/`](base/AGENTS.md).
+for the full protocol walkthrough.
 
 ## How it is reached
 
 `prte_rml_send_buffer_reliable_nb` (`../rml_send.c`, wrapped by the
-`PRTE_RML_RELIABLE_SEND` macro) calls `prte_relm.reliable_send`, which is
-`prte_relm_start_msg`. That is the only entry point application code uses;
-everything else in this directory runs in response to received RELM control
-messages or to fault notices from the routing layer.
+`PRTE_RML_RELIABLE_SEND` macro) calls `prte_relm_start_msg`. That is the only
+entry point application code uses; everything else in this directory runs in
+response to received RELM control messages or to fault notices from the routing
+layer.
 
-## The module indirection
+`relm.h` is the whole of RELM's interface to the rest of the tree — four
+symbols: `prte_relm_start_msg` (from `../rml_send.c`),
+`prte_relm_fault_handler` (from `../routed_radix.c`), and
+`prte_relm_register`/`open`/`close` (from `../rml.c`). Keep it that way; a
+fifth caller reaching past those is a sign the layering is being bypassed.
 
-RELM is structured like a mini-framework so alternative reliability strategies
-could be dropped in, but today there is exactly **one** implementation — the
-base module. `relm.c` copies `prte_relm_base_module` into the global
-`prte_relm` at open time. The state machine
-(`prte_relm_state_machine_t`, `state_machine.h`) holds function pointers for
-every customization point (`new_rank`, `pack_state_update`, `update_state`,
-`upstream_rank`, `downstream_rank`, `fault_handler`, …); `base/` fills them all
-in. Do not add a second module speculatively.
+## There is one implementation, and the code says so
+
+RELM used to be shaped like a mini-framework: a `prte_relm_module_t` of
+function pointers copied into a global `prte_relm` at open time, a `base/`
+subdirectory supplying the one implementation, and a second bundle of nine
+callbacks on the state machine that `base`'s `init()` wired to its own
+functions. Nothing ever selected anything — there was no second module, and no
+MCA variable that could have chosen one — so the layer of indirection cost a
+reader two hops to find code that was never in doubt, and `docs/todo.rst`
+carried a standing item about the selector that did not exist.
+
+That is gone. The protocol's entry points (`prte_relm_pack_state_update`,
+`prte_relm_handle_state_update`, `prte_relm_pack_link_update`,
+`prte_relm_handle_link_update`, `prte_relm_upstream_rank`,
+`prte_relm_downstream_rank`, `prte_relm_fault_handler`) are ordinary functions
+that the generic engine calls directly, and the `base/` subdirectory has been
+flattened into this one — the same shape `src/rml` and `src/grpcomm` took when
+their frameworks were collapsed. The **structural** split is still here and is
+the one worth keeping: `state_machine.c` is the generic engine (identity,
+lookup, ordering, the send emitters) and `state_updates.c`/`link_updates.c` are
+the protocol built on it. That is a compile-time boundary, not a dispatch one.
+
+If a genuinely different reliability strategy ever turns up, reintroduce the
+dispatch then, with the second implementation in hand — the interface is four
+symbols wide, so it is a cheap thing to add and was an expensive thing to
+maintain empty.
 
 ## File map
 
 | File | Responsibility |
 |------|----------------|
-| `relm.h`, `relm.c` | The `prte_relm_module_t` interface and the global `prte_relm`; `register`/`open`/`close`. `open` installs the base module. |
+| `relm.h`, `relm.c` | The subsystem's outward interface, and the `prte_relm_base` config (verbosity, cache TTL `cache_ms`, cache cap `cache_max_count`). `register` registers the MCA params; `open` builds the state machine and posts the two persistent RELM receives (`PRTE_RML_TAG_RELM_STATE`, `PRTE_RML_TAG_RELM_LINK`); `close` reverses it. |
 | `types.h`, `types.c` | The core objects: `prte_relm_msg_t` (per-message state + optional data), `prte_relm_rank_t` (per-destination message table), `prte_relm_signature_t`/GUID identity, the `prte_relm_state_t` enum, and UID sentinels. |
-| `state_machine.h`, `state_machine.c` | The `prte_relm_state_machine_t` object and the generic engine: message lookup/creation (`find`/`get`), message ordering via prev/next UID links, `start_msg`, `release_msg`, the send-upstream/send-downstream state emitters, and the received-message and link-update handlers. |
+| `state_machine.h`, `state_machine.c` | The `prte_relm_state_machine_t` object (the live message tables, the cache, the link bitmaps, the UID counter) and the generic engine: message lookup/creation (`find`/`get`), message ordering via prev/next UID links, `start_msg`, `release_msg`, the send-upstream/send-downstream state emitters, and the received-message and link-update handlers. |
 | `util.h`, `util.c` | Pack/unpack helpers for signatures, states, UIDs, and data; the local post helper (`prte_relm_post`); state-name strings; and the `PRTE_RELM_*` output/error macros. |
-| `base/` | The one concrete implementation of the state machine's callbacks. See [`base/AGENTS.md`](base/AGENTS.md). |
+| `state_updates.c` | The heart of the protocol: `prte_relm_handle_state_update` dispatches a state change by who originated it — `local_update`, `downstream_update` (from the neighbor toward `dst`), or `upstream_update` (from the neighbor toward `src`) — plus `prte_relm_pack_state_update` and the cache-eviction timer callback. |
+| `link_updates.c` | Post-fault recovery: `prte_relm_pack_link_update`/`prte_relm_handle_link_update` exchange in-flight message state with new neighbors after a promotion, `prte_relm_fault_handler` reacts to a `PRTE_RML_FAULT_SCOPE_LOCAL` recovery (purge dead paths, then re-exchange), and the upstream/downstream "links updated" bitmaps gate when updates may be sent. |
 
 ## The model in one paragraph
 
@@ -80,7 +102,7 @@ new neighbors so in-flight messages resume over the repaired tree.
 - **A signature collision is fatal, by decision.** Two live messages under one
   `<src,uid,dst>` cannot both be delivered, and the one that is dropped is
   silently lost by the layer that exists to not lose it — with no way to tell
-  which of the two is real. So both detectors in `base/state_updates.c` (a
+  which of the two is real. So both detectors in `state_updates.c` (a
   second `NEW` for a UID that already names a message, and a `SENDING` whose
   payload differs from the one already held) report and activate
   `PRTE_JOB_STATE_FORCED_EXIT`, like every other broken invariant here. They
@@ -115,11 +137,13 @@ new neighbors so in-flight messages resume over the repaired tree.
   `prte_relm_rank_t` from `prte_relm_sm->ranks` (or a `prte_relm_msg_t` from
   `rank->msgs`) drops only the table's entry; the object came from `PMIX_NEW`
   and still has to be `PMIX_RELEASE`d, along with everything hanging off it.
-  The purge in `base/link_updates.c` is where this matters most.
+  The purge in `link_updates.c` is where this matters most.
 - **`prte_relm_close` may run without `prte_relm_open`.** `prte_rml_open` has
   error returns before it reaches RELM, and `prte_rml_close` runs regardless —
-  so the module can still be the zeroed initializer. Guard before calling
-  through it.
+  so `prte_relm_sm` may still be NULL, and that is the guard `close` checks.
+  It also tears down in the order the state machine needs: cancel the receives,
+  release the state machine, and only then close the output channel it traces
+  through — releasing it evicts every cached message, and eviction traces.
 - **Warnings are errors.** Debug builds enable `--enable-devel-check`; keep the
   tree warning-free.
 
@@ -137,7 +161,6 @@ What *is* pure computation is the identity layer, and
 `test/unit/rml/test_relm.c` (run by `make check`) covers it: the UID generator
 and its wrap, the `<src,uid,dst>` signature and GUID, the find/get lookup
 helpers and what they refuse, the prev/next ordering chain, and
-`prte_relm_release_msg`. It stands the state machine up by hand — `PMIX_NEW`
-plus the `new_rank`/`new_msg` callbacks — rather than calling the base module's
-`init()`, which would also post RML receives. The other tractable piece, not
+`prte_relm_release_msg`. It stands the state machine up by hand with `PMIX_NEW`
+rather than calling `prte_relm_open()`, which would also post RML receives. The other tractable piece, not
 yet covered, is the pack/unpack helpers in `util.c`.
