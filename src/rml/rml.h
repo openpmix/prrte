@@ -310,7 +310,14 @@ typedef struct {
     pmix_rank_t n_dmns;
     // All faults known, globally confirmed or not
     pmix_bitmap_t failed_dmns;
-    // All daemons globally confirmed to have failed
+    // All daemons globally confirmed to have failed - i.e. the subset of
+    // failed_dmns whose departure the HNP has already broadcast. Its one
+    // consumer is send_failures_notice, which subtracts it from failed_dmns
+    // to work out which of this daemon's subtree failures a NEW parent has
+    // yet to hear about. prte_rml_compute_routing_tree re-initializes it (the
+    // subtraction is a bitmap XOR, which needs both operands the same width,
+    // and a grow widens failed_dmns) but carries the marks across, because
+    // nothing else in the daemon records that a departure has been broadcast.
     pmix_bitmap_t global_failed_dmns;
     // Ranks that have permanently departed the DVM (shrunk out, or lost to a
     // fault in a launched/elastic DVM). Unlike failed_dmns, this set is NOT

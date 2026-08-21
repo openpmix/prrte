@@ -39,12 +39,6 @@ since the transport it stages over (xcast) is already resilient.  Until then,
 a daemon lost while files are in flight fails the staging rather than
 re-driving it.
 
-**Routing-tree state is not preserved across a DVM resize.**
-``prte_rml_compute_routing_tree`` re-initializes the failure bitmaps on every
-grow and restores only the permanent sets (``dead_dmns``, ``absent_dmns``);
-whether anything else should survive the recompute is an open question marked
-in ``src/rml/routed_radix.c``.
-
 **Only a command line can ask for a daemon on an allocated node.**  The
 command-line half of this is done: ``--activate`` (``prun`` and
 ``prterun``) takes node names, ``+all``, ``+n<K>`` and ``file=<hostfile>``,
@@ -262,8 +256,6 @@ the marker is stale.
    * - ``rml/oob/oob_tcp_connection.c``,
        ``prte_oob_tcp_peer_try_connect``
      - a peer whose socket cannot be created
-   * - ``rml/routed_radix.c``, ``prte_rml_compute_routing_tree``
-     - routing-tree state is not preserved across a DVM resize
    * - ``rml/relm/relm.c``, ``prte_relm_register``
      - RELM has one module and no way to choose another
    * - ``mca/filem/raw/filem_raw_module.c``, ``raw_fault_handler``
