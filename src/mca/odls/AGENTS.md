@@ -491,6 +491,18 @@ Three decisions the parent makes so the child has only the one call left:
   guessing. If a third memory policy is ever added, this is what has to
   grow with it.
 
+**A failure to apply the *default* policy is not a memory-binding failure.**
+With `mem_alloc_policy=none` — the default — the call is a reset to the
+system default, not a binding: nothing ends up bound to the wrong place and
+nothing is degraded, so it is not reported at all, whatever the errno and
+whatever `mem_bind_failure_action` says (that parameter governs an explicit
+binding, and its own help text says so). The rule used to be narrower —
+`ENOSYS` alone — which covered the platform that *cannot* bind memory but
+not the one that *refuses* to: Docker's default seccomp profile denies
+`set_mempolicy` with `EPERM`, and every bound launch inside a container
+announced that "the memory was left unbound", aborting the job outright
+under `mem_bind_failure_action=error`.
+
 ### 7. Reaping children — `prte_odls_base_default_wait_local_proc()`
 
 The `waitpid` callback, registered per child and fired by

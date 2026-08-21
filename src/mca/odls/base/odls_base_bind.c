@@ -466,10 +466,24 @@ void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd)
 #endif
         }
         if (0 != err && PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding)) {
-            /* memory binding being unavailable when no memory policy was
-               actually requested is not really an error (mirrors the
-               historical membind path) */
-            if (ENOSYS == err && PRTE_HWLOC_BASE_MAP_NONE == prte_hwloc_base_map) {
+            /* With mem_alloc_policy=none - the default - the job asked for no
+               memory policy at all, and the call just made was a reset to the
+               system default rather than a binding. Failing it leaves nothing
+               bound to the wrong place and degrades nothing, so there is
+               nothing to report: mem_bind_failure_action governs an explicit
+               memory binding, and says so. The rule used to be narrower
+               (ENOSYS alone), which covered the platform that cannot bind
+               memory but not the one that refuses to - a container whose
+               seccomp policy denies set_mempolicy, which is the default under
+               Docker, answers EPERM, and every bound launch inside one
+               announced that "the memory was left unbound" (and aborted the
+               job outright under mem_bind_failure_action=error). */
+            if (PRTE_HWLOC_BASE_MAP_NONE == prte_hwloc_base_map) {
+                return;
+            }
+            if (PRTE_HWLOC_BASE_MBFA_SILENT == prte_hwloc_base_mbfa) {
+                /* "silent" means proceed without comment - and it was being
+                   answered with the same warning as "warn" */
                 return;
             }
             if (PRTE_HWLOC_BASE_MBFA_ERROR == prte_hwloc_base_mbfa) {
