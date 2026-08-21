@@ -104,8 +104,9 @@ Either directive may carry `PMIX_ALLOC_NUM_NODES` or `PMIX_ALLOC_NODE_LIST`,
 never both: Slurm allocates named nodes (`--nodelist=`) as readily as a count,
 and queues until it can — including for a node the DVM already holds, which
 `--exclusive` keeps it from granting twice. Names are vetted before anything
-is submitted: no per-node slot counts, since Slurm sizes the node. A request
-naming neither selector is declined with `PMIX_ERR_TAKE_NEXT_OPTION`.
+is submitted: no per-node slot counts, since Slurm sizes the node. A grow
+naming neither selector is refused, not passed on — inside a Slurm allocation
+no other module could legitimately serve it.
 
 ### The expander job ends with the parent allocation
 

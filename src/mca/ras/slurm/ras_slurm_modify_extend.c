@@ -1830,7 +1830,8 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
     }
 
     if(!found) {
-        pmix_output(0, "ras:slurm:modify: modify request invalid or unsupported.");
+        pmix_output(0, "ras:slurm:modify: a grow must name what it wants -"
+                       " PMIX_ALLOC_NUM_NODES or PMIX_ALLOC_NODE_LIST.");
         err = PRTE_ERR_REQUEST;
         goto cleanup;
     }
