@@ -8,8 +8,8 @@ Jansson support, and elastic mode enabled.
 
 elastic-coordination.c:
 A Slurm-specific PMIx client for exercising dynamic allocation changes. It
-accepts interactive requests to extend by node count and to shrink by node
-count, allocation ID, or node list. After every request it queries PRRTE's
+accepts interactive requests to extend by node count or node list, and to
+shrink by node count, allocation ID, or node list. After every request it queries PRRTE's
 allocation state and displays the corresponding Slurm jobs; a separate `dvm`
 command uses prun to verify reachability across the active DVM.
 
@@ -47,6 +47,7 @@ Then run inside a Slurm allocation with one initial node:
 At the coord prompt, available commands are:
 
     extend count N [as REQUEST_NAME]
+    extend list NODE1,NODE2 [as REQUEST_NAME]
     shrink count N
     shrink alloc SLURM_JOB_ID
     shrink list NODE1,NODE2
