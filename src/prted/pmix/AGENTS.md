@@ -150,6 +150,24 @@ job-level fetch matched the first unrelated entry in the array, got
 parked as "already requested", and was never answered. Compare `tproc`
 against `tproc`.
 
+**A job object outlives its map, and finding one proves nothing.** The map
+is built when the job is mapped and released the moment the job completes
+(`check_complete_resume`, `state/dvm`), while the job object itself lives
+until `cleanup_job` runs — a *later* event, and the only one that records
+the departure `prte_pmix_server_job_has_departed()` tests. A dmodex request
+landing in between finds a job that is present, is not yet "departed", and
+has a NULL `map`. The `PMIX_RANK_WILDCARD` arm handed that job straight to
+`prte_pmix_server_register_nspace()`, which assembles the job-level data by
+walking `map->nodes` — a NULL dereference that took the daemon down after
+the job had run correctly, so it read as a clean run with a segfault at the
+end. The proc-level arm immediately below already refused the equivalent
+case (a proc the mapper has not placed) with `PMIX_ERR_NOT_FOUND`; the
+wildcard arm now refuses it the same way. The window is small and entirely
+ordinary — a parent asking about a short-lived child it just spawned
+(`examples/dynamic.c`) hit it in roughly 1% of runs on the container
+harness, in both spellings of `report-child-jobs-separately` and on master
+before this change.
+
 **Two request arrays, two meanings.** `local_reqs` holds requests *we*
 originated and are waiting on; `remote_reqs` holds requests *a peer*
 asked us to service. `prte_pmix_server_clear()` sweeps only

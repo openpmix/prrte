@@ -212,6 +212,29 @@ static void dmodex_req(int sd, short args, void *cbdata)
      * it - so just register the nspace so the local PMIx server gets it. The
      * registration completes asynchronously */
     if (PMIX_RANK_WILDCARD == req->tproc.rank) {
+        /* ...but that registration is assembled from the job's map, and the
+         * map is not always there.  It is created when the job is mapped and
+         * released again the moment the job completes
+         * (check_complete_resume), while the job object itself survives until
+         * cleanup_job runs as a later event - and only cleanup_job records
+         * the departure the guard above tests.  So a request landing in
+         * between finds a jdata that is present, is not yet "departed", and
+         * has nothing left to say about placement;
+         * prte_pmix_server_register_nspace() walks map->nodes and takes the
+         * daemon down.  That window is easy to hit exactly where the comment
+         * above says it is - a parent asking about the child it just spawned
+         * (examples/dynamic.c) when the child was short-lived.
+         *
+         * Refuse it the way the proc-level branch below refuses a proc the
+         * mapper has not placed: PMIX_ERR_NOT_FOUND is the truth, and it is
+         * what the caller's PMIx_Get returns. */
+        if (NULL == jdata->map) {
+            pmix_output_verbose(2, prte_pmix_server_globals.output,
+                                "%s DMODX REQ FOR %s:WILDCARD - JOB IS NO LONGER MAPPED",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->tproc.nspace);
+            prc = PMIX_ERR_NOT_FOUND;
+            goto callback;
+        }
         rc = prte_pmix_server_register_nspace(jdata, wildcard_reg_complete, req);
         if (PRTE_SUCCESS != rc) {
             prc = prte_pmix_convert_rc(rc);
