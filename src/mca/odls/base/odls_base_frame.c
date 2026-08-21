@@ -251,6 +251,10 @@ static void sccon(prte_odls_spawn_caddy_t *p)
     p->bind_cpuset = NULL;
     p->bind_fatal = false;
     p->do_membind = false;
+    p->membind_prep_errno = 0;
+    p->membind_mode = 0;
+    p->membind_nodemask = NULL;
+    p->membind_maxnode = 0;
 #if PRTE_HAVE_SCHED_SETAFFINITY
     p->bind_mask = NULL;
     p->bind_masksize = 0;
@@ -272,6 +276,9 @@ static void scdes(prte_odls_spawn_caddy_t *p)
     }
     if (NULL != p->bind_cpuset) {
         hwloc_bitmap_free(p->bind_cpuset);
+    }
+    if (NULL != p->membind_nodemask) {
+        free(p->membind_nodemask);
     }
 #if PRTE_HAVE_SCHED_SETAFFINITY
     if (NULL != p->bind_mask) {

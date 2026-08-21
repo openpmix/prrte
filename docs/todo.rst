@@ -99,12 +99,6 @@ which nodes, and the daemon-launch path would have to fan out through more
 than one.  At minimum it needs a launcher affinity recorded per node and
 honored by ``prte_plm_base_setup_virtual_machine``.
 
-**The post-fork child still calls into hwloc once.**  ``odls`` was converted
-to async-signal-safe operations between ``fork`` and ``exec`` except for
-``hwloc_set_membind``, which allocates internally; replacing it with a bare
-``set_mempolicy``/``mbind`` means reproducing hwloc's NUMA nodeset handling
-and was left for later (``src/mca/odls/AGENTS.md``).
-
 **A hostfile line with more than one ``@`` stops the parse without saying
 where.**  ``hostfile_parse_line`` splits the value on ``@`` and takes one
 field as a hostname and two as ``user@host``; anything else prints
@@ -253,8 +247,6 @@ the marker is stale.
      - a peer whose socket cannot be created
    * - ``mca/filem/raw/filem_raw_module.c``, ``raw_fault_handler``
      - ``filem/raw`` does not survive losing a daemon mid-staging
-   * - ``mca/odls/base/odls_base_bind.c``, ``prte_odls_base_set``
-     - the post-fork child still calls into hwloc once
    * - ``mca/odls/base/odls_base_default_fns.c``,
        ``prte_odls_base_default_get_add_procs_data``
      - a job cannot ask for a transport

@@ -862,6 +862,12 @@ prte_show_title "CPU affinity (sched_setaffinity) support"
 
 PRTE_CHECK_SETAFFINITY
 
+# Check for async-signal-safe memory binding support (set_mempolicy)
+
+prte_show_title "Memory binding (set_mempolicy) support"
+
+PRTE_CHECK_SET_MEMPOLICY
+
 ############################################################################
 # Final top-level PRTE configuration
 ############################################################################
