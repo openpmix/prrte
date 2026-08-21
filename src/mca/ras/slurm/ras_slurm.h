@@ -33,6 +33,9 @@
 #define PRTE_RAS_SLURM_H
 
 #include "prte_config.h"
+
+#include <time.h>
+
 #include "src/mca/ras/base/base.h"
 #include "src/mca/ras/ras.h"
 
@@ -60,6 +63,7 @@ int prte_ras_slurm_extract_job_fields(pmix_hash_table_t *values_table);
 int prte_ras_slurm_add_modified_resources(const char *slurm_jobid, pmix_list_t *node_list);
 int prte_ras_slurm_detach_nodes(const char *slurm_jobid, prte_session_t *session, pmix_pointer_array_t *removed_nodes);
 int prte_ras_slurm_check_resources(const char *slurm_jobid);
+int prte_ras_slurm_get_job_times(const char *slurm_jobid, time_t *start_time, time_t *end_time);
 
 /* Features to serve cancel requests */
 int prte_ras_slurm_add_pending_req(const char *request_id, const char *slurm_job_id);

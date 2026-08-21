@@ -201,8 +201,14 @@ serves without consulting the ras. `ras/slurm`'s `modify()` accepts only
 `PMIX_ALLOC_REQ_CANCEL` — which nodes an extend lands on is the scheduler's
 choice. Hence `elastic extend|release|release-id|cancel`.
 
-Four cases are worth calling out:
+Five cases are worth calling out:
 
+- **The expander job's deadline.** `ras/slurm` asks for the parent's remaining
+  time and resets the limit once SLURM starts the job; both cases assert
+  SLURM's own `EndTime` for the expander is not later than the parent's. The
+  reset only does work when the parent's end moves while the expander queues,
+  so `elastic_trim_group` arranges that. `test_elastic` allocates with
+  `--time` because the partition's `MaxTime` is `INFINITE`.
 - **The in-place resize.** A partial release keeps the SLURM job and shrinks
   it with `scontrol update job <id> ReqNodeList=<survivors>`. Whether SLURM
   accepts that on a RUNNING job is precisely the assumption a fake scheduler

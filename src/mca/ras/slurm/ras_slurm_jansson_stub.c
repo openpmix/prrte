@@ -66,3 +66,14 @@ int prte_ras_slurm_check_resources(const char *slurm_jobid)
                 "Jansson support is required but not enabled in this build");
     return PRTE_ERR_NOT_AVAILABLE;
 }
+
+/**
+ * Read a job's start/end times; returns PRTE_ERR_NOT_AVAILABLE if built without Jansson.
+ */
+int prte_ras_slurm_get_job_times(const char *slurm_jobid, time_t *start_time, time_t *end_time)
+{
+    PRTE_HIDE_UNUSED_PARAMS(slurm_jobid, start_time, end_time);
+    pmix_output(0, "ras:slurm:get_job_times: "
+                "Jansson support is required but not enabled in this build");
+    return PRTE_ERR_NOT_AVAILABLE;
+}

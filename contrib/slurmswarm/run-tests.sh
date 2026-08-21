@@ -678,7 +678,9 @@ test_elastic() {
     fi
 
     cleanup_cluster
-    ALLOC new --tag dvm --nodes 3 --tasks-per-node 2 >/dev/null 2>&1
+    # --time is what makes the expander-job trim observable: the partition's
+    # MaxTime is INFINITE, and a parent with no end has nothing to align to.
+    ALLOC new --tag dvm --nodes 3 --tasks-per-node 2 --time 60 >/dev/null 2>&1
     jid=$(ALLOC jobid --tag dvm | tr -d ' \r')
     if ! dvm_start --prtemca prte_elastic_mode 1 --prtemca ras_base_verbose 5; then
         banner "ras/slurm: elastic modify surface"
@@ -707,7 +709,7 @@ test_elastic() {
 # The first extend, and everything that can only be asserted about a grant
 # that actually happened.
 elastic_grant_group() {
-    local jid=$1 out ajid nodes idx n
+    local jid=$1 out ajid nodes idx n p_end a_end
 
     banner "ras/slurm: PMIX_ALLOC_EXTEND submits a real job and absorbs it"
     out=$(SA 'timeout 180 elastic extend 2' 2>&1)
@@ -772,6 +774,23 @@ elastic_grant_group() {
     [ -n "$n" ] && [ "$n" -ge 16 ] \
         && ok "the expander job owns whole nodes ($n cpus for 2 nodes -- --exclusive)" \
         || bad "the granted job did not get whole nodes (NumCPUs=$n, want >= 16)"
+    # The salloc carried the parent's time LIMIT, not what is left of it, so
+    # counted from a later start the expander outlives the DVM it was grown
+    # for.  ras/slurm resets the limit once SLURM starts the job; whether
+    # SLURM accepts that on a RUNNING job only a real scheduler can settle.
+    p_end=$(SQ "squeue -h -j $jid -o '%e'" | tr -d ' \r')
+    a_end=$(SQ "squeue -h -j $ajid -o '%e'" | tr -d ' \r')
+    # ISO-8601 timestamps sort as strings, so no date arithmetic is needed
+    if [ -z "$p_end" ] || [ -z "$a_end" ]; then
+        bad "no end time for the parent ($p_end) or the expander ($a_end)"
+    elif [ "$a_end" \> "$p_end" ]; then
+        bad "job $ajid outlives the parent allocation ($a_end > $p_end)"
+    else
+        ok "the expander job was trimmed to the parent's end ($a_end <= $p_end)"
+    fi
+    SA "grep -q 'asking for .* what is left of parent job $jid' /tmp/prte.out" \
+        && ok "the salloc asked for the parent's remainder, not its whole limit" \
+        || bad "no remainder logged: $(SA 'grep -m3 "asking for" /tmp/prte.out' | tr '\n' ' ')"
 
     banner "ras/slurm: releasing one node resizes the SLURM job in place"
     # Removing SOME of a job's nodes keeps the job and resizes it with

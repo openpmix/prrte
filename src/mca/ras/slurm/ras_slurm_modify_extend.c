@@ -14,6 +14,7 @@
 #include "types.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <limits.h>
 #include <signal.h>
 #include <string.h>
@@ -31,9 +32,13 @@
 #include "src/util/name_fns.h"
 
 #include "ras_slurm.h"
+#include "src/mca/common/slurm/common_slurm.h"
 #include "src/mca/ras/base/base.h"
 
 #define PRTE_SLURM_MAX_SALLOC_ARGS 32
+
+/* Slurm states a job's time limit in minutes */
+#define PRTE_SLURM_SECS_PER_MINUTE 60
 
 /* Retry budget for a job whose salloc has exited but whose state slurmctld has
  * not caught up with. Doubles from 1ms to a 1s cap, ~3s in total. */
@@ -109,6 +114,8 @@ static int prte_ras_slurm_extract_reused_nodes(const char *slurm_jobid,
 static int prte_ras_slurm_add_reused_nodes_to_session(const char *slurm_jobid,
                                                       pmix_pointer_array_t *reused_nodes);
 static void prte_ras_slurm_rollback_session(const char *slurm_jobid);
+static int prte_ras_slurm_limit_to_parent_remainder(pmix_hash_table_t *fields);
+static int prte_ras_slurm_trim_job_to_parent(const char *slurm_jobid);
 static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata);
 static void slurm_grant_check_cb(int fd, short args, void *cbdata);
 static prte_slurm_wait_tracker_t *prte_ras_slurm_tracker_for_child(const prte_slurm_salloc_child_t *child);
@@ -1162,6 +1169,221 @@ static void prte_ras_slurm_rollback_session(const char *slurm_jobid)
 }
 
 /**
+ * @brief Replace the propagated time limit with what is left of the parent.
+ *
+ * The parent's limit is what that job asked for; asking Slurm for the whole
+ * of it again would reserve time past the allocation the nodes are for. The
+ * remainder counted from now is an upper bound on what a job submitted now
+ * can use - the exact figure is only knowable once Slurm starts it, which is
+ * what trim_job_to_parent does.
+ *
+ * A parent with no end time leaves the propagated value alone.
+ *
+ * @param[in,out] fields Job fields to rewrite in place.
+ */
+static int prte_ras_slurm_limit_to_parent_remainder(pmix_hash_table_t *fields)
+{
+    const char *key = num_obj_fields[NUM_OBJ_TIME_LIMIT];
+    char *parent_jobid;
+    char *minutes_string = NULL;
+    void *old_value = NULL;
+    time_t parent_end = 0;
+    long minutes;
+    int err;
+    int pmix_err;
+
+    parent_jobid = prte_common_slurm_jobid();
+    if (NULL == parent_jobid) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    err = prte_ras_slurm_get_job_times(parent_jobid, NULL, &parent_end);
+    if (PRTE_SUCCESS != err) {
+        return err;
+    }
+
+    if (0 == parent_end) {
+        return PRTE_SUCCESS;
+    }
+
+    /* See trim_job_to_parent on the truncation and the one-minute floor */
+    minutes = (long) ((parent_end - time(NULL)) / PRTE_SLURM_SECS_PER_MINUTE);
+    if (1 > minutes) {
+        minutes = 1;
+    }
+
+    if (0 > asprintf(&minutes_string, "%ld", minutes)) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+
+    pmix_hash_table_get_value_ptr(fields, key, strlen(key), &old_value);
+
+    pmix_err = pmix_hash_table_set_value_ptr(fields, key, strlen(key),
+                                             (void *) minutes_string);
+
+    if (PMIX_SUCCESS != pmix_err) {
+        free(minutes_string);
+        err = prte_pmix_convert_status(pmix_err);
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+
+    free(old_value);
+
+    PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+                         "%s ras:slurm:extend: asking for %ld minute(s), what is"
+                         " left of parent job %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), minutes, parent_jobid));
+
+    return PRTE_SUCCESS;
+}
+
+/**
+ * @brief Trim an expander job's time limit to the end of the parent allocation.
+ *
+ * The expander carries the parent's time limit, not what is left of it, so
+ * counted from a later start it outlives the allocation it was grown for.
+ * Both ends of the window are known once Slurm has started the job, so this
+ * resets the limit to the parent's remainder. Slurm counts a limit from the
+ * job's own start, hence the arithmetic rather than an end time.
+ *
+ * Only ever shortens. A parent with no end time, or an expander that already
+ * ends first, is left alone.
+ *
+ * @param[in] slurm_jobid Slurm job ID of the running expander job.
+ */
+static int prte_ras_slurm_trim_job_to_parent(const char *slurm_jobid)
+{
+    int err = PRTE_SUCCESS;
+    char *parent_jobid = NULL;
+    char *cmd = NULL;
+    FILE *fp = NULL;
+    time_t parent_end = 0;
+    time_t start = 0;
+    time_t end = 0;
+    long minutes;
+    static const char *cmd_format = "scontrol update job %s TimeLimit=%ld 2>&1";
+    char err_msg[PRTE_SLURM_ERR_STR_MAX_LEN + 1];
+
+    if (NULL == slurm_jobid) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    err = prte_ras_slurm_validate_jobid(slurm_jobid);
+    if (PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        return err;
+    }
+
+    parent_jobid = prte_common_slurm_jobid();
+    if (NULL == parent_jobid) {
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    err = prte_ras_slurm_get_job_times(slurm_jobid, &start, &end);
+    if (PRTE_SUCCESS != err) {
+        return err;
+    }
+
+    /* Slurm counts the limit from the start, so without one there is nothing
+     * to measure. */
+    if (0 == start) {
+        PMIX_OUTPUT_VERBOSE((10, prte_ras_base_framework.framework_output,
+                             "%s ras:slurm:trim_job: job %s reports no start time",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), slurm_jobid));
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    /* Read the parent last: nothing re-trims afterwards, so a parent shortened
+     * between the two queries must land on this side of the arithmetic. */
+    err = prte_ras_slurm_get_job_times(parent_jobid, NULL, &parent_end);
+    if (PRTE_SUCCESS != err) {
+        return err;
+    }
+
+    if (0 == parent_end) {
+        PMIX_OUTPUT_VERBOSE((10, prte_ras_base_framework.framework_output,
+                             "%s ras:slurm:trim_job: parent job %s has no end time;"
+                             " leaving job %s as submitted",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), parent_jobid,
+                             slurm_jobid));
+        return PRTE_SUCCESS;
+    }
+
+    /* Never lengthen */
+    if (0 != end && end <= parent_end) {
+        return PRTE_SUCCESS;
+    }
+
+    /* Truncate rather than round, so the trimmed job cannot end after the
+     * parent does. Slurm reads a limit of 0 as "no limit", the opposite of
+     * what is asked here, so a window under a minute becomes one minute. */
+    minutes = (long) ((parent_end - start) / PRTE_SLURM_SECS_PER_MINUTE);
+    if (1 > minutes) {
+        minutes = 1;
+    }
+
+    if (0 > asprintf(&cmd, cmd_format, slurm_jobid, minutes)) {
+        cmd = NULL;
+        err = PRTE_ERR_OUT_OF_RESOURCE;
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+
+    PMIX_OUTPUT_VERBOSE((10, prte_ras_base_framework.framework_output,
+                         "%s ras:slurm:trim_job: trim command is:\n%s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cmd));
+
+    fp = popen(cmd, "r");
+    if (NULL == fp) {
+        err = PRTE_ERR_FILE_OPEN_FAILURE;
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+
+    err = prte_ras_slurm_drain_cmd_output(fp, err_msg, sizeof(err_msg));
+    if (PRTE_SUCCESS != err) {
+        PRTE_ERROR_LOG(err);
+        goto cleanup;
+    }
+
+    int status = pclose(fp);
+    fp = NULL;
+
+    if (-1 == status) {
+        pmix_output(0, "ras:slurm:trim_job: pclose failed: %s.", strerror(errno));
+        err = PRTE_ERR_IN_ERRNO;
+        goto cleanup;
+    }
+
+    if (!WIFEXITED(status) || 0 != WEXITSTATUS(status)) {
+        pmix_output(0, "ras:slurm:trim_job: could not set the time limit of job %s"
+                       " to %ld minute(s): %s",
+                    slurm_jobid, minutes, err_msg);
+        err = PRTE_ERR_SLURM_UPDATE_FAILURE;
+        goto cleanup;
+    }
+
+    PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+                         "%s ras:slurm:trim_job: job %s now ends with parent job %s,"
+                         " %ld minute(s) from its start",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), slurm_jobid,
+                         parent_jobid, minutes));
+
+    cleanup:
+
+    if (NULL != fp) {
+        pclose(fp);
+    }
+
+    free(cmd);
+
+    return err;
+}
+
+/**
  * @brief Finalize a Slurm resource extension request.
  *
  * Processes newly allocated Slurm resources after the wait phase completes.
@@ -1198,6 +1420,19 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
 
     if(PRTE_SUCCESS != err) {
         goto complete;
+    }
+
+    /* The job is running, so its window is known for the first time here. A
+     * failed trim is not fatal: the nodes are granted and usable, and the job
+     * is scancelled with its session either way. */
+    if (prte_mca_ras_slurm_component.propagate_time) {
+        int trim_err = prte_ras_slurm_trim_job_to_parent(job_id);
+
+        if (PRTE_SUCCESS != trim_err) {
+            pmix_output(0, "ras:slurm:modify: could not align job %s with the end of"
+                           " the parent allocation: %s. It may outlive the DVM.",
+                        job_id, prte_strerror(trim_err));
+        }
     }
 
     PMIX_CONSTRUCT(&added_nodes, pmix_list_t);
@@ -1535,6 +1770,20 @@ int prte_ras_slurm_serve_extend_req(prte_pmix_server_req_t *req)
 
     if(PRTE_SUCCESS != err) {
         goto cleanup;
+    }
+
+    /* Ask for what is left of the parent, not for its whole limit again.
+     * Failing to work that out is not fatal - the parent's limit is a valid,
+     * if generous, request, and the trim at the grant is what makes the
+     * window exact. */
+    if (prte_mca_ras_slurm_component.propagate_time) {
+        int limit_err = prte_ras_slurm_limit_to_parent_remainder(&slurm_jobfields);
+
+        if (PRTE_SUCCESS != limit_err) {
+            pmix_output(0, "ras:slurm:modify: could not reduce the requested time"
+                           " limit to what is left of the parent allocation: %s.",
+                        prte_strerror(limit_err));
+        }
     }
 
     int rc = asprintf(&nodes_string, "%" PRIu64, num_nodes);
