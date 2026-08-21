@@ -1951,6 +1951,30 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
         jdatorted->num_reported++;
         jdatorted->num_daemons_reported++;
 
+        /* This daemon may have missed the order to terminate.  The exit
+         * command is xcast exactly once, and prte_plm_base_prted_exit()
+         * latches so it is never re-issued; a daemon that had been launched
+         * but had not yet reported in holds no contact info here, so the send
+         * to it failed and errmgr/dvm deliberately swallowed that failure -
+         * correctly, since the daemon was not dead, only not yet listening.
+         * Nothing, though, remembered that it still owes an exit.
+         *
+         * It has just told us where it is, so tell it now.  Otherwise it sits
+         * in the routing tree as a live child that will never leave, and the
+         * HNP terminates only once its child count reaches zero: prterun
+         * hangs forever and the daemon is left orphaned on its node.  An
+         * elastic grow overlapping the end of the last job is the ordinary
+         * way in, because PMIX_ALLOC_EXTEND answers its caller as soon as the
+         * scheduler does - tens of milliseconds before the daemon reports -
+         * so a client that treats that answer as the end and exits lands here
+         * every time. */
+        if (prte_prteds_term_ordered) {
+            pmix_output_verbose(5, prte_plm_base_framework.framework_output,
+                                "%s plm:base:prted_report_launch daemon %s reported after "
+                                "termination was ordered - re-issuing its exit command",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&dname));
+            prte_plm_base_prted_exit_late(&dname);
+        }
 
     CLEANUP:
         pmix_output_verbose(5, prte_plm_base_framework.framework_output,

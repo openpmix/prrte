@@ -50,6 +50,11 @@
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
 
+/* The command the DVM was ordered down with, remembered so that a daemon
+ * which was still coming up when the order went out can be given the same
+ * one when it finally reports in.  See prte_plm_base_prted_exit_late(). */
+static prte_daemon_cmd_flag_t term_command = PRTE_DAEMON_EXIT_CMD;
+
 int prte_plm_base_prted_exit(prte_daemon_cmd_flag_t command)
 {
     int rc;
@@ -77,6 +82,7 @@ int prte_plm_base_prted_exit(prte_daemon_cmd_flag_t command)
     if (prte_abnormal_term_ordered || prte_never_launched || !prte_routing_is_enabled) {
         cmmnd = PRTE_DAEMON_HALT_VM_CMD;
     }
+    term_command = cmmnd;
 
     /* send it express delivery! */
     PMIX_DATA_BUFFER_CONSTRUCT(&cmd);
@@ -94,6 +100,34 @@ int prte_plm_base_prted_exit(prte_daemon_cmd_flag_t command)
     }
     PMIX_DATA_BUFFER_DESTRUCT(&cmd);
 
+    return rc;
+}
+
+int prte_plm_base_prted_exit_late(const pmix_proc_t *daemon)
+{
+    int rc;
+    pmix_data_buffer_t *cmd;
+
+    PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                         "%s plm:base:prted_cmd re-issuing prted_exit to %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         PRTE_NAME_PRINT(daemon)));
+
+    PMIX_DATA_BUFFER_CREATE(cmd);
+    rc = PMIx_Data_pack(NULL, cmd, &term_command, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(cmd);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* point-to-point, not an xcast: the broadcast has already been through
+     * the tree and every daemon that was listening for it has acted on it */
+    PRTE_RML_SEND(rc, daemon->rank, cmd, PRTE_RML_TAG_DAEMON);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(cmd);
+    }
     return rc;
 }
 
