@@ -141,6 +141,37 @@ static int tcp_peer_create_socket(prte_oob_tcp_peer_t *peer, sa_family_t family)
 }
 
 /*
+ * Abandon a handshake that cannot be completed.
+ *
+ * `sd` is the socket the handshake is running on and `peer` is the peer it
+ * claims to belong to - and those are not always the same connection.  On the
+ * inbound path recv_handler hands us a socket it has just accepted and only
+ * publishes it as peer->sd once the handshake has succeeded, so until then
+ * peer->sd is whatever else that peer has: nothing at all, an outbound
+ * attempt of our own, or a working connection carrying traffic.  Closing the
+ * peer while holding a socket it does not own would tear that down - failing
+ * every message queued on it and reporting a lost connection - on the word of
+ * a socket that never proved it was the peer, and would leak the accepted
+ * socket besides, since recv_handler's cleanup only releases its conn op.
+ *
+ * So the peer is closed only when this really is its socket, which is also
+ * what rotates it onto the next address in its list; otherwise the failure
+ * costs nothing but the socket it arrived on.  Ownership is asked of the peer
+ * rather than inferred from which direction the handshake came in, because
+ * the simultaneous-connect arbitration in retry() can hand an accepted socket
+ * to the peer part way through.
+ */
+static void abort_handshake(prte_oob_tcp_peer_t *peer, int sd)
+{
+    if (NULL == peer || sd != peer->sd) {
+        CLOSE_THE_SOCKET(sd);
+        return;
+    }
+    peer->state = MCA_OOB_TCP_FAILED;
+    prte_oob_tcp_peer_close(peer);
+}
+
+/*
  * Try connecting to a peer - cycle across all known addresses
  * until one succeeds.
  */
@@ -937,6 +968,15 @@ static bool retry(prte_oob_tcp_peer_t *peer, int sd, bool fatal)
                 peer->recv_ev_active = false;
             }
             CLOSE_THE_SOCKET(peer->sd);
+            /* We have just thrown away our own socket in favour of the one
+             * the caller accepted, and the caller carries on to finish the
+             * handshake there, so that socket is the peer's from here on.
+             * Say so: leaving the descriptor we closed in the field invites a
+             * second close of a number the kernel has since handed to
+             * somebody else, and leaves anything that fails later in the
+             * handshake unable to tell that this peer owns the socket it
+             * failed on. */
+            peer->sd = sd;
             peer->state = MCA_OOB_TCP_UNCONNECTED;
             return false;
         } else {
@@ -1102,21 +1142,22 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
         prte_show_help("help-oob-tcp.txt", "msg-too-big", true,
                         PRTE_NAME_PRINT(&peer->name), PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         hdr.nbytes, prte_oob_base.max_msg_size);
-        peer->state = MCA_OOB_TCP_FAILED;
-        prte_oob_tcp_peer_close(peer);
+        abort_handshake(peer, sd);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
     if (NULL == (msg = (char *) malloc(hdr.nbytes))) {
-        peer->state = MCA_OOB_TCP_FAILED;
-        prte_oob_tcp_peer_close(peer);
+        abort_handshake(peer, sd);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
-    if (!tcp_peer_recv_blocking(peer, sd, msg, hdr.nbytes)) {
+    /* An inbound handshake is read with no peer, exactly as the two reads
+     * above it were: the peer we just looked up does not own this socket, so
+     * recv_blocking must dispose of the socket rather than of the peer. */
+    if (!tcp_peer_recv_blocking(is_new ? NULL : peer, sd, msg, hdr.nbytes)) {
         /* unable to complete the recv but should never happen */
         pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                             "%s unable to complete recv of connect-ack from %s ON SOCKET %d",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer->name),
-                            peer->sd);
+                            sd);
         free(msg);
         return PRTE_ERR_UNREACH;
     }
@@ -1127,36 +1168,42 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
 
     ack_flag = ntohs(ack_flag);
     if (!ack_flag) {
-        if (MCA_OOB_TCP_CONNECT_ACK == peer->state) {
-            /* We got nack from the remote side which means that
-             * it will be the initiator of the connection.
-             */
-
-            /* release the socket */
-            CLOSE_THE_SOCKET(peer->sd);
-            peer->sd = -1;
-
-            /* unregister active events */
-            if (peer->recv_ev_active) {
-                prte_event_del(&peer->recv_event);
-                peer->recv_ev_active = false;
-            }
-            if (peer->send_ev_active) {
-                prte_event_del(&peer->send_event);
-                peer->send_ev_active = false;
-            }
-
-            /* change the state so we'll accept the remote
-             * connection when it'll apeear
-             */
-            peer->state = MCA_OOB_TCP_UNCONNECTED;
-        } else {
-            /* FIXME: this shouldn't happen. We need to force next address
-             * to be tried.
-             */
-            prte_oob_tcp_peer_close(peer);
-        }
         free(msg);
+        if (is_new) {
+            /* A nack says "you dialed me while I was dialing you, and I am
+             * the one who will finish it".  That is an answer to a call we
+             * placed, so it belongs on a socket we opened; arriving on one
+             * somebody just opened to us it says nothing about any connection
+             * of ours.  Drop the socket and leave the peer - and whatever
+             * attempt it may have in flight - untouched. */
+            CLOSE_THE_SOCKET(sd);
+            return PRTE_ERR_UNREACH;
+        }
+
+        /* We got a nack on our own connection attempt, so the remote side
+         * will be the initiator.  The state check at the top of this function
+         * has already established that we are in CONNECT_ACK - a peer in any
+         * other state never gets this far.
+         */
+
+        /* release the socket */
+        CLOSE_THE_SOCKET(peer->sd);
+        peer->sd = -1;
+
+        /* unregister active events */
+        if (peer->recv_ev_active) {
+            prte_event_del(&peer->recv_event);
+            peer->recv_ev_active = false;
+        }
+        if (peer->send_ev_active) {
+            prte_event_del(&peer->send_event);
+            peer->send_ev_active = false;
+        }
+
+        /* change the state so we'll accept the remote
+         * connection when it'll apeear
+         */
+        peer->state = MCA_OOB_TCP_UNCONNECTED;
         return PRTE_ERR_UNREACH;
     }
 
@@ -1179,9 +1226,8 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
         // missing version string
         prte_show_help("help-oob-tcp.txt", "missing version", true,
                        prte_process_info.nodename, PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                       pmix_fd_get_peer_name(peer->sd), PRTE_NAME_PRINT(&(peer->name)));
-        peer->state = MCA_OOB_TCP_FAILED;
-        prte_oob_tcp_peer_close(peer);
+                       pmix_fd_get_peer_name(sd), PRTE_NAME_PRINT(&(peer->name)));
+        abort_handshake(peer, sd);
         free(msg);
         return PRTE_ERR_CONNECTION_REFUSED;
     }
@@ -1200,10 +1246,9 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
     if (0 != strcmp(version, prte_version_string)) {
         prte_show_help("help-oob-tcp.txt", "version mismatch", true, prte_process_info.nodename,
                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_version_string,
-                       pmix_fd_get_peer_name(peer->sd), PRTE_NAME_PRINT(&(peer->name)), version);
+                       pmix_fd_get_peer_name(sd), PRTE_NAME_PRINT(&(peer->name)), version);
 
-        peer->state = MCA_OOB_TCP_FAILED;
-        prte_oob_tcp_peer_close(peer);
+        abort_handshake(peer, sd);
         free(msg);
         return PRTE_ERR_CONNECTION_REFUSED;
     }
