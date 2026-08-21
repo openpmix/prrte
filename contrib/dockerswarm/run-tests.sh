@@ -7322,6 +7322,34 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     echo "$out" | grep -q PMIX_DVM_IS_READY && ok "radix-2 shrink-at-depth completed" || bad "radix-2 shrink did not complete"
     RUN 'pgrep -x prte >/dev/null' && ok "HNP survived deep-tree shrink" || bad "HNP died on deep-tree shrink"
     RUN 'pterm' >/dev/null 2>&1; cleanup_swarm
+
+    # The window where a job ends while a grow is still in flight (#2707).
+    # The exit command is xcast exactly once, and it goes out while the
+    # growing daemon has not yet reported in: the HNP holds no contact info
+    # for it, the send fails, and errmgr/dvm swallows that failure - rightly,
+    # since a daemon that has not reported is not a dead one.  Milliseconds
+    # later it reports, becomes a live routing child, and nothing re-issues
+    # the order.  The HNP terminates only once its child count reaches zero,
+    # so prterun hangs forever and the daemon is orphaned on its node with
+    # nothing left to terminate it.
+    #
+    # "--no-wait" is the client half, and it is what an ordinary requester
+    # does: phase one of an extend/grow is answered as soon as the scheduler
+    # answers, tens of milliseconds before the daemon reports, so a client
+    # that treats that as the answer and exits lands in the window every
+    # time.  Both halves are asserted - a DVM that comes down but leaves the
+    # daemon behind has only half fixed it.
+    banner "elastic DVM: a job ending mid-grow brings the DVM down (#2707)"
+    cleanup_swarm
+    out=$(RUN "cd /tmp && timeout 60 prterun --prtemca prte_elastic_mode 1 \
+                   --host node1:1 -n 1 elastic grow node2:1 --no-wait" 2>&1); rc=$?
+    [ "$rc" != 124 ] \
+        && ok "prterun exited (rc=$rc) rather than hanging on the in-flight grow" \
+        || bad "prterun hung: the daemon added mid-grow never got the exit command"
+    [ "$(prted_settle 10 2)" = 0 ] \
+        && ok "the daemon the grow added was told to exit, not left orphaned" \
+        || bad "a prted from the in-flight grow is still running on node2"
+    cleanup_swarm
 }
 
 ########################################################################

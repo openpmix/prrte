@@ -468,10 +468,27 @@ daemon via `prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, …)`:
 
 - `prte_plm_base_prted_exit(cmd)` — `PRTE_DAEMON_EXIT_CMD`, or
   `PRTE_DAEMON_HALT_VM_CMD` when terminating abnormally / before wireup.
+  **It is one-shot**: the `prte_prteds_term_ordered` latch at the top makes
+  every later call a no-op, so a daemon that was not listening when the
+  broadcast went out never hears it by any other means. That is what
+  `prte_plm_base_prted_exit_late()` is for — see below.
 - `prte_plm_base_prted_terminate_job(nspace)` — wildcard-proc → kill.
 - `prte_plm_base_prted_kill_local_procs(procs)` —
   `PRTE_DAEMON_KILL_LOCAL_PROCS`.
 - `prte_plm_base_prted_signal_local_procs(job, signal)`.
+
+A daemon reporting in *after* that broadcast gets the order point to point,
+from `prte_plm_base_prted_exit_late()` (the command it re-sends is the one
+`prte_plm_base_prted_exit()` latched, so an abnormal teardown stays
+abnormal). Without it the DVM does not come down at all: the HNP holds no
+contact info for a daemon that has not reported, so the broadcast's send to
+it fails and `errmgr/dvm` swallows that failure — rightly, since a daemon
+that has not reported is not a dead one — and nothing remembers that it
+still owes an exit. It then reports, becomes a live routing child, and the
+HNP terminates only once its child count reaches zero. An elastic grow
+overlapping the end of the last job is the ordinary way in, and the symptom
+is a `prterun` that hangs forever plus an orphaned `prted` on the added
+node (issue #2707).
 
 ### jobid / HNP name (`plm_base_jobid.c`)
 

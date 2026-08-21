@@ -107,6 +107,7 @@ PRTE_EXPORT void prte_plm_base_dvm_mod_notify(const pmix_proc_t *requester,
  * Utilities for plm components that use proxy daemons
  */
 PRTE_EXPORT int prte_plm_base_prted_exit(prte_daemon_cmd_flag_t command);
+PRTE_EXPORT int prte_plm_base_prted_exit_late(const pmix_proc_t *daemon);
 PRTE_EXPORT int prte_plm_base_prted_terminate_job(pmix_nspace_t jobid);
 PRTE_EXPORT int prte_plm_base_prted_kill_local_procs(pmix_pointer_array_t *procs);
 PRTE_EXPORT int prte_plm_base_prted_signal_local_procs(pmix_nspace_t job, int32_t signal);
