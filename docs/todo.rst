@@ -39,13 +39,6 @@ since the transport it stages over (xcast) is already resilient.  Until then,
 a daemon lost while files are in flight fails the staging rather than
 re-driving it.
 
-**A TCP peer that cannot be reached at one address is closed, not
-retried.**  In ``src/rml/oob/oob_tcp_connection.c`` the final
-connect-failure arm closes the peer and returns ``PRTE_ERR_UNREACH``
-where it should force the next address in the peer's list to be tried.
-A peer with several interfaces therefore gets fewer chances than the
-address list implies.
-
 **Routing-tree state is not preserved across a DVM resize.**
 ``prte_rml_compute_routing_tree`` re-initializes the failure bitmaps on every
 grow and restores only the permanent sets (``dead_dmns``, ``absent_dmns``);
@@ -269,9 +262,6 @@ the marker is stale.
    * - ``rml/oob/oob_tcp_connection.c``,
        ``prte_oob_tcp_peer_try_connect``
      - a peer whose socket cannot be created
-   * - ``rml/oob/oob_tcp_connection.c``,
-       ``prte_oob_tcp_peer_recv_connect_ack``
-     - a TCP peer closed rather than retried at its next address
    * - ``rml/routed_radix.c``, ``prte_rml_compute_routing_tree``
      - routing-tree state is not preserved across a DVM resize
    * - ``rml/relm/relm.c``, ``prte_relm_register``
