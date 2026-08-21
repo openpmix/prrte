@@ -15,13 +15,13 @@
  * (success) or PMIX_ERR_DVM_MOD (failure) event so the two-phase completion
  * contract can be observed end to end.
  *
- *   elastic grow       <node[:slots],...>  # PMIX_ALLOC_NEW     + NODE_LIST
- *   elastic shrink     <node,...>          # PMIX_ALLOC_RELEASE + NODE_LIST
- *   elastic extend     <num-nodes>         # PMIX_ALLOC_EXTEND  + NUM_NODES
- *   elastic new        <num-nodes>         # PMIX_ALLOC_NEW     + NUM_NODES
- *   elastic release    <num-nodes>         # PMIX_ALLOC_RELEASE + NUM_NODES
- *   elastic release-id <alloc-id>          # PMIX_ALLOC_RELEASE + ALLOC_ID
- *   elastic cancel     <req-id>            # PMIX_ALLOC_REQ_CANCEL
+ *   elastic grow       <node[:slots],...>   # PMIX_ALLOC_NEW     + NODE_LIST
+ *   elastic shrink     <node,...>           # PMIX_ALLOC_RELEASE + NODE_LIST
+ *   elastic extend     <num-nodes|node,...> # PMIX_ALLOC_EXTEND  + NUM_NODES/NODE_LIST
+ *   elastic new        <num-nodes|node,...> # PMIX_ALLOC_NEW     + NUM_NODES/NODE_LIST
+ *   elastic release    <num-nodes>          # PMIX_ALLOC_RELEASE + NUM_NODES
+ *   elastic release-id <alloc-id>           # PMIX_ALLOC_RELEASE + ALLOC_ID
+ *   elastic cancel     <req-id>             # PMIX_ALLOC_REQ_CANCEL
  *
  *   --req-id <id>   request id to send (default "elastic-test"); "cancel"
  *                   names the request to cancel this way too
@@ -29,11 +29,11 @@
  *   --no-wait       do not
  *
  * The last five forms exist for the resource managers that serve a size
- * change by talking to a scheduler rather than by naming nodes -- ras/slurm
- * is the one in tree, and NUM_NODES/ALLOC_ID/REQ_CANCEL are the only request
- * shapes its modify() accepts.  Which nodes such a request lands on is the
- * scheduler's choice, not the caller's.  The two grow directives may or may
- * not differ to an RM; ras/slurm treats them as synonyms.
+ * change by talking to a scheduler -- ras/slurm is the one in tree.  A grow
+ * it serves may name a count, and then which nodes it lands on is the
+ * scheduler's choice, or the nodes themselves, and then the scheduler queues
+ * until they are free.  The two grow directives may or may not differ to an
+ * RM; ras/slurm treats them as synonyms.
  *
  * Phase two is waited for by default, but not for "cancel", which is answered
  * in full by phase one.
@@ -249,8 +249,8 @@ static void usage(const char *me) {
             "usage: %s <op> <arg> [--req-id <id>] [--wait|--no-wait] [-- <cmd> ...]\n"
             "  grow       <node[:slots],...>   PMIX_ALLOC_NEW     + NODE_LIST\n"
             "  shrink     <node,...>           PMIX_ALLOC_RELEASE + NODE_LIST\n"
-            "  extend     <num-nodes>          PMIX_ALLOC_EXTEND  + NUM_NODES\n"
-            "  new        <num-nodes>          PMIX_ALLOC_NEW     + NUM_NODES\n"
+            "  extend     <num-nodes|node,...> PMIX_ALLOC_EXTEND  + NUM_NODES/NODE_LIST\n"
+            "  new        <num-nodes|node,...> PMIX_ALLOC_NEW     + NUM_NODES/NODE_LIST\n"
             "  release    <num-nodes>          PMIX_ALLOC_RELEASE + NUM_NODES\n"
             "  release-id <alloc-id>           PMIX_ALLOC_RELEASE + ALLOC_ID\n"
             "  cancel     <req-id>             PMIX_ALLOC_REQ_CANCEL\n"
@@ -270,6 +270,7 @@ int main(int argc, char **argv) {
     const char *op, *arg, *req_id = "elastic-test";
     char **spawn_cmd = NULL;
     uint64_t num_nodes = 0;
+    bool by_count = false;
     bool wait_phase2 = true;
     int wait_opt = -1;          /* an explicit --wait/--no-wait, if given */
     int rcexit = 0, i;
@@ -302,20 +303,22 @@ int main(int argc, char **argv) {
     }
 
     /* A grow is a NEW reservation that names the nodes to add: PRRTE adds them
-     * to the pool and extends the DVM.  PMIX_ALLOC_EXTEND asks the resource
-     * manager for more nodes instead, and names a count rather than hosts. */
+     * to the pool and extends the DVM.  "extend" and "new" name either a count
+     * for the resource manager to fill or the nodes themselves, whichever the
+     * argument looks like. */
     if (0 == strcmp(op, "grow")) {
         directive = PMIX_ALLOC_NEW;
     } else if (0 == strcmp(op, "shrink")) {
         directive = PMIX_ALLOC_RELEASE;
-    } else if (0 == strcmp(op, "extend")) {
-        directive = PMIX_ALLOC_EXTEND;
-        num_nodes = strtoull(arg, NULL, 10);
-    } else if (0 == strcmp(op, "new")) {
-        directive = PMIX_ALLOC_NEW;
-        num_nodes = strtoull(arg, NULL, 10);
+    } else if (0 == strcmp(op, "extend") || 0 == strcmp(op, "new")) {
+        directive = (0 == strcmp(op, "new")) ? PMIX_ALLOC_NEW : PMIX_ALLOC_EXTEND;
+        by_count = (strspn(arg, "0123456789") == strlen(arg));
+        if (by_count) {
+            num_nodes = strtoull(arg, NULL, 10);
+        }
     } else if (0 == strcmp(op, "release")) {
         directive = PMIX_ALLOC_RELEASE;
+        by_count = true;
         num_nodes = strtoull(arg, NULL, 10);
     } else if (0 == strcmp(op, "release-id")) {
         directive = PMIX_ALLOC_RELEASE;
@@ -374,11 +377,10 @@ int main(int argc, char **argv) {
         PMIX_INFO_CREATE(info, ninfo);
     } else {
         PMIX_INFO_CREATE(info, ninfo);
-        if (PMIX_ALLOC_EXTEND == directive || 0 == strcmp(op, "new") ||
-            0 == strcmp(op, "release")) {
-            PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NUM_NODES, &num_nodes, PMIX_UINT64);
-        } else if (0 == strcmp(op, "release-id")) {
+        if (0 == strcmp(op, "release-id")) {
             PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_ID, arg, PMIX_STRING);
+        } else if (by_count) {
+            PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NUM_NODES, &num_nodes, PMIX_UINT64);
         } else {
             PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NODE_LIST, arg, PMIX_STRING);
         }

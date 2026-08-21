@@ -21,7 +21,7 @@ Files:
 |------|----------|
 | `ras_slurm_component.c` | Registration; `query` gates on `SLURM_JOBID`; many `propagate_*` MCA params. |
 | `ras_slurm_module.c` | `init`, `allocate`, `modify`, `finalize`; the `SLURM_NODELIST` regex parser; session/tagging helpers; jobid/hostname validation. |
-| `ras_slurm_modify_extend.c` | `PMIX_ALLOC_EXTEND`/`PMIX_ALLOC_NEW`: build & launch a `salloc --no-shell` expander job, wait for it, trim its time limit, absorb new nodes. |
+| `ras_slurm_modify_extend.c` | `PMIX_ALLOC_EXTEND`/`PMIX_ALLOC_NEW`: vet the request, build & launch a `salloc --no-shell` expander job, wait for it, trim its time limit, absorb new nodes. |
 | `ras_slurm_modify_release.c` | `PMIX_ALLOC_RELEASE`: `scontrol update job` to shrink; remove nodes by count. |
 | `ras_slurm_modify_cancel.c` | `PMIX_ALLOC_REQ_CANCEL`: track and cancel pending extend requests. |
 | `ras_slurm_modify_common.c` | Shared helpers: `kill_job`, control-char checks, command-output draining. |
@@ -86,7 +86,7 @@ deviation* and the framework guide.
   **expander job**, waits for its `salloc` to exit, trims its time limit to
   the parent's end, then adds the modified resources. Answers in two
   phases — see below.
-- **`PMIX_ALLOC_NEW`** → the same, for a request naming a node **count**.
+- **`PMIX_ALLOC_NEW`** → the same request; see below.
 - **`PMIX_ALLOC_RELEASE`** → `serve_release_req`: shrinks the SLURM job
   with `scontrol update job`, removing nodes by count while protecting
   the launching node (`SLURMD_NODENAME`).
@@ -100,10 +100,12 @@ disjoint Slurm job — "new" to the scheduler. The DVM spans both, they share a
 deadline, and a release crosses them by node count, so the two directives name
 one request.
 
-The synonym covers what this component can ask Slurm for:
-`PMIX_ALLOC_NUM_NODES`. A `PMIX_ALLOC_NEW` naming its own nodes is declined
-with `PMIX_ERR_TAKE_NEXT_OPTION` and reaches `ras/hosts` and the base as
-before.
+Either directive may carry `PMIX_ALLOC_NUM_NODES` or `PMIX_ALLOC_NODE_LIST`,
+never both: Slurm allocates named nodes (`--nodelist=`) as readily as a count,
+and queues until it can — including for a node the DVM already holds, which
+`--exclusive` keeps it from granting twice. Names are vetted before anything
+is submitted: no per-node slot counts, since Slurm sizes the node. A request
+naming neither selector is declined with `PMIX_ERR_TAKE_NEXT_OPTION`.
 
 ### The expander job ends with the parent allocation
 
@@ -331,9 +333,9 @@ omitted) and can arm unparsable JSON or a failing `scancel`. Read
 adding a case. Two things that trip people up:
 
 - **The request shapes are not a plain grow.** `modify()` accepts only
-  `PMIX_ALLOC_EXTEND`/`PMIX_ALLOC_NEW`+`NUM_NODES`, `PMIX_ALLOC_RELEASE` with
-  one of `NODE_LIST`/`NUM_NODES`/`ALLOC_ID`, and `PMIX_ALLOC_REQ_CANCEL`. A
-  node-naming `PMIX_ALLOC_NEW` is declined here — the base serves it.
+  `PMIX_ALLOC_EXTEND`/`PMIX_ALLOC_NEW` with `NUM_NODES` or `NODE_LIST`,
+  `PMIX_ALLOC_RELEASE` with one of `NODE_LIST`/`NUM_NODES`/`ALLOC_ID`, and
+  `PMIX_ALLOC_REQ_CANCEL`.
 - **An extend answers in two phases, like a release.** Phase one reports
   `PMIX_OPERATION_IN_PROGRESS` with the allocation id once Slurm grants;
   `PMIX_DVM_IS_READY` (or `PMIX_ERR_DVM_MOD`) follows when the grow campaign
