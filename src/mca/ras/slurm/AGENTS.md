@@ -21,7 +21,7 @@ Files:
 |------|----------|
 | `ras_slurm_component.c` | Registration; `query` gates on `SLURM_JOBID`; many `propagate_*` MCA params. |
 | `ras_slurm_module.c` | `init`, `allocate`, `modify`, `finalize`; the `SLURM_NODELIST` regex parser; session/tagging helpers; jobid/hostname validation. |
-| `ras_slurm_modify_extend.c` | `PMIX_ALLOC_EXTEND`: build & launch a `salloc --no-shell` expander job, wait for it, trim its time limit, absorb new nodes. |
+| `ras_slurm_modify_extend.c` | `PMIX_ALLOC_EXTEND`/`PMIX_ALLOC_NEW`: build & launch a `salloc --no-shell` expander job, wait for it, trim its time limit, absorb new nodes. |
 | `ras_slurm_modify_release.c` | `PMIX_ALLOC_RELEASE`: `scontrol update job` to shrink; remove nodes by count. |
 | `ras_slurm_modify_cancel.c` | `PMIX_ALLOC_REQ_CANCEL`: track and cancel pending extend requests. |
 | `ras_slurm_modify_common.c` | Shared helpers: `kill_job`, control-char checks, command-output draining. |
@@ -86,11 +86,24 @@ deviation* and the framework guide.
   **expander job**, waits for its `salloc` to exit, trims its time limit to
   the parent's end, then adds the modified resources. Answers in two
   phases — see below.
+- **`PMIX_ALLOC_NEW`** → the same, for a request naming a node **count**.
 - **`PMIX_ALLOC_RELEASE`** → `serve_release_req`: shrinks the SLURM job
   with `scontrol update job`, removing nodes by count while protecting
   the launching node (`SLURMD_NODENAME`).
 - **`PMIX_ALLOC_REQ_CANCEL`** → `serve_cancel_req`: cancels a pending
   extend by request id, and answers it (see below).
+
+### `PMIX_ALLOC_NEW` is a synonym for `PMIX_ALLOC_EXTEND`
+
+Slurm cannot grow an allocation in place, so an extend here is always a second,
+disjoint Slurm job — "new" to the scheduler. The DVM spans both, they share a
+deadline, and a release crosses them by node count, so the two directives name
+one request.
+
+The synonym covers what this component can ask Slurm for:
+`PMIX_ALLOC_NUM_NODES`. A `PMIX_ALLOC_NEW` naming its own nodes is declined
+with `PMIX_ERR_TAKE_NEXT_OPTION` and reaches `ras/hosts` and the base as
+before.
 
 ### The expander job ends with the parent allocation
 
@@ -318,10 +331,9 @@ omitted) and can arm unparsable JSON or a failing `scancel`. Read
 adding a case. Two things that trip people up:
 
 - **The request shapes are not a plain grow.** `modify()` accepts only
-  `PMIX_ALLOC_EXTEND`+`NUM_NODES`, `PMIX_ALLOC_RELEASE` with one of
-  `NODE_LIST`/`NUM_NODES`/`ALLOC_ID`, and `PMIX_ALLOC_REQ_CANCEL`. A
-  node-naming `PMIX_ALLOC_NEW` never reaches this component — the base
-  serves it.
+  `PMIX_ALLOC_EXTEND`/`PMIX_ALLOC_NEW`+`NUM_NODES`, `PMIX_ALLOC_RELEASE` with
+  one of `NODE_LIST`/`NUM_NODES`/`ALLOC_ID`, and `PMIX_ALLOC_REQ_CANCEL`. A
+  node-naming `PMIX_ALLOC_NEW` is declined here — the base serves it.
 - **An extend answers in two phases, like a release.** Phase one reports
   `PMIX_OPERATION_IN_PROGRESS` with the allocation id once Slurm grants;
   `PMIX_DVM_IS_READY` (or `PMIX_ERR_DVM_MOD`) follows when the grow campaign
