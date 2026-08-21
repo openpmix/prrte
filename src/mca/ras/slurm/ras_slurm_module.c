@@ -301,37 +301,17 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
     return PRTE_SUCCESS;
 }
 
-/**
- * @brief Whether a request names something for the scheduler to allocate.
- *
- * A node count or a node list; anything else is not a grow this component
- * can take to Slurm.
- */
-static bool request_names_a_grow(const prte_pmix_server_req_t *req)
-{
-    for (size_t i = 0; i < req->ninfo; i++) {
-        if (PMIx_Check_key(req->info[i].key, PMIX_ALLOC_NUM_NODES) ||
-            PMIx_Check_key(req->info[i].key, PMIX_ALLOC_NODE_LIST)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 static pmix_status_t modify(prte_pmix_server_req_t *req)
 {
     int err = PRTE_SUCCESS;
 
     /* PMIX_ALLOC_NEW is a synonym for PMIX_ALLOC_EXTEND here: Slurm cannot
      * grow an allocation in place, so an extend is always a second, disjoint
-     * job - "new" to the scheduler - that the DVM then spans. The synonym
-     * covers both shapes this component can ask Slurm for, a node count and
-     * a node list; a request naming neither is left to the next module. */
-    if (PMIX_ALLOC_NEW == req->allocdir && !request_names_a_grow(req)) {
-        return PMIX_ERR_TAKE_NEXT_OPTION;
-    }
-
+     * job - "new" to the scheduler - that the DVM then spans.
+     *
+     * Both are claimed outright, and a grow this component cannot ask Slurm
+     * for is refused rather than passed on: inside a Slurm allocation there
+     * is no next module that could legitimately serve it. */
     if(PMIX_ALLOC_EXTEND == req->allocdir || PMIX_ALLOC_NEW == req->allocdir) {
         err = prte_ras_slurm_serve_extend_req(req);
         req->pstatus = prte_pmix_convert_rc(err);

@@ -937,7 +937,7 @@ elastic_trim_group() {
 # A counted PMIX_ALLOC_NEW is the same request as PMIX_ALLOC_EXTEND here:
 # Slurm cannot grow an allocation in place, so either becomes a second,
 # disjoint job the DVM spans.  A NEW naming its own NODES is still not this
-# component's request -- Slurm allocates them by name.
+# component's request -- Slurm allocates them by name too.
 elastic_new_synonym_group() {
     local jid=$1 out ajid nodes idx
 
