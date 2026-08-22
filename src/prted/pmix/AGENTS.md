@@ -449,12 +449,49 @@ design:
   (`prte_pmix_server_connection_purge()`, from
   `prte_pmix_server_job_departed()`).
 
-What this cannot see: the PMIx server library executes a connect whose
-participants are **all local** without calling the host at all, so PRRTE
-never learns of a single-node assemblage and cannot keep the promise for
-one. Neither is the *fault response* half of the definition implemented —
-terminating the assemblage when a member fails. Both are recorded in
-[`docs/todo.rst`](../../../docs/todo.rst).
+Two things follow from that record, and they are the rest of the definition:
+
+- **A spawn connects the child to the parent process** (`connection_spawned()`,
+  from `prte_plm_base_spawn_response()`), because the PMIx definition makes
+  that the default for `PMIx_Spawn`. Which launches have a parent process at
+  all is the delicate part: `jdata->originator` does *not* answer it, since
+  `plm_base_receive` overwrites it with the daemon that relayed the request.
+  `PRTE_JOB_LAUNCH_PROXY` survives from the requestor's own daemon and is the
+  process that actually asked — screened against our own namespace (a
+  prterun-style launch records the daemon) and against `PRTE_JOB_FLAG_TOOL`
+  (a `prun` records its own tool procID, and a tool is not a member of a job).
+  `PMIX_SPAWN_CHILD_SEP` opts out.
+- **A failure that terminates one member's job terminates the assemblage**
+  (`connection_job_failed()`, from `_terminate_job()` in `errmgr/dvm` — the
+  one place every failure-driven teardown goes through), each such job
+  announced with `PMIX_ERR_JOB_TERM_WO_SYNC` and explained to the user with
+  the `connected-term` help topic. `pmix_terminate_connected=0` turns it off.
+  The assemblage is marked `terminating` as it goes, so the failures its own
+  teardown produces do not drive it again.
+
+**Dissolving is more generous than recording, deliberately.** Recording
+compares memberships exactly; a disconnect dissolves any assemblage all of
+whose members it *names*, wildcards covering ranks. That asymmetry is what
+lets an application out of the assemblage a spawn created for it: the spawn
+connects the child to the parent **process**, while an application that wants
+out disconnects the two **jobs** — the shape `MPI_Comm_disconnect` has — and
+under an exact-set rule that request would match nothing and the implicit
+assemblage could never be left. It cannot dissolve anything by accident: a
+request only covers a member it names, and a wildcard member is covered only
+by a wildcard.
+
+A proc in more than one assemblage — a spawned child that also connects
+explicitly — produces **one** event, addressed to the union of the
+memberships, not one per assemblage.
+
+Note what this depends on: PMIx used to execute a connect or disconnect whose
+participants were **all local** without calling the host at all, which left
+PRRTE unable to see a single-node assemblage — and, worse, unable to see the
+disconnect that would dissolve one it had created itself at spawn. That is
+fixed in the PMIx server library (openpmix: the host is called whenever it
+offers the entry point; locality alone is no longer a reason to skip it).
+Against a PMIx without that fix, a single-node spawn assemblage cannot be
+dissolved.
 
 ---
 
@@ -668,9 +705,10 @@ only exist with more than one daemon:
   driven by `examples/sessionctrl.c`, which `build.sh` installs;
 - **connect/disconnect** (`test_connect`, driven by
   `contrib/dockerswarm/connector.c`) — a spawned child connected to its
-  parent on another node, leaving with and without disconnecting first. This
-  one is *only* testable here: a connect whose participants are all local is
-  executed inside the PMIx server library and never reaches PRRTE at all.
+  parent on another node, leaving with and without disconnecting first, and
+  failing with and without having disconnected first. The single-node run of
+  the same client covers the same ground once the PMIx fix above is in place;
+  what only the swarm shows is an assemblage that genuinely spans daemons.
 
 ---
 

@@ -12,12 +12,18 @@
  * real, multi-node DVM, and see whether the runtime keeps the one promise
  * that "connected" makes.
  *
- *   connector [--child-host <node>] [--disconnect] [--wait <s>]
+ *   connector [--child-host <node>] [--disconnect] [--abort] [--wait <s>]
  *
  * The parent (no PMIX_PARENT_ID in its job info) spawns one copy of itself,
  * registers for PMIX_ERR_PROC_TERM_WO_SYNC, and connects to the child.  The
- * child connects back and then leaves - either by calling PMIx_Disconnect
- * first (--disconnect) or by simply exiting.
+ * child connects back and then leaves - either after both halves call
+ * PMIx_Disconnect (--disconnect) or by simply exiting.
+ *
+ * With --abort the child instead dies on a signal after connecting, which
+ * asks the other half of the definition: "connected" means the host treats
+ * the assemblage as one application, so a failure that terminates the child
+ * is to terminate the parent along with it.  The parent prints nothing more
+ * in that case - it is killed - which is exactly what the harness checks.
  *
  * That difference is the whole test.  The PMIx definition of "connected" is
  * that the host environment must generate PMIX_ERR_PROC_TERM_WO_SYNC to the
@@ -48,6 +54,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <unistd.h>
 
 #include <pmix.h>
@@ -100,6 +107,7 @@ int main(int argc, char **argv)
     pmix_nspace_t child;
     pmix_status_t code = PMIX_ERR_PROC_TERM_WO_SYNC;
     bool disconnect = false;
+    bool doabort = false;
     bool ischild = false;
     int wait_secs = 15;
     char *child_host = NULL;
@@ -109,6 +117,8 @@ int main(int argc, char **argv)
     for (i = 1; i < argc; i++) {
         if (0 == strcmp(argv[i], "--disconnect")) {
             disconnect = true;
+        } else if (0 == strcmp(argv[i], "--abort")) {
+            doabort = true;
         } else if (0 == strcmp(argv[i], "--child-host") && i + 1 < argc) {
             child_host = argv[++i];
         } else if (0 == strcmp(argv[i], "--wait") && i + 1 < argc) {
@@ -157,6 +167,9 @@ int main(int argc, char **argv)
         if (disconnect) {
             PMIx_Argv_append_nosize(&app.argv, "--disconnect");
         }
+        if (doabort) {
+            PMIx_Argv_append_nosize(&app.argv, "--abort");
+        }
         /* the child says where it landed, so a run that never left this node
          * cannot pass as one that did */
         if (NULL != child_host) {
@@ -194,13 +207,27 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    /* Leaving the assemblage the sanctioned way is a COLLECTIVE over the set
+     * that was connected, so both halves have to call it - a disconnect that
+     * only the departing side issues never completes.  Whether it happens at
+     * all is what the two runs of this program differ in. */
+    if (disconnect) {
+        rc = PMIx_Disconnect(procs, 2, NULL, 0);
+        printf("CNCT %s %u DISCONNECT %s\n", role, myproc.rank, PMIx_Error_string(rc));
+        fflush(stdout);
+    }
+
+    if (ischild && doabort) {
+        /* fail, rather than leave - the assemblage is supposed to come down
+         * with us */
+        printf("CNCT %s %u ABORTING\n", role, myproc.rank);
+        fflush(stdout);
+        raise(SIGSEGV);
+        sleep(5);
+        return 1;
+    }
+
     if (ischild) {
-        /* leave the assemblage the sanctioned way, or just walk out of it */
-        if (disconnect) {
-            rc = PMIx_Disconnect(procs, 2, NULL, 0);
-            printf("CNCT %s %u DISCONNECT %s\n", role, myproc.rank, PMIx_Error_string(rc));
-            fflush(stdout);
-        }
         printf("CNCT %s %u DONE 0\n", role, myproc.rank);
         fflush(stdout);
         PMIx_Finalize(NULL, 0);

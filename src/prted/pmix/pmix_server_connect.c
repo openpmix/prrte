@@ -37,10 +37,12 @@
 #include "src/util/pmix_output.h"
 
 #include "src/grpcomm/grpcomm.h"
+#include "src/mca/plm/plm.h"
 #include "src/mca/state/state.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
+#include "src/util/prte_show_help.h"
 
 #include "src/prted/pmix/pmix_server_internal.h"
 
@@ -48,6 +50,7 @@ static void cncon(prte_pmix_server_connection_t *p)
 {
     p->members = NULL;
     p->nmembers = 0;
+    p->terminating = false;
 }
 static void cndes(prte_pmix_server_connection_t *p)
 {
@@ -156,38 +159,78 @@ void prte_pmix_server_connection_record(const pmix_proc_t *members, size_t nmemb
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) nmembers);
 }
 
+/* Does this disconnect request name every member of this assemblage?
+ *
+ * Dissolving is deliberately more generous than recording.  Recording
+ * compares sets exactly, because that is how PMIx itself decides whether two
+ * connects are the same operation; but an assemblage exists to be told about
+ * departures, and once every process in it has said it is leaving there is
+ * nobody left the record serves.  The generosity is one-directional and
+ * cannot dissolve something by accident: a request only covers a member it
+ * names, and a wildcard member is covered only by a wildcard.
+ *
+ * The case that needs it is the one PRRTE creates itself.  A spawn connects
+ * the child to the parent *process*, while an application that then wants
+ * out disconnects the two *jobs* - the shape MPI_Comm_disconnect has - and
+ * under an exact-set rule that request would match nothing and the implicit
+ * assemblage could never be left. */
+static bool membership_covered(prte_pmix_server_connection_t *cptr,
+                               const pmix_proc_t *members, size_t nmembers)
+{
+    size_t i, j;
+    bool found;
+
+    for (i = 0; i < cptr->nmembers; i++) {
+        found = false;
+        for (j = 0; j < nmembers; j++) {
+            if (member_covers(&members[j], &cptr->members[i])) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void prte_pmix_server_connection_drop(const pmix_proc_t *members, size_t nmembers)
 {
-    prte_pmix_server_connection_t *cptr;
+    prte_pmix_server_connection_t *cptr, *next;
 
     if (!registry_live() || NULL == members || 0 == nmembers) {
         return;
     }
 
-    PMIX_LIST_FOREACH(cptr, &prte_pmix_server_globals.connections,
-                      prte_pmix_server_connection_t) {
-        if (same_membership(cptr, members, nmembers)) {
+    PMIX_LIST_FOREACH_SAFE(cptr, next, &prte_pmix_server_globals.connections,
+                           prte_pmix_server_connection_t) {
+        if (membership_covered(cptr, members, nmembers)) {
             pmix_list_remove_item(&prte_pmix_server_globals.connections, &cptr->super);
             PMIX_RELEASE(cptr);
             pmix_output_verbose(2, prte_pmix_server_globals.output,
                                 "%s connection dropped across %d participants",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) nmembers);
-            return;
         }
     }
 }
 
-/* Broadcast the event to the assemblage.
+/* Broadcast an event to the assemblage.
  *
  * The targets are the members as named, wildcards and all, which is what the
  * custom range wants: PMIx delivers to whoever registered for the code and
  * falls within it, so a member that has already gone simply matches nothing.
- * The source is the departed proc rather than ourselves - naming ourselves
- * would have our own PMIx server upcall the event straight back to us. */
-static void notify_assemblage(prte_pmix_server_connection_t *cptr,
-                              prte_proc_t *proc)
+ * The source is the affected proc rather than ourselves - naming ourselves
+ * would have our own PMIx server upcall the event straight back to us.
+ *
+ * "affected" is a proc for a departure and <nspace>/WILDCARD for a job that
+ * was terminated because of one; exit_code is passed as -1 where there is
+ * none to report. */
+static void notify_assemblage(const pmix_proc_t *members, size_t nmembers,
+                              pmix_status_t event,
+                              const pmix_proc_t *affected,
+                              int exit_code)
 {
-    pmix_status_t event = PMIX_ERR_PROC_TERM_WO_SYNC;
     pmix_data_range_t range = PMIX_RANGE_CUSTOM;
     pmix_data_array_t darray;
     pmix_info_t *info;
@@ -196,15 +239,15 @@ static void notify_assemblage(prte_pmix_server_connection_t *cptr,
     pmix_status_t rc;
     int ret;
 
-    ninfo = (0 <= proc->exit_code) ? 3 : 2;
+    ninfo = (0 <= exit_code) ? 3 : 2;
     PMIX_INFO_CREATE(info, ninfo);
-    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_AFFECTED_PROC, &proc->name, PMIX_PROC);
+    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_AFFECTED_PROC, (pmix_proc_t *) affected, PMIX_PROC);
     darray.type = PMIX_PROC;
-    darray.array = cptr->members;
-    darray.size = cptr->nmembers;
+    darray.array = (pmix_proc_t *) members;
+    darray.size = nmembers;
     PMIX_INFO_LOAD(&info[1], PMIX_EVENT_CUSTOM_RANGE, &darray, PMIX_DATA_ARRAY);
-    if (0 <= proc->exit_code) {
-        PMIX_INFO_LOAD(&info[2], PMIX_EXIT_CODE, &proc->exit_code, PMIX_INT);
+    if (0 <= exit_code) {
+        PMIX_INFO_LOAD(&info[2], PMIX_EXIT_CODE, &exit_code, PMIX_INT);
     }
 
     PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
@@ -217,7 +260,7 @@ static void notify_assemblage(prte_pmix_server_connection_t *cptr,
         rc = PMIx_Data_pack(NULL, &pbkt, &event, 1, PMIX_STATUS);
     }
     if (PMIX_SUCCESS == rc) {
-        rc = PMIx_Data_pack(NULL, &pbkt, &proc->name, 1, PMIX_PROC);
+        rc = PMIx_Data_pack(NULL, &pbkt, (pmix_proc_t *) affected, 1, PMIX_PROC);
     }
     if (PMIX_SUCCESS == rc) {
         rc = PMIx_Data_pack(NULL, &pbkt, &range, 1, PMIX_DATA_RANGE);
@@ -236,8 +279,9 @@ static void notify_assemblage(prte_pmix_server_connection_t *cptr,
     }
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s notifying connected assemblage of the loss of %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name));
+                        "%s notifying connected assemblage of %s affecting %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PMIx_Error_string(event),
+                        PRTE_NAME_PRINT(affected));
 
     ret = prte_grpcomm_xcast(PRTE_RML_TAG_NOTIFICATION, &pbkt);
     if (PRTE_SUCCESS != ret) {
@@ -278,6 +322,9 @@ bool prte_pmix_server_is_connected(const pmix_proc_t *proc)
 void prte_pmix_server_connection_terminated(prte_proc_t *proc)
 {
     prte_pmix_server_connection_t *cptr;
+    pmix_proc_t *targets = NULL;
+    size_t ntargets = 0, cap = 0, i, j;
+    bool have;
 
     if (!registry_live() ||
         0 == pmix_list_get_size(&prte_pmix_server_globals.connections)) {
@@ -288,10 +335,194 @@ void prte_pmix_server_connection_terminated(prte_proc_t *proc)
         return;
     }
 
+    /* A proc can belong to more than one assemblage - a spawned job is
+     * connected to its parent by the spawn itself, and the two may then
+     * connect explicitly as well - and its departure is one event, not one
+     * per assemblage.  Address it to the union of the memberships, so
+     * everyone who was promised the news gets it exactly once. */
     PMIX_LIST_FOREACH(cptr, &prte_pmix_server_globals.connections,
                       prte_pmix_server_connection_t) {
-        if (connection_covers(cptr, &proc->name)) {
-            notify_assemblage(cptr, proc);
+        if (!connection_covers(cptr, &proc->name)) {
+            continue;
+        }
+        if (ntargets + cptr->nmembers > cap) {
+            cap = ntargets + cptr->nmembers;
+            targets = (pmix_proc_t *) realloc(targets, cap * sizeof(pmix_proc_t));
+        }
+        for (i = 0; i < cptr->nmembers; i++) {
+            have = false;
+            for (j = 0; j < ntargets; j++) {
+                if (same_proc(&targets[j], &cptr->members[i])) {
+                    have = true;
+                    break;
+                }
+            }
+            if (!have) {
+                memcpy(&targets[ntargets], &cptr->members[i], sizeof(pmix_proc_t));
+                ++ntargets;
+            }
+        }
+    }
+
+    if (0 < ntargets) {
+        notify_assemblage(targets, ntargets, PMIX_ERR_PROC_TERM_WO_SYNC,
+                          &proc->name, proc->exit_code);
+    }
+    if (NULL != targets) {
+        free(targets);
+    }
+}
+
+/* A job has launched successfully.  If it was spawned by an application
+ * process, the PMIx definition connects the two by default - "the parent
+ * process is given a copy of the new job's job-level information ... and both
+ * the parent and the members of the child job receive notification of errors
+ * arising anywhere in their combined assemblage".
+ *
+ * Whether there is a parent process at all is the whole question here, and
+ * three launches that are not a dynamic spawn arrive by the same route.
+ *
+ * jdata->originator does NOT answer it.  By the time the job reaches us it
+ * names the daemon that relayed the request - plm_base_receive overwrites it
+ * with the sender, because that is who the response has to go back to.  What
+ * survives from the requestor's own daemon is PRTE_JOB_LAUNCH_PROXY, which
+ * is set from the originator before the request is packed and is therefore
+ * the process that actually asked.
+ *
+ * That still has to be screened.  A prterun-style launch records the daemon
+ * itself as the proxy, and a "prun ./app" records prun's own tool procID - a
+ * tool is not a member of a job, has no processes to connect to or to
+ * terminate, and is not what "the parent process" means.  So a proxy in our
+ * own namespace is rejected, as is one whose job object carries
+ * PRTE_JOB_FLAG_TOOL.
+ *
+ * PMIX_SPAWN_CHILD_SEP is honored as the opt-out: a spawn that asked for the
+ * child to be independent of its parent has said in as many words that the
+ * two jobs' fates are not to be linked. */
+void prte_pmix_server_connection_spawned(prte_job_t *jdata)
+{
+    prte_job_t *parent;
+    pmix_proc_t *proxy = NULL, members[2];
+    bool sep = false, *sepptr = &sep;
+
+    if (!registry_live() || NULL == jdata) {
+        return;
+    }
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY,
+                            (void **) &proxy, PMIX_PROC) || NULL == proxy) {
+        return;
+    }
+    if (PMIX_NSPACE_INVALID(proxy->nspace) || PMIX_RANK_INVALID == proxy->rank ||
+        same_nspace(proxy->nspace, PRTE_PROC_MY_NAME->nspace)) {
+        /* no requestor, or one of our own daemons - either way there is no
+         * parent process to connect to */
+        goto done;
+    }
+    parent = prte_get_job_data_object(proxy->nspace);
+    if (NULL == parent || PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
+        goto done;
+    }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_CHILD_SEP,
+                           (void **) &sepptr, PMIX_BOOL) && sep) {
+        goto done;
+    }
+
+    PMIX_XFER_PROCID(&members[0], proxy);
+    PMIX_LOAD_PROCID(&members[1], jdata->nspace, PMIX_RANK_WILDCARD);
+    prte_pmix_server_connection_record(members, 2);
+
+done:
+    PMIX_PROC_RELEASE(proxy);
+}
+
+/* Does this assemblage name this job at all? */
+static bool connection_names_job(prte_pmix_server_connection_t *cptr,
+                                 const pmix_nspace_t nspace)
+{
+    size_t n;
+
+    for (n = 0; n < cptr->nmembers; n++) {
+        if (same_nspace(cptr->members[n].nspace, nspace)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspace)
+{
+    prte_pmix_server_connection_t *cptr;
+    prte_job_t *jptr;
+    pmix_proc_t target;
+    pmix_pointer_array_t procs;
+    prte_proc_t *pobj;
+    size_t n, m;
+    bool done;
+    int i;
+
+    if (!registry_live() || !prte_pmix_server_globals.terminate_connected) {
+        return;
+    }
+    if (prte_finalizing || prte_dvm_abort_ordered || prte_prteds_term_ordered) {
+        /* everything is going down anyway */
+        return;
+    }
+
+    PMIX_LIST_FOREACH(cptr, &prte_pmix_server_globals.connections,
+                      prte_pmix_server_connection_t) {
+        if (cptr->terminating || !connection_names_job(cptr, nspace)) {
+            continue;
+        }
+        /* the rest of this assemblage is coming down with it, and each of
+         * those jobs will report its own procs failing as it goes - none of
+         * which should drive this again */
+        cptr->terminating = true;
+
+        for (n = 0; n < cptr->nmembers; n++) {
+            if (same_nspace(cptr->members[n].nspace, nspace)) {
+                continue;
+            }
+            /* a namespace can appear more than once in a membership - one
+             * entry per rank - and it is to be killed once */
+            done = false;
+            for (m = 0; m < n; m++) {
+                if (same_nspace(cptr->members[m].nspace, cptr->members[n].nspace)) {
+                    done = true;
+                    break;
+                }
+            }
+            if (done) {
+                continue;
+            }
+            jptr = prte_get_job_data_object(cptr->members[n].nspace);
+            if (NULL == jptr || PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_ABORTED) ||
+                PRTE_JOB_STATE_TERMINATED <= jptr->state) {
+                /* already gone, or already on its way */
+                continue;
+            }
+
+            /* the user is about to lose a job they did not ask about, so say
+             * why - "connected" is not a property they can see in ps */
+            prte_show_help("help-prted.txt", "connected-term", true,
+                           nspace, jptr->nspace);
+
+            PMIX_LOAD_PROCID(&target, jptr->nspace, PMIX_RANK_WILDCARD);
+            notify_assemblage(cptr->members, cptr->nmembers,
+                              PMIX_ERR_JOB_TERM_WO_SYNC, &target, -1);
+
+            PMIX_CONSTRUCT(&procs, pmix_pointer_array_t);
+            pmix_pointer_array_init(&procs, 1, 1, 1);
+            pobj = PMIX_NEW(prte_proc_t);
+            PMIX_XFER_PROCID(&pobj->name, &target);
+            pmix_pointer_array_add(&procs, pobj);
+            prte_plm.terminate_procs(&procs);
+            for (i = 0; i < procs.size; i++) {
+                pobj = (prte_proc_t *) pmix_pointer_array_get_item(&procs, i);
+                if (NULL != pobj) {
+                    PMIX_RELEASE(pobj);
+                }
+            }
+            PMIX_DESTRUCT(&procs);
         }
     }
 }

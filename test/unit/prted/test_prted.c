@@ -1435,6 +1435,32 @@ static int test_connections(void)
     CHECK("a disconnect drops the connection",
           0 == pmix_list_get_size(&prte_pmix_server_globals.connections));
 
+    /*
+     * Dissolving is deliberately more generous than recording: a request
+     * that names every member of an assemblage dissolves it, whether or not
+     * it names them the same way.  The case that needs it is the one the
+     * runtime creates itself - a spawn connects the child to the parent
+     * PROCESS, while an application that wants out disconnects the two JOBS,
+     * which is the shape MPI_Comm_disconnect has.  Under an exact-set rule
+     * that request matches nothing and the implicit assemblage can never be
+     * left, so a child's later failure would take a parent with it that had
+     * said in as many words that it was done.
+     */
+    PMIX_LOAD_PROCID(&other[0], "unit-test-conn@1", 0);
+    other[1] = members[1];
+    prte_pmix_server_connection_record(other, 2);
+    prte_pmix_server_connection_drop(members, 2);
+    CHECK("a disconnect of the jobs dissolves a connection to one rank of one",
+          0 == pmix_list_get_size(&prte_pmix_server_globals.connections));
+
+    /* ...and the generosity only goes that way: naming one rank does not
+     * dissolve an assemblage that named the whole job */
+    prte_pmix_server_connection_record(members, 2);
+    prte_pmix_server_connection_drop(other, 2);
+    CHECK("a disconnect of one rank leaves a whole-job connection alone",
+          1 == pmix_list_get_size(&prte_pmix_server_globals.connections));
+    prte_pmix_server_connection_drop(members, 2);
+
     /* a proc that belongs to nothing is not connected, and reporting its
      * termination is a no-op rather than a walk off the end of an empty list */
     PMIX_CONSTRUCT(&pdata, prte_proc_t);

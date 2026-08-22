@@ -273,3 +273,19 @@ executable does not meet the minimum supported version:
 
 Please check your LD_LIBRARY_PATH and ensure we are pointed to a
 version that meets the minimum requirement.
+#
+[connected-term]
+
+A job is being terminated because a job it was connected to has failed:
+
+   Failed job:      %s
+   Terminated job:  %s
+
+Processes that call PMIx_Connect ask the runtime to treat them as a
+single application for fault purposes, so the failure of any member is
+taken as a failure of them all. A job leaves an assemblage by calling
+PMIx_Disconnect; a job that is still connected when another member fails
+is terminated with it.
+
+Run with "--prtemca pmix_terminate_connected 0" to confine a failure to
+the job it happened in.
