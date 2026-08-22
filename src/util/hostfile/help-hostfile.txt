@@ -316,7 +316,7 @@ PRTE detected a parse error in the hostfile:
 
    %s
 
-It occured on line number %d on token %d:
+It occurred on line number %d on token %d:
 
    %s
 #
@@ -326,7 +326,7 @@ PRTE detected a parse error in the hostfile:
 
    %s
 
-It occured on line number %d on token %d:
+It occurred on line number %d on token %d:
 
    %d
 #
@@ -349,7 +349,7 @@ PRTE detected a parse error in the hostfile:
 
    %s
 
-It occured on line number %d on token %d.
+It occurred on line number %d on token %d.
 #
 [not-all-mapped-alloc]
 
