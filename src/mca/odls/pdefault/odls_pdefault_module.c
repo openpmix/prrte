@@ -623,6 +623,10 @@ static int fork_local_proc(void *cdptr)
 
     if (pid < 0) {
         PRTE_ERROR_LOG(PMIX_ERR_SYS_LIMITS_CHILDREN);
+        /* nobody inherited these - the fork is what failed - and nothing
+           downstream will close them: do_parent() is never reached */
+        close(p[0]);
+        close(p[1]);
         if (NULL != child) {
             child->state = PRTE_PROC_STATE_FAILED_TO_START;
             child->exit_code = PMIX_ERR_SYS_LIMITS_CHILDREN;
