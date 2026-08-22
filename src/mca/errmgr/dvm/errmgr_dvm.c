@@ -55,6 +55,7 @@
 #include "src/util/pmix_show_help.h"
 #include "src/util/prte_show_help.h"
 
+#include "src/prted/pmix/pmix_server_internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
 #include "src/runtime/prte_quit.h"
@@ -107,10 +108,18 @@ static int finalize(void)
     return PRTE_SUCCESS;
 }
 
+/* Every path into here is a failure taking a job down - job_errors and the
+ * unrecoverable arms of proc_errors - which is exactly the event a connected
+ * assemblage is defined by: the host is to treat its members as one
+ * application, so a failure that costs this job its life costs every job
+ * connected to it too.  Doing it here rather than at each call site is what
+ * keeps the two from drifting apart. */
 static void _terminate_job(pmix_nspace_t jobid)
 {
     pmix_pointer_array_t procs;
     prte_proc_t pobj;
+
+    prte_pmix_server_connection_job_failed(jobid);
 
     PMIX_CONSTRUCT(&procs, pmix_pointer_array_t);
     pmix_pointer_array_init(&procs, 1, 1, 1);

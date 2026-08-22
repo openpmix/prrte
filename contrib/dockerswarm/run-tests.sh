@@ -3686,6 +3686,92 @@ test_hwloc() {
 }
 
 # Absolute path, deliberately -- see the note above DS.
+########################################################################
+# Absolute path, deliberately -- see the note on DS above.
+CN=/opt/prte/prte/bin/connector
+
+test_connect() {
+    local out n host
+
+    banner "connect: a member that leaves without disconnecting is reported"
+    # PMIx_Connect asks the host to treat a set of processes as one
+    # assemblage, and the one obligation that creates is that a member which
+    # terminates WITHOUT calling PMIx_Disconnect first owes the rest of the
+    # assemblage a PMIX_ERR_PROC_TERM_WO_SYNC event.  Nothing recorded who
+    # had connected to whom, so there was nothing to consult when a member
+    # died and the event was never sent.
+    #
+    # This cannot be tested on one host at any level.  The PMIx server
+    # library executes a connect whose participants are ALL local itself and
+    # never calls the host ("if all the participants are local, then we do
+    # not need the host"), so a single-node run exercises none of the
+    # runtime's half.  connector therefore spawns its child onto another
+    # node, and the assemblage spans two daemons.
+    cleanup_swarm
+    if ! RUN "test -x $CN"; then
+        skp "connector client not installed -- re-run ./build.sh"
+        return
+    fi
+    if ! prted_dvm_start 'node1:2,node2:2,node3:2,node4:2'; then
+        bad "could not start a DVM for the connect tests"
+        cleanup_swarm
+        return
+    fi
+
+    out=$(PRUN "--host node1:1 -n 1 $CN --child-host node2 --wait 20" 2>&1)
+    echo "$out" | grep -q 'CNCT parent 0 CONNECT PMIX_SUCCESS' \
+        && ok "the parent connected to the job it spawned" \
+        || bad "the connect did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    host=$(echo "$out" | awk '$1=="CNCT" && $2=="child" && $4=="HOST" {print $5}')
+    [ -n "$host" ] && [ "$host" != "node1" ] \
+        && ok "...to a child on $host, so the assemblage spans daemons" \
+        || skp "child host not reported ($host) -- spawned-job output may not be forwarded"
+    n=$(echo "$out" | awk '$1=="CNCT" && $2=="parent" && $4=="EVENTS" {print $5}')
+    [ "${n:-0}" -ge 1 ] \
+        && ok "...and the parent was told when the child left without disconnecting" \
+        || bad "no PMIX_ERR_PROC_TERM_WO_SYNC reached the parent: $(echo "$out" | grep CNCT | tr '\n' ' ' | tail -c 400)"
+
+    banner "connect: a member that disconnects first owes nobody an event"
+    # The other half of the same promise, and the one that shows the registry
+    # is consulted rather than the event being fired at every departure: a
+    # child that calls PMIx_Disconnect has left the assemblage, so its exit
+    # is nobody else's business.
+    out=$(PRUN "--host node1:1 -n 1 $CN --child-host node2 --disconnect --wait 10" 2>&1)
+    echo "$out" | grep -q 'CNCT parent 0 CONNECT PMIX_SUCCESS' \
+        && ok "the parent connected again" \
+        || bad "the second connect did not complete: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+    n=$(echo "$out" | awk '$1=="CNCT" && $2=="parent" && $4=="EVENTS" {print $5}')
+    [ "${n:-1}" = 0 ] \
+        && ok "...and heard nothing when the child disconnected before leaving" \
+        || bad "an event was sent about a child that had disconnected: $(echo "$out" | grep CNCT | tr '\n' ' ' | tail -c 400)"
+
+    banner "connect: a failure in one member terminates the assemblage"
+    # The other half of the definition: the host is to treat the assemblage
+    # as a single application, so a failure that terminates one member's job
+    # terminates the rest of it.  The child aborts on a signal while still
+    # connected; the parent, on another node, must not survive it.
+    out=$(PRUN "--host node1:1 -n 1 $CN --child-host node2 --abort --wait 20" 2>&1)
+    echo "$out" | grep -q 'A job is being terminated because a job it was connected to has failed' \
+        && ok "the parent's job was terminated with the child that failed" \
+        || bad "the assemblage survived a member's failure: $(echo "$out" | tr '\n' ' ' | tail -c 400)"
+    echo "$out" | grep -q 'CNCT parent 0 DONE' \
+        && bad "the parent ran to completion despite the failure" \
+        || ok "...and it did not reach the end of its own run"
+
+    banner "connect: a member that disconnected first is left out of that"
+    # ...and the same failure, after both halves have disconnected, is the
+    # child's own business.  This is what shows the teardown is driven by the
+    # recorded membership rather than by the parent/child relationship, which
+    # a disconnect does not change.
+    out=$(PRUN "--host node1:1 -n 1 $CN --child-host node2 --disconnect --abort --wait 10" 2>&1)
+    echo "$out" | grep -q 'CNCT parent 0 DONE' \
+        && ok "the parent survived the failure of a job it had disconnected from" \
+        || bad "the parent was taken down anyway: $(echo "$out" | tr '\n' ' ' | tail -c 400)"
+
+    RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    cleanup_swarm
+}
+
 GC=/opt/prte/prte/bin/groupcon
 GINV=/opt/prte/prte/bin/groupinv
 FENCER=/opt/prte/prte/bin/fencer
@@ -7242,6 +7328,8 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     test_odls
 
     test_grpcomm
+
+    test_connect
 
     test_pmix_cycling
 

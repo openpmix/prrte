@@ -437,6 +437,17 @@ void pmix_server_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_pmix_server_globals.remote_connections);
 
+    /* whether a failure that terminates one job of a connected assemblage
+     * terminates the rest of it.  The PMIx definition of "connected" asks a
+     * host that terminates an application when one of its processes fails to
+     * do the same to the whole assemblage; this is a switch because it
+     * changes the fate of a job the failure did not happen in. */
+    prte_pmix_server_globals.terminate_connected = true;
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "terminate_connected",
+                                      "Terminate every job in a connected assemblage when a failure terminates one of them",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_pmix_server_globals.terminate_connected);
+
     /* whether or not to require client pid to match */
     prte_pmix_server_globals.require_pid_match = false;
     (void) pmix_mca_base_var_register("prte", "pmix", NULL, "require_pid_match",
@@ -806,6 +817,7 @@ int pmix_server_init(void)
     PMIX_CONSTRUCT(&prte_pmix_server_globals.psets, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.departed_jobs, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.groups, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.connections, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.local_reqs, pmix_pointer_array_t);
     pmix_pointer_array_init(&prte_pmix_server_globals.local_reqs, 128, INT_MAX, 2);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.remote_reqs, pmix_pointer_array_t);
@@ -1251,6 +1263,11 @@ void pmix_server_start(void)
         /* setup recv for scheduler requests */
         PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED,
                       PRTE_RML_PERSISTENT, pmix_server_sched, NULL);
+        /* setup recv for the membership of connected assemblages, which is
+         * held here because we are the one process that sees every proc in
+         * the DVM terminate */
+        PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_CONNECTED,
+                      PRTE_RML_PERSISTENT, prte_pmix_server_connection_recv, NULL);
     }
 }
 
@@ -1278,6 +1295,7 @@ void pmix_server_finalize(void)
     if (PRTE_PROC_IS_MASTER) {
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING);
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED);
+        PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_CONNECTED);
     }
 
     /* finalize our local data server */
@@ -1304,6 +1322,7 @@ void pmix_server_finalize(void)
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.psets);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.departed_jobs);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.groups);
+    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.connections);
 
     /* shutdown the local server */
     prte_pmix_server_globals.initialized = false;
@@ -1354,6 +1373,9 @@ static void send_error(int status, pmix_proc_t *idreq, pmix_proc_t *remote, int 
 void prte_pmix_server_job_departed(const pmix_nspace_t nspace)
 {
     prte_namelist_t *nm;
+
+    /* an assemblage this job belonged to may now have nobody left in it */
+    prte_pmix_server_connection_purge(nspace);
 
     if (prte_pmix_server_job_has_departed(nspace)) {
         return;
@@ -2825,6 +2847,8 @@ static void rqcon(prte_pmix_server_req_t *p)
     p->range = PMIX_RANGE_SESSION;
     p->proxy = *PRTE_NAME_INVALID;
     p->target = *PRTE_NAME_INVALID;
+    p->procs = NULL;
+    p->nprocs = 0;
     p->jdata = NULL;
     PMIX_DATA_BUFFER_CONSTRUCT(&p->msg);
     p->timeout = prte_pmix_server_globals.timeout;
@@ -2842,6 +2866,9 @@ static void rqdes(prte_pmix_server_req_t *p)
 {
     if (NULL != p->operation) {
         free(p->operation);
+    }
+    if (NULL != p->procs) {
+        PMIX_PROC_FREE(p->procs, p->nprocs);
     }
     if (NULL != p->info && p->copy) {
         PMIX_INFO_FREE(p->info, p->ninfo);

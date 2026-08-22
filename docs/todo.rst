@@ -99,14 +99,6 @@ which nodes, and the daemon-launch path would have to fan out through more
 than one.  At minimum it needs a launcher affinity recorded per node and
 honored by ``prte_plm_base_setup_virtual_machine``.
 
-**Nothing records who is "connected".**  ``pmix_server_connect_fn`` and
-``pmix_server_disconnect_fn`` (``src/prted/pmix/pmix_server_dyn.c``)
-implement both operations as a fence across the participants, which is
-enough to make them return.  The bookkeeping is what is missing: the set of
-processes a ``PMIx_Connect`` joined is recorded nowhere, so when one of them
-terminates or fails there is nothing to consult for who was promised a
-notification.
-
 **The bootstrap configuration parses two options it deliberately does not
 publish.**  ``SessionTmpDir`` and the ``Log*`` options are read into the
 bootstrap configuration and then left there
@@ -228,8 +220,6 @@ the marker is stale.
    * - ``mca/ess/base/ess_base_bootstrap.c``,
        ``prte_ess_base_bootstrap_params``
      - two bootstrap options are parsed and not plumbed
-   * - ``prted/pmix/pmix_server_dyn.c``, ``pmix_server_disconnect_fn``
-     - nothing records who is "connected"
    * - ``mca/ras/flux/ras_flux_module.c``, ``modify``
      - ``ras/flux`` has no ``modify()``
 
