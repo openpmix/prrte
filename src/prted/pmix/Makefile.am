@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2014-2020 Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2022-2025 Nanook Consulting  All rights reserved.
+# Copyright (c) 2022-2026 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -18,6 +18,7 @@ libprrte_la_SOURCES += \
           prted/pmix/pmix_server_fence.c \
           prted/pmix/pmix_server_register_fns.c \
           prted/pmix/pmix_server_dyn.c \
+          prted/pmix/pmix_server_connect.c \
           prted/pmix/pmix_server_pub.c \
           prted/pmix/pmix_server_gen.c \
           prted/pmix/pmix_server_queries.c \

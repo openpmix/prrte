@@ -1305,6 +1305,11 @@ static void connect_release(pmix_status_t status,
     }
 
 release:
+    /* the assemblage exists only if the collective that formed it succeeded */
+    if (PMIX_SUCCESS == status) {
+        prte_pmix_server_connection_report(md->procs, md->nprocs);
+    }
+
     /* now release the connect call */
     if (NULL != md->opcbfunc) {
         md->opcbfunc(rc, md->cbdata);
@@ -1340,6 +1345,12 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
      * for "remote" scope */
 
     cd = PMIX_NEW(prte_pmix_server_req_t);
+    /* keep the membership: once the fence says the connect completed, the DVM
+     * master has to be told who is now connected to whom, since it is the one
+     * that owes them an event if a member departs without disconnecting */
+    cd->nprocs = nprocs;
+    PMIX_PROC_CREATE(cd->procs, cd->nprocs);
+    memcpy(cd->procs, procs, nprocs * sizeof(pmix_proc_t));
     for (n=0; n < ninfo; n++) {
         if (PMIX_CHECK_KEY(&info[n], PMIX_PROC_INFO_ARRAY) ||
             PMIX_CHECK_KEY(&info[n], PMIX_JOB_INFO_ARRAY)) {
@@ -1394,6 +1405,15 @@ static void mdxcbfunc(pmix_status_t status,
     PRTE_HIDE_UNUSED_PARAMS(data, ndata, relcbfunc, relcbdata);
 
     PMIX_ACQUIRE_OBJECT(cd);
+    /* these procs have left the assemblage in the sanctioned way, so the
+     * promise made when they connected is discharged */
+    if (PMIX_SUCCESS == status && NULL != cd->procs) {
+        prte_pmix_server_connection_report_drop(cd->procs, cd->nprocs);
+    }
+    if (NULL != cd->procs) {
+        PMIX_PROC_FREE(cd->procs, cd->nprocs);
+        cd->procs = NULL;
+    }
     /* ack the call */
     if (NULL != cd->cbfunc) {
         cd->cbfunc(status, cd->cbdata);
@@ -1411,18 +1431,28 @@ pmix_status_t pmix_server_disconnect_fn(const pmix_proc_t procs[], size_t nprocs
     pmix_output_verbose(2, prte_pmix_server_globals.output, "%s disconnect called",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
-    /* at some point, we need to add bookeeping to track which
-     * procs are "connected" so we know who to notify upon
-     * termination or failure. For now, just execute a fence
-     * Note that we do not need to thread-shift here as the
-     * fence function will do it for us */
+    /* Execute a fence across the participants, and - once it says they all
+     * arrived - tell the DVM master to forget the assemblage they formed.
+     * Leaving it this way is what discharges the connect's promise: a member
+     * that departs afterwards owes nobody an event.
+     * Note that we do not need to thread-shift here as the fence function
+     * will do it for us */
     cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
     cd->cbfunc = cbfunc;
     cd->cbdata = cbdata;
+    if (NULL != procs && 0 < nprocs) {
+        cd->nprocs = nprocs;
+        PMIX_PROC_CREATE(cd->procs, cd->nprocs);
+        memcpy(cd->procs, procs, nprocs * sizeof(pmix_proc_t));
+    }
 
     rc = pmix_server_fencenb_fn(procs, nprocs, info, ninfo, NULL, 0, mdxcbfunc, cd);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
+        if (NULL != cd->procs) {
+            PMIX_PROC_FREE(cd->procs, cd->nprocs);
+            cd->procs = NULL;
+        }
         PMIX_RELEASE(cd);
     }
 

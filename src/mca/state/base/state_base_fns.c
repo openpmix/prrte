@@ -686,6 +686,15 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
         }
         PRTE_FLAG_SET(pdata, PRTE_PROC_FLAG_RECORDED);
 
+        /* If this proc was connected to others, they are owed an event: the
+         * PMIx definition of "connected" is that a member which departs
+         * without first calling PMIx_Disconnect is a reportable event for
+         * the rest of the assemblage.  This is the one place that sees every
+         * proc in the DVM stop, whether it exited, failed, or was on a node
+         * whose daemon died, and the RECORDED flag just set above is what
+         * makes it exactly once per proc. */
+        prte_pmix_server_connection_terminated(pdata);
+
         /* update the proc state */
         PRTE_FLAG_UNSET(pdata, PRTE_PROC_FLAG_ALIVE);
         if (pdata->state < PRTE_PROC_STATE_TERMINATED) {
