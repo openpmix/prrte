@@ -226,6 +226,7 @@ static void wait_signal_callback(int fd, short event, void *arg)
     int status;
     pid_t pid;
     prte_wait_tracker_t *t2;
+    bool found;
     PRTE_HIDE_UNUSED_PARAMS(fd, event);
 
     PMIX_ACQUIRE_OBJECT(signal);
@@ -248,11 +249,18 @@ static void wait_signal_callback(int fd, short event, void *arg)
             return;
         }
 
+        /* A child forked by one of the worker threads had its pid stored
+         * by that thread; pair the reads below with the barrier it issues
+         * before it lets the child run. */
+        PMIX_ACQUIRE_OBJECT(&pending_cbs);
+
         /* we are already in an event, so it is safe to access the list */
+        found = false;
         PMIX_LIST_FOREACH(t2, &pending_cbs, prte_wait_tracker_t)
         {
             if (pid == t2->child->pid) {
                 /* found it! */
+                found = true;
                 t2->child->exit_code = status;
                 pmix_list_remove_item(&pending_cbs, &t2->super);
                 if (NULL != t2->cbfunc) {
@@ -263,6 +271,18 @@ static void wait_signal_callback(int fd, short event, void *arg)
                 }
                 break;
             }
+        }
+        if (!found) {
+            /* This is expected for a child nobody registered - the popen()
+             * helpers scattered around the tree are ours too, and waitpid(-1)
+             * takes whichever of them exits first.  It is a lost termination
+             * for anything that *was* registered, though, so say which pid
+             * went unclaimed rather than leaving a hang with no trace of why:
+             * whoever forked it either never recorded its pid or recorded it
+             * too late to be found here. */
+            PMIX_OUTPUT_VERBOSE((5, prte_debug_output,
+                                 "%s wait_signal_callback: reaped unregistered pid %d status %d",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) pid, status));
         }
     }
 }

@@ -101,6 +101,30 @@ static int prte_odls_base_register(pmix_mca_base_register_flag_t flags)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_odls_globals.scatter_cpusets);
 
+    /* A fault-injection hook, in the same spirit as prte_daemon_fail.  The
+     * daemon forks its children on a worker thread and records each child's
+     * pid there, while the SIGCHLD reaper runs on the progress thread and
+     * has nothing but that pid with which to attribute what it reaps.  A
+     * child short-lived enough to run between the fork and the store used to
+     * be reaped unattributably, and the job then never completed.  The child
+     * is now held until the store is done, and stalling here is what widens
+     * a window that is otherwise microseconds wide and fails in a fraction
+     * of a percent of launches.
+     *
+     * Deliberately NOT restricted to a debug build.  A timing defect has to
+     * be demonstrable in the build that ships, and an optimized build is a
+     * different race from a debug one; a hook that exists only in the latter
+     * cannot say anything about the former.  It costs a load and a
+     * predictable branch per fork(), against a fork/exec pair, and every
+     * launched proc pays the stall itself only if somebody sets it. */
+    prte_odls_globals.fork_publish_delay = 0;
+    (void) pmix_mca_base_var_register("prte", "odls", "base", "fork_publish_delay",
+                                      "Microseconds to stall between forking a child and recording "
+                                      "its pid, to exercise the launch/reap race "
+                                      "[default: 0 => no delay]",
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
+                                      &prte_odls_globals.fork_publish_delay);
+
     return PRTE_SUCCESS;
 }
 

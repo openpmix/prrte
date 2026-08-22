@@ -76,13 +76,16 @@ child-side pre-exec sequence.
 This is the function the base calls (as `cd->fork_local(cd)`) from inside
 `prte_odls_base_spawn_proc`, once per child, on whichever event base the
 base picked. The design, spelled out in the long header comment, is a
-**pipe-synchronized fork**:
+**pipe-synchronized fork**, with a pipe running each way:
 
-1. Open a pipe `p[2]`.
+1. Open a pipe `p[2]` (child→parent errors) and a pipe `gate[2]`
+   (parent→child release).
 2. `fork()`. Record `child->pid` (in *both* parent and child copies).
-3. **Child** (`pid == 0`): close the read end, call `do_child(cd, p[1])` —
-   which never returns (it either `execve`s or `_exit`s).
-4. **Parent**: close the write end, return `do_parent(cd, p[0])`.
+3. **Child** (`pid == 0`): close `p[0]` and `gate[1]`, call
+   `do_child(cd, p[1], gate[0])` — which never returns (it either
+   `execve`s or `_exit`s).
+4. **Parent**: close `gate[0]`, `PMIX_POST_OBJECT(child)`, write one byte
+   to `gate[1]` and close it, close `p[1]`, return `do_parent(cd, p[0])`.
 
 The pipe is the child→parent error channel: the child sets it
 close-on-exec, so if `execve` succeeds the pipe simply **closes with no
@@ -92,22 +95,73 @@ parent renders and prints the diagnostic.
 
 `pipe()` or `fork()` failure sets `child->state =
 PRTE_PROC_STATE_FAILED_TO_START` and returns `PMIX_ERR_SYS_LIMITS_PIPES` /
-`PMIX_ERR_SYS_LIMITS_CHILDREN`.
+`PMIX_ERR_SYS_LIMITS_CHILDREN`.  All four descriptors have to be closed on
+those paths — the gate pair is easy to forget, and leaking it leaks two
+fds per failed launch.
+
+### The gate — why the child waits to be released
+
+**The child must not be able to die before its pid has been recorded.**
+We fork on a *worker* thread, so `child->pid` is stored there, while the
+`SIGCHLD` reaper (`wait_signal_callback`,
+[`src/runtime/prte_wait.c`](../../../runtime/prte_wait.c)) runs on the
+progress thread and attributes every pid it reaps by scanning the wait
+trackers for that same field.  A process short-lived enough to run to
+completion between `fork()` returning and that store — or merely a worker
+thread descheduled right there — therefore matched **no tracker at all**,
+and `waitpid` had already consumed the status, so nothing could retry: the
+proc never left `RUNNING`, `PRTE_PROC_FLAG_WAITPID` was never set,
+`jdata->num_terminated` stopped one short of `num_procs`, the job never
+completed, `terminate_orteds` was never called, and `prterun` sat in its
+event loop with every line of the job's output already printed.  It
+reproduced in roughly 0.3% of `prterun -n 8 --map-by :oversubscribe
+hostname` runs.
+
+Registering the tracker earlier cannot fix it — the registration is
+already made *before* the fork, deliberately, "to ensure we can capture
+the callback on shortlived apps".  It is the **key** that arrives late,
+not the tracker.
+
+So `do_child()` blocks on `gate_fd` as its very first act, before
+anything that can `_exit()` — including `prte_odls_base_child_fail()`.
+The parent writes that byte only after storing the pid, which orders the
+store ahead of anything the child can do, the child's exit included.  EOF
+releases the child too, so a parent that dies mid-fork cannot strand it.
+`PMIX_POST_OBJECT`/`PMIX_ACQUIRE_OBJECT` pair the store with the reaper's
+read for the weakly-ordered case.
+
+`odls_base_fork_publish_delay` (an MCA parameter, present in **every**
+build — see the note in `odls_base_frame.c`) stalls the daemon in exactly
+that window, which turns a fraction of a percent into a certainty:
+
+```sh
+prterun --prtemca odls_base_fork_publish_delay 200000 \
+        -n 8 --map-by :oversubscribe hostname
+```
+
+That is the whole reproducer — one node, one daemon, no harness, because
+the race is between one daemon's worker thread and its own progress
+thread and nothing else participates.  Remove the gate read and it hangs
+on the first run; with the gate it is 8 lines of output and exit 0 every
+time.  Run it after touching anything in this fork path.
 
 ### `do_child()` — everything between fork and exec
 
 Runs in the forked child; `__prte_attribute_noreturn__`. In order:
 
-1. `setpgid(0,0)` — new process group so later signals reach grandchildren.
-2. Make the pipe write-fd close-on-exec.
-3. If this is a real child with output forwarding: `prte_iof_base_setup_child`
+1. Block reading `gate_fd` until the parent releases us, then close it —
+   see "The gate" above.  This is first for a reason: nothing below it may
+   run before our pid has been recorded.
+2. `setpgid(0,0)` — new process group so later signals reach grandchildren.
+3. Make the pipe write-fd close-on-exec.
+4. If this is a real child with output forwarding: `prte_iof_base_setup_child`
    to hook up stdout/stderr, then **`prte_odls_base_set(cd, write_fd)`** —
    the child half of the base binding routine, which only *issues* the
    cpu/memory bind syscalls the parent already prepared
    (`prte_odls_base_prepare_binding`, run pre-fork in `spawn_proc`) and
    proxies any binding error up the pipe. (If there is no child and no
    output forwarding, stdio is tied to `/dev/null`.)
-4. Close every inherited descriptor except stdio and the pipe. It
+5. Close every inherited descriptor except stdio and the pipe. It
    deliberately does **not** call `pmix_close_open_file_descriptors()`,
    which scans `/proc/self/fd` with `opendir`/`readdir` and so allocates —
    unsafe in the post-fork child.
@@ -131,13 +185,13 @@ Runs in the forked child; `__prte_attribute_noreturn__`. In order:
    arm also falls back on a runtime failure: the syscall can be present
    at build time and refused at run time by an older kernel or a seccomp
    policy.
-5. Restore default signal handlers (`SIGTERM/INT/HUP/PIPE/CHLD`) and
+6. Restore default signal handlers (`SIGTERM/INT/HUP/PIPE/CHLD`) and
    unblock all signals — the event library may have left them altered, and
    an app must not inherit a blocked SIGTERM.
-6. `chdir(cd->wdir)` to the app's working directory.
-7. If `PRTE_JOB_STOP_ON_EXEC`: `ptrace(PRTE_TRACEME, …)` so the app stops at
+7. `chdir(cd->wdir)` to the app's working directory.
+8. If `PRTE_JOB_STOP_ON_EXEC`: `ptrace(PRTE_TRACEME, …)` so the app stops at
    `execve` for a debugger to attach.
-8. **`execve(cd->cmd, cd->argv, cd->env)`.** On return (always an error) it
+9. **`execve(cd->cmd, cd->argv, cd->env)`.** On return (always an error) it
    simply reports `PRTE_ODLS_CHILD_ERR_EXEC` plus `errno`; the *parent*
    inspects `errno` and `stat`s the app to distinguish a bad interpreter
    (`ENOENT` but the file exists) from a missing/failed executable and

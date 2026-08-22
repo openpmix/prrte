@@ -150,7 +150,8 @@ static int restart_proc(prte_proc_t *child);
  * Explicitly declared functions so that we can get the noreturn
  * attribute registered with the compiler.
  */
-static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd) __prte_attribute_noreturn__;
+static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd,
+                     int gate_fd) __prte_attribute_noreturn__;
 
 /*
  * Module
@@ -234,11 +235,29 @@ static void set_handler_default(int sig)
     sigaction(sig, &act, (struct sigaction *) 0);
 }
 
-static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
+static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd, int gate_fd)
 {
     int i;
     long fd;
+    char byte;
     sigset_t sigs;
+
+    /* Wait for the parent to release us.  Our pid is recorded by the
+       thread that forked us - a worker thread - while the SIGCHLD reaper
+       runs on the progress thread and attributes each pid it reaps by
+       scanning the wait trackers for that same field.  A process that can
+       run to completion before the store lands therefore matches no
+       tracker at all, and its exit status is discarded: the proc never
+       leaves RUNNING, the job never counts it terminated, and the launch
+       hangs with all of its output already printed.  Nothing below this
+       point - not even a failure report, which _exit()s - can happen until
+       the parent has written the gate byte, so there is no window in which
+       we can die unattributably.  A closed gate (EOF) releases us too, so
+       a parent that dies mid-fork cannot strand us here. */
+    while (0 > read(gate_fd, &byte, 1) && EINTR == errno) {
+        continue;
+    }
+    close(gate_fd);
 
 #if HAVE_SETPGID
     /* Set a new process group for this child, so that any
@@ -576,8 +595,9 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
 static int fork_local_proc(void *cdptr)
 {
     prte_odls_spawn_caddy_t *cd = (prte_odls_spawn_caddy_t *) cdptr;
-    int p[2];
+    int p[2], gate[2];
     pid_t pid;
+    char byte = 0;
     prte_proc_t *child = cd->child;
 
     /* Default the argv if the app didn't provide one.  Do this here in
@@ -615,8 +635,33 @@ static int fork_local_proc(void *cdptr)
         return PMIX_ERR_SYS_LIMITS_PIPES;
     }
 
+    /* A second pipe runs the other way and gates the child.  We fork on a
+       worker thread, so the store of the child's pid races the progress
+       thread's SIGCHLD reaper - which has nothing but that pid with which
+       to attribute a reaped child to its wait tracker.  Holding the child
+       at the far end of this pipe until we have stored its pid means the
+       child cannot exit - or even fail - before the reaper is able to
+       recognize it.  See the comment at the head of do_child(). */
+    if (pipe(gate) < 0) {
+        PRTE_ERROR_LOG(PMIX_ERR_SYS_LIMITS_PIPES);
+        close(p[0]);
+        close(p[1]);
+        if (NULL != child) {
+            child->state = PRTE_PROC_STATE_FAILED_TO_START;
+            child->exit_code = PMIX_ERR_SYS_LIMITS_PIPES;
+        }
+        return PMIX_ERR_SYS_LIMITS_PIPES;
+    }
+
     /* Fork off the child */
     pid = fork();
+    if (0 < pid && 0 < prte_odls_globals.fork_publish_delay) {
+        /* Fault injection: widen the window between the fork and the store
+           below, which is the window a child used to be able to die in
+           without the reaper being able to attribute it.  The gate makes
+           that harmless, and a launch under this delay is what proves it. */
+        usleep((useconds_t) prte_odls_globals.fork_publish_delay);
+    }
     if (NULL != child) {
         child->pid = pid;
     }
@@ -625,6 +670,8 @@ static int fork_local_proc(void *cdptr)
         PRTE_ERROR_LOG(PMIX_ERR_SYS_LIMITS_CHILDREN);
         /* nobody inherited these - the fork is what failed - and nothing
            downstream will close them: do_parent() is never reached */
+        close(gate[0]);
+        close(gate[1]);
         close(p[0]);
         close(p[1]);
         if (NULL != child) {
@@ -636,9 +683,22 @@ static int fork_local_proc(void *cdptr)
 
     if (pid == 0) {
         close(p[0]);
-        do_child(cd, p[1]);
+        close(gate[1]);
+        do_child(cd, p[1], gate[0]);
         /* Does not return */
     }
+
+    close(gate[0]);
+    /* the pid is stored above; make it visible before the write that
+       releases the child, so the reaper - which sees the child's exit no
+       earlier than the child sees this byte - cannot read a stale field */
+    if (NULL != child) {
+        PMIX_POST_OBJECT(child);
+    }
+    while (0 > write(gate[1], &byte, 1) && EINTR == errno) {
+        continue;
+    }
+    close(gate[1]);
 
     close(p[1]);
     return do_parent(cd, p[0]);

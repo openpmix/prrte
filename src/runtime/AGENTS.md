@@ -232,6 +232,31 @@ round-robin cursor. They now both call `prte_worker_pool_assign()`.
   `prte_worker_pool_size()` is the answer; `prte_num_worker_threads` is only
   the request.
 
+### The SIGCHLD reaper, and what a worker thread owes it
+
+`wait_signal_callback` (`prte_wait.c`) is on `prte_event_base` and reaps
+with `waitpid(-1, WNOHANG)` — every child the process has, not just the
+one whose death raised the signal, because SIGCHLDs coalesce. It
+attributes each pid it reaps by scanning `pending_cbs` for a tracker whose
+`child->pid` matches, and **a pid it cannot attribute is gone**: `waitpid`
+has consumed the status and nothing retries.
+
+So a forker owes the reaper the pid *before the child can die*, and where
+that costs nothing — `plm/ssh`, `plm/slurm`, `ras/slurm` all fork on the
+progress thread itself, so the reaper cannot run in between — it is free.
+The one forker that does not is `odls/pdefault`, which forks on a worker
+thread precisely so the launch does not serialize on this one; it holds
+the child on a pipe until the store is done. See
+[`src/mca/odls/pdefault/AGENTS.md`](../mca/odls/pdefault/AGENTS.md), "The
+gate". Any *new* off-thread fork owes the same, and getting it wrong is
+not a crash: it is a proc stuck in `RUNNING`, a job that never counts it
+terminated, and a launch that hangs with all of its output printed.
+
+The reaper says so, at verbosity 5 on `prte_debug_output`, when it reaps a
+pid no tracker claims. That is routine — the `popen()` helpers scattered
+around the tree are our children too and `waitpid(-1)` takes whichever
+exits first — but it is the only trace such a hang leaves.
+
 ---
 
 ## Gotchas before you edit
