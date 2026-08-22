@@ -99,32 +99,6 @@ which nodes, and the daemon-launch path would have to fan out through more
 than one.  At minimum it needs a launcher affinity recorded per node and
 honored by ``prte_plm_base_setup_virtual_machine``.
 
-**A connected assemblage is remembered, but not yet treated as one
-application.**  The membership of a ``PMIx_Connect`` is now recorded on the
-DVM master (``src/prted/pmix/pmix_server_connect.c``) and a member that
-terminates without disconnecting first draws the
-``PMIX_ERR_PROC_TERM_WO_SYNC`` the PMIx definition requires.  Three things
-that definition also asks for are not there yet:
-
-- **The fault response.**  "Connected" is defined as the host treating the
-  assemblage as a single application: an environment that terminates an
-  application when one of its processes fails should terminate every member
-  of the assemblage.  PRRTE terminates only the failed process's own job, and
-  generates no ``PMIX_ERR_JOB_TERM_WO_SYNC`` for the jobs a member's death
-  ought to have taken with it.  The registry is what such a policy would be
-  written against.
-- **An assemblage on a single node is invisible to us.**  The PMIx server
-  library executes a connect whose participants are all local without calling
-  the host at all, so PRRTE never learns of one and cannot keep the promise
-  for it.  Nothing PRRTE does can cover that; it is a question for the PMIx
-  server library, which is the only thing that knows those procs connected.
-- **Spawn does not connect the child to its parent.**  The PMIx definition
-  says the processes created by ``PMIx_Spawn`` are connected to the parent by
-  default; PRRTE records nothing, so a spawned job that dies notifies its
-  parent only through the ordinary job-level channels.  Doing this properly
-  means deciding what ``PMIX_SPAWN_CONNECTED`` should mean for a DVM that has
-  always let a parent outlive its children.
-
 **The bootstrap configuration parses two options it deliberately does not
 publish.**  ``SessionTmpDir`` and the ``Log*`` options are read into the
 bootstrap configuration and then left there

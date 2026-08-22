@@ -3745,6 +3745,29 @@ test_connect() {
         && ok "...and heard nothing when the child disconnected before leaving" \
         || bad "an event was sent about a child that had disconnected: $(echo "$out" | grep CNCT | tr '\n' ' ' | tail -c 400)"
 
+    banner "connect: a failure in one member terminates the assemblage"
+    # The other half of the definition: the host is to treat the assemblage
+    # as a single application, so a failure that terminates one member's job
+    # terminates the rest of it.  The child aborts on a signal while still
+    # connected; the parent, on another node, must not survive it.
+    out=$(PRUN "--host node1:1 -n 1 $CN --child-host node2 --abort --wait 20" 2>&1)
+    echo "$out" | grep -q 'A job is being terminated because a job it was connected to has failed' \
+        && ok "the parent's job was terminated with the child that failed" \
+        || bad "the assemblage survived a member's failure: $(echo "$out" | tr '\n' ' ' | tail -c 400)"
+    echo "$out" | grep -q 'CNCT parent 0 DONE' \
+        && bad "the parent ran to completion despite the failure" \
+        || ok "...and it did not reach the end of its own run"
+
+    banner "connect: a member that disconnected first is left out of that"
+    # ...and the same failure, after both halves have disconnected, is the
+    # child's own business.  This is what shows the teardown is driven by the
+    # recorded membership rather than by the parent/child relationship, which
+    # a disconnect does not change.
+    out=$(PRUN "--host node1:1 -n 1 $CN --child-host node2 --disconnect --abort --wait 10" 2>&1)
+    echo "$out" | grep -q 'CNCT parent 0 DONE' \
+        && ok "the parent survived the failure of a job it had disconnected from" \
+        || bad "the parent was taken down anyway: $(echo "$out" | tr '\n' ' ' | tail -c 400)"
+
     RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     cleanup_swarm
 }

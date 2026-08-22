@@ -499,6 +499,9 @@ typedef struct {
     pmix_list_item_t super;
     pmix_proc_t *members;
     size_t nmembers;
+    /* this assemblage is already being torn down after a member's failure,
+     * so a second failure inside it must not drive the teardown again */
+    bool terminating;
 } prte_pmix_server_connection_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_pmix_server_connection_t);
 
@@ -519,6 +522,17 @@ PRTE_EXPORT bool prte_pmix_server_is_connected(const pmix_proc_t *proc);
  * plainly did not disconnect first.  Called once per proc from the DVM
  * master's proc-termination path. */
 PRTE_EXPORT void prte_pmix_server_connection_terminated(prte_proc_t *proc);
+
+/* A job has launched successfully: connect it to the process that spawned
+ * it, if it was spawned by a process at all.  The PMIx definition makes that
+ * the default for PMIx_Spawn; PMIX_SPAWN_CHILD_SEP opts out. */
+PRTE_EXPORT void prte_pmix_server_connection_spawned(prte_job_t *jdata);
+
+/* A failure has cost this job its life.  "Connected" means the host treats
+ * the assemblage as a single application, so every other job connected to it
+ * goes too - each one announced with PMIX_ERR_JOB_TERM_WO_SYNC.  Called from
+ * the DVM master's error manager as it terminates the job that failed. */
+PRTE_EXPORT void prte_pmix_server_connection_job_failed(const pmix_nspace_t nspace);
 
 /* A job's data object is going away: forget any assemblage that has nothing
  * left in it to notify. */
@@ -583,6 +597,12 @@ typedef struct {
     /* assemblages formed by PMIx_Connect - see prte_pmix_server_connection_t.
      * Populated on the DVM master only. */
     pmix_list_t connections;
+    /* whether a failure that terminates one job of an assemblage terminates
+     * the rest of it, which is what the PMIx definition of "connected" asks
+     * of a host that terminates an application when one of its processes
+     * fails.  An MCA parameter because it changes what happens to a job the
+     * user did not ask about. */
+    bool terminate_connected;
     /* jobs whose local procs have all departed, so that a direct modex for
      * one of them can be told "not found" instead of waiting for a job
      * object that is never coming back - see prte_pmix_server_job_departed() */

@@ -437,6 +437,17 @@ void pmix_server_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_pmix_server_globals.remote_connections);
 
+    /* whether a failure that terminates one job of a connected assemblage
+     * terminates the rest of it.  The PMIx definition of "connected" asks a
+     * host that terminates an application when one of its processes fails to
+     * do the same to the whole assemblage; this is a switch because it
+     * changes the fate of a job the failure did not happen in. */
+    prte_pmix_server_globals.terminate_connected = true;
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "terminate_connected",
+                                      "Terminate every job in a connected assemblage when a failure terminates one of them",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_pmix_server_globals.terminate_connected);
+
     /* whether or not to require client pid to match */
     prte_pmix_server_globals.require_pid_match = false;
     (void) pmix_mca_base_var_register("prte", "pmix", NULL, "require_pid_match",

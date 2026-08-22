@@ -44,6 +44,7 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/prted/pmix/pmix_server.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
@@ -1235,6 +1236,12 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
      * so tell it what actually happened while it is still listening */
     if (PMIX_SUCCESS != status) {
         report_launch_failure(jdata);
+    } else {
+        /* the PMIx definition says the processes created by PMIx_Spawn are
+         * connected to the parent process upon successful launch - which is
+         * what makes a parent and its child hear about each other's failures.
+         * Whether this launch has such a parent at all is decided there. */
+        prte_pmix_server_connection_spawned(jdata);
     }
 
     /* If the requestor was a tool, use PMIx to notify them of launch
