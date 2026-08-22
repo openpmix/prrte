@@ -86,40 +86,6 @@ part that needs thought: an allocation request that is refused, or that
 times out, has to fail the spawn with something the caller can tell apart
 from a launch failure.
 
-**A child reaped before its pid is published is never accounted for.**
-``wait_signal_callback`` (``src/runtime/prte_wait.c``) reaps every available
-child with ``waitpid(-1, WNOHANG)`` and matches each pid against the
-registered trackers by ``t2->child->pid``.  That field is written by
-``fork_local`` on a **worker thread**, immediately after ``fork`` returns,
-while the reaper runs on the **progress thread** - so a process short-lived
-enough to exit before the store is made (or, on a weakly-ordered machine,
-before it is visible: neither side uses ``PMIX_POST_OBJECT`` /
-``PMIX_ACQUIRE_OBJECT`` here) matches no tracker, and its exit status is
-dropped on the floor.  Nothing retries: the tracker stays on ``pending_cbs``
-for the life of the daemon, ``PRTE_PROC_FLAG_WAITPID`` is never set, that
-proc never reaches ``TERMINATED``, and ``jdata->num_terminated`` stops one
-short of ``num_procs``.  The job therefore never completes,
-``terminate_orteds`` is never called, and ``prterun`` sits in its event loop
-with ``prte_event_base_active`` still true and every line of the job's
-output already printed.
-
-The registration is deliberately made *before* the fork "to ensure we can
-capture the callback on shortlived apps" (``prte_odls_base_default_launch_local``),
-and it is on the list in time - it is the **key** that arrives late, not the
-tracker.  Any fix has to give the reaper a way to attribute a pid it cannot
-yet resolve: park the unmatched ``(pid, status)`` and drain it once the pid
-is published, or publish the pid to the progress thread before the child can
-be reaped.
-
-Observed at roughly 0.3% of runs of ``prterun -n 8 --map-by :oversubscribe
-hostname`` in a container (about one hang per 250-350 launches); the state
-at the hang is one proc left at ``PRTE_PROC_STATE_RUNNING`` with
-``PRTE_PROC_FLAG_ALIVE`` still set and neither ``WAITPID`` nor ``RECORDED``,
-its siblings all at ``TERMINATED``.  It is the other half of the fork/worker-thread
-race that "Stop a proc's state going backwards from RUNNING after it
-terminated" addressed: there the termination arrived and was mis-ordered
-against the launch report, here it is lost outright.
-
 **Mixed allocators are not supported, and would need more than the ``ras``
 framework.**  The motivating case is a cloud/local combination: an allocation
 from a scheduler plus a set of unmanaged nodes outside it.  The ``ras``

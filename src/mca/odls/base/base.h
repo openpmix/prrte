@@ -63,6 +63,9 @@ typedef struct {
     bool scatter_cpusets;
     /* launches and cpuset slices that are waiting for each other */
     pmix_list_t pending_slices;
+    /* microseconds to stall between fork() and the store of the child's
+     * pid - a fault-injection hook, see odls_base_frame.c */
+    int fork_publish_delay;
 } prte_odls_globals_t;
 
 PRTE_EXPORT extern prte_odls_globals_t prte_odls_globals;

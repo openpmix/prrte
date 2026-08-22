@@ -171,7 +171,13 @@ have its "you decide" sentinel restored by a teardown path, or a call arriving
 during finalize builds a whole new set of real threads on the way out.
 
 MCA params, all under `prte odls base`: `signal_direct_children_only`,
-`exec_agent`, `scatter_cpusets`. Framework open also **unblocks `SIGCHLD`**
+`exec_agent`, `scatter_cpusets`, and `fork_publish_delay` — a
+fault-injection hook, like `prte_daemon_fail`, that stalls between the
+fork and the store of the child's pid so the launch/reap race described
+below can be reproduced deterministically from a single `prterun`. It is
+**not** restricted to a debug build, on purpose: an optimized build is a
+different race, so a hook that exists only in a debug one cannot say
+anything about the build that ships. Framework open also **unblocks `SIGCHLD`**
 (odls must see child deaths) and builds the xterm command vector. Framework
 close releases the global `prte_local_children` array.
 
@@ -670,6 +676,14 @@ computed proc state.
   a bare `return` in the middle — a stray `return` there both leaks and, on
   the daemon side, skips the `NEVER_LAUNCHED` activation that keeps the HNP
   from hanging.
+- **A child must not be able to die before its pid is recorded.** The fork
+  happens on a worker thread, and the `SIGCHLD` reaper on the progress
+  thread has nothing but `child->pid` with which to attribute what it
+  reaps — a status it cannot attribute is discarded, and the proc then
+  never leaves `RUNNING` and the job never completes. `fork_local_proc`
+  holds the child on a second pipe until the store is done; see
+  [`pdefault/AGENTS.md`](pdefault/AGENTS.md), "The gate". A fork primitive
+  added to a new component owes the same.
 - **A launch that never forked owes a `prte_wait_cb_cancel`.**
   `launch_local` flags a child `ALIVE` and registers its waitpid *before*
   the IOF setup and the dispatch to `spawn_proc`, so anything that fails in
