@@ -176,6 +176,21 @@ int prte_register_params(void)
         return ret;
     }
 
+    /* Verbosity of prte_debug_output, the general PRRTE debug stream that
+     * prte_dt_init() opens.  Nothing set this, so the variable sat at its
+     * -1 initializer for the life of the process and the stream could only
+     * ever reach verbosity 1, and then only as a side effect of
+     * --debug-daemons.  Every message the tree writes to it above that
+     * level was unreachable.  Registered here, in phase two, so a parameter
+     * file can set it - and ahead of prte_init(), which is where
+     * prte_dt_init() reads it. */
+    prte_debug_verbosity = -1;
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "debug_verbose",
+                                      "Verbosity of the general PRRTE debug output stream "
+                                      "(-1 = off)",
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
+                                      &prte_debug_verbosity);
+
     /*
      * This string is going to be used in prte/util/stacktrace.c
      */
