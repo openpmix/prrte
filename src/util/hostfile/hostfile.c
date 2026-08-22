@@ -104,6 +104,37 @@ static char *hostfile_parse_string(void)
     return strdup(prte_util_hostfile_value.sval);
 }
 
+/*
+ * Split a host entry into its optional username and the node name.
+ *
+ * The lexer's string rule accepts '@' anywhere in a token, so a mistyped
+ * entry such as "a@b@c" arrives here as a single token that is neither a
+ * hostname nor a "user@hostname".  Refuse it the way every other parse
+ * failure in this file is refused - by naming the file, the line, and the
+ * entry - rather than printing a bare warning that says none of the three.
+ */
+static int hostfile_parse_username(const char *value, char **username, char **node_name)
+{
+    char **argv;
+    int cnt;
+
+    argv = PMIx_Argv_split(value, '@');
+    cnt = PMIx_Argv_count(argv);
+    if (1 == cnt) {
+        *node_name = strdup(argv[0]);
+    } else if (2 == cnt) {
+        *username = strdup(argv[0]);
+        *node_name = strdup(argv[1]);
+    } else {
+        prte_show_help("help-hostfile.txt", "user-host", true, cur_hostfile_name,
+                       prte_util_hostfile_line, value);
+        PMIx_Argv_free(argv);
+        return PRTE_ERR_SILENT;
+    }
+    PMIx_Argv_free(argv);
+    return PRTE_SUCCESS;
+}
+
 static int hostfile_parse_line(int token, pmix_list_t *updates,
                                pmix_list_t *exclude, bool keep_all)
 {
@@ -111,10 +142,8 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
     prte_node_t *node;
     bool got_max = false;
     char *value;
-    char **argv;
     char *node_name = NULL;
     char *username = NULL;
-    int cnt;
     char buff[64];
 
     if (PRTE_HOSTFILE_STRING == token || PRTE_HOSTFILE_HOSTNAME == token ||
@@ -127,20 +156,10 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
         } else {
             value = prte_util_hostfile_value.sval;
         }
-        argv = PMIx_Argv_split(value, '@');
-
-        cnt = PMIx_Argv_count(argv);
-        if (1 == cnt) {
-            node_name = strdup(argv[0]);
-        } else if (2 == cnt) {
-            username = strdup(argv[0]);
-            node_name = strdup(argv[1]);
-        } else {
-            pmix_output(0, "WARNING: Unhandled user@host-combination - %s\n", value); /* XXX */
-            PMIx_Argv_free(argv);
-            return PRTE_ERROR;
+        rc = hostfile_parse_username(value, &username, &node_name);
+        if (PRTE_SUCCESS != rc) {
+            return rc;
         }
-        PMIx_Argv_free(argv);
 
         /* if the first letter of the name is '^', then this is a node
          * to be excluded. Remove the ^ character so the nodename is
@@ -244,8 +263,11 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             token = prte_util_hostfile_lex();
         }
         if (prte_util_hostfile_done) {
-            /* bad syntax somewhere */
-            return PRTE_ERROR;
+            /* the file ended before the '=' that must follow a rank, so we
+             * never got a node name - say so rather than returning an error
+             * the caller can only report as a line number in our own source */
+            hostfile_parse_error(token);
+            return PRTE_ERR_SILENT;
         }
         /* next position should be the node name */
         token = prte_util_hostfile_lex();
@@ -256,20 +278,10 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             value = prte_util_hostfile_value.sval;
         }
 
-        argv = PMIx_Argv_split(value, '@');
-
-        cnt = PMIx_Argv_count(argv);
-        if (1 == cnt) {
-            node_name = strdup(argv[0]);
-        } else if (2 == cnt) {
-            username = strdup(argv[0]);
-            node_name = strdup(argv[1]);
-        } else {
-            pmix_output(0, "WARNING: Unhandled user@host-combination - %s\n", value); /* XXX */
-            PMIx_Argv_free(argv);
-            return PRTE_ERROR;
+        rc = hostfile_parse_username(value, &username, &node_name);
+        if (PRTE_SUCCESS != rc) {
+            return rc;
         }
-        PMIx_Argv_free(argv);
 
         /* Do we need to make a new node object? */
         if (NULL == (node = prte_node_match(updates, node_name))) {
@@ -310,7 +322,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
 
     } else {
         hostfile_parse_error(token);
-        return PRTE_ERROR;
+        return PRTE_ERR_SILENT;
     }
     free(username);
 
@@ -337,7 +349,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             rc = hostfile_parse_int();
             if (rc < 0) {
                 prte_show_help("help-hostfile.txt", "port", true, cur_hostfile_name, rc);
-                return PRTE_ERROR;
+                return PRTE_ERR_SILENT;
             }
             prte_set_attribute(&node->attributes, PRTE_NODE_PORT, PRTE_ATTR_LOCAL, &rc, PMIX_INT);
             break;
@@ -350,7 +362,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
                 prte_show_help("help-hostfile.txt", "slots", true, cur_hostfile_name, rc);
                 pmix_list_remove_item(updates, &node->super);
                 PMIX_RELEASE(node);
-                return PRTE_ERROR;
+                return PRTE_ERR_SILENT;
             }
             if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
                 /* multiple definitions were given for the
@@ -360,7 +372,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
                                node->name);
                 pmix_list_remove_item(updates, &node->super);
                 PMIX_RELEASE(node);
-                return PRTE_ERROR;
+                return PRTE_ERR_SILENT;
             }
             node->slots = rc;
             PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
@@ -378,7 +390,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
                                ((size_t) rc));
                 pmix_list_remove_item(updates, &node->super);
                 PMIX_RELEASE(node);
-                return PRTE_ERROR;
+                return PRTE_ERR_SILENT;
             }
             /* Only take this update if it puts us >= node_slots */
             if (rc >= node->slots) {
@@ -389,10 +401,9 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             } else {
                 prte_show_help("help-hostfile.txt", "max_slots_lt", true, cur_hostfile_name,
                                node->slots, rc);
-                PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                 pmix_list_remove_item(updates, &node->super);
                 PMIX_RELEASE(node);
-                return PRTE_ERROR;
+                return PRTE_ERR_SILENT;
             }
             break;
 
@@ -405,7 +416,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             hostfile_parse_error(token);
             pmix_list_remove_item(updates, &node->super);
             PMIX_RELEASE(node);
-            return PRTE_ERROR;
+            return PRTE_ERR_SILENT;
         }
     }
 
@@ -507,7 +518,7 @@ static int hostfile_parse(const char *hostfile, pmix_list_t *updates, pmix_list_
 
         default:
             hostfile_parse_error(token);
-            rc = PRTE_ERROR;
+            rc = PRTE_ERR_SILENT;
             goto unlock;
         }
     }

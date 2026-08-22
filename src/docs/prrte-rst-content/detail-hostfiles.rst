@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2022-2026 Nanook Consulting.  All rights reserved.
    Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -34,6 +34,16 @@ including a designated number of "slots":
    ...
 
 Blank lines and lines beginning with a ``#`` are ignored.
+
+A node name may carry the account PRRTE is to use when reaching that
+node, written in front of it and separated by a single ``@``:
+
+.. code:: sh
+
+   user01@node01  slots=4
+
+An entry may contain at most one ``@``; a second one is reported as a
+parse error naming the hostfile and the line it is on.
 
 A "slot" is the PRRTE term for an allocatable unit where we can launch
 a process.  See the section on definition of the term ``slot`` for a

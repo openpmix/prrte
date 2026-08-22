@@ -99,17 +99,6 @@ which nodes, and the daemon-launch path would have to fan out through more
 than one.  At minimum it needs a launcher affinity recorded per node and
 honored by ``prte_plm_base_setup_virtual_machine``.
 
-**A hostfile line with more than one ``@`` stops the parse without saying
-where.**  ``hostfile_parse_line`` splits the value on ``@`` and takes one
-field as a hostname and two as ``user@host``; anything else prints
-``WARNING: Unhandled user@host-combination`` through ``pmix_output`` and
-returns ``PRTE_ERROR``, which abandons the rest of the file (two sites in
-``src/util/hostfile/hostfile.c``, one per token class that can carry a
-name).  Every other parse failure in that file goes through
-``hostfile_parse_error`` and ``help-hostfile.txt``, which name the file and
-the line number.  This one names neither, and it is the failure a user is
-most likely to reach by typo.
-
 **A peer whose socket cannot be created keeps its queued messages.**  In
 ``prte_oob_tcp_peer_try_connect`` (``src/rml/oob/oob_tcp_connection.c``), a
 failed ``tcp_peer_create_socket`` activates ``PRTE_JOB_STATE_COMM_FAILED``,
@@ -238,8 +227,6 @@ the marker is stale.
 
    * - marker
      - entry above
-   * - ``util/hostfile/hostfile.c``, ``hostfile_parse_line`` (two sites)
-     - a hostfile line with more than one ``@``
    * - ``util/stacktrace.c``, ``show_stackframe``
      - stack traces assume ``siginfo_t``
    * - ``rml/oob/oob_tcp_connection.c``,
