@@ -402,6 +402,62 @@ onto PRRTE job and app attributes. Notes for extending them:
 
 ---
 
+## Connected assemblages (`pmix_server_connect.c`)
+
+`PMIx_Connect` is not a communication operation — the fence it runs is a
+means, not the point. What it asks for is that the host **treat the
+participants as one application for fault purposes**, and the concrete
+obligation that creates is one event: a member that terminates, or calls
+`PMIx_Finalize`, without first calling `PMIx_Disconnect` owes the rest of
+the assemblage a `PMIX_ERR_PROC_TERM_WO_SYNC`. A connect never followed by a
+disconnect is therefore not an untidy loose end; it is the case the event
+exists for.
+
+Keeping that promise needs the membership, and where it is held is the whole
+design:
+
+- **The DVM master holds it, alone.** It is the one process that learns of
+  every proc termination in the DVM — including the procs of a node whose
+  daemon has died, which is exactly when an assemblage most wants telling,
+  and exactly when a record kept on that daemon would have died with it.
+- **Each participating daemon reports it**, on `PRTE_RML_TAG_CONNECTED`,
+  from the *completion* of the connect collective (`connect_release`) rather
+  than from its start — so a connect that failed is never recorded. Every
+  such daemon reports, and the master takes the first and ignores the rest:
+  there is no cheap election here that does not depend on one particular
+  daemon still being alive, and the reports are a few dozen bytes on an
+  operation that has just paid for a DVM-wide collective.
+- **Termination is noticed in one place**: the `PRTE_PROC_STATE_TERMINATED`
+  arm of `prte_state_base_track_procs()`, behind the `PRTE_PROC_FLAG_RECORDED`
+  guard that makes it exactly once per proc. Every death reaches it, whether
+  the proc exited, failed, or was force-marked terminated by the errmgr
+  because its daemon is gone.
+- **A member entry may be a wildcard rank**, and usually is — a connect
+  between two jobs is written `{A/WILDCARD, B/WILDCARD}`. It stands for
+  every proc of that namespace both when matching a departure and when
+  addressing the event, where `PMIX_EVENT_CUSTOM_RANGE` carries the member
+  array as-is and PMIx's own `PMIX_CHECK_PROCID` does the covering.
+- **Matching a *set* is literal, though.** Two assemblages are the same one
+  if they name the same participants, order disregarded; but `A/0` and
+  `A/WILDCARD` are different participants, because PMIx will not pair a
+  connect expressed one way with a connect expressed the other. A disconnect
+  naming a set that was never recorded must fail to find it rather than drop
+  somebody else's.
+- **A record outlives one member's job.** The survivors are still connected
+  to each other and still owed an event apiece, so a record is dropped only
+  by a disconnect or when nothing named in it exists any more
+  (`prte_pmix_server_connection_purge()`, from
+  `prte_pmix_server_job_departed()`).
+
+What this cannot see: the PMIx server library executes a connect whose
+participants are **all local** without calling the host at all, so PRRTE
+never learns of a single-node assemblage and cannot keep the promise for
+one. Neither is the *fault response* half of the definition implemented —
+terminating the assemblage when a member fails. Both are recorded in
+[`docs/todo.rst`](../../../docs/todo.rst).
+
+---
+
 ## Session control (`pmix_server_session.c`)
 
 `PMIx_Session_control` is the scheduler's API for creating, operating on and
@@ -586,10 +642,12 @@ it is enforced here:
 ## Testing
 
 **Unit — `test/unit/prted/`.** The directive translators
-(`prte_pmix_xfer_job_info`, `prte_pmix_xfer_app`), the job-info cache, and
-the session time-limit parser (`prte_pmix_server_parse_session_time`) are
-pure data transforms and are covered there. Most of the rest of this
-directory needs a live PMIx server and at least one peer daemon.
+(`prte_pmix_xfer_job_info`, `prte_pmix_xfer_app`), the job-info cache, the
+session time-limit parser (`prte_pmix_server_parse_session_time`), the
+departed-jobs list, and the connected-assemblage registry
+(`test_connections` — set matching, wildcard coverage, and when a record is
+purged) are pure data transforms and are covered there. Most of the rest of
+this directory needs a live PMIx server and at least one peer daemon.
 
 **Live smoke test.** `prte --daemonize && prun -n 4 hostname && pterm`
 exercises register_nspace, register_client, fence, and the spawn path on
@@ -607,7 +665,12 @@ only exist with more than one daemon:
 - **session control** (`test_session`) — a reservation actually withholding
   its nodes from a general job, a request relayed from a non-master daemon,
   and a session signal reaching the jobs on every node they occupy. It is
-  driven by `examples/sessionctrl.c`, which `build.sh` installs.
+  driven by `examples/sessionctrl.c`, which `build.sh` installs;
+- **connect/disconnect** (`test_connect`, driven by
+  `contrib/dockerswarm/connector.c`) — a spawned child connected to its
+  parent on another node, leaving with and without disconnecting first. This
+  one is *only* testable here: a connect whose participants are all local is
+  executed inside the PMIx server library and never reaches PRRTE at all.
 
 ---
 

@@ -505,6 +505,20 @@ build_linux() {
                 /prrte-src/contrib/dockerswarm/groupcon.c \
                 -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
 
+            # connector: a bare PMIx client that connects a spawned child job
+            # to its parent and then has the child leave, with or without
+            # disconnecting first.  The PMIx server library runs a connect
+            # whose participants are all local without telling the host at
+            # all, so an assemblage that spans daemons is the only shape the
+            # runtime ever sees - and the promise being checked (an event to
+            # the assemblage when a member departs without disconnecting) is
+            # the runtime's to keep.
+            # (No apostrophes here: see the note further down.)
+            echo ">>>> connector (connect/disconnect assemblage) test client"
+            gcc -O0 -g -o /opt/prte/prte/bin/connector \
+                /prrte-src/contrib/dockerswarm/connector.c \
+                -I"$PMIX_PREFIX/include" -L"$PMIX_PREFIX/lib" -Wl,-rpath,"$PMIX_PREFIX/lib" -lpmix
+
             # groupinv: a bare PMIx client that forms a group by INVITATION
             # and asks for a context id.  That method runs no server
             # collective, so its leader requests the id through job control,

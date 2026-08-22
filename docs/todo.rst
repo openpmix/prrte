@@ -99,13 +99,31 @@ which nodes, and the daemon-launch path would have to fan out through more
 than one.  At minimum it needs a launcher affinity recorded per node and
 honored by ``prte_plm_base_setup_virtual_machine``.
 
-**Nothing records who is "connected".**  ``pmix_server_connect_fn`` and
-``pmix_server_disconnect_fn`` (``src/prted/pmix/pmix_server_dyn.c``)
-implement both operations as a fence across the participants, which is
-enough to make them return.  The bookkeeping is what is missing: the set of
-processes a ``PMIx_Connect`` joined is recorded nowhere, so when one of them
-terminates or fails there is nothing to consult for who was promised a
-notification.
+**A connected assemblage is remembered, but not yet treated as one
+application.**  The membership of a ``PMIx_Connect`` is now recorded on the
+DVM master (``src/prted/pmix/pmix_server_connect.c``) and a member that
+terminates without disconnecting first draws the
+``PMIX_ERR_PROC_TERM_WO_SYNC`` the PMIx definition requires.  Three things
+that definition also asks for are not there yet:
+
+- **The fault response.**  "Connected" is defined as the host treating the
+  assemblage as a single application: an environment that terminates an
+  application when one of its processes fails should terminate every member
+  of the assemblage.  PRRTE terminates only the failed process's own job, and
+  generates no ``PMIX_ERR_JOB_TERM_WO_SYNC`` for the jobs a member's death
+  ought to have taken with it.  The registry is what such a policy would be
+  written against.
+- **An assemblage on a single node is invisible to us.**  The PMIx server
+  library executes a connect whose participants are all local without calling
+  the host at all, so PRRTE never learns of one and cannot keep the promise
+  for it.  Nothing PRRTE does can cover that; it is a question for the PMIx
+  server library, which is the only thing that knows those procs connected.
+- **Spawn does not connect the child to its parent.**  The PMIx definition
+  says the processes created by ``PMIx_Spawn`` are connected to the parent by
+  default; PRRTE records nothing, so a spawned job that dies notifies its
+  parent only through the ordinary job-level channels.  Doing this properly
+  means deciding what ``PMIX_SPAWN_CONNECTED`` should mean for a DVM that has
+  always let a parent outlive its children.
 
 **The bootstrap configuration parses two options it deliberately does not
 publish.**  ``SessionTmpDir`` and the ``Log*`` options are read into the
@@ -228,8 +246,6 @@ the marker is stale.
    * - ``mca/ess/base/ess_base_bootstrap.c``,
        ``prte_ess_base_bootstrap_params``
      - two bootstrap options are parsed and not plumbed
-   * - ``prted/pmix/pmix_server_dyn.c``, ``pmix_server_disconnect_fn``
-     - nothing records who is "connected"
    * - ``mca/ras/flux/ras_flux_module.c``, ``modify``
      - ``ras/flux`` has no ``modify()``
 
