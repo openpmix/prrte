@@ -53,6 +53,33 @@ If you touch the hostname pattern, keep the leading `\^?` **outside** the
 
 ---
 
+## Every refusal names the file and the line, and says so only once
+
+A hostfile is user input, and every way of getting it wrong has to come back
+as a `prte_show_help()` message out of `help-hostfile.txt` carrying
+`cur_hostfile_name` and `prte_util_hostfile_line`. Two failures did not:
+
+- A value with more than one `@` — `hostfile_parse_username()` takes one
+  field as a hostname and two as `user@hostname`, and anything else is a
+  typo. It used to print `WARNING: Unhandled user@host-combination` through
+  `pmix_output` at two sites (the plain host entry and the `rank N=<host>`
+  form), naming neither the file nor the line, and it is the failure a user
+  is most likely to reach by typo. Both sites now go through the one helper
+  and the `user-host` topic.
+- A `rank N` whose `=` never arrives. The loop that skips to the `=` runs to
+  the end of the file, and the `done` arm returned a bare error with no
+  message at all.
+
+The other half of "says so only once": a path that has already shown help
+must return **`PRTE_ERR_SILENT`**, not `PRTE_ERROR`. `PRTE_ERROR_LOG()`
+drops `PRTE_ERR_SILENT` and prints everything else, and the callers
+(`prte_ras_base_allocate`, `prte_rmaps_base_filter_nodes`) log whatever they
+are handed — so a `PRTE_ERROR` return put `PRTE ERROR: Error in file
+ras_base_allocate.c at line 408` above the user's own diagnostic, pointing
+at our source for their typo.
+
+---
+
 ## The parser state is process-global
 
 `prte_util_hostfile_in` (the `FILE*`), `prte_util_hostfile_line` (the line
@@ -171,8 +198,9 @@ appearing more than once.
   framework opened.
 - `test/unit/util/test_util.c` writes temporary hostfiles and parses them:
   slot counts, `max_slots`, comments, the `^` exclusion (including a duplicated
-  excluded name), a malformed file, and a good file parsed straight after a
-  failed one.
+  excluded name), a `user@host` entry and the refusal of a second `@` in both
+  the plain and the `rank N=` form, a `rank` entry with no host, a malformed
+  file, and a good file parsed straight after a failed one.
 - `contrib/dockerswarm/run-tests.sh` `test_util` covers what a single node
   cannot: that a `^host` line removes *that* machine and no other, and that a
   failed parse does not poison the next one across a real launch.
