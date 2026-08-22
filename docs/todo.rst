@@ -99,15 +99,6 @@ which nodes, and the daemon-launch path would have to fan out through more
 than one.  At minimum it needs a launcher affinity recorded per node and
 honored by ``prte_plm_base_setup_virtual_machine``.
 
-**A peer whose socket cannot be created keeps its queued messages.**  In
-``prte_oob_tcp_peer_try_connect`` (``src/rml/oob/oob_tcp_connection.c``), a
-failed ``tcp_peer_create_socket`` activates ``PRTE_JOB_STATE_COMM_FAILED``,
-which is right — the failure spans every interface, so there is no other
-address to try.  What the note in place also asks for is that the peer's
-queued messages be marked and returned as unreachable, and they are not.
-This is a reconnect path as well as a first-connect one, so what is queued
-can be real work rather than a handshake.
-
 **Nothing records who is "connected".**  ``pmix_server_connect_fn`` and
 ``pmix_server_disconnect_fn`` (``src/prted/pmix/pmix_server_dyn.c``)
 implement both operations as a fence across the participants, which is
@@ -229,9 +220,6 @@ the marker is stale.
      - entry above
    * - ``util/stacktrace.c``, ``show_stackframe``
      - stack traces assume ``siginfo_t``
-   * - ``rml/oob/oob_tcp_connection.c``,
-       ``prte_oob_tcp_peer_try_connect``
-     - a peer whose socket cannot be created
    * - ``mca/filem/raw/filem_raw_module.c``, ``raw_fault_handler``
      - ``filem/raw`` does not survive losing a daemon mid-staging
    * - ``mca/odls/base/odls_base_default_fns.c``,

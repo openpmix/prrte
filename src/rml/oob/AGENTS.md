@@ -245,6 +245,18 @@ a socket handler call has to be safe off the main thread or has to be shifted.
   default callback and a lost message for RELM. From inside the transport, use
   `PRTE_OOB_COMPLETE_SEND(peer, msg)` instead: it completes inline when the peer
   is on the main base and posts the completion there when it is not.
+- **Every path that gives up on a peer drains its queue**, through
+  `tcp_peer_fail_queued_sends()` — the one place that does it, so the rule above
+  cannot be honored in one arm and forgotten in the next. It is not only
+  `prte_oob_tcp_peer_close()`: `prte_oob_tcp_peer_try_connect()` gives up in
+  five places of its own (out of memory, `socket()` or an unrecoverable
+  `bind()` failing, no address succeeding, the IDENT handshake failing), and
+  all but one of those used to return without touching the queue. They are
+  reconnect paths as well as first-connect ones, so what is queued there can
+  be real work rather than a handshake. Collect the on-deck `peer->send_msg`
+  as well as `peer->send_queue` — it is not on the list and is the one most
+  easily missed — lift both under `peer->lock`, and complete them outside it,
+  since completion runs the originator's callback.
 - **The recv object owns its payload.** `prte_oob_tcp_recv_t`'s destructor
   frees `data`; the paths that hand the payload on (`PMIx_Data_load` for local
   delivery, the relay) null the pointer first. Add a third path and it has to
@@ -279,7 +291,12 @@ a socket handler call has to be safe off the main thread or has to be shifted.
 ## Testing
 
 `prte_oob_split_and_resolve` — the interface-selection parser — is covered by
-`test/unit/rml/test_rml`, which runs under `make check` with no DVM. Everything
+`test/unit/rml/test_rml`, which runs under `make check` with no DVM. So is the
+queued-send drain above (`test_queued_sends_complete_on_close`), driven through
+`prte_oob_tcp_peer_close()` because that is the one give-up path reachable
+without sockets; the arms in `prte_oob_tcp_peer_try_connect()` share the same
+drain but cannot be provoked from a unit test, since they need `socket()` or
+`bind()` to fail. Everything
 else in this directory needs sockets between real daemons and lives in the
 `test_rml` phase of `contrib/dockerswarm/run-tests.sh`: relaying through an
 intermediate hop (which needs `--prtemca rml_base_radix 2`, since a ten-node

@@ -73,7 +73,9 @@
 #include "src/rml/oob/oob.h"
 #include "src/rml/oob/oob_tcp.h"
 #include "src/rml/oob/oob_tcp_hdr.h"
+#include "src/rml/oob/oob_tcp_connection.h"
 #include "src/rml/oob/oob_tcp_peer.h"
+#include "src/rml/oob/oob_tcp_sendrecv.h"
 
 #define CHECK(label, cond)                                    \
     do {                                                      \
@@ -605,6 +607,96 @@ static int test_wire_header(void)
     return failures;
 }
 
+/* Giving up on a peer must not take its queued messages with it.
+ *
+ * A send handed to the OOB is owed a callback: PRTE_RML_SEND_COMPLETE is how
+ * the originator learns the message went out or died, and RELM is waiting on
+ * exactly that to decide whether to replay.  PMIX_RELEASE on the send frees
+ * the buffer and tells nobody, which looks like nothing at all happening.
+ *
+ * Every path that gives up on a peer therefore has to drain the queue and
+ * complete each message with a failure status - the peer teardown here, and
+ * the arms of prte_oob_tcp_peer_try_connect that cannot get a socket at all
+ * (a create or bind failure spans every interface, so there is no other
+ * address to try).  Those arms are a reconnect path as well as a
+ * first-connect one, so what is queued can be real work rather than a
+ * handshake; they used to drop it.  They share this drain, so exercising it
+ * through the one entry point that needs no sockets covers them.
+ *
+ * The on-deck message is checked as well as the queue: it is held in
+ * peer->send_msg rather than on the list, and is the one most easily missed.
+ */
+static int completed_sends = 0;
+static int last_send_status = PRTE_SUCCESS;
+
+static void record_completion(int status, pmix_proc_t *peer,
+                              pmix_data_buffer_t *buffer,
+                              prte_rml_tag_t tag, void *cbdata)
+{
+    PRTE_HIDE_UNUSED_PARAMS(peer, tag, cbdata);
+    if (NULL != buffer) {
+        PMIX_DATA_BUFFER_RELEASE(buffer);
+    }
+    completed_sends++;
+    last_send_status = status;
+}
+
+static prte_oob_tcp_send_t *queued_send(prte_oob_tcp_peer_t *peer)
+{
+    prte_oob_tcp_send_t *snd;
+    prte_rml_send_t *msg;
+
+    msg = PMIX_NEW(prte_rml_send_t);
+    PMIX_XFER_PROCID(&msg->dst, &peer->name);
+    PMIX_XFER_PROCID(&msg->origin, PRTE_PROC_MY_NAME);
+    msg->tag = PRTE_RML_TAG_XCAST;
+    msg->cbfunc = record_completion;
+    PMIX_DATA_BUFFER_CREATE(msg->dbuf);
+
+    snd = PMIX_NEW(prte_oob_tcp_send_t);
+    snd->msg = msg;
+    return snd;
+}
+
+static int test_queued_sends_complete_on_close(void)
+{
+    int failures = 0, i;
+    prte_oob_tcp_peer_t *peer;
+
+    peer = PMIX_NEW(prte_oob_tcp_peer_t);
+    PMIX_LOAD_PROCID(&peer->name, PRTE_PROC_MY_NAME->nspace, 1);
+    peer->sd = -1;
+    /* a connection that was up: "established" is what keeps peer_close out of
+     * the rotate-to-the-next-address branch, which deliberately keeps the
+     * queue so it can go out over the next address */
+    peer->established = true;
+    peer->state = MCA_OOB_TCP_FAILED;
+
+    completed_sends = 0;
+    last_send_status = PRTE_SUCCESS;
+
+    peer->send_msg = queued_send(peer);
+    for (i = 0; i < 2; i++) {
+        prte_oob_tcp_send_t *snd = queued_send(peer);
+        pmix_list_append(&peer->send_queue, &snd->super);
+    }
+
+    prte_oob_tcp_peer_close(peer);
+
+    CHECK("every queued send was completed, on-deck message included",
+          3 == completed_sends);
+    CHECK("and completed as a failure", PRTE_SUCCESS != last_send_status);
+    CHECK("the on-deck slot was cleared", NULL == peer->send_msg);
+    CHECK("the queue was drained", 0 == pmix_list_get_size(&peer->send_queue));
+
+    PMIX_RELEASE(peer);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_queued_sends_complete_on_close\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -625,6 +717,7 @@ int main(void)
     failures += test_subnet_resolves_and_dedupes();
     failures += test_payload_outlives_sends();
     failures += test_peer_base_assignment();
+    failures += test_queued_sends_complete_on_close();
     failures += test_wire_header();
 
     prte_finalize();

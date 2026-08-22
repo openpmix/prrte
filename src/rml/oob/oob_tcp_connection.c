@@ -172,6 +172,47 @@ static void abort_handshake(prte_oob_tcp_peer_t *peer, int sd)
 }
 
 /*
+ * Nothing queued for a peer we are giving up on can ever go out, so finish
+ * each of those sends with the status that says why.  Completing them -
+ * rather than dropping them on the floor - is what lets the originator learn
+ * the message died; RELM in particular is waiting on exactly that callback,
+ * and PMIX_RELEASE on the send would free the buffer and tell nobody.
+ *
+ * Lift them off the peer in one guarded step, since a message can still be
+ * queued onto it from another thread, and complete them outside the lock,
+ * since completion runs the originator's callback.
+ */
+static void tcp_peer_fail_queued_sends(prte_oob_tcp_peer_t *peer, int status)
+{
+    prte_oob_tcp_send_t *snd;
+    pmix_list_t doomed;
+
+    PMIX_CONSTRUCT(&doomed, pmix_list_t);
+    pmix_mutex_lock(&peer->lock);
+    /* the on-deck message is not in the send queue, so it has to be
+     * collected separately */
+    if (NULL != peer->send_msg) {
+        pmix_list_append(&doomed, &peer->send_msg->super);
+        peer->send_msg = NULL;
+    }
+    while (NULL != (snd = (prte_oob_tcp_send_t *) pmix_list_remove_first(&peer->send_queue))) {
+        pmix_list_append(&doomed, &snd->super);
+    }
+    pmix_mutex_unlock(&peer->lock);
+
+    while (NULL != (snd = (prte_oob_tcp_send_t *) pmix_list_remove_first(&doomed))) {
+        if (NULL != snd->msg) {
+            prte_rml_send_t *m = snd->msg;
+            m->status = status;
+            snd->msg = NULL; // the completion owns it now
+            PRTE_OOB_COMPLETE_SEND(peer, m);
+        }
+        PMIX_RELEASE(snd);
+    }
+    PMIX_DESTRUCT(&doomed);
+}
+
+/*
  * Try connecting to a peer - cycle across all known addresses
  * until one succeeds.
  */
@@ -185,24 +226,23 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
     prte_socklen_t addrlen = 0;
     prte_oob_tcp_peer_t *peer;
     prte_oob_tcp_addr_t *addr;
-    prte_oob_tcp_send_t *snd;
-    pmix_list_t doomed;
     bool connected = false;
     pmix_pif_t *intf;
     char *host;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
+    PMIX_ACQUIRE_OBJECT(op);
+    peer = op->peer;
+
     remote_list = PMIX_NEW(pmix_list_t);
     if (NULL == remote_list) {
         pmix_output(0, "%s CANNOT CREATE SOCKET, OUT OF MEMORY",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+        tcp_peer_fail_queued_sends(peer, PRTE_ERR_UNREACH);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
         PMIX_RELEASE(op);
         return;
     }
-
-    PMIX_ACQUIRE_OBJECT(op);
-    peer = op->peer;
 
     /* Construct a list of remote pmix_pif_t from peer */
     PMIX_LIST_FOREACH(addr, &peer->addrs, prte_oob_tcp_addr_t)
@@ -211,6 +251,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         if (NULL == intf) {
             pmix_output(0, "%s CANNOT CREATE SOCKET, OUT OF MEMORY",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+            tcp_peer_fail_queued_sends(peer, PRTE_ERR_UNREACH);
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
             goto cleanup;
         }
@@ -318,16 +359,14 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         rc = tcp_peer_create_socket(peer, addr->addr.ss_family);
 
         if (PRTE_SUCCESS != rc) {
-            /* FIXME: we cannot create a TCP socket - this spans
-             * all interfaces, so all we can do is report
-             * back to the component that this peer is
-             * unreachable so it can remove the peer
-             * from its list and report back to the base
-             * NOTE: this could be a reconnect attempt,
-             * so we also need to mark any queued messages
-             * and return them as "unreachable"
+            /* we cannot create a TCP socket - this spans all interfaces, so
+             * there is no other address to try and this peer is unreachable.
+             * This is a reconnect path as well as a first-connect one, so
+             * what is queued on the peer can be real work rather than a
+             * handshake: it has to be completed as unreachable, not dropped.
              */
             pmix_output(0, "%s CANNOT CREATE SOCKET", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+            tcp_peer_fail_queued_sends(peer, PRTE_ERR_UNREACH);
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
             goto cleanup;
         }
@@ -352,6 +391,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
                         prte_socket_errno);
 
             CLOSE_THE_SOCKET(peer->sd);
+            tcp_peer_fail_queued_sends(peer, PRTE_ERR_UNREACH);
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
             goto cleanup;
         }
@@ -499,32 +539,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
          * from us if we are in our own progress thread
          */
         PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_mca_oob_tcp_component_failed_to_connect);
-        /* Nothing queued for this peer can ever go out, so finish each of
-         * those sends as unreachable.  Completing them - rather than dropping
-         * them on the floor, which is what this used to do - is what lets the
-         * originator learn the message died; RELM in particular is waiting on
-         * exactly that callback.  Lift them off the peer under its lock, then
-         * complete them outside it. */
-        PMIX_CONSTRUCT(&doomed, pmix_list_t);
-        pmix_mutex_lock(&peer->lock);
-        if (NULL != peer->send_msg) {
-            pmix_list_append(&doomed, &peer->send_msg->super);
-            peer->send_msg = NULL;
-        }
-        while (NULL != (snd = (prte_oob_tcp_send_t *) pmix_list_remove_first(&peer->send_queue))) {
-            pmix_list_append(&doomed, &snd->super);
-        }
-        pmix_mutex_unlock(&peer->lock);
-        while (NULL != (snd = (prte_oob_tcp_send_t *) pmix_list_remove_first(&doomed))) {
-            if (NULL != snd->msg) {
-                prte_rml_send_t *m = snd->msg;
-                m->status = PRTE_ERR_UNREACH;
-                snd->msg = NULL; // the completion owns it now
-                PRTE_OOB_COMPLETE_SEND(peer, m);
-            }
-            PMIX_RELEASE(snd);
-        }
-        PMIX_DESTRUCT(&doomed);
+        tcp_peer_fail_queued_sends(peer, PRTE_ERR_UNREACH);
         goto cleanup;
     }
 
@@ -568,6 +583,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
                     pmix_net_get_port((struct sockaddr *) &addr->addr), prte_strerror(rc), rc);
         /* close the socket */
         CLOSE_THE_SOCKET(peer->sd);
+        tcp_peer_fail_queued_sends(peer, PRTE_ERR_UNREACH);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
     }
 
@@ -1331,8 +1347,6 @@ static void tcp_peer_connected(prte_oob_tcp_peer_t *peer)
 void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
 {
     prte_oob_tcp_state_t old_state;
-    prte_oob_tcp_send_t *send;
-    pmix_list_t doomed;
     int err;
 
     /* Take the state transition under the peer lock so exactly one caller
@@ -1443,21 +1457,6 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
         peer->recv_msg = NULL;
     }
 
-    /* Lift everything still queued off the peer in one guarded step - a
-     * message can still be queued onto it from another thread - and complete
-     * it outside the lock, since completion runs the originator's callback. */
-    PMIX_CONSTRUCT(&doomed, pmix_list_t);
-    pmix_mutex_lock(&peer->lock);
-    if (NULL != peer->send_msg) {
-        /* Just add to the doomed list to handle w/ the rest */
-        pmix_list_append(&doomed, &peer->send_msg->super);
-        peer->send_msg = NULL;
-    }
-    while (NULL != (send = (prte_oob_tcp_send_t *) pmix_list_remove_first(&peer->send_queue))) {
-        pmix_list_append(&doomed, &send->super);
-    }
-    pmix_mutex_unlock(&peer->lock);
-
     /* inform rml of all queued sends' completion (as failures)
      * do not try to re-queue messages at this level - risking message loss is
      * unavoidable when a node in the communication tree dies, so safely
@@ -1465,16 +1464,7 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
      */
     err = prte_rml_is_node_up(peer->name.rank) ?
         PRTE_ERR_UNREACH : PRTE_ERR_NODE_DOWN;
-    while (NULL != (send = (prte_oob_tcp_send_t *) pmix_list_remove_first(&doomed))) {
-        if (NULL != send->msg) {
-            prte_rml_send_t *snd = send->msg;
-            snd->status = err;
-            send->msg = NULL; // the completion owns it now
-            PRTE_OOB_COMPLETE_SEND(peer, snd);
-        }
-        PMIX_RELEASE(send);
-    }
-    PMIX_DESTRUCT(&doomed);
+    tcp_peer_fail_queued_sends(peer, err);
 
     /* inform the component-level that we have lost a connection so
      * it can decide what to do about it.
