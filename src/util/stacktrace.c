@@ -104,7 +104,14 @@ static void set_stacktrace_filename(void)
  *  @param info with information regarding the reason/send of the signal
  *  @param p
  *
- * FIXME: Should distinguish for systems, which don't have siginfo...
+ * The handler is installed with SA_SIGINFO and reads siginfo_t without
+ * guarding for its absence.  That is deliberate, not an oversight: the
+ * type, the sa_sigaction member and the SA_SIGINFO flag are all mandatory
+ * in POSIX.1-2001, well below anything PRRTE can be built on.  The two
+ * *members* below that genuinely are optional -- si_fd, which is not in
+ * POSIX at all, and si_band, which belongs to the obsolescent XSI SIGPOLL
+ * option -- are probed for by configure and guarded individually, as is
+ * every si_code value the switch decodes.
  */
 #if PRTE_WANT_PRETTY_PRINT_STACKTRACE
 static void show_stackframe(int signo, siginfo_t *info, void *p)
