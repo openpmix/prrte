@@ -168,6 +168,14 @@ sequence itself beyond a smoke test, and nothing configures with
 ``PRTE_WANT_HOME_CONFIG_FILES`` is never compiled in CI
 (``src/runtime/AGENTS.md``).
 
+**``--disable-pretty-print-stacktrace``.**  Nothing in CI configures with it,
+which is how the arm came to not build at all: with the feature off, two
+statics in ``src/util/stacktrace.c`` were unreferenced and ``--enable-debug``
+made that an error.  That is fixed, but the option is still compiled only
+when somebody thinks to try it, and the ``contrib/platform`` files that set
+it are not built either.  It is one more configuration in the same class as
+the ``#else`` arm above: cheap to break, and nothing watching.
+
 **Heterogeneous DVMs.**  The byte-order helpers (``prte_hton64`` /
 ``prte_ntoh64``) are exercised by every inter-daemon message, but the case
 they exist for — two daemons that disagree about endianness — cannot be built

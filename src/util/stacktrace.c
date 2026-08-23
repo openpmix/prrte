@@ -64,6 +64,14 @@
 #define HOSTFORMAT "[%s:%05d] "
 
 int prte_stacktrace_output_fileno = -1;
+
+/* Everything from here to the end of the file exists only to serve the
+ * handler, so it all lives behind the same switch: with the feature off,
+ * these are unreferenced, and --enable-debug turns an unused static into a
+ * build failure.
+ */
+#if PRTE_WANT_PRETTY_PRINT_STACKTRACE
+
 static char *prte_stacktrace_output_filename_base = NULL;
 static size_t prte_stacktrace_output_filename_max_len = 0;
 static char *unable_to_print_msg = "Unable to print stack trace!\n";
@@ -82,6 +90,7 @@ static void set_stacktrace_filename(void)
 
     return;
 }
+#endif /* PRTE_WANT_PRETTY_PRINT_STACKTRACE */
 
 /**
  * This function is being called as a signal-handler in response
