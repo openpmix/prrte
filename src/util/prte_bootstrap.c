@@ -234,31 +234,14 @@ int prte_bootstrap_parse(prte_bootstrap_config_t *cfg)
             }
             cfg->sessiontmpdir = strdup(ptr);
 
-        } else if (0 == strcmp(line, "ControllerLogPath")) {
-            if (NULL != cfg->ctrllogpath) {
-                free(cfg->ctrllogpath);
-            }
-            cfg->ctrllogpath = strdup(ptr);
-
-        } else if (0 == strcmp(line, "PRTEDLogPath")) {
-            if (NULL != cfg->prtedlogpath) {
-                free(cfg->prtedlogpath);
-            }
-            cfg->prtedlogpath = strdup(ptr);
-
-        } else if (0 == strcmp(line, "ControllerLogJobState")) {
-            cfg->ctrl_log_jobstate = parse_bool(ptr);
-
-        } else if (0 == strcmp(line, "ControllerLogProcState")) {
-            cfg->ctrl_log_procstate = parse_bool(ptr);
-
-        } else if (0 == strcmp(line, "PRTEDLogJobState")) {
-            cfg->prted_log_jobstate = parse_bool(ptr);
-
-        } else if (0 == strcmp(line, "PRTEDLogProcState")) {
-            cfg->prted_log_procstate = parse_bool(ptr);
         }
-        /* unknown keys are silently ignored for forward compatibility */
+        /* Unknown keys are silently ignored for forward compatibility.
+         * That is also what now happens to the ControllerLog* and PRTEDLog*
+         * keys an older prte.conf may carry: DVM-wide state logging proved
+         * too easy to leave on and too expensive when it is, so it is no
+         * longer a configuration-file key.  The facility itself remains as
+         * the state_base_log_* MCA parameters, which are asked for one run
+         * at a time. */
         free(line);
     }
     fclose(fp);
@@ -351,12 +334,6 @@ void prte_bootstrap_config_free(prte_bootstrap_config_t *cfg)
     }
     if (NULL != cfg->sessiontmpdir) {
         free(cfg->sessiontmpdir);
-    }
-    if (NULL != cfg->ctrllogpath) {
-        free(cfg->ctrllogpath);
-    }
-    if (NULL != cfg->prtedlogpath) {
-        free(cfg->prtedlogpath);
     }
     memset(cfg, 0, sizeof(*cfg));
 }

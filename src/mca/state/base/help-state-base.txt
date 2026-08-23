@@ -81,3 +81,29 @@ non-zero.
 Please report this, with the command line that produced it, at:
 
   https://github.com/openpmix/prrte/issues
+#
+[state-log-no-path]
+%s: DVM state logging was requested, but the directory to write the log
+into could not be determined:
+
+  Configured path: %s
+
+A relative path (or no path at all) is resolved against the session
+directory base - the DVMTempDir configuration key, or the
+"prte_tmpdir_base" MCA parameter - and no such base is set.  Either give
+an absolute path or set the session directory base.
+
+State logging has been disabled for this process; the DVM is otherwise
+proceeding normally.
+#
+[state-log-open-failed]
+%s: DVM state logging was requested, but the log could not be opened:
+
+  Location: %s
+  Error:    %s
+
+Check that the path exists, is a directory, and is writable by the user
+this daemon is running as.
+
+State logging has been disabled for this process; the DVM is otherwise
+proceeding normally.

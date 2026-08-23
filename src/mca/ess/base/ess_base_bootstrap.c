@@ -371,11 +371,12 @@ int prte_ess_base_bootstrap_params(void)
     if (NULL != bootstrap_cfg.dvmtmpdir) {
         PMIx_Setenv("PRTE_MCA_prte_tmpdir_base", bootstrap_cfg.dvmtmpdir, true, &environ);
     }
-    /* NOTE: SessionTmpDir and the *Log* options are parsed and carried in the
-     * configuration, but their runtime plumbing (a dedicated session-dir
-     * override and the DVM state-logging facility) is not yet implemented, so
-     * they are intentionally not published here.  Wiring them is deferred to
-     * when those facilities exist, per the bootstrap implementation plan. */
+    /* NOTE: SessionTmpDir is parsed and carried in the configuration, but the
+     * facility it would drive - a session-directory base for application jobs
+     * distinct from the DVM's own - does not exist, so publishing it here
+     * would promise behavior the daemon does not have.  The parse stays
+     * because the file format is the specification; the plumbing waits on the
+     * facility. */
 
     return PRTE_SUCCESS;
 }

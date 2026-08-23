@@ -6,7 +6,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2026 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,7 +47,12 @@ prte_state_base_t prte_state_base = {
     .run_fdcheck = false,
     .recoverable = false,
     .max_restarts = 0,
-    .continuous = false
+    .continuous = false,
+    .log_jobstate = false,
+    .log_procstate = false,
+    .log_path = NULL,
+    .log_file = NULL,
+    .log_fp = NULL
 };
 prte_state_base_module_t prte_state = {0};
 
@@ -103,6 +108,29 @@ static int prte_state_base_register(pmix_mca_base_register_flag_t flags)
                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                &prte_state_base.autorestart);
 
+    /* DVM state logging - see state_base_log.c.  These parameters are the
+     * only way to ask for it: it is deliberately not a prte.conf key, since
+     * one written there would apply to every daemon of every DVM the cluster
+     * starts, unattended. */
+    prte_state_base.log_jobstate = false;
+    pmix_mca_base_var_register("prte", "state", "base", "log_jobstate",
+                               "Record every job state transition this process orders in the DVM state log",
+                               PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                               &prte_state_base.log_jobstate);
+
+    prte_state_base.log_procstate = false;
+    pmix_mca_base_var_register("prte", "state", "base", "log_procstate",
+                               "Record every process state transition this process orders in the DVM state log",
+                               PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                               &prte_state_base.log_procstate);
+
+    prte_state_base.log_path = NULL;
+    pmix_mca_base_var_register("prte", "state", "base", "log_path",
+                               "Directory the DVM state log is written into (a relative path is "
+                               "created under the session directory base; default: that base)",
+                               PMIX_MCA_BASE_VAR_TYPE_STRING,
+                               &prte_state_base.log_path);
+
     return PRTE_SUCCESS;
 }
 
@@ -113,6 +141,8 @@ static int prte_state_base_close(void)
         prte_state.finalize();
     }
 
+    prte_state_base_log_close();
+
     return pmix_mca_base_framework_components_close(&prte_state_base_framework, NULL);
 }
 
@@ -122,6 +152,12 @@ static int prte_state_base_close(void)
  *    */
 static int prte_state_base_open(pmix_mca_base_open_flag_t flags)
 {
+    /* Open the state log before any component can order a transition.  By
+     * now prte_init_util has established our hostname and session directory
+     * base, and our role (controller or daemon) is settled - all three name
+     * the file. */
+    prte_state_base_log_open();
+
     /* Open up all available components */
     return pmix_mca_base_framework_components_open(&prte_state_base_framework, flags);
 }

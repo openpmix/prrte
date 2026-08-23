@@ -181,13 +181,17 @@ value, **the configuration file trumps the MCA parameter file**.  (A value
 given explicitly on a command line still wins over both, so an operator can
 still override the configuration for a one-off.)
 
-Operational and logging keys (``DVMTempDir``, ``SessionTmpDir``,
-``ControllerLogPath``, ``PRTEDLogPath``, ``ControllerLogJobState``,
-``ControllerLogProcState``, ``PRTEDLogJobState``, ``PRTEDLogProcState``)
-tune session-directory placement and state logging; they are documented in
+Operational keys (``DVMTempDir``, ``SessionTmpDir``) tune
+session-directory placement; they are documented in
 :doc:`../../configuration` and do not affect DVM formation.  An unknown key
 is silently ignored so that a newer configuration file remains usable by an
-older daemon.
+older daemon — which is also what now becomes of the six ``ControllerLog*``
+/ ``PRTEDLog*`` state-logging keys an early draft of this format carried.
+They are **not** part of the format: a key here applies to every daemon of
+every DVM the cluster starts, unattended, while the volume of a
+per-transition log scales with the processes launched and fills the disk the
+session directories live on.  That facility is reached through the
+``state_base_log_*`` MCA parameters instead, one run at a time.
 
 Identity derivation
 -------------------
@@ -375,9 +379,8 @@ What the draft does *not* yet do
 * **No contact information is built.**  The controller URI is never
   synthesized from ``DVMControllerHost``/``DVMPort``, and the
   ports parsed from the file are not applied to the RML listeners.
-* **The operational and logging keys are parsed and immediately freed** —
-  ``DVMTempDir``, ``SessionTmpDir``, the log paths and log-state toggles
-  have no effect.
+* **The operational keys are parsed and immediately freed** —
+  ``DVMTempDir`` and ``SessionTmpDir`` have no effect.
 * **The parser is duplicated** between ``ess_base_bootstrap.c`` and
   ``ras_boot.c`` rather than shared, so the two consumers can drift.
 

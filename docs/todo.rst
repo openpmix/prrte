@@ -99,14 +99,49 @@ which nodes, and the daemon-launch path would have to fan out through more
 than one.  At minimum it needs a launcher affinity recorded per node and
 honored by ``prte_plm_base_setup_virtual_machine``.
 
-**The bootstrap configuration parses two options it deliberately does not
-publish.**  ``SessionTmpDir`` and the ``Log*`` options are read into the
-bootstrap configuration and then left there
-(``prte_ess_base_bootstrap_params``, ``src/mca/ess/base/ess_base_bootstrap.c``):
-the facilities they would drive — a dedicated session-directory override, and
-DVM state logging — do not exist, so publishing them as MCA envars would
-promise behavior the daemon does not have.  The parse stays because the file
-format is the specification; the plumbing waits on the facilities.
+**The bootstrap configuration parses one option it deliberately does not
+publish.**  ``SessionTmpDir`` is read into the bootstrap configuration and
+then left there (``prte_ess_base_bootstrap_params``,
+``src/mca/ess/base/ess_base_bootstrap.c``): the facility it would drive — a
+session-directory base for application jobs distinct from the DVM's own —
+does not exist, so publishing it as an MCA envar would promise behavior the
+daemon does not have.  The parse stays because the file format is the
+specification; the plumbing waits on the facility.
+
+What is missing is small but not free.  ``_setup_job_session_dir``
+(``src/util/session_dir.c``) roots every job directory at
+``prte_process_info.top_session_dir`` unconditionally, and no MCA parameter
+reroots it — ``prte_tmpdir_base`` and its local/remote siblings move the
+*whole* tree.  It is worth having: ``jdata->session_dir`` is what PRRTE hands
+PMIx as ``PMIX_NSDIR`` (``pmix_server_register_fns.c``), which is where the
+gds/shmem segments and an MPI's shared-memory backing files land, so
+separating that from the DVM's own small control directory is a real
+operational knob.  Two things have to be decided before writing it:
+
+* **Uniqueness.**  Today it comes from the ``<prefix>.<host>.<pid>`` level
+  above the job directories.  A bare ``<SessionTmpDir>/<jobid>`` collides
+  between two DVMs on one node, so that level has to be replicated under the
+  new root — and ``prte_job_session_dir_finalize`` then has two roots to
+  destroy rather than one.
+* **What the clients are told.**  ``PMIX_SERVER_TMPDIR`` must stay the
+  daemon's own directory (it is where client rendezvous files go), so
+  ``PMIX_NSDIR`` would no longer sit beneath it.
+  ``docs/how-things-work/session_dirs.rst`` says "usually placed underneath",
+  not "must be", so this is legal — but it is a change a client can observe.
+
+The ``Log*`` half of this entry is **closed, not implemented**: the six
+``ControllerLog*`` / ``PRTEDLog*`` keys have been removed from the file
+format rather than plumbed.  The facility they would have driven now exists
+as the ``state_base_log_jobstate`` / ``state_base_log_procstate`` /
+``state_base_log_path`` MCA parameters
+(``src/mca/state/base/state_base_log.c``), and that is the only way to ask
+for it.  A configuration key applies to every daemon of every DVM the
+cluster starts, for as long as the line is present and with nobody watching,
+while the volume of a per-transition record scales with the processes
+launched and lands on the same disk the session directories use — a knob
+with that blast radius has to be asked for by the run that wants it.  An
+older ``prte.conf`` carrying the keys still parses: they are unknown keys
+now, and unknown keys are ignored.
 
 **A job cannot ask for a transport.**  The network allocation request the
 odls builds for each job names ``<nspace>.net`` and a security key and
@@ -219,7 +254,7 @@ the marker is stale.
      - a job cannot ask for a transport
    * - ``mca/ess/base/ess_base_bootstrap.c``,
        ``prte_ess_base_bootstrap_params``
-     - two bootstrap options are parsed and not plumbed
+     - one bootstrap option is parsed and not plumbed
    * - ``mca/ras/flux/ras_flux_module.c``, ``modify``
      - ``ras/flux`` has no ``modify()``
 

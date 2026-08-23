@@ -52,6 +52,15 @@ void prte_state_base_activate_job_state(prte_job_t *jdata, prte_job_state_t stat
     prte_state_t *s;
     prte_state_caddy_t *caddy;
 
+    /* The state log records the moment a transition was ORDERED, which is
+     * here - the dispatch below only queues the handler.  It is deliberately
+     * ahead of everything else, so that a state nothing is registered for
+     * still appears in the record: that a transition was ordered and then
+     * dropped is exactly what the log exists to show. */
+    if (prte_state_base.log_jobstate) {
+        prte_state_base_log_job(jdata, state);
+    }
+
     for (itm = pmix_list_get_first(&prte_job_states); itm != pmix_list_get_end(&prte_job_states);
          itm = pmix_list_get_next(itm)) {
         s = (prte_state_t *) itm;
@@ -196,6 +205,11 @@ void prte_state_base_activate_proc_state(pmix_proc_t *proc, prte_proc_state_t st
     pmix_list_item_t *itm, *any = NULL, *error = NULL;
     prte_state_t *s;
     prte_state_caddy_t *caddy;
+
+    /* as above: log the order, not the dispatch */
+    if (prte_state_base.log_procstate) {
+        prte_state_base_log_proc(proc, state);
+    }
 
     /* the proc machine is keyed entirely on the name - there is nothing
      * to dispatch without one */
