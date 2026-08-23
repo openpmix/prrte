@@ -49,6 +49,24 @@ x-node: &node
   image: ${IMAGE:-prte-swarm:latest}
   networks: [dvm]
   tty: true
+  # Cap what the json-file log driver keeps.  Docker's default is UNBOUNDED:
+  # whatever a container's main process writes to stdout/stderr is kept
+  # forever, and on macOS it accumulates inside Docker.raw, which grows and
+  # never shrinks again -- a swarm left running with something chatty on its
+  # console can eat a disk while nobody is looking.  10 MB x 3 per node is
+  # ample for a post-mortem and bounds a ten-node swarm at 300 MB.
+  #
+  # This bounds the container's MAIN process only.  `docker exec` output --
+  # which is how every test here runs a command -- is not written to the
+  # container log at all, and anything a test redirects to a file inside the
+  # container (/tmp/prte.out and friends) lands in the container's writable
+  # layer, which this does not bound either.  Those are cleaned up by
+  # cleanup_swarm; this is the backstop for the path nothing cleans.
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
   volumes:
     - prte-build:/opt/prte:ro
 
