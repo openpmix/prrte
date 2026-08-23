@@ -150,41 +150,53 @@ the DVM daemons are to use as the base for session directories for all
 application sessions. Working files for each session will be placed under
 this location, separated out into a directory for each session.
 
-Logging Options
-^^^^^^^^^^^^^^^
-``ControllerLogJobState=<true|false> (default: false)`` directs the DVM
-controller to log each DVM-launched job state transition. Log entry includes
-the namespace of the job, the state to which it is transitioning, and the
-date/time stamp when the transition was ordered.
+State Logging
+^^^^^^^^^^^^^
+There is deliberately **no** configuration-file key for DVM state logging.
 
-``ControllerLogProcState=<true|false> (default: false)`` directs the DVM
-controller to log each process (in a DVM-launched job) state transition.
-Log entry includes the namespace and rank of the process, the state to
-which it is transitioning, and the date/time stamp when the transition was
-ordered.
+The DVM can be asked to record every job and/or process state transition it
+orders |mdash| the namespace (and rank), the state, and the date/time stamp
+of the moment the transition was ordered |mdash| but only as MCA parameters,
+which are given one run at a time:
 
-``ControllerLogPath=<path> (default: DVMTempDir)`` is the path to where the logs are to
-be written. If a relative path is provided,
-then the directory will be created under the ``DVMTempDir`` location. The
-path defaults to the specified SessionTmpDir in the absence of any input
-to this field. The log filename is formatted as ``prtectrlr-<hostname>-log<``.
+* ``state_base_log_jobstate`` records each job state transition the process
+  orders.
+* ``state_base_log_procstate`` records each process state transition it
+  orders.
+* ``state_base_log_path`` is the directory the log is written into. A
+  relative path is created under the session directory base (``DVMTempDir``,
+  or the ``prte_tmpdir_base`` MCA parameter), which is also the default. The
+  file is ``prtectrlr-<hostname>-log`` on the DVM controller and
+  ``prted-<hostname>-log`` on a ``prted``, so a controller sharing a node
+  with a daemon does not contend with it for one file.
 
-``PRTEDLogJobState=<true|false> (default: false)`` directs each ``prted``
-in the DVM to log each DVM-launched job state transition. Log entry includes
-the namespace of the job, the state to which it is transitioning, and the
-date/time stamp when the transition was ordered.
+Each record is one line, with the state name last because several state
+names contain spaces:
 
-``PRTEDLogProcState=<true|false> (default: false)`` directs each ``prted``
-in the DVM to log each process (in a DVM-launched job) state transition.
-Log entry includes the namespace and rank of the process, the state to
-which it is transitioning, and the date/time stamp when the transition was
-ordered.
+.. code::
 
-``PRTEDLogPath=<path> (default: DVMTempDir)`` is the path to where the logs are to
-be written. If a relative path is provided,
-then the directory will be created under the ``DVMTempDir`` location. The
-path defaults to the specified SessionTmpDir in the absence of any input
-to this field. The log filename is formatted as ``prted-<hostname>-log<``.
+   2026-08-22T18:45:01.008680 JOB <namespace> <state>
+   2026-08-22T18:45:01.105669 PROC <namespace>:<rank> <state>
+
+A field that has no value yet |mdash| a job whose namespace has not been
+assigned at the moment it reaches its first state |mdash| is written as
+``-``. The log is opened for append, so restarting a DVM adds to the record
+rather than erasing it; each run begins with a ``#`` banner line naming its
+pid. A transition is recorded when it is **ordered**, which is deliberately
+not the same as when it is acted on: a state that no handler is registered
+for is dropped by the state machine, and the log is where that shows up.
+
+Making these configuration keys was considered and rejected. A key in this
+file applies to every daemon of every DVM the cluster starts, for as long as
+the line is present, and nobody is watching |mdash| whereas the volume of a
+per-transition record scales with the number of processes launched and the
+disk it fills is the one the session directories live on. A knob with that
+blast radius should have to be asked for by the run that wants it, which is
+what an MCA parameter is. An older ``prte.conf`` that still carries the
+``ControllerLogJobState``, ``ControllerLogProcState``, ``ControllerLogPath``,
+``PRTEDLogJobState``, ``PRTEDLogProcState`` or ``PRTEDLogPath`` keys is still
+read normally: they are now simply unknown keys, and unknown keys are
+ignored.
 
 
 Configurator Tool

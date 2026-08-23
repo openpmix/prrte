@@ -41,7 +41,9 @@
 
 #include "prte_config.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "constants.h"
 #include "src/event/event-internal.h"
@@ -762,9 +764,154 @@ static int test_component_selection(void)
     return failures;
 }
 
+/*
+ * DVM state logging.
+ *
+ * The log is an operational record, asked for by the state_base_log_* MCA
+ * parameters, so what has to hold is that (a) enabling it
+ * produces the file the documentation names, in the directory asked for,
+ * creating that directory if need be; (b) both record kinds carry the fields
+ * the documentation promises; and (c) a transition is recorded when it is
+ * ORDERED, which means it appears even when no handler is registered for it
+ * and the dispatcher drops it.  That last one is the whole point - a state
+ * machine that silently swallowed an activation is exactly what someone
+ * reads this log to discover - and it is what this test drives, since it
+ * runs with empty state tables.
+ *
+ * main() enables logging into logdir before prte_init_util, because an MCA
+ * variable reads its environment only at its first registration.
+ */
+static char *logdir = NULL;
+
+/* does the log contain this exact line? */
+static bool log_has(const char *needle)
+{
+    char buf[8192];
+    size_t n;
+    FILE *fp;
+    bool found;
+
+    if (NULL == prte_state_base.log_file) {
+        return false;
+    }
+    fp = fopen(prte_state_base.log_file, "r");
+    if (NULL == fp) {
+        return false;
+    }
+    n = fread(buf, 1, sizeof(buf) - 1, fp);
+    fclose(fp);
+    buf[n] = '\0';
+    found = (NULL != strstr(buf, needle));
+    return found;
+}
+
+static int test_state_log(void)
+{
+    int failures = 0;
+    char *dir = NULL;
+    char *expected = NULL;
+    prte_job_t *jdata;
+    pmix_proc_t proc;
+
+    /* --- the path rule, on its own: absolute is taken as given, relative
+     * and absent are resolved against the session-directory base, and
+     * without such a base a relative request cannot be answered --- */
+    CHECK("logdir absolute",
+          PRTE_SUCCESS == prte_state_base_log_resolve_dir("/var/log/prte", "/tmp", &dir)
+          && NULL != dir && 0 == strcmp("/var/log/prte", dir));
+    free(dir);
+    dir = NULL;
+    CHECK("logdir relative",
+          PRTE_SUCCESS == prte_state_base_log_resolve_dir("dvmlogs", "/tmp", &dir)
+          && NULL != dir && 0 == strcmp("/tmp/dvmlogs", dir));
+    free(dir);
+    dir = NULL;
+    CHECK("logdir default",
+          PRTE_SUCCESS == prte_state_base_log_resolve_dir(NULL, "/tmp", &dir)
+          && NULL != dir && 0 == strcmp("/tmp", dir));
+    free(dir);
+    dir = NULL;
+    CHECK("logdir empty is default",
+          PRTE_SUCCESS == prte_state_base_log_resolve_dir("", "/tmp", &dir)
+          && NULL != dir && 0 == strcmp("/tmp", dir));
+    free(dir);
+    dir = NULL;
+    CHECK("logdir relative needs a base",
+          PRTE_SUCCESS != prte_state_base_log_resolve_dir("dvmlogs", NULL, &dir));
+    CHECK("refused leaves no dir", NULL == dir);
+    /* an absolute path needs no base, so it still answers */
+    CHECK("logdir absolute needs no base",
+          PRTE_SUCCESS == prte_state_base_log_resolve_dir("/var/log/prte", NULL, &dir));
+    free(dir);
+
+    /* --- the file the framework opened for us --- */
+    CHECK("log enabled", prte_state_base.log_jobstate && prte_state_base.log_procstate);
+    CHECK("log open", NULL != prte_state_base.log_fp);
+    if (NULL == prte_state_base.log_fp) {
+        /* nothing below can say anything if the open failed */
+        fprintf(stdout, "FAILED test_state_log\n");
+        return failures;
+    }
+    /* we init as PRTE_PROC_MASTER, so this is the controller's spelling, and
+     * the directory did not exist until the open created it */
+    pmix_asprintf(&expected, "%s/prtectrlr-%s-log", logdir, prte_process_info.nodename);
+    CHECK("log file name", NULL != prte_state_base.log_file && NULL != expected
+                           && 0 == strcmp(expected, prte_state_base.log_file));
+    free(expected);
+
+    /* --- the records, with no handler registered for either state: the
+     * dispatcher drops both, and the log must show them anyway --- */
+    fresh_machines();
+
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, "statelogtest");
+    prte_state_base_activate_job_state(jdata, PRTE_JOB_STATE_MAP_COMPLETE);
+    CHECK("job record", log_has(" JOB statelogtest MAP COMPLETE\n"));
+
+    /* a job activation carrying no job at all still has to be recorded */
+    prte_state_base_activate_job_state(NULL, PRTE_JOB_STATE_DAEMONS_LAUNCHED);
+    CHECK("null-job record", log_has(" JOB - DAEMONS LAUNCHED\n"));
+
+    PMIX_LOAD_PROCID(&proc, "statelogtest", 7);
+    prte_state_base_activate_proc_state(&proc, PRTE_PROC_STATE_RUNNING);
+    CHECK("proc record", log_has(" PROC statelogtest:7 RUNNING\n"));
+
+    /* activate_proc_state drops a NULL name before it dispatches; the order
+     * was still given, so it is still recorded */
+    prte_state_base_activate_proc_state(NULL, PRTE_PROC_STATE_TERMINATED);
+    CHECK("null-proc record", log_has(" PROC - NORMALLY TERMINATED\n"));
+
+    PMIX_RELEASE(jdata);
+    drop_machines();
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_state_log\n");
+    }
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
+    char cwd[PRTE_PATH_MAX];
+    char *logfile;
+
+    /* Ask for a state log before anything registers an MCA variable: a
+     * variable reads its environment only at its first registration, and the
+     * state framework's happens below.  The directory deliberately does not
+     * exist yet - creating it is part of what is under test. */
+    if (NULL == getcwd(cwd, sizeof(cwd))) {
+        fprintf(stderr, "getcwd failed\n");
+        return 1;
+    }
+    pmix_asprintf(&logdir, "%s/state-log-test-%lu", cwd, (unsigned long) getpid());
+    if (NULL == logdir) {
+        fprintf(stderr, "out of memory\n");
+        return 1;
+    }
+    setenv("PRTE_MCA_state_base_log_jobstate", "1", 1);
+    setenv("PRTE_MCA_state_base_log_procstate", "1", 1);
+    setenv("PRTE_MCA_state_base_log_path", logdir, 1);
 
     rc = prte_init_util(PRTE_PROC_MASTER);
     if (PRTE_SUCCESS != rc) {
@@ -794,8 +941,17 @@ int main(void)
     failures += test_report_child_sep_reader();
     failures += test_stop_in_app();
     failures += test_component_selection();
+    failures += test_state_log();
 
+    /* the framework close frees log_file, so take a copy to clean up with */
+    logfile = (NULL == prte_state_base.log_file) ? NULL : strdup(prte_state_base.log_file);
     (void) pmix_mca_base_framework_close(&prte_state_base_framework);
+    if (NULL != logfile) {
+        (void) unlink(logfile);
+        free(logfile);
+    }
+    (void) rmdir(logdir);
+    free(logdir);
     prte_event_base_close();
     prte_finalize();
 

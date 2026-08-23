@@ -47,12 +47,6 @@ typedef struct {
     uint32_t retry_max_delay; /* DVMRetryMaxDelay seconds (default 5) */
     char *dvmtmpdir;       /* DVMTempDir */
     char *sessiontmpdir;   /* SessionTmpDir */
-    char *ctrllogpath;     /* ControllerLogPath */
-    char *prtedlogpath;    /* PRTEDLogPath */
-    bool ctrl_log_jobstate;
-    bool ctrl_log_procstate;
-    bool prted_log_jobstate;
-    bool prted_log_procstate;
 } prte_bootstrap_config_t;
 
 /**

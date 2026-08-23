@@ -24,6 +24,8 @@
 #include "prte_config.h"
 #include "constants.h"
 
+#include <stdio.h>
+
 #include "src/class/pmix_list.h"
 #include "src/util/pmix_printf.h"
 
@@ -47,11 +49,27 @@ typedef struct {
     bool show_launch_progress;
     bool notifyerrors;
     bool autorestart;
+    /* DVM state logging - see state_base_log.c.  log_path is owned by the
+     * MCA variable system; log_file and log_fp are ours. */
+    bool log_jobstate;
+    bool log_procstate;
+    char *log_path;
+    char *log_file;
+    FILE *log_fp;
 } prte_state_base_t;
 PRTE_EXPORT extern prte_state_base_t prte_state_base;
 
 /* select a component */
 PRTE_EXPORT int prte_state_base_select(void);
+
+/*
+ * DVM state logging (state_base_log.c)
+ */
+PRTE_EXPORT int prte_state_base_log_resolve_dir(const char *path, const char *base, char **dir);
+PRTE_EXPORT void prte_state_base_log_open(void);
+PRTE_EXPORT void prte_state_base_log_close(void);
+PRTE_EXPORT void prte_state_base_log_job(prte_job_t *jdata, prte_job_state_t state);
+PRTE_EXPORT void prte_state_base_log_proc(const pmix_proc_t *proc, prte_proc_state_t state);
 
 /* debug tools */
 PRTE_EXPORT void prte_state_base_print_job_state_machine(void);

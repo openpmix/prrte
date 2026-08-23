@@ -1503,6 +1503,54 @@ test_state() {
         bad "could not start a DVM for the teardown-accounting test"
     fi
     cleanup_swarm
+
+    banner "state: the DVM state log records each role in its own file"
+    # State logging is reachable only through these MCA parameters -- it is
+    # deliberately not a prte.conf key.  Two halves of it only exist with
+    # more than one daemon: the ROLE SPLIT --
+    # the controller writes prtectrlr-<host>-log and every prted writes
+    # prted-<host>-log, so the two never contend for one file -- and the
+    # fact that the parameters have to travel to the daemons at all, which
+    # is the launch path's job, not the state framework's.  A single-node
+    # run has one process wearing both hats and proves neither.
+    cleanup_swarm
+    RUN 'rm -rf /tmp/statelog' >/dev/null 2>&1
+    ON 2 'rm -rf /tmp/statelog' >/dev/null 2>&1
+    RUN 'nohup prte --daemonize --host node2:2,node3:2 --prtemca state_base_log_jobstate 1 --prtemca state_base_log_procstate 1 --prtemca state_base_log_path /tmp/statelog >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        RUN 'timeout 60 prun -n 4 --map-by node hostname' >/dev/null 2>&1
+        out=$(RUN 'cat /tmp/statelog/prtectrlr-*-log 2>/dev/null')
+        echo "$out" | grep -q ' JOB .* VM READY' \
+            && ok "the controller logged job state transitions to its own file" \
+            || bad "no job-state records in the controller's state log"
+        out=$(ON 2 'cat /tmp/statelog/prted-*-log 2>/dev/null')
+        echo "$out" | grep -q ' PROC .* RUNNING' \
+            && ok "a prted logged proc state transitions to its own file" \
+            || bad "no proc-state records in the prted's state log (did the params reach the daemon?)"
+        ON 2 'ls /tmp/statelog/prtectrlr-*-log >/dev/null 2>&1' \
+            && bad "a prted claimed the controller's log file name" \
+            || ok "a prted did not claim the controller's log file name"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the state-log test"
+    fi
+    RUN 'rm -rf /tmp/statelog' >/dev/null 2>&1
+    ON 2 'rm -rf /tmp/statelog' >/dev/null 2>&1
+    cleanup_swarm
+
+    banner "state: no state log is written unless one is asked for"
+    # The log defaults off, and its default location is the session-directory
+    # base -- so a default flipped on would quietly start dropping a file in
+    # /tmp on every node of every DVM.
+    RUN 'rm -f /tmp/prtectrlr-*-log' >/dev/null 2>&1
+    ON 2 'rm -f /tmp/prted-*-log' >/dev/null 2>&1
+    RUN 'timeout 60 prterun --host node2:2 -n 2 hostname' >/dev/null 2>&1
+    if RUN 'ls /tmp/prtectrlr-*-log >/dev/null 2>&1' || ON 2 'ls /tmp/prted-*-log >/dev/null 2>&1'; then
+        bad "a state log was written without being asked for"
+    else
+        ok "no state log appeared when none was requested"
+    fi
+    cleanup_swarm
 }
 
 ########################################################################

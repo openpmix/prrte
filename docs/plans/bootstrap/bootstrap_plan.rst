@@ -140,10 +140,6 @@ Create ``src/util/prte_bootstrap.c`` / ``src/util/prte_bootstrap.h`` holding:
        uint32_t  retry_max_delay;  /* DVMRetryMaxDelay seconds (default 5) */
        char     *dvmtmpdir;
        char     *sessiontmpdir;
-       char     *ctrllogpath;
-       char     *prtedlogpath;
-       bool      ctrl_log_jobstate, ctrl_log_procstate;
-       bool      prted_log_jobstate, prted_log_procstate;
    } prte_bootstrap_config_t;
 
    /* Read <sysconfdir>/prte.conf, validate required keys, expand DVMNodes.
@@ -550,23 +546,25 @@ rank-indexed insertion via the shared parser's node list, reusing the
 canonical-ordering helper from Step 2 (factor it into ``prte_bootstrap.c`` so
 both the ``ess`` and ``ras`` sides call one implementation).
 
-Step 10 — Apply the operational and logging keys
-------------------------------------------------
+Step 10 — Apply the operational keys
+------------------------------------
 
-The draft parses ``DVMTempDir``, ``SessionTmpDir``, the log paths, and (newly,
-per Step 1) the four log-state booleans, then frees them with no effect.  Wire
-each to its existing runtime setting before ``prte_init``:
+The draft parses ``DVMTempDir`` and ``SessionTmpDir``, then frees them with no
+effect.  Wire each to its existing runtime setting before ``prte_init``:
+``DVMTempDir`` / ``SessionTmpDir`` → the session-directory base
+(``prte_process_info.tmpdir_base`` / the top session dir), matching how the
+``--tmpdir`` family is applied today.
 
-* ``DVMTempDir`` / ``SessionTmpDir`` → the session-directory base
-  (``prte_process_info.tmpdir_base`` / the top session dir), matching how the
-  ``--tmpdir`` family is applied today.
-* ``ControllerLogPath`` / ``PRTEDLogPath`` and the ``*LogJobState`` /
-  ``*LogProcState`` toggles → the controller/daemon state-logging options
-  described in :doc:`../../configuration`.
+The six ``ControllerLog*`` / ``PRTEDLog*`` state-logging keys the draft also
+parsed are **dropped from the format** rather than wired: a key in this file
+is set once and applies to every daemon of every DVM the cluster starts,
+unattended, whereas a per-transition record grows with the processes launched
+and fills the same disk the session directories use.  The facility exists as
+the ``state_base_log_*`` MCA parameters (:doc:`../../configuration`), which
+the run that wants it asks for.
 
-Each key is applied on the side it governs (controller-only keys only when
-``is_controller``).  These are independent of DVM formation and can land after
-the formation path (Steps 1–9) is working.
+These are independent of DVM formation and can land after the formation path
+(Steps 1–9) is working.
 
 Step 11 — Update the example config file and the configurator tool
 ------------------------------------------------------------------
