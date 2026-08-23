@@ -90,6 +90,38 @@ static void set_stacktrace_filename(void)
 
     return;
 }
+
+/*
+ * snprintf() returns the length its output *would* have had, which on
+ * truncation is larger than the space it was given, so nothing here may
+ * advance by it.  written_len() is what snprintf() actually put in the
+ * buffer, and advance_buffer() steps a print cursor by that.
+ *
+ * Stepping by the raw return instead walks the cursor past the end of the
+ * buffer and drives the remaining count negative -- and the next snprintf()
+ * takes that count as a size_t, reads it as enormous, and writes off the end
+ * of the stack.  A long node name is all it takes: the handler builds four
+ * host-prefixed lines in one 1 KB buffer, which a name of much over 200
+ * characters overruns.
+ */
+static int written_len(int ret, int cap)
+{
+    if (0 >= cap || 0 > ret) {
+        return 0;
+    }
+    if (ret >= cap) {
+        /* truncated: snprintf wrote cap - 1 characters plus the NUL */
+        return cap - 1;
+    }
+    return ret;
+}
+
+static void advance_buffer(char **tmp, int *size, int ret)
+{
+    ret = written_len(ret, *size);
+    *tmp += ret;
+    *size -= ret;
+}
 #endif /* PRTE_WANT_PRETTY_PRINT_STACKTRACE */
 
 /**
@@ -155,6 +187,7 @@ static void show_stackframe(int signo, siginfo_t *info, void *p)
     ret = snprintf(print_buffer, sizeof(print_buffer),
                    HOSTFORMAT "*** Process received signal ***\n", prte_process_info.nodename,
                    getpid());
+    ret = written_len(ret, (int) sizeof(print_buffer));
     if (-1 == write(prte_stacktrace_output_fileno, print_buffer, ret)) {
         return;
     }
@@ -168,8 +201,7 @@ static void show_stackframe(int signo, siginfo_t *info, void *p)
     ret = snprintf(tmp, size, HOSTFORMAT "Signal: %d\n", prte_process_info.nodename, getpid(),
                    signo);
 #    endif
-    size -= ret;
-    tmp += ret;
+    advance_buffer(&tmp, &size, ret);
 
     if (NULL != info) {
         switch (signo) {
@@ -426,14 +458,12 @@ static void show_stackframe(int signo, siginfo_t *info, void *p)
             ret = snprintf(tmp, size, HOSTFORMAT "Associated errno: %s (%d)\n",
                            prte_process_info.nodename, getpid(), strerror(info->si_errno),
                            info->si_errno);
-            size -= ret;
-            tmp += ret;
+            advance_buffer(&tmp, &size, ret);
         }
 
         ret = snprintf(tmp, size, HOSTFORMAT "Signal code: %s (%d)\n", prte_process_info.nodename,
                        getpid(), si_code_str, info->si_code);
-        size -= ret;
-        tmp += ret;
+        advance_buffer(&tmp, &size, ret);
 
         switch (signo) {
         case SIGILL:
@@ -442,16 +472,14 @@ static void show_stackframe(int signo, siginfo_t *info, void *p)
         case SIGBUS: {
             ret = snprintf(tmp, size, HOSTFORMAT "Failing at address: %p\n",
                            prte_process_info.nodename, getpid(), info->si_addr);
-            size -= ret;
-            tmp += ret;
+            advance_buffer(&tmp, &size, ret);
             break;
         }
         case SIGCHLD: {
             ret = snprintf(tmp, size, HOSTFORMAT "Sending PID: %d, Sending UID: %d, Status: %d\n",
                            prte_process_info.nodename, getpid(), info->si_pid, info->si_uid,
                            info->si_status);
-            size -= ret;
-            tmp += ret;
+            advance_buffer(&tmp, &size, ret);
             break;
         }
 #    ifdef SIGPOLL
@@ -465,8 +493,7 @@ static void show_stackframe(int signo, siginfo_t *info, void *p)
 #        else
             ret = 0;
 #        endif
-            size -= ret;
-            tmp += ret;
+            advance_buffer(&tmp, &size, ret);
             break;
         }
 #    endif
@@ -475,8 +502,7 @@ static void show_stackframe(int signo, siginfo_t *info, void *p)
         ret = snprintf(tmp, size,
                        HOSTFORMAT "siginfo is NULL, additional information unavailable\n",
                        prte_process_info.nodename, getpid());
-        size -= ret;
-        tmp += ret;
+        advance_buffer(&tmp, &size, ret);
     }
 
     /* write out the signal information generated above */
@@ -499,6 +525,7 @@ static void show_stackframe(int signo, siginfo_t *info, void *p)
     memset(print_buffer, 0, sizeof(print_buffer));
     ret = snprintf(print_buffer, sizeof(print_buffer), HOSTFORMAT "*** End of error message ***\n",
                    prte_process_info.nodename, getpid());
+    ret = written_len(ret, (int) sizeof(print_buffer));
     if (ret > 0) {
         if (-1 == write(prte_stacktrace_output_fileno, print_buffer, ret)) {
             return;
