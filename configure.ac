@@ -529,6 +529,13 @@ AC_CHECK_DECLS([AF_UNSPEC, PF_UNSPEC, AF_INET6, PF_INET6],
 #include <netinet/in.h>
 #endif])
 
+# The pretty-print stacktrace handler (src/util/stacktrace.c) reads siginfo_t
+# unconditionally, and nothing here probes for it: the type, the sa_sigaction
+# member and the SA_SIGINFO flag are all mandatory in POSIX.1-2001, well
+# below anything PRRTE can be built on.  These two *members* are the part
+# that genuinely varies -- si_fd is not in POSIX at all (a Solaris/Linux
+# extension, absent on macOS), and si_band belongs to the obsolescent XSI
+# SIGPOLL option.
 AC_CHECK_MEMBERS([siginfo_t.si_fd],,,[#include <signal.h>])
 
 AC_CHECK_MEMBERS([siginfo_t.si_band],,,[#include <signal.h>])

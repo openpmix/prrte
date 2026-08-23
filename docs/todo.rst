@@ -151,14 +151,6 @@ otherwise takes whatever transport the resource manager offers by default
 surface for saying which one, and the note there is the record that one was
 always intended.
 
-**Stack traces assume ``siginfo_t``.**  ``show_stackframe``
-(``src/util/stacktrace.c``) is installed as an ``sa_sigaction`` handler and
-prints ``si_code``, ``si_addr`` and their neighbors unconditionally.
-``configure`` probes for two *members* (``si_fd``, ``si_band``) but nothing
-probes for the structure itself, so a platform without it would fail to
-build rather than degrade to the plain handler.  Every platform PRRTE
-currently supports has it, which is why this has never been forced.
-
 Test coverage
 -------------
 
@@ -253,8 +245,6 @@ the marker is stale.
 
    * - marker
      - entry above
-   * - ``util/stacktrace.c``, ``show_stackframe``
-     - stack traces assume ``siginfo_t``
    * - ``mca/filem/raw/filem_raw_module.c``, ``raw_fault_handler``
      - ``filem/raw`` does not survive losing a daemon mid-staging
    * - ``mca/odls/base/odls_base_default_fns.c``,
@@ -534,6 +524,48 @@ so that the next person does not rediscover the idea and spend the effort
 again: each says what was measured and what the measurement decided.  Moving
 one back up the page takes new evidence, not a fresh reading of the same
 facts.
+
+**Guarding the stack-trace handler against a platform with no
+``siginfo_t``.**  ``show_stackframe`` (``src/util/stacktrace.c``) is
+installed as an ``sa_sigaction`` handler and reads ``si_code``, ``si_addr``
+and their neighbors unconditionally.  A ``FIXME`` carried over from the
+code's Open MPI ancestry asked for a second, plain ``sa_handler`` arm for
+"systems which don't have siginfo".  There are none.  ``siginfo_t``, the
+``sa_sigaction`` member of ``struct sigaction`` and the ``SA_SIGINFO`` flag
+are all mandatory in POSIX.1-2001 — not one of its option groups — and
+PRRTE's floor sits far above that: C11, PMIx 7, hwloc 2.1, libevent 2.0, and
+unguarded POSIX-2001 calls in every direction.  The comment dates from 2004,
+when the Unixes it was written for were still in the field.
+
+What the probes around it check is the part that genuinely is optional, and
+that division is the right one: ``si_fd`` is not in POSIX at all (a
+Solaris/Linux extension — macOS does not have it, as any build tree's
+``prte_config.h`` shows), and ``si_band`` belongs to the obsolescent XSI
+SIGPOLL option.  Both are probed, and both are guarded at their single use;
+so is every ``si_code`` value the switch decodes, and so is ``SIGPOLL``
+itself.  The only thing taken on faith is the structure.
+
+A second handler would therefore be code no compiler anywhere would ever be
+handed, living in a signal handler, where a mistake is untraceable.  Nor is
+a ``configure`` probe for the structure worth having: a check that can only
+ever answer yes is the same dead weight in a different file, and guessing at
+what a platform that has never existed would want is not portability.  The
+platform PRRTE cannot serve here already has its answer —
+``--disable-pretty-print-stacktrace`` compiles the handler out entirely and
+is used by several ``contrib/platform`` files.
+
+Checking that claim was worth more than the probe would have been: the arm
+did not build.  ``unable_to_print_msg`` and ``set_stacktrace_filename`` sat
+outside the switch their only users live behind, so with the feature off
+they were unreferenced and ``--enable-debug`` rejected the file.  Both now
+live inside the switch, and the disabled build compiles warning-free, passes
+``make check``, and launches.  That nobody had noticed is its own entry
+under **Test coverage**.
+
+So the ``FIXME`` is gone and nothing replaced it but a comment saying what is
+assumed and why.  If a platform without ``siginfo_t`` ever turns up, it will
+say so as a compile error naming the type in this one file, and the
+disable option is right there.
 
 **Giving RELM an MCA variable to choose between reliability modules.**  The
 marker in ``prte_relm_register`` asked for the enum variable that would select
