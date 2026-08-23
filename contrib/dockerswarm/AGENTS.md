@@ -1042,10 +1042,14 @@ sweeps `/tmp` inside the containers and knows nothing about the log driver.
 `max-size: 10m`, `max-file: 3` per node — ~30 MB a node, 300 MB for the swarm.
 Two things to know:
 
-- **A running container keeps the setting it was created with.**  Editing the
-  compose file does nothing to containers that already exist; they need
-  `docker compose up -d --force-recreate` (from this directory, so the project
-  name matches — see "The containers persist too").
+- **A running container keeps the setting it was created with**, but you do
+  not have to do anything special about that.  Compose stamps each container
+  with a `com.docker.compose.config-hash` label and recreates any service
+  whose definition has changed, and adding a `logging:` block changes that
+  hash — so an ordinary `docker compose up -d` picks the cap up on containers
+  that predate it.  Reach for `--force-recreate` only when you want to be
+  certain.  Either way, run it **from this directory** so the project name
+  matches — see "The containers persist too".
 - **It bounds the container's main process only.**  Every test here runs its
   command through `docker exec`, whose output is not written to the container
   log at all, and a case that redirects into a file inside the container
