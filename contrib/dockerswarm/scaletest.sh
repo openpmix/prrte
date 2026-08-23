@@ -93,6 +93,10 @@ gen_compose() {
         printf '  image: %s\n' "$IMAGE"
         printf '  networks: [dvm]\n'
         printf '  tty: true\n'
+        # bound the json-file driver, whose default is unbounded; see
+        # docker-compose.yml for what this does and does not cover
+        printf '  logging:\n    driver: json-file\n'
+        printf '    options:\n      max-size: "10m"\n      max-file: "3"\n'
         printf '  volumes:\n'
         printf '    - prte-build:/opt/prte:ro\n\n'
         printf 'services:\n'

@@ -1029,6 +1029,37 @@ If you are running a second swarm (`PRTE_SWARM`, §4), the loop above is
 per-swarm — use that swarm's container names. Nothing in it can reach the
 other swarm's `/tmp`, because the containers are different containers.
 
+### The container log is capped, and an old container is not
+
+Docker's `json-file` log driver is **unbounded** by default: everything a
+container's main process writes to stdout/stderr is kept until the disk is
+gone, and on macOS it accumulates inside `Docker.raw`, which grows and never
+shrinks again.  Ten long-lived containers plus anything chatty on their
+consoles is a disk-filler that nothing here cleans up, because `cleanup_swarm`
+sweeps `/tmp` inside the containers and knows nothing about the log driver.
+
+`docker-compose.yml` (and the generated `docker-compose.scale.yml`) now pin
+`max-size: 10m`, `max-file: 3` per node — ~30 MB a node, 300 MB for the swarm.
+Two things to know:
+
+- **A running container keeps the setting it was created with.**  Editing the
+  compose file does nothing to containers that already exist; they need
+  `docker compose up -d --force-recreate` (from this directory, so the project
+  name matches — see "The containers persist too").
+- **It bounds the container's main process only.**  Every test here runs its
+  command through `docker exec`, whose output is not written to the container
+  log at all, and a case that redirects into a file inside the container
+  (`/tmp/prte.out` and friends) is writing to the container's writable layer.
+  Both of those are swept by `cleanup_swarm`; the cap is the backstop for the
+  path nothing sweeps.
+
+To see what the logs currently hold:
+
+```sh
+docker ps -q | xargs -I{} docker inspect --format \
+    '{{.Name}} {{.HostConfig.LogConfig.Config}}' {}
+```
+
 ## 8. Rebuilding / resetting
 
 | Want to… | Do |
