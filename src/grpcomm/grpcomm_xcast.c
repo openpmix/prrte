@@ -575,16 +575,6 @@ void prte_grpcomm_xcast_fault_handler(
         }
     }
 
-    /* Any exchange still running has lost a participant, and no rearrangement
-     * of the survivors can produce the block that participant owed. Give up on
-     * it and let the payload come down the repaired tree instead. Done after
-     * the tree work above so the replays it sends go to the new children. */
-    {
-        op_t* op;
-        op_t* next_op;
-        PMIX_LIST_FOREACH_SAFE(op, next_op, &XCAST.ops, op_t){
-        }
-    }
     drive_completions();
 }
 
