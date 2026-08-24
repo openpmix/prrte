@@ -512,7 +512,7 @@ build_linux() {
             # all, so an assemblage that spans daemons is the only shape the
             # runtime ever sees - and the promise being checked (an event to
             # the assemblage when a member departs without disconnecting) is
-            # the runtime's to keep.
+            # one the runtime has to keep.
             # (No apostrophes here: see the note further down.)
             echo ">>>> connector (connect/disconnect assemblage) test client"
             gcc -O0 -g -o /opt/prte/prte/bin/connector \
