@@ -344,7 +344,11 @@ the DVM reflects the requested size: a grow's new nodes are available to
 spawn onto, a shrink's removed nodes are gone.  The event payload carries:
 
 * ``PMIX_ALLOC_ID`` (``char*``) — the allocation whose operation
-  completed; always present.
+  completed; present whenever the operation named one.  A
+  ``PMIX_ALLOC_ACTIVATE`` names none — it starts daemons on nodes the
+  requester already held, and creates no reservation — so the key is
+  omitted there rather than sent empty, and such a requester matches the
+  event by its own request id.
 * ``PMIX_ALLOC_REQ_ID`` (``char*``) — the requester's own request id,
   included whenever one was supplied on the original request, so the
   recipient can match the event by either identifier.
@@ -360,7 +364,8 @@ requester.  The event states that **no (further) DVM modification will be
 made** for this request and that the DVM has been returned to a stable
 state (for a failed grow, its pre-grow membership).  The payload carries:
 
-* ``PMIX_ALLOC_ID`` (``char*``) — always present.
+* ``PMIX_ALLOC_ID`` (``char*``) — when the operation named an allocation
+  (see the success event above).
 * ``PMIX_ALLOC_REQ_ID`` (``char*``) — when one was supplied.
 * The **underlying cause** — the specific ``pmix_status_t`` that prevented
   the modification (for example a daemon-launch failure versus a resource
