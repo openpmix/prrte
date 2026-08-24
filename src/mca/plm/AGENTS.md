@@ -454,6 +454,17 @@ rather than reading `map->daemon_vpid_start`: a target whose session is gone
 would otherwise leave the campaign with no requester, and a successful grow
 would emit no phase-two completion event at all.
 
+That scan resolves a requester through the *session* owning each target,
+which an **activation** (`--activate`, `PMIX_ALLOC_ACTIVATE`) has none of —
+it names nodes the allocation already held, which stay in the general pool.
+Such a requester is carried instead by
+`prte_plm_base_add_grow_requester()`, held in a short-lived pending list
+that the campaign adopts when it is recorded. Anything the pass does not
+hand to a campaign is answered by the wrapper around
+`setup_virtual_machine()` — success where the launch ran and simply had
+nothing to record, failure where it did not run at all — so a requester is
+never stranded, and never answered by some later grow's campaign.
+
 `map->num_new_daemons` is the key output: `== 0` means every node
 already has a daemon, so the component fast-forwards to
 `DAEMONS_REPORTED`. It also records elastic **grow campaigns** and the

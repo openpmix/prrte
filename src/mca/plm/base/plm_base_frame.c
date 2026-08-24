@@ -134,6 +134,10 @@ static int prte_plm_base_close(void)
         }
     }
 
+    /* a size change granted but never launched still owes its requester an
+     * answer, and this is the last chance to give one */
+    prte_plm_base_flush_grow_requesters();
+
     if (NULL != prte_plm_globals.base_nspace) {
         free(prte_plm_globals.base_nspace);
         /* the tool-attach path in plm_base_receive reads this to mint a
