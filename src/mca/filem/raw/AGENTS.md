@@ -67,7 +67,7 @@ the working directory instead of recreating their directory tree.
 | Class | Lives on | Role |
 |-------|----------|------|
 | `prte_filem_raw_outbound_t` | HNP | One preposition request. Holds the list of `xfers`, the aggregate `status`, and the caller's `cbfunc`/`cbdata`. When its `xfers` list drains, the callback fires. |
-| `prte_filem_raw_xfer_t` | HNP | One file being sent. Carries the read `fd`, the libevent `ev` (the caddy field — **named `ev`** as required), `src` (local path, for dup detection), `file` (remote-relative path), `type`, `mode` (the source file's permission bits), `nchunk` (next chunk index), and `nrecvd` (how many daemons have acked). |
+| `prte_filem_raw_xfer_t` | HNP | One file being sent. Carries the read `fd`, the libevent `ev` (the caddy field — **named `ev`** as required), `src` (local path, for dup detection), `file` (remote-relative path), `type`, `mode` (the source file's permission bits), `nchunk` (next chunk index), and the delivery accounting (`nexpected`, `nrecvd`, the `acked` bitmap, `horizon`) described under *completion accounting*. |
 | `prte_filem_raw_incoming_t` | daemon | One file being received. Carries the write `fd`, `ev`, `file`/`fullpath`, `type`, `mode`, the `outputs` list of pending write buffers, and `link_pts` (the paths, relative to the session dir, to place). |
 | `prte_filem_raw_output_t` | daemon | One received chunk: `numbytes` + a `PRTE_FILEM_RAW_CHUNK_MAX` data buffer, queued on an incoming file's `outputs` list for the write handler. |
 
@@ -193,16 +193,51 @@ zero-byte broadcast that tells receivers to close and finalize.
 ### `recv_ack` + `xfer_complete` — completion accounting
 
 Each daemon sends an ack `{file, status}` per file. `recv_ack` finds the
-matching `xfer` in `outbound_files`, records any non-success status, and
-bumps `xfer->nrecvd`. When `nrecvd >= prte_process_info.num_daemons` the
-file is fully positioned: `xfer_complete` moves the xfer from
-`outbound->xfers` to `positioned_files`. When an outbound's `xfers` list
-is empty, its `cbfunc` fires (this is the state machine's `files_ready`)
-and the outbound is released.
+matching `xfer` in `outbound_files`, records any non-success status, sets
+the sender's bit in `xfer->acked` and bumps `xfer->nrecvd`, then calls
+`xfer_check_complete()`. When `nrecvd >= xfer->nexpected` the file is
+fully positioned: `xfer_complete` moves the xfer from `outbound->xfers` to
+`positioned_files`. When an outbound's `xfers` list is empty, its `cbfunc`
+fires (this is the state machine's `files_ready`) and the outbound is
+released.
 
-`>=`, not `==`: `num_daemons` is read fresh on every ack, so a daemon
-leaving the DVM mid-transfer can lower it *past* a count already reached,
-and an exactly-equal test would then never fire.
+**Four fields, maintained together, and none of them is a live global.**
+
+| Field | Meaning |
+|-------|---------|
+| `nexpected` | How many daemons still owe an ack. Seeded from `prte_process_info.num_daemons` when the transfer starts; the fault handler decrements it as daemons depart. |
+| `nrecvd` | How many daemons have the file **and are still in the DVM** — a departure takes its ack back out again. |
+| `acked` | A `pmix_bitmap_t` of *which* daemons those are. |
+| `horizon` | The daemon job's `num_procs` when the transfer started, i.e. the vpid line above which a rank must have joined later. |
+
+The counting used to be a bare `nrecvd >= prte_process_info.num_daemons`
+re-read on every ack, and the reasons it cannot be are worth keeping:
+
+- **A daemon that dies owing an ack never sends one, and nothing revisits
+  the transfer.** Completion is driven only by arriving acks, so the
+  outbound hangs and the job wedges at `VM_READY`. The fault handler is
+  what settles this, which is only possible if the arithmetic does not
+  depend on a global it cannot trust at that instant — the shrink path
+  repairs the routing tree (and so calls the handler) *before* it
+  decrements `num_daemons`.
+- **A repeated ack from one daemon is not another daemon reporting in.**
+  Without `acked`, two acks for one file complete a transfer that some
+  daemon still has no copy of. `acked` also lets the handler tell "it died
+  before answering" from "it answered and then died", which need opposite
+  adjustments.
+- **A daemon that joins mid-transfer owes nothing.** `xcast` hands a late
+  joiner the ops it missed as already complete, so those chunks never
+  reach it and no ack will ever come. `horizon` is what keeps such a rank
+  from being credited (or expected) by either path — vpids are never
+  reused and a grow appends them, so "rank ≥ horizon" is exactly "joined
+  after this broadcast began".
+
+`xfer_check_complete()` also refuses to retire a transfer whose `fd` is
+still open. Under normal delivery that cannot trigger — a receiver acks
+only at EOF, which is broadcast in the same `send_chunk` call that closes
+the fd — but an *error* ack can arrive at chunk 0, and retiring on it would
+leave `send_chunk` pumping bytes for a file the job has been told is in
+place.
 
 **Every exit from a transfer goes through `xfer_retire()`**, which is the
 one place that unlinks the xfer from `outbound->xfers` and, when that list
@@ -290,8 +325,14 @@ listing failed, which is reported rather than acked as a delivery.
 
 ### `send_complete(file, status)`
 
-Packs `{file, status}` and `PRTE_RML_SEND`s it to the HNP on
+Packs `{file, status}` and sends it to the HNP on
 `PRTE_RML_TAG_FILEM_BASE_RESP` — the ack that `recv_ack` counts.
+
+It goes out with `PRTE_RML_RELIABLE_SEND`, not a plain send. The ack is the
+only thing that retires a transfer on the master, and a plain send in flight
+through a daemon that then dies is simply dropped — leaving the master
+waiting forever for an ack this daemon believes it has already given. RELM
+re-drives it over the repaired tree.
 
 ---
 
@@ -328,11 +369,59 @@ working directories gets each app's files in its own.
 
 ## Fault handling
 
-`raw_fault_handler` is intentionally minimal (marked TODO for real
-resilience): if a daemon fails while `incoming_files` or `outbound_files`
-is non-empty — i.e. a transfer is in flight — it activates
-`PRTE_JOB_STATE_COMM_FAILED`. It relies on the fact that `xcast` is
-already resilient for the not-in-flight case.
+`raw_fault_handler` has exactly one job: **settle the ack accounting for
+daemons that are never going to answer.** Everything else a transfer needs
+in order to survive a daemon loss is supplied by the layers underneath it.
+
+- The chunks ride `xcast`, which re-drives its in-flight ops over the
+  repaired tree, so a daemon whose parent died still receives the rest of
+  the file, in order, with no help from here.
+- The acks ride RELM (`send_complete` uses `PRTE_RML_RELIABLE_SEND`), so an
+  ack in flight through the daemon that died is re-driven rather than lost.
+- Neither can produce an ack from a daemon that is *gone*. That is the one
+  gap, and it is fatal on its own: completion is driven only by arriving
+  acks, so a transfer still owing one to a departed daemon holds its
+  outbound forever and the job wedges at `VM_READY`.
+
+So the handler walks `outbound_files` (and `positioned_files`, whose counts
+answer the "does this file still cover the whole DVM?" question the dedup
+check asks), drops each failed rank from what the transfer is owed via
+`credit_departures()`, and calls `xfer_check_complete()` on anything still
+in flight. It is master-only — `outbound_files` exists nowhere else — and
+does nothing at all on a daemon, whose incoming transfers need no repair.
+
+Three filters keep it from acting on things that are not daemon deaths:
+
+- **Non-master returns immediately.**
+- **`PRTE_RML_FAULT_SCOPE_LOCAL` only.** The local pass carries the news
+  first and is the *only* pass the elastic shrink path drives at all
+  (`shrink_campaign_complete` calls `prte_rml_repair_routing_tree` with
+  `global = false`), so keying on it runs this exactly once per departure
+  on both routes.
+- **An empty `failed_ranks` returns immediately.** A *revival* reaches this
+  same entry point (`prte_rml_revive_routing_tree` calls
+  `prte_filem.fault_handler` on the way back up) with nothing marked
+  failed, and so does a duplicate fault notice for a rank already recorded
+  as gone.
+
+### What this replaced, and why the old shape was worse than the TODO said
+
+The handler used to activate `PRTE_JOB_STATE_COMM_FAILED` whenever
+`incoming_files` or `outbound_files` was non-empty, on the theory that a
+non-empty list meant a transfer was in flight. It does not: **nothing ever
+removes an `incoming` entry on success.** It cannot — `raw_link_local_files`
+reads that list at fork time to find each file's link points — so after one
+preload job every daemon, the HNP included (it receives its own broadcast),
+holds a non-empty `incoming_files` for the life of the DVM.
+
+The consequence was not "staging fails" but "the DVM ends". On a prted,
+`PRTE_JOB_STATE_COMM_FAILED` kills every local proc and calls `prted_abort`
+(`errmgr/prted`); on the HNP it terminates the daemon job
+(`errmgr/dvm`, `job_errors`). So in any DVM that had *ever* staged a file,
+the next daemon loss — an event the rest of PRRTE is built to absorb — took
+the whole DVM down, as did an ordinary elastic **shrink** (which repairs the
+routing tree, and so calls this handler, on every survivor) and, on a
+bootstrap DVM, a daemon **revival**, where nothing had failed at all.
 
 ---
 
@@ -374,9 +463,18 @@ already resilient for the not-in-flight case.
 - **`raw_fault_handler` runs on daemons too**, where `outbound_files` was
   never constructed (`raw_init` only builds it on the master). Guard any
   new use of the HNP-only lists with `PRTE_PROC_IS_MASTER` —
-  `raw_preposition_files` now refuses outright off the master for the same
-  reason: appending to a list that was never constructed is not a failure
-  that announces itself.
+  `raw_fault_handler` returns immediately off the master, and
+  `raw_preposition_files` refuses outright, for the same reason: appending
+  to a list that was never constructed is not a failure that announces
+  itself.
+- **A non-empty `incoming_files` does not mean a transfer is in flight.**
+  Nothing removes an entry on success; the list is what `link_local_files`
+  reads at fork time, so it is non-empty from the first staged file until
+  the daemon exits. Any new "is staging active?" test must ask the
+  outbound side, on the master.
+- **The fault handler is also reached by a revival and by a shrink**, not
+  only by a death. Read `status->failed_ranks` and `status->scope` before
+  acting on anything.
 - **A PMIx status is not a PRTE status.** The receive path acks failures
   back to the HNP, where the value becomes the completion callback's
   status and then a job state; convert with `prte_pmix_convert_status()`
@@ -513,6 +611,14 @@ suffix classification; the collision case plants a *different* file of that
 name on one node and requires the launch to be refused with that node's
 data intact; and a `..` inside the delivered name must be refused rather
 than resolved. None of them can pass unless the bytes were actually staged
-and placed. Run them (or an equivalent multi-node test) after touching the
-send/receive/placement paths — the `test/unit/filem` unit test covers the
+and placed.
+
+Two further cases cover the fault path, and neither can be reproduced on
+one host: a daemon killed **after** a completed staging job, where the HNP,
+the daemon holding the staged file, and the DVM itself must all survive and
+a second staging job must still run; and a daemon killed **while** a large
+file is in flight, where the job must finish rather than park at `VM_READY`
+and the surviving ranks must still get their file. Run them (or an
+equivalent multi-node test) after touching the send/receive/placement paths
+or the fault handler — the `test/unit/filem` unit test covers the
 base classes, the "none" module, and the naming rules, but not delivery.

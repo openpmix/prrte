@@ -96,6 +96,7 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
 static void recv_ack(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                      prte_rml_tag_t tag, void *cbdata);
 static void write_handler(int fd, short event, void *cbdata);
+static void xfer_check_complete(prte_filem_raw_xfer_t *xfer);
 
 static int raw_init(void)
 {
@@ -149,20 +150,115 @@ static int raw_finalize(void)
     return PRTE_SUCCESS;
 }
 
+/* Drop a set of departed ranks from what one transfer is owed.
+ *
+ * A rank at or above the transfer's horizon joined after the broadcast began,
+ * never saw its chunks and owes it nothing, so it is skipped.  Below the
+ * horizon there are two cases and they need opposite adjustments: a daemon
+ * that had already acked is dropped from nrecvd as well, because the file no
+ * longer covers a daemon that is no longer here, while one that had not acked
+ * simply stops being expected.
+ */
+static void credit_departures(prte_filem_raw_xfer_t *xfer,
+                              const pmix_rank_t *failed, size_t nfailed)
+{
+    size_t n;
+    int r;
+
+    for (n = 0; n < nfailed; n++) {
+        r = (int) failed[n];
+        if ((pmix_rank_t) r >= xfer->horizon) {
+            /* joined after this broadcast began - it never owed us an ack */
+            continue;
+        }
+        if (pmix_bitmap_is_set_bit(&xfer->acked, r)) {
+            /* it took delivery before it died: the file no longer covers
+             * this daemon because the daemon is no longer here
+             */
+            pmix_bitmap_clear_bit(&xfer->acked, r);
+            if (0 < xfer->nrecvd) {
+                --xfer->nrecvd;
+            }
+        }
+        if (0 < xfer->nexpected) {
+            --xfer->nexpected;
+        }
+        PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
+                             "%s filem:raw: daemon %s departed - file %s now"
+                             " delivered to %u of %u expected",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             PRTE_VPID_PRINT(failed[n]), xfer->file,
+                             (unsigned) xfer->nrecvd, (unsigned) xfer->nexpected));
+    }
+}
+
+/* A daemon has left the DVM.  Everything a transfer needs to survive that is
+ * already in place elsewhere, so this handler has exactly one job: settle the
+ * ack accounting for the daemons that are never going to answer.
+ *
+ *  - The chunks themselves ride xcast, which re-drives its in-flight ops over
+ *    the repaired tree, so a daemon whose parent died still receives the rest
+ *    of the file, in order, without anything here.
+ *  - The acks travel back over RELM (PRTE_RML_RELIABLE_SEND in
+ *    send_complete), so an ack in flight through the daemon that died is
+ *    re-driven rather than lost.
+ *  - What neither of those can supply is an ack from a daemon that is gone.
+ *    Nothing else will ever revisit the transfer - completion is driven by
+ *    arriving acks - so a file still owing one to the departed daemon would
+ *    hang its outbound forever and wedge the job at VM_READY.  Drop the dead
+ *    ranks from what is owed here, and let any transfer that is thereby
+ *    finished retire.
+ *
+ * positioned_files is walked for the same reason, even though those transfers
+ * are long over: their counts are what the already-positioned check in
+ * raw_preposition_files reads to decide whether the file still covers the
+ * whole DVM, and a daemon that took its copy with it must stop counting.
+ *
+ * This is deliberately master-only and deliberately silent on the daemons:
+ * outbound_files exists only on the master (raw_init constructs it nowhere
+ * else), and a daemon's own incoming transfers need no repair.
+ */
 static void raw_fault_handler(const prte_rml_recovery_status_t *status){
-    PRTE_HIDE_UNUSED_PARAMS(status);
-    /* TODO: Make this actually resilient. Seems pretty trivial, since xcast is
-     * already resilient */
-    /* outbound_files only exists on the master - raw_init constructs it
-     * there and nowhere else - so it must not be read on a daemon
+    prte_filem_raw_outbound_t *outbound;
+    prte_filem_raw_xfer_t *xfer, *nxt_x;
+    pmix_list_item_t *item, *nxt;
+    pmix_rank_t *failed;
+
+    if (!PRTE_PROC_IS_MASTER) {
+        return;
+    }
+    /* the local pass is the one that carries the news first, and it is the
+     * only one the elastic shrink path drives at all - keying on it means
+     * this runs exactly once per departure, on both routes
      */
-    if (0 < pmix_list_get_size(&incoming_files) ||
-        (PRTE_PROC_IS_MASTER && 0 < pmix_list_get_size(&outbound_files))) {
-        PMIX_OUTPUT_VERBOSE((0, prte_filem_base_framework.framework_output,
-                             "%s filem:raw daemon failed during active file"
-                             " transfer operation(s)",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
+    if (PRTE_RML_FAULT_SCOPE_LOCAL != status->scope) {
+        return;
+    }
+    /* a revival reaches us through this same entry point with nothing marked
+     * failed (prte_rml_revive_routing_tree), and so does a fault notice whose
+     * ranks were all already recorded as gone.  Neither owes us anything.
+     */
+    if (0 == status->failed_ranks.size || NULL == status->failed_ranks.array) {
+        return;
+    }
+    failed = (pmix_rank_t *) status->failed_ranks.array;
+
+    PMIX_LIST_FOREACH_SAFE(xfer, nxt_x, &positioned_files, prte_filem_raw_xfer_t) {
+        credit_departures(xfer, failed, status->failed_ranks.size);
+    }
+
+    item = pmix_list_get_first(&outbound_files);
+    while (item != pmix_list_get_end(&outbound_files)) {
+        /* retiring the last xfer of an outbound releases the outbound, so
+         * take the next link before touching its contents
+         */
+        nxt = pmix_list_get_next(item);
+        outbound = (prte_filem_raw_outbound_t *) item;
+        PMIX_LIST_FOREACH_SAFE(xfer, nxt_x, &outbound->xfers, prte_filem_raw_xfer_t) {
+            credit_departures(xfer, failed, status->failed_ranks.size);
+            xfer_check_complete(xfer);
+        }
+        item = nxt;
     }
 }
 
@@ -278,6 +374,39 @@ static void xfer_complete(int status, prte_filem_raw_xfer_t *xfer)
     xfer_retire(status, xfer, true);
 }
 
+/* Has every daemon this file was broadcast to answered for it?
+ *
+ * The comparison is against the transfer's own frozen "nexpected", not the
+ * live prte_process_info.num_daemons: the DVM's size moves underneath a
+ * transfer in both directions, and neither direction says anything about
+ * who owes an ack for these bytes.  A daemon that joined after the
+ * broadcast never saw the chunks (xcast hands a late joiner the ops it
+ * missed as already complete), so it will never ack and must not be
+ * counted as owing; a daemon that departed is credited by the fault
+ * handler, whose arithmetic must not also be racing a num_daemons that
+ * may or may not have been decremented yet.
+ */
+static void xfer_check_complete(prte_filem_raw_xfer_t *xfer)
+{
+    if (0 <= xfer->fd) {
+        /* still reading and broadcasting this file.  An ack cannot mean
+         * "delivered" yet - a receiver only acks at EOF - so this is a
+         * receiver reporting an error, and retiring the transfer now would
+         * leave send_chunk pumping bytes for a file the job has already been
+         * told is in place.  The ack that does complete it always arrives
+         * after the last chunk went out.
+         */
+        return;
+    }
+    if (xfer->nrecvd < xfer->nexpected) {
+        return;
+    }
+    PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
+                         "%s filem:raw: xfer complete for file %s status %d",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), xfer->file, xfer->status));
+    xfer_complete(xfer->status, xfer);
+}
+
 static void recv_ack(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                      prte_rml_tag_t tag, void *cbdata)
 {
@@ -328,21 +457,17 @@ static void recv_ack(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer
                 if (0 != st) {
                     xfer->status = st;
                 }
-                /* track number of respondents */
-                xfer->nrecvd++;
-                /* if all daemons have responded, then this is complete.
-                 * Compare with >= rather than ==: num_daemons is read
-                 * fresh on every ack, so a daemon leaving the DVM
-                 * mid-transfer can lower it past a count we have already
-                 * reached - an exactly-equal test would then never fire
-                 * and the job would wedge at VM_READY
+                /* record WHICH daemon answered, and count it only the first
+                 * time it does: a repeated ack for the same file from the
+                 * same daemon must not be read as another daemon reporting
+                 * in, or the transfer completes while some daemon still has
+                 * no copy of the file
                  */
-                if (xfer->nrecvd >= prte_process_info.num_daemons) {
-                    PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
-                                         "%s filem:raw: xfer complete for file %s status %d",
-                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), file, xfer->status));
-                    xfer_complete(xfer->status, xfer);
+                if (!pmix_bitmap_is_set_bit(&xfer->acked, (int) sender->rank)) {
+                    pmix_bitmap_set_bit(&xfer->acked, (int) sender->rank);
+                    xfer->nrecvd++;
                 }
+                xfer_check_complete(xfer);
                 free(file);
                 return;
             }
@@ -370,6 +495,7 @@ static int raw_preposition_files(prte_job_t *jdata,
     pmix_list_t fsets;
     struct stat sbuf;
     bool already_sent;
+    prte_job_t *daemons;
 
     PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                          "%s filem:raw: preposition files for job %s",
@@ -697,6 +823,17 @@ static int raw_preposition_files(prte_job_t *jdata,
         }
 
         xfer = PMIX_NEW(prte_filem_raw_xfer_t);
+        /* every daemon in the DVM as it stands right now is a target of the
+         * broadcast about to start, and is therefore expected to ack.  The
+         * set is fixed here rather than re-read as acks arrive - see
+         * xfer_check_complete() - and the vpid horizon is taken from the same
+         * instant so a daemon that joins later can be told apart from one
+         * that was here all along
+         */
+        xfer->nexpected = prte_process_info.num_daemons;
+        daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+        xfer->horizon = (NULL == daemons) ? prte_process_info.num_daemons
+                                          : daemons->num_procs;
         /* save the source so we can avoid duplicate transfers */
         xfer->src = strdup(fs->local_target);
         xfer->fd = fd;
@@ -1351,7 +1488,13 @@ static void send_complete(char *file, int status)
         PMIX_DATA_BUFFER_RELEASE(buf);
         return;
     }
-    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_FILEM_BASE_RESP);
+    /* send this reliably: the ack is the only thing that retires a transfer
+     * on the master, and a plain send that is in flight through a daemon
+     * which then dies is simply dropped - leaving the master waiting on an
+     * ack this daemon believes it has already given, and the job wedged at
+     * VM_READY.  RELM re-drives it over the repaired tree.
+     */
+    PRTE_RML_RELIABLE_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_FILEM_BASE_RESP);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
@@ -1800,13 +1943,17 @@ static void xfer_construct(prte_filem_raw_xfer_t *ptr)
     ptr->file = NULL;
     ptr->nchunk = 0;
     ptr->status = PRTE_SUCCESS;
+    ptr->nexpected = 0;
     ptr->nrecvd = 0;
+    PMIX_CONSTRUCT(&ptr->acked, pmix_bitmap_t);
+    ptr->horizon = 0;
 }
 static void xfer_destruct(prte_filem_raw_xfer_t *ptr)
 {
     if (ptr->pending) {
         prte_event_del(&ptr->ev);
     }
+    PMIX_DESTRUCT(&ptr->acked);
     if (NULL != ptr->src) {
         free(ptr->src);
     }

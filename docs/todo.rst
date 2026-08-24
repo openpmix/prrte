@@ -32,13 +32,6 @@ Runtime behavior
 surface exists for SLURM only.  Everything above the component is
 RM-agnostic; what is missing is the Flux-side conversation.
 
-**``filem/raw`` does not survive losing a daemon mid-staging.**  Its fault
-handler is deliberately minimal (``src/mca/filem/raw/filem_raw_module.c``);
-the note in place observes that the real thing should be straightforward,
-since the transport it stages over (xcast) is already resilient.  Until then,
-a daemon lost while files are in flight fails the staging rather than
-re-driving it.
-
 **Only a command line can ask for a daemon on an allocated node.**  The
 command-line half of this is done: ``--activate`` (``prun`` and
 ``prterun``) takes node names, ``+all``, ``+n<K>`` and ``file=<hostfile>``,
@@ -245,8 +238,6 @@ the marker is stale.
 
    * - marker
      - entry above
-   * - ``mca/filem/raw/filem_raw_module.c``, ``raw_fault_handler``
-     - ``filem/raw`` does not survive losing a daemon mid-staging
    * - ``mca/odls/base/odls_base_default_fns.c``,
        ``prte_odls_base_default_get_add_procs_data``
      - a job cannot ask for a transport
