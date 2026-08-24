@@ -6264,6 +6264,66 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     for n in 1 2 3 4; do docker exec "$NODE$n" sh -c 'rm -f /root/pfbig.dat /root/pfsmall.dat' >/dev/null 2>&1; done
     cleanup_swarm
 
+    banner "iof: prterun returns when its own stdin is a TERMINAL"
+    # prterun forwarding its own stdin from a *tty* is a different code path
+    # from forwarding it from a pipe, and it used to hang: the job ran, the
+    # application read its line and exited, and prterun sat forever on an
+    # unreaped zombie (issue #2709).
+    #
+    # The mechanism is why this case is worth its runtime. Libevent keeps ONE
+    # process-wide record of which event base owns signals (evsig_base in its
+    # signal.c), re-claimed both by adding a signal event and by entering
+    # event_base_loop, and the OS handler writes the signal number to whichever
+    # base holds it at that instant. PRRTE traps SIGCHLD on prte_event_base and
+    # hands that same base to PMIx as PMIX_EXTERNAL_AUX_EVENT_BASE precisely so
+    # everything signal-related lands on one base; PMIx's stdin setup used to
+    # put its SIGCONT event on its OWN progress-thread base instead, and only
+    # when stdin is a tty. The two loops then traded ownership on every
+    # iteration and a SIGCHLD delivered while PMIx held it was dropped on the
+    # floor -- so PRRTE never learned the child had died.
+    #
+    # It follows that the case has to (a) give prterun a real pty -- script(1)
+    # supplies one -- and (b) hold that pty's stdin open for the whole run, so
+    # that exiting cannot be mistaken for "saw EOF on stdin". A fifo with a
+    # writer that outlives the run does the second part. And it has to run more
+    # than once: which base owns signals at the moment the child dies is a race,
+    # and the broken build still exited cleanly perhaps one time in five.
+    if ! RUN 'command -v script >/dev/null 2>&1'; then
+        skp "no script(1) in the image -- cannot hand prterun a pty"
+    else
+        out=$(RUN 'h=0; for i in 1 2 3 4 5; do
+                       rm -f /tmp/ttyin$i; mkfifo /tmp/ttyin$i;
+                       ( sleep 1; printf "hello\n"; sleep 30 ) \
+                           > /tmp/ttyin$i 2>/dev/null </dev/null &
+                       timeout -k 5 15 script -qec "prterun -n 1 head -1" /dev/null \
+                           < /tmp/ttyin$i > /tmp/ttyout$i.txt 2>&1 || h=$((h+1));
+                   done;
+                   echo "hangs=$h";
+                   echo "warned=$(grep -l "Only one can have signals" /tmp/ttyout*.txt 2>/dev/null | wc -l)";
+                   echo "echoed=$(grep -l "hello" /tmp/ttyout*.txt 2>/dev/null | wc -l)"')
+        h=$(echo "$out" | sed -n 's/^hangs=//p' | tr -d ' \r')
+        w=$(echo "$out" | sed -n 's/^warned=//p' | tr -d ' \r')
+        e=$(echo "$out" | sed -n 's/^echoed=//p' | tr -d ' \r')
+        # The delivery assertion first: a prterun that exits without ever
+        # forwarding the line would sail through the hang check.
+        [ "$e" = 5 ] \
+            && ok "stdin from a pty reached the application in all 5 runs" \
+            || bad "stdin from a pty reached the application in only $e/5 runs"
+        [ "$h" = 0 ] \
+            && ok "prterun exited as soon as the app did, all 5 tty runs" \
+            || bad "prterun hung on $h/5 runs with a tty stdin (#2709 -- SIGCHLD lost to a second event base)"
+        # The direct canary for the cause, not just the symptom: libevent says
+        # so out loud when a second base claims signals. It is the thing to
+        # check first if the hang ever comes back, and it fires even on the
+        # runs the race happens to let through.
+        [ "$w" = 0 ] \
+            && ok "no event base contended for signal ownership" \
+            || bad "$w/5 runs registered a signal on a second event base (libevent: 'Only one can have signals at a time')"
+        RUN 'rm -f /tmp/ttyin* /tmp/ttyout*' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
+
     banner "iof: stdin forwarded to a REMOTE proc (HNP -> prted -> proc)"
     # Rank 0 is mapped onto node2, not the head node, so every stdin byte must
     # travel HNP -> RML(PRTE_RML_TAG_IOF_PROXY) -> prted -> the proc's stdin

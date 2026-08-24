@@ -401,6 +401,30 @@ archive whose name contains a space, a collision with a *different* file being
 refused rather than overwriting the user's copy, a `..` in the delivered name
 being refused, and a file reaching a node grown into the DVM afterwards.
 
+**Terminal stdin (`iof`)**: `prterun -n 1 head -1` run under `script(1)`, so
+its own stdin is a real **pty**, with a fifo writer that outlives the run so
+the terminal never sees EOF. The application consumes its line and exits
+immediately, and the case asserts that `prterun` comes back. It used not to
+([#2709](https://github.com/openpmix/prrte/issues/2709)): libevent keeps one
+process-wide record of which event base owns signals, re-claimed both by
+adding a signal event and by entering `event_base_loop`, so a second base
+carrying signals does not just warn — it swallows the first base's signals.
+PRRTE traps `SIGCHLD` on `prte_event_base`, and PMIx's stdin setup armed a
+`SIGCONT` on its *own* progress-thread base — but only when stdin is a tty.
+The reap notice for the application was then dropped perhaps three runs in
+five, so PRRTE never learned it had died and the job never ended. openpmix
+answered it by not trapping signals at all: a library has no business owning
+a process-wide disposition, and `tcgetpgrp()` answers "do I have the
+terminal" directly, so PMIx now polls for that while suspended instead.
+
+Hence the shape of the case: five runs, because the hang is a race, plus a
+deterministic canary on libevent's own "Only one can have signals at a time"
+warning, which fired on every affected run and now fires on none. Keep that
+canary — it is the half that does not have to be raced for, and it will catch
+any future signal event registered on a second base, whichever library puts
+it there. A pipe on stdin exercises none of this, which is why the case has
+to go to the trouble of a pty.
+
 **Remote stdin (`iof`)**: a large base64 payload is piped into `prterun` on
 node1 for a job whose rank 0 is mapped onto **node2**, running `cat`. Because
 the reading proc is not on the head node, every byte must cross
