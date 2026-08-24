@@ -1060,9 +1060,17 @@ static pmix_status_t session_instantiate(prte_pmix_server_req_t *req,
     }
 
     if (grew) {
-        /* extend the DVM across the new nodes. This clears prte_dvm_ready, so
-         * a job submitted below is held in the job cache and released once the
-         * daemons are up - which is exactly the ordering we need. */
+        /* Extend the DVM across the new nodes.  Mark it not-ready first: the
+         * job built below is submitted through the ordinary launch path,
+         * which parks a job in prte_cache while the DVM is not ready and
+         * releases it at the VM_READY re-entry that ends the grow.  That is
+         * exactly the ordering an instantiation needs - its apps are meant to
+         * run on the nodes this call is about to bring in - and without the
+         * mark the job goes straight to the mapper, which sees nodes that as
+         * yet have no daemon.  Every other producer of a grow that submits
+         * work behind it does the same (prte_ras_base_add_hosts,
+         * prte_ras_base_activate_hosts). */
+        prte_dvm_ready = false;
         prte_ras_base_activate_dvm_grow();
     }
 
