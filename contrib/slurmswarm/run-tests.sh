@@ -507,10 +507,10 @@ test_ras_alloc() {
     cleanup_cluster
     # four nodes, two in the DVM: node3 for the named form and node4 for the
     # hostfile form, so neither is already in the DVM when its case runs
-    ALLOC new --tag dvm --nodes 4 --tasks-per-node 2 >/dev/null 2>&1
+    ALLOC new --tag dvm --nodes 5 --tasks-per-node 2 >/dev/null 2>&1
     if dvm_start --host node1:2,node2:2; then
-        [ "$(prted_count 3 4)" = 0 ] \
-            && ok "node3 and node4 are allocated but not in the DVM" \
+        [ "$(prted_count 3 4 5)" = 0 ] \
+            && ok "node3, node4 and node5 are allocated but not in the DVM" \
             || bad "they already have daemons - the test premise is gone"
         out=$(SA 'timeout 90 prun --activate node3 --host node3:2 -n 2 --map-by node hostname 2>&1 | tr -d "\0"')
         c=$(echo "$out" | grep -c '^node3$')
@@ -551,6 +551,38 @@ test_ras_alloc() {
             || bad "--activate accepted an unallocated node: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
         [ "$(prted_count 9)" = 0 ] \
             && ok "no daemon was launched outside the allocation" \
+            || bad "a daemon was launched on node9"
+
+        # The same authority question asked through the API instead of the
+        # command line.  PMIX_ALLOC_ACTIVATE reaches ras by a different path -
+        # prte_ras_base_modify, where ras/slurm owns the allocation and would
+        # have to refuse anything that needed the scheduler's consent - so it
+        # being served here is a property of its own, and this is the only
+        # harness that can show it.  No elastic mode on this DVM, so no
+        # campaign is recorded and the grant is the whole answer.
+        out=$(SA 'timeout 90 elastic activate node5 --no-wait 2>&1 | tr -d "\0"')
+        echo "$out" | grep -q 'PHASE 1 (acceptance): allocation request returned PMIX_SUCCESS' \
+            && ok "PMIX_ALLOC_ACTIVATE was granted under SLURM" \
+            || bad "the activation request was not granted: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        # Run the job before counting daemons rather than sleeping for one:
+        # granting the request marks the DVM not-ready, so this prun is parked
+        # until the grow reaches VM_READY - which makes its completion the
+        # signal that the daemon is up, and its output the proof.
+        out=$(SA 'timeout 90 prun --host node5:2 -n 2 --map-by node hostname 2>&1 | tr -d "\0"')
+        c=$(echo "$out" | grep -c '^node5$')
+        [ "$c" = 2 ] \
+            && ok "a job then ran on the API-activated node (2 procs)" \
+            || bad "launch on the API-activated node produced $c/2 procs: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        [ "$(prted_count 5)" = 1 ] \
+            && ok "a daemon is running on the node the request named" \
+            || bad "no daemon on the node PMIX_ALLOC_ACTIVATE named"
+        # ...and it reaches no further than the command line does
+        out=$(SA 'timeout 60 elastic activate node9 --no-wait 2>&1 | tr -d "\0"')
+        echo "$out" | grep -q 'REJECTED' \
+            && ok "PMIX_ALLOC_ACTIVATE refuses a node SLURM never granted" \
+            || bad "the API accepted an unallocated node: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        [ "$(prted_count 9)" = 0 ] \
+            && ok "and launched no daemon outside the allocation" \
             || bad "a daemon was launched on node9"
         dvm_stop
     else

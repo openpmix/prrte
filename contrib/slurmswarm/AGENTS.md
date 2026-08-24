@@ -201,6 +201,16 @@ it. Several cases here cannot exist anywhere else:
   applied, since PRRTE has no more authority over a scheduler's slot count
   than over its node list.
 
+  The same case then asks for the same thing through the API, with
+  `PMIX_ALLOC_ACTIVATE` (`elastic activate`). That is a property of its own
+  rather than a repeat: the directive reaches `ras` through
+  `prte_ras_base_modify`, where `ras/slurm` owns the allocation and would have
+  to refuse anything needing the scheduler's consent, so "served under a
+  scheduler" has to be shown for the request as well as for the command line
+   — and, again, nowhere else can show it. The DVM here is not in elastic
+  mode, so no campaign is recorded and the grant is the whole answer; the
+  two-phase completion is exercised by the sibling harness instead.
+
 - **SLURM's compressed node list.** SLURM hands out `node[2,4,6]`, and
   `ras/slurm` has its own parser for that notation — a fake scheduler handing
   out comma-separated names never reaches it. The allocation is deliberately non-contiguous: a
