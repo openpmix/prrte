@@ -241,6 +241,14 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_STOP_IN_INIT               (PRTE_JOB_START_KEY +  88) // bool - stop in PMIx_Init
 #define PRTE_JOB_STOP_IN_APP                (PRTE_JOB_START_KEY +  89) // bool - stop at app-determined location
 #define PRTE_JOB_BREAKPOINT                 (PRTE_JOB_START_KEY + 131) // char* - string ID of the app-determined location at which to stop
+#define PRTE_JOB_SPAWN_ALLOC                (PRTE_JOB_START_KEY + 132) // pmix_data_array_t* - an entire allocation request (PMIX_SPAWN_ALLOC)
+                                                                       // to be executed before this job is launched: the array's first
+                                                                       // element carries the directive, the rest are the request's info
+#define PRTE_JOB_SPAWN_ALLOC_ID             (PRTE_JOB_START_KEY + 133) // char* - PMIX_ALLOC_ID of the allocation obtained FOR this job by
+                                                                       // PRTE_JOB_SPAWN_ALLOC. Present only while the job owes that
+                                                                       // allocation a release should it fail to launch
+#define PRTE_JOB_SPAWN_ALLOC_STATUS         (PRTE_JOB_START_KEY + 134) // int32_t - the spawn status held while the allocation obtained for a
+                                                                       // failed job is handed back, and delivered once it has been
 #define PRTE_JOB_ENVARS_HARVESTED           (PRTE_JOB_START_KEY +  90) // envars have already been harvested
 #define PRTE_JOB_OUTPUT_NOCOPY              (PRTE_JOB_START_KEY +  91) // bool - do not copy output to stdout/err
 #define PRTE_JOB_RANK_OUTPUT                (PRTE_JOB_START_KEY +  92) // bool - tag stdout/stderr with rank

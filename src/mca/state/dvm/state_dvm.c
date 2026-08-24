@@ -265,7 +265,7 @@ static void init_complete(int sd, short args, void *cbdata)
 static void vm_ready(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
-    int rc, i;
+    int rc;
     pmix_data_buffer_t buf;
     prte_job_t *jptr;
     prte_proc_t *dmn;
@@ -462,13 +462,7 @@ static void vm_ready(int fd, short args, void *cbdata)
             close(prte_state_base.parent_fd);
             prte_state_base.parent_fd = -1;
         }
-        for (i = 0; i < prte_cache->size; i++) {
-            jptr = (prte_job_t *) pmix_pointer_array_get_item(prte_cache, i);
-            if (NULL != jptr) {
-                pmix_pointer_array_set_item(prte_cache, i, NULL);
-                prte_plm.spawn(jptr);
-            }
-        }
+        prte_plm_base_release_cached_jobs();
         /* progress the job */
         caddy->jdata->state = PRTE_JOB_STATE_VM_READY;
         PMIX_RELEASE(caddy);

@@ -235,6 +235,146 @@ static int resolve_spawn_targets(prte_job_t *jdata, pmix_proc_t *requestor,
     return PRTE_SUCCESS;
 }
 
+/*
+ * The cache is where a job waits for a DVM that is not ready - because nodes
+ * are being added to it, or because the allocation the job asked for is still
+ * being obtained.  Both of those end in the same place: the DVM becomes ready
+ * and everything parked behind it is launched, in the order it arrived.
+ */
+void prte_plm_base_release_cached_jobs(void)
+{
+    prte_job_t *jptr;
+    int i;
+
+    for (i = 0; i < prte_cache->size; i++) {
+        jptr = (prte_job_t *) pmix_pointer_array_get_item(prte_cache, i);
+        if (NULL == jptr) {
+            continue;
+        }
+        pmix_pointer_array_set_item(prte_cache, i, NULL);
+        prte_plm.spawn(jptr);
+    }
+}
+
+void prte_plm_base_spawn_alloc_granted(prte_job_t *jdata, const char *alloc_id)
+{
+    pmix_proc_t *proxy = NULL;
+    char *idstr;
+    int rc;
+
+    PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                         "%s plm:base:spawn_alloc granted%s%s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         (NULL == alloc_id) ? "" : " as ",
+                         (NULL == alloc_id) ? "" : alloc_id));
+
+    if (NULL != alloc_id) {
+        /* Remember what we obtained BEFORE anything else can go wrong with
+         * it: this is what a later failure hands back, and a failure while
+         * pointing the job at the allocation is exactly a failure that has to
+         * hand it back.  Removed again once the job is running - from that
+         * point the allocation belongs to the job, and its disposition is the
+         * ordinary one for a reservation. */
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_SPAWN_ALLOC_ID,
+                           PRTE_ATTR_LOCAL, (void *) alloc_id, PMIX_STRING);
+
+        /* Point the job at what it was just given.  A reservation is withheld
+         * from general use, so a job that did not target it would be mapped
+         * onto everything EXCEPT the resources it asked for.  This is the
+         * same resolution a caller gets by passing PMIX_SPAWN_TARGET, which
+         * is what a caller doing this by hand has to do afterwards - and it
+         * carries the same ownership check, which our own requester passes by
+         * construction.
+         *
+         * Not every grant names a session: a resource manager may put what it
+         * granted into the general pool (ras/slurm's extend does), and there
+         * the job needs no target and gets none. */
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY,
+                               (void **) &proxy, PMIX_PROC) &&
+            NULL != proxy) {
+            if (NULL != prte_get_session_object_from_id(alloc_id)) {
+                idstr = strdup(alloc_id);
+                rc = resolve_spawn_targets(jdata, proxy, idstr);
+                free(idstr);
+                if (PRTE_SUCCESS != rc) {
+                    PRTE_ERROR_LOG(rc);
+                    PMIX_PROC_RELEASE(proxy);
+                    prte_plm_base_spawn_alloc_failed(jdata, prte_pmix_convert_rc(rc));
+                    return;
+                }
+                /* deliberately NOT also recorded as PRTE_JOB_SPAWN_TARGET:
+                 * the mapper reads jdata->target_sessions, which is what
+                 * resolve_spawn_targets just set, and a second statement of
+                 * the same thing is a second thing to keep true */
+            }
+            PMIX_PROC_RELEASE(proxy);
+        }
+    }
+
+    /* Now decide what the job is still waiting for.  It was held by the
+     * allocation request until this moment - deliberately NOT parked in the
+     * cache, which is drained by whatever DVM-ready event comes next and
+     * would have launched it while its own allocation was still being
+     * obtained. */
+    if (prte_ras_base_dvm_is_growing()) {
+        /* The allocation brought in nodes and their daemons are being
+         * launched.  Park until VM_READY, and mark the DVM not-ready while
+         * that happens so nothing else is mapped onto a DVM in flux - the
+         * same statement prte_ras_base_add_hosts makes for the same reason. */
+        prte_dvm_ready = false;
+        pmix_pointer_array_add(prte_cache, jdata);
+        return;
+    }
+    if (!prte_dvm_ready) {
+        /* someone else's grow is in flight; wait with everything else that is
+         * waiting on it */
+        pmix_pointer_array_add(prte_cache, jdata);
+        return;
+    }
+
+    /* Nothing to wait for: the allocation needed no new daemon (it reserved
+     * nodes the DVM already spans, or the request only changed a time limit),
+     * so launch now. */
+    prte_plm.spawn(jdata);
+}
+
+void prte_plm_base_spawn_alloc_failed(prte_job_t *jdata, pmix_status_t status)
+{
+    PMIX_OUTPUT_VERBOSE((2, prte_plm_base_framework.framework_output,
+                         "%s plm:base:spawn_alloc refused: %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         PMIx_Error_string(status)));
+
+    /* The job was held by the request rather than parked in the cache, so
+     * there is nothing to take it out of - and nothing else was waiting on
+     * this allocation, so the DVM's readiness is untouched. */
+
+    /* PMIX_ERR_JOB_ALLOC_FAILED, and not the allocator's own status: the
+     * caller needs to know that this spawn failed for want of resources
+     * rather than for anything about the job, and a status that could equally
+     * have come from the launch would not tell it that.  The underlying
+     * status is reported by the allocator itself, through show_help and its
+     * own events. */
+    PRTE_HIDE_UNUSED_PARAMS(status);
+    prte_plm_base_spawn_response(PMIX_ERR_JOB_ALLOC_FAILED, jdata);
+}
+
+void prte_plm_base_spawn_alloc_released(prte_job_t *jdata)
+{
+    int32_t status = PMIX_ERR_JOB_FAILED_TO_LAUNCH;
+    int32_t *sptr = &status;
+
+    /* Deliver the answer the response stopped to release the allocation for.
+     * The job is still alive because the release request is holding it, and
+     * the status it was carrying was parked on it - see
+     * prte_plm_base_spawn_response. */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_ALLOC_STATUS,
+                           (void **) &sptr, PMIX_INT32)) {
+        prte_remove_attribute(&jdata->attributes, PRTE_JOB_SPAWN_ALLOC_STATUS);
+    }
+    prte_plm_base_spawn_response(status, jdata);
+}
+
 int prte_plm_base_comm_start(void)
 {
     if (recv_issued) {
@@ -299,6 +439,9 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
     /* true while the freshly unpacked job object belongs to nobody but us -
      * cleared once it has been handed to a session/parent/the job pool */
     bool own_jdata = false;
+    /* true once an allocation request carried by the spawn has been posted,
+     * which is what then holds the job */
+    bool posted;
     pmix_data_buffer_t *answer;
     pmix_rank_t vpid;
     prte_proc_t *proc, *dproc;
@@ -755,6 +898,30 @@ moveon:
             } else {
                 jdata->bookmark = parent->bookmark;
             }
+        }
+
+        /* An entire allocation request may ride on the spawn
+         * (PMIX_SPAWN_ALLOC), and then it is served BEFORE the job is
+         * launched: the request holds the job while the allocation is
+         * obtained, and the outcome arrives asynchronously at
+         * prte_plm_base_spawn_alloc_granted() - which decides where the job
+         * waits from there - or at _failed(), which answers the requester.
+         * The job is deliberately not put in the cache to wait: the cache is
+         * drained by the next DVM-ready event whatever raised it.
+         *
+         * Only a malformed request is decided here, and it is a bad
+         * parameter rather than an allocation failure - nothing was asked of
+         * any allocator. */
+        posted = false;
+        if (PRTE_SUCCESS != (rc = prte_ras_base_spawn_alloc(jdata, &posted))) {
+            if (PRTE_ERR_SILENT != rc) {
+                PRTE_ERROR_LOG(rc);
+            }
+            rc = PRTE_ERR_BAD_PARAM;
+            goto ANSWER_LAUNCH;
+        }
+        if (posted) {
+            return;
         }
 
         if (!prte_dvm_ready) {

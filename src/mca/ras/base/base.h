@@ -153,6 +153,24 @@ PRTE_EXPORT int prte_ras_base_add_hosts(prte_job_t *jdata);
  * of its own. */
 PRTE_EXPORT int prte_ras_base_activate_hosts(prte_job_t *jdata);
 
+/* Serve the allocation request a spawn carries (PMIX_SPAWN_ALLOC), in the
+ * name of the process that asked for the spawn.  Sets *posted when there was
+ * one and it is now in flight - the request holds the job until it answers,
+ * so the caller must stop there and launch nothing; the outcome reaches plm
+ * through prte_plm_base_spawn_alloc_granted()/_failed().  Leaves *posted
+ * false, and succeeds, where the spawn carries no allocation request at all.
+ * A malformed request - no directive, a value that is not an info array - is
+ * refused here and now, so the caller can fail the spawn outright. */
+PRTE_EXPORT int prte_ras_base_spawn_alloc(prte_job_t *jdata, bool *posted);
+
+/* Hand back an allocation obtained by prte_ras_base_spawn_alloc() for a job
+ * that then failed to launch.  Issues an ordinary PMIX_ALLOC_RELEASE in the
+ * requester's name and calls prte_plm_base_spawn_alloc_released() when it
+ * resolves, whatever the outcome.  Returns an error only if the release
+ * could not be posted at all. */
+PRTE_EXPORT int prte_ras_base_release_spawn_alloc(prte_job_t *jdata,
+                                                  const char *alloc_id);
+
 /* Resolve an activation request - a host specification, a hostfile, or both -
  * against the node pool and mark the resolved entries PRTE_NODE_STATE_ADDED,
  * reporting in nactivated how many entries that changed (zero meaning every

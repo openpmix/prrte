@@ -124,6 +124,19 @@ The form is "--activate file=<hostfile>", naming a file in the same format
 "--hostfile" reads. A PMIX_ALLOC_ACTIVATE request may instead give the file
 as its own PMIX_HOSTFILE attribute.
 
+[ras-base:spawn-alloc-nodirective]
+A spawn carried an allocation request (PMIX_SPAWN_ALLOC) that does not say
+what it is asking for.
+
+The value is an array of pmix_info_t describing an allocation request, and
+its first element must carry the request's directive as
+PMIX_ALLOC_REQ_DIRECTIVE - PMIX_ALLOC_NEW, PMIX_ALLOC_EXTEND, and so on.
+The allocation API takes that directive as a parameter; carried as data, it
+has to be stated. There is no default: a request whose directive had to be
+guessed would ask for something nobody asked for.
+
+The spawn was refused. Nothing was allocated and no processes were started.
+
 [ras-base:activate-nothing-named]
 A PMIX_ALLOC_ACTIVATE allocation request named nothing to activate.
 

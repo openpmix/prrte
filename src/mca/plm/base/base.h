@@ -70,6 +70,27 @@ PRTE_EXPORT void prte_plm_base_registered(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_plm_base_wrap_args(char **args);
 PRTE_EXPORT int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata);
 
+/* The three outcomes of an allocation a spawn asked for (PMIX_SPAWN_ALLOC).
+ *
+ * _granted: point the job at what it was given and decide whether it still
+ *   has to wait - it does when the allocation brought in nodes whose daemons
+ *   are still being launched, and does not when nothing will make the DVM
+ *   ready again, in which case the cached jobs are released here.
+ * _failed: nothing was allocated and nothing will be launched, so the job
+ *   leaves the cache and its requester is told PMIX_ERR_JOB_ALLOC_FAILED -
+ *   which is what distinguishes this from a launch failure.
+ * _released: the allocation obtained for a job that then failed to launch
+ *   has been handed back, so the spawn's own error may now be delivered. */
+PRTE_EXPORT void prte_plm_base_spawn_alloc_granted(prte_job_t *jdata,
+                                                   const char *alloc_id);
+PRTE_EXPORT void prte_plm_base_spawn_alloc_failed(prte_job_t *jdata,
+                                                  pmix_status_t status);
+PRTE_EXPORT void prte_plm_base_spawn_alloc_released(prte_job_t *jdata);
+
+/* Admit every job parked in prte_cache: the DVM is ready and they were only
+ * waiting for that.  Called at VM_READY. */
+PRTE_EXPORT void prte_plm_base_release_cached_jobs(void);
+
 /* Build the body of a PRTE_PLM_UPDATE_PROC_STATE message.
  *
  * These are the writers for the format prte_plm_base_receive() reads, and

@@ -526,6 +526,12 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "STOP-IN-APP";
         case PRTE_JOB_BREAKPOINT:
             return "BREAKPOINT";
+        case PRTE_JOB_SPAWN_ALLOC:
+            return "SPAWN-ALLOCATION-REQUEST";
+        case PRTE_JOB_SPAWN_ALLOC_ID:
+            return "SPAWN-ALLOCATION-ID";
+        case PRTE_JOB_SPAWN_ALLOC_STATUS:
+            return "SPAWN-ALLOCATION-HELD-STATUS";
         case PRTE_JOB_ENVARS_HARVESTED:
             return "ENVARS-HARVESTED";
         case PRTE_JOB_OUTPUT_NOCOPY:

@@ -39,6 +39,19 @@ option takes, and the request is answered when it is granted - the
 daemons themselves are reported by the ``PMIX_DVM_IS_READY`` event that
 completes any DVM size change.
 
+An allocation request can also arrive **on a spawn**, as
+``PMIX_SPAWN_ALLOC``: the value is an array of ``pmix_info_t`` holding the
+request's directive (``PMIX_ALLOC_REQ_DIRECTIVE``) and the info a standalone
+request would have carried. PRRTE serves that request first, exactly as it
+would serve the standalone one, and only launches the job once it is granted
+- pointing the job at what it was given, so it maps onto those resources
+rather than onto everything else. The two failures are kept apart: an
+allocation that is refused fails the spawn with ``PMIX_ERR_JOB_ALLOC_FAILED``
+and launches nothing, while a spawn that fails *after* the grant hands the
+allocation back before returning its own error. This saves a caller the
+"request, wait, read the id, spawn into it" sequence, and closes the window
+in that sequence where resources are held for a job that does not exist.
+
 PRRTE only creates a session object as a result of a call from the
 scheduler via ``PMIx_Session_control``. What it does with each directive
 of that API - and where it deviates from the letter of the attribute
