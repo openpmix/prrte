@@ -461,6 +461,16 @@ Two things follow from that record, and they are the rest of the definition:
   prterun-style launch records the daemon) and against `PRTE_JOB_FLAG_TOOL`
   (a `prun` records its own tool procID, and a tool is not a member of a job).
   `PMIX_SPAWN_CHILD_SEP` opts out.
+
+  **The same screen governs `PMIX_PARENT_ID`** (`register_nspace()`), and for
+  the same reason: an app reads that key to ask "was I spawned by another
+  application process?". Publishing the launch proxy unscreened answers *yes*
+  to every ordinary `prun ./app`, so a program that branches on it — a spawned
+  child doing one thing and its parent another, which is what the key is for —
+  runs the wrong half of itself. That was live: the daemon screen was there
+  and the tool screen was not, and the swarm's `connect:` cases (whose client
+  detects its role exactly that way) all failed on it, every one of them with
+  the parent calling itself the child.
 - **A failure that terminates one member's job terminates the assemblage**
   (`connection_job_failed()`, from `_terminate_job()` in `errmgr/dvm` — the
   one place every failure-driven teardown goes through), each such job
