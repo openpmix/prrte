@@ -6164,6 +6164,106 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     [ "$c" = 0 ] && ok "no daemons linger after the refused path" || bad "$c stray prted after refused path"
     for n in 1 2 3; do docker exec "$NODE$n" sh -c 'rm -rf /root/pfesc' >/dev/null 2>&1; done
 
+    banner "filem: a daemon loss after staging does not take the DVM down"
+    # Every daemon -- the HNP included, since it receives its own broadcast --
+    # keeps its staged files on incoming_files for the life of the DVM: that
+    # list is what link_local_files reads at fork time, so nothing removes an
+    # entry when a transfer finishes. The fault handler used to read "the list
+    # is not empty" as "a transfer is in flight" and activate a DVM-wide
+    # COMM_FAILED, which on the HNP terminates the DVM and on a prted kills
+    # every local proc and aborts the daemon. So one preload job anywhere in
+    # the DVM's history turned the next daemon loss -- an event the rest of
+    # PRRTE is built to absorb -- into the end of the DVM.
+    docker exec "${NODE}1" sh -c 'echo SURVIVOR-DATA-OK > /root/pfsurv.dat' >/dev/null 2>&1
+    for n in 2 3 4; do docker exec "$NODE$n" sh -c 'rm -f /root/pfsurv.dat' >/dev/null 2>&1; done
+    if prted_dvm_start 'node1:1,node2:1,node3:1,node4:1'; then
+        out=$(RUN 'cd /root && timeout 60 prun --host node2:1,node3:1 -np 2 --map-by node \
+                     --preload-files /root/pfsurv.dat -- sh -c "cat pfsurv.dat"' 2>&1); rc=$?
+        hits=$(echo "$out" | grep -c 'SURVIVOR-DATA-OK')
+        [ "$rc" = 0 ] && [ "$hits" = 2 ] \
+            && ok "the file staged to node2 and node3" \
+            || bad "staging failed before the daemon loss (rc=$rc, hits=$hits): $(echo "$out" | tr '\n' ' ')"
+        if ! ON 4 'pgrep -x prted' >/dev/null 2>&1; then
+            bad "node4 has no daemon to kill"
+        else
+            ON 4 'pkill -9 -x prted' >/dev/null 2>&1
+            sleep 6
+            RUN 'pgrep -x prte' >/dev/null 2>&1 \
+                && ok "the HNP survived a daemon loss after a completed staging" \
+                || bad "the HNP terminated the DVM over a staging that had already finished"
+            ON 2 'pgrep -x prted' >/dev/null 2>&1 \
+                && ok "...and so did the daemon that holds the staged file" \
+                || bad "node2's daemon aborted itself over an unrelated daemon loss"
+            # the DVM has to still be usable, and the same file has to still
+            # be deliverable through it -- positioned_files now covers one
+            # fewer daemon than it did
+            out=$(RUN 'cd /root && timeout 60 prun --host node2:1,node3:1 -np 2 --map-by node \
+                         --preload-files /root/pfsurv.dat -- sh -c "cat pfsurv.dat"' 2>&1); rc=$?
+            hits=$(echo "$out" | grep -c 'SURVIVOR-DATA-OK')
+            [ "$rc" = 0 ] && [ "$hits" = 2 ] \
+                && ok "a second staging job ran in the surviving DVM" \
+                || bad "the DVM could not stage again after the loss (rc=$rc, hits=$hits): $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the post-staging daemon-loss test"
+    fi
+    c=$(prted_settle 10 1 2 3 4 5 6 7 8 9 10)
+    [ "$c" = 0 ] && ok "no daemons linger after the post-staging loss test" || bad "$c stray prted after post-staging loss test"
+    for n in 1 2 3 4; do docker exec "$NODE$n" sh -c 'rm -f /root/pfsurv.dat' >/dev/null 2>&1; done
+    cleanup_swarm
+
+    banner "filem: a daemon lost while files are in flight does not hang the job"
+    # The staging half of the same story. A transfer retires when every daemon
+    # it was broadcast to has acked, and nothing else ever revisits it -- so a
+    # daemon that dies still owing an ack leaves the job parked at VM_READY
+    # forever unless the fault handler settles the account for it. The file is
+    # large enough that the broadcast is still running when node4's daemon is
+    # killed; if the kill lands after the last ack instead, this degrades into
+    # the case above, and every assertion below still holds either way.
+    docker exec "${NODE}1" sh -c 'head -c 50331648 /dev/urandom > /root/pfbig.dat; echo INFLIGHT-OK > /root/pfsmall.dat' >/dev/null 2>&1
+    for n in 2 3 4; do docker exec "$NODE$n" sh -c 'rm -f /root/pfbig.dat /root/pfsmall.dat' >/dev/null 2>&1; done
+    if prted_dvm_start 'node1:1,node2:1,node3:1,node4:1'; then
+        # detached, like PRUN_BG -- but this one needs a working directory
+        # (that is where the staged files land), which PRUN_BG cannot take
+        docker exec -d -e PRTE_ALLOW_RUN_AS_ROOT=1 -e PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+            "${NODE}1" bash -lc ". /opt/prte/env.sh; cd /root && \
+                timeout 180 prun --dvm-uri file:$PRTED_URI --host node2:1,node3:1 \
+                  -np 2 --map-by node --preload-files /root/pfbig.dat,/root/pfsmall.dat \
+                  -- sh -c 'cat pfsmall.dat' > /tmp/filem-inflight.out 2>&1" >/dev/null 2>&1
+        # measured: a 48 MB stage to this swarm runs about 3-4s after a ~1s
+        # prun startup, so 2s lands inside the broadcast
+        sleep 2
+        if ! ON 4 'pgrep -x prted' >/dev/null 2>&1; then
+            bad "node4 has no daemon to kill"
+        else
+            ON 4 'pkill -9 -x prted' >/dev/null 2>&1
+            n=0
+            while [ "$n" -lt 120 ]; do
+                RUN 'pgrep -x prun' >/dev/null 2>&1 || break
+                sleep 1; n=$((n+1))
+            done
+            RUN 'pgrep -x prun' >/dev/null 2>&1 \
+                && bad "the staging job never finished after a daemon died mid-transfer" \
+                || ok "the staging job finished after a daemon died mid-transfer"
+            out=$(RUN 'tr -d "\000" < /tmp/filem-inflight.out' 2>&1)
+            hits=$(echo "$out" | grep -c 'INFLIGHT-OK')
+            [ "$hits" = 2 ] \
+                && ok "both surviving ranks got their staged file" \
+                || bad "$hits of 2 ranks read the staged file: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            RUN 'pgrep -x prte' >/dev/null 2>&1 \
+                && ok "the HNP survived the loss during staging" \
+                || bad "the HNP died over a daemon lost during staging"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start a DVM for the mid-staging daemon-loss test"
+    fi
+    c=$(prted_settle 10 1 2 3 4 5 6 7 8 9 10)
+    [ "$c" = 0 ] && ok "no daemons linger after the mid-staging loss test" || bad "$c stray prted after mid-staging loss test"
+    for n in 1 2 3 4; do docker exec "$NODE$n" sh -c 'rm -f /root/pfbig.dat /root/pfsmall.dat' >/dev/null 2>&1; done
+    cleanup_swarm
+
     banner "iof: stdin forwarded to a REMOTE proc (HNP -> prted -> proc)"
     # Rank 0 is mapped onto node2, not the head node, so every stdin byte must
     # travel HNP -> RML(PRTE_RML_TAG_IOF_PROXY) -> prted -> the proc's stdin

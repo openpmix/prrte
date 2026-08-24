@@ -92,7 +92,7 @@ pointer:
 |-------|-----------|---------|--------|
 | `filem_init` | `int (void)` | Module init (called by `select` on the winner). | `PRTE_SUCCESS` |
 | `filem_finalize` | `int (void)` | Module teardown (called on framework close). | `PRTE_SUCCESS` |
-| `fault_handler` | `void (const prte_rml_recovery_status_t *)` | React to a daemon failure during transfer. | — |
+| `fault_handler` | `void (const prte_rml_recovery_status_t *)` | React to a routing-tree change — a daemon death, a shrink, or a revival. Called on **every** daemon, twice per death (LOCAL then GLOBAL scope); read `status->failed_ranks`/`->scope` before acting. | — |
 | `put` / `put_nb` | `int (prte_filem_base_request_t *)` | Push file(s) to remote proc(s), blocking / async. | `PRTE_SUCCESS`/`PRTE_ERROR` |
 | `get` / `get_nb` | `int (prte_filem_base_request_t *)` | Pull file(s) from remote proc(s), blocking / async. | `PRTE_SUCCESS`/`PRTE_ERROR` |
 | `rm` / `rm_nb` | `int (prte_filem_base_request_t *)` | Remove remote file(s), blocking / async. | `PRTE_SUCCESS`/`PRTE_ERROR` |

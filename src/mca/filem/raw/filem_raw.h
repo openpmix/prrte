@@ -18,6 +18,7 @@
 
 #include "prte_config.h"
 
+#include "src/class/pmix_bitmap.h"
 #include "src/class/pmix_object.h"
 #include "src/event/event-internal.h"
 #include "src/mca/mca.h"
@@ -60,7 +61,35 @@ typedef struct {
     uint32_t mode;
     int32_t nchunk;
     int status;
+    /* Delivery accounting, all four fields maintained together.
+     *
+     * "nexpected" is how many daemons still owe an ack.  It is seeded from
+     * the DVM's daemon count when the transfer starts and is decremented by
+     * the fault handler as daemons depart, rather than being re-read from
+     * prte_process_info.num_daemons on each ack: the handler has to settle
+     * the transfer at a moment when the daemon that just died may or may
+     * not have been subtracted from that global yet.
+     *
+     * "nrecvd" counts the daemons that have the file AND are still in the
+     * DVM, so a departure takes its ack back out again.  That is what makes
+     * "did this file reach the whole DVM?" answerable later, in
+     * raw_preposition_files' already-positioned check.
+     *
+     * "acked" records WHICH daemons those are.  A count alone cannot tell a
+     * repeated ack from one daemon apart from a first ack from another, and
+     * the fault handler must know whether the daemon that died had already
+     * answered.
+     */
+    pmix_rank_t nexpected;
     pmix_rank_t nrecvd;
+    pmix_bitmap_t acked;
+    /* the number of daemon vpids the DVM had assigned when this transfer
+     * began.  Daemon vpids are never reused and a grow appends new ones, so
+     * any rank at or above this line joined after the broadcast started,
+     * never saw its chunks, and therefore owes it nothing - a distinction
+     * the fault handler needs before it credits a departure.
+     */
+    pmix_rank_t horizon;
 } prte_filem_raw_xfer_t;
 PMIX_CLASS_DECLARATION(prte_filem_raw_xfer_t);
 
