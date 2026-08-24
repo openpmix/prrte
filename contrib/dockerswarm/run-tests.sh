@@ -7482,6 +7482,78 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
     fi
     cleanup_swarm
 
+    banner "ras: a spawn carries the allocation it needs (PMIX_SPAWN_ALLOC)"
+    # The library form of "salloc, then srun": the spawn carries an entire
+    # allocation request, and the DVM obtains the allocation, waits for it,
+    # points the job at it and launches - or fails the spawn without launching
+    # anything. Only a multi-node DVM can show it: the request has to bring in
+    # a node the DVM is not on, and the proof is the job running there.
+    #
+    # The four outcomes that have to be tellable apart are all here: granted
+    # and launched; refused (PMIX_ERR_JOB_ALLOC_FAILED, nothing launched);
+    # malformed (PMIX_ERR_BAD_PARAM - nothing was asked of any allocator); and
+    # granted but then failing to launch, which hands the allocation back
+    # before it answers.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 --host node1:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        [ "$(prted_count 2 3)" = 0 ] \
+            && ok "the DVM spans node1 alone - nothing else has a daemon" \
+            || bad "node2/node3 already have daemons - the test premise is gone"
+
+        out=$(RUN 'timeout 120 elastic spawnalloc node2:2 -- hostname' 2>&1)
+        echo "$out" | grep -q 'SPAWNED' \
+            && ok "the spawn obtained its own allocation and launched" \
+            || bad "spawn with PMIX_SPAWN_ALLOC failed: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        echo "$out" | grep -q '^node2$' \
+            && ok "and the job ran on the node it allocated" \
+            || bad "the job did not run on the allocated node: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        [ "$(prted_count 2)" = 1 ] && ok "a daemon was started there for it" \
+                                   || bad "no daemon on the allocated node"
+
+        # a directive no module serves: the allocation is refused, and that is
+        # NOT a launch failure - the caller can tell, and nothing was started
+        out=$(RUN 'timeout 90 elastic spawnalloc node3:2 --alloc-dir reaquire -- hostname' 2>&1)
+        echo "$out" | grep -q 'ALLOCATION REFUSED' \
+            && ok "a refused allocation fails the spawn with PMIX_ERR_JOB_ALLOC_FAILED" \
+            || bad "a refused allocation did not answer as one: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        [ "$(prted_count 3)" = 0 ] && ok "and nothing was launched for it" \
+                                   || bad "a daemon was started despite the refusal"
+
+        # a request that names no directive is malformed rather than refused:
+        # nothing was asked of any allocator at all
+        out=$(RUN 'timeout 90 elastic spawnalloc node3:2 --alloc-dir none -- hostname' 2>&1)
+        echo "$out" | grep -q 'REQUEST REJECTED' \
+            && ok "a request with no directive is a bad parameter, not an allocation failure" \
+            || bad "a directive-less request was not refused as malformed: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+
+        # granted, then the launch fails: the allocation goes back before the
+        # spawn's own error is delivered, so the node it took is free again -
+        # the daemon leaving is what that looks like from outside
+        out=$(RUN 'timeout 120 elastic spawnalloc node3:2 --req-id badexe -- /no/such/binary' 2>&1)
+        echo "$out" | grep -q 'SPAWN FAILED: PMIX_ERR_JOB_FAILED_TO_LAUNCH' \
+            && ok "a launch failure is reported as one, not as an allocation failure" \
+            || bad "the launch failure was not reported: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        sleep 4
+        [ "$(prted_count 3)" = 0 ] \
+            && ok "the allocation it had obtained was handed back" \
+            || bad "the failed spawn is still holding its allocation"
+        # ...and the node it gave back can be allocated again. This is the
+        # half that a hand-rolled release used to break: the daemons were told
+        # to go while the master still believed they were there, so the next
+        # grow onto that node sent its launch message to a departed daemon.
+        out=$(RUN 'timeout 120 elastic spawnalloc node3:2 -- hostname' 2>&1)
+        echo "$out" | grep -q '^node3$' \
+            && ok "the released node can be allocated again" \
+            || bad "re-allocating the released node failed: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        [ "$(prted_count 3)" = 1 ] && ok "with a daemon of its own the second time" \
+                                   || bad "no daemon on the re-allocated node"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start an elastic DVM for the PMIX_SPAWN_ALLOC test"
+    fi
+    cleanup_swarm
+
     banner "dash-host: relative node syntax selects from the DVM"
     # "+n<K>" names the K'th node of the allocation, "+e:N" names N nodes
     # that are currently empty. Neither can say anything about how big a

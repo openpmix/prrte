@@ -23,11 +23,16 @@
  *   elastic release-id <alloc-id>           # PMIX_ALLOC_RELEASE + ALLOC_ID
  *   elastic cancel     <req-id>             # PMIX_ALLOC_REQ_CANCEL
  *   elastic activate   <host-spec>          # PMIX_ALLOC_ACTIVATE + HOST
+ *   elastic spawnalloc <node[:slots],...> -- <cmd>
+ *                                          # PMIx_Spawn carrying PMIX_SPAWN_ALLOC
  *
  *   --req-id <id>   request id to send (default "elastic-test"); "cancel"
  *                   names the request to cancel this way too
  *   --hostfile <f>  hostfile to send as PMIX_HOSTFILE (activate only; may be
  *                   given with or instead of the host spec, which is then "")
+ *   --alloc-dir <d> directive for the spawn-carried request (spawnalloc only):
+ *                   new (default), extend, release, reaquire, or "none" to
+ *                   leave the directive out and see the request refused
  *   --wait          wait for the phase-two completion event
  *   --no-wait       do not
  *
@@ -68,6 +73,15 @@
  * That is the only way to place a job on a freshly grown node: grown nodes
  * join the new reservation rather than the default pool, so a plain
  * "prun --host <grown-node>" has no allocation to map onto and fails.
+ *
+ * "spawnalloc" does that whole sequence as ONE call: the spawn carries the
+ * allocation request in PMIX_SPAWN_ALLOC, and the host obtains the
+ * allocation, waits for it, points the job at it and launches - or, if the
+ * allocation is refused, fails the spawn with PMIX_ERR_JOB_ALLOC_FAILED
+ * having launched nothing.  It is the "grow, read the id, spawn into it"
+ * dance above with the caller taken out of the middle, so the two are worth
+ * comparing: this one has no window in which the resources are held by
+ * nobody's job.
  *
  * Build: gcc -o elastic elastic.c -lpmix
  */
@@ -257,6 +271,113 @@ static int spawn_into_reservation(char **cmd) {
     return 0;
 }
 
+/* Spawn a job whose allocation request rides along on the spawn itself.
+ *
+ * The whole request goes into PMIX_SPAWN_ALLOC as an array of pmix_info_t:
+ * the directive first (PMIX_ALLOC_REQ_DIRECTIVE - the allocation API takes
+ * it as a parameter, and there is no parameter here), then exactly the info
+ * a standalone request would have carried.  The host does the rest, and
+ * either the spawn succeeds on resources it obtained, or it fails with
+ * PMIX_ERR_JOB_ALLOC_FAILED having allocated nothing.
+ *
+ * Returns 0 on success.
+ */
+static int spawn_with_alloc(const char *nodes, const char *req_id,
+                            const char *dirname, char **cmd) {
+    pmix_app_t app;
+    pmix_info_t jinfo[2], *areq;
+    pmix_data_array_t darray;
+    pmix_nspace_t nspace;
+    pmix_alloc_directive_t directive = PMIX_ALLOC_NEW;
+    pmix_status_t rc, code = PMIX_EVENT_JOB_END;
+    lock_t reglock;
+    bool flag = true;
+    size_t nareq = 3;
+    int n;
+
+    lock_init(&jobend_lock);
+    lock_init(&reglock);
+    PMIx_Register_event_handler(&code, 1, NULL, 0, jobend_evh, reg_cb, &reglock);
+    lock_wait(&reglock);
+
+    PMIX_APP_CONSTRUCT(&app);
+    app.cmd = strdup(cmd[0]);
+    for (n = 0; NULL != cmd[n]; n++) {
+        PMIx_Argv_append_nosize(&app.argv, cmd[n]);
+    }
+    app.maxprocs = 1;
+
+    /* --alloc-dir names the directive, so the two ways a request can be
+     * refused are reachable: one no module will serve, and one that names no
+     * directive at all (which is not an allocation failure but a malformed
+     * request, and answers differently) */
+    if (NULL != dirname) {
+        if (0 == strcmp(dirname, "extend")) {
+            directive = PMIX_ALLOC_EXTEND;
+        } else if (0 == strcmp(dirname, "release")) {
+            directive = PMIX_ALLOC_RELEASE;
+        } else if (0 == strcmp(dirname, "reaquire")) {
+            directive = PMIX_ALLOC_REAQUIRE;
+        } else if (0 == strcmp(dirname, "none")) {
+            nareq = 2;      /* omit the directive element entirely */
+        } else if (0 != strcmp(dirname, "new")) {
+            fprintf(stderr, "unknown --alloc-dir '%s'\n", dirname);
+            return 1;
+        }
+    }
+
+    PMIX_INFO_CREATE(areq, nareq);
+    n = 0;
+    if (3 == nareq) {
+        PMIX_INFO_LOAD(&areq[n++], PMIX_ALLOC_REQ_DIRECTIVE, &directive, PMIX_ALLOC_DIRECTIVE);
+    }
+    PMIX_INFO_LOAD(&areq[n++], PMIX_ALLOC_NODE_LIST, nodes, PMIX_STRING);
+    PMIX_INFO_LOAD(&areq[n], PMIX_ALLOC_REQ_ID, req_id, PMIX_STRING);
+    darray.type = PMIX_INFO;
+    darray.size = nareq;
+    darray.array = areq;
+    PMIX_INFO_LOAD(&jinfo[0], PMIX_SPAWN_ALLOC, &darray, PMIX_DATA_ARRAY);
+    PMIX_INFO_FREE(areq, nareq);
+    PMIX_INFO_LOAD(&jinfo[1], PMIX_NOTIFY_COMPLETION, &flag, PMIX_BOOL);
+
+    fprintf(stderr, "spawning [%s] with an allocation request for [%s] ...\n",
+            cmd[0], nodes);
+    rc = PMIx_Spawn(jinfo, 2, &app, 1, nspace);
+    PMIX_APP_DESTRUCT(&app);
+    PMIX_INFO_DESTRUCT(&jinfo[0]);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, ">>> SPAWN FAILED: %s\n", PMIx_Error_string(rc));
+        if (PMIX_ERR_JOB_ALLOC_FAILED == rc) {
+            /* the outcome this attribute exists to make tellable apart: the
+             * allocation was refused, so nothing was launched */
+            fprintf(stderr, ">>> ALLOCATION REFUSED\n");
+        } else if (PMIX_ERR_BAD_PARAM == rc) {
+            /* the request itself was malformed - nothing was asked of any
+             * allocator, which is a different thing from being refused */
+            fprintf(stderr, ">>> REQUEST REJECTED\n");
+        }
+        return 1;
+    }
+    fprintf(stderr, ">>> SPAWNED %s on its own allocation\n", nspace);
+
+    /* bounded wait for the job to finish so a caller can inspect its work */
+    {
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_sec += 60;
+        pthread_mutex_lock(&jobend_lock.mtx);
+        while (jobend_lock.active) {
+            if (ETIMEDOUT == pthread_cond_timedwait(&jobend_lock.cond,
+                                                    &jobend_lock.mtx, &ts)) {
+                fprintf(stderr, ">>> TIMEOUT: spawned job did not end within 60s\n");
+                break;
+            }
+        }
+        pthread_mutex_unlock(&jobend_lock.mtx);
+    }
+    return 0;
+}
+
 static void usage(const char *me) {
     fprintf(stderr,
             "usage: %s <op> <arg> [--req-id <id>] [--wait|--no-wait] [-- <cmd> ...]\n"
@@ -268,6 +389,8 @@ static void usage(const char *me) {
             "  release-id <alloc-id>           PMIX_ALLOC_RELEASE + ALLOC_ID\n"
             "  cancel     <req-id>             PMIX_ALLOC_REQ_CANCEL\n"
             "  activate   <host-spec>          PMIX_ALLOC_ACTIVATE + HOST\n"
+            "  spawnalloc <node[:slots],...>   PMIx_Spawn + PMIX_SPAWN_ALLOC\n"
+            "                                  (needs \"-- <cmd>\")\n"
             "\n"
             "Every op but 'cancel' waits for the phase-two completion event;\n"
             "--no-wait is what a DVM outside elastic mode needs.\n", me);
@@ -283,6 +406,7 @@ int main(int argc, char **argv) {
     lock_t alloclock;
     const char *op, *arg, *req_id = "elastic-test";
     const char *hostfile = NULL;
+    const char *alloc_dir = NULL;
     char **spawn_cmd = NULL;
     uint64_t num_nodes = 0;
     bool by_count = false;
@@ -308,6 +432,8 @@ int main(int argc, char **argv) {
             req_id = argv[++i];
         } else if (0 == strcmp(argv[i], "--hostfile") && i + 1 < argc) {
             hostfile = argv[++i];
+        } else if (0 == strcmp(argv[i], "--alloc-dir") && i + 1 < argc) {
+            alloc_dir = argv[++i];
         } else if (0 == strcmp(argv[i], "--wait")) {
             wait_opt = 1;
         } else if (0 == strcmp(argv[i], "--no-wait")) {
@@ -345,6 +471,16 @@ int main(int argc, char **argv) {
         wait_phase2 = false;
     } else if (0 == strcmp(op, "activate")) {
         directive = PMIX_ALLOC_ACTIVATE;
+    } else if (0 == strcmp(op, "spawnalloc")) {
+        /* no allocation request is issued from here at all - the request
+         * rides on the spawn, which is the point */
+        directive = PMIX_ALLOC_NEW;
+        wait_phase2 = false;
+        if (NULL == spawn_cmd) {
+            fprintf(stderr, "spawnalloc needs a command: %s spawnalloc <nodes> -- <cmd>\n",
+                    argv[0]);
+            return 1;
+        }
     } else {
         fprintf(stderr, "unknown op '%s'\n", op);
         usage(argv[0]);
@@ -386,6 +522,12 @@ int main(int argc, char **argv) {
     PMIx_Register_event_handler(codes, 2, NULL, 0, completion_evh, reg_cb, &reglock);
     lock_wait(&reglock);
     fprintf(stderr, "registered for PMIX_DVM_IS_READY / PMIX_ERR_DVM_MOD\n");
+
+    /* the spawn-carried form never issues a request of its own */
+    if (0 == strcmp(op, "spawnalloc")) {
+        rcexit = spawn_with_alloc(arg, req_id, alloc_dir, spawn_cmd);
+        goto done;
+    }
 
     /* issue the size-change request.  Exactly one selector goes with the
      * request id: the node list, the node count, or the allocation id -- the

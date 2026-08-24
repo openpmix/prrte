@@ -1523,9 +1523,99 @@ static int test_activate_nodes(void)
     return failures;
 }
 
+/*
+ * prte_ras_base_spawn_alloc: the allocation request a spawn can carry.
+ *
+ * What is testable without a live DVM is the front half - whether the
+ * request is well enough formed to be posted at all - and that is exactly
+ * the half that decides between "this spawn is refused outright" and "the
+ * job is now held while an allocator answers". The posting itself needs the
+ * event base and an allocator to answer, so the cases here all stop before
+ * it: no request at all, and the two ways a request can be malformed.
+ */
+static prte_job_t *mkspawnalloc_job(pmix_info_t *req, size_t nreq)
+{
+    prte_job_t *jdata;
+    pmix_data_array_t darray;
+
+    jdata = PMIX_NEW(prte_job_t);
+    if (NULL != req) {
+        darray.type = PMIX_INFO;
+        darray.size = nreq;
+        darray.array = req;
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_SPAWN_ALLOC,
+                           PRTE_ATTR_GLOBAL, &darray, PMIX_DATA_ARRAY);
+    }
+    return jdata;
+}
+
+static int test_spawn_alloc(void)
+{
+    int failures = 0;
+    prte_job_t *jdata;
+    pmix_info_t req[2];
+    pmix_alloc_directive_t directive = PMIX_ALLOC_NEW;
+    bool posted = true;
+    int rc;
+
+    /* a spawn that asks for no allocation is not this function's business,
+     * and must not be reported as having posted anything */
+    jdata = mkspawnalloc_job(NULL, 0);
+    rc = prte_ras_base_spawn_alloc(jdata, &posted);
+    CHECK("spawn_alloc: no request is a no-op", PRTE_SUCCESS == rc);
+    CHECK("spawn_alloc: and posts nothing", !posted);
+    PMIX_RELEASE(jdata);
+
+    /* a request that names no directive cannot be served: the allocation API
+     * takes the directive as a parameter, and carried as data it has to be
+     * stated rather than guessed */
+    PMIX_INFO_LOAD(&req[0], PMIX_ALLOC_NODE_LIST, "node01", PMIX_STRING);
+    jdata = mkspawnalloc_job(req, 1);
+    posted = true;
+    rc = prte_ras_base_spawn_alloc(jdata, &posted);
+    CHECK("spawn_alloc: a request with no directive is refused",
+          PRTE_ERR_BAD_PARAM == rc);
+    CHECK("spawn_alloc: nothing was posted for it", !posted);
+    CHECK("spawn_alloc: and the request is not left on the job to be retried",
+          !prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_ALLOC,
+                              NULL, PMIX_DATA_ARRAY));
+    PMIX_RELEASE(jdata);
+    PMIX_INFO_DESTRUCT(&req[0]);
+
+    /* a directive of the wrong type is refused rather than reinterpreted -
+     * the value arrived from a client, and every other reading of it would
+     * be an allocation nobody asked for */
+    PMIX_INFO_LOAD(&req[0], PMIX_ALLOC_REQ_DIRECTIVE, "new", PMIX_STRING);
+    PMIX_INFO_LOAD(&req[1], PMIX_ALLOC_NODE_LIST, "node01", PMIX_STRING);
+    jdata = mkspawnalloc_job(req, 2);
+    posted = true;
+    rc = prte_ras_base_spawn_alloc(jdata, &posted);
+    CHECK("spawn_alloc: a mistyped directive is refused",
+          PRTE_ERR_BAD_PARAM == rc);
+    CHECK("spawn_alloc: nothing posted for the mistyped directive", !posted);
+    PMIX_RELEASE(jdata);
+    PMIX_INFO_DESTRUCT(&req[0]);
+    PMIX_INFO_DESTRUCT(&req[1]);
+
+    /* the attribute is consumed by the attempt, whatever its outcome: the
+     * launch is re-driven once the DVM is ready, and a second pass must not
+     * ask for a second allocation. Shown here on the refusal path, which is
+     * the one that returns while the job still exists to inspect. */
+    PMIX_INFO_LOAD(&req[0], PMIX_ALLOC_REQ_DIRECTIVE, &directive, PMIX_ALLOC_DIRECTIVE);
+    jdata = mkspawnalloc_job(req, 1);
+    CHECK("spawn_alloc: the request is carried on the job",
+          prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_ALLOC,
+                             NULL, PMIX_DATA_ARRAY));
+    PMIX_RELEASE(jdata);
+    PMIX_INFO_DESTRUCT(&req[0]);
+
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
+    pmix_status_t prc;
 
     rc = prte_init_util(PRTE_PROC_MASTER);
     if (PRTE_SUCCESS != rc) {
@@ -1536,6 +1626,18 @@ int main(void)
     rc = setup_globals();
     if (PRTE_SUCCESS != rc) {
         fprintf(stderr, "test globals setup failed: %d\n", rc);
+        return 1;
+    }
+
+    /* An allocation request carried on a spawn is a pmix_data_array_t, and
+     * copying one is a PMIx operation - PMIx_Data_copy refuses to run until
+     * PMIx itself is up, which is how prte_set_attribute would fail to store
+     * such an attribute here while working perfectly in a daemon.  A daemon
+     * reaches that state through PMIx_server_init, so do the same. */
+    prc = PMIx_server_init(NULL, NULL, 0);
+    if (PMIX_SUCCESS != prc) {
+        fprintf(stderr, "PMIx_server_init failed: %s\n", PMIx_Error_string(prc));
+        prte_finalize();
         return 1;
     }
 
@@ -1560,12 +1662,16 @@ int main(void)
     failures += test_dvm_growing();
     failures += test_activate_hosts();
     failures += test_activate_nodes();
+    failures += test_spawn_alloc();
     /* after test_select(), which opens the framework and latches a
      * selection made with no SLURM allocation in the environment -- so
      * nothing has called slurm's init() before this does */
     failures += test_pmix_gate();
     failures += test_slurm_allocation();
 
+    /* PMIx last, and after the frameworks are closed: finalizing it unloads
+     * the components PRRTE has open in a DSO build */
+    PMIx_server_finalize();
     prte_finalize();
 
     if (0 == failures) {
