@@ -46,6 +46,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/odls_types.h"
+#include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/state/state.h"
@@ -1166,6 +1167,11 @@ static void add_nodes_to_session(char **names, prte_session_t *dest)
     }
 }
 
+static int ras_base_start_dvm_shrink(prte_pmix_server_req_t *req,
+                                     pmix_rank_t *ranks, int32_t nranks,
+                                     prte_shrink_campaign_t **campaign,
+                                     bool report_xcast_failure);
+
 void prte_ras_base_teardown_reservation(prte_session_t *session,
                                         bool return_to_scheduler)
 {
@@ -1173,9 +1179,7 @@ void prte_ras_base_teardown_reservation(prte_session_t *session,
     int k;
     pmix_rank_t *ranks = NULL;
     int32_t m = 0;
-    pmix_data_buffer_t msg;
-    prte_daemon_cmd_flag_t cmd = PRTE_DAEMON_SHRINK_CMD;
-    pmix_status_t rc;
+    int ret;
 
     if (NULL == session || session == prte_default_session) {
         return;
@@ -1242,22 +1246,21 @@ void prte_ras_base_teardown_reservation(prte_session_t *session,
     }
 
     if (return_to_scheduler && NULL != ranks && 0 < m) {
-        PMIX_DATA_BUFFER_CONSTRUCT(&msg);
-        rc = PMIx_Data_pack(NULL, &msg, &cmd, 1, PMIX_UINT8);
-        if (PMIX_SUCCESS == rc) {
-            rc = PMIx_Data_pack(NULL, &msg, &m, 1, PMIX_INT32);
+        /* Shrink them out through the ordinary machinery rather than by hand.
+         * This used to pack and broadcast the shrink command itself, which
+         * told the daemons to go but left the master still believing they
+         * were there: node->daemon still pointing at a departed proc, the
+         * node still in the daemon job's map, the daemon count unreduced.
+         * A later grow onto that same node then "reused" the dead daemon and
+         * sent its launch message to nobody ("node has gone down"), so a node
+         * that had once been released could never be allocated again.  The
+         * campaign's completion is what does that bookkeeping - one routing
+         * repair and one node reset for the whole set - and it costs nothing
+         * to go through it. */
+        ret = ras_base_start_dvm_shrink(NULL, ranks, m, NULL, false);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
         }
-        if (PMIX_SUCCESS == rc) {
-            rc = PMIx_Data_pack(NULL, &msg, ranks, m, PMIX_PROC_RANK);
-        }
-        if (PMIX_SUCCESS == rc) {
-            if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, &msg))) {
-                PRTE_ERROR_LOG(rc);
-            }
-        } else {
-            PMIX_ERROR_LOG(rc);
-        }
-        PMIX_DATA_BUFFER_DESTRUCT(&msg);
     }
     if (NULL != ranks) {
         free(ranks);
@@ -1779,17 +1782,23 @@ static int ras_base_create_shrink_campaign(prte_pmix_server_req_t *req,
     memcpy(camp->targets, ranks, nranks * sizeof(pmix_rank_t));
     camp->ntargets = nranks;
     camp->pending = nranks;
-    /* record the requester so the phase-two completion event can be
-     * directed at the process that issued this PMIX_ALLOC_RELEASE */
-    PMIX_XFER_PROCID(&camp->requester, &req->tproc);
-    for (size_t n = 0; n < req->ninfo; n++) {
-        if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
-            camp->alloc_id = strdup(req->info[n].value.data.string);
-        } else if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_REQ_ID)) {
-            camp->req_id = strdup(req->info[n].value.data.string);
+    /* Record the requester so the phase-two completion event can be directed
+     * at the process that issued this PMIX_ALLOC_RELEASE.  There need not be
+     * one: a reservation torn down on its own account - by its timeout, by
+     * its owner departing, by the inheritance rules at job end - is nobody's
+     * request, and the campaign then exists purely for the bookkeeping its
+     * completion does. */
+    if (NULL != req) {
+        PMIX_XFER_PROCID(&camp->requester, &req->tproc);
+        for (size_t n = 0; n < req->ninfo; n++) {
+            if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
+                camp->alloc_id = strdup(req->info[n].value.data.string);
+            } else if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_REQ_ID)) {
+                camp->req_id = strdup(req->info[n].value.data.string);
+            }
         }
+        camp->have_requester = true;
     }
-    camp->have_requester = true;
     pmix_list_append(&prte_shrink_campaigns, &camp->super);
     prte_dvm_launch_fence += nranks;
 
@@ -2143,6 +2152,248 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
     // mark that the DVM is not ready so the launch does not continue
     // until we have processed the nodes
     prte_dvm_ready = false;
+
+    return PRTE_SUCCESS;
+}
+
+/*
+ * PMIX_SPAWN_ALLOC - a spawn that carries the allocation it needs.
+ *
+ * The request is served exactly as a standalone PMIx_Allocation_request
+ * would be: the same directive, the same info, the same modules, the same
+ * answer.  What differs is only what is done with that answer, and that is
+ * plm's business - so the two callbacks below decide nothing themselves,
+ * they hand the outcome to prte_plm_base_spawn_alloc_granted/_failed.
+ *
+ * The requester is the process that asked for the spawn, not the job being
+ * spawned: the job has no namespace yet (the HNP assigns it at launch), and
+ * an allocation has to be owned by somebody who exists.  That also puts the
+ * reservation under the ordinary ownership rules - the spawn requester can
+ * release it, target it, and is the one it outlives.
+ */
+static void spawn_alloc_complete(pmix_status_t status, pmix_info_t *info, size_t ninfo,
+                                 void *cbdata, pmix_release_cbfunc_t rel, void *relcbdata)
+{
+    prte_job_t *jdata = (prte_job_t *) cbdata;
+    char *alloc_id = NULL;
+    size_t n;
+
+    /* the id of what we were given, where the answer carries one - it is
+     * what points the job at those resources, and what has to be handed back
+     * if the job then fails to launch */
+    for (n = 0; n < ninfo; n++) {
+        if (PMIx_Check_key(info[n].key, PMIX_ALLOC_ID) &&
+            PMIX_STRING == info[n].value.type) {
+            alloc_id = info[n].value.data.string;
+            break;
+        }
+    }
+
+    /* PMIX_OPERATION_IN_PROGRESS is a grant, not a maybe: it is what a
+     * resource manager answers when the resources are promised and their
+     * daemons are still coming (ras/slurm's extend), and the DVM-ready event
+     * that ends it is the same one the job is already waiting on. */
+    if (PMIX_SUCCESS == status || PMIX_OPERATION_SUCCEEDED == status ||
+        PMIX_OPERATION_IN_PROGRESS == status) {
+        prte_plm_base_spawn_alloc_granted(jdata, alloc_id);
+    } else {
+        prte_plm_base_spawn_alloc_failed(jdata, status);
+    }
+
+    if (NULL != rel) {
+        rel(relcbdata);
+    }
+}
+
+int prte_ras_base_spawn_alloc(prte_job_t *jdata, bool *posted)
+{
+    pmix_data_array_t *darray = NULL;
+    pmix_info_t *src, *info = NULL;
+    size_t n, ninfo = 0, idx = 0, nalloc;
+    pmix_alloc_directive_t directive = 0;
+    bool have_directive = false;
+    prte_pmix_server_req_t *req;
+    pmix_proc_t *proxy = NULL;
+
+    *posted = false;
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_ALLOC,
+                            (void **) &darray, PMIX_DATA_ARRAY) ||
+        NULL == darray) {
+        /* this spawn asks for no allocation - the ordinary case */
+        return PRTE_SUCCESS;
+    }
+    /* consumed: the launch is re-driven once the DVM is ready again, and a
+     * second pass must not ask for a second allocation */
+    prte_remove_attribute(&jdata->attributes, PRTE_JOB_SPAWN_ALLOC);
+
+    if (PMIX_INFO != darray->type || 0 == darray->size || NULL == darray->array) {
+        PMIX_DATA_ARRAY_FREE(darray);
+        return PRTE_ERR_BAD_PARAM;
+    }
+    src = (pmix_info_t *) darray->array;
+    nalloc = darray->size;
+
+    /* Split the request into its directive and its info array - the shape a
+     * request has everywhere else in the code, and the shape the modules
+     * expect.  Everything that is not the directive is the request.  The
+     * array is sized for the whole thing and filled short by exactly the
+     * directive; the tail stays as PMIX_INFO_CREATE left it, which destructs
+     * to nothing, so the request may carry the filled count. */
+    PMIX_INFO_CREATE(info, nalloc);
+    if (NULL == info) {
+        PMIX_DATA_ARRAY_FREE(darray);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    for (n = 0; n < nalloc; n++) {
+        if (PMIx_Check_key(src[n].key, PMIX_ALLOC_REQ_DIRECTIVE)) {
+            if (PMIX_ALLOC_DIRECTIVE != src[n].value.type) {
+                PMIX_INFO_FREE(info, nalloc);
+                PMIX_DATA_ARRAY_FREE(darray);
+                return PRTE_ERR_BAD_PARAM;
+            }
+            directive = src[n].value.data.uint8;
+            have_directive = true;
+            continue;
+        }
+        PMIX_INFO_XFER(&info[idx++], &src[n]);
+    }
+    ninfo = idx;
+    PMIX_DATA_ARRAY_FREE(darray);
+
+    if (!have_directive) {
+        /* the one element that cannot be defaulted: a request whose directive
+         * we had to guess would ask for something nobody asked for */
+        prte_show_help("help-ras-base.txt", "ras-base:spawn-alloc-nodirective", true);
+        PMIX_INFO_FREE(info, nalloc);
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    if (NULL == req) {
+        PMIX_INFO_FREE(info, nalloc);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    pmix_asprintf(&req->operation, "SPAWN-ALLOC: %s",
+                  PMIx_Alloc_directive_string(directive));
+    req->allocdir = directive;
+    req->info = info;
+    req->ninfo = ninfo;
+    req->copy = true;
+    /* ask in the name of whoever asked for the spawn */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY,
+                           (void **) &proxy, PMIX_PROC) &&
+        NULL != proxy) {
+        PMIX_XFER_PROCID(&req->tproc, proxy);
+        PMIX_PROC_RELEASE(proxy);
+    } else {
+        PMIX_XFER_PROCID(&req->tproc, &jdata->originator);
+    }
+    /* The request OWNS the job object it carries - and this one is not ours
+     * to give away, so take a reference of our own for it to drop (the same
+     * borrowing prte_ras_base_add_hosts does).  That reference is what keeps
+     * the job alive across the request, so the callbacks may use it freely
+     * until they hand the request back. */
+    PMIX_RETAIN(jdata);
+    req->jdata = jdata;
+    req->cbdata = jdata;
+    req->infocbfunc = spawn_alloc_complete;
+    req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+
+    /* Note what is NOT done here: the job is not parked in the cache and the
+     * DVM is not marked un-ready.  The request itself is what holds the job
+     * while the allocation is obtained - the cache is drained by the next
+     * DVM-ready event whatever it was raised for, which would launch this job
+     * before it had the resources it asked for.  Where to wait, and for what,
+     * is decided once the answer is in (prte_plm_base_spawn_alloc_granted). */
+    prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, prte_ras_base_modify, req);
+    PMIX_POST_OBJECT(req);
+    prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
+
+    *posted = true;
+    return PRTE_SUCCESS;
+}
+
+/*
+ * Hand back an allocation obtained for a spawn that then failed to launch.
+ *
+ * The requester is told the spawn's own error - but only once the resources
+ * are on their way back, since a caller that is told its spawn failed is
+ * entitled to assume it is no longer holding anything for it.  The release
+ * is an ordinary PMIX_ALLOC_RELEASE, so it goes wherever a release goes: to
+ * the module that owns the allocation, and through the same deferral if a
+ * grow is in flight.  cb is invoked when it resolves, either way - there is
+ * no outcome in which the spawn's own error is not delivered.
+ */
+static void spawn_alloc_release_complete(pmix_status_t status, pmix_info_t *info,
+                                         size_t ninfo, void *cbdata,
+                                         pmix_release_cbfunc_t rel, void *relcbdata)
+{
+    prte_job_t *jdata = (prte_job_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(info, ninfo);
+
+    if (PMIX_SUCCESS != status && PMIX_OPERATION_SUCCEEDED != status) {
+        /* nothing more can be done about it here - the resources stay held,
+         * and the requester still has to be told what became of its spawn */
+        PMIX_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
+                             "%s ras:base:spawn_alloc release refused: %s",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             PMIx_Error_string(status)));
+    }
+
+    prte_plm_base_spawn_alloc_released(jdata);
+
+    if (NULL != rel) {
+        rel(relcbdata);
+    }
+}
+
+int prte_ras_base_release_spawn_alloc(prte_job_t *jdata, const char *alloc_id)
+{
+    prte_pmix_server_req_t *req;
+    pmix_proc_t *proxy = NULL;
+
+    if (NULL == alloc_id) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+
+    PMIX_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
+                         "%s ras:base:spawn_alloc releasing %s - the job it was "
+                         "obtained for did not launch",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), alloc_id));
+
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    if (NULL == req) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    req->operation = strdup("SPAWN-ALLOC-RELEASE");
+    req->allocdir = PMIX_ALLOC_RELEASE;
+    req->ninfo = 1;
+    PMIX_INFO_CREATE(req->info, req->ninfo);
+    if (NULL == req->info) {
+        PMIX_RELEASE(req);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    req->copy = true;
+    PMIX_INFO_LOAD(&req->info[0], PMIX_ALLOC_ID, (void *) alloc_id, PMIX_STRING);
+    /* release in the same name it was obtained in, or the ownership check
+     * refuses us our own allocation */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY,
+                           (void **) &proxy, PMIX_PROC) &&
+        NULL != proxy) {
+        PMIX_XFER_PROCID(&req->tproc, proxy);
+        PMIX_PROC_RELEASE(proxy);
+    } else {
+        PMIX_XFER_PROCID(&req->tproc, &jdata->originator);
+    }
+    PMIX_RETAIN(jdata);
+    req->jdata = jdata;
+    req->cbdata = jdata;
+    req->infocbfunc = spawn_alloc_release_complete;
+    req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+
+    prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, prte_ras_base_modify, req);
+    PMIX_POST_OBJECT(req);
+    prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
 
     return PRTE_SUCCESS;
 }
