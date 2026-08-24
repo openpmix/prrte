@@ -646,6 +646,19 @@ that was returned: %d.
 "abort". This may have caused other processes in the application to be
 terminated by signals sent by %s (as reported here).
 #
+[prun:proc-killed-by-release]
+
+%s has exited because process rank %lu on node %s was killed when that
+node was released from the DVM. Releasing a node removes its daemon,
+which kills the application processes still running under it.
+
+The node was released on request - by a process, a tool, or the
+scheduler. Nothing drains a node before releasing it.
+
+Any remaining processes in this job were terminated by %s. A job that
+can carry on without the lost processes can say so with
+"--runtime-options recoverable" and will not be terminated.
+#
 [prun:proc-exit-no-sync]
 
 %s has exited due to process rank %lu with PID %lu on node %s exiting
