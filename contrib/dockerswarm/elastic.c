@@ -22,9 +22,12 @@
  *   elastic release    <num-nodes>          # PMIX_ALLOC_RELEASE + NUM_NODES
  *   elastic release-id <alloc-id>           # PMIX_ALLOC_RELEASE + ALLOC_ID
  *   elastic cancel     <req-id>             # PMIX_ALLOC_REQ_CANCEL
+ *   elastic activate   <host-spec>          # PMIX_ALLOC_ACTIVATE + HOST
  *
  *   --req-id <id>   request id to send (default "elastic-test"); "cancel"
  *                   names the request to cancel this way too
+ *   --hostfile <f>  hostfile to send as PMIX_HOSTFILE (activate only; may be
+ *                   given with or instead of the host spec, which is then "")
  *   --wait          wait for the phase-two completion event
  *   --no-wait       do not
  *
@@ -48,6 +51,16 @@
  * PMIX_DVM_IS_READY is the answer, exactly as it is for a grow.  Outside
  * elastic mode no campaign is recorded and phase one stays terminal; use
  * --no-wait there rather than burning the timeout.
+ *
+ * "activate" is the odd one out: it asks for nothing new at all, only that a
+ * daemon be started on nodes the DVM's allocation ALREADY holds but is not
+ * spanning (a --prtemca prte_max_vm_size cap leaves such nodes behind, and so
+ * does a shrink).  It is therefore the one size change permitted where a
+ * scheduler owns the allocation.  Its nodes are named with PMIX_HOST -- the
+ * same syntax "--activate" takes on a command line, including "+all", "+n<K>"
+ * and "file=<path>" -- and/or with PMIX_HOSTFILE.  Like an extend it answers
+ * phase one as soon as the request is granted and reports the daemons through
+ * the phase-two event, so it is waited for the same way.
  *
  * A grow may be followed by "-- <cmd> [args...]", in which case the tool
  * spawns that command INTO THE RESERVATION the grow just created, using the
@@ -254,6 +267,7 @@ static void usage(const char *me) {
             "  release    <num-nodes>          PMIX_ALLOC_RELEASE + NUM_NODES\n"
             "  release-id <alloc-id>           PMIX_ALLOC_RELEASE + ALLOC_ID\n"
             "  cancel     <req-id>             PMIX_ALLOC_REQ_CANCEL\n"
+            "  activate   <host-spec>          PMIX_ALLOC_ACTIVATE + HOST\n"
             "\n"
             "Every op but 'cancel' waits for the phase-two completion event;\n"
             "--no-wait is what a DVM outside elastic mode needs.\n", me);
@@ -268,6 +282,7 @@ int main(int argc, char **argv) {
     lock_t reglock;
     lock_t alloclock;
     const char *op, *arg, *req_id = "elastic-test";
+    const char *hostfile = NULL;
     char **spawn_cmd = NULL;
     uint64_t num_nodes = 0;
     bool by_count = false;
@@ -291,6 +306,8 @@ int main(int argc, char **argv) {
         }
         if (0 == strcmp(argv[i], "--req-id") && i + 1 < argc) {
             req_id = argv[++i];
+        } else if (0 == strcmp(argv[i], "--hostfile") && i + 1 < argc) {
+            hostfile = argv[++i];
         } else if (0 == strcmp(argv[i], "--wait")) {
             wait_opt = 1;
         } else if (0 == strcmp(argv[i], "--no-wait")) {
@@ -326,6 +343,8 @@ int main(int argc, char **argv) {
         directive = PMIX_ALLOC_REQ_CANCEL;
         req_id = arg;
         wait_phase2 = false;
+    } else if (0 == strcmp(op, "activate")) {
+        directive = PMIX_ALLOC_ACTIVATE;
     } else {
         fprintf(stderr, "unknown op '%s'\n", op);
         usage(argv[0]);
@@ -372,7 +391,16 @@ int main(int argc, char **argv) {
      * request id: the node list, the node count, or the allocation id -- the
      * RM modules reject a request that carries more than one. */
     lock_init(&alloclock);
-    if (0 == strcmp(op, "cancel")) {
+    if (0 == strcmp(op, "activate")) {
+        /* the nodes are named as hosts, not as an allocation request: they
+         * are already allocated, and nothing is being asked of a scheduler */
+        ninfo = (NULL != hostfile) ? 3 : 2;
+        PMIX_INFO_CREATE(info, ninfo);
+        PMIX_INFO_LOAD(&info[0], PMIX_HOST, arg, PMIX_STRING);
+        if (NULL != hostfile) {
+            PMIX_INFO_LOAD(&info[1], PMIX_HOSTFILE, hostfile, PMIX_STRING);
+        }
+    } else if (0 == strcmp(op, "cancel")) {
         ninfo = 1;
         PMIX_INFO_CREATE(info, ninfo);
     } else {

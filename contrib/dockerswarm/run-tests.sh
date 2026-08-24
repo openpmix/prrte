@@ -7398,7 +7398,7 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         # and names both the host and the file
         RUN 'printf "node9\n" > /tmp/activate-bad.txt'
         out=$(RUN 'timeout 60 prun --activate file=/tmp/activate-bad.txt -n 1 hostname' 2>&1)
-        echo "$out" | grep -q 'hostfile given to "--activate" names a host' \
+        echo "$out" | grep -q 'hostfile given to an activation request names a host' \
             && ok "a hostfile naming an unallocated host is refused" \
             || bad "activate accepted an unallocated host from a file: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
         [ "$(prted_count 9)" = 0 ] && ok "no daemon launched from the refused file" \
@@ -7406,6 +7406,79 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     else
         bad "could not start an elastic DVM for the --activate re-admit test"
+    fi
+    cleanup_swarm
+
+    banner "ras: PMIX_ALLOC_ACTIVATE activates a node programmatically"
+    # The library form of the same operation: a tool that holds nodes the DVM
+    # is not spanning asks for daemons on them with PMIX_ALLOC_ACTIVATE,
+    # naming them with PMIX_HOST and/or PMIX_HOSTFILE. It is parsed by the
+    # same resolver "--activate" uses, so the two cannot drift apart - the
+    # cases below are deliberately the command-line ones, asked for through
+    # the API instead.
+    #
+    # Unlike the command line there is no job behind the request to make the
+    # completion observable, so the answer comes in two phases exactly as a
+    # grow's does: the request is granted at once, and the daemons are
+    # reported by the directed PMIX_DVM_IS_READY when they are up. That needs
+    # elastic mode, which is what records the campaign the event comes from.
+    cleanup_swarm
+    RUN 'nohup prte --daemonize --prtemca prte_elastic_mode 1 --prtemca prte_max_vm_size 2 --host node1:2,node2:2,node3:2,node4:2 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    if RUN 'pgrep -x prte >/dev/null'; then
+        [ "$(prted_count 3 4)" = 0 ] \
+            && ok "max_vm_size left node3+node4 allocated with no daemon" \
+            || bad "they already have daemons - the test premise is gone"
+
+        out=$(RUN 'timeout 90 elastic activate node3' 2>&1)
+        echo "$out" | grep -q PMIX_DVM_IS_READY \
+            && ok "PMIX_ALLOC_ACTIVATE node3 reported phase-two completion" \
+            || bad "no completion event for the activation: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        [ "$(prted_count 3)" = 1 ] && ok "a daemon started on the activated node" \
+                                   || bad "the activated node has no daemon"
+        [ "$(prted_count 4)" = 0 ] && ok "and only that node - node4 was not swept in" \
+                                   || bad "naming node3 also started a daemon on node4"
+        # the point of the exercise: the node is now usable
+        out=$(RUN 'timeout 60 prun --host node3:2 -n 2 --map-by node hostname' 2>&1)
+        c=$(echo "$out" | grep -c '^node3$')
+        [ "$c" = 2 ] && ok "a job then ran on the activated node (2 procs)" \
+                     || bad "launch on the activated node produced $c/2 procs: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+
+        # the hostfile half: PMIX_HOSTFILE instead of PMIX_HOST, with the
+        # host spec left empty. Its "slots=" must NOT be applied, for the
+        # same reason the command line refuses a ":N" - activation has no
+        # authority over what the allocation grants.
+        RUN 'printf "node4 slots=99\n" > /tmp/pactivate.txt'
+        out=$(RUN 'timeout 90 elastic activate "" --hostfile /tmp/pactivate.txt' 2>&1)
+        echo "$out" | grep -q PMIX_DVM_IS_READY \
+            && ok "PMIX_HOSTFILE activated the node the file named" \
+            || bad "no completion event for the hostfile activation: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        [ "$(prted_count 4)" = 1 ] && ok "a daemon started on the node from the file" \
+                                   || bad "the node named in the file has no daemon"
+        alloc=$(RUN 'timeout 30 prun --display allocation -n 1 hostname' 2>&1)
+        echo "$alloc" | grep -qE '^[[:space:]]*node4:[[:space:]]+slots=2' \
+            && ok "the file's slots=99 was not applied to node4" \
+            || bad "activation applied a slot count from its hostfile: $(echo "$alloc" | grep node4 | tr '\n' ' ')"
+
+        # ...and it can name nothing the allocation does not hold. This is the
+        # property that lets the directive be served under a scheduler at all,
+        # so the refusal is the feature. node5 is outside this DVM's four.
+        out=$(RUN 'timeout 60 elastic activate node5 --no-wait' 2>&1)
+        echo "$out" | grep -q 'REJECTED' \
+            && ok "an unallocated host is refused, and the refusal reaches the caller" \
+            || bad "the API accepted an unallocated host: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        [ "$(prted_count 5)" = 0 ] && ok "no daemon launched on the refused host" \
+                                   || bad "a daemon was launched on node5"
+
+        # with the DVM now spanning the whole allocation "+all" has nothing to
+        # do: that is success, answered in phase one, and NOT a promise of a
+        # completion event nobody will send
+        out=$(RUN 'timeout 60 elastic activate +all --no-wait' 2>&1)
+        echo "$out" | grep -q 'PHASE 1 (acceptance): allocation request returned PMIX_SUCCESS' \
+            && ok "+all is satisfied, and answered outright, with nothing left to activate" \
+            || bad "+all did not answer at phase one: $(echo "$out" | tr '\n' ' ' | tail -c 300)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    else
+        bad "could not start an elastic DVM for the PMIX_ALLOC_ACTIVATE test"
     fi
     cleanup_swarm
 

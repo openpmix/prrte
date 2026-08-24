@@ -38,9 +38,13 @@
  *      --display-allocation.
  *
  *   5. prte_ras_base_activate_hosts, which resolves a --activate
- *      specification against the node pool. It is the one operation that
- *      may extend the DVM under an allocation PRRTE does not own, so what
- *      it will and will not accept is exactly the safety property.
+ *      specification against the node pool, and
+ *      prte_ras_base_activate_nodes beneath it, which is the same resolver
+ *      as a PMIX_ALLOC_ACTIVATE request reaches - with the hostfile as its
+ *      own argument rather than folded into the host list. It is the one
+ *      operation that may extend the DVM under an allocation PRRTE does not
+ *      own, so what it will and will not accept is exactly the safety
+ *      property.
  *
  *   6. ras/slurm's "detect and report an allocation" capability, driven
  *      through the framework rather than by calling into the component.
@@ -1363,6 +1367,162 @@ static int test_activate_hosts(void)
 }
 
 
+/*
+ * prte_ras_base_activate_nodes: the entry point both requesters share.
+ *
+ * The command line reaches it through prte_ras_base_activate_hosts() above,
+ * folding its hostfile into the host list as "file=<path>"; a
+ * PMIX_ALLOC_ACTIVATE request reaches it directly, carrying the hostfile as a
+ * separate attribute.  What is tested here is the part only the second caller
+ * can reach - the hostfile as its own argument - plus the activation count,
+ * which is what tells that caller whether anything will be launched and so
+ * whether a completion event is coming.
+ *
+ * No grow is activated by this function at all, which is why every case can
+ * be run without a state machine behind it.
+ */
+static int mkactfile(const char *path, const char *content)
+{
+    FILE *fp = fopen(path, "w");
+
+    if (NULL == fp) {
+        fprintf(stderr, "could not write test hostfile %s\n", path);
+        return PRTE_ERROR;
+    }
+    fputs(content, fp);
+    fclose(fp);
+    return PRTE_SUCCESS;
+}
+
+static int test_activate_nodes(void)
+{
+    int failures = 0;
+    prte_node_t *idle1, *idle2, *nptr;
+    prte_node_state_t *parked;
+    const char *hf1 = "prte_test_activate_nodes1.txt";
+    const char *hf2 = "prte_test_activate_nodes2.txt";
+    char *both;
+    int i, npool, n = -1;
+
+    /* own the pool, as the +e forms above require - the same reason applies
+     * to "+all" here */
+    npool = prte_node_pool->size;
+    parked = (prte_node_state_t *) malloc(npool * sizeof(prte_node_state_t));
+    for (i = 0; i < npool; i++) {
+        nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i);
+        if (NULL == nptr) {
+            continue;
+        }
+        parked[i] = nptr->state;
+        nptr->state = PRTE_NODE_STATE_NOT_INCLUDED;
+    }
+
+    idle1 = PMIX_NEW(prte_node_t);
+    idle1->name = strdup("actn-idle1");
+    idle1->state = PRTE_NODE_STATE_UP;
+    idle1->slots = 4;
+    idle1->index = pmix_pointer_array_add(prte_node_pool, idle1);
+
+    idle2 = PMIX_NEW(prte_node_t);
+    idle2->name = strdup("actn-idle2");
+    idle2->state = PRTE_NODE_STATE_UP;
+    idle2->slots = 4;
+    idle2->index = pmix_pointer_array_add(prte_node_pool, idle2);
+
+    /* naming nothing at all is a bad request, not an empty success: a
+     * requester that meant "everything" says so with "+all" */
+    CHECK("activate_nodes: nothing named is refused",
+          PRTE_ERR_BAD_PARAM == prte_ras_base_activate_nodes(NULL, NULL, &n));
+    CHECK("activate_nodes: refusal reports no activation", 0 == n);
+    CHECK("activate_nodes: an empty spec is the same as none",
+          PRTE_ERR_BAD_PARAM == prte_ras_base_activate_nodes("", "", &n));
+
+    /* the host specification alone */
+    CHECK("activate_nodes: host spec accepted",
+          PRTE_SUCCESS == prte_ras_base_activate_nodes("actn-idle1", NULL, &n));
+    CHECK("activate_nodes: it marked the node", PRTE_NODE_STATE_ADDED == idle1->state);
+    CHECK("activate_nodes: and counted it", 1 == n);
+
+    /* a node already marked is met, and counts for nothing: there is no
+     * second daemon to launch, so no completion to wait for */
+    CHECK("activate_nodes: re-naming a marked node succeeds",
+          PRTE_SUCCESS == prte_ras_base_activate_nodes("actn-idle1", NULL, &n));
+    CHECK("activate_nodes: with nothing left to activate", 0 == n);
+
+    /* the hostfile as its own argument - the form only the PMIx directive
+     * produces, since the command line spells it "file=<path>" */
+    idle1->state = PRTE_NODE_STATE_UP;
+    if (PRTE_SUCCESS != mkactfile(hf1, "actn-idle1\n")) {
+        return failures + 1;
+    }
+    CHECK("activate_nodes: hostfile argument accepted",
+          PRTE_SUCCESS == prte_ras_base_activate_nodes(NULL, hf1, &n));
+    CHECK("activate_nodes: the file's node was marked",
+          PRTE_NODE_STATE_ADDED == idle1->state);
+    CHECK("activate_nodes: and counted", 1 == n);
+
+    /* both arguments together, each naming a different node */
+    idle1->state = PRTE_NODE_STATE_UP;
+    CHECK("activate_nodes: host spec and hostfile together",
+          PRTE_SUCCESS == prte_ras_base_activate_nodes("actn-idle2", hf1, &n));
+    CHECK("activate_nodes: both nodes marked",
+          PRTE_NODE_STATE_ADDED == idle1->state &&
+          PRTE_NODE_STATE_ADDED == idle2->state);
+    CHECK("activate_nodes: both counted", 2 == n);
+
+    /* several hostfiles, comma-delimited, as every other hostfile attribute
+     * accepts */
+    idle1->state = PRTE_NODE_STATE_UP;
+    idle2->state = PRTE_NODE_STATE_UP;
+    if (PRTE_SUCCESS != mkactfile(hf2, "actn-idle2\n")) {
+        return failures + 1;
+    }
+    pmix_asprintf(&both, "%s,%s", hf1, hf2);
+    CHECK("activate_nodes: a comma-delimited hostfile list",
+          PRTE_SUCCESS == prte_ras_base_activate_nodes(NULL, both, &n));
+    CHECK("activate_nodes: every file's node marked",
+          PRTE_NODE_STATE_ADDED == idle1->state &&
+          PRTE_NODE_STATE_ADDED == idle2->state);
+    CHECK("activate_nodes: all of them counted", 2 == n);
+    free(both);
+
+    /* a refusal anywhere marks nothing and says so */
+    idle1->state = PRTE_NODE_STATE_UP;
+    idle2->state = PRTE_NODE_STATE_UP;
+    CHECK("activate_nodes: an unknown host is refused",
+          PRTE_ERR_SILENT == prte_ras_base_activate_nodes("actn-idle1,actn-nosuch",
+                                                          NULL, &n));
+    CHECK("activate_nodes: nothing was marked by the refused spec",
+          PRTE_NODE_STATE_UP == idle1->state);
+    CHECK("activate_nodes: and nothing counted", 0 == n);
+
+    /* the refusal covers the hostfile argument too */
+    if (PRTE_SUCCESS != mkactfile(hf2, "actn-nosuch\n")) {
+        return failures + 1;
+    }
+    CHECK("activate_nodes: an unknown host in the hostfile is refused",
+          PRTE_ERR_SILENT == prte_ras_base_activate_nodes("actn-idle1", hf2, &n));
+    CHECK("activate_nodes: the host spec's node was not marked either",
+          PRTE_NODE_STATE_UP == idle1->state);
+
+    unlink(hf1);
+    unlink(hf2);
+    for (i = 0; i < npool; i++) {
+        nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i);
+        if (NULL == nptr) {
+            continue;
+        }
+        nptr->state = parked[i];
+    }
+    free(parked);
+    pmix_pointer_array_set_item(prte_node_pool, idle1->index, NULL);
+    pmix_pointer_array_set_item(prte_node_pool, idle2->index, NULL);
+    PMIX_RELEASE(idle1);
+    PMIX_RELEASE(idle2);
+
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0;
@@ -1399,6 +1559,7 @@ int main(void)
     failures += test_flag_string();
     failures += test_dvm_growing();
     failures += test_activate_hosts();
+    failures += test_activate_nodes();
     /* after test_select(), which opens the framework and latches a
      * selection made with no SLURM allocation in the environment -- so
      * nothing has called slurm's init() before this does */
