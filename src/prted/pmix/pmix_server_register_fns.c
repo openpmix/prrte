@@ -247,7 +247,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
     gid_t gid;
     pmix_list_t *cache;
     hwloc_obj_t machine;
-    pmix_proc_t pproc, *parentproc, *procptr;
+    pmix_proc_t pproc, *parentproc = NULL, *procptr;
     pmix_status_t ret;
     pmix_info_t devinfo[2];
     prte_pmix_reg_caddy_t *cd;
@@ -665,12 +665,37 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
         PMIX_INFO_LIST_RELEASE(iarray);
     }
 
-    /* get the parent job that spawned this one */
+    /* Get the parent job that spawned this one, if a *process* did.
+     *
+     * The proxy is not automatically that: a prterun-style launch records the
+     * daemon itself, and a plain "prun ./app" records prun's own tool procID.
+     * Neither is a parent process - a tool is not a member of a job and has no
+     * procs to be spawned by - so PMIX_PARENT_ID must not be published for
+     * either. An app reads that key to ask "was I spawned by another
+     * application process?", and publishing prun's id answers yes to every
+     * ordinary launch, which is how a program that branches on it (a spawned
+     * child doing one thing, its parent another) ends up running the wrong
+     * half of itself. The identical screen, and the reasoning, is in
+     * prte_pmix_server_connection_spawned() (pmix_server_connect.c).
+     *
+     * strncmp, not PMIX_CHECK_NSPACE: that macro treats an empty nspace on
+     * either side as a wildcard match, and this test must answer only for the
+     * namespace it was actually given.
+     */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &parentproc, PMIX_PROC)) {
-        parent = prte_get_job_data_object(parentproc->nspace);
-        if (NULL != parent && PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, parent->nspace)) {
-            PMIX_PROC_RELEASE(parentproc);
+        if (0 != strncmp(PRTE_PROC_MY_NAME->nspace, parentproc->nspace, PMIX_MAX_NSLEN)) {
+            parent = prte_get_job_data_object(parentproc->nspace);
+        }
+        if (NULL != parent && PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
             parent = NULL;
+        }
+        if (NULL == parent) {
+            /* release it here: the tail of this function only releases it
+             * when a parent was found, so every rejecting path must clean up
+             * its own copy or the proc object leaks once per job launched
+             */
+            PMIX_PROC_RELEASE(parentproc);
+            parentproc = NULL;
         }
     }
 
