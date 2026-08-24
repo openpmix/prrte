@@ -441,6 +441,44 @@ once the shrink command is on the wire, every targeted daemon's departure is a
 *success* for the campaign, since clean exit and crash are indistinguishable
 and both remove the node as requested.
 
+Reporting a release that killed running processes
+-------------------------------------------------
+
+Releasing a node removes its daemon, which kills the application processes
+still running under it.  Nothing drains a node first, so this is a legitimate
+outcome of a successful shrink, but it must not be silent.
+
+``release_node_procs()`` (``ras_base_allocate.c``) reports each such process as
+``PRTE_PROC_STATE_KILLED_BY_RELEASE``.  Reported as ``PRTE_PROC_STATE_TERMINATED``
+- correct for the DVM's own bookkeeping, since the release is planned - a job
+that lost most of its processes mid-collective ended "successfully": ``prun``
+exited 0, the survivors were told nothing, and the requester was told the
+shrink succeeded.
+
+The state's consequences:
+
+* errmgr/dvm handles it as a proc failure.  A **recoverable** or **continuous**
+  job is notified (``PMIX_ERR_PROC_KILLED_BY_RELEASE``) and keeps running with the
+  proc's resources recovered; any other job is flagged
+  ``PRTE_JOB_STATE_KILLED_BY_RELEASE``, given a non-zero exit code, and
+  terminated.
+* ``PMIX_JOB_TERM_STATUS`` becomes ``PMIX_ERR_JOB_KILLED_BY_RELEASE`` and the
+  ``prun:proc-killed-by-release`` help text names the first rank and its node.
+* Proc accounting is unchanged.  ``proc_errors()`` force-marks
+  ``WAITPID_FIRED`` and ``IOF_COMPLETE`` for a remote proc, which drives the
+  same ``TERMINATED`` activation this path raised directly before.
+
+Every PMIx constant above falls back to its cancellation or killed-by-cmd
+equivalent when PRRTE is built against a PMIx that predates them.
+
+Only procs not yet flagged ``PRTE_PROC_FLAG_RECORDED`` are reported.  A node
+lists procs that exited earlier until their whole job terminates, so without
+that test the release of an idle node would abort a healthy job.
+
+The campaign is unaffected: the release still succeeds and
+``PMIX_DVM_IS_READY`` still fires.  The DVM shrank as asked; the job lost
+processes, and that is now reported rather than dropped.
+
 Summary of Files Changed (Shrink Fence)
 -----------------------------------------
 

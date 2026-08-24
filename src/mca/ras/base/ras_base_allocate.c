@@ -815,16 +815,21 @@ void prte_ras_base_shrink_complete(prte_shrink_campaign_t *campaign)
     }
 }
 
-/* Mark the application procs on a released node as terminated.  Nothing else
- * does: the target daemon's proc-state updates race the routing teardown its
- * departure starts, and its later comm failure is ignored (errmgr_dvm.c), so
- * the errmgr's lost-daemon sweep never runs either.  An unaccounted proc holds
- * its job below PRTE_JOB_STATE_TERMINATED and prterun never shuts the DVM down.
+/* Report the application procs killed by the release of this node.  Nothing
+ * else does: the target daemon's proc-state updates race the routing teardown
+ * its departure starts, and its later comm failure is ignored (errmgr_dvm.c).
+ * An unaccounted proc holds its job below PRTE_JOB_STATE_TERMINATED forever.
  *
- * TERMINATED, not TERM_WO_SYNC: the release is planned.  track_procs() skips a
- * proc already flagged RECORDED, so a real report is not counted twice.  Runs
- * before prte_plm_base_reset_dvm_node(), which can drop the map's last
- * reference to the node. */
+ * KILLED_BY_RELEASE, not TERMINATED: the release is planned, the kill is not.
+ * Reported as a normal termination it left prun exiting 0 for a job that lost
+ * ranks mid-fence.  errmgr/dvm decides what it costs.  Accounting is
+ * unchanged - proc_errors force-marks WAITPID_FIRED and IOF_COMPLETE for a
+ * remote proc, driving the same TERMINATED activation raised here before.
+ *
+ * A node lists procs that exited earlier until their whole job terminates, so
+ * without the RECORDED test the release of an idle node would abort a healthy
+ * job.  Runs before prte_plm_base_reset_dvm_node(), which can drop the map's
+ * last reference to the node. */
 static void release_node_procs(prte_node_t *node)
 {
     prte_proc_t *proc;
@@ -845,11 +850,16 @@ static void release_node_procs(prte_node_t *node)
         if (PMIX_CHECK_NSPACE(proc->name.nspace, PRTE_PROC_MY_NAME->nspace)) {
             continue;
         }
+        /* already accounted for: it reported its own termination before the
+         * release reached it, so the release did not kill it */
+        if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_RECORDED)) {
+            continue;
+        }
         PMIX_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
-                             "%s ras:base:shrink releasing proc %s with node %s",
+                             "%s ras:base:shrink killing live proc %s with node %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_NAME_PRINT(&proc->name), node->name));
-        PRTE_ACTIVATE_PROC_STATE(&proc->name, PRTE_PROC_STATE_TERMINATED);
+        PRTE_ACTIVATE_PROC_STATE(&proc->name, PRTE_PROC_STATE_KILLED_BY_RELEASE);
     }
 }
 

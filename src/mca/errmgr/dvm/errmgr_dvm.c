@@ -657,6 +657,44 @@ keep_going:
         }
         break;
 
+    /* This proc's node was released from the DVM and the departing daemon
+     * killed it.  Planned for the DVM, not for the job, so it is handled like
+     * the loss of a daemon - except that the cause is known and can be named. */
+    case PRTE_PROC_STATE_KILLED_BY_RELEASE:
+        pmix_output_verbose(5, prte_errmgr_base_framework.framework_output,
+                             "%s errmgr:dvm: proc %s killed by the release of node %s",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
+                             (NULL == pptr->node) ? "unknown" : pptr->node->name);
+        if (flag) {
+            /* a job that can absorb the loss is told and keeps running */
+#ifdef PMIX_ERR_PROC_KILLED_BY_RELEASE
+            check_send_notification(jdata, pptr, PMIX_ERR_PROC_KILLED_BY_RELEASE);
+#else
+            check_send_notification(jdata, pptr, PMIX_ERR_PROC_KILLED_BY_CMD);
+#endif
+            // recover the resources used by this proc
+            prte_state_base_recover_resources(jdata, pptr);
+        } else {
+            if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
+                jdata->state = PRTE_JOB_STATE_KILLED_BY_RELEASE;
+                /* point to the first rank to cause the problem */
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr,
+                                   PMIX_POINTER);
+                /* retain the object so it doesn't get free'd */
+                PMIX_RETAIN(pptr);
+                PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
+                /* the proc was killed, so it reported no exit code of its
+                 * own - without one the termination reads as success */
+                jdata->exit_code = pptr->exit_code;
+                if (0 == jdata->exit_code) {
+                    jdata->exit_code = PRTE_ERROR_DEFAULT_EXIT_CODE;
+                }
+                /* kill what is left of the job */
+                _terminate_job(jdata->nspace);
+            }
+        }
+        break;
+
     case PRTE_PROC_STATE_FAILED_TO_START:
     case PRTE_PROC_STATE_FAILED_TO_LAUNCH:
         pmix_output_verbose(5, prte_errmgr_base_framework.framework_output,

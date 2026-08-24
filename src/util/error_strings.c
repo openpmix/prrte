@@ -136,6 +136,8 @@ const char *prte_job_state_to_str(prte_job_state_t state)
         return "CANNOT LAUNCH";
     case PRTE_JOB_STATE_FILES_POSN_FAILED:
         return "FILE PREPOSITION FAILED";
+    case PRTE_JOB_STATE_KILLED_BY_RELEASE:
+        return "KILLED BY RELEASE";
     case PRTE_JOB_STATE_FT_CHECKPOINT:
         return "FAULT TOLERANCE CHECKPOINT";
     case PRTE_JOB_STATE_FT_CONTINUE:
@@ -232,6 +234,8 @@ const char *prte_proc_state_to_str(prte_proc_state_t state)
         return "FAILED TO CONNECT";
     case PRTE_PROC_STATE_PEER_UNKNOWN:
         return "PEER UNKNOWN";
+    case PRTE_PROC_STATE_KILLED_BY_RELEASE:
+        return "KILLED BY RELEASE";
     case PRTE_PROC_STATE_ANY:
         return "ANY";
     default:

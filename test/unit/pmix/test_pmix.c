@@ -73,6 +73,19 @@
         }                                                     \
     } while (0)
 
+/* A release kill has its own status and state only on a PMIx that
+ * defines them */
+#ifdef PMIX_ERR_JOB_KILLED_BY_RELEASE
+#    define RELEASE_STATUS PMIX_ERR_JOB_KILLED_BY_RELEASE
+#else
+#    define RELEASE_STATUS PMIX_ERR_JOB_CANCELED
+#endif
+#ifdef PMIX_PROC_STATE_KILLED_BY_RELEASE
+#    define RELEASE_PSTATE PMIX_PROC_STATE_KILLED_BY_RELEASE
+#else
+#    define RELEASE_PSTATE PMIX_PROC_STATE_KILLED_BY_CMD
+#endif
+
 /* ------------------------------------------------------------------ */
 /* proc state translation                                             */
 /* ------------------------------------------------------------------ */
@@ -125,6 +138,8 @@ static struct {
     {"NO_PATH_TO_TARGET", PRTE_PROC_STATE_NO_PATH_TO_TARGET, PMIX_PROC_STATE_COMM_FAILED},
     {"FAILED_TO_CONNECT", PRTE_PROC_STATE_FAILED_TO_CONNECT, PMIX_PROC_STATE_COMM_FAILED},
     {"PEER_UNKNOWN", PRTE_PROC_STATE_PEER_UNKNOWN, PMIX_PROC_STATE_COMM_FAILED},
+
+    {"KILLED_BY_RELEASE", PRTE_PROC_STATE_KILLED_BY_RELEASE, RELEASE_PSTATE},
 };
 
 static int test_convert_state(void)
@@ -223,6 +238,11 @@ static int test_state_roundtrip(void)
         }
         if (PMIX_PROC_STATE_COMM_FAILED == state_map[n].pmix
             && PRTE_PROC_STATE_COMM_FAILED != state_map[n].prte) {
+            continue;
+        }
+        /* only lossy where PMIx has no state of its own for it */
+        if (PMIX_PROC_STATE_KILLED_BY_CMD == state_map[n].pmix
+            && PRTE_PROC_STATE_KILLED_BY_CMD != state_map[n].prte) {
             continue;
         }
 
@@ -457,6 +477,7 @@ static int test_job_state_to_error(void)
         {"FAILED_TO_START", PRTE_JOB_STATE_FAILED_TO_START, PMIX_ERR_JOB_FAILED_TO_LAUNCH},
         {"CANNOT_LAUNCH", PRTE_JOB_STATE_CANNOT_LAUNCH, PMIX_ERR_JOB_FAILED_TO_LAUNCH},
         {"KILLED_BY_CMD", PRTE_JOB_STATE_KILLED_BY_CMD, PMIX_ERR_JOB_CANCELED},
+        {"KILLED_BY_RELEASE", PRTE_JOB_STATE_KILLED_BY_RELEASE, RELEASE_STATUS},
         {"ABORTED", PRTE_JOB_STATE_ABORTED, PMIX_ERR_JOB_ABORTED},
         {"CALLED_ABORT", PRTE_JOB_STATE_CALLED_ABORT, PMIX_ERR_JOB_ABORTED},
         {"SILENT_ABORT", PRTE_JOB_STATE_SILENT_ABORT, PMIX_ERR_JOB_ABORTED},
@@ -490,6 +511,7 @@ static int test_proc_state_to_error(void)
         pmix_status_t expect;
     } tbl[] = {
         {"KILLED_BY_CMD", PRTE_PROC_STATE_KILLED_BY_CMD, PMIX_ERR_JOB_CANCELED},
+        {"KILLED_BY_RELEASE", PRTE_PROC_STATE_KILLED_BY_RELEASE, RELEASE_STATUS},
         {"ABORTED", PRTE_PROC_STATE_ABORTED, PMIX_ERR_JOB_ABORTED},
         {"CALLED_ABORT", PRTE_PROC_STATE_CALLED_ABORT, PMIX_ERR_JOB_ABORTED},
         {"ABORTED_BY_SIG", PRTE_PROC_STATE_ABORTED_BY_SIG, PMIX_ERR_JOB_ABORTED_BY_SIG},

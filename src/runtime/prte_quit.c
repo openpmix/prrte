@@ -302,6 +302,11 @@ static char *print_aborted_job(prte_job_t *job,
                                        (unsigned long) proc->pid, nodename, prte_tool_basename,
                                        prte_tool_basename);
         return output;
+    } else if (PRTE_PROC_STATE_KILLED_BY_RELEASE == proc->state) {
+        output = pmix_show_help_string("help-prun.txt", "prun:proc-killed-by-release", true,
+                                       prte_tool_basename, (unsigned long) proc->name.rank,
+                                       nodename, prte_tool_basename);
+        return output;
     } else if (PRTE_PROC_STATE_COMM_FAILED == proc->state) {
         output = pmix_show_help_string("help-prun.txt", "prun:proc-comm-failed", true,
                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -366,6 +371,8 @@ static char *dump_job(prte_job_t *job)
         } else if (PRTE_PROC_STATE_ABORTED_BY_SIG == pptr->state) {
             ++num_killed;
         } else if (PRTE_PROC_STATE_SENSOR_BOUND_EXCEEDED == pptr->state) {
+            ++num_killed;
+        } else if (PRTE_PROC_STATE_KILLED_BY_RELEASE == pptr->state) {
             ++num_killed;
         }
     }
