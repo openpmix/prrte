@@ -454,6 +454,19 @@ rather than reading `map->daemon_vpid_start`: a target whose session is gone
 would otherwise leave the campaign with no requester, and a successful grow
 would emit no phase-two completion event at all.
 
+An allocation the spawn itself asked for (`PMIX_SPAWN_ALLOC`) is served at
+this point too, and is the one thing that stops the launch path rather than
+continuing it: `prte_ras_base_spawn_alloc()` posts the request, the request
+holds the job, and `prte_plm_base_spawn_alloc_granted()`/`_failed()` pick the
+launch back up (or answer the requester) when it resolves. The job is
+deliberately **not** parked in `prte_cache` to wait — the cache is drained by
+whatever DVM-ready event comes next, which would launch it while its own
+allocation was still being obtained. It goes in only once a grow is known to
+be in flight, which is the same thing everything else in the cache is waiting
+for. The other half of that contract lives in `prte_plm_base_spawn_response`:
+a job that obtained an allocation and then failed to launch hands it back
+before its requester is told, and the answer follows the release.
+
 That scan resolves a requester through the *session* owning each target,
 which an **activation** (`--activate`, `PMIX_ALLOC_ACTIVATE`) has none of —
 it names nodes the allocation already held, which stay in the general pool.

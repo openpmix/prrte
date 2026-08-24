@@ -1232,6 +1232,37 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
         return PRTE_SUCCESS;
     }
 
+    /* A job that obtained its own allocation (PMIX_SPAWN_ALLOC) and then
+     * failed to launch has to give that allocation back before its requester
+     * is told: a caller told its spawn failed is entitled to conclude it is
+     * not holding resources for it, and nothing else will ever release them -
+     * the job they were obtained for does not exist and never will.
+     *
+     * The answer therefore waits for the release, which is why the status is
+     * parked on the job and delivered by the re-entry from
+     * prte_plm_base_spawn_alloc_released().  Removing the id first is what
+     * makes that re-entry pass straight through here rather than release
+     * again.  A release we cannot even post is not worth losing the answer
+     * over: fall through and tell the requester what happened. */
+    if (PMIX_SUCCESS != status) {
+        char *sa_id = NULL;
+
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_ALLOC_ID,
+                               (void **) &sa_id, PMIX_STRING) &&
+            NULL != sa_id) {
+            prte_remove_attribute(&jdata->attributes, PRTE_JOB_SPAWN_ALLOC_ID);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_SPAWN_ALLOC_STATUS,
+                               PRTE_ATTR_LOCAL, &status, PMIX_INT32);
+            rc = prte_ras_base_release_spawn_alloc(jdata, sa_id);
+            free(sa_id);
+            if (PRTE_SUCCESS == rc) {
+                return PRTE_SUCCESS;
+            }
+            PRTE_ERROR_LOG(rc);
+            prte_remove_attribute(&jdata->attributes, PRTE_JOB_SPAWN_ALLOC_STATUS);
+        }
+    }
+
     /* a status is all the requester is going to get out of this response,
      * so tell it what actually happened while it is still listening */
     if (PMIX_SUCCESS != status) {
@@ -1453,6 +1484,12 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
     }
 
 next:
+    /* The job is running, so an allocation obtained for it is now the job's
+     * to hold: drop the note that says we still owe it a release.  From here
+     * its disposition is the ordinary one for a reservation - the inheritance
+     * rules applied when the owning namespace ends. */
+    prte_remove_attribute(&jdata->attributes, PRTE_JOB_SPAWN_ALLOC_ID);
+
     /* notify the spawn requestor */
     rc = prte_plm_base_spawn_response(PRTE_SUCCESS, jdata);
     if (PRTE_SUCCESS != rc) {

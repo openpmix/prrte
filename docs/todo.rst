@@ -32,28 +32,6 @@ Runtime behavior
 surface exists for SLURM only.  Everything above the component is
 RM-agnostic; what is missing is the Flux-side conversation.
 
-**There is no way to put an allocation directive into a** ``PMIx_Spawn``
-**call.**  This was the second half of the activation item, which is now
-done: a programmatic requester asks for a daemon on a node it already holds
-with ``PMIX_ALLOC_ACTIVATE``, naming its nodes with ``PMIX_HOST`` and/or
-``PMIX_HOSTFILE``, and ``prte_ras_base_modify`` serves it through the same
-``prte_ras_base_activate_nodes`` the ``--activate`` command line resolves
-through.  What remains is more general than activation and is worth having
-on its own.  Today a caller that needs resources before it can launch has to
-issue ``PMIx_Allocation_request`` itself, wait for it, and then spawn - the
-library equivalent of running ``salloc`` before ``srun``.
-An attribute carrying an allocation request on the spawn would let the host
-do what ``srun`` does when invoked outside an allocation: obtain the
-allocation per the directive, wait for it to complete, and only then
-execute the spawn.  PRRTE already has the mechanism this needs - the
-add-host path marks the DVM not-ready, parks the job in ``prte_cache``, and
-lets the grow's ``VM_READY`` re-entry release it (``prte_ras_base_add_hosts``,
-``plm_base_receive.c``) - so what is missing is the attribute and the
-routing, not the machinery.  Getting the failure semantics right is the
-part that needs thought: an allocation request that is refused, or that
-times out, has to fail the spawn with something the caller can tell apart
-from a launch failure.
-
 **Mixed allocators are not supported, and would need more than the ``ras``
 framework.**  The motivating case is a cloud/local combination: an allocation
 from a scheduler plus a set of unmanaged nodes outside it.  The ``ras``

@@ -294,6 +294,54 @@ against the *tool's* cwd, because the HNP is the process that opens it.
 
 ---
 
+## An allocation a spawn brings with it
+
+`PMIX_SPAWN_ALLOC` puts an entire allocation request **on** a spawn: the
+value is an array of `pmix_info_t` beginning with the request's directive
+(`PMIX_ALLOC_REQ_DIRECTIVE`) and continuing with exactly the info a
+standalone `PMIx_Allocation_request` would have carried. The host obtains the
+allocation, waits for it, and only then launches — what a launcher does for
+itself when invoked outside an allocation, and what a caller otherwise has to
+write by hand as "request, wait, read the id, spawn with
+`PMIX_SPAWN_TARGET`".
+
+The request itself is nothing new: `prte_ras_base_spawn_alloc()` splits the
+array into its directive and its info and hands it to `prte_ras_base_modify`
+like any other, so it reaches the same modules with the same semantics. Four
+things about the *surroundings* are worth knowing.
+
+- **Who asks.** The requester is the process that asked for the spawn
+  (`PRTE_JOB_LAUNCH_PROXY`), not the job being spawned — that job has no
+  namespace yet, and an allocation must be owned by somebody who exists. It
+  also puts the reservation under the ordinary ownership rules, so the same
+  process can target and release it.
+- **Where the job waits.** The job is held by the *request* — not parked in
+  `prte_cache`, which is drained by whatever DVM-ready event comes next and
+  would launch it while its own allocation was still being obtained. Only
+  once the answer is in does `prte_plm_base_spawn_alloc_granted()` decide:
+  cache it if a grow is now in flight (`prte_ras_base_dvm_is_growing()`), or
+  launch it at once if nothing is coming to make the DVM ready again.
+- **Where the job runs.** A grant that names a session is resolved through
+  the same `resolve_spawn_targets()` a `PMIX_SPAWN_TARGET` goes through, so
+  the job maps onto what it was just given. Without that it would map onto
+  everything *except* those nodes — a reservation is withheld from general
+  use. A grant that names no session (ras/slurm's extend puts its nodes in
+  the general pool) needs no target and gets none.
+- **The two failures, kept apart.** A refused allocation fails the spawn with
+  `PMIX_ERR_JOB_ALLOC_FAILED` and launches nothing; a *malformed* request —
+  no directive, a value that is not an info array — is `PMIX_ERR_BAD_PARAM`,
+  because nothing was asked of any allocator. And a spawn that fails *after*
+  the grant hands the allocation back before its own error is delivered
+  (`prte_ras_base_release_spawn_alloc()`, driven from
+  `prte_plm_base_spawn_response`): a caller told its spawn failed is entitled
+  to conclude it is not holding resources for it, and nothing else would ever
+  release them — the job they were obtained for does not exist and never
+  will. `PRTE_JOB_SPAWN_ALLOC_ID` is what records that debt; it is dropped
+  once the job is running, from which point the allocation is the job's and
+  its disposition is the ordinary one for a reservation.
+
+---
+
 ## `prte_ras_base_allocate()` — the driver
 
 This state callback in `ras_base_allocate.c` is the heart of the
@@ -422,6 +470,8 @@ elastic-DVM or PMIx_Allocation code:
 | `prte_ras_base_modify()` | The `modify` driver (also a state callback). Cycles modules (keyed by `req->key`) to serve a `prte_pmix_server_req_t`; on `PMIX_SUCCESS` calls `prte_ras_base_complete_request`, then invokes the requester's `infocbfunc`. |
 | `prte_ras_base_add_hosts()` | Collect `PRTE_APP_ADD_HOSTFILE`/`PRTE_APP_ADD_HOST` directives across apps into a `PMIX_ALLOC_EXTEND` request and hand it to `prte_ras_base_modify`. Sets `prte_dvm_ready = false` until processed. |
 | `prte_ras_base_activate_hosts()` | Collect `PRTE_APP_ACTIVATE_HOSTS` directives across apps, resolve them against the node pool, mark the resolved entries `PRTE_NODE_STATE_ADDED` and activate a grow. Adds nothing to the allocation, so it is permitted under a scheduler; must run after `prte_ras_base_add_hosts()`. Sets `prte_dvm_ready = false` when it activates a grow of its own. |
+| `prte_ras_base_spawn_alloc()` | Serve the allocation request carried by a spawn (`PMIX_SPAWN_ALLOC`), in the name of the spawn's requester. Sets `*posted` when one is in flight - the request then holds the job, and the outcome arrives at `prte_plm_base_spawn_alloc_granted()`/`_failed()`. |
+| `prte_ras_base_release_spawn_alloc()` | Give back an allocation obtained for a job that then failed to launch, calling `prte_plm_base_spawn_alloc_released()` when it resolves so the spawn's own error can follow. |
 | `prte_ras_base_activate_nodes()` | Resolve one activation — a host specification, a hostfile, or both — against the node pool and mark the resolved entries `PRTE_NODE_STATE_ADDED`, reporting how many entries that changed. Shared by `--activate` and `PMIX_ALLOC_ACTIVATE`. Resolves and marks only: activating the grow is the caller's. |
 | `prte_ras_base_complete_request()` | The heavy reservation router. For `PMIX_ALLOC_NEW`/`EXTEND` it resolves the destination `prte_session_t` (honoring `PMIX_ALLOC_TARGET`/`SHARE`/`INHERITANCE`/`ID`/`REQ_ID`), parses `PMIX_ALLOC_NODE_LIST`, inserts the nodes, and attaches them to the reservation (`add_nodes_to_session`). For `PMIX_ALLOC_RELEASE` it tears down a named reservation or xcasts a `PRTE_DAEMON_SHRINK_CMD`. Marks `PRTE_JOB_EXTEND_DVM` and re-launches daemons for grows. |
 | `prte_ras_base_release_allocation()` | Session-destruct hook: cycles modules whose `release_allocation` matches `session->alloc_module`. |

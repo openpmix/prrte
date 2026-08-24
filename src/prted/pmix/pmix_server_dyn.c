@@ -317,6 +317,25 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
             }
 #endif
 
+#if defined(PMIX_SPAWN_ALLOC)
+            /***   ALLOCATION TO OBTAIN FIRST   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_ALLOC)) {
+            /* An entire allocation request, to be served before this job is
+             * launched. It is carried through to the HNP unexamined - the HNP
+             * is where ras lives, and the only thing to be decided here is
+             * that the value is the shape the attribute calls for. Stored
+             * GLOBAL so the generic job-attribute pack loop forwards it. */
+            if (PMIX_DATA_ARRAY != info->value.type ||
+                NULL == info->value.data.darray ||
+                PMIX_INFO != info->value.data.darray->type ||
+                0 == info->value.data.darray->size) {
+                return PRTE_ERR_BAD_PARAM;
+            }
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_SPAWN_ALLOC,
+                               PRTE_ATTR_GLOBAL, info->value.data.darray,
+                               PMIX_DATA_ARRAY);
+#endif
+
             /***   DISPLAY MAP   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_MAP)) {
             flag = PMIX_INFO_TRUE(info);
