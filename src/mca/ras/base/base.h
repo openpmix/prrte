@@ -153,6 +153,23 @@ PRTE_EXPORT int prte_ras_base_add_hosts(prte_job_t *jdata);
  * of its own. */
 PRTE_EXPORT int prte_ras_base_activate_hosts(prte_job_t *jdata);
 
+/* Resolve an activation request - a host specification, a hostfile, or both -
+ * against the node pool and mark the resolved entries PRTE_NODE_STATE_ADDED,
+ * reporting in nactivated how many entries that changed (zero meaning every
+ * named node is already in the DVM or already on its way in, so there is
+ * nothing to launch).  Either argument may be NULL, but not both; the
+ * hostfile argument may name several files, comma-delimited.  The host
+ * specification is "--host" syntax, including the "file=<path>" form, and is
+ * parsed by the same code that parses "--activate".
+ *
+ * This resolves and marks only: activating the grow is the caller's, since
+ * only the caller knows whether another request is already about to launch
+ * one.  Refusals are reported through show_help and returned as
+ * PRTE_ERR_SILENT. */
+PRTE_EXPORT int prte_ras_base_activate_nodes(const char *hosts,
+                                             const char *hostfile,
+                                             int *nactivated);
+
 /* Render the node specification carried by a PMIX_ALLOC_NODE_LIST-style info
  * (a string, a regex, or a regex2) into a comma-delimited node-name string the
  * caller must free. Returns PMIX_ERR_BAD_PARAM for any other value type. */
