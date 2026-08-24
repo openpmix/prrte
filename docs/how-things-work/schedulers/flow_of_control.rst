@@ -20,9 +20,24 @@ via the ``PMIx_Session_control`` API - i.e., the RM cannot guarantee
 its ability to intercept and process an allocation response to learn
 of a session that needs to be instantiated.
 
-PRRTE's role in the ``PMIx_Allocation_request`` flow is simply to
+PRRTE's role in the ``PMIx_Allocation_request`` flow is generally to
 pass the request on to the scheduler, and transport the reply back
 to the requestor.
+
+``PMIX_ALLOC_ACTIVATE`` is the exception: PRRTE answers it itself,
+without involving any resource manager. It asks for a daemon on nodes
+the requestor **already holds** - an allocated node the DVM is not
+spanning, because a ``--host``/``--hostfile`` given at startup narrowed
+which nodes got one, or because a released reservation handed it back
+without one. Nothing is added to the allocation and no slot count
+changes, so there is nothing to ask a scheduler for and nothing a
+scheduler could refuse; for the same reason the request is served even
+where the scheduler owns the allocation, which is where a request for
+new resources cannot be. The nodes are named with ``PMIX_HOST`` and/or
+``PMIX_HOSTFILE``, in the same syntax the ``--activate`` command line
+option takes, and the request is answered when it is granted - the
+daemons themselves are reported by the ``PMIX_DVM_IS_READY`` event that
+completes any DVM size change.
 
 PRRTE only creates a session object as a result of a call from the
 scheduler via ``PMIx_Session_control``. What it does with each directive
