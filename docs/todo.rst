@@ -122,6 +122,32 @@ mechanism, scoped to a signature and driven by releases rather than by
 failures.  That is a wire change plus a memo that holds a counter, and it
 needs the dockerswarm harness to validate, so it has not been attempted.
 
+**A connected job's teardown costs one DVM-wide broadcast per process.**
+`PMIx_Connect` obliges the host to tell an assemblage about every member
+that leaves without disconnecting first, and PRRTE keeps that promise in
+``notify_assemblage()`` (``src/prted/pmix/pmix_server_connect.c``): one
+``PMIX_ERR_PROC_TERM_WO_SYNC`` per departing proc, each broadcast to every
+daemon in the DVM with a ``PMIX_EVENT_CUSTOM_RANGE`` naming the membership,
+so that PMIx delivers it to exactly the members that registered for it.
+
+Running to completion is not a disconnect, and a spawned child is connected
+to its parent by default, so an ``MPI_Comm_spawn``ed job of N ranks ends by
+issuing N broadcasts across the whole DVM.  Nothing pays for this unless an
+assemblage exists — the registry is empty in the ordinary case and the check
+is the first thing every one of those entry points makes — but where one
+does exist the cost grows with the product of the job size and the DVM.
+
+Coalescing them is not simply an optimization to write.  The event is per
+proc by definition: a member is entitled to know *which* peer went, and the
+exit code travels with it.  A batched event would have to carry a list and
+every consumer would have to learn to read one, which is a PMIx interface
+question rather than a PRRTE one.  What could be done here without touching
+the definition is to stop broadcasting: the membership is held on the master
+and the daemons hosting those members are derivable from it, so the
+notification could be sent to those daemons rather than xcast to all of
+them.  That trades a broadcast for a proc-to-daemon walk on the master, and
+it needs the dockerswarm harness to show it delivers the same events.
+
 **A job cannot ask for a transport.**  The network allocation request the
 odls builds for each job names ``<nspace>.net`` and a security key and
 otherwise takes whatever transport the resource manager offers by default
