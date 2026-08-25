@@ -1738,6 +1738,147 @@ static int test_group_left(void)
     return failures;
 }
 
+/*
+ * A PMIx_Query_info's qualifiers reach the host exactly as the requesting
+ * process wrote them: PMIx forwards the array without inspecting what any
+ * entry holds.  Six of the ones _query() acts on are strings it goes on to
+ * hand to strlen(), strcmp() or PMIx_Check_nspace(), so a qualifier carrying
+ * a value of some other type gave those functions whatever eight bytes the
+ * caller chose as a pointer - which any process or tool attached to any
+ * daemon could send.
+ *
+ * The query is driven through the real upcall rather than through the shifted
+ * handler, because the upcall is what a client reaches and because the answer
+ * this pins is the one the client is given: a malformed qualifier is
+ * PMIX_ERR_BAD_PARAM, not a fault and not the PMIX_ERR_NOT_FOUND that the
+ * status decision at the end of the handler used to overwrite it with.
+ */
+static pmix_status_t qstatus;
+static bool qdone;
+
+static void query_cbfunc(pmix_status_t status, pmix_info_t *info, size_t ninfo,
+                         void *cbdata, pmix_release_cbfunc_t release_fn, void *release_cbdata)
+{
+    PRTE_HIDE_UNUSED_PARAMS(info, ninfo, cbdata);
+    qstatus = status;
+    qdone = true;
+    if (NULL != release_fn) {
+        release_fn(release_cbdata);
+    }
+}
+
+static pmix_status_t run_query(pmix_query_t *q)
+{
+    pmix_proc_t requestor;
+    pmix_status_t rc;
+    int spins = 0;
+
+    PMIX_LOAD_PROCID(&requestor, "unit-test-query", 0);
+    qstatus = PMIX_SUCCESS;
+    qdone = false;
+    rc = pmix_server_query_fn(&requestor, q, 1, query_cbfunc, NULL);
+    if (PMIX_SUCCESS != rc) {
+        return rc;
+    }
+    /* the upcall posts to the event base and this thread is the one that
+     * drives it, so turn it until the handler has answered */
+    while (!qdone && spins < 1000) {
+        prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE | PRTE_EVLOOP_NONBLOCK);
+        ++spins;
+    }
+    if (!qdone) {
+        return PMIX_ERR_TIMEOUT;
+    }
+    return qstatus;
+}
+
+static int test_query_qualifiers(void)
+{
+    int failures = 0;
+    pmix_query_t q;
+    size_t bogus = 0x41;    /* a fatal pointer and a perfectly good size */
+    bool made_array = false;
+    prte_job_t *jdata = NULL;
+
+    if (NULL == prte_job_data) {
+        prte_job_data = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_job_data, 8, INT32_MAX, 8);
+        made_array = true;
+    }
+    /* the namespace qualifier is checked against the jobs we know about */
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, "unit-test-query@1");
+    if (PRTE_SUCCESS != prte_set_job_data_object(jdata)) {
+        fprintf(stderr, "FAIL [test_query_qualifiers]: could not register a job\n");
+        PMIX_RELEASE(jdata);
+        return 1;
+    }
+
+    /* a mistyped qualifier is refused, not read */
+    PMIX_QUERY_CONSTRUCT(&q);
+    PMIx_Argv_append_nosize(&q.keys, PMIX_QUERY_NAMESPACES);
+    PMIX_INFO_CREATE(q.qualifiers, 1);
+    q.nqual = 1;
+    PMIX_INFO_LOAD(&q.qualifiers[0], PMIX_HOSTNAME, &bogus, PMIX_SIZE);
+    CHECK("a mistyped hostname qualifier is refused", PMIX_ERR_BAD_PARAM == run_query(&q));
+    PMIX_QUERY_DESTRUCT(&q);
+
+    PMIX_QUERY_CONSTRUCT(&q);
+    PMIx_Argv_append_nosize(&q.keys, PMIX_QUERY_NAMESPACES);
+    PMIX_INFO_CREATE(q.qualifiers, 1);
+    q.nqual = 1;
+    PMIX_INFO_LOAD(&q.qualifiers[0], PMIX_NSPACE, &bogus, PMIX_SIZE);
+    CHECK("a mistyped nspace qualifier is refused", PMIX_ERR_BAD_PARAM == run_query(&q));
+    PMIX_QUERY_DESTRUCT(&q);
+
+    PMIX_QUERY_CONSTRUCT(&q);
+    PMIx_Argv_append_nosize(&q.keys, PMIX_QUERY_NAMESPACES);
+    PMIX_INFO_CREATE(q.qualifiers, 1);
+    q.nqual = 1;
+    PMIX_INFO_LOAD(&q.qualifiers[0], PMIX_ALLOC_ID, &bogus, PMIX_SIZE);
+    CHECK("a mistyped allocation id qualifier is refused", PMIX_ERR_BAD_PARAM == run_query(&q));
+    PMIX_QUERY_DESTRUCT(&q);
+
+    /* a numeric qualifier that is not a number is refused too - it used to
+     * leave the id at its "not given" sentinel and be silently ignored */
+    PMIX_QUERY_CONSTRUCT(&q);
+    PMIx_Argv_append_nosize(&q.keys, PMIX_QUERY_NAMESPACES);
+    PMIX_INFO_CREATE(q.qualifiers, 1);
+    q.nqual = 1;
+    PMIX_INFO_LOAD(&q.qualifiers[0], PMIX_NODEID, "not-a-number", PMIX_STRING);
+    CHECK("a non-numeric nodeid qualifier is refused", PMIX_ERR_BAD_PARAM == run_query(&q));
+    PMIX_QUERY_DESTRUCT(&q);
+
+    /* an unknown namespace is a bad parameter and stays one: the status
+     * decision at the end used to replace any error but NOT_SUPPORTED with
+     * NOT_FOUND, because a failed arm leaves an empty result list behind */
+    PMIX_QUERY_CONSTRUCT(&q);
+    PMIx_Argv_append_nosize(&q.keys, PMIX_QUERY_NAMESPACES);
+    PMIX_INFO_CREATE(q.qualifiers, 1);
+    q.nqual = 1;
+    PMIX_INFO_LOAD(&q.qualifiers[0], PMIX_NSPACE, "unit-test-query@nope", PMIX_STRING);
+    CHECK("an unknown namespace is reported as such", PMIX_ERR_BAD_PARAM == run_query(&q));
+    PMIX_QUERY_DESTRUCT(&q);
+
+    /* ...and a key this DVM does not implement still says so */
+    PMIX_QUERY_CONSTRUCT(&q);
+    PMIx_Argv_append_nosize(&q.keys, "prte.unit.test.no.such.key");
+    CHECK("an unrecognized key is not supported", PMIX_ERR_NOT_SUPPORTED == run_query(&q));
+    PMIX_QUERY_DESTRUCT(&q);
+
+    pmix_pointer_array_set_item(prte_job_data, jdata->index, NULL);
+    PMIX_RELEASE(jdata);
+    if (made_array) {
+        PMIX_RELEASE(prte_job_data);
+        prte_job_data = NULL;
+    }
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_query_qualifiers\n");
+    }
+    return failures;
+}
+
 static int test_connections(void)
 {
     int failures = 0;
@@ -1927,6 +2068,7 @@ int main(void)
     failures += test_departed_jobs();
     failures += test_monitor_accounting();
     failures += test_connections();
+    failures += test_query_qualifiers();
     failures += test_group_left();
     failures += test_prefix_normalization();
     failures += test_singleton_id();

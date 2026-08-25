@@ -1205,23 +1205,24 @@ done:
         ret = rc;
     }
     PMIX_INFO_LIST_RELEASE(results);
-    if (PMIX_ERR_NOT_SUPPORTED != ret) {
-        if (PMIX_ERR_EMPTY == rc) {
+    /* only decide the status here if no arm has already decided it.  An error
+     * an arm set is what actually happened - a malformed qualifier, a job we
+     * do not know - and reporting "not found" in its place tells the caller
+     * the DVM looked.  PMIX_ERR_NOT_SUPPORTED used to be the one error
+     * protected from this, which is how the shape of it is visible: every
+     * other error an arm could set was being thrown away with an empty
+     * result list, which is exactly what an arm that failed leaves behind */
+    if (PMIX_SUCCESS == ret) {
+        if (PMIX_ERR_EMPTY == rc || 0 == dry.size) {
             ret = PMIX_ERR_NOT_FOUND;
-        } else if (PMIX_SUCCESS == ret) {
-            if (0 == dry.size) {
-                ret = PMIX_ERR_NOT_FOUND;
-            } else if (dry.size < nkeys) {
-                /* against cd->ninfo, which a query caddy never sets, this
-                 * compared with zero and PMIX_QUERY_PARTIAL_SUCCESS could not
-                 * be reached.  The count that means something here is the
-                 * number of keys that were asked for: fewer results than that
-                 * is what partial success is for, and a caller has no other
-                 * way to learn that one of its keys went unanswered */
-                ret = PMIX_QUERY_PARTIAL_SUCCESS;
-            } else {
-                ret = PMIX_SUCCESS;
-            }
+        } else if (dry.size < nkeys) {
+            /* against cd->ninfo, which a query caddy never sets, this compared
+             * with zero and PMIX_QUERY_PARTIAL_SUCCESS could not be reached.
+             * The count that means something here is the number of keys that
+             * were asked for: fewer results than that is what partial success
+             * is for, and a caller has no other way to learn that one of its
+             * keys went unanswered */
+            ret = PMIX_QUERY_PARTIAL_SUCCESS;
         }
     }
     rcd->ninfo = dry.size;
