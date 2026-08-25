@@ -329,6 +329,26 @@ bearing:
 - **A refresh must not be answered from here.** `PMIX_GET_REFRESH_CACHE` is
   the caller saying our copy may be stale, which is exactly when we must
   go and ask.
+- **`dmodex_req()` calls `PMIx_Get` on the PRRTE progress thread, and that
+  is safe for one reason only.** It is the blocking form, and it blocks the
+  caller until the *PMIx* progress thread answers — so the question is
+  whether that answer can require anything of the thread now waiting.  It
+  cannot, because `get_data()` refuses outright for a peer that is a server
+  and not a tool (`PMIx_ERR_NOT_FOUND` rather than a request parked pending
+  a commit), and a daemon's `pmix_globals.mypeer` stays server-only:
+  `PMIx_tool_attach_to_server()` builds a peer for the server it attached to
+  and never restamps ours, so even the master with a scheduler attached does
+  not take the tool branch.  What is left is a local datastore lookup on the
+  other thread.  Two things would break that: making our own peer a tool,
+  and letting a `PMIX_GET_REFRESH_CACHE` through — the refresh runs *ahead*
+  of the server check inside `PMIx_Get`, which is why the call here is
+  guarded by `!refresh_cache` and not merely skipped as an optimization.
+- **`PMIX_REQUIRED_KEY` never arrives with a NULL string**, so the `strdup`
+  of it is not the crash it looks like: PMIx loads that key under
+  `if (NULL != key)`, and the only other producer
+  (`pmix_pending_nspace_requests`) hands up the array the first one built.
+  A NULL key reaches us as no `PMIX_REQUIRED_KEY` at all, which is why
+  `prte_pmix_server_derivable_key()` takes NULL and answers false.
 - **A `PMIx_Get`'s `PMIX_TIMEOUT` reaches us, and we are the only one who
   honors it.** PMIx arms no timer on a host request — deliberately, so as
   not to race a host that also supports one — but it does hand the caller's
