@@ -106,6 +106,14 @@ void pmix_server_launch_resp(int status, pmix_proc_t *sender,
     pmix_nspace_t jobid;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
 
+    /* we deliberately continue past a failed unpack below so that the room
+     * number still has a chance of being read - which means the nspace may
+     * never be written.  Give it a defined value first: pmix_server_notify_spawn
+     * hands it straight to prte_get_job_data_object(), which reads it as a
+     * NUL-terminated string, and an unwritten pmix_nspace_t is 256 bytes of
+     * whatever the stack last held */
+    PMIX_LOAD_NSPACE(jobid, NULL);
+
     /* unpack the status - this is already a PMIx value */
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &ret, &cnt, PMIX_INT32);
@@ -143,6 +151,10 @@ static void spawn(int sd, short args, void *cbdata)
     pmix_data_buffer_t *buf;
     prte_plm_cmd_flag_t command;
     char nspace[PMIX_MAX_NSLEN + 1];
+    /* the packers answer in PMIx statuses and prte_job_pack and the RML in
+     * PRRTE ones.  They are separate spaces that agree only on success, so
+     * keep them in separate variables: the callback below converts, and it
+     * can only convert what is already known to be a PRRTE code */
     pmix_status_t prc;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
@@ -159,18 +171,19 @@ static void spawn(int sd, short args, void *cbdata)
     PMIX_DATA_BUFFER_CREATE(buf);
 
     command = PRTE_PLM_LAUNCH_JOB_CMD;
-    rc = PMIx_Data_pack(NULL, buf, &command, 1, PMIX_UINT8);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
+    prc = PMIx_Data_pack(NULL, buf, &command, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS != prc) {
+        PMIX_ERROR_LOG(prc);
+        rc = prte_pmix_convert_status(prc);
         PMIX_DATA_BUFFER_RELEASE(buf);
         pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
         goto callback;
     }
 
-    /* pack the jdata object */
+    /* pack the jdata object - answers in PRRTE codes */
     rc = prte_job_pack(buf, req->jdata, PRTE_JOB_PACK_ALL);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
         pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
@@ -220,6 +233,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
     int i, m, rc;
     bool flag;
     uint32_t u32;
+    int32_t i32;
     uint16_t u16;
     prte_job_t *djob;
     prte_app_context_t *app;
@@ -411,13 +425,21 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
 
             /***   NUMBER OF PROCS TO SPAWN AT EACH COLOCATION  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_COLOCATE_NPERPROC)) {
+            PMIX_VALUE_GET_NUMBER(rc, &info->value, u16, uint16_t);
+            if (PMIX_SUCCESS != rc) {
+                return PRTE_ERR_BAD_PARAM;
+            }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_NPERPROC,
-                               PRTE_ATTR_GLOBAL, &info->value.data.uint16, PMIX_UINT16);
+                               PRTE_ATTR_GLOBAL, &u16, PMIX_UINT16);
 
             /***   NUMBER OF PROCS TO SPAWN AT EACH COLOCATION  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_COLOCATE_NPERNODE)) {
+            PMIX_VALUE_GET_NUMBER(rc, &info->value, u16, uint16_t);
+            if (PMIX_SUCCESS != rc) {
+                return PRTE_ERR_BAD_PARAM;
+            }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_NPERNODE,
-                               PRTE_ATTR_GLOBAL, &info->value.data.uint16, PMIX_UINT16);
+                               PRTE_ATTR_GLOBAL, &u16, PMIX_UINT16);
 
             /***   RANK-BY   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_RANKBY)) {
@@ -499,13 +521,17 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
 
             /***   MAX RESTARTS  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_MAX_RESTARTS)) {
+            PMIX_VALUE_GET_NUMBER(rc, &info->value, i32, int32_t);
+            if (PMIX_SUCCESS != rc) {
+                return PRTE_ERR_BAD_PARAM;
+            }
             for (i = 0; i < jdata->apps->size; i++) {
                 app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i);
                 if (NULL == app) {
                     continue;
                 }
                 prte_set_attribute(&app->attributes, PRTE_APP_MAX_RESTARTS, PRTE_ATTR_GLOBAL,
-                                   &info->value.data.uint32, PMIX_INT32);
+                                   &i32, PMIX_INT32);
             }
 
            /*** EXEC AGENT ***/
@@ -532,7 +558,10 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
 
             /***   CPUS/RANK   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_CPUS_PER_PROC)) {
-            u16 = info->value.data.uint32;
+            PMIX_VALUE_GET_NUMBER(rc, &info->value, u16, uint16_t);
+            if (PMIX_SUCCESS != rc) {
+                return PRTE_ERR_BAD_PARAM;
+            }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC,
                                PRTE_ATTR_GLOBAL, &u16, PMIX_UINT16);
 
@@ -570,6 +599,9 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
                                PMIX_BOOL);
 
         } else if (PMIX_CHECK_KEY(info, PMIX_PARENT_ID)) {
+            if (NULL == info->value.data.proc) {
+                return PRTE_ERR_BAD_PARAM;
+            }
             PMIX_XFER_PROCID(&jdata->originator, info->value.data.proc);
 
             /***   SPAWN REQUESTOR IS TOOL   ***/
@@ -665,6 +697,9 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
 
             /***   STDIN TARGET   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_STDIN_TGT)) {
+            if (NULL == info->value.data.string) {
+                return PRTE_ERR_BAD_PARAM;
+            }
             if (0 == strcmp(info->value.data.string, "all")) {
                 jdata->stdin_target = PMIX_RANK_WILDCARD;
             } else if (0 == strcmp(info->value.data.string, "none")) {
@@ -691,15 +726,23 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
 
             /***   NUMBER OF DEBUGGER_DAEMONS PER NODE   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_DAEMONS_PER_NODE)) {
+            PMIX_VALUE_GET_NUMBER(rc, &info->value, u16, uint16_t);
+            if (PMIX_SUCCESS != rc) {
+                return PRTE_ERR_BAD_PARAM;
+            }
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_NODE,
-                               PRTE_ATTR_GLOBAL, &info->value.data.uint16, PMIX_UINT16);
+                               PRTE_ATTR_GLOBAL, &u16, PMIX_UINT16);
 
             /***   NUMBER OF DEBUGGER_DAEMONS PER PROC   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_DAEMONS_PER_PROC)) {
+            PMIX_VALUE_GET_NUMBER(rc, &info->value, u16, uint16_t);
+            if (PMIX_SUCCESS != rc) {
+                return PRTE_ERR_BAD_PARAM;
+            }
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_PROC,
-                               PRTE_ATTR_GLOBAL, &info->value.data.uint16, PMIX_UINT16);
+                               PRTE_ATTR_GLOBAL, &u16, PMIX_UINT16);
 
         } else if (PMIX_CHECK_KEY(info, PMIX_ENVARS_HARVESTED)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_ENVARS_HARVESTED,
@@ -742,6 +785,13 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TIMEOUT) ||
                    PMIX_CHECK_KEY(info, PMIX_TIMEOUT)) {
             if (PMIX_STRING == info->value.type) {
+                /* PMIX_CONVERT_TIME indexes the split it makes without
+                 * checking that there was anything to split, so a NULL
+                 * string - which PMIX_INFO_LOAD produces for a PMIX_STRING
+                 * loaded with no value - faults inside it */
+                if (NULL == info->value.data.string) {
+                    return PRTE_ERR_BAD_PARAM;
+                }
                 rc = PMIX_CONVERT_TIME(info->value.data.string);
             } else {
                 PMIX_VALUE_GET_NUMBER(i, &info->value, rc, int);
@@ -754,6 +804,13 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
 
         } else if (PMIX_CHECK_KEY(info, PMIX_JOB_TIMEOUT)) {
             if (PMIX_STRING == info->value.type) {
+                /* PMIX_CONVERT_TIME indexes the split it makes without
+                 * checking that there was anything to split, so a NULL
+                 * string - which PMIX_INFO_LOAD produces for a PMIX_STRING
+                 * loaded with no value - faults inside it */
+                if (NULL == info->value.data.string) {
+                    return PRTE_ERR_BAD_PARAM;
+                }
                 rc = PMIX_CONVERT_TIME(info->value.data.string);
             } else {
                 PMIX_VALUE_GET_NUMBER(i, &info->value, rc, int);
@@ -809,6 +866,7 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
     pmix_info_t *info;
     size_t m;
     int rc;
+    pmix_status_t prc;
     bool flag;
     pmix_envar_t envar;
     char cwd[PRTE_PATH_MAX];
@@ -865,12 +923,27 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                                        info->value.data.string, PMIX_STRING);
 
             } else if (PMIX_CHECK_KEY(info, PMIX_WDIR)) {
+                if (NULL == info->value.data.string) {
+                    return PRTE_ERR_BAD_PARAM;
+                }
+                /* papp->cwd may already have given us one, and this directive
+                 * overrides it - so let go of the old value rather than
+                 * stranding it */
+                if (NULL != app->cwd) {
+                    free(app->cwd);
+                    app->cwd = NULL;
+                }
                 /* if this is a relative path, convert it to an absolute path */
                 if (pmix_path_is_absolute(info->value.data.string)) {
                     app->cwd = strdup(info->value.data.string);
                 } else {
-                    /* get the cwd */
-                    if (PRTE_SUCCESS != (rc = pmix_getcwd(cwd, sizeof(cwd)))) {
+                    /* get the cwd.  pmix_getcwd answers in PMIx statuses and
+                     * we answer in PRRTE codes, so convert rather than hand
+                     * our caller a code from the wrong space - it converts
+                     * what we return on the way back out to the client */
+                    prc = pmix_getcwd(cwd, sizeof(cwd));
+                    if (PMIX_SUCCESS != prc) {
+                        rc = prte_pmix_convert_status(prc);
                         prte_show_help("help-prted.txt", "cwd", true, "spawn", rc);
                         /* jdata belongs to our caller - it constructed it and
                          * will dispose of it on our error return.  Releasing
@@ -1089,6 +1162,8 @@ static void interim(int sd, short args, void *cbdata)
     prte_schizo_base_module_t *schizo;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
+    PMIX_ACQUIRE_OBJECT(cd);
+
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s spawn called from proc %s with %d apps",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(requestor),
@@ -1227,9 +1302,9 @@ complete:
     PMIX_RELEASE(cd);
 }
 
-int pmix_server_spawn_fn(const pmix_proc_t *proc, const pmix_info_t job_info[], size_t ninfo,
-                         const pmix_app_t apps[], size_t napps, pmix_spawn_cbfunc_t cbfunc,
-                         void *cbdata)
+pmix_status_t pmix_server_spawn_fn(const pmix_proc_t *proc, const pmix_info_t job_info[],
+                                   size_t ninfo, const pmix_app_t apps[], size_t napps,
+                                   pmix_spawn_cbfunc_t cbfunc, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd;
 
@@ -1248,7 +1323,7 @@ int pmix_server_spawn_fn(const pmix_proc_t *proc, const pmix_info_t job_info[], 
     prte_event_set(prte_event_base, &cd->ev, -1, PRTE_EV_WRITE, interim, cd);
     PMIX_POST_OBJECT(cd);
     prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
-    return PRTE_SUCCESS;
+    return PMIX_SUCCESS;
 }
 
 // modex callback func for connect
@@ -1264,7 +1339,7 @@ static void connect_release(pmix_status_t status,
     pmix_proc_t *procID;
     pmix_nspace_t *nspace;
     pmix_status_t rc;
-    int cnt;
+    int32_t cnt;
 
     PMIX_ACQUIRE_OBJECT(md);
 
@@ -1278,9 +1353,12 @@ static void connect_release(pmix_status_t status,
         /* prep for unpacking */
         bo.bytes = (char*)data;
         bo.size = sz;
+        /* PMIx_Data_embed COPIES the payload into pbkt, so pbkt owns heap of
+         * its own from here on and every exit below has to destruct it */
         PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
         rc = PMIx_Data_embed(&pbkt, &bo);
         if (PMIX_SUCCESS != rc) {
+            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             goto release;
         }
         // the payload consists of packed info containing
@@ -1321,6 +1399,7 @@ static void connect_release(pmix_status_t status,
         } else {
             rc = PMIX_SUCCESS;
         }
+        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
     }
 
 release:

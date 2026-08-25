@@ -319,6 +319,45 @@ static int test_xfer_job_info(void)
     CHECK("xfer/empty", PRTE_SUCCESS == prte_pmix_xfer_job_info(jdata, NULL, 0));
     PMIX_RELEASE(jdata);
 
+    /* A directive whose value is a PMIX_STRING carrying no string is what
+     * PMIX_INFO_LOAD produces from a NULL - an ordinary thing for an
+     * application to hand PMIx_Spawn, and something PMIx itself treats as
+     * legal.  The branches that parse such a value rather than pass it on
+     * to a NULL-tolerant callee used to dereference it, so a client could
+     * segfault the daemon it was attached to with one spawn request.  Each
+     * of these must come back as a refusal, and must come back at all. */
+    jdata = fresh_job();
+    PMIX_INFO_LOAD(&info[0], PMIX_STDIN_TGT, NULL, PMIX_STRING);
+    CHECK("xfer/null-stdin-tgt", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, info, 1));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_RELEASE(jdata);
+
+    jdata = fresh_job();
+    PMIX_INFO_LOAD(&info[0], PMIX_SPAWN_TIMEOUT, NULL, PMIX_STRING);
+    CHECK("xfer/null-spawn-timeout", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, info, 1));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_RELEASE(jdata);
+
+    jdata = fresh_job();
+    PMIX_INFO_LOAD(&info[0], PMIX_JOB_TIMEOUT, NULL, PMIX_STRING);
+    CHECK("xfer/null-job-timeout", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, info, 1));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_RELEASE(jdata);
+
+    jdata = fresh_job();
+    PMIX_INFO_LOAD(&info[0], PMIX_PARENT_ID, NULL, PMIX_PROC);
+    CHECK("xfer/null-parent-id", PRTE_SUCCESS != prte_pmix_xfer_job_info(jdata, info, 1));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_RELEASE(jdata);
+
+    /* ...and a key whose value we only ever hand onward stays a no-op: the
+     * guard above must not have turned every empty value into a refusal */
+    jdata = fresh_job();
+    PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_ID, NULL, PMIX_STRING);
+    CHECK("xfer/null-passthrough", PRTE_SUCCESS == prte_pmix_xfer_job_info(jdata, info, 1));
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_RELEASE(jdata);
+
     return failures;
 }
 
@@ -394,6 +433,35 @@ static int test_xfer_app(void)
     app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 1);
     CHECK("app/multi-idx", NULL != app && 1 == app->idx);
     CHECK("app/multi-cmd", NULL != app && 0 == strcmp(app->app, "b"));
+    PMIX_APP_DESTRUCT(&papp);
+    PMIX_RELEASE(jdata);
+
+    /* PMIX_WDIR overrides whatever pmix_app_t.cwd already gave us, so the
+     * earlier value has to be let go rather than stranded - and a WDIR
+     * carrying no string at all must be refused rather than dereferenced */
+    jdata = fresh_job();
+    PMIX_APP_CONSTRUCT(&papp);
+    papp.cmd = strdup("c");
+    papp.cwd = strdup("/tmp");
+    papp.maxprocs = 1;
+    PMIX_INFO_CREATE(papp.info, 1);
+    papp.ninfo = 1;
+    PMIX_INFO_LOAD(&papp.info[0], PMIX_WDIR, "/usr", PMIX_STRING);
+    CHECK("app/wdir-rc", PRTE_SUCCESS == prte_pmix_xfer_app(jdata, &papp));
+    app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0);
+    CHECK("app/wdir-override", NULL != app && NULL != app->cwd
+                               && 0 == strcmp(app->cwd, "/usr"));
+    PMIX_APP_DESTRUCT(&papp);
+    PMIX_RELEASE(jdata);
+
+    jdata = fresh_job();
+    PMIX_APP_CONSTRUCT(&papp);
+    papp.cmd = strdup("d");
+    papp.maxprocs = 1;
+    PMIX_INFO_CREATE(papp.info, 1);
+    papp.ninfo = 1;
+    PMIX_INFO_LOAD(&papp.info[0], PMIX_WDIR, NULL, PMIX_STRING);
+    CHECK("app/wdir-null", PRTE_SUCCESS != prte_pmix_xfer_app(jdata, &papp));
     PMIX_APP_DESTRUCT(&papp);
     PMIX_RELEASE(jdata);
 
