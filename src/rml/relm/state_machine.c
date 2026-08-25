@@ -266,7 +266,12 @@ int prte_relm_start_msg(
          * unload above may already have emptied it. Releasing an emptied
          * buffer is what the caller then does, and it is harmless. */
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-        return ret;
+        /* ret is one of the packers' PMIx statuses and this function answers
+         * in PRRTE codes - the header says so, and every other way out of it
+         * does.  Its callers convert what they get with prte_pmix_convert_rc,
+         * so an unconverted PMIx status was converted a second time and the
+         * client behind the send was told something unrelated. */
+        return prte_pmix_convert_status(ret);
     }
     /* We took ownership of "buf" by succeeding, and the unload above moved
      * its payload out into "data" - but that leaves the container itself,
@@ -280,7 +285,7 @@ int prte_relm_start_msg(
     msg_cd->data = data;
     PRTE_PMIX_THREADSHIFT(msg_cd, prte_event_base, prte_relm_start_msg_cb);
 
-    return PMIX_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 void prte_relm_release_msg(prte_relm_msg_t* msg){
