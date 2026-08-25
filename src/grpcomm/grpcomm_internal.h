@@ -282,8 +282,6 @@ PMIX_CLASS_DECLARATION(prte_grpcomm_group_t);
 typedef struct {
     pmix_object_t super;
     prte_event_t ev;
-    prte_grpcomm_fence_signature_t *sig;
-    pmix_data_buffer_t *buf;
     pmix_proc_t *procs;
     size_t nprocs;
     pmix_info_t *info;

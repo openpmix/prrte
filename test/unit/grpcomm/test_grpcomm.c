@@ -204,8 +204,6 @@ static int test_classes(void)
 
     /* fence caddy: all borrowed pointers NULL, sizes zero */
     prte_pmix_fence_caddy_t *fcd = PMIX_NEW(prte_pmix_fence_caddy_t);
-    CHECK("fence caddy sig NULL", NULL == fcd->sig);
-    CHECK("fence caddy buf NULL", NULL == fcd->buf);
     CHECK("fence caddy procs NULL", NULL == fcd->procs);
     CHECK("fence caddy nprocs 0", 0 == fcd->nprocs);
     CHECK("fence caddy data NULL", NULL == fcd->data);
