@@ -1992,6 +1992,38 @@ test_runtime() {
         echo "$out" | grep -q 'STATUS PMIX_SUCCESS' \
             && ok "...and a later job could publish that key again" \
             || bad "a reclaimed key could not be republished: $(echo "$out" | grep '^STATUS' | tr -d '\r')"
+
+        banner "runtime/data_server: LOCAL-range data is reclaimed from the daemon holding it"
+        # THE case that only exists with more than one node.  A LOCAL-range
+        # publish never reaches the HNP: pmix_server_pub.c routes it to
+        # PRTE_PROC_MY_NAME, and every daemon runs prte_data_server_init(),
+        # so the item lives in node2's OWN store.  The termination purge
+        # went only to the global store, which left local-range data
+        # unreclaimed -- and a single host cannot show that, because there
+        # "my store" and "the HNP's store" are the same object.
+        #
+        # Both keys are published by jobs that then end, and both are read
+        # back from node2, since node2's store is the only place a
+        # LOCAL-range lookup from node2 is routed to.
+        out=$(PRUN "--host node2:1 -n 1 $DS persist prte.test.loc.drop dropped app 0 local" 2>&1)
+        echo "$out" | grep -q '^PUBLISHED prte.test.loc.drop' \
+            && ok "a PERSIST_APP key was published LOCAL on node2" \
+            || bad "the local-range publish never happened: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        out=$(PRUN "--host node2:1 -n 1 $DS persist prte.test.loc.keep kept session 0 local" 2>&1)
+        echo "$out" | grep -q '^PUBLISHED prte.test.loc.keep' \
+            && ok "a PERSIST_SESSION key was published LOCAL on node2" \
+            || bad "the local-range publish never happened: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        sleep 5
+
+        out=$(PRUN "--host node2:1 -n 1 $DS lookup prte.test.loc.drop 15 local" 2>&1)
+        echo "$out" | grep -q '^FOUND prte.test.loc.drop' \
+            && bad "local-range app data survived its application: $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+            || ok "the LOCAL PERSIST_APP key went from node2's own store"
+        # the control: the purge must take what expired and nothing else
+        out=$(PRUN "--host node2:1 -n 1 $DS lookup prte.test.loc.keep 15 local" 2>&1)
+        echo "$out" | grep -q '^FOUND prte.test.loc.keep kept' \
+            && ok "...and the LOCAL PERSIST_SESSION key beside it did not" \
+            || bad "the purge took local-range data it should have kept: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     fi
     cleanup_swarm
