@@ -29,21 +29,19 @@
 
 #include "prte_config.h"
 
-#ifdef HAVE_UNISTD_H
-#    include <unistd.h>
-#endif
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
 #include "src/pmix/pmix-internal.h"
-#include "src/util/pmix_argv.h"
 #include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/rml/rml.h"
 #include "src/runtime/data_server/prte_data_server.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
-#include "src/util/pmix_show_help.h"
 #include "src/util/prte_show_help.h"
 
 #include "src/prted/pmix/pmix_server_internal.h"
@@ -340,7 +338,6 @@ pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc, const pmix_info_t 
 {
     prte_pmix_server_req_t *req;
     pmix_status_t rc;
-    int ret;
     uint8_t cmd = PRTE_PMIX_PUBLISH_CMD;
 
     pmix_output_verbose(1, prte_pmix_server_globals.output, "%s orted:pmix:server PUBLISH",
@@ -353,9 +350,9 @@ pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc, const pmix_info_t 
     req->cbdata = cbdata;
 
     /* load the command */
-    ret = PMIx_Data_pack(NULL, &req->msg, &cmd, 1, PMIX_UINT8);
-    if (PMIX_SUCCESS != ret) {
-        PMIX_ERROR_LOG(ret);
+    rc = PMIx_Data_pack(NULL, &req->msg, &cmd, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         PMIX_RELEASE(req);
         return PMIX_ERR_PACK_FAILURE;
     }
@@ -390,14 +387,13 @@ pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc, const pmix_info_t 
     PMIX_POST_OBJECT(req);
     prte_event_active(&(req->ev), PRTE_EV_WRITE, 1);
 
-    return PRTE_SUCCESS;
+    return PMIX_SUCCESS;
 }
 
 pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const pmix_info_t info[],
                                     size_t ninfo, pmix_lookup_cbfunc_t cbfunc, void *cbdata)
 {
     prte_pmix_server_req_t *req;
-    int ret;
     uint8_t cmd = PRTE_PMIX_LOOKUP_CMD;
     size_t m, n;
     pmix_status_t rc;
@@ -413,8 +409,9 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const 
     req->cbdata = cbdata;
 
     /* load the command */
-    if (PRTE_SUCCESS != (ret = PMIx_Data_pack(NULL, &req->msg, &cmd, 1, PMIX_UINT8))) {
-        PRTE_ERROR_LOG(ret);
+    rc = PMIx_Data_pack(NULL, &req->msg, &cmd, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         PMIX_RELEASE(req);
         return PMIX_ERR_PACK_FAILURE;
     }
@@ -467,7 +464,7 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const 
     PMIX_POST_OBJECT(req);
     prte_event_active(&(req->ev), PRTE_EV_WRITE, 1);
 
-    return PRTE_SUCCESS;
+    return PMIX_SUCCESS;
 }
 
 pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
@@ -475,7 +472,6 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
                                        pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
     prte_pmix_server_req_t *req;
-    int ret;
     uint8_t cmd;
     size_t m, n;
     pmix_status_t rc;
@@ -490,8 +486,9 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
 
         /* load the command */
         cmd = PRTE_PMIX_PURGE_PROC_CMD;
-        if (PRTE_SUCCESS != (ret = PMIx_Data_pack(NULL, &req->msg, &cmd, 1, PMIX_UINT8))) {
-            PRTE_ERROR_LOG(ret);
+        rc = PMIx_Data_pack(NULL, &req->msg, &cmd, 1, PMIX_UINT8);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             PMIX_RELEASE(req);
             return PMIX_ERR_PACK_FAILURE;
         }
@@ -528,7 +525,7 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
         PMIX_POST_OBJECT(req);
         prte_event_active(&(req->ev), PRTE_EV_WRITE, 1);
 
-        return PRTE_SUCCESS;
+        return PMIX_SUCCESS;
     }
 
 
@@ -540,8 +537,9 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
 
     /* load the command */
     cmd = PRTE_PMIX_UNPUBLISH_CMD;
-    if (PRTE_SUCCESS != (ret = PMIx_Data_pack(NULL, &req->msg, &cmd, 1, PMIX_UINT8))) {
-        PRTE_ERROR_LOG(ret);
+    rc = PMIx_Data_pack(NULL, &req->msg, &cmd, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         PMIX_RELEASE(req);
         return PMIX_ERR_PACK_FAILURE;
     }
@@ -594,7 +592,7 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
     PMIX_POST_OBJECT(req);
     prte_event_active(&(req->ev), PRTE_EV_WRITE, 1);
 
-    return PRTE_SUCCESS;
+    return PMIX_SUCCESS;
 }
 
 void pmix_server_keyval_client(int status, pmix_proc_t *sender,
@@ -602,7 +600,8 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender,
                                prte_rml_tag_t tg, void *cbdata)
 {
     uint8_t command;
-    int rc, room_num = -1;
+    pmix_status_t rc;
+    int room_num = -1;
     int32_t cnt;
     prte_pmix_server_req_t *req = NULL;
     pmix_byte_object_t bo;
@@ -621,9 +620,10 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender,
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &room_num, &cnt, PMIX_INT);
     if (PMIX_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-        ret = PMIX_ERR_UNPACK_FAILURE;
-        goto release;
+        PMIX_ERROR_LOG(rc);
+        /* nothing to answer and nobody to answer it to - the room number is
+         * how a reply finds the request that is waiting for it */
+        return;
     }
 
     /* unpack the command */
