@@ -468,9 +468,6 @@ The state's consequences:
   ``WAITPID_FIRED`` and ``IOF_COMPLETE`` for a remote proc, which drives the
   same ``TERMINATED`` activation this path raised directly before.
 
-Every PMIx constant above falls back to its cancellation or killed-by-cmd
-equivalent when PRRTE is built against a PMIx that predates them.
-
 Only procs not yet flagged ``PRTE_PROC_FLAG_RECORDED`` are reported.  A node
 lists procs that exited earlier until their whole job terminates, so without
 that test the release of an idle node would abort a healthy job.
