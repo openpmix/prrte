@@ -274,7 +274,10 @@ int prte_grpcomm_xcast_nb(prte_rml_tag_t tag, pmix_data_buffer_t *msg,
             PMIX_ERROR_LOG(rc);
             PMIx_Data_buffer_destruct(&msg_copy);
             PMIX_RELEASE(op);
-            return rc;
+            /* this entry point answers in PRTE codes - callers log it with
+             * PRTE_ERROR_LOG and at least one runs it back through
+             * prte_pmix_convert_rc(), which would mistranslate a PMIx status */
+            return prte_pmix_convert_status(rc);
         }
 
         PMIx_Data_unload(&msg_copy, &op->msg);
@@ -288,7 +291,7 @@ int prte_grpcomm_xcast_nb(prte_rml_tag_t tag, pmix_data_buffer_t *msg,
     PMIX_POST_OBJECT(&op);
     prte_event_active(&op->ev, PRTE_EV_WRITE, 1);
 
-    return PMIX_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 void prte_grpcomm_xcast_recv(
@@ -587,9 +590,12 @@ static void begin_xcast(int sd, short args, void* cbdata){
 
     // setup the payload
     pmix_data_buffer_t *xcast_msg = PMIx_Data_buffer_create();
+    /* the packers answer in PMIx statuses - PRTE_RML_RELIABLE_SEND below
+     * answers in PRTE codes, so the two failures below are logged through
+     * different decoders on purpose */
     int rc = pack_relay_msg(xcast_msg, op);
     if (PMIX_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
+        PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(xcast_msg);
         PMIX_RELEASE(op);
         return;
@@ -659,8 +665,9 @@ static void send_ack_msg(
     } else {
         PRTE_RML_SEND(ret, dest, msg, PRTE_RML_TAG_XCAST_ACK);
     }
-    if(PMIX_SUCCESS != ret){
-        PMIX_ERROR_LOG(ret);
+    /* the RML answers in PRTE codes, unlike the packers above */
+    if(PRTE_SUCCESS != ret){
+        PRTE_ERROR_LOG(ret);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIx_Data_buffer_release(msg);
     }
@@ -975,9 +982,10 @@ static prte_rml_payload_t* build_forward_payload(op_t* op){
     pmix_data_buffer_t* xcast_msg = PMIx_Data_buffer_create();
     prte_rml_payload_t* payload;
 
+    /* pack_forward_msg answers in PMIx statuses */
     int rc = pack_forward_msg(xcast_msg, op);
     if (PMIX_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
+        PMIX_ERROR_LOG(rc);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIX_DATA_BUFFER_RELEASE(xcast_msg);
         return NULL;
@@ -1138,6 +1146,9 @@ static void process_msg(op_t* op){
         ret = PMIx_Data_embed(msg, &op->msg);
     }
     if(PMIX_SUCCESS != ret){
+        /* this ends the DVM, so it must say why - the decompress failure
+         * above has its own show_help, and this path had nothing at all */
+        PMIX_ERROR_LOG(ret);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIx_Data_buffer_release(msg);
         return;
