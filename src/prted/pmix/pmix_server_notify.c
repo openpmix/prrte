@@ -402,7 +402,10 @@ static void _notify_event(int sd, short args, void *cbdata)
 
     if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_NOTIFICATION, &pbkt))) {
         PRTE_ERROR_LOG(rc);
-        ret = PMIX_ERROR;
+        /* rc is a PRRTE code and cd->cbfunc hands what we put here straight
+         * to a client - convert rather than flattening every failure to
+         * PMIX_ERROR, which tells the caller nothing it can act on */
+        ret = prte_pmix_convert_rc(rc);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
 

@@ -956,6 +956,12 @@ told which one.
 The helper is not static only so that `test_group_left` can pin all of that
 without a DVM.
 
+**The xcast's failure is a PRRTE code and the caller reads PMIx ones.**
+`_notify_event()` used to flatten every `prte_grpcomm_xcast()` failure to a
+bare `PMIX_ERROR` before handing it to the client's completion callback,
+which is the convert-direction mistake described under "Conventions" wearing
+its other face — not converting at all.
+
 ---
 
 ## Conventions specific to this directory
