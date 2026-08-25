@@ -592,8 +592,14 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender,
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &command, &cnt, PMIX_UINT8);
     if (PMIX_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-        return;
+        PMIX_ERROR_LOG(rc);
+        /* the room number came out, so there is somebody to answer - and
+         * they are a client parked in PMIx_Publish or PMIx_Lookup with
+         * nothing else in the DVM that will ever take them out of it.
+         * Returning here left the request in local_reqs and that client
+         * waiting for the life of the DVM */
+        ret = PMIX_ERR_UNPACK_FAILURE;
+        goto release;
     }
 
     /* unpack the return status */
