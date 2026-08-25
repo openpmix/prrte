@@ -358,6 +358,43 @@ daemons reported?" check. Returning early there means that if the *last*
 daemon's response is malformed, the request never completes and the
 client hangs forever.
 
+The same obligation runs the other way, on the daemon *serving* the
+request: `mycbfn()` used to abandon a reply it could not pack, and a
+daemon that goes quiet is one the requestor counts forever.
+`send_monitor_error()` is the minimum owed there — our vpid, the room
+number in the requestor's tracker, and why.
+
+**And a count of zero completes too.** `ndaemons` is `num_daemons - 1`,
+because the requesting daemon skips its own copy of the broadcast — so on
+a DVM of one it is zero, the xcast reaches nobody who will answer, and the
+completion test lives *only* in the response handler that nothing will
+ever run. PMIx has already taken this node's own contribution before
+up-calling (it asks the host only about participation it judges remote,
+and merges the local half itself), so an empty success is the whole of the
+honest answer. `mfn()` gives it before it builds anything.
+
+**The monitor tracker carries two indices and they name different
+arrays.** `local_index` is our own room — in `local_reqs` on the daemon
+that originated the request, in `remote_reqs` on the daemon serving it.
+`remote_index` is the *requestor's* room in *its* `local_reqs`, and it
+means nothing as a subscript on any array of ours. `mycbfn()` cleared
+`remote_reqs[remote_index]` when it finished: that left the served
+request's real slot holding a pointer to the object it then freed — which
+`prte_pmix_server_clear()` walks — and unlinked whatever unrelated peer
+request happened to occupy the slot it did name. The two coincide while
+one request is in flight, which is why it survived: both are zero.
+
+**A response's index does not prove what kind of request it found.**
+`pmix_server_monitor_resp()` bounds-checks the index it unpacks and
+NULL-checks the slot, but a slot is handed out again the instant its
+occupant retires, so a response that crossed with a retirement lands on a
+live request of some other kind — where it counts a report, overwrites the
+status, and merges monitor results into an `info` array that request never
+allocated. `req->monitor` is the discriminator (this file sets it and
+nothing else does), exactly as `req->mdxcbfunc` is for the direct-modex
+response. Any new operation sharing these arrays needs the same
+treatment.
+
 ---
 
 ## What a daemon publishes, and what it derives
