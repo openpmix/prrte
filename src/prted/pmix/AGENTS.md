@@ -562,7 +562,16 @@ by a wildcard.
 
 A proc in more than one assemblage — a spawned child that also connects
 explicitly — produces **one** event, addressed to the union of the
-memberships, not one per assemblage.
+memberships, not one per assemblage. It does, though, produce that event
+**per proc**, and each one is a DVM-wide xcast: `notify_assemblage()`
+broadcasts to every daemon and lets PMIx's custom range decide who hears
+it. That is the PMIx definition — the promise is made to each member about
+each departure — but it means an `MPI_Comm_spawn`ed job of N ranks pays N
+broadcasts as it ends, since a child is connected to its parent by default
+and running to completion is *not* a disconnect. The registry check comes
+first, so a DVM with no assemblages pays nothing at all; see
+[`docs/todo.rst`](../../../docs/todo.rst) for what a cheaper shape would
+have to preserve.
 
 Note what this depends on: PMIx used to execute a connect or disconnect whose
 participants were **all local** without calling the host at all, which left

@@ -346,8 +346,16 @@ void prte_pmix_server_connection_terminated(prte_proc_t *proc)
             continue;
         }
         if (ntargets + cptr->nmembers > cap) {
+            pmix_proc_t *tmp;
             cap = ntargets + cptr->nmembers;
-            targets = (pmix_proc_t *) realloc(targets, cap * sizeof(pmix_proc_t));
+            tmp = (pmix_proc_t *) realloc(targets, cap * sizeof(pmix_proc_t));
+            if (NULL == tmp) {
+                /* assigning through the same pointer would lose the block we
+                 * already have, and the loop below would then index a NULL */
+                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                break;
+            }
+            targets = tmp;
         }
         for (i = 0; i < cptr->nmembers; i++) {
             have = false;
@@ -652,6 +660,12 @@ void prte_pmix_server_connection_recv(int status, pmix_proc_t *sender,
         return;
     }
     PMIX_PROC_CREATE(members, nmembers);
+    if (NULL == members) {
+        /* nmembers came off the wire, so this is reachable by a peer asking
+         * for more than we can hold rather than only by genuine exhaustion */
+        PMIX_ERROR_LOG(PMIX_ERR_NOMEM);
+        return;
+    }
     cnt = nmembers;
     rc = PMIx_Data_unpack(NULL, buffer, members, &cnt, PMIX_PROC);
     if (PMIX_SUCCESS != rc) {
