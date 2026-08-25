@@ -458,6 +458,39 @@ The in-file comments are the real spec — read them. The load-bearing ideas:
   assuming its *newly-acquired* subtree finished ops it completed before
   promotion.
 
+### The forward is shared, and that changes what a send completion means
+
+`tree_whole_forward()` packs the forward **once** and hands the same
+`prte_rml_payload_t` to every child, because the bytes do not depend on the
+destination. Two consequences are easy to get wrong:
+
+- **A send takes its own reference, and only once it has accepted the
+  message.** `prte_rml_send_payload_cb_nb()` retains after every early
+  return, so a *refused* send leaves the caller's count exactly as it found
+  it — which is why `forward_payload_to()` has nothing to unwind on failure
+  and `tree_whole_forward()` drops exactly one reference of its own after
+  the loop.
+- **The completion callback is handed a NULL buffer.** For an ordinary
+  buffer send the callback owns the buffer; for a shared payload the buffer
+  belongs to the payload and the other destinations may still be
+  transmitting it, so `PRTE_RML_SEND_COMPLETE` passes NULL instead. That is
+  what lets `forward_lost()` pass its arguments straight through to
+  `prte_rml_send_callback()` without freeing a buffer `k-1` other sends are
+  still using.
+
+**A forward that fails synchronously ends the DVM; one that fails
+asynchronously only costs the op that subtree.** `forward_payload_to()`
+force-exits on a non-success return, while `forward_lost()` deliberately
+just drops `nexpected` — the same event, opposite reactions. What makes
+that safe is an invariant that lives in `src/rml`: `update_descendants()`
+replaces any child found in `failed_dmns` with its next living descendant,
+and it runs *after* `prte_rml_repair_routing_tree()` has marked the new
+failures — so a rank in `prte_rml_base.children` is never one
+`prte_rml_is_node_up()` calls down, and `PRTE_ERR_NODE_DOWN` is not a
+return this loop can actually see. A change on either side of that (a
+child set that can hold a failed rank, or a marking that moves after the
+repair) turns an ordinary daemon loss into a DVM teardown.
+
 ### Completion callbacks (the `pending_completions` FIFO)
 
 The op the master ends up *tracking* is a fresh one built on receipt, not
@@ -874,6 +907,22 @@ previous one of that name is over.
   through `convert_info_list()` in `grpcomm_group.c`, which initialises the
   array itself and answers an empty one on any failure, so what comes back
   is always safe to pack from and to destruct.
+- **Three numbering schemes meet in `grpcomm_xcast.c`, and the mixture is
+  deliberate.** The `DIRECT_XCAST_PACK`/`_UNPACK` packers hand back
+  `PMIx_Data_pack`'s status, so `pack_sig`, `pack_msg`, `pack_relay_msg` and
+  `pack_forward_msg` answer in **PMIx** statuses; every `PRTE_RML_SEND*`
+  answers in **PRTE** codes. A function that does both — `send_ack_msg()`
+  is the clearest — needs two checks logged through two decoders, and
+  collapsing them into one "tidier" test logs half its failures against the
+  wrong table. `process_wireup()` looks worst of all, testing
+  `prte_util_decode_nidmap()` against `PMIX_SUCCESS` and
+  `prte_util_decode_job_catchup()` against `PRTE_SUCCESS` two lines apart:
+  both are right, because those two functions genuinely answer in different
+  numbering. Check the callee before making them agree.
+  The entry points themselves answer in **PRTE** codes, as the API table
+  above says — callers log them with `PRTE_ERROR_LOG` and at least one
+  (`pmix_server_monitor.c`) runs the result back through
+  `prte_pmix_convert_rc()`, which mistranslates a PMIx status.
 - Standard PRRTE rules: `prte_config.h` first, constant-on-left, braces
   everywhere, `PMIX_ERROR_LOG`/`PRTE_ERROR_LOG`, no new warnings.
 
