@@ -726,27 +726,27 @@ void prte_pmix_server_clear(pmix_proc_t *pname)
  * to cleanup after any tools once they depart */
 static void _lost_conn(int sd, short args, void *cbdata)
 {
-     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t*)cbdata;
-     prte_job_t *jdata;
-     PRTE_HIDE_UNUSED_PARAMS(sd, args);
+    prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t*)cbdata;
+    prte_job_t *jdata;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
-     // check the source to see if it is a client or tool
-     jdata = prte_get_job_data_object(cd->proc.nspace);
-     if (NULL != jdata && !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+    // check the source to see if it is a client or tool
+    jdata = prte_get_job_data_object(cd->proc.nspace);
+    if (NULL != jdata && !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
         // client - do nothing, the ODLS will see it go away
         goto complete;
-     }
+    }
 
-     // Either a tool, or a peer we hold no job object for - which on a
-     // daemon other than the master is what a tool looks like, since only
-     // the master keeps one. Not knowing the job is therefore not a reason
-     // to do nothing here; prte_pmix_server_tool_departed() decides, and on
-     // the master it re-checks the TOOL flag before acting.
-     //
-     // A tool isn't a child of ours, so we cannot see a waitpid fire: this
-     // is the only notice we get that a tool has dropped without finalizing
-     // (a clean finalize arrives as the client_finalized upcall instead).
-     prte_pmix_server_tool_departed(&cd->proc);
+    // Either a tool, or a peer we hold no job object for - which on a
+    // daemon other than the master is what a tool looks like, since only
+    // the master keeps one. Not knowing the job is therefore not a reason
+    // to do nothing here; prte_pmix_server_tool_departed() decides, and on
+    // the master it re-checks the TOOL flag before acting.
+    //
+    // A tool isn't a child of ours, so we cannot see a waitpid fire: this
+    // is the only notice we get that a tool has dropped without finalizing
+    // (a clean finalize arrives as the client_finalized upcall instead).
+    prte_pmix_server_tool_departed(&cd->proc);
 
 complete:
     // progress the PMIx event notification chain
@@ -758,25 +758,25 @@ complete:
 
 static void lost_connection_hdlr(size_t evhdlr_registration_id, pmix_status_t status,
                                  const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
-                                 pmix_info_t *results, size_t nresults,
-                                 pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
+                                pmix_info_t *results, size_t nresults,
+                                pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
-     prte_pmix_server_op_caddy_t *cd;
-     PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id);
+    prte_pmix_server_op_caddy_t *cd;
+    PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id);
 
-     // need to threadshift this into our own progress thread
-     cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
-     cd->status = status;
-     memcpy(&cd->proc, source, sizeof(pmix_proc_t));
-     cd->info = info;
-     cd->ninfo = ninfo;
-     cd->directives = results;
-     cd->ndirs = nresults;
-     cd->evcbfunc = cbfunc;
-     cd->cbdata = cbdata;
-     prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _lost_conn, cd);
-     PMIX_POST_OBJECT(cd);
-     prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
+    // need to threadshift this into our own progress thread
+    cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
+    cd->status = status;
+    memcpy(&cd->proc, source, sizeof(pmix_proc_t));
+    cd->info = info;
+    cd->ninfo = ninfo;
+    cd->directives = results;
+    cd->ndirs = nresults;
+    cd->evcbfunc = cbfunc;
+    cd->cbdata = cbdata;
+    prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _lost_conn, cd);
+    PMIX_POST_OBJECT(cd);
+    prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
 }
 
 static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
@@ -1002,13 +1002,13 @@ int pmix_server_init(void)
     }
 
     /* tell the server whether or not to drop a session-level PMIx connection point */
-   PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SESSION_SUPPORT,
-                      &prte_pmix_server_globals.session_server, PMIX_BOOL);
-   if (PMIX_SUCCESS != prc) {
-       PMIX_INFO_LIST_RELEASE(ilist);
-       rc = prte_pmix_convert_status(prc);
-       return rc;
-   }
+    PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SESSION_SUPPORT,
+                       &prte_pmix_server_globals.session_server, PMIX_BOOL);
+    if (PMIX_SUCCESS != prc) {
+        PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
+        return rc;
+    }
 
     if (PRTE_PROC_IS_MASTER) {
         // mark ourselves as a gateway server
@@ -1045,23 +1045,23 @@ int pmix_server_init(void)
          * PMIx connection point - only do this for the HNP as, in
          * at least one case, a daemon can be colocated with the
          * HNP and would overwrite the server rendezvous file */
-       PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SYSTEM_SUPPORT,
-                          (void*)&prte_pmix_server_globals.system_server, PMIX_BOOL);
-       if (PMIX_SUCCESS != prc) {
-           PMIX_INFO_LIST_RELEASE(ilist);
-           rc = prte_pmix_convert_status(prc);
-           return rc;
-       }
+        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SYSTEM_SUPPORT,
+                           (void*)&prte_pmix_server_globals.system_server, PMIX_BOOL);
+        if (PMIX_SUCCESS != prc) {
+            PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
+            return rc;
+        }
 
         // tell if they want to allow tools from other users
-       flag = !prte_pmix_server_globals.no_foreign_tools;
-       PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_ALLOW_FOREIGN_TOOLS,
-                          (void*)&flag, PMIX_BOOL);
-       if (PMIX_SUCCESS != prc) {
-           PMIX_INFO_LIST_RELEASE(ilist);
-           rc = prte_pmix_convert_status(prc);
-           return rc;
-       }
+        flag = !prte_pmix_server_globals.no_foreign_tools;
+        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_ALLOW_FOREIGN_TOOLS,
+                           (void*)&flag, PMIX_BOOL);
+        if (PMIX_SUCCESS != prc) {
+            PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
+            return rc;
+        }
 
         /* if requested and persistent, tell the server that we are the system
          * controller - don't do this for the non-persistent mode */
@@ -1131,13 +1131,13 @@ int pmix_server_init(void)
     }
 
     /* tell if we allow remote tool connections */
-     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_REMOTE_CONNECTIONS,
+    PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_REMOTE_CONNECTIONS,
                        (void*)&prte_pmix_server_globals.remote_connections, PMIX_BOOL);
-     if (PMIX_SUCCESS != prc) {
-         PMIX_INFO_LIST_RELEASE(ilist);
-         rc = prte_pmix_convert_status(prc);
-         return rc;
-     }
+    if (PMIX_SUCCESS != prc) {
+        PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
+        return rc;
+    }
 
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_ALLOW_CLIENT_CLONES,
                       (void*)&prte_pmix_server_globals.allow_client_clones, PMIX_BOOL);
@@ -1159,7 +1159,7 @@ int pmix_server_init(void)
             rc = prte_pmix_convert_status(prc);
             return rc;
         }
-     }
+    }
 
     /* tell the server what we are doing with FQDN */
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_HOSTNAME_KEEP_FQDN, &prte_keep_fqdn_hostnames, PMIX_BOOL);
@@ -2786,12 +2786,12 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
     /* a group context-id request carries no field of its own - see the
      * matching pack in prte_server_send_request() */
 
-   /* unpack the number of info */
-   cnt = 1;
-   rc = PMIx_Data_unpack(NULL, buffer, &ninfo, &cnt, PMIX_SIZE);
+    /* unpack the number of info */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &ninfo, &cnt, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-            goto reply;
+        goto reply;
     }
 
     /* Need to add the requestor's ID to the info array, so allocate one
@@ -3140,7 +3140,7 @@ static void psdes(prte_pmix_server_pset_t *p)
         free(p->name);
     }
     if (NULL != p->jdata) {
-     PMIX_RELEASE(p->jdata);
+        PMIX_RELEASE(p->jdata);
     }
     if (NULL != p->members) {
         free(p->members);
