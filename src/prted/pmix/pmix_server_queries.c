@@ -60,6 +60,22 @@
 
 #include "src/prted/pmix/pmix_server_internal.h"
 
+/* A query's qualifiers are the requesting client's own: PMIx forwards the
+ * array to the host without inspecting what any entry holds, so reading a
+ * fixed member of the value union is reading whatever eight bytes the caller
+ * chose to put there.  Every qualifier this function acts on other than the
+ * two numeric ones is a string that it then hands to strlen(), strcmp() or
+ * PMIx_Check_nspace(), so a mistyped one is a fault - which any process or
+ * tool attached to a daemon could produce with a single PMIx_Query_info. */
+static bool qual_string(const pmix_info_t *qual, char **str)
+{
+    if (PMIX_STRING != qual->value.type) {
+        return false;
+    }
+    *str = qual->value.data.string;
+    return true;
+}
+
 static void qrel(void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
@@ -133,10 +149,14 @@ static void _query(int sd, short args, void *cbdata)
                                          : "(not a string)"));
 
                 if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_NSPACE)) {
+                    char *nsq;
+                    if (!qual_string(&q->qualifiers[n], &nsq)) {
+                        ret = PMIX_ERR_BAD_PARAM;
+                        goto done;
+                    }
                     // the nspace could be NULL, indicating that this is a
                     // wildcard request - if so, then ignore it here
-                    if (NULL == q->qualifiers[n].value.data.string ||
-                        0 == strlen(q->qualifiers[n].value.data.string)) {
+                    if (NULL == nsq || 0 == strlen(nsq)) {
                         PMIX_LOAD_NSPACE(jobid, NULL);
                         continue;
                     }
@@ -149,7 +169,7 @@ static void _query(int sd, short args, void *cbdata)
                     for (k = 0; k < prte_job_data->size; k++) {
                         jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, k);
                         if (NULL != jdata) {
-                            if (PMIX_CHECK_NSPACE(q->qualifiers[n].value.data.string, jdata->nspace)) {
+                            if (PMIX_CHECK_NSPACE(nsq, jdata->nspace)) {
                                 matched = 1;
                                 break;
                             }
@@ -159,7 +179,7 @@ static void _query(int sd, short args, void *cbdata)
                         pmix_output_verbose(2, prte_pmix_server_globals.output,
                                             "%s qualifier key \"%s\" : value \"%s\" is an unknown namespace",
                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), q->qualifiers[n].key,
-                                            q->qualifiers[n].value.data.string);
+                                            nsq);
                         ret = PMIX_ERR_BAD_PARAM;
                         goto done;
                     }
@@ -171,16 +191,21 @@ static void _query(int sd, short args, void *cbdata)
                     }
 
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_GROUP_ID)) {
+                    char *grpq;
+                    prte_pmix_server_pset_t *ps;
                     /* Never trust the group string that is provided.
                      * First check to see if we know about this group. If
                      * not then return an error. If so then continue on.
                      */
+                    if (!qual_string(&q->qualifiers[n], &grpq) || NULL == grpq) {
+                        ret = PMIX_ERR_BAD_PARAM;
+                        goto done;
+                    }
                     /* Make sure the qualifier group exists */
                     matched = 0;
-                    prte_pmix_server_pset_t *ps;
                     PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.groups, prte_pmix_server_pset_t)
                     {
-                        if (PMIX_CHECK_NSPACE(q->qualifiers[n].value.data.string, ps->name)) {
+                        if (NULL != ps->name && PMIX_CHECK_NSPACE(grpq, ps->name)) {
                             matched = 1;
                             break;
                         }
@@ -189,34 +214,54 @@ static void _query(int sd, short args, void *cbdata)
                         pmix_output_verbose(2, prte_pmix_server_globals.output,
                                             "%s qualifier key \"%s\" : value \"%s\" is an unknown group",
                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), q->qualifiers[n].key,
-                                            q->qualifiers[n].value.data.string);
+                                            grpq);
                         ret = PMIX_ERR_BAD_PARAM;
                         goto done;
                     }
-                    PMIX_LOAD_NSPACE(jobid, q->qualifiers[n].value.data.string);
+                    PMIX_LOAD_NSPACE(jobid, grpq);
                     if (PMIX_NSPACE_INVALID(jobid)) {
                         ret = PMIX_ERR_BAD_PARAM;
                         goto done;
                     }
 
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_HOSTNAME)) {
-                    hostname = q->qualifiers[n].value.data.string;
+                    if (!qual_string(&q->qualifiers[n], &hostname)) {
+                        ret = PMIX_ERR_BAD_PARAM;
+                        goto done;
+                    }
 
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_NODEID)) {
                     PMIX_VALUE_GET_NUMBER(rc, &q->qualifiers[n].value, nodeid, uint32_t);
+                    if (PMIX_SUCCESS != rc) {
+                        ret = PMIX_ERR_BAD_PARAM;
+                        goto done;
+                    }
 
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_PSET_NAME)) {
-                    psetname = q->qualifiers[n].value.data.string;
+                    if (!qual_string(&q->qualifiers[n], &psetname)) {
+                        ret = PMIX_ERR_BAD_PARAM;
+                        goto done;
+                    }
 
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_SESSION_ID)) {
                     PMIX_VALUE_GET_NUMBER(rc, &q->qualifiers[n].value, sessionid, uint32_t);
+                    if (PMIX_SUCCESS != rc) {
+                        ret = PMIX_ERR_BAD_PARAM;
+                        goto done;
+                    }
 
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_ALLOC_ID)) {
-                    allocid = q->qualifiers[n].value.data.string;
+                    if (!qual_string(&q->qualifiers[n], (char **) &allocid)) {
+                        ret = PMIX_ERR_BAD_PARAM;
+                        goto done;
+                    }
 
 #ifdef PMIX_ALLOC_PROPERTY
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_ALLOC_PROPERTY)) {
-                    allocprop = q->qualifiers[n].value.data.string;
+                    if (!qual_string(&q->qualifiers[n], (char **) &allocprop)) {
+                        ret = PMIX_ERR_BAD_PARAM;
+                        goto done;
+                    }
 #endif
                 }
 
