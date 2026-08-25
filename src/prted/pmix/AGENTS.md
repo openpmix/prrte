@@ -350,6 +350,26 @@ is the case: `PMIx_Proc_create(0)` returns NULL and PMIx refuses a set with
 no name or no members, so every daemon logged an error and the requestor was
 told it had worked.
 
+**The same rule in publish/lookup/unpublish costs a mis-route rather than a
+fault, which is why it survived longer.** `scan_directives()`
+(`pmix_server_pub.c`) reads `PMIX_RANGE` and `PMIX_TIMEOUT` out of the
+client's own info array, and neither is a pointer — so reading the wrong
+member of the union produces a plausible value instead of a crash. The range
+is what decides where the request goes: SESSION and GLOBAL are relayed to the
+master and on to the data server, LOCAL is answered here. Read it out of the
+wrong member and a publish the application meant to be visible across the
+session is quietly kept on this daemon, and the lookup that was supposed to
+find it does not. The timeout is the width half of the same rule — read with
+`PMIX_VALUE_GET_NUMBER`, never off `value.data.integer`, because a caller may
+legally have sent a `PMIX_SIZE`.
+
+**And the RML gives a refused buffer back.** `PRTE_RML_RELIABLE_SEND` takes
+ownership of what it is handed *only by succeeding*; on an error return the
+buffer is still the caller's, emptied of its payload or not. See
+[`../../rml/relm/AGENTS.md`](../../rml/relm/AGENTS.md). Every relay in this
+directory that reaches its callback tail through a failed send has to release
+its buffer on the way.
+
 **A collecting relay must complete on *every* path.** `monitor`
 fans out to all daemons and counts responses (`ndaemons` vs `nreported`).
 It increments `nreported` as soon as a response arrives, so a response
@@ -883,6 +903,19 @@ which is fine from the PRRTE progress thread and fatal from the PMIx one.
 The flag this replaced (`scheduler_set_as_server`) recorded "the scheduler has
 been made primary" once and never reconsidered — correct only for as long as
 the scheduler was the sole connection.
+
+**A failed attach to the external data server is not a state the DVM can
+carry on from, and it looks exactly like one.** `init_server()` sets
+`pubsub_init` before it does any work, so it runs once whatever happens, and
+only the request that provoked it learns that it failed. What the *next*
+request then does is the trap: the target for anything the master cannot
+relay outward is the master itself, which is this daemon's own data server.
+So after a failed attach the DVM went on publishing successfully into a store
+no other DVM will ever look in, and answering lookups out of it — one error
+message at the first request, and then a peer DVM blocked in
+`MPI_Lookup_name` with nothing to connect the two. `server_init_rc` remembers
+the outcome and every later request is refused with it. Anything else added
+here that can fail once and be skipped forever needs the same treatment.
 
 ---
 
