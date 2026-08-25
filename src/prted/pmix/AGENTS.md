@@ -475,21 +475,29 @@ treatment.
 
 ## What a daemon publishes, and what it derives
 
-`prte_pmix_server_register_nspace()` used to hand its local PMIx server a
+`prte_pmix_server_register_nspace()` hands its local PMIx server a
 `PMIX_PROC_INFO_ARRAY` for **every** proc of a job — rank, global rank,
-app rank, appnum, local and node rank, node id, hostname, cpuset and the
-locality string generated from it. Every daemon, for the whole job. That
-is a table proportional to the job on a node that will only ever run its
-own slice of it, and `prte_hostname_cutoff` — which drops one field of it
-above a thousand nodes — is the record of that wall having been met once
-already.
+app rank, appnum, local and node rank, node id, hostname and, for the procs
+it hosts, cpuset and the locality string generated from it. Every daemon,
+for the whole job. That is a table proportional to the job on a node that
+will only ever run its own slice of it, and `prte_hostname_cutoff` — which
+drops one field of it above a thousand nodes — is the record of that wall
+having been met once already.
 
-With `prte_pmix_lazy_procdata` (the default where PMIx allows it) a daemon
-publishes only the procs it hosts. Everything it withheld is still in its
-own job object, so when PMIx asks for one of those procs through the
-`direct_modex` upcall, `dmodex_req()` answers out of `jdata->procs[rank]`
-instead of going to the hosting daemon. Four things about that are load
-bearing:
+**Only the two location keys are withheld today, and for a different
+reason** (the cpuset scatter, below). `prte_pmix_lazy_procdata` — on by
+default — switches on the *deriving* half of the narrowing: when PMIx asks
+for one of the placement keys through the `direct_modex` upcall,
+`dmodex_req()` answers out of `jdata->procs[rank]` rather than going to the
+hosting daemon. The *withholding* half is **not** in: the per-proc loop
+here still emits an array for every proc of the job on every daemon, so the
+derivation almost never fires — everything the eager registration published
+is found locally first. Do not read the paragraphs below as a description
+of a daemon that publishes only its own procs; they describe the rules any
+such narrowing must keep to, and
+[`docs/todo.rst`](../../../docs/todo.rst) carries the measurement of what
+the derivation is worth as it stands and what the other half would cost.
+Four things about the derivation are load bearing:
 
 - **The key set is what PRRTE is the authority for, not what an app wants.**
   `derivable_key()` lists the placement and binding this DVM computed —
@@ -541,6 +549,18 @@ bearing:
   directives up to `direct_modex`, they are packed on to the servicing
   daemon, and `pmix_server_dmdx_recv()` arms the timer. That is why the
   attribute table registers `PMIX_TIMEOUT` under `PMIx_Get`.
+
+**`register_nspace()` is not called once per job.** The wildcard arm of
+`dmodex_req()` calls it again whenever a client asks a daemon that hosts none
+of the job's procs for job-level data the local server does not hold — once
+per such get. Rebuilding the info arrays is what that caller wants; anything
+in there with a *side effect* has to be idempotent, or it repeats at that
+rate. The process sets are the case: appending the registry entry again
+duplicated the pset in every query answer and took a reference on the job
+object that nothing would give back, so that append is now guarded by a
+lookup. Client registration is not, and does not need to be — the daemon
+that takes this second path hosts no procs of the job, so the loop that
+registers them does not run.
 
 ### A binding we were not sent is not a binding of "none"
 
