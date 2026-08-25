@@ -62,6 +62,34 @@
  * RML exactly as it does for a data server hosted here, so a DVM holds one
  * connection to the external server however many daemons it has.
  */
+static int init_server(void);
+
+/* Attach to the external data server if we have not already.
+ *
+ * This used to happen only inside execute() below - that is, only when a
+ * LOCAL client of this daemon published or looked something up.  The master
+ * needs the connection for a different reason: every other daemon relays its
+ * requests to the master, and the master is the only one that holds the tool
+ * connection to the far end.  A master with no publishing client of its own
+ * therefore never attached, and the relay failed PMIX_ERR_UNREACH for every
+ * request the DVM made.  Nothing noticed, because a job's nspace
+ * registration used to publish through execute() and attach as a side
+ * effect. */
+int prte_pmix_server_init_pubsub(void)
+{
+    int ret;
+
+    if (prte_pmix_server_globals.pubsub_init) {
+        return PRTE_SUCCESS;
+    }
+    ret = init_server();
+    if (PRTE_SUCCESS != ret) {
+        prte_show_help("help-prted.txt", "noserver", true,
+                       (NULL == prte_data_server_uri) ? "NULL" : prte_data_server_uri);
+    }
+    return ret;
+}
+
 static int init_server(void)
 {
     char *server;
@@ -172,13 +200,9 @@ static void execute(int sd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(req);
 
-    if (!prte_pmix_server_globals.pubsub_init) {
-        /* we need to initialize our connection to the server */
-        if (PRTE_SUCCESS != (rc = init_server())) {
-            prte_show_help("help-prted.txt", "noserver", true,
-                           (NULL == prte_data_server_uri) ? "NULL" : prte_data_server_uri);
-            goto callback;
-        }
+    /* we need our connection to the server */
+    if (PRTE_SUCCESS != (rc = prte_pmix_server_init_pubsub())) {
+        goto callback;
     }
 
     /* add this request to our tracker array */

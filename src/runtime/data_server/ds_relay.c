@@ -389,6 +389,18 @@ pmix_status_t prte_ds_relay(pmix_proc_t *sender, int room_number,
         return rc;
     }
 
+    /* Make sure we are attached.  Relaying is the master's job, and the
+     * master may have no publishing client of its own - in which case
+     * nothing else would ever have opened this connection, because the
+     * attach used to happen only in execute(), on behalf of a LOCAL
+     * client.  Every relayed request then failed PMIX_ERR_UNREACH. */
+    rc = prte_pmix_server_init_pubsub();
+    if (PRTE_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(cd);
+        return prte_pmix_convert_rc(rc);
+    }
+
     /* Point our client-side calls at the data server.  We may hold more
      * than one server connection - a scheduler is the other - and PMIx
      * sends a client operation to whichever one is currently primary, so
