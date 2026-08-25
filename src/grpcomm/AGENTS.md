@@ -527,6 +527,34 @@ gathers the *local* contributions, then deletes it the instant the request
 is handed to the host — deliberately, so a late host answer cannot reach a
 tracker it already released.
 
+**A contribution can outlive the release that ended its fence, and nothing
+here can tell that from the next round.**  A fence signature is only its
+participant list — no round, no sequence number, nothing on the wire that
+distinguishes one fence over a set of procs from the next.  In the normal
+flow that costs nothing, because a daemon converges only when everything it
+expects has arrived, so nothing *can* arrive afterwards.  But
+`abort_fence_op()` ends a fence early — on a `PMIX_TIMEOUT`, and on a
+participant lost to a failed daemon — and a contribution still climbing the
+tree then reaches a daemon whose tracker the release already retired.
+`fence_recv()` builds a new tracker for it, and the next fence over those
+same participants *finds* that tracker, inherits its `nreported` and its
+bucket, and can converge early carrying the previous round's data.
+
+**Do not fix this by copying `completed_group_ops`.**  The group memo works
+because a group is keyed by `groupID` + operation and `group()` drops the
+memo entry when a local client starts one.  A daemon relaying a fence for
+its subtree has no local client and would never drop the entry, so the next
+fence's legitimate contribution would be discarded — a hang, which is worse
+than the wrong answer it was meant to prevent.  On a pure relay a straggler
+and a new round are genuinely the same message, and a fence has no
+originator to stamp a round id: this is the same "every participant must
+reach the same answer independently" problem the withdrawn lateral fence
+ran into.  What would work is a per-signature *release count* — each daemon
+counts releases seen for a signature, stamps contributions with it, drops
+anything stamped lower — which is the recovery epoch's mechanism scoped to a
+signature.  That is a wire change and needs the dockerswarm harness; see
+[`docs/todo.rst`](../../docs/todo.rst).
+
 **A release with no local callback still has data to free.** A daemon
 holding a tracker only because it relayed for its subtree has no `cbfunc`
 — the common case on any interior daemon — so that branch frees the

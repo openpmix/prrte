@@ -159,18 +159,19 @@ static int pack_epoch_frame(pmix_data_buffer_t *framed, pmix_data_buffer_t *body
 static void abort_fence_op(prte_grpcomm_fence_t *coll, pmix_status_t st)
 {
     pmix_data_buffer_t *reply;
-    pmix_status_t rc;
+    pmix_status_t prc;
+    int rc;
 
     PMIX_DATA_BUFFER_CREATE(reply);
     rc = fence_sig_pack(reply, coll->sig);
-    if (PMIX_SUCCESS != rc) {
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(reply);
         return;
     }
-    rc = PMIx_Data_pack(NULL, reply, &st, 1, PMIX_INT32);
-    if (PMIX_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
+    prc = PMIx_Data_pack(NULL, reply, &st, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != prc) {
+        PMIX_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(reply);
         return;
     }
@@ -741,8 +742,8 @@ static void tree_gather_answer(prte_grpcomm_fence_t *coll)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         PMIX_DATA_BUFFER_CREATE(reply);
         rc = fence_sig_pack(reply, coll->sig);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
             return;
         }
@@ -771,8 +772,8 @@ static void tree_gather_answer(prte_grpcomm_fence_t *coll)
 
     PMIX_DATA_BUFFER_CREATE(reply);
     rc = fence_sig_pack(reply, coll->sig);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(reply);
         return;
     }
@@ -862,8 +863,8 @@ void prte_grpcomm_fence_release(int status, pmix_proc_t *sender,
 
     /* unpack the signature */
     rc = fence_sig_unpack(buffer, &sig);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
         return;
     }
 

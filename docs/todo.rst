@@ -89,6 +89,39 @@ with that blast radius has to be asked for by the run that wants it.  An
 older ``prte.conf`` carrying the keys still parses: they are unknown keys
 now, and unknown keys are ignored.
 
+**A fence cannot tell a post-release straggler from the next round.**  A
+fence signature is only its participant list, so nothing on the
+``PRTE_RML_TAG_FENCE`` wire says which *round* a contribution belongs to.
+That is invisible in the normal flow — a daemon converges only once every
+contribution it expects has arrived, so nothing can arrive afterwards — but
+the controller also ends a fence early, on a ``PMIX_TIMEOUT`` and on a
+participant lost to a failed daemon (``abort_fence_op()``,
+``src/grpcomm/grpcomm_fence.c``).  A contribution still climbing the tree
+then lands on a daemon that has already retired its tracker, and
+``fence_recv()`` builds a fresh one for it.  The next fence over the same
+participants finds that tracker, inherits its ``nreported`` and its bucket,
+and can converge early carrying the previous round's data.
+
+The group collective solves the same problem with ``completed_group_ops``, a
+bounded memo of released operations that ``grp_recv`` consults, and that fix
+**cannot** be copied here.  A group is keyed by ``groupID`` plus operation
+and ``group()`` forgets the memo entry when a local client starts one; a
+daemon relaying a fence for its subtree has no local client, so the memo
+would never be forgotten there and the *next* fence's legitimate
+contribution would be dropped — a hang in place of a wrong answer.  On a
+pure relay the two are genuinely indistinguishable without a round
+discriminator on the wire, and a fence has no originator to assign one: this
+is the same "every participant must reach the same answer independently"
+problem that the withdrawn lateral fence ran into
+(``src/grpcomm/AGENTS.md``).
+
+What would work is a per-signature release count: each daemon counts the
+releases it has seen for a signature, stamps its contributions with that
+count, and drops a contribution stamped below its own — the recovery epoch's
+mechanism, scoped to a signature and driven by releases rather than by
+failures.  That is a wire change plus a memo that holds a counter, and it
+needs the dockerswarm harness to validate, so it has not been attempted.
+
 **A job cannot ask for a transport.**  The network allocation request the
 odls builds for each job names ``<nspace>.net`` and a security key and
 otherwise takes whatever transport the resource manager offers by default
