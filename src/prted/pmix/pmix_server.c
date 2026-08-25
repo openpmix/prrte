@@ -3085,6 +3085,12 @@ static void rqcon(prte_pmix_server_req_t *p)
     p->sz = 0;
     p->ndaemons = 0;
     p->nreported = 0;
+    p->nsuccess = 0;
+    /* constructed, deliberately not initialized: an empty bitmap is usable
+     * and set_bit grows it from nothing, so a request that never fans out
+     * pays nothing for carrying these */
+    PMIX_CONSTRUCT(&p->expected_dmns, pmix_bitmap_t);
+    PMIX_CONSTRUCT(&p->reported_dmns, pmix_bitmap_t);
     p->range = PMIX_RANGE_SESSION;
     p->proxy = *PRTE_NAME_INVALID;
     p->target = *PRTE_NAME_INVALID;
@@ -3143,6 +3149,8 @@ static void rqdes(prte_pmix_server_req_t *p)
         PMIX_RELEASE(p->jdata);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&p->msg);
+    PMIX_DESTRUCT(&p->expected_dmns);
+    PMIX_DESTRUCT(&p->reported_dmns);
 }
 PMIX_CLASS_INSTANCE(prte_pmix_server_req_t,
                     pmix_object_t,

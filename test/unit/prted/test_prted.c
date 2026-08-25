@@ -1425,6 +1425,150 @@ static int test_request_tracker(void)
     return failures;
 }
 
+/* The monitor collective's accounting for a daemon that dies mid-flight.
+ *
+ * The request fans out with an xcast and then counts direct replies, so
+ * nothing in it is keyed on the routing tree and nothing repairs it when the
+ * tree changes - a daemon that dies simply never answers.  What closes that
+ * is prte_pmix_server_fault_handler(), and the two things it has to get right
+ * are both invisible in a single-shot test: the routing tree calls it TWICE
+ * for one death (LOCAL scope, then GLOBAL), and it must not account a rank
+ * this particular request was never waiting on.
+ *
+ * The recovery status is filled in by hand rather than constructed, because
+ * its constructor reads the live routing tree, which no unit test has. */
+static pmix_status_t mon_status;
+static int mon_calls;
+
+static void mon_cbfunc(pmix_status_t status, pmix_info_t *info, size_t ninfo,
+                       void *cbdata, pmix_release_cbfunc_t release_fn,
+                       void *release_cbdata)
+{
+    PRTE_HIDE_UNUSED_PARAMS(info, ninfo, cbdata, release_fn, release_cbdata);
+    /* deliberately does NOT invoke release_fn: that thread-shifts onto an
+     * event base nothing is driving here.  The test owns the request. */
+    mon_status = status;
+    ++mon_calls;
+}
+
+static prte_pmix_server_req_t *mon_req(pmix_info_t *monitor, pmix_rank_t nexpect)
+{
+    prte_pmix_server_req_t *req;
+    pmix_rank_t r;
+
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    req->monitor = monitor;      /* moncopy stays false - we own it */
+    req->infocbfunc = mon_cbfunc;
+    for (r = 1; r <= nexpect; r++) {
+        pmix_bitmap_set_bit(&req->expected_dmns, (int) r);
+    }
+    req->ndaemons = nexpect;
+    req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+    return req;
+}
+
+static void mon_reported(prte_pmix_server_req_t *req, pmix_rank_t r, bool ok)
+{
+    pmix_bitmap_set_bit(&req->reported_dmns, (int) r);
+    ++req->nreported;
+    if (ok) {
+        ++req->nsuccess;
+    }
+}
+
+static void mon_drop(prte_pmix_server_req_t *req)
+{
+    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs,
+                                req->local_index, NULL);
+    PMIX_RELEASE(req);
+}
+
+static int test_monitor_accounting(void)
+{
+    int failures = 0;
+    prte_pmix_server_req_t *req;
+    prte_rml_recovery_status_t st;
+    pmix_rank_t failed[2];
+    pmix_info_t monitor;
+    uint32_t nrep;
+
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.local_reqs, pmix_pointer_array_t);
+    pmix_pointer_array_init(&prte_pmix_server_globals.local_reqs, 8, INT32_MAX, 8);
+    PMIX_INFO_LOAD(&monitor, PMIX_MONITOR_HEARTBEAT, NULL, PMIX_BOOL);
+
+    memset(&st, 0, sizeof(st));
+    st.failed_ranks.array = failed;
+    st.failed_ranks.type = PMIX_PROC_RANK;
+
+    /* one of three answered, the other two died: the caller is holding a
+     * sample of part of the DVM and has to be told so */
+    req = mon_req(&monitor, 3);
+    mon_reported(req, 1, true);
+    mon_calls = 0;
+    mon_status = PMIX_SUCCESS;
+    failed[0] = 2;
+    failed[1] = 3;
+    st.failed_ranks.size = 2;
+    prte_pmix_server_fault_handler(&st);
+    CHECK("losing the last outstanding daemons completes the request", 1 == mon_calls);
+    CHECK("...with partial success", PMIX_ERR_PARTIAL_SUCCESS == mon_status);
+
+    /* the tree reports every death twice - LOCAL scope then GLOBAL - and the
+     * request is still on the array when the second call arrives, because the
+     * release it was handed thread-shifts.  A second completion here would
+     * answer the client twice and release the request under it. */
+    nrep = req->nreported;
+    prte_pmix_server_fault_handler(&st);
+    CHECK("the second notice for the same death is a no-op", 1 == mon_calls);
+    /* assert the accounting directly, not just that it did not complete
+     * twice: an over-count sails past the equality test in the completion
+     * check and would leave this looking clean while the request could
+     * never again be completed by anything */
+    CHECK("...and does not count the same death twice", nrep == req->nreported);
+    mon_drop(req);
+
+    /* nobody answered at all - "partial" would be a lie, so the status says
+     * why instead */
+    req = mon_req(&monitor, 2);
+    mon_calls = 0;
+    failed[0] = 1;
+    failed[1] = 2;
+    st.failed_ranks.size = 2;
+    prte_pmix_server_fault_handler(&st);
+    CHECK("losing every daemon completes the request", 1 == mon_calls);
+    CHECK("...and does not call that a partial success",
+          PMIX_SUCCESS != mon_status && PMIX_ERR_PARTIAL_SUCCESS != mon_status);
+    mon_drop(req);
+
+    /* a death this request was never waiting on must not be counted: doing so
+     * completes it early, before the daemons it IS waiting on have answered */
+    req = mon_req(&monitor, 1);
+    mon_calls = 0;
+    failed[0] = 7;
+    st.failed_ranks.size = 1;
+    prte_pmix_server_fault_handler(&st);
+    CHECK("an unrelated daemon's death is not accounted", 0 == mon_calls);
+    CHECK("...and leaves the request waiting", 0 == req->nreported);
+    mon_drop(req);
+
+    /* a request that never fanned out has no expected set to consult */
+    req = mon_req(&monitor, 0);
+    mon_calls = 0;
+    failed[0] = 1;
+    st.failed_ranks.size = 1;
+    prte_pmix_server_fault_handler(&st);
+    CHECK("a request that never fanned out is left alone", 0 == mon_calls);
+    mon_drop(req);
+
+    PMIX_INFO_DESTRUCT(&monitor);
+    PMIX_DESTRUCT(&prte_pmix_server_globals.local_reqs);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_monitor_accounting\n");
+    }
+    return failures;
+}
+
 static int test_departed_jobs(void)
 {
     int failures = 0;
@@ -1676,6 +1820,7 @@ int main(void)
 
     failures += test_request_tracker();
     failures += test_departed_jobs();
+    failures += test_monitor_accounting();
     failures += test_connections();
     failures += test_prefix_normalization();
     failures += test_singleton_id();
