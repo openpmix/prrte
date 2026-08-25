@@ -350,6 +350,19 @@ is the case: `PMIx_Proc_create(0)` returns NULL and PMIx refuses a set with
 no name or no members, so every daemon logged an error and the requestor was
 told it had worked.
 
+**A query's qualifiers are the same array under another name.** `_query()`
+(`pmix_server_queries.c`) reads six of them - `PMIX_NSPACE`, `PMIX_GROUP_ID`,
+`PMIX_HOSTNAME`, `PMIX_PSET_NAME`, `PMIX_ALLOC_ID`, `PMIX_ALLOC_PROPERTY` -
+and every one is a string it goes on to hand to `strlen`, `strcmp`,
+`PMIx_Check_nspace` or a session lookup, so this is the fault version of the
+rule rather than the quiet one. Refuse a mistyped qualifier with
+`PMIX_ERR_BAD_PARAM`; do **not** fall back to treating it as absent, because
+"absent" has a meaning for all six of them and it is a different answer, not
+an error — a mistyped `PMIX_HOSTNAME` treated as unset makes the server-URI
+query answer about *this* node. The two numeric qualifiers were already read
+through `PMIX_VALUE_GET_NUMBER`, which refuses a non-number; check what it
+says, or a bad value silently leaves the sentinel in place and is ignored.
+
 **The same rule in publish/lookup/unpublish costs a mis-route rather than a
 fault, which is why it survived longer.** `scan_directives()`
 (`pmix_server_pub.c`) reads `PMIX_RANGE` and `PMIX_TIMEOUT` out of the
@@ -607,6 +620,39 @@ does: each rank asks every other rank in its job where it is, and the
 harness asserts that what a rank was told about a peer is what that peer
 says about itself. That comparison *is* the A/B, because a proc's own
 daemon publishes its data either way.
+
+---
+
+## Answering a query
+
+`_query()` is one very long `if`/`else if` chain over the keys of each
+`pmix_query_t`, in the shape of `prte_pmix_xfer_job_info()` and with the same
+hazards. Four things about it that are not local to any one arm:
+
+- **It walks every job object in the array, and meets them at every stage of
+  their lives.** So a pointer that is populated at some point in a job's
+  lifecycle is not populated for every job it will see: `jdata->session` is
+  optional (the launch path falls back to `prte_default_session` where it
+  finds none) and `proct->node` is NULL until the mapper places the proc.
+  Both faulted here, and the proc table two arms further down had already had
+  the check the namespace-info arm was missing.
+- **An arm that builds an info list owns it on every way out.** The nesting
+  goes three deep in places — a per-proc list inside a per-job list inside the
+  arm's own — and an early exit has to release all of the ones it is inside,
+  not just the innermost. Nine exits released the inner list and left the
+  outer one holding every job gathered so far.
+- **`dry` is shared by every arm** and is reused, converted and destructed
+  over and over. It is initialized at its declaration because the `done:`
+  label is reachable from qualifier failures that run before any arm has
+  touched it.
+- **The status the caller gets is decided at `done:` from what came back**,
+  not from what any arm returned: nothing at all is `PMIX_ERR_NOT_FOUND`,
+  fewer results than keys asked for is `PMIX_QUERY_PARTIAL_SUCCESS`, and an
+  arm that could not answer at all sets `ret` and jumps. An arm that adds no
+  result and does *not* set `ret` — the two resource-usage ones — therefore
+  makes the query answer "looked and found nothing" where the default arm
+  would have said `PMIX_ERR_NOT_SUPPORTED`; see
+  [`docs/todo.rst`](../../../docs/todo.rst).
 
 ---
 
