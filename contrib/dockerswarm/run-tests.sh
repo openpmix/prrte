@@ -1855,6 +1855,100 @@ test_runtime() {
     fi
     cleanup_swarm
 
+    banner "runtime/data_server: a duplicate key is refused"
+    # "Duplicate keys being published on the same data range shall return
+    # the PMIX_ERR_DUPLICATE_KEY error."  Until that was enforced the
+    # duplicate was STORED, behind the original -- and since ds_lookup
+    # answers a key from the first match it finds, unreachable for the life
+    # of the DVM.  The publish reported success and did nothing.
+    #
+    # This is a cross-node case because the two publishers have to be
+    # genuinely different processes reaching one store through different
+    # daemons; the ownership test that decides "yours to replace" from
+    # "somebody else's name" is what a single process cannot exercise.
+    if ! RUN "test -x $DS"; then
+        skp "dataserver client not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start 'node1:2,node2:2,node3:2,node4:2'; then
+        bad "could not start a DVM for the duplicate-key tests"
+    else
+        PRUN_BG /tmp/ds-dup-own.out "--host node2:1 -n 1 $DS publish prte.test.dup taken session 90"
+        sleep 8
+        if ! RUN 'grep -q "^PUBLISHED prte.test.dup" /tmp/ds-dup-own.out'; then
+            bad "the first publish never happened: $(RUN 'cat /tmp/ds-dup-own.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+        else
+            ok "node2 holds prte.test.dup on the SESSION range"
+
+            out=$(PRUN "--host node3:1 -n 1 $DS dup prte.test.dup mine 0" 2>&1)
+            echo "$out" | grep -q 'STATUS PMIX_ERR_DUPLICATE_KEY' \
+                && ok "another process publishing the same key was refused" \
+                || bad "a duplicate publish was not refused: $(echo "$out" | grep '^STATUS' | tr -d '\r')"
+
+            # ...and the refusal must leave the original alone.  The scan
+            # runs to completion before anything is removed for exactly
+            # this reason.
+            out=$(PRUN "--host node4:1 -n 1 $DS lookup prte.test.dup 15" 2>&1)
+            echo "$out" | grep -q '^FOUND prte.test.dup taken' \
+                && ok "...and the original publication survived the refusal" \
+                || bad "a refused publish disturbed the store: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+            # A range is a SET OF PROCESSES, not the pmix_data_range_t word.
+            # This job's NAMESPACE range is its own namespace, which is
+            # disjoint from the publisher's, so the same key on it is a
+            # different range and must be permitted.
+            out=$(PRUN "--host node3:1 -n 1 $DS dup prte.test.dup elsewhere 0 namespace" 2>&1)
+            echo "$out" | grep -q 'STATUS PMIX_SUCCESS' \
+                && ok "the same key on a range naming a different set was allowed" \
+                || bad "a publish on a genuinely different range was refused: $(echo "$out" | grep '^STATUS' | tr -d '\r')"
+
+            # ...and a key nobody has published is still fine, so what is
+            # being refused above is the collision and not publishing itself
+            out=$(PRUN "--host node3:1 -n 1 $DS dup prte.test.dup.free free 0" 2>&1)
+            echo "$out" | grep -q 'STATUS PMIX_SUCCESS' \
+                && ok "an uncontested key still publishes normally" \
+                || bad "an uncontested publish was refused: $(echo "$out" | grep '^STATUS' | tr -d '\r')"
+
+            banner "runtime/data_server: a publisher may replace its own key"
+            # prte.pub.replace is owner-scoped: it takes back what the
+            # CALLER published, so a self-republish works without an
+            # intervening PMIx_Unpublish, and somebody else's live name
+            # still cannot be taken.
+            out=$(PRUN "--host node3:1 -n 1 $DS republish prte.test.rp 15" 2>&1)
+            echo "$out" | grep -q 'PUBLISH PMIX_SUCCESS' \
+                && ok "an uncontested key published normally" \
+                || bad "the first publish was refused: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            echo "$out" | grep -q 'REPUBLISH PMIX_ERR_DUPLICATE_KEY' \
+                && ok "a bare self-republish was refused" \
+                || bad "a bare self-republish was not refused: $(echo "$out" | grep '^REPUBLISH' | tr -d '\r')"
+            echo "$out" | grep -q '^FOUND prte.test.rp first' \
+                && ok "...and the value that was there survived it" \
+                || bad "a refused republish disturbed the value: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            echo "$out" | grep -q 'REPLACE PMIX_SUCCESS' \
+                && ok "the same publish carrying prte.pub.replace was accepted" \
+                || bad "a replace directive was refused: $(echo "$out" | grep '^REPLACE' | tr -d '\r')"
+            echo "$out" | grep -q '^FOUND prte.test.rp third' \
+                && ok "...and the new value is what a lookup now returns" \
+                || bad "a replace did not take effect: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+            # The directive grants no reach over another publisher's key.
+            # node2 still holds prte.test.dup, so it is the FIRST publish
+            # here that is refused -- and the run must stop there, having
+            # neither replaced nor displaced anything.
+            out=$(PRUN "--host node4:1 -n 1 $DS republish prte.test.dup 15" 2>&1)
+            echo "$out" | grep -q 'PUBLISH PMIX_ERR_DUPLICATE_KEY' \
+                && ok "prte.pub.replace did not reach another process's key" \
+                || bad "a replace took a key belonging to somebody else: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            echo "$out" | grep -q '^REPLACE' \
+                && bad "the replace was attempted against another process's key" \
+                || ok "...and it did not get as far as trying"
+            out=$(PRUN "--host node4:1 -n 1 $DS lookup prte.test.dup 15" 2>&1)
+            echo "$out" | grep -q '^FOUND prte.test.dup taken' \
+                && ok "...and node2's value is still what a lookup returns" \
+                || bad "another process's key was disturbed: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        fi
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
     banner "runtime/data_server: PMIX_PERSISTENCE is honored when a job ends"
     # PMIX_PERSISTENCE was recorded at publish and then never consulted
     # again: nothing removed data on a lifetime boundary, so PERSIST_APP
@@ -1894,10 +1988,10 @@ test_runtime() {
         # point on a long-lived DVM: successive generations of a job get a
         # fresh namespace, and without this the first one to publish a name
         # owned it until the DVM went away.
-        out=$(PRUN "--host node3:1 -n 1 $DS persist prte.test.pers.drop reused app 0" 2>&1)
-        echo "$out" | grep -q '^PUBLISHED prte.test.pers.drop' \
+        out=$(PRUN "--host node3:1 -n 1 $DS dup prte.test.pers.drop reused 0" 2>&1)
+        echo "$out" | grep -q 'STATUS PMIX_SUCCESS' \
             && ok "...and a later job could publish that key again" \
-            || bad "a reclaimed key could not be republished: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+            || bad "a reclaimed key could not be republished: $(echo "$out" | grep '^STATUS' | tr -d '\r')"
         RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
     fi
     cleanup_swarm

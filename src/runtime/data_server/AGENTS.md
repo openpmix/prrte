@@ -205,6 +205,58 @@ uninitialized memory.
 
 ---
 
+## Duplicate keys: same key, same *set of processes*
+
+`ds_publish` refuses a key that is already published on the range being
+published to, with `PMIX_ERR_DUPLICATE_KEY` and nothing stored. The Standard
+requires that, and the alternative is worse than it sounds: `ds_lookup`
+answers a key from the **first match it finds**, so a stored duplicate is
+unreachable — a write that reported success and did nothing.
+
+Nor is the loser reliably the newcomer. The store is a
+`pmix_pointer_array_t` and `pmix_pointer_array_add()` fills the **lowest
+free slot**, so a duplicate landing in a slot that some earlier unpublish
+freed sits *ahead* of the original and displaces it instead. Which value a
+lookup resolves to was a function of unrelated publish/unpublish history.
+
+**"Same range" is a set of processes, not the `pmix_data_range_t` word.**
+`PMIX_RANGE_NAMESPACE` published by two processes of different namespaces
+names two disjoint sets; refusing the second would refuse a publish the
+Standard permits. So `same_data_range()` tests the range word **and** asks
+whether the new publisher could itself have looked the stored item up
+(`prte_data_server_check_access` then `prte_data_server_check_range`) —
+which for `NAMESPACE`, `LOCAL` and `PROC_LOCAL` is exactly set equality, is
+trivially true for `SESSION`, `GLOBAL` and `RM`, and separates two users'
+identically-keyed items because neither can see the other's.
+
+The scan runs in two passes and the order is the point: `count_duplicates()`
+decides, `drop_prior()` acts. A publish that is going to be refused must
+leave the store exactly as it found it.
+
+The consequence worth knowing before you field a bug report: two *concurrent*
+publishers of one name no longer both appear to succeed. The second is
+refused, and since removal is a question of ownership, only the first can let
+the name go. Sequential generations of a job are unaffected — the previous
+one's `PERSIST_APP` data goes when it ends (see below) — but overlapping ones
+must now handle `PMIX_ERR_DUPLICATE_KEY` where they used to get a write that
+quietly went nowhere.
+
+`PRTE_PUBLISH_REPLACE` (`"prte.pub.replace"`, in `prte_data_server.h`) lets
+a publisher take back its **own** prior publication of those keys instead of
+failing — otherwise updating a value you published yourself needs an
+intervening `PMIx_Unpublish`. It is deliberately owner-scoped: if any
+colliding item belongs to somebody else the publish is refused whether or
+not the directive was given, so it is a republish and never a way to take a
+live name away. Only the republished keys go; an object holding others keeps
+them.
+
+Everything those checks read — the owner (which `PMIX_REQUESTOR` may have
+replaced), the range, the uid and gid — is final only *after* the directive
+scan, so the gate has to sit between that scan and
+`pmix_pointer_array_add()`.
+
+---
+
 ## Persistence and parked requests
 
 `PMIX_PERSIST_FIRST_READ` removes an item from `data->info` as soon as it is
@@ -283,6 +335,12 @@ exists.
 - **An access rule is not an ownership rule.** See the section above: what
   may be read and what may be removed are different questions, and the
   answer to the first one refused owners their own data.
+- **Decide before you remove.** The duplicate scan is two passes for a
+  reason: a refused publish must leave the store untouched, so nothing may
+  be dropped until every collision has been found and attributed.
+- **A range word is not a range.** Two publications can carry the same
+  `pmix_data_range_t` and still name disjoint sets of processes. Never
+  compare `data->range` alone and call it "the same range".
 - **A parked request can own an armed timer.** Remove it from `pending` and
   `PMIX_RELEASE` it; never `free` around it, and never leave the list
   holding one you have released.
@@ -324,11 +382,11 @@ by a publish in the other, that an ended job's data is purged from the server
 and that the purge takes *only* that job's data — plus the control, that a
 DVM which was not given the URI sees none of it.
 
-**Not covered:** `PMIX_PERSIST_FIRST_READ` end-to-end, and the lifecycle side
-of `ds_purge` (which is driven by job termination rather than by a client
-call) — in particular that a `PERSIST_APP` item is gone once its job ends
-while a `PERSIST_SESSION` one is not, which needs two jobs under one
-persistent DVM. Access
+**Not covered:** `PMIX_PERSIST_FIRST_READ` end-to-end, the duplicate-key and
+`PRTE_PUBLISH_REPLACE` paths, and the lifecycle side of `ds_purge` (which is
+driven by job termination rather than by a client call) — in particular that
+a `PERSIST_APP` item is gone once its job ends while a `PERSIST_SESSION` one
+is not, which needs two jobs under one persistent DVM. Access
 permissions are covered only with the harness running as a single user, so
 what the swarm proves is that a list naming *somebody else* keeps us out —
 not that a genuinely different uid gets in.

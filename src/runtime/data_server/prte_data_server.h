@@ -41,6 +41,22 @@ BEGIN_C_DECLS
 #define PRTE_PMIX_UNPUBLISH_CMD  0x03
 #define PRTE_PMIX_PURGE_PROC_CMD 0x04
 
+/* Directive for PMIx_Publish: replace this publisher's OWN prior
+ * publication of the keys being published rather than failing with
+ * PMIX_ERR_DUPLICATE_KEY.
+ *
+ * The Standard defines no such attribute, and refusing duplicates creates
+ * the need for one: a process that wants to update a value it published
+ * itself would otherwise have to PMIx_Unpublish first, and a publisher
+ * that skipped that step used to get a silent no-op.  The directive reaches
+ * only the caller's own publications - a published item belongs to the
+ * process that published it, the same rule PMIx_Unpublish applies - so it
+ * is a republish and not a way to take a live name away from somebody
+ * else.  A publish whose keys collide with ANOTHER publisher's is refused
+ * with or without it.
+ */
+#define PRTE_PUBLISH_REPLACE     "prte.pub.replace"     // (bool) replace the caller's own prior publication of these keys
+
 /* provide hooks to startup and finalize the data server */
 PRTE_EXPORT int prte_data_server_init(void);
 PRTE_EXPORT void prte_data_server_finalize(void);
