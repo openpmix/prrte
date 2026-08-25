@@ -878,9 +878,10 @@ errout:
     return rc;
 }
 
-/* add any info that the tool couldn't self-assign. Follows the
- * same asynchronous completion contract as
- * prte_pmix_server_register_nspace above */
+/* add any info that the tool couldn't self-assign.  Follows the same
+ * asynchronous completion contract as prte_pmix_server_register_nspace
+ * above, with one difference the caller has to tolerate: when the job is
+ * already known the callback fires synchronously, before this returns. */
 int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
                                    pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
@@ -907,6 +908,25 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         return PRTE_SUCCESS;
     }
 
+    /* The tool's rank is its own to choose, and it is not always zero - PMIx
+     * lets a tool self-assign both halves of its identity, and _toolconn()
+     * only defaults the rank when none was given.  The proc object built
+     * below has to carry that rank and sit at that subscript, because
+     * everything that later looks the tool up indexes jdata->procs by rank:
+     * in particular prte_state_base_track_procs(), which is what retires the
+     * tool's job when it departs.  Filed at zero, a tool with any other rank
+     * was never found there, so its namespace never terminated - and with
+     * it, the inheritance disposition of any allocation it had reserved.
+     *
+     * Screen the rank before building anything.  It arrived from the
+     * connecting process, and the sentinel ranks are not subscripts: handing
+     * PMIX_RANK_UNDEF to pmix_pointer_array_set_item() asks it to grow to
+     * four billion entries. */
+    if (PMIX_RANK_VALID <= cd->target.rank) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
+
     // create a job tracker for it
     jdata = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, cd->target.nspace);
@@ -916,20 +936,51 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
      * what lets a later command of theirs reach an allocation this one made */
     jdata->uid = cd->uid;
     jdata->gid = cd->gid;
+    /* If this fails the job never entered the array, so nothing else will
+     * ever release it and the nspace we would go on to register is one no
+     * lookup can reach.  It fails for an nspace PRRTE will not accept -
+     * an empty one, which is what a tool that sent PMIX_NSPACE carrying no
+     * string leaves in cd->target - so this is reachable from the wire. */
     rc = prte_set_job_data_object(jdata);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_RELEASE(jdata);
+        return rc;
+    }
     app = PMIX_NEW(prte_app_context_t);
-    app->argv = PMIx_Argv_split(cd->cmdline, ' ');
-    app->app = strdup(app->argv[0]);
+    /* The command line is optional and it comes from the connecting process:
+     * PMIx sends PMIX_CMD_LINE only when it could read its own argv (it
+     * cannot on a system where /proc is absent or the sysctl is refused),
+     * and a tool speaking the protocol directly need not send it at all.
+     * PMIx_Argv_split() of a NULL - or of a string that is all separators -
+     * yields a NULL argv, so argv[0] was a dereference any tool could
+     * provoke on the daemon it attached to, and through the TCONN relay on
+     * the master.  Every consumer of app->app already tolerates NULL, so
+     * saying nothing is the honest answer when we were told nothing. */
+    if (NULL != cd->cmdline) {
+        app->argv = PMIx_Argv_split(cd->cmdline, ' ');
+    }
+    if (NULL != app->argv) {
+        app->app = strdup(app->argv[0]);
+    }
     app->idx = 0;
     app->num_procs = 1;
-    app->first_rank = 0;
+    /* the app's leader is its lowest global rank, which for a one-proc tool
+     * job is the tool's own rank - not necessarily zero */
+    app->first_rank = cd->target.rank;
     pmix_pointer_array_set_item(jdata->apps, 0, app);
     jdata->num_apps++;
     proc = PMIX_NEW(prte_proc_t);
-    PMIX_LOAD_PROCID(&proc->name, cd->target.nspace, 0);
+    PMIX_LOAD_PROCID(&proc->name, cd->target.nspace, cd->target.rank);
     proc->pid = cd->pid;
     proc->state = PRTE_PROC_STATE_RUNNING;
-    pmix_pointer_array_set_item(jdata->procs, 0, proc);
+    /* the sole proc of the sole app, alone on this node - say so on the job
+     * object as well as in the registration below, or a query reads the
+     * constructor's "undefined" back out of a proc we do know these about */
+    proc->app_rank = 0;
+    proc->local_rank = 0;
+    proc->node_rank = 0;
+    pmix_pointer_array_set_item(jdata->procs, cd->target.rank, proc);
     // find the node it is on - the tool is on our node, and our node is
     // whichever one carries our own daemon proc. Our vpid is not a subscript
     // into the node pool: the pool is indexed by node identity, and in a DVM
@@ -946,6 +997,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
     }
     if (NULL == node) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PMIX_RELEASE(jdata);
         return PRTE_ERR_NOT_FOUND;
     }
     /* the node backpointer is borrowed, not retained */
@@ -959,7 +1011,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_ERROR_LOG(ret);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     u32 = 1;
     /* pass the number of nodes in the job */
@@ -968,7 +1020,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_ERROR_LOG(ret);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
 
     /* job size */
@@ -977,7 +1029,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_ERROR_LOG(ret);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
 
     /* number of apps in this job */
@@ -986,7 +1038,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_ERROR_LOG(ret);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
 
 
@@ -999,7 +1051,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     /* add local size for this job */
     u32 = 1;
@@ -1009,7 +1061,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     /* pass the local ldr */
     PMIX_INFO_LIST_ADD(ret, ilist, PMIX_LOCALLDR, &cd->target.rank, PMIX_PROC_RANK);
@@ -1018,7 +1070,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     /* add to the main payload */
     PMIX_INFO_LIST_CONVERT(ret, ilist, &darray);
@@ -1027,7 +1079,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     PMIX_INFO_LIST_ADD(ret, joblist, PMIX_NODE_INFO_ARRAY, &darray, PMIX_DATA_ARRAY);
     if (PMIX_SUCCESS != ret) {
@@ -1035,7 +1087,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     PMIX_DATA_ARRAY_DESTRUCT(&darray);
     PMIX_INFO_LIST_RELEASE(ilist);
@@ -1050,7 +1102,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     /* add the app size */
     PMIX_INFO_LIST_ADD(ret, ilist, PMIX_APP_SIZE, &app->num_procs, PMIX_UINT32);
@@ -1059,7 +1111,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     /* add the app leader */
     PMIX_INFO_LIST_ADD(ret, ilist, PMIX_APPLDR, &app->first_rank, PMIX_PROC_RANK);
@@ -1068,7 +1120,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     /* add the cmd line */
     PMIX_INFO_LIST_ADD(ret, ilist, PMIX_APP_ARGV, cd->cmdline, PMIX_STRING);
@@ -1077,7 +1129,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     /* add to the main payload */
     PMIX_INFO_LIST_CONVERT(ret, ilist, &darray);
@@ -1086,7 +1138,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     PMIX_INFO_LIST_ADD(ret, joblist, PMIX_APP_INFO_ARRAY, &darray, PMIX_DATA_ARRAY);
     if (PMIX_SUCCESS != ret) {
@@ -1094,7 +1146,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     PMIX_DATA_ARRAY_DESTRUCT(&darray);
     PMIX_INFO_LIST_RELEASE(ilist);
@@ -1109,7 +1161,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     /* appnum */
     u32 = 0;
@@ -1119,16 +1171,17 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
-    /* app rank */
-    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_APP_RANK, &proc->name.rank, PMIX_PROC_RANK);
+    /* app rank - the rank WITHIN the app, which for the only proc of the only
+     * app is zero however the tool numbered itself globally */
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_APP_RANK, &proc->app_rank, PMIX_PROC_RANK);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     /* local rank */
     u16 = 0;
@@ -1138,7 +1191,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     /* node rank */
     PMIX_INFO_LIST_ADD(ret, ilist, PMIX_NODE_RANK, &u16, PMIX_UINT16);
@@ -1147,16 +1200,21 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
-    /* node ID */
-    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_NODEID, &PRTE_PROC_MY_NAME->rank, PMIX_UINT32);
+    /* Node ID.  This is the node's slot in the node pool, which is its
+     * identity across the DVM - not our own vpid.  The two coincide on a DVM
+     * that has never changed shape and diverge the moment one has (a departed
+     * daemon's vpid is retired, its pool slot is not), which is the same
+     * distinction the node lookup above is written for.  Publishing the vpid
+     * told the tool about whichever node happened to sit in that slot. */
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_NODEID, &node->index, PMIX_UINT32);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     /* add to the main payload */
     PMIX_INFO_LIST_CONVERT(ret, ilist, &darray);
@@ -1165,7 +1223,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     PMIX_INFO_LIST_ADD(ret, joblist, PMIX_PROC_INFO_ARRAY, &darray, PMIX_DATA_ARRAY);
     if (PMIX_SUCCESS != ret) {
@@ -1173,7 +1231,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_INFO_LIST_RELEASE(ilist);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     PMIX_DATA_ARRAY_DESTRUCT(&darray);
     PMIX_INFO_LIST_RELEASE(ilist);
@@ -1190,7 +1248,7 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         PMIX_ERROR_LOG(ret);
         PMIX_INFO_LIST_RELEASE(joblist);
         rc = prte_pmix_convert_status(ret);
-        return rc;
+        goto errout;
     }
     PMIX_INFO_LIST_RELEASE(joblist);
 
@@ -1211,7 +1269,17 @@ int prte_pmix_server_register_tool(prte_pmix_server_req_t *cd,
         /* the callback will never fire - releasing the caddy
          * also releases the info array */
         PMIX_RELEASE(rcd);
-        return rc;
+        goto errout;
     }
     return PRTE_SUCCESS;
+
+errout:
+    /* The job object went into the global array before any of this could
+     * fail, and nothing else knows it is there: the tool is about to be
+     * told its connection failed, so no client_finalized will ever retire
+     * this namespace and the DVM would carry a phantom tool job - and hold
+     * itself open for it - for the rest of the session.  Releasing it also
+     * takes it back out of the array. */
+    PMIX_RELEASE(jdata);
+    return rc;
 }
