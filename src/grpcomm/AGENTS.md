@@ -797,6 +797,12 @@ previous one of that name is over.
   field is packed and unpacked unguarded, so every daemon in a DVM agrees
   on the message layout no matter what its PMIx advertised. Guard the
   *behaviour*, never the bytes.
+- **The trackers' `pmix_bitmap_init(&reported_slots, 1)` is deliberately
+  unchecked.** `pmix_bitmap_set_bit()` grows the bitmap on demand, and an
+  `init` that fails leaves `array_size` at zero behind a NULL pointer, so the
+  first slot recorded allocates and every accessor before that reads zero -
+  which is the right answer for a tracker nothing has reported to. A
+  constructor cannot fail anyway; do not add an abort here.
 - **One allocator per array.** The proc arrays on a signature are built
   with `PMIX_PROC_CREATE` and freed with `PMIX_PROC_FREE` everywhere —
   those allocate and free *inside the PMIx library*, so a plain `free()`

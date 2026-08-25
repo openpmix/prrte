@@ -223,8 +223,6 @@ PMIX_CLASS_INSTANCE(prte_grpcomm_group_memo_t,
 
 static void mdcon(prte_pmix_fence_caddy_t *p)
 {
-    p->sig = NULL;
-    p->buf = NULL;
     p->procs = NULL;
     p->nprocs = 0;
     p->info = NULL;
@@ -236,12 +234,6 @@ static void mdcon(prte_pmix_fence_caddy_t *p)
 }
 static void mddes(prte_pmix_fence_caddy_t *p)
 {
-    if (NULL != p->sig) {
-        PMIX_RELEASE(p->sig);
-    }
-    if (NULL != p->buf) {
-        PMIX_DATA_BUFFER_RELEASE(p->buf);
-    }
     /* The modex bucket PMIx handed up with the fence.  Ownership transfers on
      * that call and cannot not: PMIx unloads the buffer into a bare pointer
      * and returns, while we park it here and read it later from another
