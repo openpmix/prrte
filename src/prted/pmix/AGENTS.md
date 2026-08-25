@@ -929,6 +929,33 @@ it is enforced here:
   broadcasts to every daemon including the originator, and the originator
   must update its group registry but must not re-notify its own clients.
 
+**An event's info array is the generating client's own, and it reaches every
+daemon in the DVM.** PMIx hands what a process passed to `PMIx_Notify_event`
+straight to the host without inspecting what any entry holds — the same
+untrusted-input rule as `_toolconn()` and `process_job_ctrl()` under "The
+relay pattern", in a third place, and the worst-placed of the three because
+the host's answer to the event is to broadcast it. So anything in here that
+*reads* an entry must check `value.type` first:
+`prte_pmix_server_group_member_left()` took the `PMIX_GROUP_ID` off
+`value.data.string` and the departing proc off `value.data.proc`, so one
+`PMIx_Notify_event(PMIX_GROUP_LEFT, ...)` carrying either key with, say, a
+`PMIX_SIZE` value faulted every daemon at once, on the `strcmp` or on the
+`PMIX_CHECK_PROCID`. Any process attached to any daemon could send it, and
+the registry is non-empty on every daemon from the first successful
+`PMIx_Group_construct` onwards, because `grpcomm_group.c` appends the group
+everywhere.
+
+The identity has to be concrete as well as well-typed. `PMIX_CHECK_PROCID`
+counts an empty nspace and a wildcard rank as matching anything, so a
+departure naming neither removed whichever member happened to sit first in
+the array — the wildcard trap that runs through this whole directory, here
+in a place where the wildcard arrived from outside rather than from an
+uninitialized field. A proc leaves a group one at a time; insist on being
+told which one.
+
+The helper is not static only so that `test_group_left` can pin all of that
+without a DVM.
+
 ---
 
 ## Conventions specific to this directory
@@ -984,7 +1011,8 @@ it is enforced here:
 **Unit — `test/unit/prted/`.** The directive translators
 (`prte_pmix_xfer_job_info`, `prte_pmix_xfer_app`), the job-info cache, the
 session time-limit parser (`prte_pmix_server_parse_session_time`), the
-departed-jobs list, and the connected-assemblage registry
+group-departure validator (`test_group_left`), the departed-jobs list, and
+the connected-assemblage registry
 (`test_connections` — set matching, wildcard coverage, and when a record is
 purged) are pure data transforms and are covered there. Most of the rest of
 this directory needs a live PMIx server and at least one peer daemon.

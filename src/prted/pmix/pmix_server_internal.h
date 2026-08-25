@@ -486,6 +486,14 @@ pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,
                             const pmix_info_t directives[], size_t ndirs,
                             pmix_info_cbfunc_t cbfunc, void *cbdata);
 
+/* Apply a PMIX_GROUP_LEFT notification to this daemon's copy of the group
+ * registry, dropping the departing proc from the membership we hold. The
+ * info array is the generating client's own and is validated here. Runs on
+ * the PRRTE progress thread; exported so the unit test can reach it. */
+PRTE_EXPORT extern void prte_pmix_server_group_member_left(pmix_status_t code,
+                                                           const pmix_proc_t *source,
+                                                           pmix_info_t *info, size_t ninfo);
+
 /* Interpret a PMIX_ALLOC_TIME session time limit -
  * "[[[[months:]days:]hours:]minutes:]seconds", scanned from the right - and
  * return it in seconds, or -1 if the string is not a well-formed time. */

@@ -152,9 +152,10 @@ static void _notify_release(int status, void *cbdata)
  * against its own copy of prte_pmix_server_globals.groups - keeping the
  * registry consistent across the DVM. This must run on the PRRTE event base
  * (the same context that creates/queries the registry); it is called from the
- * broadcast receiver below. */
-static void group_member_left(pmix_status_t code, const pmix_proc_t *source,
-                              pmix_info_t *info, size_t ninfo)
+ * broadcast receiver below. It is not static only so that test_group_left in
+ * test/unit/prted can pin the input validation. */
+void prte_pmix_server_group_member_left(pmix_status_t code, const pmix_proc_t *source,
+                                        pmix_info_t *info, size_t ninfo)
 {
     char *grpid = NULL;
     pmix_proc_t *affected = NULL;
@@ -164,11 +165,24 @@ static void group_member_left(pmix_status_t code, const pmix_proc_t *source,
     if (PMIX_GROUP_LEFT != code) {
         return;
     }
+    /* this array is the generating process's own: PMIx hands what a client
+     * passed to PMIx_Notify_event straight to the host without inspecting
+     * what any entry holds, and we then broadcast it to the whole DVM. So a
+     * value's type must be checked before the matching member of its union
+     * is read - a PMIX_GROUP_ID carrying, say, a PMIX_SIZE would otherwise
+     * hand strcmp() whatever eight bytes the caller chose, on every daemon
+     * at once. A PMIX_STRING that carries no string is the same trap in its
+     * quieter form: the packer writes a zero length and the unpacker hands
+     * back NULL */
     for (n = 0; n < ninfo; n++) {
         if (PMIX_CHECK_KEY(&info[n], PMIX_GROUP_ID)) {
-            grpid = info[n].value.data.string;
+            if (PMIX_STRING == info[n].value.type) {
+                grpid = info[n].value.data.string;
+            }
         } else if (PMIX_CHECK_KEY(&info[n], PMIX_EVENT_AFFECTED_PROC)) {
-            affected = info[n].value.data.proc;
+            if (PMIX_PROC == info[n].value.type) {
+                affected = info[n].value.data.proc;
+            }
         }
     }
     /* the event source is the departing proc if it wasn't called out explicitly */
@@ -176,6 +190,13 @@ static void group_member_left(pmix_status_t code, const pmix_proc_t *source,
         affected = (pmix_proc_t *) source;
     }
     if (NULL == grpid || NULL == affected) {
+        return;
+    }
+    /* PMIX_CHECK_PROCID counts an empty nspace and a wildcard rank as
+     * matching anything, so a departure that does not name a concrete
+     * identity would drop whichever member happens to sit first in the
+     * array. Procs leave a group one at a time; insist on being told which */
+    if (PMIX_NSPACE_INVALID(affected->nspace) || !PMIX_RANK_IS_VALID(affected->rank)) {
         return;
     }
     PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.groups, prte_pmix_server_pset_t) {
@@ -285,7 +306,7 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
 
     /* keep our group membership registry consistent with any voluntary
      * departure - every daemon does this, including the originator */
-    group_member_left(code, &cd->proc, cd->info, realninfo);
+    prte_pmix_server_group_member_left(code, &cd->proc, cd->info, realninfo);
 
     /* if I am the one who broadcast it, my local clients have already been
      * notified - just release and return now that the registry is updated */
