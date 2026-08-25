@@ -6821,8 +6821,12 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
             # faulty rather than sleep: its ranks register with PMIx and name
             # their host on startup, which is how the case knows it spanned
             # node3.
+            # recoverable: the release kills the rank on node3, and a job
+            # that has not said it can absorb that is terminated whole (the
+            # case below covers that).  This one is about ACCOUNTING, so it
+            # uses the mode that leaves the survivors running to be counted.
             RUN 'rm -f /tmp/shrink-live.out' >/dev/null 2>&1
-            RUN_BG /tmp/shrink-live.out "timeout 180 prun --dvm-uri file:/tmp/dvm.uri -n 3 --map-by ppr:1:node $FLT clean 25"
+            RUN_BG /tmp/shrink-live.out "timeout 180 prun --dvm-uri file:/tmp/dvm.uri -n 3 --map-by ppr:1:node --runtime-options recoverable $FLT clean 25"
             sleep 8
             if ! RUN 'grep -q " HOST node3" /tmp/shrink-live.out'; then
                 bad "no rank landed on node3: $(RUN 'tr "\n" " " < /tmp/shrink-live.out' | tail -c 200)"
@@ -6846,6 +6850,60 @@ gcc -o /root/staged_marker /root/staged_marker.c' >/dev/null 2>&1
                 [ "${n:-0}" -ge 2 ] \
                     && ok "...and the survivors finished normally" \
                     || bad "$n/2 survivors finished: $(RUN 'tr "\n" " " < /tmp/shrink-live.out' | tail -c 200)"
+                RUN 'pgrep -x prte >/dev/null' && ok "...and the HNP survived" \
+                                               || bad "the HNP died on the shrink"
+                out=$(RUN 'timeout 60 prun --dvm-uri file:/tmp/dvm.uri -n 2 --map-by ppr:1:node hostname' 2>&1)
+                [ "$(echo "$out" | grep -cE '^node[12]$')" = 2 ] \
+                    && ok "...and the reduced DVM still runs a job" \
+                    || bad "the reduced DVM could not run a job: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+            fi
+        fi
+        RUN 'timeout -k 5 30 pterm --dvm-uri file:/tmp/dvm.uri' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
+    banner "elastic DVM: a release reports the procs it killed"
+    # The counterpart to the case above: the same shrink under a job that has
+    # NOT declared itself recoverable.  Releasing the node kills its rank, and
+    # that must reach the outcome rather than passing for a clean run.
+    cleanup_swarm
+    RUN 'rm -f /tmp/dvm.uri; nohup prte --daemonize --report-uri /tmp/dvm.uri --prtemca prte_elastic_mode 1 >/tmp/prte.out 2>&1 & sleep 8' >/dev/null
+    duri=$(RUN 'head -1 /tmp/dvm.uri' 2>/dev/null | tr -d '\r')
+    if [ -z "$duri" ]; then
+        bad "could not start an elastic DVM for the release-reporting test"
+    else
+        out=$(RUN "PRTE_DVM_URI='$duri' timeout 90 elastic grow node2:2,node3:2" 2>&1)
+        if ! echo "$out" | grep -q PMIX_DVM_IS_READY; then
+            bad "grow did not complete -- cannot test the release reporting: $(echo "$out" | tr '\n' ' ' | tail -c 200)"
+        else
+            RUN 'rm -f /tmp/shrink-kill.out' >/dev/null 2>&1
+            RUN_BG /tmp/shrink-kill.out "{ timeout 180 prun --dvm-uri file:/tmp/dvm.uri -n 3 --map-by ppr:1:node $FLT clean 25; echo RC=\$?; }"
+            sleep 8
+            if ! RUN 'grep -q " HOST node3" /tmp/shrink-kill.out'; then
+                bad "no rank landed on node3: $(RUN 'tr "\n" " " < /tmp/shrink-kill.out' | tail -c 200)"
+            else
+                out=$(RUN "PRTE_DVM_URI='$duri' timeout 90 elastic shrink node3" 2>&1)
+                echo "$out" | grep -q PMIX_DVM_IS_READY \
+                    && ok "shrink node3 completed under a live job" \
+                    || bad "shrink did not complete under a live job: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+                n=0
+                while [ "$n" -lt 60 ]; do
+                    RUN 'grep -q "^RC=" /tmp/shrink-kill.out' && break
+                    sleep 1; n=$((n+1))
+                done
+                if [ "$n" -ge 60 ]; then
+                    bad "prun never returned after the release"
+                else
+                    rc=$(RUN 'sed -n "s/^RC=//p" /tmp/shrink-kill.out' | tr -d ' \r')
+                    [ "${rc:-0}" != 0 ] \
+                        && ok "prun reported the loss (exit $rc), not a clean run" \
+                        || bad "prun exited 0 for a job that lost a rank to the release"
+                    # the help text wraps after "when that", so match within
+                    # one line -- and on the rank and node it names
+                    RUN 'grep -qE "process rank [0-9]+ on node node3 was killed" /tmp/shrink-kill.out' \
+                        && ok "...and named the rank and the node it was released with" \
+                        || bad "no diagnostic naming the killed rank: $(RUN 'tr "\n" " " < /tmp/shrink-kill.out' | tail -c 250)"
+                fi
                 RUN 'pgrep -x prte >/dev/null' && ok "...and the HNP survived" \
                                                || bad "the HNP died on the shrink"
                 out=$(RUN 'timeout 60 prun --dvm-uri file:/tmp/dvm.uri -n 2 --map-by ppr:1:node hostname' 2>&1)
