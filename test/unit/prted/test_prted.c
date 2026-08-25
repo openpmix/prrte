@@ -1334,6 +1334,15 @@ static const struct {
     {"-5",                     -1},
     {"5s",                     -1},
     {"1:2:3:4:5:6",            -1},   /* one field too many */
+    /* Inside strtol's range and outside the accumulator's.  strtol reports
+     * only its own overflow, so a month count this large used to be
+     * multiplied by 2592000 and summed as signed - undefined, and in
+     * practice a plausible-looking duration for a session that would then
+     * be reclaimed at the wrong moment. */
+    {"3558399705577:0:0:0:0",  -1},
+    {"3558399705576:0:0:0:0",  3558399705576L * 2592000L},  /* the largest that fits */
+    {"9223372036854775807",    9223372036854775807L},  /* LONG_MAX: seconds, x1 */
+    {"9223372036854775808",    -1},   /* past LONG_MAX: strtol's own overflow */
 };
 
 static int test_session_time(void)

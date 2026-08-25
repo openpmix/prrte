@@ -905,6 +905,30 @@ The parts that matter when editing this file:
 - **An unrecognized directive is not an error.** A request may be addressed at
   more than one kind of RTE. Refuse only what PRRTE is being asked to do and
   cannot (`PROVISION_*`, anything asking it to *choose* machines).
+- **Every value in the request is the caller's own, and this upcall is
+  reachable by any application process or tool attached to any daemon.** It is
+  the same untrusted-input rule as `_toolconn()` and `process_job_ctrl()` under
+  "The relay pattern", in another place, and the strings are the fault version
+  of it: `PMIX_SESSION_CTRL_ID`, `PMIX_ALLOC_ID`, `PMIX_ALLOC_REQ_ID`,
+  `PMIX_ALLOC_TIME`, `PMIX_PERSONALITY` and `PMIX_NSPACE` all go on to a
+  `strdup`, a `strlen` or a parser, so a mistyped one faulted the daemon on a
+  path that needs no authorization at all (the time is read during the parse,
+  before anyone has asked who is calling). `get_string_directive()` is the one
+  place they are read; keep it that way. `PMIX_ALLOC_INHERITANCE` is the quiet
+  half of the same rule — it decides whether the session's nodes are handed
+  *away* to the scheduler, so it is read with `PMIX_VALUE_GET_NUMBER` rather
+  than off a fixed union member. And a `PMIX_NSPACE` must name something: an
+  empty one is PMIx's wildcard, so it selects every job in the session instead
+  of none.
+- **`set_response()` may run only ONCE per parsed request.** It frees the info
+  array the request arrived with, and every string the parsed `prte_sessctrl_t`
+  holds points into that array — so a second call reads the copy the first
+  released. `apply_to_all()` used to call it once per session and did exactly
+  that; it now builds the answer once, after the loop, naming no session
+  (a request addressed to all of them has no one session to report). For the
+  same reason `set_response()` replaces the request's array even when it has
+  nothing to say: leaving the old one there answers the caller with its own
+  directives echoed back as results.
 - **`answer_request()` owns the completion for both callers**, because they
   answer through different callbacks: a local client's answer goes to PMIx's
   own callback (synchronous), a relayed one to `send_alloc_resp` (which
