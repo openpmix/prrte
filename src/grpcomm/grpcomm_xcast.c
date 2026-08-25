@@ -133,12 +133,11 @@ static void send_ack(signature_t* sig, pmix_rank_t ack_id);
 static void request_ack(pmix_rank_t from, signature_t* sig, pmix_rank_t ack_id);
 // Remove local tracking and ack to parent
 static void finish_op(op_t *op);
-// Finish every op that is now both complete and next in op-id order
+// Finish every op whose subtree has reported. Ops are held in op-id order
+// and finish_op is what enforces that they retire in it
 static void drive_completions(void);
 // Give up on this op's exchange and get the payload the tree way
 static void tree_whole_forward(op_t *op);
-// How this broadcast will travel - decided by its originator, and only there
-// Is an op ahead of this one in op-id order still waiting on its payload?
 
 
 // Pack the xcast message forwarded to our children.  Takes no destination:
@@ -288,7 +287,7 @@ int prte_grpcomm_xcast_nb(prte_rml_tag_t tag, pmix_data_buffer_t *msg,
      * access framework-global data safely */
 
     prte_event_set(prte_event_base, &op->ev, -1, PRTE_EV_WRITE, begin_xcast, op);
-    PMIX_POST_OBJECT(&op);
+    PMIX_POST_OBJECT(op);
     prte_event_active(&op->ev, PRTE_EV_WRITE, 1);
 
     return PRTE_SUCCESS;
@@ -311,12 +310,11 @@ void prte_grpcomm_xcast_recv(
     signature_t sig;
     if(PMIX_SUCCESS != unpack_sig(buffer, &sig)) return;
 
-    /* An op-id of zero is an originator relaying to the controller, not a
-     * forward down the tree. The distinction decides how the payload that
-     * follows is laid out: the relay always carries it whole, because that hop
-     * is an ordinary point-to-point send even when the broadcast is going to
-     * Capture it before the controller stamps an id
-     * on the signature below. */
+    /* An op-id of zero is an originator relaying to the controller rather than
+     * a forward down the tree; the controller stamps the real id below. The
+     * two carry the same fields in the same order - pack_relay_msg and
+     * pack_forward_msg are deliberately identical - so nothing downstream has
+     * to tell them apart. */
 
     // A daemon that has never seen any xcast (op_id_inited == 0) yet is being
     // handed an op is a *late joiner*: a daemon grown into a running DVM, or one
@@ -422,7 +420,8 @@ void prte_grpcomm_xcast_recv(
     PMIX_OUTPUT_VERBOSE((
         1, prte_grpcomm_globals.output,
         "%s grpcomm:xcast:recv: new xcast of tag %u with op_id %lu",
-        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), op->msg_tag, sig.op_id
+        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned) op->msg_tag,
+        (unsigned long) sig.op_id
     ));
 
     // We need to process (invoke the user msg's callback, generally) and
@@ -585,7 +584,7 @@ static void begin_xcast(int sd, short args, void* cbdata){
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     op_t* op = (op_t*) cbdata;
-    PMIX_ACQUIRE_OBJECT(&op);
+    PMIX_ACQUIRE_OBJECT(op);
 
 
     // setup the payload
@@ -1114,6 +1113,11 @@ static void process_wireup(pmix_data_buffer_t *msg){
         if(PMIX_SUCCESS != ret){ PMIX_ERROR_LOG(ret); break; }
     } while(PMIX_SUCCESS == ret);
 
+    /* Reaching here means the loop broke on a real unpack failure - a wireup
+     * we cannot read leaves this daemon with no route to anyone, so it ends
+     * the job. The clean end of the record stream is the
+     * READ_PAST_END_OF_BUFFER return inside the loop, which is why that one
+     * is a return and not a break. */
     if(val.type != PMIX_UNDEF) PMIx_Value_destruct(&val);
     if(sval.type != PMIX_UNDEF) PMIx_Value_destruct(&sval);
     PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
@@ -1180,7 +1184,10 @@ static void op_con(op_t* p)
     p->replay_pending_parent = false;
 
     p->nreported = 0;
-    p->nexpected = -1;
+    /* "not yet computed" - forward_op() sets the real count. Deliberately the
+     * largest value rather than zero, so an op that has not been forwarded can
+     * never satisfy op_ready() and retire without having been sent anywhere */
+    p->nexpected = SIZE_MAX;
     p->ack_id_up = 0;
     p->ack_id_down = 0;
 
