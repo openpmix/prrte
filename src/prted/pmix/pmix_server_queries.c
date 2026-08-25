@@ -106,12 +106,17 @@ static void _query(int sd, short args, void *cbdata)
         const char *allocprop;
 #endif
     char **ans, *tmp;
+    size_t nkeys = 0;
     char *psetname;
     prte_app_context_t *app;
     prte_session_t *session;
     int matched;
     pmix_proc_info_t *procinfo;
-    pmix_data_array_t dry;
+    /* PMIx initializes this before anything in PMIx_Info_list_convert() can
+     * fail, but every path to the done: label depends on that and the early
+     * ones reach it having never touched this - so initialize it here rather
+     * than rely on the callee to initialize its caller's stack */
+    pmix_data_array_t dry = PMIX_DATA_ARRAY_STATIC_INIT;
     prte_proc_t *proct;
     pmix_proc_t *proc;
     size_t sz;
@@ -267,6 +272,7 @@ static void _query(int sd, short args, void *cbdata)
             }
         }
         for (n = 0; NULL != q->keys[n]; n++) {
+            ++nkeys;
             pmix_output_verbose(2, prte_pmix_server_globals.output,
                                 "%s processing key %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), q->keys[n]);
@@ -1215,12 +1221,16 @@ done:
         } else if (PMIX_SUCCESS == ret) {
             if (0 == dry.size) {
                 ret = PMIX_ERR_NOT_FOUND;
+            } else if (dry.size < nkeys) {
+                /* against cd->ninfo, which a query caddy never sets, this
+                 * compared with zero and PMIX_QUERY_PARTIAL_SUCCESS could not
+                 * be reached.  The count that means something here is the
+                 * number of keys that were asked for: fewer results than that
+                 * is what partial success is for, and a caller has no other
+                 * way to learn that one of its keys went unanswered */
+                ret = PMIX_QUERY_PARTIAL_SUCCESS;
             } else {
-                if (dry.size < cd->ninfo) {
-                    ret = PMIX_QUERY_PARTIAL_SUCCESS;
-                } else {
-                    ret = PMIX_SUCCESS;
-                }
+                ret = PMIX_SUCCESS;
             }
         }
     }
