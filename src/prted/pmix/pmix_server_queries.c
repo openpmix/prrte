@@ -303,8 +303,12 @@ static void _query(int sd, short args, void *cbdata)
                     if (NULL == jdata) {
                         continue;
                     }
-                    // if the session ID was given, then ignore jobs not from that session
-                    if (UINT32_MAX != sessionid && jdata->session->session_id != sessionid) {
+                    // if the session ID was given, then ignore jobs not from that session.
+                    // A job's session pointer is optional - the launch path falls back to
+                    // prte_default_session where it finds none - so a job that has none
+                    // belongs to no session the caller can have named
+                    if (UINT32_MAX != sessionid &&
+                        (NULL == jdata->session || jdata->session->session_id != sessionid)) {
                         continue;
                     }
                     PMIX_INFO_LIST_START(stack);
@@ -346,13 +350,19 @@ static void _query(int sd, short args, void *cbdata)
                             PMIX_INFO_LIST_RELEASE(plist);
                             goto done;
                         }
-                        /* add the proc's hostname */
-                        PMIX_INFO_LIST_ADD(rc, plist, PMIX_HOSTNAME, proct->node->name, PMIX_STRING);
-                        if (PMIX_SUCCESS != rc) {
-                            PMIX_ERROR_LOG(rc);
-                            PMIX_INFO_LIST_RELEASE(stack);
-                            PMIX_INFO_LIST_RELEASE(plist);
-                            goto done;
+                        /* add the proc's hostname.  A proc has no node until the
+                         * mapper places it, and this loop walks every job in the
+                         * array including one still being mapped - the proc table
+                         * below makes the same check and this did not */
+                        if (NULL != proct->node && NULL != proct->node->name) {
+                            PMIX_INFO_LIST_ADD(rc, plist, PMIX_HOSTNAME, proct->node->name,
+                                               PMIX_STRING);
+                            if (PMIX_SUCCESS != rc) {
+                                PMIX_ERROR_LOG(rc);
+                                PMIX_INFO_LIST_RELEASE(stack);
+                                PMIX_INFO_LIST_RELEASE(plist);
+                                goto done;
+                            }
                         }
                         /* add the proc's local rank */
                         PMIX_INFO_LIST_ADD(rc, plist, PMIX_LOCAL_RANK, &proct->local_rank, PMIX_UINT16);
@@ -539,6 +549,10 @@ static void _query(int sd, short args, void *cbdata)
                 } else {
                     /* send them ours */
                     proct = prte_get_proc_object(PRTE_PROC_MY_NAME);
+                    if (NULL == proct) {
+                        ret = PMIX_ERR_NOT_FOUND;
+                        goto done;
+                    }
                 }
                 /* get the server uri value - we can block here as we are in
                  * an PRTE progress thread */
