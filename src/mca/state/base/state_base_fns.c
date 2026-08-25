@@ -385,9 +385,23 @@ void prte_state_base_report_progress(int fd, short argc, void *cbdata)
     PMIX_RELEASE(caddy);
 }
 
+/* Tell the data server that a job has ended, so it can drop the published
+ * data that was not to outlive it.
+ *
+ * The lifetime that ended is named in the message: PMIX_PERSIST_APP, since
+ * the target is a whole namespace.  Without it the server cannot tell this
+ * from an explicit "remove everything I published" and would take data the
+ * publisher asked to keep for the session.
+ *
+ * PMIX_PERSIST_PROC data is therefore reclaimed at job granularity rather
+ * than when its individual publisher exits - later than the Standard's
+ * "until the publishing process terminates", but a message per terminating
+ * process is not a cost this path can carry at scale. */
 void prte_state_base_notify_data_server(pmix_proc_t *target)
 {
     pmix_data_buffer_t *buf;
+    pmix_info_t horizon;
+    pmix_persistence_t persist = PMIX_PERSIST_APP;
     int rc, room = -1;
     uint8_t cmd = PRTE_PMIX_PURGE_PROC_CMD;
     size_t ninfo;
@@ -423,10 +437,17 @@ void prte_state_base_notify_data_server(pmix_proc_t *target)
         return;
     }
 
-    /* no directives of our own - the count still has to be there, as the
-     * command carries one and the reader unpacks it unconditionally */
-    ninfo = 0;
+    /* one directive: the lifetime that just ended */
+    ninfo = 1;
     rc = PMIx_Data_pack(NULL, buf, &ninfo, 1, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return;
+    }
+    PMIX_INFO_LOAD(&horizon, PMIX_PERSISTENCE, &persist, PMIX_PERSIST);
+    rc = PMIx_Data_pack(NULL, buf, &horizon, 1, PMIX_INFO);
+    PMIX_INFO_DESTRUCT(&horizon);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
@@ -744,12 +765,14 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
             if (prte_state_base.run_fdcheck) {
                 prte_state_base_check_fds(jdata);
             }
-            /* if ompi-server is around, then notify it to purge
-             * any session-related info */
-            if (NULL != prte_data_server_uri) {
-                PMIX_LOAD_PROCID(&target, jdata->nspace, PMIX_RANK_WILDCARD);
-                prte_state_base_notify_data_server(&target);
-            }
+            /* tell the data server the job is over, so it can drop what
+             * this namespace published that was not to outlive it.  This
+             * used to be done only when an external data server was
+             * configured, which left the built-in one - the usual case -
+             * never told a job had ended, so nothing was ever reclaimed
+             * from it short of the DVM shutting down */
+            PMIX_LOAD_PROCID(&target, jdata->nspace, PMIX_RANK_WILDCARD);
+            prte_state_base_notify_data_server(&target);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
         }
     }

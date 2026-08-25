@@ -444,7 +444,10 @@ static void construct(prte_data_object_t *ptr)
     ptr->agids = NULL;
     ptr->nagids = 0;
     ptr->range = PMIX_RANGE_SESSION;
-    ptr->persistence = PMIX_PERSIST_SESSION;
+    /* the Standard's default is PMIX_PERSIST_APP - "retain until the
+     * application terminates".  PMIx adds no default of its own before
+     * handing a publish to the host, so this is the one that governs */
+    ptr->persistence = PMIX_PERSIST_APP;
     PMIX_CONSTRUCT(&ptr->info, pmix_list_t);
 }
 

@@ -148,6 +148,17 @@ PRTE_EXPORT pmix_status_t prte_data_server_check_range(prte_data_req_t *req,
 PRTE_EXPORT pmix_status_t prte_data_server_check_access(prte_data_req_t *req,
                                                         prte_data_object_t *data);
 
+/* Has data with this persistence outlived the lifetime that just ended?
+ *
+ * The persistence values are not a numeric ladder that can be compared -
+ * PMIX_PERSIST_INDEF is 0 and outlives all of them - so the ordering is
+ * spelled out rather than derived.  A horizon of PMIX_PERSIST_INVALID means
+ * no lifetime ended and the caller asked for everything, which is what an
+ * explicit PMIx_Unpublish(NULL, ...) means: a publisher taking back all of
+ * its own data regardless of how long it had asked for it to be kept. */
+PRTE_EXPORT bool prte_data_server_expires_by(pmix_persistence_t persist,
+                                             pmix_persistence_t horizon);
+
 /* Apply the REQUESTER's range: is this publisher one the lookup asked to
  * search?  The PMIx retrieval rules constrain a lookup to data whose
  * publisher falls within the range the requester gave (the default being

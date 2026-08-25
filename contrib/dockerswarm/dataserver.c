@@ -45,6 +45,14 @@
  * instance rather than to the HNP (see pmix_server_pub.c), so it is only
  * reachable by a lookup carrying the same range.
  *
+ *   dataserver persist <key> <value> <persistence> [seconds] [range]
+ *       Publish with an explicit PMIX_PERSISTENCE and exit, so the JOB
+ *       ends.  <persistence> is one of first-read, proc, app, session,
+ *       indef.  What a later job can still look up is what the data server
+ *       kept: "app" must be gone once this job terminates, "session" must
+ *       not be.  Persistence means nothing until something removes data on
+ *       a lifetime boundary, so this is the test that it does.
+ *
  *   dataserver unpublish <key> [seconds] [pubrange] [unpubrange]
  *       Publish, then unpublish, then look up - all from one process, since
  *       only the publisher may unpublish its own data.  Prints
@@ -311,6 +319,58 @@ static int do_unpublish(const char *key, int seconds, const char *pubrange,
     return 0;
 }
 
+static pmix_persistence_t parse_persist(const char *s)
+{
+    if (NULL == s) {
+        return PMIX_PERSIST_APP;
+    }
+    if (0 == strcmp(s, "first-read")) {
+        return PMIX_PERSIST_FIRST_READ;
+    }
+    if (0 == strcmp(s, "proc")) {
+        return PMIX_PERSIST_PROC;
+    }
+    if (0 == strcmp(s, "session")) {
+        return PMIX_PERSIST_SESSION;
+    }
+    if (0 == strcmp(s, "indef")) {
+        return PMIX_PERSIST_INDEF;
+    }
+    return PMIX_PERSIST_APP;
+}
+
+static int do_persist(const char *key, const char *value, const char *pstr,
+                      int seconds, const char *rangestr)
+{
+    pmix_status_t rc;
+    pmix_info_t info[3];
+    pmix_data_range_t range = parse_range(rangestr);
+    pmix_persistence_t persist = parse_persist(pstr);
+
+    rc = PMIx_Init(&myproc, NULL, 0);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, "ERROR PMIx_Init: %s\n", PMIx_Error_string(rc));
+        return 1;
+    }
+    PMIX_INFO_LOAD(&info[0], key, value, PMIX_STRING);
+    PMIX_INFO_LOAD(&info[1], PMIX_RANGE, &range, PMIX_DATA_RANGE);
+    PMIX_INFO_LOAD(&info[2], PMIX_PERSISTENCE, &persist, PMIX_PERSIST);
+    rc = PMIx_Publish(info, 3);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    PMIX_INFO_DESTRUCT(&info[2]);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, "ERROR PMIx_Publish(%s): %s\n", key, PMIx_Error_string(rc));
+        PMIx_Finalize(NULL, 0);
+        return 1;
+    }
+    printf("PUBLISHED %s\n", key);
+    fflush(stdout);
+    sleep(seconds);
+    PMIx_Finalize(NULL, 0);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     char *keys[2];
@@ -321,8 +381,9 @@ int main(int argc, char **argv)
                 "       %s lookup <key> [secs] [range]\n"
                 "       %s lookupwait <key> [secs] [range]\n"
                 "       %s lookup2 <key1> <key2> [secs]\n"
-                "       %s unpublish <key> [secs] [pubrange] [unpubrange]\n",
-                argv[0], argv[0], argv[0], argv[0], argv[0]);
+                "       %s unpublish <key> [secs] [pubrange] [unpubrange]\n"
+                "       %s persist <key> <value> <persistence> [secs] [range]\n",
+                argv[0], argv[0], argv[0], argv[0], argv[0], argv[0]);
         return 2;
     }
 
@@ -362,6 +423,16 @@ int main(int argc, char **argv)
         return do_unpublish(argv[2], (4 > argc) ? 20 : atoi(argv[3]),
                             (5 > argc) ? NULL : argv[4],
                             (6 > argc) ? NULL : argv[5]);
+    }
+
+    if (0 == strcmp(argv[1], "persist")) {
+        if (5 > argc) {
+            fprintf(stderr, "persist needs <key> <value> <persistence>\n");
+            return 2;
+        }
+        return do_persist(argv[2], argv[3], argv[4],
+                          (6 > argc) ? 0 : atoi(argv[5]),
+                          (7 > argc) ? NULL : argv[6]);
     }
 
     fprintf(stderr, "unknown mode: %s\n", argv[1]);
