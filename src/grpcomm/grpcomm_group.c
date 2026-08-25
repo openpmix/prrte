@@ -595,7 +595,6 @@ void prte_grpcomm_group_fault_handler(const prte_rml_recovery_status_t* status)
             }
         }
     }
-
 }
 
 
@@ -858,7 +857,7 @@ void prte_grpcomm_grp_recv(int status, pmix_proc_t *sender,
     struct timeval tv;
     size_t n, nendpts, ngrpinfo;
     pmix_status_t st;
-    pmix_info_t *endpts, *grpinfo = NULL;
+    pmix_info_t *endpts = NULL, *grpinfo = NULL;
     prte_grpcomm_group_signature_t *sig = NULL;
     prte_grpcomm_group_t *coll;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
@@ -1347,7 +1346,6 @@ answer:
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
-            PMIX_PROC_FREE(finalmembership, nfinal);
             /* the abort below puts this on the wire as a PMIx status */
             rc = prte_pmix_convert_rc(rc);
             goto failed;
@@ -1357,7 +1355,6 @@ answer:
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
-            PMIX_PROC_FREE(finalmembership, nfinal);
             goto failed;
         }
 
@@ -1367,7 +1364,6 @@ answer:
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_PROC_FREE(finalmembership, nfinal);
                 goto failed;
             }
             if (0 < nfinal) {
@@ -1375,7 +1371,6 @@ answer:
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
-                    PMIX_PROC_FREE(finalmembership, nfinal);
                     goto failed;
                 }
                 PMIX_PROC_FREE(finalmembership, nfinal);
@@ -1409,7 +1404,7 @@ answer:
                 goto failed;
             }
             if (0 < ninfo) {
-               rc =  PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
+               rc = PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
@@ -1525,7 +1520,7 @@ failed:
                 return;
             }
             if (0 < ninfo) {
-                rc =PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
+                rc = PMIx_Data_pack(NULL, reply, info, ninfo, PMIX_INFO);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
@@ -2254,6 +2249,8 @@ static prte_grpcomm_group_t *get_tracker(prte_grpcomm_group_signature_t *sig,
                     }
                     coll->sig->members = p;
                     coll->sig->nmembers = n;
+                } else {
+                    PMIX_LIST_DESTRUCT(&plist);
                 }
 
             } else if (sig->follower) {
@@ -2306,6 +2303,8 @@ static prte_grpcomm_group_t *get_tracker(prte_grpcomm_group_signature_t *sig,
                     coll->sig->addmembers = p;
                     coll->sig->naddmembers = n;
                     coll->nfollowers = n;
+                } else {
+                    PMIX_LIST_DESTRUCT(&plist);
                 }
             }
             // if they specified a final order, see if one was already given
