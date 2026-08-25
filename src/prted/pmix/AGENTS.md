@@ -185,6 +185,31 @@ the end of `pmix_server_dmdx_resp()`, and `prte_pmix_server_clear()`.
 Without the guard the first parks a request that is never answered, and the
 other two *release* a request somebody is still waiting on.
 
+**...and the sentinel screen is still not enough, because some requests that
+are not modexes name a real proc.** The three scheduler relays — allocate,
+session control, and the group context id — deliberately record the
+*requesting* process in `tproc`, at both ends of the relay
+(`assign_group_ctxid()` in `pmix_server_job_ctrl.c`, and the branches of
+`pmix_server_sched()`). That is a genuine identity, so it sails past a
+`PMIX_NSPACE_INVALID` check, and it sits in `local_reqs` alongside the
+modex requests. A job-level fetch names `nspace/WILDCARD`, and
+`PMIX_CHECK_PROCID` covers every rank of that namespace — so the "anyone
+else waiting for this target" sweep in `pmix_server_dmdx_resp()` matched a
+relayed request from any proc of the job being fetched, cleared its slot and
+released it. Nobody was answered: the daemon that relayed it, and the client
+behind it, waited for the life of the DVM, and for allocate and session
+control that was also a *third* release on an object built to take two.
+
+The discriminator is `mdxcbfunc`, not `tproc`: `PRTE_DMX_REQ` is the only
+thing that builds a direct-modex request and it always sets one, and no other
+operation sets it at all. Both halves of `pmix_server_dmdx_resp()` test it —
+the sweep, and the indexed lookup above it, where the index arrived on the
+wire and names a slot that is reused the moment its occupant retires. **So
+if you add an operation to `local_reqs`, do not set `mdxcbfunc`**, and if you
+ever need to clear it, remember that `rqcon()` NULLing it is the only reason
+a recycled block does not carry the previous occupant's — which this code
+now *calls* rather than merely compares. `test_request_tracker` pins both.
+
 **The sentinel exists only because the constructor writes it.** `PMIX_NEW`
 mallocs and does not zero, so `rqcon()` leaving `tproc` alone did not mean
 "empty" — it meant whatever the previous occupant of that block left there,
@@ -307,6 +332,23 @@ too: `PMIX_HOSTNAME` and `PMIX_CMD_LINE` were `strdup`ed unchecked, and a
 `PMIX_STRING` carrying no string survives the wire as a NULL (the packer
 writes a zero length, the unpacker hands back NULL), so any tool could
 segfault the daemon it attached to by connecting.
+
+**A directive's value is untrusted until its type has been checked, and
+`job_control` is the second place that bit.** The directives reach
+`process_job_ctrl()` exactly as the client sent them - PMIx's job-control
+path forwards the array to the host without inspecting what any entry holds
+- so reading a fixed member of the value union is reading whatever eight
+bytes the caller chose to put there. `PMIX_JOB_CTRL_DEFINE_PSET` took the
+pset name straight from `value.data.string` and handed it to the packer,
+which calls `strlen` on it: any process attached to a daemon could fault it
+with one `PMIx_Job_control` carrying that key with, say, a `PMIX_SIZE`
+value. Check the type, and check the string is there - and while you are
+about it check the parts of the request the *receiving* daemon will need,
+because a directive that is merely useless rather than fatal still gets
+broadcast to the whole DVM and answered with success. A pset with no members
+is the case: `PMIx_Proc_create(0)` returns NULL and PMIx refuses a set with
+no name or no members, so every daemon logged an error and the requestor was
+told it had worked.
 
 **A collecting relay must complete on *every* path.** `monitor`
 fans out to all daemons and counts responses (`ndaemons` vs `nreported`).

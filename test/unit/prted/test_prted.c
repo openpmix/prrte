@@ -1400,12 +1400,23 @@ static int test_request_tracker(void)
      * job-level fetch (rank=WILDCARD) does pair with an untargeted request */
     CHECK("a job-level fetch would match it", PMIX_CHECK_PROCID(&req->tproc, &wild));
 
+    /* mdxcbfunc is the other field the matching loops key on, and it carries
+     * more weight than tproc does: pmix_server_dmdx_resp() uses it to tell a
+     * direct-modex request from everything else sharing local_reqs - the
+     * scheduler relays record a REAL requestor in tproc, so the sentinel
+     * check above does not screen them - and having decided, it CALLS it.
+     * A stale one left in a recycled block is therefore not a mismatch but a
+     * jump through a dangling function pointer. */
+    CHECK("a new request carries no modex callback", NULL == req->mdxcbfunc);
+
     /* leave a real identity in the allocator, then take the block back */
     PMIX_XFER_PROCID(&req->tproc, &real);
+    req->mdxcbfunc = (pmix_modex_cbfunc_t) 0x1;
     PMIX_RELEASE(req);
     req = PMIX_NEW(prte_pmix_server_req_t);
     CHECK("a recycled request does not inherit the last one's target",
           PMIX_NSPACE_INVALID(req->tproc.nspace) && PMIX_RANK_INVALID == req->tproc.rank);
+    CHECK("...nor the last one's modex callback", NULL == req->mdxcbfunc);
     PMIX_RELEASE(req);
 
     if (0 == failures) {
