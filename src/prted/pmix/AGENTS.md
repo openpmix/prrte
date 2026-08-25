@@ -277,6 +277,25 @@ request of theirs is completed with data it never asked for. The
 direction, when the answer we were waiting on arrives after we gave up:
 `_mdxresp()` drops a late payload rather than putting it on the wire.
 
+**...and a relay that cannot *build* its request must fail it, not ship
+what it managed.** The tool-connection relay in `_toolconn()`
+(`pmix_server_gen.c`) logged each pack failure and packed on, so the master
+received a buffer it could not read - and with no index unpacked from it,
+nobody to answer. The tool then waited for the life of the DVM. A pack
+failure there now releases the buffer, gives the array slot back, and
+answers the tool.
+
+**The info array on a tool connection is the tool's own, straight off the
+wire.** `ptl_base_connection_hdlr.c` unpacks whatever the connecting
+process sent and hands it to the `tool_connected` upcall with only the
+uid/gid/version appended, so `_toolconn()` is parsing untrusted input in
+exactly the way `prte_pmix_xfer_job_info()` is - see the NULL-value rule
+under "Directive translation" below, which is the same rule. It bit here
+too: `PMIX_HOSTNAME` and `PMIX_CMD_LINE` were `strdup`ed unchecked, and a
+`PMIX_STRING` carrying no string survives the wire as a NULL (the packer
+writes a zero length, the unpacker hands back NULL), so any tool could
+segfault the daemon it attached to by connecting.
+
 **A collecting relay must complete on *every* path.** `monitor`
 fans out to all daemons and counts responses (`ndaemons` vs `nreported`).
 It increments `nreported` as soon as a response arrives, so a response
