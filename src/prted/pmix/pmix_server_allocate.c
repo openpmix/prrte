@@ -22,7 +22,8 @@ void pmix_server_alloc_request_resp(int status, pmix_proc_t *sender,
                                     void *cbdata)
 {
 
-    int req_index, cnt;
+    int req_index;
+    int32_t cnt;
     pmix_status_t ret, rc;
     prte_pmix_server_req_t *req;
 
@@ -33,7 +34,12 @@ void pmix_server_alloc_request_resp(int status, pmix_proc_t *sender,
     rc = PMIx_Data_unpack(NULL, buffer, &ret, &cnt, PMIX_STATUS);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        ret = prte_pmix_convert_rc(rc);
+        /* an unpack status is ALREADY a PMIx status, and this is the one we
+         * report to the client.  Running it through prte_pmix_convert_rc -
+         * the PRRTE-to-PMIx direction - matches no PRRTE constant and lands
+         * on the default, so every failure here reached the requestor as a
+         * bare PMIX_ERROR instead of saying what went wrong */
+        ret = rc;
     }
 
     /* we let the above errors fall thru in the vain hope that the req number can
@@ -74,7 +80,8 @@ void pmix_server_alloc_request_resp(int status, pmix_proc_t *sender,
     rc = PMIx_Data_unpack(NULL, buffer, &req->ninfo, &cnt, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        ret = prte_pmix_convert_rc(rc);
+        ret = rc;
+        req->ninfo = 0;
         goto ANSWER;
     }
 
@@ -89,8 +96,13 @@ void pmix_server_alloc_request_resp(int status, pmix_proc_t *sender,
 
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            ret = prte_pmix_convert_rc(rc);
+            ret = rc;
+            /* free the array rather than just forgetting its size: the
+             * destructor frees req->ninfo entries, so zeroing the count
+             * while leaving the pointer in place loses the whole thing */
+            PMIX_INFO_FREE(req->info, req->ninfo);
             req->ninfo = 0;
+            req->copy = false;
             goto ANSWER;
         }
     }
@@ -193,6 +205,7 @@ pmix_status_t prte_server_send_request(uint8_t cmd, prte_pmix_server_req_t *req)
 {
     pmix_data_buffer_t *buf;
     pmix_status_t rc;
+    int ret;   // the RML answers in PRRTE codes, the packers in PMIx ones
 
     PMIX_DATA_BUFFER_CREATE(buf);
 
@@ -258,12 +271,15 @@ pmix_status_t prte_server_send_request(uint8_t cmd, prte_pmix_server_req_t *req)
         }
     }
 
-    /* send this request to the DVM controller */
-    PRTE_RML_RELIABLE_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_SCHED);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
+    /* send this request to the DVM controller.  The send answers in PRRTE
+     * codes while everything else here - and this function's own return
+     * type - is a PMIx status, and each caller hands what we return straight
+     * to a client's completion callback, so convert it before it leaves */
+    PRTE_RML_RELIABLE_SEND(ret, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_SCHED);
+    if (PRTE_SUCCESS != ret) {
+        PRTE_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_RELEASE(buf);
-        return rc;
+        return prte_pmix_convert_rc(ret);
     }
     return PMIX_SUCCESS;
 }

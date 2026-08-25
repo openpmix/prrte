@@ -738,7 +738,17 @@ it is enforced here:
     status — through `prte_pmix_convert_rc()`, the PRRTE→PMIx direction,
     so every failure of the `PMIX_SERVER_URI` query reached the tool as a
     bare `PMIX_ERROR`. Before converting, ask which space the value is
-    already in.
+    already in. An unpack status is the commonest case of a value
+    that is *already* a PMIx status — `pmix_server_alloc_request_resp()`
+    converted three of them — and `send_error()` in `pmix_server.c` is the
+    commonest case of the opposite, a function whose parameter is a PRRTE
+    code and which converts on the way out.
+  - **A function that returns `pmix_status_t` must return one on every
+    path.** `prte_server_send_request()` answers with the packers' PMIx
+    statuses and, on a send failure, answered with the RML's PRRTE code —
+    and each of its three callers hands what it returns straight to a
+    client's completion callback. Keep the two in separate variables, as
+    that function now does, so the compiler shows which is which.
 - **A helper must not answer for its caller.** `process_directive()` in
   `pmix_server_session.c` used to invoke `req->infocbfunc` itself on an
   error and then return to a caller that also invokes it — a double
