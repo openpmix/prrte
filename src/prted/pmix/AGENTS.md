@@ -645,13 +645,18 @@ hazards. Four things about it that are not local to any one arm:
   over and over. It is initialized at its declaration because the `done:`
   label is reachable from qualifier failures that run before any arm has
   touched it.
-- **The status the caller gets is decided at `done:` from what came back**,
-  not from what any arm returned: nothing at all is `PMIX_ERR_NOT_FOUND`,
-  fewer results than keys asked for is `PMIX_QUERY_PARTIAL_SUCCESS`, and an
-  arm that could not answer at all sets `ret` and jumps. An arm that adds no
-  result and does *not* set `ret` — the two resource-usage ones — therefore
-  makes the query answer "looked and found nothing" where the default arm
-  would have said `PMIX_ERR_NOT_SUPPORTED`; see
+- **The status the caller gets is decided at `done:` — but only if no arm
+  decided it first.** Nothing at all is `PMIX_ERR_NOT_FOUND`, fewer results
+  than keys asked for is `PMIX_QUERY_PARTIAL_SUCCESS`, and an arm that could
+  not answer sets `ret` and jumps. That last case is why the decision has to
+  be gated on `ret` still being success: an arm that gives up leaves the
+  result list empty, which is indistinguishable at `done:` from having looked
+  and found nothing — so an ungated substitution replaces every real error
+  with `PMIX_ERR_NOT_FOUND` and the caller cannot tell "there is no such
+  thing" from "you asked wrongly". An arm that adds no result and does *not*
+  set `ret` — the two resource-usage ones — makes the query answer "looked
+  and found nothing" where the default arm would have said
+  `PMIX_ERR_NOT_SUPPORTED`; see
   [`docs/todo.rst`](../../../docs/todo.rst).
 
 ---
@@ -1103,8 +1108,10 @@ codes that has to survive grow, shrink and daemon loss.
 **Unit — `test/unit/prted/`.** The directive translators
 (`prte_pmix_xfer_job_info`, `prte_pmix_xfer_app`), the job-info cache, the
 session time-limit parser (`prte_pmix_server_parse_session_time`), the
-group-departure validator (`test_group_left`), the departed-jobs list, and
-the connected-assemblage registry
+group-departure validator (`test_group_left`), the query qualifier
+validation and status decision (`test_query_qualifiers`, driven through the
+real `pmix_server_query_fn` upcall with the test thread turning the event
+base), the departed-jobs list, and the connected-assemblage registry
 (`test_connections` — set matching, wildcard coverage, and when a record is
 purged) are pure data transforms and are covered there. Most of the rest of
 this directory needs a live PMIx server and at least one peer daemon.
