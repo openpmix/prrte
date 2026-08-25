@@ -2146,6 +2146,45 @@ test_runtime() {
                 RUN "timeout -k 5 30 pterm --dvm-uri file:$PRTED_URI" >/dev/null 2>&1
             fi
 
+            banner "runtime/data_server: LOCAL-range data is NOT relayed away"
+            # A PMIX_RANGE_LOCAL item belongs to the store of the daemon that
+            # relayed it and must never leave the DVM, whatever
+            # prte_data_server_uri says.  The relay used to take everything:
+            # a local-range publish was forwarded to the external server, so
+            # it was stored where its own publisher could never look it up,
+            # and the matching lookup was answered out of a store that cannot
+            # hold local-range data at all.  Both legs now carry
+            # PRTE_RML_TAG_DATA_SERVER_LOCAL, which is what tells the receive
+            # to serve rather than relay - the range itself is buried in a
+            # payload whose shape depends on the command.
+            #
+            # This needs a DVM that IS pointed at an external server, so it
+            # lives here rather than beside the other local-range test.
+            #
+            # Both legs are on node4, and deliberately: LOCAL range means
+            # "behind the same daemon", so the lookup has to run where the
+            # publish did, and node3's other slot is held for 90s by the
+            # cross-DVM publisher above.  Asking node3 for a second slot
+            # fails the MAP, which reads as "the data was relayed away".
+            PRUN_URI_BG /tmp/ds-a.uri /tmp/ds-loc.out \
+                "--host node4:1 -n 1 $DS publish prte.test.xloc stayshome local 30"
+            sleep 8
+            if ! RUN 'grep -q "^PUBLISHED prte.test.xloc" /tmp/ds-loc.out'; then
+                bad "the local-range publish never happened: $(RUN 'cat /tmp/ds-loc.out' 2>&1 | tr '\n' ' ' | tail -c 250)"
+            else
+                ok "a LOCAL-range key was published in a DVM using an external server"
+                out=$(PRUN_URI /tmp/ds-a.uri "--host node4:1 -n 1 $DS lookup prte.test.xloc 20 local" 2>&1)
+                echo "$out" | grep -q '^FOUND prte.test.xloc stayshome' \
+                    && ok "...and a peer on that node found it - it stayed home" \
+                    || bad "local-range data was relayed away: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+                # the control: it must not have reached the external server,
+                # which is what a SESSION-range lookup would be answered from
+                out=$(PRUN_URI /tmp/ds-b.uri "--host node5:1 -n 1 $DS lookup prte.test.xloc 15" 2>&1)
+                echo "$out" | grep -q '^FOUND prte.test.xloc' \
+                    && bad "local-range data reached the external server: $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+                    || ok "...and the other DVM cannot see it, as LOCAL requires"
+            fi
+
             banner "runtime/data_server: a waiting lookup crosses DVMs too"
             # The parked-request path, but with the park in one DVM and the
             # publish in another.  Both legs are relays, and the wake-up has

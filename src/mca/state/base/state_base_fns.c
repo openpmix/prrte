@@ -397,7 +397,7 @@ void prte_state_base_report_progress(int fd, short argc, void *cbdata)
  * than when its individual publisher exits - later than the Standard's
  * "until the publishing process terminates", but a message per terminating
  * process is not a cost this path can carry at scale. */
-static void send_purge(pmix_rank_t dest, pmix_proc_t *target)
+static void send_purge(pmix_rank_t dest, prte_rml_tag_t tag, pmix_proc_t *target)
 {
     pmix_data_buffer_t *buf;
     pmix_info_t horizon;
@@ -449,7 +449,7 @@ static void send_purge(pmix_rank_t dest, pmix_proc_t *target)
         return;
     }
 
-    PRTE_RML_RELIABLE_SEND(rc, dest, buf, PRTE_RML_TAG_DATA_SERVER);
+    PRTE_RML_RELIABLE_SEND(rc, dest, buf, tag);
     if (PRTE_SUCCESS != rc) {
         PMIX_DATA_BUFFER_RELEASE(buf);
     }
@@ -469,7 +469,7 @@ void prte_state_base_notify_data_server(pmix_proc_t *target)
      * request goes to the master, which relays it. */
     global = (NULL == prte_data_server_uri) ? prte_pmix_server_globals.server.rank
                                             : PRTE_PROC_MY_HNP->rank;
-    send_purge(global, target);
+    send_purge(global, PRTE_RML_TAG_DATA_SERVER, target);
 
     /* ...and OUR OWN store, which is a different one on every daemon but
      * the master.  A PMIX_RANGE_LOCAL publish never leaves the daemon that
@@ -479,14 +479,12 @@ void prte_state_base_notify_data_server(pmix_proc_t *target)
      * the global store reclaimed everything EXCEPT local-range data, which
      * a single-node run cannot show: there the two stores are one object.
      *
-     * Gated on there being no external data server because in that case a
-     * daemon's prte_data_server() relays what it receives rather than
-     * serving it, so a request addressed to ourselves would not reach our
-     * store at all.  (Local-range publish has the same problem in that
-     * configuration, and is broken there for the same reason - a separate
-     * defect, not one to paper over from here.) */
-    if (NULL == prte_data_server_uri && global != PRTE_PROC_MY_NAME->rank) {
-        send_purge(PRTE_PROC_MY_NAME->rank, target);
+     * The tag is what keeps this one at home: a daemon pointed at an
+     * external data server relays what arrives on the ordinary tag, so a
+     * purge of our own store addressed to ourselves would be forwarded to
+     * a DVM that does not hold the data and cannot act on it. */
+    if (global != PRTE_PROC_MY_NAME->rank) {
+        send_purge(PRTE_PROC_MY_NAME->rank, PRTE_RML_TAG_DATA_SERVER_LOCAL, target);
     }
 }
 
