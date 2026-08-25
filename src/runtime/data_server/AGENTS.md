@@ -343,6 +343,18 @@ exists.
 
 Two things about the relay path are easy to get wrong, and both were.
 
+**A local-range request must not be relayed.** `prte_data_server()` used to
+hand *everything* to `prte_ds_relay()` whenever `prte_data_server_uri` was set.
+But `PMIX_RANGE_LOCAL` data belongs to the store of the daemon that relayed
+it, so forwarding it stored a publish where its own publisher could never look
+it up, and answered a local-range lookup out of a store that cannot hold
+local-range data. By the time the dispatch runs, the range is buried in a
+payload whose shape depends on the command — so the *sender* says which store
+it means by choosing the tag, `PRTE_RML_TAG_DATA_SERVER_LOCAL` rather than
+`PRTE_RML_TAG_DATA_SERVER`. `execute()` picks it for a local range, the
+lifecycle purge picks it for our own store, and the receive is registered for
+both.
+
 **The master must attach even when nothing local asks it to.** The attach
 (`init_server()`, now behind `prte_pmix_server_init_pubsub()`) used to happen
 only inside `execute()` in `pmix_server_pub.c` — that is, only when a **local

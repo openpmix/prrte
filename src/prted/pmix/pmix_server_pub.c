@@ -195,6 +195,8 @@ static void execute(int sd, short args, void *cbdata)
     int rc;
     pmix_data_buffer_t *xfer;
     pmix_proc_t *target;
+    /* the DVM's store unless the range says otherwise */
+    prte_rml_tag_t dstag = PRTE_RML_TAG_DATA_SERVER;
     bool stored = false;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
@@ -239,10 +241,13 @@ static void execute(int sd, short args, void *cbdata)
         target = (NULL == prte_data_server_uri) ? &prte_pmix_server_globals.server
                                                 : PRTE_PROC_MY_HNP;
     } else if (PMIX_RANGE_LOCAL == req->range) {
-        /* if the range is local, send it to myself */
+        /* if the range is local, send it to myself - and say so with the
+         * tag, so that a DVM pointed at an external data server serves this
+         * out of its own store instead of relaying it away */
         pmix_output_verbose(1, prte_pmix_server_globals.output, "%s orted:pmix:server range LOCAL",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         target = PRTE_PROC_MY_NAME;
+        dstag = PRTE_RML_TAG_DATA_SERVER_LOCAL;
     } else {
         pmix_output_verbose(1, prte_pmix_server_globals.output, "%s orted:pmix:server range GLOBAL",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
@@ -250,7 +255,7 @@ static void execute(int sd, short args, void *cbdata)
     }
 
     /* send the request to the target */
-    PRTE_RML_RELIABLE_SEND(rc, target->rank, xfer, PRTE_RML_TAG_DATA_SERVER);
+    PRTE_RML_RELIABLE_SEND(rc, target->rank, xfer, dstag);
     if (PRTE_SUCCESS == rc) {
         return;
     }

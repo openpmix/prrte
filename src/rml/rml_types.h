@@ -148,6 +148,12 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 /* support data store/lookup */
 #define PRTE_RML_TAG_DATA_SERVER 27
 #define PRTE_RML_TAG_DATA_CLIENT 28
+/* ...and the same request, but for THIS daemon's own store rather than the
+ * DVM's.  A PMIX_RANGE_LOCAL item never leaves the daemon that relayed it,
+ * so a request about one must not be handed to an external data server -
+ * which is what the tag tells the receive, since by then the range is
+ * buried in the payload.  See src/runtime/data_server/AGENTS.md. */
+#define PRTE_RML_TAG_DATA_SERVER_LOCAL 84
 
 /* collectives */
 #define PRTE_RML_TAG_FENCE_RELEASE     31

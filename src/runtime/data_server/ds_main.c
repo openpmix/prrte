@@ -92,6 +92,9 @@ int prte_data_server_init(void)
 
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DATA_SERVER,
                   PRTE_RML_PERSISTENT, prte_data_server, NULL);
+    /* requests that are about our own store, whatever else is configured */
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DATA_SERVER_LOCAL,
+                  PRTE_RML_PERSISTENT, prte_data_server, NULL);
 
     return PRTE_SUCCESS;
 }
@@ -125,7 +128,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
     pmix_data_buffer_t *answer;
     pmix_status_t rc;
     int room_number;
-    PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
+    PRTE_HIDE_UNUSED_PARAMS(status, cbdata);
 
     pmix_output_verbose(1, prte_data_store.output,
                         "%s data server got message from %s",
@@ -164,18 +167,27 @@ void prte_data_server(int status, pmix_proc_t *sender,
         return;
     }
 
-    /* When an external data server is configured, this DVM stores nothing:
-     * the request is reissued to that server over our PMIx tool connection
-     * to it, and the relay answers this sender when it replies.  Only the
-     * master holds that connection, which is why every daemon addressed
-     * its request here (pmix_server_pub.c, execute).
+    /* When an external data server is configured, this DVM stores nothing
+     * that is not local to it: the request is reissued to that server over
+     * our PMIx tool connection, and the relay answers this sender when it
+     * replies.  Only the master holds that connection, which is why every
+     * daemon addressed its request here (pmix_server_pub.c, execute).
+     *
+     * "Not local to it" is the whole of the exception, and the tag is what
+     * carries it.  A PMIX_RANGE_LOCAL item never leaves the daemon that
+     * relayed it - execute() routes it to PRTE_PROC_MY_NAME - so sending it
+     * on to another DVM would store it where its own publisher could never
+     * look it up, and would answer a local-range lookup out of a store that
+     * cannot hold local-range data.  By the time we get here the range is
+     * buried in a payload whose shape depends on the command, so the sender
+     * says which store it means by choosing the tag.
      *
      * A relay that could NOT take the request on has to be reported like any
      * other failure.  This used to log the error and return, answering
      * nobody - so the daemon that asked stayed parked on its room number and
      * the process behind it hung for good.  An unreachable data server is
      * something a caller can be told about; a hang is not. */
-    if (NULL != prte_data_server_uri) {
+    if (NULL != prte_data_server_uri && PRTE_RML_TAG_DATA_SERVER_LOCAL != tag) {
         rc = prte_ds_relay(sender, room_number, command, buffer);
         if (PMIX_SUCCESS == rc) {
             /* the relay owns the request now and answers from a reply of
