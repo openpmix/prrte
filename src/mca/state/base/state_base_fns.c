@@ -397,7 +397,7 @@ void prte_state_base_report_progress(int fd, short argc, void *cbdata)
  * than when its individual publisher exits - later than the Standard's
  * "until the publishing process terminates", but a message per terminating
  * process is not a cost this path can carry at scale. */
-void prte_state_base_notify_data_server(pmix_proc_t *target)
+static void send_purge(pmix_rank_t dest, pmix_proc_t *target)
 {
     pmix_data_buffer_t *buf;
     pmix_info_t horizon;
@@ -405,11 +405,6 @@ void prte_state_base_notify_data_server(pmix_proc_t *target)
     int rc, room = -1;
     uint8_t cmd = PRTE_PMIX_PURGE_PROC_CMD;
     size_t ninfo;
-
-    /* if nobody local to us published anything, then we can ignore this */
-    if (PMIX_NSPACE_INVALID(prte_pmix_server_globals.server.nspace)) {
-        return;
-    }
 
     PMIX_DATA_BUFFER_CREATE(buf);
 
@@ -454,15 +449,44 @@ void prte_state_base_notify_data_server(pmix_proc_t *target)
         return;
     }
 
-    /* Send the request to the server.  An external data server is not
-     * addressable over the RML - only the master holds the PMIx connection
-     * to it - so the request goes to the master, which relays it. */
-    PRTE_RML_RELIABLE_SEND(rc, (NULL == prte_data_server_uri)
-                                   ? prte_pmix_server_globals.server.rank
-                                   : PRTE_PROC_MY_HNP->rank,
-                  buf, PRTE_RML_TAG_DATA_SERVER);
+    PRTE_RML_RELIABLE_SEND(rc, dest, buf, PRTE_RML_TAG_DATA_SERVER);
     if (PRTE_SUCCESS != rc) {
         PMIX_DATA_BUFFER_RELEASE(buf);
+    }
+}
+
+void prte_state_base_notify_data_server(pmix_proc_t *target)
+{
+    pmix_rank_t global;
+
+    /* if nobody local to us published anything, then we can ignore this */
+    if (PMIX_NSPACE_INVALID(prte_pmix_server_globals.server.nspace)) {
+        return;
+    }
+
+    /* The global store.  An external data server is not addressable over
+     * the RML - only the master holds the PMIx connection to it - so the
+     * request goes to the master, which relays it. */
+    global = (NULL == prte_data_server_uri) ? prte_pmix_server_globals.server.rank
+                                            : PRTE_PROC_MY_HNP->rank;
+    send_purge(global, target);
+
+    /* ...and OUR OWN store, which is a different one on every daemon but
+     * the master.  A PMIX_RANGE_LOCAL publish never leaves the daemon that
+     * relayed it - pmix_server_pub.c routes it to PRTE_PROC_MY_NAME - and
+     * every daemon runs prte_data_server_init(), so what a local-range
+     * publish leaves behind is reclaimable only from here.  Purging just
+     * the global store reclaimed everything EXCEPT local-range data, which
+     * a single-node run cannot show: there the two stores are one object.
+     *
+     * Gated on there being no external data server because in that case a
+     * daemon's prte_data_server() relays what it receives rather than
+     * serving it, so a request addressed to ourselves would not reach our
+     * store at all.  (Local-range publish has the same problem in that
+     * configuration, and is broken there for the same reason - a separate
+     * defect, not one to paper over from here.) */
+    if (NULL == prte_data_server_uri && global != PRTE_PROC_MY_NAME->rank) {
+        send_purge(PRTE_PROC_MY_NAME->rank, target);
     }
 }
 

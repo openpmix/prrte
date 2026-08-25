@@ -293,6 +293,26 @@ published, regardless of persistence. That case must *not* drop the
 requestor's parked lookups — cancelling the lookups a process is waiting on
 is no part of taking its published data back.
 
+**There is a store on every daemon, not just the master.**
+`pmix_server_start()` calls `prte_data_server_init()` unconditionally, and it
+runs in `ess/hnp` and `ess/base/ess_base_std_prted` alike. What decides which
+store a request reaches is the RANGE, in `execute()`
+(`src/prted/pmix/pmix_server_pub.c`) — one routing decision, no local-first
+search and no fallback:
+
+| Range | Target |
+|-------|--------|
+| `PMIX_RANGE_SESSION` | the global server (`prte_pmix_server_globals.server`; the HNP relays when it is external) |
+| `PMIX_RANGE_LOCAL` | `PRTE_PROC_MY_NAME` — **this daemon's own store** |
+| everything else | `PRTE_PROC_MY_HNP` |
+
+So a prted's store holds *only* local-range items published by its own local
+procs, and a lookup that misses gets `PMIX_ERR_NOT_FOUND` rather than trying
+somewhere else. On the master the two stores are the same object, which is
+why a single-node run cannot tell them apart — and why the purge going only
+to the global store left local-range data unreclaimed until it also went to
+`PRTE_PROC_MY_NAME`.
+
 `prte_state_base_notify_data_server()` is what sends the lifecycle purge,
 with `PMIX_PERSIST_APP`, when a job's procs have all terminated. All three
 call sites used to be gated on `NULL != prte_data_server_uri`, so the
