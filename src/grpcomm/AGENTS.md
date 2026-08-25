@@ -659,6 +659,31 @@ Three things about the shape are load-bearing:
 status; the normal non-success path then completes each daemon's local
 participants and deletes the tracker — so a cancel/abort tears down the
 collective **without tearing down the DVM**, which is the whole point.
+Only the controller may call it — it is the sole xcast source — and every
+caller sits behind a `PRTE_PROC_IS_MASTER` test for that reason.
+
+**The entry point owes the participant an answer on every path.**
+`prte_grpcomm_group()` has already returned `PMIX_SUCCESS` to the PMIx
+server by the time `group()` runs, so nothing upstream will fail the
+client if the handler bails out: a silent `return` leaves it blocked in
+`PMIx_Group_construct` with no collective in flight to release it. Every
+failure therefore leaves by the `error:` label. That label does two things
+and both are load-bearing — it invokes `cd->cbfunc` with the reason, and it
+first clears `coll->cbfunc`/`coll->cbdata`, because the tracker itself
+*stays* (a release from the controller, which can still abort the
+operation, has to find it) and a release arriving later would otherwise
+complete the same client a second time with the same `cbdata`. This is the
+same rule the fence entry point follows — see *Retire before you deliver*.
+
+**A controller that cannot build the release must abort, not return.** By
+the time `check_complete()` starts packing, `converged` is latched, so
+nothing will drive that tracker again — and on the controller the recovery
+restart deliberately skips a converged tracker, because its release is
+supposed to be on the wire already. A bare `return` out of the packing
+therefore hangs *every* participant in the DVM, permanently. The `failed:`
+label instead falls back to `abort_group_op()`, whose message is only a
+signature plus a status and so is by far the smallest thing still worth
+trying to build.
 
 **`ft_collective` means "some *surviving* participant asked for it."** It
 is accumulated by sticky-OR as contributions merge, so a participant that
@@ -835,6 +860,20 @@ previous one of that name is over.
   with `PMIX_PROC_CREATE` and freed with `PMIX_PROC_FREE` everywhere —
   those allocate and free *inside the PMIx library*, so a plain `free()`
   crosses the library boundary.
+- **Never call `PMIx_Info_list_convert()` and reach for the array without
+  reading the status.** An empty list — the ordinary case for a construct
+  carrying no `PMIX_GROUP_INFO` and no endpoints — answers
+  `PMIX_ERR_EMPTY`, and on that early return PMIx is under no obligation to
+  have touched the `pmix_data_array_t` you handed it. Callers here pass an
+  *uninitialised stack* variable, so an unchecked call reads whatever was on
+  the stack for `.array`/`.size`, packs that many `pmix_info_t` from that
+  pointer, and then hands the same pointer to `PMIX_DATA_ARRAY_DESTRUCT`.
+  Current PMIx master initialises the argument before its first failure
+  return, but no *released* PMIx in the supported range does, and depending
+  on that is depending on the callee to clean up after the caller. Go
+  through `convert_info_list()` in `grpcomm_group.c`, which initialises the
+  array itself and answers an empty one on any failure, so what comes back
+  is always safe to pack from and to destruct.
 - Standard PRRTE rules: `prte_config.h` first, constant-on-left, braces
   everywhere, `PMIX_ERROR_LOG`/`PRTE_ERROR_LOG`, no new warnings.
 
