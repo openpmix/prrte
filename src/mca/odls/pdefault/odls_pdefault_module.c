@@ -138,6 +138,12 @@
 #include "src/prted/pmix/pmix_server.h"
 #include "odls_pdefault.h"
 
+/* the highest signal number this platform defines, used to sweep every
+ * signal back to its default disposition before we exec */
+#ifndef _NSIG
+#    define _NSIG 32
+#endif
+
 /*
  * Module functions (function pointers used in a struct)
  */
@@ -362,17 +368,28 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd, int gate_fd)
 #endif
 
     /* Set signal handlers back to the default.  Do this close to
-       the exev() because the event library may (and likely will)
+       the exec() because the event library may (and likely will)
        reset them.  If we don't do this, the event library may
        have left some set that, at least on some OS's, don't get
        reset via fork() or exec().  Hence, the launched process
-       could be unkillable (for example). */
+       could be unkillable (for example).
 
-    set_handler_default(SIGTERM);
-    set_handler_default(SIGINT);
-    set_handler_default(SIGHUP);
-    set_handler_default(SIGPIPE);
-    set_handler_default(SIGCHLD);
+       Every signal has to be covered, not just the handful the daemon
+       itself traps.  exec() resets a *handled* signal to its default, but
+       an *ignored* one stays ignored across it - and libevent's kqueue
+       backend implements signal events by setting the signal to SIG_IGN
+       (everything except SIGCHLD; see kqueue.c).  The daemon registers a
+       signal event for every signal it is willing to forward, which by
+       default is all of them, so on macOS and the BSDs every process PRRTE
+       launched came up with SIGUSR1, SIGUSR2, SIGALRM, SIGCONT and the
+       rest already ignored.  A forwarded signal then arrived at the
+       application and was silently discarded: the whole --forward-signals
+       path reached the app and did nothing.  SIGKILL and SIGSTOP cannot be
+       changed and simply fail here, which is harmless. */
+
+    for (i = 1; i < _NSIG; i++) {
+        set_handler_default(i);
+    }
 
     /* Unblock all signals, for many of the same reasons that we
        set the default handlers, above.  This is noticable on

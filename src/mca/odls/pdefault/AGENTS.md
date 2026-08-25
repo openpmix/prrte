@@ -185,9 +185,28 @@ Runs in the forked child; `__prte_attribute_noreturn__`. In order:
    arm also falls back on a runtime failure: the syscall can be present
    at build time and refused at run time by an older kernel or a seccomp
    policy.
-6. Restore default signal handlers (`SIGTERM/INT/HUP/PIPE/CHLD`) and
-   unblock all signals — the event library may have left them altered, and
-   an app must not inherit a blocked SIGTERM.
+6. Restore the default disposition of **every** signal and unblock them
+   all — the event library may have left them altered, and an app must not
+   inherit a blocked SIGTERM.
+
+   It has to be every signal, not the handful the daemon itself traps.
+   `execve` resets a *handled* signal to its default on its own, but an
+   *ignored* one stays ignored across it — and libevent's kqueue backend
+   implements a signal event by setting that signal to `SIG_IGN`
+   (everything but `SIGCHLD`; see its `kqueue.c`). The daemon registers a
+   signal event for every signal it is willing to forward, which by
+   default is all of them, so on macOS and the BSDs every application
+   PRRTE launched started life with `SIGUSR1`, `SIGUSR2`, `SIGALRM`,
+   `SIGCONT` and the rest already ignored, and a forwarded signal arrived
+   and was silently discarded. Linux hid it: libevent's epoll backend
+   uses a real handler there, which `execve` resets. `SIGKILL` and
+   `SIGSTOP` cannot be changed and simply fail, which is harmless.
+
+   The one-line check is `prterun -n 1 <prog>` where `<prog>` calls
+   `sigaction(sig, NULL, &oa)` and prints whether each disposition is
+   `SIG_DFL`; every one of them must be. Note that a Linux-only harness
+   cannot see this at all, so a container test for it would pass
+   vacuously.
 7. `chdir(cd->wdir)` to the app's working directory.
 8. If `PRTE_JOB_STOP_ON_EXEC`: `ptrace(PRTE_TRACEME, …)` so the app stops at
    `execve` for a debugger to attach.
