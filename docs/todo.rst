@@ -177,6 +177,24 @@ considerably more machinery than the broadcast it saves.  It has not been
 judged worth it, and the empty arms are the record of the decision rather
 than of an oversight.
 
+**Two resource-usage queries are recognized and answer nothing.**
+``PMIX_QUERY_PROC_RESOURCE_USAGE`` and ``PMIX_QUERY_NODE_RESOURCE_USAGE``
+have arms of their own in ``_query()``
+(``src/prted/pmix/pmix_server_queries.c``) and both arms are empty.  PRRTE
+collects no resource usage: the odls knows a child's pid and its exit code
+and nothing about what it consumed while it ran, and a daemon samples
+nothing about its node beyond the topology it discovered at startup.
+
+Having the arms rather than not having them changes what the caller is
+told, and for the worse.  The default arm answers
+``PMIX_ERR_NOT_SUPPORTED``, which is the truth; falling into an empty arm
+that adds no result makes the query come back ``PMIX_ERR_NOT_FOUND``,
+which says the DVM looked and found nothing.  Whoever implements these
+should either fill them in or delete them, and until then the honest
+reading of them is that they are placeholders for a sampling path that was
+never built - one that would need a per-proc collector in the odls and a
+node-level one in each daemon, plus a decision about how often either runs.
+
 Test coverage
 -------------
 
@@ -282,6 +300,9 @@ the marker is stale.
    * - ``prted/pmix/pmix_server_notify.c``, ``_register_events``,
        ``_deregister_events``
      - event registration is accepted and discarded
+   * - ``prted/pmix/pmix_server_queries.c``, ``_query``,
+       ``PMIX_QUERY_*_RESOURCE_USAGE``
+     - two resource-usage queries are recognized and answer nothing
 
 Two families of marker are **not** ours, and are deliberately absent from
 that table: the ``TODO`` comments in ``hostfile_lex.c`` and
