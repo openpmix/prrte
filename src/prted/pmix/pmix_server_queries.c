@@ -1005,7 +1005,7 @@ static void _query(int sd, short args, void *cbdata)
                  * there way thru the state machine for mapping, and more jobs may
                  * be submitted at any moment.
                  */
-                p = 0;
+                nslots = 0;
                 for (k=0; k < prte_node_pool->size; k++) {
                     node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, k);
                     if (NULL == node) {
@@ -1031,9 +1031,12 @@ static void _query(int sd, short args, void *cbdata)
                     if (node->slots <= node->slots_inuse) {
                         continue;
                     }
-                    p += node->slots - node->slots_inuse;
+                    nslots += (uint32_t)(node->slots - node->slots_inuse);
                 }
-                PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_AVAILABLE_SLOTS, &p, PMIX_UINT32);
+                /* the count is handed to PMIx by address, so it has to be the
+                 * width PMIx is told it is - a size_t read as a PMIX_UINT32
+                 * takes the correct four bytes only on a little-endian machine */
+                PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_AVAILABLE_SLOTS, &nslots, PMIX_UINT32);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     goto done;
