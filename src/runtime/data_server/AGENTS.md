@@ -339,6 +339,33 @@ exists.
 
 ---
 
+## The external server: attach, and answer
+
+Two things about the relay path are easy to get wrong, and both were.
+
+**The master must attach even when nothing local asks it to.** The attach
+(`init_server()`, now behind `prte_pmix_server_init_pubsub()`) used to happen
+only inside `execute()` in `pmix_server_pub.c` — that is, only when a **local
+client of that daemon** published or looked something up. But relaying is the
+*master's* job: every other daemon sends its request to the master, which is
+the only one holding the tool connection to the far end. A master with no
+publishing client of its own therefore never attached, and every relayed
+request failed `PMIX_ERR_UNREACH`. Nothing noticed for as long as each job's
+nspace registration also published — that went through `execute()` and
+attached as a side effect. Remove the accidental attach and the feature stops
+working, which is exactly what happened. `prte_ds_relay()` now forces it.
+
+**A relay that cannot take the request must still answer.** The dispatch in
+`prte_data_server()` used to log a relay failure and `return`, sending
+nothing. The daemon that asked stayed parked on its room number, and the
+process behind it hung for good. An unreachable data server is something a
+caller can be told about; a hang is not. The relay branch now falls into the
+same error reply every other failure uses, and the contract is unchanged:
+`prte_ds_relay()` returning `PMIX_SUCCESS` means it owns the request and will
+answer — including when it has already sent a failure.
+
+---
+
 ## Gotchas before you edit
 
 - **The answer-buffer contract above.** Every new exit path has to say which
@@ -364,6 +391,12 @@ exists.
 - **A parked request can own an armed timer.** Remove it from `pending` and
   `PMIX_RELEASE` it; never `free` around it, and never leave the list
   holding one you have released.
+- **Every exit from the dispatch must answer somebody.** A caller is parked
+  on a room number; a path that returns silently is a hang, not an error.
+  See the section above.
+- **`rc` in `prte_data_server()` is a `pmix_status_t`.** Format it with
+  `PMIx_Error_string()`; `PRTE_ERROR_NAME()` knows only PRRTE's codes and
+  renders every PMIx status as "Unknown error".
 - **No locking, and none is wanted.** Everything here runs inside the RML
   receive on the progress thread.
 - **`prte_data_store.output` is `-1` until a verbosity is registered**, so

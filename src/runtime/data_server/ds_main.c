@@ -148,19 +148,6 @@ void prte_data_server(int status, pmix_proc_t *sender,
         return;
     }
 
-    /* When an external data server is configured, this DVM stores nothing:
-     * the request is reissued to that server over our PMIx tool connection
-     * to it, and the relay answers this sender when it replies.  Only the
-     * master holds that connection, which is why every daemon addressed
-     * its request here (pmix_server_pub.c, execute). */
-    if (NULL != prte_data_server_uri) {
-        rc = prte_ds_relay(sender, room_number, command, buffer);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-        }
-        return;
-    }
-
     PMIX_DATA_BUFFER_CREATE(answer);
     /* pack the room number as this must lead any response */
     rc = PMIx_Data_pack(NULL, answer, &room_number, 1, PMIX_INT);
@@ -175,6 +162,28 @@ void prte_data_server(int status, pmix_proc_t *sender,
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(answer);
         return;
+    }
+
+    /* When an external data server is configured, this DVM stores nothing:
+     * the request is reissued to that server over our PMIx tool connection
+     * to it, and the relay answers this sender when it replies.  Only the
+     * master holds that connection, which is why every daemon addressed
+     * its request here (pmix_server_pub.c, execute).
+     *
+     * A relay that could NOT take the request on has to be reported like any
+     * other failure.  This used to log the error and return, answering
+     * nobody - so the daemon that asked stayed parked on its room number and
+     * the process behind it hung for good.  An unreachable data server is
+     * something a caller can be told about; a hang is not. */
+    if (NULL != prte_data_server_uri) {
+        rc = prte_ds_relay(sender, room_number, command, buffer);
+        if (PMIX_SUCCESS == rc) {
+            /* the relay owns the request now and answers from a reply of
+             * its own, so ours is surplus */
+            PMIX_DATA_BUFFER_RELEASE(answer);
+            return;
+        }
+        goto report;
     }
 
     /* From here on the handlers own "answer": each of them either sends it
@@ -208,13 +217,17 @@ void prte_data_server(int status, pmix_proc_t *sender,
             break;
     }
 
+report:
     if (PMIX_SUCCESS != rc) {
         pmix_status_t ret;
 
+        /* rc is a pmix_status_t here, so it takes the PMIx formatter -
+         * PRTE_ERROR_NAME knows only PRRTE's codes and rendered every
+         * status this reports as "Unknown error" */
         pmix_output_verbose(1, prte_data_store.output,
                             "%s data server: sending error %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            PRTE_ERROR_NAME(rc));
+                            PMIx_Error_string(rc));
         /* pack the error code. Keep the pack status in its own variable:
          * overwriting rc with it lost the very code we were reporting, and
          * a failed pack then went out as a "successful" empty answer. */
