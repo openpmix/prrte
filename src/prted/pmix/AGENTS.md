@@ -114,6 +114,16 @@ The two `PRTE_PMIX_WAIT_THREAD` calls left in this directory are both in
 loop exists. There is no loop to park there, so blocking is correct. Any
 *new* one outside that function is almost certainly a bug.
 
+The *wakeup* side of those two calls is the mirror image of the golden
+rule, and deliberately so: `regcbfunc()` fires on the PMIx progress thread
+and calls `PRTE_PMIX_WAKEUP_THREAD` directly rather than thread-shifting.
+It has to. The waiter is `pmix_server_init()` itself, blocked in
+`PRTE_PMIX_WAIT_THREAD` on the lock's condition variable with nothing
+driving `prte_event_base` yet, so a shifted wakeup would never be
+dispatched and the daemon would never finish starting. The shifted form
+(`prte_pmix_shifted_wakeup()`) is for waiters that are driving the event
+loop — which is everybody else.
+
 The narrow exception is a callback that PMIx guarantees to invoke
 synchronously on our own thread — `prte_pmix_server_register_nspace`'s
 completion when we called it from a shifted handler. Those are marked
@@ -149,6 +159,30 @@ monitor/tool-connect. The dmodex de-duplication loop in
 job-level fetch matched the first unrelated entry in the array, got
 parked as "already requested", and was never answered. Compare `tproc`
 against `tproc`.
+
+**...and then screen the entries that name no target at all.** Comparing
+`tproc` against `tproc` is only half of it, because a great many requests
+never name a target proc — monitor, publish/lookup, spawn, tool connection
+— and they sit in the same two arrays as the ones that do. Their `tproc` is
+the `{"", PMIX_RANK_INVALID}` sentinel, whose empty nspace matches *every*
+namespace, so a job-level fetch (`rank=WILDCARD`) pairs with the first one
+of them in the array. **Three** loops match on `tproc` and each must skip
+`PMIX_NSPACE_INVALID(r->tproc.nspace)` first: the de-duplication loop in
+`pmix_server_fence.c`, the "anyone else waiting for this target" sweep at
+the end of `pmix_server_dmdx_resp()`, and `prte_pmix_server_clear()`.
+Without the guard the first parks a request that is never answered, and the
+other two *release* a request somebody is still waiting on.
+
+**The sentinel exists only because the constructor writes it.** `PMIX_NEW`
+mallocs and does not zero, so `rqcon()` leaving `tproc` alone did not mean
+"empty" — it meant whatever the previous occupant of that block left there,
+which for a recycled request is a real proc identity. That is the same
+field the three loops above key on, so the matching was not merely
+unguarded, it was nondeterministic. `test_request_tracker` in
+[`test/unit/prted/test_prted.c`](../../../test/unit/prted/test_prted.c)
+pins it down, and does it by recycling a released request rather than by
+inspecting a fresh one, because a fresh one usually comes off a zeroed
+page and looks fine.
 
 **A job object outlives its map, and finding one proves nothing.** The map
 is built when the job is mapped and released the moment the job completes
@@ -189,6 +223,14 @@ Two things about that sweep, both of which it got wrong:
   ended was quietly taking the outstanding monitor requests with it. Guard
   with `PMIX_NSPACE_INVALID()` first; this is the same trap described above
   for `tproc` versus `target`, in a second place.
+- **A request it leaves alive must forget its index.** The slot is free the
+  instant it is cleared and the array hands out the lowest free one, so an
+  `inprogress` request that keeps its old `local_index` will, when its
+  holder finally answers, clear the slot that by then belongs to an
+  unrelated request — and leave *that* peer waiting. Setting `local_index`
+  back to `-1` is the whole fix; `pmix_pointer_array_set_item()` refuses a
+  negative index, so every later use is inert rather than wrong. The same
+  rule appears again in the session-control path, for the same reason.
 
 ---
 
@@ -212,6 +254,28 @@ When adding to a relay, remember that the index arriving on the wire is
 untrusted input. `pmix_pointer_array_get_item()` bounds-checks and
 returns NULL, so check for NULL — but do not then `return` without
 completing the request, because the requester is still waiting.
+
+**A relay must answer even a request it cannot parse.** Every `goto reply`
+in `pmix_server_sched()` happens after the requestor's index has been
+unpacked, so there is always somebody addressable on the other end holding
+a tracker for it — and until recently the "we could not build a request"
+arm printed a line and returned, which left that daemon's client blocked
+for the life of the DVM. `send_sched_error()` packs the two fields
+`pmix_server_alloc_request_resp()` reads when the status is not success
+(the status and the index) and sends them; that is the minimum a relay
+owes a peer it cannot serve.
+
+**A timed-out request is finished, and its index belongs to the peer
+again.** `timeout_cbfunc()` answers the peer with `PRTE_ERR_TIMEOUT` and
+must then retire the request outright: delete the retry cycle, clear the
+array slot, and release it unless somebody else holds it. Leaving it armed
+does two bad things — the daemon retries a request nobody is waiting for
+until the DVM ends, and a retry that eventually succeeds sends a *second*
+reply under an index the peer has long since reused, so an unrelated
+request of theirs is completed with data it never asked for. The
+`timed_out` flag is what stops the same thing happening from the other
+direction, when the answer we were waiting on arrives after we gave up:
+`_mdxresp()` drops a late payload rather than putting it on the wire.
 
 **A collecting relay must complete on *every* path.** `monitor`
 fans out to all daemons and counts responses (`ndaemons` vs `nreported`).
@@ -265,6 +329,12 @@ bearing:
 - **A refresh must not be answered from here.** `PMIX_GET_REFRESH_CACHE` is
   the caller saying our copy may be stale, which is exactly when we must
   go and ask.
+- **A `PMIx_Get`'s `PMIX_TIMEOUT` reaches us, and we are the only one who
+  honors it.** PMIx arms no timer on a host request — deliberately, so as
+  not to race a host that also supports one — but it does hand the caller's
+  directives up to `direct_modex`, they are packed on to the servicing
+  daemon, and `pmix_server_dmdx_recv()` arms the timer. That is why the
+  attribute table registers `PMIX_TIMEOUT` under `PMIx_Get`.
 
 ### A binding we were not sent is not a binding of "none"
 
