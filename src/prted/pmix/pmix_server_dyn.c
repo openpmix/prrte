@@ -626,7 +626,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
             prte_set_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, PRTE_ATTR_GLOBAL, &flag,
                                PMIX_BOOL);
 
-            /*** DETAILED OIUTPUT TAG */
+            /*** DETAILED OUTPUT TAG */
         } else if (PMIX_CHECK_KEY(info, PMIX_IOF_TAG_DETAILED_OUTPUT)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT_DETAILED,
@@ -1025,9 +1025,9 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                         prte_set_attribute(&app->attributes, PRTE_APP_PES_PER_PROC,
                                            PRTE_ATTR_GLOBAL, &pes, PMIX_UINT16);
                     }
-                } 
+                }
                 PMIx_Argv_free(ck);
- 
+
                 /***   REQUESTED MAPPER (per-app) - no longer supported   ***/
             } else if (PMIX_CHECK_KEY(info, PMIX_MAPPER)) {
                 /* see prte_pmix_xfer_job_info(): the mapping policy is the
@@ -1382,7 +1382,7 @@ static void connect_release(pmix_status_t status,
             } else if (PMIX_CHECK_KEY(&infostat, PMIX_JOB_INFO_ARRAY)) {
                 // contains an array of job-level info
                 info = (pmix_info_t*)infostat.value.data.darray->array;
-                // npace is in first place
+                // nspace is in first place
                 nspace = info[0].value.data.nspace;
                 // register this data
                 rc = PMIx_server_register_nspace(*nspace, -1, &infostat, 1, NULL, NULL);
