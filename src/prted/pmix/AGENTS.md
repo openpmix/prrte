@@ -1006,6 +1006,22 @@ upcall for a tool only from `PMIX_CAP_TOOL_FINALIZED` onwards; before that
 the tool's job object, and anything it held, simply accumulated for the
 life of the DVM.
 
+**A tool's rank is its own to choose, and the job object has to be built at
+it.** `prte_pmix_server_register_tool()` files the tool's `prte_proc_t` in
+`jdata->procs` at that rank, because that is how everything downstream finds
+it — `prte_state_base_track_procs()` above all, which is what drives the
+namespace through the state machine. Filed at zero instead, a tool that
+self-assigned any other rank was simply never found there and its job never
+retired, taking with it the allocation disposition this section is about.
+The rank arrives from the connecting process, so screen it first: the
+sentinel ranks are not subscripts, and `PMIX_RANK_UNDEF` handed to
+`pmix_pointer_array_set_item()` asks the array to grow to four billion
+entries. The same applies to everything else `_toolconn()` recorded off the
+wire — an empty `PMIX_NSPACE` is one `prte_set_job_data_object()` refuses,
+and a `PMIX_CMD_LINE` that never arrived leaves a NULL that
+`PMIx_Argv_split()` turns into a NULL `argv`. `test_tool_registration` pins
+the checks that can be reached without a live PMIx server.
+
 `lost_connection_hdlr()` in `pmix_server.c` is the other half — the
 *abnormal* departure — and it is registered at the end of
 `pmix_server_init()`. Watch what precedes that registration: an early

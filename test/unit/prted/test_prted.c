@@ -1879,6 +1879,84 @@ static int test_query_qualifiers(void)
     return failures;
 }
 
+/* prte_pmix_server_register_tool() builds the daemon's job object for a
+ * connecting tool out of what that tool sent, which is untrusted input from
+ * the wire.  Everything past the checks below needs a live PMIx server, so
+ * this pins the three decisions it makes before reaching one. */
+static int test_tool_registration(void)
+{
+    int failures = 0;
+    prte_pmix_server_req_t *req;
+    prte_job_t *jdata;
+    bool made_array = false;
+    int rc;
+
+    if (NULL == prte_job_data) {
+        prte_job_data = PMIX_NEW(pmix_pointer_array_t);
+        pmix_pointer_array_init(prte_job_data, 8, INT32_MAX, 8);
+        made_array = true;
+    }
+
+    /* A tool chooses its own rank, and the sentinel ranks are not
+     * subscripts: the proc object is filed in jdata->procs at the tool's
+     * rank, so PMIX_RANK_UNDEF would ask the pointer array to grow to four
+     * billion entries.  Refused before anything is built. */
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    PMIX_LOAD_PROCID(&req->target, "unit-test-tool@1", PMIX_RANK_UNDEF);
+    req->cmdline = strdup("a-tool --with args");
+    rc = prte_pmix_server_register_tool(req, NULL, NULL);
+    CHECK("a sentinel rank is refused", PRTE_ERR_BAD_PARAM == rc);
+    CHECK("...and no job object was left behind",
+          NULL == prte_get_job_data_object(req->target.nspace));
+    PMIX_RELEASE(req);
+
+    /* A tool that sent PMIX_NSPACE carrying no string leaves an empty
+     * namespace here, which PRRTE will not file.  That return used to be
+     * ignored, so the job object was neither in the array nor released and
+     * the namespace registered was one no lookup could reach. */
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    PMIX_LOAD_NSPACE(req->target.nspace, NULL);
+    req->target.rank = 0;
+    rc = prte_pmix_server_register_tool(req, NULL, NULL);
+    CHECK("an empty namespace is refused", PRTE_SUCCESS != rc);
+    PMIX_RELEASE(req);
+
+    /* A namespace we already hold is answered at once - and the caller has
+     * to tolerate the callback firing before the call returns, which is why
+     * this one is passed none. */
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, "unit-test-tool@2");
+    if (PRTE_SUCCESS != prte_set_job_data_object(jdata)) {
+        fprintf(stderr, "FAIL [test_tool_registration]: could not register a job\n");
+        PMIX_RELEASE(jdata);
+        if (made_array) {
+            PMIX_RELEASE(prte_job_data);
+            prte_job_data = NULL;
+        }
+        return failures + 1;
+    }
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    PMIX_LOAD_PROCID(&req->target, "unit-test-tool@2", 0);
+    rc = prte_pmix_server_register_tool(req, NULL, NULL);
+    CHECK("a namespace already known is accepted without rebuilding it",
+          PRTE_SUCCESS == rc);
+    CHECK("...and the job object we had is the one still there",
+          jdata == prte_get_job_data_object(req->target.nspace));
+    PMIX_RELEASE(req);
+
+    pmix_pointer_array_set_item(prte_job_data, jdata->index, NULL);
+    PMIX_RELEASE(jdata);
+    if (made_array) {
+        PMIX_RELEASE(prte_job_data);
+        prte_job_data = NULL;
+    }
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_tool_registration\n");
+    }
+    return failures;
+}
+
 static int test_connections(void)
 {
     int failures = 0;
@@ -2068,6 +2146,7 @@ int main(void)
     failures += test_departed_jobs();
     failures += test_monitor_accounting();
     failures += test_connections();
+    failures += test_tool_registration();
     failures += test_query_qualifiers();
     failures += test_group_left();
     failures += test_prefix_normalization();
