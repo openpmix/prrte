@@ -1294,6 +1294,58 @@ static int test_session_time(void)
  * remembers what it was told and that it stays bounded - a persistent DVM
  * runs jobs without end.
  */
+/*
+ * prte_pmix_server_req_t's constructor.
+ *
+ * PMIX_NEW mallocs and does not zero, so a field the constructor forgets
+ * holds whatever the previous occupant of that memory left behind.  The
+ * field that matters most is tproc: the loops that decide which request an
+ * arriving answer belongs to match on it, and an operation that names no
+ * target proc at all - monitor, publish/lookup, spawn, tool connection -
+ * never writes it.  Those loops screen such a request by testing its
+ * nspace for PMIx's "invalid", which only works because the constructor
+ * puts the sentinel there.
+ *
+ * The recycling half of this test is the part that catches the bug: it
+ * releases a request that DID name a target before allocating another,
+ * which the allocator satisfies from the same block - so a constructor
+ * that leaves tproc alone hands the new request the dead one's identity.
+ */
+static int test_request_tracker(void)
+{
+    int failures = 0;
+    prte_pmix_server_req_t *req;
+    pmix_proc_t real, wild;
+
+    PMIX_LOAD_PROCID(&real, "unit-test-tracker", 3);
+    PMIX_LOAD_PROCID(&wild, "unit-test-tracker", PMIX_RANK_WILDCARD);
+
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    CHECK("a new request names no target proc", PMIX_NSPACE_INVALID(req->tproc.nspace));
+    CHECK("...with an invalid rank", PMIX_RANK_INVALID == req->tproc.rank);
+    CHECK("...so it matches no real proc", !PMIX_CHECK_PROCID(&req->tproc, &real));
+    CHECK("...it is on neither request array",
+          -1 == req->local_index && -1 == req->remote_index);
+    CHECK("...and it owns no info array", !req->copy && NULL == req->info);
+    /* the sentinel is not sufficient on its own, which is why the matching
+     * loops screen for it: an empty nspace matches every namespace, so a
+     * job-level fetch (rank=WILDCARD) does pair with an untargeted request */
+    CHECK("a job-level fetch would match it", PMIX_CHECK_PROCID(&req->tproc, &wild));
+
+    /* leave a real identity in the allocator, then take the block back */
+    PMIX_XFER_PROCID(&req->tproc, &real);
+    PMIX_RELEASE(req);
+    req = PMIX_NEW(prte_pmix_server_req_t);
+    CHECK("a recycled request does not inherit the last one's target",
+          PMIX_NSPACE_INVALID(req->tproc.nspace) && PMIX_RANK_INVALID == req->tproc.rank);
+    PMIX_RELEASE(req);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_request_tracker\n");
+    }
+    return failures;
+}
+
 static int test_departed_jobs(void)
 {
     int failures = 0;
@@ -1543,6 +1595,7 @@ int main(void)
         return 1;
     }
 
+    failures += test_request_tracker();
     failures += test_departed_jobs();
     failures += test_connections();
     failures += test_prefix_normalization();
