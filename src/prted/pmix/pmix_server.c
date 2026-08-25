@@ -194,6 +194,9 @@ static char *prte_attrs_publish[] = {"PMIX_RANGE",
                                      "PMIX_ACCESS_PERMISSIONS",
                                      "PMIX_ACCESS_USERIDS",
                                      "PMIX_ACCESS_GRPIDS",
+                                     /* PRRTE's own - the Standard has no
+                                      * attribute for republishing a key */
+                                     PRTE_PUBLISH_REPLACE,
                                      NULL};
 
 static char *prte_attrs_lookup[] = {"PMIX_RANGE",

@@ -45,6 +45,28 @@
  * instance rather than to the HNP (see pmix_server_pub.c), so it is only
  * reachable by a lookup carrying the same range.
  *
+ *   dataserver dup <key> <value> [seconds] [range]
+ *       Publish and print "STATUS <status>" whatever happens, without
+ *       failing the process.  For the duplicate-key case, where the
+ *       expected outcome IS an error: a key already published on the same
+ *       range by ANOTHER process must come back
+ *       PMIX_ERR_DUPLICATE_KEY.
+ *
+ *   dataserver republish <key> [seconds] [range]
+ *       One process, three publishes of the same key on the same range.
+ *       Prints "PUBLISH <status>" (and "PUBLISHED <key>" when that
+ *       succeeded), then "REPUBLISH <status>" for a bare second publish
+ *       (which must be refused), then "REPLACE <status>" for one carrying
+ *       "prte.pub.replace" (which must succeed), with a lookup after each.
+ *       This is the self-republish path: the first value must survive the
+ *       refusal, and the third must displace it.
+ *
+ *       Pointed at a key ANOTHER process already holds, the first publish
+ *       is the one that gets refused - which is the case that says the
+ *       replace directive grants no reach over somebody else's name.  That
+ *       is a result, not a failure, so it stops there and exits 0 rather
+ *       than having PRRTE tear the job down over it.
+ *
  *   dataserver persist <key> <value> <persistence> [seconds] [range]
  *       Publish with an explicit PMIX_PERSISTENCE and exit, so the JOB
  *       ends.  <persistence> is one of first-read, proc, app, session,
@@ -339,6 +361,97 @@ static pmix_persistence_t parse_persist(const char *s)
     return PMIX_PERSIST_APP;
 }
 
+/* Publish and report the status whatever it is.  Returns 0 even on failure:
+ * the duplicate-key case EXPECTS an error, and exiting non-zero would have
+ * PRRTE tear the job down and bury the STATUS line under an abort banner. */
+static int do_dup(const char *key, const char *value, int seconds,
+                  const char *rangestr)
+{
+    pmix_status_t rc;
+    pmix_info_t info[2];
+    pmix_data_range_t range = parse_range(rangestr);
+
+    rc = PMIx_Init(&myproc, NULL, 0);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, "ERROR PMIx_Init: %s\n", PMIx_Error_string(rc));
+        return 1;
+    }
+    PMIX_INFO_LOAD(&info[0], key, value, PMIX_STRING);
+    PMIX_INFO_LOAD(&info[1], PMIX_RANGE, &range, PMIX_DATA_RANGE);
+    rc = PMIx_Publish(info, 2);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    printf("STATUS %s\n", PMIx_Error_string(rc));
+    fflush(stdout);
+    sleep(seconds);
+    PMIx_Finalize(NULL, 0);
+    return 0;
+}
+
+/* Publish the same key three times from one process: bare, bare again, then
+ * with the replace directive.  A lookup after each says which value the
+ * store is actually serving, which is the whole point - the failure this
+ * covers was a republish that reported success and could not be read back. */
+static int do_republish(const char *key, int seconds, const char *rangestr)
+{
+    pmix_status_t rc;
+    pmix_info_t info[3];
+    pmix_data_range_t range = parse_range(rangestr);
+    char *keys[2] = {NULL, NULL};
+
+    rc = PMIx_Init(&myproc, NULL, 0);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, "ERROR PMIx_Init: %s\n", PMIx_Error_string(rc));
+        return 1;
+    }
+    keys[0] = (char *) key;
+
+    PMIX_INFO_LOAD(&info[0], key, "first", PMIX_STRING);
+    PMIX_INFO_LOAD(&info[1], PMIX_RANGE, &range, PMIX_DATA_RANGE);
+    rc = PMIx_Publish(info, 2);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    printf("PUBLISH %s\n", PMIx_Error_string(rc));
+    fflush(stdout);
+    if (PMIX_SUCCESS != rc) {
+        /* somebody else holds this key, which is one of the outcomes this
+         * mode exists to report.  There is no "own prior publication" to
+         * replace, so there is nothing further to do - and exiting non-zero
+         * would have PRRTE tear the job down and bury the line above under
+         * an abort banner. */
+        PMIx_Finalize(NULL, 0);
+        return 0;
+    }
+    printf("PUBLISHED %s\n", key);
+    fflush(stdout);
+
+    /* a bare republish must be refused, and must not disturb what is there */
+    PMIX_INFO_LOAD(&info[0], key, "second", PMIX_STRING);
+    PMIX_INFO_LOAD(&info[1], PMIX_RANGE, &range, PMIX_DATA_RANGE);
+    rc = PMIx_Publish(info, 2);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    printf("REPUBLISH %s\n", PMIx_Error_string(rc));
+    fflush(stdout);
+    (void) lookup_keys(keys, 1, seconds, false, rangestr);
+
+    /* ...and one that asks to replace must take it over */
+    PMIX_INFO_LOAD(&info[0], key, "third", PMIX_STRING);
+    PMIX_INFO_LOAD(&info[1], PMIX_RANGE, &range, PMIX_DATA_RANGE);
+    PMIX_INFO_LOAD(&info[2], "prte.pub.replace", NULL, PMIX_BOOL);
+    rc = PMIx_Publish(info, 3);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    PMIX_INFO_DESTRUCT(&info[2]);
+    printf("REPLACE %s\n", PMIx_Error_string(rc));
+    fflush(stdout);
+    keys[0] = (char *) key;
+    (void) lookup_keys(keys, 1, seconds, false, rangestr);
+
+    PMIx_Finalize(NULL, 0);
+    return 0;
+}
+
 static int do_persist(const char *key, const char *value, const char *pstr,
                       int seconds, const char *rangestr)
 {
@@ -382,8 +495,11 @@ int main(int argc, char **argv)
                 "       %s lookupwait <key> [secs] [range]\n"
                 "       %s lookup2 <key1> <key2> [secs]\n"
                 "       %s unpublish <key> [secs] [pubrange] [unpubrange]\n"
+                "       %s dup <key> <value> [secs] [range]\n"
+                "       %s republish <key> [secs] [range]\n"
                 "       %s persist <key> <value> <persistence> [secs] [range]\n",
-                argv[0], argv[0], argv[0], argv[0], argv[0], argv[0]);
+                argv[0], argv[0], argv[0], argv[0], argv[0], argv[0], argv[0],
+                argv[0]);
         return 2;
     }
 
@@ -425,6 +541,22 @@ int main(int argc, char **argv)
                             (6 > argc) ? NULL : argv[5]);
     }
 
+    if (0 == strcmp(argv[1], "dup")) {
+        if (4 > argc) {
+            fprintf(stderr, "dup needs <key> <value>\n");
+            return 2;
+        }
+        return do_dup(argv[2], argv[3], (5 > argc) ? 0 : atoi(argv[4]),
+                      (6 > argc) ? NULL : argv[5]);
+    }
+    if (0 == strcmp(argv[1], "republish")) {
+        if (3 > argc) {
+            fprintf(stderr, "republish needs a key\n");
+            return 2;
+        }
+        return do_republish(argv[2], (4 > argc) ? 20 : atoi(argv[3]),
+                            (5 > argc) ? NULL : argv[4]);
+    }
     if (0 == strcmp(argv[1], "persist")) {
         if (5 > argc) {
             fprintf(stderr, "persist needs <key> <value> <persistence>\n");
