@@ -67,6 +67,47 @@
  */
 
 
+/* Tell the requesting daemon that we cannot serve its monitor request.
+ *
+ * The collective counts responses, so a daemon that goes quiet is a daemon
+ * the requestor waits on for the life of the DVM - which makes a reply the
+ * minimum we owe it even when we have nothing to say.  This packs the three
+ * fields pmix_server_monitor_resp() reads before it looks at the status:
+ * our vpid, the room number in the requestor's own tracker, and why. */
+static void send_monitor_error(pmix_rank_t dvpid, int remote_index, pmix_status_t st)
+{
+    pmix_data_buffer_t *msg;
+    pmix_status_t rc;
+    int ret;
+
+    PMIX_DATA_BUFFER_CREATE(msg);
+
+    rc = PMIx_Data_pack(NULL, msg, &prte_process_info.myproc.rank, 1, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(msg);
+        return;
+    }
+    rc = PMIx_Data_pack(NULL, msg, &remote_index, 1, PMIX_INT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(msg);
+        return;
+    }
+    rc = PMIx_Data_pack(NULL, msg, &st, 1, PMIX_STATUS);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(msg);
+        return;
+    }
+
+    PRTE_RML_SEND(ret, dvpid, msg, PRTE_RML_TAG_MONITOR_RESP);
+    if (PRTE_SUCCESS != ret) {
+        PRTE_ERROR_LOG(ret);
+        PMIX_DATA_BUFFER_RELEASE(msg);
+    }
+}
+
 static void mfn(int sd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
@@ -78,6 +119,20 @@ static void mfn(int sd, short args, void *cbdata)
     // record the number of daemons that must respond - the DVM can
     // grow or shrink, so this must be read on the progress thread
     req->ndaemons = prte_process_info.num_daemons - 1;
+
+    /* Every daemon but us answers, and the completion test lives in the
+     * response handler - so on a DVM of one there is nothing to xcast to
+     * and nothing that will ever run that test.  PMIx has already gathered
+     * this node's own contribution before up-calling (it only asks the host
+     * about participation it judges remote), so an empty success is the
+     * whole of our answer and the caller gets its local results. */
+    if (0 == req->ndaemons) {
+        if (NULL != req->infocbfunc) {
+            req->infocbfunc(PMIX_SUCCESS, NULL, 0, req->cbdata, NULL, NULL);
+        }
+        PMIX_RELEASE(req);
+        return;
+    }
 
     // cache the request
     req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
@@ -177,6 +232,9 @@ pmix_status_t pmix_server_monitor_fn(const pmix_proc_t *requestor,
 
     // create a tracking object
     req = PMIX_NEW(prte_pmix_server_req_t);
+    if (NULL == req) {
+        return PMIX_ERR_NOMEM;
+    }
     memcpy(&req->target, requestor, sizeof(pmix_proc_t));
     req->monitor = (pmix_info_t*)monitor;
     req->pstatus = error;
@@ -202,6 +260,7 @@ static void mycbfn(int sd, short args, void *cbdata)
     int ret;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
+    rc = PMIX_SUCCESS;
     PMIX_DATA_BUFFER_CREATE(msg);
 
     // pack my vpid
@@ -228,8 +287,11 @@ static void mycbfn(int sd, short args, void *cbdata)
         goto errorout;
     }
 
-    // if it failed, then nothing more to pack
-    if (PMIX_SUCCESS == rq2->status) {
+    /* if it failed, then nothing more to pack.  Gate on the same field we
+     * packed above and the receiver reads: status is a PRRTE code that mycb
+     * never sets, so this used to be permanently true and would ship results
+     * the far end had already decided not to read. */
+    if (PMIX_SUCCESS == rq2->pstatus) {
         // pack any returned info
         rc = PMIx_Data_pack(NULL, msg, &rq2->ninfo, 1, PMIX_SIZE);
         if (PMIX_SUCCESS != rc) {
@@ -257,13 +319,24 @@ static void mycbfn(int sd, short args, void *cbdata)
     }
 
 errorout:
+    /* We built no reply, so the requestor is still counting and would never
+     * reach its total.  Send it the bare refusal rather than going quiet. */
+    if (PMIX_SUCCESS != rc) {
+        send_monitor_error(req->proxy.rank, req->remote_index, rc);
+    }
+
     // execute the release callback
     if (NULL != rq2->rlcbfunc) {
         rq2->rlcbfunc(rq2->rlcbdata);
     }
 
-    // cleanup
-    pmix_pointer_array_set_item(&prte_pmix_server_globals.remote_reqs, req->remote_index, NULL);
+    /* local_index is OUR room in remote_reqs; remote_index is the
+     * requestor's room in its own local_reqs and means nothing on this
+     * array.  Clearing that one left this request's slot pointing at the
+     * object we are about to free - which prte_pmix_server_clear() then
+     * walks - and unlinked whichever unrelated peer request happened to
+     * hold the slot it named. */
+    pmix_pointer_array_set_item(&prte_pmix_server_globals.remote_reqs, req->local_index, NULL);
     PMIX_RELEASE(req);
     PMIX_RELEASE(rq2);
 }
@@ -291,11 +364,10 @@ void pmix_server_monitor_request(int status, pmix_proc_t *sender,
                                  pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
                                  void *cbdata)
 {
-    pmix_status_t rc, ret;
+    pmix_status_t rc;
     pmix_rank_t dvpid;
     int32_t cnt;
     int remote_index;
-    pmix_data_buffer_t *msg;
     pmix_status_t event;
     pmix_info_t *monitor;
     size_t ndirs;
@@ -335,6 +407,10 @@ void pmix_server_monitor_request(int status, pmix_proc_t *sender,
 
     // unpack the monitor
     monitor = PMIx_Info_create(1);
+    if (NULL == monitor) {
+        rc = PMIX_ERR_NOMEM;
+        goto errorout;
+    }
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, monitor, &cnt, PMIX_INFO);
     if (PMIX_SUCCESS != rc) {
@@ -362,13 +438,19 @@ void pmix_server_monitor_request(int status, pmix_proc_t *sender,
     }
     // we need two extra locations for our own directives
     PMIX_INFO_CREATE(directives, ndirs+2);
+    if (NULL == directives) {
+        PMIx_Info_free(monitor, 1);
+        rc = PMIX_ERR_NOMEM;
+        goto errorout;
+    }
     if (0 < ndirs) {
         cnt = ndirs;
         rc = PMIx_Data_unpack(NULL, buffer, directives, &cnt, PMIX_INFO);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIx_Info_free(monitor, 1);
-            PMIx_Info_free(directives, ndirs);
+            /* ndirs+2 was allocated - the two spare slots are ours */
+            PMIx_Info_free(directives, ndirs + 2);
             goto errorout;
         }
     }
@@ -382,6 +464,12 @@ void pmix_server_monitor_request(int status, pmix_proc_t *sender,
 
     // cache this request
     req = PMIX_NEW(prte_pmix_server_req_t);
+    if (NULL == req) {
+        PMIx_Info_free(monitor, 1);
+        PMIx_Info_free(directives, ndirs);
+        rc = PMIX_ERR_NOMEM;
+        goto errorout;
+    }
     PMIx_Load_procid(&req->proxy, prte_process_info.myproc.nspace, dvpid);
     req->monitor = monitor;
     req->moncopy = true;
@@ -405,37 +493,7 @@ void pmix_server_monitor_request(int status, pmix_proc_t *sender,
 
 errorout:
     // cannot allow the collective to hang
-    PMIX_DATA_BUFFER_CREATE(msg);
-
-    // pack my vpid
-    ret = PMIx_Data_pack(NULL, msg, &prte_process_info.myproc.rank, 1, PMIX_PROC_RANK);
-    if (PMIX_SUCCESS != ret) {
-        PMIX_ERROR_LOG(ret);
-        PMIX_DATA_BUFFER_RELEASE(msg);
-        return;
-    }
-
-    // pack the room number for the requestor's tracker
-    ret = PMIx_Data_pack(NULL, msg, &remote_index, 1, PMIX_INT);
-    if (PMIX_SUCCESS != ret) {
-        PMIX_ERROR_LOG(ret);
-        PMIX_DATA_BUFFER_RELEASE(msg);
-        return;
-    }
-    // pack an error status to indicate a problem
-    ret = PMIx_Data_pack(NULL, msg, &rc, 1, PMIX_STATUS);
-    if (PMIX_SUCCESS != ret) {
-        PMIX_ERROR_LOG(ret);
-        PMIX_DATA_BUFFER_RELEASE(msg);
-        return;
-    }
-
-    // send to the requesting daemon
-    PRTE_RML_SEND(ret, dvpid, msg, PRTE_RML_TAG_MONITOR_RESP);
-    if (PRTE_SUCCESS != ret) {
-        PRTE_ERROR_LOG(ret);
-        PMIX_DATA_BUFFER_RELEASE(msg);
-    }    
+    send_monitor_error(dvpid, remote_index, rc);
 }
 
 void pmix_server_monitor_resp(int status, pmix_proc_t *sender,
@@ -472,6 +530,20 @@ void pmix_server_monitor_resp(int status, pmix_proc_t *sender,
     if (NULL == req) {
         // bad index, or we no longer have this request
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return;
+    }
+    /* The index came off the wire, and the slot it names is handed out
+     * again the moment its previous occupant retires - so a response that
+     * crossed with a retirement can land on a live request of some other
+     * kind.  Accounting a report against one of those, and merging monitor
+     * results into an info array it did not allocate, corrupts a request
+     * somebody else is waiting on.  monitor is set by this file and nowhere
+     * else, which makes it the discriminator. */
+    if (NULL == req->monitor) {
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s monitor response for index %d found a %s request - dropping it",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), local_index,
+                            (NULL == req->operation) ? "non-monitor" : req->operation);
         return;
     }
 
