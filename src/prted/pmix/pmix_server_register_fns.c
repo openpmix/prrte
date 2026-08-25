@@ -183,7 +183,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
 
     /* pass the session ID */
     ui32_ptr = &ui32;
-    if(prte_get_attribute(&jdata->attributes, PRTE_JOB_SESSION_ID, (void **) &ui32_ptr, PMIX_UINT32)){
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_SESSION_ID, (void **) &ui32_ptr,
+                           PMIX_UINT32)) {
         PMIX_INFO_LIST_ADD(ret, info, PMIX_SESSION_ID, &ui32, PMIX_UINT32);
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
@@ -262,9 +263,12 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
                         PMIX_LOAD_PROCID(&nm->name, pptr->name.nspace, pptr->name.rank);
                         pmix_list_append(&local_procs, &nm->super);
                         if (PMIX_CHECK_NSPACE(jdata->nspace, pptr->name.nspace)) {
-                            /* go ahead and register this client - since we are going to wait
-                             * for register_nspace to complete and the PMIx library serializes
-                             * the registration requests, we don't need to wait here */
+                            /* Go ahead and register this client.  The PMIx library
+                             * serializes registration requests, so this one is
+                             * ordered ahead of the register_nspace below however
+                             * long either takes - which is why neither has to be
+                             * waited for here, and why this one being fire-and-
+                             * forget does not race the namespace it belongs to. */
                             ret = PMIx_server_register_client(&pptr->name, uid, gid,
                                                               (void*)pptr, NULL, NULL);
                             if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
