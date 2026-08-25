@@ -469,6 +469,37 @@ onto PRRTE job and app attributes. Notes for extending them:
   handled early makes a later `else if` on the same key dead code —
   `PMIX_TIMEOUT` was matched by the `SPAWN_TIMEOUT` branch and its own
   branch was unreachable.
+- **A value the branch *parses* has to be checked; one it merely passes on
+  does not.** `PMIX_INFO_LOAD(&i, KEY, NULL, PMIX_STRING)` is ordinary,
+  legal PMIx — `pmix_bfrops_base_value_load()` zeroes the union for a NULL
+  `data`, so the info arrives as a `PMIX_STRING` whose `data.string` is
+  NULL, and PMIx's own `PMIX_INFO_TRUE` handles that case deliberately.
+  The many branches that hand the pointer straight to `prte_set_attribute`
+  or to a policy setter are safe, because those all test for NULL. The
+  branches that read it are not, and four of them faulted: `PMIX_STDIN_TGT`
+  (`strcmp`), `PMIX_PARENT_ID` (`PMIX_XFER_PROCID` on a NULL proc),
+  `PMIX_WDIR` (`pmix_path_is_absolute` dereferences its argument
+  immediately), and both timeout keys — `PMIX_CONVERT_TIME` indexes
+  `tmp[sz-1]` without checking that the split produced anything, so a NULL
+  string faults *inside PMIx*. Any of these let a client segfault the
+  daemon it was attached to with one `PMIx_Spawn`, which is why
+  `test_xfer_job_info` now pins each of them.
+- **Read a number with `PMIX_VALUE_GET_NUMBER`, never off a fixed union
+  member.** `u16 = info->value.data.uint32` reads four bytes of a union the
+  caller may have filled with two, which the truncation back to `uint16_t`
+  rescues on a little-endian machine and does not on a big-endian one. The
+  macro converts from whatever integer type the caller actually used and
+  says so in its status, which is also the only way a non-numeric value
+  gets refused rather than silently becoming a count.
+- **`pmix_getcwd()` answers in PMIx statuses.** It looks like one more
+  PRRTE-shaped `int` helper and it is not — it returns `PMIX_ERR_BAD_PARAM`
+  and `PMIX_ERR_IN_ERRNO`. `prte_pmix_xfer_app()` returned one of those to
+  a caller reading PRRTE codes, which then ran it through
+  `prte_pmix_convert_rc()` — the PRRTE→PMIx direction — and the client got
+  a bare `PMIX_ERROR`. The same trap is in `spawn()`, where `rc` carried a
+  `PMIx_Data_pack` status on one path and a `prte_job_pack`/RML code on the
+  others while one `goto callback` converted them all the same way; the two
+  spaces live in separate variables there now.
 
 ---
 
