@@ -48,6 +48,15 @@
 
 #include "src/prted/pmix/pmix_server_internal.h"
 
+/* The outcome of the one attach attempt.  init_server() marks itself done
+ * before it does any work, so it runs exactly once whether it succeeds or
+ * fails - and the failure has to be remembered.  Without the connection a
+ * later request is not refused, it is sent to this daemon's own data server
+ * instead: not where the caller asked for it to go, and not where the other
+ * DVM will look for it.  One error message followed by publishes that
+ * silently go nowhere useful is worse than a request that fails. */
+static int server_init_rc = PRTE_SUCCESS;
+
 /* Attach to the data server named by prte_data_server_uri.
  *
  * The server is a DVM of its own, so it is reached as a PMIx *tool
@@ -77,17 +86,21 @@ static int init_server(void);
  * effect. */
 int prte_pmix_server_init_pubsub(void)
 {
-    int ret;
-
     if (prte_pmix_server_globals.pubsub_init) {
-        return PRTE_SUCCESS;
+        /* Answer with what the one attempt actually did.  Returning success
+         * here because the attempt has been MADE is the trap described on
+         * server_init_rc above: only the request that provoked the attach
+         * learned that it failed, and every later one carried on into this
+         * daemon's own data server - not where the caller asked for it to
+         * go, and not where the other DVM will look. */
+        return server_init_rc;
     }
-    ret = init_server();
-    if (PRTE_SUCCESS != ret) {
+    server_init_rc = init_server();
+    if (PRTE_SUCCESS != server_init_rc) {
         prte_show_help("help-prted.txt", "noserver", true,
                        (NULL == prte_data_server_uri) ? "NULL" : prte_data_server_uri);
     }
-    return ret;
+    return server_init_rc;
 }
 
 static int init_server(void)
@@ -203,7 +216,8 @@ static void execute(int sd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(req);
 
-    /* we need our connection to the server */
+    /* we need our connection to the server, and every request needs it: a
+     * failed attach is remembered and re-reported rather than skipped */
     if (PRTE_SUCCESS != (rc = prte_pmix_server_init_pubsub())) {
         /* rc is a PRRTE code and what we hand back goes to a client */
         ret = prte_pmix_convert_rc(rc);
