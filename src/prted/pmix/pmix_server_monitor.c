@@ -91,17 +91,150 @@ static void send_monitor_error(pmix_rank_t dvpid, int remote_index, pmix_status_
     }
 }
 
+/* The first thing to go wrong is the useful one to report, so a later
+ * response must not overwrite it.  (pstatus is clear of the caller's own
+ * monitor code by the time any response arrives - see mfn.) */
+#define RECORD_ERROR(r, st)                 \
+    do {                                    \
+        if (PMIX_SUCCESS == (r)->pstatus) { \
+            (r)->pstatus = (st);            \
+        }                                   \
+    } while (0)
+
+/* Run the completion test for a fan-out that may just have become whole.
+ *
+ * Whole means every daemon we were waiting on has been accounted for - by
+ * answering, or by dying.  The status says which of those it was, because a
+ * caller handed a sample of half the DVM has to be able to tell.  May clear
+ * the request's slot and release it, so the caller must not touch it after. */
+static void monitor_check_complete(prte_pmix_server_req_t *req)
+{
+    pmix_status_t st;
+
+    if (req->ndaemons != req->nreported) {
+        return;
+    }
+
+    if (req->nsuccess == req->ndaemons) {
+        st = PMIX_SUCCESS;
+    } else if (0 < req->nsuccess) {
+        /* some daemons answered and some could not - the results are a
+         * sample of part of the DVM, which is what this status is for */
+        st = PMIX_ERR_PARTIAL_SUCCESS;
+    } else {
+        /* nothing came back at all - report why, not that it was partial */
+        st = (PMIX_SUCCESS == req->pstatus) ? PMIX_ERROR : req->pstatus;
+    }
+
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s monitor request complete: %u/%u answered, status %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        req->nsuccess, req->ndaemons, PMIx_Error_string(st));
+
+    if (NULL != req->infocbfunc) {
+        req->infocbfunc(st, req->info, req->ninfo, req->cbdata,
+                        prte_pmix_server_req_release, req);
+    } else {
+        // nothing we can do!
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs,
+                                    req->local_index, NULL);
+        PMIX_RELEASE(req);
+    }
+}
+
+/* Account a daemon departure against every monitor collective in flight.
+ *
+ * A monitor request fans out with an xcast and then counts direct replies,
+ * so nothing in it is keyed on the routing tree and nothing repairs it when
+ * the tree changes: a daemon that dies mid-collective simply never answers,
+ * and the requestor counts for the life of the DVM.  Unlike a fence, there
+ * is nothing to re-drive here - a monitor reply is a sample of live state on
+ * a node that no longer exists - so recovery is to stop waiting for it and
+ * tell the caller its sample is short.
+ *
+ * The routing tree calls this twice for the same death, at LOCAL scope and
+ * again at GLOBAL, and a rank may be named again later by an adoption notice
+ * to a new parent.  Marking the departure in reported_dmns is what makes all
+ * of that idempotent; screening against expected_dmns is what keeps a death
+ * this request never waited on from counting at all. */
+void prte_pmix_server_fault_handler(const prte_rml_recovery_status_t *status)
+{
+    prte_pmix_server_req_t *req;
+    pmix_rank_t *failed;
+    size_t i;
+    int n, bit;
+    bool lost;
+
+    if (0 == status->failed_ranks.size || NULL == status->failed_ranks.array) {
+        /* a revival, or a reshape with no deaths in it */
+        return;
+    }
+    failed = (pmix_rank_t *) status->failed_ranks.array;
+
+    for (n = 0; n < prte_pmix_server_globals.local_reqs.size; n++) {
+        req = (prte_pmix_server_req_t *)
+            pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, n);
+        if (NULL == req || NULL == req->monitor || 0 == req->ndaemons) {
+            /* not a monitor collective, or one that never fanned out */
+            continue;
+        }
+        lost = false;
+        for (i = 0; i < status->failed_ranks.size; i++) {
+            bit = (int) failed[i];
+            if (!pmix_bitmap_is_set_bit(&req->expected_dmns, bit) ||
+                pmix_bitmap_is_set_bit(&req->reported_dmns, bit)) {
+                continue;
+            }
+            pmix_bitmap_set_bit(&req->reported_dmns, bit);
+            ++req->nreported;
+            lost = true;
+        }
+        if (!lost) {
+            continue;
+        }
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s monitor request lost a daemon: %u/%u now in",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            req->nreported, req->ndaemons);
+        if (PMIX_SUCCESS == req->pstatus) {
+            req->pstatus = PMIX_ERR_UNREACH;
+        }
+        /* may clear slot n and release req - we do not touch it again */
+        monitor_check_complete(req);
+    }
+}
+
 static void mfn(int sd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
     pmix_data_buffer_t msg;
     pmix_status_t rc;
+    pmix_rank_t r;
     int ret;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
-    // record the number of daemons that must respond - the DVM can
-    // grow or shrink, so this must be read on the progress thread
-    req->ndaemons = prte_process_info.num_daemons - 1;
+    /* Record WHICH daemons must respond, not merely how many.  The xcast
+     * below reaches every daemon the routing tree still considers live, so
+     * that same predicate - a vpid inside the span that is not marked
+     * failed - is exactly the set that will answer.  This has to be read
+     * here, on the progress thread, because the DVM can grow or shrink.
+     *
+     * The identities are what let a later death be accounted for: a bare
+     * count cannot say whether the daemon that just died had already
+     * reported, and both readings of that are wrong. */
+    req->ndaemons = 0;
+    for (r = 0; r < prte_rml_base.n_dmns; r++) {
+        if (r == prte_process_info.myproc.rank ||
+            pmix_bitmap_is_set_bit(&prte_rml_base.failed_dmns, (int) r)) {
+            continue;
+        }
+        if (PMIX_SUCCESS != pmix_bitmap_set_bit(&req->expected_dmns, (int) r)) {
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            rc = PMIX_ERR_NOMEM;
+            goto errorout;
+        }
+        ++req->ndaemons;
+    }
 
     /* Every daemon but us answers, and the completion test lives in the
      * response handler - so on a DVM of one there is nothing to xcast to
@@ -162,6 +295,12 @@ static void mfn(int sd, short args, void *cbdata)
         PMIX_DATA_BUFFER_DESTRUCT(&msg);
         goto errorout;
     }
+    /* that was the caller's monitor code, and it is now on the wire.  The
+     * field is reused from here on to accumulate the collective's own
+     * result - the first non-success a daemon reports, or the reason a
+     * daemon will never report at all - so clear the caller's value out of
+     * it rather than letting an ordinary monitor code read as a failure. */
+    req->pstatus = PMIX_SUCCESS;
 
     // pack the directives, if given
     rc = PMIx_Data_pack(NULL, &msg, &req->ndirs, 1, PMIX_SIZE);
@@ -530,7 +669,24 @@ void pmix_server_monitor_resp(int status, pmix_proc_t *sender,
         return;
     }
 
-    // record that another daemon reported
+    /* Record WHICH daemon reported.  A bare count cannot tell a second copy
+     * of one daemon's response from the first, and counting one twice
+     * completes the request early - before the daemon whose slot it took is
+     * heard from.  Screening against the expected set also drops a response
+     * from a daemon this request was never waiting on. */
+    if (!pmix_bitmap_is_set_bit(&req->expected_dmns, (int) dvpid)) {
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s monitor response from unexpected daemon %s - dropping it",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_VPID_PRINT(dvpid));
+        return;
+    }
+    if (pmix_bitmap_is_set_bit(&req->reported_dmns, (int) dvpid)) {
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s duplicate monitor response from daemon %s - dropping it",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_VPID_PRINT(dvpid));
+        return;
+    }
+    pmix_bitmap_set_bit(&req->reported_dmns, (int) dvpid);
     ++req->nreported;
 
     /* Note that every failure below records the error on the request and
@@ -544,10 +700,14 @@ void pmix_server_monitor_resp(int status, pmix_proc_t *sender,
     rc = PMIx_Data_unpack(NULL, buffer, &rstatus, &cnt, PMIX_STATUS);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        req->pstatus = rc;
+        RECORD_ERROR(req, rc);
         goto complete;
     }
-    req->pstatus = rstatus;
+    if (PMIX_SUCCESS == rstatus) {
+        ++req->nsuccess;
+    } else {
+        RECORD_ERROR(req, rstatus);
+    }
 
     // if it succeeded, then unpack the results
     if (PMIX_SUCCESS == rstatus) {
@@ -555,7 +715,7 @@ void pmix_server_monitor_resp(int status, pmix_proc_t *sender,
         rc = PMIx_Data_unpack(NULL, buffer, &ninfo, &cnt, PMIX_SIZE);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            req->pstatus = rc;
+            RECORD_ERROR(req, rc);
             goto complete;
         }
         if (0 < ninfo) {
@@ -565,7 +725,7 @@ void pmix_server_monitor_resp(int status, pmix_proc_t *sender,
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_INFO_FREE(info, ninfo);
-                req->pstatus = rc;
+                RECORD_ERROR(req, rc);
                 goto complete;
             }
         }
@@ -597,15 +757,6 @@ void pmix_server_monitor_resp(int status, pmix_proc_t *sender,
     }
 
 complete:
-    // if all daemons have reported, then we are complete
-    if (req->ndaemons == req->nreported) {
-        if (NULL != req->infocbfunc) {
-            req->infocbfunc(req->pstatus, req->info, req->ninfo, req->cbdata,
-                            prte_pmix_server_req_release, req);
-        } else {
-            // nothing we can do!
-            pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
-            PMIX_RELEASE(req);
-        }
-    }
+    // if everyone we were waiting on is accounted for, then we are complete
+    monitor_check_complete(req);
 }

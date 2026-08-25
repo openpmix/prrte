@@ -364,6 +364,49 @@ daemon that goes quiet is one the requestor counts forever.
 `send_monitor_error()` is the minimum owed there — our vpid, the room
 number in the requestor's tracker, and why.
 
+**A daemon that dies mid-collective is accounted, not waited on.** Nothing
+in this rollup is keyed on the routing tree — it xcasts the request and then
+counts direct replies — so the tree can be repaired around a dead daemon
+while the request goes on counting a DVM that no longer exists. It is wired
+into the same dispatch every other in-flight collective uses:
+`prte_pmix_server_fault_handler()`, called from `src/rml/routed_radix.c`
+beside `prte_grpcomm_fault_handler()`.
+
+What it does there is *not* what fence and group do. Their recovery is a
+restart — discard, recompute what the repaired tree owes, re-offer the
+contribution kept for the purpose — which works because a fence contribution
+is idempotent and re-derivable. A monitor reply is a sample of live state on
+a node that has just ceased to exist; there is nothing to re-offer. So
+recovery here is to stop waiting and say the sample is short. It needs no
+epoch, and deliberately does not have one.
+
+That is why the request records **which** daemons it is waiting on
+(`expected_dmns`) and which have been accounted for (`reported_dmns`), rather
+than the bare count it used to keep. A count cannot answer the only question
+a death poses — had that daemon already reported? — and both readings of it
+are wrong: decrement when it had reported and `nreported` sails past the
+target, decrement when it had not and you are correct only by luck. The
+identities also make the accounting idempotent, which it must be, because the
+routing tree reports every death **twice**, once at LOCAL scope and again at
+GLOBAL, and a rank can be named again later by an adoption notice to a new
+parent. Screening against `expected_dmns` is the other half: a death this
+request was never waiting on must not be counted at all, or it completes
+early — before the daemons it *is* waiting on have answered.
+
+The same two sets are what make a duplicate response harmless, which the
+bare count did not: counting one daemon twice completed the request before
+the daemon whose slot it took was heard from.
+
+**The status says how much of the DVM answered.** All expected daemons
+reported success — `PMIX_SUCCESS`. Some answered and some could not —
+`PMIX_ERR_PARTIAL_SUCCESS`, because the caller is holding a sample of part of
+the DVM and cannot otherwise tell. None answered — the reason, not a claim of
+partiality. Note that `pstatus` carries the *caller's* monitor code until
+`mfn()` packs it into the fan-out, and is cleared there before it starts
+accumulating the collective's own result; and that it keeps the **first**
+non-success rather than the last, which used to mean one daemon's failure was
+erased by the next daemon's success.
+
 **And a count of zero completes too.** `ndaemons` is `num_daemons - 1`,
 because the requesting daemon skips its own copy of the broadcast — so on
 a DVM of one it is zero, the xcast reaches nobody who will answer, and the

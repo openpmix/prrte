@@ -38,6 +38,7 @@
 #include "src/mca/filem/filem.h"
 #include "src/mca/state/state.h"
 #include "src/rml/relm/relm.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 
 
 static void resize_ranks(pmix_data_array_t* arr, size_t size){
@@ -400,6 +401,11 @@ void prte_rml_repair_routing_tree(pmix_data_array_t* failed_ranks, bool global,
     prte_grpcomm_fault_handler(s);
     prte_filem.fault_handler(s);
     prte_relm_fault_handler(s);
+    /* The PMIx server's monitor collective fans out with an xcast and counts
+     * direct replies, so it holds a set of daemons it is waiting on that
+     * nothing else repairs.  It is not called on the revival path below: it
+     * keys on deaths, not on the shape of the tree. */
+    prte_pmix_server_fault_handler(s);
 
     PMIX_DESTRUCT(&status);
 }

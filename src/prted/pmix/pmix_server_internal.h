@@ -40,6 +40,7 @@
 #endif
 #include <pmix_server.h>
 
+#include "src/class/pmix_bitmap.h"
 #include "src/class/pmix_hotel.h"
 #include "src/event/event-internal.h"
 #include "src/mca/base/pmix_base.h"
@@ -49,6 +50,7 @@
 #include "src/util/proc_info.h"
 #include "types.h"
 
+#include "src/rml/rml_types.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
 
@@ -92,6 +94,22 @@ typedef struct {
     size_t sz;
     uint32_t ndaemons;
     uint32_t nreported;
+    uint32_t nsuccess;
+    /* Which daemons a fan-out-and-count operation is waiting on, and which
+     * of them have been accounted for.  Both are indexed by daemon vpid and
+     * are used only by the monitor collective; every other request leaves
+     * them as the constructor makes them, which costs nothing - a bitmap is
+     * usable empty and set_bit grows it from nothing.
+     *
+     * Two sets rather than a counter because a daemon failure has to be
+     * accounted exactly once, and a bare count cannot say whether the daemon
+     * that just died had already reported (in which case there is nothing to
+     * adjust) or had not (in which case it never will).  Recording the
+     * identity also makes the accounting idempotent, which it has to be: the
+     * routing tree's fault handler fires twice for every death, once at
+     * LOCAL scope and again at GLOBAL. */
+    pmix_bitmap_t expected_dmns;
+    pmix_bitmap_t reported_dmns;
     pmix_data_range_t range;
     pmix_proc_t proxy;
     pmix_proc_t target;
@@ -355,6 +373,11 @@ PRTE_EXPORT extern pmix_status_t pmix_server_stdin_fn(const pmix_proc_t *source,
                                                       const pmix_info_t directives[], size_t ndirs,
                                                       const pmix_byte_object_t *bo,
                                                       pmix_op_cbfunc_t cbfunc, void *cbdata);
+
+/* Account a daemon departure against every outstanding monitor collective.
+ * Called from the routing tree's fault handler, on the PRRTE progress thread,
+ * once at LOCAL scope and again at GLOBAL for the same death. */
+PRTE_EXPORT void prte_pmix_server_fault_handler(const prte_rml_recovery_status_t *status);
 
 PRTE_EXPORT extern pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
                                                       const pmix_proc_t procs[], size_t nprocs,
