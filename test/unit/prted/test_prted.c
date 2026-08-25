@@ -1633,6 +1633,111 @@ static int test_departed_jobs(void)
  * wildcard member covers, and that a record is neither leaked nor dropped
  * while somebody named in it still exists.  Sending the event needs daemons.
  */
+/*
+ * PMIX_GROUP_LEFT arrives as an ordinary event notification, which means its
+ * info array is whatever the generating client passed to PMIx_Notify_event:
+ * PMIx forwards it to the host without inspecting what any entry holds, and
+ * the host then xcasts it to every daemon in the DVM.  So every value has to
+ * have its type checked before the matching member of its union is read, and
+ * the departing proc has to name a concrete identity - PMIX_CHECK_PROCID
+ * counts an empty nspace and a wildcard rank as matching anything, so a
+ * departure that names neither would drop whichever member sits first.
+ *
+ * Both mistakes were live, and both are reachable by any process attached to
+ * any daemon: a PMIX_GROUP_ID carrying a PMIX_SIZE handed strcmp() eight
+ * bytes of the caller's choosing, on every daemon at once.
+ */
+static int test_group_left(void)
+{
+    int failures = 0;
+    prte_pmix_server_pset_t *grp;
+    pmix_info_t info[2];
+    pmix_proc_t source, affected;
+    size_t bogus = 0x41;    /* a value that is a fatal pointer and a fine size */
+
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.groups, pmix_list_t);
+    grp = PMIX_NEW(prte_pmix_server_pset_t);
+    grp->name = strdup("unit-test-group");
+    grp->num_members = 3;
+    PMIX_PROC_CREATE(grp->members, grp->num_members);
+    PMIX_LOAD_PROCID(&grp->members[0], "unit-test-grp@1", 0);
+    PMIX_LOAD_PROCID(&grp->members[1], "unit-test-grp@1", 1);
+    PMIX_LOAD_PROCID(&grp->members[2], "unit-test-grp@1", 2);
+    pmix_list_append(&prte_pmix_server_globals.groups, &grp->super);
+
+    /* a proc that is in no group, so a fall back to the event source cannot
+     * itself remove anything and confuse the cases below */
+    PMIX_LOAD_PROCID(&source, "unit-test-grp@9", 0);
+
+    /* a group id of the wrong type is not a group id */
+    PMIX_INFO_LOAD(&info[0], PMIX_GROUP_ID, &bogus, PMIX_SIZE);
+    PMIX_LOAD_PROCID(&affected, "unit-test-grp@1", 1);
+    PMIX_INFO_LOAD(&info[1], PMIX_EVENT_AFFECTED_PROC, &affected, PMIX_PROC);
+    prte_pmix_server_group_member_left(PMIX_GROUP_LEFT, &source, info, 2);
+    CHECK("a mistyped group id is ignored", 3 == grp->num_members);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+
+    /* ...and neither is a PMIX_STRING that carries no string, which is what
+     * a string packed with a zero length comes back as */
+    PMIX_INFO_LOAD(&info[0], PMIX_GROUP_ID, NULL, PMIX_STRING);
+    PMIX_INFO_LOAD(&info[1], PMIX_EVENT_AFFECTED_PROC, &affected, PMIX_PROC);
+    prte_pmix_server_group_member_left(PMIX_GROUP_LEFT, &source, info, 2);
+    CHECK("a group id with no string is ignored", 3 == grp->num_members);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+
+    /* an affected proc of the wrong type is not a proc: the departure falls
+     * back to the event source, which belongs to no group here */
+    PMIX_INFO_LOAD(&info[0], PMIX_GROUP_ID, "unit-test-group", PMIX_STRING);
+    PMIX_INFO_LOAD(&info[1], PMIX_EVENT_AFFECTED_PROC, &bogus, PMIX_SIZE);
+    prte_pmix_server_group_member_left(PMIX_GROUP_LEFT, &source, info, 2);
+    CHECK("a mistyped affected proc is ignored", 3 == grp->num_members);
+    PMIX_INFO_DESTRUCT(&info[1]);
+
+    /* a departure that names no concrete identity must not stand for the
+     * first member it is compared against */
+    PMIX_LOAD_PROCID(&affected, NULL, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LOAD(&info[1], PMIX_EVENT_AFFECTED_PROC, &affected, PMIX_PROC);
+    prte_pmix_server_group_member_left(PMIX_GROUP_LEFT, &source, info, 2);
+    CHECK("a wildcard departure drops nobody", 3 == grp->num_members);
+    PMIX_INFO_DESTRUCT(&info[1]);
+
+    /* an event that is not a departure leaves the registry alone */
+    PMIX_LOAD_PROCID(&affected, "unit-test-grp@1", 1);
+    PMIX_INFO_LOAD(&info[1], PMIX_EVENT_AFFECTED_PROC, &affected, PMIX_PROC);
+    prte_pmix_server_group_member_left(PMIX_ERR_LOST_CONNECTION, &source, info, 2);
+    CHECK("only PMIX_GROUP_LEFT is acted on", 3 == grp->num_members);
+
+    /* and the case all of that guards: rank 1 leaves, rank 2 slides down,
+     * and the members that stay keep their order */
+    prte_pmix_server_group_member_left(PMIX_GROUP_LEFT, &source, info, 2);
+    CHECK("a departing member is dropped", 2 == grp->num_members);
+    CHECK("the members that stay keep their order",
+          0 == grp->members[0].rank && 2 == grp->members[1].rank);
+
+    /* a second notice for a member already gone is a no-op, not an underflow */
+    prte_pmix_server_group_member_left(PMIX_GROUP_LEFT, &source, info, 2);
+    CHECK("a repeated departure is harmless", 2 == grp->num_members);
+    PMIX_INFO_DESTRUCT(&info[1]);
+    PMIX_INFO_DESTRUCT(&info[0]);
+
+    /* a departure from a group we do not hold */
+    PMIX_INFO_LOAD(&info[0], PMIX_GROUP_ID, "unit-test-other", PMIX_STRING);
+    PMIX_INFO_LOAD(&info[1], PMIX_EVENT_AFFECTED_PROC, &affected, PMIX_PROC);
+    prte_pmix_server_group_member_left(PMIX_GROUP_LEFT, &source, info, 2);
+    CHECK("an unknown group is left alone", 2 == grp->num_members);
+    PMIX_INFO_DESTRUCT(&info[0]);
+    PMIX_INFO_DESTRUCT(&info[1]);
+
+    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.groups);
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_group_left\n");
+    }
+    return failures;
+}
+
 static int test_connections(void)
 {
     int failures = 0;
@@ -1822,6 +1927,7 @@ int main(void)
     failures += test_departed_jobs();
     failures += test_monitor_accounting();
     failures += test_connections();
+    failures += test_group_left();
     failures += test_prefix_normalization();
     failures += test_singleton_id();
     failures += test_xfer_job_info();
