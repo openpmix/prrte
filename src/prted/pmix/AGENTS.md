@@ -962,6 +962,13 @@ bare `PMIX_ERROR` before handing it to the client's completion callback,
 which is the convert-direction mistake described under "Conventions" wearing
 its other face — not converting at all.
 
+**The two event-registration hooks are deliberately empty**, and
+[`docs/todo.rst`](../../../docs/todo.rst) carries the reasoning: a
+notification is broadcast to every daemon and filtered against each local
+PMIx server's own registrations there, so the host has nothing to record.
+Acting on them would trade that broadcast for a DVM-wide replicated set of
+codes that has to survive grow, shrink and daemon loss.
+
 ---
 
 ## Conventions specific to this directory

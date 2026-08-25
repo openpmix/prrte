@@ -156,6 +156,27 @@ otherwise takes whatever transport the resource manager offers by default
 surface for saying which one, and the note there is the record that one was
 always intended.
 
+**Event registration is accepted and discarded.**  PMIx offers the host a
+pair of hooks — ``register_events``/``deregister_events`` — through which it
+reports which status codes its local clients have asked to hear about, so
+that a host can stop distributing the ones nobody wants.  PRRTE takes both
+(``_register_events``/``_deregister_events``,
+``src/prted/pmix/pmix_server_notify.c``), thread-shifts them, and answers
+success without recording anything: every notification a daemon originates is
+xcast to the whole DVM and every daemon hands it to its own PMIx server,
+which filters it against its clients' registrations there.
+
+That is correct — no event is lost, and none is delivered to a process that
+did not ask — and it is why the arms have been empty for as long as they have
+existed.  What it costs is a broadcast per event whether or not any process
+in the DVM wants the code.  Using the registrations would mean each daemon
+keeping the union of its clients' codes, propagating that set on change, and
+consulting it before the xcast in ``_notify_event()`` — a DVM-wide replicated
+set that has to be right under grow, shrink and daemon loss, which is
+considerably more machinery than the broadcast it saves.  It has not been
+judged worth it, and the empty arms are the record of the decision rather
+than of an oversight.
+
 Test coverage
 -------------
 
@@ -258,6 +279,9 @@ the marker is stale.
      - one bootstrap option is parsed and not plumbed
    * - ``mca/ras/flux/ras_flux_module.c``, ``modify``
      - ``ras/flux`` has no ``modify()``
+   * - ``prted/pmix/pmix_server_notify.c``, ``_register_events``,
+       ``_deregister_events``
+     - event registration is accepted and discarded
 
 Two families of marker are **not** ours, and are deliberately absent from
 that table: the ``TODO`` comments in ``hostfile_lex.c`` and

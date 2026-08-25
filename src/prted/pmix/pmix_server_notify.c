@@ -65,10 +65,14 @@ static void _register_events(int sd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(cd);
 
-    /* need to implement this */
+    /* deliberately empty: every notification a daemon originates is xcast to
+     * the whole DVM and handed to each daemon's own PMIx server, which
+     * filters it against its clients' registrations there - so there is
+     * nothing for the host to record. See docs/todo.rst, "event registration
+     * is accepted and discarded", for what acting on these would buy */
 
     if (NULL != cd->cbfunc) {
-        cd->cbfunc(PRTE_SUCCESS, cd->cbdata);
+        cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
     }
     PMIX_RELEASE(cd);
 }
@@ -104,9 +108,9 @@ static void _deregister_events(int sd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(cd);
 
-    /* need to implement this */
+    /* deliberately empty - see _register_events above */
     if (NULL != cd->cbfunc) {
-        cd->cbfunc(PRTE_SUCCESS, cd->cbdata);
+        cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
     }
     PMIX_RELEASE(cd);
 }
@@ -127,7 +131,7 @@ pmix_status_t pmix_server_deregister_events_fn(pmix_status_t *codes, size_t ncod
     prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _deregister_events, cd);
     PMIX_POST_OBJECT(cd);
     prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
-    return PRTE_SUCCESS;
+    return PMIX_SUCCESS;
 }
 
 static void _notify_release(int status, void *cbdata)
