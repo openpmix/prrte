@@ -93,7 +93,6 @@ static void _query(int sd, short args, void *cbdata)
     pmix_status_t ret = PMIX_SUCCESS;
     void *results, *plist, *stack, *cache;
     pmix_pointer_array_t *alloc_nodes;
-    prte_info_item_t *kv;
     pmix_nspace_t jobid;
     prte_job_t *jdata;
     prte_node_t *node, *ndptr;
@@ -317,12 +316,15 @@ static void _query(int sd, short args, void *cbdata)
                     if (PMIX_SUCCESS != rc) {
                         PMIX_ERROR_LOG(rc);
                         PMIX_INFO_LIST_RELEASE(stack);
+                        PMIX_INFO_LIST_RELEASE(cache);
                         goto done;
                     }
                     /* add the cmd line */
                     app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0);
                     if (NULL == app) {
                         ret = PMIX_ERR_NOT_FOUND;
+                        PMIX_INFO_LIST_RELEASE(stack);
+                        PMIX_INFO_LIST_RELEASE(cache);
                         goto done;
                     }
                     cmdline = PMIx_Argv_join(app->argv, ' ');
@@ -333,6 +335,7 @@ static void _query(int sd, short args, void *cbdata)
                     if (PMIX_SUCCESS != rc) {
                         PMIX_ERROR_LOG(rc);
                         PMIX_INFO_LIST_RELEASE(stack);
+                        PMIX_INFO_LIST_RELEASE(cache);
                         goto done;
                     }
                     /* construct info on each process in the job */
@@ -348,6 +351,7 @@ static void _query(int sd, short args, void *cbdata)
                             PMIX_ERROR_LOG(rc);
                             PMIX_INFO_LIST_RELEASE(stack);
                             PMIX_INFO_LIST_RELEASE(plist);
+                            PMIX_INFO_LIST_RELEASE(cache);
                             goto done;
                         }
                         /* add the proc's hostname.  A proc has no node until the
@@ -361,6 +365,7 @@ static void _query(int sd, short args, void *cbdata)
                                 PMIX_ERROR_LOG(rc);
                                 PMIX_INFO_LIST_RELEASE(stack);
                                 PMIX_INFO_LIST_RELEASE(plist);
+                                PMIX_INFO_LIST_RELEASE(cache);
                                 goto done;
                             }
                         }
@@ -370,6 +375,7 @@ static void _query(int sd, short args, void *cbdata)
                             PMIX_ERROR_LOG(rc);
                             PMIX_INFO_LIST_RELEASE(stack);
                             PMIX_INFO_LIST_RELEASE(plist);
+                            PMIX_INFO_LIST_RELEASE(cache);
                             goto done;
                         }
                         /* add to the stack */
@@ -378,6 +384,7 @@ static void _query(int sd, short args, void *cbdata)
                             PMIX_ERROR_LOG(rc);
                             PMIX_INFO_LIST_RELEASE(stack);
                             PMIX_INFO_LIST_RELEASE(plist);
+                            PMIX_INFO_LIST_RELEASE(cache);
                             goto done;
                         }
                         PMIX_INFO_LIST_RELEASE(plist);
@@ -389,6 +396,7 @@ static void _query(int sd, short args, void *cbdata)
                     if (PMIX_SUCCESS != rc) {
                         PMIX_ERROR_LOG(rc);
                         PMIX_INFO_LIST_RELEASE(stack);
+                        PMIX_INFO_LIST_RELEASE(cache);
                         goto done;
                     }
                     PMIX_INFO_LIST_RELEASE(stack);
@@ -464,11 +472,9 @@ static void _query(int sd, short args, void *cbdata)
                 if (NULL != prte_hwloc_topology) {
                     char *xmlbuffer = NULL;
                     int len;
-                    kv = PMIX_NEW(prte_info_item_t);
                     /* get it from the v2 API */
                     if (0 != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len,
                                                              HWLOC_TOPOLOGY_EXPORT_XML_FLAG_V1)) {
-                        PMIX_RELEASE(kv);
                         continue;
                     }
                     PMIX_INFO_LIST_ADD(rc, results, PMIX_HWLOC_XML_V1, xmlbuffer, PMIX_STRING);
@@ -483,9 +489,7 @@ static void _query(int sd, short args, void *cbdata)
                 if (NULL != prte_hwloc_topology) {
                     char *xmlbuffer = NULL;
                     int len;
-                    kv = PMIX_NEW(prte_info_item_t);
                     if (0 != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len, 0)) {
-                        PMIX_RELEASE(kv);
                         continue;
                     }
                     PMIX_INFO_LIST_ADD(rc, results, PMIX_HWLOC_XML_V2, xmlbuffer, PMIX_STRING);
@@ -1170,6 +1174,13 @@ static void _query(int sd, short args, void *cbdata)
                 nodelist = PMIx_Argv_join(nodes, ',');
                 PMIx_Argv_free(nodes);
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_RESOLVE_NODE, nodelist, PMIX_STRING);
+                if (NULL != nodelist) {
+                    free(nodelist);
+                }
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    goto done;
+                }
 
             } else if (PMIx_Check_key(q->keys[n], PMIX_QUERY_PROC_RESOURCE_USAGE)) {
 
