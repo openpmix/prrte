@@ -30,31 +30,19 @@
 
 #include "prte_config.h"
 
-#ifdef HAVE_UNISTD_H
-#    include <unistd.h>
-#endif
+#include <string.h>
 
-#include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/pmix_argv.h"
 #include "src/util/pmix_output.h"
 
-#include "src/mca/errmgr/errmgr.h"
 #include "src/grpcomm/grpcomm.h"
-#include "src/mca/iof/base/base.h"
-#include "src/mca/iof/iof.h"
-#include "src/mca/plm/base/plm_private.h"
-#include "src/mca/plm/plm.h"
-#include "src/mca/plm/base/plm_private.h"
-#include "src/mca/rmaps/rmaps_types.h"
-#include "src/rml/rml.h"
-#include "src/mca/schizo/schizo.h"
+#include "src/mca/errmgr/errmgr.h"
 #include "src/mca/state/state.h"
+#include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
-#include "src/util/pmix_show_help.h"
 
 #include "src/prted/pmix/pmix_server_internal.h"
 
@@ -228,7 +216,7 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                         prte_rml_tag_t tg, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd;
-    int cnt, rc;
+    int cnt;
     pmix_proc_t source;
     pmix_data_range_t range = PMIX_RANGE_SESSION;
     pmix_status_t code, ret;
@@ -239,9 +227,9 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
 
     /* unpack the daemon who broadcast the event */
     cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &vpid, &cnt, PMIX_PROC_RANK);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
+    ret = PMIx_Data_unpack(NULL, buffer, &vpid, &cnt, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
         return;
     }
 
@@ -443,7 +431,7 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code, const pmix_proc_t *so
 
     /* check to see if this is one we sent down */
     for (n = 0; n < ninfo; n++) {
-        if (0 == strcmp(info[n].key, "prte.notify.donotloop")) {
+        if (PMIX_CHECK_KEY(&info[n], "prte.notify.donotloop")) {
             /* yep - do not process */
             return PMIX_OPERATION_SUCCEEDED;
         }
