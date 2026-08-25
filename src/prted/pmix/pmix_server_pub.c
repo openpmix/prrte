@@ -661,6 +661,7 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender,
             rc = PMIx_Data_unpack(NULL, &pbkt, &pdata[n].proc, &cnt, PMIX_PROC);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
+                PMIX_INFO_DESTRUCT(&info);
                 PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                 ret = rc;
                 goto release;
@@ -669,6 +670,7 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender,
             rc = PMIx_Data_unpack(NULL, &pbkt, &info, &cnt, PMIX_INFO);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
+                PMIX_INFO_DESTRUCT(&info);
                 PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                 ret = rc;
                 goto release;
@@ -677,6 +679,7 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender,
             PMIX_VALUE_XFER_DIRECT(rc, &pdata[n].value, &info.value);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
+                PMIX_INFO_DESTRUCT(&info);
                 PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                 ret = rc;
                 goto release;
@@ -684,6 +687,10 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender,
             PMIX_INFO_DESTRUCT(&info);
         }
     }
+    /* the payload was loaded into this buffer, which owns it from that point
+     * on - every error arm above lets it go and the way out did not, so a
+     * whole lookup response leaked on each one that worked */
+    PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
 
 release:
     if (0 <= room_num) {
