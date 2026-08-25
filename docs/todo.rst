@@ -270,6 +270,9 @@ does.
    * - subsystem
      - last reviewed
      - since
+   * - ``src/grpcomm``
+     - 2026-08-25 (round 4)
+     - nothing
    * - ``src/event``
      - 2026-07-31
      - nothing
@@ -307,13 +310,6 @@ is not a marginal case.
    * - subsystem
      - last reviewed
      - since
-   * - ``src/grpcomm``
-     - 2026-08-02 (round 3)
-     - The subsystem was then taken out of MCA and rebuilt at a new path
-       (``src/mca/grpcomm`` became ``src/grpcomm``), collective movements
-       were added and most of them removed again, and the xcast was
-       reworked twice.  Every line is now at an address the review never
-       saw.  **Re-review this one first.**
    * - ``src/prted``
      - 2026-07-30
      - 43 commits, +3,187/-482.  The PMIx server host module
