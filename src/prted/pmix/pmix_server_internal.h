@@ -269,6 +269,12 @@ PRTE_EXPORT extern pmix_status_t pmix_server_dmodex_req_fn(const pmix_proc_t *pr
                                                            const pmix_info_t info[], size_t ninfo,
                                                            pmix_modex_cbfunc_t cbfunc,
                                                            void *cbdata);
+/* Attach to the data server named by prte_data_server_uri, if that has not
+ * already happened.  Idempotent.  The master needs this even when it has no
+ * publishing client of its own: it is the only daemon holding the tool
+ * connection every other daemon's request is relayed over. */
+PRTE_EXPORT int prte_pmix_server_init_pubsub(void);
+
 PRTE_EXPORT extern pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc,
                                                         const pmix_info_t info[], size_t ninfo,
                                                         pmix_op_cbfunc_t cbfunc, void *cbdata);
