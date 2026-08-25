@@ -1328,8 +1328,10 @@ static pmix_status_t apply_to_all(prte_pmix_server_req_t *req,
     if (NULL == prte_sessions) {
         return PMIX_ERR_NOT_FOUND;
     }
-    /* snapshot the size: terminating a session can remove it from the array,
-     * and can do so from under the walk */
+    /* Terminating a session can remove it from the array from under this
+     * walk.  That is safe as written: removal only NULLs the slot (the object
+     * itself survives for as long as we hold it), and the array never
+     * shrinks, so re-reading ->size each time is correct. */
     for (i = 0; i < prte_sessions->size; i++) {
         session = (prte_session_t *) pmix_pointer_array_get_item(prte_sessions, i);
         if (NULL == session || session == prte_default_session) {
@@ -1724,7 +1726,7 @@ static void pass_request(int sd, short args, void *cbdata)
                             "%s session ctrl: relaying to the master as local req %d",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->local_index);
         rc = prte_server_send_request(PRTE_PMIX_SESSION_CTRL, req);
-        if (PRTE_SUCCESS != rc) {
+        if (PMIX_SUCCESS != rc) {
             goto callback;
         }
         return;
@@ -1802,5 +1804,5 @@ pmix_status_t pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,
     prte_event_set(prte_event_base, &req->ev, -1, PRTE_EV_WRITE, pass_request, req);
     PMIX_POST_OBJECT(req);
     prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
-    return PRTE_SUCCESS;
+    return PMIX_SUCCESS;
 }
