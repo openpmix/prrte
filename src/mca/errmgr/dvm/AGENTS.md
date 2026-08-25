@@ -186,7 +186,7 @@ between "notify and keep going" and "abort the job":
 | `KILLED_BY_CMD` | notify `PMIX_ERR_PROC_KILLED_BY_CMD` + recover resources | if all procs terminated → `TERMINATED` |
 | `ABORTED_BY_SIG` | notify `PMIX_ERR_PROC_ABORTED_BY_SIG` + recover | set `JOB_STATE_ABORTED_BY_SIG`, record aborted proc, `_terminate_job` |
 | `TERM_WO_SYNC` | notify `PMIX_ERR_PROC_TERM_WO_SYNC` + recover | set `ABORTED_WO_SYNC`; if `exit_code == 0` force `PRTE_ERROR_DEFAULT_EXIT_CODE` so the user sees an error; `_terminate_job`. (No notification: this arm has just flagged the job ABORTED, and `check_send_notification` declines to speak about a proc in an aborting job, so the call that used to sit here could never send.) |
-| `KILLED_BY_RELEASE` | notify `PMIX_ERR_PROC_KILLED_BY_RELEASE` (`_BY_CMD` on an older PMIx) + recover | set `KILLED_BY_RELEASE`; force `PRTE_ERROR_DEFAULT_EXIT_CODE` when the killed proc reported none; `_terminate_job` |
+| `KILLED_BY_RELEASE` | notify `PMIX_ERR_PROC_KILLED_BY_RELEASE` + recover | set `KILLED_BY_RELEASE`; force `PRTE_ERROR_DEFAULT_EXIT_CODE` when the killed proc reported none; `_terminate_job` |
 | `FAILED_TO_START` / `FAILED_TO_LAUNCH` | *(unconditional)* set `FAILED_TO_START`/`_LAUNCH`, `_terminate_job`, activate `FAILED_TO_START` | same |
 | `CALLED_ABORT` | notify `PMIX_ERR_PROC_REQUESTED_ABORT` + recover | set `CALLED_ABORT`, `_terminate_job` |
 | `TERM_NON_ZERO` | if `PRTE_JOB_ERROR_NONZERO_EXIT` also set: notify `PMIX_ERR_EXIT_NONZERO_TERM` + recover | set `NON_ZERO_TERM`, `_terminate_job`; always bump `PRTE_JOB_NUM_NONZERO_EXIT` |

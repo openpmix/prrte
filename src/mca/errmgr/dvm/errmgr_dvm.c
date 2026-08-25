@@ -667,11 +667,7 @@ keep_going:
                              (NULL == pptr->node) ? "unknown" : pptr->node->name);
         if (flag) {
             /* a job that can absorb the loss is told and keeps running */
-#ifdef PMIX_ERR_PROC_KILLED_BY_RELEASE
             check_send_notification(jdata, pptr, PMIX_ERR_PROC_KILLED_BY_RELEASE);
-#else
-            check_send_notification(jdata, pptr, PMIX_ERR_PROC_KILLED_BY_CMD);
-#endif
             // recover the resources used by this proc
             prte_state_base_recover_resources(jdata, pptr);
         } else {
