@@ -107,6 +107,7 @@ static int init_server(void)
 {
     char *server;
     char input[1024], *filename;
+    size_t len;
     FILE *fp;
     pmix_status_t ret;
     pmix_info_t info[2];
@@ -157,7 +158,15 @@ static int init_server(void)
                 return PRTE_ERR_BAD_PARAM;
             }
             fclose(fp);
-            input[strlen(input) - 1] = '\0'; /* remove newline */
+            /* strip the line ending if there is one.  A file written by
+             * PMIx's own report-uri ends in a newline, but this file is
+             * whatever the user pointed us at - and chopping the last
+             * character unconditionally takes a character of the URI off a
+             * file that has none. */
+            len = strlen(input);
+            while (0 < len && ('\n' == input[len - 1] || '\r' == input[len - 1])) {
+                input[--len] = '\0';
+            }
             server = strdup(input);
         } else {
             server = strdup(prte_data_server_uri);
