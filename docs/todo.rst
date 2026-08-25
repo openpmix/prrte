@@ -131,7 +131,7 @@ daemon in the DVM with a ``PMIX_EVENT_CUSTOM_RANGE`` naming the membership,
 so that PMIx delivers it to exactly the members that registered for it.
 
 Running to completion is not a disconnect, and a spawned child is connected
-to its parent by default, so an ``MPI_Comm_spawn``ed job of N ranks ends by
+to its parent by default, so an ``MPI_Comm_spawn``\ ed job of N ranks ends by
 issuing N broadcasts across the whole DVM.  Nothing pays for this unless an
 assemblage exists — the registry is empty in the ordinary case and the check
 is the first thing every one of those entry points makes — but where one
