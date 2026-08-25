@@ -30,31 +30,14 @@
 
 #include "prte_config.h"
 
-#ifdef HAVE_UNISTD_H
-#    include <unistd.h>
-#endif
-
-#include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/pmix_argv.h"
 #include "src/util/pmix_output.h"
 
-#include "src/mca/errmgr/errmgr.h"
 #include "src/grpcomm/grpcomm.h"
-#include "src/mca/iof/base/base.h"
-#include "src/mca/iof/iof.h"
-#include "src/mca/plm/base/plm_private.h"
-#include "src/mca/plm/plm.h"
-#include "src/mca/plm/base/plm_private.h"
-#include "src/mca/rmaps/rmaps_types.h"
+#include "src/mca/errmgr/errmgr.h"
 #include "src/rml/rml.h"
-#include "src/mca/schizo/schizo.h"
-#include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
-#include "src/runtime/prte_locks.h"
-#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
-#include "src/util/pmix_show_help.h"
 
 #include "src/prted/pmix/pmix_server_internal.h"
 
