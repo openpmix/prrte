@@ -142,7 +142,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
     pmix_list_t local_procs, members;
     prte_namelist_t *nm;
     size_t nmsize;
-    prte_pmix_server_pset_t *pset;
+    prte_pmix_server_pset_t *pset, *psptr;
     pmix_cpuset_t cpuset;
     uint32_t ui32, *ui32_ptr;
     pmix_data_array_t *devarray;
@@ -152,14 +152,31 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
     size_t ndist;
     pmix_topology_t topo;
     pmix_data_array_t darray, lparray;
-    bool flag, *fptr;
+    bool flag, *fptr, newpset;
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s register nspace for %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace));
 
+    /* Everything below is assembled by walking the job's map, and a job
+     * object outlives its map: the map is released when the job completes
+     * and the object itself not until cleanup_job, a later event.  A caller
+     * that reaches us in between would take the daemon down here.  The
+     * caller that can hit that window - the wildcard direct-modex arm of
+     * dmodex_req() - screens for it itself, because it owes its client an
+     * answer rather than merely a survival; this is the backstop for the
+     * rest. */
+    if (NULL == jdata->map) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
+    }
+
     /* setup the info list */
     PMIX_INFO_LIST_START(info);
+    if (NULL == info) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
     uid = geteuid();
     gid = getegid();
     topo.source = "hwloc";
@@ -316,7 +333,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
             free(tmp);
             PMIX_INFO_LIST_RELEASE(info);
             rc = prte_pmix_convert_status(ret);
-            return rc;
+            goto errout;
         }
         free(tmp);
         PMIX_INFO_LIST_ADD(ret, info, PMIX_NODE_MAP, &nregex, PMIX_REGEX2);
@@ -327,7 +344,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
             free(tmp);
             PMIX_INFO_LIST_RELEASE(info);
             rc = prte_pmix_convert_status(ret);
-            return rc;
+            goto errout;
         }
         free(tmp);
         PMIX_INFO_LIST_ADD(ret, info, PMIX_NODE_MAP, regex, PMIX_REGEX);
@@ -347,7 +364,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
             free(tmp);
             PMIX_INFO_LIST_RELEASE(info);
             rc = prte_pmix_convert_status(ret);
-            return rc;
+            goto errout;
         }
         free(tmp);
         PMIX_INFO_LIST_ADD(ret, info, PMIX_PROC_MAP, &pregex, PMIX_REGEX2);
@@ -358,7 +375,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
             free(tmp);
             PMIX_INFO_LIST_RELEASE(info);
             rc = prte_pmix_convert_status(ret);
-            return rc;
+            goto errout;
         }
         free(tmp);
         PMIX_INFO_LIST_ADD(ret, info, PMIX_PROC_MAP, regex, PMIX_REGEX);
@@ -409,7 +426,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
         PRTE_ERROR_LOG(rc);
         PMIX_INFO_LIST_RELEASE(info);
         rc = prte_pmix_convert_status(rc);
-        return rc;
+        goto errout;
     }
     // job session dir will have been stored in the jdata object
     PMIX_INFO_LIST_ADD(ret, info, PMIX_NSDIR, jdata->session_dir, PMIX_STRING);
@@ -505,12 +522,34 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
         if (prte_get_attribute(&app->attributes, PRTE_APP_PSET_NAME, (void **) &tmp, PMIX_STRING)
             && NULL != tmp) {
             PMIX_INFO_LIST_ADD(ret, iarray, PMIX_PSET_NAME, tmp, PMIX_STRING);
-            /* register it */
-            pset = PMIX_NEW(prte_pmix_server_pset_t);
-            pset->name = strdup(tmp);
-            PMIX_RETAIN(jdata);
-            pset->jdata = jdata;
-            pmix_list_append(&prte_pmix_server_globals.psets, &pset->super);
+            /* Have we already recorded this one?  This function is not
+             * called once per job: the wildcard arm of dmodex_req() calls it
+             * again every time a client asks a daemon that hosts none of the
+             * job's procs for job-level data the local server does not hold,
+             * which is once per such get.  The info arrays below have to be
+             * rebuilt each time - that is what the caller wants - but the
+             * registry entry is a per-job fact, and appending it again both
+             * duplicated the pset in every query answer and took a reference
+             * on the job object that nothing would ever give back. */
+            pset = NULL;
+            PMIX_LIST_FOREACH(psptr, &prte_pmix_server_globals.psets,
+                              prte_pmix_server_pset_t) {
+                if (psptr->jdata == jdata && NULL != psptr->name &&
+                    0 == strcmp(psptr->name, tmp)) {
+                    pset = psptr;
+                    break;
+                }
+            }
+            if (NULL == pset) {
+                pset = PMIX_NEW(prte_pmix_server_pset_t);
+                pset->name = strdup(tmp);
+                PMIX_RETAIN(jdata);
+                pset->jdata = jdata;
+                pmix_list_append(&prte_pmix_server_globals.psets, &pset->super);
+                newpset = true;
+            } else {
+                newpset = false;
+            }
             free(tmp);
             /* and its membership */
             PMIX_CONSTRUCT(&members, pmix_list_t);
@@ -525,24 +564,28 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
                     pmix_list_append(&members, &nm->super);
                 }
             }
-            pset->num_members = pmix_list_get_size(&members);
-            if (0 < pset->num_members) {
-                PMIX_DATA_ARRAY_CONSTRUCT(&darray, pset->num_members, PMIX_PROC);
+            nmsize = pmix_list_get_size(&members);
+            if (0 < nmsize) {
+                PMIX_DATA_ARRAY_CONSTRUCT(&darray, nmsize, PMIX_PROC);
                 procptr = (pmix_proc_t*)darray.array;
                 k = 0;
-                pset->members = (pmix_proc_t *)malloc(pset->num_members * sizeof (pmix_proc_t));
                 PMIX_LIST_FOREACH(nm, &members, prte_namelist_t) {
                     PMIX_LOAD_PROCID(&procptr[k], nm->name.nspace, nm->name.rank);
-                    PMIX_LOAD_PROCID(&pset->members[k], nm->name.nspace, nm->name.rank);
                     ++k;
                 }
                 PMIX_INFO_LIST_ADD(ret, iarray, PMIX_PSET_MEMBERS, &darray, PMIX_DATA_ARRAY);
-                PMIX_DATA_ARRAY_DESTRUCT(&darray);
-                // let the PMIx server know
-                ret = PMIx_server_define_process_set(pset->members, pset->num_members, pset->name);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
+                if (newpset) {
+                    pset->num_members = nmsize;
+                    pset->members = (pmix_proc_t *) malloc(nmsize * sizeof(pmix_proc_t));
+                    memcpy(pset->members, procptr, nmsize * sizeof(pmix_proc_t));
+                    // let the PMIx server know
+                    ret = PMIx_server_define_process_set(pset->members, pset->num_members,
+                                                         pset->name);
+                    if (PMIX_SUCCESS != ret) {
+                        PMIX_ERROR_LOG(ret);
+                    }
                 }
+                PMIX_DATA_ARRAY_DESTRUCT(&darray);
             }
             PMIX_LIST_DESTRUCT(&members);
         }
@@ -633,7 +676,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
                     hwloc_bitmap_free(cpuset.bitmap);
                     PMIX_INFO_LIST_RELEASE(info);
                     PMIX_INFO_LIST_RELEASE(pmap);
-                    return prte_pmix_convert_status(ret);
+                    rc = prte_pmix_convert_status(ret);
+                    goto errout;
                 }
                 PMIX_INFO_LIST_ADD(ret, pmap, PMIX_LOCALITY_STRING, tmp, PMIX_STRING);
                 free(tmp);
@@ -679,11 +723,11 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
                 /* create and pass a proc-level session directory */
                 rc = prte_session_dir(&pptr->name);
                 if (PRTE_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
+                    PRTE_ERROR_LOG(rc);
                     PMIX_INFO_LIST_RELEASE(info);
                     PMIX_INFO_LIST_RELEASE(pmap);
                     rc = prte_pmix_convert_status(rc);
-                    return rc;
+                    goto errout;
                 }
                 pmix_asprintf(&tmp, "%s/%s", jdata->session_dir,
                                           PMIX_RANK_PRINT(pptr->name.rank));
@@ -751,6 +795,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
     }
     if (NULL != parent) {
         PMIX_PROC_RELEASE(parentproc);
+        parentproc = NULL;
     }
     if (0 != prte_pmix_server_globals.generate_dist) {
         PMIX_INFO_DESTRUCT(&devinfo[0]);
@@ -777,9 +822,21 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
     }
     PMIX_LIST_DESTRUCT(&local_procs);
 
-    /* register it */
+    /* register it.  A failure here has to be caught: PMIx_Info_list_convert()
+     * initializes the caller's array before anything can fail, so what an
+     * unchecked failure hands PMIx is a registration carrying no info at all
+     * - a job whose every job-level key is silently missing, reported to
+     * nobody. */
     PMIX_INFO_LIST_CONVERT(ret, info, &darray);
     PMIX_INFO_LIST_RELEASE(info);
+    if (PMIX_SUCCESS != ret) {
+        /* returns rather than joining the error tail below: by this point
+         * both argv lists are freed, the local-proc list is destructed and
+         * the proxy copy is released, so the tail would do each of them a
+         * second time */
+        PMIX_ERROR_LOG(ret);
+        return prte_pmix_convert_status(ret);
+    }
 
     /* do not block waiting for the registration - the callback
      * chain will thread-shift and then invoke the caller's callback
@@ -800,6 +857,25 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
         return rc;
     }
     return PRTE_SUCCESS;
+
+errout:
+    /* Every exit above is taken with the node and rank argv lists still
+     * built, with the local-proc list holding one object per proc on this
+     * node, and possibly with our own copy of the launch proxy in hand.
+     * None of that is visible to the caller, so a failed registration
+     * leaks all of it unless it is released here - once per job launched,
+     * on a path that is rare but not unreachable. */
+    if (NULL != list) {
+        PMIx_Argv_free(list);
+    }
+    if (NULL != procs) {
+        PMIx_Argv_free(procs);
+    }
+    if (NULL != parentproc) {
+        PMIX_PROC_RELEASE(parentproc);
+    }
+    PMIX_LIST_DESTRUCT(&local_procs);
+    return rc;
 }
 
 /* add any info that the tool couldn't self-assign. Follows the
