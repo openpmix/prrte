@@ -259,7 +259,7 @@ These live in `state_base_fns.c` and are wired into components' tables
 | `prte_state_base_local_launch_complete` | Optionally kicks `REPORT_PROGRESS` every 100 daemons when `PRTE_JOB_SHOW_PROGRESS` is set. |
 | `prte_state_base_report_progress` | Prints the "App launch reported: N daemons / M procs" line. |
 | `prte_state_base_check_fds` | Debug leak check: enumerates open fds after a job completes (enabled by `state_base_check_fds`). |
-| `prte_state_base_notify_data_server` | Tells a co-resident data server to purge a terminated nspace's published data. |
+| `prte_state_base_notify_data_server` | Tells the data server a job has ended, naming the lifetime that ended (`PMIX_PERSIST_APP`) so it drops the nspace's published data that was not to outlive it. Not gated on an external data server: the built-in one needs telling too, and while it was gated nothing was ever reclaimed from it. |
 | `prte_state_base_recover_resources` | Idempotently returns one proc's slot/cpu resources to its node and drops the node from the map when empty — used on daemon-loss / partial-failure recovery paths. Written to tolerate being called twice for the same proc. |
 
 ### Every handler here is wired — keep it that way

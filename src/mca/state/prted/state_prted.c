@@ -681,12 +681,11 @@ static void job_teardown(int fd, short argc, void *cbdata)
         prte_state_base_check_fds(jdata);
     }
 
-    /* if ompi-server is around, then notify it to purge
-     * any session-related info */
-    if (NULL != prte_data_server_uri) {
-        PMIX_LOAD_PROCID(&target, jdata->nspace, PMIX_RANK_WILDCARD);
-        prte_state_base_notify_data_server(&target);
-    }
+    /* tell the data server the job is over, so it can drop what this
+     * namespace published that was not to outlive it - see the same call
+     * in state_base_fns.c for why this is not gated on an external server */
+    PMIX_LOAD_PROCID(&target, jdata->nspace, PMIX_RANK_WILDCARD);
+    prte_state_base_notify_data_server(&target);
 
     /* The resources are back, but the JOB OBJECT STAYS until the DVM says
      * the job is over everywhere - prted_comm.c's DVM_CLEANUP_JOB.

@@ -1157,6 +1157,10 @@ static int test_data_server_objects(void)
           PMIX_RANK_UNDEF == obj->owner.rank && 0 == strlen(obj->owner.nspace));
     CHECK("ds: a new data object defaults to session range",
           PMIX_RANGE_SESSION == obj->range);
+    /* the Standard's default, and the one that governs: PMIx adds no
+     * persistence of its own before handing a publish to the host */
+    CHECK("ds: a new data object defaults to app persistence",
+          PMIX_PERSIST_APP == obj->persistence);
     CHECK("ds: a new data object has no uid", UINT32_MAX == obj->uid);
     PMIX_RELEASE(obj);
 
@@ -1168,6 +1172,53 @@ static int test_data_server_objects(void)
     CHECK("ds: a new request has no keys", NULL == req->keys);
     /* the destructor free()s keys - it must not free garbage */
     PMIX_RELEASE(req);
+
+    return failures;
+}
+
+/* The persistence ordering ds_purge applies when a lifetime ends.  Worth
+ * pinning down because the values are NOT a usable numeric ladder:
+ * PMIX_PERSIST_INDEF is 0 and outlives every other value, so any attempt to
+ * decide this with a comparison gets it exactly backwards. */
+static int test_data_server_persistence(void)
+{
+    int failures = 0;
+
+    /* no horizon: an explicit PMIx_Unpublish(NULL, ...) takes everything
+     * the caller published, however long it asked for it to be kept */
+    CHECK("persist: no horizon takes INDEF",
+          prte_data_server_expires_by(PMIX_PERSIST_INDEF, PMIX_PERSIST_INVALID));
+    CHECK("persist: no horizon takes SESSION",
+          prte_data_server_expires_by(PMIX_PERSIST_SESSION, PMIX_PERSIST_INVALID));
+
+    /* a process ended */
+    CHECK("persist: PROC goes at the PROC horizon",
+          prte_data_server_expires_by(PMIX_PERSIST_PROC, PMIX_PERSIST_PROC));
+    CHECK("persist: an unread FIRST_READ goes at the PROC horizon",
+          prte_data_server_expires_by(PMIX_PERSIST_FIRST_READ, PMIX_PERSIST_PROC));
+    CHECK("persist: APP stays at the PROC horizon",
+          !prte_data_server_expires_by(PMIX_PERSIST_APP, PMIX_PERSIST_PROC));
+    CHECK("persist: SESSION stays at the PROC horizon",
+          !prte_data_server_expires_by(PMIX_PERSIST_SESSION, PMIX_PERSIST_PROC));
+
+    /* an application ended - what a terminating job reports */
+    CHECK("persist: PROC goes at the APP horizon",
+          prte_data_server_expires_by(PMIX_PERSIST_PROC, PMIX_PERSIST_APP));
+    CHECK("persist: APP goes at the APP horizon",
+          prte_data_server_expires_by(PMIX_PERSIST_APP, PMIX_PERSIST_APP));
+    CHECK("persist: SESSION stays at the APP horizon",
+          !prte_data_server_expires_by(PMIX_PERSIST_SESSION, PMIX_PERSIST_APP));
+    CHECK("persist: INDEF stays at the APP horizon",
+          !prte_data_server_expires_by(PMIX_PERSIST_INDEF, PMIX_PERSIST_APP));
+
+    /* the session ended */
+    CHECK("persist: SESSION goes at the SESSION horizon",
+          prte_data_server_expires_by(PMIX_PERSIST_SESSION, PMIX_PERSIST_SESSION));
+    CHECK("persist: APP goes at the SESSION horizon",
+          prte_data_server_expires_by(PMIX_PERSIST_APP, PMIX_PERSIST_SESSION));
+    /* the one value no lifetime reclaims */
+    CHECK("persist: INDEF stays at the SESSION horizon",
+          !prte_data_server_expires_by(PMIX_PERSIST_INDEF, PMIX_PERSIST_SESSION));
 
     return failures;
 }
@@ -1759,6 +1810,7 @@ int main(void)
     failures += test_session_teardown();
     failures += test_exit_status();
     failures += test_data_server_objects();
+    failures += test_data_server_persistence();
     failures += test_data_server_range();
     failures += test_data_server_search_range();
     failures += test_data_server_access();

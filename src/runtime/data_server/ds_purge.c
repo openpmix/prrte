@@ -49,6 +49,31 @@
 #include "src/runtime/data_server/prte_data_server.h"
 #include "src/runtime/data_server/ds.h"
 
+/* see the header for the rule this encodes */
+bool prte_data_server_expires_by(pmix_persistence_t persist,
+                                 pmix_persistence_t horizon)
+{
+    if (PMIX_PERSIST_INVALID == horizon) {
+        return true;
+    }
+    switch (persist) {
+    case PMIX_PERSIST_FIRST_READ:
+    case PMIX_PERSIST_PROC:
+        /* the shortest lifetimes: over by the time any lifetime we are
+         * told about has ended.  FIRST_READ is normally consumed by the
+         * read that answers it - this is what becomes of one nobody read */
+        return true;
+    case PMIX_PERSIST_APP:
+        return (PMIX_PERSIST_APP == horizon || PMIX_PERSIST_SESSION == horizon);
+    case PMIX_PERSIST_SESSION:
+        return (PMIX_PERSIST_SESSION == horizon);
+    case PMIX_PERSIST_INDEF:
+    default:
+        /* retained until specifically deleted */
+        return false;
+    }
+}
+
 void prte_ds_purge(pmix_proc_t *sender,
                    pmix_data_buffer_t *buffer,
                    pmix_data_buffer_t *answer)
@@ -61,6 +86,9 @@ void prte_ds_purge(pmix_proc_t *sender,
     prte_data_req_t *req, *rqnext;
     pmix_info_t *info;
     size_t n, ninfo;
+    /* absent a PMIX_PERSISTENCE directive this is an explicit
+     * "remove everything I published", not the end of a lifetime */
+    pmix_persistence_t horizon = PMIX_PERSIST_INVALID;
 
     /* unpack the proc whose data is to be purged - session
      * data is purged by providing a requestor whose rank
@@ -94,6 +122,9 @@ void prte_ds_purge(pmix_proc_t *sender,
                  * Without this the purge would take everything the relay
                  * itself owns - which is everything it ever published. */
                 prte_ds_check_requestor(&requestor, &info[n]);
+            } else if (PMIx_Check_key(info[n].key, PMIX_PERSISTENCE)) {
+                /* a lifetime ended, and this is which one */
+                horizon = info[n].value.data.persist;
             }
         }
         PMIX_INFO_FREE(info, ninfo);
@@ -114,6 +145,15 @@ void prte_ds_purge(pmix_proc_t *sender,
         if (!PMIX_CHECK_PROCID(&requestor, &data->owner)) {
             continue;
         }
+        /* ...and whether it was to outlive what just ended.  This is what
+         * makes PMIX_PERSISTENCE mean anything: the value was recorded at
+         * publish and then never consulted again, so data published to last
+         * only as long as its application sat in the store until the DVM
+         * itself went away, and PMIX_PERSIST_APP and PMIX_PERSIST_PROC both
+         * behaved as PMIX_PERSIST_INDEF. */
+        if (!prte_data_server_expires_by(data->persistence, horizon)) {
+            continue;
+        }
         /* remove the object */
         pmix_pointer_array_set_item(&prte_data_store.store, data->index, NULL);
         PMIX_RELEASE(data);
@@ -122,7 +162,15 @@ void prte_ds_purge(pmix_proc_t *sender,
     /* Drop any lookup this process left parked on the pending list. Those
      * requests outlived their requestor: a later publish would match one and
      * try to reply to a process that no longer exists, and until then the
-     * request kept the (already purged) proc's keys alive. */
+     * request kept the (already purged) proc's keys alive.
+     *
+     * Only when a lifetime actually ended, though.  An explicit
+     * PMIx_Unpublish(NULL, ...) arrives as this same command from a process
+     * that is very much alive, and cancelling the lookups it is waiting on
+     * is no part of taking its published data back. */
+    if (PMIX_PERSIST_INVALID == horizon) {
+        goto done;
+    }
     PMIX_LIST_FOREACH_SAFE(req, rqnext, &prte_data_store.pending, prte_data_req_t) {
         if (!PMIX_CHECK_PROCID(&requestor, &req->requestor)) {
             continue;

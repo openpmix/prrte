@@ -1855,6 +1855,53 @@ test_runtime() {
     fi
     cleanup_swarm
 
+    banner "runtime/data_server: PMIX_PERSISTENCE is honored when a job ends"
+    # PMIX_PERSISTENCE was recorded at publish and then never consulted
+    # again: nothing removed data on a lifetime boundary, so PERSIST_APP
+    # and PERSIST_PROC both behaved as PERSIST_INDEF and a persistent DVM's
+    # store only ever grew.  The state machine now tells the data server
+    # which lifetime ended, and ds_purge takes what does not outlive it.
+    #
+    # It takes a PERSISTENT DVM and two jobs: the publisher has to
+    # terminate while the store lives on.  The two keys are published by
+    # separate jobs so that neither outcome can be an artifact of the other.
+    if ! RUN "test -x $DS"; then
+        skp "dataserver client not installed -- re-run ./build.sh"
+    elif ! prted_dvm_start 'node1:2,node2:2,node3:2'; then
+        bad "could not start a DVM for the persistence test"
+    else
+        out=$(PRUN "--host node2:1 -n 1 $DS persist prte.test.pers.keep kept session 0" 2>&1)
+        echo "$out" | grep -q '^PUBLISHED prte.test.pers.keep' \
+            && ok "a PERSIST_SESSION key was published by a job that then ended" \
+            || bad "the session-persistence publish never happened: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        out=$(PRUN "--host node2:1 -n 1 $DS persist prte.test.pers.drop dropped app 0" 2>&1)
+        echo "$out" | grep -q '^PUBLISHED prte.test.pers.drop' \
+            && ok "a PERSIST_APP key was published by a job that then ended" \
+            || bad "the app-persistence publish never happened: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        sleep 5
+
+        out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.pers.keep 15" 2>&1)
+        echo "$out" | grep -q '^FOUND prte.test.pers.keep kept' \
+            && ok "the PERSIST_SESSION key outlived its publishing job" \
+            || bad "session-persistence data was reclaimed too early: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+
+        out=$(PRUN "--host node3:1 -n 1 $DS lookup prte.test.pers.drop 15" 2>&1)
+        echo "$out" | grep -q '^FOUND prte.test.pers.drop' \
+            && bad "app-persistence data survived its application: $(echo "$out" | tr '\n' ' ' | tail -c 250)" \
+            || ok "the PERSIST_APP key went when its application ended"
+
+        # ...and the key it freed is available again, which is the whole
+        # point on a long-lived DVM: successive generations of a job get a
+        # fresh namespace, and without this the first one to publish a name
+        # owned it until the DVM went away.
+        out=$(PRUN "--host node3:1 -n 1 $DS persist prte.test.pers.drop reused app 0" 2>&1)
+        echo "$out" | grep -q '^PUBLISHED prte.test.pers.drop' \
+            && ok "...and a later job could publish that key again" \
+            || bad "a reclaimed key could not be republished: $(echo "$out" | tr '\n' ' ' | tail -c 250)"
+        RUN 'timeout -k 5 30 pterm' >/dev/null 2>&1
+    fi
+    cleanup_swarm
+
     banner "runtime/data_server: PMIX_RANGE_LOCAL data does not leave its node"
     # A LOCAL-range publish is not sent to the HNP at all: the daemon routes
     # it to its OWN data server instance (pmix_server_pub.c picks

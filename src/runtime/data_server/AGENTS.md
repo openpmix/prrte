@@ -227,9 +227,43 @@ timer, so every path is covered by `PMIX_RELEASE`. Without the timer a wait
 for a key nobody publishes never returned: the timeout reached the daemon's
 caddy (`req->timeout` in `pmix_server_pub.c`) and went no further.
 
-`ds_purge` drops both the departing process's published items *and* any
-lookup it left parked; a request that outlives its requestor would otherwise
-have a later publish trying to reply to a process that no longer exists.
+**`PMIX_PERSISTENCE` is enforced by `ds_purge`, and only because the state
+machine tells it a lifetime ended.** The purge command carries the horizon
+that was reached as a `PMIX_PERSISTENCE` directive, and `expires_by()`
+decides what that takes: `FIRST_READ` and `PROC` at any horizon, `APP` at
+`APP` or `SESSION`, `INDEF` never. The values are *not* a numeric ladder —
+`PMIX_PERSIST_INDEF` is 0 and outlives all of them — so the ordering is
+spelled out rather than compared.
+
+A purge with **no** horizon (`PMIX_PERSIST_INVALID`) means an explicit
+`PMIx_Unpublish(NULL, ...)`: a live publisher taking back everything it
+published, regardless of persistence. That case must *not* drop the
+requestor's parked lookups — cancelling the lookups a process is waiting on
+is no part of taking its published data back.
+
+`prte_state_base_notify_data_server()` is what sends the lifecycle purge,
+with `PMIX_PERSIST_APP`, when a job's procs have all terminated. All three
+call sites used to be gated on `NULL != prte_data_server_uri`, so the
+**built-in** data server — the usual case — was never told a job had ended;
+nothing was ever reclaimed from it short of the DVM shutting down, and
+`PERSIST_APP` and `PERSIST_PROC` both behaved as `PERSIST_INDEF`. The
+function itself had always routed correctly for the built-in case; its own
+callers were what gated it out.
+
+`PMIX_PERSIST_PROC` is therefore reclaimed at **job** granularity rather
+than when its individual publisher exits. That is later than the Standard's
+"until the publishing process terminates", and it is deliberate: a message
+to the store for every terminating process is not a cost the termination
+path can carry at scale.
+
+The object's default is `PMIX_PERSIST_APP`, which is the Standard's default.
+PMIx adds none of its own before handing a publish to the host, so the value
+in `ds_main.c`'s constructor is the one that governs.
+
+A lifecycle purge drops both the departing process's published items *and*
+any lookup it left parked; a request that outlives its requestor would
+otherwise have a later publish trying to reply to a process that no longer
+exists.
 
 ---
 
@@ -290,8 +324,11 @@ by a publish in the other, that an ended job's data is purged from the server
 and that the purge takes *only* that job's data — plus the control, that a
 DVM which was not given the URI sees none of it.
 
-**Not covered:** `PMIX_PERSIST_FIRST_READ` end-to-end, and `ds_purge` (which
-is driven by process termination rather than by a client call). Access
+**Not covered:** `PMIX_PERSIST_FIRST_READ` end-to-end, and the lifecycle side
+of `ds_purge` (which is driven by job termination rather than by a client
+call) — in particular that a `PERSIST_APP` item is gone once its job ends
+while a `PERSIST_SESSION` one is not, which needs two jobs under one
+persistent DVM. Access
 permissions are covered only with the harness running as a single user, so
 what the swarm proves is that a list naming *somebody else* keeps us out —
 not that a genuinely different uid gets in.
