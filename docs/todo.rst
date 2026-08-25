@@ -45,6 +45,47 @@ which nodes, and the daemon-launch path would have to fan out through more
 than one.  At minimum it needs a launcher affinity recorded per node and
 honored by ``prte_plm_base_setup_virtual_machine``.
 
+**``register_nspace()`` checks the list it is building, not the entries it
+puts in it.**  ``prte_pmix_server_register_nspace``
+(``src/prted/pmix/pmix_server_register_fns.c``) makes roughly forty
+``PMIX_INFO_LIST_ADD`` calls and reads the status of three of them.  The
+review checked the two that decide whether the registration is coherent at
+all — that the list handle exists, and that the final conversion into the
+array handed to ``PMIx_server_register_nspace`` succeeded — and left the
+rest, on the argument that ``PMIx_Info_list_add`` fails only on a NULL list
+or out of memory, and that forty checks would treble the length of an
+already very long function to report a condition under which the daemon is
+failing everywhere at once.  The consequence if that argument is wrong is a
+job registered with a key silently missing.  What would settle it properly
+is not forty checks but an accumulator — one status the adds fold into,
+tested once — which is a change to the macro, not to this file.
+
+**A client registration that fails is logged and the launch continues.**
+``register_nspace()`` calls ``PMIx_server_register_client`` for each proc it
+is about to host and, on an error, logs it and carries on.  The proc's
+``PMIx_Init`` will then be refused by our own PMIx server, which the
+application sees as an obscure failure some way downstream rather than as
+the launch failure it is.  Failing the whole job on it would be the honest
+alternative and is not obviously right either — the observed failure modes
+are out-of-memory — so it is recorded rather than changed.
+
+**``PRTE_JOB_NSPACE_REGISTERED`` is written and never read.**  Both
+registration paths in ``pmix_server_register_fns.c`` set it, and nothing in
+the tree consults it.  Either something should — the obvious candidate is
+the wildcard direct-modex arm of ``dmodex_req``, which re-registers a
+namespace it may already have registered — or the attribute should go, along
+with its entry in ``src/util/attr.h``.  Leaving it is the third option and
+is what the code does today.
+
+**A session control addressed to every session answers with no session id.**
+``apply_to_all`` (``src/prted/pmix/pmix_server_session.c``) applies the
+operation to each session the requestor controls and then builds one answer
+carrying the request's control id and nothing else.  It used to report
+whichever session happened to be served last, which was worse; but the PMIx
+description of a ``UINT32_MAX`` session id does not say what the answer
+should carry, and an array of per-session results is the other plausible
+reading.  Naming none of them is a choice, not a settled question.
+
 **The bootstrap configuration parses one option it deliberately does not
 publish.**  ``SessionTmpDir`` is read into the bootstrap configuration and
 then left there (``prte_ess_base_bootstrap_params``,
@@ -268,6 +309,30 @@ topology file instead.  Nor is ``prte_hwloc_print()`` exercised against a
 machine of a few thousand PUs, which is the width its cpuset buffer is sized
 for (``src/hwloc/AGENTS.md``).
 
+**Session control over every session, relayed from a non-master daemon.**
+That combination is the one path through ``pmix_server_session.c`` that runs
+``apply_to_session`` more than once per request, and it is what made a
+use-after-free possible there: the answer for the second session was built
+out of strings pointing into the info array the first answer had already
+freed.  ``contrib/dockerswarm``'s ``test_session`` covers a relayed request
+and covers operations on one named session, but never the two together, so
+the fix is argued rather than demonstrated.  The case is cheap —
+``examples/sessionctrl.c`` already takes a session id, so it needs a
+``UINT32_MAX`` spelling, two sessions instantiated by the same requestor,
+and the request issued from a node that is not the master.
+
+**``prte_pmix_server_register_tool()`` past its early returns.**  The unit
+test (``test_tool_registration``) pins the three decisions the function
+makes before it needs a live PMIx server: the rank screen, the refusal of a
+namespace PRRTE will not file, and the already-registered short circuit.
+Everything after that — including the missing-command-line case, where PMIx
+sent no ``PMIX_CMD_LINE`` because it could not read its own argv — ends in
+``PMIx_server_register_nspace`` and so cannot be reached from
+``test/unit/prted``, which initializes no server.  Nor does the harness
+produce it: PMIx on Linux always finds ``/proc/self/cmdline``, so the tool
+always sends one.  What would cover it is a client that attaches with
+``PMIx_tool_init`` and composes its own connection info array.
+
 **The XML arm, and the copy constructors.**  In
 ``src/runtime/data_type_support/``, the print functions' XML output has no
 test, and ``prte_job_copy`` / ``prte_proc_copy`` have no callers to be tested
@@ -344,6 +409,9 @@ does.
    * - ``src/grpcomm``
      - 2026-08-25 (round 4)
      - nothing
+   * - ``src/prted/pmix``
+     - 2026-08-25
+     - nothing
    * - ``src/event``
      - 2026-07-31
      - nothing
@@ -381,11 +449,14 @@ is not a marginal case.
    * - subsystem
      - last reviewed
      - since
-   * - ``src/prted``
+   * - ``src/prted`` (excluding ``pmix/``)
      - 2026-07-30
-     - 43 commits, +3,187/-482.  The PMIx server host module
-       (``src/prted/pmix``) absorbed most of the launch-message work, the
-       lazy proc-data derivation, and the tool-connection data server.
+     - 23 commits, +677/-154.  ``prte.c``, ``prted_comm.c``,
+       ``prte_app_parse.c`` and ``prun_common.c``.  The PMIx server host
+       module underneath it has since had a review of its own and is listed
+       above; this row is what is left, and the churn in it is the
+       spawn-tree wait, the shrink departure timer and the ``--prefix``
+       normalizers.
    * - ``src/mca/ras``
      - 2026-07-26
      - 44 commits, +2,093/-494.  Elastic extend/release, the SLURM
