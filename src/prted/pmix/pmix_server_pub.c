@@ -193,6 +193,7 @@ static void execute(int sd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
     int rc;
+    pmix_status_t ret;
     pmix_data_buffer_t *xfer;
     pmix_proc_t *target;
     /* the DVM's store unless the range says otherwise */
@@ -204,6 +205,8 @@ static void execute(int sd, short args, void *cbdata)
 
     /* we need our connection to the server */
     if (PRTE_SUCCESS != (rc = prte_pmix_server_init_pubsub())) {
+        /* rc is a PRRTE code and what we hand back goes to a client */
+        ret = prte_pmix_convert_rc(rc);
         goto callback;
     }
 
@@ -215,15 +218,15 @@ static void execute(int sd, short args, void *cbdata)
     PMIX_DATA_BUFFER_CREATE(xfer);
 
     /* pack the room number */
-    rc = PMIx_Data_pack(NULL, xfer, &req->local_index, 1, PMIX_INT);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
+    ret = PMIx_Data_pack(NULL, xfer, &req->local_index, 1, PMIX_INT);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_RELEASE(xfer);
         goto callback;
     }
-    rc = PMIx_Data_copy_payload(xfer, &req->msg);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
+    ret = PMIx_Data_copy_payload(xfer, &req->msg);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_RELEASE(xfer);
         goto callback;
     }
@@ -260,14 +263,17 @@ static void execute(int sd, short args, void *cbdata)
         return;
     }
     PRTE_ERROR_LOG(rc);
-    rc = prte_pmix_convert_rc(rc);
+    /* the RML takes the buffer only by succeeding - on an error return it is
+     * still ours, emptied or not (src/rml/relm/AGENTS.md) */
+    PMIX_DATA_BUFFER_RELEASE(xfer);
+    ret = prte_pmix_convert_rc(rc);
 
 callback:
     /* execute the callback to avoid having the client hang */
     if (NULL != req->opcbfunc) {
-        req->opcbfunc(rc, req->cbdata);
+        req->opcbfunc(ret, req->cbdata);
     } else if (NULL != req->lkcbfunc) {
-        req->lkcbfunc(rc, NULL, 0, req->cbdata);
+        req->lkcbfunc(ret, NULL, 0, req->cbdata);
     }
     if (stored) {
         pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
