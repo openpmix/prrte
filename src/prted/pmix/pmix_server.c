@@ -2290,12 +2290,25 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender,
 
     /* get the request out of the tracking array */
     req = (prte_pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, index);
+    /* The index arrived on the wire, and the slot it names is reused the
+     * moment its previous occupant is retired - so a response that crossed
+     * with a retirement can name a live request of an entirely different
+     * kind.  local_reqs holds the scheduler relays too, and completing one
+     * of those here would retire it without answering the daemon waiting on
+     * it.  mdxcbfunc is the discriminator: PRTE_DMX_REQ is the only thing
+     * that builds a direct-modex request and it always sets one, and no
+     * other operation sets it at all. */
+    if (NULL != req && NULL == req->mdxcbfunc) {
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s dmdx response for index %d found a %s request - dropping it",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), index,
+                            (NULL == req->operation) ? "non-modex" : req->operation);
+        req = NULL;
+    }
     /* return the returned data to the requestor */
     if (NULL != req) {
-        if (NULL != req->mdxcbfunc) {
-            PMIX_RETAIN(d);
-            req->mdxcbfunc(pret, d->data, d->ndata, req->cbdata, relcbfunc, d);
-        }
+        PMIX_RETAIN(d);
+        req->mdxcbfunc(pret, d->data, d->ndata, req->cbdata, relcbfunc, d);
         pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, index, NULL);
         PMIX_RELEASE(req);
     } else {
@@ -2310,22 +2323,30 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender,
         if (NULL == req) {
             continue;
         }
-        /* Only requests that name a target proc can be waiting on this
-         * answer.  local_reqs also holds the operations that name none -
-         * monitor, publish/lookup, spawn, tool connection - and their
-         * tproc is the {"", PMIX_RANK_INVALID} sentinel, whose empty
-         * nspace is PMIx's wildcard and matches every namespace.  Without
-         * this guard such a request is completed and released by somebody
-         * else's modex reply, and whoever was actually waiting on it waits
-         * for the life of the DVM. */
-        if (PMIX_NSPACE_INVALID(req->tproc.nspace)) {
+        /* Only a direct-modex request can be waiting on this answer, and
+         * mdxcbfunc is what says one is: PRTE_DMX_REQ is the sole builder
+         * of them and always sets it, while nothing else does.  Everything
+         * else in local_reqs is matched here purely by accident of tproc
+         * and would be retired without ever being answered.
+         *
+         * Two different kinds of entry get caught without this test.  The
+         * operations that name no target at all - monitor, publish/lookup,
+         * spawn, tool connection - carry the {"", PMIX_RANK_INVALID}
+         * sentinel, and an empty nspace is PMIx's wildcard, so they match
+         * every namespace.  Worse, the scheduler relays - allocate,
+         * session control, group context id - deliberately record the
+         * REQUESTING proc in tproc, which is a real identity that sails
+         * past a sentinel check: a job-level fetch (rank WILDCARD) for the
+         * requestor's own namespace covers it, and the relayed request is
+         * released while the daemon that sent it, and its client, wait for
+         * the life of the DVM.  For allocate and session control that
+         * release is also one of three on an object built to take two. */
+        if (NULL == req->mdxcbfunc || PMIX_NSPACE_INVALID(req->tproc.nspace)) {
             continue;
         }
         if (PMIX_CHECK_PROCID(&req->tproc, &pproc)) {
-            if (NULL != req->mdxcbfunc) {
-                PMIX_RETAIN(d);
-                req->mdxcbfunc(pret, d->data, d->ndata, req->cbdata, relcbfunc, d);
-            }
+            PMIX_RETAIN(d);
+            req->mdxcbfunc(pret, d->data, d->ndata, req->cbdata, relcbfunc, d);
             pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, n, NULL);
             PMIX_RELEASE(req);
         }

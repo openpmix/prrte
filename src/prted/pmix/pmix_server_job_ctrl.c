@@ -65,7 +65,8 @@
 static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_proc_t targets[],
                                       size_t ntargets, const pmix_info_t directives[], size_t ndirs)
 {
-    int rc, j;
+    pmix_status_t rc;
+    int prc, j;
     int32_t signum, ntgts;
     size_t m, n;
     prte_proc_t *proc;
@@ -87,6 +88,9 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
                     if (PMIX_RANK_WILDCARD == targets[n].rank) {
                         /* create an object */
                         proc = PMIX_NEW(prte_proc_t);
+                        if (NULL == proc) {
+                            continue;
+                        }
                         PMIX_LOAD_PROCID(&proc->name, targets[n].nspace, PMIX_RANK_WILDCARD);
                     } else {
                         /* get the proc object for this proc */
@@ -100,8 +104,9 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
                 }
                 ptrarray = &parray;
             }
-            if (PRTE_SUCCESS != (rc = prte_plm.terminate_procs(ptrarray))) {
-                PRTE_ERROR_LOG(rc);
+            prc = prte_plm.terminate_procs(ptrarray);
+            if (PRTE_SUCCESS != prc) {
+                PRTE_ERROR_LOG(prc);
             }
             if (NULL != ptrarray) {
                 /* cleanup the array */
@@ -112,8 +117,8 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
                 }
                 PMIX_DESTRUCT(&parray);
             }
-            if (PMIX_SUCCESS != rc) {
-                return rc;
+            if (PRTE_SUCCESS != prc) {
+                return prte_pmix_convert_rc(prc);
             }
             return PMIX_OPERATION_SUCCEEDED;
         }
@@ -130,15 +135,22 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
                     PMIX_DATA_BUFFER_RELEASE(cmd);
                     return rc;
                 }
-                if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, cmd))) {
-                    PRTE_ERROR_LOG(rc);
-                }
+                prc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, cmd);
                 PMIX_DATA_BUFFER_RELEASE(cmd);
-                if (PMIX_SUCCESS != rc) {
-                    return rc;
+                if (PRTE_SUCCESS != prc) {
+                    PRTE_ERROR_LOG(prc);
+                    return prte_pmix_convert_rc(prc);
                 }
                 return PMIX_OPERATION_SUCCEEDED;
             }
+            /* Terminating a named set of procs is PMIX_JOB_CTRL_KILL's job
+             * here; this directive only ever means the whole DVM, and with
+             * targets there is nothing for it to do.  Say so rather than
+             * falling through, which left the refusal conditional on what
+             * else happened to be in the array - a request carrying both
+             * this and a SIGNAL was answered by signalling the job and
+             * reporting success. */
+            return PMIX_ERR_NOT_SUPPORTED;
         }
 
         if (PMIX_CHECK_KEY(&directives[m], PMIX_JOB_CTRL_SIGNAL)) {
@@ -176,17 +188,32 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
                 PMIX_DATA_BUFFER_RELEASE(cmd);
                 return rc;
             }
-            if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, cmd))) {
-                PRTE_ERROR_LOG(rc);
-            }
+            prc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, cmd);
             PMIX_DATA_BUFFER_RELEASE(cmd);
-            if (PMIX_SUCCESS != rc) {
-                return rc;
+            if (PRTE_SUCCESS != prc) {
+                PRTE_ERROR_LOG(prc);
+                return prte_pmix_convert_rc(prc);
             }
             return PMIX_OPERATION_SUCCEEDED;
         }
 
         if (PMIX_CHECK_KEY(&directives[m], PMIX_JOB_CTRL_DEFINE_PSET)) {
+            /* The directive is the client's, straight off the wire, and
+             * nothing between it and here checks what it holds. The name
+             * is read out of the value union below, so a value of any
+             * other type hands the packer whatever those eight bytes are
+             * as a char* and it faults in strlen - one PMIx_Job_control
+             * away, from any process attached to this daemon. A member
+             * list is equally required: the receiving daemon sizes an
+             * allocation from the count and PMIx refuses a set with no
+             * members or no name, so either would leave every daemon in
+             * the DVM logging an error while the requestor was told the
+             * operation succeeded. */
+            if (PMIX_STRING != directives[m].value.type ||
+                NULL == directives[m].value.data.string ||
+                NULL == targets || 0 == ntargets) {
+                return PMIX_ERR_BAD_PARAM;
+            }
             // goes to all daemons
             PMIX_DATA_BUFFER_CREATE(cmd);
             cmmnd = PRTE_DAEMON_DEFINE_PSET;
@@ -222,12 +249,11 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
                 PMIX_DATA_BUFFER_RELEASE(cmd);
                 return rc;
             }
-            if (PRTE_SUCCESS != (rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, cmd))) {
-                PRTE_ERROR_LOG(rc);
-            }
+            prc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, cmd);
             PMIX_DATA_BUFFER_RELEASE(cmd);
-            if (PMIX_SUCCESS != rc) {
-                return rc;
+            if (PRTE_SUCCESS != prc) {
+                PRTE_ERROR_LOG(prc);
+                return prte_pmix_convert_rc(prc);
             }
             return PMIX_OPERATION_SUCCEEDED;
         }
