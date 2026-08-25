@@ -313,7 +313,7 @@ void prte_grpcomm_fence_fault_handler(const prte_rml_recovery_status_t* status)
         return;
     }
 
-        if (!PRTE_PROC_IS_MASTER) {
+    if (!PRTE_PROC_IS_MASTER) {
         return;
     }
     PMIX_LIST_FOREACH_SAFE(coll, nxt, &prte_grpcomm_globals.fence_ops,
@@ -388,13 +388,6 @@ static void fence(int sd, short args, void *cbdata)
         st = prte_pmix_convert_rc(rc);
         goto done;
     }
-
-    /* Say how we intend to move this fence's contributions. Nobody downstream
-     * obeys it - every participant decides for itself, because there is no
-     * originator to decide for them - so this is not an instruction but an
-     * assertion, and the receiver's job is to notice if it disagrees. Packed
-     * unguarded: every daemon in a DVM runs the same build, so the bytes are
-     * never conditional even when the behaviour is. */
 
     // pack the info structs
     rc = PMIx_Data_pack(NULL, relay, &cd->ninfo, 1, PMIX_SIZE);
@@ -594,7 +587,10 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
         }
     }
 
-    /* cycle thru the info to look for keys we support */
+    /* Merge the directives this contribution carried into the tracker. The
+     * array itself is freed unread below - what gets forwarded upward is
+     * rebuilt from the tracker in tree_gather_answer(), so writing the merged
+     * values back into these entries would say nothing to anybody. */
     for (n=0; n < ninfo; n++) {
         if (PMIX_CHECK_KEY(&info[n], PMIX_TIMEOUT)) {
             PMIX_VALUE_GET_NUMBER(rc, &info[n].value, timeout, int);
@@ -606,9 +602,6 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
             if (coll->timeout < timeout) {
                 coll->timeout = timeout;
             }
-            /* update the info with the collected value */
-            info[n].value.type = PMIX_INT;
-            info[n].value.data.integer = coll->timeout;
 
         } else if (PMIX_CHECK_KEY(&info[n], PMIX_LOCAL_COLLECTIVE_STATUS)) {
             PMIX_VALUE_GET_NUMBER(rc, &info[n].value, st, pmix_status_t);
@@ -621,9 +614,6 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
                 PMIX_SUCCESS == coll->status) {
                 coll->status = st;
             }
-            /* update the info with the collected value */
-            info[n].value.type = PMIX_STATUS;
-            info[n].value.data.status = coll->status;
         }
     }
 
