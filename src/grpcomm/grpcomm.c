@@ -101,8 +101,6 @@ int prte_grpcomm_init(void)
                   PRTE_RML_PERSISTENT, prte_grpcomm_xcast_recv, NULL);
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST_ACK,
                   PRTE_RML_PERSISTENT, prte_grpcomm_xcast_ack, NULL);
-    /* A bulk broadcast's exchange partners are not routing-tree neighbours, so
-     * the RML hands their losses here instead of repairing the tree. */
 
     /* fence receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE,
@@ -110,8 +108,6 @@ int prte_grpcomm_init(void)
     /* setup recv for barrier release */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_RELEASE,
                   PRTE_RML_PERSISTENT, prte_grpcomm_fence_release, NULL);
-    /* ...and for a fence's lateral allgather, which arrives from exchange
-     * partners rather than from a routing-tree child */
 
     /* group receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP,
@@ -134,7 +130,6 @@ void prte_grpcomm_finalize(void)
 
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST_ACK);
-    prte_rml_lateral_set_lost_callback(NULL);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_RELEASE);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP);
