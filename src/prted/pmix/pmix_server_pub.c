@@ -202,6 +202,37 @@ static int init_server(void)
     return PRTE_SUCCESS;
 }
 
+/* Pull the range and timeout out of a publish/lookup/unpublish directive
+ * array.  The array is the requesting client's own - PMIx forwards it to the
+ * host without inspecting what any entry holds - so a value's type has to be
+ * checked before the matching member of the union is read.  Neither of these
+ * is a pointer, so the cost of getting it wrong is not a fault: it is that
+ * the range decides where the request is *sent*, so a value read out of the
+ * wrong union member routes a publish to this daemon instead of the data
+ * server, and the data is quietly put where no lookup will find it. */
+static void scan_directives(prte_pmix_server_req_t *req,
+                            const pmix_info_t info[], size_t ninfo)
+{
+    size_t n;
+    pmix_status_t rc;
+    int tmo;
+
+    for (n = 0; n < ninfo; n++) {
+        if (PMIX_CHECK_KEY(&info[n], PMIX_RANGE)) {
+            if (PMIX_DATA_RANGE == info[n].value.type) {
+                req->range = info[n].value.data.range;
+            }
+        } else if (PMIX_CHECK_KEY(&info[n], PMIX_TIMEOUT)) {
+            /* the data server is what honors this - it is recorded here only
+             * so that a timer on this side would have it */
+            PMIX_VALUE_GET_NUMBER(rc, &info[n].value, tmo, int);
+            if (PMIX_SUCCESS == rc) {
+                req->timeout = tmo;
+            }
+        }
+    }
+}
+
 static void execute(int sd, short args, void *cbdata)
 {
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t *) cbdata;
@@ -302,7 +333,6 @@ pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc, const pmix_info_t 
     pmix_status_t rc;
     int ret;
     uint8_t cmd = PRTE_PMIX_PUBLISH_CMD;
-    size_t n;
 
     pmix_output_verbose(1, prte_pmix_server_globals.output, "%s orted:pmix:server PUBLISH",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
@@ -321,14 +351,7 @@ pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc, const pmix_info_t 
         return PMIX_ERR_PACK_FAILURE;
     }
 
-    /* no help for it - need to search for range/persistence */
-    for (n = 0; n < ninfo; n++) {
-        if (0 == strncmp(info[n].key, PMIX_RANGE, PMIX_MAX_KEYLEN)) {
-            req->range = info[n].value.data.range;
-        } else if (0 == strncmp(info[n].key, PMIX_TIMEOUT, PMIX_MAX_KEYLEN)) {
-            req->timeout = info[n].value.data.integer;
-        }
-    }
+    scan_directives(req, info, ninfo);
 
     /* pack the name of the publisher */
     if (PMIX_SUCCESS
@@ -387,14 +410,7 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const 
         return PMIX_ERR_PACK_FAILURE;
     }
 
-    /* no help for it - need to search for range and timeout */
-    for (n = 0; n < ninfo; n++) {
-        if (0 == strncmp(info[n].key, PMIX_RANGE, PMIX_MAX_KEYLEN)) {
-            req->range = info[n].value.data.range;
-        } else if (0 == strncmp(info[n].key, PMIX_TIMEOUT, PMIX_MAX_KEYLEN)) {
-            req->timeout = info[n].value.data.integer;
-        }
-    }
+    scan_directives(req, info, ninfo);
 
     /* pack the name of the requestor */
     if (PMIX_SUCCESS
@@ -521,14 +537,7 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
         return PMIX_ERR_PACK_FAILURE;
     }
 
-    /* no help for it - need to search for range and timeout */
-    for (n = 0; n < ninfo; n++) {
-        if (0 == strncmp(info[n].key, PMIX_RANGE, PMIX_MAX_KEYLEN)) {
-            req->range = info[n].value.data.range;
-        } else if (0 == strncmp(info[n].key, PMIX_TIMEOUT, PMIX_MAX_KEYLEN)) {
-            req->timeout = info[n].value.data.integer;
-        }
-    }
+    scan_directives(req, info, ninfo);
 
     /* pack the name of the requestor */
     if (PMIX_SUCCESS
