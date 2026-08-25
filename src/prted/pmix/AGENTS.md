@@ -103,6 +103,18 @@ Three things about that:
   shift. Copy that pattern; do not write the request from the PMIx
   thread "just this once".
 
+**One upcall in here does not post an event, and it is not an oversight.**
+`pmix_server_group_fn()` validates its group id and calls
+`prte_grpcomm_group()` straight through, because *that* function is the one
+that builds a caddy and posts to `prte_event_base` — the shift happens one
+call deeper, so doing it here as well would shift twice. What makes the
+pass-through legal is that nothing above the hand-off reads PRRTE state: the
+only globals it touches are `prte_pmix_server_globals.output` (an `int`
+written once during init) and `PRTE_NAME_PRINT`, whose scratch buffers are
+thread-specific storage. Add anything to that function that reads a
+`prte_job_t`, a node, or a request array and it stops being legal — move the
+work into `prte_grpcomm_group()`'s handler rather than shifting here.
+
 The daemon-command side follows the same discipline: `prted_comm.c`'s
 `HALT_VM`/`SHRINK`/`DVM_CLEANUP_JOB` cases issue their PMIx call and
 return, and pick up in `_daemon_continue()` once PMIx is done. Nothing on
