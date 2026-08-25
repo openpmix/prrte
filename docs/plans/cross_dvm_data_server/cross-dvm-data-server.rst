@@ -12,10 +12,23 @@ lives on this DVM's own master and every participant reaches it over the RML
 ``prte_pmix_server_uri`` asks for something else: that the store live in a
 **different DVM**, so that jobs launched by *different invocations* can find
 each other's data.  That is what an MPI application is doing when one
-``mpirun`` calls ``MPI_Publish_name`` and another calls ``MPI_Comm_accept``,
-and it is why ``pmix_server_register_fns.c`` publishes a job's info whenever
-an external server is configured: any subsequent connect has to be able to
-retrieve it.
+``mpirun`` calls ``MPI_Publish_name`` and another calls ``MPI_Comm_accept``.
+
+What crosses is the data an application publishes, and only that.
+``pmix_server_register_fns.c`` used to also publish each job's registration
+info whenever an external server was configured, on the stated grounds that
+"any subsequent connect has to be able to retrieve it" — but nothing ever
+retrieved it.  Every ``PMIx_Lookup`` caller in PRRTE, PMIx and Open MPI takes
+a key the user supplied, and no reader keyed by a namespace has existed at
+any point in the history.  It could not have served that purpose in any case:
+the key was ``prte_process_info.myproc.nspace``, the *daemon* job's namespace
+and so one constant string per DVM, while the value was the registration info
+for whichever job was being registered — so every daemon, and every job, wrote
+a different payload under the one key, and a reader would have got an
+arbitrary daemon's copy of an arbitrary job.  It is an ORTE-era carry-over,
+from when cross-``mpirun`` accept/connect really did fetch the remote job's
+info by name; under PMIx that travels through ``PMIx_Connect`` and the
+server's own machinery.  The write has been removed.
 
 
 Why it could not work over the RML

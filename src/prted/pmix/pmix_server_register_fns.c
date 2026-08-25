@@ -65,7 +65,6 @@ typedef struct {
     pmix_event_t ev;
     pmix_info_t *pinfo;
     size_t ninfo;
-    bool publish;
     pmix_op_cbfunc_t cbfunc;
     void *cbdata;
     pmix_status_t status;
@@ -74,7 +73,6 @@ static void regcon(prte_pmix_reg_caddy_t *p)
 {
     p->pinfo = NULL;
     p->ninfo = 0;
-    p->publish = false;
     p->cbfunc = NULL;
     p->cbdata = NULL;
     p->status = PMIX_SUCCESS;
@@ -87,130 +85,20 @@ static void regdes(prte_pmix_reg_caddy_t *p)
 }
 static PMIX_CLASS_INSTANCE(prte_pmix_reg_caddy_t, pmix_object_t, regcon, regdes);
 
-/* invoke the caller's callback (on the PRRTE progress thread)
- * and cleanup */
-static void complete_reg(prte_pmix_reg_caddy_t *cd)
+/* the registration has completed and PMIx has handed it back on ITS
+ * progress thread; regcbfunc shifted us here.  Invoke the caller's callback
+ * on the PRRTE progress thread and clean up. */
+static void _nspace_reg_done(int sd, short args, void *cbdata)
 {
+    prte_pmix_reg_caddy_t *cd = (prte_pmix_reg_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    PMIX_ACQUIRE_OBJECT(cd);
+
     if (NULL != cd->cbfunc) {
         cd->cbfunc(cd->status, cd->cbdata);
     }
     PMIX_RELEASE(cd);
-}
-
-static void _pub_done(int sd, short args, void *cbdata)
-{
-    prte_pmix_reg_caddy_t *cd = (prte_pmix_reg_caddy_t *) cbdata;
-    PRTE_HIDE_UNUSED_PARAMS(sd, args);
-
-    PMIX_ACQUIRE_OBJECT(cd);
-    complete_reg(cd);
-}
-
-static void pubcbfunc(pmix_status_t status, void *cbdata)
-{
-    prte_pmix_reg_caddy_t *cd = (prte_pmix_reg_caddy_t *) cbdata;
-
-    /* shift to be safe against whatever context completed
-     * the publish operation */
-    cd->status = status;
-    prte_event_set(prte_event_base, &cd->ev, -1, PRTE_EV_WRITE, _pub_done, cd);
-    PMIX_POST_OBJECT(cd);
-    prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
-}
-
-static void _nspace_reg_done(int sd, short args, void *cbdata)
-{
-    prte_pmix_reg_caddy_t *cd = (prte_pmix_reg_caddy_t *) cbdata;
-    pmix_status_t ret;
-    PRTE_HIDE_UNUSED_PARAMS(sd, args);
-
-    PMIX_ACQUIRE_OBJECT(cd);
-
-    if (PMIX_SUCCESS != cd->status) {
-        complete_reg(cd);
-        return;
-    }
-
-    /* when the user has connected us to an external data server, we
-     * must assume there is going to be some cross-mpirun exchange,
-     * and so we protect against that situation by publishing the
-     * job info for this job - this allows any subsequent "connect"
-     * to retrieve the job info */
-    if (cd->publish && NULL != prte_data_server_uri) {
-        pmix_data_buffer_t pbkt;
-        pmix_byte_object_t pbo;
-        uid_t euid;
-        pmix_data_range_t range = PMIX_RANGE_SESSION;
-        pmix_persistence_t persist = PMIX_PERSIST_APP;
-        pmix_info_t *pinfo;
-        size_t n;
-
-        PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-        ret = PMIx_Data_pack(NULL, &pbkt, &cd->ninfo, 1, PMIX_SIZE);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-            cd->status = ret;
-            complete_reg(cd);
-            return;
-        }
-        ret = PMIx_Data_pack(NULL, &pbkt, cd->pinfo, cd->ninfo, PMIX_INFO);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-            cd->status = ret;
-            complete_reg(cd);
-            return;
-        }
-        PMIX_INFO_FREE(cd->pinfo, cd->ninfo);
-        cd->pinfo = NULL;
-        cd->ninfo = 0;
-        ret = PMIx_Data_unload(&pbkt, &pbo);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-            cd->status = ret;
-            complete_reg(cd);
-            return;
-        }
-
-        cd->ninfo = 4;
-        PMIX_INFO_CREATE(pinfo, cd->ninfo);
-
-        /* first pass the packed values with a key of the nspace */
-        n = 0;
-        PMIX_INFO_LOAD(&pinfo[n], prte_process_info.myproc.nspace, &pbo, PMIX_BYTE_OBJECT);
-        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-        ++n;
-
-        /* set the range to be session */
-        PMIX_INFO_LOAD(&pinfo[n], PMIX_RANGE, &range, PMIX_DATA_RANGE);
-        ++n;
-
-        /* set the persistence to be app */
-        PMIX_INFO_LOAD(&pinfo[n], PMIX_PERSISTENCE, &persist, PMIX_PERSIST);
-        ++n;
-
-        /* add our effective userid to the directives */
-        euid = geteuid();
-        PMIX_INFO_LOAD(&pinfo[n], PMIX_USERID, &euid, PMIX_UINT32);
-        ++n;
-
-        /* now publish it */
-        cd->pinfo = pinfo;
-        ret = pmix_server_publish_fn(&prte_process_info.myproc, cd->pinfo, cd->ninfo,
-                                     pubcbfunc, cd);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            cd->status = ret;
-            complete_reg(cd);
-            return;
-        }
-        /* the publish callback completes the chain */
-        return;
-    }
-
-    complete_reg(cd);
 }
 
 static void regcbfunc(pmix_status_t status, void *cbdata)
@@ -894,13 +782,11 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata,
     PMIX_INFO_LIST_RELEASE(info);
 
     /* do not block waiting for the registration - the callback
-     * chain will thread-shift, perform any required data-server
-     * publication, and then invoke the caller's callback on our
-     * progress thread */
+     * chain will thread-shift and then invoke the caller's callback
+     * on our progress thread */
     cd = PMIX_NEW(prte_pmix_reg_caddy_t);
     cd->pinfo = (pmix_info_t *) darray.array;
     cd->ninfo = darray.size;
-    cd->publish = true;
     cd->cbfunc = cbfunc;
     cd->cbdata = cbdata;
     ret = PMIx_server_register_nspace(pproc.nspace, jdata->num_local_procs,
