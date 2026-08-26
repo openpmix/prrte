@@ -487,6 +487,11 @@ does.
      - nothing.  All four of ``prte.c``, ``prted_comm.c``,
        ``prte_app_parse.c`` and ``prun_common.c``; with the row above it,
        the directory is now reviewed end to end.
+   * - ``src/mca/ras/base``
+     - 2026-08-26
+     - nothing.  The framework's own four files only — the driver, the
+       node insert, the framework hooks and the selector.  The ``ras``
+       *components* are not covered by this and stay in the table below.
    * - ``src/event``
      - 2026-07-31
      - nothing
@@ -524,7 +529,7 @@ is not a marginal case.
    * - subsystem
      - last reviewed
      - since
-   * - ``src/mca/ras``
+   * - ``src/mca/ras`` (components only; see ``base/`` above)
      - 2026-07-26
      - 44 commits, +2,093/-494.  Elastic extend/release, the SLURM
        ``--json`` parser and its version gate, node reservation.
