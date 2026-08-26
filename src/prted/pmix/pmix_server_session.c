@@ -276,7 +276,9 @@ static pmix_status_t scan_resources(prte_sessctrl_t *ctl,
 
 #if defined(PMIX_ALLOC_INHERITANCE)
         } else if (PMIX_CHECK_KEY(&info[n], PMIX_ALLOC_INHERITANCE)) {
-            if (!prte_pmix_value_get_inheritance(&info[n].value, &ctl->inheritance)) {
+            rc = PMIx_Value_get_number(&info[n].value, &ctl->inheritance,
+                                       PMIX_ALLOC_INHERIT);
+            if (PMIX_SUCCESS != rc) {
                 return PMIX_ERR_BAD_PARAM;
             }
             ctl->have_inheritance = true;
@@ -433,11 +435,14 @@ static pmix_status_t parse_directives(prte_pmix_server_req_t *req,
         } else if (PMIX_CHECK_KEY(info, PMIX_ALLOC_INHERITANCE)) {
             /* governs what becomes of the session's nodes when it is reclaimed:
              * handed back to the scheduler, or returned to the DVM's general
-             * pool. See returns_to_scheduler().  Read through the shared
-             * reader rather than off a fixed union member: the destructive
-             * disposition must be one the caller asked for, not one a type
-             * confusion produced. */
-            if (!prte_pmix_value_get_inheritance(&info->value, &ctl->inheritance)) {
+             * pool. See returns_to_scheduler().  Named as the attribute's own
+             * type rather than read off a fixed union member: the destructive
+             * disposition must be the one the caller asked for, not one a type
+             * confusion produced.  PMIx takes the same value sent as a plain
+             * integer of any width that can hold it. */
+            rc = PMIx_Value_get_number(&info->value, &ctl->inheritance,
+                                       PMIX_ALLOC_INHERIT);
+            if (PMIX_SUCCESS != rc) {
                 return PMIX_ERR_BAD_PARAM;
             }
             ctl->have_inheritance = true;

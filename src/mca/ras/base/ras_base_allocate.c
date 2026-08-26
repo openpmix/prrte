@@ -1542,7 +1542,9 @@ static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
             /* the disposition decides whether the nodes go back to the
              * scheduler, so it must be the one the caller asked for and not
              * one a type confusion produced */
-            if (!prte_pmix_value_get_inheritance(&req->info[n].value, &inherit)) {
+            if (PMIX_SUCCESS != PMIx_Value_get_number(&req->info[n].value,
+                                                      &inherit,
+                                                      PMIX_ALLOC_INHERIT)) {
                 return PMIX_ERR_BAD_PARAM;
             }
             have_inherit = true;
