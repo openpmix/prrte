@@ -28,8 +28,25 @@
  * suppression and aggregation and then delivers.  Correct on the HNP, on
  * a tool, and in an application; see the header for why it is not on a
  * prted. */
-static void deliver_locally(const char *filename, const char *topic, const char *output)
+/* Emit a message we have decided we are the one to deliver.
+ *
+ * "emit_directly" says the caller knows nobody else will show it, and it has
+ * to be said explicitly because pmix_show_help_norender() is not, on a
+ * daemon, a local write. PMIx routes a SERVER peer's log through IOF, and
+ * IOF then honors PMIX_IOF_LOCAL_OUTPUT - which WE set false for a
+ * persistent DVM and for every prted (pmix_server.c), so that a job's stdout
+ * never lands on a daemon's own terminal. That is right for application
+ * output and wrong for a daemon's own diagnostic, which is not application
+ * output and has nowhere else to go when no tool is subscribed. Both callers
+ * below reached a point where they had concluded the message was theirs to
+ * show; without this it was simply dropped. */
+static void deliver_locally(const char *filename, const char *topic,
+                            const char *output, bool emit_directly)
 {
+    if (emit_directly) {
+        fprintf(stderr, "%s", output);
+        fflush(stderr);
+    }
     pmix_show_help_norender(filename, topic, output);
 }
 
@@ -104,14 +121,15 @@ static void relay_to_hnp(int sd, short args, void *cbdata)
     PRTE_RML_RELIABLE_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_SHOW_HELP);
     if (PRTE_SUCCESS != rc) {
         PMIX_DATA_BUFFER_RELEASE(buf);
-        deliver_locally(cd->filename, cd->topic, cd->output);
+        /* the relay is what would have shown it, and it did not go */
+        deliver_locally(cd->filename, cd->topic, cd->output, true);
     }
     PMIX_RELEASE(cd);
     return;
 
 fallback:
     PMIX_DATA_BUFFER_RELEASE(buf);
-    deliver_locally(cd->filename, cd->topic, cd->output);
+    deliver_locally(cd->filename, cd->topic, cd->output, true);
     PMIX_RELEASE(cd);
 }
 
@@ -136,7 +154,17 @@ int prte_show_help(const char *filename, const char *topic,
      * IS the tool). A tool or an application delivers its own output too.
      * Only a non-master daemon has to hand the message off. */
     if (PRTE_PROC_IS_MASTER || !PRTE_PROC_IS_DAEMON) {
-        deliver_locally(filename, topic, output);
+        /* A persistent DVM stays quiet once it is running: a tool holds the
+         * connection and IOF puts the message where the user actually is.
+         * Until it has started, though, there is no tool and no IOF
+         * subscriber, and the terminal it was launched from is the only place
+         * anyone can be looking - so a startup failure has to say so itself.
+         * prte_dvm_started is latched, which prte_dvm_ready is not: that one
+         * goes false again on every grow, and a grow is exactly when these
+         * messages fire. A tool or an application is its own endpoint and
+         * PMIx writes for it. */
+        deliver_locally(filename, topic, output,
+                        prte_persistent && !prte_dvm_started);
         free(output);
         return PRTE_SUCCESS;
     }
@@ -147,7 +175,11 @@ int prte_show_help(const char *filename, const char *topic,
      * might be seen beats one that certainly will not. */
     if (prte_finalizing || PMIX_RANK_INVALID == PRTE_PROC_MY_HNP->rank ||
         PMIX_NSPACE_INVALID(PRTE_PROC_MY_HNP->nspace)) {
-        deliver_locally(filename, topic, output);
+        /* unconditionally direct: a prted always carries
+         * PMIX_IOF_LOCAL_OUTPUT=false, so handing this to PMIx is handing it
+         * nowhere, and we have just established there is no HNP to relay to
+         * either. Our stderr may well still be connected */
+        deliver_locally(filename, topic, output, true);
         free(output);
         return PRTE_SUCCESS;
     }
@@ -201,7 +233,12 @@ void prte_show_help_recv(int status, pmix_proc_t *sender,
      * deliver it, and to let PMIx suppress it if an identical message from
      * another node has already been shown */
     if (NULL != output) {
-        deliver_locally(filename, topic, output);
+        /* a daemon's message, but ours to show, and under the same rule as
+         * one of our own: quiet once a tool is there to receive it, direct
+         * while we are still starting and the terminal is all there is - a
+         * daemon that fails to launch during DVM startup lands here */
+        deliver_locally(filename, topic, output,
+                        prte_persistent && !prte_dvm_started);
     }
 
 cleanup:

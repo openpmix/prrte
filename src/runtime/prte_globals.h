@@ -680,6 +680,14 @@ PRTE_EXPORT extern bool prte_debug_daemons_file_flag;
 PRTE_EXPORT extern bool prte_leave_session_attached;
 PRTE_EXPORT extern char *prte_data_server_uri;
 PRTE_EXPORT extern bool prte_dvm_ready;
+/* Latched true the first time the DVM finishes starting, and never cleared.
+ * prte_dvm_ready is NOT this: it is cleared and re-set on every grow, session
+ * instantiate and teardown, so it answers "is a size change in flight", not
+ * "have we started". The difference is what tells a startup failure - where
+ * the HNP's terminal is the only place the user can be looking - from a
+ * failure during operation, where a tool is holding the connection and the
+ * HNP must stay quiet. See deliver_locally() in src/util/prte_show_help.c. */
+PRTE_EXPORT extern bool prte_dvm_started;
 PRTE_EXPORT extern pmix_pointer_array_t *prte_cache;
 PRTE_EXPORT extern bool prte_persistent;
 
