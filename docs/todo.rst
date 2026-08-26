@@ -462,6 +462,11 @@ does.
    * - ``src/prted/pmix``
      - 2026-08-25
      - nothing
+   * - ``src/prted`` (excluding ``pmix/``)
+     - 2026-08-25
+     - nothing.  All four of ``prte.c``, ``prted_comm.c``,
+       ``prte_app_parse.c`` and ``prun_common.c``; with the row above it,
+       the directory is now reviewed end to end.
    * - ``src/event``
      - 2026-07-31
      - nothing
@@ -499,14 +504,6 @@ is not a marginal case.
    * - subsystem
      - last reviewed
      - since
-   * - ``src/prted`` (excluding ``pmix/``)
-     - 2026-07-30
-     - 23 commits, +677/-154.  ``prte.c``, ``prted_comm.c``,
-       ``prte_app_parse.c`` and ``prun_common.c``.  The PMIx server host
-       module underneath it has since had a review of its own and is listed
-       above; this row is what is left, and the churn in it is the
-       spawn-tree wait, the shrink departure timer and the ``--prefix``
-       normalizers.
    * - ``src/mca/ras``
      - 2026-07-26
      - 44 commits, +2,093/-494.  Elastic extend/release, the SLURM
