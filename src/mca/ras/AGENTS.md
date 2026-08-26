@@ -432,7 +432,24 @@ input list.** Walk it carefully before touching allocation code:
   `PRTE_JOB_DO_NOT_LAUNCH` (offline mapper tests), a synthetic
   `prte_proc_t` daemon is attached to each node so the mapper sees a
   daemon without a live launch.
-- Bumps `prte_ras_base.total_slots_alloc` by each node's slots.
+- Bumps `prte_ras_base.total_slots_alloc` by each node's slots — but only
+  for a node it actually adds. A node the pool already held is skipped, so a
+  `PRTE_NODE_ADD_SLOTS` adjust applied in place does not reach the total.
+  That matters less than it looks, and it is worth knowing why before
+  "fixing" it: **the framework total is not what a job reports.**
+  `prte_ras_base_allocate` copies it into `jdata->total_slots_alloc` at
+  `ALLOCATION_COMPLETE`, and `prte_plm_base_daemons_reported` then
+  *recomputes* that field from the job's own session nodes at
+  `DAEMONS_REPORTED` — which is before anything reads it, so
+  `PMIX_UNIV_SIZE` / `PMIX_MAX_PROCS` and the packed launch message all
+  carry the recomputed figure. `prte_ras_base.total_slots_alloc` is the
+  framework's running description of the pool and nothing else.
+- **An error return does not drain the list.** The contract is "removes all
+  items", and it holds only on success: an error leaves what it had not
+  reached still on the list, so a caller must `PMIX_LIST_DESTRUCT` rather
+  than `PMIX_DESTRUCT`. The node in hand is released by `node_insert`
+  itself, since by then it is off the list and not yet in the pool and no
+  one else could.
 
 ---
 

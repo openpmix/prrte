@@ -203,9 +203,11 @@ static int finalize(void)
  * slots_max, so an adjustment could push a node above the ceiling the
  * allocation gave it - unlike every other slot adjustment in the framework
  * (prte_ras_base_node_insert clamps both ends for PRTE_NODE_ADD_SLOTS). And it
- * never told prte_ras_base.total_slots_alloc, which is what a managed
- * allocation reports to applications as PMIX_UNIV_SIZE / PMIX_MAX_PROCS, so
- * the DVM's idea of its own size drifted from the pool it was describing. */
+ * never told prte_ras_base.total_slots_alloc, so the framework's own running
+ * total drifted from the pool it was describing.  Note what that total is
+ * NOT: a job's PMIX_UNIV_SIZE / PMIX_MAX_PROCS is jdata->total_slots_alloc,
+ * which prte_plm_base_daemons_reported recomputes from the job's own session
+ * nodes and which therefore does not come from here. */
 static void adjust_slots(prte_node_t *nptr, int slots)
 {
     int before = nptr->slots;
