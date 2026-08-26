@@ -70,4 +70,3 @@ the allocation: every fabricated node dups that bitmap into
   don't free it per node.
 - This path is a primary consumer of the base's `DO_NOT_LAUNCH` daemon
   fabrication — keep the attribute set.
-</content>

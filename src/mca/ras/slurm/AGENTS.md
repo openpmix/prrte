@@ -383,4 +383,3 @@ rules are easy to get wrong and the failures are silent leaks.
 - `pmix_pointer_array_add` returns an **index**, not a status. The
   `0 > rc` tests are correct as failure checks, but feeding that value to
   `prte_pmix_convert_status()` yields a meaningless error code.
-</content>

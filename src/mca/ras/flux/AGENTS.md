@@ -81,4 +81,3 @@ with `slots = nslots`. Errors map to `PRTE_ERR_NOT_AVAILABLE`.
   safely leaked. It returns a **count**, so a caller treating `<= 0` as
   failure must also set `ret` — falling through to `err:` with `ret`
   still `PRTE_SUCCESS` returns a partially-built node list as success.
-</content>

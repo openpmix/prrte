@@ -50,4 +50,3 @@ framework `ras_base_verbose`.
 - `query` is strict about **all four** env vars — SGE sets them
   together; loosening the gate risks selecting on a non-SGE machine.
 - `get_slot_count` is `#if 0`-guarded dead code; ignore it.
-</content>

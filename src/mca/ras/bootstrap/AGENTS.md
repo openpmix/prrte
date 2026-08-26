@@ -76,4 +76,3 @@ node is already represented by the HNP at pool index 0. Each node is a
 - Marking the nodes `PRTE_NODE_FLAG_SLOTS_GIVEN` is intentional: without
   it the one slot per node this component assigns would be replaced by
   the node's core count.
-</content>
