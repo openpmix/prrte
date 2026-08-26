@@ -319,13 +319,45 @@ prefix keys. Written on any later app it stays with that app, and the apps
 that gave none fall back to the defaults: saying nothing is not the same as
 agreeing.
 
-**Every exit from `prte_parse_locals()` owns `temp_argv` and `env`.** It has
-three: the `create_app()` failure inside the segment loop, the one after it
-for the trailing segment, and the success path. Only the last released both,
-so any command line whose *final* segment fails to parse leaked them —
+**Every exit from `prte_parse_locals()` owns `temp_argv`.** It has three:
+the `create_app()` failure inside the segment loop, the one after it for the
+trailing segment, and the success path. Only the last released it, so any
+command line whose *final* segment fails to parse leaked it —
 `--display map --display cpus` is enough, because a repeated option is
-refused right there. `env` is filled in by `create_app()` and belongs to us
-whether or not it then failed.
+refused right there. (There used to be an `env` array here too, threaded
+through `create_app()` as the "base environment" an appfile's recursive
+parse would need. There is no recursion — `prte_parse_appfile()` folds an
+appfile into the command line before any of this runs — and `create_app()`
+had long since stopped writing through the parameter, so it was always
+NULL. It is gone.)
+
+**`create_app()` owns `results` and `app` on every path, and the only exit
+that releases them is `cleanup:`.** Six error paths used a bare
+`return PRTE_ERR_FATAL` instead and leaked a fully-parsed command line plus
+a half-built app apiece. It also must not return the last
+`PMIX_INFO_LIST_ADD`'s status by accident: those failures are not acted on
+where they happen, so the success path sets `rc` explicitly before handing
+the app over — otherwise the caller gets an error together with
+`made_app == true` and drops the app it was just given.
+
+**Each prefix conflict check must count its own option.** The three blocks
+(`--prefix`, `--pmix-prefix`, `--app-prefix`) each take
+`pmix_cmd_line_get_ninsts()` — which is just `PMIx_Argv_count(opt->values)`
+— and walk `opt->values` up to it. The `--pmix-prefix` block passed
+`PRTE_CLI_PREFIX`, so it skipped the check entirely whenever no `--prefix`
+was given (conflicting `--pmix-prefix` values were silently accepted, first
+one wins) and walked past the terminator whenever more `--prefix` values
+were given than `--pmix-prefix` ones. `--prefix /x --prefix /x
+--pmix-prefix /y` segfaulted the tool. `test/unit/prted` covers all three.
+
+**A command-line value that has to be a number must be checked for being
+one.** `strtol` returns 0 for a string with no digits in it, and 0 is a
+meaningful value in several places here — for `-n` it is the spelling of
+"let the mapping policy compute the count", so `-n four` launched some
+other number of processes and said nothing. The idiom used throughout is a
+leading-`isdigit`, full consumption of the string, `errno`, and a range
+check against the field the value lands in (`maxprocs` is an `int`, so
+`-n 4294967297` must be refused rather than truncated to 1).
 
 `prun_common()` is the tool body: `PMIx_tool_init` (with whatever DVM
 search directive the user gave), register event handlers for job

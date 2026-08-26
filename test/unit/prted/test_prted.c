@@ -1036,6 +1036,147 @@ static int check_envar_app(const char *desc, prte_pmix_app_t *app,
     return failures;
 }
 
+/*
+ * The --prefix / --pmix-prefix / --app-prefix conflict checks in
+ * create_app(), driven through prte_parse_locals().
+ *
+ * The pmix-prefix check counted instances of PRTE_CLI_PREFIX while walking
+ * PRTE_CLI_PMIX_PREFIX's values.  That both skipped the check whenever no
+ * --prefix was given - so conflicting --pmix-prefix values were silently
+ * accepted and the first one used - and walked the value array past its
+ * NULL terminator whenever more --prefix values were given than
+ * --pmix-prefix ones, which segfaulted the tool.
+ */
+typedef struct {
+    const char *desc;
+    const char *argv[12];
+    bool accept;
+    const char *prte_prefix;  /* expected PRTE_PREFIX in jobdata, or NULL */
+    const char *pmix_prefix;  /* expected PMIX_PREFIX in jobdata, or NULL */
+} prefix_case_t;
+
+static prefix_case_t prefix_cases[] = {
+    {"prefix/two-prte-one-pmix",
+     {"prterun", "--prefix", "/opt/x", "--prefix", "/opt/x",
+      "--pmix-prefix", "/opt/y", "hostname", NULL},
+     true, "/opt/x", "/opt/y"},
+    {"prefix/pmix-conflict",
+     {"prterun", "--pmix-prefix", "/opt/a", "--pmix-prefix", "/opt/b",
+      "hostname", NULL},
+     false, NULL, NULL},
+    {"prefix/pmix-repeat-agrees",
+     {"prterun", "--pmix-prefix", "/opt/a", "--pmix-prefix", "/opt/a",
+      "hostname", NULL},
+     true, NULL, "/opt/a"},
+    {"prefix/prte-conflict",
+     {"prterun", "--prefix", "/opt/a", "--prefix", "/opt/b",
+      "hostname", NULL},
+     false, NULL, NULL},
+    {"prefix/prte-repeat-agrees",
+     {"prterun", "--prefix", "/opt/a", "--prefix", "/opt/a",
+      "hostname", NULL},
+     true, "/opt/a", NULL},
+    {NULL, {NULL}, false, NULL, NULL}
+};
+
+static const char *find_jobdata(pmix_list_t *jobdata, const char *key)
+{
+    prte_info_item_t *item;
+
+    PMIX_LIST_FOREACH(item, jobdata, prte_info_item_t) {
+        if (PMIx_Check_key(item->info.key, key)) {
+            return item->info.value.data.string;
+        }
+    }
+    return NULL;
+}
+
+static int test_prefix_conflicts(void)
+{
+    prte_schizo_base_module_t *schizo;
+    prefix_case_t *c;
+    pmix_list_t apps, jobdata;
+    const char *got;
+    int failures = 0, rc;
+    char buf[128];
+
+    schizo = envar_test_schizo();
+    if (NULL == schizo) {
+        return 1;
+    }
+
+    for (c = prefix_cases; NULL != c->desc; c++) {
+        PMIX_CONSTRUCT(&apps, pmix_list_t);
+        PMIX_CONSTRUCT(&jobdata, pmix_list_t);
+        rc = prte_parse_locals(schizo, &apps, (char **) c->argv,
+                               NULL, NULL, &jobdata, NULL);
+        snprintf(buf, sizeof(buf), "%s/rc", c->desc);
+        CHECK(buf, c->accept == (PRTE_SUCCESS == rc));
+        if (c->accept && PRTE_SUCCESS == rc) {
+            got = find_jobdata(&jobdata, "PRTE_PREFIX");
+            snprintf(buf, sizeof(buf), "%s/prte-prefix", c->desc);
+            CHECK(buf, (NULL == c->prte_prefix)
+                           ? (NULL == got)
+                           : (NULL != got && 0 == strcmp(got, c->prte_prefix)));
+            got = find_jobdata(&jobdata, PMIX_PREFIX);
+            snprintf(buf, sizeof(buf), "%s/pmix-prefix", c->desc);
+            CHECK(buf, (NULL == c->pmix_prefix)
+                           ? (NULL == got)
+                           : (NULL != got && 0 == strcmp(got, c->pmix_prefix)));
+        }
+        PMIX_LIST_DESTRUCT(&jobdata);
+        PMIX_LIST_DESTRUCT(&apps);
+    }
+
+    return failures;
+}
+
+/*
+ * "-n <value>" has to be a number that fits an int.  Anything else read as
+ * 0 through strtol, which is the spelling of "let the mapping policy decide"
+ * - so a misspelled count silently launched some other number of processes.
+ */
+static int test_nprocs(void)
+{
+    prte_schizo_base_module_t *schizo;
+    pmix_list_t apps;
+    prte_pmix_app_t *app;
+    int failures = 0, rc;
+    size_t n;
+    const char *bad[] = {"four", "", "2x", " 2", "-1", "4294967297", NULL};
+    const char *good_argv[] = {"prterun", "-n", "6", "hostname", NULL};
+
+    schizo = envar_test_schizo();
+    if (NULL == schizo) {
+        return 1;
+    }
+
+    for (n = 0; NULL != bad[n]; n++) {
+        const char *argv[] = {"prterun", "-n", bad[n], "hostname", NULL};
+        char buf[96];
+
+        PMIX_CONSTRUCT(&apps, pmix_list_t);
+        rc = prte_parse_locals(schizo, &apps, (char **) argv,
+                               NULL, NULL, NULL, NULL);
+        snprintf(buf, sizeof(buf), "nprocs/reject-\"%s\"", bad[n]);
+        CHECK(buf, PRTE_SUCCESS != rc);
+        PMIX_LIST_DESTRUCT(&apps);
+    }
+
+    PMIX_CONSTRUCT(&apps, pmix_list_t);
+    rc = prte_parse_locals(schizo, &apps, (char **) good_argv,
+                           NULL, NULL, NULL, NULL);
+    CHECK("nprocs/accept-rc", PRTE_SUCCESS == rc);
+    CHECK("nprocs/accept-count", 1 == pmix_list_get_size(&apps));
+    if (1 == pmix_list_get_size(&apps)) {
+        app = (prte_pmix_app_t *) pmix_list_get_first(&apps);
+        CHECK("nprocs/accept-value", 6 == app->app.maxprocs);
+    }
+    PMIX_LIST_DESTRUCT(&apps);
+
+    return failures;
+}
+
 static int test_envar_order(int *nskipped)
 {
     prte_schizo_base_module_t *schizo;
@@ -2274,6 +2415,8 @@ int main(void)
     failures += test_job_info_cache();
     failures += test_session_time();
     failures += test_directive_distribution();
+    failures += test_prefix_conflicts();
+    failures += test_nprocs();
     failures += test_envar_order(&skipped);
     failures += test_envar_order_permutations(&skipped);
     failures += test_envar_order_mpmd(&skipped);
