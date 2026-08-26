@@ -344,8 +344,11 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
         PMIX_CONSTRUCT(&procarray, pmix_pointer_array_t);
         pmix_pointer_array_init(&procarray, num_replies, PRTE_GLOBAL_ARRAY_MAX_SIZE, 16);
 
-        /* unpack the proc names into the array */
+        /* unpack the proc names into the array - reset the count first
+         * rather than inheriting whatever the command unpack left in it */
+        n = 1;
         while (PMIX_SUCCESS == (ret = PMIx_Data_unpack(NULL, buffer, &proc, &n, PMIX_PROC))) {
+            n = 1;
             proct = PMIX_NEW(prte_proc_t);
             PMIX_LOAD_PROCID(&proct->name, proc.nspace, proc.rank);
 
