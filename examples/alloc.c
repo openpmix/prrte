@@ -185,7 +185,7 @@ int main(int argc, char **argv)
         DEBUG_CONSTRUCT_MYQUERY(&mydata);
         PMIX_INFO_CREATE(info, 2);
         PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NUM_NODES, &nnodes, PMIX_UINT64);
-        PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_ID, myallocation, PMIX_STRING);
+        PMIX_INFO_LOAD(&info[1], PMIX_ALLOC_ID, myallocation, PMIX_STRING);
         if (PMIX_SUCCESS
             != (rc = PMIx_Allocation_request_nb(PMIX_ALLOC_NEW, info, 2, infocbfunc, &mydata))) {
             fprintf(stderr, "Client ns %s rank %d: PMIx_Allocation_request_nb failed: %d\n",
