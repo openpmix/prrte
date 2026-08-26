@@ -449,10 +449,20 @@ static void vm_ready(int fd, short args, void *cbdata)
         }
     }
     if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, caddy->jdata->nspace)) {
+        bool first_ready = !prte_dvm_started;
+
         prte_dvm_ready = true;
-        /* notify that the vm is ready */
+        /* and latch that we have started at least once - unlike the flag
+         * above, this one is never cleared.  prte_dvm_ready goes false again
+         * on every grow, session instantiate and teardown, so it says "is a
+         * size change in flight", not "have we started" */
+        prte_dvm_started = true;
+        /* notify that the vm is ready - once.  This state is re-entered at
+         * the end of every grow, and a persistent DVM announcing itself ready
+         * again each time a node is added is noise on a terminal the user is
+         * no longer watching for startup */
         if (0 > prte_state_base.parent_fd) {
-            if (prte_state_base.ready_msg && prte_persistent) {
+            if (first_ready && prte_state_base.ready_msg && prte_persistent) {
                 fprintf(stdout, "DVM ready\n");
                 fflush(stdout);
             }

@@ -73,6 +73,7 @@ char *prte_data_server_uri = NULL;
 char *prte_tool_basename = NULL;
 char *prte_tool_actual = NULL;
 bool prte_dvm_ready = false;
+bool prte_dvm_started = false;
 pmix_pointer_array_t *prte_cache = NULL;
 
 int prte_dvm_launch_fence = 0;
