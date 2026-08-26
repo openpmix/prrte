@@ -519,12 +519,13 @@ for `PMIX_ALLOC_NODE_LIST`.
 `PMIX_ALLOC_INHERITANCE` has **two** legitimate spellings and both must be
 accepted: `PMIX_ALLOC_INHERIT`, the attribute's own type and the one the PMIx
 documentation's example uses, and a plain integer of some width.
-`PMIx_Value_get_number()` knows only the second, so it cannot be the whole
-answer on its own. `prte_pmix_value_get_inheritance()`
-([`src/pmix/pmix-internal.h`](../../pmix/pmix-internal.h)) is the single
-reader — the disposition decides whether a reservation's nodes go back to the
-scheduler, so it must be the one the caller sent and not one a type confusion
-produced.
+`PMIx_Value_get_number()` takes either — name `PMIX_ALLOC_INHERIT` as the
+destination type and it writes the `uint8_t` the disposition is. Read it that
+way and never off a fixed union member: the disposition decides whether a
+reservation's nodes go back to the scheduler, so it must be the one the caller
+sent and not one a type confusion produced. PRRTE carried its own reader for
+this until openpmix#4198 taught `PMIx_Value_get_number` the named integer
+types; a PMIx older than that refuses the documented spelling.
 
 ### What a failed request must leave behind
 

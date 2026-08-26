@@ -918,11 +918,11 @@ The parts that matter when editing this file:
   before anyone has asked who is calling). `get_string_directive()` is the one
   place they are read; keep it that way. `PMIX_ALLOC_INHERITANCE` is the quiet
   half of the same rule — it decides whether the session's nodes are handed
-  *away* to the scheduler, so it is read with
-  `prte_pmix_value_get_inheritance()` rather than off a fixed union member;
-  that reader takes `PMIX_ALLOC_INHERIT`, the attribute's own type and the
-  one PMIx's documentation uses, which `PMIx_Value_get_number()` does not
-  know. And a `PMIX_NSPACE` must name something: an
+  *away* to the scheduler, so it is read with `PMIx_Value_get_number()`,
+  naming `PMIX_ALLOC_INHERIT`, rather than off a fixed union member. PMIx
+  accepts that value under the attribute's own type and as a plain integer
+  of any width that can hold it, so a host need not care which spelling the
+  caller chose. And a `PMIX_NSPACE` must name something: an
   empty one is PMIx's wildcard, so it selects every job in the session instead
   of none.
 - **`set_response()` may run only ONCE per parsed request.** It frees the info

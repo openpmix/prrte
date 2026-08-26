@@ -570,32 +570,6 @@ pmix_status_t prte_pmix_convert_proc_state_to_error(int state)
     }
 }
 
-bool prte_pmix_value_get_inheritance(const pmix_value_t *value,
-                                     uint8_t *inherit)
-{
-    pmix_status_t rc;
-
-    if (NULL == value) {
-        return false;
-    }
-#if defined(PMIX_ALLOC_INHERIT)
-    /* the attribute's own type - the spelling the PMIx documentation uses,
-     * and the one PMIX_VALUE_GET_NUMBER does not recognize */
-    if (PMIX_ALLOC_INHERIT == value->type) {
-        *inherit = (uint8_t) value->data.inheritance;
-        return true;
-    }
-#endif
-    /* a plain integer of any width is also acceptable: the value is a small
-     * enumeration and a caller has every reason to hand it over as one.
-     * PMIx_Value_get_number refuses one that will not fit in a uint8_t
-     * without changing sign or losing precision, which is what we want -
-     * a disposition is a small enumeration and a value outside it names
-     * nothing. */
-    rc = PMIx_Value_get_number(value, inherit, PMIX_UINT8);
-    return (PMIX_SUCCESS == rc);
-}
-
 /* handler side of prte_pmix_shifted_wakeup - executes on the
  * PRRTE progress thread */
 static void shifted_wakeup(int fd, short args, void *cbdata)
