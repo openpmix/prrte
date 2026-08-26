@@ -447,6 +447,11 @@ input list.** Walk it carefully before touching allocation code:
   `SLOTS_GIVEN`, `NONUSABLE`) for that display.
 - `prte_ras_base_display_cpus(jdata, nodelist)` prints available
   processors per package for the requested nodes (`--display-cpus`).
+  It resolves each requested name with `prte_node_match()`, which is the one
+  place that knows how a name reaches a pool entry — the local-host aliases,
+  the per-node alias list, and the fact that an entry may carry no name at
+  all. It used to spell that walk out for itself and had already drifted:
+  it compared `node->name` with no NULL check.
   **Its parseable form has to parse.** It used to emit
   `<processors node=x>` — an unquoted attribute value — wrapping
   `<pkg=0 cpus=0-7>`, which is not an element at all, while
@@ -478,6 +483,71 @@ elastic-DVM or PMIx_Allocation code:
 | `prte_ras_base_shrink_complete()` | Offers a drained `prte_shrink_campaign_t` to every module's `shrink_complete`. |
 | `prte_ras_base_teardown_reservation()` | Drop a reservation's hold on its nodes (clear `node->session` back to the default pool), deregister it, and — if `return_to_scheduler` — shrink its daemon-carrying nodes out of the DVM. |
 | `prte_ras_base_check_reservations_on_term()` | On namespace termination, fire each reservation's inheritance disposition (`PMIX_ALLOC_INHERIT_NONE`/`CHILD`/`CHILD_DEFAULT`/`DEFAULT`). |
+
+### A request's directives arrive from a client and are typed by a client
+
+`req->info` is the requester's own array: `pmix_server_alloc_fn` hands the
+client's `pmix_info_t[]` straight through, and nothing between there and here
+inspects it. So **never read `value.data.<member>` without first establishing
+the type**. A `PMIX_ALLOC_ID` sent as an integer, taken as `.string`, is a
+wild pointer, and the first `strdup`/`strcmp`/`PMIX_LOAD_NSPACE` of it faults
+the **HNP** — i.e. any process or tool that can connect to the DVM could take
+it down with a one-line allocation request. `ras_base_get_string()` is the
+string reader every directive in `ras_base_allocate.c` goes through, and it
+answers `PMIX_ERR_BAD_PARAM` rather than ignoring a mistyped key, because a
+caller that mistyped one needs to be told and not quietly handed a
+reservation it cannot name. `prte_ras_base_parse_node_list()` does the same
+for `PMIX_ALLOC_NODE_LIST`.
+
+`PMIX_ALLOC_INHERITANCE` has **two** legitimate spellings and both must be
+accepted: `PMIX_ALLOC_INHERIT`, the attribute's own type and the one the PMIx
+documentation's example uses, and a plain integer of some width.
+`PMIX_VALUE_GET_NUMBER` knows only the second, so it cannot be the whole
+answer on its own. `prte_pmix_value_get_inheritance()`
+([`src/pmix/pmix-internal.h`](../../pmix/pmix-internal.h)) is the single
+reader — the disposition decides whether a reservation's nodes go back to the
+scheduler, so it must be the one the caller sent and not one a type confusion
+produced.
+
+### What a failed request must leave behind
+
+- **A `PMIX_ALLOC_NEW` that fails after `ras_base_prepare_grow()` created its
+  reservation unwinds it** (`prte_ras_base_teardown_reservation` +
+  `PMIX_RELEASE`, exactly as `pmix_server_session.c` unwinds a half-built
+  session). Otherwise the requester is told the request failed, never learns
+  the allocation id, and can therefore never release a reservation that is
+  still registered and still holding a reference on the owner job. Nodes an
+  earlier `PMIX_ALLOC_NODE_LIST` already contributed stay in the pool — a
+  pool index is a `PMIX_NODEID` and is never reused — and revert to the
+  general pool still marked `PRTE_NODE_STATE_ADDED`, so the next grow adopts
+  them, which is the right answer for nodes the allocator did grant.
+- **A shrink that names no daemon is never broadcast.** A release may
+  legitimately name only nodes that carry none — one a previous shrink handed
+  back, one the DVM was never extended onto. Sending the command anyway is
+  not harmless: the receiver sizes its target array from the packed count and
+  PMIx refuses an unpack of zero values, so *every* daemon in the DVM logs
+  `PMIX_ERR_UNPACK_INADEQUATE_SPACE` for a command that asked nothing of it.
+  The guard lives in `ras_base_send_dvm_shrink`, which is the one place every
+  caller passes through.
+
+### Tearing a reservation down does not free it
+
+`prte_ras_base_teardown_reservation()` gives the nodes back, drops the owners
+and the retained owner job, disarms the session's time limit, and removes the
+session from `prte_sessions` — but it does **not** release the
+`prte_session_t`. It cannot: `prte_job_t::session` and `::target_sessions`
+are borrowed pointers taken without a reference, so a job still running in
+the reservation would be left holding a dangling one. Deregistering also puts
+the object beyond `prte_finalize`'s sweep over `prte_sessions`, so it is
+genuinely leaked, one small object per reservation ever torn down. `docs/todo.rst`
+records what fixing it properly needs. Disarming the timer *is* done here and
+is load-bearing: the limit is on a lifetime that has just ended, and a timer
+left armed fires `session_timeout_cb()` on a reservation that no longer
+exists and terminates whatever jobs are still recorded in `session->jobs`.
+
+The two callers that *can* release — `pmix_server_session.c`'s `error:` path
+and the grow unwind above — do so because the session they are discarding was
+built moments earlier and no job has ever seen it.
 
 **A reservation requested by a tool lives and dies with that tool**, and
 that hangs on the daemon being told when the tool goes. It is not a child,
@@ -585,6 +655,11 @@ documented in each component's guide.
   (a node just added by a grow, or the whole allocation before
   `LAUNCH_DAEMONS`). Both `--display-topo` and `--display-cpus` are pool
   walks.
+- **`PMIx_Argv_split()` answers "nothing" with NULL, not with an empty
+  array.** A string that is empty or all delimiters — `""`, `";;"` — splits
+  to a NULL `char**`, so every caller must check before indexing it. This is
+  reachable from user input: `--display topo=';'` used to fault the HNP in
+  `prte_ras_base_allocate`'s topology dump.
 - **A parser reading an RM's file or env must tolerate malformed input.**
   These run on the HNP, so a NULL deref on a blank line takes the whole
   DVM down. `strtok_r` returns NULL for a short line; `fgets` does not
