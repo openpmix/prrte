@@ -533,6 +533,80 @@ static int test_proc_state_to_error(void)
 }
 
 /* ------------------------------------------------------------------ */
+/* PMIX_ALLOC_INHERITANCE reader                                       */
+/* ------------------------------------------------------------------ */
+
+/* prte_pmix_value_get_inheritance() decides what becomes of a reservation's
+ * nodes when it is reclaimed -- handed back to the scheduler, or returned to
+ * the DVM's general pool -- from a value a client sent.  Two things it must
+ * get right, and each was wrong somewhere before this test existed:
+ *
+ *  - PMIX_ALLOC_INHERIT is the attribute's OWN type and the spelling the PMIx
+ *    documentation's example uses, but it is not one PMIX_VALUE_GET_NUMBER
+ *    knows, so code that reached for that macro alone refused the canonical
+ *    request outright (PMIX_ERR_BAD_PARAM).
+ *
+ *  - A value of a type that carries no number at all must be REFUSED, not
+ *    read off a fixed union member.  This arrives over the wire, so any
+ *    connected tool can send one, and the disposition it would produce is the
+ *    destructive one as easily as the harmless one.
+ */
+static int test_inheritance_reader(void)
+{
+    int failures = 0;
+    pmix_value_t v;
+    uint8_t out;
+
+    PMIX_VALUE_CONSTRUCT(&v);
+
+#if defined(PMIX_ALLOC_INHERIT)
+    /* the canonical spelling */
+    v.type = PMIX_ALLOC_INHERIT;
+    v.data.inheritance = 3;
+    out = 0xff;
+    CHECK("PMIX_ALLOC_INHERIT accepted",
+          prte_pmix_value_get_inheritance(&v, &out) && 3 == out);
+#endif
+
+    /* the numeric spellings a caller may reasonably use instead */
+    v.type = PMIX_UINT8;
+    v.data.uint8 = 2;
+    out = 0xff;
+    CHECK("uint8 accepted", prte_pmix_value_get_inheritance(&v, &out) && 2 == out);
+
+    v.type = PMIX_INT;
+    v.data.integer = 1;
+    out = 0xff;
+    CHECK("int accepted", prte_pmix_value_get_inheritance(&v, &out) && 1 == out);
+
+    v.type = PMIX_SIZE;
+    v.data.size = 0;
+    out = 0xff;
+    CHECK("size accepted", prte_pmix_value_get_inheritance(&v, &out) && 0 == out);
+
+    /* and the ones that carry no number: refused, and the caller's variable
+     * left alone so a rejected value cannot leak into the disposition */
+    v.type = PMIX_STRING;
+    v.data.string = (char *) "child";
+    out = 0xff;
+    CHECK("string refused", !prte_pmix_value_get_inheritance(&v, &out) && 0xff == out);
+
+    v.type = PMIX_BOOL;
+    v.data.flag = true;
+    out = 0xff;
+    CHECK("bool refused", !prte_pmix_value_get_inheritance(&v, &out) && 0xff == out);
+
+    v.type = PMIX_UNDEF;
+    out = 0xff;
+    CHECK("undef refused", !prte_pmix_value_get_inheritance(&v, &out) && 0xff == out);
+
+    out = 0xff;
+    CHECK("NULL value refused", !prte_pmix_value_get_inheritance(NULL, &out) && 0xff == out);
+
+    return failures;
+}
+
+/* ------------------------------------------------------------------ */
 
 int main(void)
 {
@@ -547,6 +621,7 @@ int main(void)
     failures += test_status_roundtrip();
     failures += test_job_state_to_error();
     failures += test_proc_state_to_error();
+    failures += test_inheritance_reader();
 
     if (0 == failures) {
         fprintf(stdout, "PASSED all pmix shim unit tests\n");
