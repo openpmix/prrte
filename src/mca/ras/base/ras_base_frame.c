@@ -56,7 +56,6 @@ prte_ras_base_t prte_ras_base = {
     .total_slots_alloc = 0,
     .multiplier = 0,
     .launch_orted_on_hn = false,
-    .simulated = false,
     .allocation_established = false
 };
 
@@ -100,9 +99,9 @@ static int prte_ras_base_close(void)
 }
 
 /**
- *  * Function for finding and opening either all MCA components, or the one
- *   * that was specifically requested via a MCA parameter.
- *    */
+ * Function for finding and opening either all MCA components, or the one
+ * that was specifically requested via a MCA parameter.
+ */
 static int prte_ras_base_open(pmix_mca_base_open_flag_t flags)
 {
     /* init the globals.  The static initializers above leave each list's

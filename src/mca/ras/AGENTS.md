@@ -608,7 +608,6 @@ deviation*.)
 | `total_slots_alloc` | Sum of `slots` across the pool. |
 | `multiplier` | `ras_base_multiplier` — fabricate N daemons/node to simulate scale (default 1). |
 | `launch_orted_on_hn` | `ras_base_launch_orted_on_hn` — run a daemon on the head node. |
-| `simulated` | Set when the simulator is in play. |
 | `allocation_established` | Latched true once the first allocation completes; drives the reuse guard. |
 
 MCA params: `prte_ras_base_multiplier`,
