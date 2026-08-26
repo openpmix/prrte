@@ -236,6 +236,38 @@ odls consults ahead of its MCA value.  There is already a per-job
 follow; what is absent is the DVM-wide equivalent and the decision about
 which of the two should win.
 
+**A tool forwards signals from the signal handler itself, which is not
+async-signal-safe.**  Every forwardable signal is forwarded by default, and
+both tool bodies take them with ``signal()`` and do the work in the handler:
+``signal_forward_callback()`` in ``src/prted/prun_common.c`` calls
+``PMIx_Job_control``, and its counterpart in ``src/prted/prte.c`` calls
+``PMIx_Job_control_nb``.  Neither is async-signal-safe - both take locks,
+allocate, and write to a socket - and neither is the ``fprintf`` beside
+them.
+
+Note what the non-blocking form did and did not fix.  Moving ``prte.c`` to
+``PMIx_Job_control_nb`` removed a *different* deadlock: the blocking call
+was made from the thread that drives ``prte_event_base``, and waited for a
+completion only that thread could produce.  This one is still open, and it
+is open in both files.  Neither PMIx nor PRRTE blocks signals in its
+progress threads, so the kernel may deliver to any thread - including one
+already inside PMIx holding the lock the handler is about to want.  The
+window is real rather than theoretical: the main thread is inside PMIx for
+the whole of ``PMIx_Spawn``, which covers mapping and launching the job.
+
+The fix is not a smaller call.  It is to stop doing the work in the
+handler: the handler should ``write()`` a byte to a self-pipe - which is
+async-signal-safe and is already the pattern ``prte.c``'s
+``abort_signal_callback()`` uses for ctrl-c, via ``term_pipe`` - and the
+forwarding should happen on a thread that can safely make the call.  That
+is easy in ``prte.c``, which drives an event base and can take a signal
+event on it.  It is the harder half in ``prun_common.c``, whose main thread
+spends the job parked in ``PRTE_PMIX_WAIT_THREAD``: it has no event base of
+its own, so it needs either one or a thread whose job is to drain that
+pipe.  Because the answer differs between the two files and changes how
+every PRRTE tool takes a signal, it is recorded here rather than done
+alongside an unrelated fix.
+
 **Two resource-usage queries are recognized and answer nothing.**
 ``PMIX_QUERY_PROC_RESOURCE_USAGE`` and ``PMIX_QUERY_NODE_RESOURCE_USAGE``
 have arms of their own in ``_query()``
