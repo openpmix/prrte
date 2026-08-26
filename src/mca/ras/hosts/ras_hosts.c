@@ -90,6 +90,10 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
         /* Record that the rankfile mapping policy has been selected */
         if (NULL == jdata->map) {
             jdata->map = PMIX_NEW(prte_job_map_t);
+            if (NULL == jdata->map) {
+                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                return PRTE_ERR_OUT_OF_RESOURCE;
+            }
         }
         PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_GIVEN);
         PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYUSER);
@@ -137,9 +141,9 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
      * through them to see if anything is there. The parser will
      * add the nodes found in each hostfile to our list - i.e.,
      * the resulting list contains the UNION of all nodes specified
-     * in hosthosts from across all app_contexts
+     * in hostfiles from across all app_contexts
      *
-     * Note that any relative node syntax found in the hosthosts will
+     * Note that any relative node syntax found in the hostfiles will
      * generate an error in this scenario, so only non-relative syntax
      * can be present
      */
@@ -184,7 +188,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
         }
     }
 
-    /* if something was found in the hosthosts(s), then we are done
+    /* if something was found in the hostfile(s), then we are done
      */
     if (!pmix_list_is_empty(nodes)) {
         return PRTE_SUCCESS;
