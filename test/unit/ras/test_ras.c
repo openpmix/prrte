@@ -900,6 +900,84 @@ static int test_pmix_gate(void)
 }
 
 /*
+ * ras/hosts allocate(): a hostfile specification naming no file must be
+ * refused, not indexed.
+ *
+ * PMIx_Argv_split answers "nothing" with NULL rather than with an empty
+ * array, so "" and "," both split to NULL and the loop walking the result
+ * dereferenced address zero.  The command line reaches this: the persistent
+ * branch of prte.c joins --hostfile's values raw (the prterun branch
+ * absolutizes each one first, which is why only prte gets here with an empty
+ * string), so `prte --hostfile ''` and `prte --hostfile ,` both segfaulted
+ * the DVM master inside prte_ras_base_allocate - before there was a node
+ * pool, a daemon or an errmgr to fail over.
+ *
+ * Driven through the module vtable rather than by naming allocate(): it is
+ * static, and reaching the component the way the base does is also the only
+ * spelling that works whether it was linked statically or loaded as a
+ * plugin.
+ */
+static int test_hosts_empty_hostfile(void)
+{
+    int failures = 0;
+    pmix_mca_base_component_t *comp;
+    pmix_mca_base_module_t *module = NULL;
+    prte_ras_base_module_t *mod;
+    int pri = -1, rc;
+    size_t n;
+    const char *specs[] = {"", ",", ",,", NULL};
+
+    comp = find_ras_component("hosts");
+    if (NULL == comp) {
+        fprintf(stdout, "SKIP test_hosts_empty_hostfile: ras/hosts not found\n");
+        return 0;
+    }
+    CHECK("hosts: has a query function", NULL != comp->pmix_mca_query_component);
+    if (NULL == comp->pmix_mca_query_component) {
+        return failures;
+    }
+    rc = comp->pmix_mca_query_component(&module, &pri);
+    CHECK("hosts: always answers the query", PRTE_SUCCESS == rc && NULL != module);
+    CHECK("hosts: at priority 1", 1 == pri);
+    if (NULL == module) {
+        return failures;
+    }
+    mod = (prte_ras_base_module_t *) module;
+    CHECK("hosts: has an allocate", NULL != mod->allocate);
+    if (NULL == mod->allocate) {
+        return failures;
+    }
+
+    for (n = 0; NULL != specs[n]; n++) {
+        prte_job_t *jdata;
+        prte_app_context_t *app;
+        pmix_list_t nodes;
+
+        jdata = PMIX_NEW(prte_job_t);
+        app = PMIX_NEW(prte_app_context_t);
+        app->idx = pmix_pointer_array_add(jdata->apps, app);
+        jdata->num_apps = 1;
+        prte_set_attribute(&app->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_GLOBAL,
+                           (void *) specs[n], PMIX_STRING);
+        PMIX_CONSTRUCT(&nodes, pmix_list_t);
+
+        rc = mod->allocate(jdata, &nodes);
+        CHECK("hosts: a hostfile naming no file is refused",
+              PRTE_SUCCESS != rc && PRTE_ERR_TAKE_NEXT_OPTION != rc);
+        CHECK("hosts: ... and contributes no nodes",
+              0 == pmix_list_get_size(&nodes));
+
+        PMIX_LIST_DESTRUCT(&nodes);
+        PMIX_RELEASE(jdata);
+    }
+
+    if (0 == failures) {
+        fprintf(stdout, "PASSED test_hosts_empty_hostfile\n");
+    }
+    return failures;
+}
+
+/*
  * ras/slurm, exercised the way the base exercises it: query the component
  * for a module, then drive that module's allocate().
  *
@@ -1756,6 +1834,7 @@ int main(void)
      * selection made with no SLURM allocation in the environment -- so
      * nothing has called slurm's init() before this does */
     failures += test_pmix_gate();
+    failures += test_hosts_empty_hostfile();
     failures += test_slurm_allocation();
 
     /* PMIx last, and after the frameworks are closed: finalizing it unloads

@@ -17,6 +17,8 @@
 #include "types.h"
 
 #include <ctype.h>
+#include <errno.h>
+#include <stdint.h>
 
 #include "src/class/pmix_list.h"
 #include "src/util/pmix_show_help.h"
@@ -47,6 +49,16 @@ prte_ras_base_module_t prte_ras_hosts_module = {
     .finalize = finalize
 };
 
+/* Reporting a hard error is the DRIVER's job, not ours.
+ *
+ * prte_ras_base_allocate() reads anything outside its return protocol as a
+ * real error and answers it with PRTE_ERROR_LOG plus
+ * PRTE_ACTIVATE_JOB_STATE(PRTE_JOB_STATE_ALLOC_FAILED).  Two of the five
+ * error paths below used to activate that state as well, so a bad hostfile
+ * ran the DVM's whole failure teardown twice - two job_errors for the daemon
+ * job, and with it two terminate_orteds()/DAEMONS_TERMINATED activations -
+ * while the other three paths, and every other ras component, returned the
+ * code and left the reporting alone.  Return the error; the driver has it. */
 static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 {
     int rc, i, j;
@@ -144,12 +156,27 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
             /* hostfile was specified - parse it and add it to the list */
             hostlist = PMIx_Argv_split(hosts, ',');
+            if (NULL == hostlist) {
+                /* PMIx_Argv_split answers "nothing" with NULL, not with an
+                 * empty array, so a value that is empty or all separators
+                 * yields no tokens at all and indexing the result faults the
+                 * DVM master before it has a node pool to fail over.  That is
+                 * a live command line: the persistent branch of prte.c joins
+                 * the option's values raw, so "prte --hostfile ''" and
+                 * "prte --hostfile ," both arrive here as a string with no
+                 * filename in it.  (The prterun branch absolutizes each value
+                 * against the tool's cwd first, which is why only prte gets
+                 * here with one.)  The user asked for specific hosts and named
+                 * none, so say so rather than carrying on with an allocation
+                 * they did not ask for. */
+                prte_show_help("help-hostfile.txt", "no-hostfile", true, hosts);
+                free(hosts);
+                return PRTE_ERR_SILENT;
+            }
             free(hosts);
             for (j=0; NULL != hostlist[j]; j++) {
                 if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(nodes, hostlist[j]))) {
                     PMIx_Argv_free(hostlist);
-                    /* set an error event */
-                    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
                     return rc;
                 }
             }
@@ -171,7 +198,6 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
         /* a default hostfile was provided - parse it */
         if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(nodes, prte_default_hostfile))) {
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             return rc;
         }
     }
@@ -210,23 +236,66 @@ static int finalize(void)
  * nodes and which therefore does not come from here. */
 static void adjust_slots(prte_node_t *nptr, int slots)
 {
-    int before = nptr->slots;
+    int32_t before = nptr->slots;
+    /* sum in a type that cannot overflow on the inputs: both operands are
+     * int32_t and the clamp below cannot rescue a sum that has already
+     * overflowed - signed overflow is undefined, not a value to be clamped.
+     * int64_t rather than long, which is 32 bits in an ILP32 build. */
+    int64_t adjusted = (int64_t) before + (int64_t) slots;
 
-    nptr->slots += slots;
-    if (0 > nptr->slots) {
-        nptr->slots = 0;
-    } else if (0 < nptr->slots_max && nptr->slots > nptr->slots_max) {
-        nptr->slots = nptr->slots_max;
+    if (0 > adjusted) {
+        adjusted = 0;
+    } else if (0 < nptr->slots_max && adjusted > (int64_t) nptr->slots_max) {
+        adjusted = nptr->slots_max;
     }
+    nptr->slots = (int32_t) adjusted;
     prte_ras_base.total_slots_alloc += (nptr->slots - before);
+}
+
+/* Read a hostfile slot count.
+ *
+ * The bare strtol() this replaces answered 0 for anything that is not a
+ * number, and 0 is a meaningful count here: an unrecognized "slots=" value
+ * gave the node zero slots AND set PRTE_NODE_FLAG_SLOTS_GIVEN, so it joined
+ * the DVM able to run nothing and was never re-sized from its topology.  It
+ * also truncated a long into an int, which matters because the sign is what
+ * the caller acts on: a value too large to fit could arrive with the sign the
+ * user did not write, and "a new node may not be given negative slots" is a
+ * refusal that then does not fire.
+ *
+ * Trailing text after the digits is tolerated only as whitespace, which is
+ * what the bare strtol() effectively did - this parser reads one keyword per
+ * line and ignores whatever follows the value. */
+static bool parse_slots(const char *value, int *result)
+{
+    char *endptr = NULL;
+    long l;
+
+    if ('+' != value[0] && '-' != value[0] &&
+        !isdigit((unsigned char) value[0])) {
+        return false;
+    }
+    errno = 0;
+    l = strtol(value, &endptr, 10);
+    if (0 != errno || NULL == endptr || endptr == value) {
+        return false;
+    }
+    if ('\0' != *endptr && !isspace((unsigned char) *endptr)) {
+        return false;
+    }
+    if (INT32_MAX < l || INT32_MIN > l) {
+        return false;
+    }
+    *result = (int) l;
+    return true;
 }
 
 static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
 {
     FILE *fp;
-    char *line, *cptr, *ptr, *nm;
-    bool addslots, found;
-    int slots, m, n;
+    char *line, *cptr, *ptr;
+    bool addslots;
+    int slots;
     prte_node_t *nptr, *node;
 
     /* We don't use the hostfile parsing code in src/util because it
@@ -296,47 +365,30 @@ static pmix_status_t process_hostfile(char *hostfile, pmix_list_t *nodes)
         if ('+' == *ptr || '-' == *ptr) {
             addslots = true;
         }
-        slots = strtol(ptr, NULL, 10);
+        if (!parse_slots(ptr, &slots)) {
+            prte_show_help("help-ras-base.txt", "ras-base:bad-slots", true,
+                           cptr, hostfile, ptr);
+            fclose(fp);
+            free(line);
+            return PMIX_ERR_BAD_PARAM;
+        }
 
 process:
-        // see if we have this node
-        found = false;
-        // does the name refer to me?
-        if (prte_check_host_is_local(cptr)) {
-            nm = prte_process_info.nodename;
+        /* See if we already have this node.
+         *
+         * prte_node_match() is the one place that knows how a name reaches a
+         * pool entry: it resolves a name that refers to this host to our
+         * canonical nodename, searches the per-node alias lists, and tolerates
+         * an entry that carries no name at all.  This used to spell that walk
+         * out for itself and had already drifted from it - it compared
+         * nptr->name with no NULL check, which is the same drift the framework
+         * guide records for --display-cpus. */
+        nptr = prte_node_match(NULL, cptr);
+        if (NULL != nptr) {
+            if (addslots) {
+                adjust_slots(nptr, slots);
+            }
         } else {
-            nm = cptr;
-        }
-
-        for (n = 0; !found && n < prte_node_pool->size; n++) {
-            nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n);
-            if (NULL == nptr) {
-                continue;
-            }
-            if (0 == strcmp(nm, nptr->name)) {
-                // we have the node
-                if (addslots) {
-                    adjust_slots(nptr, slots);
-                }
-                found = true;
-                break;
-            } else if (NULL != nptr->aliases) {
-                /* no choice but an exhaustive search - fortunately, these lists are short! */
-                for (m = 0; NULL != nptr->aliases[m]; m++) {
-                    /* match on nm, not cptr: if the name given refers to this
-                     * host it was resolved to our canonical nodename above, and
-                     * that is the spelling the pool's aliases carry */
-                    if (0 == strcmp(nm, nptr->aliases[m])) {
-                        if (addslots) {
-                            adjust_slots(nptr, slots);
-                        }
-                        found = true;
-                        break;
-                    }
-                }
-            }
-        }
-        if (!found) {
             // this is a new node - add it
             node = PMIX_NEW(prte_node_t);
             node->name = strdup(cptr);
