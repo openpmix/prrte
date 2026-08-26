@@ -587,8 +587,12 @@ bool prte_pmix_value_get_inheritance(const pmix_value_t *value,
     }
 #endif
     /* a plain integer of any width is also acceptable: the value is a small
-     * enumeration and a caller has every reason to hand it over as one */
-    PMIX_VALUE_GET_NUMBER(rc, value, *inherit, uint8_t);
+     * enumeration and a caller has every reason to hand it over as one.
+     * PMIx_Value_get_number refuses one that will not fit in a uint8_t
+     * without changing sign or losing precision, which is what we want -
+     * a disposition is a small enumeration and a value outside it names
+     * nothing. */
+    rc = PMIx_Value_get_number(value, inherit, PMIX_UINT8);
     return (PMIX_SUCCESS == rc);
 }
 

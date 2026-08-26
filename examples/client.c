@@ -260,7 +260,7 @@ nostop:
                 myproc.rank, rc);
         goto done;
     }
-    PMIX_VALUE_GET_NUMBER(rc, val, n, uint32_t);
+    rc = PMIx_Value_get_number(val, &n, PMIX_UINT32);
     fprintf(stderr, "Client %s:%d universe size %u\n", myproc.nspace, myproc.rank, n);
 
     /* get the number of procs in our job - univ size is the total number of allocated
@@ -270,7 +270,7 @@ nostop:
                 myproc.rank, rc);
         goto done;
     }
-    PMIX_VALUE_GET_NUMBER(rc, val, nprocs, uint32_t);
+    rc = PMIx_Value_get_number(val, &nprocs, PMIX_UINT32);
     PMIX_VALUE_RELEASE(val);
     fprintf(stderr, "Client %s:%d num procs %d\n", myproc.nspace, myproc.rank, nprocs);
 
@@ -279,7 +279,7 @@ nostop:
         fprintf(stderr, "Client ns %s rank %d: PMIx_Get sessionID failed: %d\n", myproc.nspace,
                 myproc.rank, rc);
     } else {
-        PMIX_VALUE_GET_NUMBER(rc, val, sid, uint32_t);
+        rc = PMIx_Value_get_number(val, &sid, PMIX_UINT32);
         if (PMIX_SUCCESS != rc) {
             fprintf(stderr, "Session ID was not a number: %s\n", PMIx_Error_string(rc));
             goto done;
@@ -303,7 +303,7 @@ nostop:
                 myproc.rank, rc);
         goto done;
     }
-    PMIX_VALUE_GET_NUMBER(rc, val, n, uint32_t);
+    rc = PMIx_Value_get_number(val, &n, PMIX_UINT32);
     PMIX_VALUE_RELEASE(val);
     fprintf(stderr, "Client %s:%d num local procs %d\n", myproc.nspace, myproc.rank, n);
 

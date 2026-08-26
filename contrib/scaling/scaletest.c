@@ -229,7 +229,7 @@ int main(int argc, char **argv)
 
     rc = PMIx_Get(&wildcard, PMIX_JOB_SIZE, NULL, 0, &vptr);
     if (PMIX_SUCCESS == rc && NULL != vptr) {
-        PMIX_VALUE_GET_NUMBER(rc, vptr, nprocs, uint32_t);
+        rc = PMIx_Value_get_number(vptr, &nprocs, PMIX_UINT32);
         PMIX_VALUE_RELEASE(vptr);
     }
     if (PMIX_SUCCESS != rc) {

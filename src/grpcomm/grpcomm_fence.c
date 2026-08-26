@@ -593,7 +593,7 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
      * values back into these entries would say nothing to anybody. */
     for (n=0; n < ninfo; n++) {
         if (PMIX_CHECK_KEY(&info[n], PMIX_TIMEOUT)) {
-            PMIX_VALUE_GET_NUMBER(rc, &info[n].value, timeout, int);
+            rc = PMIx_Value_get_number(&info[n].value, &timeout, PMIX_INT);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_INFO_FREE(info, ninfo);
@@ -604,7 +604,7 @@ void prte_grpcomm_fence_recv(int status, pmix_proc_t *sender,
             }
 
         } else if (PMIX_CHECK_KEY(&info[n], PMIX_LOCAL_COLLECTIVE_STATUS)) {
-            PMIX_VALUE_GET_NUMBER(rc, &info[n].value, st, pmix_status_t);
+            rc = PMIx_Value_get_number(&info[n].value, &st, PMIX_STATUS);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_INFO_FREE(info, ninfo);

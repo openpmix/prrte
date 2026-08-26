@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
                 myproc.rank, PMIx_Error_string(rc));
         goto done;
     }
-    PMIX_VALUE_GET_NUMBER(rc, val, size, int);
+    rc = PMIx_Value_get_number(val, &size, PMIX_INT);
     if (PMIX_SUCCESS != rc) {
         fprintf(stderr, "Client ns %s rank %d: get size number failed: %s\n", myproc.nspace,
                 myproc.rank, PMIx_Error_string(rc));
