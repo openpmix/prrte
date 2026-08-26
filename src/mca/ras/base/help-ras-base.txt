@@ -54,6 +54,21 @@ We cannot subtract slots from an unknown host. Please
 correct the file or ensure that we are allocated the
 host in advance.
 
+[ras-base:bad-slots]
+A host in an add-hostfile was given a slot count that is not a number:
+
+  Host:  %s
+  File:  %s
+  Given: slots=%s
+
+The value must be a whole number - "slots=4" to state a count, or
+"slots=+2"/"slots=-2" to adjust the count of a host the DVM already holds.
+
+A value that is not a number used to be read as zero, which is a meaningful
+count here: the host would have joined the DVM able to run nothing, and
+marked as having been given that count so its real size was never worked out
+from its topology.
+
 [ras-base:add-host-managed]
 An add-host or add-hostfile directive was given, but this DVM's allocation
 is owned by a resource manager.
