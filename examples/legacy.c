@@ -82,7 +82,7 @@ int main(int argc, char **argv)
                 myproc.rank, rc);
         goto done;
     }
-    PMIX_VALUE_GET_NUMBER(rc, val, n, uint32_t);
+    rc = PMIx_Value_get_number(val, &n, PMIX_UINT32);
     fprintf(stderr, "Client %s:%d universe size %u\n", myproc.nspace, myproc.rank, n);
 
     /* get the number of procs in our job - univ size is the total number of allocated

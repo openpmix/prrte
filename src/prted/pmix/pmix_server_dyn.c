@@ -282,7 +282,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
 
             /***   ALLOC/SESSION IDs  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_SESSION_ID)) {
-            PMIX_VALUE_GET_NUMBER(rc, &info->value, u32, uint32_t);
+            rc = PMIx_Value_get_number(&info->value, &u32, PMIX_UINT32);
             if (PMIX_SUCCESS != rc) {
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -425,7 +425,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
 
             /***   NUMBER OF PROCS TO SPAWN AT EACH COLOCATION  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_COLOCATE_NPERPROC)) {
-            PMIX_VALUE_GET_NUMBER(rc, &info->value, u16, uint16_t);
+            rc = PMIx_Value_get_number(&info->value, &u16, PMIX_UINT16);
             if (PMIX_SUCCESS != rc) {
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -434,7 +434,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
 
             /***   NUMBER OF PROCS TO SPAWN AT EACH COLOCATION  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_COLOCATE_NPERNODE)) {
-            PMIX_VALUE_GET_NUMBER(rc, &info->value, u16, uint16_t);
+            rc = PMIx_Value_get_number(&info->value, &u16, PMIX_UINT16);
             if (PMIX_SUCCESS != rc) {
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -521,7 +521,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
 
             /***   MAX RESTARTS  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_MAX_RESTARTS)) {
-            PMIX_VALUE_GET_NUMBER(rc, &info->value, i32, int32_t);
+            rc = PMIx_Value_get_number(&info->value, &i32, PMIX_INT32);
             if (PMIX_SUCCESS != rc) {
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -558,7 +558,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
 
             /***   CPUS/RANK   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_CPUS_PER_PROC)) {
-            PMIX_VALUE_GET_NUMBER(rc, &info->value, u16, uint16_t);
+            rc = PMIx_Value_get_number(&info->value, &u16, PMIX_UINT16);
             if (PMIX_SUCCESS != rc) {
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -726,7 +726,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
 
             /***   NUMBER OF DEBUGGER_DAEMONS PER NODE   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_DAEMONS_PER_NODE)) {
-            PMIX_VALUE_GET_NUMBER(rc, &info->value, u16, uint16_t);
+            rc = PMIx_Value_get_number(&info->value, &u16, PMIX_UINT16);
             if (PMIX_SUCCESS != rc) {
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -736,7 +736,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
 
             /***   NUMBER OF DEBUGGER_DAEMONS PER PROC   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_DAEMONS_PER_PROC)) {
-            PMIX_VALUE_GET_NUMBER(rc, &info->value, u16, uint16_t);
+            rc = PMIx_Value_get_number(&info->value, &u16, PMIX_UINT16);
             if (PMIX_SUCCESS != rc) {
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -794,7 +794,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
                 }
                 rc = PMIX_CONVERT_TIME(info->value.data.string);
             } else {
-                PMIX_VALUE_GET_NUMBER(i, &info->value, rc, int);
+                i = PMIx_Value_get_number(&info->value, &rc, PMIX_INT);
                 if (PMIX_SUCCESS != i) {
                     return PRTE_ERR_BAD_PARAM;
                 }
@@ -813,7 +813,7 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
                 }
                 rc = PMIX_CONVERT_TIME(info->value.data.string);
             } else {
-                PMIX_VALUE_GET_NUMBER(i, &info->value, rc, int);
+                i = PMIx_Value_get_number(&info->value, &rc, PMIX_INT);
                 if (PMIX_SUCCESS != i) {
                     return PRTE_ERR_BAD_PARAM;
                 }

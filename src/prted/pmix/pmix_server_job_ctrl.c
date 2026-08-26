@@ -161,7 +161,7 @@ static pmix_status_t process_job_ctrl(const pmix_proc_t *requestor, const pmix_p
                 return rc;
             }
             /* pack the signal */
-            PMIX_VALUE_GET_NUMBER(rc, &directives[m].value, signum, int32_t);
+            rc = PMIx_Value_get_number(&directives[m].value, &signum, PMIX_INT32);
             if (PMIX_SUCCESS != rc) {
                 PMIX_DATA_BUFFER_RELEASE(cmd);
                 return rc;

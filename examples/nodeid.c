@@ -64,7 +64,7 @@ int main(int argc, char **argv)
                 myproc.rank, PMIx_Error_string(rc));
         goto done;
     }
-    PMIX_VALUE_GET_NUMBER(rc, val, jobsize, uint32_t);
+    rc = PMIx_Value_get_number(val, &jobsize, PMIX_UINT32);
     if (PMIX_SUCCESS != rc) {
         fprintf(stderr, "[%s:%u] Got bad job size: %s\n",
                 myproc.nspace, myproc.rank, PMIx_Error_string(rc));
@@ -82,7 +82,7 @@ int main(int argc, char **argv)
                     myproc.nspace, myproc.rank, n, PMIx_Error_string(rc));
             break;
         }
-        PMIX_VALUE_GET_NUMBER(rc, val, nodeid, uint32_t);
+        rc = PMIx_Value_get_number(val, &nodeid, PMIX_UINT32);
         if (PMIX_SUCCESS != rc) {
             fprintf(stderr, "[%s:%u] Got bad nodeid for rank %zd: %s\n",
                     myproc.nspace, myproc.rank, n, PMIx_Error_string(rc));

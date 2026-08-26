@@ -360,7 +360,7 @@ rule rather than the quiet one. Refuse a mistyped qualifier with
 "absent" has a meaning for all six of them and it is a different answer, not
 an error — a mistyped `PMIX_HOSTNAME` treated as unset makes the server-URI
 query answer about *this* node. The two numeric qualifiers were already read
-through `PMIX_VALUE_GET_NUMBER`, which refuses a non-number; check what it
+through `PMIx_Value_get_number()`, which refuses a non-number; check what it
 says, or a bad value silently leaves the sentinel in place and is ignored.
 
 **The same rule in publish/lookup/unpublish costs a mis-route rather than a
@@ -373,7 +373,7 @@ master and on to the data server, LOCAL is answered here. Read it out of the
 wrong member and a publish the application meant to be visible across the
 session is quietly kept on this daemon, and the lookup that was supposed to
 find it does not. The timeout is the width half of the same rule — read with
-`PMIX_VALUE_GET_NUMBER`, never off `value.data.integer`, because a caller may
+`PMIx_Value_get_number()`, never off `value.data.integer`, because a caller may
 legally have sent a `PMIX_SIZE`.
 
 **And the RML gives a refused buffer back.** `PRTE_RML_RELIABLE_SEND` takes
@@ -748,12 +748,14 @@ onto PRRTE job and app attributes. Notes for extending them:
   string faults *inside PMIx*. Any of these let a client segfault the
   daemon it was attached to with one `PMIx_Spawn`, which is why
   `test_xfer_job_info` now pins each of them.
-- **Read a number with `PMIX_VALUE_GET_NUMBER`, never off a fixed union
+- **Read a number with `PMIx_Value_get_number()`, never off a fixed union
   member.** `u16 = info->value.data.uint32` reads four bytes of a union the
   caller may have filled with two, which the truncation back to `uint16_t`
   rescues on a little-endian machine and does not on a big-endian one. The
-  macro converts from whatever integer type the caller actually used and
-  says so in its status, which is also the only way a non-numeric value
+  function converts from whatever integer type the caller actually used,
+  refuses a value the destination cannot hold without changing sign or
+  losing precision, and says so in its status — which is also the only way
+  a non-numeric value
   gets refused rather than silently becoming a count.
 - **`pmix_getcwd()` answers in PMIx statuses.** It looks like one more
   PRRTE-shaped `int` helper and it is not — it returns `PMIX_ERR_BAD_PARAM`
@@ -916,8 +918,11 @@ The parts that matter when editing this file:
   before anyone has asked who is calling). `get_string_directive()` is the one
   place they are read; keep it that way. `PMIX_ALLOC_INHERITANCE` is the quiet
   half of the same rule — it decides whether the session's nodes are handed
-  *away* to the scheduler, so it is read with `PMIX_VALUE_GET_NUMBER` rather
-  than off a fixed union member. And a `PMIX_NSPACE` must name something: an
+  *away* to the scheduler, so it is read with
+  `prte_pmix_value_get_inheritance()` rather than off a fixed union member;
+  that reader takes `PMIX_ALLOC_INHERIT`, the attribute's own type and the
+  one PMIx's documentation uses, which `PMIx_Value_get_number()` does not
+  know. And a `PMIX_NSPACE` must name something: an
   empty one is PMIx's wildcard, so it selects every job in the session instead
   of none.
 - **`set_response()` may run only ONCE per parsed request.** It frees the info

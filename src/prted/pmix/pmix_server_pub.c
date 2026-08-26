@@ -232,7 +232,7 @@ static void scan_directives(prte_pmix_server_req_t *req,
         } else if (PMIX_CHECK_KEY(&info[n], PMIX_TIMEOUT)) {
             /* the data server is what honors this - it is recorded here only
              * so that a timer on this side would have it */
-            PMIX_VALUE_GET_NUMBER(rc, &info[n].value, tmo, int);
+            rc = PMIx_Value_get_number(&info[n].value, &tmo, PMIX_INT);
             if (PMIX_SUCCESS == rc) {
                 req->timeout = tmo;
             }

@@ -225,7 +225,7 @@ static void _query(int sd, short args, void *cbdata)
                     }
 
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_NODEID)) {
-                    PMIX_VALUE_GET_NUMBER(rc, &q->qualifiers[n].value, nodeid, uint32_t);
+                    rc = PMIx_Value_get_number(&q->qualifiers[n].value, &nodeid, PMIX_UINT32);
                     if (PMIX_SUCCESS != rc) {
                         ret = PMIX_ERR_BAD_PARAM;
                         goto done;
@@ -238,7 +238,7 @@ static void _query(int sd, short args, void *cbdata)
                     }
 
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_SESSION_ID)) {
-                    PMIX_VALUE_GET_NUMBER(rc, &q->qualifiers[n].value, sessionid, uint32_t);
+                    rc = PMIx_Value_get_number(&q->qualifiers[n].value, &sessionid, PMIX_UINT32);
                     if (PMIX_SUCCESS != rc) {
                         ret = PMIX_ERR_BAD_PARAM;
                         goto done;

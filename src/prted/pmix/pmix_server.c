@@ -1935,7 +1935,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
                 continue;
             }
             if (PMIX_CHECK_KEY(&info[sz], PMIX_TIMEOUT)) {
-                PMIX_VALUE_GET_NUMBER(prc, &info[sz].value, timeout, int32_t);
+                prc = PMIx_Value_get_number(&info[sz].value, &timeout, PMIX_INT32);
                 if (PMIX_SUCCESS != prc) {
                     PMIX_ERROR_LOG(prc);
                     if (NULL != info) {

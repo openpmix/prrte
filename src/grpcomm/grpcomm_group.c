@@ -172,21 +172,21 @@ pmix_status_t prte_grpcomm_group_parse_directives(prte_grpcomm_group_signature_t
             sig->assignID = PMIX_INFO_TRUE(&directives[i]);
 
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_BOOTSTRAP)) {
-            PMIX_VALUE_GET_NUMBER(rc, &directives[i].value, sig->bootstrap, size_t);
+            rc = PMIx_Value_get_number(&directives[i].value, &sig->bootstrap, PMIX_SIZE);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 return rc;
             }
 
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_LOCAL_COLLECTIVE_STATUS)) {
-            PMIX_VALUE_GET_NUMBER(rc, &directives[i].value, *st, pmix_status_t);
+            rc = PMIx_Value_get_number(&directives[i].value, st, PMIX_STATUS);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 return rc;
             }
 
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_TIMEOUT)) {
-            PMIX_VALUE_GET_NUMBER(rc, &directives[i].value, *timeout, int);
+            rc = PMIx_Value_get_number(&directives[i].value, timeout, PMIX_INT);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 return rc;

@@ -381,10 +381,14 @@ static pmix_status_t parse_directives(prte_pmix_server_req_t *req,
             ctl->personality = info;
 
         } else if (PMIX_CHECK_KEY(info, PMIX_USERID)) {
-            PMIX_VALUE_GET_NUMBER(rc, &info->value, ctl->uid, uid_t);
+            uint32_t uid;
+            /* PMIx has no data type for uid_t, so read it as the unsigned
+             * 32-bit quantity every platform PRRTE builds on makes it */
+            rc = PMIx_Value_get_number(&info->value, &uid, PMIX_UINT32);
             if (PMIX_SUCCESS != rc) {
                 return PMIX_ERR_BAD_PARAM;
             }
+            ctl->uid = (uid_t) uid;
             ctl->have_uid = true;
 
         } else if (PMIX_CHECK_KEY(info, PMIX_GRPID)) {
@@ -468,7 +472,7 @@ static pmix_status_t parse_directives(prte_pmix_server_req_t *req,
             set_op(ctl, PRTE_SESSCTRL_EXTEND, PMIX_INFO_TRUE(info));
 
         } else if (PMIX_CHECK_KEY(info, PMIX_SESSION_SIGNAL)) {
-            PMIX_VALUE_GET_NUMBER(rc, &info->value, ctl->sigvalue, int);
+            rc = PMIx_Value_get_number(&info->value, &ctl->sigvalue, PMIX_INT);
             if (PMIX_SUCCESS != rc || 0 >= ctl->sigvalue) {
                 return PMIX_ERR_BAD_PARAM;
             }
@@ -497,10 +501,16 @@ static pmix_status_t parse_directives(prte_pmix_server_req_t *req,
             PMIx_Argv_append_nosize(&ctl->nspaces, tstr);
 
         } else if (PMIX_CHECK_KEY(info, PMIX_TIMEOUT)) {
-            PMIX_VALUE_GET_NUMBER(rc, &info->value, ctl->timelimit, long);
-            if (PMIX_SUCCESS != rc || 0 > ctl->timelimit) {
+            int64_t tl;
+            /* PMIx has no data type for long, so read the widest signed
+             * quantity it does have and refuse what a long cannot hold -
+             * writing an int64_t through a long* would overrun the field
+             * wherever long is 32 bits */
+            rc = PMIx_Value_get_number(&info->value, &tl, PMIX_INT64);
+            if (PMIX_SUCCESS != rc || 0 > tl || (int64_t) LONG_MAX < tl) {
                 return PMIX_ERR_BAD_PARAM;
             }
+            ctl->timelimit = (long) tl;
         }
         /* an unrecognized directive is not an error: the request may be
          * addressed at more than one RTE, and refusing on a key we simply

@@ -519,7 +519,7 @@ for `PMIX_ALLOC_NODE_LIST`.
 `PMIX_ALLOC_INHERITANCE` has **two** legitimate spellings and both must be
 accepted: `PMIX_ALLOC_INHERIT`, the attribute's own type and the one the PMIx
 documentation's example uses, and a plain integer of some width.
-`PMIX_VALUE_GET_NUMBER` knows only the second, so it cannot be the whole
+`PMIx_Value_get_number()` knows only the second, so it cannot be the whole
 answer on its own. `prte_pmix_value_get_inheritance()`
 ([`src/pmix/pmix-internal.h`](../../pmix/pmix-internal.h)) is the single
 reader — the disposition decides whether a reservation's nodes go back to the

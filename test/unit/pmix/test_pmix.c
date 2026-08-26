@@ -542,9 +542,9 @@ static int test_proc_state_to_error(void)
  * get right, and each was wrong somewhere before this test existed:
  *
  *  - PMIX_ALLOC_INHERIT is the attribute's OWN type and the spelling the PMIx
- *    documentation's example uses, but it is not one PMIX_VALUE_GET_NUMBER
- *    knows, so code that reached for that macro alone refused the canonical
- *    request outright (PMIX_ERR_BAD_PARAM).
+ *    documentation's example uses, but it is not one PMIx_Value_get_number()
+ *    knows, so code that reached for that function alone refused the
+ *    canonical request outright (PMIX_ERR_BAD_PARAM).
  *
  *  - A value of a type that carries no number at all must be REFUSED, not
  *    read off a fixed union member.  This arrives over the wire, so any

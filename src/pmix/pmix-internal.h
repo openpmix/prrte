@@ -242,9 +242,10 @@ PRTE_EXPORT pmix_status_t prte_pmix_convert_proc_state_to_error(int state);
  * the caller actually sent and not one a type confusion produced - which is
  * why nobody may simply take value.data.uint8. Two spellings have to be
  * accepted: PMIX_ALLOC_INHERIT, the attribute's own type and the one the
- * PMIx documentation uses, which PMIX_VALUE_GET_NUMBER does not know; and a
- * plain integer of whatever width, which that macro does. Returns false if
- * the value is neither.
+ * PMIx documentation uses, which PMIx_Value_get_number() does not know; and
+ * a plain integer of whatever width, which that function does - refusing one
+ * that will not fit in a uint8_t without changing sign or losing precision.
+ * Returns false if the value is neither.
  */
 PRTE_EXPORT bool prte_pmix_value_get_inheritance(const pmix_value_t *value,
                                                  uint8_t *inherit);

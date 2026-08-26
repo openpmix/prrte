@@ -193,7 +193,7 @@ int main(int argc, char **argv)
                 myproc.nspace, myproc.rank, rc);
         goto done;
     }
-    PMIX_VALUE_GET_NUMBER(rc, val, nprocs, uint32_t);
+    rc = PMIx_Value_get_number(val, &nprocs, PMIX_UINT32);
     PMIX_VALUE_RELEASE(val);
     if (1 < nprocs) {
         fprintf(stderr, "Please only run one proc for this example\n");
