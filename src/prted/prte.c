@@ -829,7 +829,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
             goto DONE;
         }
         /* did they provide an app? */
-        if (PMIX_SUCCESS != rc || 0 == pmix_list_get_size(&apps)) {
+        if (PRTE_SUCCESS != rc || 0 == pmix_list_get_size(&apps)) {
             if (proxyrun) {
                 prte_show_help("help-prun.txt", "prun:executable-not-specified", true,
                                prte_tool_basename, prte_tool_basename);
@@ -984,13 +984,13 @@ PRTE_EXPORT int prte(int argc, char *argv[])
             if (NULL == param) {
                 param = strdup(iprteinfo->info.value.data.string);
             } else if (0 != strcmp(param, iprteinfo->info.value.data.string)) {
-                    // we have non-matching prefixes
-                    prte_show_help("help-plm-base.txt", "multiple-prefixes", true,
-                                   prte_tool_basename, PRTE_CLI_PREFIX,
-                                   PRTE_CLI_PREFIX, "PRRTE", PRTE_CLI_PREFIX,
-                                   param, iprteinfo->info.value.data.string);
-                    PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-                    goto DONE;
+                // we have non-matching prefixes
+                prte_show_help("help-plm-base.txt", "multiple-prefixes", true,
+                               prte_tool_basename, PRTE_CLI_PREFIX,
+                               PRTE_CLI_PREFIX, "PRRTE", PRTE_CLI_PREFIX,
+                               param, iprteinfo->info.value.data.string);
+                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                goto DONE;
             }
         }
     }
@@ -1077,13 +1077,13 @@ PRTE_EXPORT int prte(int argc, char *argv[])
             if (NULL == param) {
                 param = strdup(iprteinfo->info.value.data.string);
             } else if (0 != strcmp(param, iprteinfo->info.value.data.string)) {
-                    // we have non-matching prefixes
-                    prte_show_help("help-plm-base.txt", "multiple-prefixes", true,
-                                   prte_tool_basename, PRTE_CLI_PMIX_PREFIX,
-                                   PRTE_CLI_PMIX_PREFIX, "PMIx", PRTE_CLI_PMIX_PREFIX,
-                                   param, iprteinfo->info.value.data.string);
-                    PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-                    goto DONE;
+                // we have non-matching prefixes
+                prte_show_help("help-plm-base.txt", "multiple-prefixes", true,
+                               prte_tool_basename, PRTE_CLI_PMIX_PREFIX,
+                               PRTE_CLI_PMIX_PREFIX, "PMIx", PRTE_CLI_PMIX_PREFIX,
+                               param, iprteinfo->info.value.data.string);
+                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                goto DONE;
             }
         }
     }
@@ -1853,8 +1853,11 @@ static void epipe_signal_callback(int fd, short args, void *cbdata)
 
     sigpipe_error_count++;
 
-    if (10 < sigpipe_error_count) {
-        /* time to abort */
+    /* Say this - and try to abort - exactly once.  clean_abort() does not
+     * necessarily abort: under --keepalive it declines, because the DVM is
+     * to outlive everything but its parent.  Calling it again on every
+     * subsequent SIGPIPE simply reprinted "aborting" forever. */
+    if (11 == sigpipe_error_count) {
         pmix_output(0, "%s: SIGPIPE detected - aborting", prte_tool_basename);
         clean_abort(0, 0, NULL);
     }
