@@ -928,6 +928,8 @@ int pmix_server_init(void)
     prte_pmix_server_globals.server = *PRTE_NAME_INVALID;
     prte_pmix_server_globals.scheduler_connected = false;
     prte_pmix_server_globals.scheduler_lookup_done = false;
+    prte_pmix_server_globals.scheduler_directives = NULL;
+    prte_pmix_server_globals.nscheddirs = 0;
     prte_pmix_server_globals.primary_server = *PRTE_NAME_INVALID;
     prte_pmix_server_globals.primary_server_set = false;
 
@@ -1402,6 +1404,12 @@ void pmix_server_finalize(void)
 
     /* finalize our local data server */
     prte_data_server_finalize();
+
+    if (NULL != prte_pmix_server_globals.scheduler_directives) {
+        PMIX_INFO_FREE(prte_pmix_server_globals.scheduler_directives,
+                       prte_pmix_server_globals.nscheddirs);
+        prte_pmix_server_globals.nscheddirs = 0;
+    }
 
     /* cleanup collectives.  A request may still have a timer armed - the
      * two-second dmodex retry cycle, or a caller's timeout - and libevent

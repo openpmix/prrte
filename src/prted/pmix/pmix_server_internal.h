@@ -445,6 +445,21 @@ PRTE_EXPORT extern void pmix_server_alloc_request_resp(int status, pmix_proc_t *
 
 PRTE_EXPORT extern pmix_status_t prte_pmix_set_scheduler(void);
 
+/* Record the directives to hand PMIx_tool_attach_to_server when we go looking
+ * for the scheduler.  Takes ownership of the array, which must have been
+ * built with PMIX_INFO_CREATE; replaces anything recorded before.
+ *
+ * This exists because the knowledge and the call live on opposite sides of a
+ * boundary that only crosses one way.  The parameters that say where the
+ * scheduler is belong to the ras/pmix component, which may be a run-time
+ * loadable plugin - so nothing in libprrte may name its symbols - while the
+ * attach belongs here, is made once for the whole daemon, and is triggered by
+ * whichever of allocation, session control or tool connection needs a
+ * scheduler first.  The component pushes what it knows at selection time
+ * instead. */
+PRTE_EXPORT void prte_pmix_set_scheduler_directives(pmix_info_t *directives,
+                                                    size_t ndirs);
+
 /* Designate an attached server as the primary one, so that the client-side
  * PMIx calls that follow go to it.  Only one server can be primary at a
  * time, so any operation that uses one of our tool connections must call
@@ -607,6 +622,13 @@ typedef struct {
     /* we have already looked for a scheduler to attach to and found none - do
      * not look again. See prte_pmix_set_scheduler(). */
     bool scheduler_lookup_done;
+    /* Where to look for the scheduler, as told to us by whichever component
+     * knows - ras/pmix, out of its own MCA parameters.  Empty when nobody has
+     * said anything, which is the ordinary case and leaves the attach exactly
+     * the bare rendezvous scan it has always been.  See
+     * prte_pmix_set_scheduler_directives(). */
+    pmix_info_t *scheduler_directives;
+    size_t nscheddirs;
     bool remote_connections;
     bool tool_support;
     bool require_pid_match;

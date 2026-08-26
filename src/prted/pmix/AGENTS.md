@@ -983,7 +983,15 @@ A daemon is a PMIx server, but the master is also a PMIx **tool** of anything
 it has to reach outside this DVM. There are two such things, and they are
 reached the same way — `PMIx_tool_attach_to_server()`:
 
-- a **scheduler**, in `prte_pmix_set_scheduler()` (`pmix_server_alloc*.c`);
+- a **scheduler**, in `prte_pmix_set_scheduler()` (`pmix_server_alloc*.c`).
+  *Where* to look for it is not knowable here: the parameters that say so
+  belong to `ras/pmix`, which may be a plugin, so nothing in `libprrte`
+  may name its symbols. That component pushes them in at selection with
+  `prte_pmix_set_scheduler_directives()` and they are held in
+  `prte_pmix_server_globals` until the attach — which happens **once**,
+  triggered by whichever of allocation, session control or tool connection
+  needs a scheduler first, which is why they have to be recorded ahead of
+  all three rather than supplied by the caller that happens to get there;
 - an **external data server**, in `init_server()` (`pmix_server_pub.c`) — a
   data server living in another DVM, which the RML cannot address at all
   because it names a peer by rank in the sender's own namespace. See

@@ -125,10 +125,21 @@ ANSWER:
     }
 }
 
+void prte_pmix_set_scheduler_directives(pmix_info_t *directives, size_t ndirs)
+{
+    if (NULL != prte_pmix_server_globals.scheduler_directives) {
+        PMIX_INFO_FREE(prte_pmix_server_globals.scheduler_directives,
+                       prte_pmix_server_globals.nscheddirs);
+    }
+    prte_pmix_server_globals.scheduler_directives = directives;
+    prte_pmix_server_globals.nscheddirs = (NULL == directives) ? 0 : ndirs;
+}
+
 pmix_status_t prte_pmix_set_scheduler(void)
 {
     pmix_status_t rc;
-    pmix_info_t info[2];
+    pmix_info_t *info;
+    size_t n, ninfo;
 
     if (!prte_pmix_server_globals.scheduler_connected) {
         /* Look for a scheduler to attach to - ONCE.
@@ -148,21 +159,33 @@ pmix_status_t prte_pmix_set_scheduler(void)
         if (prte_pmix_server_globals.scheduler_lookup_done) {
             return PMIX_ERR_UNREACH;
         }
-        prte_pmix_server_globals.scheduler_lookup_done = true;
+        /* Whatever the allocator told us about where the scheduler is, plus
+         * the two directives that are ours in every case.  Built before the
+         * search is latched as done: an array we could not allocate is not a
+         * search that happened. */
+        ninfo = prte_pmix_server_globals.nscheddirs + 2;
+        PMIX_INFO_CREATE(info, ninfo);
+        if (NULL == info) {
+            return PMIX_ERR_NOMEM;
+        }
+        for (n = 0; n < prte_pmix_server_globals.nscheddirs; n++) {
+            PMIX_INFO_XFER(&info[n], &prte_pmix_server_globals.scheduler_directives[n]);
+        }
         /* make it optional so we don't hang if there is no scheduler */
-        PMIX_INFO_LOAD(&info[0], PMIX_CONNECT_TO_SCHEDULER, NULL, PMIX_BOOL);
-        PMIX_INFO_LOAD(&info[1], PMIX_TOOL_CONNECT_OPTIONAL, NULL, PMIX_BOOL);
+        PMIX_INFO_LOAD(&info[ninfo - 2], PMIX_CONNECT_TO_SCHEDULER, NULL, PMIX_BOOL);
+        PMIX_INFO_LOAD(&info[ninfo - 1], PMIX_TOOL_CONNECT_OPTIONAL, NULL, PMIX_BOOL);
+        prte_pmix_server_globals.scheduler_lookup_done = true;
         pmix_output_verbose(2, prte_pmix_server_globals.output,
-                            "%s looking for a scheduler to attach to",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+                            "%s looking for a scheduler to attach to with %"
+                            PRIsize_t " directives",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ninfo);
         rc = PMIx_tool_attach_to_server(NULL, &prte_pmix_server_globals.scheduler,
-                                        info, 2);
+                                        info, ninfo);
         pmix_output_verbose(2, prte_pmix_server_globals.output,
                             "%s scheduler attach returned %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             PMIx_Error_string(rc));
-        PMIX_INFO_DESTRUCT(&info[0]);
-        PMIX_INFO_DESTRUCT(&info[1]);
+        PMIX_INFO_FREE(info, ninfo);
         if (PMIX_SUCCESS != rc) {
             return rc;
         }

@@ -16,6 +16,8 @@
 #include "constants.h"
 #include "types.h"
 
+#include <string.h>
+
 #include "src/class/pmix_list.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
@@ -25,6 +27,94 @@
 /*
  * Local functions
  */
+static int init(void);
+/* Hand the scheduler's whereabouts to the code that will go looking for it.
+ *
+ * Every ras_pmix_* connection parameter is the name of a PMIx attach
+ * attribute - ras_pmix_uri is PMIX_SERVER_URI, ras_pmix_server_pid is
+ * PMIX_SERVER_PIDINFO, and so on down to the retry pair, which PMIx
+ * implements itself.  None of them was ever handed to anything: the attach
+ * in prte_pmix_set_scheduler() passed only PMIX_CONNECT_TO_SCHEDULER and
+ * PMIX_TOOL_CONNECT_OPTIONAL, so PRRTE scanned for a rendezvous and took
+ * whatever it found.  A site naming the scheduler it means - one of two on
+ * the machine, or one whose rendezvous is not where PMIx looks by default -
+ * got its parameter accepted, reported by prte_info, used to decide that this
+ * component is the allocator (so no hostfile is read), and then ignored at
+ * the one moment it meant anything.
+ *
+ * This runs at selection, which is the only place with both the parameters
+ * and a guarantee of being ahead of every consumer: allocation, session
+ * control and the tool-connection path all reach prte_pmix_set_scheduler(),
+ * it looks exactly once, and whichever of them gets there first would
+ * otherwise burn that one look with nothing to aim it.
+ *
+ * A parameter left at its default contributes nothing, so a DVM that has not
+ * been told anything gets the same bare scan it always did. */
+static int init(void)
+{
+    pmix_info_t *dirs;
+    size_t ndirs = 0, n = 0;
+    prte_ras_pmix_component_t *c = &prte_mca_ras_pmix_component;
+
+    if (NULL != c->uri) {
+        ++ndirs;
+    }
+    if (0 < strlen(c->server.nspace)) {
+        ++ndirs;
+    }
+    if (0 < c->server_pid) {
+        ++ndirs;
+    }
+    if (NULL != c->server_host) {
+        ++ndirs;
+    }
+    if (NULL != c->connection_order) {
+        ++ndirs;
+    }
+    /* the retry pair always goes: the parameters document defaults (5 and 1)
+     * and a user who reads that is entitled to get them */
+    ndirs += 2;
+
+    PMIX_INFO_CREATE(dirs, ndirs);
+    if (NULL == dirs) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    if (NULL != c->uri) {
+        PMIX_INFO_LOAD(&dirs[n++], PMIX_SERVER_URI, c->uri, PMIX_STRING);
+    }
+    if (0 < strlen(c->server.nspace)) {
+        PMIX_INFO_LOAD(&dirs[n++], PMIX_SERVER_NSPACE, c->server.nspace, PMIX_STRING);
+    }
+    if (0 < c->server_pid) {
+        PMIX_INFO_LOAD(&dirs[n++], PMIX_SERVER_PIDINFO, &c->server_pid, PMIX_PID);
+    }
+    if (NULL != c->server_host) {
+        /* PMIX_SERVER_HOSTNAME is the attribute defined for exactly this -
+         * the node the target server is on - and no PTL reads it yet, so it
+         * is forwarded to the server rather than used to choose one.  Send it
+         * anyway: it is the right attribute for what the parameter says, and
+         * a PMIx that starts honoring it needs nothing here.
+         *
+         * ras_pmix_rank is NOT sent, and there is nothing to send it as.
+         * PMIX_SERVER_RANK is a PMIx_server_init attribute - the rank a
+         * server takes for ITSELF - not a way to name the server a tool wants,
+         * and PMIx identifies an attach target by nspace and rendezvous.  Sent
+         * here it would not select anything and would be forwarded to the
+         * server as an assertion we have no business making.  See
+         * docs/todo.rst. */
+        PMIX_INFO_LOAD(&dirs[n++], PMIX_SERVER_HOSTNAME, c->server_host, PMIX_STRING);
+    }
+    if (NULL != c->connection_order) {
+        PMIX_INFO_LOAD(&dirs[n++], PMIX_CONNECTION_ORDER, c->connection_order, PMIX_STRING);
+    }
+    PMIX_INFO_LOAD(&dirs[n++], PMIX_CONNECT_MAX_RETRIES, &c->max_retries, PMIX_UINT32);
+    PMIX_INFO_LOAD(&dirs[n++], PMIX_CONNECT_RETRY_DELAY, &c->retry_delay, PMIX_UINT32);
+
+    prte_pmix_set_scheduler_directives(dirs, ndirs);
+    return PRTE_SUCCESS;
+}
+
 static int allocate(prte_job_t *jdata, pmix_list_t *nodes);
 static int finalize(void);
 static pmix_status_t modify(prte_pmix_server_req_t *req);
@@ -34,7 +124,7 @@ static pmix_status_t modify(prte_pmix_server_req_t *req);
  */
 prte_ras_base_module_t prte_ras_pmix_module = {
     .scheduler_owned = true,
-    .init = NULL,
+    .init = init,
     .allocate = allocate,
     .modify = modify,
     .finalize = finalize
