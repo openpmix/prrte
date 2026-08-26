@@ -880,18 +880,24 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
                 }
                 /* close */
                 pclose(fp);
-                /* transfer this load */
+                /* Transfer this load.  PMIx_Data_unload hands us ownership
+                 * of the payload and PMIx_Data_pack copies it into the
+                 * answer, so the byte object is ours to release either way -
+                 * the error arm above does exactly that, and this one used
+                 * to leak one process's entire stack trace per process per
+                 * request. */
                 ret = PMIx_Data_unload(&data, &pbo);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&data);
                     break;
                 }
-                if (PMIX_SUCCESS != PMIx_Data_pack(NULL, answer, &pbo, 1, PMIX_BYTE_OBJECT)) {
-                    PMIX_DATA_BUFFER_DESTRUCT(&data);
+                ret = PMIx_Data_pack(NULL, answer, &pbo, 1, PMIX_BYTE_OBJECT);
+                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+                PMIX_DATA_BUFFER_DESTRUCT(&data);
+                if (PMIX_SUCCESS != ret) {
                     break;
                 }
-                PMIX_DATA_BUFFER_DESTRUCT(&data);
             }
         }
         if (NULL != gstack_exec) {
