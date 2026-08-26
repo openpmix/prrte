@@ -78,6 +78,11 @@ PRTE_EXPORT void prte_strip_trailing_pathsep(char *param);
  * parts.  Returns PRTE_ERR_BAD_PARAM if the value is not of that form. */
 PRTE_EXPORT int prte_parse_singleton_id(const char *name, pmix_nspace_t nspace,
                                         pmix_rank_t *rank);
+
+/* Append the contents of an appfile to a command line, one app context per
+ * line, joined with the ":" delimiter.  Blank lines are ignored.  Returns
+ * PRTE_ERR_FILE_OPEN_FAILURE if the file cannot be read. */
+PRTE_EXPORT int prte_parse_appfile(const char *path, char ***pargv, int *pargc);
 END_C_DECLS
 
 #endif /* PRTED_H */

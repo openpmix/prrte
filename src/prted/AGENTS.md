@@ -140,6 +140,36 @@ does not drive a PRRTE event base, so the classic
 `PRTE_PMIX_WAIT_THREAD` / `PRTE_PMIX_WAKEUP_THREAD` pair is correct there
 and is used throughout. Do not "fix" it to match `prte.c`.
 
+**And the exception does not travel.** The same code moved into `prte.c`
+is a hang, and moving it is easy because the two files do many of the same
+things and `prterun` is the tool wearing `prte.c`'s body. The rule in
+`prte.c` is absolute: **no blocking PMIx call may be made from the thread
+that drives `prte_event_base`** — not just the `PMIx_Notify_event` case the
+top-level `AGENTS.md` describes. `prte` *is* the PMIx server, so a call
+like `PMIx_Job_control` is handed straight to our own host module, which
+thread-shifts the work back onto `prte_event_base`; the blocking form then
+waits inside `PMIX_WAIT_THREAD` for a completion only this thread could
+produce, and the whole DVM master stops — no RML, no timers, no PMIx
+replies, forever.
+
+That is not hypothetical: `signal_forward_callback()` did exactly this,
+and every forwardable signal is forwarded by default, so one
+`kill -USR1 <prterun>` wedged the run permanently. It now uses
+`PMIx_Job_control_nb`. Note what the non-blocking form then requires:
+**PMIx borrows the targets and directives arrays rather than copying them**,
+and reads them on its own thread long after the call returns, so neither may
+live on the caller's stack. The completion callback frees them, and may run
+on either thread, so it must touch nothing but the allocation.
+
+The other half of that function is worth knowing before you write anything
+that names "our" job: **a persistent DVM has no job of its own, and an empty
+namespace is not a safe way to say so.** `spawnednspace` is only set on the
+`prterun` path. Handed to the job-control path an empty namespace is packed
+into the daemon command verbatim, and `prted_comm.c` reads an empty
+namespace as *every* job — so a signal sent to a shared persistent `prte`
+would have been delivered to every process in the DVM, other users' jobs
+included. Check for it explicitly.
+
 ---
 
 ## `prte.c` — the HNP body
@@ -191,6 +221,32 @@ relative to `prte_init()`.
   inside the event loop.
 - **`prte_event_reinit()` after `--daemonize`.** The event base is opened
   before the fork and some backends (kqueue on macOS) do not survive it.
+- **The `--dvm <keyword>` values are keywords, not prefixes.** The block
+  that rewrites the `--dvm` option's key into the one `prun_common()`
+  expects tests `file:`, `uri:`, `pid:` and `ns:` as prefixes, which they
+  are, and then `system`, `system-first` and `search`, which are not.
+  Testing those three with `strncasecmp(..., 6)` made `system-first`
+  unreachable — it matches `system` in its first six characters, so the
+  earlier arm always won — and `--dvm system-first` silently became
+  `--dvm system`, failing outright wherever it was supposed to fall back.
+  They are matched exactly now; keep it that way, and note that each
+  keyword must be rewritten to the key that actually carries its meaning
+  (`system-first` is `PRTE_CLI_SYS_SERVER_FIRST`, which becomes
+  `PMIX_CONNECT_SYSTEM_FIRST` — it is not a namespace).
+
+- **`PRTE_UPDATE_EXIT_STATUS` discards a zero.** It only writes when the
+  new status is non-zero, so `PRTE_UPDATE_EXIT_STATUS(rc)` on a path where
+  `rc` still holds `PRTE_SUCCESS` is a no-op and the tool exits 0 having
+  failed. Three failure paths did this. Pass the failure you actually
+  detected, and if you have nothing better, `PRTE_ERR_FATAL`.
+
+- **`prte_parse_appfile()` is the `--app` reader**, extracted so it can be
+  unit-tested. `PMIx_Argv_split` returns **NULL**, not an empty array, for
+  a string that yields no tokens, so a blank line in an appfile — entirely
+  ordinary — segfaulted the tool on `split[0]`. Such a line is skipped
+  whole rather than merely contributing no words: emitting the `:`
+  delimiter for it would hand the parser an empty app context.
+
 - **`prep_singleton()` builds a job by hand.** It fabricates a
   `prte_job_t`/`prte_app_context_t`/`prte_proc_t` and registers the
   nspace, so a singleton can `PMIx_Init` against this DVM. It is the only
@@ -331,7 +387,8 @@ correctly. Do not move the close back out to `prun.c`/`prte.c`.
 
 **Unit — `test/unit/prted/` (`make check`).** Everything in here that can
 be exercised without a DVM: the `--prefix` normalizer, the `--singleton`
-identifier parser, `prte_pmix_xfer_job_info()`'s directive handling
+identifier parser, the `--app` appfile reader (including the blank lines
+that used to crash it), `prte_pmix_xfer_job_info()`'s directive handling
 (including its conflict rejection and its cache-the-unknown default),
 `prte_pmix_xfer_app()`'s translation and — importantly — its ownership
 contract with the caller's job object, and the job-info cache. Extend it
