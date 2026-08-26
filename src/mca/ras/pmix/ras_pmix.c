@@ -44,7 +44,6 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 {
     PRTE_HIDE_UNUSED_PARAMS(jdata, nodes);
 
-
     return PRTE_ERR_TAKE_NEXT_OPTION;
 }
 
@@ -225,7 +224,11 @@ static void passthru(int sd, short args, void *cbdata)
     if (NULL != cd->rel) {
         cd->rel(cd->relcbdata);
         cd->rel = NULL;
+        cd->relcbdata = NULL;
     }
+    /* the answer is PMIx's again - leave nothing here that looks readable */
+    cd->info = NULL;
+    cd->ninfo = 0;
     /* nothing of PMIx's is left for anyone to release */
     req->rlcbfunc = NULL;
     req->rlcbdata = NULL;
