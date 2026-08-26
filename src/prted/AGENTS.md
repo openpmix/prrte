@@ -162,13 +162,32 @@ live on the caller's stack. The completion callback frees them, and may run
 on either thread, so it must touch nothing but the allocation.
 
 The other half of that function is worth knowing before you write anything
-that names "our" job: **a persistent DVM has no job of its own, and an empty
-namespace is not a safe way to say so.** `spawnednspace` is only set on the
-`prterun` path. Handed to the job-control path an empty namespace is packed
-into the daemon command verbatim, and `prted_comm.c` reads an empty
-namespace as *every* job — so a signal sent to a shared persistent `prte`
-would have been delivered to every process in the DVM, other users' jobs
+that names "our" job: **an empty namespace is not a safe way to say "no
+job".** Handed to the job-control path it is packed into the daemon command
+verbatim, and `prted_comm.c` reads an empty namespace as *every* job — so
+the signal is delivered to every process in the DVM, other users' jobs
 included. Check for it explicitly.
+
+There are two ways to arrive there with one, and both are live. In `prte.c`
+a persistent DVM has no job of its own, so `spawnednspace` is only ever set
+on the `prterun` path. In `prun_common.c` it is a *window*: the forwardable
+signals are taken with `signal()` before the tool has connected to anything,
+and `spawnednspace` is not written until `PMIx_Spawn` returns — so a
+`SIGTSTP` or a `kill -USR1` that lands while the tool is still connecting,
+still parsing, or still inside the spawn finds it empty. Both
+`signal_forward_callback()`s refuse an empty namespace now; keep it that way,
+and note that the window is not small — the spawn covers the whole mapping
+and launch of the job.
+
+**And the borrowed-array rule above is about a pure server, not about
+`prun`.** `prun_common.c`'s `defhandler()` hands `PMIx_Job_control_nb`
+a `pmix_proc_t` and a `pmix_info_t` on its own stack, and that is correct:
+the entry point only borrows the arrays and defers the pack when the caller
+is the host's server. A tool or launcher peer — which is what `prun` is,
+and what `PMIX_LAUNCHER` in its `PMIx_tool_init` makes it — takes
+`pmix_job_control_relay()` instead, which packs both arrays into the message
+before it returns. Do not "fix" that call by heap-allocating its arguments,
+and do not read `prun`'s pattern as licence for the same thing in `prte.c`.
 
 ---
 
@@ -369,18 +388,65 @@ were given than `--pmix-prefix` ones. `--prefix /x --prefix /x
 one.** `strtol` returns 0 for a string with no digits in it, and 0 is a
 meaningful value in several places here — for `-n` it is the spelling of
 "let the mapping policy compute the count", so `-n four` launched some
-other number of processes and said nothing. The idiom used throughout is a
-leading-`isdigit`, full consumption of the string, `errno`, and a range
-check against the field the value lands in (`maxprocs` is an `int`, so
-`-n 4294967297` must be refused rather than truncated to 1).
+other number of processes and said nothing. The idiom is a leading-`isdigit`,
+full consumption of the string, `errno`, and a range check against the field
+the value lands in (`maxprocs` is an `int`, so `-n 4294967297` must be
+refused rather than truncated to 1), and it is packaged as
+`prte_parse_uint_option()` in [`../util/prte_cmd_line.c`](../util/prte_cmd_line.c)
+— reach for that rather than writing the fourth copy. `--timeout`,
+`--spawn-timeout`, `--max-restarts`, `--wait-to-connect`,
+`--num-connect-retries` and `--stdin`'s rank all went through a bare
+`strtol` and quietly meant something else; `--stdin garbage` sent the
+tool's stdin to rank 0.
+
+The same goes for a value that has to be a **truth**: `prte_cli_bool_value()`
+refuses one that is neither, because the test underneath reports anything it
+does not recognize as false — so `--gpu-support maybe` meant "no GPU
+support".
 
 `prun_common()` is the tool body: `PMIx_tool_init` (with whatever DVM
 search directive the user gave), register event handlers for job
-termination and debugger events, `PMIx_Spawn_nb`, push stdin, wait, then
+termination and debugger events, `PMIx_Spawn`, push stdin, wait, then
 report the job's exit status. Signal forwarding is done with
 `PMIx_Job_control(PMIX_JOB_CTRL_SIGNAL)` against the spawned nspace,
 which is what eventually arrives at `prted_comm.c`'s
 `SIGNAL_LOCAL_PROCS`.
+
+**Its return value IS the tool's exit status**, and `rc` holds
+`PRTE_SUCCESS` for most of the function's length — it is left there by the
+last thing that succeeded. So a `goto DONE` that does not assign `rc` first
+reports success: a command line the tool had just *refused*, and a spawn
+that was never attempted, both came back 0. Assign the failure you actually
+detected. (`PRTE_UPDATE_EXIT_STATUS` cannot rescue this — it discards a
+zero, and `prterun`'s proxy path `exit()`s the return value directly without
+consulting `prte_exit_status` at all.)
+
+**Every `PMIx_Register_event_handler()` here is followed by a wait on the
+lock its `regcbfunc` will wake, so every one of them must check the
+return.** The entry point refuses an uninitialized or shutting-down
+library, and a failed allocation, *in front of* the thread-shift that
+eventually calls the callback — so on those returns the wait is permanent.
+`PMIx_Deregister_event_handler()` is the same. Only `PMIX_SUCCESS` promises
+a callback; anything else means there is nothing to wait for.
+
+**Only one handler is ever deregistered, and which one is positional.**
+`regcbfunc` writes a single file-scope `evid`, so the id the teardown
+deregisters is whichever registration ran *last* — the job-termination
+handler. The default, launch-failed and ready-for-debug handlers stay
+registered until `PMIx_tool_finalize`. That is why the release lock they
+carry may not be destructed at the end of the wait: it lives on
+`prun_common()`'s stack, and a handler firing after `PRTE_PMIX_DESTRUCT_LOCK`
+locks a destroyed mutex. It is destructed after the finalize, which is the
+point past which no handler can run.
+
+**`prte_prun_parse_common_cli()` is shared by all three tools, and they do
+not offer the same options.** `--enable-recovery` and `--continuous` are in
+`prun`'s option table only, so for `prte` and `prterun` those two blocks
+never run — which is how the `flag` they set came to be read, uninitialized,
+by the `--get-stack-traces` and `--report-state-on-timeout` blocks below
+them. `--get-stack-traces` silently did nothing, because the DVM reads the
+value and not the key's presence. Do not share a scratch variable across
+blocks here; set what you are about to send.
 
 **"The job" means the whole spawn tree, and the `PMIX_EVENT_JOB_END`
 handler is deliberately *not* filtered to our own namespace.** A job
@@ -438,8 +504,15 @@ identifier parser, the `--app` appfile reader (including the blank lines
 that used to crash it), `prte_pmix_xfer_job_info()`'s directive handling
 (including its conflict rejection and its cache-the-unknown default),
 `prte_pmix_xfer_app()`'s translation and — importantly — its ownership
-contract with the caller's job object, and the job-info cache. Extend it
-whenever you add a decision that does not need a live runtime.
+contract with the caller's job object, the job-info cache,
+`prte_parse_uint_option()`, and `prte_prun_parse_common_cli()`'s
+job-directive decisions. Extend it whenever you add a decision that does
+not need a live runtime.
+
+Note what the last of those has to do to be worth anything: it sets
+`prte_tool_actual` per case, because that is what `schizo->parse_cli()`
+picks its option table from, and a case written against the wrong tool's
+table fails in the parse and proves nothing about the code under test.
 
 **Offline mapper harness.** Not relevant here unless you touch how job
 directives reach the mapper — but if you change `prte_pmix_xfer_job_info`,
