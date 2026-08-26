@@ -32,6 +32,7 @@
 #include "constants.h"
 
 #include <ctype.h>
+#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
 #ifdef HAVE_UNISTD_H
@@ -187,6 +188,11 @@ static int add_envar_directives(prte_pmix_app_t *app,
         key = ordered[k].key;
 
         if (0 == strcmp(key, PRTE_CLI_FWD_ENVAR)) {
+            /* Construct the envar before every use.  Forwarding a variable
+             * has no separator, but the field is packed and shipped with
+             * the rest of the directive, so leaving it whatever was on the
+             * stack put an uninitialized byte into the launch message. */
+            PMIX_ENVAR_CONSTRUCT(&envt);
             param = strdup(ordered[k].value);
             /* if there is an '=' in it, then they are setting a value */
             if (NULL != (value = strchr(param, '='))) {
@@ -204,6 +210,7 @@ static int add_envar_directives(prte_pmix_app_t *app,
                         if (0 == strncmp(environ[i], param, strlen(param))) {
                             // this is a var to fwd
                             // extract the name and value
+                            PMIX_ENVAR_CONSTRUCT(&envt);
                             ptr = strdup(environ[i]);
                             value = strchr(ptr, '=');
                             *value = '\0';
@@ -222,6 +229,7 @@ static int add_envar_directives(prte_pmix_app_t *app,
                         prte_show_help("help-schizo-base.txt", "missing-envar-param", true, param);
                         free(param);
                     } else {
+                        PMIX_ENVAR_CONSTRUCT(&envt);
                         envt.envar = param;
                         envt.value = strdup(value);
                         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_ENVAR, &envt, PMIX_ENVAR);
@@ -235,6 +243,8 @@ static int add_envar_directives(prte_pmix_app_t *app,
             /* these two store the variable's name and the value as SEPARATE
              * occurrences, given one immediately after the other */
             bool prepend = (0 == strcmp(key, PMIX_CLI_PREPEND_ENVAR));
+
+            PMIX_ENVAR_CONSTRUCT(&envt);
             param = strdup(ordered[k].value);
             if (k + 1 >= nordered || 0 != strcmp(ordered[k + 1].key, key)) {
                 // the value it edits with is missing
@@ -300,28 +310,19 @@ done:
 }
 
 /*
- * This function takes a "char ***app_env" parameter to handle the
- * specific case:
+ * Build one app context from one segment of the command line.
  *
- *   prun --mca foo bar -app appfile
- *
- * That is, we'll need to keep foo=bar, but the presence of the app
- * file will cause an invocation of parse_appfile(), which will cause
- * one or more recursive calls back to create_app().  Since the
- * foo=bar value applies globally to all apps in the appfile, we need
- * to pass in the "base" environment (that contains the foo=bar value)
- * when we parse each line in the appfile.
- *
- * This is really just a special case -- when we have a simple case like:
- *
- *   prun --mca foo bar -np 4 hostname
- *
- * Then the upper-level function (parse_locals()) calls create_app()
- * with a NULL value for app_env, meaning that there is no "base"
- * environment that the app needs to be created from.
+ * There used to be a "char ***app_env" parameter here, described as the
+ * base environment to carry across the recursive create_app() calls that an
+ * appfile produced.  There is no recursion any more - an appfile is read
+ * into the command line up front, by prte_parse_appfile() in prte.c, before
+ * any of this runs - and this function had long since stopped writing
+ * through the parameter, so the caller's variable was always NULL and
+ * everything it was plumbed through was a no-op.  It is gone rather than
+ * left looking load-bearing.
  */
 static int create_app(prte_schizo_base_module_t *schizo, char **argv,
-                      prte_pmix_app_t **app_ptr, bool *made_app, char ***app_env,
+                      prte_pmix_app_t **app_ptr, bool *made_app,
                       char ***hostfiles, char ***hosts, pmix_list_t *jobdata)
 {
     char cwd[PRTE_PATH_MAX];
@@ -332,7 +333,6 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
     pmix_cli_result_t results;
     char *tval;
     prte_info_item_t *iptr;
-    PRTE_HIDE_UNUSED_PARAMS(app_env);
 
     *made_app = false;
 
@@ -520,12 +520,36 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
     /* check for bozo error */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_NP);
     if (NULL != opt) {
-        count = strtol(opt->values[0], NULL, 10);
+        char *npend = NULL;
+        long nprocs;
+
+        /* A value that is not a number at all reads as 0, which is the
+         * spelling of "let the mapping policy compute it" - so "-n four"
+         * quietly launched some other number of processes rather than
+         * being refused.  maxprocs is an int, so a value that does not fit
+         * one has to go the same way: truncating it silently turns, say,
+         * 4294967297 into 1. */
+        errno = 0;
+        nprocs = strtol(opt->values[0], &npend, 10);
+        if (!isdigit((unsigned char) opt->values[0][0]) ||
+            NULL == npend || '\0' != *npend || 0 != errno ||
+            nprocs > (long) INT_MAX) {
+            prte_show_help("help-prun.txt", "bad-option-input", true,
+                           prte_tool_basename, "--" PRTE_CLI_NP,
+                           opt->values[0], "a number of processes");
+            rc = PRTE_ERR_FATAL;
+            goto cleanup;
+        }
+        count = (int) nprocs;
+        /* the leading-digit test above already refuses a sign, so this is
+         * unreachable from the command line - it is kept because the check
+         * is what the message names and the two must not drift apart */
         if (0 > count) {
             prte_show_help("help-prun.txt", "prun:negative-nprocs", true,
                            prte_tool_basename,
-                           app->app.argv[0], count, NULL);
-            return PRTE_ERR_FATAL;
+                           app->app.argv[0], count);
+            rc = PRTE_ERR_FATAL;
+            goto cleanup;
         }
         /* we don't require that the user provide --np or -n because
          * the cmd line might stipulate a mapping policy that computes
@@ -548,7 +572,8 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
                                        prte_tool_basename, PRTE_CLI_PREFIX,
                                        PRTE_CLI_PREFIX, "PRRTE", PRTE_CLI_PREFIX,
                                        param, opt->values[i]);
-                        return PRTE_ERR_FATAL;
+                        rc = PRTE_ERR_FATAL;
+                        goto cleanup;
                     }
                 }
             }
@@ -559,8 +584,13 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
 
         opt = pmix_cmd_line_get_param(&results, PRTE_CLI_PMIX_PREFIX);
         if (NULL != opt) {
-            // only allow one instance of it, or all must be the same
-            if (1 < (count = pmix_cmd_line_get_ninsts(&results, PRTE_CLI_PREFIX))) {
+            /* Only allow one instance of it, or all must be the same.
+             * Count THIS option's values: counting PRTE_CLI_PREFIX's here
+             * both skipped the check whenever no --prefix was given, and
+             * walked opt->values past its terminator when more --prefix
+             * values were given than --pmix-prefix ones - "--prefix /x
+             * --prefix /x --pmix-prefix /y" segfaulted on the NULL. */
+            if (1 < (count = pmix_cmd_line_get_ninsts(&results, PRTE_CLI_PMIX_PREFIX))) {
                 param = NULL;
                 for (i=0; i < count; i++) {
                     if (NULL == param) {
@@ -570,7 +600,8 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
                                        prte_tool_basename, PRTE_CLI_PMIX_PREFIX,
                                        PRTE_CLI_PMIX_PREFIX, "PMIx", PRTE_CLI_PMIX_PREFIX,
                                        param, opt->values[i]);
-                        return PRTE_ERR_FATAL;
+                        rc = PRTE_ERR_FATAL;
+                        goto cleanup;
                     }
                 }
             }
@@ -641,7 +672,8 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
                     prte_show_help("help-plm-base.txt", "multiple-app-prefixes", true,
                                    prte_tool_basename, PRTE_CLI_APP_PREFIX,
                                    PRTE_CLI_APP_PREFIX, param, opt->values[i]);
-                    return PRTE_ERR_FATAL;
+                    rc = PRTE_ERR_FATAL;
+                    goto cleanup;
                 }
             }
         }
@@ -659,7 +691,8 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
             prte_show_help("help-plm-base.txt", "prefix-conflict", true,
                            prte_tool_basename, PRTE_CLI_APP_PREFIX, opt2->values[0],
                            PRTE_CLI_NO_APP_PREFIX);
-            return PRTE_ERR_FATAL;
+            rc = PRTE_ERR_FATAL;
+            goto cleanup;
         }
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PREFIX, NULL, PMIX_STRING);
     } else if (NULL != getenv("PMIX_APP_NO_PREFIX")) {
@@ -668,7 +701,8 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
             prte_show_help("help-plm-base.txt", "prefix-conflict", true,
                            prte_tool_basename, PRTE_CLI_APP_PREFIX, opt2->values[0],
                            "PMIX_APP_NO_PREFIX");
-            return PRTE_ERR_FATAL;
+            rc = PRTE_ERR_FATAL;
+            goto cleanup;
         }
         // allow the cmd line to override the environment
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PREFIX, NULL, PMIX_STRING);
@@ -710,6 +744,12 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv,
         app->rtos = PMIx_Argv_join(opt->values, ',');
     }
 
+    /* The app is made.  Say so unconditionally rather than returning
+     * whatever the last PMIX_INFO_LIST_ADD happened to leave in rc: a
+     * failure from any of them is not acted on where it happens, so a stale
+     * one here would hand the caller an error alongside made_app == true -
+     * and the caller, seeing the error, drops the app it was just given. */
+    rc = PRTE_SUCCESS;
     *app_ptr = app;
     app = NULL;
     *made_app = true;
@@ -853,7 +893,7 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
                       pmix_cli_result_t *results)
 {
     int i, rc;
-    char **temp_argv, **env;
+    char **temp_argv;
     prte_pmix_app_t *app;
     bool made_app;
 
@@ -861,28 +901,17 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
     temp_argv = NULL;
     PMIx_Argv_append_nosize(&temp_argv, argv[0]);
 
-    /* NOTE: This bogus env variable is necessary in the calls to
-     create_app(), below.  See comment immediately before the
-     create_app() function for an explanation. */
-
-    env = NULL;
     for (i = 1; NULL != argv[i]; ++i) {
         if (0 == strcmp(argv[i], ":")) {
             /* Make an app with this argv */
             if (PMIx_Argv_count(temp_argv) > 1) {
-                if (NULL != env) {
-                    PMIx_Argv_free(env);
-                    env = NULL;
-                }
                 app = NULL;
-                rc = create_app(schizo, temp_argv, &app, &made_app, &env,
+                rc = create_app(schizo, temp_argv, &app, &made_app,
                                 hostfiles, hosts, jobdata);
                 if (PRTE_SUCCESS != rc) {
-                    /* Assume that the error message has already been
-                     printed; create_app may still have filled in "env"
-                     before it failed, and it belongs to us either way */
+                    /* assume that the error message has already been
+                     printed */
                     PMIx_Argv_free(temp_argv);
-                    PMIx_Argv_free(env);
                     return rc;
                 }
                 if (made_app) {
@@ -901,15 +930,14 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
 
     if (PMIx_Argv_count(temp_argv) > 1) {
         app = NULL;
-        rc = create_app(schizo, temp_argv, &app, &made_app, &env,
+        rc = create_app(schizo, temp_argv, &app, &made_app,
                         hostfiles, hosts, jobdata);
         if (PRTE_SUCCESS != rc) {
-            /* this return used to skip the two frees below entirely, so
-             * any command line that fails its final segment leaked both -
+            /* this return used to skip the free below entirely, so any
+             * command line that fails its final segment leaked temp_argv -
              * "--display map --display cpus" is enough, since a repeated
              * option is refused here */
             PMIx_Argv_free(temp_argv);
-            PMIx_Argv_free(env);
             return rc;
         }
         if (made_app) {
@@ -917,9 +945,6 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
         }
     }
 
-    if (NULL != env) {
-        PMIx_Argv_free(env);
-    }
     PMIx_Argv_free(temp_argv);
 
     /* every segment has now been seen, so it can be decided whether the
