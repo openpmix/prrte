@@ -55,4 +55,3 @@ discovers nodes+slots; `rmaps/lsf` handles affinity.
 - `testbuild_lsf.h` exists so CI can build the component without LSF
   installed; keep any new LSF API you call mirrored there under
   `PRTE_TESTBUILD_LAUNCHERS`.
-</content>

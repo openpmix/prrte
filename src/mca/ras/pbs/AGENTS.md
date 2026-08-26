@@ -56,4 +56,3 @@ On success it records `prte_num_allocated_nodes` and returns
 - `discover` ignores any user hostfile/dash-host — PBS is authoritative.
 - The Cobalt variant is a first-class alias throughout; keep both env
   names handled in `query`, `allocate`, and `discover`.
-</content>

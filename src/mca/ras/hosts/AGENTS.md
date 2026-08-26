@@ -100,4 +100,3 @@ handled something, else `PMIX_ERR_TAKE_NEXT_OPTION`.
 - Because this is the lowest-priority component, returning a hard error
   (rather than `TAKE_NEXT_OPTION`) from `allocate` will fail the whole
   allocation — reserve hard errors for genuine parse failures.
-</content>

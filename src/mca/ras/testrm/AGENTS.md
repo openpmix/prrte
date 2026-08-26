@@ -43,4 +43,3 @@ mapper/launch tests distinct from the user-facing `--hostfile` path
 - Unlike `ras/hosts`, this component ignores `--host`/`--hostfile`/the
   default hostfile; it reads *only* its configured file. Keep it minimal
   — its value is being a predictable, RM-shaped test fixture.
-</content>
