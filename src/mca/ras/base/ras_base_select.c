@@ -27,6 +27,7 @@
 #include <string.h>
 
 #include "src/mca/base/pmix_base.h"
+#include "src/mca/errmgr/errmgr.h"
 #include "src/mca/mca.h"
 
 #include "src/mca/ras/base/base.h"
@@ -45,7 +46,7 @@ int prte_ras_base_select(void)
     prte_ras_base_module_t *nmodule;
     prte_ras_base_selected_module_t *newmodule, *mod;
     pmix_list_t candidates;
-    int rc, priority;
+    int rc, priority = 0;
     bool inserted;
 
     if (selected) {
@@ -79,6 +80,11 @@ int prte_ras_base_select(void)
         pmix_output_verbose(5, prte_ras_base_framework.framework_output,
                             "mca:ras:select: Querying component [%s]",
                             component->pmix_mca_component_name);
+        /* priority is seeded above rather than left to the query: these are
+         * run-time loadable plugins, so a component that answers with a
+         * module and forgets to set it is a thing that can be installed, and
+         * ordering the candidates on an uninitialized read is worse than
+         * ordering them last */
         rc = component->pmix_mca_query_component(&module, &priority);
 
         /* If no module was returned, then skip component */
@@ -98,6 +104,10 @@ int prte_ras_base_select(void)
 
         /* add to the candidate list */
         newmodule = PMIX_NEW(prte_ras_base_selected_module_t);
+        if (NULL == newmodule) {
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            continue;
+        }
         newmodule->pri = priority;
         newmodule->module = nmodule;
         newmodule->component = component;
