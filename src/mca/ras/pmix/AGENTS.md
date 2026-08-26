@@ -32,7 +32,7 @@ Files:
 | File | Contents |
 |------|----------|
 | `ras_pmix_component.c` | Registration; `open`/`register`; `query` returns the module at priority 20; scheduler-connection MCA params. |
-| `ras_pmix.c` | `allocate` (no-op), `modify`, `finalize`, and the async passthrough callbacks. |
+| `ras_pmix.c` | `init` (publish the scheduler's whereabouts), `allocate` (no-op), `modify`, `finalize`, and the async passthrough callbacks. |
 | `ras_pmix.h` | `prte_ras_pmix_component_t` (server procid, uri, connection order, retries, …). |
 
 ---
@@ -52,9 +52,34 @@ Files:
   `prte_ras_base_complete_request`, and relays the result to the original
   caller.
 
-MCA params (`ras_pmix_*`) configure the scheduler connection: `uri`,
-`nspace`, `rank`, `system_scheduler`, `connection_order`, `server_pid`,
-`server_host`, `max_retries`, `retry_delay`.
+- **`init()`** is where the MCA parameters become real. Every
+  `ras_pmix_*` connection parameter is the name of a PMIx attach
+  attribute:
+
+  | parameter | attribute |
+  |-----------|-----------|
+  | `uri` | `PMIX_SERVER_URI` |
+  | `nspace` | `PMIX_SERVER_NSPACE` |
+  | `server_pid` | `PMIX_SERVER_PIDINFO` |
+  | `server_host` | `PMIX_SERVER_HOSTNAME` (declared; no PTL reads it yet, so it is forwarded rather than acted on) |
+  | `connection_order` | `PMIX_CONNECTION_ORDER` |
+  | `max_retries` | `PMIX_CONNECT_MAX_RETRIES` |
+  | `retry_delay` | `PMIX_CONNECT_RETRY_DELAY` |
+  | `system_scheduler` | `PMIX_CONNECT_TO_SCHEDULER` (always sent) |
+
+  `init()` builds that array and hands it to
+  `prte_pmix_set_scheduler_directives()`, which parks it in
+  `prte_pmix_server_globals` for `prte_pmix_set_scheduler()` to use when
+  it attaches. A parameter left at its default contributes nothing, so a
+  DVM that has been told nothing gets the same bare rendezvous scan the
+  attach has always done.
+
+  **`rank` is the one with no attribute**, and deliberately sends
+  nothing: `PMIX_SERVER_RANK` is a `PMIx_server_init` attribute — the
+  rank a server takes for *itself* — and PMIx identifies an attach target
+  by nspace and rendezvous, not by rank. Sent here it would select
+  nothing and be forwarded to the server as an assertion PRRTE has no
+  business making. See [`docs/todo.rst`](../../../../docs/todo.rst).
 
 ---
 
@@ -128,3 +153,28 @@ MCA params (`ras_pmix_*`) configure the scheduler connection: `uri`,
   nodes back to the RM, and a request the scheduler grants but PRRTE then
   fails to apply locally is not compensated either. See
   [`docs/todo.rst`](../../../../docs/todo.rst).
+
+- **The parameters have to be *pushed*, because the boundary only crosses
+  one way.** The knowledge of where the scheduler is belongs to this
+  component, which may be a run-time loadable plugin — so nothing in
+  `libprrte` may name `prte_mca_ras_pmix_component` (a unit test tried,
+  and failed the `--enable-mca-dso` link). The attach belongs to
+  `prte_pmix_set_scheduler()`, is made **once** for the whole daemon, and
+  is triggered by whichever of allocation, session control or tool
+  connection wants a scheduler first. So `init()` — which runs at
+  selection, ahead of all of them — pushes, rather than the shim pulling.
+  Doing it any later would let one of those consumers burn the one look
+  with nothing to aim it. The other half of that ordering is that
+  `pmix_server_init()` — which zeroes the pair of globals the directives
+  live in — runs at `ess_hnp_module.c:249`, well ahead of
+  `prte_ras_base_select()` at :338. Reverse them and the store is wiped
+  the moment it is made.
+- **An MCA variable writes an `int` through whatever storage it is
+  given**, so `rank`, `server_pid` and the retry pair are registered
+  against file-static `int` proxies and copied into their real types
+  afterwards, the way `nspace` already was. Handing the base a
+  `pmix_rank_t *` or a `pid_t *` had it write four bytes of `int` through
+  a pointer of another type.
+- **An over-long `ras_pmix_nspace` is refused, not truncated.**
+  `PMIx_Load_nspace` silently cuts at `PMIX_MAX_NSLEN`, and a truncated
+  name is a different scheduler — most likely one that does not exist.

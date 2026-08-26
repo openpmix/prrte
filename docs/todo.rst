@@ -32,6 +32,19 @@ Runtime behavior
 surface exists for SLURM only.  Everything above the component is
 RM-agnostic; what is missing is the Flux-side conversation.
 
+**``ras_pmix_rank`` names nothing PMIx can act on.**  Every other
+``ras_pmix_*`` connection parameter is the name of a PMIx attach attribute
+and is now handed to ``PMIx_tool_attach_to_server`` (see
+``src/mca/ras/pmix/``).  This one has no counterpart: ``PMIX_SERVER_RANK`` is
+a ``PMIx_server_init`` attribute — the rank a server takes for *itself* — and
+PMIx identifies an attach target by namespace and rendezvous, so a rank
+selects nothing.  ``ras_pmix_server_host`` is a milder version of the same
+thing: ``PMIX_SERVER_HOSTNAME`` is the attribute defined for what the
+parameter means, but no PTL reads it, so it is forwarded to the server rather
+than used to choose one.  Either PMIx grows a way to name a scheduler by
+these, or the parameters should go; they are registered and reported by
+``prte_info`` today, which is a promise neither can keep.
+
 **``ras/pmix`` forwards allocation requests to a scheduler and never gives
 anything back.**  The component (``src/mca/ras/pmix/``) exists to relay a
 runtime ``PMIx_Allocation_request`` to a host PMIx server acting as the system
@@ -524,6 +537,12 @@ does.
      - nothing.  The framework's own four files only — the driver, the
        node insert, the framework hooks and the selector.  The ``ras``
        *components* are not covered by this and stay in the table below.
+   * - ``src/mca/ras/pmix``
+     - 2026-08-26
+     - nothing.  Both files.  Note that nothing automated exercises this
+       component's one real path: there is no PMIx scheduler in any
+       harness, so the review is a reading plus what ``make check`` can
+       reach through the module vtable.
    * - ``src/event``
      - 2026-07-31
      - nothing

@@ -824,6 +824,44 @@ static int test_pmix_gate(void)
             PMIX_LIST_DESTRUCT(&nodes);
         }
 
+        /* init() must hand the component's connection parameters to the code
+         * that goes looking for the scheduler.
+         *
+         * Every ras_pmix_* connection parameter is the name of a PMIx attach
+         * attribute - ras_pmix_uri is PMIX_SERVER_URI, the retry pair is
+         * PMIX_CONNECT_MAX_RETRIES/PMIX_CONNECT_RETRY_DELAY - and not one of
+         * them was ever handed to anything: the attach passed only
+         * PMIX_CONNECT_TO_SCHEDULER and PMIX_TOOL_CONNECT_OPTIONAL, so PRRTE
+         * scanned for a rendezvous and took whatever it found while the
+         * parameter naming the scheduler the site meant was accepted,
+         * reported by prte_info, used to decide that this component is the
+         * allocator - and then ignored.
+         *
+         * The retry pair is what this checks because it is the half that is
+         * always published (the parameters document defaults, so a user who
+         * reads that is entitled to get them) and because it needs no string
+         * MCA variable to be written from the test. */
+        CHECK("pmix: has an init", NULL != mod->init);
+        if (NULL != mod->init) {
+            bool sawmax = false, sawdelay = false;
+            size_t d;
+
+            CHECK("pmix: init succeeds", PRTE_SUCCESS == mod->init());
+            for (d = 0; d < prte_pmix_server_globals.nscheddirs; d++) {
+                if (PMIx_Check_key(prte_pmix_server_globals.scheduler_directives[d].key,
+                                   PMIX_CONNECT_MAX_RETRIES)) {
+                    sawmax = true;
+                } else if (PMIx_Check_key(prte_pmix_server_globals.scheduler_directives[d].key,
+                                          PMIX_CONNECT_RETRY_DELAY)) {
+                    sawdelay = true;
+                }
+            }
+            CHECK("pmix: init publishes the retry count", sawmax);
+            CHECK("pmix: init publishes the retry delay", sawdelay);
+            /* leave nothing behind for the rest of the suite */
+            prte_pmix_set_scheduler_directives(NULL, 0);
+        }
+
         /* With no scheduler reachable, modify() must say UNREACH.
          *
          * It used to say PMIX_ERR_TAKE_NEXT_OPTION, from a time when the
