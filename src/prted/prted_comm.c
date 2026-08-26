@@ -83,8 +83,6 @@
  */
 static const char *get_prted_comm_cmd_str(int command);
 
-static pmix_pointer_array_t *procs_prev_ordered_to_terminate = NULL;
-
 /*
  * Continuations for the three daemon commands that cannot finish until PMIx
  * has finished something for us.
@@ -307,10 +305,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
     pmix_pointer_array_t procarray;
     prte_proc_t *proct;
     char *cmd_str = NULL;
-    pmix_pointer_array_t *procs_to_kill = NULL;
-    int32_t num_procs, num_new_procs = 0, p;
-    prte_proc_t *cur_proc = NULL, *prev_proc = NULL;
-    bool found = false;
+    int32_t num_procs;
     FILE *fp;
     char gscmd[256], path[1035], *pathptr;
     char string[256], *string_ptr = string;
@@ -318,7 +313,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
     char *tmp;
     pmix_rank_t *ranks;
     prte_daemon_caddy_t *cd;
-    PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
     /* unpack the command */
     n = 1;
@@ -465,105 +460,6 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
                                  "%s prted:comm:add_procs failed to launch on error %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(ret)));
         }
-        break;
-
-    case PRTE_DAEMON_ABORT_PROCS_CALLED:
-        if (prte_debug_daemons_flag) {
-            pmix_output(0, "%s prted_cmd: received abort_procs report",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-        }
-
-        /* Number of processes */
-        n = 1;
-        ret = PMIx_Data_unpack(NULL, buffer, &num_procs, &n, PMIX_INT32);
-        if (PMIX_SUCCESS != ret) {
-            PRTE_ERROR_LOG(ret);
-            goto CLEANUP;
-        }
-
-        /* Retrieve list of processes */
-        procs_to_kill = PMIX_NEW(pmix_pointer_array_t);
-        pmix_pointer_array_init(procs_to_kill, num_procs, INT32_MAX, 2);
-
-        /* Keep track of previously terminated, so we don't keep ordering the
-         * same processes to die.
-         */
-        if (NULL == procs_prev_ordered_to_terminate) {
-            procs_prev_ordered_to_terminate = PMIX_NEW(pmix_pointer_array_t);
-            pmix_pointer_array_init(procs_prev_ordered_to_terminate, num_procs + 1, INT32_MAX, 8);
-        }
-
-        num_new_procs = 0;
-        for (i = 0; i < num_procs; ++i) {
-            cur_proc = PMIX_NEW(prte_proc_t);
-
-            n = 1;
-            ret = PMIx_Data_unpack(NULL, buffer, &(cur_proc->name), &n, PMIX_PROC);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                PMIX_RELEASE(cur_proc);
-                goto ABORT_PROC_CLEANUP;
-            }
-
-            /* See if duplicate */
-            found = false;
-            for (p = 0; p < procs_prev_ordered_to_terminate->size; ++p) {
-                if (NULL
-                    == (prev_proc = (prte_proc_t *)
-                            pmix_pointer_array_get_item(procs_prev_ordered_to_terminate, p))) {
-                    continue;
-                }
-                if (PMIX_CHECK_PROCID(&cur_proc->name, &prev_proc->name)) {
-                    found = true;
-                    break;
-                }
-            }
-
-            PMIX_OUTPUT_VERBOSE(
-                (2, prte_debug_output,
-                 "%s prted:comm:abort_procs Application %s requests term. of %s (%2d of %2d) %3s.",
-                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender),
-                 PRTE_NAME_PRINT(&(cur_proc->name)), i, num_procs, (found ? "Dup" : "New")));
-
-            /* If not a duplicate, then add to the to_kill list */
-            if (!found) {
-                pmix_pointer_array_add(procs_to_kill, (void *) cur_proc);
-                PMIX_RETAIN(cur_proc);
-                pmix_pointer_array_add(procs_prev_ordered_to_terminate, (void *) cur_proc);
-                num_new_procs++;
-            } else {
-                /* nobody took a reference to it */
-                PMIX_RELEASE(cur_proc);
-            }
-            cur_proc = NULL;
-        }
-
-        /*
-         * Send the request to terminate
-         */
-        if (num_new_procs > 0) {
-            PMIX_OUTPUT_VERBOSE((2, prte_debug_output,
-                                 "%s prted:comm:abort_procs Terminating application requested "
-                                 "processes (%2d / %2d).",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_new_procs, num_procs));
-            prte_plm.terminate_procs(procs_to_kill);
-        } else {
-            PMIX_OUTPUT_VERBOSE((2, prte_debug_output,
-                                 "%s prted:comm:abort_procs No new application processes to "
-                                 "terminating from request (%2d / %2d).",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_new_procs, num_procs));
-        }
-    ABORT_PROC_CLEANUP:
-        /* terminate_procs copies what it needs, so release our tracking
-         * array and the references it holds */
-        for (p = 0; p < procs_to_kill->size; ++p) {
-            cur_proc = (prte_proc_t *) pmix_pointer_array_get_item(procs_to_kill, p);
-            if (NULL != cur_proc) {
-                PMIX_RELEASE(cur_proc);
-            }
-        }
-        PMIX_RELEASE(procs_to_kill);
-        procs_to_kill = NULL;
         break;
 
         /****    DEFINE PSET    ****/

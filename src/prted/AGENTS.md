@@ -267,7 +267,6 @@ a string in `get_prted_comm_cmd_str()`.
 | `KILL_LOCAL_PROCS` | Kill the named procs, or all of them if the list is empty. |
 | `SIGNAL_LOCAL_PROCS` | Deliver a signal to the named **job**'s local procs. |
 | `ADD_LOCAL_PROCS` / `DVM_ADD_PROCS` | Hand the launch message to `odls.launch_local_procs`. |
-| `ABORT_PROCS_CALLED` | An app called `PMIx_Abort`; terminate the listed procs (deduplicated against everything already ordered to die). |
 | `DEFINE_PSET` | Register a process set with the local PMIx server. |
 | `EXIT_CMD` | Orderly shutdown once our children and routing children are gone. |
 | `HALT_VM_CMD` | Abnormal shutdown; notify attached tools, then terminate. |
@@ -287,10 +286,26 @@ Rules that this switch has broken before and will break again:
 - **`break` inside a `for` inside a `case` leaves the loop, not the
   switch.** The `GET_STACK_TRACES` case relies on this deliberately;
   read carefully before adding one.
+- **`GET_STACK_TRACES` is the one command that does block the loop**, and
+  knowingly: it `popen`s `gstack` against each local proc and reads it to
+  EOF, on the progress thread. It is a diagnostic reached from
+  `--timeout --get-stack-traces`, when the daemon is already in trouble
+  and the traces matter more than its latency. Do not take it as licence
+  for anything else here, and do not add work to it.
 - **Do not block.** See the thread rule above — a command that must wait
   on PMIx is written as a continuation, not as a wait on a lock.
 - **Do not assume the daemon job object exists.** `prte_get_job_data_object`
   can return NULL during teardown.
+- **A `case` with no sender is dead, and there is no compatibility reason
+  to keep one.** `ABORT_PROCS_CALLED` was such a case for a long time: an
+  app calling `PMIx_Abort` reaches `pmix_server_abort_fn` and is answered
+  entirely inside `prted/pmix` (`_client_abort` activates
+  `PRTE_PROC_STATE_CALLED_ABORT`), and nothing anywhere packed the daemon
+  command. Its ~100 lines carried a file-static array of every proc ever
+  ordered to die, retained and never emptied, which on a persistent DVM
+  would have grown for the life of the daemon. Before adding a command
+  here, grep for something that packs it; before keeping one, grep the
+  same way.
 
 ### The shrink path is subtler than it looks
 
