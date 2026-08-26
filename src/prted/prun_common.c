@@ -51,9 +51,6 @@
 #ifdef HAVE_SYS_TYPES_H
 #    include <sys/types.h>
 #endif /* HAVE_SYS_TYPES_H */
-#ifdef HAVE_SYS_WAIT_H
-#    include <sys/wait.h>
-#endif /* HAVE_SYS_WAIT_H */
 #ifdef HAVE_SYS_TIME_H
 #    include <sys/time.h>
 #endif /* HAVE_SYS_TIME_H */
@@ -70,7 +67,6 @@
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/threads/pmix_mutex.h"
-#include "src/util/daemon_init.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/prte_cmd_line.h"
@@ -95,8 +91,6 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_quit.h"
 #include "src/runtime/runtime.h"
-
-#include "src/prted/prted.h"
 
 typedef struct {
     prte_pmix_lock_t lock;
@@ -151,7 +145,6 @@ static child_status_t *child_statuses = NULL;
 static size_t evid = INT_MAX;
 static pmix_proc_t myproc;
 static bool verbose = false;
-static pmix_list_t forwarded_signals;
 
 static void signal_forward_callback(int signal);
 
@@ -518,30 +511,6 @@ static int stdin_target_rank(pmix_cli_result_t *results, pmix_rank_t *rank)
     return PRTE_SUCCESS;
 }
 
-static int wait_pipe[2];
-
-static int wait_dvm(pid_t pid)
-{
-    char reply;
-    int rc;
-    int status;
-
-    close(wait_pipe[1]);
-    do {
-        rc = read(wait_pipe[0], &reply, 1);
-    } while (0 > rc && EINTR == errno);
-
-    if (1 == rc && 'K' == reply) {
-        return 0;
-    } else if (0 == rc) {
-        waitpid(pid, &status, 0);
-        if (WIFEXITED(status)) {
-            return WEXITSTATUS(status);
-        }
-    }
-    return 255;
-}
-
 int prun_common(pmix_cli_result_t *results,
                 prte_schizo_base_module_t *schizo,
                 int pargc, char **pargv)
@@ -564,7 +533,6 @@ int prun_common(pmix_cli_result_t *results,
     uint32_t ui32;
     pid_t pid;
     prte_ess_base_signal_t *sig;
-    prte_event_list_item_t *evitm;
     pmix_value_t *val;
     pmix_data_array_t darray;
     char hostname[PRTE_PATH_MAX];
@@ -582,7 +550,6 @@ int prun_common(pmix_cli_result_t *results,
      * own copy now; this is the one prun and "prterun --dvm" run. */
     verbose = pmix_cmd_line_is_taken(results, PRTE_CLI_VERBOSE);
     PMIX_CONSTRUCT(&apps, pmix_list_t);
-    PMIX_CONSTRUCT(&forwarded_signals, pmix_list_t);
     /* this only names the tool to PMIx, so a host that will not tell us
      * its name is not fatal - but the buffer has to be readable either
      * way, and gethostname leaves it untouched when it fails */
@@ -592,24 +559,15 @@ int prun_common(pmix_cli_result_t *results,
     }
     hostname[sizeof(hostname) - 1] = '\0';
 
-    /* detach from controlling terminal
-     * otherwise, remain attached so output can get to us
-     */
-    if (pmix_cmd_line_is_taken(results, PRTE_CLI_DAEMONIZE)) {
-        if (0 > pipe(wait_pipe)) {
-            return PRTE_ERROR;
-        }
-        prte_state_base.parent_fd = wait_pipe[1];
-        prte_daemon_init_callback(NULL, wait_dvm);
-        close(wait_pipe[0]);
-    } else {
 #if defined(HAVE_SETSID)
-        /* see if we were directed to separate from current session */
-        if (pmix_cmd_line_is_taken(results, PRTE_CLI_SET_SID)) {
-            setsid();
-        }
-#endif
+    /* see if we were directed to separate from current session.  There is
+     * no --daemonize arm to this: neither prun nor prterun offers the
+     * option (it was removed from prterun), so the fork-and-wait that used
+     * to sit here could not be reached. */
+    if (pmix_cmd_line_is_taken(results, PRTE_CLI_SET_SID)) {
+        setsid();
     }
+#endif
 
     /** setup callbacks for signals we should forward */
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_FWD_SIGNALS);
@@ -1134,11 +1092,6 @@ DONE:
         child_statuses = cstmp->next;
         free(cstmp);
     }
-    PMIX_LIST_FOREACH(evitm, &forwarded_signals, prte_event_list_item_t)
-    {
-        prte_event_signal_del(&evitm->ev);
-    }
-    PMIX_LIST_DESTRUCT(&forwarded_signals);
     if (NULL != papps) {
         PMIX_APP_FREE(papps, napps);
     }

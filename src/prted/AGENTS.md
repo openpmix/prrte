@@ -448,6 +448,13 @@ them. `--get-stack-traces` silently did nothing, because the DVM reads the
 value and not the key's presence. Do not share a scratch variable across
 blocks here; set what you are about to send.
 
+**There is no `--daemonize` arm to the session handling, and re-adding one
+is not a fix.** Neither `prun` nor `prterun` offers the option (it was
+removed from `prterun`), so the fork-and-wait that used to sit at the top of
+`prun_common()` — pipe, `prte_daemon_init_callback()`, `wait_dvm()`,
+`prte_state_base.parent_fd` — could not be reached, and nothing on the tool
+side ever wrote the 'K' its parent was waiting for.
+
 **"The job" means the whole spawn tree, and the `PMIX_EVENT_JOB_END`
 handler is deliberately *not* filtered to our own namespace.** A job
 spawned by ours outlives it by default, so our job's termination is not
