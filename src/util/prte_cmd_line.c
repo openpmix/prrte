@@ -18,6 +18,7 @@
 #include "prte_config.h"
 #include "constants.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <limits.h>
 #include <stdio.h>
@@ -202,4 +203,38 @@ bool prte_parse_umask(const char *value, mode_t *mask)
     }
     *mask = (mode_t) ul;
     return true;
+}
+
+int prte_parse_uint_option(const char *value, unsigned long limit,
+                           unsigned long *result)
+{
+    char *endptr;
+    unsigned long ul;
+
+    if (NULL == value || NULL == result) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    *result = 0;
+
+    /* A leading digit is what separates a number from everything else a
+     * user might type: strtoul() would otherwise accept leading white
+     * space and a sign, so "-1" would wrap into a very large value and
+     * " 2" would be read as 2 - and an empty string would come back as a
+     * perfectly successful zero. */
+    if (!isdigit((unsigned char) value[0])) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    errno = 0;
+    endptr = NULL;
+    ul = strtoul(value, &endptr, 10);
+    if (0 != errno || NULL == endptr || '\0' != endptr[0]) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    /* the caller names the field the value has to fit: truncating into it
+     * silently turns a value the user chose into a different one */
+    if (ul > limit) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    *result = ul;
+    return PRTE_SUCCESS;
 }

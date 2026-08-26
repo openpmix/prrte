@@ -360,6 +360,28 @@ PRTE_EXPORT int prte_load_appfile(const char *filename, char ***argv);
  */
 PRTE_EXPORT bool prte_parse_umask(const char *value, mode_t *mask);
 
+/**
+ * Interpret a command-line option value that has to be a non-negative
+ * decimal number.
+ *
+ * strtoul() reports a perfectly successful zero for a string with no
+ * digits in it, and zero is meaningful almost everywhere PRRTE asks for a
+ * number - "no timeout", "let the mapping policy compute the count",
+ * "rank 0".  So a misspelled value does not fail; it quietly means
+ * something else.  This refuses anything that is not a complete run of
+ * digits, and anything that does not fit the field the caller is going
+ * to store it in.
+ *
+ * @param value   the option's value
+ * @param limit   the largest value the caller's field can hold
+ * @param result  filled in on success, zero otherwise
+ *
+ * @retval PRTE_SUCCESS
+ * @retval PRTE_ERR_BAD_PARAM  not a number, or larger than @c limit
+ */
+PRTE_EXPORT int prte_parse_uint_option(const char *value, unsigned long limit,
+                                       unsigned long *result);
+
 END_C_DECLS
 
 #endif /* PRTE_CMD_LINE_H */

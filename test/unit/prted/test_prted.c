@@ -73,6 +73,7 @@
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
 #include "src/prted/prted.h"
+#include "src/util/prte_cmd_line.h"
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 
@@ -2340,6 +2341,168 @@ static int test_connections(void)
     return failures;
 }
 
+/*
+ * prte_parse_uint_option(): the numeric option values.
+ *
+ * strtoul() reports success and zero for a string with no digits in it, and
+ * zero is meaningful at nearly every place PRRTE asks for a number - "no
+ * timeout", "rank 0", "let the mapping policy decide" - so a misspelled
+ * value did not fail, it quietly meant something else.
+ */
+static int test_uint_option(void)
+{
+    int failures = 0;
+    unsigned long v;
+    size_t n;
+    const char *bad[] = {"four", "", "2x", " 2", "-1", "+2", "0x10", "1 ", NULL};
+
+    for (n = 0; NULL != bad[n]; n++) {
+        v = 12345;
+        CHECK(bad[n][0] ? bad[n] : "<empty>",
+              PRTE_SUCCESS != prte_parse_uint_option(bad[n], UINT32_MAX, &v));
+        CHECK("bad/zeroed", 0 == v);
+    }
+
+    CHECK("good/0", PRTE_SUCCESS == prte_parse_uint_option("0", 100, &v) && 0 == v);
+    CHECK("good/7", PRTE_SUCCESS == prte_parse_uint_option("7", 100, &v) && 7 == v);
+    CHECK("good/limit", PRTE_SUCCESS == prte_parse_uint_option("100", 100, &v) && 100 == v);
+    /* the caller names the field the value has to fit: silently truncating
+     * into it turns the value the user chose into a different one */
+    CHECK("over/limit", PRTE_SUCCESS != prte_parse_uint_option("101", 100, &v));
+    CHECK("over/int", PRTE_SUCCESS != prte_parse_uint_option("4294967297", UINT32_MAX, &v));
+    CHECK("null", PRTE_SUCCESS != prte_parse_uint_option(NULL, 100, &v));
+
+    return failures;
+}
+
+/* is KEY in the converted job info, and is it true? */
+static int jinfo_true(pmix_data_array_t *da, const char *key, bool *found)
+{
+    pmix_info_t *info;
+    size_t n;
+
+    *found = false;
+    if (NULL == da->array) {
+        return 0;
+    }
+    info = (pmix_info_t *) da->array;
+    for (n = 0; n < da->size; n++) {
+        if (PMIx_Check_key(info[n].key, key)) {
+            *found = true;
+            return PMIX_INFO_TRUE(&info[n]) ? 1 : 0;
+        }
+    }
+    return 0;
+}
+
+/*
+ * prte_prun_parse_common_cli(): the job-level directives a tool builds from
+ * its command line, for prun, prterun and prte alike.
+ *
+ *  - --get-stack-traces and --report-state-on-timeout are the bare presence
+ *    of an option, and were handed a "flag" that only the --enable-recovery
+ *    and --continuous blocks above them ever assigned.  On any command line
+ *    that gave neither - which is every command line that asks only for
+ *    stack traces - the DVM was told to take them "false", and the option
+ *    did nothing.  The DVM reads the value, not the key's presence.
+ *
+ *  - a value that has to be a number has to be checked for being one, or
+ *    the option is silently dropped (--timeout) or aimed somewhere else
+ *    (--stdin, which would have gone to rank 0).
+ */
+typedef struct {
+    const char *desc;
+    const char *tool;       /* which tool's option table to parse against */
+    const char *argv[8];
+    bool accept;
+    const char *truekey;    /* directive that must be present AND true */
+} common_cli_case_t;
+
+static common_cli_case_t common_cli_cases[] = {
+    {"stacktraces", "prterun", {"prterun", "--get-stack-traces", "hostname", NULL},
+     true, PMIX_TIMEOUT_STACKTRACES},
+    {"reportstate", "prterun", {"prterun", "--report-state-on-timeout", "hostname", NULL},
+     true, PMIX_TIMEOUT_REPORT_STATE},
+    /* --enable-recovery and --continuous are the only two blocks that ever
+     * wrote the shared "flag", and they exist only in prun's option table -
+     * so for prterun the value read below them was ALWAYS uninitialized.
+     * Check both tools: prun with the writer present, and prun without it. */
+    {"stacktraces/prun", "prun", {"prun", "--get-stack-traces", "hostname", NULL},
+     true, PMIX_TIMEOUT_STACKTRACES},
+    {"stacktraces/prun+recovery", "prun",
+     {"prun", "--enable-recovery", "--get-stack-traces", "hostname", NULL},
+     true, PMIX_TIMEOUT_STACKTRACES},
+    {"timeout/good", "prterun", {"prterun", "--timeout", "10", "hostname", NULL}, true, NULL},
+    {"timeout/word", "prterun", {"prterun", "--timeout", "ten", "hostname", NULL}, false, NULL},
+    {"timeout/empty", "prterun", {"prterun", "--timeout", "", "hostname", NULL}, false, NULL},
+    {"spawn-timeout/word", "prterun",
+     {"prterun", "--spawn-timeout", "soon", "hostname", NULL}, false, NULL},
+    {"stdin/all", "prterun", {"prterun", "--stdin", "all", "hostname", NULL}, true, NULL},
+    {"stdin/none", "prterun", {"prterun", "--stdin", "none", "hostname", NULL}, true, NULL},
+    {"stdin/rank", "prterun", {"prterun", "--stdin", "3", "hostname", NULL}, true, NULL},
+    {"stdin/word", "prterun", {"prterun", "--stdin", "second", "hostname", NULL}, false, NULL},
+    {NULL, NULL, {NULL}, false, NULL}
+};
+
+static int test_common_cli(void)
+{
+    prte_schizo_base_module_t *schizo;
+    common_cli_case_t *c;
+    pmix_cli_result_t results;
+    pmix_list_t apps;
+    pmix_data_array_t darray;
+    pmix_status_t prc;
+    int failures = 0, rc;
+    bool found, istrue;
+    char buf[128];
+    char *saved_actual;
+
+    schizo = envar_test_schizo();
+    if (NULL == schizo) {
+        return 1;
+    }
+    /* parse_cli picks its option table off prte_tool_actual, and the two
+     * tools do not offer the same options */
+    saved_actual = prte_tool_actual;
+
+    for (c = common_cli_cases; NULL != c->desc; c++) {
+        void *jinfo;
+
+        prte_tool_actual = (char *) c->tool;
+        PMIX_CONSTRUCT(&results, pmix_cli_result_t);
+        rc = schizo->parse_cli((char **) c->argv, &results, PMIX_CLI_SILENT);
+        snprintf(buf, sizeof(buf), "%s/parse", c->desc);
+        CHECK(buf, PRTE_SUCCESS == rc);
+        if (PRTE_SUCCESS != rc) {
+            PMIX_DESTRUCT(&results);
+            continue;
+        }
+
+        PMIX_CONSTRUCT(&apps, pmix_list_t);
+        PMIX_INFO_LIST_START(jinfo);
+        rc = prte_prun_parse_common_cli(jinfo, &results, schizo, &apps);
+        snprintf(buf, sizeof(buf), "%s/rc", c->desc);
+        CHECK(buf, c->accept == (PRTE_SUCCESS == rc));
+
+        if (c->accept && PRTE_SUCCESS == rc && NULL != c->truekey) {
+            PMIX_INFO_LIST_CONVERT(prc, jinfo, &darray);
+            istrue = jinfo_true(&darray, c->truekey, &found);
+            snprintf(buf, sizeof(buf), "%s/present", c->desc);
+            CHECK(buf, PMIX_SUCCESS == prc && found);
+            snprintf(buf, sizeof(buf), "%s/true", c->desc);
+            CHECK(buf, istrue);
+            PMIX_DATA_ARRAY_DESTRUCT(&darray);
+        }
+
+        PMIX_INFO_LIST_RELEASE(jinfo);
+        PMIX_LIST_DESTRUCT(&apps);
+        PMIX_DESTRUCT(&results);
+    }
+    prte_tool_actual = saved_actual;
+
+    return failures;
+}
+
 int main(void)
 {
     int rc, failures = 0, skipped = 0;
@@ -2417,6 +2580,8 @@ int main(void)
     failures += test_directive_distribution();
     failures += test_prefix_conflicts();
     failures += test_nprocs();
+    failures += test_uint_option();
+    failures += test_common_cli();
     failures += test_envar_order(&skipped);
     failures += test_envar_order_permutations(&skipped);
     failures += test_envar_order_mpmd(&skipped);
