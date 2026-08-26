@@ -263,10 +263,9 @@ static void display_cpus(prte_topology_t *t,
 void prte_ras_base_display_cpus(prte_job_t *jdata, char *nodelist)
 {
     char **nodes = NULL;
-    int i, j, m;
+    int i, j;
     prte_topology_t *t;
     prte_node_t *nptr;
-    bool moveon;
 
     if (NULL == nodelist) {
         /* output the available cpus for all topologies */
@@ -285,34 +284,20 @@ void prte_ras_base_display_cpus(prte_job_t *jdata, char *nodelist)
         return;
     }
     for (j=0; NULL != nodes[j]; j++) {
-        moveon = false;
-        for (i=0; i < prte_node_pool->size && !moveon; i++) {
-            nptr = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, i);
-            if (NULL == nptr) {
-                continue;
-            }
-            if (0 == strcmp(nptr->name, nodes[j])) {
-                /* a node that has not yet been launched upon carries no
-                 * topology - there is nothing to display for it */
-                if (NULL != nptr->topology) {
-                    display_cpus(nptr->topology, jdata, nodes[j]);
-                }
-                break;
-            }
-            if (NULL == nptr->aliases) {
-                continue;
-            }
-            /* no choice but an exhaustive search - fortunately, these lists are short! */
-            for (m = 0; NULL != nptr->aliases[m]; m++) {
-                if (0 == strcmp(nodes[j], nptr->aliases[m])) {
-                    /* this is the node! */
-                    if (NULL != nptr->topology) {
-                        display_cpus(nptr->topology, jdata, nodes[j]);
-                    }
-                    moveon = true;
-                    break;
-                }
-            }
+        /* prte_node_match is the one place that knows how a name resolves to
+         * a pool entry - the local-host aliases, the per-node alias list, and
+         * the fact that a pool entry may carry no name at all.  This walk used
+         * to be spelled out here and had already drifted from it: it compared
+         * nptr->name without a NULL check, which faults on any pool entry that
+         * has not been named yet. */
+        nptr = prte_node_match(NULL, nodes[j]);
+        if (NULL == nptr) {
+            continue;
+        }
+        /* a node that has not yet been launched upon carries no topology -
+         * there is nothing to display for it */
+        if (NULL != nptr->topology) {
+            display_cpus(nptr->topology, jdata, nodes[j]);
         }
     }
     PMIx_Argv_free(nodes);
@@ -379,7 +364,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
                              "%s ras:base:allocate reusing established base allocation for job %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_JOBID_PRINT(jdata->nspace)));
-        PMIX_DESTRUCT(&nodes);
+        PMIX_LIST_DESTRUCT(&nodes);
         goto DISPLAY;
     }
 
@@ -395,7 +380,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         }
         if (PRTE_ERR_ALLOCATION_PENDING == rc) {
             /* an allocation request is underway, so just do nothing */
-            PMIX_DESTRUCT(&nodes);
+            PMIX_LIST_DESTRUCT(&nodes);
             PMIX_RELEASE(caddy);
             return;
         } else if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
@@ -403,11 +388,11 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
             continue;
         } else if (PRTE_EXISTS == rc) {
             /* fixed allocation has already been discovered */
-            PMIX_DESTRUCT(&nodes);
+            PMIX_LIST_DESTRUCT(&nodes);
             goto DISPLAY;
         } else {
             PRTE_ERROR_LOG(rc);
-            PMIX_DESTRUCT(&nodes);
+            PMIX_LIST_DESTRUCT(&nodes);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PMIX_RELEASE(caddy);
             return;
@@ -420,7 +405,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     if (pmix_list_is_empty(&nodes)) {
         if (prte_allocation_required) {
             /* an allocation is required, so this is fatal */
-            PMIX_DESTRUCT(&nodes);
+            PMIX_LIST_DESTRUCT(&nodes);
             prte_show_help("help-ras-base.txt", "ras-base:no-allocation", true);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PMIX_RELEASE(caddy);
@@ -433,7 +418,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         node = PMIX_NEW(prte_node_t);
         if (NULL == node) {
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-            PMIX_DESTRUCT(&nodes);
+            PMIX_LIST_DESTRUCT(&nodes);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PMIX_RELEASE(caddy);
             return;
@@ -456,12 +441,12 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
      */
     if (PRTE_SUCCESS != (rc = prte_ras_base_node_insert(&nodes, jdata))) {
         PRTE_ERROR_LOG(rc);
-        PMIX_DESTRUCT(&nodes);
+        PMIX_LIST_DESTRUCT(&nodes);
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
         PMIX_RELEASE(caddy);
         return;
     }
-    PMIX_DESTRUCT(&nodes);
+    PMIX_LIST_DESTRUCT(&nodes);
 
 DISPLAY:
     /* the DVM's base allocation is now established; any later job that does
@@ -498,6 +483,12 @@ DISPLAY:
         if (NULL != hosts) {
             hostlist = PMIx_Argv_split(hosts, ';');
             free(hosts);
+            /* a specification that holds no name at all - "" or ";;" - splits
+             * to nothing, and PMIx_Argv_split says that with a NULL array
+             * rather than an empty one */
+            if (NULL == hostlist) {
+                goto topodone;
+            }
             for (j=0; NULL != hostlist[j]; j++) {
                 node = prte_node_match(NULL, hostlist[j]);
                 /* a node only acquires a topology once its daemon has
@@ -540,6 +531,7 @@ DISPLAY:
         }
     }
 
+topodone:
     /* set the job state to the next position */
     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOCATION_COMPLETE);
 
@@ -1247,9 +1239,28 @@ void prte_ras_base_teardown_reservation(prte_session_t *session,
         session->owner_job = NULL;
     }
 
-    /* deregister so the reservation can no longer be looked up / targeted.
-     * The session object itself is left for any still-running jobs that
-     * reference it (via session->jobs) and is reclaimed at DVM teardown. */
+    /* Disarm the time limit, if one was in force.  The limit is on the
+     * session's lifetime and that lifetime has just ended; leaving the event
+     * armed would fire session_timeout_cb() on a reservation that no longer
+     * exists and terminate whatever jobs are still recorded in session->jobs.
+     * This mirrors what session_des() does, and has to be done here as well
+     * because the session object is deliberately not released below. */
+    if (NULL != session->timer) {
+        prte_event_evtimer_del(session->timer->ev);
+        PMIX_RELEASE(session->timer);
+        session->timer = NULL;
+    }
+    session->timeout.tv_sec = 0;
+    session->timeout.tv_usec = 0;
+
+    /* Deregister so the reservation can no longer be looked up / targeted.
+     * The session OBJECT is deliberately not released: prte_job_t::session
+     * and ::target_sessions are borrowed pointers, so a job still running in
+     * this reservation would be left holding a dangling one.  That leaks the
+     * object - deregistering also puts it out of reach of prte_finalize's
+     * sweep over prte_sessions, which is the only thing that would have
+     * reclaimed it.  See "a torn-down reservation leaks its session object"
+     * in docs/todo.rst for what fixing it properly needs. */
     if (0 <= session->index) {
         pmix_pointer_array_set_item(prte_sessions, session->index, NULL);
         session->index = -1;
@@ -1464,8 +1475,30 @@ pmix_status_t prte_ras_base_parse_node_list(pmix_info_t *info, char **ndstring)
     return PMIX_ERR_BAD_PARAM;
 }
 
+/* Read a string-valued directive out of a request.
+ *
+ * req->info is the requester's own array - pmix_server_alloc_fn hands the
+ * client's data straight through - so every value in it arrived from a
+ * client or a tool and may be of any type.  Taking value.data.string from an
+ * entry that is not a string yields whatever the union happened to hold, and
+ * the first strdup/strcmp/PMIX_LOAD_NSPACE of it faults the HNP: any
+ * connected process could take the DVM down with a one-line allocation
+ * request.  Refuse instead, as PMIX_ALLOC_NODE_LIST and the activate
+ * directives already do - a caller that mistyped a key has to be told, not
+ * quietly handed a reservation it cannot name.
+ */
+static bool ras_base_get_string(const pmix_info_t *info, char **value)
+{
+    if (PMIX_STRING != info->value.type || NULL == info->value.data.string) {
+        return false;
+    }
+    *value = info->value.data.string;
+    return true;
+}
+
 static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
-                                           prte_session_t **dest_out)
+                                           prte_session_t **dest_out,
+                                           bool *created)
 {
     size_t n;
     char *target = NULL;        /* PMIX_ALLOC_TARGET namespace, if any */
@@ -1488,7 +1521,9 @@ static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
     for (n = 0; n < req->ninfo; n++) {
 #if defined(PMIX_ALLOC_TARGET)
         if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_TARGET)) {
-            target = req->info[n].value.data.string;
+            if (!ras_base_get_string(&req->info[n], &target)) {
+                return PMIX_ERR_BAD_PARAM;
+            }
             continue;
         }
 #endif
@@ -1501,17 +1536,26 @@ static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
 #endif
 #if defined(PMIX_ALLOC_INHERITANCE)
         if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_INHERITANCE)) {
-            inherit = req->info[n].value.data.uint8;
+            /* the disposition decides whether the nodes go back to the
+             * scheduler, so it must be the one the caller asked for and not
+             * one a type confusion produced */
+            if (!prte_pmix_value_get_inheritance(&req->info[n].value, &inherit)) {
+                return PMIX_ERR_BAD_PARAM;
+            }
             have_inherit = true;
             continue;
         }
 #endif
         if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
-            alloc_id = req->info[n].value.data.string;
+            if (!ras_base_get_string(&req->info[n], &alloc_id)) {
+                return PMIX_ERR_BAD_PARAM;
+            }
             continue;
         }
         if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_REQ_ID)) {
-            req_id = req->info[n].value.data.string;
+            if (!ras_base_get_string(&req->info[n], &req_id)) {
+                return PMIX_ERR_BAD_PARAM;
+            }
         }
     }
     (void) have_share;
@@ -1561,6 +1605,7 @@ static pmix_status_t ras_base_prepare_grow(prte_pmix_server_req_t *req,
         if (NULL == dest) {
             return PMIX_ERR_OUT_OF_RESOURCE;
         }
+        *created = true;
     }
 
     *dest_out = dest;
@@ -1641,6 +1686,10 @@ static void ras_base_set_alloc_response(prte_pmix_server_req_t *req,
      * (shared) session carries no allocation id, so nothing is reported. */
     rn = (NULL != dest->user_refid) ? 2 : 1;
     PMIX_INFO_CREATE(rinfo, rn);
+    if (NULL == rinfo) {
+        /* the grow itself succeeded - report it, minus the id */
+        return;
+    }
     PMIX_INFO_LOAD(&rinfo[0], PMIX_ALLOC_ID, dest->alloc_refid, PMIX_STRING);
     if (2 == rn) {
         PMIX_INFO_LOAD(&rinfo[1], PMIX_ALLOC_REQ_ID, dest->user_refid,
@@ -1665,6 +1714,7 @@ static void ras_base_complete_grow_request(prte_pmix_server_req_t *req)
     pmix_status_t rc;
     size_t n;
     bool found = false;
+    bool created = false;
 
     /* an add-host/add-hostfile request (from the --add-host and
      * --add-hostfile cmd line options) grows the DVM's general pool.
@@ -1685,7 +1735,7 @@ static void ras_base_complete_grow_request(prte_pmix_server_req_t *req)
         }
     }
 
-    rc = ras_base_prepare_grow(req, &dest);
+    rc = ras_base_prepare_grow(req, &dest, &created);
     if (PMIX_SUCCESS != rc) {
         req->pstatus = rc;
         return;
@@ -1702,14 +1752,14 @@ static void ras_base_complete_grow_request(prte_pmix_server_req_t *req)
         rc = prte_ras_base_parse_node_list(&req->info[n], &ndstring);
         if (PMIX_SUCCESS != rc) {
             req->pstatus = rc;
-            return;
+            goto unwind;
         }
 
         ret = prte_ras_base_insert_node_string(ndstring, dest);
         free(ndstring);
         if (PRTE_SUCCESS != ret) {
             req->pstatus = prte_pmix_convert_rc(ret);
-            return;
+            goto unwind;
         }
         found = true;
     }
@@ -1718,6 +1768,26 @@ static void ras_base_complete_grow_request(prte_pmix_server_req_t *req)
         prte_ras_base_activate_dvm_grow();
     }
     ras_base_set_alloc_response(req, dest);
+    return;
+
+unwind:
+    /* A PMIX_ALLOC_NEW that fails after its reservation was created must not
+     * leave that reservation behind: the requester is told the request failed
+     * and never learns the allocation id, so nothing can ever release it, and
+     * until the owning namespace terminates it holds a reference on the owner
+     * job and a slot in prte_sessions that a later lookup can still find.
+     * Unwind it exactly as pmix_server_session.c unwinds a half-built session.
+     * An EXTEND target, or the shared default session, is not ours to touch.
+     *
+     * Any nodes an earlier PMIX_ALLOC_NODE_LIST already contributed stay in
+     * the pool - a pool index is a PMIX_NODEID and must never be reused - and
+     * revert to the general pool as the reservation lets them go.  They keep
+     * PRTE_NODE_STATE_ADDED, so the next grow brings them into the DVM, which
+     * is the right answer for a node the allocator did grant us. */
+    if (created) {
+        prte_ras_base_teardown_reservation(dest, false);
+        PMIX_RELEASE(dest);
+    }
 }
 
 static int ras_base_find_shrink_targets(char **nodes, pmix_rank_t **ranks_out,
@@ -1801,10 +1871,21 @@ static int ras_base_create_shrink_campaign(prte_pmix_server_req_t *req,
     if (NULL != req) {
         PMIX_XFER_PROCID(&camp->requester, &req->tproc);
         for (size_t n = 0; n < req->ninfo; n++) {
+            char *sval;
+            /* the ids are only echoed back in the completion event, so a
+             * mistyped one is not worth failing the shrink over - but it must
+             * not be strdup'd off the wrong union member either.  Keep the
+             * first of a repeated key rather than leaking the earlier copy. */
             if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
-                camp->alloc_id = strdup(req->info[n].value.data.string);
+                if (NULL == camp->alloc_id &&
+                    ras_base_get_string(&req->info[n], &sval)) {
+                    camp->alloc_id = strdup(sval);
+                }
             } else if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_REQ_ID)) {
-                camp->req_id = strdup(req->info[n].value.data.string);
+                if (NULL == camp->req_id &&
+                    ras_base_get_string(&req->info[n], &sval)) {
+                    camp->req_id = strdup(sval);
+                }
             }
         }
         camp->have_requester = true;
@@ -1839,6 +1920,23 @@ static int ras_base_send_dvm_shrink(prte_shrink_campaign_t *camp,
     pmix_data_buffer_t msg;
     prte_daemon_cmd_flag_t cmd = PRTE_DAEMON_SHRINK_CMD;
     pmix_status_t rc;
+
+    /* Nothing to tell the DVM.  A release can legitimately name only nodes
+     * that carry no daemon - one a previous shrink handed back, one the DVM
+     * was never extended onto - and there is then no target to remove.
+     * Broadcasting it anyway is not harmless: the receiver sizes its target
+     * array from the count and PMIx refuses an unpack of zero values, so
+     * every daemon in the DVM logs PMIX_ERR_UNPACK_INADEQUATE_SPACE for a
+     * command that asked nothing of it. */
+    if (0 >= nranks) {
+        if (NULL != camp) {
+            /* cannot happen today - a campaign is only recorded for a
+             * non-empty target set - but a campaign left on the list never
+             * drains, so do not let that depend on a caller far from here */
+            ras_base_abort_dvm_shrink(camp, false, PMIX_SUCCESS);
+        }
+        return PRTE_SUCCESS;
+    }
 
     /* create the request */
     PMIX_DATA_BUFFER_CONSTRUCT(&msg);
@@ -1948,7 +2046,10 @@ static bool ras_base_teardown_by_alloc_id(prte_pmix_server_req_t *req)
 
     for (size_t n = 0; n < req->ninfo; n++) {
         if (PMIx_Check_key(req->info[n].key, PMIX_ALLOC_ID)) {
-            rel_alloc_id = req->info[n].value.data.string;
+            if (!ras_base_get_string(&req->info[n], &rel_alloc_id)) {
+                req->pstatus = PMIX_ERR_BAD_PARAM;
+                return true;
+            }
             break;
         }
     }
@@ -2117,6 +2218,11 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
 
     // create an allocation request tracker
     req = PMIX_NEW(prte_pmix_server_req_t);
+    if (NULL == req) {
+        PMIx_Argv_free(hostfiles);
+        PMIx_Argv_free(addhosts);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
     req->key = strdup("hosts");
     req->operation = strdup("ADDHOSTS");
     req->allocdir = PMIX_ALLOC_EXTEND;
@@ -2136,6 +2242,13 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
     }
     req->copy = true;
     req->info = PMIx_Info_create(req->ninfo);
+    if (NULL == req->info) {
+        PMIx_Argv_free(hostfiles);
+        PMIx_Argv_free(addhosts);
+        req->ninfo = 0;
+        PMIX_RELEASE(req);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
     i = 0;
     if (NULL != hostfiles) {
         tmp = PMIx_Argv_join(hostfiles, ',');
