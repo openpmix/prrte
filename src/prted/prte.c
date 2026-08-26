@@ -118,6 +118,14 @@ typedef struct {
     size_t ninfo;
 } mylock_t;
 
+/* A forwarded signal's job-control request.  PMIx borrows the target and
+ * directive arrays for the life of the operation, so they cannot be the
+ * caller's stack - see signal_forward_callback(). */
+typedef struct {
+    pmix_proc_t proc;
+    pmix_info_t info;
+} prte_sigfwd_t;
+
 static pmix_nspace_t spawnednspace;
 static pmix_proc_t myproc;
 static bool signals_set = false;
@@ -174,6 +182,7 @@ static void parent_died_fn(size_t evhdlr_registration_id, pmix_status_t status,
     // shift this into our event base
     cd = PMIX_NEW(prte_pmix_server_req_t);
     prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, clean_abort, cd);
+    PMIX_POST_OBJECT(cd);
     prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
 }
 
@@ -322,6 +331,54 @@ int prte_parse_singleton_id(const char *name, pmix_nspace_t nspace, pmix_rank_t 
     return PRTE_SUCCESS;
 }
 
+/* Read an appfile and append its contents to a command line.  Each line of
+ * the file is one app context, so the lines are joined with the ":"
+ * delimiter the parser expects.
+ *
+ * A blank line - or one holding nothing but spaces - splits to no tokens at
+ * all, and PMIx_Argv_split reports that by returning NULL rather than an
+ * empty array, so the result must be checked before it is indexed: a single
+ * empty line in an appfile used to segfault the tool right here.  Such a
+ * line is skipped entirely rather than merely contributing no words,
+ * because emitting the delimiter for it would hand the parser an empty app
+ * context.
+ */
+int prte_parse_appfile(const char *path, char ***pargv, int *pargc)
+{
+    FILE *fp;
+    char *line, **split;
+    size_t n;
+    bool first = true;
+
+    if (NULL == path || NULL == pargv || NULL == pargc) {
+        return PRTE_ERR_BAD_PARAM;
+    }
+    fp = fopen(path, "r");
+    if (NULL == fp) {
+        return PRTE_ERR_FILE_OPEN_FAILURE;
+    }
+    while (NULL != (line = pmix_getline(fp))) {
+        split = PMIx_Argv_split(line, ' ');
+        free(line);
+        if (NULL == split) {
+            continue;
+        }
+        if (!first) {
+            // add a colon delimiter
+            PMIx_Argv_append_nosize(pargv, ":");
+            ++(*pargc);
+        }
+        for (n = 0; NULL != split[n]; n++) {
+            PMIx_Argv_append_nosize(pargv, split[n]);
+            ++(*pargc);
+        }
+        PMIx_Argv_free(split);
+        first = false;
+    }
+    fclose(fp);
+    return PRTE_SUCCESS;
+}
+
 PRTE_EXPORT int prte(int argc, char *argv[])
 {
     int rc = 1, i;
@@ -339,7 +396,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     int pargc;
     prte_job_t *jdata;
     prte_app_context_t *dapp;
-    bool proxyrun = false, first;
+    bool proxyrun = false;
     void *jinfo;
     pmix_proc_t pname;
     pmix_value_t *val;
@@ -532,15 +589,17 @@ PRTE_EXPORT int prte(int argc, char *argv[])
             prte_show_help("help-prterun.txt", "multiple-default-hostfiles", true, param);
             return 1;
          }
-        if (!pmix_path_is_absolute(opt->values[0])) {
-            param = pmix_os_path(false, cwd, opt->values[0], NULL);
-        } else {
-            param = opt->values[0];
-        }
         if (NULL != prte_default_hostfile) {
             free(prte_default_hostfile);
         }
-        prte_default_hostfile = strdup(param);
+        /* take ownership of the path directly - copying it through a
+         * temporary and then strdup'ing that leaked the temporary, as the
+         * relative case builds a fresh string with pmix_os_path() */
+        if (!pmix_path_is_absolute(opt->values[0])) {
+            prte_default_hostfile = pmix_os_path(false, cwd, opt->values[0], NULL);
+        } else {
+            prte_default_hostfile = strdup(opt->values[0]);
+        }
         prte_default_hostfile_given = true;
     }
 
@@ -556,28 +615,11 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_APPFILE);
     if (NULL != opt) {
         // parse the file and add its context to the argv array
-        fp = fopen(opt->values[0], "r");
-        if (NULL == fp) {
+        rc = prte_parse_appfile(opt->values[0], &pargv, &pargc);
+        if (PRTE_SUCCESS != rc) {
             prte_show_help("help-prun.txt", "appfile-failure", true, opt->values[0]);
             return 1;
         }
-        first = true;
-        while (NULL != (param = pmix_getline(fp))) {
-            if (!first) {
-                // add a colon delimiter
-                PMIx_Argv_append_nosize(&pargv, ":");
-                ++pargc;
-            }
-            // break the line down into parts
-            split = PMIx_Argv_split(param, ' ');
-            for (n=0; NULL != split[n]; n++) {
-                PMIx_Argv_append_nosize(&pargv, split[n]);
-                ++pargc;
-            }
-            PMIx_Argv_free(split);
-            first = false;
-        }
-        fclose(fp);
     }
 
     /* decide if we are to use a persistent DVM, or act alone */
@@ -611,16 +653,16 @@ PRTE_EXPORT int prte(int argc, char *argv[])
                 cptr = strdup(&opt->values[0][3]);
                 free(opt->values[0]);
                 opt->values[0] = cptr;
-            } else if (0 == strncasecmp(opt->values[0], "system", 6)) {
-                /* direct to search for a system server */
-                free(opt->key);
-                opt->key = strdup(PRTE_CLI_SYS_SERVER_ONLY);
-            } else if (0 == strncasecmp(opt->values[0], "system-first", 6)) {
+            } else if (0 == strcasecmp(opt->values[0], "system-first")) {
                 /* direct to search for a system server first, and then
                  * take the first available DVM */
                 free(opt->key);
-                opt->key = strdup(PRTE_CLI_NAMESPACE);
-            } else if (0 != strncasecmp(opt->values[0], "search", 6)) {
+                opt->key = strdup(PRTE_CLI_SYS_SERVER_FIRST);
+            } else if (0 == strcasecmp(opt->values[0], "system")) {
+                /* direct to search for a system server */
+                free(opt->key);
+                opt->key = strdup(PRTE_CLI_SYS_SERVER_ONLY);
+            } else if (0 != strcasecmp(opt->values[0], "search")) {
                 /* "search" would mean to look for first available DVM,
                  * so we wouldn't have to adjust anything as the opt
                  * key is already set to PRTE_CLI_DVM, which will be
@@ -652,6 +694,11 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     }
 
     /** RUN INDEPENDENTLY */
+
+    /* -v was accepted and never read: "verbose" was a file-scope bool
+     * hardwired to false, so every "if (verbose)" below it was dead and the
+     * option did nothing at all */
+    verbose = pmix_cmd_line_is_taken(&results, PRTE_CLI_VERBOSE);
 
     /* if we were given a keepalive pipe, set up to monitor it now */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_KEEPALIVE);
@@ -743,6 +790,29 @@ PRTE_EXPORT int prte(int argc, char *argv[])
             return 1;
         }
         prte_pmix_server_globals.singleton = strdup(opt->values[0]);
+    }
+
+    /* Check the stdin target now, while we can still refuse it.  Anything
+     * that is neither "all" nor "none" has to be a bare rank: strtoul
+     * would otherwise read a misspelled value as rank 0, and our stdin
+     * would be pushed to a process the user never named - the DVM's own
+     * copy of the directive lands on the same silent 0, so nothing further
+     * down would question it either. */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_STDIN);
+    if (NULL != opt &&
+        0 != strcmp(opt->values[0], "all") &&
+        0 != strcmp(opt->values[0], "none")) {
+        char *endp = NULL;
+
+        errno = 0;
+        (void) strtoul(opt->values[0], &endp, 10);
+        if (!isdigit((unsigned char) opt->values[0][0]) ||
+            NULL == endp || '\0' != *endp || 0 != errno) {
+            prte_show_help("help-prun.txt", "bad-option-input", true,
+                           prte_tool_basename, "--" PRTE_CLI_STDIN,
+                           opt->values[0], "all, none, or a rank");
+            return 1;
+        }
     }
 
     /* default to a persistent DVM */
@@ -877,20 +947,17 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     PMIX_INFO_DESTRUCT(&info);
     PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
 
-    /* check for launch directives in case we were launched by a
-     * tool wanting to direct our operation - this needs to be
-     * done prior to starting the DVM as it may include instructions
-     * on the daemon executable, the fork/exec agent to be used by
-     * the daemons, or other directives impacting the DVM itself. */
-    PMIX_LOAD_PROCID(&pname, myproc.nspace, PMIX_RANK_WILDCARD);
-    PMIX_INFO_LOAD(&info, PMIX_OPTIONAL, NULL, PMIX_BOOL);
-    /*  Have to cycle over directives we support*/
-    ret = PMIx_Get(&pname, PMIX_FORKEXEC_AGENT, &info, 1, &val);
-    PMIX_INFO_DESTRUCT(&info);
-    if (PMIX_SUCCESS == ret) {
-        /* set our fork/exec agent */
-        PMIX_VALUE_RELEASE(val);
-    }
+    /* This is where launch directives from a tool wanting to direct our
+     * operation would be picked up - before the DVM starts, since they may
+     * name the daemon executable, the fork/exec agent the daemons are to
+     * use, or something else about the DVM itself.
+     *
+     * Nothing is read here today.  The one directive that used to be was
+     * PMIX_FORKEXEC_AGENT, and the value was released without being acted
+     * on, so the tool's directive was silently ignored - the Get is gone
+     * rather than left looking like it does something.  Making it work is
+     * not a line here: every daemon reads its exec agent from its own MCA
+     * state, so the value has to reach them.  See docs/todo.rst. */
 
     /* start the DVM */
 
@@ -1250,16 +1317,29 @@ PRTE_EXPORT int prte(int argc, char *argv[])
         } else {
             char *leftover;
             int outpipe;
-            /* see if it is an integer pipe */
+            /* See if it is an integer pipe.  It has to start with a digit
+             * to be one: strtol accepts leading whitespace and a sign and
+             * returns 0 for a string with no digits at all, so an empty
+             * --report-pid value used to write our pid onto file
+             * descriptor 0 and then close our own stdin. */
             leftover = NULL;
             outpipe = strtol(opt->values[0], &leftover, 10);
-            if (NULL == leftover || 0 == strlen(leftover)) {
+            if (isdigit((unsigned char) opt->values[0][0]) &&
+                (NULL == leftover || 0 == strlen(leftover))) {
                 /* stitch together the var names and URI */
                 pmix_asprintf(&leftover, "%lu", (unsigned long) getpid());
                 /* output to the pipe */
                 rc = pmix_fd_write(outpipe, strlen(leftover) + 1, leftover);
                 free(leftover);
                 close(outpipe);
+                if (PRTE_SUCCESS != rc) {
+                    /* whoever handed us the pipe is waiting for this and
+                     * has no other way to learn that it never arrived */
+                    pmix_output(0, "Unable to report my PID on pipe %d: %s",
+                                outpipe, prte_strerror(rc));
+                    PRTE_UPDATE_EXIT_STATUS(rc);
+                    goto DONE;
+                }
             } else {
                 /* must be a file */
                 fp = fopen(opt->values[0], "w");
@@ -1287,16 +1367,27 @@ PRTE_EXPORT int prte(int argc, char *argv[])
     ret = PMIx_Get(&pname, PMIX_LAUNCH_DIRECTIVES, &info, 1, &val);
     PMIX_INFO_DESTRUCT(&info);
     if (PMIX_SUCCESS == ret) {
-        iptr = (pmix_info_t *) val->data.darray->array;
-        ninfo = val->data.darray->size;
-        for (n = 0; n < ninfo; n++) {
-            PMIX_INFO_LIST_XFER(ret, jinfo, &iptr[n]);
+        /* Whoever launched us supplied this, so its type is not ours to
+         * assume: reading a value of any other type as a data array walks
+         * whatever else the value union happens to hold. */
+        if (PMIX_DATA_ARRAY != val->type || NULL == val->data.darray ||
+            PMIX_INFO != val->data.darray->type) {
+            pmix_output(0, "%s: ignoring launch directives given as %s - "
+                        "they must be an array of info",
+                        prte_tool_basename, PMIx_Data_type_string(val->type));
+        } else {
+            iptr = (pmix_info_t *) val->data.darray->array;
+            ninfo = val->data.darray->size;
+            for (n = 0; n < ninfo; n++) {
+                PMIX_INFO_LIST_XFER(ret, jinfo, &iptr[n]);
+            }
         }
         PMIX_VALUE_RELEASE(val);
     }
 
     ret = prte_prun_parse_common_cli(jinfo, &results, schizo, &apps);
     if (PRTE_SUCCESS != ret) {
+        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
         goto DONE;
     }
 
@@ -1307,7 +1398,10 @@ PRTE_EXPORT int prte(int argc, char *argv[])
         ninfo = 0;
     } else if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
-        PRTE_UPDATE_EXIT_STATUS(rc);
+        /* report the failure, not "rc" - which is still PRTE_SUCCESS here,
+         * and PRTE_UPDATE_EXIT_STATUS discards a zero, so the launcher
+         * exited 0 having spawned nothing */
+        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
         goto DONE;
     } else {
         iptr = (pmix_info_t *) darray.array;
@@ -1337,7 +1431,7 @@ PRTE_EXPORT int prte(int argc, char *argv[])
                 papps[n].ninfo = 0;
             } else {
                 PMIX_ERROR_LOG(ret);
-                PRTE_UPDATE_EXIT_STATUS(rc);
+                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
                 goto DONE;
             }
         } else {
@@ -1683,24 +1777,69 @@ static int prep_singleton(const char *name)
     return rc;
 }
 
+/* Release the request PMIx borrowed from us.  This may run on either our
+ * own progress thread (the normal completion, arriving back through our
+ * job_control upcall) or the PMIx one (an early failure inside PMIx), so it
+ * must touch nothing but the allocation it is handed. */
+static void sigfwd_cbfunc(pmix_status_t status, pmix_info_t *info, size_t ninfo,
+                          void *cbdata, pmix_release_cbfunc_t release_fn,
+                          void *release_cbdata)
+{
+    prte_sigfwd_t *sf = (prte_sigfwd_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(status, info, ninfo);
+
+    if (NULL != release_fn) {
+        release_fn(release_cbdata);
+    }
+    PMIX_INFO_DESTRUCT(&sf->info);
+    free(sf);
+}
+
 static void signal_forward_callback(int signum, short args, void *cbdata)
 {
     pmix_status_t rc;
-    pmix_proc_t proc;
-    pmix_info_t info;
+    prte_sigfwd_t *sf;
     PRTE_HIDE_UNUSED_PARAMS(args, cbdata);
+
+    /* A persistent DVM has no job of its own, so there is nothing here to
+     * forward a signal to - and "nothing" must not be spelled as an empty
+     * namespace.  That is what we would hand the job-control path, which
+     * packs it into the daemon command verbatim, and an empty namespace
+     * there means *every* job: one signal to a shared persistent DVM would
+     * be delivered to every process in it, including jobs belonging to
+     * other users. */
+    if (0 == strlen(spawnednspace)) {
+        return;
+    }
 
     if (verbose) {
         fprintf(stderr, "%s: Forwarding signal %d to job\n", prte_tool_basename, signum);
     }
 
-    /* send the signal out to the processes */
-    PMIX_LOAD_PROCID(&proc, spawnednspace, PMIX_RANK_WILDCARD);
-    PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_SIGNAL, &signum, PMIX_INT);
-    rc = PMIx_Job_control(&proc, 1, &info, 1, NULL, NULL);
-    if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
+    /* Send the signal out to the processes.  This has to be the
+     * non-blocking form.  We run on the thread that drives prte_event_base,
+     * and we are ourselves the PMIx server that will be asked to carry the
+     * request out: PMIx hands it to our own job_control upcall, which
+     * thread-shifts the actual work back onto this very event base.  The
+     * blocking form therefore waits for a completion that only this thread
+     * can produce, and a single forwarded signal - every forwardable signal
+     * is forwarded by default - wedged the DVM master permanently.
+     *
+     * PMIx borrows both arrays rather than copying them, and reads them
+     * long after this call returns, so neither may live on our stack. */
+    sf = (prte_sigfwd_t *) malloc(sizeof(prte_sigfwd_t));
+    if (NULL == sf) {
+        return;
+    }
+    PMIX_LOAD_PROCID(&sf->proc, spawnednspace, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LOAD(&sf->info, PMIX_JOB_CTRL_SIGNAL, &signum, PMIX_INT);
+    rc = PMIx_Job_control_nb(&sf->proc, 1, &sf->info, 1, sigfwd_cbfunc, sf);
+    if (PMIX_SUCCESS != rc) {
+        /* the callback will not fire, so the request is ours to release */
         fprintf(stderr, "Signal %d could not be sent to job %s (returned %s)", signum,
                 spawnednspace, PMIx_Error_string(rc));
+        PMIX_INFO_DESTRUCT(&sf->info);
+        free(sf);
     }
 }
 

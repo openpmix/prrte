@@ -218,6 +218,24 @@ considerably more machinery than the broadcast it saves.  It has not been
 judged worth it, and the empty arms are the record of the decision rather
 than of an oversight.
 
+**A launcher's fork/exec agent directive is read and dropped.**  A tool that
+launches ``prte`` through PMIx may hand it launch directives, and the one
+``prte()`` (``src/prted/prte.c``) ever looked for was
+``PMIX_FORKEXEC_AGENT``: it did the ``PMIx_Get``, released the value, and
+carried on, so the directive had no effect and nothing said so.  The ``Get``
+has been removed, since keeping it made the code read as though the
+directive were honored.
+
+Honoring it is more than restoring the call.  The agent is used by whichever
+daemon forks the process, and each daemon reads its own from its own MCA
+state (``odls_base_exec_agent``, ``prte_odls_globals.exec_agent``) — so a
+value learned by the HNP has to be propagated, either into the daemons'
+environment at launch or as an attribute on the daemon job object that the
+odls consults ahead of its MCA value.  There is already a per-job
+``PRTE_JOB_EXEC_AGENT`` for the application job, which is the shape to
+follow; what is absent is the DVM-wide equivalent and the decision about
+which of the two should win.
+
 **Two resource-usage queries are recognized and answer nothing.**
 ``PMIX_QUERY_PROC_RESOURCE_USAGE`` and ``PMIX_QUERY_NODE_RESOURCE_USAGE``
 have arms of their own in ``_query()``
