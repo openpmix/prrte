@@ -56,6 +56,12 @@ static void normalize_node(prte_node_t *node)
     }
     /* copy the full FQDN, then truncate node->name in place to the short name */
     fqdn = strdup(node->name);
+    if (NULL == fqdn) {
+        /* leave the name whole rather than truncate it with nowhere to keep
+         * the full form - a short name with no rawname and no alias is a node
+         * the allocation's own spelling can no longer reach */
+        return;
+    }
     *ptr = '\0';
     if (NULL == node->rawname) {
         node->rawname = fqdn;
