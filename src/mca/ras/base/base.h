@@ -65,7 +65,6 @@ typedef struct prte_ras_base_t {
     int total_slots_alloc;
     int multiplier;
     bool launch_orted_on_hn;
-    bool simulated;
     /* set once the DVM's base allocation has been established (the first
      * allocation to complete). Used to detect that a subsequent job must
      * reuse the existing allocation rather than re-run discovery. This is
