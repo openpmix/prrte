@@ -1588,7 +1588,11 @@ static void prte_ras_slurm_extend_wait_complete(int fd, short args, void *cbdata
     }
 
     if(have_added_nodes) {
-        PMIX_DESTRUCT(&added_nodes);
+        /* every error path above reaches here with nodes still on the list -
+         * including prte_ras_base_node_insert's, which drains only as far as
+         * it got - so the items have to be released, not just the list
+         * re-initialized */
+        PMIX_LIST_DESTRUCT(&added_nodes);
         have_added_nodes = false;
     }
 

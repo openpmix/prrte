@@ -68,7 +68,12 @@ static void normalize_node(prte_node_t *node)
 
 /*
  * Add the specified node definitions to the global data store
- * NOTE: this removes all items from the list!
+ *
+ * NOTE: this removes all items from the list - but only when it succeeds.
+ * An error return leaves whatever it had not reached still on the list, so
+ * the caller must PMIX_LIST_DESTRUCT it rather than PMIX_DESTRUCT it.  The
+ * node in hand when the error was hit is released here; nothing else can,
+ * since it is already off the list and not yet in the pool.
  */
 int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
 {
@@ -172,15 +177,21 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
              * being round-tripped through set_attribute. */
             PMIX_LIST_FOREACH(kv, &node->attributes, prte_attribute_t)
             {
-                prte_remove_attribute(&hnp_node->attributes, kv->key);
+                /* build the replacement before dropping what it replaces:
+                 * removing first and then failing to copy leaves the node
+                 * with neither, and these carry the per-node launch settings
+                 * (username, port), so losing one silently launches the
+                 * daemon differently */
                 kv2 = PMIX_NEW(prte_attribute_t);
                 kv2->key = kv->key;
                 kv2->local = kv->local;
                 prc = PMIx_Value_xfer(&kv2->data, &kv->data);
                 if (PMIX_SUCCESS != prc) {
+                    PMIX_ERROR_LOG(prc);
                     PMIX_RELEASE(kv2);
                     continue;
                 }
+                prte_remove_attribute(&hnp_node->attributes, kv->key);
                 pmix_list_append(&hnp_node->attributes, &kv2->super);
             }
             /* the incoming node carries the authority for its own slot count:
@@ -293,12 +304,16 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                                                  (void *) node);
                 if (PRTE_SUCCESS != rc) {
                     PRTE_ERROR_LOG(rc);
+                    /* it is off the caller's list and not in the pool, so
+                     * this is the only reference left to it */
+                    PMIX_RELEASE(node);
                     return rc;
                 }
             } else {
                 node->index = pmix_pointer_array_add(prte_node_pool, (void *) node);
                 if (PRTE_SUCCESS > (rc = node->index)) {
                     PRTE_ERROR_LOG(rc);
+                    PMIX_RELEASE(node);
                     return rc;
                 }
             }
