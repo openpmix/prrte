@@ -235,6 +235,20 @@ PRTE_EXPORT int prte_pmix_convert_status(pmix_status_t status);
 PRTE_EXPORT pmix_status_t prte_pmix_convert_job_state_to_error(int state);
 PRTE_EXPORT pmix_status_t prte_pmix_convert_proc_state_to_error(int state);
 
+/* Read a PMIX_ALLOC_INHERITANCE value.
+ *
+ * The disposition it carries decides whether a reservation's nodes go back
+ * to the scheduler or into the DVM's general pool, so it has to be the value
+ * the caller actually sent and not one a type confusion produced - which is
+ * why nobody may simply take value.data.uint8. Two spellings have to be
+ * accepted: PMIX_ALLOC_INHERIT, the attribute's own type and the one the
+ * PMIx documentation uses, which PMIX_VALUE_GET_NUMBER does not know; and a
+ * plain integer of whatever width, which that macro does. Returns false if
+ * the value is neither.
+ */
+PRTE_EXPORT bool prte_pmix_value_get_inheritance(const pmix_value_t *value,
+                                                 uint8_t *inherit);
+
 /* Reach the interface version a framework's own header states.
  *
  * The PRRTE counterpart of PMIX_MCA_FW_VER() in PMIx's mca.h, and the
