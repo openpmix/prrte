@@ -63,7 +63,18 @@ prte_ras_pmix_component_t prte_mca_ras_pmix_component = {
 };
 PMIX_MCA_BASE_COMPONENT_INIT(prte, ras, pmix)
 
+/* MCA variables bind to the storage they are given and the base writes an
+ * int through it, so a parameter whose home is not an int needs a proxy of
+ * the right type here and a copy after registration.  ras_pmix_rank lands in
+ * a pmix_rank_t, ras_pmix_server_pid in a pid_t and the retry pair in
+ * uint32_t; handing the base those addresses had it write four bytes of int
+ * through a pointer of another type, which the platforms PRRTE builds on
+ * happen to survive and the language does not promise. */
 static char *nspace = NULL;
+static int rank = (int) PMIX_RANK_INVALID;
+static int server_pid = 0;
+static int max_retries = 5;
+static int retry_delay = 1;
 
 static int ras_pmix_register(void)
 {
@@ -83,14 +94,32 @@ static int ras_pmix_register(void)
                                                 PMIX_MCA_BASE_VAR_TYPE_STRING,
                                                 &nspace);
     if (NULL != nspace) {
-        PMIx_Load_nspace(prte_mca_ras_pmix_component.server.nspace, nspace);
+        /* PMIx_Load_nspace truncates at PMIX_MAX_NSLEN without saying so, and
+         * a truncated name is a different scheduler - most likely one that
+         * does not exist.  A name that does not fit a pmix_nspace_t cannot be
+         * any PMIx namespace, so say so and leave the parameter unapplied
+         * rather than attaching to whatever the prefix happens to match.  An
+         * unset nspace does not count towards the query gate below, so with
+         * nothing else configured the component declines and the ordinary
+         * allocator runs. */
+        if (PMIX_MAX_NSLEN < strlen(nspace)) {
+            pmix_output(0, "ras/pmix: ignoring ras_pmix_nspace \"%s\" - a PMIx "
+                           "namespace is at most %d characters", nspace,
+                        (int) PMIX_MAX_NSLEN);
+        } else {
+            PMIx_Load_nspace(prte_mca_ras_pmix_component.server.nspace, nspace);
+        }
     }
 
-    prte_mca_ras_pmix_component.server.rank = PMIX_RANK_INVALID;
+    /* the cast is not decoration: PMIX_RANK_INVALID is UINT32_MAX, and
+     * initializing an int with it is a narrowing conversion some compilers
+     * refuse under the warnings-as-errors build */
+    rank = (int) PMIX_RANK_INVALID;
     (void) pmix_mca_base_component_var_register(component, "rank",
                                                 "Specify the rank of the scheduler to which we are to connect",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
-                                                &prte_mca_ras_pmix_component.server.rank);
+                                                &rank);
+    prte_mca_ras_pmix_component.server.rank = (pmix_rank_t) rank;
 
     prte_mca_ras_pmix_component.connect_to_system_scheduler = false;
     (void) pmix_mca_base_component_var_register(component, "system_scheduler",
@@ -105,11 +134,12 @@ static int ras_pmix_register(void)
                                                 PMIX_MCA_BASE_VAR_TYPE_STRING,
                                                 &prte_mca_ras_pmix_component.connection_order);
 
-    prte_mca_ras_pmix_component.server_pid = 0;
+    server_pid = 0;
     (void) pmix_mca_base_component_var_register(component, "server_pid",
                                                 "Specify the pid of the scheduler to which we are to connect",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
-                                                &prte_mca_ras_pmix_component.server_pid);
+                                                &server_pid);
+    prte_mca_ras_pmix_component.server_pid = (pid_t) server_pid;
 
     prte_mca_ras_pmix_component.server_host = NULL;
     (void) pmix_mca_base_component_var_register(component, "server_host",
@@ -117,18 +147,23 @@ static int ras_pmix_register(void)
                                                 PMIX_MCA_BASE_VAR_TYPE_STRING,
                                                 &prte_mca_ras_pmix_component.server_host);
 
-    prte_mca_ras_pmix_component.max_retries = 5;
+    max_retries = 5;
     (void) pmix_mca_base_component_var_register(component, "max_retries",
                                                 "Max number of retries for connection (default: 5)",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
-                                                &prte_mca_ras_pmix_component.max_retries);
+                                                &max_retries);
+    /* a negative count is not "retry forever" to PMIx, it is four billion
+     * attempts once it lands in the uint32_t the attribute is defined on */
+    prte_mca_ras_pmix_component.max_retries = (0 > max_retries) ? 0
+                                                                : (uint32_t) max_retries;
 
-
-    prte_mca_ras_pmix_component.retry_delay = 1;
+    retry_delay = 1;
     (void) pmix_mca_base_component_var_register(component, "retry_delay",
                                                 "Time in seconds between connection attempts (default: 1)",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
-                                                &prte_mca_ras_pmix_component.retry_delay);
+                                                &retry_delay);
+    prte_mca_ras_pmix_component.retry_delay = (0 > retry_delay) ? 0
+                                                               : (uint32_t) retry_delay;
 
     return PRTE_SUCCESS;
 }
