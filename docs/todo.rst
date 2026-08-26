@@ -32,6 +32,38 @@ Runtime behavior
 surface exists for SLURM only.  Everything above the component is
 RM-agnostic; what is missing is the Flux-side conversation.
 
+**``ras/pmix`` forwards allocation requests to a scheduler and never gives
+anything back.**  The component (``src/mca/ras/pmix/``) exists to relay a
+runtime ``PMIx_Allocation_request`` to a host PMIx server acting as the system
+scheduler, and it does that — but three things around it are unfinished, and
+they became visible only once ``ras`` selection went single-owner.
+
+Its ``allocate()`` returns ``PRTE_ERR_TAKE_NEXT_OPTION``: it discovers no
+initial allocation at all.  While every component that answered the query was
+kept, the next one down did that job.  Now the component that answers *is* the
+allocator, so pointing a DVM at a PMIx scheduler — a ``ras_pmix_uri``, an
+``ras_pmix_server_host``, ``ras_pmix_system_scheduler`` — makes this the
+allocator and leaves the base falling through to its one-slot local-node
+fabrication, with any ``--hostfile`` unread.  Asking the scheduler for the
+DVM's own allocation is the missing piece; until it exists, this component is
+only usable on a DVM whose initial nodes came from somewhere the user does not
+mind being ignored.
+
+It declares ``scheduler_owned = true`` and implements neither
+``release_allocation`` nor ``shrink_complete`` — the two module hooks the
+framework offers precisely so an RM learns when a reservation is torn down or
+a shrink has drained.  ``ras/slurm`` implements both.  So nodes a PMIx
+scheduler grants are never handed back to it, and stay charged to the DVM for
+its lifetime.
+
+And a request the scheduler *grants* but PRRTE then fails to apply locally is
+not compensated: ``passthru`` reports the local failure to the requester and
+nothing issues the ``PMIX_ALLOC_RELEASE`` that would return the nodes.  The
+self-inflicted version of this is fixed — the answer is now merged into the
+request rather than substituted for it, so the routing directives the local
+completion needs are still there — but a genuinely malformed request still
+reaches the scheduler before it is refused here.
+
 **Mixed allocators are not supported, and would need more than the ``ras``
 framework.**  The motivating case is a cloud/local combination: an allocation
 from a scheduler plus a set of unmanaged nodes outside it.  The ``ras``
