@@ -211,6 +211,9 @@ static void display_cpus(prte_topology_t *t,
     physical = prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_PHYSICAL_CPUS, NULL,
                                   PMIX_BOOL);
     avail = hwloc_bitmap_alloc();
+    if (NULL == avail) {
+        return;
+    }
 
     if (parsable) {
         /* "parseable" has to actually parse. This element carried an
@@ -1919,7 +1922,8 @@ static int ras_base_send_dvm_shrink(prte_shrink_campaign_t *camp,
 {
     pmix_data_buffer_t msg;
     prte_daemon_cmd_flag_t cmd = PRTE_DAEMON_SHRINK_CMD;
-    pmix_status_t rc;
+    pmix_status_t rc;      /* PMIx codes, from the pack */
+    int ret;               /* PRRTE codes, from the xcast */
 
     /* Nothing to tell the DVM.  A release can legitimately name only nodes
      * that carry no daemon - one a previous shrink handed back, one the DVM
@@ -1964,21 +1968,21 @@ static int ras_base_send_dvm_shrink(prte_shrink_campaign_t *camp,
      * single routing-tree repair and one completion event, rather than
      * discovering the departures one daemon at a time. */
     if (NULL != camp) {
-        rc = prte_grpcomm_xcast_nb(PRTE_RML_TAG_DAEMON, &msg,
-                                   shrink_xcast_complete, camp);
+        ret = prte_grpcomm_xcast_nb(PRTE_RML_TAG_DAEMON, &msg,
+                                    shrink_xcast_complete, camp);
     } else {
-        rc = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, &msg);
+        ret = prte_grpcomm_xcast(PRTE_RML_TAG_DAEMON, &msg);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&msg);
 
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != ret) {
+        PRTE_ERROR_LOG(ret);
         /* undo the campaign we just added (only if one was created), and
          * tell the requester the DVM modification failed */
         if (NULL != camp) {
-            ras_base_abort_dvm_shrink(camp, true, prte_pmix_convert_rc(rc));
+            ras_base_abort_dvm_shrink(camp, true, prte_pmix_convert_rc(ret));
         }
-        return report_xcast_failure ? rc : PRTE_SUCCESS;
+        return report_xcast_failure ? ret : PRTE_SUCCESS;
     }
 
     return PRTE_SUCCESS;
@@ -2374,7 +2378,7 @@ int prte_ras_base_spawn_alloc(prte_job_t *jdata, bool *posted)
                 PMIX_DATA_ARRAY_FREE(darray);
                 return PRTE_ERR_BAD_PARAM;
             }
-            directive = src[n].value.data.uint8;
+            directive = src[n].value.data.adir;
             have_directive = true;
             continue;
         }
