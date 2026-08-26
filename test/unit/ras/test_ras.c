@@ -804,6 +804,57 @@ static int test_pmix_gate(void)
           NULL == module ||
           ((prte_ras_base_module_t *) module)->scheduler_owned);
 
+    if (NULL != module) {
+        prte_ras_base_module_t *mod = (prte_ras_base_module_t *) module;
+        pmix_list_t nodes;
+
+        /* it discovers nothing: this component forwards runtime requests to
+         * a scheduler and never contributes a node to initial discovery.
+         * Worth pinning because the query gate above now makes it the sole
+         * selected module whenever anyone points it at a scheduler, so this
+         * return is what sends the base to its local-node fallback rather
+         * than to another allocator. */
+        CHECK("pmix: has an allocate", NULL != mod->allocate);
+        if (NULL != mod->allocate) {
+            PMIX_CONSTRUCT(&nodes, pmix_list_t);
+            CHECK("pmix: allocate contributes nothing",
+                  PRTE_ERR_TAKE_NEXT_OPTION == mod->allocate(NULL, &nodes));
+            CHECK("pmix: allocate leaves the list empty",
+                  0 == pmix_list_get_size(&nodes));
+            PMIX_LIST_DESTRUCT(&nodes);
+        }
+
+        /* With no scheduler reachable, modify() must say UNREACH.
+         *
+         * It used to say PMIX_ERR_TAKE_NEXT_OPTION, from a time when the
+         * framework kept every module that answered and ras/hosts could
+         * serve the request locally further down the list.  Selection keeps
+         * exactly one module now, so there is no next option: the driver's
+         * loop simply ends and req->pstatus is left holding the
+         * PMIX_ERR_NOT_SUPPORTED it was seeded with, telling the requester
+         * the operation is unsupported when the truth is that the scheduler
+         * is out of touch - "give up" where "try again" was meant.
+         *
+         * scheduler_lookup_done is what makes this deterministic and cheap:
+         * prte_pmix_set_scheduler() looks for a scheduler exactly once, and
+         * with the search already marked done it answers UNREACH without
+         * going near PMIx_tool_attach_to_server (a blocking rendezvous scan
+         * this test has no business performing). */
+        CHECK("pmix: has a modify", NULL != mod->modify);
+        if (NULL != mod->modify) {
+            prte_pmix_server_req_t *req;
+            bool saved = prte_pmix_server_globals.scheduler_lookup_done;
+
+            prte_pmix_server_globals.scheduler_lookup_done = true;
+            req = PMIX_NEW(prte_pmix_server_req_t);
+            req->allocdir = PMIX_ALLOC_EXTEND;
+            CHECK("pmix: modify reports UNREACH with no scheduler",
+                  PMIX_ERR_UNREACH == mod->modify(req));
+            PMIX_RELEASE(req);
+            prte_pmix_server_globals.scheduler_lookup_done = saved;
+        }
+    }
+
     if (0 == failures) {
         fprintf(stdout, "PASSED test_pmix_gate\n");
     }
