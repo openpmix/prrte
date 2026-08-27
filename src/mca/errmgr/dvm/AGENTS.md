@@ -57,7 +57,10 @@ Fires when a job is activated into an error state. Flow:
    rather than retaining and dereferencing it: a crash inside the handler
    whose job is to report crashes is the worst possible outcome here.
 3. Copy `caddy->job_state` into `jdata->state`.
-4. **Two policies, chosen by whose job it is:**
+4. **A job with no namespace is answered and dropped, before anything else.**
+   See the section below — this test has to come first, because *both* of
+   the policies underneath it are wrong for such a job.
+5. **Two policies, chosen by whose job it is:**
 
    **The daemon job itself** (`nspace == PRTE_PROC_MY_NAME->nspace`) —
    the DVM is in trouble:
@@ -201,12 +204,66 @@ so a replacement can be mapped.
 
 ---
 
+## A job with no namespace must not enter either policy
+
+An empty namespace is PMIx's **wildcard**: `PMIx_Check_nspace()` returns
+true if *either* side is invalid. A `prte_job_t` that failed before
+`prte_plm_base_create_jobid()` named it therefore matches the daemon
+namespace, and both of `job_errors`' arms do the wrong thing with it:
+
+| arm | what it does to a nameless job |
+|-----|-------------------------------|
+| daemon (`nspace == mine`) | `NEVER_LAUNCHED` is in its list, so it disables routing and activates `PRTE_JOB_STATE_DAEMONS_TERMINATED` — which is `prte_quit`. One application's failure takes the **whole DVM** down. |
+| everything else | hands `_terminate_job()` that same empty namespace, which every daemon's odls reads as **every local proc**. |
+
+Testing the namespace properly is therefore not the fix on its own — it
+just moves the damage from the first row to the second. `job_errors`
+screens for `PMIX_NSPACE_INVALID(jdata->nspace)` *before* either arm and
+answers the requester directly with `prte_plm_base_spawn_response()`,
+which routes on the job's originator and room number rather than on its
+name. Nothing is running under such a job and nothing downstream can
+address it, so an answer is the whole of what is owed.
+
+`prte_plm_base_setup_job()` is where this arises: it activates
+`NEVER_LAUNCHED` on two paths that run *before* the job is named.
+`prte_plm_base_spawn_alloc_failed()` and the `dvm_held` unwind in
+`prte_ras_base_modify()` avoid the state machine for the same reason and
+call `prte_plm_base_spawn_response()` directly.
+
+**The pattern is still present in `state_dvm.c`'s `check_complete()`**,
+which opens `if (NULL == jdata || PMIX_CHECK_NSPACE(jdata->nspace, ...))`
+and would likewise take a nameless job for the daemon job and call
+`prte_plm.terminate_orteds()`. Nothing reaches it with one today — the
+screen above is upstream of every route there — and hardening it in
+isolation is not obviously an improvement, because a nameless job would
+then fall through to the normal completion path (reservation dispositions,
+`dvm_notify`, `cleanup_job`) which is no better equipped for it. Left as
+is, deliberately; do not "fix" it without deciding what that path should
+do.
+
+---
+
 ## Helpers
 
 ### `_terminate_job(nspace)`
 Builds a one-element proc array holding `{nspace, PMIX_RANK_WILDCARD}`
 and calls `prte_plm.terminate_procs()` — the standard "kill this whole
 job" call.
+
+**It refuses an invalid namespace, and that guard is not decoration.** The
+command it builds is xcast to every daemon, and
+`prte_odls_base_default_kill_local_procs()` *skips its namespace filter*
+when the nspace is invalid:
+
+```c
+if (!PMIX_NSPACE_INVALID(proc->name.nspace) &&
+    !PMIX_CHECK_NSPACE(proc->name.nspace, child->name.nspace)) {
+    continue;
+}
+```
+
+So `{"", RANK_WILDCARD}` does not terminate nothing — it terminates every
+application process on every node in the DVM.
 
 ### `check_send_notification(jdata, proc, event)`
 Emits a PMIx event to the *surviving* procs of a recoverable/continuous

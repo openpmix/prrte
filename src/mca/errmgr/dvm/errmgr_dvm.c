@@ -119,6 +119,18 @@ static void _terminate_job(pmix_nspace_t jobid)
     pmix_pointer_array_t procs;
     prte_proc_t pobj;
 
+    /* An empty namespace is PMIx's WILDCARD, and this function's whole
+     * output is a {nspace, RANK_WILDCARD} kill sent to every daemon in the
+     * DVM.  prte_odls_base_default_kill_local_procs() skips its namespace
+     * filter for an invalid nspace, so such a command does not terminate
+     * nothing - it terminates every application process on every node.
+     * There is no job here to terminate; say so rather than aiming at all of
+     * them. */
+    if (PMIX_NSPACE_INVALID(jobid)) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return;
+    }
+
     prte_pmix_server_connection_job_failed(jobid);
 
     PMIX_CONSTRUCT(&procs, pmix_pointer_array_t);
@@ -171,6 +183,37 @@ static void job_errors(int fd, short args, void *cbdata)
                          "%s errmgr:dvm: job %s reported state %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace),
                          prte_job_state_to_str(jobstate));
+
+    /* A job that failed before it was given a namespace has never launched:
+     * nothing is running under it and nothing downstream can address it.  It
+     * must not go any further into the machine, because an empty namespace is
+     * PMIx's WILDCARD - PMIX_CHECK_NSPACE answers true against anything - so
+     * the daemon test below takes such a job for the DAEMON job, and that arm
+     * ends in PRTE_JOB_STATE_DAEMONS_TERMINATED, which is prte_quit.  One
+     * application's failure would take the whole DVM down with it.
+     *
+     * Testing the namespace properly is not the fix on its own, either: the
+     * arm below that hands _terminate_job() the same empty namespace, which
+     * every daemon's odls reads as "every local proc".  Both arms are wrong
+     * for a job with no name.
+     *
+     * All that is owed here is an answer to whoever asked for it, and
+     * prte_plm_base_spawn_response() delivers that by the job's originator
+     * and room number rather than by its name.  prte_plm_base_spawn_alloc_failed()
+     * reaches for it directly for exactly the same reason.
+     *
+     * prte_plm_base_setup_job() is where this arises: it activates
+     * NEVER_LAUNCHED on two paths that run before prte_plm_base_create_jobid()
+     * has named the job. */
+    if (PMIX_NSPACE_INVALID(jdata->nspace)) {
+        rc = prte_pmix_convert_job_state_to_error(jobstate);
+        rc = prte_plm_base_spawn_response(rc, jdata);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+        }
+        PMIX_RELEASE(caddy);
+        return;
+    }
 
     if (PMIX_CHECK_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
         if (PRTE_JOB_STATE_FAILED_TO_START == jdata->state

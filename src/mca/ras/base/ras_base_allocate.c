@@ -944,15 +944,14 @@ respond:
         if (NULL != req->jdata) {
             /* Answer the requester directly rather than through the state
              * machine.  This job has not been through prte_plm.spawn(), so it
-             * has no namespace yet - and PMIX_CHECK_NSPACE counts an empty
-             * nspace as matching anything, so errmgr/dvm's job_errors() takes
-             * it for the DAEMON job, never sends a spawn response, and leaves
-             * the tool waiting for the life of the DVM.  Its other branch
-             * would be worse: it hands _terminate_job() that same empty
-             * namespace, which prted_comm.c reads as EVERY job.  A job with
-             * no name does not belong in the state machine at all; what the
-             * requester is owed is an answer, and this is the call that
-             * gives it. */
+             * has no namespace yet, and there is nothing for the state
+             * machine to do with one: nothing is running under it and nothing
+             * downstream can address it.  All that is owed is an answer, and
+             * prte_plm_base_spawn_response() delivers it by the job's
+             * originator and room number rather than by its name -
+             * prte_plm_base_spawn_alloc_failed() reaches for it directly for
+             * the same reason.  (errmgr/dvm's job_errors() also handles a
+             * nameless job now, and safely; this does not depend on that.) */
             prte_plm_base_spawn_response(prte_pmix_convert_job_state_to_error(PRTE_JOB_STATE_ALLOC_FAILED),
                                          req->jdata);
         }
