@@ -60,8 +60,8 @@
 #include "src/runtime/runtime_internals.h"
 
 /* State Machine */
-pmix_list_t prte_job_states = PMIX_LIST_STATIC_INIT;
-pmix_list_t prte_proc_states = PMIX_LIST_STATIC_INIT;
+pmix_list_t prte_job_states = PMIX_LIST_STATIC_INIT(prte_job_states);
+pmix_list_t prte_proc_states = PMIX_LIST_STATIC_INIT(prte_proc_states);
 
 /* a clean output channel without prefix */
 int prte_clean_output = -1;

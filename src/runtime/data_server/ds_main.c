@@ -53,7 +53,7 @@
 // globals
 prte_data_store_t prte_data_store = {
     .store = PMIX_POINTER_ARRAY_STATIC_INIT,
-    .pending = PMIX_LIST_STATIC_INIT,
+    .pending = PMIX_LIST_STATIC_INIT(prte_data_store.pending),
     .output = -1,
     .verbosity = 0
 };

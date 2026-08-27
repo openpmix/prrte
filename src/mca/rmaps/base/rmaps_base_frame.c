@@ -58,7 +58,7 @@
  * Global variables
  */
 prte_rmaps_base_t prte_rmaps_base = {
-    .selected_modules = PMIX_LIST_STATIC_INIT,
+    .selected_modules = PMIX_LIST_STATIC_INIT(prte_rmaps_base.selected_modules),
     .mapping = 0,
     .ranking = 0,
     .ppr = NULL,
@@ -72,7 +72,7 @@ prte_rmaps_base_t prte_rmaps_base = {
     .default_ranking_policy = NULL,
     .require_hwtcpus = false,
     .have_cores = true,
-    .resized_nodes = PMIX_LIST_STATIC_INIT
+    .resized_nodes = PMIX_LIST_STATIC_INIT(prte_rmaps_base.resized_nodes)
 };
 
 static void rsz_con(prte_rmaps_base_resize_t *p)

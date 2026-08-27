@@ -64,7 +64,7 @@ prte_ess_base_module_t prte_ess = {
 int prte_ess_base_num_procs = -1;
 char *prte_ess_base_nspace = NULL;
 char *prte_ess_base_vpid = NULL;
-pmix_list_t prte_ess_base_signals = PMIX_LIST_STATIC_INIT;
+pmix_list_t prte_ess_base_signals = PMIX_LIST_STATIC_INIT(prte_ess_base_signals);
 
 static char *forwarded_signals = "all";
 static bool signals_added = false;

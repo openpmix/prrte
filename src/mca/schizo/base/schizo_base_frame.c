@@ -44,7 +44,7 @@
  * Global variables
  */
 prte_schizo_base_t prte_schizo_base = {
-    .active_modules = PMIX_LIST_STATIC_INIT,
+    .active_modules = PMIX_LIST_STATIC_INIT(prte_schizo_base.active_modules),
     .test_proxy_launch = false,
     .default_display_options = NULL,
     .default_runtime_options = NULL,

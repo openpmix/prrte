@@ -43,8 +43,8 @@
 prte_grpcomm_globals_t prte_grpcomm_globals = {
     .output = -1,
     .context_id = UINT32_MAX,
-    .fence_ops = PMIX_LIST_STATIC_INIT,
-    .group_ops = PMIX_LIST_STATIC_INIT
+    .fence_ops = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.fence_ops),
+    .group_ops = PMIX_LIST_STATIC_INIT(prte_grpcomm_globals.group_ops)
 };
 
 prte_grpcomm_release_bcast_fn_t prte_grpcomm_release_bcast = prte_grpcomm_xcast;
