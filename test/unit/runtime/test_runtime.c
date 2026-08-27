@@ -452,6 +452,10 @@ static int test_node_matching(void)
     {
         prte_node_t *n3 = make_node("c01");
         CHECK("match: nptr_match through an alias", prte_nptr_match(n1, n3));
+        /* the hostfile and dash-host parsers always pass the node they
+         * parsed first, and that node never carries aliases of its own,
+         * so the aliased side has to be recognized from either position */
+        CHECK("match: nptr_match through an alias, reversed", prte_nptr_match(n3, n1));
         PMIX_RELEASE(n3);
     }
 
