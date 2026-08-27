@@ -816,7 +816,9 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
     prte_pmix_server_req_t *req = (prte_pmix_server_req_t*)cbdata;
     prte_ras_base_selected_module_t *mod;
     deferred_release_t *dr;
+    prte_job_t *jptr;
     pmix_status_t rc;
+    int i;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     /* Hold a release while the DVM is still growing, and replay it once the
@@ -894,6 +896,68 @@ void prte_ras_base_modify(int fd, short args, void *cbdata)
     }
 
 respond:
+    /* A request that parked the DVM owes it back if it fails.
+     *
+     * prte_ras_base_add_hosts() clears prte_dvm_ready and its caller parks
+     * the requesting job in prte_cache; only the grow's VM_READY re-entry
+     * (state_dvm.c) sets the flag again and drains the cache.  A request that
+     * never reaches a grow therefore left that job - and every job cached
+     * behind it - waiting on a DVM that would never be ready again.  One
+     * mistyped --add-hostfile path was enough to hang a tool for the life of
+     * the DVM, and nothing timed it out.
+     *
+     * Fail the job that asked before releasing the rest: it asked for nodes
+     * it did not get, so launching it on the old allocation would be
+     * answering a question nobody put.  The flag is on the request rather
+     * than inferred from prte_dvm_ready because that flag is also false while
+     * somebody else's grow is in flight, and this must not cut that short. */
+    PMIX_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
+                         "%s ras:base:modify respond dvm_held=%s pstatus=%s jdata=%s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         req->dvm_held ? "true" : "false",
+                         PMIx_Error_string(req->pstatus),
+                         (NULL == req->jdata) ? "NULL" : PRTE_JOBID_PRINT(req->jdata->nspace)));
+    if (req->dvm_held && PMIX_SUCCESS != req->pstatus) {
+        prte_dvm_ready = true;
+        if (NULL != req->jdata) {
+            /* Take the requester out of the cache BEFORE draining it.
+             * prte_plm_base_release_cached_jobs() spawns each cached job
+             * synchronously, while PRTE_ACTIVATE_JOB_STATE only posts an
+             * event - so leaving it there launches the very job we are about
+             * to fail, and the failure then arrives while the plm is still
+             * building that job's launch message and destructs its state
+             * caddy underneath it.  Removing it is also what stops a later
+             * drain from spawning a job that has since been terminated; the
+             * cache holds a borrowed pointer, so clearing the slot is all it
+             * takes. */
+            for (i = 0; i < prte_cache->size; i++) {
+                jptr = (prte_job_t *) pmix_pointer_array_get_item(prte_cache, i);
+                if (jptr == req->jdata) {
+                    pmix_pointer_array_set_item(prte_cache, i, NULL);
+                    break;
+                }
+            }
+        }
+        /* everything else was only queued behind us - nothing was wrong
+         * with those */
+        prte_plm_base_release_cached_jobs();
+        if (NULL != req->jdata) {
+            /* Answer the requester directly rather than through the state
+             * machine.  This job has not been through prte_plm.spawn(), so it
+             * has no namespace yet - and PMIX_CHECK_NSPACE counts an empty
+             * nspace as matching anything, so errmgr/dvm's job_errors() takes
+             * it for the DAEMON job, never sends a spawn response, and leaves
+             * the tool waiting for the life of the DVM.  Its other branch
+             * would be worse: it hands _terminate_job() that same empty
+             * namespace, which prted_comm.c reads as EVERY job.  A job with
+             * no name does not belong in the state machine at all; what the
+             * requester is owed is an answer, and this is the call that
+             * gives it. */
+            prte_plm_base_spawn_response(prte_pmix_convert_job_state_to_error(PRTE_JOB_STATE_ALLOC_FAILED),
+                                         req->jdata);
+        }
+    }
+
     // execute the callback
     if (NULL != req->infocbfunc) {
         req->infocbfunc(req->pstatus, req->info, req->ninfo, req->cbdata, prte_pmix_server_req_release, req);
@@ -2279,7 +2343,10 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
     prte_event_active(&req->ev, PRTE_EV_WRITE, 1);
 
     // mark that the DVM is not ready so the launch does not continue
-    // until we have processed the nodes
+    // until we have processed the nodes.  Record that on the request: only
+    // the grow's VM_READY re-entry gives this back, so a request that fails
+    // before it reaches a grow has to give it back itself.
+    req->dvm_held = true;
     prte_dvm_ready = false;
 
     return PRTE_SUCCESS;

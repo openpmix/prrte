@@ -78,6 +78,9 @@ typedef struct {
     bool launcher;
     bool scheduler;
     bool copy;  // info array has been copied and must be released
+    /* this request cleared prte_dvm_ready and parked the requesting job, so
+     * whoever fails it owes both back - see prte_ras_base_modify() */
+    bool dvm_held;
     bool moncopy;  // monitor was allocated and must be released
     bool dircopy;   // directives array has been copied and must be released
     uid_t uid;

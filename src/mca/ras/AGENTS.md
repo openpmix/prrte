@@ -539,6 +539,21 @@ types; a PMIx older than that refuses the documented spelling.
   pool index is a `PMIX_NODEID` and is never reused — and revert to the
   general pool still marked `PRTE_NODE_STATE_ADDED`, so the next grow adopts
   them, which is the right answer for nodes the allocator did grant.
+- **A request that parked the DVM must give it back.**
+  `prte_ras_base_add_hosts()` clears `prte_dvm_ready` and its caller parks the
+  requesting job in `prte_cache`; only the grow's `VM_READY` re-entry
+  (`state_dvm.c`) sets the flag again and drains the cache. A request that
+  fails before it ever reaches a grow therefore left that job — and every job
+  cached behind it — waiting on a DVM that would never be ready again, and
+  nothing times that out. A mistyped `--add-hostfile` path was enough. Such a
+  request is marked `dvm_held`, and `prte_ras_base_modify()`'s respond tail
+  fails the requesting job and restores the flag. The marker lives on the
+  request rather than being inferred from `prte_dvm_ready`, because that flag
+  is also false while somebody *else's* grow is in flight and this must not
+  cut that short. This is the same invariant the add-host refusal above is
+  placed to protect, on the other side of the decision: refusing before
+  posting keeps a request nothing will answer out of the machinery, and
+  `dvm_held` covers the one that was posted and then failed.
 - **A shrink that names no daemon is never broadcast.** A release may
   legitimately name only nodes that carry none — one a previous shrink handed
   back, one the DVM was never extended onto. Sending the command anyway is
