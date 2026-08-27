@@ -644,19 +644,32 @@ bool prte_nptr_match(prte_node_t *n1, prte_node_t *n2)
         return true;
     }
 
+    /* each side's alias list has to be checked against the other's name
+     * independently of whether the far side has aliases at all. A node
+     * parsed out of a hostfile or a dash-host spec carries no aliases of
+     * its own, while the allocation's node has the name the user gave
+     * demoted to an alias the moment its daemon reports the hostname it
+     * found for itself - so nesting either test inside the other means a
+     * node named by an address, and reported by name, stops matching. */
     if (NULL != n1->aliases) {
         for (i = 0; NULL != n1->aliases[i]; i++) {
             if (0 == strcmp(n1->aliases[i], n2->name)) {
                 return true;
             }
-            if (NULL != n2->aliases) {
-                for (m = 0; NULL != n2->aliases[m]; m++) {
-                    if (0 == strcmp(n2->aliases[m], n1->name)) {
-                        return true;
-                    }
-                    if (0 == strcmp(n1->aliases[i], n2->aliases[m])) {
-                        return true;
-                    }
+        }
+    }
+    if (NULL != n2->aliases) {
+        for (m = 0; NULL != n2->aliases[m]; m++) {
+            if (0 == strcmp(n2->aliases[m], n1->name)) {
+                return true;
+            }
+        }
+    }
+    if (NULL != n1->aliases && NULL != n2->aliases) {
+        for (i = 0; NULL != n1->aliases[i]; i++) {
+            for (m = 0; NULL != n2->aliases[m]; m++) {
+                if (0 == strcmp(n1->aliases[i], n2->aliases[m])) {
+                    return true;
                 }
             }
         }
