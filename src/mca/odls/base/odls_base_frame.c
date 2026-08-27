@@ -69,12 +69,12 @@ prte_odls_base_module_t prte_odls = {0};
  */
 prte_odls_globals_t prte_odls_globals = {
     .output = 0,
-    .xterm_ranks = PMIX_LIST_STATIC_INIT,
+    .xterm_ranks = PMIX_LIST_STATIC_INIT(prte_odls_globals.xterm_ranks),
     .xtermcmd = NULL,
     .signal_direct_children_only = false,
     .exec_agent = NULL,
     .scatter_cpusets = true,
-    .pending_slices = PMIX_LIST_STATIC_INIT
+    .pending_slices = PMIX_LIST_STATIC_INIT(prte_odls_globals.pending_slices)
 };
 
 static int prte_odls_base_register(pmix_mca_base_register_flag_t flags)

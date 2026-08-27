@@ -50,9 +50,9 @@
  * Global variables
  */
 prte_ras_base_t prte_ras_base = {
-    .selected_modules = PMIX_LIST_STATIC_INIT,
+    .selected_modules = PMIX_LIST_STATIC_INIT(prte_ras_base.selected_modules),
     .scheduler_owned = false,
-    .deferred_releases = PMIX_LIST_STATIC_INIT,
+    .deferred_releases = PMIX_LIST_STATIC_INIT(prte_ras_base.deferred_releases),
     .total_slots_alloc = 0,
     .multiplier = 0,
     .launch_orted_on_hn = false,
