@@ -3075,6 +3075,7 @@ static void rqcon(prte_pmix_server_req_t *p)
     p->launcher = false;
     p->scheduler = false;
     p->copy = false;
+    p->dvm_held = false;
     p->moncopy = false;
     p->dircopy = false;
     p->local_index = -1;
