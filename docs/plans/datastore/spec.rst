@@ -629,72 +629,48 @@ problem depends on it.  Until it exists, a daemon's store treats a local
 shorter than the publisher asked for.  The master's store honors ``APP``
 properly from the start.
 
-Deviation of the current implementation
----------------------------------------
+Where the implementation stands
+-------------------------------
 
-For reference while the design plan is written, this is where the code
-stands against the specification above.
+Kept current as the work lands, so that a reader can tell what this
+document still describes as *intended* from what it now describes as
+*true*.  The build order is in :doc:`impl-plan`.
 
 .. list-table::
    :header-rows: 1
-   :widths: 24 38 38
+   :widths: 24 12 64
 
    * - Rule
-     - Today
-     - Required
-   * - ``FIRST_READ``
-     - removed by any purge, including the publisher's job ending
-       (``ds_purge.c``, ``expires_by()``) — this is #2733
-     - removed by the read, or by the timeout
-   * - ``PROC``
-     - removed when the publisher's *job* ends, not the process
-     - removed when the process terminates
-   * - ``APP``
-     - removed when the *job* ends — the purge names a namespace and a
-       wildcard rank, so every app's data goes at the last app's exit
-     - removed when the publishing **application** ends.  The master
-       counts terminations per app (``prte_proc_t.app_idx`` already says
-       which app a proc belongs to) and purges its own store; a
-       daemon's local-range store waits for the notification that is
-       deferred above
+     - State
+     - Notes
+   * - ``FIRST_READ`` outlives its publisher
+     - done
+     - No horizon takes it; removed by the read (issue #2733).
+   * - Removal by uid
+     - done
+     - ``prte_data_server_owns()``; scopes ``prte.pub.replace`` too, and
+       the cross-DVM relay carries the originating uid and gid.
+   * - ``PROC`` at process granularity
+     - done
+     - A direct call on each store as the process dies, not a message.
+   * - ``APP`` at application granularity
+     - done
+     - Per-app termination counting at the master; the purge names the
+       app index.  A daemon's local-range store still treats a local
+       ``APP`` item as ``NSPACE`` — see the deferred notice below.
    * - ``NSPACE``
-     - does not exist
-     - new constant, removed at namespace termination — which is what
-       the job-end purge already does, so the existing purge becomes the
-       ``NSPACE`` horizon and the app-granular one is the addition
+     - done
+     - The new constant, the job-end horizon, and PRRTE's default.
    * - ``SESSION``
-     - never removed: the only purge anyone sends carries a
-       ``PMIX_PERSIST_APP`` horizon (``state_base_fns.c``,
-       ``send_purge()``)
-     - removed at session teardown
-   * - ``INDEF``
-     - never removed
-     - removed by the idle timeout
-   * - Timeout
-     - none
-     - ``prte_data_server_timeout``, default 300 s
-   * - Default persistence
-     - ``PMIX_PERSIST_APP``, applied at namespace granularity — so the
-       observed default is namespace lifetime
-     - ``PMIX_PERSIST_NSPACE``, which is that same observed behavior,
-       now stated
-   * - Cap
-     - none; the store grows without bound
-     - ``prte_data_server_max_size``, default 16 MiB **per uid**,
-       evicting that uid's own least-recently-used items
-   * - Removal
-     - the requesting process must *be* the publisher — nspace and rank
-       both compared (``ds_unpublish.c``); the uid and gid PMIx appends
-       to an unpublish are not read at all
-     - ownership by uid: the same effective uid recorded at publish, and
-       gid where known; the publishing process need not still exist
-   * - ``prte.pub.replace``
-     - scoped to the publishing process
-     - scoped to the same uid/gid test as removal
-   * - Relayed identity
-     - ``PMIX_REQUESTOR`` corrects the owning *process* across a
-       cross-DVM relay; the uid and gid stored are the relaying daemon's
-     - the originating process's uid and gid cross with it
+     - done
+     - Purged at reservation teardown, selected by the session id
+       recorded at publish.
+   * - Retention timeout
+     - to do
+     - ``prte_data_server_timeout``, default 300 s.
+   * - Per-uid storage cap
+     - to do
+     - ``prte_data_server_max_size``, default 16 MiB per uid.
 
 Decisions taken
 ---------------

@@ -62,8 +62,9 @@ Phase 3 — the horizons
 Depends on the PMIx constant (below), which should be in flight from the
 start of this work.
 
-#. ``ds.h`` / ``ds_main.c``: ``app_idx``, ``session_id``,
-   ``last_access`` on the object, constructed properly.
+#. ``ds.h`` / ``ds_main.c``: ``app_idx`` and ``session_id`` on the object,
+   constructed properly.  (``last_access`` waits for Phase 4, which is
+   where the first thing that reads it lands.)
 #. ``ds_publish.c``: resolve the publisher's app and session; stamp
    ``last_access``.
 #. ``ds_purge.c``: the new ``expires_by()`` table; match on the app
@@ -84,8 +85,8 @@ one persistent DVM: a ``PERSIST_APP`` item gone at job end, a
 Phase 4 — the timeout
 ---------------------
 
-``prte_data_server_timeout``, the sweep event, and the arm/disarm rule.
-Small and self-contained once ``last_access`` exists.
+``last_access`` on the object, ``prte_data_server_timeout``, the sweep
+event, and the arm/disarm rule.
 
 Swarm coverage sets the timeout to a few seconds by MCA parameter — not
 a debug-only knob, and not a ``PRTE_ENABLE_DEBUG`` build.

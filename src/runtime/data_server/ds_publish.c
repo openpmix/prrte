@@ -44,6 +44,7 @@
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
+#include "src/util/attr.h"
 #include "src/util/name_fns.h"
 
 #include "src/runtime/data_server/prte_data_server.h"
@@ -170,6 +171,36 @@ static bool same_data_range(prte_data_req_t *rq, prte_data_object_t *data,
  * own" and "that name is taken".  Nothing is modified here: the decision
  * has to be complete before anything is removed, so that a publish which
  * ends up refused leaves the store exactly as it found it. */
+/* Record which application and session the publisher belongs to.
+ *
+ * Every process that runs a data server holds the job objects it needs for
+ * this: the master holds them all, and a daemon holds the ones whose procs
+ * it hosts - which is exactly the set that can publish into its own store.
+ * The session id is a job attribute set PRTE_ATTR_GLOBAL where it is set at
+ * all, so it reaches the daemons in the launch message. */
+static void resolve_publisher(prte_data_object_t *data)
+{
+    prte_job_t *jdata;
+    prte_proc_t *proc;
+    uint32_t *ui32ptr;
+
+    jdata = prte_get_job_data_object(data->owner.nspace);
+    if (NULL == jdata) {
+        return;
+    }
+    proc = prte_get_proc_object(&data->owner);
+    if (NULL != proc) {
+        data->app_idx = (uint32_t) proc->app_idx;
+    }
+    ui32ptr = &data->session_id;
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_SESSION_ID,
+                            (void **) &ui32ptr, PMIX_UINT32)) {
+        /* no allocation of its own: the default session, which ends when
+         * the DVM does and therefore never needs a purge of its own */
+        data->session_id = UINT32_MAX;
+    }
+}
+
 static size_t count_duplicates(prte_data_req_t *rq, prte_data_object_t *data,
                                bool *foreign)
 {
@@ -372,6 +403,21 @@ pmix_status_t prte_ds_publish(pmix_proc_t *sender,
      * tool identity.  After the scan, so the relay's PMIX_USERID cannot
      * land on top of the claim. */
     prte_ds_check_requestor(&data->owner, &data->uid, &data->gid, info, ninfo);
+
+    /* A publisher that named no persistence, or named an invalid one, gets
+     * the default the object was constructed with. */
+    if (PMIX_PERSIST_INVALID == data->persistence) {
+        data->persistence = PMIX_PERSIST_NSPACE;
+    }
+
+    /* Which application, and which session?  Neither is derivable later:
+     * the job object does not outlive the job, and the purge that reclaims
+     * an APP or SESSION item arrives after the publisher has gone.  Both
+     * are therefore resolved now, and both are allowed to fail - a relayed
+     * publish from another DVM has no proc object here, and a job with no
+     * allocation of its own runs in the default session, which ends with
+     * the DVM.  UINT32_MAX matches no purge. */
+    resolve_publisher(data);
 
     /* the values we keep were copied into the data object above, so the
      * unpacked array has done its job - it used to be freed only on the

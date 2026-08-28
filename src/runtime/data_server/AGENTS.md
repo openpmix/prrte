@@ -313,13 +313,31 @@ timer, so every path is covered by `PMIX_RELEASE`. Without the timer a wait
 for a key nobody publishes never returned: the timeout reached the daemon's
 caddy (`req->timeout` in `pmix_server_pub.c`) and went no further.
 
-**`PMIX_PERSISTENCE` is enforced by `ds_purge`, and only because the state
-machine tells it a lifetime ended.** The purge command carries the horizon
-that was reached as a `PMIX_PERSISTENCE` directive, and `expires_by()`
-decides what that takes: `PROC` at any horizon, `APP` at `APP` or
-`SESSION`, `INDEF` and `FIRST_READ` never. The values are *not* a numeric
-ladder — `PMIX_PERSIST_INDEF` is 0 and outlives all of them — so the
-ordering is spelled out rather than compared.
+**`PMIX_PERSISTENCE` is enforced by the purge, and only because the state
+machine says a lifetime ended.** `expires_by()` decides what a given
+horizon takes:
+
+| horizon | removes |
+|---------|---------|
+| `INVALID` (an explicit unpublish-all) | everything the target owns |
+| `PROC` | `PROC` |
+| `APP` | `PROC`, `APP` |
+| `NSPACE` | `PROC`, `APP`, `NSPACE` |
+| `SESSION` | `PROC`, `APP`, `NSPACE`, `SESSION` |
+
+The values are *not* a numeric ladder — `PMIX_PERSIST_INDEF` is 0 and
+outlives all of them, and `PMIX_PERSIST_NSPACE` is 5 while ending before
+`SESSION`'s 4 — so the ordering is spelled out rather than compared.
+
+Two of the horizons need something a `pmix_proc_t` cannot say. An
+**application** is not a process and not a namespace either: every app of a
+job shares the one namespace assigned to the job, so the target names them
+all and `prte.purge.appidx` says which one ended. A **session** outlives the
+jobs that ran in it and their job objects, so its target admits anybody (an
+empty namespace is a wildcard to `PMIX_CHECK_PROCID`) and `PMIX_SESSION_ID`
+selects. Each item records both at publish, in `app_idx` and `session_id`,
+because neither is derivable later — the purge arrives after the publisher
+has gone.
 
 `FIRST_READ` is in that list of what no horizon takes, and it took
 issue #2733 to get there. Its criterion is the first access and nothing
@@ -358,43 +376,58 @@ why a single-node run cannot tell them apart — and why the purge going only
 to the global store left local-range data unreclaimed until it also went to
 `PRTE_PROC_MY_NAME`.
 
-`prte_state_base_notify_data_server()` is what sends the lifecycle purge,
-with `PMIX_PERSIST_APP`, when a job's procs have all terminated. All three
-call sites used to be gated on `NULL != prte_data_server_uri`, so the
-**built-in** data server — the usual case — was never told a job had ended;
-nothing was ever reclaimed from it short of the DVM shutting down, and
-`PERSIST_APP` and `PERSIST_PROC` both behaved as `PERSIST_INDEF`. The
-function itself had always routed correctly for the built-in case; its own
-callers were what gated it out.
+**A purge is a call, not a message.** The store that has to act is in every
+case one the acting process already holds, so `state/base` offers four
+entry points and each is called by whoever can see that lifetime end:
 
-**A daemon does not send that one.** `state_prted.c`'s `job_teardown()`
-runs when the procs of a job that *this daemon hosted* have terminated —
-`num_terminated == num_local_procs` — which says nothing about the rest of
-the job. It calls `prte_state_base_notify_local_data_server()`, which
-purges this daemon's own store alone. Sending the DVM-wide form from there
-meant the first node to finish its share purged the entire namespace's
-`APP` and `PROC` data out of the **master's** store, so a process still
-running on another node could lose what it had published before its own
-application, or even its own process, had ended.
+| call | called by | when |
+|------|-----------|------|
+| `prte_state_base_purge_proc` | the master, and the daemon that hosted it | a process terminates (both `track_procs` implementations) |
+| `prte_state_base_purge_app` | the master | an app's terminated count reaches its `num_procs` |
+| `prte_state_base_purge_nspace` | the master; every daemon | the job ends (`state_dvm.c`); `PRTE_DAEMON_DVM_CLEANUP_JOB_CMD` |
+| `prte_state_base_purge_session` | the master | `prte_ras_base_teardown_reservation()` |
 
-The master's own send is therefore unconditional. It used to be skipped
-when `prte_pmix_server_globals.server.nspace` was unset — "nobody local to
-us has used the data server" — which is a true statement about *our* store
-and a false one about the global store, whose publishers are anywhere in
-the DVM. On the master that guard is satisfied exactly when the publishing
-processes ran on other nodes, which is the arrangement that most needs the
-purge; it went unnoticed only because the daemons were each sending the
-DVM-wide purge as well.
+Each purges **its own** store. That is what makes the `PROC` horizon
+affordable — it fires once per terminating process, and a store nothing was
+ever published into is an array of one empty slot, so the scan costs
+nothing. The **only** thing that still needs a message is an *external*
+data server, which lives in another DVM behind the PMIx tool connection the
+master holds; a daemon never relays, since its own store is local-range
+data that never leaves this DVM.
 
-`PMIX_PERSIST_PROC` is therefore reclaimed at **job** granularity rather
-than when its individual publisher exits. That is later than the Standard's
-"until the publishing process terminates", and it is deliberate: a message
-to the store for every terminating process is not a cost the termination
-path can carry at scale.
+Two things that had to be got right here, both of which were once wrong:
 
-The object's default is `PMIX_PERSIST_APP`, which is the Standard's default.
-PMIx adds none of its own before handing a publish to the host, so the value
-in `ds_main.c`'s constructor is the one that governs.
+- **A daemon's share of a job finishing is not a lifetime ending.**
+  `state_prted.c`'s `job_teardown()` runs when the procs of a job that
+  *this daemon hosted* have terminated (`num_terminated ==
+  num_local_procs`), which says nothing about the rest of the job. It used
+  to send the DVM-wide purge from there, so the first node to finish its
+  share purged the entire namespace's `APP` and `PROC` data out of the
+  **master's** store while other nodes were still publishing into it. It
+  now sends nothing: each of its procs was purged at the `PROC` horizon as
+  it died, and the namespace horizon arrives from the master.
+- **The purge used to be gated on `prte_pmix_server_globals.server.nspace`
+  being set** — "nobody local to us has used the data server" — which is
+  true of *our* store and false of the global one, whose publishers are
+  anywhere in the DVM. On the master that guard held exactly when the
+  publishers ran on other nodes, which is the arrangement that most needs
+  the purge. It went unnoticed only because every daemon was sending the
+  DVM-wide purge as well.
+
+All three call sites were once gated on `NULL != prte_data_server_uri`, so
+the **built-in** data server — the usual case — was never told a job had
+ended at all; nothing was reclaimed from it short of the DVM shutting down,
+and `PERSIST_APP` and `PERSIST_PROC` both behaved as `PERSIST_INDEF`.
+
+The object's default is `PMIX_PERSIST_NSPACE`, and PMIx adds none of its
+own before handing a publish to the host, so the value in `ds_main.c`'s
+constructor is the one that governs. It is deliberately **not** the
+Standard's `PMIX_PERSIST_APP`: `APP` means the publishing process's
+*application*, an MPMD job's applications need not end together, and
+applying that default literally would shorten the retention every unmarked
+publish has been getting — as a side effect of reading `APP` correctly.
+`NSPACE` is that same lifetime, said out loud. A publisher that wants app
+lifetime asks for `APP` and gets it.
 
 A lifecycle purge drops both the departing process's published items *and*
 any lookup it left parked; a request that outlives its requestor would
@@ -511,7 +544,9 @@ by a publish in the other, that an ended job's data is purged from the server
 and that the purge takes *only* that job's data — plus the control, that a
 DVM which was not given the URI sees none of it.
 
-**Not covered:** anything that needs a second *user*. The harness runs as
+**Not covered:** the `SESSION` horizon end to end, which needs a
+reservation torn down under a persistent DVM with data published inside it;
+and anything that needs a second *user*. The harness runs as
 one uid in every container, so what the swarm can show of the ownership rule
 is the same-user half — a later job taking back its predecessor's name, and
 replacing it in one publish. That a different uid is refused is unit-tested

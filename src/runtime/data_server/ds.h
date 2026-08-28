@@ -62,6 +62,16 @@ typedef struct {
     /* characteristics */
     pmix_data_range_t range;
     pmix_persistence_t persistence;
+    /* Which application of the owner's job published this, and which
+     * session that job was running within - the two lifetimes that a
+     * namespace and a rank cannot express on their own.  Both are resolved
+     * at publish, from the publisher's own proc and job objects, and both
+     * are UINT32_MAX when they cannot be: a relayed publish from another
+     * DVM has no proc object here, and a job with no allocation of its own
+     * runs in the default session, whose end is the DVM's end.  UINT32_MAX
+     * matches no purge, which is the right answer for both. */
+    uint32_t app_idx;
+    uint32_t session_id;
     /* and the values themselves - we store them as a list
      * because we may (if persistence is set to "first-read")
      * remove them upon read */
@@ -156,6 +166,13 @@ PRTE_EXPORT pmix_status_t prte_data_server_check_access(prte_data_req_t *req,
  * no lifetime ended and the caller asked for everything, which is what an
  * explicit PMIx_Unpublish(NULL, ...) means: a publisher taking back all of
  * its own data regardless of how long it had asked for it to be kept.
+ *
+ *      horizon      removes
+ *      INVALID      everything owned by the target
+ *      PROC         PROC
+ *      APP          PROC, APP
+ *      NSPACE       PROC, APP, NSPACE
+ *      SESSION      PROC, APP, NSPACE, SESSION
  *
  * Two persistences are removed by NO horizon.  PMIX_PERSIST_INDEF is
  * retained until specifically deleted, and PMIX_PERSIST_FIRST_READ until

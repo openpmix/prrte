@@ -73,6 +73,35 @@ BEGIN_C_DECLS
 #define PRTE_PUBLISH_REQ_UID     "prte.pub.ruid"        // (uint32) effective uid of the process a relay is acting for
 #define PRTE_PUBLISH_REQ_GID     "prte.pub.rgid"        // (uint32) effective gid of the process a relay is acting for
 
+/* Which application ended, on a purge carrying a PMIX_PERSIST_APP horizon.
+ *
+ * A purge names whose data is in question with a pmix_proc_t, and an
+ * application is not a process: an MPMD job's applications share the one
+ * namespace assigned to the job, so the namespace and a wildcard rank name
+ * every app at once.  The horizons that need to say more than a process
+ * name can carry say it here - this one, and PMIX_SESSION_ID for
+ * PMIX_PERSIST_SESSION.
+ */
+#define PRTE_PURGE_APP_IDX       "prte.purge.appidx"    // (uint32) index of the application that terminated
+
+/* Purge THIS process's store directly, with no message and no reply.
+ *
+ * The store that has to act is in every case one the caller already has in
+ * hand: a daemon reaps its own children and is told when a namespace ends,
+ * and the master holds every job object.  So a lifetime ending is a
+ * function call rather than a message - which is what makes the PROC
+ * horizon affordable at all, since that one fires once per terminating
+ * process.
+ *
+ * `target` names whose data goes, with PMIX_RANK_WILDCARD for "any rank of
+ * this namespace" and an empty namespace for "anybody" (the session
+ * horizon, where the session id is what selects).  `qualifier` is the app
+ * index for PMIX_PERSIST_APP and the session id for PMIX_PERSIST_SESSION,
+ * and is ignored otherwise. */
+PRTE_EXPORT void prte_data_server_purge_local(const pmix_proc_t *target,
+                                              pmix_persistence_t horizon,
+                                              uint32_t qualifier);
+
 /* provide hooks to startup and finalize the data server */
 PRTE_EXPORT int prte_data_server_init(void);
 PRTE_EXPORT void prte_data_server_finalize(void);

@@ -105,14 +105,24 @@ PRTE_EXPORT void prte_state_base_local_launch_complete(int fd, short argc, void 
 PRTE_EXPORT void prte_state_base_report_progress(int fd, short argc, void *cbdata);
 PRTE_EXPORT void prte_state_base_track_procs(int fd, short argc, void *cbdata);
 PRTE_EXPORT void prte_state_base_check_fds(prte_job_t *jdata);
-PRTE_EXPORT void prte_state_base_notify_data_server(pmix_proc_t *target);
-
-/* Purge only OUR OWN store - the one holding this daemon's local-range
- * data - without touching the DVM's global store.  What a daemon knows
- * when its share of a job is done is that its own procs of that job have
- * gone; the job itself may still be running on other nodes, and the
- * global store is not its to act on. */
-PRTE_EXPORT void prte_state_base_notify_local_data_server(pmix_proc_t *target);
+/* A lifetime ended: drop the published data that was not to outlive it.
+ *
+ * Each is called by the process that holds the store having to act - a
+ * daemon for its own local-range data, the master for everything else - so
+ * these are calls rather than messages, and a purge costs nothing when
+ * nothing was ever published.  The master additionally relays to an
+ * external data server where one is configured, since that store lives in
+ * another DVM.
+ *
+ * Which one a caller reaches for is which lifetime it is in a position to
+ * observe.  A daemon knows when its own child exits and when the master
+ * tells it a namespace is over; it does NOT know when an application has
+ * ended DVM-wide, and its own share of a job finishing is not a lifetime at
+ * all - the job may still be running on every other node. */
+PRTE_EXPORT void prte_state_base_purge_proc(pmix_proc_t *proc);
+PRTE_EXPORT void prte_state_base_purge_app(prte_job_t *jdata, prte_app_idx_t idx);
+PRTE_EXPORT void prte_state_base_purge_nspace(pmix_nspace_t nspace);
+PRTE_EXPORT void prte_state_base_purge_session(uint32_t session_id);
 
 /* A proc reported a state and we hold no job object to account it against.
  * Both track_procs implementations call this instead of dropping the

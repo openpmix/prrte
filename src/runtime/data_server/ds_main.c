@@ -522,10 +522,19 @@ static void construct(prte_data_object_t *ptr)
     ptr->agids = NULL;
     ptr->nagids = 0;
     ptr->range = PMIX_RANGE_SESSION;
-    /* the Standard's default is PMIX_PERSIST_APP - "retain until the
-     * application terminates".  PMIx adds no default of its own before
-     * handing a publish to the host, so this is the one that governs */
-    ptr->persistence = PMIX_PERSIST_APP;
+    /* The Standard's default is PMIX_PERSIST_APP, and PMIx adds no default
+     * of its own before handing a publish to the host, so the value here is
+     * the one that governs.  PRRTE deliberately says NSPACE instead.
+     *
+     * PMIX_PERSIST_APP means the publishing process's APPLICATION - one app
+     * context - and an MPMD job's applications do not have to end together.
+     * Applying the Standard's default literally would therefore shorten the
+     * retention every unmarked publish has been getting, as a side effect
+     * of reading APP correctly.  NSPACE is that same lifetime, now said out
+     * loud.  A publisher that wants app lifetime asks for APP and gets it. */
+    ptr->persistence = PMIX_PERSIST_NSPACE;
+    ptr->app_idx = UINT32_MAX;
+    ptr->session_id = UINT32_MAX;
     PMIX_CONSTRUCT(&ptr->info, pmix_list_t);
 }
 

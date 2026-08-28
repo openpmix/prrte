@@ -69,6 +69,7 @@
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml.h"
+#include "src/mca/state/base/base.h"
 #include "src/mca/state/state.h"
 
 #include "src/runtime/prte_globals.h"
@@ -671,6 +672,13 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
                 PRTE_ERROR_LOG(ret);
             }
         }
+
+        /* The namespace is over everywhere - which only the master can say,
+         * and this is it saying so.  Drop what this job published into OUR
+         * store: the local-range items its procs left behind, which no
+         * other process can reach and which nothing else will reclaim
+         * short of this daemon exiting. */
+        prte_state_base_purge_nspace(job);
 
         /* Deregister the nspace and, once that completes, clear any pending
          * server ops that still reference it.  Deliberately not waited on

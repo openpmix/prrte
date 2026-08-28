@@ -72,7 +72,11 @@ bool prte_data_server_expires_by(pmix_persistence_t persist,
          * any of them has ended */
         return true;
     case PMIX_PERSIST_APP:
-        return (PMIX_PERSIST_APP == horizon || PMIX_PERSIST_SESSION == horizon);
+        return (PMIX_PERSIST_APP == horizon ||
+                PMIX_PERSIST_NSPACE == horizon ||
+                PMIX_PERSIST_SESSION == horizon);
+    case PMIX_PERSIST_NSPACE:
+        return (PMIX_PERSIST_NSPACE == horizon || PMIX_PERSIST_SESSION == horizon);
     case PMIX_PERSIST_SESSION:
         return (PMIX_PERSIST_SESSION == horizon);
     case PMIX_PERSIST_INDEF:
@@ -82,13 +86,73 @@ bool prte_data_server_expires_by(pmix_persistence_t persist,
     }
 }
 
+/* Does this item belong to the lifetime that just ended?
+ *
+ * The target says whose data is in question - a process, or with
+ * PMIX_RANK_WILDCARD any rank of a namespace, or with an empty namespace
+ * anybody at all, which is how the session horizon reaches across the jobs
+ * that ran in it.  Two horizons then need something a process name cannot
+ * carry, and that is what the qualifier is for. */
+static bool purge_takes(prte_data_object_t *data, const pmix_proc_t *target,
+                        pmix_persistence_t horizon, uint32_t qualifier)
+{
+    if (!PMIX_CHECK_PROCID(target, &data->owner)) {
+        return false;
+    }
+    if (PMIX_PERSIST_APP == horizon && qualifier != data->app_idx) {
+        /* another application of the same job, which is still running: the
+         * namespace is not over just because this application is */
+        return false;
+    }
+    if (PMIX_PERSIST_SESSION == horizon && qualifier != data->session_id) {
+        return false;
+    }
+    return prte_data_server_expires_by(data->persistence, horizon);
+}
+
+/* Remove everything the ended lifetime takes.  Shared by the message form
+ * and the direct one - what differs between them is who gets told, not what
+ * goes. */
+static void purge_store(const pmix_proc_t *target, pmix_persistence_t horizon,
+                        uint32_t qualifier)
+{
+    prte_data_object_t *data;
+    int k;
+
+    for (k = 0; k < prte_data_store.store.size; k++) {
+        data = (prte_data_object_t *) pmix_pointer_array_get_item(&prte_data_store.store, k);
+        if (NULL == data) {
+            continue;
+        }
+        if (!purge_takes(data, target, horizon, qualifier)) {
+            continue;
+        }
+        pmix_pointer_array_set_item(&prte_data_store.store, data->index, NULL);
+        PMIX_RELEASE(data);
+    }
+}
+
+void prte_data_server_purge_local(const pmix_proc_t *target,
+                                  pmix_persistence_t horizon,
+                                  uint32_t qualifier)
+{
+    /* A store nothing was ever published into is an array of one empty
+     * slot, so this costs nothing in the case that matters: the PROC
+     * horizon fires once per terminating process, and almost no job
+     * publishes anything at all. */
+    pmix_output_verbose(1, prte_data_store.output,
+                        "%s data server: purge at %s horizon, data from %s:%d",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PMIx_Persistence_string(horizon),
+                        target->nspace, target->rank);
+    purge_store(target, horizon, qualifier);
+}
+
 void prte_ds_purge(pmix_proc_t *sender,
                    pmix_data_buffer_t *buffer,
                    pmix_data_buffer_t *answer)
 {
     int32_t count;
-    prte_data_object_t *data;
-    int k;
     pmix_status_t rc, ret;
     pmix_proc_t requestor;
     prte_data_req_t *req, *rqnext;
@@ -97,6 +161,8 @@ void prte_ds_purge(pmix_proc_t *sender,
     /* absent a PMIX_PERSISTENCE directive this is an explicit
      * "remove everything I published", not the end of a lifetime */
     pmix_persistence_t horizon = PMIX_PERSIST_INVALID;
+    /* the app index or session id the horizon needs, where it needs one */
+    uint32_t qualifier = UINT32_MAX;
 
     /* unpack the proc whose data is to be purged - session
      * data is purged by providing a requestor whose rank
@@ -128,6 +194,11 @@ void prte_ds_purge(pmix_proc_t *sender,
             if (PMIx_Check_key(info[n].key, PMIX_PERSISTENCE)) {
                 /* a lifetime ended, and this is which one */
                 horizon = info[n].value.data.persist;
+            } else if (PMIx_Check_key(info[n].key, PRTE_PURGE_APP_IDX) ||
+                       PMIx_Check_key(info[n].key, PMIX_SESSION_ID)) {
+                /* which application, or which session - the horizon says
+                 * which of the two this is */
+                qualifier = info[n].value.data.uint32;
             }
         }
         /* A relay purging on behalf of a process in its own DVM.  Without
@@ -144,29 +215,13 @@ void prte_ds_purge(pmix_proc_t *sender,
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         requestor.nspace, requestor.rank);
 
-    /* cycle across the stored data, looking for a match */
-    for (k = 0; k < prte_data_store.store.size; k++) {
-        data = (prte_data_object_t *) pmix_pointer_array_get_item(&prte_data_store.store, k);
-        if (NULL == data) {
-            continue;
-        }
-        /* check if data posted by the specified process */
-        if (!PMIX_CHECK_PROCID(&requestor, &data->owner)) {
-            continue;
-        }
-        /* ...and whether it was to outlive what just ended.  This is what
-         * makes PMIX_PERSISTENCE mean anything: the value was recorded at
-         * publish and then never consulted again, so data published to last
-         * only as long as its application sat in the store until the DVM
-         * itself went away, and PMIX_PERSIST_APP and PMIX_PERSIST_PROC both
-         * behaved as PMIX_PERSIST_INDEF. */
-        if (!prte_data_server_expires_by(data->persistence, horizon)) {
-            continue;
-        }
-        /* remove the object */
-        pmix_pointer_array_set_item(&prte_data_store.store, data->index, NULL);
-        PMIX_RELEASE(data);
-    }
+    /* Take what the ended lifetime takes.  This is what makes
+     * PMIX_PERSISTENCE mean anything: the value was recorded at publish and
+     * then never consulted again, so data published to last only as long as
+     * its application sat in the store until the DVM itself went away, and
+     * PMIX_PERSIST_APP and PMIX_PERSIST_PROC both behaved as
+     * PMIX_PERSIST_INDEF. */
+    purge_store(&requestor, horizon, qualifier);
 
     /* Drop any lookup this process left parked on the pending list. Those
      * requests outlived their requestor: a later publish would match one and

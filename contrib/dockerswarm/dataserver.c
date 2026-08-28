@@ -80,10 +80,14 @@
  *
  *   dataserver persist <key> <value> <persistence> [seconds] [range]
  *       Publish with an explicit PMIX_PERSISTENCE and exit, so the JOB
- *       ends.  <persistence> is one of first-read, proc, app, session,
- *       indef.  What a later job can still look up is what the data server
- *       kept: "app" must be gone once this job terminates, "session" must
- *       not be.  Persistence means nothing until something removes data on
+ *       ends.  <persistence> is one of first-read, proc, app, nspace,
+ *       session, indef.  What a later job can still look up is what the
+ *       data server kept: "app" must be gone once this job terminates,
+ *       "session" must not be.  "app" and "nspace" are different lifetimes
+ *       in an MPMD job - every app shares the job's namespace, and they
+ *       need not terminate together - so an app that exits early takes its
+ *       own "app" data with it and leaves its "nspace" data standing.
+ *       Persistence means nothing until something removes data on
  *       a lifetime boundary, so this is the test that it does.
  *
  *   dataserver unpublish <key> [seconds] [pubrange] [unpubrange]
@@ -407,6 +411,9 @@ static pmix_persistence_t parse_persist(const char *s)
     }
     if (0 == strcmp(s, "session")) {
         return PMIX_PERSIST_SESSION;
+    }
+    if (0 == strcmp(s, "nspace")) {
+        return PMIX_PERSIST_NSPACE;
     }
     if (0 == strcmp(s, "indef")) {
         return PMIX_PERSIST_INDEF;
